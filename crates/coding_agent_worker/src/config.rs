@@ -114,6 +114,9 @@ impl HarnessCredentials {
 #[derive(Debug, Clone, Deserialize)]
 #[serde(default, deny_unknown_fields)]
 pub struct MacroApi {
+    /// Computer-reachable egress base; enrollment overrides local routing.
+    #[serde(default)]
+    pub egress_url: Option<String>,
     /// Base URL of the agent-harness service, e.g.
     /// `http://localhost:50009/agent-harness`. Sessions are created and
     /// prompted here, and its `ws(s)` twin hosts the runtime gateway.
@@ -128,6 +131,7 @@ pub struct MacroApi {
 impl Default for MacroApi {
     fn default() -> Self {
         Self {
+            egress_url: None,
             api_url: "https://gateway.macro.com/agent-harness".to_owned(),
             storage_url: "https://gateway.macro.com/dss".to_owned(),
             web_url: "https://macro.com/app".to_owned(),

@@ -1,0 +1,21 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            INSERT INTO harness_pairing_requests\n                (id, code, device_secret_hash, requested_name, host_info, requested_scope,\n                 expires_at, requested_allow_permission_bypass)\n            VALUES ($1, $2, $3, $4, $5, $6, $7, $8)\n            ON CONFLICT (code) DO NOTHING\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Bytea",
+        "Text",
+        "Text",
+        "Text",
+        "Timestamptz",
+        "Bool"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "9b68777f9537afb7bd85558a48098e7fa715b8ea350de181c3c3c092bdc82a3e"
+}

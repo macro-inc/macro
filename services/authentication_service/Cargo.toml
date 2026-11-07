@@ -40,6 +40,7 @@ return_passwordless_code = []
 
 [dependencies]
 agent_correlation = { path = "../../crates/agent_correlation", features = ["http", "postgres"] }
+stripe_price_id = { path = "../../crates/stripe_price_id" }
 crm = { path = "../../crates/crm", default-features = false, features = ["lookup"] }
 agent_api_keys = { path = "../../crates/agent_api_keys" }
 ai_billing = { path = "../../crates/ai_billing" }
@@ -47,6 +48,8 @@ ai_usage = { path = "../../crates/ai_usage" }
 initiative = { path = "../../crates/initiative", default-features = false, features = ["postgres"] }
 codex_connection = { path = "../../crates/codex_connection" }
 codex_cloud_agents = { path = "../../crates/codex_cloud_agents" }
+agent_git = { path = "../../crates/agent_git", default-features = false, features = ["client"] }
+harnesses = { path = "../../crates/harnesses", default-features = false, features = ["outbound"] }
 cursor_api_key = { path = "../../crates/cursor_api_key" }
 cursor_cloud_agents = { path = "../../crates/cursor_cloud_agents" }
 aes-gcm = { workspace = true }
@@ -108,6 +111,10 @@ github_pull_requests = { path = "../../crates/github_pull_requests", default-fea
   "service",
 ] }
 hmac = { workspace = true }
+hosted_runtimes = { path = "../../crates/hosted_runtimes", default-features = false, features = [
+  "inbound",
+  "outbound",
+] }
 http-body-util = { workspace = true }
 jsonwebtoken = { workspace = true }
 loops_client = { path = "../../crates/loops_client" }
@@ -183,6 +190,7 @@ system_status = { path = "../../crates/system_status", features = [
   "postgres",
 ] }
 teams = { path = "../../crates/teams" }
+team_agents = { path = "../../crates/team_agents", features = ["inbound", "outbound"] }
 thiserror = { workspace = true }
 time = { workspace = true }
 tokio = { workspace = true, features = ["signal"] }

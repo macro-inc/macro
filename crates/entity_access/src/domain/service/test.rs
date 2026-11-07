@@ -481,6 +481,14 @@ impl AccessRepository for MockRepo {
     }
 
     /// Resolve ordinary shares on an external chat.
+    async fn get_harness_access(
+        &self,
+        _harness_id: &str,
+        _user_id: Option<&MacroUserId<Lowercase<'_>>>,
+    ) -> Result<Option<AccessLevel>, AccessError> {
+        Ok(None)
+    }
+
     async fn get_external_chat_access(
         &self,
         _group_id: &str,

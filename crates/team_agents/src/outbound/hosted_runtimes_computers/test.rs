@@ -1,0 +1,1136 @@
+mod quarantine;
+
+use crate::domain::models::{PersonaConfigKey, PersonaOsUser, StripePriceId, SystemdUnitName};
+use hosted_runtimes::domain::ids::ComputerId;
+use hosted_runtimes::domain::models::ComputerName;
+use std::collections::HashMap;
+use std::sync::{Arc, Mutex};
+
+use macro_user_id::{cowlike::CowLike, user_id::MacroUserIdStr};
+
+use chrono::{DateTime, TimeZone, Utc};
+use hosted_runtimes::domain::{
+    lifecycle::{ComputerState, Context, EffectWorker, Event, HostId, Phase, transition},
+    models::{
+        BillingInterval, Computer, ComputerRecord, Host, HostRegistration, NewComputer, Quote,
+        SubscriptionItem,
+    },
+    ports::{
+        Billing, BillingError, ComputerRepo, DueTimer, PendingEffect, ReserveError,
+        StaticFleetAttachment,
+    },
+    service::{Clock, ComputerService},
+    size::{CatalogEntry, ComputerSize, current_catalog},
+};
+use uuid::Uuid;
+
+use super::HostedRuntimesComputers;
+use crate::domain::{models as agent, ports::Computers};
+
+const TEAM: Uuid = Uuid::from_u128(0x0000_0000_0000_4000_8000_0000_0000_00aa);
+const HOST: HostId = HostId::new(Uuid::from_u128(0x0000_0000_0000_4000_8000_0000_0000_0001));
+
+fn now() -> DateTime<Utc> {
+    Utc.with_ymd_and_hms(2026, 11, 4, 12, 0, 0).unwrap()
+}
+
+struct FixedClock;
+
+impl Clock for FixedClock {
+    fn now(&self) -> DateTime<Utc> {
+        now()
+    }
+}
+
+#[derive(Debug, thiserror::Error)]
+#[error("fake storage error")]
+struct FakeError;
+
+/// One host with `sold_units` of sold capacity; every computer awake fits.
+#[derive(Clone, Default)]
+struct FakeRepo {
+    sold_units: u32,
+    fail_payment_confirmation: bool,
+    computers: Arc<Mutex<HashMap<ComputerId, Computer>>>,
+    effects: Arc<Mutex<Vec<PendingEffect>>>,
+    events: Arc<Mutex<Vec<(ComputerId, Event)>>>,
+}
+
+impl ComputerRepo for FakeRepo {
+    type Err = FakeError;
+    type PaymentGuard = ();
+    type EnrollmentGuard = ();
+
+    async fn heartbeat_host(&self, _host: HostId, _at: DateTime<Utc>) -> Result<(), FakeError> {
+        Ok(())
+    }
+
+    async fn lock_enrollment(&self, _computer_id: ComputerId) -> Result<(), FakeError> {
+        Ok(())
+    }
+
+    async fn lock_payment(&self, _computer_id: ComputerId) -> Result<(), FakeError> {
+        Ok(())
+    }
+
+    async fn reserve(
+        &self,
+        computer: NewComputer,
+        now: DateTime<Utc>,
+    ) -> Result<Computer, ReserveError<FakeError>> {
+        let mut computers = self.computers.lock().unwrap();
+        let sold: u32 = computers
+            .values()
+            .filter(|existing| existing.state.holds_units())
+            .map(|existing| existing.resources.units())
+            .sum();
+        if sold + computer.resources.units() > self.sold_units {
+            return Err(ReserveError::SoldOut);
+        }
+        let mut state = ComputerState::reserved(HOST, now);
+        if let hosted_runtimes::domain::models::PurchaseBilling::Comped { reason } =
+            computer.billing
+        {
+            state.comp_reason = Some(reason);
+        }
+        let mut reserved = Computer {
+            id: computer.id,
+            team_id: computer.team_id,
+            name: computer.name,
+            size: computer.size,
+            resources: computer.resources,
+            catalog_entry: computer.catalog_entry,
+            price_id: computer.price_id,
+            enrollment_generation: Default::default(),
+            state,
+            harness_id: None,
+            persona: computer.persona,
+            created_by: computer.created_by,
+            created_at: now,
+            enrolled_at: None,
+        };
+        if let Some(reason) = reserved.state.comp_reason.clone() {
+            let (state, effects) = transition(
+                &reserved.state,
+                &Event::Comped { reason },
+                Context {
+                    now,
+                    host_has_room: true,
+                    enrollment_generation: reserved.enrollment_generation,
+                },
+            );
+            reserved.state = state;
+            let mut outbox = self.effects.lock().unwrap();
+            for effect in effects {
+                if let hosted_runtimes::domain::lifecycle::Effect::Create { generation, .. } =
+                    &effect
+                {
+                    reserved.enrollment_generation = *generation;
+                }
+                let id = outbox.len() as i64 + 1;
+                outbox.push(PendingEffect {
+                    id,
+                    computer_id: reserved.id,
+                    effect,
+                    attempts: 0,
+                });
+            }
+        }
+        computers.insert(reserved.id, reserved.clone());
+        Ok(reserved)
+    }
+
+    async fn apply(
+        &self,
+        computer_id: ComputerId,
+        event: Event,
+        now: DateTime<Utc>,
+    ) -> Result<Option<Computer>, FakeError> {
+        if self.fail_payment_confirmation && matches!(event, Event::PaymentConfirmed) {
+            return Err(FakeError);
+        }
+        self.events
+            .lock()
+            .unwrap()
+            .push((computer_id, event.clone()));
+        let mut computers = self.computers.lock().unwrap();
+        let Some(computer) = computers.get_mut(&computer_id) else {
+            return Ok(None);
+        };
+        let (state, effects) = transition(
+            &computer.state,
+            &event,
+            Context {
+                now,
+                host_has_room: true,
+                enrollment_generation: computer.enrollment_generation,
+            },
+        );
+        computer.state = state;
+        let mut outbox = self.effects.lock().unwrap();
+        for effect in effects {
+            if let hosted_runtimes::domain::lifecycle::Effect::Create { generation, .. } = &effect {
+                computer.enrollment_generation = *generation;
+            }
+            let id = outbox.len() as i64 + 1;
+            outbox.push(PendingEffect {
+                id,
+                computer_id,
+                effect,
+                attempts: 0,
+            });
+        }
+        Ok(Some(computer.clone()))
+    }
+
+    async fn get(&self, computer_id: ComputerId) -> Result<Option<ComputerRecord>, FakeError> {
+        Ok(self
+            .computers
+            .lock()
+            .unwrap()
+            .get(&computer_id)
+            .cloned()
+            .map(Into::into))
+    }
+
+    async fn list_for_team(&self, team_id: Uuid) -> Result<Vec<ComputerRecord>, FakeError> {
+        let mut computers: Vec<Computer> = self
+            .computers
+            .lock()
+            .unwrap()
+            .values()
+            .filter(|computer| computer.team_id == team_id)
+            .filter(|computer| computer.state.phase != Phase::Destroyed)
+            .cloned()
+            .collect();
+        computers.sort_by_key(|computer| computer.created_at);
+        Ok(computers.into_iter().map(Into::into).collect())
+    }
+
+    async fn find_by_harness(
+        &self,
+        _harness_id: harness_id::HarnessId,
+    ) -> Result<Option<Computer>, FakeError> {
+        Ok(None)
+    }
+
+    async fn set_harness(
+        &self,
+        _computer_id: ComputerId,
+        _harness_id: harness_id::HarnessId,
+    ) -> Result<(), FakeError> {
+        Ok(())
+    }
+
+    async fn mark_enrolled(
+        &self,
+        _computer_id: ComputerId,
+        _now: DateTime<Utc>,
+    ) -> Result<(), FakeError> {
+        Ok(())
+    }
+
+    async fn running(&self) -> Result<Vec<ComputerRecord>, FakeError> {
+        Ok(vec![])
+    }
+
+    async fn coldest_frozen(&self, _host: HostId) -> Result<Option<ComputerId>, FakeError> {
+        Ok(None)
+    }
+
+    async fn instances_expected(&self, _host: HostId) -> Result<Vec<ComputerRecord>, FakeError> {
+        Ok(vec![])
+    }
+
+    async fn lease_effects(
+        &self,
+        worker: EffectWorker,
+        limit: u32,
+        _now: DateTime<Utc>,
+        _lease_until: DateTime<Utc>,
+    ) -> Result<Vec<PendingEffect>, FakeError> {
+        Ok(self
+            .effects
+            .lock()
+            .unwrap()
+            .iter()
+            .filter(|pending| pending.effect.worker() == worker)
+            .take(limit as usize)
+            .cloned()
+            .collect())
+    }
+
+    async fn release_effects(
+        &self,
+        _ids: &[i64],
+        _lease_until: DateTime<Utc>,
+        _now: DateTime<Utc>,
+    ) -> Result<(), FakeError> {
+        // This billing-only fake never hides leased effects.
+        Ok(())
+    }
+
+    async fn finish_effect(
+        &self,
+        id: i64,
+        completion: Option<Event>,
+        now: DateTime<Utc>,
+    ) -> Result<(), FakeError> {
+        let computer_id = self
+            .effects
+            .lock()
+            .unwrap()
+            .iter()
+            .find(|effect| effect.id == id)
+            .map(|effect| effect.computer_id);
+        if let (Some(computer_id), Some(event)) = (computer_id, completion) {
+            self.apply(computer_id, event, now).await?;
+        }
+        self.complete_effect(id).await
+    }
+
+    async fn complete_effect(&self, id: i64) -> Result<(), FakeError> {
+        self.effects
+            .lock()
+            .unwrap()
+            .retain(|pending| pending.id != id);
+        Ok(())
+    }
+
+    async fn retry_effect(
+        &self,
+        id: i64,
+        _error: String,
+        _retry_at: DateTime<Utc>,
+    ) -> Result<(), FakeError> {
+        for pending in self.effects.lock().unwrap().iter_mut() {
+            if pending.id == id {
+                pending.attempts += 1;
+            }
+        }
+        Ok(())
+    }
+
+    async fn due_timers(
+        &self,
+        _now: DateTime<Utc>,
+        _limit: u32,
+    ) -> Result<Vec<DueTimer>, FakeError> {
+        Ok(vec![])
+    }
+
+    async fn fire_timer(
+        &self,
+        _timer: DueTimer,
+        _instance_status: Option<hosted_runtimes::domain::ports::InstanceStatus>,
+        _now: DateTime<Utc>,
+    ) -> Result<Option<Computer>, FakeError> {
+        Ok(None)
+    }
+
+    async fn postpone_macrod_timers(
+        &self,
+        _host: HostId,
+        _deadline: DateTime<Utc>,
+    ) -> Result<(), FakeError> {
+        // This fake has no timers; due_timers always returns an empty batch.
+        Ok(())
+    }
+
+    async fn register_host(&self, _registration: HostRegistration) -> Result<Host, FakeError> {
+        Err(FakeError)
+    }
+
+    async fn sold_out_sizes(
+        &self,
+        _catalog: &[CatalogEntry],
+        _always_on: bool,
+    ) -> Result<Vec<ComputerSize>, FakeError> {
+        Ok(vec![])
+    }
+
+    async fn request_notify(
+        &self,
+        _team_id: Uuid,
+        _user_id: MacroUserIdStr<'static>,
+        _size: ComputerSize,
+    ) -> Result<(), FakeError> {
+        Ok(())
+    }
+
+    async fn notify_requests(
+        &self,
+        _team_id: Uuid,
+        _user_id: MacroUserIdStr<'static>,
+    ) -> Result<Vec<ComputerSize>, FakeError> {
+        Ok(vec![])
+    }
+}
+
+type BillingUpdate = (StripePriceId, Vec<SubscriptionItem>, String);
+
+/// Records subscription updates; fails them when `decline` is set.
+#[derive(Default)]
+struct FakeBilling {
+    calls: Arc<std::sync::atomic::AtomicUsize>,
+    decline: bool,
+    provider_fails: bool,
+    quote_fails: bool,
+    no_subscription: bool,
+    updates: Arc<Mutex<Vec<BillingUpdate>>>,
+    removals: Mutex<Vec<(StripePriceId, String)>>,
+}
+
+impl Billing for FakeBilling {
+    fn sales_available(&self) -> bool {
+        true
+    }
+
+    async fn quote(&self, _team_id: Uuid, size: ComputerSize) -> Result<Quote, BillingError> {
+        self.calls.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+        if self.no_subscription {
+            return Err(BillingError::NoSubscription);
+        }
+        if self.quote_fails {
+            return Err(BillingError::Provider(rootcause::report!(
+                "billing is unreachable"
+            )));
+        }
+        Ok(Quote {
+            size,
+            price_id: StripePriceId::parse(&format!("price_{}", size.as_ref())).expect("price"),
+            amount: 2000
+                * i64::from(
+                    current_catalog()
+                        .iter()
+                        .find(|entry| entry.size == size)
+                        .expect("catalog size")
+                        .resources
+                        .units(),
+                ),
+            currency: "usd".to_owned(),
+            interval: BillingInterval::Month,
+        })
+    }
+
+    async fn add_computer(
+        &self,
+        _team_id: Uuid,
+        price_id: &StripePriceId,
+        extra_items: &[SubscriptionItem],
+        idempotency_key: &str,
+    ) -> Result<(), BillingError> {
+        self.calls.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+        if self.decline {
+            return Err(BillingError::PaymentFailed);
+        }
+        self.updates.lock().unwrap().push((
+            price_id.clone(),
+            extra_items.to_vec(),
+            idempotency_key.to_owned(),
+        ));
+        if self.provider_fails {
+            return Err(BillingError::Provider(rootcause::report!(
+                "billing response was lost"
+            )));
+        }
+        Ok(())
+    }
+
+    async fn remove_computer(
+        &self,
+        _team_id: Uuid,
+        price_id: &StripePriceId,
+        idempotency_key: &str,
+    ) -> Result<(), BillingError> {
+        self.calls.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+        self.removals
+            .lock()
+            .unwrap()
+            .push((price_id.clone(), idempotency_key.to_owned()));
+        Ok(())
+    }
+
+    async fn period_end(&self, _team_id: Uuid) -> Result<DateTime<Utc>, BillingError> {
+        self.calls.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+        Ok(now() + chrono::Duration::days(20))
+    }
+}
+
+#[tokio::test]
+async fn purchase_sends_the_persona_and_seat_through_one_billing_update() {
+    let repo = FakeRepo {
+        sold_units: 4,
+        ..Default::default()
+    };
+    let computers = repo.computers.clone();
+    let billing = FakeBilling::default();
+    let updates = billing.updates.clone();
+    let service = HostedRuntimesComputers::new(
+        Arc::new(ComputerService::new(
+            repo.clone(),
+            billing,
+            FixedClock,
+            StaticFleetAttachment(hosted_runtimes::domain::models::FleetAttachment::Attached),
+        )),
+        repo,
+        harnesses::domain::ports::MockHarnessRepo::new(),
+    );
+    let persona = agent::Persona {
+        name: "Agent".to_string(),
+        os_user: PersonaOsUser::parse("agent-example").expect("OS user"),
+        extra_service: agent::PersonaService {
+            unit_name: SystemdUnitName::parse("brain@agent-example").expect("unit"),
+            exec: "/opt/macro/brain run".to_string(),
+            env: Default::default(),
+        },
+        config: std::collections::BTreeMap::from([(
+            PersonaConfigKey::parse("MACRO_AGENT_USER_ID").expect("config key"),
+            "macro|agent@example.com".to_string(),
+        )]),
+    };
+    let id = service
+        .purchase(agent::ComputerPurchase {
+            team_id: TEAM,
+            created_by: macro_user_id::user_id::MacroUserIdStr::parse_from_str(
+                "macro|admin@example.com",
+            )
+            .expect("admin id")
+            .into_owned(),
+            size: agent::ComputerSize::Large,
+            name: Some("Agent".to_string()),
+            persona: Some(persona.clone()),
+            extra_items: vec![agent::SubscriptionItem {
+                price_id: StripePriceId::parse("price_seat").expect("price"),
+                quantity: 1,
+            }],
+        })
+        .await
+        .expect("purchase");
+    {
+        let updates = updates.lock().unwrap();
+        assert_eq!(updates.len(), 1);
+        assert_eq!(updates[0].0.as_str(), "price_large");
+        assert_eq!(
+            updates[0].1,
+            vec![SubscriptionItem {
+                price_id: StripePriceId::parse("price_seat").expect("price"),
+                quantity: 1
+            }]
+        );
+    }
+    assert_eq!(service.persona(TEAM, id).await.unwrap(), persona);
+    assert_eq!(service.harness_id(TEAM, id).await.unwrap(), None);
+    assert!(matches!(
+        service.harness_id(Uuid::now_v7(), id).await,
+        Err(agent::TeamAgentError::NotFound)
+    ));
+    let harness_id = harness_id::HarnessId::new_from_uuid(Uuid::from_u128(0x50));
+    computers.lock().unwrap().get_mut(&id).unwrap().harness_id = Some(harness_id);
+    assert_eq!(
+        service.harness_id(TEAM, id).await.unwrap(),
+        Some(harness_id)
+    );
+    computers.lock().unwrap().get_mut(&id).unwrap().harness_id = None;
+
+    assert!(matches!(
+        service.persona(Uuid::now_v7(), id).await,
+        Err(agent::TeamAgentError::NotFound)
+    ));
+    let installed = computers
+        .lock()
+        .unwrap()
+        .get(&id)
+        .unwrap()
+        .persona
+        .clone()
+        .unwrap();
+    assert_eq!(installed.os_user, persona.os_user);
+    assert_eq!(installed.config, persona.config);
+    assert_eq!(installed.extra_service.exec, persona.extra_service.exec);
+    assert_eq!(
+        installed.extra_service.unit_name,
+        persona.extra_service.unit_name
+    );
+
+    let quote = service
+        .quote(TEAM, agent::ComputerSize::Large)
+        .await
+        .expect("quote");
+    assert_eq!(quote.amount, 4000);
+    assert_eq!((quote.vcpus, quote.memory_gb, quote.disk_gb), (8, 16, 200));
+    assert_eq!(quote.interval, agent::BillingInterval::Month);
+    let pending = service.status(TEAM, id).await.expect("status");
+    assert_eq!(pending.status, agent::ComputerStatusKind::SettingUp);
+    assert_eq!(pending.payment, agent::ComputerPayment::Paid);
+    assert_eq!(pending.setup.unwrap().step, agent::SetupStep::Creating);
+    assert!(matches!(
+        service.status(Uuid::now_v7(), id).await,
+        Err(agent::TeamAgentError::NotFound)
+    ));
+
+    assert!(matches!(
+        service.retry(TEAM, id).await,
+        Err(agent::TeamAgentError::RetryUnavailable(_))
+    ));
+    assert!(matches!(
+        service.retry(Uuid::now_v7(), id).await,
+        Err(agent::TeamAgentError::NotFound)
+    ));
+    computers.lock().unwrap().get_mut(&id).unwrap().state.phase = Phase::Failed { host: HOST };
+    let retried = service
+        .retry(TEAM, id)
+        .await
+        .expect("retry existing paid computer");
+    assert_eq!(retried.status, agent::ComputerStatusKind::SettingUp);
+    assert_eq!(service.persona(TEAM, id).await.unwrap(), persona);
+
+    assert_eq!(
+        updates.lock().unwrap().len(),
+        1,
+        "retry must not bill again"
+    );
+
+    {
+        let mut rows = computers.lock().unwrap();
+        let row = rows.get_mut(&id).unwrap();
+        row.state.phase = Phase::Running { host: HOST };
+        row.enrolled_at = Some(now());
+    }
+    assert_eq!(
+        service.status(TEAM, id).await.expect("ready").status,
+        agent::ComputerStatusKind::Ready
+    );
+    service.release(TEAM, id).await.expect("release");
+    service.release(TEAM, id).await.expect("repeat release");
+    assert_eq!(
+        service.status(TEAM, id).await.unwrap().payment,
+        agent::ComputerPayment::Paid
+    );
+    service
+        .release(TEAM, ComputerId::new_from_uuid(Uuid::now_v7()))
+        .await
+        .expect("missing release");
+}
+
+#[tokio::test]
+async fn declined_purchase_reports_unavailable_and_releases_reserved_capacity() {
+    let repo = FakeRepo {
+        sold_units: 4,
+        ..Default::default()
+    };
+    let computers = repo.computers.clone();
+    let service = HostedRuntimesComputers::new(
+        Arc::new(ComputerService::new(
+            repo.clone(),
+            FakeBilling {
+                decline: true,
+                ..Default::default()
+            },
+            FixedClock,
+            StaticFleetAttachment(hosted_runtimes::domain::models::FleetAttachment::Attached),
+        )),
+        repo,
+        harnesses::domain::ports::MockHarnessRepo::new(),
+    );
+    assert!(matches!(
+        service
+            .purchase(agent::ComputerPurchase {
+                team_id: TEAM,
+                created_by: macro_user_id::user_id::MacroUserIdStr::parse_from_str(
+                    "macro|admin@example.com"
+                )
+                .expect("admin id")
+                .into_owned(),
+                size: agent::ComputerSize::Standard,
+                name: None,
+                persona: None,
+                extra_items: vec![],
+            })
+            .await,
+        Err(agent::TeamAgentError::ComputerUnavailable(_))
+    ));
+    assert!(
+        computers
+            .lock()
+            .unwrap()
+            .values()
+            .all(|row| row.state.phase == Phase::PaymentFailed)
+    );
+}
+
+#[tokio::test]
+async fn billing_provider_failures_remain_upstream_errors() {
+    let repo = FakeRepo::default();
+    let service = HostedRuntimesComputers::new(
+        Arc::new(ComputerService::new(
+            repo.clone(),
+            FakeBilling {
+                quote_fails: true,
+                ..Default::default()
+            },
+            FixedClock,
+            StaticFleetAttachment(hosted_runtimes::domain::models::FleetAttachment::Attached),
+        )),
+        repo,
+        harnesses::domain::ports::MockHarnessRepo::new(),
+    );
+    assert!(matches!(
+        service.quote(TEAM, agent::ComputerSize::Standard).await,
+        Err(agent::TeamAgentError::ComputerProvider(_))
+    ));
+}
+
+#[tokio::test]
+async fn payment_errors_recover_the_durable_computer_and_its_payment_status() {
+    for (fail_payment_confirmation, decline, provider_fails, expected, update_count) in [
+        (true, false, false, agent::ComputerStatusKind::SettingUp, 1),
+        (false, false, true, agent::ComputerStatusKind::SettingUp, 1),
+        (false, true, false, agent::ComputerStatusKind::Failed, 0),
+    ] {
+        let repo = FakeRepo {
+            sold_units: 4,
+            fail_payment_confirmation,
+            ..Default::default()
+        };
+        let billing = FakeBilling {
+            decline,
+            provider_fails,
+            ..Default::default()
+        };
+        let updates = billing.updates.clone();
+        let computers = HostedRuntimesComputers::new(
+            Arc::new(ComputerService::new(
+                repo.clone(),
+                billing,
+                FixedClock,
+                StaticFleetAttachment(hosted_runtimes::domain::models::FleetAttachment::Attached),
+            )),
+            repo.clone(),
+            harnesses::domain::ports::MockHarnessRepo::new(),
+        );
+        let result = computers
+            .purchase(agent::ComputerPurchase {
+                team_id: TEAM,
+                created_by: macro_user_id::user_id::MacroUserIdStr::parse_from_str(
+                    "macro|admin@example.com",
+                )
+                .expect("admin id")
+                .into_owned(),
+                size: agent::ComputerSize::Standard,
+                name: Some("Agent".to_string()),
+                persona: Some(agent::Persona {
+                    name: "Agent".to_string(),
+                    os_user: PersonaOsUser::parse("agent-example").expect("OS user"),
+                    extra_service: agent::PersonaService {
+                        unit_name: SystemdUnitName::parse("brain@agent-example").expect("unit"),
+                        exec: "/opt/macro/brain run".to_string(),
+                        env: Default::default(),
+                    },
+                    config: std::collections::BTreeMap::from([(
+                        PersonaConfigKey::parse("MACRO_AGENT_USER_ID").expect("config key"),
+                        "macro|agent@example.com".to_string(),
+                    )]),
+                }),
+                extra_items: vec![agent::SubscriptionItem {
+                    price_id: StripePriceId::parse("price_seat").expect("price"),
+                    quantity: 1,
+                }],
+            })
+            .await;
+        let id = result.expect("recover the durable purchase");
+        assert_eq!(updates.lock().unwrap().len(), update_count);
+        let saved = repo.get(id).await.unwrap().unwrap().into_healthy().unwrap();
+        assert_eq!(saved.team_id, TEAM);
+        let status = computers.status(TEAM, id).await.unwrap();
+        assert_eq!(status.status, expected);
+        assert_eq!(
+            status.payment,
+            if decline {
+                agent::ComputerPayment::Unbilled
+            } else {
+                agent::ComputerPayment::Pending
+            }
+        );
+        if decline {
+            assert_eq!(saved.state.phase, Phase::PaymentFailed);
+        } else {
+            assert!(matches!(saved.state.phase, Phase::PendingPayment { .. }));
+            assert_eq!(
+                status.setup.expect("pending purchase progress").step,
+                agent::SetupStep::Creating
+            );
+        }
+        assert!(matches!(
+            computers.retry(TEAM, id).await,
+            Err(agent::TeamAgentError::RetryUnavailable(_))
+        ));
+        assert_eq!(updates.lock().unwrap().len(), update_count);
+        if decline {
+            computers.release(TEAM, id).await.unwrap();
+            computers.release(TEAM, id).await.unwrap();
+            let released = computers.status(TEAM, id).await.unwrap();
+            assert_eq!(released.status, agent::ComputerStatusKind::Released);
+            assert_eq!(released.payment, agent::ComputerPayment::Unbilled);
+        }
+    }
+}
+
+#[tokio::test]
+async fn status_reads_only_the_enrolled_persona_from_the_computers_own_harness() {
+    use harnesses::domain::{
+        models::{ClaudeMode, Harness, HarnessCapabilities, HarnessOwner, PersonaHealth},
+        ports::MockHarnessRepo,
+    };
+    use hosted_runtimes::domain::enrollment;
+    let checked_at = Utc::now();
+    let last_turn_at = Some(checked_at - chrono::Duration::seconds(10));
+    for (health, healthy, error) in [
+        (
+            PersonaHealth::Healthy {
+                checked_at,
+                last_turn_at,
+            },
+            true,
+            None,
+        ),
+        (
+            PersonaHealth::Unhealthy {
+                checked_at,
+                last_turn_at,
+                last_error: "brain exited".to_string(),
+            },
+            false,
+            Some("brain exited"),
+        ),
+        (
+            PersonaHealth::Missing {
+                checked_at,
+                last_turn_at,
+                last_error: "unit missing".to_string(),
+            },
+            false,
+            Some("unit missing"),
+        ),
+    ] {
+        for matching_computer in [true, false] {
+            let repo = FakeRepo {
+                sold_units: 4,
+                ..Default::default()
+            };
+            let id = ComputerId::new_from_uuid(Uuid::now_v7());
+            let harness_id = "00000000-0000-4000-8000-0000000000aa".parse().unwrap();
+            let mut computer = repo
+                .reserve(
+                    NewComputer {
+                        billing: hosted_runtimes::domain::models::PurchaseBilling::Stripe,
+                        extra_items: vec![],
+                        id,
+                        team_id: TEAM,
+                        name: ComputerName::try_new("Agent").unwrap(),
+                        size: ComputerSize::Standard,
+                        resources: current_catalog()[0].resources,
+                        catalog_entry: current_catalog()[0].id.clone(),
+                        price_id: Some(StripePriceId::parse("price_standard").unwrap()),
+                        created_by: MacroUserIdStr::parse_from_str("macro|admin@example.com")
+                            .unwrap()
+                            .into_owned(),
+                        persona: Some(enrollment::Persona {
+                            name: "Agent".to_string(),
+                            os_user: PersonaOsUser::parse("agent-slug").expect("OS user"),
+                            extra_service: enrollment::PersonaService {
+                                unit_name: SystemdUnitName::parse("brain@agent-slug")
+                                    .expect("unit"),
+                                exec: "/opt/macro/brain run".to_string(),
+                                env: Default::default(),
+                            },
+                            config: Default::default(),
+                        }),
+                    },
+                    now(),
+                )
+                .await
+                .unwrap();
+            computer.state.phase = Phase::Running { host: HOST };
+            computer.enrolled_at = Some(now());
+            computer.harness_id = Some(harness_id);
+            repo.computers.lock().unwrap().insert(id, computer);
+            let harness = Harness {
+                allow_permission_bypass: false,
+                id: harness_id,
+                kind: "macrod".to_string(),
+                name: "Computer".to_string(),
+                owner: HarnessOwner::User {
+                    user_id: "macro|admin@example.com".to_owned(),
+                },
+                access: Default::default(),
+                is_agent_computer: true,
+                shared_team_ids: vec![TEAM],
+                created_by: "macro|admin@example.com".to_string(),
+                created_at: now(),
+                updated_at: now(),
+                connected: true,
+                last_connected_at: Some(now()),
+                capabilities: HarnessCapabilities {
+                    screen: false,
+                    personas: std::collections::BTreeMap::from([
+                        ("agent-slug".to_string(), health.clone()),
+                        (
+                            "another-agent".to_string(),
+                            PersonaHealth::Healthy {
+                                checked_at,
+                                last_turn_at: None,
+                            },
+                        ),
+                    ]),
+                },
+                computer_id: Some(if matching_computer {
+                    id
+                } else {
+                    ComputerId::new_from_uuid(Uuid::from_u128(0xbad))
+                }),
+                claude_mode: ClaudeMode::MacroCredits,
+            };
+            let mut harnesses = MockHarnessRepo::new();
+            harnesses
+                .expect_get_harness()
+                .times(1)
+                .withf(move |id| *id == harness_id)
+                .return_once(move |_| Box::pin(async move { Ok(Some(harness)) }));
+            let adapter = HostedRuntimesComputers::new(
+                Arc::new(ComputerService::new(
+                    repo.clone(),
+                    FakeBilling::default(),
+                    FixedClock,
+                    StaticFleetAttachment(
+                        hosted_runtimes::domain::models::FleetAttachment::Attached,
+                    ),
+                )),
+                repo,
+                harnesses,
+            );
+            let report = adapter.status(TEAM, id).await.unwrap();
+            if matching_computer {
+                let brain = report.brain.unwrap();
+                assert_eq!(brain.healthy, healthy);
+                assert_eq!(brain.last_error.as_deref(), error);
+                assert_eq!(brain.last_turn_at, last_turn_at);
+            } else {
+                assert_eq!(report.brain, None);
+            }
+        }
+    }
+}
+
+#[tokio::test]
+async fn catalog_is_available_without_billing_and_quote_preserves_no_subscription() {
+    let repo = FakeRepo::default();
+    let service = HostedRuntimesComputers::new(
+        Arc::new(ComputerService::new(
+            repo.clone(),
+            FakeBilling {
+                no_subscription: true,
+                ..Default::default()
+            },
+            FixedClock,
+            StaticFleetAttachment(hosted_runtimes::domain::models::FleetAttachment::Attached),
+        )),
+        repo,
+        harnesses::domain::ports::MockHarnessRepo::new(),
+    );
+    let specs = service.sizes();
+    assert_eq!(specs.len(), ComputerSize::ALL.len());
+    for (spec, entry) in specs.iter().zip(current_catalog()) {
+        assert_eq!(spec.size, entry.size);
+        assert_eq!(
+            (spec.vcpus, spec.memory_gb, spec.disk_gb),
+            (
+                entry.resources.vcpus.get(),
+                entry.resources.memory_gib.get(),
+                entry.resources.disk_gib.get()
+            )
+        );
+    }
+    assert!(matches!(
+        service.quote(TEAM, agent::ComputerSize::Standard).await,
+        Err(agent::TeamAgentError::NoSubscription)
+    ));
+}
+
+#[tokio::test]
+async fn configured_catalog_drives_sizes_quotes_and_reserved_resources() {
+    use hosted_runtimes::domain::size::{
+        CatalogEntryId, ComputerResources, DiskGib, MemoryGib, Vcpus,
+    };
+
+    let repo = FakeRepo {
+        sold_units: 2,
+        ..Default::default()
+    };
+    let catalog = vec![CatalogEntry {
+        id: CatalogEntryId::try_new("standard@fixture".to_owned()).unwrap(),
+        size: ComputerSize::Standard,
+        resources: ComputerResources {
+            vcpus: Vcpus::new(6),
+            memory_gib: MemoryGib::new(12),
+            disk_gib: DiskGib::new(150),
+        },
+    }];
+    let billing = FakeBilling::default();
+    let calls = billing.calls.clone();
+    let adapter = HostedRuntimesComputers::new(
+        Arc::new(
+            ComputerService::new(
+                repo.clone(),
+                billing,
+                FixedClock,
+                StaticFleetAttachment(hosted_runtimes::domain::models::FleetAttachment::Attached),
+            )
+            .with_catalog(catalog.clone()),
+        ),
+        repo.clone(),
+        harnesses::domain::ports::MockHarnessRepo::new(),
+    );
+    let specs = adapter.sizes();
+    assert_eq!(specs.len(), 1);
+    assert_eq!(
+        (specs[0].vcpus, specs[0].memory_gb, specs[0].disk_gb),
+        (6, 12, 150)
+    );
+    assert_eq!(calls.load(std::sync::atomic::Ordering::SeqCst), 0);
+    let quote = adapter.quote(TEAM, ComputerSize::Standard).await.unwrap();
+    assert_eq!((quote.vcpus, quote.memory_gb, quote.disk_gb), (6, 12, 150));
+    let purchase = agent::ComputerPurchase {
+        team_id: TEAM,
+        created_by: macro_user_id::user_id::MacroUserIdStr::parse_from_str(
+            "macro|admin@example.com",
+        )
+        .unwrap()
+        .into_owned(),
+        size: ComputerSize::Standard,
+        name: Some("Agent".to_owned()),
+        persona: None,
+        extra_items: vec![],
+    };
+    let id = adapter.purchase(purchase.clone()).await.unwrap();
+    let saved = repo.get(id).await.unwrap().unwrap().into_healthy().unwrap();
+    assert_eq!(saved.resources, catalog[0].resources);
+    assert_eq!(saved.catalog_entry, catalog[0].id);
+    assert!(matches!(
+        adapter.purchase(purchase).await,
+        Err(agent::TeamAgentError::ComputerUnavailable(_))
+    ));
+}
+
+#[tokio::test]
+async fn comped_purchase_and_release_never_consult_billing() {
+    let repo = FakeRepo {
+        sold_units: 4,
+        ..Default::default()
+    };
+    let billing = FakeBilling {
+        provider_fails: true,
+        ..Default::default()
+    };
+    let calls = billing.calls.clone();
+    let saved = repo.computers.clone();
+    let adapter = HostedRuntimesComputers::new(
+        Arc::new(ComputerService::new(
+            repo.clone(),
+            billing,
+            FixedClock,
+            StaticFleetAttachment(hosted_runtimes::domain::models::FleetAttachment::Attached),
+        )),
+        repo,
+        harnesses::domain::ports::MockHarnessRepo::new(),
+    );
+    let id = adapter
+        .provision_comped(agent::ComputerPurchase {
+            team_id: TEAM,
+            created_by: macro_user_id::user_id::MacroUserIdStr::parse_from_str(
+                "macro|admin@example.com",
+            )
+            .expect("admin id")
+            .into_owned(),
+            size: agent::ComputerSize::Standard,
+            name: Some("Agent".to_owned()),
+            persona: None,
+            extra_items: vec![],
+        })
+        .await
+        .expect("complimentary provision succeeds even with unavailable billing");
+    {
+        let computers = saved.lock().unwrap();
+        let state = &computers[&id].state;
+        assert_eq!(
+            state.payment,
+            hosted_runtimes::domain::lifecycle::PaymentOutcome::Comped
+        );
+        assert_eq!(state.comp_reason.as_deref(), Some("Included for Macro"));
+    }
+    adapter
+        .release(TEAM, id)
+        .await
+        .expect("release comped computer");
+    assert_eq!(calls.load(std::sync::atomic::Ordering::SeqCst), 0);
+}
+
+#[tokio::test]
+async fn detached_fleet_keeps_catalog_roster_payment_and_queues_agent_release() {
+    use hosted_runtimes::domain::models::FleetAttachment;
+    let repo = FakeRepo {
+        sold_units: 4,
+        ..Default::default()
+    };
+    let billing = FakeBilling::default();
+    let attached = HostedRuntimesComputers::new(
+        Arc::new(ComputerService::new(
+            repo.clone(),
+            billing,
+            FixedClock,
+            StaticFleetAttachment(FleetAttachment::Attached),
+        )),
+        repo.clone(),
+        harnesses::domain::ports::MockHarnessRepo::new(),
+    );
+    let id = attached
+        .purchase(agent::ComputerPurchase {
+            team_id: TEAM,
+            created_by: MacroUserIdStr::parse_from_str("macro|admin@example.com")
+                .unwrap()
+                .into_owned(),
+            size: agent::ComputerSize::Standard,
+            name: Some("Agent".to_owned()),
+            persona: None,
+            extra_items: vec![],
+        })
+        .await
+        .unwrap();
+    let detached = HostedRuntimesComputers::new(
+        Arc::new(ComputerService::new(
+            repo.clone(),
+            FakeBilling::default(),
+            FixedClock,
+            StaticFleetAttachment(FleetAttachment::Detached),
+        )),
+        repo.clone(),
+        harnesses::domain::ports::MockHarnessRepo::new(),
+    );
+    assert_eq!(detached.sizes(), attached.sizes());
+    let status = detached.status(TEAM, id).await.unwrap();
+    assert_eq!(status.payment, agent::ComputerPayment::Paid);
+    assert_eq!(status.status, agent::ComputerStatusKind::Unavailable);
+    assert!(matches!(
+        detached.quote(TEAM, agent::ComputerSize::Standard).await,
+        Err(agent::TeamAgentError::FleetUnavailable(_))
+    ));
+    detached.release(TEAM, id).await.unwrap();
+    assert!(
+        repo.events
+            .lock()
+            .unwrap()
+            .iter()
+            .any(|(computer, event)| *computer == id && matches!(event, Event::ReleaseNow))
+    );
+    assert!(repo.get(id).await.unwrap().is_some());
+}

@@ -24,7 +24,10 @@ import type {
 } from './ai-billing-types';
 import { fetchWithAuth as _fetchWithAuth } from './fetch';
 import type {
+  AgentVoice,
   CheckoutSessionV2Response,
+  ComputerSize,
+  CreateTeamAgent,
   CursorApiKeyStatus,
   CursorModelsResponse,
   EmailConnectionProviders,
@@ -46,6 +49,11 @@ import type {
   SetGithubPullRequestDraftResponse,
   SetGithubPullRequestStateRequest,
   SetGithubPullRequestStateResponse,
+  TeamAgent,
+  TeamAgentComputer,
+  TeamAgentQuote,
+  TeamAgentSizes,
+  TeamAgents,
   TrialEligibility,
   UserQuota,
 } from './generated/schemas';
@@ -94,6 +102,11 @@ import type { UserName } from './generated/schemas/userName';
 import type { UserNames } from './generated/schemas/userNames';
 import type { UserOrganizationResponse } from './generated/schemas/userOrganizationResponse';
 import type { UserTokensResponse } from './generated/schemas/userTokensResponse';
+import {
+  teamAgentComputerErrorResponseHandler,
+  teamAgentCreateErrorResponseHandler,
+  teamAgentQuoteErrorResponseHandler,
+} from './team-agent-errors';
 
 const authHost = SERVER_HOSTS['auth-service'];
 
@@ -1365,6 +1378,76 @@ export const authServiceClient = {
         .map((result): TeamWithMembers | null =>
           'team' in result ? result : null
         )
+    );
+  },
+
+  listTeamAgents() {
+    return fetchWithAuth<TeamAgents>(`${authHost}/team_agents`, {
+      method: 'GET',
+    });
+  },
+
+  getTeamAgentComputer(userId: string) {
+    return fetchWithAuth<TeamAgentComputer, 'COMPUTERS_UNAVAILABLE'>(
+      `${authHost}/team_agents/${encodeURIComponent(userId)}/computer`,
+      {
+        method: 'GET',
+        errorResponseHandler: teamAgentComputerErrorResponseHandler,
+        trace: { expectedStatusCodes: [503] },
+      }
+    );
+  },
+  getTeamAgentVoice(userId: string) {
+    return fetchWithAuth<AgentVoice>(
+      `${authHost}/team_agents/${encodeURIComponent(userId)}/voice`,
+      { method: 'GET' }
+    );
+  },
+  setTeamAgentVoice(userId: string, voice: AgentVoice) {
+    return fetchWithAuth<AgentVoice>(
+      `${authHost}/team_agents/${encodeURIComponent(userId)}/voice`,
+      { method: 'PUT', body: JSON.stringify(voice) }
+    );
+  },
+
+  getTeamAgentSizes() {
+    return fetchWithAuth<TeamAgentSizes>(`${authHost}/team_agents/sizes`, {
+      method: 'GET',
+    });
+  },
+
+  quoteTeamAgent(size: ComputerSize) {
+    return fetchWithAuth<TeamAgentQuote, 'no_subscription'>(
+      `${authHost}/team_agents/quote?size=${size}`,
+      {
+        method: 'GET',
+        errorResponseHandler: teamAgentQuoteErrorResponseHandler,
+      }
+    );
+  },
+
+  createTeamAgent(request: CreateTeamAgent) {
+    return fetchWithAuth<
+      TeamAgent,
+      'repository_creation_failed' | 'quote_changed'
+    >(`${authHost}/team_agents`, {
+      method: 'POST',
+      body: JSON.stringify(request),
+      errorResponseHandler: teamAgentCreateErrorResponseHandler,
+    });
+  },
+
+  retryTeamAgent(userId: string) {
+    return fetchWithAuth<TeamAgent>(
+      `${authHost}/team_agents/${encodeURIComponent(userId)}/retry`,
+      { method: 'POST' }
+    );
+  },
+
+  deleteTeamAgent(userId: string) {
+    return fetchWithAuth<{}>(
+      `${authHost}/team_agents/${encodeURIComponent(userId)}`,
+      { method: 'DELETE' }
     );
   },
 

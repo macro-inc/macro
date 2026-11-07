@@ -108,6 +108,8 @@ export type MacroAuth =
 
 /** Options passed to `new Macro(opts)` and stored on `MacroClient`. */
 export interface MacroOpts {
+  /** HTTP transport, for runtime tracing or an isolated test transport. */
+  fetch?: typeof globalThis.fetch;
   /** Optional generated API operation events; excludes arguments, URLs and response data. */
   onRequest?: (event: import('./utils/activity').RequestActivity) => void;
   /** How to authenticate. Takes precedence over `token`. Falls back to

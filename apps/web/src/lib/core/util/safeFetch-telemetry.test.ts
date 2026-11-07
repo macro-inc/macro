@@ -73,3 +73,20 @@ describe('safeFetch capability URL privacy', () => {
       expect(JSON.stringify(result.error)).not.toContain('secret-token');
   });
 });
+
+describe('safeFetch agent identity privacy', () => {
+  it('preserves the request identity while redacting its span path', async () => {
+    const url =
+      'https://gateway.example/auth/team_agents/macro%7Cagent%40example.com/retry';
+    mocks.fetch.mockResolvedValue(new Response('{}', { status: 200 }));
+    await safeFetch(url, { method: 'POST' });
+    expect(mocks.fetch.mock.calls[0][0]).toBe(url);
+    expect(mocks.startSpan).toHaveBeenCalledWith(
+      'http POST /auth/team_agents/:agentId/retry',
+      { kind: 'client' }
+    );
+    const attributes = JSON.stringify(mocks.span.setAttr.mock.calls);
+    expect(attributes).not.toContain('agent%40example.com');
+    expect(attributes).toContain('/team_agents/:agentId/retry');
+  });
+});

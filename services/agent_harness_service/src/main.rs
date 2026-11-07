@@ -8,11 +8,15 @@
 //! the orchestrator from the resulting `macro.agent_sessions` events.
 
 mod agent_runtime_directory;
+mod anthropic_gateway;
 mod api;
 mod bots_directory;
+mod brain_gateway;
 mod code_mode;
 mod coding_agent;
 mod coding_agents;
+mod computer_screen;
+mod computers;
 mod config;
 mod containers;
 mod conversation_admission;
@@ -29,7 +33,9 @@ mod routine_drafts;
 mod routine_sessions;
 mod runtime_commands;
 mod scheduling;
+mod speech_gateway;
 mod trigger;
+mod voice_gateway;
 
 #[cfg(test)]
 mod test;
@@ -219,6 +225,8 @@ async fn main() -> anyhow::Result<()> {
     result
 }
 
+const DEFAULT_POSTHOG_HOST: &str = "https://us.i.posthog.com";
+
 fn macro_mcp_endpoint(base_url: &McpServiceUrl) -> Result<url::Url, url::ParseError> {
     // Append rather than Url::join("/mcp"), which would discard the gateway prefix.
     url::Url::parse(&format!("{}/mcp", base_url.trim_end_matches('/')))
@@ -257,6 +265,8 @@ async fn run() -> anyhow::Result<()> {
         .resolve_remote_secrets(Environment::new_or_prod(), &secrets)
         .await
         .context("failed to resolve agent harness service secrets")?;
+    let livekit_credentials = config.livekit_credentials()?;
+    let computer_fleet = config.computer_fleet()?;
     let non_user_owners = config.non_user_owners()?;
     let bot_id = BotId::new_from_uuid(config.harness_bot_id);
     let enable_dev_commands = matches!(
@@ -744,30 +754,45 @@ async fn run() -> anyhow::Result<()> {
         .value()
         .map(|key| {
             feature_flags::outbound::posthog::PostHogFeatureFlags::new(
-                config
-                    .posthog_host
-                    .value()
-                    .unwrap_or("https://us.i.posthog.com"),
+                config.posthog_host.value().unwrap_or(DEFAULT_POSTHOG_HOST),
                 key.to_owned(),
                 std::time::Duration::from_secs(3),
             )
             .map_err(|error| anyhow::anyhow!("invalid feature flag configuration: {error}"))
         })
         .transpose()?;
-    // `ai-code-mode` decides, per user, whether agent sessions hide
-    // SDK-covered tools and whether the public MCP lists only code mode.
-    let code_mode_selector: Option<Arc<dyn agent_inmem::domain::tool_mode::ToolModeSelector>> =
-        match (&code_runner, &feature_flags) {
-            (Some(_), Some(flags)) => Some(Arc::new(
-                agent_inmem::domain::tool_mode::FlaggedToolMode::new(flags.clone()),
+    // Teammates explicitly get ai-code-mode from server account facts;
+    // ordinary users keep their current PostHog rollout (or standard tools).
+    let ordinary_mode: Arc<dyn agent_inmem::domain::tool_mode::ToolModeSelector> =
+        match &feature_flags {
+            Some(flags) => Arc::new(agent_inmem::domain::tool_mode::FlaggedToolMode::new(
+                flags.clone(),
             )),
-            _ => None,
+            None => Arc::new(agent_inmem::domain::tool_mode::StandardTools),
         };
+    let code_mode_selector: Option<Arc<dyn agent_inmem::domain::tool_mode::ToolModeSelector>> =
+        code_runner.as_ref().map(|_| {
+            let selector: Arc<dyn agent_inmem::domain::tool_mode::ToolModeSelector> =
+                Arc::new(agent_inmem::domain::tool_mode::AgentToolMode::new(
+                    public_mcp::agent_accounts::Accounts(
+                        team_agents::outbound::pg_team_agents_repo::PgTeamAgentsRepo::new(
+                            pool.clone(),
+                        ),
+                    ),
+                    ordinary_mode,
+                ));
+            selector
+        });
     let public_code_mode = match (&code_runner, &code_mode_selector) {
         (Some((_, public, _, _)), Some(selector)) => Some(public_mcp::PublicCodeMode {
             service: Arc::new(agent_code_mode::domain::UserCodeModeService::new(
                 Arc::new(public.clone()),
                 Arc::new(code_mode::UserRunCredentials {
+                    teammates: Arc::new(public_mcp::agent_accounts::Accounts(
+                        team_agents::outbound::pg_team_agents_repo::PgTeamAgentsRepo::new(
+                            pool.clone(),
+                        ),
+                    )),
                     correlations: agent_correlation::outbound::PgCorrelationRepository(
                         pool.clone(),
                     ),
@@ -906,10 +931,17 @@ async fn run() -> anyhow::Result<()> {
     let reviews_cell = Arc::new(std::sync::OnceLock::new());
     let internal_mcp = internal_mcp::router(
         Arc::new(session_repo.clone()),
-        url::Url::parse(&egress_base_url)?
-            .host_str()
-            .context("egress URL needs a host")?
-            .to_owned(),
+        {
+            let overrides = computers::service_url_overrides()?;
+            let mut urls = vec![egress_base_url.as_str()];
+            urls.extend(config.external_egress_base_url.as_deref());
+            urls.extend(
+                overrides
+                    .get(AgentHarnessEgressUrl::OVERRIDE_ENV_VAR_NAME)
+                    .map(String::as_str),
+            );
+            internal_mcp::configured_hosts(&urls)?
+        },
         internal_mcp::InternalTools {
             service: session_pull_requests.clone(),
             tasks: session_tasks,
@@ -926,6 +958,7 @@ async fn run() -> anyhow::Result<()> {
     // a second set of clients and dropping them when the listing ends.
     let mcp_connector = Arc::new(AcpMcpConnector::new(
         EgressMcpClient::new(Arc::clone(&egress), &egress_base_url)
+            .with_external_base_url(config.external_egress_base_url.as_deref())
             .with_internal_mcp(internal_mcp_handler(internal_mcp.clone())),
     ));
     let tool_catalog: Arc<dyn agent_session::domain::ports::SessionToolCatalog> =
@@ -1311,10 +1344,73 @@ async fn run() -> anyhow::Result<()> {
     // Each dial also reports which sessions its runtime still serves, which
     // the harness loads once it exists below.
     let (live_sessions, mut live_session_reports) = tokio::sync::mpsc::unbounded_channel();
+    // Macro computers: the fleet operator (when this deployment drives a
+    // fleet), presence that turns macrod connects into lifecycle events, and
+    // a forwarder that wakes an asleep computer for a prompt.
+    let computer_operator = computers::operator(
+        &config,
+        computer_fleet,
+        &pool,
+        Arc::new(harnesses::domain::service::HarnessServiceImpl::new(
+            PgHarnessRepo::new(pool.clone()),
+        )),
+    )
+    .await?;
+    let brain_access = team_agents::domain::gateway::BrainGatewayAuthorizer::new(
+        team_agents::outbound::brain_gateway_directory::BrainGatewayDirectoryAdapter::new(
+            macro_authorization::PgUserApiKeyAuthorizer::new(
+                macro_authorization::PgUserApiKeyAuthorizationRepo::new(pool.clone()),
+            ),
+            team_agents::outbound::pg_team_agents_repo::PgTeamAgentsRepo::new(pool.clone()),
+            teams::outbound::team_repo::TeamRepositoryImpl::new(pool.clone()),
+        ),
+        brain_gateway::GatewayComputers::new(
+            hosted_runtimes::outbound::pg::PgComputerRepo::new(pool.clone()),
+            computer_operator.clone(),
+        ),
+    );
+    let brain_access = Arc::new(brain_access);
+    let speech_provider = Arc::new(speech_gateway::SpeechGateway::new(
+        brain_access.clone(),
+        admission.clone(),
+        recorder.clone(),
+        livekit_credentials,
+        "https://agent-gateway.livekit.cloud/v1",
+        "https://api.deepgram.com/v1/models",
+    )?);
+    let speech_gateway = speech_gateway::router(speech_provider.clone());
+    let anthropic_gateway = anthropic_gateway::router(
+        anthropic_gateway::GatewayState::new(
+            Arc::new(session_repo.clone()),
+            admission.clone(),
+            recorder.clone(),
+            anthropic_gateway::ANTHROPIC_API_URL,
+            &config.anthropic_api_key,
+        )?
+        .with_brains(brain_access),
+    )
+    .merge(speech_gateway);
+    let parked_commands = Arc::new(computers::ParkedCommands::default());
+    let command_forwarder = Arc::new(RedisCommandForwarder::new(redis.clone()));
     let runtimes = RuntimeRegistry::with_presence(
-        Arc::new(PgHarnessPresence::new(pool.clone(), replica)),
+        Arc::new(computers::ComputerPresence::new(
+            Arc::new(PgHarnessPresence::new(pool.clone(), replica)),
+            computer_operator.clone(),
+            Arc::clone(&command_forwarder),
+            Arc::clone(&parked_commands),
+            pool.clone(),
+        )),
         live_sessions,
     );
+    let computer_tasks = tokio_util::task::TaskTracker::new();
+    if let Some(operator) = &computer_operator {
+        computers::spawn_loops(
+            Arc::clone(operator),
+            computers::PgSessionActivity::new(pool.clone()),
+            &computer_tasks,
+            service_shutdown.clone(),
+        );
+    }
     let presence_runtimes = Arc::clone(&runtimes);
     // Read once, here, rather than at every session this deployment opens: a
     // URL that names no repository is a misconfiguration of the deployment,
@@ -1412,7 +1508,13 @@ async fn run() -> anyhow::Result<()> {
                 egress_base_url,
             )
             .with_external_base_url(config.external_egress_base_url.clone()),
-            RedisCommandForwarder::new(redis.clone()),
+            computers::WakingForwarder::new(
+                Arc::clone(&command_forwarder),
+                computer_operator.clone(),
+                Arc::clone(&parked_commands),
+                computer_tasks.clone(),
+                service_shutdown.clone(),
+            ),
             PgPermissionPolicySource::new(PgBotsRepo::new(pool.clone())),
             PgCodingAgentSource::new(PgBotsRepo::new(pool.clone())),
             defaults,
@@ -1707,6 +1809,21 @@ async fn run() -> anyhow::Result<()> {
         session_repo.clone(),
         MacroAuthorizationState::new(Arc::new(authorization_service.clone())),
     );
+    let computer_screen = computer_screen::router(
+        Arc::clone(&runtimes),
+        redis.clone(),
+        harnesses::domain::service::HarnessServiceImpl::new(PgHarnessRepo::new(pool.clone())),
+        MacroAuthorizationState::new(Arc::new(authorization_service.clone())),
+        feature_flags
+            .clone()
+            .map(hosted_runtimes::domain::rollout::ComputerRollout::new)
+            .unwrap_or_default(),
+        hosted_runtimes::domain::models::FleetAttachment::from_operator_present(
+            computer_operator.is_some(),
+        ),
+        &computer_tasks,
+        service_shutdown.clone(),
+    );
     let gateway_state = RuntimeGatewayState::new(
         runtimes,
         MacroAuthorizationState::new(Arc::new(authorization_service.clone())),
@@ -1729,10 +1846,7 @@ async fn run() -> anyhow::Result<()> {
         .value()
         .map(|key| {
             feature_flags::outbound::posthog::PostHogFeatureFlags::new(
-                config
-                    .posthog_host
-                    .value()
-                    .unwrap_or("https://us.i.posthog.com"),
+                config.posthog_host.value().unwrap_or(DEFAULT_POSTHOG_HOST),
                 key.to_owned(),
                 std::time::Duration::from_secs(3),
             )
@@ -1818,6 +1932,14 @@ async fn run() -> anyhow::Result<()> {
             MacroAuthorizationState::new(Arc::new(authorization_service.clone())),
         ),
     );
+    let voices = voice_gateway::router(voice_gateway::VoiceState {
+        service: Arc::new(team_agents::domain::voice::Voices::new(
+            speech_gateway::VoiceCatalog(speech_provider),
+            feature_flags.clone(),
+        )),
+        access: entity_access.clone(),
+        auth: MacroAuthorizationState::new(Arc::new(authorization_service.clone())),
+    });
     let tool_approval_answers = tool_approvals_router(ToolApprovalsRouterState::new(
         tool_approvals,
         entity_access.clone(),
@@ -1883,7 +2005,9 @@ async fn run() -> anyhow::Result<()> {
             .with_routine_sessions(routine_sessions)
             .with_conversations(conversations)
             .with_coding_agents(coding_agents)
+            .with_computer_screen(computer_screen)
             .with_capabilities(capabilities)
+            .with_voices(voices)
             .with_mode_choice(mode_choice)
             .with_pull_requests(pull_requests)
             .with_auto_archive(auto_archive)
@@ -2099,6 +2223,7 @@ async fn run() -> anyhow::Result<()> {
         if let Err(error) = api::serve_egress(
             egress,
             internal_mcp,
+            anthropic_gateway,
             egress_port,
             egress_shutdown.clone().cancelled_owned(),
         )
@@ -2344,6 +2469,8 @@ async fn run() -> anyhow::Result<()> {
     }
 
     service_shutdown.cancel();
+    computer_tasks.close();
+    computer_tasks.wait().await;
     scheduling_runtime.stop();
     cognition_runtime.stop();
     notification_cancel.cancel();

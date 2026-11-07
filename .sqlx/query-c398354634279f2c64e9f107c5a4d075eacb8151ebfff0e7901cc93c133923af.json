@@ -1,0 +1,12 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE macro_user_email_verification SET is_verified = true WHERE email = 'owner@staff.example.com'",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": []
+  },
+  "hash": "c398354634279f2c64e9f107c5a4d075eacb8151ebfff0e7901cc93c133923af"
+}

@@ -1,10 +1,20 @@
+import { match } from 'ts-pattern';
 import type { Harness as HarnessRecord } from '../../../generated/storage/types.gen';
 import { MacroNotFoundError, unwrap } from '../../utils';
 import type { MacroClient } from '../../utils/client';
+import { Agent } from '../agents/agent';
 import { MacroEntity } from '../entity';
+import { type AccessRequest, EntityAccess } from '../sharing/access';
+import { User } from '../users/user';
 
-/** A registered host for coding agents. */
+/** A registered host for agents: a teammate's computer running macrod. */
 export class Harness extends MacroEntity<HarnessRecord> {
+  /**
+   * Access requests for this host. Asking for access works from any credential;
+   * deciding who gets it takes a human authorized reviewer's session, in the app.
+   */
+  readonly access = new EntityAccess(this.client, 'harness', this);
+
   /** Construct a lazy host handle. */
   static byId(client: MacroClient, id: string): Harness {
     return new Harness(client, id);
@@ -16,9 +26,9 @@ export class Harness extends MacroEntity<HarnessRecord> {
   }
 
   protected async fetch(): Promise<HarnessRecord> {
-    const record = unwrap(await this.client.storage.listHarnesses()).find(
-      (h) => h.id === this.id,
-    );
+    const record = unwrap(
+      await this.client.storage.listHarnessDirectory(),
+    ).find((h) => h.id === this.id);
     if (!record)
       throw new MacroNotFoundError(`Harness ${this.id} is unavailable`);
     return record;
@@ -56,6 +66,49 @@ export class Harness extends MacroEntity<HarnessRecord> {
         path: { harness_id: this.id },
         body: { name },
       }),
+    );
+  }
+
+  /** The person whose computer this is. */
+  readonly owner = this.mappedField('owner', (owner) =>
+    User.byId(this.client, owner.user_id),
+  );
+
+  /**
+   * The caller's role: `owner`, `user` (can run agents), `read` (can see what is
+   * on it, cannot run agents), `resident` (the assigned agent account, view-only),
+   * or `none` (can only see it exists).
+   */
+  readonly callerAccess = this.field('access');
+
+  /**
+   * Ask the host's owner for access in the caller's name, and show them which
+   * agent asked.
+   *
+   * Agents: call this only when the user asked for it or agreed after being
+   * offered it, typically after `callerAccess()` was `none` or `read`, or a prompt to an
+   * agent on this host was refused; never request access on your own. It never
+   * grants access: agents cannot approve requests or share a host, even one
+   * their own user owns. Tell the user it is pending with `owner()`, and check
+   * `callerAccess()` later.
+   */
+  async requestAccess(role: 'read' | 'user' = 'user'): Promise<AccessRequest> {
+    return this.access.request(role === 'read' ? 'view' : 'edit');
+  }
+
+  /** Agents and agent accounts living on the host, for callers with at least `read`. */
+  async residents(): Promise<(Agent | User)[]> {
+    return unwrap(
+      await this.client.storage.listHarnessResidents({
+        path: { harness_id: this.id },
+      }),
+    ).flatMap((resident): (Agent | User)[] =>
+      match(resident)
+        .with({ type: 'bot' }, (bot) => [Agent.byId(this.client, bot.bot_id)])
+        .with({ type: 'account' }, (account) => [
+          User.byId(this.client, account.user_id),
+        ])
+        .exhaustive(() => []),
     );
   }
 

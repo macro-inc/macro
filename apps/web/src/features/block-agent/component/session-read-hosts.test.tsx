@@ -22,6 +22,10 @@ const mocks = vi.hoisted(() => ({
 
 // Keep both real session hosts and the real read marker. Replace unrelated
 // editor/chrome surfaces and provide the session/notification boundary data.
+vi.mock('@app/features/runtime-sharing/views/AgentRuntime', () => ({
+  AgentRuntime: () => null,
+}));
+
 vi.mock('@notifications/notification-helpers', () => ({
   markNotificationsForEntityAsRead: mocks.markRead,
 }));
@@ -98,6 +102,9 @@ vi.mock('@core/component/EntityIcon', () => ({ EntityIcon: () => null }));
 // Chrome, and query-backed: both hosts render it, and this file mounts them
 // without a QueryClientProvider.
 vi.mock('./AgentPreviewBanner', () => ({ AgentPreviewBanner: () => null }));
+vi.mock('@app/features/computer-screen/agent-computer-screen', () => ({
+  AgentComputerScreen: (props: { children: JSX.Element }) => props.children,
+}));
 vi.mock('./auto-archive-file-operations', () => ({
   useAutoArchiveFileOperations: () => () => [],
 }));

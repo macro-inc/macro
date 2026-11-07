@@ -3,7 +3,9 @@ use entity_access::{
     domain::{models::MemberTeamRole, ports::EntityAccessService},
     inbound::axum_extractors::MacroUserTeamExtractorV2,
 };
-use macro_authorization::MacroAuthorizationService;
+use macro_authorization::{
+    AnyPrincipal, MacroAuthorization, MacroAuthorizationExtractor, MacroAuthorizationService,
+};
 use macro_user_id::{email::Email, lowercased::Lowercase};
 use model_error_response::ErrorResponse;
 
@@ -32,6 +34,10 @@ pub struct InviteToTeamRequest {
     /// as an agent and joins the team when it first signs in.
     #[serde(default)]
     pub is_agent: bool,
+    /// Runtimes the caller owns to share with each person who accepts. Others
+    /// are ignored. Honored only from the caller's own session.
+    #[serde(default)]
+    pub harness_ids: Vec<uuid::Uuid>,
 }
 
 /// Error type for the invite to team handler
@@ -86,6 +92,7 @@ impl axum::response::IntoResponse for InviteToTeamError {
         (status = 304),
         (status = 400, body = ErrorResponse),
         (status = 401, body = ErrorResponse),
+        (status = 403, body = ErrorResponse),
         (status = 404, body = ErrorResponse),
         (status = 409, body = ErrorResponse, description = "`team_id` names a team other than the caller's current team"),
         (status = 500, body = ErrorResponse),
@@ -94,6 +101,7 @@ impl axum::response::IntoResponse for InviteToTeamError {
 #[tracing::instrument(skip_all, err)]
 pub async fn handler<T: TeamService, Eas: EntityAccessService, Auth: MacroAuthorizationService>(
     access: MacroUserTeamExtractorV2<MemberTeamRole, Eas, Auth>,
+    authorization: MacroAuthorizationExtractor<Auth, AnyPrincipal>,
     State(state): State<TeamRouterState<T, Eas, Auth>>,
     Json(req): Json<InviteToTeamRequest>,
 ) -> Result<StatusCode, InviteToTeamError> {
@@ -124,6 +132,21 @@ pub async fn handler<T: TeamService, Eas: EntityAccessService, Auth: MacroAuthor
 
     if team_invites.is_empty() {
         return Ok(StatusCode::NOT_MODIFIED);
+    }
+
+    if let MacroAuthorization::User(inviter) = &authorization.authorization
+        && inviter.is_human_session()
+        && !req.harness_ids.is_empty()
+    {
+        let invite_ids: Vec<_> = team_invites
+            .iter()
+            .map(|invite| invite.team_invite_id)
+            .collect();
+        state
+            .service
+            .offer_harnesses_with_invites(&invite_ids, &inviter.macro_user_id, &req.harness_ids)
+            .await
+            .map_err(InviteToTeamError::InviteUsersToTeamError)?;
     }
 
     Ok(StatusCode::CREATED)

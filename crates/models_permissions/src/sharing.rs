@@ -26,4 +26,15 @@ pub struct SharingFacts {
     pub name: String,
     /// File extension for a document.
     pub file_type: Option<String>,
+    /// Agent-computer classification and owning team, independent of human ownership.
+    pub agent_harness: Option<AgentHarnessFacts>,
+}
+
+/// Agent computer facts selected by the shared database classifier.
+#[derive(Debug, Clone)]
+pub struct AgentHarnessFacts {
+    /// The computer's team; grant recipients must belong to this team.
+    pub team_id: uuid::Uuid,
+    /// Assigned account, absent while its binding is still being established.
+    pub agent_user_id: Option<MacroUserIdStr<'static>>,
 }

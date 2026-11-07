@@ -1,0 +1,9 @@
+history/
+log/
+cache/
+work/
+secrets
+secrets.*
+*.secret
+node_modules/
+*.brain-tmp

@@ -98,6 +98,7 @@ export type HoverCardComponentProps = {
   triggerAriaLabel?: string;
   /** Click action for a button trigger that also opens a hover preview. */
   triggerOnClick?: JSX.EventHandler<HTMLElement, MouseEvent>;
+  triggerOnContextMenu?: JSX.EventHandler<HTMLElement, MouseEvent>;
   /** Class applied to the underlying trigger element. */
   triggerClass?: string;
   /** Receives the underlying Kobalte trigger element. */
@@ -399,6 +400,7 @@ export function HoverCard(props: HoverCardComponentProps) {
           ? { type: 'button', role: 'button' }
           : {})}
         onClick={props.triggerOnClick}
+        onContextMenu={props.triggerOnContextMenu}
         class={props.triggerClass}
         disabled={isDisabled()}
         tabIndex={props.triggerTabIndex}

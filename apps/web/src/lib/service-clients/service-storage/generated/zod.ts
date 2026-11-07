@@ -5409,6 +5409,7 @@ export const getCollabSurfaceResponse = zod
         'crm_contact',
         'crm_pipeline',
         'reminder',
+        'harness',
         'skill',
         'agent_session',
         'scheduled_action',
@@ -5466,6 +5467,7 @@ export const ensureCollabSurfaceBody = zod
         'crm_contact',
         'crm_pipeline',
         'reminder',
+        'harness',
         'skill',
         'agent_session',
         'scheduled_action',
@@ -5504,6 +5506,7 @@ export const ensureCollabSurfaceResponse = zod
         'crm_contact',
         'crm_pipeline',
         'reminder',
+        'harness',
         'skill',
         'agent_session',
         'scheduled_action',
@@ -33362,6 +33365,7 @@ export const accessRequestsStateParams = zod.object({
     'email_thread',
     'agent_session',
     'external_chat',
+    'harness',
   ]),
   entity_id: zod.uuid(),
 });
@@ -33414,6 +33418,12 @@ export const accessRequestsStateResponse = zod
             id: zod
               .uuid()
               .describe('Stable request identity across revisions.'),
+            requestedByAgent: zod
+              .uuid()
+              .nullish()
+              .describe(
+                "The agent that asked on the requester's behalf, when one did."
+              ),
             requestedLevel: zod
               .enum(['view', 'comment', 'edit', 'owner'])
               .describe('Ordered from least to most access top -> bottom'),
@@ -33471,6 +33481,12 @@ export const accessRequestsStateResponse = zod
             id: zod
               .uuid()
               .describe('Stable request identity across revisions.'),
+            requestedByAgent: zod
+              .uuid()
+              .nullish()
+              .describe(
+                "The agent that asked on the requester's behalf, when one did."
+              ),
             requestedLevel: zod
               .enum(['view', 'comment', 'edit', 'owner'])
               .describe('Ordered from least to most access top -> bottom'),
@@ -33520,6 +33536,7 @@ export const accessRequestsSubmitParams = zod.object({
     'email_thread',
     'agent_session',
     'external_chat',
+    'harness',
   ]),
   entity_id: zod.uuid(),
 });
@@ -33550,6 +33567,12 @@ export const accessRequestsSubmitResponse = zod
       ])
       .optional(),
     id: zod.uuid().describe('Stable request identity across revisions.'),
+    requestedByAgent: zod
+      .uuid()
+      .nullish()
+      .describe(
+        "The agent that asked on the requester's behalf, when one did."
+      ),
     requestedLevel: zod
       .enum(['view', 'comment', 'edit', 'owner'])
       .describe('Ordered from least to most access top -> bottom'),
@@ -33586,6 +33609,7 @@ export const accessRequestsCancelParams = zod.object({
     'email_thread',
     'agent_session',
     'external_chat',
+    'harness',
   ]),
   entity_id: zod.uuid(),
 });
@@ -33612,6 +33636,7 @@ export const accessRequestsResolveParams = zod.object({
     'email_thread',
     'agent_session',
     'external_chat',
+    'harness',
   ]),
   entity_id: zod.uuid(),
   request_id: zod.uuid(),
@@ -33643,6 +33668,12 @@ export const accessRequestsResolveResponse = zod
       ])
       .optional(),
     id: zod.uuid().describe('Stable request identity across revisions.'),
+    requestedByAgent: zod
+      .uuid()
+      .nullish()
+      .describe(
+        "The agent that asked on the requester's behalf, when one did."
+      ),
     requestedLevel: zod
       .enum(['view', 'comment', 'edit', 'owner'])
       .describe('Ordered from least to most access top -> bottom'),
@@ -33679,6 +33710,7 @@ export const accessRequestsDirectParams = zod.object({
     'email_thread',
     'agent_session',
     'external_chat',
+    'harness',
   ]),
   entity_id: zod.uuid(),
 });
@@ -33711,6 +33743,7 @@ export const accessRequestsSetDirectParams = zod.object({
     'email_thread',
     'agent_session',
     'external_chat',
+    'harness',
   ]),
   entity_id: zod.uuid(),
   user_id: zod.string(),
@@ -33749,6 +33782,7 @@ export const accessRequestsRemoveDirectParams = zod.object({
     'email_thread',
     'agent_session',
     'external_chat',
+    'harness',
   ]),
   entity_id: zod.uuid(),
   user_id: zod.string(),
@@ -35622,6 +35656,7 @@ export const listFavoritesQueryParams = zod.object({
           'crm_contact',
           'crm_pipeline',
           'reminder',
+          'harness',
           'skill',
           'agent_session',
           'scheduled_action',
@@ -35687,6 +35722,7 @@ export const listFavoritesResponse = zod
                 'crm_contact',
                 'crm_pipeline',
                 'reminder',
+                'harness',
                 'skill',
                 'agent_session',
                 'scheduled_action',
@@ -35740,6 +35776,7 @@ export const addFavoriteBody = zod
         'crm_contact',
         'crm_pipeline',
         'reminder',
+        'harness',
         'skill',
         'agent_session',
         'scheduled_action',
@@ -35794,6 +35831,7 @@ export const addFavoriteResponse = zod
         'crm_contact',
         'crm_pipeline',
         'reminder',
+        'harness',
         'skill',
         'agent_session',
         'scheduled_action',
@@ -35845,6 +35883,7 @@ export const reorderFavoritesBody = zod
                 'crm_contact',
                 'crm_pipeline',
                 'reminder',
+                'harness',
                 'skill',
                 'agent_session',
                 'scheduled_action',
@@ -35889,6 +35928,7 @@ export const removeFavoriteByEntityParams = zod.object({
       'crm_contact',
       'crm_pipeline',
       'reminder',
+      'harness',
       'skill',
       'agent_session',
       'scheduled_action',
@@ -40979,24 +41019,123 @@ export const approveHarnessPairingBody = zod
     team_id: zod
       .uuid()
       .nullish()
-      .describe('Owning team. Omit for a private, user-owned harness.'),
+      .describe(
+        'Team to open the harness to. Omit to keep it to the approving user.'
+      ),
   })
   .describe('Request to approve a pairing and register the harness.');
 
+export const approveHarnessPairingResponseCapabilitiesPersonasDefault = {};
+export const approveHarnessPairingResponseCapabilitiesScreenDefault = false;
+
 export const approveHarnessPairingResponse = zod
   .object({
+    access: zod
+      .enum(['owner', 'user', 'read', 'resident', 'none'])
+      .optional()
+      .describe('What one caller may do with a runtime.'),
     allow_permission_bypass: zod
       .boolean()
       .optional()
       .describe(
         'Whether agents may bypass ACP permission requests on this harness.'
       ),
+    capabilities: zod
+      .object({
+        personas: zod
+          .record(
+            zod.string(),
+            zod
+              .union([
+                zod
+                  .object({
+                    checked_at: zod.iso
+                      .datetime({})
+                      .describe('Time of this observation.'),
+                    last_turn_at: zod.iso
+                      .datetime({})
+                      .nullish()
+                      .describe(
+                        'Most recent completed turn, retained across unavailable probes.'
+                      ),
+                    status: zod.enum(['healthy']),
+                  })
+                  .describe(
+                    'The brain is serving health and reports no problems.'
+                  ),
+                zod
+                  .object({
+                    checked_at: zod.iso
+                      .datetime({})
+                      .describe('Time of this observation.'),
+                    last_error: zod
+                      .string()
+                      .describe(
+                        'A bounded diagnostic, never an environment file or response body.'
+                      ),
+                    last_turn_at: zod.iso
+                      .datetime({})
+                      .nullish()
+                      .describe(
+                        'Most recent completed turn, retained across unavailable probes.'
+                      ),
+                    status: zod.enum(['unhealthy']),
+                  })
+                  .describe(
+                    'The unit, its configuration or its health response has a problem.'
+                  ),
+                zod
+                  .object({
+                    checked_at: zod.iso
+                      .datetime({})
+                      .describe('Time of this observation.'),
+                    last_error: zod
+                      .string()
+                      .describe('Why the brain could not be found.'),
+                    last_turn_at: zod.iso
+                      .datetime({})
+                      .nullish()
+                      .describe(
+                        'Most recent completed turn, retained across unavailable probes.'
+                      ),
+                    status: zod.enum(['missing']),
+                  })
+                  .describe('The unit or brain health listener is absent.'),
+              ])
+              .describe(
+                'A brain observation. Consumers combine harness connection presence with\n`checked_at` freshness when deciding whether the observation is still live.'
+              )
+          )
+          .default(approveHarnessPairingResponseCapabilitiesPersonasDefault)
+          .describe(
+            "Latest brain health, keyed by the enrolled persona's OS username."
+          ),
+        screen: zod
+          .boolean()
+          .optional()
+          .describe('A display Macro can stream (Xvnc on `127.0.0.1:5900`).'),
+      })
+      .optional()
+      .describe(
+        "What a harness's machine can do beyond running agents.\n\nmacrod reports this after it connects; every field defaults to off, so\nharnesses that never report stay plain."
+      ),
+    claude_mode: zod
+      .enum(['macro_credits', 'own_account'])
+      .optional()
+      .describe('How Claude Code on a Macro computer is paid for.'),
+    computer_id: zod.union([zod.null(), zod.string()]).optional(),
     connected: zod
       .boolean()
       .describe('Whether the daemon currently holds a runtime connection.'),
     created_at: zod.iso.datetime({}).describe('Creation timestamp.'),
     created_by: zod.string().describe('User that registered this harness.'),
     id: zod.string(),
+    is_agent_computer: zod
+      .boolean()
+      .optional()
+      .describe(
+        'Whether this is a dedicated agent computer, whose teammates may only read it.'
+      ),
     kind: zod.string().describe('Runtime kind. Currently always `macrod`.'),
     last_connected_at: zod.iso
       .datetime({})
@@ -41004,22 +41143,19 @@ export const approveHarnessPairingResponse = zod
       .describe('When the daemon last attached a runtime connection.'),
     name: zod.string().describe('Display name.'),
     owner: zod
-      .union([
-        zod
-          .object({
-            type: zod.enum(['user']),
-            user_id: zod.string().describe('Owner user id.'),
-          })
-          .describe('User-owned (private) harness.'),
-        zod
-          .object({
-            team_id: zod.uuid().describe('Owner team id.'),
-            type: zod.enum(['team']),
-          })
-          .describe('Team-owned harness, usable by every team member.'),
-      ])
+      .object({
+        type: zod.enum(['user']),
+        user_id: zod.string().describe('Owner user id.'),
+      })
+      .describe('The person whose runtime this is.')
       .describe(
-        'Harness owner.\n\nExactly one of a user or a team, mirroring the bots owner pattern. There\nare no system harnesses.'
+        "Harness owner.\n\nAlways one person: a runtime is someone's computer. A team runtime is a\nperson's runtime with a grant to the team, never one owned by the team."
+      ),
+    shared_team_ids: zod
+      .array(zod.uuid())
+      .optional()
+      .describe(
+        'Teams with a grant; agent computers grant Read, ordinary computers User.'
       ),
     updated_at: zod.iso.datetime({}).describe('Update timestamp.'),
   })
@@ -41034,7 +41170,7 @@ code) addresses it.
  * @summary Handler for `POST /harness-pairings/{pairing_id}/claim`.
  */
 export const claimHarnessPairingParams = zod.object({
-  pairing_id: zod.uuid().describe('Pairing ID'),
+  pairing_id: zod.string().describe('Pairing ID'),
 });
 
 export const claimHarnessPairingBody = zod
@@ -41047,22 +41183,123 @@ export const claimHarnessPairingBody = zod
     "Request to claim an approved pairing's credential.\n\nThe daemon serializes this, so both derives are used."
   );
 
+export const claimHarnessPairingResponseHarnessCapabilitiesPersonasDefault = {};
+export const claimHarnessPairingResponseHarnessCapabilitiesScreenDefault = false;
+
 export const claimHarnessPairingResponse = zod
   .object({
     harness: zod
       .object({
+        access: zod
+          .enum(['owner', 'user', 'read', 'resident', 'none'])
+          .optional()
+          .describe('What one caller may do with a runtime.'),
         allow_permission_bypass: zod
           .boolean()
           .optional()
           .describe(
             'Whether agents may bypass ACP permission requests on this harness.'
           ),
+        capabilities: zod
+          .object({
+            personas: zod
+              .record(
+                zod.string(),
+                zod
+                  .union([
+                    zod
+                      .object({
+                        checked_at: zod.iso
+                          .datetime({})
+                          .describe('Time of this observation.'),
+                        last_turn_at: zod.iso
+                          .datetime({})
+                          .nullish()
+                          .describe(
+                            'Most recent completed turn, retained across unavailable probes.'
+                          ),
+                        status: zod.enum(['healthy']),
+                      })
+                      .describe(
+                        'The brain is serving health and reports no problems.'
+                      ),
+                    zod
+                      .object({
+                        checked_at: zod.iso
+                          .datetime({})
+                          .describe('Time of this observation.'),
+                        last_error: zod
+                          .string()
+                          .describe(
+                            'A bounded diagnostic, never an environment file or response body.'
+                          ),
+                        last_turn_at: zod.iso
+                          .datetime({})
+                          .nullish()
+                          .describe(
+                            'Most recent completed turn, retained across unavailable probes.'
+                          ),
+                        status: zod.enum(['unhealthy']),
+                      })
+                      .describe(
+                        'The unit, its configuration or its health response has a problem.'
+                      ),
+                    zod
+                      .object({
+                        checked_at: zod.iso
+                          .datetime({})
+                          .describe('Time of this observation.'),
+                        last_error: zod
+                          .string()
+                          .describe('Why the brain could not be found.'),
+                        last_turn_at: zod.iso
+                          .datetime({})
+                          .nullish()
+                          .describe(
+                            'Most recent completed turn, retained across unavailable probes.'
+                          ),
+                        status: zod.enum(['missing']),
+                      })
+                      .describe('The unit or brain health listener is absent.'),
+                  ])
+                  .describe(
+                    'A brain observation. Consumers combine harness connection presence with\n`checked_at` freshness when deciding whether the observation is still live.'
+                  )
+              )
+              .default(
+                claimHarnessPairingResponseHarnessCapabilitiesPersonasDefault
+              )
+              .describe(
+                "Latest brain health, keyed by the enrolled persona's OS username."
+              ),
+            screen: zod
+              .boolean()
+              .optional()
+              .describe(
+                'A display Macro can stream (Xvnc on `127.0.0.1:5900`).'
+              ),
+          })
+          .optional()
+          .describe(
+            "What a harness's machine can do beyond running agents.\n\nmacrod reports this after it connects; every field defaults to off, so\nharnesses that never report stay plain."
+          ),
+        claude_mode: zod
+          .enum(['macro_credits', 'own_account'])
+          .optional()
+          .describe('How Claude Code on a Macro computer is paid for.'),
+        computer_id: zod.union([zod.null(), zod.string()]).optional(),
         connected: zod
           .boolean()
           .describe('Whether the daemon currently holds a runtime connection.'),
         created_at: zod.iso.datetime({}).describe('Creation timestamp.'),
         created_by: zod.string().describe('User that registered this harness.'),
         id: zod.string(),
+        is_agent_computer: zod
+          .boolean()
+          .optional()
+          .describe(
+            'Whether this is a dedicated agent computer, whose teammates may only read it.'
+          ),
         kind: zod.string().describe('Runtime kind. Currently always `macrod`.'),
         last_connected_at: zod.iso
           .datetime({})
@@ -41070,22 +41307,19 @@ export const claimHarnessPairingResponse = zod
           .describe('When the daemon last attached a runtime connection.'),
         name: zod.string().describe('Display name.'),
         owner: zod
-          .union([
-            zod
-              .object({
-                type: zod.enum(['user']),
-                user_id: zod.string().describe('Owner user id.'),
-              })
-              .describe('User-owned (private) harness.'),
-            zod
-              .object({
-                team_id: zod.uuid().describe('Owner team id.'),
-                type: zod.enum(['team']),
-              })
-              .describe('Team-owned harness, usable by every team member.'),
-          ])
+          .object({
+            type: zod.enum(['user']),
+            user_id: zod.string().describe('Owner user id.'),
+          })
+          .describe('The person whose runtime this is.')
           .describe(
-            'Harness owner.\n\nExactly one of a user or a team, mirroring the bots owner pattern. There\nare no system harnesses.'
+            "Harness owner.\n\nAlways one person: a runtime is someone's computer. A team runtime is a\nperson's runtime with a grant to the team, never one owned by the team."
+          ),
+        shared_team_ids: zod
+          .array(zod.uuid())
+          .optional()
+          .describe(
+            'Teams with a grant; agent computers grant Read, ordinary computers User.'
           ),
         updated_at: zod.iso.datetime({}).describe('Update timestamp.'),
       })
@@ -41103,20 +41337,117 @@ export const claimHarnessPairingResponse = zod
 /**
  * @summary Handler for `GET /harnesses`.
  */
+export const listHarnessesResponseCapabilitiesPersonasDefault = {};
+export const listHarnessesResponseCapabilitiesScreenDefault = false;
+
 export const listHarnessesResponseItem = zod
   .object({
+    access: zod
+      .enum(['owner', 'user', 'read', 'resident', 'none'])
+      .optional()
+      .describe('What one caller may do with a runtime.'),
     allow_permission_bypass: zod
       .boolean()
       .optional()
       .describe(
         'Whether agents may bypass ACP permission requests on this harness.'
       ),
+    capabilities: zod
+      .object({
+        personas: zod
+          .record(
+            zod.string(),
+            zod
+              .union([
+                zod
+                  .object({
+                    checked_at: zod.iso
+                      .datetime({})
+                      .describe('Time of this observation.'),
+                    last_turn_at: zod.iso
+                      .datetime({})
+                      .nullish()
+                      .describe(
+                        'Most recent completed turn, retained across unavailable probes.'
+                      ),
+                    status: zod.enum(['healthy']),
+                  })
+                  .describe(
+                    'The brain is serving health and reports no problems.'
+                  ),
+                zod
+                  .object({
+                    checked_at: zod.iso
+                      .datetime({})
+                      .describe('Time of this observation.'),
+                    last_error: zod
+                      .string()
+                      .describe(
+                        'A bounded diagnostic, never an environment file or response body.'
+                      ),
+                    last_turn_at: zod.iso
+                      .datetime({})
+                      .nullish()
+                      .describe(
+                        'Most recent completed turn, retained across unavailable probes.'
+                      ),
+                    status: zod.enum(['unhealthy']),
+                  })
+                  .describe(
+                    'The unit, its configuration or its health response has a problem.'
+                  ),
+                zod
+                  .object({
+                    checked_at: zod.iso
+                      .datetime({})
+                      .describe('Time of this observation.'),
+                    last_error: zod
+                      .string()
+                      .describe('Why the brain could not be found.'),
+                    last_turn_at: zod.iso
+                      .datetime({})
+                      .nullish()
+                      .describe(
+                        'Most recent completed turn, retained across unavailable probes.'
+                      ),
+                    status: zod.enum(['missing']),
+                  })
+                  .describe('The unit or brain health listener is absent.'),
+              ])
+              .describe(
+                'A brain observation. Consumers combine harness connection presence with\n`checked_at` freshness when deciding whether the observation is still live.'
+              )
+          )
+          .default(listHarnessesResponseCapabilitiesPersonasDefault)
+          .describe(
+            "Latest brain health, keyed by the enrolled persona's OS username."
+          ),
+        screen: zod
+          .boolean()
+          .optional()
+          .describe('A display Macro can stream (Xvnc on `127.0.0.1:5900`).'),
+      })
+      .optional()
+      .describe(
+        "What a harness's machine can do beyond running agents.\n\nmacrod reports this after it connects; every field defaults to off, so\nharnesses that never report stay plain."
+      ),
+    claude_mode: zod
+      .enum(['macro_credits', 'own_account'])
+      .optional()
+      .describe('How Claude Code on a Macro computer is paid for.'),
+    computer_id: zod.union([zod.null(), zod.string()]).optional(),
     connected: zod
       .boolean()
       .describe('Whether the daemon currently holds a runtime connection.'),
     created_at: zod.iso.datetime({}).describe('Creation timestamp.'),
     created_by: zod.string().describe('User that registered this harness.'),
     id: zod.string(),
+    is_agent_computer: zod
+      .boolean()
+      .optional()
+      .describe(
+        'Whether this is a dedicated agent computer, whose teammates may only read it.'
+      ),
     kind: zod.string().describe('Runtime kind. Currently always `macrod`.'),
     last_connected_at: zod.iso
       .datetime({})
@@ -41124,22 +41455,19 @@ export const listHarnessesResponseItem = zod
       .describe('When the daemon last attached a runtime connection.'),
     name: zod.string().describe('Display name.'),
     owner: zod
-      .union([
-        zod
-          .object({
-            type: zod.enum(['user']),
-            user_id: zod.string().describe('Owner user id.'),
-          })
-          .describe('User-owned (private) harness.'),
-        zod
-          .object({
-            team_id: zod.uuid().describe('Owner team id.'),
-            type: zod.enum(['team']),
-          })
-          .describe('Team-owned harness, usable by every team member.'),
-      ])
+      .object({
+        type: zod.enum(['user']),
+        user_id: zod.string().describe('Owner user id.'),
+      })
+      .describe('The person whose runtime this is.')
       .describe(
-        'Harness owner.\n\nExactly one of a user or a team, mirroring the bots owner pattern. There\nare no system harnesses.'
+        "Harness owner.\n\nAlways one person: a runtime is someone's computer. A team runtime is a\nperson's runtime with a grant to the team, never one owned by the team."
+      ),
+    shared_team_ids: zod
+      .array(zod.uuid())
+      .optional()
+      .describe(
+        'Teams with a grant; agent computers grant Read, ordinary computers User.'
       ),
     updated_at: zod.iso.datetime({}).describe('Update timestamp.'),
   })
@@ -41149,22 +41477,119 @@ export const listHarnessesResponseItem = zod
 export const listHarnessesResponse = zod.array(listHarnessesResponseItem);
 
 /**
- * @summary Handler for `GET /harnesses/me`.
+ * @summary Handler for `GET /harnesses/directory`.
  */
-export const getSelfHarnessResponse = zod
+export const listHarnessDirectoryResponseCapabilitiesPersonasDefault = {};
+export const listHarnessDirectoryResponseCapabilitiesScreenDefault = false;
+
+export const listHarnessDirectoryResponseItem = zod
   .object({
+    access: zod
+      .enum(['owner', 'user', 'read', 'resident', 'none'])
+      .optional()
+      .describe('What one caller may do with a runtime.'),
     allow_permission_bypass: zod
       .boolean()
       .optional()
       .describe(
         'Whether agents may bypass ACP permission requests on this harness.'
       ),
+    capabilities: zod
+      .object({
+        personas: zod
+          .record(
+            zod.string(),
+            zod
+              .union([
+                zod
+                  .object({
+                    checked_at: zod.iso
+                      .datetime({})
+                      .describe('Time of this observation.'),
+                    last_turn_at: zod.iso
+                      .datetime({})
+                      .nullish()
+                      .describe(
+                        'Most recent completed turn, retained across unavailable probes.'
+                      ),
+                    status: zod.enum(['healthy']),
+                  })
+                  .describe(
+                    'The brain is serving health and reports no problems.'
+                  ),
+                zod
+                  .object({
+                    checked_at: zod.iso
+                      .datetime({})
+                      .describe('Time of this observation.'),
+                    last_error: zod
+                      .string()
+                      .describe(
+                        'A bounded diagnostic, never an environment file or response body.'
+                      ),
+                    last_turn_at: zod.iso
+                      .datetime({})
+                      .nullish()
+                      .describe(
+                        'Most recent completed turn, retained across unavailable probes.'
+                      ),
+                    status: zod.enum(['unhealthy']),
+                  })
+                  .describe(
+                    'The unit, its configuration or its health response has a problem.'
+                  ),
+                zod
+                  .object({
+                    checked_at: zod.iso
+                      .datetime({})
+                      .describe('Time of this observation.'),
+                    last_error: zod
+                      .string()
+                      .describe('Why the brain could not be found.'),
+                    last_turn_at: zod.iso
+                      .datetime({})
+                      .nullish()
+                      .describe(
+                        'Most recent completed turn, retained across unavailable probes.'
+                      ),
+                    status: zod.enum(['missing']),
+                  })
+                  .describe('The unit or brain health listener is absent.'),
+              ])
+              .describe(
+                'A brain observation. Consumers combine harness connection presence with\n`checked_at` freshness when deciding whether the observation is still live.'
+              )
+          )
+          .default(listHarnessDirectoryResponseCapabilitiesPersonasDefault)
+          .describe(
+            "Latest brain health, keyed by the enrolled persona's OS username."
+          ),
+        screen: zod
+          .boolean()
+          .optional()
+          .describe('A display Macro can stream (Xvnc on `127.0.0.1:5900`).'),
+      })
+      .optional()
+      .describe(
+        "What a harness's machine can do beyond running agents.\n\nmacrod reports this after it connects; every field defaults to off, so\nharnesses that never report stay plain."
+      ),
+    claude_mode: zod
+      .enum(['macro_credits', 'own_account'])
+      .optional()
+      .describe('How Claude Code on a Macro computer is paid for.'),
+    computer_id: zod.union([zod.null(), zod.string()]).optional(),
     connected: zod
       .boolean()
       .describe('Whether the daemon currently holds a runtime connection.'),
     created_at: zod.iso.datetime({}).describe('Creation timestamp.'),
     created_by: zod.string().describe('User that registered this harness.'),
     id: zod.string(),
+    is_agent_computer: zod
+      .boolean()
+      .optional()
+      .describe(
+        'Whether this is a dedicated agent computer, whose teammates may only read it.'
+      ),
     kind: zod.string().describe('Runtime kind. Currently always `macrod`.'),
     last_connected_at: zod.iso
       .datetime({})
@@ -41172,22 +41597,163 @@ export const getSelfHarnessResponse = zod
       .describe('When the daemon last attached a runtime connection.'),
     name: zod.string().describe('Display name.'),
     owner: zod
-      .union([
-        zod
-          .object({
-            type: zod.enum(['user']),
-            user_id: zod.string().describe('Owner user id.'),
-          })
-          .describe('User-owned (private) harness.'),
-        zod
-          .object({
-            team_id: zod.uuid().describe('Owner team id.'),
-            type: zod.enum(['team']),
-          })
-          .describe('Team-owned harness, usable by every team member.'),
-      ])
+      .object({
+        type: zod.enum(['user']),
+        user_id: zod.string().describe('Owner user id.'),
+      })
+      .describe('The person whose runtime this is.')
       .describe(
-        'Harness owner.\n\nExactly one of a user or a team, mirroring the bots owner pattern. There\nare no system harnesses.'
+        "Harness owner.\n\nAlways one person: a runtime is someone's computer. A team runtime is a\nperson's runtime with a grant to the team, never one owned by the team."
+      ),
+    shared_team_ids: zod
+      .array(zod.uuid())
+      .optional()
+      .describe(
+        'Teams with a grant; agent computers grant Read, ordinary computers User.'
+      ),
+    updated_at: zod.iso.datetime({}).describe('Update timestamp.'),
+  })
+  .describe(
+    'A registered user-run harness.\n\nClients deserialize this, so both derives are used.'
+  );
+export const listHarnessDirectoryResponse = zod.array(
+  listHarnessDirectoryResponseItem
+);
+
+/**
+ * @summary Handler for `GET /harnesses/me`.
+ */
+export const getSelfHarnessResponseCapabilitiesPersonasDefault = {};
+export const getSelfHarnessResponseCapabilitiesScreenDefault = false;
+
+export const getSelfHarnessResponse = zod
+  .object({
+    access: zod
+      .enum(['owner', 'user', 'read', 'resident', 'none'])
+      .optional()
+      .describe('What one caller may do with a runtime.'),
+    allow_permission_bypass: zod
+      .boolean()
+      .optional()
+      .describe(
+        'Whether agents may bypass ACP permission requests on this harness.'
+      ),
+    capabilities: zod
+      .object({
+        personas: zod
+          .record(
+            zod.string(),
+            zod
+              .union([
+                zod
+                  .object({
+                    checked_at: zod.iso
+                      .datetime({})
+                      .describe('Time of this observation.'),
+                    last_turn_at: zod.iso
+                      .datetime({})
+                      .nullish()
+                      .describe(
+                        'Most recent completed turn, retained across unavailable probes.'
+                      ),
+                    status: zod.enum(['healthy']),
+                  })
+                  .describe(
+                    'The brain is serving health and reports no problems.'
+                  ),
+                zod
+                  .object({
+                    checked_at: zod.iso
+                      .datetime({})
+                      .describe('Time of this observation.'),
+                    last_error: zod
+                      .string()
+                      .describe(
+                        'A bounded diagnostic, never an environment file or response body.'
+                      ),
+                    last_turn_at: zod.iso
+                      .datetime({})
+                      .nullish()
+                      .describe(
+                        'Most recent completed turn, retained across unavailable probes.'
+                      ),
+                    status: zod.enum(['unhealthy']),
+                  })
+                  .describe(
+                    'The unit, its configuration or its health response has a problem.'
+                  ),
+                zod
+                  .object({
+                    checked_at: zod.iso
+                      .datetime({})
+                      .describe('Time of this observation.'),
+                    last_error: zod
+                      .string()
+                      .describe('Why the brain could not be found.'),
+                    last_turn_at: zod.iso
+                      .datetime({})
+                      .nullish()
+                      .describe(
+                        'Most recent completed turn, retained across unavailable probes.'
+                      ),
+                    status: zod.enum(['missing']),
+                  })
+                  .describe('The unit or brain health listener is absent.'),
+              ])
+              .describe(
+                'A brain observation. Consumers combine harness connection presence with\n`checked_at` freshness when deciding whether the observation is still live.'
+              )
+          )
+          .default(getSelfHarnessResponseCapabilitiesPersonasDefault)
+          .describe(
+            "Latest brain health, keyed by the enrolled persona's OS username."
+          ),
+        screen: zod
+          .boolean()
+          .optional()
+          .describe('A display Macro can stream (Xvnc on `127.0.0.1:5900`).'),
+      })
+      .optional()
+      .describe(
+        "What a harness's machine can do beyond running agents.\n\nmacrod reports this after it connects; every field defaults to off, so\nharnesses that never report stay plain."
+      ),
+    claude_mode: zod
+      .enum(['macro_credits', 'own_account'])
+      .optional()
+      .describe('How Claude Code on a Macro computer is paid for.'),
+    computer_id: zod.union([zod.null(), zod.string()]).optional(),
+    connected: zod
+      .boolean()
+      .describe('Whether the daemon currently holds a runtime connection.'),
+    created_at: zod.iso.datetime({}).describe('Creation timestamp.'),
+    created_by: zod.string().describe('User that registered this harness.'),
+    id: zod.string(),
+    is_agent_computer: zod
+      .boolean()
+      .optional()
+      .describe(
+        'Whether this is a dedicated agent computer, whose teammates may only read it.'
+      ),
+    kind: zod.string().describe('Runtime kind. Currently always `macrod`.'),
+    last_connected_at: zod.iso
+      .datetime({})
+      .nullish()
+      .describe('When the daemon last attached a runtime connection.'),
+    name: zod.string().describe('Display name.'),
+    owner: zod
+      .object({
+        type: zod.enum(['user']),
+        user_id: zod.string().describe('Owner user id.'),
+      })
+      .describe('The person whose runtime this is.')
+      .describe(
+        "Harness owner.\n\nAlways one person: a runtime is someone's computer. A team runtime is a\nperson's runtime with a grant to the team, never one owned by the team."
+      ),
+    shared_team_ids: zod
+      .array(zod.uuid())
+      .optional()
+      .describe(
+        'Teams with a grant; agent computers grant Read, ordinary computers User.'
       ),
     updated_at: zod.iso.datetime({}).describe('Update timestamp.'),
   })
@@ -41208,6 +41774,91 @@ export const listHarnessAgentsResponseItem = zod
 export const listHarnessAgentsResponse = zod.array(
   listHarnessAgentsResponseItem
 );
+
+/**
+ * macrod reports what its machine can do after it connects; the body
+replaces the previous report.
+ * @summary Handler for `PUT /harnesses/me/capabilities`.
+ */
+export const putSelfHarnessCapabilitiesBodyPersonasDefault = {};
+export const putSelfHarnessCapabilitiesBodyScreenDefault = false;
+
+export const putSelfHarnessCapabilitiesBody = zod
+  .object({
+    personas: zod
+      .record(
+        zod.string(),
+        zod
+          .union([
+            zod
+              .object({
+                checked_at: zod.iso
+                  .datetime({})
+                  .describe('Time of this observation.'),
+                last_turn_at: zod.iso
+                  .datetime({})
+                  .nullish()
+                  .describe(
+                    'Most recent completed turn, retained across unavailable probes.'
+                  ),
+                status: zod.enum(['healthy']),
+              })
+              .describe('The brain is serving health and reports no problems.'),
+            zod
+              .object({
+                checked_at: zod.iso
+                  .datetime({})
+                  .describe('Time of this observation.'),
+                last_error: zod
+                  .string()
+                  .describe(
+                    'A bounded diagnostic, never an environment file or response body.'
+                  ),
+                last_turn_at: zod.iso
+                  .datetime({})
+                  .nullish()
+                  .describe(
+                    'Most recent completed turn, retained across unavailable probes.'
+                  ),
+                status: zod.enum(['unhealthy']),
+              })
+              .describe(
+                'The unit, its configuration or its health response has a problem.'
+              ),
+            zod
+              .object({
+                checked_at: zod.iso
+                  .datetime({})
+                  .describe('Time of this observation.'),
+                last_error: zod
+                  .string()
+                  .describe('Why the brain could not be found.'),
+                last_turn_at: zod.iso
+                  .datetime({})
+                  .nullish()
+                  .describe(
+                    'Most recent completed turn, retained across unavailable probes.'
+                  ),
+                status: zod.enum(['missing']),
+              })
+              .describe('The unit or brain health listener is absent.'),
+          ])
+          .describe(
+            'A brain observation. Consumers combine harness connection presence with\n`checked_at` freshness when deciding whether the observation is still live.'
+          )
+      )
+      .default(putSelfHarnessCapabilitiesBodyPersonasDefault)
+      .describe(
+        "Latest brain health, keyed by the enrolled persona's OS username."
+      ),
+    screen: zod
+      .boolean()
+      .optional()
+      .describe('A display Macro can stream (Xvnc on `127.0.0.1:5900`).'),
+  })
+  .describe(
+    "What a harness's machine can do beyond running agents.\n\nmacrod reports this after it connects; every field defaults to off, so\nharnesses that never report stay plain."
+  );
 
 /**
  * @summary Handler for `GET /harnesses/me/sessions`.
@@ -41262,20 +41913,117 @@ export const patchHarnessBody = zod
     'Request to change a registered harness. Omitted fields stay as they are.'
   );
 
+export const patchHarnessResponseCapabilitiesPersonasDefault = {};
+export const patchHarnessResponseCapabilitiesScreenDefault = false;
+
 export const patchHarnessResponse = zod
   .object({
+    access: zod
+      .enum(['owner', 'user', 'read', 'resident', 'none'])
+      .optional()
+      .describe('What one caller may do with a runtime.'),
     allow_permission_bypass: zod
       .boolean()
       .optional()
       .describe(
         'Whether agents may bypass ACP permission requests on this harness.'
       ),
+    capabilities: zod
+      .object({
+        personas: zod
+          .record(
+            zod.string(),
+            zod
+              .union([
+                zod
+                  .object({
+                    checked_at: zod.iso
+                      .datetime({})
+                      .describe('Time of this observation.'),
+                    last_turn_at: zod.iso
+                      .datetime({})
+                      .nullish()
+                      .describe(
+                        'Most recent completed turn, retained across unavailable probes.'
+                      ),
+                    status: zod.enum(['healthy']),
+                  })
+                  .describe(
+                    'The brain is serving health and reports no problems.'
+                  ),
+                zod
+                  .object({
+                    checked_at: zod.iso
+                      .datetime({})
+                      .describe('Time of this observation.'),
+                    last_error: zod
+                      .string()
+                      .describe(
+                        'A bounded diagnostic, never an environment file or response body.'
+                      ),
+                    last_turn_at: zod.iso
+                      .datetime({})
+                      .nullish()
+                      .describe(
+                        'Most recent completed turn, retained across unavailable probes.'
+                      ),
+                    status: zod.enum(['unhealthy']),
+                  })
+                  .describe(
+                    'The unit, its configuration or its health response has a problem.'
+                  ),
+                zod
+                  .object({
+                    checked_at: zod.iso
+                      .datetime({})
+                      .describe('Time of this observation.'),
+                    last_error: zod
+                      .string()
+                      .describe('Why the brain could not be found.'),
+                    last_turn_at: zod.iso
+                      .datetime({})
+                      .nullish()
+                      .describe(
+                        'Most recent completed turn, retained across unavailable probes.'
+                      ),
+                    status: zod.enum(['missing']),
+                  })
+                  .describe('The unit or brain health listener is absent.'),
+              ])
+              .describe(
+                'A brain observation. Consumers combine harness connection presence with\n`checked_at` freshness when deciding whether the observation is still live.'
+              )
+          )
+          .default(patchHarnessResponseCapabilitiesPersonasDefault)
+          .describe(
+            "Latest brain health, keyed by the enrolled persona's OS username."
+          ),
+        screen: zod
+          .boolean()
+          .optional()
+          .describe('A display Macro can stream (Xvnc on `127.0.0.1:5900`).'),
+      })
+      .optional()
+      .describe(
+        "What a harness's machine can do beyond running agents.\n\nmacrod reports this after it connects; every field defaults to off, so\nharnesses that never report stay plain."
+      ),
+    claude_mode: zod
+      .enum(['macro_credits', 'own_account'])
+      .optional()
+      .describe('How Claude Code on a Macro computer is paid for.'),
+    computer_id: zod.union([zod.null(), zod.string()]).optional(),
     connected: zod
       .boolean()
       .describe('Whether the daemon currently holds a runtime connection.'),
     created_at: zod.iso.datetime({}).describe('Creation timestamp.'),
     created_by: zod.string().describe('User that registered this harness.'),
     id: zod.string(),
+    is_agent_computer: zod
+      .boolean()
+      .optional()
+      .describe(
+        'Whether this is a dedicated agent computer, whose teammates may only read it.'
+      ),
     kind: zod.string().describe('Runtime kind. Currently always `macrod`.'),
     last_connected_at: zod.iso
       .datetime({})
@@ -41283,28 +42031,81 @@ export const patchHarnessResponse = zod
       .describe('When the daemon last attached a runtime connection.'),
     name: zod.string().describe('Display name.'),
     owner: zod
-      .union([
-        zod
-          .object({
-            type: zod.enum(['user']),
-            user_id: zod.string().describe('Owner user id.'),
-          })
-          .describe('User-owned (private) harness.'),
-        zod
-          .object({
-            team_id: zod.uuid().describe('Owner team id.'),
-            type: zod.enum(['team']),
-          })
-          .describe('Team-owned harness, usable by every team member.'),
-      ])
+      .object({
+        type: zod.enum(['user']),
+        user_id: zod.string().describe('Owner user id.'),
+      })
+      .describe('The person whose runtime this is.')
       .describe(
-        'Harness owner.\n\nExactly one of a user or a team, mirroring the bots owner pattern. There\nare no system harnesses.'
+        "Harness owner.\n\nAlways one person: a runtime is someone's computer. A team runtime is a\nperson's runtime with a grant to the team, never one owned by the team."
+      ),
+    shared_team_ids: zod
+      .array(zod.uuid())
+      .optional()
+      .describe(
+        'Teams with a grant; agent computers grant Read, ordinary computers User.'
       ),
     updated_at: zod.iso.datetime({}).describe('Update timestamp.'),
   })
   .describe(
     'A registered user-run harness.\n\nClients deserialize this, so both derives are used.'
   );
+
+/**
+ * @summary Handler for `GET /harnesses/{harness_id}/residents`.
+ */
+export const listHarnessResidentsParams = zod.object({
+  harness_id: zod.string().describe('Harness ID'),
+});
+
+export const listHarnessResidentsResponseItem = zod
+  .union([
+    zod
+      .object({
+        bot_id: zod.string(),
+        name: zod.string().describe('Display name.'),
+        owner_user_id: zod
+          .string()
+          .nullish()
+          .describe('The person owning the bot, if any.'),
+        team_id: zod
+          .uuid()
+          .nullish()
+          .describe('The team owning the bot, if any.'),
+        type: zod.enum(['bot']),
+      })
+      .describe('A non-coding bot bound to this runtime.'),
+    zod
+      .object({
+        name: zod.string().describe('Display name.'),
+        team_id: zod.uuid().describe("The computer's team."),
+        type: zod.enum(['account']),
+        user_id: zod.string().describe("The agent's Macro account identity."),
+      })
+      .describe('The Macro account assigned to a dedicated agent computer.'),
+  ])
+  .describe('A bot or dedicated Macro account resident on a runtime.');
+export const listHarnessResidentsResponse = zod.array(
+  listHarnessResidentsResponseItem
+);
+
+/**
+ * Requires the owner's own session: an agent can ask for access to a runtime
+but never open one, since that grants code execution on the machine.
+ * @summary Handler for `PUT /harnesses/{harness_id}/team-access`.
+ */
+export const setHarnessTeamAccessParams = zod.object({
+  harness_id: zod.string().describe('Harness ID'),
+});
+
+export const setHarnessTeamAccessBody = zod
+  .object({
+    enabled: zod
+      .boolean()
+      .describe('Whether every member of the team may use the runtime.'),
+    team_id: zod.uuid().describe('The team, which the owner must belong to.'),
+  })
+  .describe("Request to open or close a runtime to one of the owner's teams.");
 
 /**
  * @summary Gets the users history

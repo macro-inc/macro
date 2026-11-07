@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE \"User\" SET email = 'owner@staff.example.com' WHERE id = $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "c9aaec8264267fc64b4dfcd539b25236a241a7ecfb8e18096e11a3d815d77d1c"
+}

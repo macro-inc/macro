@@ -1,0 +1,43 @@
+[package]
+default-run = "agent_git_service"
+edition = "2024"
+name = "agent_git_service"
+publish = false
+version = "0.1.0"
+
+[[bin]]
+name = "agent_git_service"
+path = "src/main.rs"
+
+[[bin]]
+name = "agent_git_service_doppler_config"
+path = "src/doppler_config.rs"
+
+[dependencies]
+macro_tower_layers = { path = "../../crates/macro_tower_layers" }
+agent_git = { path = "../../crates/agent_git" }
+aws-sdk-secretsmanager = { workspace = true }
+axum = { workspace = true }
+database_env_vars = { path = "../../crates/database_env_vars" }
+doppler-config = { workspace = true }
+macro_auth = { path = "../../crates/macro_auth" }
+macro_authorization = { path = "../../crates/macro_authorization", features = ["postgres"] }
+macro_aws_config = { path = "../../crates/macro_aws_config" }
+macro_config = { path = "../../crates/macro_config" }
+macro_cors = { path = "../../crates/macro_cors" }
+macro_entrypoint = { path = "../../crates/macro_entrypoint" }
+macro_env = { path = "../../crates/macro_env" }
+macro_service_urls = { path = "../../crates/macro_service_urls" }
+rootcause = { workspace = true }
+secretsmanager_client = { path = "../../crates/secretsmanager_client" }
+sqlx = { workspace = true }
+teams = { path = "../../crates/teams", default-features = false, features = ["outbound", "ports"] }
+tokio = { workspace = true, features = ["signal"] }
+tokio-util = { workspace = true, features = ["rt"] }
+tower-http = { workspace = true, features = ["trace"] }
+tracing = { workspace = true }
+workspace-hack = { version = "0.1", path = "../../crates/workspace-hack" }
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["test-util"] }
+serde_json = { workspace = true }

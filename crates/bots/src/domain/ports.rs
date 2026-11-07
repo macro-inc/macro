@@ -115,7 +115,22 @@ pub trait BotRepo: Send + Sync + 'static {
         team_id: Uuid,
     ) -> impl Future<Output = Result<bool, Self::Err>> + Send;
 
-    /// Get ownership and permission capabilities of an active registered harness.
+    /// Whether a team's every member may use a harness.
+    fn harness_granted_to_team(
+        &self,
+        harness_id: HarnessId,
+        team_id: Uuid,
+    ) -> impl Future<Output = Result<bool, Self::Err>> + Send;
+
+    /// Whether a user may run agents on a harness: its owner, or a user through
+    /// a live grant. Readers may not.
+    fn user_may_use_harness(
+        &self,
+        harness_id: HarnessId,
+        user_id: &str,
+    ) -> impl Future<Output = Result<bool, Self::Err>> + Send;
+
+    /// Get the permission capabilities of an active registered harness.
     fn get_harness_facts(
         &self,
         harness_id: HarnessId,
@@ -472,4 +487,20 @@ pub enum BotError {
     /// Repository error.
     #[error(transparent)]
     Repo(#[from] anyhow::Error),
+}
+
+/// Trusted runtime-routing lookups for agent harness assignments.
+pub trait HarnessAssignments: Send + Sync {
+    /// Lookup the registered harness selected by an agent.
+    fn harness_for(
+        &self,
+        bot: BotId,
+    ) -> impl Future<Output = Result<Option<HarnessId>, Self::Err>> + Send;
+    /// List every agent assigned to a harness, including retired bots.
+    fn bots_on_harness(
+        &self,
+        harness: HarnessId,
+    ) -> impl Future<Output = Result<Vec<BotId>, Self::Err>> + Send;
+    /// Persistence failure.
+    type Err: std::error::Error + Send + Sync + 'static;
 }

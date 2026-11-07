@@ -30,6 +30,17 @@ event contract (schema, sanitization, delivery semantics).
   `authentication_service`; `teams` cannot depend on `ai_billing`.
 - `src/domain/owned_entity_cleanup.rs` + `open_seat_release.rs`: account/team
   deletion side effects (owned-entity transfer, seat release).
+- `src/domain/subscription_items.rs`: `TeamSubscriptionItems`, non-seat items
+  (Macro computers) on the team subscription by price. One Stripe update per
+  change set, under the team billing lock, invoiced now with
+  `error_if_incomplete` (a decline is `CustomerError::PaymentFailed`) and
+  idempotent by key (`subscription_item_change` durable requests/receipts plus
+  an atomic `macro_item_change` provider marker and Stripe's `Idempotency-Key`).
+  Replay the receipt before resolving current subscription/prices. Pending item
+  changes block subsequent subscription mutations until resolved; retries send
+  the stored endpoint and exact request, including scheduled updates. Retain
+  receipts after subscription/team deletion to prevent delayed duplicate charges.
+  Seat prices passed here change seat items too.
 - `src/inbound/axum_router.rs` / `src/inbound/toolset.rs`: HTTP routes and AI
   tool surface.
 - `src/outbound/team_repo.rs`: the Postgres repository; reads use the supplied pool.
@@ -49,7 +60,7 @@ event contract (schema, sanitization, delivery semantics).
 - Used by: `services/authentication_service`, `services/document_storage_service`,
   `services/calendar_service`, `services/agent_harness_service`,
   `services/agent_harness_service`, `crates/scheduled_action`, `crates/ai_tools`,
-  `crates/ai_billing`, `crates/calendar_scheduling`.
+  `crates/ai_billing`, `crates/calendar_scheduling`, `crates/team_agents`.
 
 ## Recipes
 
@@ -61,6 +72,13 @@ event contract (schema, sanitization, delivery semantics).
 
 ## Gotchas
 
+- Carry the canonical `StripePriceId` through deferred agent-seat items and
+  generic item changes; validate once at configuration/provider boundaries.
+
+- Agent seat quotes and deferred seat items carry the shared
+  `stripe_price_id::StripePriceId`; validate configured seat prices before
+  returning deferred items or requesting a provider quote.
+
 - A trialing subscription that gains its first Max seat ends the trial and
   starts a new billing cycle immediately. Every other seat change keeps the
   trial, including on a subscription already trialing on Max, so its scheduled
@@ -71,6 +89,13 @@ event contract (schema, sanitization, delivery semantics).
   409 in that same request when it is no longer the caller's team; without
   `team_id` the routes act on whatever team is current.
 
+- `add_team_agent` joins a team agent without a Stripe call and returns the
+  seat item; `crates/team_agents` adds it in the computer purchase's single
+  subscription update. Undo an unbilled join with `undo_team_agent_join`,
+  never `remove_user_from_team`, which would decrement a seat never added.
+- Legacy `POST /team/invite` with `is_agent: true` loads the same per-caller
+  `enable-team-agents` snapshot through `AgentInviteRollout` and fails closed
+  before any billing or invitation effects. Human invitations do not load flags.
 - Invite and reminder emails carry the inviter's display name
   (`TeamRepository::get_user_display_name`). A failed lookup is logged and the
   email falls back to the inviter's address, so it never blocks an invite.
@@ -79,6 +104,10 @@ event contract (schema, sanitization, delivery semantics).
   `authentication_service`'s agent setup joins the team, so the seat is added
   without a separate acceptance. Existing accounts accept like any other invite.
   Its email links to the agent signup page (`/app/signup/agent?team_invite=<id>`).
+
+## Billing identifiers
+
+- Use `stripe_price_id::StripePriceId` for seat price configuration, item quantity changes, and price lookups; convert to provider strings only in the Stripe adapter.
 
 ## Checks
 
@@ -91,3 +120,14 @@ event contract (schema, sanitization, delivery semantics).
 ## Related
 
 - Docs: `crates/teams/README.md` · Rules: `.agents/rules/rust/db.md`
+
+- `add_team_agent(..., bill_seat: false)` joins an included agent without
+  subscription lookup, legacy backfill or Stripe mutation. The calling domain
+  verifies eligibility; deferred billed joins still return their seat item.
+
+- Persist `team_user.seat_included` when joining an included agent. Ordinary
+  removal and account cleanup skip seat billing for that membership, removal
+  rollback preserves it, and paid plan changes are rejected for included seats.
+- Subscription item/pricing data errors are typed in `customer_repo/subscription_error.rs`, bridged to the existing customer error contract.
+
+- `customer_repo/billing.rs` handles subscription locks, schedules, and request construction; `subscription_items.rs` handles item quantities and provider value mapping.

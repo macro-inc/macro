@@ -20,10 +20,85 @@ the local ACP process (Claude Code, Codex, ...), and drives native
   on each connect. `[macro]` is a dev override that defaults to production.
 - `src/daemon.rs` + `src/runtime.rs`: the serving core — persistent harness
   service connection, ACP process bridge, start/stop/restart on re-pair.
+- Pass `macrod service --ignore-stdin-eof` under system service managers;
+  embedded services keep the default shutdown when their parent's stdin closes.
 - `src/self_knowledge.rs`: the `<macrod-runtime>` section the bridge
   (`src/harness.rs`) prefixes to each new session's first prompt — macrod
   version, workspace, forwarded MCP servers, permission bypass, listing only
   what the session has. General Macro guidance stays in the `SelfKnowledge` tool.
+- `src/enroll.rs`: `macrod enroll --from incus|file:<path> --config <path>`,
+  run as root by the box image's `macrod-enroll.service` on a Macro computer.
+  Reads the `hosted_runtimes` `Enrollment` (Incus guest API
+  `/dev/incus/sock`, key `user.macro.enrollment`, or a file), writes
+  `macrod.toml` with the deployment URLs resolved from its
+  `macro_service_urls` `OVERRIDE_*` values (API, storage and app together, plus an optional
+  computer-reachable egress URL; macrod.toml stays the one URL source at runtime).
+  It installs the persona (validated names and keys; useradd, the mode-0600
+  `/etc/macro/personas/<os_user>.env` merging non-secret config with transient
+  `persona_enrollment.env` and zeroizing `persona_enrollment.secrets`, and
+  `/etc/systemd/system/<unit>.service`, `enable --now --no-block`) before claiming
+  the pre-approved pairing. It chowns the config to its directory's owner, then
+  writes `/var/lib/macrod/enrolled`. A stored credential skips the claim, so retries
+  are safe. Queue persona starts without waiting: their units start after macrod,
+  which waits for enrollment to finish. `--root` (hidden) prefixes system paths for tests.
+- `src/capabilities.rs`: on an enrolled Macro computer only (the marker
+  exists), reports `HarnessCapabilities` (`screen` = Xvnc on
+  `127.0.0.1:5900`) to `PUT /harnesses/me/capabilities` when the serving core
+  starts and on change. Display probing stays once a minute; enrolled persona
+  health is sampled every 15 seconds and stored in the same JSON report.
+  Open a fresh connection for each report so recurring polls cannot pin a
+  reassigned service IP after backend restarts.
+- `src/domain/personas.rs`: unit recovery/backoff policy, independent of I/O.
+  A stopped unit is started; a failed unit is reset and restarted. Attempts
+  back off from 5 seconds to 5 minutes until health recovers. Units already
+  activating/restarting are left to systemd's own `Restart=always` policy.
+  Running but degraded brains are reported, not restarted for an upstream outage.
+- `src/outbound/personas.rs`: discovery, systemctl and loopback HTTP adapters.
+  macrod stays the image's unprivileged `macro` user. Its existing passwordless
+  sudo permits noninteractive, validated `brain@<os_user>` control and the hidden
+  root-only `macrod persona-config` command. That command reads
+  `/etc/macro/personas/*.env` and returns only OS usernames and health ports;
+  no persona token enters the reporter or its logs. Polls use independent
+  timeouts, no redirects/proxies, bounded bodies and bounded diagnostics.
+  Keep the typed health problem categories synchronized with the brain:
+  `budget`, `event stream disconnected`, `turn execution failed`,
+  `event handling failed`, `brain is draining`, and `event intake not active`.
+  These fixed unhealthy categories preserve the reported `lastTurnAt` even on
+  HTTP 503; unknown response text becomes a fixed diagnostic
+  and is never persisted.
+  Reports carry healthy/unhealthy/missing, `checked_at`, last error when
+  applicable, and `last_turn_at`; the previous turn survives unavailable probes.
+  The capability reporter is cancellation-aware and tracked by the daemon's
+  `TaskTracker`, including across re-pair and shutdown.
+- `src/computer.rs` (`src/computer/`): on an enrolled Macro computer only,
+  the `computerControl` runtime messages and each Claude Code session's env.
+  Credits mode (no token) adds `ANTHROPIC_BASE_URL` (the session's
+  `macro_internal` MCP URL with `/mcp/internal` → `/anthropic`),
+  `ANTHROPIC_AUTH_TOKEN` (its bearer) and
+  `CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC=1` to `session/new|load|resume`
+  as `_meta.claudeCode.options.env`; own-account mode adds
+  `CLAUDE_CODE_OAUTH_TOKEN` instead, for sessions opened after the switch.
+  `claude_sign_in.rs` drives `claude setup-token` on a hidden PTY (`pty.rs`,
+  rustix): returns its OAuth URL, then types the pasted code or GETs a pasted
+  `http://localhost:<port>/callback?code=` URL inside the box, and stores the
+  `sk-ant-oat01-` token at `/var/lib/macrod/claude-token` (0600);
+  sign-out deletes it. Match the pinned Claude Code setup-token rejection text
+  in `claude_sign_in.rs` and return typed `InvalidCode` immediately; silence
+  still times out after 60 seconds. `claude_sign_in_cancel` interrupts URL/token
+  waits before taking the sign-in mutex, then drops the PTY; completion owns
+  its process so all failures also kill it immediately. Cancellation during a
+  token-store save restores the prior token (or deletes the newly saved token
+  when previously using credits) before acknowledging cancellation. `token_store.rs` keeps disk access in the root-only
+  `macrod-token-store.service`, installed by enrollment. Its Unix socket is
+  0600, owned by the config's uid, verifies peer credentials in both directions,
+  and accepts only bounded load/save/delete requests. macrod and Claude stay
+  unprivileged. On an already enrolled box, rerun `macrod enroll` as root to
+  install the helper without re-pairing; the image's first-boot unit skips an
+  existing marker. ACP trace logs contain only direction and byte counts.
+  `screen.rs`: `screen_open` connects to Xvnc on
+  `127.0.0.1:5900`, then dials its own wss to
+  `<api_url>/harnesses/me/screen?stream=` and relays raw bytes. Spans:
+  `macrod.computer.control`, `macrod.screen.stream`.
 - `src/trigger.rs` + `src/dispatch.rs`: agent-trigger broker events → session
   create/dial/prompt against the live harness service.
 - `src/daemon.rs` `watch_presence`: each minute a connection has held, asks
@@ -99,6 +174,10 @@ Channel/document trigger prompts retain their source message ID through
 for initial mentions, existing-session follow-ups, and conflicted-create retries;
 external chat replies depend on it. Direct session controls still mint IDs.
 
+## Enrollment identities
+
+- Retain typed computer/pairing IDs and persona user/unit names until the pairing HTTP or OS command boundary. Expose the device secret only for the pairing claim. Enrollment requires an `agent-` prefixed Linux name before any effects; legacy local personas must be re-invited.
+
 ## Checks
 
 - `cargo test -p coding_agent_worker` (`SQLX_OFFLINE` unset).
@@ -120,8 +199,17 @@ external chat replies depend on it. Direct session controls still mint IDs.
 
 ## Gotchas
 
+- Paired credentials remain scope-free. Resolve webhook scope from current
+  `shared_team_ids`, never a team owner variant; every harness has a human owner.
+
+- Keep canonical persona/name/identity types; the generic persona parser permits
+  Linux names, but enrollment requires an `agent-` username. Reject old names before
+  side effects; local preview agents with old names must be re-invited.
+
 - `src/herdr.rs` and its submodule are Unix-only (`#[cfg(unix)]`); don't add
   Windows-breaking code there without a cfg gate.
+- Set the PTY master's close-on-exec flag with `fcntl` on macOS; its
+  `posix_openpt` does not accept `O_CLOEXEC`.
 - The ACP child is killed with its whole tree: a process group on Unix, a Job
   Object on Windows (`src/outbound/acp_process/job.rs`).
 - Every herdr call goes through the `HerdrCli` facade; add a capability to both
@@ -148,3 +236,25 @@ external chat replies depend on it. Direct session controls still mint IDs.
   update it alongside `src/herdr/` changes.
 - MCP server selection is supplied by `agent_harness` when the session binds;
   native launch forwards that list, with credentials refreshed on launch/resume.
+
+Macro computers replace the managed `/workspace` placeholder with their configured
+workspace on session start. Enrollment’s `OVERRIDE_AGENT_HARNESS_EGRESS_URL` is
+stored as `[macro].egress_url`; computer sessions route first-party MCP and
+Anthropic requests through it without changing custom external MCP addresses.
+
+Service/enrollment telemetry opts in with `OTEL_EXPORTER_OTLP_ENDPOINT`
+(gRPC). Only enrollment and audited persona supervision spans export; health
+spans emit on state change and restart spans record attempt/backoff/outcome.
+Enrollment retains only W3C context in `/var/lib/macrod/provision.traceparent`;
+supervision joins it and records the marker's computer UUID plus a hashed persona ID.
+Steady unit-state polling emits no span. stdout remains the daemon protocol.
+
+## Enrollment configuration regression
+
+Keep `enroll/test/enrollment_urls.rs` exercising the actual team-agent issuer,
+transport decoder and worker persona-file installer for create and recreate.
+The test starts Node 24 with an empty environment and the real mode-0600 file,
+imports `packages/brain/src/config.ts`, and checks all seven canonical service
+URLs (including the MCP service base), current credentials and fresh repo URL.
+Do not replace this boundary proof with a hand-written config parser or a fixture
+under `/tmp`. The durable persona contains no URLs or credentials.

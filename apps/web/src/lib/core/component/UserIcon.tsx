@@ -127,6 +127,26 @@ function UserIconContent(props: {
  * User avatar with profile picture, tooltip, and DM click behavior.
  * For pure styling without user-specific behavior, use `<Avatar>` from @ui.
  */
+function BotAvatar(props: UserIconProps) {
+  return (
+    <Avatar
+      size={props.size ?? 'md'}
+      class={cn('bg-surface text-accent ring ring-edge-muted', props.class)}
+    >
+      <Show
+        when={props.photoUrl}
+        fallback={
+          <Avatar.Fallback>
+            <RobotIcon class="size-[62%]" />
+          </Avatar.Fallback>
+        }
+      >
+        {(photoUrl) => <Avatar.Image src={photoUrl()} alt="" />}
+      </Show>
+    </Avatar>
+  );
+}
+
 export function UserIcon(props: UserIconProps) {
   const size = () => props.size ?? 'md';
 
@@ -146,6 +166,7 @@ export function UserIcon(props: UserIconProps) {
   const isConnectedSecondaryInbox = useIsConnectedSecondaryInbox();
 
   const openDm = (event: MouseEvent) => {
+    if (event.button !== 0) return;
     if (!props.id || isConnectedSecondaryInbox(props.id)) return;
     fireAndForget(
       openDirectMessage(props.id, {
@@ -187,21 +208,20 @@ export function UserIcon(props: UserIconProps) {
       </Match>
 
       <Match when={isBotPrincipalId(props.id)}>
-        <Avatar
-          size={size()}
-          class={cn('bg-surface text-accent ring ring-edge-muted', props.class)}
-        >
-          <Show
-            when={props.photoUrl}
-            fallback={
-              <Avatar.Fallback>
-                <RobotIcon class="size-[62%]" />
-              </Avatar.Fallback>
-            }
-          >
-            {(photoUrl) => <Avatar.Image src={photoUrl()} alt="" />}
-          </Show>
-        </Avatar>
+        <Show when={showTooltip()} fallback={<BotAvatar {...props} />}>
+          <UserCardTrigger
+            placement="left"
+            triggerAs="div"
+            triggerClass={triggerClass()}
+            triggerTabIndex={isTouchDevice() ? 0 : -1}
+            user={{
+              displayName: displayName() || 'Agent',
+              id: props.id,
+              photoUrl: props.photoUrl,
+            }}
+            trigger={<BotAvatar {...props} />}
+          />
+        </Show>
       </Match>
 
       <Match when={!showTooltip() || !hasTooltipContent()}>

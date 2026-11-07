@@ -1,4 +1,5 @@
 //! Public workspace MCP and OAuth, hosted on the harness's public listener.
+pub(crate) mod agent_accounts;
 mod analytics;
 mod markdown_images;
 #[cfg(test)]
@@ -69,6 +70,9 @@ pub async fn router(
     let public_url = macro_service_urls::McpPublicUrl::new()?;
     let (auth_proxy, backfill) =
         build_auth_proxy(config, secrets, &public_url, db.clone(), kms).await?;
+    let user_api_keys = Arc::new(macro_authorization::PgUserApiKeyAuthorizer::new(
+        macro_authorization::PgUserApiKeyAuthorizationRepo::new(db.clone()),
+    ));
     let analytics = build_analytics(config, db);
     let item_base_url = macro_service_urls::AppServiceUrl::new()?.to_string();
     let static_file_base_url =
@@ -77,6 +81,11 @@ pub async fn router(
         .parse_url()?
         .host_str()
         .context("public MCP URL has no host")?
+        .to_owned();
+    let service_host = macro_service_urls::McpServiceUrl::new()?
+        .parse_url()?
+        .host_str()
+        .context("MCP service URL has no host")?
         .to_owned();
     // Built once: the factory runs per request in stateless mode.
     let tools = ai_tools::tools_for(ai_tools::AiHost::Mcp).toolset;
@@ -104,18 +113,7 @@ pub async fn router(
             })
         },
         Arc::new(LocalSessionManager::default()),
-        {
-            let mut config = StreamableHttpServerConfig::default().with_allowed_hosts([
-                mcp_public_host.clone(),
-                "localhost".into(),
-                "127.0.0.1".into(),
-                "gateway.macro.com".into(),
-                "dev-gateway.macro.com".into(),
-            ]);
-            config.stateful_mode = false;
-            config.json_response = true;
-            config
-        },
+        server_config(mcp_public_host, service_host),
     );
 
     background_tasks.spawn(backfill);
@@ -138,19 +136,22 @@ pub async fn router(
     // Serves the ChatGPT Apps Directory domain verification token.
     let openai_domain_verification_token =
         config.openai_domain_verification_token.as_ref().to_string();
-    Ok(
-        mcp_auth_proxy::inbound::axum_router::mounted_mcp_router(auth_proxy, jwt_args, mcp_service)
-            .route(
-                "/.well-known/openai-apps-challenge",
-                axum::routing::get(move || async move { openai_domain_verification_token }),
-            )
-            .layer(
-                macro_tower_layers::MacroRequestIdAndTracingLayer::new(
-                    std::time::Duration::from_millis(200),
-                )
-                .into_inner(),
-            ),
+    Ok(mcp_auth_proxy::inbound::axum_router::mounted_mcp_router(
+        Some(user_api_keys),
+        auth_proxy,
+        jwt_args,
+        mcp_service,
     )
+    .route(
+        "/.well-known/openai-apps-challenge",
+        axum::routing::get(move || async move { openai_domain_verification_token }),
+    )
+    .layer(
+        macro_tower_layers::MacroRequestIdAndTracingLayer::new(std::time::Duration::from_millis(
+            200,
+        ))
+        .into_inner(),
+    ))
 }
 
 /// The broker, and the one-off copy of its Redis state into Postgres to run
@@ -286,4 +287,19 @@ fn build_redirect_uri_policy(config: &Config) -> RedirectUriPolicy {
         Some(hosts) => RedirectUriPolicy::new(hosts.split(',')),
         None => RedirectUriPolicy::new(DEFAULT_MCP_ALLOWED_REDIRECT_HOSTS),
     }
+}
+
+/// Public and typed service origins share this authenticated MCP transport.
+fn server_config(public_host: String, service_host: String) -> StreamableHttpServerConfig {
+    let mut config = StreamableHttpServerConfig::default().with_allowed_hosts([
+        public_host,
+        service_host,
+        "localhost".into(),
+        "127.0.0.1".into(),
+        "gateway.macro.com".into(),
+        "dev-gateway.macro.com".into(),
+    ]);
+    config.stateful_mode = false;
+    config.json_response = true;
+    config
 }

@@ -67,7 +67,7 @@ pub struct CodeModeSurface {
     pub service: Arc<dyn UserCodeMode>,
     /// Jev, for selecting documentation by task.
     pub cognition: Option<Arc<dyn Cognition>>,
-    /// The `ai-code-mode` flag, per user.
+    /// The `ai-code-mode` policy: explicit teammates, ordinary per-user flags.
     pub selector: Arc<dyn ToolModeSelector>,
 }
 
@@ -120,8 +120,8 @@ impl<Context> AuthenticatedToolService<Context> {
         definitions(&self.toolset).collect()
     }
 
-    /// Tools listed for a mode. Code mode lists only `ExecuteCode` and
-    /// `DescribeCodeTools`. Native tools stay callable if a client already
+    /// Tools listed for a mode. Code mode lists `ExecuteCode`,
+    /// `DescribeCodeTools` and `ReadCodeDocs`. Native tools stay callable if a client already
     /// knows their names.
     fn tool_definitions_for(&self, mode: ToolMode) -> Vec<Tool> {
         match (mode, &self.code_mode) {

@@ -27,9 +27,98 @@ Pulumi stacks; they do not host extra agent processes.
   ends their work registrations first
   (`agent_session::domain::work_registration`).
 - `src/internal_mcp.rs`: the internal MCP server exposed to running sessions.
+- `src/anthropic_gateway.rs` + `src/anthropic_gateway/`: `/anthropic/v1/messages`
+  and `/anthropic/v1/messages/count_tokens` on the egress listener, for runtimes
+  on Macro credits (Claude Code on a Macro computer). Both values come from
+  the `macro_internal` MCP server in `session/new`/`load`/`resume`:
+  `ANTHROPIC_BASE_URL` is its URL with `/mcp/internal` replaced by
+  `/anthropic`, and `ANTHROPIC_AUTH_TOKEN` is the session egress token from
+  its `Authorization: Bearer` header (re-minted on every attach, so restart
+  the runtime with the latest one). Requests pass through unchanged with
+  `ANTHROPIC_API_KEY`; only `anthropic-version`/`anthropic-beta` are
+  forwarded. Models are a const allowlist (`ALLOWED_MODELS`, each mapped to
+  its `ai_pricing` id, including the image’s bundled Claude Code Opus 4.8 and Sonnet 4.6
+  defaults). `messages` is admitted as `AiFeature::AgentSession`
+  for the session owner, and its `usage` (SSE `message_start`/`message_delta`
+  or the JSON body) goes to the process's settling recorder, which charges
+  only under `ENABLE_AI_USAGE_BILLING`. Span: `anthropic_gateway.messages`.
+- `src/computers.rs`: passes shared computer/pairing IDs and validated Macro buyer IDs
+  directly between the hosted-runtime and harness services; configures the optional fleet operator, runs fleet effects,
+  timers, reconciliation and idle sleep, reports macrod presence, and wakes
+  sleeping computers before forwarding prompts. `COMPUTERS_FLEET` selects
+  `incus` or local-only `docker`; absence means no attached fleet, emits one startup
+  warning and starts no operator. Selected groups remain strictly validated.
+  Shutdown stops computer passes through the shared CancellationToken and waits
+  on their TaskTracker; fleet effects drain for up to thirty seconds and release
+  unfinished leases. Completion still notifies brain wake waiters. See
+  hosted_runtimes' Contracts for redeploy grace, bounded effect execution, and
+  hard-kill recovery.
+  `COMPUTERS_IMAGE` selects the local Incus image alias or Docker image;
+  an Incus override must not silently use the shared `macro-box` alias.
+  HostedHarnesses pairing retains the buying admin as the harness owner and
+  grants the team User access for ordinary computers or Read access for persona
+  computers. The bound agent account is a view-only Account resident, with no
+  generic execution as the host user. `computers.rs` selects team access from
+  the persona; PostgreSQL inserts and grant changes use the shared
+  `harness_grant_level` normalization for either a bound account or agent-computer
+  classification.
+- Computer lifecycle and gateway adapters carry canonical `ComputerId` and
+  `HarnessId`; unwrap only at the harness/storage boundary.
+- `src/brain_gateway.rs` supplies computer facts and the same prompt-wake path
+  to the standalone-brain Anthropic gateway authorization boundary in
+  `team_agents::domain::gateway`. `/brain/anthropic/v1/messages` and
+  `/brain/anthropic/v1/messages/count_tokens` accept only a revocable API key
+  parsed as a validated `AgentApiKey` (`mak_` + 64 hex) before directory or
+  admission calls. Keys remain redacted in Debug. The key must belong to a
+  registered agent on its current team with a Running computer (Frozen
+  computers are woken). These routes share the session gateway's model allowlist,
+  budgets, forwarding and meter; `ai_usage.user_id` is the agent and `entity` is
+  its team. See `hosted_runtimes/AGENTS.md` Contracts for the credential contract.
+- `src/computer_screen.rs` + `src/computer_screen/`: runtime screen and Macro
+  computer account routes.
+  Viewer screen and all Claude routes require the caller's `enable-macro-computers`
+  flag through `hosted_runtimes::domain::rollout::ComputerRollout`; missing
+  providers/flags and evaluation errors return 403. The macrod
+  `/harnesses/me/screen` endpoint and fleet workers stay ungated. Viewer socket
+  renewals recheck the rollout and shared View/Use authorization, failing closed.
+  `POST /harnesses/{id}/claude-sign-in` → `{url}`,
+  `POST /harnesses/{id}/claude-sign-in/complete` `{code}` → `{signedIn}`
+  (a rejected code returns 422 with `code: "invalid_code"`),
+  `POST /harnesses/{id}/claude-sign-in/cancel` → 204 (same manage rights
+  and rollout gate; interrupts an active start or completion and waits for
+  its account-mode reconciliation and lease release before answering),
+  `POST /harnesses/{id}/claude-sign-out` → `{mode}` (manage rights; mode is
+  written to the harness row on macrod's confirmation; a shared 180-second
+  account-change lease covers the command and mode write, preventing opposing
+  requests from persisting out of order; concurrent requests get 409; terminal
+  responses release the lease after the mode write, and failed or dropped
+  requests schedule owner-checked cleanup instead of waiting for expiry;
+  abandoned sign-in requests cancel macrod before releasing their lease;
+  completion and its mode write run in a tracked task so a dropped HTTP waiter
+  still reconciles any token macrod already committed),
+  `GET /harnesses/{id}/claude-mode` → `{mode}` (manage rights), and two
+  websockets: the viewer's `GET /harnesses/{id}/screen[?control=true]` (view
+  rights; `control` needs use rights from the harness domain; `rfb.rs` drops
+  view-only input and fails closed on unreadable messages; screen-capable paired
+  runtimes also qualify without a hosted-computer ID) and macrod's
+  `GET /harnesses/me/screen?stream=` (harness token). Viewer sockets renew View/Use
+  authorization every five seconds, pause forwarding during the bounded renewal,
+  and close on revocation or authorization failure. Commands reach
+  macrod as `computerControl` runtime messages; `bus.rs` carries them over
+  Redis (`agent-harness.computer-control`: claim with `SET NX`, ack within
+  3 s or 409, then the answer) when the runtime is on another replica, and
+  always carries screen bytes over per-stream channels, so either socket may
+  land on any replica. Each screen socket sends a ping every 20 seconds so a
+  static desktop stays connected through the load balancer. Both sides require
+  initial peer RFB bytes within 20 seconds, cleaning up cancelled upgrades.
+  Spans:
+  `computer_control.request`/`.execute`,
+  `computer_screen.view`/`.computer` (joined by `stream_id` and propagated
+  context).
 - `src/public_mcp.rs` + `src/public_mcp/`: public workspace MCP and OAuth;
-  reuses the harness tool context and retains bearer authentication. Users with
-  `ai-code-mode` get only `ExecuteCode`/`DescribeCodeTools`/`ReadCodeDocs` on
+  reuses the harness tool context with JWT bearer or standard user API-key
+  authentication. Teammates and ordinary users with `ai-code-mode` get only
+  `ExecuteCode`/`DescribeCodeTools`/`ReadCodeDocs` on
   `tools/list` (`tool_service.rs`); hidden native tools stay callable. The flag
   is cached per user (`tool_mode_cache.rs`).
   `src/code_mode/connected_apps.rs` serves a running execution's
@@ -135,7 +224,8 @@ produce events, independently of public session control.
 
 ## Checks
 
-- `cargo test -p agent_harness_service` (`SQLX_OFFLINE` unset). Add
+- `cargo test -p agent_harness_service` (`SQLX_OFFLINE` unset; computer
+  account-lease tests require `REDIS_URI` pointing at isolated local Redis). Add
   `-- --include-ignored` with Deno 2.9.6 on `PATH` for the real-runtime
   routine code tests.
 - `just check` (`SQLX_OFFLINE=true cargo check`).
@@ -148,6 +238,26 @@ access. Lifecycle, runtime provider connections, billing, and memory stay owner-
 
 ## Configuration and lifecycle
 
+Computer fleets require `COMPUTERS_CONTROL_PLANE_ID` whenever `COMPUTERS_FLEET`
+is `incus` or `docker`. Omit the selector and fleet settings when no fleet is attached;
+`disabled`, blank and unknown selections are invalid. PostHog
+`enable-macro-computers` remains the only product rollout gate.
+Read the stable identity from Doppler in deployed environments; local stacks
+explicitly set `local-<instance>`. Distinct control planes sharing a host
+must use distinct identities; replicas of one control plane share an identity.
+
+An enabled fleet also requires `COMPUTERS_IMAGE`, `COMPUTERS_HOST_NAME`,
+`COMPUTERS_HOST_RESERVE_GB`, and `COMPUTERS_OVERSELL_FACTOR`. Docker additionally
+requires `COMPUTERS_DOCKER_MEMORY_GB`, network and enrollment directory. Incus
+requires its endpoint and mTLS material, `COMPUTERS_INCUS_PROFILE`,
+`COMPUTERS_INCUS_STORAGE_POOL`, `COMPUTERS_INCUS_REQUEST_TIMEOUT_SECS`,
+`COMPUTERS_INCUS_CONNECT_TIMEOUT_SECS`, `COMPUTERS_INCUS_OPERATION_WAIT_SECS`,
+`COMPUTERS_INCUS_OPERATION_WAITS`, `COMPUTERS_INCUS_STATE_CHANGE_TIMEOUT_SECS`,
+and `COMPUTERS_INCUS_SHUTDOWN_GRACE_SECS`. Missing values fail startup with the
+variable name; fleet-specific values are required only for that fleet.
+Local orchestration supplies every value explicitly for each fleet; see
+[required variables and local values](../../docs/development/running-locally.md#macro-computers).
+
 All feature configs read the same harness `APP_SECRETS_JSON`; the harness
 Doppler validation binary validates each config. Stable public origins resolve
 once at startup through `macro_service_urls`: `McpPublicUrl` preserves the
@@ -155,7 +265,8 @@ once at startup through `macro_service_urls`: `McpPublicUrl` preserves the
 `document-cognition[-dev].macro.com` integration callbacks, and `AppServiceUrl`
 supplies browser links and preview form origin. Preview control accepts the
 `PreviewGatewayUrl` host (plus app/loopback hosts locally). Use process-level
-`OVERRIDE_*` values for local instances. The shared gateway preserves the public
+`OVERRIDE_*` values for local instances; enrollment copies only macrod’s typed
+service overrides from that process environment. The shared gateway preserves the public
 hostnames and internally rewrites cognition paths. `PREVIEW_DOMAIN` and
 `PREVIEW_SSH_HOST` remain infrastructure-generated Doppler settings. Legacy
 `MCP_PUBLIC_URL`, `MCP_CLIENT_PUBLIC_URL`, `PREVIEW_APP_ORIGIN`, and
@@ -170,12 +281,19 @@ is cognition's Secrets Manager reference; AI tools resolve the separate
 `DOCUMENT_STORAGE_SERVICE_CLOUDFRONT_SIGNER_PRIVATE_KEY_SECRET_NAME` reference.
 
 The shared Postgres pool defaults to 30 connections (`DATABASE_MAX_CONNECTIONS`).
+Computer lifecycle observations use one additional dedicated lock connection per
+replica. Serialize connect/disconnect effects by harness across replicas and check
+durable live connections before emitting a disconnect, so an old socket cannot
+mark its replacement offline. Keep this lock pool separate from repository pools
+to avoid exhausting the connections needed inside the guarded operation.
 Routine dispatch waits for the shared HTTP listener and calls its loopback
 address, avoiding an ALB/self-startup race. Shutdown stops scheduling intake and
 projection workers before draining sessions and pending publishes. Preview
 listener failure shuts down the process so ECS can replace the task.
 
 ## Gotchas
+
+- Keep computer domain IDs, harness IDs, and Incus resource names typed in `computers.rs`; unwrap only when calling the existing harness registry or SQL boundary.
 
 - Keep two tasks and rolling replacements in both environments. Preview
   control uses shared Postgres state. SSH claims a tunnel owner; browser HTTP/WS
@@ -193,16 +311,85 @@ listener failure shuts down the process so ECS can replace the task.
   `agent_session.bot_id`) writes as that agent, under the bot's own name (read
   per call, so its document edits label their live cursors with it);
   `McpClient` (OAuth) writes as the Macro bot labelled with the client's name
-  (shown as the author); `ApiKey` writes as the Macro bot. Public `ExecuteCode`
-  builds its context per call from the caller and signs the same attribution
-  into its SDK token: the agent, or the Macro bot plus the client name as
-  `agent_via`. Never read a bot id or client name from the request itself.
+  (shown as the author); direct native `ApiKey` tools retain Macro bot
+  attribution. Public `ExecuteCode` resolves API-key owners against
+  server-side teammate account facts: teammates write as themselves; ordinary
+  API-key users retain Macro bot attribution. It signs this attribution into
+  the SDK token, preserving OAuth client names as `agent_via`. Never read a
+  bot id, client name, or teammate claim from the request itself.
 - The public MCP server is stateless, so tool calls carry no `clientInfo`; the
   client is identified per call by its `User-Agent` / `x-anthropic-client`
   headers and per session by `$mcp_initialize`.
+
+Local MCP uses both configured egress addresses in the in-process catalog;
+the public MCP transport permits its typed service hostname as well as its
+public hostname. Internal MCP also permits the configured local computer egress
+bridge hostname, preserving Host validation for other origins.
+
 
 ## Related
 
 - Rules: `.agents/rules/rust/architecture.md`, `.agents/rules/config-and-service-urls.md`
 
+The Anthropic brain gateway records hashed agent identity, team/computer IDs,
+validated model, numeric tokens/status and explicit admission category.
+
 - Code-mode credentials create durable per-invocation agent correlation; the final merged HTTP router validates incoming attribution before handlers.
+
+## Speech gateway and voice catalog
+
+The computer egress listener proxies `/brain/inference/stt` and
+`/brain/inference/tts` WebSockets to LiveKit Inference. It shares
+BrainGatewayAccess with Anthropic: only registered agents on their team's
+running computer qualify. Server-only `LIVEKIT_API_KEY` and `LIVEKIT_API_SECRET`
+sign 60-second `inference.perform` JWTs; neither secret nor upstream token is
+returned to the guest. Composition uses `Option<LiveKitCredentials>`: both env
+values absent means calls are off; both present must be nonblank and have no
+surrounding whitespace. Partial or blank credentials fail startup. The dev/prd
+Doppler check validates the same option and accepts `None`; it never substitutes
+empty credentials or requires credentials for a deployment with calls off.
+The local stack already supplies them through its LiveKit configuration.
+There is no Deepgram key or direct Deepgram speech connection.
+
+Session contracts fix Nova-3 STT to mono PCM16/16k and Aura-2 TTS to PCM16/24k,
+with known catalog voices. Reject changes to models, encoding, voice or sample
+rate after creation. Bound message size, session duration and sample output.
+Meter forwarded PCM seconds and synthesis characters with the shared recorder
+and the `livekit-inference-deepgram-*` pricing rows. The model rates use the
+LiveKit Build/Ship baseline and preserve administrator-configured prices.
+
+Authenticated team admins with the agent-management rollout enabled can query
+`/voices` and `/voices/{model}/sample`. Runtime speech remains independent of it.
+Catalog metadata is cached for a day; fixed-line WAV previews are cached by model.
+The admin-only voice settings policy lives in team_agents, and agent_git
+commits the selected model. Spans never include transcripts, synthesis text or keys.
+- `harness_bindings.rs` resolves runtime routing through the harness, bot assignment, and session lookup ports; each owning crate reads its own table.
+
+Computer operator construction requires an explicit persona credential source.
+The composition uses the auth service enrollment source below, which returns
+empty material for computers without a persona and fails closed if persona
+credentials cannot be issued.
+
+## Persona enrollment credentials
+
+The computer operator uses the auth service's InternalOnly enrollment source
+with `AUTHENTICATION_SERVICE_SECRET_KEY` to issue fresh per-agent bootstrap
+credentials. A persona fails closed when that credential is absent; ordinary
+non-persona computers need no issuance. Request and response bodies are never
+logged or cached. The fleet skips issuance for an already claimed generation;
+unclaimed retries and recreated guests receive fresh credentials through the
+transient `PersonaEnrollment` payload, installed mode 0600 before pairing claim.
+
+Public MCP accepts JWT bearer or the standard revocable user API key. Compose
+`UserApiKeyAuthorizer` at startup; key requests run only as their owner. The
+`ai-code-mode` selector includes teammates through `TeamAgentRepository` server
+facts even without PostHog configuration; ordinary users keep their existing
+flag policy. No request header may assert teammate status. Brain clients require
+all three code-mode tools and reject unavailable deployments explicitly.
+
+Hosted computer screen and account-control requests require the operator-derived
+`FleetAttachment` after the existing rollout and shared Read/Use authorization;
+no attachment answers typed 503 before command or screen-relay effects. Generic
+paired runtime screens and macrod ingress keep their existing authorization.
+Authentication checks the owning hosted host heartbeat per request, so its
+attachment observation can briefly differ from this service's operator presence.

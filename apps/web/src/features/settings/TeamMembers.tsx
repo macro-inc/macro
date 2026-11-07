@@ -1,25 +1,37 @@
 import { ListSkeleton } from '@app/components/view-shell/ListSkeleton';
 import { SearchBar } from '@app/components/view-shell/SearchBar';
+import { useSettingsComputerScreen } from '@app/features/computer-screen/context/settings-screen-context';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
+import { t } from '@app/lib/i18n';
+import { beginInteraction, usePending } from '@app/observability/flow';
 import { AgentTag } from '@core/component/AgentTag';
 import { UserIcon } from '@core/component/UserIcon';
-import { enableAiUsageBilling } from '@core/constant/featureFlags';
+import {
+  enableAiUsageBilling,
+  enableMacroComputers,
+  enableTeamAgents,
+} from '@core/constant/featureFlags';
+import { useSettingsState } from '@core/constant/SettingsState';
 import { useUserId } from '@core/context/user';
 import {
   getDisplayName,
   isAgentAccount,
+  isHumanAccount,
   macroIdToEmail,
   tryMacroId,
 } from '@core/user';
 import { debouncedDependent } from '@core/util/debounce';
+import { fireAndForget } from '@core/util/fireAndForget';
 import { fuzzyFilter } from '@core/util/fuzzy';
 import CaretDownIcon from '@icon/system/regular/caret-down.svg';
 import CheckIcon from '@icon/system/regular/check.svg';
-import PlusIcon from '@icon/system/regular/plus.svg';
+import MonitorIcon from '@icon/system/regular/desktop.svg';
+import DotsIcon from '@icon/system/regular/dots-three.svg';
 import TrashIcon from '@icon/system/regular/trash.svg';
 import type { CollectionNode } from '@kobalte/core';
 import { Select } from '@kobalte/core/select';
 import { useAiBillingSummaryQuery } from '@queries/auth';
+import { queryReadyGate } from '@queries/gate';
 import {
   useDeleteTeamInviteMutation,
   useResendTeamInviteMutation,
@@ -34,13 +46,34 @@ import {
   useToggleAutoJoinDomainMutation,
   useToggleNonAdminInvitesMutation,
 } from '@queries/team/teams';
+import {
+  useDeleteTeamAgentMutation,
+  useRetryTeamAgentMutation,
+  useTeamAgentComputerAvailability,
+  useTeamAgentsQuery,
+} from '@queries/team-agents';
 import type { PaidPlan } from '@service-auth/ai-billing-types';
+import type { TeamAgent } from '@service-auth/generated/schemas';
 import type { Team as TeamSummary } from '@service-auth/generated/schemas/team';
 import type { TeamInviteDetails } from '@service-auth/generated/schemas/teamInviteDetails';
 import type { TeamMember } from '@service-auth/generated/schemas/teamMember';
 import { TeamRole } from '@service-auth/generated/schemas/teamRole';
-import { Button, ConfirmDialog, ToggleSwitch, Tooltip } from '@ui';
-import { createMemo, createSignal, For, mapArray, Show } from 'solid-js';
+import { Button, ConfirmDialog, Dropdown, ToggleSwitch, Tooltip } from '@ui';
+import {
+  createEffect,
+  createMemo,
+  createSignal,
+  For,
+  mapArray,
+  on,
+  Show,
+  Suspense,
+} from 'solid-js';
+import { AgentVoiceDialog } from './components/agent-voice-dialog';
+import { InviteAgentDialog } from './components/invite-agent-dialog';
+import { MemberInviteActions } from './components/member-invite-actions';
+import { MemberRowLayout } from './components/member-row-layout';
+import { TeamAgentRow } from './components/team-agent-row';
 import { TeamInviteRow } from './components/team-invite-row';
 import { TeamSeatPlanSelect } from './components/team-seat-plan-select';
 import {
@@ -54,6 +87,7 @@ import { CopyTeamInviteLinkButton } from './TeamInviteLinkSection';
 import {
   canInviteToTeam,
   canRemoveTeamMember,
+  canRetryTeamAgent,
   isTeamAdminOrOwner,
 } from './teamMemberPermissions';
 
@@ -129,7 +163,7 @@ function memberPlan(member: TeamMember): PaidPlan {
   return plan === 'max' ? 'max' : 'premium';
 }
 
-function MemberRow(props: {
+type MemberRowProps = {
   member: TeamMember;
   isOwner: boolean;
   isCurrentUser: boolean;
@@ -143,8 +177,128 @@ function MemberRow(props: {
   onRemove: () => void;
   onRoleChange: (role: TeamRole) => void;
   onPlanChange: (plan: PaidPlan) => void;
-}) {
+  managedLayout?: boolean;
+  onViewComputer?: () => void;
+};
+
+export function MemberRow(props: MemberRowProps) {
   const aiUsageBilling = useFeatureFlag(enableAiUsageBilling);
+  const humanMember = () => isHumanAccount(tryMacroId(props.member.user_id));
+  const displayName = () => getDisplayName(tryMacroId(props.member.user_id));
+  return (
+    <Show when={props.managedLayout} fallback={<LegacyMemberRow {...props} />}>
+      <MemberRowLayout
+        kind={
+          isAgentAccount(tryMacroId(props.member.user_id)) ? 'agent' : 'human'
+        }
+        avatar={
+          <UserIcon id={props.member.user_id} isDeleted={false} size="lg" />
+        }
+        name={
+          <>
+            <Tooltip label={displayName()} class="min-w-0">
+              <span class="truncate" data-member-name>
+                {displayName()}
+                {props.isCurrentUser && (
+                  <span class="text-ink-muted font-normal"> (you)</span>
+                )}
+              </span>
+            </Tooltip>
+            <Show when={isAgentAccount(tryMacroId(props.member.user_id))}>
+              <AgentTag />
+            </Show>
+          </>
+        }
+        detail={
+          <>
+            <Show
+              when={
+                props.isOwner &&
+                props.member.role !== TeamRole.owner &&
+                humanMember()
+              }
+              fallback={<span class="capitalize">{props.member.role}</span>}
+            >
+              <RoleSelect
+                value={props.member.role}
+                onChange={props.onRoleChange}
+              />
+            </Show>
+            <Show when={props.showPlan}>
+              <Show
+                when={props.canEditPlan && humanMember()}
+                fallback={
+                  <span class="capitalize">{memberPlan(props.member)}</span>
+                }
+              >
+                <TeamSeatPlanSelect
+                  value={memberPlan(props.member)}
+                  onChange={props.onPlanChange}
+                  disabled={props.planPending}
+                  aiUsageBilling={aiUsageBilling().enabled}
+                  pendingDowngrade={props.pendingDowngrade}
+                />
+              </Show>
+            </Show>
+          </>
+        }
+        status={undefined}
+        actions={
+          <>
+            <Show when={props.onViewComputer}>
+              <MemberComputerMenu onOpen={() => props.onViewComputer?.()} />
+            </Show>
+            <Show when={props.canManageRemovals && humanMember()}>
+              <Tooltip
+                label={
+                  props.canRemove
+                    ? 'Remove member'
+                    : props.member.role === TeamRole.owner
+                      ? 'Cannot remove team owner'
+                      : 'Cannot remove yourself'
+                }
+              >
+                <Button
+                  variant="ghost"
+                  size="icon-sm"
+                  disabled={!props.canRemove}
+                  onClick={props.onRemove}
+                  aria-label="Remove member"
+                >
+                  <TrashIcon class="size-4" />
+                </Button>
+              </Tooltip>
+            </Show>
+          </>
+        }
+      />
+    </Show>
+  );
+}
+
+function MemberComputerMenu(props: { onOpen(): void }) {
+  return (
+    <Dropdown>
+      <Dropdown.Trigger
+        variant="ghost"
+        size="icon-sm"
+        aria-label={t('common.more')}
+      >
+        <DotsIcon class="size-4" />
+      </Dropdown.Trigger>
+      <Dropdown.Content>
+        <Dropdown.Item onSelect={props.onOpen}>
+          <MonitorIcon class="size-4" />
+          {t('runtimeSharing.viewComputer')}
+        </Dropdown.Item>
+      </Dropdown.Content>
+    </Dropdown>
+  );
+}
+
+function LegacyMemberRow(props: MemberRowProps) {
+  const aiUsageBilling = useFeatureFlag(enableAiUsageBilling);
+  const humanMember = () => isHumanAccount(tryMacroId(props.member.user_id));
   const displayName = () => getDisplayName(tryMacroId(props.member.user_id));
   const isMemberOwner = () => props.member.role === TeamRole.owner;
   const email = () => {
@@ -182,7 +336,7 @@ function MemberRow(props: {
       <div class="flex items-center gap-2 shrink-0">
         <Show when={props.showPlan}>
           <Show
-            when={props.canEditPlan}
+            when={props.canEditPlan && humanMember()}
             fallback={
               <span class="text-xs text-ink-muted capitalize">
                 {memberPlan(props.member)}
@@ -199,7 +353,7 @@ function MemberRow(props: {
           </Show>
         </Show>
         <Show
-          when={props.isOwner && !isMemberOwner()}
+          when={props.isOwner && !isMemberOwner() && humanMember()}
           fallback={
             <span class="text-xs text-ink-muted capitalize">
               {props.member.role}
@@ -208,7 +362,10 @@ function MemberRow(props: {
         >
           <RoleSelect value={props.member.role} onChange={props.onRoleChange} />
         </Show>
-        <Show when={props.canManageRemovals}>
+        <Show when={props.onViewComputer}>
+          <MemberComputerMenu onOpen={() => props.onViewComputer?.()} />
+        </Show>
+        <Show when={props.canManageRemovals && humanMember()}>
           <Show
             when={props.canRemove}
             fallback={
@@ -249,6 +406,7 @@ function MemberName(props: { memberId: string }) {
 
 /** Team › Members: the roster, roles and seats, and how people join. */
 export function TeamMembers(props: { team: TeamSummary }) {
+  const settings = useSettingsState();
   const userId = useUserId();
   const {
     teamQuery,
@@ -258,6 +416,40 @@ export function TeamMembers(props: { team: TeamSummary }) {
     allowNonAdminInvites,
   } = useTeamViewer(() => props.team);
   const invitesQuery = useTeamInvitesQuery(() => props.team.id);
+  const agentFlag = useFeatureFlag(enableTeamAgents);
+  const computerFlag = useFeatureFlag(enableMacroComputers);
+  const screen = useSettingsComputerScreen();
+  const canViewAgentComputers = () =>
+    !computerFlag().loading && computerFlag().enabled && !!screen;
+  const canManageAgents = () =>
+    isAdminOrOwner() && !agentFlag().loading && agentFlag().enabled;
+  const agentsQuery = useTeamAgentsQuery(() => props.team.id, canManageAgents);
+  usePending(
+    'team-agent.roster',
+    () => canManageAgents() && agentsQuery.isLoading
+  );
+  const agents = () =>
+    canManageAgents() && queryReadyGate(agentsQuery)
+      ? agentsQuery.data.agents
+      : [];
+  const [inviteAgentOpen, setInviteAgentOpen] = createSignal(false);
+  const [voiceAgent, setVoiceAgent] = createSignal<TeamAgent>();
+  const canChangeVoice = () => canManageAgents();
+  createEffect(() => {
+    const agent = voiceAgent();
+    if (agent && !canChangeVoice()) setVoiceAgent(undefined);
+  });
+  const [removeAgent, setRemoveAgent] = createSignal<TeamAgent>();
+  // A remote rollout change revokes open management UI, including when enabled again.
+  createEffect(
+    on(canManageAgents, (allowed) => {
+      if (allowed) return;
+      setInviteAgentOpen(false);
+      setRemoveAgent(undefined);
+    })
+  );
+  const deleteAgent = useDeleteTeamAgentMutation();
+  const retryAgent = useRetryTeamAgentMutation();
 
   const deleteInviteMutation = useDeleteTeamInviteMutation();
   const resendInviteMutation = useResendTeamInviteMutation();
@@ -275,11 +467,15 @@ export function TeamMembers(props: { team: TeamSummary }) {
 
   const members = createMemo(() => {
     const unsorted = teamQuery.data?.members ?? [];
-    return [...unsorted].sort((a, b) => {
-      const roleCompare = (roleOrder[a.role] ?? 3) - (roleOrder[b.role] ?? 3);
-      if (roleCompare !== 0) return roleCompare;
-      return a.user_id.localeCompare(b.user_id);
-    });
+    return [...unsorted]
+      .filter(
+        (member) => !agents().some((agent) => agent.userId === member.user_id)
+      )
+      .sort((a, b) => {
+        const roleCompare = (roleOrder[a.role] ?? 3) - (roleOrder[b.role] ?? 3);
+        if (roleCompare !== 0) return roleCompare;
+        return a.user_id.localeCompare(b.user_id);
+      });
   });
 
   const [memberQuery, setMemberQuery] = createSignal('');
@@ -303,7 +499,15 @@ export function TeamMembers(props: { team: TeamSummary }) {
   });
 
   // Only worth showing the filter once the list is long enough to scan.
-  const showMemberSearch = () => members().length > 5;
+  const filteredAgents = createMemo(() => {
+    const query = debouncedMemberQuery().trim().toLowerCase();
+    return agents().filter(
+      (agent) =>
+        !query || `${agent.name} ${agent.email}`.toLowerCase().includes(query)
+    );
+  });
+
+  const showMemberSearch = () => members().length + agents().length > 5;
 
   const filteredMembers = createMemo(() => {
     const q = debouncedMemberQuery().trim().toLowerCase();
@@ -363,7 +567,12 @@ export function TeamMembers(props: { team: TeamSummary }) {
 
   const handleRemoveMember = () => {
     const member = showRemoveModal();
-    if (!props.team.id || !member) return;
+    if (
+      !props.team.id ||
+      !member ||
+      !isHumanAccount(tryMacroId(member.user_id))
+    )
+      return;
 
     removeUserMutation.mutate(
       { teamId: props.team.id, userId: member.user_id },
@@ -385,35 +594,73 @@ export function TeamMembers(props: { team: TeamSummary }) {
     <>
       <SettingsPage
         title="Members"
-        description={`Invite people to ${props.team.name} and manage their roles.`}
+        description={
+          canManageAgents()
+            ? `Invite people and agents to ${props.team.name}.`
+            : `Invite people to ${props.team.name} and manage their roles.`
+        }
         actions={
-          // Members can invite unless the team has restricted inviting
-          // to admins; removals stay admin-only.
+          <div class="flex flex-wrap items-center justify-end gap-2">
+            <Show
+              when={canInviteToTeam(currentUserRole(), allowNonAdminInvites())}
+            >
+              <CopyTeamInviteLinkButton teamId={props.team.id} />
+            </Show>
+            <MemberInviteActions
+              canInviteAgents={canManageAgents()}
+              canInvitePeople={canInviteToTeam(
+                currentUserRole(),
+                allowNonAdminInvites()
+              )}
+              onInvitePerson={() => setShowInviteModal(true)}
+              onInviteAgent={() => {
+                if (!canManageAgents()) return;
+                const interaction = beginInteraction('team-agent.open', {
+                  attributes: { 'team.id': props.team.id },
+                });
+                try {
+                  setInviteAgentOpen(true);
+                } finally {
+                  interaction.end();
+                }
+              }}
+            />
+          </div>
+        }
+      >
+        <SettingsSection
+          title="Team members"
+          description={
+            canManageAgents()
+              ? `${members().length} ${members().length === 1 ? 'person' : 'people'} · ${agents().length} ${agents().length === 1 ? 'agent' : 'agents'}`
+              : `${members().length} ${members().length === 1 ? 'member' : 'members'}`
+          }
+        >
+          <Show when={agentFlag().loading}>
+            <p role="status">Loading agent features…</p>
+          </Show>
           <Show
-            when={canInviteToTeam(currentUserRole(), allowNonAdminInvites())}
+            when={
+              canManageAgents() && agentsQuery.isPending && !agentsQuery.isError
+            }
           >
-            <div class="flex items-center gap-2">
-              {/* A link someone sends themselves gets opened; keep it one
-                  click from the page alongside the email invite. */}
-              <CopyTeamInviteLinkButton
-                teamId={props.team.id}
-                class="text-[15px]"
-              />
-              {/* Inverted (black on light, white on dark) so inviting is the
-                  page's primary action. */}
+            <p role="status">Loading agents…</p>
+          </Show>
+          <Show when={canManageAgents() && agentsQuery.isError}>
+            <div role="alert" class="text-sm text-failure">
+              Couldn't refresh agents.{' '}
               <Button
-                variant="primary"
-                class="text-[15px]"
-                onClick={() => setShowInviteModal(true)}
+                variant="ghost"
+                size="sm"
+                onClick={() => {
+                  if (!canManageAgents()) return;
+                  fireAndForget(agentsQuery.refetch(), 'team-agents.retry');
+                }}
               >
-                <PlusIcon class="size-4" />
-                Invite
+                Try again
               </Button>
             </div>
           </Show>
-        }
-      >
-        <SettingsSection>
           <Show when={showMemberSearch()}>
             <SearchBar
               size="sm"
@@ -459,7 +706,7 @@ export function TeamMembers(props: { team: TeamSummary }) {
             }
           >
             <Show
-              when={filteredMembers().length > 0}
+              when={filteredMembers().length > 0 || filteredAgents().length > 0}
               fallback={
                 <SettingsCard>
                   <div class="px-6 py-8 text-center text-sm text-ink-muted">
@@ -473,54 +720,212 @@ export function TeamMembers(props: { team: TeamSummary }) {
                   list visibly continues. */}
               <SettingsCard class="max-h-[418px] overflow-y-auto! overscroll-contain">
                 <For each={filteredMembers()}>
-                  {(member) => (
-                    <MemberRow
-                      member={member}
-                      isOwner={isOwner()}
-                      isCurrentUser={member.user_id === userId()}
-                      canManageRemovals={canManageMemberRemovals()}
-                      canRemove={canRemoveTeamMember(
-                        userId(),
-                        currentUserRole(),
-                        member
-                      )}
-                      showPlan={showSeatPlans()}
-                      canEditPlan={isAdminOrOwner()}
-                      planPending={planMovePending()}
-                      pendingDowngrade={
-                        teamQuery.data?.scheduled_seat_plans?.[member.user_id]
-                          ?.plan === 'premium'
-                      }
-                      onPlanChange={(plan) => {
-                        if (!props.team.id) return;
-                        setMemberPlanMutation.mutate({
-                          teamId: props.team.id,
-                          userId: member.user_id,
-                          plan,
-                        });
-                      }}
-                      onRemove={() => setShowRemoveModal(member)}
-                      onRoleChange={(newRole) => {
-                        if (!props.team.id) return;
-                        patchTeamMutation.mutate({
-                          teamId: props.team.id,
-                          request: {
-                            user_role_updates: [
-                              {
-                                team_user_id: member.user_id,
-                                role: newRole,
-                              },
-                            ],
-                          },
-                        });
-                      }}
-                    />
-                  )}
+                  {(member) => {
+                    const computerAvailable = useTeamAgentComputerAvailability(
+                      () => member.user_id,
+                      () =>
+                        canViewAgentComputers() &&
+                        isAgentAccount(tryMacroId(member.user_id))
+                    );
+                    return (
+                      <MemberRow
+                        managedLayout={canManageAgents()}
+                        member={member}
+                        onViewComputer={
+                          computerAvailable()
+                            ? () => {
+                                if (computerAvailable())
+                                  screen?.openAgentComputer(member.user_id);
+                              }
+                            : undefined
+                        }
+                        isOwner={isOwner()}
+                        isCurrentUser={member.user_id === userId()}
+                        canManageRemovals={canManageMemberRemovals()}
+                        canRemove={canRemoveTeamMember(
+                          userId(),
+                          currentUserRole(),
+                          member
+                        )}
+                        showPlan={showSeatPlans()}
+                        canEditPlan={isAdminOrOwner()}
+                        planPending={planMovePending()}
+                        pendingDowngrade={
+                          teamQuery.data?.scheduled_seat_plans?.[member.user_id]
+                            ?.plan === 'premium'
+                        }
+                        onPlanChange={(plan) => {
+                          if (
+                            !props.team.id ||
+                            !isHumanAccount(tryMacroId(member.user_id))
+                          )
+                            return;
+                          setMemberPlanMutation.mutate({
+                            teamId: props.team.id,
+                            userId: member.user_id,
+                            plan,
+                          });
+                        }}
+                        onRemove={() => {
+                          if (isHumanAccount(tryMacroId(member.user_id)))
+                            setShowRemoveModal(member);
+                        }}
+                        onRoleChange={(newRole) => {
+                          if (
+                            !props.team.id ||
+                            !isHumanAccount(tryMacroId(member.user_id))
+                          )
+                            return;
+                          patchTeamMutation.mutate({
+                            teamId: props.team.id,
+                            request: {
+                              user_role_updates: [
+                                {
+                                  team_user_id: member.user_id,
+                                  role: newRole,
+                                },
+                              ],
+                            },
+                          });
+                        }}
+                      />
+                    );
+                  }}
                 </For>
+                <Show when={canManageAgents()}>
+                  <Suspense
+                    fallback={
+                      <p class="p-4" role="status">
+                        Loading agents…
+                      </p>
+                    }
+                  >
+                    <For each={filteredAgents()}>
+                      {(agent) => {
+                        const computerAvailable =
+                          useTeamAgentComputerAvailability(
+                            () => agent.userId,
+                            canViewAgentComputers
+                          );
+                        return (
+                          <TeamAgentRow
+                            avatar={
+                              <UserIcon
+                                id={agent.userId}
+                                isDeleted={false}
+                                size="lg"
+                              />
+                            }
+                            agent={agent}
+                            canManage={canManageAgents()}
+                            onOpenBilling={() =>
+                              settings.openSettings('Billing')
+                            }
+                            onViewComputer={
+                              computerAvailable()
+                                ? () => {
+                                    if (computerAvailable())
+                                      screen?.openAgentComputer(agent.userId);
+                                  }
+                                : undefined
+                            }
+                            retrying={retryAgent.isPending}
+                            retryError={
+                              retryAgent.isError &&
+                              retryAgent.variables?.userId === agent.userId
+                            }
+                            onVoice={
+                              canChangeVoice()
+                                ? () => {
+                                    if (canChangeVoice()) setVoiceAgent(agent);
+                                  }
+                                : undefined
+                            }
+                            onRetry={
+                              canManageAgents()
+                                ? () => {
+                                    if (
+                                      !canManageAgents() ||
+                                      retryAgent.isPending ||
+                                      !canRetryTeamAgent(agent)
+                                    )
+                                      return;
+                                    retryAgent.mutate({
+                                      teamId: props.team.id,
+                                      userId: agent.userId,
+                                    });
+                                  }
+                                : undefined
+                            }
+                            onRemove={
+                              canManageAgents()
+                                ? () => {
+                                    if (
+                                      canManageAgents() &&
+                                      agent.payment !== 'pending'
+                                    )
+                                      setRemoveAgent(agent);
+                                  }
+                                : undefined
+                            }
+                          />
+                        );
+                      }}
+                    </For>
+                  </Suspense>
+                </Show>
               </SettingsCard>
             </Show>
           </Show>
         </SettingsSection>
+
+        <AgentVoiceDialog
+          teamId={props.team.id}
+          agent={voiceAgent()}
+          onClose={() => setVoiceAgent(undefined)}
+        />
+        <Show when={canManageAgents()}>
+          <InviteAgentDialog
+            teamId={props.team.id}
+            open={inviteAgentOpen()}
+            onClose={() => setInviteAgentOpen(false)}
+          />
+          <ConfirmDialog
+            open={!!removeAgent()}
+            onOpenChange={(open) => !open && setRemoveAgent(undefined)}
+            title="Remove agent"
+            confirmLabel="Remove agent"
+            tone="danger"
+            pending={deleteAgent.isPending}
+            onConfirm={() => {
+              const agent = agents().find(
+                (item) => item.userId === removeAgent()?.userId
+              );
+              if (!agent || deleteAgent.isPending || !canManageAgents()) return;
+              if (agent.payment === 'pending') {
+                setRemoveAgent(undefined);
+                return;
+              }
+              deleteAgent.mutate(
+                { teamId: props.team.id, userId: agent.userId },
+                { onSuccess: () => setRemoveAgent(undefined) }
+              );
+            }}
+            body={
+              <>
+                <p>
+                  Remove {removeAgent()?.name}? This releases its computer and
+                  seat and permanently deletes its repository.
+                </p>
+                <Show when={deleteAgent.isError}>
+                  <p role="alert" class="text-failure">
+                    Couldn't remove the agent. Try again.
+                  </p>
+                </Show>
+              </>
+            }
+          />
+        </Show>
 
         <Show
           when={

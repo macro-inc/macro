@@ -74,6 +74,7 @@ import {
 import { botAssignableChannelOptions } from '../channel/Bots/botChannelOptions';
 import { canDeleteBot, canManageAgent } from '../channel/Bots/botPermissions';
 import { ChannelMultiSelect } from '../channel/Bots/ChannelMultiSelect';
+import { ComputerScreenAction } from '../computer-screen/computer-screen-action';
 import {
   agentSettingsRequest,
   consumeAgentSettingsRequest,
@@ -211,7 +212,7 @@ export function Agents(props: {
           // that is merely asleep is normal, and the label says what to expect.
           name: [
             harness?.name ?? 'macrod',
-            harness?.owner.type === 'team' ? 'Team' : undefined,
+            harness?.shared_team_ids?.length ? 'Team machine' : undefined,
             harness && !harness.connected ? 'Offline' : undefined,
           ]
             .filter(Boolean)
@@ -656,6 +657,12 @@ function AgentEditorPage(props: {
   onSave: (agent: CreateAgentParams) => Promise<string | undefined>;
   onDelete?: () => void;
 }) {
+  const screenHarnesses = useHarnessesQuery();
+  const harnessesScreenAvailable = (id: string) =>
+    screenHarnesses.isSuccess &&
+    screenHarnesses.data.some(
+      (item) => item.id === id && item.capabilities?.screen === true
+    );
   const [name, setName] = createSignal(props.agent?.bot.name ?? '');
   const [tag, setTag] = createSignal(props.agent?.bot.handle ?? '');
   const [tagEdited, setTagEdited] = createSignal(props.agent !== undefined);
@@ -1272,6 +1279,14 @@ function AgentEditorPage(props: {
                 />
               </AgentFormSection>
 
+              <Show when={props.agent?.harness_id}>
+                {(id) => (
+                  <ComputerScreenAction
+                    harnessId={id()}
+                    available={harnessesScreenAvailable(id())}
+                  />
+                )}
+              </Show>
               <AgentFormSection
                 title="Where it runs"
                 description="Pick where this agent does its work."

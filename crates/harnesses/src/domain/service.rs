@@ -1,5 +1,7 @@
 //! Harness domain service.
 
+use computer_id::ComputerId;
+use pairing_id::PairingId;
 #[cfg(test)]
 mod test;
 
@@ -12,11 +14,16 @@ use uuid::Uuid;
 
 use super::{
     models::{
-        ApprovePairingRequest, ClaimOutcome, ClaimPairingRequest, ClaimedPairing,
-        CreatePairingRequest, CreatedPairing, Harness, HarnessAgent, HarnessOwner, HarnessSession,
-        PairingDetails, PairingStatus, PatchHarnessRequest,
+        ApprovePairingRequest, ClaimOutcome, ClaimPairingRequest, ClaimedPairing, ClaudeMode,
+        CreateHostedPairing, CreatePairingRequest, CreatedPairing, Harness, HarnessAccess,
+        HarnessAgent, HarnessCapabilities, HarnessOwner, HarnessPermission, HarnessResident,
+        HarnessSession, HarnessTeamAccess, HarnessTeamGrant, HostedPairing, PairingDetails,
+        PairingStatus, PatchHarnessRequest, SetHarnessTeamAccessRequest,
     },
-    ports::{HarnessChanges, HarnessError, HarnessRepo, HarnessService, NewHarness, NewPairing},
+    ports::{
+        HarnessChanges, HarnessError, HarnessRepo, HarnessService, HostedPairingUpsert, NewHarness,
+        NewPairing,
+    },
     tokens,
 };
 
@@ -66,22 +73,33 @@ where
         caller: &MacroUserIdStr<'static>,
         harness: &Harness,
     ) -> Result<(), HarnessError> {
-        let may_manage = match &harness.owner {
-            HarnessOwner::User { user_id } => user_id == caller.as_ref(),
-            // Same rule as team bots: the registrant or the team owner.
-            HarnessOwner::Team { team_id } => {
-                harness.created_by == caller.as_ref()
-                    || self
-                        .repo
-                        .user_owns_team(caller.clone(), *team_id)
-                        .await
-                        .map_err(Into::into)?
-            }
-        };
-        if !may_manage {
+        if self
+            .repo
+            .harness_access(harness.id, caller.clone())
+            .await
+            .map_err(Into::into)?
+            == HarnessAccess::Owner
+        {
+            return Ok(());
+        }
+        // Dedicated agent computers are bounded to their own team by the shared
+        // access rule. A stale grant to another team must not restore management.
+        if harness.is_agent_computer {
             return Err(HarnessError::Unauthorized);
         }
-        Ok(())
+        // A team's owner can take a machine the whole team runs on out of
+        // service; only the runtime's own owner decides who else may use it.
+        for team_id in &harness.shared_team_ids {
+            if self
+                .repo
+                .user_owns_team(caller.clone(), *team_id)
+                .await
+                .map_err(Into::into)?
+            {
+                return Ok(());
+            }
+        }
+        Err(HarnessError::Unauthorized)
     }
 }
 
@@ -120,7 +138,7 @@ where
         let device_secret = tokens::generate_device_secret();
         let device_secret_hash = harness_token::hash_token(&device_secret);
         let expires_at = Utc::now() + Duration::minutes(PAIRING_TTL_MINUTES);
-        let pairing_id = Uuid::new_v4();
+        let pairing_id = PairingId::new_from_uuid(Uuid::now_v7());
 
         for _ in 0..CODE_ATTEMPTS {
             let code = tokens::generate_pairing_code();
@@ -195,45 +213,50 @@ where
             None => details.requested_name,
         };
 
-        // Any current member may register a team harness, mirroring team
-        // agents: harnesses exist to serve agents teammates create.
-        let owner = match req.team_id {
-            Some(team_id) => {
-                let is_member = self
-                    .repo
-                    .user_has_team(caller.clone(), team_id)
-                    .await
-                    .map_err(Into::into)?;
-                if !is_member {
-                    return Err(HarnessError::Unauthorized);
-                }
-                HarnessOwner::Team { team_id }
+        // Any current member may open their harness to their team, mirroring
+        // team agents: harnesses exist to serve agents teammates create.
+        if let Some(team_id) = req.team_id {
+            let is_member = self
+                .repo
+                .user_has_team(caller.clone(), team_id)
+                .await
+                .map_err(Into::into)?;
+            if !is_member {
+                return Err(HarnessError::Unauthorized);
             }
-            None => HarnessOwner::User {
-                user_id: caller.as_ref().to_owned(),
-            },
-        };
+        }
 
         self.repo
             .approve_pairing(
                 &code,
                 NewHarness {
                     allow_permission_bypass: req.allow_permission_bypass,
-                    id: HarnessId::new_from_uuid(Uuid::new_v4()),
+                    id: HarnessId::new_from_uuid(Uuid::now_v7()),
                     name,
-                    owner,
+                    owner: HarnessOwner::User {
+                        user_id: caller.as_ref().to_owned(),
+                    },
+                    team_grant: req.team_id.map(|team_id| HarnessTeamGrant {
+                        team_id,
+                        access: HarnessTeamAccess::User,
+                    }),
                     created_by: caller,
+                    computer_id: None,
                 },
             )
             .await
             .map_err(Into::into)?
+            .map(|harness| Harness {
+                access: HarnessAccess::Owner,
+                ..harness
+            })
             .ok_or_else(|| HarnessError::Gone("this pairing is no longer pending".to_owned()))
     }
 
     #[tracing::instrument(skip(self, req), err)]
     async fn claim_pairing(
         &self,
-        pairing_id: Uuid,
+        pairing_id: PairingId,
         req: ClaimPairingRequest,
     ) -> Result<ClaimOutcome, HarnessError> {
         let facts = self
@@ -269,6 +292,7 @@ where
             .repo
             .claim_pairing(
                 pairing_id,
+                presented,
                 Uuid::new_v4(),
                 HashedHarnessToken::from_raw(&token),
             )
@@ -278,7 +302,10 @@ where
                 HarnessError::Gone("this pairing's credential was already claimed".to_owned())
             })?;
 
-        Ok(ClaimOutcome::Claimed(ClaimedPairing { harness, token }))
+        Ok(ClaimOutcome::Claimed(Box::new(ClaimedPairing {
+            harness,
+            token,
+        })))
     }
 
     #[tracing::instrument(skip(self), fields(caller = %caller), err)]
@@ -288,7 +315,91 @@ where
     ) -> Result<Vec<Harness>, HarnessError> {
         Ok(self
             .repo
-            .list_visible_harnesses(caller)
+            .list_usable_harnesses(caller)
+            .await
+            .map_err(Into::into)?)
+    }
+
+    #[tracing::instrument(skip(self), fields(caller = %caller), err)]
+    async fn list_directory(
+        &self,
+        caller: MacroUserIdStr<'static>,
+    ) -> Result<Vec<Harness>, HarnessError> {
+        Ok(self
+            .repo
+            .list_directory_harnesses(caller)
+            .await
+            .map_err(Into::into)?)
+    }
+
+    #[tracing::instrument(skip(self, req), fields(caller = %caller, team_id = %req.team_id, enabled = req.enabled), err)]
+    async fn set_team_access(
+        &self,
+        caller: MacroUserIdStr<'static>,
+        harness_id: HarnessId,
+        req: SetHarnessTeamAccessRequest,
+    ) -> Result<(), HarnessError> {
+        let access = self
+            .repo
+            .harness_access(harness_id, caller.clone())
+            .await
+            .map_err(Into::into)?;
+        if access != HarnessAccess::Owner {
+            return Err(HarnessError::Unauthorized);
+        }
+        let is_member = self
+            .repo
+            .user_has_team(caller, req.team_id)
+            .await
+            .map_err(Into::into)?;
+        if !is_member {
+            return Err(HarnessError::Unauthorized);
+        }
+        let harness = self
+            .repo
+            .get_harness(harness_id)
+            .await
+            .map_err(Into::into)?
+            .ok_or_else(|| HarnessError::NotFound("unknown harness".to_owned()))?;
+        if harness.is_agent_computer
+            && self
+                .repo
+                .agent_computer_team(harness_id)
+                .await
+                .map_err(Into::into)?
+                != Some(req.team_id)
+        {
+            return Err(HarnessError::Unauthorized);
+        }
+        let team_access = if harness.is_agent_computer {
+            HarnessTeamAccess::Read
+        } else {
+            HarnessTeamAccess::User
+        };
+        Ok(self
+            .repo
+            .set_team_access(harness_id, req.team_id, team_access, req.enabled)
+            .await
+            .map_err(Into::into)?)
+    }
+
+    #[tracing::instrument(skip(self), fields(caller = %caller), err)]
+    async fn list_residents(
+        &self,
+        caller: MacroUserIdStr<'static>,
+        harness_id: HarnessId,
+    ) -> Result<Vec<HarnessResident>, HarnessError> {
+        let access = self
+            .repo
+            .harness_access(harness_id, caller)
+            .await
+            .map_err(Into::into)?;
+        if access == HarnessAccess::None {
+            return Err(HarnessError::Unauthorized);
+        }
+        Ok(self
+            .repo
+            .list_residents(harness_id)
             .await
             .map_err(Into::into)?)
     }
@@ -300,13 +411,19 @@ where
         harness_id: HarnessId,
         req: PatchHarnessRequest,
     ) -> Result<Harness, HarnessError> {
-        let harness = self
+        let mut harness = self
             .repo
             .get_harness(harness_id)
             .await
             .map_err(Into::into)?
             .ok_or_else(|| HarnessError::NotFound("unknown harness".to_owned()))?;
         self.ensure_may_manage(&caller, &harness).await?;
+        let access = self
+            .repo
+            .harness_access(harness_id, caller)
+            .await
+            .map_err(Into::into)?;
+        harness.access = access;
 
         let changes = HarnessChanges {
             name: req.name.as_deref().map(validated_name).transpose()?,
@@ -320,6 +437,10 @@ where
             .await
             .map_err(Into::into)?
             .ok_or_else(|| HarnessError::NotFound("unknown harness".to_owned()))
+            .map(|mut updated| {
+                updated.access = access;
+                updated
+            })
     }
 
     #[tracing::instrument(skip(self), fields(caller = %caller), err)]
@@ -394,5 +515,168 @@ where
             .list_sessions(harness_id)
             .await
             .map_err(Into::into)?)
+    }
+
+    #[tracing::instrument(skip(self, capabilities), fields(screen = capabilities.screen, persona_count = capabilities.personas.len()), err)]
+    async fn report_capabilities(
+        &self,
+        harness_id: HarnessId,
+        capabilities: HarnessCapabilities,
+    ) -> Result<(), HarnessError> {
+        if !self
+            .repo
+            .set_capabilities(harness_id, capabilities)
+            .await
+            .map_err(Into::into)?
+        {
+            return Err(HarnessError::NotFound("unknown harness".to_owned()));
+        }
+        Ok(())
+    }
+
+    #[tracing::instrument(
+        skip(self, req),
+        fields(team_id = %req.team_id, computer_id = %req.computer_id, created_by = %req.created_by),
+        err
+    )]
+    async fn create_hosted_pairing(
+        &self,
+        req: CreateHostedPairing,
+    ) -> Result<HostedPairing, HarnessError> {
+        let name = validated_name(&req.name)?;
+        let device_secret = super::models::DeviceSecret::new(tokens::generate_device_secret());
+        let new_pairing_id = PairingId::new_from_uuid(Uuid::now_v7());
+        let upserted = self
+            .repo
+            .upsert_hosted_pairing(
+                NewPairing {
+                    id: new_pairing_id,
+                    // Never shown or typed: the code only has to be unique,
+                    // and its shape keeps it out of code lookups entirely.
+                    code: format!("hosted:{new_pairing_id}"),
+                    device_secret_hash: harness_token::hash_token(device_secret.expose()),
+                    requested_name: name.clone(),
+                    host: None,
+                    expires_at: Utc::now() + Duration::minutes(PAIRING_TTL_MINUTES),
+                },
+                NewHarness {
+                    allow_permission_bypass: req.allow_permission_bypass,
+                    id: HarnessId::new_from_uuid(Uuid::now_v7()),
+                    name,
+                    owner: HarnessOwner::User {
+                        user_id: req.created_by.as_ref().to_owned(),
+                    },
+                    team_grant: Some(HarnessTeamGrant {
+                        team_id: req.team_id,
+                        access: req.team_access,
+                    }),
+                    created_by: req.created_by,
+                    computer_id: Some(req.computer_id),
+                },
+            )
+            .await
+            .map_err(Into::into)?;
+        let pairing_id = match upserted {
+            HostedPairingUpsert::Created => new_pairing_id,
+            HostedPairingUpsert::Rotated { pairing_id } => pairing_id,
+            HostedPairingUpsert::Rekeyed => new_pairing_id,
+        };
+        Ok(HostedPairing {
+            pairing_id,
+            device_secret,
+        })
+    }
+
+    #[tracing::instrument(skip(self), err)]
+    async fn hosted_pairing_claimed(&self, pairing_id: PairingId) -> Result<bool, HarnessError> {
+        let facts = self
+            .repo
+            .pairing_claim_facts(pairing_id)
+            .await
+            .map_err(Into::into)?
+            .ok_or_else(|| HarnessError::NotFound("unknown hosted pairing".to_owned()))?;
+        match facts.status {
+            PairingStatus::Claimed => Ok(true),
+            PairingStatus::Approved => Ok(false),
+            PairingStatus::Pending => Err(HarnessError::BadRequest(
+                "hosted pairing is not approved".to_owned(),
+            )),
+        }
+    }
+
+    #[tracing::instrument(skip(self), fields(harness_id = tracing::field::Empty), err)]
+    async fn revoke_hosted_harness(&self, computer_id: ComputerId) -> Result<(), HarnessError> {
+        let Some(harness_id) = self
+            .repo
+            .computer_harness(computer_id)
+            .await
+            .map_err(Into::into)?
+        else {
+            return Ok(());
+        };
+        tracing::Span::current().record("harness_id", tracing::field::display(harness_id));
+        // A concurrent revoke deleting it first is the same outcome.
+        self.repo
+            .delete_harness(harness_id)
+            .await
+            .map_err(Into::into)?;
+        Ok(())
+    }
+
+    #[tracing::instrument(skip(self), err)]
+    async fn harness_computer(
+        &self,
+        harness_id: HarnessId,
+    ) -> Result<Option<ComputerId>, HarnessError> {
+        Ok(self
+            .repo
+            .harness_computer(harness_id)
+            .await
+            .map_err(Into::into)?)
+    }
+
+    #[tracing::instrument(skip(self), fields(caller = %caller), err)]
+    async fn authorize_harness(
+        &self,
+        caller: MacroUserIdStr<'static>,
+        harness_id: HarnessId,
+        permission: HarnessPermission,
+    ) -> Result<Harness, HarnessError> {
+        let mut harness = self
+            .repo
+            .get_harness(harness_id)
+            .await
+            .map_err(Into::into)?
+            .ok_or_else(|| HarnessError::NotFound("unknown harness".to_owned()))?;
+        harness.access = self
+            .repo
+            .harness_access(harness_id, caller.clone())
+            .await
+            .map_err(Into::into)?;
+        match permission {
+            HarnessPermission::View if harness.access != HarnessAccess::None => {}
+            HarnessPermission::Use
+                if matches!(harness.access, HarnessAccess::Owner | HarnessAccess::User) => {}
+            HarnessPermission::Manage => self.ensure_may_manage(&caller, &harness).await?,
+            _ => return Err(HarnessError::Unauthorized),
+        }
+        Ok(harness)
+    }
+
+    #[tracing::instrument(skip(self), fields(mode = mode.as_str()), err)]
+    async fn set_claude_mode(
+        &self,
+        harness_id: HarnessId,
+        mode: ClaudeMode,
+    ) -> Result<(), HarnessError> {
+        if !self
+            .repo
+            .set_claude_mode(harness_id, mode)
+            .await
+            .map_err(Into::into)?
+        {
+            return Err(HarnessError::NotFound("unknown harness".to_owned()));
+        }
+        Ok(())
     }
 }

@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        UPDATE cursor_configs\n        SET default_model_id = $2,\n            updated_at       = NOW()\n        WHERE user_id = $1\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "61901feef40d440764198abc530ab1d3c70df62f7464438b229d8cdd8ce00ccc"
+}

@@ -1,0 +1,21 @@
+[Unit]
+Description=Macro brain for %i
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+User=%i
+WorkingDirectory=/home/%i
+Environment=HOME=/home/%i
+Environment=PATH=/usr/local/bin:/usr/bin:/bin
+EnvironmentFile=/etc/macro/personas/%i.env
+ExecStart=/usr/lib/macro-box/start-brain
+Restart=always
+RestartSec=5
+NoNewPrivileges=yes
+ProtectSystem=strict
+ReadWritePaths=/home/%i /tmp
+PrivateTmp=yes
+
+[Install]
+WantedBy=multi-user.target

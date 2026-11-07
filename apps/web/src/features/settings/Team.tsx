@@ -1,4 +1,5 @@
 import { ListSkeleton } from '@app/components/view-shell/ListSkeleton';
+import { t } from '@app/lib/i18n';
 import { useUserId } from '@core/context/user';
 import { getDisplayName, tryMacroId } from '@core/user';
 import EnvelopeIcon from '@icon/system/regular/envelope.svg';
@@ -6,6 +7,7 @@ import PlusIcon from '@icon/system/regular/plus.svg';
 import SpinnerIcon from '@icon/system/regular/spinner.svg';
 import UsersIcon from '@icon/system/regular/users.svg';
 import XIcon from '@icon/system/regular/x.svg';
+import { useHarnessesQuery } from '@queries/harnesses/harnesses';
 import {
   useJoinTeamMutation,
   useRejectInvitationMutation,
@@ -19,7 +21,7 @@ import {
 } from '@queries/team/teams';
 import type { Team as TeamSummary } from '@service-auth/generated/schemas/team';
 import type { TeamInviteDetails } from '@service-auth/generated/schemas/teamInviteDetails';
-import { Button, cn, Dialog, Panel, Tooltip } from '@ui';
+import { Button, Checkbox, cn, Dialog, Panel, Tooltip } from '@ui';
 import {
   type Accessor,
   createMemo,
@@ -467,6 +469,15 @@ export function InviteToTeamDialog(props: {
   onClose: () => void;
 }) {
   const inviteToTeamMutation = useInviteToTeamMutation();
+  const harnesses = useHarnessesQuery();
+  const ownRuntimes = () =>
+    harnesses.isSuccess
+      ? harnesses.data.filter(
+          (harness) => harness.access === 'owner' && !harness.is_agent_computer
+        )
+      : [];
+  const [offeredRuntimes, setOfferedRuntimes] = createSignal<string[]>([]);
+
   // The addresses just invited; set once sending succeeds to show the
   // heads-up step.
   const [sent, setSent] = createSignal<string[]>();
@@ -494,6 +505,7 @@ export function InviteToTeamDialog(props: {
   const close = () => {
     setInvites([EMPTY_INVITE]);
     setInviteErrors([]);
+    setOfferedRuntimes([]);
     setSent(undefined);
     submission += 1;
     props.onClose();
@@ -511,7 +523,13 @@ export function InviteToTeamDialog(props: {
     inviteToTeamMutation.mutate(
       {
         teamId: props.teamId,
-        request: { invites: inviteEntries, is_agent: false },
+        request: {
+          invites: inviteEntries,
+          is_agent: false,
+          harness_ids: offeredRuntimes().filter((id) =>
+            ownRuntimes().some((runtime) => runtime.id === id)
+          ),
+        },
       },
       {
         onSuccess: () => {
@@ -562,6 +580,37 @@ export function InviteToTeamDialog(props: {
                   onErrorsChange={setInviteErrors}
                 />
               </div>
+              <Show when={ownRuntimes().length > 0}>
+                <section
+                  class="flex flex-col gap-2"
+                  aria-label={t('runtimeSharing.inviteRuntimes')}
+                >
+                  <div class="text-sm text-ink">
+                    {t('runtimeSharing.inviteRuntimes')}
+                  </div>
+                  <p class="text-xs text-ink-muted">
+                    {t('runtimeSharing.inviteRuntimesHint')}
+                  </p>
+                  <For each={ownRuntimes()}>
+                    {(runtime) => (
+                      <Checkbox
+                        class="flex items-center gap-3 text-sm touch:min-h-[44px]"
+                        checked={offeredRuntimes().includes(runtime.id)}
+                        onChange={(checked) =>
+                          setOfferedRuntimes((current) =>
+                            checked
+                              ? [...current, runtime.id]
+                              : current.filter((id) => id !== runtime.id)
+                          )
+                        }
+                      >
+                        <Checkbox.Control />
+                        <Checkbox.Label>{runtime.name}</Checkbox.Label>
+                      </Checkbox>
+                    )}
+                  </For>
+                </section>
+              </Show>
             </div>
           </Panel.Body>
           <Panel.Footer class="justify-end gap-2 px-4 py-3">

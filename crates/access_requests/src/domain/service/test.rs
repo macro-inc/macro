@@ -58,6 +58,49 @@ fn only_team_administrators_review_team_owned_entities() {
         ],
         name: "Shared".into(),
         file_type: None,
+        agent_harness: None,
     };
     assert_eq!(reviewers(&facts), vec![user("admin"), user("owner")]);
+}
+
+#[test]
+fn agent_harness_reviewers_are_human_owner_and_team_administrators_only() {
+    use models_permissions::sharing::AgentHarnessFacts;
+    let user =
+        |name: &str| MacroUserIdStr::try_from(format!("macro|{name}@requests.test")).unwrap();
+    let mut facts = SharingFacts {
+        owner: Owner::User(user("inviter")),
+        sponsor: None,
+        team_members: vec![
+            (user("member"), SharingTeamRole::Member),
+            (user("admin"), SharingTeamRole::Admin),
+            (user("teamowner"), SharingTeamRole::Owner),
+            (user("agent"), SharingTeamRole::Admin),
+        ],
+        name: "Agent computer".into(),
+        file_type: None,
+        agent_harness: Some(AgentHarnessFacts {
+            team_id: Uuid::from_u128(0x100),
+            agent_user_id: Some(user("agent")),
+        }),
+    };
+    assert_eq!(
+        reviewers(&facts),
+        vec![user("inviter"), user("admin"), user("teamowner")]
+    );
+    assert_eq!(
+        supported_levels_for(ShareEntityType::Harness, &facts),
+        vec![AccessLevel::View]
+    );
+    facts.agent_harness.as_mut().unwrap().agent_user_id = None;
+    assert_eq!(
+        supported_levels_for(ShareEntityType::Harness, &facts),
+        vec![AccessLevel::View]
+    );
+    facts.agent_harness = None;
+    assert_eq!(reviewers(&facts), vec![user("inviter")]);
+    assert_eq!(
+        supported_levels_for(ShareEntityType::Harness, &facts),
+        vec![AccessLevel::View, AccessLevel::Edit]
+    );
 }

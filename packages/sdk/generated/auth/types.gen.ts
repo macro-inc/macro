@@ -39,6 +39,16 @@ export type AgentSetupResponse = {
 };
 
 /**
+ * A provider voice setting, serialized as `config/voice.json`.
+ */
+export type AgentVoice = {
+    /**
+     * Exact Aura-2 voice model.
+     */
+    model: string;
+};
+
+/**
  * Error response body.
  */
 export type AiBillingErrorBody = {
@@ -114,6 +124,11 @@ export type AutoReloadSnapshot = {
      */
     target_balance_cents: number;
 };
+
+/**
+ * How often a recurring price bills.
+ */
+export type BillingInterval = 'month' | 'year';
 
 /**
  * Request body for switching plans
@@ -276,6 +291,111 @@ export type CodexLoginStart = {
  */
 export type CodexLoginState = 'pending' | 'connected' | 'expired' | 'failed';
 
+/**
+ * Durable payment outcome supplied by hosted runtimes.
+ */
+export type ComputerPayment = 'pending' | 'paid' | 'comped' | 'unbilled';
+
+/**
+ * A size a team can buy.
+ */
+export type ComputerSize = 'standard' | 'large' | 'xl';
+
+/**
+ * Computer specifications, available independently of subscription pricing.
+ */
+export type ComputerSizeSpec = {
+    /**
+     * Disk capacity in GB.
+     */
+    diskGb: number;
+    /**
+     * Memory in GB.
+     */
+    memoryGb: number;
+    /**
+     * Catalog size.
+     */
+    size: ComputerSize;
+    /**
+     * Virtual CPU count.
+     */
+    vcpus: number;
+};
+
+/**
+ * A computer as its team sees it.
+ */
+export type ComputerStatus = {
+    /**
+     * When billing stops, for a computer canceled at period end.
+     */
+    cancelsAt?: string | null;
+    /**
+     * Versioned catalog entry saved at purchase.
+     */
+    catalogEntry: string;
+    /**
+     * Present for a comped purchase, including after release.
+     */
+    compReason?: string | null;
+    /**
+     * Time the computer was reserved.
+     */
+    createdAt: string;
+    /**
+     * Root disk limit saved at purchase.
+     */
+    diskGib: number;
+    /**
+     * Harness claimed by this guest.
+     */
+    harnessId?: string | null;
+    /**
+     * Stable resource identity.
+     */
+    id: string;
+    /**
+     * Memory limit saved at purchase.
+     */
+    memoryGib: number;
+    /**
+     * Display name.
+     */
+    name: string;
+    payment?: null | PaymentOutcome;
+    /**
+     * Display name of the installed persona.
+     */
+    personaName?: string | null;
+    /**
+     * Whether validated state requests power on; false for quarantined records.
+     */
+    poweredOn: boolean;
+    /**
+     * When the disk is destroyed, for a canceled computer.
+     */
+    retainedUntil?: string | null;
+    setup?: null | SetupProgress;
+    /**
+     * Purchased catalog size.
+     */
+    size: string;
+    /**
+     * Observed guest status.
+     */
+    status: ComputerStatusKind;
+    /**
+     * Virtual CPU count.
+     */
+    vcpus: number;
+};
+
+/**
+ * The coarse status the team sees.
+ */
+export type ComputerStatusKind = 'setting_up' | 'needs_attention' | 'waiting_for_capacity' | 'ready' | 'asleep' | 'waking' | 'stopping' | 'stopped' | 'failed' | 'payment_failed' | 'released';
+
 export type CreateAccountMergeRequest = {
     /**
      * The email address to generate the merge link for.
@@ -358,6 +478,40 @@ export type CreateProfilePictureUploadRequest = {
      * Exact size of the image in bytes. Storage rejects a body of any other size.
      */
     size_bytes: number;
+};
+
+/**
+ * Input for inviting a team agent and buying its computer.
+ */
+export type CreateTeamAgent = {
+    /**
+     * Profile picture URL (a static file the caller uploaded).
+     */
+    avatarUrl?: string | null;
+    /**
+     * Whether the reviewed quote included the seat and computer for free.
+     */
+    expectedIncluded: boolean;
+    /**
+     * What the agent is responsible for. Seeds the persona repo.
+     */
+    jobDescription: string;
+    /**
+     * Display name.
+     */
+    name: string;
+    /**
+     * How the agent behaves and talks. Seeds the persona repo.
+     */
+    personality: string;
+    /**
+     * The computer to buy.
+     */
+    size: ComputerSize;
+    /**
+     * Aura-2 model chosen in the voice picker; older clients use a persona default.
+     */
+    voice?: string | null;
 };
 
 /**
@@ -565,6 +719,54 @@ export type EmailConnectionProviders = {
      * `original_url` for the administrator's browser to return to.
      */
     outlook_admin_consent_url?: string | null;
+};
+
+/**
+ * One email in an agent's mailbox.
+ */
+export type EmailMessage = {
+    /**
+     * Sender.
+     */
+    from: string;
+    /**
+     * Provider message id.
+     */
+    messageId: string;
+    /**
+     * Short preview of the body.
+     */
+    preview?: string | null;
+    /**
+     * When the provider received or sent it.
+     */
+    receivedAt: string;
+    /**
+     * Subject line.
+     */
+    subject?: string | null;
+    /**
+     * Plain-text body, when fetched individually.
+     */
+    text?: string | null;
+    /**
+     * Provider thread id.
+     */
+    threadId: string;
+    /**
+     * Recipients.
+     */
+    to: Array<string>;
+};
+
+/**
+ * A page of an agent's emails, newest first.
+ */
+export type EmailMessages = {
+    /**
+     * The emails.
+     */
+    messages: Array<EmailMessage>;
 };
 
 /**
@@ -1231,6 +1433,37 @@ export type InitOutlookLinkResponse = {
 };
 
 /**
+ * Body of an internal purchase.
+ */
+export type InternalPurchaseBody = {
+    /**
+     * Purchase funding or billing state.
+     */
+    billing: PurchaseBilling;
+    /**
+     * The team admin or owner the caller authorized.
+     */
+    createdBy: string;
+    /**
+     * Joined into the same subscription update, e.g. an agent seat.
+     */
+    extraItems?: Array<SubscriptionItem>;
+    /**
+     * Display name.
+     */
+    name?: string | null;
+    persona?: null | Persona;
+    /**
+     * Purchased catalog size.
+     */
+    size: ComputerSize;
+    /**
+     * Team that owns the computer.
+     */
+    teamId: string;
+};
+
+/**
  * A single invite entry with email and tier
  */
 export type InviteEntry = {
@@ -1244,6 +1477,11 @@ export type InviteEntry = {
  * The request body to invite a user to a team
  */
 export type InviteToTeamRequest = {
+    /**
+     * Runtimes the caller owns to share with each person who accepts. Others
+     * are ignored. Honored only from the caller's own session.
+     */
+    harness_ids?: Array<string>;
     /**
      * The invites to send, each with an email and tier
      */
@@ -1324,6 +1562,16 @@ export type MergeGithubPullRequestResponse = {
      * The merge commit's SHA.
      */
     sha: string;
+};
+
+/**
+ * Body of a notify-me request.
+ */
+export type NotifyBody = {
+    /**
+     * Purchased catalog size.
+     */
+    size: ComputerSize;
 };
 
 export type PasswordRequest = {
@@ -1478,6 +1726,11 @@ export type PatchUserTutorialRequest = {
     tutorialComplete: boolean;
 };
 
+/**
+ * The purchase outcome, latched after payment or comp confirmation.
+ */
+export type PaymentOutcome = 'pending' | 'paid' | 'unbilled' | 'comped';
+
 export type Permission = {
     /**
      * The description of the permission
@@ -1487,6 +1740,53 @@ export type Permission = {
      * The permission
      */
     id: string;
+};
+
+/**
+ * An agent identity that lives on the computer next to macrod: its own OS
+ * user and its own long-running systemd service.
+ */
+export type Persona = {
+    /**
+     * Written to `/etc/macro/personas/<os_user>.env` and loaded by the
+     * persona's unit as its `EnvironmentFile`.
+     */
+    config: {
+        [key: string]: string;
+    };
+    /**
+     * Service installed for the persona.
+     */
+    extra_service: PersonaService;
+    /**
+     * Display name.
+     */
+    name: string;
+    /**
+     * Linux user created for the persona; its service runs as this user.
+     */
+    os_user: string;
+};
+
+/**
+ * The persona's systemd service, installed as
+ * `/etc/systemd/system/<unit_name>.service`.
+ */
+export type PersonaService = {
+    /**
+     * Extra `Environment=` values, on top of the `EnvironmentFile`.
+     */
+    env: {
+        [key: string]: string;
+    };
+    /**
+     * `ExecStart` command line.
+     */
+    exec: string;
+    /**
+     * Unit name without the `.service` suffix.
+     */
+    unit_name: string;
 };
 
 /**
@@ -1557,6 +1857,16 @@ export type PostGetNamesRequestBody = {
     user_ids: Array<string>;
 };
 
+/**
+ * Body of a power change.
+ */
+export type PowerBody = {
+    /**
+     * Requested power state.
+     */
+    on: boolean;
+};
+
 export type ProfilePictureQueryParams = {
     url: string;
 };
@@ -1595,6 +1905,43 @@ export type PublicGtmInviteLink = {
      * Whether the link can still be used.
      */
     status: GtmInviteLinkStatus;
+};
+
+/**
+ * Server-selected purchase funding. Team clients cannot select this value.
+ */
+export type PurchaseBilling = {
+    kind: 'stripe';
+} | {
+    kind: 'comped';
+    /**
+     * Reason for this decision or failure.
+     */
+    reason: string;
+};
+
+/**
+ * Body of a team purchase.
+ */
+export type PurchaseBody = {
+    /**
+     * Display name.
+     */
+    name?: string | null;
+    /**
+     * Purchased catalog size.
+     */
+    size: ComputerSize;
+};
+
+/**
+ * Answer of a purchase.
+ */
+export type Purchased = {
+    /**
+     * Computer this operation addresses.
+     */
+    computerId: string;
 };
 
 /**
@@ -1653,6 +2000,32 @@ export type PutUserNameQueryParams = {
 };
 
 /**
+ * What one computer of a size costs the team.
+ */
+export type Quote = {
+    /**
+     * In the currency's smallest unit.
+     */
+    amount: number;
+    /**
+     * Billing currency code.
+     */
+    currency: string;
+    /**
+     * Subscription billing interval.
+     */
+    interval: BillingInterval;
+    /**
+     * Stripe price saved for billing replay.
+     */
+    priceId: string;
+    /**
+     * Purchased catalog size.
+     */
+    size: ComputerSize;
+};
+
+/**
  * Request body to redeem a link.
  */
 export type RedeemGtmInviteLinkRequest = {
@@ -1660,6 +2033,16 @@ export type RedeemGtmInviteLinkRequest = {
      * The token from the link URL.
      */
     token: string;
+};
+
+/**
+ * Body of a release.
+ */
+export type ReleaseBody = {
+    /**
+     * The computer's name, typed to confirm.
+     */
+    confirmName: string;
 };
 
 export type ResendFusionauthVerifyUserEmailRequest = {
@@ -1715,6 +2098,28 @@ export type SendDomainNoticeResponse = {
 };
 
 /**
+ * An email for an agent to send.
+ */
+export type SendEmail = {
+    /**
+     * Optional HTML body.
+     */
+    html?: string | null;
+    /**
+     * Subject line.
+     */
+    subject: string;
+    /**
+     * Plain-text body.
+     */
+    text: string;
+    /**
+     * Recipients.
+     */
+    to: Array<string>;
+};
+
+/**
  * The body which is used to describe the recipient email
  */
 export type SendInviteBody = {
@@ -1736,6 +2141,16 @@ export type SendMobileWelcomeEmailResponse = {
      * Whether the lead was enrolled (false if they were already enrolled previously)
      */
     sent: boolean;
+};
+
+/**
+ * The provider's id for a sent email.
+ */
+export type SentEmail = {
+    /**
+     * Provider message id.
+     */
+    messageId: string;
 };
 
 /**
@@ -1805,6 +2220,67 @@ export type SetGithubPullRequestStateResponse = {
     state: GithubPullRequestState;
 };
 
+/**
+ * Setup progress, for invite and purchase flows to show.
+ */
+export type SetupProgress = {
+    /**
+     * 1-based position of `step`.
+     */
+    position: number;
+    /**
+     * Current setup stage.
+     */
+    step: SetupStep;
+    /**
+     * Number of setup stages.
+     */
+    total: number;
+};
+
+/**
+ * Steps a new computer goes through, in order.
+ */
+export type SetupStep = 'creating' | 'booting' | 'connecting' | 'ready';
+
+/**
+ * A size with its resources, price and whether it can be bought now.
+ */
+export type SizeOffer = {
+    /**
+     * Whether no host has both sold units and awake reservations for a persona.
+     */
+    alwaysOnSoldOut: boolean;
+    /**
+     * Root disk size in GiB.
+     */
+    diskGb: number;
+    /**
+     * Memory in GiB.
+     */
+    memoryGb: number;
+    /**
+     * The caller asked to hear when this size is back.
+     */
+    notifyRequested: boolean;
+    /**
+     * Price for one computer.
+     */
+    quote: Quote;
+    /**
+     * Purchased catalog size.
+     */
+    size: ComputerSize;
+    /**
+     * Whether no host can currently sell this size.
+     */
+    soldOut: boolean;
+    /**
+     * Virtual CPU count.
+     */
+    vcpus: number;
+};
+
 export type SsoRequiredResponse = {
     /**
      * The idp_id you need to perform sso login with.
@@ -1841,9 +2317,132 @@ export type StripeSessionResponse = {
 };
 
 /**
+ * Actual current recurring items and the provider's next invoice preview.
+ */
+export type SubscriptionBilling = {
+    /**
+     * Paid agent seat allocations; excludes included memberships.
+     */
+    agentSeats: SubscriptionSeatTotal;
+    /**
+     * The subscription's ISO currency, as returned by the provider.
+     */
+    currency: string;
+    /**
+     * Paid human seat allocations; excludes included memberships.
+     */
+    humanSeats: SubscriptionSeatTotal;
+    /**
+     * The actual recurring billing interval shared by these items.
+     */
+    interval: BillingInterval;
+    /**
+     * Real provider line items, allocated only when their ownership is known.
+     */
+    lineItems: Array<SubscriptionBillingLineItem>;
+    nextInvoice?: null | SubscriptionNextInvoice;
+    /**
+     * Recurring item subtotal in minor units, before invoice adjustments.
+     */
+    subscriptionTotal: number;
+};
+
+/**
+ * An allocated provider item or an explicitly included computer.
+ */
+export type SubscriptionBillingLineItem = {
+    /**
+     * Agent account associated with this computer, if known.
+     */
+    agentUserId?: string | null;
+    /**
+     * Current recurring amount for this allocated quantity, in minor units.
+     */
+    amount: number;
+    /**
+     * Identified computer, absent for aggregate or unattributed items.
+     */
+    computerId?: string | null;
+    /**
+     * Included without a subscription charge.
+     */
+    included: boolean;
+    /**
+     * Actual billing category; unmatched quantities stay `other`.
+     */
+    kind: SubscriptionBillingLineKind;
+    /**
+     * Entity name or provider item description.
+     */
+    name: string;
+    plan?: null | SeatPlan;
+    /**
+     * Actual subscription quantity allocated to this row.
+     */
+    quantity: number;
+    size?: null | ComputerSize;
+    /**
+     * Computer status supplied by its owning service.
+     */
+    status?: string | null;
+    /**
+     * Provider price per unit in minor units, when fixed.
+     */
+    unitAmount?: number | null;
+};
+
+/**
+ * What an actual subscription item pays for.
+ */
+export type SubscriptionBillingLineKind = 'human_seat' | 'agent_seat' | 'computer' | 'other';
+
+/**
+ * A Stripe price and how many of it to add to the team subscription.
+ */
+export type SubscriptionItem = {
+    /**
+     * Stripe price saved for billing replay.
+     */
+    priceId: string;
+    /**
+     * Added to the item's current quantity.
+     */
+    quantity: number;
+};
+
+/**
+ * Provider-confirmed next invoice, including its adjustments and credits.
+ */
+export type SubscriptionNextInvoice = {
+    /**
+     * Actual upcoming invoice amount due in minor units.
+     */
+    amount: number;
+    /**
+     * Provider's next payment or due date, when supplied.
+     */
+    date?: string | null;
+};
+
+/**
+ * Billed seat quantity and current recurring amount in minor units.
+ */
+export type SubscriptionSeatTotal = {
+    /**
+     * Actual recurring price times allocated quantity, in minor units.
+     */
+    amount: number;
+    /**
+     * Actual billed quantity allocated to this seat kind.
+     */
+    quantity: number;
+};
+
+/**
  * Current renewal and scheduled change; empty for accounts without a subscription.
  */
 export type SubscriptionStatus = {
+    billing?: null | SubscriptionBilling;
     /**
      * Provider-confirmed subscription renewal date.
      */
@@ -1911,6 +2510,181 @@ export type Team = {
     name: string;
     owner_id: string;
     slug: string;
+};
+
+/**
+ * A team agent: an AI teammate with its own Macro account and computer.
+ */
+export type TeamAgent = {
+    /**
+     * The agent's Macro computer, once bought.
+     */
+    computerId?: string | null;
+    /**
+     * When the agent was created.
+     */
+    createdAt: string;
+    /**
+     * Admin who created the agent.
+     */
+    createdBy?: string | null;
+    /**
+     * The agent's email address.
+     */
+    email: string;
+    /**
+     * Most recent completed brain turn, from its harness health report.
+     */
+    lastTurnAt?: string | null;
+    /**
+     * Display name.
+     */
+    name: string;
+    payment?: null | ComputerPayment;
+    /**
+     * Whether failed computer provisioning can be retried without purchasing.
+     */
+    retryable: boolean;
+    setup?: null | SetupProgress;
+    /**
+     * Where the computer is in coming up.
+     */
+    status: TeamAgentStatus;
+    /**
+     * Failure, transient health, or pending purchase-link recovery diagnostic.
+     */
+    statusReason?: string | null;
+    /**
+     * Team the agent belongs to.
+     */
+    teamId: string;
+    /**
+     * The agent's Macro user id (`macro|<email>`).
+     */
+    userId: string;
+};
+
+/**
+ * Minimal own-team discovery; this conveys no runtime permission.
+ */
+export type TeamAgentComputer = {
+    /**
+     * Computer bound to the requested agent account.
+     */
+    computerId: string;
+    /**
+     * Paired runtime, absent until enrollment establishes it.
+     */
+    harnessId?: string | null;
+    /**
+     * Always true: a bound team-agent account classifies its computer as an agent computer.
+     */
+    isAgentComputer: boolean;
+};
+
+/**
+ * A conflict the client can handle without inspecting error messages.
+ */
+export type TeamAgentConflict = {
+    /**
+     * Machine-readable reason.
+     */
+    code: TeamAgentConflictCode;
+    /**
+     * Human-readable explanation.
+     */
+    message: string;
+};
+
+/**
+ * Stable conflict codes for invitation and provisioning failures.
+ */
+export type TeamAgentConflictCode = 'quote_changed' | 'no_subscription' | 'computer_unavailable' | 'retry_unavailable';
+
+/**
+ * Public provider failure details. Never contains raw upstream response bodies.
+ */
+export type TeamAgentFailure = {
+    /**
+     * Machine-readable failure stage.
+     */
+    code: TeamAgentFailureCode;
+    /**
+     * Safe, actionable reason.
+     */
+    message: string;
+};
+
+/**
+ * Stable provider failure reason safe for invitation error presentation.
+ */
+export type TeamAgentFailureCode = 'repository_creation_failed' | 'provider_failed';
+
+/**
+ * What inviting an agent adds to the team's bill, in cents per interval.
+ */
+export type TeamAgentQuote = {
+    /**
+     * The agent's computer.
+     */
+    computer: number;
+    /**
+     * ISO currency code, lowercase (`usd`).
+     */
+    currency: string;
+    /**
+     * Disk capacity in GB, from the computer size catalog.
+     */
+    diskGb: number;
+    /**
+     * Both seat and computer are included, with no Stripe change.
+     */
+    included: boolean;
+    /**
+     * How often both bill.
+     */
+    interval: BillingInterval;
+    /**
+     * RAM in GB, from the computer size catalog.
+     */
+    memoryGb: number;
+    /**
+     * The agent's seat; 0 when the team does not bill seats.
+     */
+    seat: number;
+    /**
+     * `seat + computer`.
+     */
+    total: number;
+    /**
+     * Virtual CPUs in the quoted computer size.
+     */
+    vcpus: number;
+};
+
+/**
+ * The computer catalog for inviting team agents.
+ */
+export type TeamAgentSizes = {
+    /**
+     * Available sizes in catalog order.
+     */
+    sizes: Array<ComputerSizeSpec>;
+};
+
+/**
+ * Where an agent's computer is in coming up.
+ */
+export type TeamAgentStatus = 'provisioning' | 'running' | 'unhealthy' | 'failed';
+
+/**
+ * A team's agents.
+ */
+export type TeamAgents = {
+    /**
+     * The agents, oldest first.
+     */
+    agents: Array<TeamAgent>;
 };
 
 /**
@@ -3208,6 +3982,73 @@ export type HealthHandlerResponses = {
 
 export type HealthHandlerResponse = HealthHandlerResponses[keyof HealthHandlerResponses];
 
+export type InternalPurchaseComputerData = {
+    body: InternalPurchaseBody;
+    path?: never;
+    query?: never;
+    url: '/internal/computers';
+};
+
+export type InternalPurchaseComputerErrors = {
+    503: ErrorResponse;
+};
+
+export type InternalPurchaseComputerError = InternalPurchaseComputerErrors[keyof InternalPurchaseComputerErrors];
+
+export type InternalPurchaseComputerResponses = {
+    200: Purchased;
+};
+
+export type InternalPurchaseComputerResponse = InternalPurchaseComputerResponses[keyof InternalPurchaseComputerResponses];
+
+export type InternalQuoteComputerData = {
+    body?: never;
+    path?: never;
+    query: {
+        /**
+         * Team that owns the computer.
+         */
+        teamId: string;
+        /**
+         * Purchased catalog size.
+         */
+        size: ComputerSize;
+    };
+    url: '/internal/computers/quote';
+};
+
+export type InternalQuoteComputerErrors = {
+    503: ErrorResponse;
+};
+
+export type InternalQuoteComputerError = InternalQuoteComputerErrors[keyof InternalQuoteComputerErrors];
+
+export type InternalQuoteComputerResponses = {
+    200: Quote;
+};
+
+export type InternalQuoteComputerResponse = InternalQuoteComputerResponses[keyof InternalQuoteComputerResponses];
+
+export type InternalGetComputerData = {
+    body?: never;
+    path: {
+        computer_id: string;
+    };
+    query: {
+        /**
+         * Team that owns the computer.
+         */
+        teamId: string;
+    };
+    url: '/internal/computers/{computer_id}';
+};
+
+export type InternalGetComputerResponses = {
+    200: ComputerStatus;
+};
+
+export type InternalGetComputerResponse = InternalGetComputerResponses[keyof InternalGetComputerResponses];
+
 export type MacroApiTokenData = {
     body?: never;
     path?: never;
@@ -4039,6 +4880,212 @@ export type ToggleTeamAutoJoinDomainResponses = {
 
 export type ToggleTeamAutoJoinDomainResponse = ToggleTeamAutoJoinDomainResponses[keyof ToggleTeamAutoJoinDomainResponses];
 
+export type ListTeamComputersData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/team/computers';
+};
+
+export type ListTeamComputersErrors = {
+    401: ErrorResponse;
+    403: ErrorResponse;
+};
+
+export type ListTeamComputersError = ListTeamComputersErrors[keyof ListTeamComputersErrors];
+
+export type ListTeamComputersResponses = {
+    200: Array<ComputerStatus>;
+};
+
+export type ListTeamComputersResponse = ListTeamComputersResponses[keyof ListTeamComputersResponses];
+
+export type PurchaseTeamComputerData = {
+    body: PurchaseBody;
+    path?: never;
+    query?: never;
+    url: '/team/computers';
+};
+
+export type PurchaseTeamComputerErrors = {
+    402: ErrorResponse;
+    409: ErrorResponse;
+    503: ErrorResponse;
+};
+
+export type PurchaseTeamComputerError = PurchaseTeamComputerErrors[keyof PurchaseTeamComputerErrors];
+
+export type PurchaseTeamComputerResponses = {
+    200: Purchased;
+};
+
+export type PurchaseTeamComputerResponse = PurchaseTeamComputerResponses[keyof PurchaseTeamComputerResponses];
+
+export type NotifyTeamComputerAvailableData = {
+    body: NotifyBody;
+    path?: never;
+    query?: never;
+    url: '/team/computers/notify';
+};
+
+export type NotifyTeamComputerAvailableResponses = {
+    204: void;
+};
+
+export type NotifyTeamComputerAvailableResponse = NotifyTeamComputerAvailableResponses[keyof NotifyTeamComputerAvailableResponses];
+
+export type ListTeamComputerOffersData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/team/computers/offers';
+};
+
+export type ListTeamComputerOffersErrors = {
+    503: ErrorResponse;
+};
+
+export type ListTeamComputerOffersError = ListTeamComputerOffersErrors[keyof ListTeamComputerOffersErrors];
+
+export type ListTeamComputerOffersResponses = {
+    200: Array<SizeOffer>;
+};
+
+export type ListTeamComputerOffersResponse = ListTeamComputerOffersResponses[keyof ListTeamComputerOffersResponses];
+
+export type QuoteTeamComputerData = {
+    body?: never;
+    path?: never;
+    query: {
+        /**
+         * Purchased catalog size.
+         */
+        size: ComputerSize;
+    };
+    url: '/team/computers/quote';
+};
+
+export type QuoteTeamComputerErrors = {
+    503: ErrorResponse;
+};
+
+export type QuoteTeamComputerError = QuoteTeamComputerErrors[keyof QuoteTeamComputerErrors];
+
+export type QuoteTeamComputerResponses = {
+    200: Quote;
+};
+
+export type QuoteTeamComputerResponse = QuoteTeamComputerResponses[keyof QuoteTeamComputerResponses];
+
+export type GetTeamComputerData = {
+    body?: never;
+    path: {
+        computer_id: string;
+    };
+    query?: never;
+    url: '/team/computers/{computer_id}';
+};
+
+export type GetTeamComputerErrors = {
+    404: ErrorResponse;
+};
+
+export type GetTeamComputerError = GetTeamComputerErrors[keyof GetTeamComputerErrors];
+
+export type GetTeamComputerResponses = {
+    200: ComputerStatus;
+};
+
+export type GetTeamComputerResponse = GetTeamComputerResponses[keyof GetTeamComputerResponses];
+
+export type UndoCancelTeamComputerData = {
+    body?: never;
+    path: {
+        computer_id: string;
+    };
+    query?: never;
+    url: '/team/computers/{computer_id}/cancel';
+};
+
+export type UndoCancelTeamComputerResponses = {
+    200: ComputerStatus;
+};
+
+export type UndoCancelTeamComputerResponse = UndoCancelTeamComputerResponses[keyof UndoCancelTeamComputerResponses];
+
+export type CancelTeamComputerData = {
+    body?: never;
+    path: {
+        computer_id: string;
+    };
+    query?: never;
+    url: '/team/computers/{computer_id}/cancel';
+};
+
+export type CancelTeamComputerResponses = {
+    200: ComputerStatus;
+};
+
+export type CancelTeamComputerResponse = CancelTeamComputerResponses[keyof CancelTeamComputerResponses];
+
+export type SetTeamComputerPowerData = {
+    body: PowerBody;
+    path: {
+        computer_id: string;
+    };
+    query?: never;
+    url: '/team/computers/{computer_id}/power';
+};
+
+export type SetTeamComputerPowerResponses = {
+    200: ComputerStatus;
+};
+
+export type SetTeamComputerPowerResponse = SetTeamComputerPowerResponses[keyof SetTeamComputerPowerResponses];
+
+export type ReleaseTeamComputerData = {
+    body: ReleaseBody;
+    path: {
+        computer_id: string;
+    };
+    query?: never;
+    url: '/team/computers/{computer_id}/release';
+};
+
+export type ReleaseTeamComputerErrors = {
+    400: ErrorResponse;
+};
+
+export type ReleaseTeamComputerError = ReleaseTeamComputerErrors[keyof ReleaseTeamComputerErrors];
+
+export type ReleaseTeamComputerResponses = {
+    200: ComputerStatus;
+};
+
+export type ReleaseTeamComputerResponse = ReleaseTeamComputerResponses[keyof ReleaseTeamComputerResponses];
+
+export type RetryTeamComputerData = {
+    body?: never;
+    path: {
+        computer_id: string;
+    };
+    query?: never;
+    url: '/team/computers/{computer_id}/retry';
+};
+
+export type RetryTeamComputerErrors = {
+    404: ErrorResponse;
+    409: ErrorResponse;
+};
+
+export type RetryTeamComputerError = RetryTeamComputerErrors[keyof RetryTeamComputerErrors];
+
+export type RetryTeamComputerResponses = {
+    200: ComputerStatus;
+};
+
+export type RetryTeamComputerResponse = RetryTeamComputerResponses[keyof RetryTeamComputerResponses];
+
 export type PatchTeamCrmSettingsData = {
     body: PatchTeamCrmSettingsRequest;
     path?: never;
@@ -4093,6 +5140,7 @@ export type InviteToTeamData = {
 export type InviteToTeamErrors = {
     400: ErrorResponse;
     401: ErrorResponse;
+    403: ErrorResponse;
     404: ErrorResponse;
     /**
      * `team_id` names a team other than the caller's current team
@@ -4436,6 +5484,336 @@ export type GetUserInvitesResponses = {
 };
 
 export type GetUserInvitesResponse = GetUserInvitesResponses[keyof GetUserInvitesResponses];
+
+export type ListTeamAgentsData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/team_agents';
+};
+
+export type ListTeamAgentsErrors = {
+    401: ErrorResponse;
+    403: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type ListTeamAgentsError = ListTeamAgentsErrors[keyof ListTeamAgentsErrors];
+
+export type ListTeamAgentsResponses = {
+    200: TeamAgents;
+};
+
+export type ListTeamAgentsResponse = ListTeamAgentsResponses[keyof ListTeamAgentsResponses];
+
+export type CreateTeamAgentData = {
+    body: CreateTeamAgent;
+    path?: never;
+    query?: never;
+    url: '/team_agents';
+};
+
+export type CreateTeamAgentErrors = {
+    400: ErrorResponse;
+    401: ErrorResponse;
+    403: ErrorResponse;
+    409: TeamAgentConflict;
+    500: ErrorResponse;
+    502: TeamAgentFailure;
+    503: ErrorResponse;
+};
+
+export type CreateTeamAgentError = CreateTeamAgentErrors[keyof CreateTeamAgentErrors];
+
+export type CreateTeamAgentResponses = {
+    201: TeamAgent;
+};
+
+export type CreateTeamAgentResponse = CreateTeamAgentResponses[keyof CreateTeamAgentResponses];
+
+export type GetMyTeamAgentData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/team_agents/me';
+};
+
+export type GetMyTeamAgentErrors = {
+    401: ErrorResponse;
+    404: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type GetMyTeamAgentError = GetMyTeamAgentErrors[keyof GetMyTeamAgentErrors];
+
+export type GetMyTeamAgentResponses = {
+    200: TeamAgent;
+};
+
+export type GetMyTeamAgentResponse = GetMyTeamAgentResponses[keyof GetMyTeamAgentResponses];
+
+export type ListMyTeamAgentEmailData = {
+    body?: never;
+    path?: never;
+    query?: {
+        /**
+         * Most emails to return, 1 to 100. Defaults to 20.
+         */
+        limit?: number;
+    };
+    url: '/team_agents/me/email/messages';
+};
+
+export type ListMyTeamAgentEmailErrors = {
+    401: ErrorResponse;
+    404: ErrorResponse;
+    502: ErrorResponse;
+    503: ErrorResponse;
+};
+
+export type ListMyTeamAgentEmailError = ListMyTeamAgentEmailErrors[keyof ListMyTeamAgentEmailErrors];
+
+export type ListMyTeamAgentEmailResponses = {
+    200: EmailMessages;
+};
+
+export type ListMyTeamAgentEmailResponse = ListMyTeamAgentEmailResponses[keyof ListMyTeamAgentEmailResponses];
+
+export type GetMyTeamAgentEmailData = {
+    body?: never;
+    path: {
+        /**
+         * Provider message id.
+         */
+        message_id: string;
+    };
+    query?: never;
+    url: '/team_agents/me/email/messages/{message_id}';
+};
+
+export type GetMyTeamAgentEmailErrors = {
+    401: ErrorResponse;
+    404: ErrorResponse;
+    502: ErrorResponse;
+    503: ErrorResponse;
+};
+
+export type GetMyTeamAgentEmailError = GetMyTeamAgentEmailErrors[keyof GetMyTeamAgentEmailErrors];
+
+export type GetMyTeamAgentEmailResponses = {
+    200: EmailMessage;
+};
+
+export type GetMyTeamAgentEmailResponse = GetMyTeamAgentEmailResponses[keyof GetMyTeamAgentEmailResponses];
+
+export type SendTeamAgentEmailData = {
+    body: SendEmail;
+    path?: never;
+    query?: never;
+    url: '/team_agents/me/email/send';
+};
+
+export type SendTeamAgentEmailErrors = {
+    400: ErrorResponse;
+    401: ErrorResponse;
+    404: ErrorResponse;
+    502: ErrorResponse;
+    503: ErrorResponse;
+};
+
+export type SendTeamAgentEmailError = SendTeamAgentEmailErrors[keyof SendTeamAgentEmailErrors];
+
+export type SendTeamAgentEmailResponses = {
+    200: SentEmail;
+};
+
+export type SendTeamAgentEmailResponse = SendTeamAgentEmailResponses[keyof SendTeamAgentEmailResponses];
+
+export type QuoteTeamAgentData = {
+    body?: never;
+    path?: never;
+    query: {
+        /**
+         * The computer size to price.
+         */
+        size: ComputerSize;
+    };
+    url: '/team_agents/quote';
+};
+
+export type QuoteTeamAgentErrors = {
+    400: ErrorResponse;
+    401: ErrorResponse;
+    403: ErrorResponse;
+    409: TeamAgentConflict;
+    500: ErrorResponse;
+    502: ErrorResponse;
+    503: ErrorResponse;
+};
+
+export type QuoteTeamAgentError = QuoteTeamAgentErrors[keyof QuoteTeamAgentErrors];
+
+export type QuoteTeamAgentResponses = {
+    200: TeamAgentQuote;
+};
+
+export type QuoteTeamAgentResponse = QuoteTeamAgentResponses[keyof QuoteTeamAgentResponses];
+
+export type GetTeamAgentSizesData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/team_agents/sizes';
+};
+
+export type GetTeamAgentSizesErrors = {
+    401: ErrorResponse;
+    403: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type GetTeamAgentSizesError = GetTeamAgentSizesErrors[keyof GetTeamAgentSizesErrors];
+
+export type GetTeamAgentSizesResponses = {
+    200: TeamAgentSizes;
+};
+
+export type GetTeamAgentSizesResponse = GetTeamAgentSizesResponses[keyof GetTeamAgentSizesResponses];
+
+export type DeleteTeamAgentData = {
+    body?: never;
+    path: {
+        /**
+         * The agent's Macro user id.
+         */
+        agent_user_id: string;
+    };
+    query?: never;
+    url: '/team_agents/{agent_user_id}';
+};
+
+export type DeleteTeamAgentErrors = {
+    400: ErrorResponse;
+    401: ErrorResponse;
+    403: ErrorResponse;
+    404: ErrorResponse;
+    409: TeamAgentConflict;
+    500: ErrorResponse;
+    502: ErrorResponse;
+};
+
+export type DeleteTeamAgentError = DeleteTeamAgentErrors[keyof DeleteTeamAgentErrors];
+
+export type DeleteTeamAgentResponses = {
+    204: void;
+};
+
+export type DeleteTeamAgentResponse = DeleteTeamAgentResponses[keyof DeleteTeamAgentResponses];
+
+export type GetTeamAgentComputerData = {
+    body?: never;
+    path: {
+        /**
+         * The agent's Macro user id.
+         */
+        agent_user_id: string;
+    };
+    query?: never;
+    url: '/team_agents/{agent_user_id}/computer';
+};
+
+export type GetTeamAgentComputerErrors = {
+    400: ErrorResponse;
+    401: ErrorResponse;
+    403: ErrorResponse;
+    404: ErrorResponse;
+    500: ErrorResponse;
+    503: ErrorResponse;
+};
+
+export type GetTeamAgentComputerError = GetTeamAgentComputerErrors[keyof GetTeamAgentComputerErrors];
+
+export type GetTeamAgentComputerResponses = {
+    200: TeamAgentComputer;
+};
+
+export type GetTeamAgentComputerResponse = GetTeamAgentComputerResponses[keyof GetTeamAgentComputerResponses];
+
+export type RetryTeamAgentData = {
+    body?: never;
+    path: {
+        /**
+         * The agent's Macro user id.
+         */
+        agent_user_id: string;
+    };
+    query?: never;
+    url: '/team_agents/{agent_user_id}/retry';
+};
+
+export type RetryTeamAgentErrors = {
+    400: ErrorResponse;
+    401: ErrorResponse;
+    403: ErrorResponse;
+    404: ErrorResponse;
+    409: TeamAgentConflict;
+    500: ErrorResponse;
+    502: ErrorResponse;
+    503: ErrorResponse;
+};
+
+export type RetryTeamAgentError = RetryTeamAgentErrors[keyof RetryTeamAgentErrors];
+
+export type RetryTeamAgentResponses = {
+    200: TeamAgent;
+};
+
+export type RetryTeamAgentResponse = RetryTeamAgentResponses[keyof RetryTeamAgentResponses];
+
+export type GetTeamAgentVoiceData = {
+    body?: never;
+    path: {
+        agent_user_id: string;
+    };
+    query?: never;
+    url: '/team_agents/{agent_user_id}/voice';
+};
+
+export type GetTeamAgentVoiceErrors = {
+    403: ErrorResponse;
+    404: ErrorResponse;
+};
+
+export type GetTeamAgentVoiceError = GetTeamAgentVoiceErrors[keyof GetTeamAgentVoiceErrors];
+
+export type GetTeamAgentVoiceResponses = {
+    200: AgentVoice;
+};
+
+export type GetTeamAgentVoiceResponse = GetTeamAgentVoiceResponses[keyof GetTeamAgentVoiceResponses];
+
+export type SetTeamAgentVoiceData = {
+    body: AgentVoice;
+    path: {
+        agent_user_id: string;
+    };
+    query?: never;
+    url: '/team_agents/{agent_user_id}/voice';
+};
+
+export type SetTeamAgentVoiceErrors = {
+    400: ErrorResponse;
+    403: ErrorResponse;
+    404: ErrorResponse;
+};
+
+export type SetTeamAgentVoiceError = SetTeamAgentVoiceErrors[keyof SetTeamAgentVoiceErrors];
+
+export type SetTeamAgentVoiceResponses = {
+    200: AgentVoice;
+};
+
+export type SetTeamAgentVoiceResponse = SetTeamAgentVoiceResponses[keyof SetTeamAgentVoiceResponses];
 
 export type AgentSetupData = {
     body?: never;

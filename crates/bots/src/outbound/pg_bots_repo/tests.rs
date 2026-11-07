@@ -2085,19 +2085,38 @@ async fn insert_harness(
     owner_user_id: Option<&str>,
     team_id: Option<Uuid>,
 ) -> anyhow::Result<HarnessId> {
+    let owner = if let Some(owner) = owner_user_id {
+        owner.to_owned()
+    } else if let Some(team) = team_id {
+        sqlx::query_scalar!("SELECT owner_id FROM team WHERE id = $1", team)
+            .fetch_one(pool)
+            .await?
+    } else {
+        anyhow::bail!("test harness requires an owner or team");
+    };
     let harness_id = Uuid::new_v4();
     sqlx::query!(
         r#"
         INSERT INTO harnesses (id, name, owner_user_id, team_id, created_by)
-        VALUES ($1, 'test harness', $2, $3, $4)
+        VALUES ($1, 'test harness', $2, NULL, $2)
         "#,
         harness_id,
-        owner_user_id,
-        team_id,
-        owner_user_id.unwrap_or(USER_OWNER),
+        owner,
     )
     .execute(pool)
     .await?;
+    if let Some(team) = team_id {
+        sqlx::query!(
+            r#"
+            INSERT INTO entity_access (entity_id, entity_type, source_id, source_type, access_level)
+            VALUES ($1, 'harness', $2, 'team', 'edit')
+            "#,
+            harness_id,
+            team.to_string(),
+        )
+        .execute(pool)
+        .await?;
+    }
     Ok(HarnessId::new_from_uuid(harness_id))
 }
 
@@ -2333,6 +2352,40 @@ async fn team_harnesses_back_member_agents_but_not_team_agents_on_private_harnes
         .create_agent(user_id(TEAM_MEMBER), team_on_private)
         .await;
     assert!(matches!(team_on_private, Err(BotError::Unauthorized)));
+
+    // A teammate's agent runs on someone's private harness once they are given
+    // access to it, and a team agent still does not: not everyone on the team was.
+    let shared_harness = insert_harness(&pool, Some(TEAM_OWNER), None).await?;
+    let refused = service
+        .create_agent(
+            user_id(TEAM_MEMBER),
+            macrod_agent_req("member-on-shared-harness", Some(shared_harness)),
+        )
+        .await;
+    assert!(matches!(refused, Err(BotError::Unauthorized)));
+    sqlx::query!(
+        r#"
+        INSERT INTO entity_access (entity_id, entity_type, source_id, source_type, access_level)
+        VALUES ($1, 'harness', $2, 'user', 'edit')
+        "#,
+        shared_harness.as_uuid(),
+        TEAM_MEMBER,
+    )
+    .execute(&pool)
+    .await?;
+    let on_shared = service
+        .create_agent(
+            user_id(TEAM_MEMBER),
+            macrod_agent_req("member-on-shared-harness", Some(shared_harness)),
+        )
+        .await?;
+    assert_eq!(on_shared.harness_id, Some(shared_harness));
+    let mut team_on_shared = macrod_agent_req("team-on-shared-harness", Some(shared_harness));
+    team_on_shared.team_id = Some(team_id);
+    let team_on_shared = service
+        .create_agent(user_id(TEAM_MEMBER), team_on_shared)
+        .await;
+    assert!(matches!(team_on_shared, Err(BotError::Unauthorized)));
 
     // Updates re-check the binding: moving the member's agent onto their own
     // private harness works, and clearing the slug clears the binding.

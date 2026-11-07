@@ -37,6 +37,12 @@ const agentsPageProps = {
   onManageRuntimes: vi.fn(),
 };
 
+// The app supplies PostHog above Settings; keep rollout reads local to this
+// editor fixture, including the bound runtime's computer-screen action.
+vi.mock('@app/lib/analytics/posthog', () => ({
+  useFeatureFlag: () => () => ({ enabled: false, loading: false }),
+}));
+
 // The real Lexical surface has its own Markdown round-trip suite.
 vi.mock('./components/instructions-editor', () => ({
   AgentInstructionsEditor: (props: {
@@ -365,6 +371,8 @@ const MACROD_HARNESS = {
   updated_at: '2026-08-27T12:00:00Z',
   connected: true,
   last_connected_at: '2026-08-27T12:34:00Z',
+  access: 'owner',
+  shared_team_ids: [],
 } satisfies Harness;
 
 describe('Agents', () => {
@@ -1240,9 +1248,6 @@ describe('Agents', () => {
     const dialog = screen.getByRole('region', { name: /^(New|Edit) agent$/ });
     const teamOption = within(dialog).getByLabelText('Team');
     expect(teamOption).toHaveProperty('disabled', true);
-    const teamCardClasses = teamOption.closest('label')?.classList;
-    expect(teamCardClasses?.contains('cursor-not-allowed')).toBe(true);
-    expect(teamCardClasses?.contains('opacity-50')).toBe(true);
     expect(
       within(dialog).getByText(
         'Team agents need a team owner. Create or join a team in Team settings to enable this option.'

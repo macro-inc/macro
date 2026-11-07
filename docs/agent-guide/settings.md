@@ -231,6 +231,151 @@ domain. Both should appear in the team's member list and configured auto-join
 channels without an upgrade prompt. Repeat with auto-join disabled to verify a
 same-domain signup is not added automatically.
 
+### Team subscription breakdown
+
+On the existing **Billing** page, billing admins with an active provider
+subscription see **Subscription breakdown** below their plan. It shows actual
+paid **Human seats** and **Agent seats**, each mapped computer's size, status,
+and current subscription price, and any other provider subscription items.
+Each computer appears once, with recorded specifications when available; there is
+no duplicate Computers subtotal. Included rows say **Included**, with an
+**Included for Macro** note. If today’s catalog price differs from an existing
+charge, the row keeps the actual subscribed amount and explains the new-computer price. Agent names and live health
+come from the team agents query when available.
+
+**Total per month/year** uses the current subscription interval and currency.
+Amounts use that currency's minor-unit precision, including zero-decimal currencies.
+**Next invoice** uses the provider's upcoming amount due and invoice date;
+proration or credits can make it differ from the subscription total. There
+are no estimated taxes or invented add-ons. Without an active subscription,
+or without billing access, the existing plan UI remains; no invoice or
+currency amount is fabricated. On a phone the rows wrap within the existing
+Settings card, and the page scrolls vertically.
+
+### Invite an agent teammate
+
+The `enable-team-agents` rollout controls invitations, managed agent status and
+actions, and the agent billing breakdown. While the flag loads, these surfaces
+wait and make no agent-management requests. With it off, existing agents remain
+in Members with their data-derived **Agent** chip; invitation, Retry and Remove
+agent controls disappear, and Billing keeps its existing computers view. Human
+invitations, the separate Runtimes rollout, and existing agents' own access keep
+working.
+
+With the `enable-team-agents` rollout enabled, team admins and owners see
+**Invite agent** in **Team → Members**. The split **Invite** control opens the
+existing person invitation with its main action; **Invite options** offers
+**Invite a person** and, for team managers, **Invite an agent**, with icons and descriptions in a menu below the controls. All header
+actions use the same control height on desktop and touch. In narrow Settings
+panes the controls move below the heading so its title and subtitle stay
+readable. Inviting an agent creates its account and buys its computer together. The existing email
+invitation flow remains available.
+
+For billed teams without an active subscription, the dialog keeps specifications visible
+and explains that an active team plan is required. **Go to billing** opens
+`/app/settings/billing`; the team owner can activate a plan there. An invitation
+cannot be confirmed until the team has an active subscription. Teams whose server
+quote marks the agent as included can invite without a subscription; their review
+shows **Included for Macro**, with no currency charge.
+
+1. Choose **Invite agent**. Enter a **Name**, **Role / job description**, and
+   **Personality**. Choose **Standard**, **Large**, or **XL** using the quoted
+   vCPU, RAM, and disk specifications beside each size (available even without
+   a paid plan). Specs wrap only between complete items on narrow phones, and
+   computer prices align with the size titles. Specs come from the size catalog
+   (Standard: 4 vCPUs, 8 GiB RAM, 100 GiB disk).
+   A fictional photographic portrait is generated only after choosing
+   **Generate portrait**, using the current name, role, and personality.
+   Typing or changing the profile never starts generation. The face sits beside
+   Name and Role at the top of the form, with a shimmer only while a request is
+   running. A failure keeps the previous portrait or placeholder and shows an
+   inline error with **Retry**. After the first request, **Generate another**
+   uses the current profile; **Upload photo** uses the existing avatar uploader.
+   Both store a permanent static-file URL. Generation uses the same metered
+   image-generation service as the AI tool. A failure leaves both actions available.
+   Review waits for an active photo request. The shared Dialog supplies the normal
+   header, close control, scrolling body, footer and phone sheet.
+   Choose a **Voice** and use **Play sample** to hear the fixed preview line.
+   The suggested voice matches the persona’s descriptive tags; another choice
+   stays selected through price review. Samples stop when the voice changes
+   or the form closes.
+2. Choose **Review price**. The content-sized review uses the same breakdown as
+   computer purchases and Billing: names, specification sublines, right-aligned
+   amounts, a divider, total, and a short billing note. Included invitations keep
+   all rows with **Included** amounts and an **Included for Macro** note.
+   Review the server's **Agent seat**, **Computer**,
+   and **Total per month/year**, in its quoted currency. **Back** preserves
+   the draft. A loading or failed quote disables confirmation; **Try again**
+   refreshes the quote. The quote shown in a review stays fixed across background
+   refreshes; confirmation includes its billing eligibility. If eligibility
+   changes before creation, the server refuses the invitation before purchase
+   and asks you to review again. **Back** refreshes the quote and preserves the
+   draft so you can review the new terms. Typing changes only the draft; it never refreshes quotes
+   or catalog specifications. Computer prices load for all three sizes on opening.
+3. Choose **Invite <name> · <price>/month** (or the quoted year interval) once.
+   Included invitations say **Invite <name>**. The controls stay disabled while the
+   request is pending. On success the dialog closes and the roster refreshes.
+   If confirmation fails, check the roster before starting another invitation:
+   the response may have been lost after the purchase completed. A repository
+   creation failure instead shows the server's actionable reason and
+   **Nothing was charged**; no purchase has started in that case.
+4. The shared **Team members** roster shows people and agents together. Agent
+   rows share people's height and columns, with an **Agent** chip beside the name
+   and a single setup bar or health pill in the activity/status column. Human
+   status stays empty when activity is unavailable. The
+   status tooltip combines the current setup step or failure reason with the
+   latest completed turn reported by the server; an agent without a completed
+   turn says **No activity yet** there. **More** includes **Retry** when provisioning can be
+   retried and **Remove agent**. The same actions stay reachable on mobile.
+   The roster polls every three seconds while any agent is
+   provisioning, then every thirty seconds while the page is visible and the
+   roster is nonempty. **Alive** means the agent is running. **Dead** means a ready computer's agent is
+   disconnected, missing, stale, or unhealthy; its reason is in the status tooltip and row menu without
+   a provisioning Retry action. Before the first connection, setup stays
+   as **Setting up…**, with **Creating**, **Booting**, or **Connecting** when
+   the server supplies a step. No payment stage is displayed; absent or retired
+   steps leave the generic setup label. Alive, Dead, and failed rows keep refreshing, so
+   transient health failures can recover without a manual refresh. Billing
+   shows the same live agent health without changing the subscription amounts.
+5. **Retry** appears only for terminal `failed` status when `retryable=true`
+   and payment is **paid** or **comped**. It
+   re-drives failed provisioning on the same computer, preserving the agent's
+   workspace and billing. Retry is disabled while the request runs. Failures
+   refresh the status and keep an error in the row menu if retry is still available;
+   a stale retry rejected with 409 refreshes the row.
+6. Setup never displays a payment state. If payment fails, admins see
+   **Couldn't add <name>: payment didn't go through** and a **Billing** link.
+   Other members continue to see **Setting up…** until setup resolves. No raw
+   payment diagnostic appears in their tooltip or row menu. Existing action
+   eligibility remains enforced: pending settlement blocks Retry and Remove;
+   an admin may remove an unsuccessful invitation and try inviting again.
+7. Confirm **Remove agent** to release its computer and seat and permanently
+   delete its repository. For a billed agent this removes the seat and computer
+   from the subscription. Removal remains blocked if payment becomes pending after
+   the confirmation opens. A failed removal keeps the confirmation open for
+   another attempt.
+
+On phones the invitation is a sheet, with its actions pinned above the scrolling
+form. Verify Review and Confirm stay reachable with long descriptions and the
+keyboard open; cancelling and reopening starts a fresh draft. Verify loading,
+quote failure/recovery, duplicate confirmation, all status states, and removal
+cancellation on desktop, phone, and tablet.
+
+The backend-free browser check exercises the real invitation form with scripted
+quotes and purchases:
+`bunx playwright test --config src/features/settings/browser-test/team-agents/playwright.config.ts`.
+
+The agent row's **More → Change voice** opens the same voice picker later.
+Team admins can open the managed agent roster and save a new voice. Being an
+agent's creator does not keep roster access after losing the admin role.
+Teammates can still discover and request access to an agent's computer without
+loading that management roster.
+**Save voice** commits `config/voice.json` in the agent's repository and takes
+effect on the next call. Failed saves preserve the selection for retry. Desktop
+uses the existing dialog; phone uses the settings drawer with reachable actions.
+Samples are synthesized through Macro with a fixed line, cached, and billed to
+the team when synthesis is needed. Provider credentials stay at the gateway.
+
 ### Navigation
 
 On phones, **More views → Settings** opens an inset glass sheet over the current
@@ -752,7 +897,7 @@ New macrod sessions use the agent's saved model before sending the first prompt.
 Changing that default applies to new sessions; existing sessions keep their selected model.
 If the runtime rejects the saved model, the prompt fails instead of using a different model.
 
-The `Runtimes` section shows built-in Macro, Cursor, and Codex configuration, followed by paired macrod runtimes. Codex's card appears only within the agents and Codex rollouts. On the desktop app only, a “This computer” card appears above the built-in runtimes: the bundled macrod daemon is set up from here with one click. `Set up` scans the machine for installed agents and names the one it will use (Claude Code first, then Codex, OpenCode, OpenClaw, Hermes); `Options` changes the agent, workspace folder, and a larger Full access choice labeled Suggested (unchecked until explicitly selected). `Set up <agent>` then walks a three-step checklist — Find an agent, Connect this computer (start, install the connector, link to the account; the pairing is approved automatically, no code is typed), Create your agent (a private `@<agent>` coding agent bound to this runtime) — and ends on `@<agent> is ready` with `Start a session`, which opens the Agents composer in Auto with that agent as the usual coding agent. A failed step shows its error and `Try again`, which resumes at the failed step. A desktop app that was never set up also shows a one-time “Run agents on this computer” prompt whose `Set up` runs the same flow in a dialog; closing the prompt sticks. Before this computer is paired, a dismissible “Run agents on this computer” invitation also appears above the Home input and the Agents new-conversation and active-session inputs; its `Set up` runs the same flow in a dialog in place, and dismissal applies only to this user on this computer. The Runtimes settings tab stays available in the desktop app even if the newer Agents view is disabled. A running runtime with no agent bound to it offers `Create agent`. The daemon runs with the user's interactive login-shell environment (variables exported from `.zshrc` and the like), so agents authenticate as they do in a terminal. The app then keeps the daemon up: it restarts after any unexpected exit (with backoff) and on every launch until the user presses `Stop`, and any re-pairing is approved from wherever the user is in the app, not only on this card. While running the card shows the bound agent and workspace with a `Stop` action; a stopped runtime offers `Start`. The web app never shows this card. The “Bring your own agent” card sits above the Agents / Runtimes navigation and is visible on both sections. It rotates Claude Code, OpenCode, OpenClaw, and Hermes; reduced motion keeps a static name. Its `New runtime` action opens the full-page pairing flow from either section: enter the code, look up the request, review the machine, name, sharing and permission bypass, then Approve and Done. Each row under Connected runtimes shows its name, Private/Team, connection, an `Allow bypassing permission requests` switch (confirmation on enable; applies from each session's next turn) and `Rename` / `Remove` actions. A runtime's name and bypass are set only here, and its Private/Team access only at approval; macrod.toml holds only machine-local config, and macrod refuses a file that still sets `[identity]` or a credentials `scope`. Desktop setup's Full access choice turns on that switch for the new runtime. Back/Cancel returns to the runtime list. Destructive removal still requires confirmation. `/settings/runtimes` opens this section; legacy `/settings/harness?pair=…` links remain supported.
+The `Runtimes` section shows built-in Macro, Cursor, and Codex configuration, followed by paired macrod runtimes. Codex's card appears only within the agents and Codex rollouts. On the desktop app only, a “This computer” card appears above the built-in runtimes: the bundled macrod daemon is set up from here with one click. `Set up` scans the machine for installed agents and names the one it will use (Claude Code first, then Codex, OpenCode, OpenClaw, Hermes); `Options` changes the agent, workspace folder, and a larger Full access choice labeled Suggested (unchecked until explicitly selected). `Set up <agent>` then walks a three-step checklist — Find an agent, Connect this computer (start, install the connector, link to the account; the pairing is approved automatically, no code is typed), Create your agent (a private `@<agent>` coding agent bound to this runtime) — and ends on `@<agent> is ready` with `Start a session`, which opens the Agents composer in Auto with that agent as the usual coding agent. A failed step shows its error and `Try again`, which resumes at the failed step. A desktop app that was never set up also shows a one-time “Run agents on this computer” prompt whose `Set up` runs the same flow in a dialog; closing the prompt sticks. Before this computer is paired, a dismissible “Run agents on this computer” invitation also appears above the Home input and the Agents new-conversation and active-session inputs; its `Set up` runs the same flow in a dialog in place, and dismissal applies only to this user on this computer. The Runtimes settings tab stays available in the desktop app even if the newer Agents view is disabled. A running runtime with no agent bound to it offers `Create agent`. The daemon runs with the user's interactive login-shell environment (variables exported from `.zshrc` and the like), so agents authenticate as they do in a terminal. The app then keeps the daemon up: it restarts after any unexpected exit (with backoff) and on every launch until the user presses `Stop`, and any re-pairing is approved from wherever the user is in the app, not only on this card. While running the card shows the bound agent and workspace with a `Stop` action; a stopped runtime offers `Start`. The web app never shows this card. The “Bring your own agent” card sits above the Agents / Runtimes navigation and is visible on both sections. It rotates Claude Code, OpenCode, OpenClaw, and Hermes; reduced motion keeps a static name. Its `New runtime` action opens the full-page pairing flow from either section: enter the code, look up the request, review the machine, name, sharing and permission bypass, then Approve and Done. Each row under Connected runtimes shows its name, Private/Team, connection, an `Allow bypassing permission requests` switch (confirmation on enable; applies from each session's next turn) and `Rename` / `Remove` actions. Macro computers show their badge and use the computer release action instead of `Remove`. A runtime's name and bypass are set only here, and sharing can also be changed through Share; macrod.toml holds only machine-local config, and macrod refuses a file that still sets `[identity]` or a credentials `scope`. Desktop setup's Full access choice turns on that switch for the new runtime. Back/Cancel returns to the runtime list. Destructive removal still requires confirmation. `/settings/runtimes` opens this section; legacy `/settings/harness?pair=…` links remain supported. Every paired runtime has one person as its owner; its `Team machine` or `Private` label says whether every teammate is a user of it. Everyone else on the team can see it and holds a role: No Access, Read (sees what is on it but cannot run agents), or User (can run agents); non-coding agents bound to it are Residents. Its owner's `Share` button, which counts waiting access requests, opens the runtime Share menu: the `Team machine` switch, the owner, residents, people with a `Read` or `User` role picker, access requests with `Approve` and `Deny`, and a filterable list of teammates to `Add` as users. It has no link, channel or outside sharing. Removing or lowering access a resident depends on first warns that it shuts the agent down. `Remove` shows only for the owner and, on a team machine, the team's owner. The user card lists a person's runtimes and the viewer's role, with `Request access` for those the viewer cannot run agents on; agent cards and the agent session pane show the runtime an agent runs on, with the same action. Opening an access-request notification lands on this section. The team `Invite to Team` dialog offers `Share your runtimes`, making the invitee a user of each one chosen, when the inviter owns any. `/settings/runtimes` opens this section; legacy `/settings/harness?pair=…` links remain supported.
 Connection chips in agent replies open this page, including before any account is connected. Cursor's default-model picker uses
 the same live model discovery and retains its existing save action. Beside it,
 the composer's speedometer effort control (the bottom sheet on touch) offers the
@@ -783,6 +928,132 @@ OAuth token.
 The Codex section and its auth/config requests were exercised in Chromium with
 mocked backend responses on 2026-09-15. Provider login and a full deployed Macro
 session were not exercised by that UI check.
+
+### Macro computers
+
+Macro computers are hosted machines a team buys for its agents, billed on
+the team subscription. They sit in `Runtimes`, behind the
+`enable-macro-computers` flag for purchases and Claude account controls, and
+need a team: without one the page shows nothing about them. The flag follows
+PostHog in every environment unless explicitly overridden locally. With the
+flag off, existing computers stay listed in Runtimes and team Billing, and
+management actions including Cancel and Release stay available. Team purchase,
+quote and offers return 403 when the rollout is off, missing or unavailable.
+Every team member sees the **Macro computers**
+list; only team admins and owners see the buying card and the row controls.
+
+If the environment has no computer prices configured, offers, quotes, and
+purchases answer 503 with `computers are not available in this environment`.
+Partial price configuration prevents the authentication service from starting.
+Runtimes rows and the team Billing computers list show the recorded resources
+(vCPU, GiB memory and GiB disk), even when the purchase catalog changes.
+
+To buy one as a team admin:
+
+1. Open `/app/settings/runtimes` (mobile: Settings sheet → Runtimes).
+2. Under **Get a Macro computer**, pick a size radio (**Standard**, **Large**,
+   **XL**); each shows vCPU, memory and disk in GiB, and its price per interval. A
+   sold-out size is disabled and offers **Notify me**, which turns into
+   "We'll let you know".
+3. Press **Continue**. The dialog (a drawer on phones) titled
+   **Buy a <size> Macro computer?** sizes to its content and shows the shared
+   item/specifications/amount breakdown, total and proration note. **Name
+   (optional)** names the computer.
+4. Press **Buy · <price>/month** (or the quoted year interval). A zero-price
+   offer keeps the breakdown with Included amounts and a plain **Buy** action. Failures stay in the dialog: sold out (409),
+   payment declined (402), or a subscription that can't add computers (422).
+   On success the dialog closes with "Computer purchased. Setting it up now."
+
+The new row reads **Setting up** with its step (creating, starting up,
+connecting, ready; "step N of 4"). Payment recovery also reports creating;
+no payment stage is shown. A computer blocked by awake host capacity instead
+shows **Waiting for space on the host**, with "Turn off or release another
+computer on this host to make room". It has no setup step; admins can turn it
+off or release it. This applies both before and after first enrollment, on
+desktop and mobile. The list polls every 3 seconds
+while any computer is setting up, waiting for capacity, waking or stopping. Once ready a row shows
+its size, the vCPU/memory/disk resources recorded at purchase, status (**Ready**, **Asleep**, **Waking**, **Stopping**,
+**Stopped**, **Failed**), its Claude access mode, and the runtime it
+registered as with a connection dot; that runtime's row under **Connected
+runtimes** carries a **Macro computer** badge and no Remove. Admin controls
+on each row:
+
+- **Power** switch: on/off, available when Ready, Asleep, Stopped or waiting for capacity.
+- **Cancel at period end**: billing stops at the period end, shown as
+  "Cancels <date>"; **Keep computer** undoes it until then. After the period
+  a canceled computer shows "Disk deleted <date>".
+- **Release now**: a content-sized dialog explains the computer and its disk are destroyed
+  now with no refund; **Release now** stays disabled until the computer's
+  exact name is typed.
+
+**Sign in with Claude** opens Claude's OAuth page. Paste the code or localhost
+callback URL back into the form and press **Complete sign-in**. **Cancel**
+kills the pending sign-in on the computer and closes the paste form, including
+while a code is being submitted. **Sign in with Claude** stays disabled while
+starting, while the paste form is open, and while its result is pending. Leaving
+the controls aborts the request and cancels the pending sign-in. These controls
+behave the same way on desktop and mobile. A rejected code
+shows “That code didn't work — sign in again to get a new one”; start again to
+obtain a fresh code. A 409 shows “Another sign-in is in progress on this computer
+— try again shortly”. New sessions then use that Claude account. **Use Macro
+credits** signs out on the computer.
+
+Team **Billing** lists the same computers under **Macro computers** with size,
+status, cancel date and price per interval.
+
+Each enrolled computer shows **Claude: Macro credits** or **Claude: your account**.
+Harness managers can press **Sign in with Claude**, which opens Claude in a new
+tab. Finish signing in there, then paste the code or callback URL into **Paste
+the code or the URL you were sent to** and press **Complete sign-in**. The input
+accepts surrounding whitespace. If the new tab was blocked, use **Open Claude
+sign-in** beside the field. Successful sign-in switches the label to your account;
+**Use Macro credits** signs the computer out and restores Macro credits. Request
+failures appear inline. Members without management rights see the mode without
+account controls. This account is used by Claude on the shared computer.
+
+When the team's computer fleet is unavailable, known-unavailable **View computer**
+and **Show screen** entries are hidden without an error toast. They return after
+computer discovery observes the fleet again. Other lookup failures still show
+failure feedback.
+
+With **enable-macro-computers** enabled, **View computer** in a member’s agent menu,
+an agent’s settings, or a screen-capable runtime opens the existing Screen pane
+as the main Settings content at every width. Runtime cards outside Settings
+open the Runtimes settings page with that pane. Settings stays mounted underneath;
+**Close screen** restores the previous form or member list. Agent-session screens
+keep their desktop split beside the conversation.
+With **enable-macro-computers** enabled, an agent's portrait card also offers
+**Show screen** when its paired computer supports screens. Open the card by
+hovering or right-clicking on desktop, or tapping or long-pressing on a phone.
+**Show screen** opens the pane in watch mode. Desktop viewers with User or owner
+access also get **Take control**, which opens directly in control mode. Phone
+cards offer only **Show screen** and remain watch-only.
+
+In a direct message with an agent teammate, a small **View computer** icon
+beside **Call** opens the same pane in watch mode. It uses the ordinary header
+button styling and appears only with **enable-macro-computers**, a paired
+screen-capable computer and readable access. Human DMs and group conversations
+keep their existing header. Desktop editors can choose **Take control** in the
+pane; phones keep the full-screen watch view with no control action.
+
+The header names the computer and shows a small **Watching** or **In control**
+pill; the back icon closes the screen. **Show screen** starts in **Watching** mode. Read and Resident access stay watch-only;
+User and owner access offer **Take control** on desktop. Phones remain watch-only.
+Taking control focuses the remote screen so typing, including complete URLs,
+goes to the computer. Tab from the toolbar can return to the screen; clicking
+outside it restores app shortcuts. Watching does not claim keyboard focus.
+The server enforces the same input permissions. Ordinary readers can request
+edit access when the server offers it; agent-computer readers see no control
+request. A disconnected screen shows a centered computer icon, one message and
+**Retry**. Without access, choose **Request
+access** and the supported access level. Dedicated agent computers offer View
+only; their sharing dialog caps teammates at Read. The inviting owner and team
+admins can control the agent computer. Closing the pane leaves Settings mounted.
+
+Macro computer screens keep the selected Watch or Take control mode when the
+runtime list refreshes; changing the computer or losing edit permission returns
+the pane to Watch. Touch devices stay watch-only. Phones use a full-frame
+screen; tablets retain the side-by-side layout when the pane is wide enough.
 
 ### GitHub reconnect recovery
 

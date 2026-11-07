@@ -1,6 +1,9 @@
+import { isBotPrincipalId } from '@core/constant/macroAgent';
+import { touchHandler } from '@core/directive/touchHandler';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
+import { isAgentAccount, tryMacroId } from '@core/user';
 import { cn } from '@ui/utils/classname';
-import { createSignal, type JSX, Show } from 'solid-js';
+import { createEffect, createSignal, type JSX, Show } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
 import { HoverCard, type HoverCardComponentProps } from './HoverCard';
 import { openUserCard } from './UserCardDrawer';
@@ -25,12 +28,31 @@ type UserCardTriggerProps = {
  */
 export function UserCardTrigger(props: UserCardTriggerProps) {
   const [open, setOpen] = createSignal(false);
+  const isAgent = () =>
+    isBotPrincipalId(props.user.id) ||
+    isAgentAccount(tryMacroId(props.user.id ?? ''));
+  const openContextCard = (event: MouseEvent) => {
+    if (!isAgent()) return;
+    event.preventDefault();
+    event.stopPropagation();
+    if (isTouchDevice()) openUserCard(props.user);
+    else setOpen(true);
+  };
 
   return (
     <Show
       when={!isTouchDevice()}
       fallback={
         <Dynamic
+          ref={(element: HTMLElement) =>
+            createEffect(() => {
+              if (!isAgent()) return;
+              touchHandler(element, () => ({
+                onLongPress: () => openUserCard(props.user),
+              }));
+            })
+          }
+          onContextMenu={openContextCard}
           component={props.triggerAs ?? 'span'}
           role="button"
           tabIndex={props.triggerTabIndex ?? 0}
@@ -59,6 +81,7 @@ export function UserCardTrigger(props: UserCardTriggerProps) {
     >
       <HoverCard
         placement={props.placement}
+        triggerOnContextMenu={openContextCard}
         open={open()}
         onOpenChange={setOpen}
         isolateClicks

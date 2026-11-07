@@ -1468,3 +1468,15 @@ impl SessionViewAccess for NoInheritedSessionAccess {
         Box::pin(async { Ok(false) })
     }
 }
+
+/// Trusted runtime reconciliation reads, separate from user-authorized session reads.
+pub trait RuntimeSessionLookup: Send + Sync {
+    /// Resolve reported ACP sessions restricted to the supplied agents.
+    fn sessions_for_bots(
+        &self,
+        bots: &[BotId],
+        sessions: &[SessionId],
+    ) -> impl Future<Output = std::result::Result<Vec<AgentSessionId>, Self::Err>> + Send;
+    /// Persistence failure.
+    type Err: std::error::Error + Send + Sync + 'static;
+}

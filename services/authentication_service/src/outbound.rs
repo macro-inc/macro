@@ -1,9 +1,13 @@
 //! Adapters for authentication service use cases.
 
+pub mod computer_billing;
+pub mod computer_urls;
 pub mod invite_rewards;
 pub mod microsoft;
+pub mod staff_comp_policy;
 pub mod subscription_checkout;
 pub mod team_owned_entity_cleanup;
 pub mod user_deletion;
 
+pub mod subscription_billing;
 pub mod subscription_plan;

@@ -26,7 +26,8 @@ whose hash lives in `account_manager_grants` rather than `"UserApiKey"`.
 
 - Depends on: `macro_user_id`, `macro_authorization` (feature `inbound`).
 - Used by: `services/document_storage_service`,
-  `services/authentication_service` (agent setup).
+  `services/authentication_service` (agent setup), `crates/team_agents`
+  (mints a team agent's key at creation).
 
 ## Checks
 

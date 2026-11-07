@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT id FROM hosted_runtime\n            WHERE host_id = $1 AND awake AND state->>'phase' = 'frozen'\n            ORDER BY updated_at\n            LIMIT 1\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "d2408791eaced034e9bba602c886e11225e37e0893a68e677ce4dd02afc3f7b4"
+}

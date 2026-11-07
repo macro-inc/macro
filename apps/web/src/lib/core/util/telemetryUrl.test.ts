@@ -136,3 +136,14 @@ describe('meeting URL telemetry', () => {
     expect(redactLinkTokenProperties(properties).details).toBe(details);
   });
 });
+
+it('redacts raw and encoded agent identities in URLs and exception text', () => {
+  expect(
+    telemetryUrl(
+      'https://gateway.example/auth/team_agents/macro%7Cagent%40example.com/retry'
+    )
+  ).toBe('https://gateway.example/auth/team_agents/:agentId/retry');
+  expect(redactLinkTokens('Failed /team_agents/macro|agent@example.com')).toBe(
+    'Failed /team_agents/:agentId'
+  );
+});

@@ -1,0 +1,12 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO \"Document\" (id, name, owner, \"projectId\")\n        VALUES ('legacy-document-id', 'Legacy document', 'macro|owner@example.com',\n            '20000000-0000-0000-0000-000000000003')",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": []
+  },
+  "hash": "d7b01c5ae5e2e3c0733c2dc329bbb85a8804f30595210098431669f95aa71f47"
+}

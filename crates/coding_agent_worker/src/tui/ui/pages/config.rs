@@ -1,7 +1,6 @@
 #[cfg(test)]
 mod test;
 
-use harnesses::domain::models::HarnessOwner;
 use ratatui::Frame;
 use ratatui::layout::{Constraint, Layout, Rect};
 use ratatui::style::{Style, Stylize as _};
@@ -112,12 +111,15 @@ fn runtime_lines(app: &App, width: u16) -> Vec<Line<'static>> {
             lines.push(row("Name", Span::raw(harness.name.clone())));
             lines.push(row(
                 "Access",
-                match harness.owner {
-                    HarnessOwner::User { .. } => Span::raw("Private"),
-                    HarnessOwner::Team { .. } => Span::styled(
+                if harness.shared_team_ids.is_empty() {
+                    Span::raw("Private")
+                } else if harness.is_agent_computer {
+                    Span::raw("Team · teammates can view this agent computer")
+                } else {
+                    Span::styled(
                         "Team · teammates can command agents on this machine",
                         Style::new().fg(WARN),
-                    ),
+                    )
                 },
             ));
             lines.push(row(

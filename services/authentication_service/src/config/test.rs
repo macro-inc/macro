@@ -3,7 +3,8 @@ use crate::service::signup_policy::SignupPolicyDenial;
 use super::*;
 
 fn config_values() -> serde_json::Value {
-    let mut values = serde_json::json!({ "ENVIRONMENT": "local" });
+    let mut values =
+        serde_json::json!({ "ENVIRONMENT": "local", "TEAM_AGENTS_INCLUDED_EMAIL_DOMAIN": "" });
     for key in [
         "BASE_URL",
         "DATABASE_URL",
@@ -457,4 +458,115 @@ fn cursor_kms_key_required_when_both_absent() {
     let configured = CursorApiKeyKmsKeyId::new_unset();
     let error = resolve_cursor_api_key_kms_key_id(&configured, None).unwrap_err();
     assert!(error.to_string().contains("CURSOR_API_KEY_KMS_KEY_ID"));
+}
+
+#[test]
+fn staff_domain_has_no_implicit_local_default() {
+    let mut values = config_values();
+    values
+        .as_object_mut()
+        .unwrap()
+        .remove("TEAM_AGENTS_INCLUDED_EMAIL_DOMAIN");
+    assert!(serde_json::from_value::<Config>(values).is_err());
+    let config: Config = serde_json::from_value(config_values()).unwrap();
+    assert!(config.team_agents_included_email_domain.is_empty());
+}
+
+#[test]
+fn configured_computer_prices_require_the_complete_group_at_startup() {
+    let config: Config = serde_json::from_value(config_values()).unwrap();
+    config.validate_computer_config().unwrap();
+
+    let keys = [
+        "STRIPE_COMPUTER_STANDARD_MONTHLY_PRICE_ID",
+        "STRIPE_COMPUTER_LARGE_MONTHLY_PRICE_ID",
+        "STRIPE_COMPUTER_XL_MONTHLY_PRICE_ID",
+        "STRIPE_COMPUTER_STANDARD_YEARLY_PRICE_ID",
+        "STRIPE_COMPUTER_LARGE_YEARLY_PRICE_ID",
+        "STRIPE_COMPUTER_XL_YEARLY_PRICE_ID",
+    ];
+    let mut values = config_values();
+    for key in keys {
+        values[key] = serde_json::json!("price_test");
+    }
+    let config: Config = serde_json::from_value(values.clone()).unwrap();
+    config.validate_computer_config().unwrap();
+    for key in keys {
+        for missing in [serde_json::Value::Null, serde_json::json!(" ")] {
+            let mut incomplete = values.clone();
+            incomplete[key] = missing;
+            let config: Config = serde_json::from_value(incomplete).unwrap();
+            assert!(
+                config
+                    .validate_computer_config()
+                    .unwrap_err()
+                    .to_string()
+                    .contains(key)
+            );
+        }
+    }
+}
+
+#[test]
+fn computer_prices_reject_malformed_configured_ids_even_without_a_fleet() {
+    for value in [
+        "",
+        " ",
+        "prod_test",
+        "price_",
+        "price_bad id",
+        "price_bad\n",
+    ] {
+        let mut values = config_values();
+        for key in [
+            "STRIPE_COMPUTER_STANDARD_MONTHLY_PRICE_ID",
+            "STRIPE_COMPUTER_LARGE_MONTHLY_PRICE_ID",
+            "STRIPE_COMPUTER_XL_MONTHLY_PRICE_ID",
+            "STRIPE_COMPUTER_STANDARD_YEARLY_PRICE_ID",
+            "STRIPE_COMPUTER_LARGE_YEARLY_PRICE_ID",
+            "STRIPE_COMPUTER_XL_YEARLY_PRICE_ID",
+        ] {
+            values[key] = serde_json::json!("price_test");
+        }
+        values["STRIPE_COMPUTER_STANDARD_MONTHLY_PRICE_ID"] = serde_json::json!(value);
+        let config: Config = serde_json::from_value(values).unwrap();
+        assert!(config.computer_prices().is_err(), "{value:?}");
+    }
+}
+
+#[test]
+fn partial_computer_prices_fail_without_a_fleet() {
+    let keys = [
+        "STRIPE_COMPUTER_STANDARD_MONTHLY_PRICE_ID",
+        "STRIPE_COMPUTER_LARGE_MONTHLY_PRICE_ID",
+        "STRIPE_COMPUTER_XL_MONTHLY_PRICE_ID",
+        "STRIPE_COMPUTER_STANDARD_YEARLY_PRICE_ID",
+        "STRIPE_COMPUTER_LARGE_YEARLY_PRICE_ID",
+        "STRIPE_COMPUTER_XL_YEARLY_PRICE_ID",
+    ];
+    for mask in 0_u8..64 {
+        let mut values = config_values();
+        for (index, key) in keys.iter().enumerate() {
+            if mask & (1 << index) != 0 {
+                values[key] = serde_json::json!("price_test");
+            }
+        }
+        let config: Config = serde_json::from_value(values).unwrap();
+        match mask {
+            0 => assert!(config.computer_prices().unwrap().is_empty()),
+            63 => assert!(!config.computer_prices().unwrap().is_empty()),
+            _ => assert!(config.computer_prices().is_err(), "partial group {mask}"),
+        }
+    }
+}
+
+#[test]
+fn absent_fleet_keeps_optional_computer_prices_and_rejects_partial_prices() {
+    let mut values = config_values();
+    let config: Config = serde_json::from_value(values.clone()).unwrap();
+    config.validate_computer_config().unwrap();
+
+    values["STRIPE_COMPUTER_STANDARD_MONTHLY_PRICE_ID"] = serde_json::json!("price_test");
+    let config: Config = serde_json::from_value(values).unwrap();
+    assert!(config.validate_computer_config().is_err());
 }

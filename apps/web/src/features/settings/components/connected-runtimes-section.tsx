@@ -1,15 +1,63 @@
+import { useShareRequests } from '@app/features/access-requests/access-requests';
+import { shareEntity } from '@app/features/access-requests/core/types';
+import { t } from '@app/lib/i18n';
 import { toast } from '@core/component/Toast/Toast';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { ThrownResultError } from '@core/util/result';
 import { usePatchHarnessMutation } from '@queries/harnesses/harnesses';
 import type { Harness as RegisteredHarness } from '@service-storage/client';
-import { confirmDialog, ToggleSwitch } from '@ui';
-import { For, Show } from 'solid-js';
+import { Button, confirmDialog, ToggleSwitch } from '@ui';
+import { createSignal, For, lazy, Show, Suspense } from 'solid-js';
+import { ComputerScreenAction } from '../../computer-screen/computer-screen-action';
 import { ConnectAction, StatusDot } from '../integration-ui';
 import { SettingsCard } from '../primitives';
 
 function failureMessage(error: unknown, fallback: string): string {
   return (error instanceof ThrownResultError && error.message) || fallback;
+}
+
+const RuntimeShareDialog = lazy(async () => ({
+  default: (
+    await import('@app/features/runtime-sharing/views/RuntimeShareDialog')
+  ).RuntimeShareDialog,
+}));
+
+/** The owner's Share button, with the menu it opens and requests waiting in it. */
+function ShareRuntime(props: { harness: RegisteredHarness }) {
+  const [open, setOpen] = createSignal(false);
+  const requests = useShareRequests(
+    () => shareEntity('harness', props.harness.id),
+    () => true
+  );
+  const pending = () => requests.state()?.pendingCount ?? 0;
+  return (
+    <>
+      <Button
+        variant="secondary"
+        size="sm"
+        aria-label={
+          pending() > 0
+            ? t('runtimeSharing.shareRequests', { count: pending() })
+            : undefined
+        }
+        onClick={() => setOpen(true)}
+      >
+        {t('runtimeSharing.share')}
+        <Show when={pending() > 0}>
+          <span class="text-xs text-accent-ink">{pending()}</span>
+        </Show>
+      </Button>
+      <Show when={open()}>
+        <Suspense>
+          <RuntimeShareDialog
+            harness={props.harness}
+            open={open()}
+            onOpenChange={setOpen}
+          />
+        </Suspense>
+      </Show>
+    </>
+  );
 }
 
 function lastConnectedText(harness: RegisteredHarness): string {
@@ -29,10 +77,14 @@ function lastConnectedText(harness: RegisteredHarness): string {
  */
 export function ConnectedRuntimesSection(props: {
   harnesses: readonly RegisteredHarness[];
+  /** Runtimes that are the team's Macro computers; release them, not remove. */
+  computerHarnessIds: ReadonlySet<string>;
   /** The runtimes could not be loaded; say so rather than show an empty page. */
   error: boolean;
   onRename: (harness: RegisteredHarness) => void;
   onRemove: (harness: RegisteredHarness) => void;
+  /** A team's owner can also take a machine the team runs on out of service. */
+  canRemoveShared: boolean;
 }) {
   const connectedCount = () =>
     props.harnesses.filter((harness) => harness.connected).length;
@@ -54,6 +106,8 @@ export function ConnectedRuntimesSection(props: {
             {(harness) => (
               <PairedRuntimeRow
                 harness={harness}
+                isComputer={props.computerHarnessIds.has(harness.id)}
+                canRemoveShared={props.canRemoveShared}
                 onRename={() => props.onRename(harness)}
                 onRemove={() => props.onRemove(harness)}
               />
@@ -76,6 +130,8 @@ export function ConnectedRuntimesSection(props: {
  */
 function PairedRuntimeRow(props: {
   harness: RegisteredHarness;
+  isComputer: boolean;
+  canRemoveShared: boolean;
   onRename: () => void;
   onRemove: () => void;
 }) {
@@ -112,8 +168,15 @@ function PairedRuntimeRow(props: {
               {props.harness.name}
             </p>
             <span class="inline-flex h-5 shrink-0 items-center whitespace-nowrap rounded-md border border-edge-muted px-2 text-xxs/none font-medium uppercase text-ink-extra-muted">
-              {props.harness.owner.type === 'team' ? 'Team' : 'Private'}
+              {(props.harness.shared_team_ids?.length ?? 0) > 0
+                ? 'Team machine'
+                : 'Private'}
             </span>
+            <Show when={props.isComputer}>
+              <span class="inline-flex h-5 shrink-0 items-center whitespace-nowrap rounded-md bg-accent-bg px-2 text-[11px]/none font-medium text-accent">
+                Macro computer
+              </span>
+            </Show>
             <StatusDot
               state={props.harness.connected ? 'connected' : 'disconnected'}
               label={props.harness.connected ? 'Connected' : 'Offline'}
@@ -123,17 +186,33 @@ function PairedRuntimeRow(props: {
             {lastConnectedText(props.harness)}
           </p>
         </div>
-        <div class="flex shrink-0 items-center gap-1">
-          <ConnectAction
-            label="Rename"
-            variant="neutral"
-            onClick={props.onRename}
+        <div class="flex shrink-0 flex-wrap items-center justify-end gap-1">
+          <ComputerScreenAction
+            harnessId={props.harness.id}
+            available={props.harness.capabilities?.screen === true}
           />
-          <ConnectAction
-            label="Remove"
-            variant="danger"
-            onClick={props.onRemove}
-          />
+          <Show when={props.harness.access === 'owner'}>
+            <ShareRuntime harness={props.harness} />
+            <ConnectAction
+              label="Rename"
+              variant="neutral"
+              onClick={props.onRename}
+            />
+          </Show>
+          <Show
+            when={
+              !props.isComputer &&
+              (props.harness.access === 'owner' ||
+                (props.canRemoveShared &&
+                  (props.harness.shared_team_ids?.length ?? 0) > 0))
+            }
+          >
+            <ConnectAction
+              label="Remove"
+              variant="danger"
+              onClick={props.onRemove}
+            />
+          </Show>
         </div>
       </div>
       <div class="flex flex-col gap-1">
@@ -142,7 +221,7 @@ function PairedRuntimeRow(props: {
           label="Allow bypassing permission requests"
           labelClass="text-xs text-ink"
           checked={props.harness.allow_permission_bypass}
-          disabled={patchHarness.isPending}
+          disabled={props.harness.access !== 'owner' || patchHarness.isPending}
           onChange={(allowed) =>
             fireAndForget(setBypass(allowed), 'harness-settings')
           }

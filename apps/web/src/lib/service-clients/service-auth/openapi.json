@@ -2054,6 +2054,135 @@
         }
       }
     },
+    "/internal/computers": {
+      "post": {
+        "tags": ["hosted_runtimes::inbound::axum_router"],
+        "summary": "Buy a computer for a team; one subscription update covers the computer\nand `extraItems`.",
+        "operationId": "internal_purchase_computer",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/InternalPurchaseBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Purchased"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/internal/computers/quote": {
+      "get": {
+        "tags": ["hosted_runtimes::inbound::axum_router"],
+        "summary": "Quote a computer for an authenticated internal caller.",
+        "operationId": "internal_quote_computer",
+        "parameters": [
+          {
+            "name": "teamId",
+            "in": "query",
+            "description": "Team that owns the computer.",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "size",
+            "in": "query",
+            "description": "Purchased catalog size.",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/ComputerSize"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Quote"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/internal/computers/{computer_id}": {
+      "get": {
+        "tags": ["hosted_runtimes::inbound::axum_router"],
+        "summary": "Read computer status for an authenticated internal caller.",
+        "operationId": "internal_get_computer",
+        "parameters": [
+          {
+            "name": "computer_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "teamId",
+            "in": "query",
+            "description": "Team that owns the computer.",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ComputerStatus"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/jwt/macro_api_token": {
       "get": {
         "tags": ["jwt::macro_api_token"],
@@ -4128,6 +4257,437 @@
         }
       }
     },
+    "/team/computers": {
+      "get": {
+        "tags": ["hosted_runtimes::inbound::axum_router"],
+        "summary": "The team's computers, oldest first.",
+        "operationId": "list_team_computers",
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/ComputerStatus"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": ["hosted_runtimes::inbound::axum_router"],
+        "summary": "Buy a computer for the team, billed on the team subscription.",
+        "operationId": "purchase_team_computer",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PurchaseBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Purchased"
+                }
+              }
+            }
+          },
+          "402": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/team/computers/notify": {
+      "post": {
+        "tags": ["hosted_runtimes::inbound::axum_router"],
+        "summary": "Ask to hear when a sold-out size is back.",
+        "operationId": "notify_team_computer_available",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NotifyBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/team/computers/offers": {
+      "get": {
+        "tags": ["hosted_runtimes::inbound::axum_router"],
+        "summary": "Every size with its price and availability.",
+        "operationId": "list_team_computer_offers",
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/SizeOffer"
+                  }
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/team/computers/quote": {
+      "get": {
+        "tags": ["hosted_runtimes::inbound::axum_router"],
+        "summary": "The price of one computer of a size for the team.",
+        "operationId": "quote_team_computer",
+        "parameters": [
+          {
+            "name": "size",
+            "in": "query",
+            "description": "Purchased catalog size.",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/ComputerSize"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Quote"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/team/computers/{computer_id}": {
+      "get": {
+        "tags": ["hosted_runtimes::inbound::axum_router"],
+        "summary": "One computer, with setup progress until it first connects.",
+        "operationId": "get_team_computer",
+        "parameters": [
+          {
+            "name": "computer_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ComputerStatus"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/team/computers/{computer_id}/cancel": {
+      "post": {
+        "tags": ["hosted_runtimes::inbound::axum_router"],
+        "summary": "Stop billing at the end of the current period.",
+        "operationId": "cancel_team_computer",
+        "parameters": [
+          {
+            "name": "computer_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ComputerStatus"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": ["hosted_runtimes::inbound::axum_router"],
+        "summary": "Keep a computer that was canceled at period end.",
+        "operationId": "undo_cancel_team_computer",
+        "parameters": [
+          {
+            "name": "computer_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ComputerStatus"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/team/computers/{computer_id}/power": {
+      "post": {
+        "tags": ["hosted_runtimes::inbound::axum_router"],
+        "summary": "Turn a computer on or off. A computer that is off keeps its disk and stays billed.",
+        "operationId": "set_team_computer_power",
+        "parameters": [
+          {
+            "name": "computer_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PowerBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ComputerStatus"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/team/computers/{computer_id}/release": {
+      "post": {
+        "tags": ["hosted_runtimes::inbound::axum_router"],
+        "summary": "Stop billing and destroy the computer now, without a refund.",
+        "operationId": "release_team_computer",
+        "parameters": [
+          {
+            "name": "computer_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReleaseBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ComputerStatus"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/team/computers/{computer_id}/retry": {
+      "post": {
+        "tags": ["hosted_runtimes::inbound::axum_router"],
+        "summary": "Retry a failed computer without changing billing.",
+        "operationId": "retry_team_computer",
+        "parameters": [
+          {
+            "name": "computer_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ComputerStatus"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/team/crm": {
       "patch": {
         "tags": ["teams::inbound::axum_router::patch_team_crm_settings"],
@@ -4289,6 +4849,16 @@
             }
           },
           "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
             "description": "",
             "content": {
               "application/json": {
@@ -5125,6 +5695,980 @@
             }
           },
           "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/team_agents": {
+      "get": {
+        "tags": ["team-agents"],
+        "summary": "The caller's team's agents, with fresh computer status. Requires a team\nadmin or owner.",
+        "operationId": "list_team_agents",
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TeamAgents"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": ["team-agents"],
+        "summary": "Invite a team agent and buy its computer, in one Stripe update. Requires a\nteam admin or owner. The agent comes back `provisioning`.",
+        "operationId": "create_team_agent",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateTeamAgent"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TeamAgent"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TeamAgentConflict"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TeamAgentFailure"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/team_agents/me": {
+      "get": {
+        "tags": ["team-agents"],
+        "summary": "The calling team agent's own profile.",
+        "operationId": "get_my_team_agent",
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TeamAgent"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/team_agents/me/email/messages": {
+      "get": {
+        "tags": ["team-agents"],
+        "summary": "The calling team agent's newest emails.",
+        "operationId": "list_my_team_agent_email",
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "description": "Most emails to return, 1 to 100. Defaults to 20.",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "minimum": 0
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EmailMessages"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/team_agents/me/email/messages/{message_id}": {
+      "get": {
+        "tags": ["team-agents"],
+        "summary": "One of the calling team agent's emails, with its body.",
+        "operationId": "get_my_team_agent_email",
+        "parameters": [
+          {
+            "name": "message_id",
+            "in": "path",
+            "description": "Provider message id.",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EmailMessage"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/team_agents/me/email/send": {
+      "post": {
+        "tags": ["team-agents"],
+        "summary": "Send an email as the calling team agent.",
+        "operationId": "send_team_agent_email",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SendEmail"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SentEmail"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/team_agents/quote": {
+      "get": {
+        "tags": ["team-agents"],
+        "summary": "What inviting an agent with a computer of `size` adds to the team's bill.\nRequires a team admin or owner.",
+        "operationId": "quote_team_agent",
+        "parameters": [
+          {
+            "name": "size",
+            "in": "query",
+            "description": "The computer size to price.",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/ComputerSize"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TeamAgentQuote"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TeamAgentConflict"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/team_agents/sizes": {
+      "get": {
+        "tags": ["team-agents"],
+        "summary": "Computer specifications for rollout-enabled team admins, independent of billing.",
+        "operationId": "get_team_agent_sizes",
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TeamAgentSizes"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/team_agents/{agent_user_id}": {
+      "delete": {
+        "tags": ["team-agents"],
+        "summary": "Delete a team agent: release its computer, delete its repo, remove its\nseat, mailbox and account. Requires a team admin or owner. Safe to retry.",
+        "operationId": "delete_team_agent",
+        "parameters": [
+          {
+            "name": "agent_user_id",
+            "in": "path",
+            "description": "The agent's Macro user id.",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": ""
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TeamAgentConflict"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/team_agents/{agent_user_id}/computer": {
+      "get": {
+        "tags": ["team-agents"],
+        "summary": "Minimal own-team computer discovery; does not grant runtime access.",
+        "operationId": "get_team_agent_computer",
+        "parameters": [
+          {
+            "name": "agent_user_id",
+            "in": "path",
+            "description": "The agent's Macro user id.",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TeamAgentComputer"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/team_agents/{agent_user_id}/retry": {
+      "post": {
+        "tags": ["team-agents"],
+        "summary": "Retry a failed agent's existing computer and recover its workspace repo.\nRequires a team admin or owner; preserves bootstrap credentials and billing.",
+        "operationId": "retry_team_agent",
+        "parameters": [
+          {
+            "name": "agent_user_id",
+            "in": "path",
+            "description": "The agent's Macro user id.",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TeamAgent"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TeamAgentConflict"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/team_agents/{agent_user_id}/voice": {
+      "get": {
+        "tags": ["team-agents"],
+        "summary": "Read the user-selected voice from the agent's repository.",
+        "operationId": "get_team_agent_voice",
+        "parameters": [
+          {
+            "name": "agent_user_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AgentVoice"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": ["team-agents"],
+        "summary": "Commit an administrator's voice selection to the agent's repository.",
+        "operationId": "set_team_agent_voice",
+        "parameters": [
+          {
+            "name": "agent_user_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AgentVoice"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AgentVoice"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
             "description": "",
             "content": {
               "application/json": {
@@ -6552,6 +8096,17 @@
           }
         }
       },
+      "AgentVoice": {
+        "type": "object",
+        "description": "A provider voice setting, serialized as `config/voice.json`.",
+        "required": ["model"],
+        "properties": {
+          "model": {
+            "type": "string",
+            "description": "Exact Aura-2 voice model."
+          }
+        }
+      },
       "AiBillingErrorBody": {
         "type": "object",
         "description": "Error response body.",
@@ -6658,6 +8213,11 @@
             "description": "Reload the balance back up to this, in customer cents."
           }
         }
+      },
+      "BillingInterval": {
+        "type": "string",
+        "description": "How often a recurring price bills.",
+        "enum": ["month", "year"]
       },
       "ChangePlanRequest": {
         "type": "object",
@@ -6845,6 +8405,170 @@
         "description": "Device authorization state visible to its initiating user.",
         "enum": ["pending", "connected", "expired", "failed"]
       },
+      "ComputerPayment": {
+        "type": "string",
+        "description": "Durable payment outcome supplied by hosted runtimes.",
+        "enum": ["pending", "paid", "comped", "unbilled"]
+      },
+      "ComputerSize": {
+        "type": "string",
+        "description": "A size a team can buy.",
+        "enum": ["standard", "large", "xl"]
+      },
+      "ComputerSizeSpec": {
+        "type": "object",
+        "description": "Computer specifications, available independently of subscription pricing.",
+        "required": ["size", "vcpus", "memoryGb", "diskGb"],
+        "properties": {
+          "diskGb": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Disk capacity in GB.",
+            "minimum": 0
+          },
+          "memoryGb": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Memory in GB.",
+            "minimum": 0
+          },
+          "size": {
+            "$ref": "#/components/schemas/ComputerSize",
+            "description": "Catalog size."
+          },
+          "vcpus": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Virtual CPU count.",
+            "minimum": 0
+          }
+        }
+      },
+      "ComputerStatus": {
+        "type": "object",
+        "description": "A computer as its team sees it.",
+        "required": [
+          "id",
+          "name",
+          "size",
+          "vcpus",
+          "memoryGib",
+          "diskGib",
+          "catalogEntry",
+          "status",
+          "poweredOn",
+          "createdAt"
+        ],
+        "properties": {
+          "cancelsAt": {
+            "type": ["string", "null"],
+            "format": "date-time",
+            "description": "When billing stops, for a computer canceled at period end."
+          },
+          "catalogEntry": {
+            "type": "string",
+            "description": "Versioned catalog entry saved at purchase."
+          },
+          "compReason": {
+            "type": ["string", "null"],
+            "description": "Present for a comped purchase, including after release."
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Time the computer was reserved."
+          },
+          "diskGib": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Root disk limit saved at purchase."
+          },
+          "harnessId": {
+            "type": ["string", "null"],
+            "format": "uuid",
+            "description": "Harness claimed by this guest."
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Stable resource identity."
+          },
+          "memoryGib": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Memory limit saved at purchase."
+          },
+          "name": {
+            "type": "string",
+            "description": "Display name."
+          },
+          "payment": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/PaymentOutcome",
+                "description": "Latched purchase outcome; unknown for quarantined records."
+              }
+            ]
+          },
+          "personaName": {
+            "type": ["string", "null"],
+            "description": "Display name of the installed persona."
+          },
+          "poweredOn": {
+            "type": "boolean",
+            "description": "Whether validated state requests power on; false for quarantined records."
+          },
+          "retainedUntil": {
+            "type": ["string", "null"],
+            "format": "date-time",
+            "description": "When the disk is destroyed, for a canceled computer."
+          },
+          "setup": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/SetupProgress",
+                "description": "Present until the computer first connects."
+              }
+            ]
+          },
+          "size": {
+            "type": "string",
+            "description": "Purchased catalog size."
+          },
+          "status": {
+            "$ref": "#/components/schemas/ComputerStatusKind",
+            "description": "Observed guest status."
+          },
+          "vcpus": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Virtual CPU count."
+          }
+        }
+      },
+      "ComputerStatusKind": {
+        "type": "string",
+        "description": "The coarse status the team sees.",
+        "enum": [
+          "setting_up",
+          "needs_attention",
+          "waiting_for_capacity",
+          "ready",
+          "asleep",
+          "waking",
+          "stopping",
+          "stopped",
+          "failed",
+          "payment_failed",
+          "released"
+        ]
+      },
       "CreateAccountMergeRequest": {
         "type": "object",
         "required": ["email"],
@@ -6950,6 +8674,47 @@
             "format": "int64",
             "description": "Exact size of the image in bytes. Storage rejects a body of any other size.",
             "minimum": 0
+          }
+        }
+      },
+      "CreateTeamAgent": {
+        "type": "object",
+        "description": "Input for inviting a team agent and buying its computer.",
+        "required": [
+          "expectedIncluded",
+          "name",
+          "jobDescription",
+          "personality",
+          "size"
+        ],
+        "properties": {
+          "avatarUrl": {
+            "type": ["string", "null"],
+            "description": "Profile picture URL (a static file the caller uploaded)."
+          },
+          "expectedIncluded": {
+            "type": "boolean",
+            "description": "Whether the reviewed quote included the seat and computer for free."
+          },
+          "jobDescription": {
+            "type": "string",
+            "description": "What the agent is responsible for. Seeds the persona repo."
+          },
+          "name": {
+            "type": "string",
+            "description": "Display name."
+          },
+          "personality": {
+            "type": "string",
+            "description": "How the agent behaves and talks. Seeds the persona repo."
+          },
+          "size": {
+            "$ref": "#/components/schemas/ComputerSize",
+            "description": "The computer to buy."
+          },
+          "voice": {
+            "type": ["string", "null"],
+            "description": "Aura-2 model chosen in the voice picker; older clients use a persona default."
           }
         }
       },
@@ -7182,6 +8947,63 @@
           "outlook_admin_consent_url": {
             "type": ["string", "null"],
             "description": "Where a Microsoft 365 administrator approves Macro for their whole\ndirectory. Present when Outlook is configured and the request named an\n`original_url` for the administrator's browser to return to."
+          }
+        }
+      },
+      "EmailMessage": {
+        "type": "object",
+        "description": "One email in an agent's mailbox.",
+        "required": ["messageId", "threadId", "from", "to", "receivedAt"],
+        "properties": {
+          "from": {
+            "type": "string",
+            "description": "Sender."
+          },
+          "messageId": {
+            "type": "string",
+            "description": "Provider message id."
+          },
+          "preview": {
+            "type": ["string", "null"],
+            "description": "Short preview of the body."
+          },
+          "receivedAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When the provider received or sent it."
+          },
+          "subject": {
+            "type": ["string", "null"],
+            "description": "Subject line."
+          },
+          "text": {
+            "type": ["string", "null"],
+            "description": "Plain-text body, when fetched individually."
+          },
+          "threadId": {
+            "type": "string",
+            "description": "Provider thread id."
+          },
+          "to": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Recipients."
+          }
+        }
+      },
+      "EmailMessages": {
+        "type": "object",
+        "description": "A page of an agent's emails, newest first.",
+        "required": ["messages"],
+        "properties": {
+          "messages": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/EmailMessage"
+            },
+            "description": "The emails."
           }
         }
       },
@@ -8057,6 +9879,52 @@
           }
         }
       },
+      "InternalPurchaseBody": {
+        "type": "object",
+        "description": "Body of an internal purchase.",
+        "required": ["billing", "teamId", "createdBy", "size"],
+        "properties": {
+          "billing": {
+            "$ref": "#/components/schemas/PurchaseBilling",
+            "description": "Purchase funding or billing state."
+          },
+          "createdBy": {
+            "type": "string",
+            "description": "The team admin or owner the caller authorized."
+          },
+          "extraItems": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SubscriptionItem"
+            },
+            "description": "Joined into the same subscription update, e.g. an agent seat."
+          },
+          "name": {
+            "type": ["string", "null"],
+            "description": "Display name."
+          },
+          "persona": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/Persona",
+                "description": "Optional guest persona configuration."
+              }
+            ]
+          },
+          "size": {
+            "$ref": "#/components/schemas/ComputerSize",
+            "description": "Purchased catalog size."
+          },
+          "teamId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Team that owns the computer."
+          }
+        }
+      },
       "InviteEntry": {
         "type": "object",
         "description": "A single invite entry with email and tier",
@@ -8073,6 +9941,14 @@
         "description": "The request body to invite a user to a team",
         "required": ["invites"],
         "properties": {
+          "harness_ids": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "Runtimes the caller owns to share with each person who accepts. Others\nare ignored. Honored only from the caller's own session."
+          },
           "invites": {
             "type": "array",
             "items": {
@@ -8204,6 +10080,17 @@
           "sha": {
             "type": "string",
             "description": "The merge commit's SHA."
+          }
+        }
+      },
+      "NotifyBody": {
+        "type": "object",
+        "description": "Body of a notify-me request.",
+        "required": ["size"],
+        "properties": {
+          "size": {
+            "$ref": "#/components/schemas/ComputerSize",
+            "description": "Purchased catalog size."
           }
         }
       },
@@ -8408,6 +10295,11 @@
           }
         }
       },
+      "PaymentOutcome": {
+        "type": "string",
+        "description": "The purchase outcome, latched after payment or comp confirmation.",
+        "enum": ["pending", "paid", "unbilled", "comped"]
+      },
       "Permission": {
         "type": "object",
         "required": ["id", "description"],
@@ -8419,6 +10311,62 @@
           "id": {
             "type": "string",
             "description": "The permission"
+          }
+        }
+      },
+      "Persona": {
+        "type": "object",
+        "description": "An agent identity that lives on the computer next to macrod: its own OS\nuser and its own long-running systemd service.",
+        "required": ["name", "os_user", "extra_service", "config"],
+        "properties": {
+          "config": {
+            "type": "object",
+            "description": "Written to `/etc/macro/personas/<os_user>.env` and loaded by the\npersona's unit as its `EnvironmentFile`.",
+            "additionalProperties": {
+              "type": "string"
+            },
+            "propertyNames": {
+              "type": "string",
+              "description": "A validated environment variable name for persona config or service env."
+            }
+          },
+          "extra_service": {
+            "$ref": "#/components/schemas/PersonaService",
+            "description": "Service installed for the persona."
+          },
+          "name": {
+            "type": "string",
+            "description": "Display name."
+          },
+          "os_user": {
+            "type": "string",
+            "description": "Linux user created for the persona; its service runs as this user."
+          }
+        }
+      },
+      "PersonaService": {
+        "type": "object",
+        "description": "The persona's systemd service, installed as\n`/etc/systemd/system/<unit_name>.service`.",
+        "required": ["unit_name", "exec", "env"],
+        "properties": {
+          "env": {
+            "type": "object",
+            "description": "Extra `Environment=` values, on top of the `EnvironmentFile`.",
+            "additionalProperties": {
+              "type": "string"
+            },
+            "propertyNames": {
+              "type": "string",
+              "description": "A validated environment variable name for persona config or service env."
+            }
+          },
+          "exec": {
+            "type": "string",
+            "description": "`ExecStart` command line."
+          },
+          "unit_name": {
+            "type": "string",
+            "description": "Unit name without the `.service` suffix."
           }
         }
       },
@@ -8522,6 +10470,17 @@
           }
         }
       },
+      "PowerBody": {
+        "type": "object",
+        "description": "Body of a power change.",
+        "required": ["on"],
+        "properties": {
+          "on": {
+            "type": "boolean",
+            "description": "Requested power state."
+          }
+        }
+      },
       "ProfilePictureQueryParams": {
         "type": "object",
         "required": ["url"],
@@ -8576,6 +10535,65 @@
           "status": {
             "$ref": "#/components/schemas/GtmInviteLinkStatus",
             "description": "Whether the link can still be used."
+          }
+        }
+      },
+      "PurchaseBilling": {
+        "oneOf": [
+          {
+            "type": "object",
+            "description": "Charge the team subscription.",
+            "required": ["kind"],
+            "properties": {
+              "kind": {
+                "type": "string",
+                "enum": ["stripe"]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "Provide the computer without a charge.",
+            "required": ["reason", "kind"],
+            "properties": {
+              "kind": {
+                "type": "string",
+                "enum": ["comped"]
+              },
+              "reason": {
+                "type": "string",
+                "description": "Reason for this decision or failure."
+              }
+            }
+          }
+        ],
+        "description": "Server-selected purchase funding. Team clients cannot select this value."
+      },
+      "PurchaseBody": {
+        "type": "object",
+        "description": "Body of a team purchase.",
+        "required": ["size"],
+        "properties": {
+          "name": {
+            "type": ["string", "null"],
+            "description": "Display name."
+          },
+          "size": {
+            "$ref": "#/components/schemas/ComputerSize",
+            "description": "Purchased catalog size."
+          }
+        },
+        "additionalProperties": false
+      },
+      "Purchased": {
+        "type": "object",
+        "description": "Answer of a purchase.",
+        "required": ["computerId"],
+        "properties": {
+          "computerId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Computer this operation addresses."
           }
         }
       },
@@ -8638,6 +10656,34 @@
           }
         }
       },
+      "Quote": {
+        "type": "object",
+        "description": "What one computer of a size costs the team.",
+        "required": ["size", "priceId", "amount", "currency", "interval"],
+        "properties": {
+          "amount": {
+            "type": "integer",
+            "format": "int64",
+            "description": "In the currency's smallest unit."
+          },
+          "currency": {
+            "type": "string",
+            "description": "Billing currency code."
+          },
+          "interval": {
+            "$ref": "#/components/schemas/BillingInterval",
+            "description": "Subscription billing interval."
+          },
+          "priceId": {
+            "type": "string",
+            "description": "Stripe price saved for billing replay."
+          },
+          "size": {
+            "$ref": "#/components/schemas/ComputerSize",
+            "description": "Purchased catalog size."
+          }
+        }
+      },
       "RedeemGtmInviteLinkRequest": {
         "type": "object",
         "description": "Request body to redeem a link.",
@@ -8646,6 +10692,17 @@
           "token": {
             "type": "string",
             "description": "The token from the link URL."
+          }
+        }
+      },
+      "ReleaseBody": {
+        "type": "object",
+        "description": "Body of a release.",
+        "required": ["confirmName"],
+        "properties": {
+          "confirmName": {
+            "type": "string",
+            "description": "The computer's name, typed to confirm."
           }
         }
       },
@@ -8709,6 +10766,32 @@
           }
         }
       },
+      "SendEmail": {
+        "type": "object",
+        "description": "An email for an agent to send.",
+        "required": ["to", "subject", "text"],
+        "properties": {
+          "html": {
+            "type": ["string", "null"],
+            "description": "Optional HTML body."
+          },
+          "subject": {
+            "type": "string",
+            "description": "Subject line."
+          },
+          "text": {
+            "type": "string",
+            "description": "Plain-text body."
+          },
+          "to": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Recipients."
+          }
+        }
+      },
       "SendInviteBody": {
         "type": "object",
         "description": "The body which is used to describe the recipient email",
@@ -8737,6 +10820,17 @@
           "sent": {
             "type": "boolean",
             "description": "Whether the lead was enrolled (false if they were already enrolled previously)"
+          }
+        }
+      },
+      "SentEmail": {
+        "type": "object",
+        "description": "The provider's id for a sent email.",
+        "required": ["messageId"],
+        "properties": {
+          "messageId": {
+            "type": "string",
+            "description": "Provider message id."
           }
         }
       },
@@ -8834,6 +10928,88 @@
           }
         }
       },
+      "SetupProgress": {
+        "type": "object",
+        "description": "Setup progress, for invite and purchase flows to show.",
+        "required": ["step", "position", "total"],
+        "properties": {
+          "position": {
+            "type": "integer",
+            "format": "int32",
+            "description": "1-based position of `step`.",
+            "minimum": 0
+          },
+          "step": {
+            "$ref": "#/components/schemas/SetupStep",
+            "description": "Current setup stage."
+          },
+          "total": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Number of setup stages.",
+            "minimum": 0
+          }
+        }
+      },
+      "SetupStep": {
+        "type": "string",
+        "description": "Steps a new computer goes through, in order.",
+        "enum": ["creating", "booting", "connecting", "ready"]
+      },
+      "SizeOffer": {
+        "type": "object",
+        "description": "A size with its resources, price and whether it can be bought now.",
+        "required": [
+          "size",
+          "vcpus",
+          "memoryGb",
+          "diskGb",
+          "quote",
+          "soldOut",
+          "alwaysOnSoldOut",
+          "notifyRequested"
+        ],
+        "properties": {
+          "alwaysOnSoldOut": {
+            "type": "boolean",
+            "description": "Whether no host has both sold units and awake reservations for a persona."
+          },
+          "diskGb": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Root disk size in GiB.",
+            "minimum": 0
+          },
+          "memoryGb": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Memory in GiB.",
+            "minimum": 0
+          },
+          "notifyRequested": {
+            "type": "boolean",
+            "description": "The caller asked to hear when this size is back."
+          },
+          "quote": {
+            "$ref": "#/components/schemas/Quote",
+            "description": "Price for one computer."
+          },
+          "size": {
+            "$ref": "#/components/schemas/ComputerSize",
+            "description": "Purchased catalog size."
+          },
+          "soldOut": {
+            "type": "boolean",
+            "description": "Whether no host can currently sell this size."
+          },
+          "vcpus": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Virtual CPU count.",
+            "minimum": 0
+          }
+        }
+      },
       "SsoRequiredResponse": {
         "type": "object",
         "required": ["idp_id"],
@@ -8884,10 +11060,201 @@
           }
         }
       },
+      "SubscriptionBilling": {
+        "type": "object",
+        "description": "Actual current recurring items and the provider's next invoice preview.",
+        "required": [
+          "currency",
+          "interval",
+          "humanSeats",
+          "agentSeats",
+          "lineItems",
+          "subscriptionTotal"
+        ],
+        "properties": {
+          "agentSeats": {
+            "$ref": "#/components/schemas/SubscriptionSeatTotal",
+            "description": "Paid agent seat allocations; excludes included memberships."
+          },
+          "currency": {
+            "type": "string",
+            "description": "The subscription's ISO currency, as returned by the provider."
+          },
+          "humanSeats": {
+            "$ref": "#/components/schemas/SubscriptionSeatTotal",
+            "description": "Paid human seat allocations; excludes included memberships."
+          },
+          "interval": {
+            "$ref": "#/components/schemas/BillingInterval",
+            "description": "The actual recurring billing interval shared by these items."
+          },
+          "lineItems": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SubscriptionBillingLineItem"
+            },
+            "description": "Real provider line items, allocated only when their ownership is known."
+          },
+          "nextInvoice": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/SubscriptionNextInvoice",
+                "description": "Provider invoice preview, absent when no upcoming invoice is available."
+              }
+            ]
+          },
+          "subscriptionTotal": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Recurring item subtotal in minor units, before invoice adjustments."
+          }
+        }
+      },
+      "SubscriptionBillingLineItem": {
+        "type": "object",
+        "description": "An allocated provider item or an explicitly included computer.",
+        "required": ["kind", "quantity", "amount", "name", "included"],
+        "properties": {
+          "agentUserId": {
+            "type": ["string", "null"],
+            "description": "Agent account associated with this computer, if known."
+          },
+          "amount": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Current recurring amount for this allocated quantity, in minor units."
+          },
+          "computerId": {
+            "type": ["string", "null"],
+            "format": "uuid",
+            "description": "Identified computer, absent for aggregate or unattributed items."
+          },
+          "included": {
+            "type": "boolean",
+            "description": "Included without a subscription charge."
+          },
+          "kind": {
+            "$ref": "#/components/schemas/SubscriptionBillingLineKind",
+            "description": "Actual billing category; unmatched quantities stay `other`."
+          },
+          "name": {
+            "type": "string",
+            "description": "Entity name or provider item description."
+          },
+          "plan": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/SeatPlan",
+                "description": "Seat plan, where applicable."
+              }
+            ]
+          },
+          "quantity": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Actual subscription quantity allocated to this row.",
+            "minimum": 0
+          },
+          "size": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/ComputerSize",
+                "description": "Identified computer's catalog size."
+              }
+            ]
+          },
+          "status": {
+            "type": ["string", "null"],
+            "description": "Computer status supplied by its owning service."
+          },
+          "unitAmount": {
+            "type": ["integer", "null"],
+            "format": "int64",
+            "description": "Provider price per unit in minor units, when fixed."
+          }
+        }
+      },
+      "SubscriptionBillingLineKind": {
+        "type": "string",
+        "description": "What an actual subscription item pays for.",
+        "enum": ["human_seat", "agent_seat", "computer", "other"]
+      },
+      "SubscriptionItem": {
+        "type": "object",
+        "description": "A Stripe price and how many of it to add to the team subscription.",
+        "required": ["priceId", "quantity"],
+        "properties": {
+          "priceId": {
+            "type": "string",
+            "description": "Stripe price saved for billing replay."
+          },
+          "quantity": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Added to the item's current quantity.",
+            "minimum": 0
+          }
+        }
+      },
+      "SubscriptionNextInvoice": {
+        "type": "object",
+        "description": "Provider-confirmed next invoice, including its adjustments and credits.",
+        "required": ["amount"],
+        "properties": {
+          "amount": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Actual upcoming invoice amount due in minor units."
+          },
+          "date": {
+            "type": ["string", "null"],
+            "format": "date-time",
+            "description": "Provider's next payment or due date, when supplied."
+          }
+        }
+      },
+      "SubscriptionSeatTotal": {
+        "type": "object",
+        "description": "Billed seat quantity and current recurring amount in minor units.",
+        "required": ["quantity", "amount"],
+        "properties": {
+          "amount": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Actual recurring price times allocated quantity, in minor units."
+          },
+          "quantity": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Actual billed quantity allocated to this seat kind.",
+            "minimum": 0
+          }
+        }
+      },
       "SubscriptionStatus": {
         "type": "object",
         "description": "Current renewal and scheduled change; empty for accounts without a subscription.",
         "properties": {
+          "billing": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/SubscriptionBilling",
+                "description": "Actual provider billing details, exposed only to its billing administrator."
+              }
+            ]
+          },
           "renewalDate": {
             "type": ["string", "null"],
             "format": "date-time",
@@ -9029,6 +11396,252 @@
           },
           "slug": {
             "type": "string"
+          }
+        }
+      },
+      "TeamAgent": {
+        "type": "object",
+        "description": "A team agent: an AI teammate with its own Macro account and computer.",
+        "required": [
+          "userId",
+          "teamId",
+          "name",
+          "email",
+          "status",
+          "retryable",
+          "createdAt"
+        ],
+        "properties": {
+          "computerId": {
+            "type": ["string", "null"],
+            "format": "uuid",
+            "description": "The agent's Macro computer, once bought."
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When the agent was created."
+          },
+          "createdBy": {
+            "type": ["string", "null"],
+            "description": "Admin who created the agent."
+          },
+          "email": {
+            "type": "string",
+            "description": "The agent's email address."
+          },
+          "lastTurnAt": {
+            "type": ["string", "null"],
+            "format": "date-time",
+            "description": "Most recent completed brain turn, from its harness health report."
+          },
+          "name": {
+            "type": "string",
+            "description": "Display name."
+          },
+          "payment": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/ComputerPayment",
+                "description": "Durable billing outcome, absent only when no computer can be read."
+              }
+            ]
+          },
+          "retryable": {
+            "type": "boolean",
+            "description": "Whether failed computer provisioning can be retried without purchasing."
+          },
+          "setup": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/SetupProgress",
+                "description": "Where the computer's setup is, while `provisioning` and once fetched."
+              }
+            ]
+          },
+          "status": {
+            "$ref": "#/components/schemas/TeamAgentStatus",
+            "description": "Where the computer is in coming up."
+          },
+          "statusReason": {
+            "type": ["string", "null"],
+            "description": "Failure, transient health, or pending purchase-link recovery diagnostic."
+          },
+          "teamId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Team the agent belongs to."
+          },
+          "userId": {
+            "type": "string",
+            "description": "The agent's Macro user id (`macro|<email>`)."
+          }
+        }
+      },
+      "TeamAgentComputer": {
+        "type": "object",
+        "description": "Minimal own-team discovery; this conveys no runtime permission.",
+        "required": ["computerId", "isAgentComputer"],
+        "properties": {
+          "computerId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Computer bound to the requested agent account."
+          },
+          "harnessId": {
+            "type": ["string", "null"],
+            "format": "uuid",
+            "description": "Paired runtime, absent until enrollment establishes it."
+          },
+          "isAgentComputer": {
+            "type": "boolean",
+            "description": "Always true: a bound team-agent account classifies its computer as an agent computer."
+          }
+        }
+      },
+      "TeamAgentConflict": {
+        "type": "object",
+        "description": "A conflict the client can handle without inspecting error messages.",
+        "required": ["code", "message"],
+        "properties": {
+          "code": {
+            "$ref": "#/components/schemas/TeamAgentConflictCode",
+            "description": "Machine-readable reason."
+          },
+          "message": {
+            "type": "string",
+            "description": "Human-readable explanation."
+          }
+        }
+      },
+      "TeamAgentConflictCode": {
+        "type": "string",
+        "description": "Stable conflict codes for invitation and provisioning failures.",
+        "enum": [
+          "quote_changed",
+          "no_subscription",
+          "computer_unavailable",
+          "retry_unavailable"
+        ]
+      },
+      "TeamAgentFailure": {
+        "type": "object",
+        "description": "Public provider failure details. Never contains raw upstream response bodies.",
+        "required": ["code", "message"],
+        "properties": {
+          "code": {
+            "$ref": "#/components/schemas/TeamAgentFailureCode",
+            "description": "Machine-readable failure stage."
+          },
+          "message": {
+            "type": "string",
+            "description": "Safe, actionable reason."
+          }
+        }
+      },
+      "TeamAgentFailureCode": {
+        "type": "string",
+        "description": "Stable provider failure reason safe for invitation error presentation.",
+        "enum": ["repository_creation_failed", "provider_failed"]
+      },
+      "TeamAgentQuote": {
+        "type": "object",
+        "description": "What inviting an agent adds to the team's bill, in cents per interval.",
+        "required": [
+          "included",
+          "vcpus",
+          "memoryGb",
+          "diskGb",
+          "seat",
+          "computer",
+          "total",
+          "currency",
+          "interval"
+        ],
+        "properties": {
+          "computer": {
+            "type": "integer",
+            "format": "int64",
+            "description": "The agent's computer."
+          },
+          "currency": {
+            "type": "string",
+            "description": "ISO currency code, lowercase (`usd`)."
+          },
+          "diskGb": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Disk capacity in GB, from the computer size catalog.",
+            "minimum": 0
+          },
+          "included": {
+            "type": "boolean",
+            "description": "Both seat and computer are included, with no Stripe change."
+          },
+          "interval": {
+            "$ref": "#/components/schemas/BillingInterval",
+            "description": "How often both bill."
+          },
+          "memoryGb": {
+            "type": "integer",
+            "format": "int32",
+            "description": "RAM in GB, from the computer size catalog.",
+            "minimum": 0
+          },
+          "seat": {
+            "type": "integer",
+            "format": "int64",
+            "description": "The agent's seat; 0 when the team does not bill seats."
+          },
+          "total": {
+            "type": "integer",
+            "format": "int64",
+            "description": "`seat + computer`."
+          },
+          "vcpus": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Virtual CPUs in the quoted computer size.",
+            "minimum": 0
+          }
+        }
+      },
+      "TeamAgentSizes": {
+        "type": "object",
+        "description": "The computer catalog for inviting team agents.",
+        "required": ["sizes"],
+        "properties": {
+          "sizes": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ComputerSizeSpec"
+            },
+            "description": "Available sizes in catalog order."
+          }
+        }
+      },
+      "TeamAgentStatus": {
+        "type": "string",
+        "description": "Where an agent's computer is in coming up.",
+        "enum": ["provisioning", "running", "unhealthy", "failed"]
+      },
+      "TeamAgents": {
+        "type": "object",
+        "description": "A team's agents.",
+        "required": ["agents"],
+        "properties": {
+          "agents": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/TeamAgent"
+            },
+            "description": "The agents, oldest first."
           }
         }
       },

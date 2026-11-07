@@ -16946,6 +16946,7 @@
                   "crm_contact",
                   "crm_pipeline",
                   "reminder",
+                  "harness",
                   "skill",
                   "agent_session",
                   "scheduled_action",
@@ -17166,6 +17167,7 @@
                 "crm_contact",
                 "crm_pipeline",
                 "reminder",
+                "harness",
                 "skill",
                 "agent_session",
                 "scheduled_action",
@@ -19020,8 +19022,7 @@
             "description": "Pairing ID",
             "required": true,
             "schema": {
-              "type": "string",
-              "format": "uuid"
+              "$ref": "#/components/schemas/PairingId"
             }
           }
         ],
@@ -19104,6 +19105,48 @@
         "tags": ["harnesses"],
         "summary": "Handler for `GET /harnesses`.",
         "operationId": "list_harnesses",
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/Harness"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/harnesses/directory": {
+      "get": {
+        "tags": ["harnesses"],
+        "summary": "Handler for `GET /harnesses/directory`.",
+        "operationId": "list_harness_directory",
         "responses": {
           "200": {
             "description": "",
@@ -19251,6 +19294,59 @@
             }
           },
           "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/harnesses/me/capabilities": {
+      "put": {
+        "tags": ["harnesses"],
+        "summary": "Handler for `PUT /harnesses/me/capabilities`.",
+        "description": "macrod reports what its machine can do after it connects; the body\nreplaces the previous report.",
+        "operationId": "put_self_harness_capabilities",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/HarnessCapabilities"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": ""
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
             "description": "",
             "content": {
               "application/json": {
@@ -19424,6 +19520,113 @@
             }
           },
           "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/harnesses/{harness_id}/residents": {
+      "get": {
+        "tags": ["harnesses"],
+        "summary": "Handler for `GET /harnesses/{harness_id}/residents`.",
+        "operationId": "list_harness_residents",
+        "parameters": [
+          {
+            "name": "harness_id",
+            "in": "path",
+            "description": "Harness ID",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/HarnessId"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/HarnessResident"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/harnesses/{harness_id}/team-access": {
+      "put": {
+        "tags": ["harnesses"],
+        "summary": "Handler for `PUT /harnesses/{harness_id}/team-access`.",
+        "description": "Requires the owner's own session: an agent can ask for access to a runtime\nbut never open one, since that grants code execution on the machine.",
+        "operationId": "set_harness_team_access",
+        "parameters": [
+          {
+            "name": "harness_id",
+            "in": "path",
+            "description": "Harness ID",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/HarnessId"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SetHarnessTeamAccessRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": ""
+          },
+          "401": {
             "description": "",
             "content": {
               "application/json": {
@@ -24071,6 +24274,11 @@
             "format": "uuid",
             "description": "Stable request identity across revisions."
           },
+          "requestedByAgent": {
+            "type": ["string", "null"],
+            "format": "uuid",
+            "description": "The agent that asked on the requester's behalf, when one did."
+          },
           "requestedLevel": {
             "$ref": "#/components/schemas/AccessLevel",
             "description": "Requested upgrade."
@@ -24413,6 +24621,7 @@
                   "crm_contact",
                   "crm_pipeline",
                   "reminder",
+                  "harness",
                   "skill",
                   "agent_session",
                   "scheduled_action",
@@ -26012,7 +26221,7 @@
           "team_id": {
             "type": ["string", "null"],
             "format": "uuid",
-            "description": "Owning team. Omit for a private, user-owned harness."
+            "description": "Team to open the harness to. Omit to keep it to the approving user."
           }
         }
       },
@@ -29965,6 +30174,11 @@
           }
         }
       },
+      "ClaudeMode": {
+        "type": "string",
+        "description": "How Claude Code on a Macro computer is paid for.",
+        "enum": ["macro_credits", "own_account"]
+      },
       "CloudStorageItemType": {
         "type": "string",
         "enum": ["document", "chat", "project"]
@@ -30005,6 +30219,7 @@
                   "crm_contact",
                   "crm_pipeline",
                   "reminder",
+                  "harness",
                   "skill",
                   "agent_session",
                   "scheduled_action",
@@ -30803,6 +31018,9 @@
           }
         },
         "additionalProperties": false
+      },
+      "ComputerId": {
+        "type": "string"
       },
       "ConferenceProvider": {
         "type": "string",
@@ -32351,8 +32569,7 @@
             "description": "When the pairing expires."
           },
           "pairing_id": {
-            "type": "string",
-            "format": "uuid",
+            "$ref": "#/components/schemas/PairingId",
             "description": "Pairing id used to poll for the claim."
           },
           "poll_interval_seconds": {
@@ -37827,6 +38044,7 @@
                   "crm_contact",
                   "crm_pipeline",
                   "reminder",
+                  "harness",
                   "skill",
                   "agent_session",
                   "scheduled_action",
@@ -39475,6 +39693,7 @@
                   "crm_contact",
                   "crm_pipeline",
                   "reminder",
+                  "harness",
                   "skill",
                   "agent_session",
                   "scheduled_action",
@@ -39530,6 +39749,7 @@
                   "crm_contact",
                   "crm_pipeline",
                   "reminder",
+                  "harness",
                   "skill",
                   "agent_session",
                   "scheduled_action",
@@ -42638,9 +42858,32 @@
           "connected"
         ],
         "properties": {
+          "access": {
+            "$ref": "#/components/schemas/HarnessAccess",
+            "description": "What the caller may do with it. Reported as `none` where no caller is\nin question, such as to the daemon itself."
+          },
           "allow_permission_bypass": {
             "type": "boolean",
             "description": "Whether agents may bypass ACP permission requests on this harness."
+          },
+          "capabilities": {
+            "$ref": "#/components/schemas/HarnessCapabilities",
+            "description": "What the harness's machine can do, as macrod last reported it."
+          },
+          "claude_mode": {
+            "$ref": "#/components/schemas/ClaudeMode",
+            "description": "How Claude Code on this machine is paid for. Only meaningful for\nMacro computers."
+          },
+          "computer_id": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/ComputerId",
+                "description": "The Macro computer (hosted VM) this harness runs on; absent for a\nmachine the user paired themselves."
+              }
+            ]
           },
           "connected": {
             "type": "boolean",
@@ -42659,6 +42902,10 @@
             "$ref": "#/components/schemas/HarnessId",
             "description": "Harness id."
           },
+          "is_agent_computer": {
+            "type": "boolean",
+            "description": "Whether this is a dedicated agent computer, whose teammates may only read it."
+          },
           "kind": {
             "type": "string",
             "description": "Runtime kind. Currently always `macrod`."
@@ -42676,12 +42923,25 @@
             "$ref": "#/components/schemas/HarnessOwner",
             "description": "Owner."
           },
+          "shared_team_ids": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "Teams with a grant; agent computers grant Read, ordinary computers User."
+          },
           "updated_at": {
             "type": "string",
             "format": "date-time",
             "description": "Update timestamp."
           }
         }
+      },
+      "HarnessAccess": {
+        "type": "string",
+        "description": "What one caller may do with a runtime.",
+        "enum": ["owner", "user", "read", "resident", "none"]
       },
       "HarnessAgent": {
         "type": "object",
@@ -42702,6 +42962,28 @@
           }
         }
       },
+      "HarnessCapabilities": {
+        "type": "object",
+        "description": "What a harness's machine can do beyond running agents.\n\nmacrod reports this after it connects; every field defaults to off, so\nharnesses that never report stay plain.",
+        "properties": {
+          "personas": {
+            "type": "object",
+            "description": "Latest brain health, keyed by the enrolled persona's OS username.",
+            "default": {},
+            "additionalProperties": {
+              "$ref": "#/components/schemas/PersonaHealth"
+            },
+            "propertyNames": {
+              "type": "string"
+            }
+          },
+          "screen": {
+            "type": "boolean",
+            "description": "A display Macro can stream (Xvnc on `127.0.0.1:5900`).",
+            "default": false
+          }
+        }
+      },
       "HarnessId": {
         "type": "string"
       },
@@ -42709,7 +42991,7 @@
         "oneOf": [
           {
             "type": "object",
-            "description": "User-owned (private) harness.",
+            "description": "The person whose runtime this is.",
             "required": ["user_id", "type"],
             "properties": {
               "type": {
@@ -42721,25 +43003,66 @@
                 "description": "Owner user id."
               }
             }
-          },
+          }
+        ],
+        "description": "Harness owner.\n\nAlways one person: a runtime is someone's computer. A team runtime is a\nperson's runtime with a grant to the team, never one owned by the team."
+      },
+      "HarnessResident": {
+        "oneOf": [
           {
             "type": "object",
-            "description": "Team-owned harness, usable by every team member.",
-            "required": ["team_id", "type"],
+            "description": "A non-coding bot bound to this runtime.",
+            "required": ["bot_id", "name", "type"],
             "properties": {
-              "team_id": {
+              "bot_id": {
+                "$ref": "#/components/schemas/BotId",
+                "description": "Bot identity."
+              },
+              "name": {
                 "type": "string",
+                "description": "Display name."
+              },
+              "owner_user_id": {
+                "type": ["string", "null"],
+                "description": "The person owning the bot, if any."
+              },
+              "team_id": {
+                "type": ["string", "null"],
                 "format": "uuid",
-                "description": "Owner team id."
+                "description": "The team owning the bot, if any."
               },
               "type": {
                 "type": "string",
-                "enum": ["team"]
+                "enum": ["bot"]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "The Macro account assigned to a dedicated agent computer.",
+            "required": ["user_id", "name", "team_id", "type"],
+            "properties": {
+              "name": {
+                "type": "string",
+                "description": "Display name."
+              },
+              "team_id": {
+                "type": "string",
+                "format": "uuid",
+                "description": "The computer's team."
+              },
+              "type": {
+                "type": "string",
+                "enum": ["account"]
+              },
+              "user_id": {
+                "type": "string",
+                "description": "The agent's Macro account identity."
               }
             }
           }
         ],
-        "description": "Harness owner.\n\nExactly one of a user or a team, mirroring the bots owner pattern. There\nare no system harnesses."
+        "description": "A bot or dedicated Macro account resident on a runtime."
       },
       "HarnessSession": {
         "type": "object",
@@ -46266,6 +46589,9 @@
           }
         }
       },
+      "PairingId": {
+        "type": "string"
+      },
       "ParaPatch": {
         "type": "object",
         "description": "Paragraph formatting changes.",
@@ -47110,6 +47436,82 @@
             "description": "Always `pending`."
           }
         }
+      },
+      "PersonaHealth": {
+        "oneOf": [
+          {
+            "type": "object",
+            "description": "The brain is serving health and reports no problems.",
+            "required": ["checked_at", "status"],
+            "properties": {
+              "checked_at": {
+                "type": "string",
+                "format": "date-time",
+                "description": "Time of this observation."
+              },
+              "last_turn_at": {
+                "type": ["string", "null"],
+                "format": "date-time",
+                "description": "Most recent completed turn, retained across unavailable probes."
+              },
+              "status": {
+                "type": "string",
+                "enum": ["healthy"]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "The unit, its configuration or its health response has a problem.",
+            "required": ["checked_at", "last_error", "status"],
+            "properties": {
+              "checked_at": {
+                "type": "string",
+                "format": "date-time",
+                "description": "Time of this observation."
+              },
+              "last_error": {
+                "type": "string",
+                "description": "A bounded diagnostic, never an environment file or response body."
+              },
+              "last_turn_at": {
+                "type": ["string", "null"],
+                "format": "date-time",
+                "description": "Most recent completed turn, retained across unavailable probes."
+              },
+              "status": {
+                "type": "string",
+                "enum": ["unhealthy"]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "The unit or brain health listener is absent.",
+            "required": ["checked_at", "last_error", "status"],
+            "properties": {
+              "checked_at": {
+                "type": "string",
+                "format": "date-time",
+                "description": "Time of this observation."
+              },
+              "last_error": {
+                "type": "string",
+                "description": "Why the brain could not be found."
+              },
+              "last_turn_at": {
+                "type": ["string", "null"],
+                "format": "date-time",
+                "description": "Most recent completed turn, retained across unavailable probes."
+              },
+              "status": {
+                "type": "string",
+                "enum": ["missing"]
+              }
+            }
+          }
+        ],
+        "description": "A brain observation. Consumers combine harness connection presence with\n`checked_at` freshness when deciding whether the observation is still live."
       },
       "PinRequest": {
         "type": "object",
@@ -49790,6 +50192,22 @@
           }
         }
       },
+      "SetHarnessTeamAccessRequest": {
+        "type": "object",
+        "description": "Request to open or close a runtime to one of the owner's teams.",
+        "required": ["team_id", "enabled"],
+        "properties": {
+          "enabled": {
+            "type": "boolean",
+            "description": "Whether every member of the team may use the runtime."
+          },
+          "team_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The team, which the owner must belong to."
+          }
+        }
+      },
       "SetOperator": {
         "type": "string",
         "description": "How a cell's options or references relate to a set of them. The first\ntwo fit a column holding one value, the last three one holding several.",
@@ -50010,7 +50428,8 @@
           "call",
           "email_thread",
           "agent_session",
-          "external_chat"
+          "external_chat",
+          "harness"
         ]
       },
       "SharePermissionV2": {

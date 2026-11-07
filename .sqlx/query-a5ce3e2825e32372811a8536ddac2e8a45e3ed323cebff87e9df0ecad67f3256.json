@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        WITH user_source_ids AS (\n            SELECT cp.channel_id::text as source_id FROM comms_channel_participants cp\n                WHERE cp.user_id = $1 AND cp.left_at IS NULL\n            UNION ALL\n            SELECT t.team_id::text FROM team_user t\n                WHERE t.user_id = $1\n            UNION ALL\n            SELECT $1\n        )\n        SELECT DISTINCT ea.entity_id::text as \"item_id!\"\n        FROM entity_access ea\n        JOIN user_source_ids us ON us.source_id = ea.source_id\n        JOIN \"Document\" d ON d.id = ea.entity_id::text\n        WHERE ea.entity_type = 'document'\n            AND d.\"deletedAt\" IS NULL\n            AND (NOT $2 OR d.owner != $1)\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "item_id!",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Bool"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "a5ce3e2825e32372811a8536ddac2e8a45e3ed323cebff87e9df0ecad67f3256"
+}

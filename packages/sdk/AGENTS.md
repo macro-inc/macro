@@ -42,6 +42,12 @@ enforced by the ordinary backend APIs.
   `/scheduling`. Link writes carry the user's quoted `userConfirmation`, which the
   route rejects when blank; `BookingLink` handles keep their `team` for edits.
 - `src/entities/routines/`, `agents/`, `harnesses/`: automation and agent hosts.
+  `harnesses.directory()` lists teammates' hosts and `Harness.requestAccess()`
+  asks for one. Granting takes a human authorized reviewer's session, so the
+  server refuses `Harness.access.grant` and `resolve` from any SDK credential.
+  `users.byId(id).agentRuntime()` discovers an agent account's runtime within
+  the caller's own team and returns a Harness handle, or `undefined` before
+  pairing. Discovery grants no permissions.
   `agents.list()` reads storage agent records, which built-in personas lack;
   `agents.coding()` reads the harness `GET /coding-agents` listing (Cursor
   included) that the `ListCodingAgents` tool serves. `routines.create` takes
@@ -103,6 +109,10 @@ enforced by the ordinary backend APIs.
 
 - Keep handwritten behavior in `src/`; never edit `generated/` or `specs/`.
 - Keep WhatsApp pairing, passkeys, connection setup/disconnect and rollout configuration out of the handwritten public SDK; operate on accounts linked in the app, with personal bearer sessions for account/access controls. External chat sends/uploads accept the connection owner's session or own API token; bots never send.
+- Keep hosted-computer management, team-agent provisioning and recovery, and
+  internal provisioning routes in app-only coverage exclusions; retain agent
+  quote specifications in the generated contract.
+
 - Use POST to start channel calls and call-id scoped joins/leaves; the legacy GET starts a call as a side effect.
 - Keep notification mute, unmute, and snooze endpoints, including bulk item preferences, in the app-only coverage exclusions.
 - Keep `external-chat/` provider-neutral; provider-specific reads (WhatsApp community chats) branch on `provider` with an exhaustive match.
@@ -217,6 +227,9 @@ the existing gateway prefixes.
 
 - Workspace-import report/cancel endpoints remain app-only review plumbing,
   explicitly classified alongside the existing Notion routes in coverage skips.
+
+`MacroOpts.fetch` supplies the HTTP transport for all generated service clients;
+brain tracing uses it to inject W3C context without modifying SDK operations.
 
 - `AgentSession.activity()` and invocation handles iterate durable agent-correlated history lazily; session visibility controls the feed.
 

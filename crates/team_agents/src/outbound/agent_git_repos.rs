@@ -1,0 +1,174 @@
+//! Workspace repos through `agent_git_service`'s internal API.
+
+use agent_git::client::{AgentGitClient, AgentGitClientError};
+use agent_git::domain::template::PersonaSeed as RepoSeed;
+use macro_service_urls::AgentGitServiceUrl;
+use macro_user_id::cowlike::CowLike;
+use macro_user_id::user_id::MacroUserIdStr;
+use std::sync::Arc;
+use uuid::Uuid;
+
+use agent_credentials::RepoToken;
+
+use crate::domain::models::{AgentRepo, PersonaSeed, TeamAgentError};
+use crate::domain::ports::AgentRepos;
+
+type CloneBaseUrl = dyn Fn() -> Result<AgentGitServiceUrl, TeamAgentError> + Send + Sync;
+
+/// Creates and deletes agents' repos with the agent git client.
+pub struct AgentGitRepos {
+    client: AgentGitClient,
+    clone_base_url: Arc<CloneBaseUrl>,
+}
+
+impl AgentGitRepos {
+    /// Wraps the agent git client.
+    pub fn new(client: AgentGitClient) -> Self {
+        Self {
+            client,
+            clone_base_url: Arc::new(|| {
+                AgentGitServiceUrl::new().map_err(TeamAgentError::internal)
+            }),
+        }
+    }
+}
+
+impl AgentRepos for AgentGitRepos {
+    #[tracing::instrument(skip_all, err)]
+    async fn voice(
+        &self,
+        agent: &MacroUserIdStr<'_>,
+        team: Uuid,
+    ) -> Result<crate::domain::voice::AgentVoice, TeamAgentError> {
+        let voice = self.client.voice(agent, team).await.map_err(|error| {
+            TeamAgentError::RepoProvider(rootcause::Report::new(error).into_dynamic())
+        })?;
+        Ok(crate::domain::voice::AgentVoice { model: voice.model })
+    }
+
+    #[tracing::instrument(skip_all, err)]
+    async fn set_voice(
+        &self,
+        agent: &MacroUserIdStr<'_>,
+        team: Uuid,
+        voice: crate::domain::voice::AgentVoice,
+    ) -> Result<(), TeamAgentError> {
+        self.client
+            .set_voice(agent, team, voice.model)
+            .await
+            .map_err(|error| {
+                TeamAgentError::RepoProvider(rootcause::Report::new(error).into_dynamic())
+            })
+    }
+    #[tracing::instrument(name = "team_agents.repo.create", skip_all, err)]
+    async fn create(
+        &self,
+        agent_user_id: &MacroUserIdStr<'_>,
+        team_id: Uuid,
+        seed: &PersonaSeed,
+    ) -> Result<AgentRepo, TeamAgentError> {
+        // The internal create endpoint's address need not be reachable from a
+        // computer. Build its advertised remote before creating any resources.
+        let base = (self.clone_base_url)()?;
+        let mut clone_url = base.parse_url().map_err(TeamAgentError::internal)?;
+        let host = clone_url
+            .host_str()
+            .ok_or_else(|| TeamAgentError::internal_message("the computer git URL needs a host"))?;
+        let loopback = host.eq_ignore_ascii_case("localhost")
+            || host.ends_with(".localhost")
+            || host
+                .trim_matches(['[', ']'])
+                .parse::<std::net::IpAddr>()
+                .is_ok_and(|ip| ip.is_loopback() || ip.is_unspecified());
+        if !matches!(clone_url.scheme(), "http" | "https")
+            || loopback
+            || !clone_url.username().is_empty()
+            || clone_url.password().is_some()
+            || clone_url.query().is_some()
+            || clone_url.fragment().is_some()
+        {
+            return Err(TeamAgentError::internal_message(
+                "the computer git URL must be a reachable HTTP(S) base without credentials, query or fragment",
+            ));
+        }
+        clone_url
+            .path_segments_mut()
+            .map_err(|_| {
+                TeamAgentError::internal_message("the computer git URL is not a base URL")
+            })?
+            .pop_if_empty()
+            .push(&format!("{}.git", agent_user_id.as_ref()));
+        let created = self
+            .client
+            .create_repo(
+                agent_user_id.clone().into_owned(),
+                team_id,
+                RepoSeed {
+                    voice: seed.voice.clone(),
+                    creator_id: seed.creator_id.clone(),
+                    name: seed.name.clone(),
+                    job_description: seed.job_description.clone(),
+                    personality: seed.personality.clone(),
+                },
+            )
+            .await
+            .map_err(|error| {
+                tracing::error!(error = ?error, "workspace repository creation failed before purchase");
+                let reason = match &error {
+                    AgentGitClientError::Status { body, .. }
+                        if body.contains("run git init") && body.contains("No such file or directory") =>
+                    {
+                        "The workspace repository service is missing git. Nothing was charged."
+                    }
+                    _ => "The workspace repository could not be created. Nothing was charged.",
+                };
+                TeamAgentError::InvitationFailed(reason.to_string())
+            })?;
+
+        Ok(AgentRepo {
+            url: clone_url.to_string(),
+            token: created.token,
+        })
+    }
+
+    #[tracing::instrument(name = "team_agents.repo.ensure", skip_all, fields(agent_user_id = %macro_user_id::telemetry_id(agent_user_id.as_ref()), %team_id), err)]
+    async fn ensure(
+        &self,
+        agent_user_id: &MacroUserIdStr<'_>,
+        team_id: Uuid,
+        seed: &PersonaSeed,
+        token: &RepoToken,
+    ) -> Result<(), TeamAgentError> {
+        self.client
+            .ensure_repo(
+                agent_user_id.clone().into_owned(),
+                team_id,
+                RepoSeed {
+                    voice: seed.voice.clone(),
+                    creator_id: seed.creator_id.clone(),
+                    name: seed.name.clone(),
+                    job_description: seed.job_description.clone(),
+                    personality: seed.personality.clone(),
+                },
+                token,
+            )
+            .await
+            .map_err(|error| {
+                TeamAgentError::RepoProvider(rootcause::Report::new(error).into_dynamic())
+            })?;
+        Ok(())
+    }
+
+    #[tracing::instrument(name = "team_agents.repo.delete", skip_all, err)]
+    async fn delete(&self, agent_user_id: &MacroUserIdStr<'_>) -> Result<(), TeamAgentError> {
+        self.client
+            .delete_repo(agent_user_id)
+            .await
+            .map_err(|error| {
+                TeamAgentError::RepoProvider(rootcause::Report::new(error).into_dynamic())
+            })
+    }
+}
+
+#[cfg(test)]
+mod test;

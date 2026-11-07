@@ -254,6 +254,32 @@ services:
       start_period: 10s
 
   # ============================================================================
+  # agent-git-service (Port 8111)
+  # Git smart-HTTP remotes for agent repositories (spawns `git http-backend`),
+  # and the local owner of /agent-git. Repositories live on the named volume.
+  # ============================================================================
+  agent-git-service:
+    <<: [*common-env, *rust-services-image]
+    command: ["/app/out/agent_git_service"]
+    ports:
+      - "8111:8080"
+    volumes:
+      - agent-git-repos:/data/agent-git
+    depends_on:
+      - postgres
+    networks:
+      databases:
+      services:
+        aliases:
+          - agent-git-service
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+  # ============================================================================
   # notification_service (Port 8089)
   # User notifications - NotificationDB
   # ============================================================================
@@ -738,6 +764,8 @@ services:
 
 volumes:
   sync_state:
+  # agent-git-service's bare repositories (REPO_STORAGE_ROOT=/data/agent-git).
+  agent-git-repos:
   # Backing store for the `lgtm` collector (profile-gated, global project).
   lgtm_data:
 

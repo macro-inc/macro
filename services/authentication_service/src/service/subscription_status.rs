@@ -7,6 +7,13 @@ use teams::domain::model::ScheduledSeatPlan;
 
 use super::subscription_plan::PlanChangeError;
 
+mod billing;
+pub(crate) mod billing_facts;
+pub use billing::{
+    SubscriptionBilling, SubscriptionBillingLineItem, SubscriptionBillingLineKind,
+    SubscriptionNextInvoice, SubscriptionSeatTotal,
+};
+
 #[cfg(test)]
 mod test;
 
@@ -17,16 +24,26 @@ pub struct SubscriptionPlanFacts {
     pub period_end: DateTime<Utc>,
     /// Only the caller's seat, from the currently attached provider schedule.
     pub scheduled_change: Option<ScheduledSeatPlan>,
+    /// Actual provider billing details, exposed only to its billing administrator.
+    pub billing: Option<billing_facts::SubscriptionBillingFacts>,
 }
 
 /// Capability for reading customer-scoped subscription and schedule facts.
 pub trait SubscriptionStatusGateway: Send + Sync {
+    /// Trusted membership facts; the service decides whether to read financial details.
+    fn billing_access(
+        &self,
+        scope: SubscriptionScope,
+        user: &MacroUserIdStr<'_>,
+    ) -> impl Future<Output = Result<billing_facts::BillingAccess, PlanChangeError>> + Send;
+
     /// Find the live subscription in the trusted scope and its caller-specific change.
     fn status(
         &self,
         customer: &str,
         scope: SubscriptionScope,
         user: &MacroUserIdStr<'_>,
+        read_billing: bool,
     ) -> impl Future<Output = Result<Option<SubscriptionPlanFacts>, PlanChangeError>> + Send;
 }
 
@@ -38,6 +55,8 @@ pub struct SubscriptionStatus {
     pub renewal_date: Option<DateTime<Utc>>,
     /// Future downgrade for the caller's seat, if still pending.
     pub scheduled_change: Option<ScheduledSeatPlan>,
+    /// Actual provider billing details, exposed only to its billing administrator.
+    pub billing: Option<SubscriptionBilling>,
 }
 
 /// Resolves the caller's payer and scope before reading subscription facts.
@@ -56,6 +75,7 @@ impl<E: EntitlementSource, G: SubscriptionStatusGateway> SubscriptionStatusServi
     }
 
     /// Return only the authenticated caller's current subscription and future downgrade.
+    #[tracing::instrument(name = "billing.subscription.status", skip_all, fields(team_id = tracing::field::Empty, billing_allowed = tracing::field::Empty), err)]
     pub async fn status(
         &self,
         user: &MacroUserIdStr<'_>,
@@ -65,7 +85,7 @@ impl<E: EntitlementSource, G: SubscriptionStatusGateway> SubscriptionStatusServi
             .entitlement(user)
             .await
             .map_err(anyhow::Error::from)?;
-        if !entitlement.tier.is_paid() || entitlement.unlimited {
+        if !entitlement.tier.is_paid() {
             return Ok(SubscriptionStatus::default());
         }
         let Some(customer) = self
@@ -76,9 +96,15 @@ impl<E: EntitlementSource, G: SubscriptionStatusGateway> SubscriptionStatusServi
         else {
             return Ok(SubscriptionStatus::default());
         };
+        let scope = SubscriptionScope::from(&entitlement.scope);
+        if let SubscriptionScope::Team { team_id } = scope {
+            tracing::Span::current().record("team_id", tracing::field::display(team_id));
+        }
+        let read_billing = self.gateway.billing_access(scope, user).await?.can_view();
+        tracing::Span::current().record("billing_allowed", read_billing);
         let Some(facts) = self
             .gateway
-            .status(&customer, SubscriptionScope::from(&entitlement.scope), user)
+            .status(&customer, scope, user, read_billing)
             .await?
         else {
             return Ok(SubscriptionStatus::default());
@@ -93,6 +119,13 @@ impl<E: EntitlementSource, G: SubscriptionStatusGateway> SubscriptionStatusServi
         Ok(SubscriptionStatus {
             renewal_date: Some(facts.period_end),
             scheduled_change,
+            billing: if read_billing {
+                facts
+                    .billing
+                    .and_then(billing_facts::SubscriptionBillingFacts::render)
+            } else {
+                None
+            },
         })
     }
 }

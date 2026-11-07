@@ -96,6 +96,31 @@ account backends do not currently consume trace-context query parameters, so
 upgrade server spans are not yet joined to this browser trace. Verify browser
 phases separately rather than assuming end-to-end upgrade correlation.
 
+## Team billing
+
+The existing Billing view owns `team.billing.breakdown` when an authoritative
+subscription breakdown is present. Its optional agent roster is held as
+`team-agent.billing-roster`; billing amounts come from the existing subscription
+status request, which precedes this display flow. The roster request uses the
+shared query flow context and sends `traceparent`; no amounts, product names, or teammate names are recorded as
+attributes.
+
+## Agent invitations
+
+Opening **Settings → Members → Invite agent** starts
+`team-agent.invite.open`, with `team-agent.sizes` and `team-agent.quote` loading
+phases. Requests run under `team-agent.sizes.load` and `team-agent.quote.load`;
+cache hits need no request. Changing size loads only that size's quote; typing
+never refetches. **Review price** measures `team-agent.review-price` through the
+next paint. Confirmation starts `team-agent.invite.submit` and its
+`team-agent.invite` mutation child. The parent span is passed explicitly through
+the mutation's asynchronous dispatch, and authenticated HTTP requests carry
+`traceparent` through token lookup to the backend.
+
+Search by `team.id` and `computer.size`; no draft names, role descriptions,
+personality, or avatar URLs are recorded. Included and paid invitations share
+the flow. Failed requests mark their spans as errors.
+
 ## Call joining
 
 Click **Start call** on `/app/meet/new` or **Join call** on a shared meeting's
@@ -537,3 +562,7 @@ per surface and check that the text reached the intended editor. Keep short
 Command-K queries below universal-compose promotion. For large documents use
 the collaborative editor fixture described in
 [documents](documents.md) and also type in a real app document.
+
+HTTP server `url.path` uses the matched route template (or `unmatched`), so
+personal identities in dynamic segments never become span fields. Use opaque
+entity attributes to locate a request rather than its literal path.

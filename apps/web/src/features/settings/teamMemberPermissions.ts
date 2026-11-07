@@ -1,3 +1,4 @@
+import type { TeamAgent } from '@service-auth/generated/schemas';
 import { type TeamMember, TeamRole } from '@service-auth/generated/schemas';
 
 export function isTeamAdminOrOwner(role: TeamRole | undefined): boolean {
@@ -22,5 +23,14 @@ export function canRemoveTeamMember(
     isTeamAdminOrOwner(actingRole) &&
     targetMember.user_id !== actingUserId &&
     targetMember.role !== TeamRole.owner
+  );
+}
+
+/** Retrying provisioning never starts a new purchase. */
+export function canRetryTeamAgent(agent: TeamAgent): boolean {
+  return (
+    agent.status === 'failed' &&
+    agent.retryable &&
+    (agent.payment === 'paid' || agent.payment === 'comped')
   );
 }

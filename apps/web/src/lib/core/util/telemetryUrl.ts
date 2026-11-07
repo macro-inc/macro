@@ -1,10 +1,11 @@
 /**
  * Meeting URLs and team invite links contain bearer capabilities; retain the
  * route, never the token. Invite links are also matched percent-encoded, as in
- * a login `redirect` parameter.
+ * a login `redirect` parameter. Team-agent paths also redact email-bearing IDs.
  */
 export function redactLinkTokens(value: string): string {
   return value
+    .replace(/(\/team_agents\/)macro(?:\||%7c)[^/?#\s"'\\]+/gi, '$1:agentId')
     .replace(
       /(\/call\/(?:meetings\/)?(?:join|invite)\/|\/(?:app\/)?meet\/(?:join\/)?)([^/?#\s"']+)/g,
       (match, prefix: string, token: string) => {

@@ -1,0 +1,100 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT c.id, c.channel_id, c.room_name, c.created_by, c.created_at, c.egress_id, c.recording_key, c.preview_url, c.recording_started_at,\n                   (SELECT title FROM call_meetings WHERE id = c.meeting_id) AS custom_name,\n                   c.share_with_team,\n                   sp.team_share_access_level AS \"team_share_access_level?: AccessLevel\"\n            FROM calls c\n            JOIN \"SharePermission\" sp ON sp.id = c.share_permission_id\n            WHERE c.id = $1\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "channel_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "room_name",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "created_by",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "created_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 5,
+        "name": "egress_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 6,
+        "name": "recording_key",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 7,
+        "name": "preview_url",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 8,
+        "name": "recording_started_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 9,
+        "name": "custom_name",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 10,
+        "name": "share_with_team",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 11,
+        "name": "team_share_access_level?: AccessLevel",
+        "type_info": {
+          "Custom": {
+            "name": "\"AccessLevel\"",
+            "kind": {
+              "Enum": [
+                "view",
+                "comment",
+                "edit",
+                "owner"
+              ]
+            }
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      true,
+      false,
+      false,
+      false,
+      true,
+      true,
+      true,
+      true,
+      null,
+      false,
+      true
+    ]
+  },
+  "hash": "3718d42411995c3344c0b5aba5b14a018d03ce4a48dbc8bcb55ccb5f4b5ce3a7"
+}

@@ -24,18 +24,27 @@ import type { Sdk as StaticFilesSdk } from '../../generated/static-files/sdk.gen
 import type { Sdk as StorageSdk } from '../../generated/storage/sdk.gen';
 import type { Sdk as UnfurlSdk } from '../../generated/unfurl/sdk.gen';
 
+// /harnesses/{harness_id}/screen and /harnesses/me/screen are app-only
+// WebSocket transports, absent from OpenAPI and generated SDK methods.
 export const agentHarnessExcluded = [
-  'classify', // Command K inference is app-internal.
-  'extract', // Command K inference is app-internal.
-  'loadAgentModelsHandler',
-  'discoverAgentCapabilitiesHandler',
-  'previewAgentSessions',
   // Batch form of agentSessionsForPullRequest that feeds the web Reviews list.
   'agentSessionsForPullRequests',
-  // Speculative page warm-up requires a signed-in user and is app-internal.
-  'warmAgentSessionHandler',
+  'cancelClaudeSignIn', // Computer account credentials are managed in the app.
+  'classify', // Command K inference is app-internal.
+  'claudeSignOut', // Computer account credentials are managed in the app.
+  'completeClaudeSignIn', // Computer account credentials are managed in the app.
+  'discoverAgentCapabilitiesHandler',
+  'extract', // Command K inference is app-internal.
+  'getAgentVoiceSample', // Fixed previews belong to the app's agent voice picker.
+  'getAgentVoices', // The provider catalog belongs to app settings.
+  'getClaudeMode', // Computer account selection belongs to the app.
+  'loadAgentModelsHandler',
+  'previewAgentSessions',
   // The connect chip's continuation after an app connects is app-internal.
   'reportAgentSessionAppConnected',
+  'startClaudeSignIn', // Computer account credentials are managed in the app.
+  // Speculative page warm-up requires a signed-in user and is app-internal.
+  'warmAgentSessionHandler',
 ] as const satisfies readonly (keyof AgentHarnessSdk)[];
 
 export const agentHarnessBacklog =
@@ -44,6 +53,7 @@ export const agentHarnessBacklog =
 export const authExcluded = [
   'appleLogin',
   'cancelCodexLogin',
+  'cancelTeamComputer', // Computer billing and lifecycle controls belong to the app.
   'changePlan',
   'checkGithubLinkStatus',
   'checkGmailLinkStatus',
@@ -55,12 +65,15 @@ export const authExcluded = [
   'createMergeRequest',
   'createPortalSession',
   'createTeam',
+  // Team agents: the brain and the app's agent settings call these directly.
+  'createTeamAgent',
   'createTeamInviteLink',
   // An agent's own API key is a credential managed in the app's agent settings.
   'deleteAgentApiKey',
   'deleteCursorApiKey',
   'deleteGithubLink',
   'deleteTeam',
+  'deleteTeamAgent',
   'deleteTeamInviteLink',
   'deleteUser',
   'disconnectCodex',
@@ -74,10 +87,15 @@ export const authExcluded = [
   'getGithubPullRequestMergeability',
   'getGtmInviteOffer',
   'getLegacyUserPermissions',
+  'getMyTeamAgent',
+  'getMyTeamAgentEmail',
   'getPermissions',
   // Renewal and scheduled-plan details are part of the app's billing settings.
   'getSubscriptionStatus',
+  'getTeamAgentSizes', // Invitation catalog belongs to the app's team settings.
+  'getTeamAgentVoice', // Voice ownership is managed in app settings.
   'getTeamByInviteLink',
+  'getTeamComputer', // Computer billing and lifecycle controls belong to the app.
   'getTeamInviteLink',
   'getSystemStatus',
   // Introductory offers belong to the app's subscription checkout flow.
@@ -95,14 +113,22 @@ export const authExcluded = [
   'initGithubLink',
   'initGmailLink',
   'initOutlookLink',
+  'internalGetComputer', // Internal computer provisioning plumbing.
+  'internalPurchaseComputer', // Internal computer provisioning plumbing.
+  'internalQuoteComputer', // Internal computer provisioning plumbing.
   'joinTeam',
   'joinTeamByInviteLink',
   'listCodexEnvironments',
   'listCursorModels',
   'listGtmInviteLinks',
+  'listMyTeamAgentEmail',
   'listSystemStatusHistory',
+  'listTeamAgents',
+  'listTeamComputerOffers', // Computer checkout offers belong to the app.
+  'listTeamComputers', // Computer billing and lifecycle controls belong to the app.
   'logout',
   'mergeGithubPullRequest',
+  'notifyTeamComputerAvailable', // Computer availability notifications belong to the app.
   'oauth2Callback',
   'oauthRedirect',
   'passwordLogin',
@@ -117,6 +143,7 @@ export const authExcluded = [
   'pollCodexLogin',
   'postProfilePictures',
   'purchaseAiCredits',
+  'purchaseTeamComputer', // Computer checkout belongs to the app.
   'putAgentApiKey',
   'putCursorApiKey',
   'putCursorDefaultModel',
@@ -124,24 +151,33 @@ export const authExcluded = [
   // Internal to the web app's agent signup; the token is shown in its modal.
   'agentSetup',
   'putUserLanguage',
+  'quoteTeamAgent',
+  'quoteTeamComputer', // Computer checkout belongs to the app.
   'redeemGtmInviteLink',
   'refresh',
   'rejectInvitation',
+  'releaseTeamComputer', // Computer billing and lifecycle controls belong to the app.
   'removeUserFromTeam',
   'resendFusionauthVerifyUserEmail',
   'resolveGtmInviteLink',
+  'retryTeamAgent', // Agent provisioning recovery belongs to app settings.
+  'retryTeamComputer', // Computer provisioning recovery belongs to the app.
   'revokeGtmInviteLink',
   'sendMobileWelcomeEmail',
+  'sendTeamAgentEmail',
   'sendTeamDomainNotice',
   'sessionCreation',
   'sessionLogin',
   'setGithubPullRequestDraft',
   'setGithubPullRequestState',
   'setSystemStatus',
+  'setTeamAgentVoice', // Voice ownership is managed in app settings.
+  'setTeamComputerPower', // Computer lifecycle controls belong to the app.
   'ssoLogin',
   'startCodexLogin',
   'toggleTeamAutoJoinDomain',
   'toggleTeamNonAdminInvites',
+  'undoCancelTeamComputer', // Computer billing and lifecycle controls belong to the app.
   'updateAiBillingAutoReload',
   'updateAiBillingOverage',
   'verifyEmailLink',
@@ -305,6 +341,9 @@ export const staticFilesBacklog =
   [] as const satisfies readonly (keyof StaticFilesSdk)[];
 
 export const storageExcluded = [
+  // Opening a host to a team takes its owner's own session: an agent can ask for
+  // access but never grant it.
+  'setHarnessTeamAccess',
   // Asking to join a channel-shared event, and its sharer's request list,
   // are web-app actions.
   'listJoinRequests',
@@ -345,6 +384,8 @@ export const storageExcluded = [
   'getBatchProjectPreview',
   'getBotOwnerProfiles',
   'getCollabSurface',
+  // Daemon capability reports are internal runtime registration plumbing.
+  'putSelfHarnessCapabilities',
   // The web grid's incremental refresh after a version ping, not a user-facing surface.
   'getDatabaseTableChanges',
   'getDocumentListHandler',

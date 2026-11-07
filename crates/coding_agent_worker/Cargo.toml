@@ -9,6 +9,7 @@ name = "macrod"
 path = "src/main.rs"
 
 [dependencies]
+pairing_id = { path = "../pairing_id" }
 agent_fold = { path = "../folds/agent_fold", default-features = false }
 claude_fold = { path = "../folds/claude_fold" }
 codex_fold = { path = "../folds/codex_fold" }
@@ -29,14 +30,23 @@ clap = { workspace = true }
 crossterm = { workspace = true }
 eventsource-stream = { workspace = true }
 futures = { workspace = true }
+genai_telemetry = { path = "../genai_telemetry" }
 harness_id = { path = "../harness_id" }
 harnesses = { path = "../harnesses", default-features = false }
 hex = { workspace = true }
+hosted_runtimes = { path = "../hosted_runtimes", default-features = false }
 lazy-regex = { workspace = true }
 macro_event_broker = { path = "../macro_event_broker", default-features = false }
 macro_env_var = { path = "../macro_env_var" }
+macro_service_urls = { path = "../macro_service_urls" }
+macro_tower_layers = { path = "../macro_tower_layers" }
 macro_user_id = { path = "../macro_user_id" }
 macro_uuid = { path = "../macro_uuid" }
+nom = { workspace = true }
+opentelemetry = { workspace = true, features = ["trace"] }
+opentelemetry_sdk = { workspace = true, features = ["trace", "rt-tokio"] }
+opentelemetry-otlp = { workspace = true }
+tracing-opentelemetry = { workspace = true }
 ratatui = { workspace = true }
 reqwest = { workspace = true, features = ["stream"] }
 rootcause = { workspace = true }
@@ -62,9 +72,10 @@ uuid = { workspace = true }
 webbrowser = { workspace = true }
 webhook = { path = "../webhook", default-features = false }
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
+zeroize = { workspace = true }
 
 [target.'cfg(unix)'.dependencies]
-rustix = { workspace = true }
+rustix = { workspace = true, features = ["fs", "pty", "termios"] }
 
 # Release archives: tar.gz everywhere but Windows, which gets a zip.
 [target.'cfg(not(windows))'.dependencies]
@@ -86,6 +97,7 @@ windows-sys = { workspace = true, features = [
 zip = { workspace = true }
 
 [dev-dependencies]
+team_agents = { path = "../team_agents", default-features = false }
 bot_id = { path = "../bot_id", features = ["test-utils"] }
 channel_sender = { path = "../channel_sender" }
 channels = { path = "../channels", default-features = false }
@@ -93,6 +105,7 @@ chrono = { workspace = true }
 harness_id = { path = "../harness_id", features = ["test-utils"] }
 tempfile = { workspace = true }
 tokio = { workspace = true, features = ["io-util", "net", "test-util"] }
+wiremock = { workspace = true }
 
 [package.metadata.cargo-shear]
 # Linked for its `vendored` feature on musl, never named in code.

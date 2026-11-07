@@ -34,9 +34,9 @@ export type ButtonGroupProps = Omit<ComponentProps<'div'>, 'size'> & {
   orientation?: ButtonGroupOrientation;
 };
 
-/** Layout only; Button owns the frame's colors, border, and optional finish. */
+/** Button owns frame colors and finish; paint the border inside the controls' height. */
 export const buttonGroupVariants =
-  'inline-flex items-stretch justify-center rounded-full border data-[orientation=horizontal]:flex-row data-[orientation=vertical]:flex-col has-[[data-slot=input-group-control]:focus-visible]:ring-2 has-[[data-slot=input-group-control]:focus-visible]:ring-button-focus';
+  'relative inline-flex items-stretch justify-center rounded-full border-0 after:pointer-events-none after:absolute after:inset-0 after:rounded-[inherit] after:border after:border-inherit data-[orientation=horizontal]:flex-row data-[orientation=vertical]:flex-col has-[[data-slot=input-group-control]:focus-visible]:ring-2 has-[[data-slot=input-group-control]:focus-visible]:ring-button-focus';
 export const buttonGroupDividerVariants =
   'shrink-0 self-stretch bg-divider data-[orientation=horizontal]:w-px data-[orientation=vertical]:h-px';
 

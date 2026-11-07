@@ -49,6 +49,11 @@ top of it.
 
 ## Gotchas
 
+- Harness sharing facts use `harness_is_agent_computer` and load the computer's
+  team, including its owner even without a membership row. Preserve the human
+  harness owner; reviewer/grant policy remains in `access_requests`. Offered
+  runtime grants use `harness_grant_level` so agent computers never receive User.
+
 - Helpers never commit; every function takes `&mut Transaction<'_, Postgres>`
   and the caller commits once alongside its own row writes.
 - Folder direct-grant changes hold `team_share::acquire_guard` before entity/row

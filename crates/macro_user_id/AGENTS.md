@@ -44,3 +44,6 @@ backend.
 ## Related
 
 - Rules: `.agents/rules/rust/code.md` (CS-10 newtype ids)
+
+Use `telemetry_id` (lowercase SHA-256 hex) when tracing an identity: the raw
+`macro|<email>` form contains personal data and must not become a span field.

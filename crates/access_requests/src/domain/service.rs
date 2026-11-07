@@ -29,7 +29,7 @@ pub struct AccessRequestService<R, A, C = SystemClock> {
 
 /// Human reviewers come from recorded ownership, never an arbitrary Owner-level grant.
 pub fn reviewers(facts: &SharingFacts) -> Vec<MacroUserIdStr<'static>> {
-    match &facts.owner {
+    let mut result = match &facts.owner {
         Owner::User(user) => vec![user.clone()],
         Owner::Bot(_) => match facts.sponsor.as_ref() {
             Some(Owner::User(user)) => vec![user.clone()],
@@ -37,7 +37,16 @@ pub fn reviewers(facts: &SharingFacts) -> Vec<MacroUserIdStr<'static>> {
             _ => Vec::new(),
         },
         Owner::Team(_) => team_reviewers(facts),
+    };
+    if let Some(agent) = &facts.agent_harness {
+        for reviewer in team_reviewers(facts) {
+            if !result.contains(&reviewer) {
+                result.push(reviewer);
+            }
+        }
+        result.retain(|user| agent.agent_user_id.as_ref() != Some(user));
     }
+    result
 }
 fn team_reviewers(facts: &SharingFacts) -> Vec<MacroUserIdStr<'static>> {
     facts
@@ -53,6 +62,8 @@ fn team_reviewers(facts: &SharingFacts) -> Vec<MacroUserIdStr<'static>> {
 pub fn supported_levels(kind: ShareEntityType, file_type: Option<&str>) -> Vec<AccessLevel> {
     use AccessLevel::{Comment, Edit, View};
     match kind {
+        // A runtime's readers and users.
+        ShareEntityType::Harness => vec![View, Edit],
         ShareEntityType::ExternalChat | ShareEntityType::EmailThread => vec![View],
         ShareEntityType::Document => match file_type {
             Some("md" | "docx" | "spreadsheet" | "pptx") => vec![View, Comment, Edit],
@@ -63,6 +74,15 @@ pub fn supported_levels(kind: ShareEntityType, file_type: Option<&str>) -> Vec<A
         | ShareEntityType::Initiative
         | ShareEntityType::Database
         | ShareEntityType::AgentSession => vec![View, Comment, Edit],
+    }
+}
+
+/// Agent computers offer observation only; apply this to every grant entry point.
+fn supported_levels_for(kind: ShareEntityType, facts: &SharingFacts) -> Vec<AccessLevel> {
+    if kind == ShareEntityType::Harness && facts.agent_harness.is_some() {
+        vec![AccessLevel::View]
+    } else {
+        supported_levels(kind, facts.file_type.as_deref())
     }
 }
 
@@ -146,6 +166,37 @@ impl<R: RequestRepository, A: EntityAccessService, C: Clock> AccessRequestServic
             Err(RequestError::Forbidden)
         }
     }
+    /// A runtime is only ever shared among people who share a team with its owner.
+    async fn require_teammate(
+        &self,
+        tx: &mut R::Transaction,
+        entity: ShareEntity,
+        user: &MacroUserIdStr<'static>,
+    ) -> Result<(), RequestError> {
+        if entity.entity_type != ShareEntityType::Harness {
+            return Ok(());
+        }
+        if tx.facts().agent_harness.is_some() {
+            return if tx
+                .facts()
+                .team_members
+                .iter()
+                .any(|(member, _)| member == user)
+            {
+                Ok(())
+            } else {
+                Err(RequestError::Forbidden)
+            };
+        }
+        let Owner::User(owner) = tx.facts().owner.clone() else {
+            return Err(RequestError::Forbidden);
+        };
+        if tx.shares_team(&owner, user).await? {
+            Ok(())
+        } else {
+            Err(RequestError::Forbidden)
+        }
+    }
     fn event(
         &self,
         entity: ShareEntity,
@@ -187,7 +238,7 @@ impl<R: RequestRepository, A: EntityAccessService, C: Clock> AccessRequestServic
         let supported_levels = if reviewers.is_empty() {
             Vec::new()
         } else {
-            supported_levels(entity.entity_type, tx.facts().file_type.as_deref())
+            supported_levels_for(entity.entity_type, tx.facts())
         };
         let owner = (access_level.is_some() || can_review).then(|| tx.facts().owner.principal_id());
         let mine = tx.mine(&user).await?;
@@ -222,13 +273,14 @@ impl<R: RequestRepository, A: EntityAccessService, C: Clock> AccessRequestServic
         user: MacroUserIdStr<'static>,
         entity: ShareEntity,
         args: RequestAccess,
+        requested_by_agent: Option<Uuid>,
     ) -> Result<AccessRequest, RequestError> {
         let (mut tx, level) = self.begin_request(&user, entity).await?;
         if reviewers(tx.facts()).is_empty() || reviewers(tx.facts()).contains(&user) {
             return Err(RequestError::Forbidden);
         }
-        if !supported_levels(entity.entity_type, tx.facts().file_type.as_deref())
-            .contains(&args.requested_level)
+        self.require_teammate(&mut tx, entity, &user).await?;
+        if !supported_levels_for(entity.entity_type, tx.facts()).contains(&args.requested_level)
             || level.is_some_and(|level| args.requested_level <= level)
         {
             return Err(RequestError::InvalidLevel);
@@ -266,6 +318,7 @@ impl<R: RequestRepository, A: EntityAccessService, C: Clock> AccessRequestServic
             resolved_at: None,
             granted_level: None,
             retry_after: Some(now + Duration::seconds(REQUEST_COOLDOWN_SECONDS)),
+            requested_by_agent,
         };
         tx.save(&request).await?;
         let event = self.event(
@@ -318,11 +371,11 @@ impl<R: RequestRepository, A: EntityAccessService, C: Clock> AccessRequestServic
         let mut request = tx.request(id).await?.ok_or(RequestError::NotFound)?;
         ensure_pending(&request, args.revision)?;
         if let Some(level) = args.granted_level {
-            if !supported_levels(entity.entity_type, tx.facts().file_type.as_deref())
-                .contains(&level)
-            {
+            if !supported_levels_for(entity.entity_type, tx.facts()).contains(&level) {
                 return Err(RequestError::InvalidLevel);
             }
+            self.require_teammate(&mut tx, entity, &request.requester_id)
+                .await?;
             tx.grant(&request.requester_id, Some(level), true).await?;
             request.status = RequestStatus::Granted;
             request.granted_level = Some(level);
@@ -379,10 +432,12 @@ impl<R: RequestRepository, A: EntityAccessService, C: Clock> AccessRequestServic
             return Err(RequestError::Forbidden);
         }
         if let Some(level) = level
-            && !supported_levels(entity.entity_type, tx.facts().file_type.as_deref())
-                .contains(&level)
+            && !supported_levels_for(entity.entity_type, tx.facts()).contains(&level)
         {
             return Err(RequestError::InvalidLevel);
+        }
+        if level.is_some() {
+            self.require_teammate(&mut tx, entity, &recipient).await?;
         }
         tx.grant(&recipient, level, false).await?;
         let event = self.event(entity, tx.facts(), &user, None, recipient);

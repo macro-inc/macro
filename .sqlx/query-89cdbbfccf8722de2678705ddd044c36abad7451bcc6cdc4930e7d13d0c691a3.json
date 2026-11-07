@@ -1,0 +1,44 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT entity_id, entity_type, access_level AS \"access_level: AccessLevel\"\n        FROM entity_access WHERE source_type = 'user' AND source_id = 'macro|reader@example.com'\n        ORDER BY entity_id",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "entity_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "entity_type",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "access_level: AccessLevel",
+        "type_info": {
+          "Custom": {
+            "name": "\"AccessLevel\"",
+            "kind": {
+              "Enum": [
+                "view",
+                "comment",
+                "edit",
+                "owner"
+              ]
+            }
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": [
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "89cdbbfccf8722de2678705ddd044c36abad7451bcc6cdc4930e7d13d0c691a3"
+}

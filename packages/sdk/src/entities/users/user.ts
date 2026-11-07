@@ -4,6 +4,7 @@ import { MacroNotFoundError, unwrap } from '../../utils';
 import type { MacroClient } from '../../utils/client';
 import { Channel } from '../channels/channel';
 import { PropertiedEntity } from '../entity';
+import { Harness } from '../harnesses/harness';
 
 /**
  * A Macro user. Identity lives in the auth service, so details like the
@@ -76,6 +77,23 @@ export class User extends PropertiedEntity<UserName> implements Mentionable {
   email(): string | undefined {
     const email = this.id.startsWith('macro|') ? this.id.slice(6) : undefined;
     return email?.includes('@') ? email : undefined;
+  }
+
+  /**
+   * The runtime of this own-team agent account, without administrator details.
+   * Requires the team-agent rollout; discovery grants no runtime permission.
+   *
+   * @returns A runtime handle, or `undefined` while enrollment has not paired it.
+   */
+  async agentRuntime(): Promise<Harness | undefined> {
+    const computer = unwrap(
+      await this.client.auth.getTeamAgentComputer({
+        path: { agent_user_id: this.id },
+      }),
+    );
+    return computer.harnessId
+      ? Harness.byId(this.client, computer.harnessId)
+      : undefined;
   }
 
   /**

@@ -186,6 +186,16 @@ export const enableSlackArchiveImport = defineFlag({
   default: onInDev,
 });
 
+/**
+ * Macro computers: purchases in Settings → Runtimes, Screen and Claude access.
+ * Existing computers remain visible on team Billing.
+ * Fail closed in dev too so the local kill switch agrees with the backend.
+ */
+export const enableMacroComputers = defineFlag({
+  key: 'enable-macro-computers',
+  env: 'ENABLE_MACRO_COMPUTERS',
+});
+
 /** Sidebar prompt cards: imports, calendars, repositories, and Home setup. */
 export const enableSidebarPromotions = defineFlag({
   key: 'enable-sidebar-promotions',
@@ -1058,4 +1068,10 @@ export const enableInAppTours = defineFlag({
 export const enableWhatsappLinked = defineFlag({
   key: 'enable-whatsapp-linked',
   env: 'ENABLE_WHATSAPP_LINKED',
+});
+
+/** Team admins can invite an agent and purchase its computer together. */
+export const enableTeamAgents = defineFlag({
+  key: 'enable-team-agents',
+  default: onInDev,
 });

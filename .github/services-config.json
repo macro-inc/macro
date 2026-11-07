@@ -1,5 +1,16 @@
 {
   "services": {
+    "agent-git-service": {
+      "bootstrap_pending": "Doppler project agent-git-service and first deploy pending",
+      "source_paths": [
+        "services/agent_git_service/**",
+        "crates/agent_git/**"
+      ],
+      "stack_path": "infra/stacks/agent-git-service/**",
+      "deploy_binaries": [
+        "agent_git_service"
+      ]
+    },
     "agent-harness-service": {
       "source_paths": [
         "services/agent_harness_service/**",

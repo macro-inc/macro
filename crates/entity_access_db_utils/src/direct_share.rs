@@ -4,7 +4,7 @@ use model_entity::EntityType;
 use model_owner::Owner;
 use models_permissions::{
     share_permission::access_level::AccessLevel,
-    sharing::{SharingFacts, SharingTeamRole},
+    sharing::{AgentHarnessFacts, SharingFacts, SharingTeamRole},
 };
 use sqlx::{Postgres, Transaction};
 
@@ -30,6 +30,8 @@ pub async fn facts(
             .fetch_optional(tx.as_mut()).await?.map(|r| (r.owner_id, r.name, None)),
         EntityType::ExternalChat => sqlx::query!("SELECT user_id, name FROM external_chat WHERE id = $1 FOR SHARE", id)
             .fetch_optional(tx.as_mut()).await?.map(|r| (r.user_id, r.name, None)),
+        EntityType::Harness => sqlx::query!(r#"SELECT COALESCE(owner_user_id, created_by) AS "owner!", name FROM harnesses WHERE id = $1 AND deleted_at IS NULL FOR SHARE"#, id)
+            .fetch_optional(tx.as_mut()).await?.map(|r| (r.owner, r.name, None)),
         EntityType::Initiative => sqlx::query!("SELECT owner_user_id, name FROM initiative WHERE id = $1 FOR SHARE", id)
             .fetch_optional(tx.as_mut()).await?.map(|r| (r.owner_user_id, r.name, None)),
         EntityType::Database => sqlx::query!("SELECT user_id AS owner_id, name FROM database_entities WHERE database_id = $1 AND trashed_at IS NULL FOR SHARE", id)
@@ -60,19 +62,91 @@ pub async fn facts(
     } else {
         None
     };
-    let team_members = if let Owner::Team(team) = sponsor.as_ref().unwrap_or(&owner) {
+    let agent_harness =
+        if kind == EntityType::Harness {
+            sqlx::query!(
+            r#"SELECT COALESCE(c.team_id, a.team_id) AS "team_id!", a.user_id AS "agent_user_id?"
+            FROM harnesses h
+            LEFT JOIN hosted_runtime c ON c.id = h.computer_id
+            LEFT JOIN LATERAL (
+                SELECT user_id, team_id FROM team_agents
+                WHERE computer_id = h.computer_id ORDER BY user_id LIMIT 1
+            ) a ON true
+            WHERE h.id = $1 AND harness_is_agent_computer(h.id)"#,
+            id,
+        )
+        .fetch_optional(tx.as_mut())
+        .await?
+        .map(|row| -> anyhow::Result<AgentHarnessFacts> {
+            Ok(AgentHarnessFacts {
+                team_id: row.team_id,
+                agent_user_id: row.agent_user_id.map(MacroUserIdStr::try_from).transpose()?,
+            })
+        })
+        .transpose()?
+        } else {
+            None
+        };
+    let team = agent_harness
+        .as_ref()
+        .map(|agent| agent.team_id)
+        .or_else(|| match sponsor.as_ref().unwrap_or(&owner) {
+            Owner::Team(team) => Some(*team),
+            _ => None,
+        });
+    let mut team_members = if let Some(team) = team {
         sqlx::query!("SELECT user_id, team_role AS \"team_role: SharingTeamRole\" FROM team_user WHERE team_id = $1 FOR SHARE", team)
             .fetch_all(tx.as_mut()).await?.into_iter().map(|r| Ok((MacroUserIdStr::try_from(r.user_id)?, r.team_role))).collect::<anyhow::Result<Vec<_>>>()?
     } else {
         Vec::new()
     };
+    if let Some(agent) = &agent_harness {
+        let team_owner = sqlx::query_scalar!(
+            "SELECT owner_id FROM team WHERE id = $1 FOR SHARE",
+            agent.team_id
+        )
+        .fetch_one(tx.as_mut())
+        .await?;
+        let team_owner = MacroUserIdStr::try_from(team_owner)?;
+        team_members.retain(|(user, _)| user != &team_owner);
+        team_members.push((team_owner, SharingTeamRole::Owner));
+    }
     Ok(Some(SharingFacts {
         owner,
         sponsor,
         team_members,
         name,
         file_type,
+        agent_harness,
     }))
+}
+
+/// Grant the runtimes offered with a team invite to whoever accepted it. An offer
+/// counts only while its inviter still owns the runtime and it is still live.
+pub async fn grant_invited_harnesses(
+    tx: &mut Transaction<'_, Postgres>,
+    team_invite_id: &macro_uuid::Uuid,
+    invited_by: &MacroUserIdStr<'_>,
+    user: &MacroUserIdStr<'_>,
+) -> anyhow::Result<()> {
+    sqlx::query!(
+        r#"INSERT INTO entity_access (entity_id, entity_type, source_id, source_type, access_level)
+        SELECT h.id, 'harness', $3, 'user', harness_grant_level(h.id, 'edit'::"AccessLevel")
+        FROM team_invite_harness_grant g
+        JOIN harnesses h ON h.id = g.harness_id
+        WHERE g.team_invite_id = $1
+          AND h.deleted_at IS NULL
+          AND COALESCE(h.owner_user_id, h.created_by) = $2
+        ON CONFLICT (entity_id, entity_type, source_id, source_type)
+        WHERE granted_from_project_id IS NULL
+        DO NOTHING"#,
+        team_invite_id,
+        invited_by.as_ref(),
+        user.as_ref(),
+    )
+    .execute(tx.as_mut())
+    .await?;
+    Ok(())
 }
 
 /// List direct non-owner user grants. Inherited, channel and team grants are excluded.

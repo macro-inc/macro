@@ -7,9 +7,9 @@
 use harnesses::domain::models::{
     ClaimPairingRequest, ClaimedPairing, CreatePairingRequest, CreatedPairing,
 };
+use pairing_id::PairingId;
 use reqwest::StatusCode;
 use rootcause::prelude::ResultExt as _;
-use uuid::Uuid;
 
 use crate::config::{Config, HarnessCredentials};
 
@@ -70,7 +70,7 @@ impl PairingClient {
     /// Poll the claim once.
     pub async fn claim(
         &self,
-        pairing_id: Uuid,
+        pairing_id: PairingId,
         device_secret: &str,
     ) -> rootcause::Result<ClaimStatus> {
         let response = self

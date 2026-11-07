@@ -74,3 +74,62 @@ fn every_local_harness_publishes_the_api_port_used_by_the_sdk() {
         assert!(ports.contains(&format!("{}:2222", instance.port(Port::PreviewSsh))));
     }
 }
+
+#[test]
+fn docker_computers_share_the_enrollment_dir_with_the_daemon() {
+    let instance = Instance::derive(Some("computers-compose-docker"), None).unwrap();
+    let computers = Computers::new(Mode::Local, Fleet::Docker, &instance);
+    let mut services = IndexMap::new();
+    services.insert(EGRESS_SERVICE.to_string(), Some(dct::Service::default()));
+    add_computers(&mut services, &computers).unwrap();
+
+    let dir = computers.enrollment_dir().display().to_string();
+    let harness = services[EGRESS_SERVICE].as_ref().unwrap();
+    assert_eq!(
+        harness.volumes,
+        vec![dct::Volumes::Simple(format!("{dir}:{dir}"))]
+    );
+    assert_eq!(services.len(), 1);
+    let _ = std::fs::remove_dir_all(instance.artifact_dir());
+}
+
+#[test]
+fn incus_computers_need_no_relay_sidecars() {
+    let instance = Instance::derive(Some("computers-compose-incus"), None).unwrap();
+    let computers = Computers::new(Mode::Local, Fleet::Incus, &instance);
+    let mut services = IndexMap::new();
+    services.insert(EGRESS_SERVICE.to_string(), Some(dct::Service::default()));
+    add_computers(&mut services, &computers).unwrap();
+
+    assert_eq!(services.len(), 1);
+    assert!(!services.contains_key("computers_incus_uplink"));
+    assert!(!services.contains_key("computers_incus_relay"));
+    assert!(
+        services[EGRESS_SERVICE]
+            .as_ref()
+            .unwrap()
+            .volumes
+            .is_empty()
+    );
+    let _ = std::fs::remove_dir_all(instance.artifact_dir());
+}
+
+#[test]
+fn disabled_control_plane_is_explicit_only_in_the_harness() {
+    let instance = Instance::derive(Some("computers-off"), None).unwrap();
+    let computers = Computers::new(Mode::Local, Fleet::Off, &instance);
+    let mut services = IndexMap::from([(
+        EGRESS_SERVICE.to_owned(),
+        Some(dct::Service {
+            environment: kv(&[("PORT", "8080")]),
+            ..Default::default()
+        }),
+    )]);
+    add_computers(&mut services, &computers).unwrap();
+    let value = serde_yaml::to_value(&services).unwrap();
+    assert_eq!(
+        value[EGRESS_SERVICE]["environment"]["COMPUTERS_FLEET"],
+        "disabled"
+    );
+    assert_eq!(value[EGRESS_SERVICE]["environment"]["PORT"], "8080");
+}

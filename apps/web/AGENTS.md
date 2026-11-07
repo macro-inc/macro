@@ -137,6 +137,13 @@ beside a scrolling editor whose selection runs past its visible bottom
 (`clipToVisible`), have a backend-free browser regression:
 `bunx playwright test --config src/lib/core/component/LexicalMarkdown/directive/browser-test/playwright.config.ts`.
 
+The runtime Share menu (teammates, team access, access requests, and the warning
+before shutting down a resident) has a backend-free desktop/phone regression:
+`bunx playwright test --config src/features/runtime-sharing/browser-test/playwright.config.ts`.
+It runs the real queries and service client over a scripted network. The warning
+opens under an owner from inside the sheet; one captured outside it closes the
+menu on the first tap.
+
 Composer `/` menus list Connections between Skills and Pull requests. Keep native
 and hosted providers aligned with `mcp_select::select_connections`, prefer native
 credentials per provider, and preserve editor focus on pointer and touch selection.
@@ -504,6 +511,14 @@ resolved session ID; keep the existing `AgentSessionProvider` subscription to
   Settings → Integrations: one searchable list row per integration, styled like
   the Drive/Tasks lists, custom MCP servers then connected ones first,
   described by what each does in Macro; preserve `agent-connections` and `team-connections` as aliases for existing links.
+- Keep Macro computers (`features/settings/computers`) team-only. Gate purchase,
+  Screen and Claude account surfaces with `enableMacroComputers`
+  (`enable-macro-computers`); keep existing lists in Runtimes and Billing and
+  management actions available with rollout off. `useTeamComputers` loads by
+  team membership and exposes `canPurchase` separately. Members read; admins
+  buy and manage. Show the exact price before buying, and release only after
+  the computer's name is typed. See the
+  [Macro computers walkthrough](../../docs/agent-guide/settings.md#macro-computers).
 - Keep bot setup focused on the token-and-SDK workflow; Agent and Ownership
   controls live under collapsed Advanced settings. See the
   [Bots walkthrough](../../docs/agent-guide/settings.md#bots).
@@ -1088,6 +1103,54 @@ Reuse the responsive import review for Notion, Linear and Jira; scope report
 queries and cancellation to the saved draft source. Issue tracker handoffs
 call the reviewed workspace tools, and show separate task/project totals.
 
+### Computer screen and Claude access
+
+`features/computer-screen` owns the noVNC pane, watch/control connection
+lifecycle, and `screen` search namespace (`s0.screen.pane=split`). Session hosts
+compose `AgentComputerScreen` around their Changes split and register
+`screenSearch.namespace`; `ChangesToggle` places its Screen toggle beside Changes.
+Resolve a session's computer through its bot's current harness binding, matching
+the backend's `session_harness` lookup; require `capabilities.screen`. Keep
+the connection keyed by stable session/harness IDs so list polling preserves
+control and the stream. Keep noVNC lazy-loaded, refresh socket auth like the sync
+router, default to view-only,
+and reconnect when control changes. Focus the controlling noVNC canvas, mark it
+`data-keyboard-input`, and attach a detached hotkey scope so app navigation cannot
+consume guest keystrokes; watch-only screens must not claim keyboard focus.
+Touch devices remain watch-only.
+Settings tabs compose `SettingsComputerScreen` with `ScreenSplit takeover` so
+the screen replaces the main Settings content at every width; use the real
+harness name, shared mode Badge and icon back control, with `EmptyStatePanel`
+for disconnections. Offer Read-to-control requests only for ordinary runtimes
+whose server-supported levels include edit; agent discovery classification also
+suppresses them when optional directory classification is absent. Closing restores
+the still-mounted Settings form. Agent sessions keep their desktop split and
+phone takeover. Launch with `useSettingsComputerScreen().openHarness(id)` or
+`openAgentComputer(userId)`; the latter discovers the computer only after the
+click through the team-agent query adapter. Runtime cards outside Settings
+navigate to Runtimes through the app-scoped `SettingsScreenNavigationProvider`
+and open that same pane; do not create a module-global request bus. Preserve
+cached runtime permissions across refresh failures and show the refresh error.
+Keep screen discovery, access loading and connection inside the caller-owned
+interaction trace, passing its span explicitly across asynchronous work. With
+`enable-macro-computers` on, derive control from the server's harness
+`access` (`user`/`owner`), never agent/session edit permission; resolve enabled
+session screens from the runtime directory, since the usable-runtime list omits
+Read/Resident/None. Keep screen controls and directory fetching disabled while the computer flag is off or loading;
+refresh the directory
+every 15 seconds in the foreground and explicitly on Settings screen open so
+remote grants and service recovery appear without remounting; `read` and
+`resident` remain watch-only. Agent computer sharing exposes Read only, and
+access requests use the server's `supportedLevels`. Account residents are not
+bots and cannot be stopped by removing an unrelated human's runtime grant.
+Settings computer rows compose `ComputerClaudeAccess`; managers fetch
+`claude-mode`, while other members read the harness list's `claude_mode`.
+The backend also requires management rights for Claude account changes.
+Focused tests: `bun run test src/features/computer-screen src/features/settings/computers/views/computer-claude-access.test.tsx`.
+For a backend-free visual check, run
+`bunx vite --config src/features/computer-screen/browser-test/vite.config.ts`;
+it renders the real panes and Claude form over scripted transports.
+
 ### Agent backend hosting
 
 Cognition, routines, preview control, and MCP share `agent_harness_service`.
@@ -1263,3 +1326,99 @@ of posting, multi-paragraph anchors, saved ranges, and cancellation during posti
   dynamic object spread); a spread makes a selection change revisit every
   unrelated layout input. Profile with the
   [entity collection fixture](src/features/entity/browser-test/README.md).
+
+Use the existing Billing route's `SubscriptionStatus.billing` for actual seat,
+computer, total and next-invoice amounts; never calculate a bill from catalog
+quotes. Format provider minor units using currency precision and Stripe's
+ISK/UGX wire-format exceptions.
+`TeamBillingBreakdown` renders provider lines, enriched by the team
+agents query. A null breakdown keeps the existing plan and computers UI. Its browser regression
+covers interval/currency, distinct upcoming invoice amounts, included computers
+and narrow layouts.
+
+Gate teammate invitation, management and billing details with `enableTeamAgents`;
+wait for flag loading before choosing an off path, and disable feature queries
+until enabled. Keep the data-derived Agent chip when off; use confirmed human
+identity for generic member controls so an agent cannot be managed through them.
+Gate View computer, screen panes and navigation with `enableMacroComputers`,
+independently of agent management; disabling the agent flag must not revoke
+computer UI access. Treat the dedicated agent-computer discovery endpoint's
+503 as typed absence; cache that outcome to hide known-unavailable screen
+entries without a failure toast or a roster-wide discovery prefetch. Recheck
+known absence while computer UI is enabled so fleet reattachment restores the
+entry; preserve other discovery errors and their failure feedback. Agent self-service keeps its existing gate.
+
+Use the shared `Dialog` and `Panel` header/body/footer for agent invitations,
+including the standard phone sheet. `AgentPortrait` generates a fictional face
+only on Generate portrait, then offers Generate another; typing never starts a
+request. Preserve the existing avatar uploader and selected static-file URL; keep prompts and profiles out
+of telemetry attributes. Keep the face beside the identity fields at the top;
+show a shimmer while a named portrait is pending and an inline retry on failure.
+Show Setting up… before the agent runs, with Creating/Booting/Connecting
+steps only when supplied by the server; never show a payment state. Treat
+retired or absent steps as generic setup. Show a failed-payment invitation
+sentence and Billing link only to admins; other viewers keep generic setup. Keep size
+specification items atomic and prices aligned with titles at 390px and 320px.
+
+Use the provider-backed `VoicePicker` in invitations and admin voice settings;
+stop and revoke samples when selection changes or the dialog closes. Keep a
+chosen voice through review and retries, and apply saved voices on the next call.
+Keep the managed roster query and voice controls admin-only; teammate computer
+discovery remains independent of the management roster.
+
+Keep Members invitation actions in `MemberInviteActions`; the split Invite action
+opens the existing person dialog, with person/agent choices in its dropdown.
+People and managed agents share the filtered roster; agent activity comes from
+`lastTurnAt`, and Retry uses `canRetryTeamAgent` at each entry point. The Members
+rows share `MemberRowLayout` for height and identity/status/action columns on
+desktop and phones; put the role below the name and keep failure details and
+Retry in the row menu. Leave human status empty when no activity field exists;
+do not invent activity timestamps or placeholder dashes. Keep billing labels out
+of the status column.
+Display running agents as Alive and unhealthy agents as Dead, preserving status
+colors and diagnostic reasons. Distinguish transient `unhealthy` agents on ready computers from
+terminal `failed` provisioning; only terminal failures can retry provisioning.
+The browser fixture covers header heights and invitation/row menus on desktop, phone,
+and tablet.
+
+Fetch agent invitation specifications from `/team_agents/sizes` independently of
+pricing; keep draft edits out of query inputs and preserve mounted fields while
+typing. Exercise the adapter and form with
+`bun run test src/features/settings/components/invite-agent-dialog.test.tsx src/features/settings/components/invite-agent-form.test.tsx src/lib/queries/team-agents`
+and the desktop/phone/tablet suite at
+`src/features/settings/browser-test/team-agents/playwright.config.ts`.
+Handle quote `no_subscription` conflicts with an active-plan explanation and a
+button to `/app/settings/billing`; keep purchase disabled. Render included
+quotes as **Included for Macro**. Freeze review terms and submit the reviewed
+`included` value as `expectedIncluded`; a `quote_changed` refusal requires a
+fresh review before retrying. Show only typed `repository_creation_failed`
+server reasons as pre-purchase failures; other create failures keep the
+roster-check warning.
+
+Team-agent telemetry uses opaque team/computer IDs. The API's `userId` may
+contain an email address; do not attach it to browser spans.
+
+For agent portrait cards, gate Show screen on enable-macro-computers and a
+paired screen-capable harness. Reuse harness User/owner access for desktop
+Take control; keep touch devices watch-only. Bind long-press handlers to the
+underlying DOM element when using Dynamic. The desktop/phone regression is
+`src/features/computer-screen/browser-test/portrait/playwright.config.ts`.
+
+Reuse `PriceBreakdown` for agent invite review, Macro computer purchase and
+subscription billing: item/spec subline/amount, divider, total and billing note.
+Keep included rows visible, use GiB throughout, and size confirmation/release
+dialogs to content. Billing renders each computer once and uses provider amounts;
+show a differing catalog price as context without replacing a subscribed charge.
+
+Agent DM headers reuse `AgentComputerScreenEntry` and `HeaderActionButton` for
+View computer, beside Call. Require a one-to-one agent DM and readable access;
+open in watch mode and let the existing Screen pane enforce desktop editing and
+touch watch-only. Flags-off headers stay unchanged. The portrait browser suite
+also exercises DM entry in both themes on desktop and phones.
+
+### Computer capacity
+
+Computer offers expose ordinary `soldOut` and persona `alwaysOnSoldOut`
+availability separately. Use generated auth types. Show `waiting_for_capacity`
+as a capacity wait with its translated hint in Runtimes and Billing, including
+on mobile; retain power controls and polling while waiting.

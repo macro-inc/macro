@@ -1103,6 +1103,47 @@ export type ClassifyInputResponse = {
 };
 
 /**
+ * How Claude Code on a computer is paid for.
+ */
+export type ClaudeModeResponse = {
+    /**
+     * `macro_credits` or `own_account`.
+     */
+    mode: string;
+};
+
+/**
+ * `POST /harnesses/{harness_id}/claude-sign-in/complete` body.
+ */
+export type ClaudeSignInComplete = {
+    /**
+     * The code Claude showed, or the `http://localhost:<port>/callback?...`
+     * address the browser could not open.
+     */
+    code: string;
+};
+
+/**
+ * `POST /harnesses/{harness_id}/claude-sign-in` answer.
+ */
+export type ClaudeSignInStarted = {
+    /**
+     * Where the user signs in to Claude, in their own browser.
+     */
+    url: string;
+};
+
+/**
+ * `POST /harnesses/{harness_id}/claude-sign-in/complete` answer.
+ */
+export type ClaudeSignedIn = {
+    /**
+     * Always `true`.
+     */
+    signedIn: boolean;
+};
+
+/**
  * Information used to choose a coding persona for a task.
  */
 export type CodingAgent = {
@@ -1733,7 +1774,7 @@ export type EmailSuggestions = {
 /**
  * The type of an entity in Macro
  */
-export type EntityType = 'user' | 'chat' | 'channel' | 'channel_message' | 'document' | 'project' | 'email_thread' | 'calendar_event' | 'team' | 'call' | 'foreign_entity' | 'static_file' | 'crm_company' | 'crm_contact' | 'crm_pipeline' | 'reminder' | 'skill' | 'agent_session' | 'scheduled_action' | 'initiative' | 'database' | 'database_row' | 'form' | 'external_chat';
+export type EntityType = 'user' | 'chat' | 'channel' | 'channel_message' | 'document' | 'project' | 'email_thread' | 'calendar_event' | 'team' | 'call' | 'foreign_entity' | 'static_file' | 'crm_company' | 'crm_contact' | 'crm_pipeline' | 'reminder' | 'harness' | 'skill' | 'agent_session' | 'scheduled_action' | 'initiative' | 'database' | 'database_row' | 'form' | 'external_chat';
 
 /**
  * A bounded SDK operation observed during execution; not an authorization or write receipt.
@@ -2943,6 +2984,32 @@ export type UpdateSharePermissionRequestV2 = {
     linkShare?: null | LinkShare;
     linkShareAccessLevel?: null | AccessLevel;
     teamShareAccessLevel?: null | AccessLevel;
+};
+
+/**
+ * One Aura-2 voice returned by the provider catalog.
+ */
+export type Voice = {
+    /**
+     * Provider's accent label.
+     */
+    accent: string;
+    /**
+     * Languages this voice supports.
+     */
+    languages: Array<string>;
+    /**
+     * Exact model selector.
+     */
+    model: string;
+    /**
+     * Provider's voice name.
+     */
+    name: string;
+    /**
+     * Provider's gender and character tags.
+     */
+    tags: Array<string>;
 };
 
 /**
@@ -4658,6 +4725,140 @@ export type ListCodingAgentsResponses = {
 
 export type ListCodingAgentsResponse = ListCodingAgentsResponses[keyof ListCodingAgentsResponses];
 
+export type GetClaudeModeData = {
+    body?: never;
+    path: {
+        /**
+         * Harness ID
+         */
+        harness_id: string;
+    };
+    query?: never;
+    url: '/harnesses/{harness_id}/claude-mode';
+};
+
+export type GetClaudeModeErrors = {
+    403: unknown;
+    404: unknown;
+    503: unknown;
+};
+
+export type GetClaudeModeResponses = {
+    200: ClaudeModeResponse;
+};
+
+export type GetClaudeModeResponse = GetClaudeModeResponses[keyof GetClaudeModeResponses];
+
+export type StartClaudeSignInData = {
+    body?: never;
+    path: {
+        /**
+         * Harness ID
+         */
+        harness_id: string;
+    };
+    query?: never;
+    url: '/harnesses/{harness_id}/claude-sign-in';
+};
+
+export type StartClaudeSignInErrors = {
+    400: unknown;
+    403: unknown;
+    404: unknown;
+    409: unknown;
+    422: unknown;
+    503: unknown;
+    504: unknown;
+};
+
+export type StartClaudeSignInResponses = {
+    200: ClaudeSignInStarted;
+};
+
+export type StartClaudeSignInResponse = StartClaudeSignInResponses[keyof StartClaudeSignInResponses];
+
+export type CancelClaudeSignInData = {
+    body?: never;
+    path: {
+        /**
+         * Harness ID
+         */
+        harness_id: string;
+    };
+    query?: never;
+    url: '/harnesses/{harness_id}/claude-sign-in/cancel';
+};
+
+export type CancelClaudeSignInErrors = {
+    403: unknown;
+    404: unknown;
+    409: unknown;
+    422: unknown;
+    503: unknown;
+    504: unknown;
+};
+
+export type CancelClaudeSignInResponses = {
+    204: void;
+};
+
+export type CancelClaudeSignInResponse = CancelClaudeSignInResponses[keyof CancelClaudeSignInResponses];
+
+export type CompleteClaudeSignInData = {
+    body: ClaudeSignInComplete;
+    path: {
+        /**
+         * Harness ID
+         */
+        harness_id: string;
+    };
+    query?: never;
+    url: '/harnesses/{harness_id}/claude-sign-in/complete';
+};
+
+export type CompleteClaudeSignInErrors = {
+    400: unknown;
+    403: unknown;
+    404: unknown;
+    409: unknown;
+    422: unknown;
+    503: unknown;
+    504: unknown;
+};
+
+export type CompleteClaudeSignInResponses = {
+    200: ClaudeSignedIn;
+};
+
+export type CompleteClaudeSignInResponse = CompleteClaudeSignInResponses[keyof CompleteClaudeSignInResponses];
+
+export type ClaudeSignOutData = {
+    body?: never;
+    path: {
+        /**
+         * Harness ID
+         */
+        harness_id: string;
+    };
+    query?: never;
+    url: '/harnesses/{harness_id}/claude-sign-out';
+};
+
+export type ClaudeSignOutErrors = {
+    403: unknown;
+    404: unknown;
+    409: unknown;
+    422: unknown;
+    503: unknown;
+    504: unknown;
+};
+
+export type ClaudeSignOutResponses = {
+    200: ClaudeModeResponse;
+};
+
+export type ClaudeSignOutResponse = ClaudeSignOutResponses[keyof ClaudeSignOutResponses];
+
 export type ClassifyData = {
     body: ClassifyInputRequest;
     path?: never;
@@ -4721,3 +4922,45 @@ export type ExtractResponses = {
 };
 
 export type ExtractResponse = ExtractResponses[keyof ExtractResponses];
+
+export type GetAgentVoicesData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/voices';
+};
+
+export type GetAgentVoicesErrors = {
+    403: unknown;
+    502: unknown;
+};
+
+export type GetAgentVoicesResponses = {
+    200: Array<Voice>;
+};
+
+export type GetAgentVoicesResponse = GetAgentVoicesResponses[keyof GetAgentVoicesResponses];
+
+export type GetAgentVoiceSampleData = {
+    body?: never;
+    path: {
+        model: string;
+    };
+    query?: never;
+    url: '/voices/{model}/sample';
+};
+
+export type GetAgentVoiceSampleErrors = {
+    400: unknown;
+    403: unknown;
+    502: unknown;
+};
+
+export type GetAgentVoiceSampleResponses = {
+    /**
+     * WAV audio sample
+     */
+    200: Array<number>;
+};
+
+export type GetAgentVoiceSampleResponse = GetAgentVoiceSampleResponses[keyof GetAgentVoiceSampleResponses];

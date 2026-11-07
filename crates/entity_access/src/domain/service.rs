@@ -82,6 +82,7 @@ where
             EntityType::ExternalChat => {
                 self.repo.get_external_chat_access(entity_id, user_id).await
             }
+            EntityType::Harness => self.repo.get_harness_access(entity_id, user_id).await,
             EntityType::ScheduledAction => {
                 self.repo
                     .get_scheduled_action_access(entity_id, user_id)
@@ -300,6 +301,8 @@ where
             // A reminder belongs to a user, so a team-scoped bot never reaches one.
             | EntityType::Reminder
             | EntityType::Skill
+            // A runtime is used by people; a bot reaches one by being bound to it.
+            | EntityType::Harness
             | EntityType::ScheduledAction => {
                 Err(AccessError::BadRequest("Unsupported bot entity type"))
             }
@@ -569,6 +572,7 @@ where
             | EntityType::DatabaseRow
             | EntityType::ExternalChat
             | EntityType::Form
+            | EntityType::Harness
             | EntityType::ScheduledAction => {
                 self.get_optimized_access(entity_id, user_id, entity_type)
                     .await

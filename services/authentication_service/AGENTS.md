@@ -25,7 +25,18 @@ key issuance, and account merge/link flows.
   allowlisting, OAuth/OAuth2 account linking, GTM invite links, the platform
   status banner API (`crates/system_status`), shared-mailbox
   relocation signup, Cursor/Codex API key endpoints, introductory trial
-  eligibility and subscription checkout.
+  eligibility and subscription checkout, and the `/team_agents` routes
+  (`crates/team_agents`; optional
+  `DEAD_SIMPLE_MAIL_API_KEY`). The agents adapter shares the hosted
+  `ComputerService` used for computer billing, passing the seat as an extra
+  purchase item so both charges use one subscription update. The admin-only
+  `/team_agents/sizes` catalog does not require a subscription; quote conflicts
+  expose `code: "no_subscription"` for the invitation billing prompt.
+  Every team-agent admin operation (including roster, catalog and voice settings)
+  shares one fail-closed `enable-team-agents` snapshot per authenticated actor.
+  Teammates discover their own team’s agent computer through the member-authorized
+  `/team_agents/{agent_user_id}/computer` route. Agent self-service and runtime
+  credentials remain independent of the rollout.
 - Not here: authorization/permission decisions on other entities →
   `crates/macro_authorization`; metered AI credits → `crates/ai_billing`;
   team lifecycle and seats → `crates/teams`; a person's interface language
@@ -41,12 +52,70 @@ key issuance, and account merge/link flows.
   `authentication-service` → verify with
   `authentication_service_doppler_config`.
 
+## Computer billing identifiers
+
+- Treat the six `STRIPE_COMPUTER_*_PRICE_ID` values as an optional all-or-none group: none means computer prices are not configured; any partial group fails startup and Doppler validation independently of physical fleet attachment. Validate configured price syntax in both startup and the Doppler binary.
+- Store computer interval prices as `Option<stripe_price_id::StripePriceId>` and reject malformed configured IDs during configuration loading, including when no fleet is attached. `Config::computer_prices` returns a validation result.
+
 ## Checks
 
 - `cargo test -p authentication_service` (`SQLX_OFFLINE` unset).
 - Signup-policy changes specifically:
   `env -u DATABASE_URL cargo test -p authentication_service --bin authentication_service config::test`
   and `cargo run -p authentication_service --bin authentication_service_doppler_config`.
+
+`TEAM_AGENTS_INCLUDED_EMAIL_DOMAIN` is required configuration; set `macro.com`
+for deployed environments, or empty to disable. Local instances must explicitly
+opt into a staff domain in their env file; the boot placeholder is empty. A
+verified current primary email of an owner or administrator at that exact domain
+qualifies the team. `MacroStaffCompPolicy` shares the team-agents domain check
+with the computer service. Comped agents have no seat item, use
+`PurchaseBilling::Comped`, and release without Stripe calls. This does not change
+metered AI usage policy.
+
+## Macro computers billing
+
+Team computer purchase, quote and offers use the shared fail-closed
+`enable-macro-computers` rollout via `ComputerService::with_rollout`; compose
+it from the existing PostHog provider. Existing management and internal APIs keep
+their authorization policy. Every computer HTTP use case also requires a fresh
+host heartbeat through `PgComputerRepo` and returns typed 503 before reads or
+effects when detached. The five-minute freshness policy belongs to hosted runtimes;
+authentication has no fleet selector or startup availability latch. Pure catalog
+access, webhook reconciliation and billing workers remain independent of attachment.
+
+- `src/outbound/computer_billing.rs`: `TeamComputerBilling`, the
+  `hosted_runtimes` `Billing` port on the team subscription (one item per
+  `STRIPE_COMPUTER_{STANDARD,LARGE,XL}_{MONTHLY,YEARLY}_PRICE_ID`, chosen by the
+  subscription's interval). Prices are `ComputerPrices`
+  (`src/domain/computer_billing.rs`), not seat plans. Replay durable item-change
+  receipts before applying changes. Purchase snapshots the quoted price id;
+  retries and removal use that saved id rather than resolving current prices.
+- With no computer prices, quote and purchase return 503 `computers are not available in this environment` through the shared computer router, before contacting Stripe.
+- Every team subscription webhook re-reads the complete subscription and reports
+  item quantities by price id to `ComputerBillingObserver` (`ComputerService`).
+  Reconcile against each row's saved price id, including prices no longer in
+  configuration; cancel newest excess computers per price. Ignore partial
+  subscription snapshots. Observer failures are logged, never fail the webhook.
+
+## Subscription billing status
+
+`GET /user/stripe/subscription_status` includes nullable `billing` details for
+personal subscribers and team owners/admins. Allocation and access policy live in
+`service/subscription_status/billing_facts.rs`; the Stripe adapter supplies actual
+recurring prices, quantities, upcoming invoice amounts and owning-domain facts.
+Computer billing facts retain canonical `ComputerId` and `ComputerName` until
+the response renderer emits their UUID and string wire values.
+Match provider items to recorded computer IDs or price IDs and label them from
+the stored catalog entry and resources. Never infer an existing computer size
+from the current price table; unlinked legacy charges remain generic Computer rows.
+Included memberships contribute no paid seat amount. Comped computers appear as
+zero rows, and unmatched or ambiguous provider quantities remain `other` rather
+than invented per-account charges. Unsupported interval/price shapes have no
+breakdown. Amounts preserve Stripe wire currency units, including its currency
+exceptions; clients must use provider currency scaling. The recurring subtotal
+excludes invoice adjustments; `nextInvoice.amount` is the actual provider amount
+due and its date is absent when the provider supplies no payment/due date.
 
 ## Subscription checkout
 
@@ -185,4 +254,46 @@ inputs cannot select an agent, and ordinary user credentials remain unattributed
 - Rules: `.agents/rules/config-and-service-urls.md`,
   `.agents/rules/rust/security.md` · Skill: `new-service`
 
+- Team agent retry is admin-only and reuses the original computer and persona.
+  Its adapter receives the same computer repository for scoped bootstrap reads
+  and the harness domain repository for enrolled-persona health and last-turn
+  time. The fleet issues new credentials through the InternalOnly enrollment route;
+  repo recovery reissues its token while preserving repository contents.
+
+- `src/outbound/computer_urls.rs` implements the domain `EnrollmentEnvironment`
+  port using canonical typed service URLs resolved on every issuance. It supplies
+  all seven canonical service overrides, gateway and Anthropic base transiently;
+  MCP stays a service base. Computer-facing URLs reject loopback, invalid protocols,
+  credentials, query strings and fragments. The git adapter advertises the guest
+  remote separately from its internal API address. No JSON override bridge remains.
+  Brain Anthropic credentials reuse that agent's revocable Macro API key on the
+  dedicated `/brain/anthropic` gateway path.
+
 - The HTTP boundary validates optional signed agent correlation without changing existing authorization.
+
+Computer billing accepts either all six
+`STRIPE_COMPUTER_{STANDARD,LARGE,XL}_{MONTHLY,YEARLY}_PRICE_ID` values or none.
+Validate syntax and reject partial groups at startup and in the Doppler check.
+Keep configured and recorded prices when no fleet is attached; cleanup and
+subscription reconciliation still use them. Prices have no fallback. See [required computer config](../../docs/development/running-locally.md#macro-computers).
+
+## Persona enrollment contract
+
+`POST /internal/team_agent_enrollment/{computer}/{generation}` requires
+`InternalOnly`, never an ordinary user or agent key. It returns one-time
+`PersonaEnrollment` with `Cache-Control: no-store`. The team-agent domain verifies
+the generation, team, agent account and persona identity, locks the agent row,
+replaces its Brain API key and reissues the repo token. No bootstrap plaintext is
+persisted. A failed issuance may be repeated to revoke the incomplete attempt.
+
+The enrollment environment includes the typed storage, auth, cognition, harness,
+scheduled-action, websocket-connection and MCP service URLs. Resolve them afresh
+for each create or recreate; retain neither URLs nor bootstrap credentials in
+`hosted_runtime.persona`. Missing environment composition fails closed before
+credential replacement. The worker merges this transient environment with the
+one-time secret payload into its owner-only mode-0600 persona file.
+
+The team-agent adapter uses the non-HTTP computer maintenance surface for roster
+status and release requests. A detached fleet is a transient unavailable roster
+observation; removal records release for later fleet effects while retaining
+billing cleanup. Neither maintenance operation is exposed as a computer route.

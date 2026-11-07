@@ -7,6 +7,7 @@
 import type {
   AgentApiKey,
   AgentSetupResponse,
+  AgentVoice,
   AiBillingErrorBody,
   AppleLoginRequest,
   ChangePlanRequest,
@@ -17,6 +18,7 @@ import type {
   CodexEnvironment,
   CodexLoginPoll,
   CodexLoginStart,
+  ComputerStatus,
   CreateAccountMergeRequest,
   CreateCheckoutSessionV2Request,
   CreatedTeamInviteLinkResponse,
@@ -24,6 +26,7 @@ import type {
   CreateInProgressLinkResponse,
   CreatePortalSessionRequest,
   CreateProfilePictureUploadRequest,
+  CreateTeamAgent,
   CreateTeamRequest,
   CreditCheckoutRequestBody,
   CreditCheckoutResponse,
@@ -34,6 +37,8 @@ import type {
   CursorModelsResponse,
   EmailConnectionProviders,
   EmailConnectionProvidersParams,
+  EmailMessage,
+  EmailMessages,
   EmptyResponse,
   EnrichGithubPullRequestsProxyRequest,
   EnrichGithubPullRequestsResponse,
@@ -60,13 +65,18 @@ import type {
   InitGmailLinkResponse,
   InitOutlookLinkParams,
   InitOutlookLinkResponse,
+  InternalGetComputerParams,
+  InternalPurchaseBody,
+  InternalQuoteComputerParams,
   InviteToTeamRequest,
   JoinTeamByInviteLinkResponse,
   ListGtmInviteLinksParams,
+  ListMyTeamAgentEmailParams,
   MacroApiTokenParams,
   MacroApiTokenResponse,
   MergeGithubPullRequestRequest,
   MergeGithubPullRequestResponse,
+  NotifyBody,
   PasswordlessCallbackParams,
   PasswordlessRequest,
   PasswordlessStartedResponse,
@@ -81,25 +91,35 @@ import type {
   Permission,
   PlanCatalogResponse,
   PostGetNamesRequestBody,
+  PowerBody,
   ProfilePictures,
   ProfilePictureUpload,
   PublicGtmInviteLink,
+  PurchaseBody,
+  Purchased,
   PutAgentApiKeyRequest,
   PutCursorApiKeyRequest,
   PutCursorDefaultModelRequest,
   PutProfilePictureFileRequest,
   PutProfilePictureParams,
   PutUserNameParams,
+  Quote,
+  QuoteTeamAgentParams,
+  QuoteTeamComputerParams,
   RedeemGtmInviteLinkRequest,
+  ReleaseBody,
   ResendFusionauthVerifyUserEmailRequest,
   SendDomainNoticeResponse,
+  SendEmail,
   SendInviteBody,
   SendMobileWelcomeEmailRequest,
   SendMobileWelcomeEmailResponse,
+  SentEmail,
   SetGithubPullRequestDraftRequest,
   SetGithubPullRequestDraftResponse,
   SetGithubPullRequestStateRequest,
   SetGithubPullRequestStateResponse,
+  SizeOffer,
   SsoLoginParams,
   SsoRequiredResponse,
   StatusUpdate,
@@ -108,6 +128,13 @@ import type {
   SystemStatus,
   SystemStatusHistory,
   Team,
+  TeamAgent,
+  TeamAgentComputer,
+  TeamAgentConflict,
+  TeamAgentFailure,
+  TeamAgentQuote,
+  TeamAgentSizes,
+  TeamAgents,
   TeamInviteLinkResponse,
   TeamInviteLinkTeam,
   TeamInviteLinkTokenRequest,
@@ -2455,6 +2482,181 @@ export const healthHandler = async (
 };
 
 /**
+ * @summary Buy a computer for a team; one subscription update covers the computer
+and `extraItems`.
+ */
+export type internalPurchaseComputerResponse200 = {
+  data: Purchased;
+  status: 200;
+};
+
+export type internalPurchaseComputerResponse503 = {
+  data: ErrorResponse;
+  status: 503;
+};
+
+export type internalPurchaseComputerResponseSuccess =
+  internalPurchaseComputerResponse200 & {
+    headers: Headers;
+  };
+export type internalPurchaseComputerResponseError =
+  internalPurchaseComputerResponse503 & {
+    headers: Headers;
+  };
+
+export type internalPurchaseComputerResponse =
+  | internalPurchaseComputerResponseSuccess
+  | internalPurchaseComputerResponseError;
+
+export const getInternalPurchaseComputerUrl = () => {
+  return `/internal/computers`;
+};
+
+export const internalPurchaseComputer = async (
+  internalPurchaseBody: InternalPurchaseBody,
+  options?: RequestInit
+): Promise<internalPurchaseComputerResponse> => {
+  const res = await fetch(getInternalPurchaseComputerUrl(), {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(internalPurchaseBody),
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: internalPurchaseComputerResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as internalPurchaseComputerResponse;
+};
+
+/**
+ * @summary Quote a computer for an authenticated internal caller.
+ */
+export type internalQuoteComputerResponse200 = {
+  data: Quote;
+  status: 200;
+};
+
+export type internalQuoteComputerResponse503 = {
+  data: ErrorResponse;
+  status: 503;
+};
+
+export type internalQuoteComputerResponseSuccess =
+  internalQuoteComputerResponse200 & {
+    headers: Headers;
+  };
+export type internalQuoteComputerResponseError =
+  internalQuoteComputerResponse503 & {
+    headers: Headers;
+  };
+
+export type internalQuoteComputerResponse =
+  | internalQuoteComputerResponseSuccess
+  | internalQuoteComputerResponseError;
+
+export const getInternalQuoteComputerUrl = (
+  params: InternalQuoteComputerParams
+) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : value.toString());
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/internal/computers/quote?${stringifiedParams}`
+    : `/internal/computers/quote`;
+};
+
+export const internalQuoteComputer = async (
+  params: InternalQuoteComputerParams,
+  options?: RequestInit
+): Promise<internalQuoteComputerResponse> => {
+  const res = await fetch(getInternalQuoteComputerUrl(params), {
+    ...options,
+    method: 'GET',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: internalQuoteComputerResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as internalQuoteComputerResponse;
+};
+
+/**
+ * @summary Read computer status for an authenticated internal caller.
+ */
+export type internalGetComputerResponse200 = {
+  data: ComputerStatus;
+  status: 200;
+};
+
+export type internalGetComputerResponseSuccess =
+  internalGetComputerResponse200 & {
+    headers: Headers;
+  };
+
+export type internalGetComputerResponse = internalGetComputerResponseSuccess;
+
+export const getInternalGetComputerUrl = (
+  computerId: string,
+  params: InternalGetComputerParams
+) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : value.toString());
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/internal/computers/${computerId}?${stringifiedParams}`
+    : `/internal/computers/${computerId}`;
+};
+
+export const internalGetComputer = async (
+  computerId: string,
+  params: InternalGetComputerParams,
+  options?: RequestInit
+): Promise<internalGetComputerResponse> => {
+  const res = await fetch(getInternalGetComputerUrl(computerId, params), {
+    ...options,
+    method: 'GET',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: internalGetComputerResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as internalGetComputerResponse;
+};
+
+/**
  * @summary Generates a macro-api-token using the user's macro-access-token
 You can either have your access token in the cookies or in the request
 headers
@@ -4793,6 +4995,556 @@ export const toggleTeamAutoJoinDomain = async (
 };
 
 /**
+ * @summary The team's computers, oldest first.
+ */
+export type listTeamComputersResponse200 = {
+  data: ComputerStatus[];
+  status: 200;
+};
+
+export type listTeamComputersResponse401 = {
+  data: ErrorResponse;
+  status: 401;
+};
+
+export type listTeamComputersResponse403 = {
+  data: ErrorResponse;
+  status: 403;
+};
+
+export type listTeamComputersResponseSuccess = listTeamComputersResponse200 & {
+  headers: Headers;
+};
+export type listTeamComputersResponseError = (
+  | listTeamComputersResponse401
+  | listTeamComputersResponse403
+) & {
+  headers: Headers;
+};
+
+export type listTeamComputersResponse =
+  | listTeamComputersResponseSuccess
+  | listTeamComputersResponseError;
+
+export const getListTeamComputersUrl = () => {
+  return `/team/computers`;
+};
+
+export const listTeamComputers = async (
+  options?: RequestInit
+): Promise<listTeamComputersResponse> => {
+  const res = await fetch(getListTeamComputersUrl(), {
+    ...options,
+    method: 'GET',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: listTeamComputersResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as listTeamComputersResponse;
+};
+
+/**
+ * @summary Buy a computer for the team, billed on the team subscription.
+ */
+export type purchaseTeamComputerResponse200 = {
+  data: Purchased;
+  status: 200;
+};
+
+export type purchaseTeamComputerResponse402 = {
+  data: ErrorResponse;
+  status: 402;
+};
+
+export type purchaseTeamComputerResponse409 = {
+  data: ErrorResponse;
+  status: 409;
+};
+
+export type purchaseTeamComputerResponse503 = {
+  data: ErrorResponse;
+  status: 503;
+};
+
+export type purchaseTeamComputerResponseSuccess =
+  purchaseTeamComputerResponse200 & {
+    headers: Headers;
+  };
+export type purchaseTeamComputerResponseError = (
+  | purchaseTeamComputerResponse402
+  | purchaseTeamComputerResponse409
+  | purchaseTeamComputerResponse503
+) & {
+  headers: Headers;
+};
+
+export type purchaseTeamComputerResponse =
+  | purchaseTeamComputerResponseSuccess
+  | purchaseTeamComputerResponseError;
+
+export const getPurchaseTeamComputerUrl = () => {
+  return `/team/computers`;
+};
+
+export const purchaseTeamComputer = async (
+  purchaseBody: PurchaseBody,
+  options?: RequestInit
+): Promise<purchaseTeamComputerResponse> => {
+  const res = await fetch(getPurchaseTeamComputerUrl(), {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(purchaseBody),
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: purchaseTeamComputerResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as purchaseTeamComputerResponse;
+};
+
+/**
+ * @summary Ask to hear when a sold-out size is back.
+ */
+export type notifyTeamComputerAvailableResponse204 = {
+  data: void;
+  status: 204;
+};
+
+export type notifyTeamComputerAvailableResponseSuccess =
+  notifyTeamComputerAvailableResponse204 & {
+    headers: Headers;
+  };
+
+export type notifyTeamComputerAvailableResponse =
+  notifyTeamComputerAvailableResponseSuccess;
+
+export const getNotifyTeamComputerAvailableUrl = () => {
+  return `/team/computers/notify`;
+};
+
+export const notifyTeamComputerAvailable = async (
+  notifyBody: NotifyBody,
+  options?: RequestInit
+): Promise<notifyTeamComputerAvailableResponse> => {
+  const res = await fetch(getNotifyTeamComputerAvailableUrl(), {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(notifyBody),
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: notifyTeamComputerAvailableResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as notifyTeamComputerAvailableResponse;
+};
+
+/**
+ * @summary Every size with its price and availability.
+ */
+export type listTeamComputerOffersResponse200 = {
+  data: SizeOffer[];
+  status: 200;
+};
+
+export type listTeamComputerOffersResponse503 = {
+  data: ErrorResponse;
+  status: 503;
+};
+
+export type listTeamComputerOffersResponseSuccess =
+  listTeamComputerOffersResponse200 & {
+    headers: Headers;
+  };
+export type listTeamComputerOffersResponseError =
+  listTeamComputerOffersResponse503 & {
+    headers: Headers;
+  };
+
+export type listTeamComputerOffersResponse =
+  | listTeamComputerOffersResponseSuccess
+  | listTeamComputerOffersResponseError;
+
+export const getListTeamComputerOffersUrl = () => {
+  return `/team/computers/offers`;
+};
+
+export const listTeamComputerOffers = async (
+  options?: RequestInit
+): Promise<listTeamComputerOffersResponse> => {
+  const res = await fetch(getListTeamComputerOffersUrl(), {
+    ...options,
+    method: 'GET',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: listTeamComputerOffersResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as listTeamComputerOffersResponse;
+};
+
+/**
+ * @summary The price of one computer of a size for the team.
+ */
+export type quoteTeamComputerResponse200 = {
+  data: Quote;
+  status: 200;
+};
+
+export type quoteTeamComputerResponse503 = {
+  data: ErrorResponse;
+  status: 503;
+};
+
+export type quoteTeamComputerResponseSuccess = quoteTeamComputerResponse200 & {
+  headers: Headers;
+};
+export type quoteTeamComputerResponseError = quoteTeamComputerResponse503 & {
+  headers: Headers;
+};
+
+export type quoteTeamComputerResponse =
+  | quoteTeamComputerResponseSuccess
+  | quoteTeamComputerResponseError;
+
+export const getQuoteTeamComputerUrl = (params: QuoteTeamComputerParams) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : value.toString());
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/team/computers/quote?${stringifiedParams}`
+    : `/team/computers/quote`;
+};
+
+export const quoteTeamComputer = async (
+  params: QuoteTeamComputerParams,
+  options?: RequestInit
+): Promise<quoteTeamComputerResponse> => {
+  const res = await fetch(getQuoteTeamComputerUrl(params), {
+    ...options,
+    method: 'GET',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: quoteTeamComputerResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as quoteTeamComputerResponse;
+};
+
+/**
+ * @summary One computer, with setup progress until it first connects.
+ */
+export type getTeamComputerResponse200 = {
+  data: ComputerStatus;
+  status: 200;
+};
+
+export type getTeamComputerResponse404 = {
+  data: ErrorResponse;
+  status: 404;
+};
+
+export type getTeamComputerResponseSuccess = getTeamComputerResponse200 & {
+  headers: Headers;
+};
+export type getTeamComputerResponseError = getTeamComputerResponse404 & {
+  headers: Headers;
+};
+
+export type getTeamComputerResponse =
+  | getTeamComputerResponseSuccess
+  | getTeamComputerResponseError;
+
+export const getGetTeamComputerUrl = (computerId: string) => {
+  return `/team/computers/${computerId}`;
+};
+
+export const getTeamComputer = async (
+  computerId: string,
+  options?: RequestInit
+): Promise<getTeamComputerResponse> => {
+  const res = await fetch(getGetTeamComputerUrl(computerId), {
+    ...options,
+    method: 'GET',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: getTeamComputerResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as getTeamComputerResponse;
+};
+
+/**
+ * @summary Stop billing at the end of the current period.
+ */
+export type cancelTeamComputerResponse200 = {
+  data: ComputerStatus;
+  status: 200;
+};
+
+export type cancelTeamComputerResponseSuccess =
+  cancelTeamComputerResponse200 & {
+    headers: Headers;
+  };
+
+export type cancelTeamComputerResponse = cancelTeamComputerResponseSuccess;
+
+export const getCancelTeamComputerUrl = (computerId: string) => {
+  return `/team/computers/${computerId}/cancel`;
+};
+
+export const cancelTeamComputer = async (
+  computerId: string,
+  options?: RequestInit
+): Promise<cancelTeamComputerResponse> => {
+  const res = await fetch(getCancelTeamComputerUrl(computerId), {
+    ...options,
+    method: 'POST',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: cancelTeamComputerResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as cancelTeamComputerResponse;
+};
+
+/**
+ * @summary Keep a computer that was canceled at period end.
+ */
+export type undoCancelTeamComputerResponse200 = {
+  data: ComputerStatus;
+  status: 200;
+};
+
+export type undoCancelTeamComputerResponseSuccess =
+  undoCancelTeamComputerResponse200 & {
+    headers: Headers;
+  };
+
+export type undoCancelTeamComputerResponse =
+  undoCancelTeamComputerResponseSuccess;
+
+export const getUndoCancelTeamComputerUrl = (computerId: string) => {
+  return `/team/computers/${computerId}/cancel`;
+};
+
+export const undoCancelTeamComputer = async (
+  computerId: string,
+  options?: RequestInit
+): Promise<undoCancelTeamComputerResponse> => {
+  const res = await fetch(getUndoCancelTeamComputerUrl(computerId), {
+    ...options,
+    method: 'DELETE',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: undoCancelTeamComputerResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as undoCancelTeamComputerResponse;
+};
+
+/**
+ * @summary Turn a computer on or off. A computer that is off keeps its disk and stays billed.
+ */
+export type setTeamComputerPowerResponse200 = {
+  data: ComputerStatus;
+  status: 200;
+};
+
+export type setTeamComputerPowerResponseSuccess =
+  setTeamComputerPowerResponse200 & {
+    headers: Headers;
+  };
+
+export type setTeamComputerPowerResponse = setTeamComputerPowerResponseSuccess;
+
+export const getSetTeamComputerPowerUrl = (computerId: string) => {
+  return `/team/computers/${computerId}/power`;
+};
+
+export const setTeamComputerPower = async (
+  computerId: string,
+  powerBody: PowerBody,
+  options?: RequestInit
+): Promise<setTeamComputerPowerResponse> => {
+  const res = await fetch(getSetTeamComputerPowerUrl(computerId), {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(powerBody),
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: setTeamComputerPowerResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as setTeamComputerPowerResponse;
+};
+
+/**
+ * @summary Stop billing and destroy the computer now, without a refund.
+ */
+export type releaseTeamComputerResponse200 = {
+  data: ComputerStatus;
+  status: 200;
+};
+
+export type releaseTeamComputerResponse400 = {
+  data: ErrorResponse;
+  status: 400;
+};
+
+export type releaseTeamComputerResponseSuccess =
+  releaseTeamComputerResponse200 & {
+    headers: Headers;
+  };
+export type releaseTeamComputerResponseError =
+  releaseTeamComputerResponse400 & {
+    headers: Headers;
+  };
+
+export type releaseTeamComputerResponse =
+  | releaseTeamComputerResponseSuccess
+  | releaseTeamComputerResponseError;
+
+export const getReleaseTeamComputerUrl = (computerId: string) => {
+  return `/team/computers/${computerId}/release`;
+};
+
+export const releaseTeamComputer = async (
+  computerId: string,
+  releaseBody: ReleaseBody,
+  options?: RequestInit
+): Promise<releaseTeamComputerResponse> => {
+  const res = await fetch(getReleaseTeamComputerUrl(computerId), {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(releaseBody),
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: releaseTeamComputerResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as releaseTeamComputerResponse;
+};
+
+/**
+ * @summary Retry a failed computer without changing billing.
+ */
+export type retryTeamComputerResponse200 = {
+  data: ComputerStatus;
+  status: 200;
+};
+
+export type retryTeamComputerResponse404 = {
+  data: ErrorResponse;
+  status: 404;
+};
+
+export type retryTeamComputerResponse409 = {
+  data: ErrorResponse;
+  status: 409;
+};
+
+export type retryTeamComputerResponseSuccess = retryTeamComputerResponse200 & {
+  headers: Headers;
+};
+export type retryTeamComputerResponseError = (
+  | retryTeamComputerResponse404
+  | retryTeamComputerResponse409
+) & {
+  headers: Headers;
+};
+
+export type retryTeamComputerResponse =
+  | retryTeamComputerResponseSuccess
+  | retryTeamComputerResponseError;
+
+export const getRetryTeamComputerUrl = (computerId: string) => {
+  return `/team/computers/${computerId}/retry`;
+};
+
+export const retryTeamComputer = async (
+  computerId: string,
+  options?: RequestInit
+): Promise<retryTeamComputerResponse> => {
+  const res = await fetch(getRetryTeamComputerUrl(computerId), {
+    ...options,
+    method: 'POST',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: retryTeamComputerResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as retryTeamComputerResponse;
+};
+
+/**
  * @summary Legacy compatibility endpoint for team admins and owners. Enabling
 is a no-op; disabling is rejected. CRM records remain available.
 Each member manages mailbox contribution through `/crm/email-privacy`;
@@ -4963,6 +5715,11 @@ export type inviteToTeamResponse401 = {
   status: 401;
 };
 
+export type inviteToTeamResponse403 = {
+  data: ErrorResponse;
+  status: 403;
+};
+
 export type inviteToTeamResponse404 = {
   data: ErrorResponse;
   status: 404;
@@ -4985,6 +5742,7 @@ export type inviteToTeamResponseError = (
   | inviteToTeamResponse304
   | inviteToTeamResponse400
   | inviteToTeamResponse401
+  | inviteToTeamResponse403
   | inviteToTeamResponse404
   | inviteToTeamResponse409
   | inviteToTeamResponse500
@@ -5947,6 +6705,982 @@ export const getUserInvites = async (
     status: res.status,
     headers: res.headers,
   } as getUserInvitesResponse;
+};
+
+/**
+ * @summary The caller's team's agents, with fresh computer status. Requires a team
+admin or owner.
+ */
+export type listTeamAgentsResponse200 = {
+  data: TeamAgents;
+  status: 200;
+};
+
+export type listTeamAgentsResponse401 = {
+  data: ErrorResponse;
+  status: 401;
+};
+
+export type listTeamAgentsResponse403 = {
+  data: ErrorResponse;
+  status: 403;
+};
+
+export type listTeamAgentsResponse500 = {
+  data: ErrorResponse;
+  status: 500;
+};
+
+export type listTeamAgentsResponseSuccess = listTeamAgentsResponse200 & {
+  headers: Headers;
+};
+export type listTeamAgentsResponseError = (
+  | listTeamAgentsResponse401
+  | listTeamAgentsResponse403
+  | listTeamAgentsResponse500
+) & {
+  headers: Headers;
+};
+
+export type listTeamAgentsResponse =
+  | listTeamAgentsResponseSuccess
+  | listTeamAgentsResponseError;
+
+export const getListTeamAgentsUrl = () => {
+  return `/team_agents`;
+};
+
+export const listTeamAgents = async (
+  options?: RequestInit
+): Promise<listTeamAgentsResponse> => {
+  const res = await fetch(getListTeamAgentsUrl(), {
+    ...options,
+    method: 'GET',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: listTeamAgentsResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as listTeamAgentsResponse;
+};
+
+/**
+ * @summary Invite a team agent and buy its computer, in one Stripe update. Requires a
+team admin or owner. The agent comes back `provisioning`.
+ */
+export type createTeamAgentResponse201 = {
+  data: TeamAgent;
+  status: 201;
+};
+
+export type createTeamAgentResponse400 = {
+  data: ErrorResponse;
+  status: 400;
+};
+
+export type createTeamAgentResponse401 = {
+  data: ErrorResponse;
+  status: 401;
+};
+
+export type createTeamAgentResponse403 = {
+  data: ErrorResponse;
+  status: 403;
+};
+
+export type createTeamAgentResponse409 = {
+  data: TeamAgentConflict;
+  status: 409;
+};
+
+export type createTeamAgentResponse500 = {
+  data: ErrorResponse;
+  status: 500;
+};
+
+export type createTeamAgentResponse502 = {
+  data: TeamAgentFailure;
+  status: 502;
+};
+
+export type createTeamAgentResponse503 = {
+  data: ErrorResponse;
+  status: 503;
+};
+
+export type createTeamAgentResponseSuccess = createTeamAgentResponse201 & {
+  headers: Headers;
+};
+export type createTeamAgentResponseError = (
+  | createTeamAgentResponse400
+  | createTeamAgentResponse401
+  | createTeamAgentResponse403
+  | createTeamAgentResponse409
+  | createTeamAgentResponse500
+  | createTeamAgentResponse502
+  | createTeamAgentResponse503
+) & {
+  headers: Headers;
+};
+
+export type createTeamAgentResponse =
+  | createTeamAgentResponseSuccess
+  | createTeamAgentResponseError;
+
+export const getCreateTeamAgentUrl = () => {
+  return `/team_agents`;
+};
+
+export const createTeamAgent = async (
+  createTeamAgent: CreateTeamAgent,
+  options?: RequestInit
+): Promise<createTeamAgentResponse> => {
+  const res = await fetch(getCreateTeamAgentUrl(), {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(createTeamAgent),
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: createTeamAgentResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as createTeamAgentResponse;
+};
+
+/**
+ * @summary The calling team agent's own profile.
+ */
+export type getMyTeamAgentResponse200 = {
+  data: TeamAgent;
+  status: 200;
+};
+
+export type getMyTeamAgentResponse401 = {
+  data: ErrorResponse;
+  status: 401;
+};
+
+export type getMyTeamAgentResponse404 = {
+  data: ErrorResponse;
+  status: 404;
+};
+
+export type getMyTeamAgentResponse500 = {
+  data: ErrorResponse;
+  status: 500;
+};
+
+export type getMyTeamAgentResponseSuccess = getMyTeamAgentResponse200 & {
+  headers: Headers;
+};
+export type getMyTeamAgentResponseError = (
+  | getMyTeamAgentResponse401
+  | getMyTeamAgentResponse404
+  | getMyTeamAgentResponse500
+) & {
+  headers: Headers;
+};
+
+export type getMyTeamAgentResponse =
+  | getMyTeamAgentResponseSuccess
+  | getMyTeamAgentResponseError;
+
+export const getGetMyTeamAgentUrl = () => {
+  return `/team_agents/me`;
+};
+
+export const getMyTeamAgent = async (
+  options?: RequestInit
+): Promise<getMyTeamAgentResponse> => {
+  const res = await fetch(getGetMyTeamAgentUrl(), {
+    ...options,
+    method: 'GET',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: getMyTeamAgentResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as getMyTeamAgentResponse;
+};
+
+/**
+ * @summary The calling team agent's newest emails.
+ */
+export type listMyTeamAgentEmailResponse200 = {
+  data: EmailMessages;
+  status: 200;
+};
+
+export type listMyTeamAgentEmailResponse401 = {
+  data: ErrorResponse;
+  status: 401;
+};
+
+export type listMyTeamAgentEmailResponse404 = {
+  data: ErrorResponse;
+  status: 404;
+};
+
+export type listMyTeamAgentEmailResponse502 = {
+  data: ErrorResponse;
+  status: 502;
+};
+
+export type listMyTeamAgentEmailResponse503 = {
+  data: ErrorResponse;
+  status: 503;
+};
+
+export type listMyTeamAgentEmailResponseSuccess =
+  listMyTeamAgentEmailResponse200 & {
+    headers: Headers;
+  };
+export type listMyTeamAgentEmailResponseError = (
+  | listMyTeamAgentEmailResponse401
+  | listMyTeamAgentEmailResponse404
+  | listMyTeamAgentEmailResponse502
+  | listMyTeamAgentEmailResponse503
+) & {
+  headers: Headers;
+};
+
+export type listMyTeamAgentEmailResponse =
+  | listMyTeamAgentEmailResponseSuccess
+  | listMyTeamAgentEmailResponseError;
+
+export const getListMyTeamAgentEmailUrl = (
+  params?: ListMyTeamAgentEmailParams
+) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : value.toString());
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/team_agents/me/email/messages?${stringifiedParams}`
+    : `/team_agents/me/email/messages`;
+};
+
+export const listMyTeamAgentEmail = async (
+  params?: ListMyTeamAgentEmailParams,
+  options?: RequestInit
+): Promise<listMyTeamAgentEmailResponse> => {
+  const res = await fetch(getListMyTeamAgentEmailUrl(params), {
+    ...options,
+    method: 'GET',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: listMyTeamAgentEmailResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as listMyTeamAgentEmailResponse;
+};
+
+/**
+ * @summary One of the calling team agent's emails, with its body.
+ */
+export type getMyTeamAgentEmailResponse200 = {
+  data: EmailMessage;
+  status: 200;
+};
+
+export type getMyTeamAgentEmailResponse401 = {
+  data: ErrorResponse;
+  status: 401;
+};
+
+export type getMyTeamAgentEmailResponse404 = {
+  data: ErrorResponse;
+  status: 404;
+};
+
+export type getMyTeamAgentEmailResponse502 = {
+  data: ErrorResponse;
+  status: 502;
+};
+
+export type getMyTeamAgentEmailResponse503 = {
+  data: ErrorResponse;
+  status: 503;
+};
+
+export type getMyTeamAgentEmailResponseSuccess =
+  getMyTeamAgentEmailResponse200 & {
+    headers: Headers;
+  };
+export type getMyTeamAgentEmailResponseError = (
+  | getMyTeamAgentEmailResponse401
+  | getMyTeamAgentEmailResponse404
+  | getMyTeamAgentEmailResponse502
+  | getMyTeamAgentEmailResponse503
+) & {
+  headers: Headers;
+};
+
+export type getMyTeamAgentEmailResponse =
+  | getMyTeamAgentEmailResponseSuccess
+  | getMyTeamAgentEmailResponseError;
+
+export const getGetMyTeamAgentEmailUrl = (messageId: string) => {
+  return `/team_agents/me/email/messages/${messageId}`;
+};
+
+export const getMyTeamAgentEmail = async (
+  messageId: string,
+  options?: RequestInit
+): Promise<getMyTeamAgentEmailResponse> => {
+  const res = await fetch(getGetMyTeamAgentEmailUrl(messageId), {
+    ...options,
+    method: 'GET',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: getMyTeamAgentEmailResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as getMyTeamAgentEmailResponse;
+};
+
+/**
+ * @summary Send an email as the calling team agent.
+ */
+export type sendTeamAgentEmailResponse200 = {
+  data: SentEmail;
+  status: 200;
+};
+
+export type sendTeamAgentEmailResponse400 = {
+  data: ErrorResponse;
+  status: 400;
+};
+
+export type sendTeamAgentEmailResponse401 = {
+  data: ErrorResponse;
+  status: 401;
+};
+
+export type sendTeamAgentEmailResponse404 = {
+  data: ErrorResponse;
+  status: 404;
+};
+
+export type sendTeamAgentEmailResponse502 = {
+  data: ErrorResponse;
+  status: 502;
+};
+
+export type sendTeamAgentEmailResponse503 = {
+  data: ErrorResponse;
+  status: 503;
+};
+
+export type sendTeamAgentEmailResponseSuccess =
+  sendTeamAgentEmailResponse200 & {
+    headers: Headers;
+  };
+export type sendTeamAgentEmailResponseError = (
+  | sendTeamAgentEmailResponse400
+  | sendTeamAgentEmailResponse401
+  | sendTeamAgentEmailResponse404
+  | sendTeamAgentEmailResponse502
+  | sendTeamAgentEmailResponse503
+) & {
+  headers: Headers;
+};
+
+export type sendTeamAgentEmailResponse =
+  | sendTeamAgentEmailResponseSuccess
+  | sendTeamAgentEmailResponseError;
+
+export const getSendTeamAgentEmailUrl = () => {
+  return `/team_agents/me/email/send`;
+};
+
+export const sendTeamAgentEmail = async (
+  sendEmail: SendEmail,
+  options?: RequestInit
+): Promise<sendTeamAgentEmailResponse> => {
+  const res = await fetch(getSendTeamAgentEmailUrl(), {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(sendEmail),
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: sendTeamAgentEmailResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as sendTeamAgentEmailResponse;
+};
+
+/**
+ * @summary What inviting an agent with a computer of `size` adds to the team's bill.
+Requires a team admin or owner.
+ */
+export type quoteTeamAgentResponse200 = {
+  data: TeamAgentQuote;
+  status: 200;
+};
+
+export type quoteTeamAgentResponse400 = {
+  data: ErrorResponse;
+  status: 400;
+};
+
+export type quoteTeamAgentResponse401 = {
+  data: ErrorResponse;
+  status: 401;
+};
+
+export type quoteTeamAgentResponse403 = {
+  data: ErrorResponse;
+  status: 403;
+};
+
+export type quoteTeamAgentResponse409 = {
+  data: TeamAgentConflict;
+  status: 409;
+};
+
+export type quoteTeamAgentResponse500 = {
+  data: ErrorResponse;
+  status: 500;
+};
+
+export type quoteTeamAgentResponse502 = {
+  data: ErrorResponse;
+  status: 502;
+};
+
+export type quoteTeamAgentResponse503 = {
+  data: ErrorResponse;
+  status: 503;
+};
+
+export type quoteTeamAgentResponseSuccess = quoteTeamAgentResponse200 & {
+  headers: Headers;
+};
+export type quoteTeamAgentResponseError = (
+  | quoteTeamAgentResponse400
+  | quoteTeamAgentResponse401
+  | quoteTeamAgentResponse403
+  | quoteTeamAgentResponse409
+  | quoteTeamAgentResponse500
+  | quoteTeamAgentResponse502
+  | quoteTeamAgentResponse503
+) & {
+  headers: Headers;
+};
+
+export type quoteTeamAgentResponse =
+  | quoteTeamAgentResponseSuccess
+  | quoteTeamAgentResponseError;
+
+export const getQuoteTeamAgentUrl = (params: QuoteTeamAgentParams) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : value.toString());
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/team_agents/quote?${stringifiedParams}`
+    : `/team_agents/quote`;
+};
+
+export const quoteTeamAgent = async (
+  params: QuoteTeamAgentParams,
+  options?: RequestInit
+): Promise<quoteTeamAgentResponse> => {
+  const res = await fetch(getQuoteTeamAgentUrl(params), {
+    ...options,
+    method: 'GET',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: quoteTeamAgentResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as quoteTeamAgentResponse;
+};
+
+/**
+ * @summary Computer specifications for rollout-enabled team admins, independent of billing.
+ */
+export type getTeamAgentSizesResponse200 = {
+  data: TeamAgentSizes;
+  status: 200;
+};
+
+export type getTeamAgentSizesResponse401 = {
+  data: ErrorResponse;
+  status: 401;
+};
+
+export type getTeamAgentSizesResponse403 = {
+  data: ErrorResponse;
+  status: 403;
+};
+
+export type getTeamAgentSizesResponse500 = {
+  data: ErrorResponse;
+  status: 500;
+};
+
+export type getTeamAgentSizesResponseSuccess = getTeamAgentSizesResponse200 & {
+  headers: Headers;
+};
+export type getTeamAgentSizesResponseError = (
+  | getTeamAgentSizesResponse401
+  | getTeamAgentSizesResponse403
+  | getTeamAgentSizesResponse500
+) & {
+  headers: Headers;
+};
+
+export type getTeamAgentSizesResponse =
+  | getTeamAgentSizesResponseSuccess
+  | getTeamAgentSizesResponseError;
+
+export const getGetTeamAgentSizesUrl = () => {
+  return `/team_agents/sizes`;
+};
+
+export const getTeamAgentSizes = async (
+  options?: RequestInit
+): Promise<getTeamAgentSizesResponse> => {
+  const res = await fetch(getGetTeamAgentSizesUrl(), {
+    ...options,
+    method: 'GET',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: getTeamAgentSizesResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as getTeamAgentSizesResponse;
+};
+
+/**
+ * @summary Delete a team agent: release its computer, delete its repo, remove its
+seat, mailbox and account. Requires a team admin or owner. Safe to retry.
+ */
+export type deleteTeamAgentResponse204 = {
+  data: void;
+  status: 204;
+};
+
+export type deleteTeamAgentResponse400 = {
+  data: ErrorResponse;
+  status: 400;
+};
+
+export type deleteTeamAgentResponse401 = {
+  data: ErrorResponse;
+  status: 401;
+};
+
+export type deleteTeamAgentResponse403 = {
+  data: ErrorResponse;
+  status: 403;
+};
+
+export type deleteTeamAgentResponse404 = {
+  data: ErrorResponse;
+  status: 404;
+};
+
+export type deleteTeamAgentResponse409 = {
+  data: TeamAgentConflict;
+  status: 409;
+};
+
+export type deleteTeamAgentResponse500 = {
+  data: ErrorResponse;
+  status: 500;
+};
+
+export type deleteTeamAgentResponse502 = {
+  data: ErrorResponse;
+  status: 502;
+};
+
+export type deleteTeamAgentResponseSuccess = deleteTeamAgentResponse204 & {
+  headers: Headers;
+};
+export type deleteTeamAgentResponseError = (
+  | deleteTeamAgentResponse400
+  | deleteTeamAgentResponse401
+  | deleteTeamAgentResponse403
+  | deleteTeamAgentResponse404
+  | deleteTeamAgentResponse409
+  | deleteTeamAgentResponse500
+  | deleteTeamAgentResponse502
+) & {
+  headers: Headers;
+};
+
+export type deleteTeamAgentResponse =
+  | deleteTeamAgentResponseSuccess
+  | deleteTeamAgentResponseError;
+
+export const getDeleteTeamAgentUrl = (agentUserId: string) => {
+  return `/team_agents/${agentUserId}`;
+};
+
+export const deleteTeamAgent = async (
+  agentUserId: string,
+  options?: RequestInit
+): Promise<deleteTeamAgentResponse> => {
+  const res = await fetch(getDeleteTeamAgentUrl(agentUserId), {
+    ...options,
+    method: 'DELETE',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: deleteTeamAgentResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as deleteTeamAgentResponse;
+};
+
+/**
+ * @summary Minimal own-team computer discovery; does not grant runtime access.
+ */
+export type getTeamAgentComputerResponse200 = {
+  data: TeamAgentComputer;
+  status: 200;
+};
+
+export type getTeamAgentComputerResponse400 = {
+  data: ErrorResponse;
+  status: 400;
+};
+
+export type getTeamAgentComputerResponse401 = {
+  data: ErrorResponse;
+  status: 401;
+};
+
+export type getTeamAgentComputerResponse403 = {
+  data: ErrorResponse;
+  status: 403;
+};
+
+export type getTeamAgentComputerResponse404 = {
+  data: ErrorResponse;
+  status: 404;
+};
+
+export type getTeamAgentComputerResponse500 = {
+  data: ErrorResponse;
+  status: 500;
+};
+
+export type getTeamAgentComputerResponse503 = {
+  data: ErrorResponse;
+  status: 503;
+};
+
+export type getTeamAgentComputerResponseSuccess =
+  getTeamAgentComputerResponse200 & {
+    headers: Headers;
+  };
+export type getTeamAgentComputerResponseError = (
+  | getTeamAgentComputerResponse400
+  | getTeamAgentComputerResponse401
+  | getTeamAgentComputerResponse403
+  | getTeamAgentComputerResponse404
+  | getTeamAgentComputerResponse500
+  | getTeamAgentComputerResponse503
+) & {
+  headers: Headers;
+};
+
+export type getTeamAgentComputerResponse =
+  | getTeamAgentComputerResponseSuccess
+  | getTeamAgentComputerResponseError;
+
+export const getGetTeamAgentComputerUrl = (agentUserId: string) => {
+  return `/team_agents/${agentUserId}/computer`;
+};
+
+export const getTeamAgentComputer = async (
+  agentUserId: string,
+  options?: RequestInit
+): Promise<getTeamAgentComputerResponse> => {
+  const res = await fetch(getGetTeamAgentComputerUrl(agentUserId), {
+    ...options,
+    method: 'GET',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: getTeamAgentComputerResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as getTeamAgentComputerResponse;
+};
+
+/**
+ * @summary Retry a failed agent's existing computer and recover its workspace repo.
+Requires a team admin or owner; preserves bootstrap credentials and billing.
+ */
+export type retryTeamAgentResponse200 = {
+  data: TeamAgent;
+  status: 200;
+};
+
+export type retryTeamAgentResponse400 = {
+  data: ErrorResponse;
+  status: 400;
+};
+
+export type retryTeamAgentResponse401 = {
+  data: ErrorResponse;
+  status: 401;
+};
+
+export type retryTeamAgentResponse403 = {
+  data: ErrorResponse;
+  status: 403;
+};
+
+export type retryTeamAgentResponse404 = {
+  data: ErrorResponse;
+  status: 404;
+};
+
+export type retryTeamAgentResponse409 = {
+  data: TeamAgentConflict;
+  status: 409;
+};
+
+export type retryTeamAgentResponse500 = {
+  data: ErrorResponse;
+  status: 500;
+};
+
+export type retryTeamAgentResponse502 = {
+  data: ErrorResponse;
+  status: 502;
+};
+
+export type retryTeamAgentResponse503 = {
+  data: ErrorResponse;
+  status: 503;
+};
+
+export type retryTeamAgentResponseSuccess = retryTeamAgentResponse200 & {
+  headers: Headers;
+};
+export type retryTeamAgentResponseError = (
+  | retryTeamAgentResponse400
+  | retryTeamAgentResponse401
+  | retryTeamAgentResponse403
+  | retryTeamAgentResponse404
+  | retryTeamAgentResponse409
+  | retryTeamAgentResponse500
+  | retryTeamAgentResponse502
+  | retryTeamAgentResponse503
+) & {
+  headers: Headers;
+};
+
+export type retryTeamAgentResponse =
+  | retryTeamAgentResponseSuccess
+  | retryTeamAgentResponseError;
+
+export const getRetryTeamAgentUrl = (agentUserId: string) => {
+  return `/team_agents/${agentUserId}/retry`;
+};
+
+export const retryTeamAgent = async (
+  agentUserId: string,
+  options?: RequestInit
+): Promise<retryTeamAgentResponse> => {
+  const res = await fetch(getRetryTeamAgentUrl(agentUserId), {
+    ...options,
+    method: 'POST',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: retryTeamAgentResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as retryTeamAgentResponse;
+};
+
+/**
+ * @summary Read the user-selected voice from the agent's repository.
+ */
+export type getTeamAgentVoiceResponse200 = {
+  data: AgentVoice;
+  status: 200;
+};
+
+export type getTeamAgentVoiceResponse403 = {
+  data: ErrorResponse;
+  status: 403;
+};
+
+export type getTeamAgentVoiceResponse404 = {
+  data: ErrorResponse;
+  status: 404;
+};
+
+export type getTeamAgentVoiceResponseSuccess = getTeamAgentVoiceResponse200 & {
+  headers: Headers;
+};
+export type getTeamAgentVoiceResponseError = (
+  | getTeamAgentVoiceResponse403
+  | getTeamAgentVoiceResponse404
+) & {
+  headers: Headers;
+};
+
+export type getTeamAgentVoiceResponse =
+  | getTeamAgentVoiceResponseSuccess
+  | getTeamAgentVoiceResponseError;
+
+export const getGetTeamAgentVoiceUrl = (agentUserId: string) => {
+  return `/team_agents/${agentUserId}/voice`;
+};
+
+export const getTeamAgentVoice = async (
+  agentUserId: string,
+  options?: RequestInit
+): Promise<getTeamAgentVoiceResponse> => {
+  const res = await fetch(getGetTeamAgentVoiceUrl(agentUserId), {
+    ...options,
+    method: 'GET',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: getTeamAgentVoiceResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as getTeamAgentVoiceResponse;
+};
+
+/**
+ * @summary Commit an administrator's voice selection to the agent's repository.
+ */
+export type setTeamAgentVoiceResponse200 = {
+  data: AgentVoice;
+  status: 200;
+};
+
+export type setTeamAgentVoiceResponse400 = {
+  data: ErrorResponse;
+  status: 400;
+};
+
+export type setTeamAgentVoiceResponse403 = {
+  data: ErrorResponse;
+  status: 403;
+};
+
+export type setTeamAgentVoiceResponse404 = {
+  data: ErrorResponse;
+  status: 404;
+};
+
+export type setTeamAgentVoiceResponseSuccess = setTeamAgentVoiceResponse200 & {
+  headers: Headers;
+};
+export type setTeamAgentVoiceResponseError = (
+  | setTeamAgentVoiceResponse400
+  | setTeamAgentVoiceResponse403
+  | setTeamAgentVoiceResponse404
+) & {
+  headers: Headers;
+};
+
+export type setTeamAgentVoiceResponse =
+  | setTeamAgentVoiceResponseSuccess
+  | setTeamAgentVoiceResponseError;
+
+export const getSetTeamAgentVoiceUrl = (agentUserId: string) => {
+  return `/team_agents/${agentUserId}/voice`;
+};
+
+export const setTeamAgentVoice = async (
+  agentUserId: string,
+  agentVoice: AgentVoice,
+  options?: RequestInit
+): Promise<setTeamAgentVoiceResponse> => {
+  const res = await fetch(getSetTeamAgentVoiceUrl(agentUserId), {
+    ...options,
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(agentVoice),
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: setTeamAgentVoiceResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as setTeamAgentVoiceResponse;
 };
 
 /**

@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO \"User\" (id, email, macro_user_id) VALUES ($1, $1, $2)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "d08cea9c8ce158f5d2dae74eee59b3b7d6c52b6fc8135ef906260893b094652b"
+}

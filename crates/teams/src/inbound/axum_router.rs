@@ -308,6 +308,12 @@ impl IntoResponse for DeleteTeamError {
 impl IntoResponse for InviteUsersToTeamError {
     fn into_response(self) -> Response {
         match self {
+            InviteUsersToTeamError::AgentsNotEnabled => (
+                StatusCode::FORBIDDEN,
+                Json(ErrorResponse {
+                    message: "team agents are not enabled".into(),
+                }),
+            ),
             InviteUsersToTeamError::TooManyEmails => (
                 StatusCode::BAD_REQUEST,
                 Json(ErrorResponse {

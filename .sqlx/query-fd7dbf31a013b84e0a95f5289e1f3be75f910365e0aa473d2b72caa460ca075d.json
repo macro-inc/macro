@@ -1,0 +1,100 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT\n            id, kind, name, owner_user_id, team_id, created_by, allow_permission_bypass,\n            created_at, updated_at, last_connected_at, last_disconnected_at,\n            capabilities AS \"capabilities: Json<HarnessCapabilities>\", computer_id, claude_mode\n        FROM harnesses\n        WHERE id = $1 AND deleted_at IS NULL\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "kind",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "name",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "owner_user_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "team_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 5,
+        "name": "created_by",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 6,
+        "name": "allow_permission_bypass",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 7,
+        "name": "created_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 8,
+        "name": "updated_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 9,
+        "name": "last_connected_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 10,
+        "name": "last_disconnected_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 11,
+        "name": "capabilities: Json<HarnessCapabilities>",
+        "type_info": "Jsonb"
+      },
+      {
+        "ordinal": 12,
+        "name": "computer_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 13,
+        "name": "claude_mode",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      true,
+      true,
+      false,
+      false,
+      false,
+      false,
+      true,
+      true,
+      false,
+      true,
+      false
+    ]
+  },
+  "hash": "fd7dbf31a013b84e0a95f5289e1f3be75f910365e0aa473d2b72caa460ca075d"
+}

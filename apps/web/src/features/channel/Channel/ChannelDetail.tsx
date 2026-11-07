@@ -61,6 +61,7 @@ import {
   Show,
   Switch,
 } from 'solid-js';
+import { ChannelComputerButton } from './ChannelComputerButton';
 import { ChannelLoading } from './ChannelLoading';
 import {
   ChannelMessages,
@@ -197,6 +198,7 @@ export function ChannelDetailActions(props: ChannelDetailHeaderProps) {
             <ChannelCallButton grouped channelId={props.channelId} />
           </DebugSuspense>
         </Show>
+        <ChannelComputerButton grouped channelId={props.channelId} />
         <Show when={askMacroEntity()}>
           {(entity) => (
             <DebugSuspense name="ChannelDetail.ask-macro">

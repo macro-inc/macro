@@ -2,7 +2,7 @@ use axum::http::HeaderValue;
 use chrono::Utc;
 
 use super::*;
-use crate::domain::models::HarnessOwner;
+use crate::domain::models::{ClaudeMode, HarnessOwner};
 
 fn harness(connected: bool) -> Harness {
     Harness {
@@ -13,11 +13,17 @@ fn harness(connected: bool) -> Harness {
         owner: HarnessOwner::User {
             user_id: "macro|owner@example.com".to_owned(),
         },
+        access: crate::domain::models::HarnessAccess::None,
+        is_agent_computer: false,
+        shared_team_ids: Vec::new(),
         created_by: "macro|owner@example.com".to_owned(),
         created_at: Utc::now(),
         updated_at: Utc::now(),
         connected,
         last_connected_at: None,
+        capabilities: HarnessCapabilities::default(),
+        computer_id: None,
+        claude_mode: ClaudeMode::MacroCredits,
     }
 }
 

@@ -26,6 +26,10 @@ import type {
   CallConnectedTool,
   ClassifyInputRequest,
   ClassifyInputResponse,
+  ClaudeModeResponse,
+  ClaudeSignedIn,
+  ClaudeSignInComplete,
+  ClaudeSignInStarted,
   CodingAgentsResponse,
   CodingPreferencesBody,
   ConnectedApp,
@@ -72,6 +76,7 @@ import type {
   StartFreshAgentConversationRequest,
   UnlinkAgentSessionPullRequestParams,
   UpdateSharePermissionRequestV2,
+  Voice,
   WarmAgentSessionRequest,
   WarmAgentSessionResponse,
   WorkRegistrationResponse,
@@ -4207,6 +4212,403 @@ export const listCodingAgents = async (
 };
 
 /**
+ * @summary How Claude Code on the computer is paid for.
+ */
+export type getClaudeModeResponse200 = {
+  data: ClaudeModeResponse;
+  status: 200;
+};
+
+export type getClaudeModeResponse403 = {
+  data: void;
+  status: 403;
+};
+
+export type getClaudeModeResponse404 = {
+  data: void;
+  status: 404;
+};
+
+export type getClaudeModeResponse503 = {
+  data: void;
+  status: 503;
+};
+
+export type getClaudeModeResponseSuccess = getClaudeModeResponse200 & {
+  headers: Headers;
+};
+export type getClaudeModeResponseError = (
+  | getClaudeModeResponse403
+  | getClaudeModeResponse404
+  | getClaudeModeResponse503
+) & {
+  headers: Headers;
+};
+
+export type getClaudeModeResponse =
+  | getClaudeModeResponseSuccess
+  | getClaudeModeResponseError;
+
+export const getGetClaudeModeUrl = (harnessId: string) => {
+  return `/harnesses/${harnessId}/claude-mode`;
+};
+
+export const getClaudeMode = async (
+  harnessId: string,
+  options?: RequestInit
+): Promise<getClaudeModeResponse> => {
+  const res = await fetch(getGetClaudeModeUrl(harnessId), {
+    ...options,
+    method: 'GET',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: getClaudeModeResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as getClaudeModeResponse;
+};
+
+/**
+ * @summary Start a Claude sign-in on the computer and return its URL.
+ */
+export type startClaudeSignInResponse200 = {
+  data: ClaudeSignInStarted;
+  status: 200;
+};
+
+export type startClaudeSignInResponse400 = {
+  data: void;
+  status: 400;
+};
+
+export type startClaudeSignInResponse403 = {
+  data: void;
+  status: 403;
+};
+
+export type startClaudeSignInResponse404 = {
+  data: void;
+  status: 404;
+};
+
+export type startClaudeSignInResponse409 = {
+  data: void;
+  status: 409;
+};
+
+export type startClaudeSignInResponse422 = {
+  data: void;
+  status: 422;
+};
+
+export type startClaudeSignInResponse503 = {
+  data: void;
+  status: 503;
+};
+
+export type startClaudeSignInResponse504 = {
+  data: void;
+  status: 504;
+};
+
+export type startClaudeSignInResponseSuccess = startClaudeSignInResponse200 & {
+  headers: Headers;
+};
+export type startClaudeSignInResponseError = (
+  | startClaudeSignInResponse400
+  | startClaudeSignInResponse403
+  | startClaudeSignInResponse404
+  | startClaudeSignInResponse409
+  | startClaudeSignInResponse422
+  | startClaudeSignInResponse503
+  | startClaudeSignInResponse504
+) & {
+  headers: Headers;
+};
+
+export type startClaudeSignInResponse =
+  | startClaudeSignInResponseSuccess
+  | startClaudeSignInResponseError;
+
+export const getStartClaudeSignInUrl = (harnessId: string) => {
+  return `/harnesses/${harnessId}/claude-sign-in`;
+};
+
+export const startClaudeSignIn = async (
+  harnessId: string,
+  options?: RequestInit
+): Promise<startClaudeSignInResponse> => {
+  const res = await fetch(getStartClaudeSignInUrl(harnessId), {
+    ...options,
+    method: 'POST',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: startClaudeSignInResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as startClaudeSignInResponse;
+};
+
+/**
+ * @summary Cancel the pending setup-token process. Its terminal completion releases
+the original request's account lease, including on another replica.
+ */
+export type cancelClaudeSignInResponse204 = {
+  data: void;
+  status: 204;
+};
+
+export type cancelClaudeSignInResponse403 = {
+  data: void;
+  status: 403;
+};
+
+export type cancelClaudeSignInResponse404 = {
+  data: void;
+  status: 404;
+};
+
+export type cancelClaudeSignInResponse409 = {
+  data: void;
+  status: 409;
+};
+
+export type cancelClaudeSignInResponse422 = {
+  data: void;
+  status: 422;
+};
+
+export type cancelClaudeSignInResponse503 = {
+  data: void;
+  status: 503;
+};
+
+export type cancelClaudeSignInResponse504 = {
+  data: void;
+  status: 504;
+};
+
+export type cancelClaudeSignInResponseSuccess =
+  cancelClaudeSignInResponse204 & {
+    headers: Headers;
+  };
+export type cancelClaudeSignInResponseError = (
+  | cancelClaudeSignInResponse403
+  | cancelClaudeSignInResponse404
+  | cancelClaudeSignInResponse409
+  | cancelClaudeSignInResponse422
+  | cancelClaudeSignInResponse503
+  | cancelClaudeSignInResponse504
+) & {
+  headers: Headers;
+};
+
+export type cancelClaudeSignInResponse =
+  | cancelClaudeSignInResponseSuccess
+  | cancelClaudeSignInResponseError;
+
+export const getCancelClaudeSignInUrl = (harnessId: string) => {
+  return `/harnesses/${harnessId}/claude-sign-in/cancel`;
+};
+
+export const cancelClaudeSignIn = async (
+  harnessId: string,
+  options?: RequestInit
+): Promise<cancelClaudeSignInResponse> => {
+  const res = await fetch(getCancelClaudeSignInUrl(harnessId), {
+    ...options,
+    method: 'POST',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: cancelClaudeSignInResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as cancelClaudeSignInResponse;
+};
+
+/**
+ * @summary Finish the Claude sign-in with what the user pasted.
+ */
+export type completeClaudeSignInResponse200 = {
+  data: ClaudeSignedIn;
+  status: 200;
+};
+
+export type completeClaudeSignInResponse400 = {
+  data: void;
+  status: 400;
+};
+
+export type completeClaudeSignInResponse403 = {
+  data: void;
+  status: 403;
+};
+
+export type completeClaudeSignInResponse404 = {
+  data: void;
+  status: 404;
+};
+
+export type completeClaudeSignInResponse409 = {
+  data: void;
+  status: 409;
+};
+
+export type completeClaudeSignInResponse422 = {
+  data: void;
+  status: 422;
+};
+
+export type completeClaudeSignInResponse503 = {
+  data: void;
+  status: 503;
+};
+
+export type completeClaudeSignInResponse504 = {
+  data: void;
+  status: 504;
+};
+
+export type completeClaudeSignInResponseSuccess =
+  completeClaudeSignInResponse200 & {
+    headers: Headers;
+  };
+export type completeClaudeSignInResponseError = (
+  | completeClaudeSignInResponse400
+  | completeClaudeSignInResponse403
+  | completeClaudeSignInResponse404
+  | completeClaudeSignInResponse409
+  | completeClaudeSignInResponse422
+  | completeClaudeSignInResponse503
+  | completeClaudeSignInResponse504
+) & {
+  headers: Headers;
+};
+
+export type completeClaudeSignInResponse =
+  | completeClaudeSignInResponseSuccess
+  | completeClaudeSignInResponseError;
+
+export const getCompleteClaudeSignInUrl = (harnessId: string) => {
+  return `/harnesses/${harnessId}/claude-sign-in/complete`;
+};
+
+export const completeClaudeSignIn = async (
+  harnessId: string,
+  claudeSignInComplete: ClaudeSignInComplete,
+  options?: RequestInit
+): Promise<completeClaudeSignInResponse> => {
+  const res = await fetch(getCompleteClaudeSignInUrl(harnessId), {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(claudeSignInComplete),
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: completeClaudeSignInResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as completeClaudeSignInResponse;
+};
+
+/**
+ * @summary Forget the computer's Claude account and return it to Macro credits.
+ */
+export type claudeSignOutResponse200 = {
+  data: ClaudeModeResponse;
+  status: 200;
+};
+
+export type claudeSignOutResponse403 = {
+  data: void;
+  status: 403;
+};
+
+export type claudeSignOutResponse404 = {
+  data: void;
+  status: 404;
+};
+
+export type claudeSignOutResponse409 = {
+  data: void;
+  status: 409;
+};
+
+export type claudeSignOutResponse422 = {
+  data: void;
+  status: 422;
+};
+
+export type claudeSignOutResponse503 = {
+  data: void;
+  status: 503;
+};
+
+export type claudeSignOutResponse504 = {
+  data: void;
+  status: 504;
+};
+
+export type claudeSignOutResponseSuccess = claudeSignOutResponse200 & {
+  headers: Headers;
+};
+export type claudeSignOutResponseError = (
+  | claudeSignOutResponse403
+  | claudeSignOutResponse404
+  | claudeSignOutResponse409
+  | claudeSignOutResponse422
+  | claudeSignOutResponse503
+  | claudeSignOutResponse504
+) & {
+  headers: Headers;
+};
+
+export type claudeSignOutResponse =
+  | claudeSignOutResponseSuccess
+  | claudeSignOutResponseError;
+
+export const getClaudeSignOutUrl = (harnessId: string) => {
+  return `/harnesses/${harnessId}/claude-sign-out`;
+};
+
+export const claudeSignOut = async (
+  harnessId: string,
+  options?: RequestInit
+): Promise<claudeSignOutResponse> => {
+  const res = await fetch(getClaudeSignOutUrl(harnessId), {
+    ...options,
+    method: 'POST',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: claudeSignOutResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as claudeSignOutResponse;
+};
+
+/**
  * @summary Classify a draft for the authenticated user.
  */
 export type classifyResponse200 = {
@@ -4330,4 +4732,122 @@ export const extract = async (
 
   const data: extractResponse['data'] = body ? JSON.parse(body) : {};
   return { data, status: res.status, headers: res.headers } as extractResponse;
+};
+
+/**
+ * @summary Provider voice metadata for the Invite agent form and agent settings.
+ */
+export type getAgentVoicesResponse200 = {
+  data: Voice[];
+  status: 200;
+};
+
+export type getAgentVoicesResponse403 = {
+  data: void;
+  status: 403;
+};
+
+export type getAgentVoicesResponse502 = {
+  data: void;
+  status: 502;
+};
+
+export type getAgentVoicesResponseSuccess = getAgentVoicesResponse200 & {
+  headers: Headers;
+};
+export type getAgentVoicesResponseError = (
+  | getAgentVoicesResponse403
+  | getAgentVoicesResponse502
+) & {
+  headers: Headers;
+};
+
+export type getAgentVoicesResponse =
+  | getAgentVoicesResponseSuccess
+  | getAgentVoicesResponseError;
+
+export const getGetAgentVoicesUrl = () => {
+  return `/voices`;
+};
+
+export const getAgentVoices = async (
+  options?: RequestInit
+): Promise<getAgentVoicesResponse> => {
+  const res = await fetch(getGetAgentVoicesUrl(), {
+    ...options,
+    method: 'GET',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: getAgentVoicesResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as getAgentVoicesResponse;
+};
+
+/**
+ * @summary Cached audio generated through Macro using a fixed preview line.
+ */
+export type getAgentVoiceSampleResponse200 = {
+  data: number[];
+  status: 200;
+};
+
+export type getAgentVoiceSampleResponse400 = {
+  data: void;
+  status: 400;
+};
+
+export type getAgentVoiceSampleResponse403 = {
+  data: void;
+  status: 403;
+};
+
+export type getAgentVoiceSampleResponse502 = {
+  data: void;
+  status: 502;
+};
+
+export type getAgentVoiceSampleResponseSuccess =
+  getAgentVoiceSampleResponse200 & {
+    headers: Headers;
+  };
+export type getAgentVoiceSampleResponseError = (
+  | getAgentVoiceSampleResponse400
+  | getAgentVoiceSampleResponse403
+  | getAgentVoiceSampleResponse502
+) & {
+  headers: Headers;
+};
+
+export type getAgentVoiceSampleResponse =
+  | getAgentVoiceSampleResponseSuccess
+  | getAgentVoiceSampleResponseError;
+
+export const getGetAgentVoiceSampleUrl = (model: string) => {
+  return `/voices/${model}/sample`;
+};
+
+export const getAgentVoiceSample = async (
+  model: string,
+  options?: RequestInit
+): Promise<getAgentVoiceSampleResponse> => {
+  const res = await fetch(getGetAgentVoiceSampleUrl(model), {
+    ...options,
+    method: 'GET',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: getAgentVoiceSampleResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as getAgentVoiceSampleResponse;
 };

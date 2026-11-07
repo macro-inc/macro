@@ -1,0 +1,28 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT p.id AS \"pairing_id?\", p.status AS \"status?\"\n            FROM harnesses h\n            LEFT JOIN harness_pairing_requests p ON p.harness_id = h.id\n            WHERE h.computer_id = $1 AND h.deleted_at IS NULL\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "pairing_id?",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "status?",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false
+    ]
+  },
+  "hash": "1b848866712161596f929739129901969886b00da87bdd31a8c87c093c926308"
+}

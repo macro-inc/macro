@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO entity_access (entity_id, entity_type, source_id, source_type, access_level)\n        SELECT h.id, 'harness', $3, 'user', harness_grant_level(h.id, 'edit'::\"AccessLevel\")\n        FROM team_invite_harness_grant g\n        JOIN harnesses h ON h.id = g.harness_id\n        WHERE g.team_invite_id = $1\n          AND h.deleted_at IS NULL\n          AND COALESCE(h.owner_user_id, h.created_by) = $2\n        ON CONFLICT (entity_id, entity_type, source_id, source_type)\n        WHERE granted_from_project_id IS NULL\n        DO NOTHING",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "a9271f4df52840cbf446d6a483fcd648825fdfc769e8d5c8e4e580998dc44019"
+}

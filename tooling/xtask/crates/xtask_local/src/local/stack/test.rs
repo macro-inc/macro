@@ -8,12 +8,14 @@ fn stack_state_roundtrips() {
         mode: "local".to_string(),
         frontend: "static".to_string(),
         binaries_dir: Some(PathBuf::from("/tmp/binaries")),
+        computers: Some(Fleet::Incus),
     };
     let json = serde_json::to_string(&state).unwrap();
     let back: StackState = serde_json::from_str(&json).unwrap();
     assert_eq!(back.mode, "local");
     assert_eq!(back.frontend, "static");
     assert_eq!(back.binaries_dir, Some(PathBuf::from("/tmp/binaries")));
+    assert_eq!(back.computers, Some(Fleet::Incus));
     assert!(mode_from_label(&back.mode).is_ok());
     assert!(mode_from_label("nonsense").is_err());
 }
@@ -23,6 +25,9 @@ fn legacy_stack_state_has_no_binaries_dir() {
     let state: StackState =
         serde_json::from_str(r#"{"mode":"local","frontend":"static"}"#).unwrap();
     assert_eq!(state.binaries_dir, None);
+    assert_eq!(state.computers, None);
+    let instance = Instance::derive(Some("legacy-state"), None).unwrap();
+    assert_eq!(state.computers(Mode::Local, &instance).fleet(), Fleet::Off);
 }
 
 #[test]
@@ -35,6 +40,7 @@ fn clearing_state_invalidates_a_previous_headless_stack() {
             mode: "local".to_string(),
             frontend: "static".to_string(),
             binaries_dir: None,
+            computers: None,
         },
     )
     .unwrap();

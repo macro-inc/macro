@@ -13,23 +13,32 @@ use teams::domain::{
 };
 /// Composed with the owning billing adapter through its domain port.
 #[derive(Clone)]
-pub struct StripePlanGateway<C> {
+pub struct StripePlanGateway<C, Teams, Computers, Agents> {
     db: PgPool,
     stripe: Arc<stripe::Client>,
     prices: SeatPrices,
     customer: C,
+    billing: super::subscription_billing::StripeBillingReader<Teams, Computers, Agents>,
 }
-impl<C> StripePlanGateway<C> {
+impl<C, Teams, Computers, Agents> StripePlanGateway<C, Teams, Computers, Agents> {
     /// Inject customer storage, provider client and billing domain capabilities.
-    pub fn new(db: PgPool, stripe: Arc<stripe::Client>, prices: SeatPrices, customer: C) -> Self {
+    pub fn new(
+        db: PgPool,
+        stripe: Arc<stripe::Client>,
+        prices: SeatPrices,
+        customer: C,
+        billing: super::subscription_billing::StripeBillingReader<Teams, Computers, Agents>,
+    ) -> Self {
         Self {
             db,
             stripe,
             prices,
             customer,
+            billing,
         }
     }
 
+    #[tracing::instrument(name = "billing.subscription.load", skip_all, err)]
     async fn subscription(
         &self,
         customer: &str,
@@ -72,7 +81,13 @@ impl<C> StripePlanGateway<C> {
         Ok(found)
     }
 }
-impl<C: CustomerRepository> PlanGateway for StripePlanGateway<C> {
+impl<
+    C: CustomerRepository,
+    Teams: teams::domain::team_repo::TeamRepository,
+    Computers: hosted_runtimes::domain::ports::ComputerRepo,
+    Agents: team_agents::domain::ports::TeamAgentRepository,
+> PlanGateway for StripePlanGateway<C, Teams, Computers, Agents>
+{
     async fn personal_subscription(
         &self,
         user: &MacroUserIdStr<'_>,
@@ -137,12 +152,28 @@ impl<C: CustomerRepository> PlanGateway for StripePlanGateway<C> {
     }
 }
 
-impl<C: CustomerRepository> SubscriptionStatusGateway for StripePlanGateway<C> {
+impl<
+    C: CustomerRepository,
+    Teams: teams::domain::team_repo::TeamRepository,
+    Computers: hosted_runtimes::domain::ports::ComputerRepo,
+    Agents: team_agents::domain::ports::TeamAgentRepository,
+> SubscriptionStatusGateway for StripePlanGateway<C, Teams, Computers, Agents>
+{
+    async fn billing_access(
+        &self,
+        scope: SubscriptionScope,
+        user: &MacroUserIdStr<'_>,
+    ) -> Result<crate::service::subscription_status::billing_facts::BillingAccess, PlanChangeError>
+    {
+        self.billing.access(scope, user).await
+    }
+
     async fn status(
         &self,
         customer: &str,
         scope: SubscriptionScope,
         user: &MacroUserIdStr<'_>,
+        read_billing: bool,
     ) -> Result<Option<SubscriptionPlanFacts>, PlanChangeError> {
         let Some(subscription) = self.subscription(customer, scope).await? else {
             return Ok(None);
@@ -160,6 +191,13 @@ impl<C: CustomerRepository> SubscriptionStatusGateway for StripePlanGateway<C> {
         Ok(Some(SubscriptionPlanFacts {
             period_end,
             scheduled_change,
+            billing: if read_billing {
+                self.billing
+                    .read(&self.stripe, &subscription, scope, user)
+                    .await?
+            } else {
+                None
+            },
         }))
     }
 }

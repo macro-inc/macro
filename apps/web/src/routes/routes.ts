@@ -10,6 +10,7 @@ import {
 import { CALENDAR_VIEW_ID } from '@app/features/calendar-view/types';
 import { changesSearch } from '@app/features/changes/changes-search';
 import { mobileSearchRouteStateSchema } from '@app/features/command/mobile/mobile-search-route-state';
+import { screenSearch } from '@app/features/computer-screen/screen-search';
 import {
   CRM_RETIRED_DATABASES_ROUTE_IDS,
   crmItemBlockType,
@@ -368,7 +369,11 @@ export const agentsRoute = defineRoute({
   params: z.object({ id: z.string() }),
   mountKey: AGENTS_WORKSPACE_MOUNT,
   claim: ({ id }) => ({ namespace: 'agent', id }),
-  search: [changesSearch.namespace, agentDetailSearch.namespace],
+  search: [
+    changesSearch.namespace,
+    screenSearch.namespace,
+    agentDetailSearch.namespace,
+  ],
   toReference: ({ id }) => uuidRouteReference(id, 'agent'),
 });
 
@@ -378,7 +383,11 @@ export const codersRoute = defineRoute({
   params: z.object({ id: z.string() }),
   mountKey: AGENTS_WORKSPACE_MOUNT,
   claim: ({ id }) => ({ namespace: 'agent', id }),
-  search: [changesSearch.namespace, agentDetailSearch.namespace],
+  search: [
+    changesSearch.namespace,
+    screenSearch.namespace,
+    agentDetailSearch.namespace,
+  ],
   toReference: ({ id }) => uuidRouteReference(id, 'agent'),
 });
 
@@ -389,7 +398,7 @@ export const agentChatsRoute = defineRoute({
   params: z.object({ id: z.string() }),
   mountKey: AGENTS_WORKSPACE_MOUNT,
   claim: ({ id }) => ({ namespace: 'chat', id }),
-  search: [changesSearch.namespace],
+  search: [changesSearch.namespace, screenSearch.namespace],
   toReference: ({ id }) => uuidRouteReference(id, 'chat'),
 });
 

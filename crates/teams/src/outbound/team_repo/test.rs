@@ -1184,7 +1184,7 @@ async fn test_rollback_remove_user_from_team(pool: Pool<Postgres>) -> anyhow::Re
     assert_eq!(removed_member.role, TeamRole::Admin);
 
     team_repo
-        .rollback_remove_user_from_team(&removed_member)
+        .rollback_remove_user_from_team(&removed_member, false)
         .await?;
 
     let member = team_repo.get_team_member(&team_id, &user_id).await?;
@@ -1806,7 +1806,7 @@ async fn test_add_user_to_team(pool: Pool<Postgres>) -> anyhow::Result<()> {
     );
 
     let member = team_repo
-        .add_user_to_team(&team_id, &user_id)
+        .add_user_to_team(&team_id, &user_id, false)
         .await?
         .expect("user should have been added");
 
@@ -1824,7 +1824,9 @@ async fn test_add_user_to_team(pool: Pool<Postgres>) -> anyhow::Result<()> {
     assert!(!invites_after.iter().any(|invite| invite.team_id == team_id));
 
     // Adding again is a no-op: no member returned, no extra seat counted.
-    let member = team_repo.add_user_to_team(&team_id, &user_id).await?;
+    let member = team_repo
+        .add_user_to_team(&team_id, &user_id, false)
+        .await?;
     assert!(member.is_none());
 
     let seat_count = team_repo.get_team_seat_count(&team_id).await?;
@@ -2145,6 +2147,57 @@ async fn agent_invites_are_visible_to_the_invitee(pool: Pool<Postgres>) -> anyho
     assert_eq!(pending.len(), 1);
     assert!(pending[0].is_agent);
 
+    Ok(())
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("teams"))
+)]
+async fn included_seat_provenance_survives_removal_rollback(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    let team_repo = TeamRepositoryImpl::new(pool.clone());
+
+    let team_id = macro_uuid::string_to_uuid("11111111-1111-1111-1111-111111111111")?;
+    let user_id = MacroUserIdStr::parse_from_str("macro|included@example.com")?;
+
+    let seat_count_before = team_repo.get_team_seat_count(&team_id).await?;
+    let macro_user_id = uuid::Uuid::now_v7();
+    sqlx::query!(
+        r#"INSERT INTO macro_user (id, username, email, stripe_customer_id)
+        VALUES ($1, 'included@example.com', 'included@example.com', 'cus_included_fixture')"#,
+        macro_user_id
+    )
+    .execute(&pool)
+    .await?;
+    sqlx::query!(
+        r#"INSERT INTO "User" (id, email, macro_user_id)
+        VALUES ('macro|included@example.com', 'included@example.com', $1)"#,
+        macro_user_id
+    )
+    .execute(&pool)
+    .await?;
+
+    let member = team_repo
+        .add_user_to_team(&team_id, &user_id, true)
+        .await?
+        .expect("user should have been added");
+
+    assert_eq!(member.team_id, team_id);
+    assert_eq!(member.user_id.as_ref(), user_id.as_ref());
+    assert_eq!(member.role, TeamRole::Member);
+
+    assert!(team_repo.is_seat_included(&team_id, &user_id).await?);
+    let removed = team_repo.remove_user_from_team(&team_id, &user_id).await?;
+    team_repo
+        .rollback_remove_user_from_team(&removed, true)
+        .await?;
+    assert!(team_repo.is_seat_included(&team_id, &user_id).await?);
+    assert_eq!(
+        team_repo.get_team_seat_count(&team_id).await?,
+        seat_count_before + 1
+    );
     Ok(())
 }
 

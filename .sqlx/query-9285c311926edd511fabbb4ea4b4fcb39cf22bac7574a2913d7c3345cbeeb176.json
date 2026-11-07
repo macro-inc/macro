@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "DELETE FROM agent_secrets WHERE agent_user_id = $1 AND name = $2",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "9285c311926edd511fabbb4ea4b4fcb39cf22bac7574a2913d7c3345cbeeb176"
+}

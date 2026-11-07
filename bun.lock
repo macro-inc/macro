@@ -99,6 +99,7 @@
         "@macro-inc/observability": "workspace:*",
         "@macro-inc/spreadsheet": "workspace:*",
         "@normy/query-core": "^0.21.0",
+        "@novnc/novnc": "^1.7.0",
         "@observablehq/plot": "^0.6.17",
         "@phosphor-icons/core": "^2.1.1",
         "@pierre/diffs": "^1.3.5",
@@ -202,6 +203,7 @@
         "@types/gtag.js": "^0.0.20",
         "@types/lodash": "^4.17.20",
         "@types/node": "^24.8.0",
+        "@types/novnc__novnc": "^1.6.0",
         "@types/papaparse": "^5.5.2",
         "@types/uuid": "^10.0.0",
         "@types/wicg-file-system-access": "^2020.9.5",
@@ -1361,6 +1363,8 @@
 
     "@normy/query-core": ["@normy/query-core@0.21.0", "", { "dependencies": { "@normy/core": "0.14.0" }, "peerDependencies": { "@tanstack/query-core": ">=5.4.3" } }, "sha512-O1GM0wqXIHHiWremrbvGG3ZuDxPsg+k9DDin+7sjkK/jHT2ER2MVodoMG40sB3I+zCKCdGVDi+/nZlb36m/mmA=="],
 
+    "@novnc/novnc": ["@novnc/novnc@1.7.0", "", {}, "sha512-ucEJOx4T2avIRCleodk7YobZj5O2Ga2AeLfQ69A/yjG9HHba2+PDgwSkN3FttrmG+70ZGx21sElNFouK13RzyA=="],
+
     "@observablehq/plot": ["@observablehq/plot@0.6.17", "", { "dependencies": { "d3": "^7.9.0", "interval-tree-1d": "^1.0.0", "isoformat": "^0.2.0" } }, "sha512-/qaXP/7mc4MUS0s4cPPFASDRjtsWp85/TbfsciqDgU1HwYixbSbbytNuInD8AcTYC3xaxACgVX06agdfQy9W+g=="],
 
     "@opentelemetry/api": ["@opentelemetry/api@1.9.1", "", {}, "sha512-gLyJlPHPZYdAk1JENA9LeHejZe1Ti77/pTeFm/nMXmQH/HFZlcS/O2XJB+L8fkbrNSqhdtlvjBVjxwUYanNH5Q=="],
@@ -1914,6 +1918,8 @@
     "@types/mdast": ["@types/mdast@4.0.4", "", { "dependencies": { "@types/unist": "*" } }, "sha512-kGaNbPh1k7AFzgpud/gMdvIm5xuECykRR+JnWKQno9TAXVa6WIVCGTPvYGekIDL4uwCZQSYbUxNBSb1aUo79oA=="],
 
     "@types/node": ["@types/node@24.13.3", "", { "dependencies": { "undici-types": "~7.18.0" } }, "sha512-Dh8vAsV36ig5wa9OX4pXvMc9D3Veibfw2wix0CUwYODLD8nkj9UsLjASr49nPg+2eKzxhBV+v7L8pXvT4e639Q=="],
+
+    "@types/novnc__novnc": ["@types/novnc__novnc@1.6.0", "", {}, "sha512-kIH/PQACbf9qj6whiSXRKECpyzgs6IFNVsW4wohyqQUZfQHdLhuGRMLi9XEhBiISSh0lKCSbBa7kScuPu9Gk+Q=="],
 
     "@types/papaparse": ["@types/papaparse@5.5.2", "", { "dependencies": { "@types/node": "*" } }, "sha512-gFnFp/JMzLHCwRf7tQHrNnfhN4eYBVYYI897CGX4MY1tzY9l2aLkVyx2IlKZ/SAqDbB3I1AOZW5gTMGGsqWliA=="],
 

@@ -5,13 +5,23 @@ use std::{collections::HashMap, sync::Arc};
 #[cfg(test)]
 mod test;
 
+mod billing;
+mod item_changes;
+mod subscription_items;
+use subscription_items::{cadence, item_quantity_updates, update_error};
+mod subscription_error;
+use subscription_error::SubscriptionDataError;
+
 use anyhow::Context;
 use macro_user_id::user_id::MacroUserIdStr;
 use stripe::{UpdateSubscription, UpdateSubscriptionItems};
 
 use crate::domain::{
     customer_repo::CustomerRepository,
-    model::{CustomerError, ScheduledSeatPlan, SeatPlan, SeatPrices},
+    model::{
+        BillingCadence, BillingInterval, CustomerError, ItemQuantityChange, PriceInfo,
+        ScheduledSeatPlan, SeatPlan, SeatPrices, SeatQuote, SubscriptionTerms,
+    },
 };
 
 /// The CustomerRepositoryImpl struct is a wrapper around a stripe::Client connected to stripe.
@@ -27,420 +37,22 @@ pub struct CustomerRepositoryImpl {
     subscription_locks: sqlx::PgPool,
 }
 
+/// How an item update is sent beyond the items themselves.
+#[derive(Default)]
+struct ItemUpdateOptions<'a> {
+    /// Journals the request and marks the provider object with this key,
+    /// also sent as Stripe's idempotency key, so a retry applies once.
+    idempotency_key: Option<&'a str>,
+    /// Fail the update when its invoice cannot be paid, instead of leaving
+    /// the subscription past due.
+    error_if_incomplete: bool,
+}
+
 /// One plan's seat item on a subscription.
 #[derive(Debug, Clone)]
 struct SeatItem {
     id: String,
     quantity: u64,
-}
-
-impl CustomerRepositoryImpl {
-    async fn billing_guard(
-        locks: &sqlx::PgPool,
-        key: &str,
-    ) -> Result<sqlx::Transaction<'static, sqlx::Postgres>, CustomerError> {
-        let mut guard = locks
-            .begin()
-            .await
-            .map_err(|e| CustomerError::StorageLayerError(e.into()))?;
-        sqlx::query!("SELECT pg_advisory_xact_lock(hashtextextended($1, 0))", key)
-            .execute(&mut *guard)
-            .await
-            .map_err(|e| CustomerError::StorageLayerError(e.into()))?;
-        Ok(guard)
-    }
-
-    async fn subscription_guard(
-        &self,
-        id: &stripe::SubscriptionId,
-    ) -> Result<sqlx::Transaction<'static, sqlx::Postgres>, CustomerError> {
-        Self::billing_guard(
-            &self.subscription_locks,
-            &format!("subscription-billing:{id}"),
-        )
-        .await
-    }
-
-    async fn read_pending(
-        &self,
-        subscription: &str,
-        record: &str,
-    ) -> Result<PendingChanges, CustomerError> {
-        let id: uuid::Uuid = record
-            .parse()
-            .map_err(|e| CustomerError::StorageLayerError(anyhow::Error::from(e)))?;
-        let row = sqlx::query!("SELECT effective_at, member_plans FROM subscription_plan_schedule WHERE id = $1 AND subscription_id = $2", id, subscription).fetch_one(&self.pool).await.map_err(|e| CustomerError::StorageLayerError(e.into()))?;
-        Ok(PendingChanges {
-            at: row.effective_at.timestamp(),
-            members: serde_json::from_value(row.member_plans)
-                .map_err(|e| CustomerError::StorageLayerError(e.into()))?,
-        })
-    }
-    async fn pending_changes(
-        &self,
-        schedule: &stripe::SubscriptionSchedule,
-        subscription: &stripe::Subscription,
-    ) -> Result<PendingChanges, CustomerError> {
-        match schedule.metadata.as_ref().and_then(|m| m.get(PENDING_KEY)) {
-            Some(record) => self.read_pending(subscription.id.as_str(), record).await,
-            None => Ok(PendingChanges {
-                at: subscription.current_period_end,
-                members: HashMap::new(),
-            }),
-        }
-    }
-
-    async fn read_scheduled_seat_plans(
-        &self,
-        subscription: &stripe::SubscriptionId,
-        schedule: &stripe::SubscriptionScheduleId,
-    ) -> Result<HashMap<String, ScheduledSeatPlan>, CustomerError> {
-        let schedule = stripe::SubscriptionSchedule::retrieve(&self.client, schedule, &[])
-            .await
-            .map_err(storage)?;
-        if schedule
-            .metadata
-            .as_ref()
-            .and_then(|m| m.get(OWNED_KEY))
-            .map(String::as_str)
-            != Some("1")
-            || !matches!(
-                schedule.status,
-                stripe::SubscriptionScheduleStatus::Active
-                    | stripe::SubscriptionScheduleStatus::NotStarted
-            )
-        {
-            return Ok(HashMap::new());
-        }
-        let Some(record) = schedule.metadata.as_ref().and_then(|m| m.get(PENDING_KEY)) else {
-            return Ok(HashMap::new());
-        };
-        let changes = self.read_pending(subscription.as_str(), record).await?;
-        let effective_at =
-            chrono::DateTime::from_timestamp(changes.at, 0).context("invalid scheduled renewal")?;
-        Ok(changes
-            .members
-            .into_iter()
-            .map(|(user, plan)| (user, ScheduledSeatPlan { plan, effective_at }))
-            .collect())
-    }
-
-    async fn release_schedule(
-        &self,
-        id: &stripe::SubscriptionScheduleId,
-    ) -> Result<(), CustomerError> {
-        self.client
-            .post::<stripe::SubscriptionSchedule>(&format!("/subscription_schedules/{id}/release"))
-            .await
-            .map_err(storage)?;
-        Ok(())
-    }
-
-    async fn write_schedule(
-        &self,
-        schedule: &stripe::SubscriptionSchedule,
-        subscription: &stripe::Subscription,
-        mut current: serde_json::Value,
-        pending: PendingChanges,
-        proration: &str,
-    ) -> Result<(), CustomerError> {
-        current["end_date"] = pending.at.into();
-        let mut next = current.clone();
-        next["start_date"] = pending.at.into();
-        next.as_object_mut().unwrap().remove("end_date");
-        next.as_object_mut().unwrap().remove("trial_end");
-        next.as_object_mut().unwrap().remove("add_invoice_items");
-        next["iterations"] = 1.into();
-        next["proration_behavior"] = "none".into();
-        let mut quantities = phase_quantities(&current)?;
-        let max = self.seat_prices.price_id(SeatPlan::Max)?.to_string();
-        let pro = self.seat_prices.price_id(SeatPlan::Premium)?.to_string();
-        let count = pending.members.len() as u64;
-        let source = quantities.get(&max).copied().unwrap_or(0);
-        if source < count {
-            return Err(CustomerError::StorageLayerError(anyhow::anyhow!(
-                "scheduled downgrades exceed active Max seats"
-            )));
-        }
-        // A new lower-price item retains the seat's item-level tax and billing
-        // settings as well as the phase-wide settings copied above.
-        let source_item = next["items"]
-            .as_array()
-            .and_then(|items| {
-                items
-                    .iter()
-                    .find(|item| item["price"].as_str() == Some(max.as_str()))
-            })
-            .cloned();
-        if let Some(mut item) = source_item
-            && !next["items"]
-                .as_array()
-                .unwrap()
-                .iter()
-                .any(|item| item["price"].as_str() == Some(pro.as_str()))
-        {
-            item["price"] = pro.clone().into();
-            next["items"].as_array_mut().unwrap().push(item);
-        }
-        quantities.insert(max, source - count);
-        *quantities.entry(pro).or_default() += count;
-        replace_quantities(&mut next, &quantities);
-        if next.get("metadata").is_none() {
-            next["metadata"] = serde_json::json!({});
-        }
-        let record_id = macro_uuid::generate_uuid_v7();
-        let effective_at =
-            chrono::DateTime::from_timestamp(pending.at, 0).context("invalid scheduled renewal")?;
-        let members = serde_json::to_value(&pending.members)
-            .map_err(|e| CustomerError::StorageLayerError(e.into()))?;
-        sqlx::query!("INSERT INTO subscription_plan_schedule (id, subscription_id, effective_at, member_plans) VALUES ($1, $2, $3, $4)", record_id, subscription.id.as_str(), effective_at, members).execute(&self.pool).await.map_err(|e| CustomerError::StorageLayerError(e.into()))?;
-        let encoded = record_id.to_string();
-        next["metadata"][APPLIED_KEY] = encoded.clone().into();
-        let request = ScheduleUpdate {
-            phases: vec![current, next],
-            proration_behavior: proration,
-            end_behavior: "release",
-            metadata: HashMap::from([
-                (OWNED_KEY.to_string(), "1".to_string()),
-                (PENDING_KEY.to_string(), encoded),
-            ]),
-        };
-        self.client
-            .post_form::<stripe::SubscriptionSchedule, _>(
-                &format!("/subscription_schedules/{}", schedule.id),
-                &request,
-            )
-            .await
-            .map_err(storage)?;
-        Ok(())
-    }
-
-    /// Creates a new instance of CustomerRepositoryImpl
-    pub fn new(stripe_client: stripe::Client, seat_prices: SeatPrices, pool: sqlx::PgPool) -> Self {
-        // Guards hold connections across provider and repository calls. Separate
-        // pools keep waiters from exhausting the pool those calls need, and keep
-        // the team -> subscription lock order from exhausting its own capacity.
-        let lock_pool = || {
-            sqlx::postgres::PgPoolOptions::new()
-                .max_connections(pool.options().get_max_connections().min(4))
-                .idle_timeout(std::time::Duration::from_secs(60))
-                .connect_lazy_with(
-                    pool.connect_options()
-                        .as_ref()
-                        .clone()
-                        .options([("lock_timeout", "30000")]),
-                )
-        };
-        let team_locks = lock_pool();
-        let subscription_locks = lock_pool();
-        Self {
-            client: Arc::new(stripe_client),
-            seat_prices,
-            pool,
-            team_locks,
-            subscription_locks,
-        }
-    }
-
-    /// The active subscription's seat items, keyed by plan.
-    async fn get_seat_items(
-        &self,
-        subscription_id: &stripe::SubscriptionId,
-    ) -> Result<HashMap<SeatPlan, SeatItem>, CustomerError> {
-        let subscription = stripe::Subscription::retrieve(&self.client, subscription_id, &[])
-            .await
-            .map_err(|e| CustomerError::StorageLayerError(e.into()))?;
-
-        if subscription.status != stripe::SubscriptionStatus::Active
-            && subscription.status != stripe::SubscriptionStatus::Trialing
-        {
-            return Err(CustomerError::SubscriptionNotActive);
-        }
-
-        let items: HashMap<SeatPlan, SeatItem> = subscription
-            .items
-            .data
-            .iter()
-            .filter_map(|item| {
-                let price = item.price.as_ref()?;
-                let plan = self.seat_prices.plan_for_price(price.id.as_str())?;
-                Some((
-                    plan,
-                    SeatItem {
-                        id: item.id.to_string(),
-                        quantity: item.quantity.unwrap_or(1),
-                    },
-                ))
-            })
-            .collect();
-
-        if items.is_empty() {
-            return Err(CustomerError::NoMatchingLineItem);
-        }
-
-        Ok(items)
-    }
-
-    /// The item update that leaves `plan` with `quantity` seats: a new item
-    /// when the plan had none, a deletion when it drops to zero.
-    fn seat_item_update(
-        &self,
-        plan: SeatPlan,
-        existing: Option<&SeatItem>,
-        quantity: u64,
-    ) -> Result<UpdateSubscriptionItems, CustomerError> {
-        Ok(match existing {
-            Some(item) if quantity == 0 => UpdateSubscriptionItems {
-                id: Some(item.id.clone()),
-                deleted: Some(true),
-                ..Default::default()
-            },
-            Some(item) => UpdateSubscriptionItems {
-                id: Some(item.id.clone()),
-                quantity: Some(quantity),
-                ..Default::default()
-            },
-            None => UpdateSubscriptionItems {
-                price: Some(self.seat_prices.price_id(plan)?.to_string()),
-                quantity: Some(quantity),
-                ..Default::default()
-            },
-        })
-    }
-
-    async fn update_items(
-        &self,
-        subscription_id: &stripe::SubscriptionId,
-        items: Vec<UpdateSubscriptionItems>,
-    ) -> Result<(), CustomerError> {
-        let subscription = stripe::Subscription::retrieve(&self.client, subscription_id, &[])
-            .await
-            .map_err(storage)?;
-        let end_trial = subscription.status == stripe::SubscriptionStatus::Trialing
-            && self.adds_first_max_seat(&subscription, &items)?;
-        if let Some(schedule_id) = subscription.schedule.as_ref().map(|s| s.id()) {
-            let schedule = stripe::SubscriptionSchedule::retrieve(&self.client, &schedule_id, &[])
-                .await
-                .map_err(storage)?;
-            require_owned_schedule(&schedule)?;
-            let pending = self.pending_changes(&schedule, &subscription).await?;
-            // A Pro trial gaining Max ends now. With no Max seat before, no seat
-            // is waiting to downgrade, so release the schedule and bill directly.
-            if !end_trial && pending.at > subscription.current_period_start {
-                let current = current_phase(&schedule, &subscription)?;
-                let mut phase = phase_parameters(current)?;
-                let mut quantities = subscription
-                    .items
-                    .data
-                    .iter()
-                    .filter_map(|i| {
-                        i.price
-                            .as_ref()
-                            .map(|p| (p.id.to_string(), i.quantity.unwrap_or(1)))
-                    })
-                    .collect::<HashMap<_, _>>();
-                for update in &items {
-                    let price = update
-                        .price
-                        .clone()
-                        .or_else(|| {
-                            subscription
-                                .items
-                                .data
-                                .iter()
-                                .find(|i| Some(i.id.as_str()) == update.id.as_deref())
-                                .and_then(|i| i.price.as_ref())
-                                .map(|p| p.id.to_string())
-                        })
-                        .context("missing item price")?;
-                    if update.deleted == Some(true) {
-                        quantities.remove(&price);
-                    } else {
-                        quantities.insert(price, update.quantity.unwrap_or(1));
-                    }
-                }
-                replace_quantities(&mut phase, &quantities);
-                return self
-                    .write_schedule(&schedule, &subscription, phase, pending, "always_invoice")
-                    .await;
-            }
-            // The scheduled phase already became effective. Release it before
-            // an immediate upgrade; acknowledging old metadata cannot undo it.
-            self.release_schedule(&schedule.id).await?;
-        }
-        let mut update_params = UpdateSubscription {
-            items: Some(items),
-            proration_behavior: Some(
-                stripe::generated::billing::subscription::SubscriptionProrationBehavior::AlwaysInvoice,
-            ),
-            ..Default::default()
-        };
-        if end_trial {
-            // A trial has no paid remainder to prorate. Reset the cycle so Max
-            // bills a full period today instead of inheriting the trial end.
-            update_params.trial_end = Some(stripe::Scheduled::now());
-            update_params.billing_cycle_anchor = Some(stripe::SubscriptionBillingCycleAnchor::Now);
-        }
-
-        stripe::Subscription::update(&self.client, subscription_id, update_params)
-            .await
-            .map_err(|e| CustomerError::StorageLayerError(e.into()))?;
-
-        Ok(())
-    }
-
-    /// Whether the seat update gives a subscription without Max seats its first
-    /// one. A subscription already trialing on Max keeps its trial terms, and
-    /// its scheduled downgrades, through other seat changes.
-    fn adds_first_max_seat(
-        &self,
-        subscription: &stripe::Subscription,
-        items: &[UpdateSubscriptionItems],
-    ) -> Result<bool, CustomerError> {
-        let Ok(max) = self.seat_prices.price_id(SeatPlan::Max) else {
-            return Ok(false);
-        };
-        let max_items: Vec<_> = subscription
-            .items
-            .data
-            .iter()
-            .filter(|item| {
-                item.price
-                    .as_ref()
-                    .is_some_and(|price| price.id.as_str() == max)
-            })
-            .collect();
-        let mut quantity = max_items
-            .iter()
-            .map(|item| item.quantity.unwrap_or(1))
-            .sum::<u64>();
-        if quantity > 0 {
-            return Ok(false);
-        }
-        for update in items {
-            if let Some(price) = &update.price {
-                if price.as_str() == max {
-                    quantity = quantity.saturating_add(update.quantity.unwrap_or(1));
-                }
-                continue;
-            }
-            let Some(id) = &update.id else {
-                continue;
-            };
-            let Some(existing) = max_items.iter().find(|item| item.id.as_str() == id) else {
-                continue;
-            };
-            quantity = quantity.saturating_sub(existing.quantity.unwrap_or(1));
-            if update.deleted != Some(true) {
-                quantity = quantity.saturating_add(
-                    update
-                        .quantity
-                        .unwrap_or_else(|| existing.quantity.unwrap_or(1)),
-                );
-            }
-        }
-        Ok(quantity > 0)
-    }
 }
 
 impl CustomerRepository for CustomerRepositoryImpl {
@@ -490,6 +102,55 @@ impl CustomerRepository for CustomerRepositoryImpl {
         Ok(changes)
     }
 
+    fn seat_price_id(
+        &self,
+        plan: SeatPlan,
+    ) -> Result<stripe_price_id::StripePriceId, CustomerError> {
+        self.seat_prices.price_id(plan).cloned()
+    }
+
+    #[tracing::instrument(skip(self), err)]
+    async fn seat_quote(&self, plan: SeatPlan) -> Result<SeatQuote, CustomerError> {
+        let price_id = self.seat_price_id(plan)?;
+        let parsed_price_id: stripe::PriceId = price_id
+            .as_str()
+            .parse()
+            .context("configured seat price id is malformed")?;
+        let price = stripe::Price::retrieve(&self.client, &parsed_price_id, &[])
+            .await
+            .map_err(storage)?;
+        let amount = price
+            .unit_amount
+            .context("the seat price has no unit amount")?;
+        let recurring = price.recurring.context("the seat price is not recurring")?;
+        if recurring.interval_count != 1 {
+            return Err(anyhow::anyhow!(
+                "the seat price bills every {} intervals",
+                recurring.interval_count
+            )
+            .into());
+        }
+        let interval = match recurring.interval {
+            stripe::RecurringInterval::Month => BillingInterval::Month,
+            stripe::RecurringInterval::Year => BillingInterval::Year,
+            other => {
+                return Err(anyhow::anyhow!("the seat price bills per {}", other.as_str()).into());
+            }
+        };
+
+        let currency = price
+            .currency
+            .context("the seat price has no currency")?
+            .to_string();
+
+        Ok(SeatQuote {
+            price_id,
+            amount,
+            currency,
+            interval,
+        })
+    }
+
     #[tracing::instrument(skip(self), err)]
     async fn increment_seat_count(
         &self,
@@ -497,7 +158,7 @@ impl CustomerRepository for CustomerRepositoryImpl {
         plan: SeatPlan,
         amount: u64,
     ) -> Result<(), CustomerError> {
-        let _billing = self.subscription_guard(subscription_id).await?;
+        let _billing = self.subscription_guard(subscription_id, None).await?;
         let items = self.get_seat_items(subscription_id).await?;
         let existing = items.get(&plan);
         let quantity = existing
@@ -506,7 +167,8 @@ impl CustomerRepository for CustomerRepositoryImpl {
             .context("seat count overflow")?;
         let update = self.seat_item_update(plan, existing, quantity)?;
 
-        self.update_items(subscription_id, vec![update]).await
+        self.update_items(subscription_id, vec![update], ItemUpdateOptions::default())
+            .await
     }
 
     #[tracing::instrument(skip(self), err)]
@@ -516,7 +178,7 @@ impl CustomerRepository for CustomerRepositoryImpl {
         plan: SeatPlan,
         amount: u64,
     ) -> Result<(), CustomerError> {
-        let _billing = self.subscription_guard(subscription_id).await?;
+        let _billing = self.subscription_guard(subscription_id, None).await?;
         let items = self.get_seat_items(subscription_id).await?;
         let Some(existing) = items.get(&plan) else {
             return Err(CustomerError::NoMatchingLineItem);
@@ -530,7 +192,8 @@ impl CustomerRepository for CustomerRepositoryImpl {
         }
         let update = self.seat_item_update(plan, Some(existing), quantity)?;
 
-        self.update_items(subscription_id, vec![update]).await
+        self.update_items(subscription_id, vec![update], ItemUpdateOptions::default())
+            .await
     }
 
     #[tracing::instrument(skip(self), err)]
@@ -543,7 +206,7 @@ impl CustomerRepository for CustomerRepositoryImpl {
         if from == to {
             return Ok(());
         }
-        let _billing = self.subscription_guard(subscription_id).await?;
+        let _billing = self.subscription_guard(subscription_id, None).await?;
         // Make sure the target plan is sold before touching anything.
         self.seat_prices.price_id(to)?;
 
@@ -558,7 +221,8 @@ impl CustomerRepository for CustomerRepositoryImpl {
             self.seat_item_update(to, target, target.map_or(0, |item| item.quantity) + 1)?,
         ];
 
-        self.update_items(subscription_id, updates).await
+        self.update_items(subscription_id, updates, ItemUpdateOptions::default())
+            .await
     }
 
     async fn schedule_seat_plan(
@@ -567,7 +231,7 @@ impl CustomerRepository for CustomerRepositoryImpl {
         user: &MacroUserIdStr<'_>,
         plan: Option<SeatPlan>,
     ) -> Result<(), CustomerError> {
-        let _billing = self.subscription_guard(id).await?;
+        let _billing = self.subscription_guard(id, None).await?;
         let subscription = stripe::Subscription::retrieve(&self.client, id, &[])
             .await
             .map_err(storage)?;
@@ -624,7 +288,7 @@ impl CustomerRepository for CustomerRepositoryImpl {
             }
         };
         let current = phase_parameters(current_phase(&schedule, &subscription)?)?;
-        self.write_schedule(&schedule, &subscription, current, pending, "none")
+        self.write_schedule(&schedule, &subscription, current, pending, "none", None)
             .await
     }
 
@@ -634,7 +298,7 @@ impl CustomerRepository for CustomerRepositoryImpl {
         plan: SeatPlan,
         end_trial: bool,
     ) -> Result<(), CustomerError> {
-        let _billing = self.subscription_guard(id).await?;
+        let _billing = self.subscription_guard(id, None).await?;
         let subscription = stripe::Subscription::retrieve(&self.client, id, &[])
             .await
             .map_err(storage)?;
@@ -700,7 +364,7 @@ impl CustomerRepository for CustomerRepositoryImpl {
         &self,
         id: &stripe::SubscriptionId,
     ) -> Result<(), CustomerError> {
-        let _billing = self.subscription_guard(id).await?;
+        let _billing = self.subscription_guard(id, None).await?;
         let params = stripe::UpdateSubscription {
             metadata: Some(HashMap::from([(APPLIED_KEY.to_string(), String::new())])),
             ..Default::default()
@@ -712,11 +376,116 @@ impl CustomerRepository for CustomerRepositoryImpl {
     }
 
     #[tracing::instrument(skip(self), err)]
+    async fn replay_item_change(&self, idempotency_key: &str) -> Result<bool, CustomerError> {
+        CustomerRepositoryImpl::replay_item_change(self, idempotency_key).await
+    }
+
+    async fn change_item_quantities(
+        &self,
+        subscription_id: &stripe::SubscriptionId,
+        changes: Vec<ItemQuantityChange>,
+        idempotency_key: &str,
+    ) -> Result<(), CustomerError> {
+        let _billing = self
+            .subscription_guard(subscription_id, Some(idempotency_key))
+            .await?;
+        if let Some(change) = self.item_change(idempotency_key).await? {
+            return self
+                .replay_item_change_locked(idempotency_key, change)
+                .await;
+        }
+        let subscription = stripe::Subscription::retrieve(&self.client, subscription_id, &[])
+            .await
+            .map_err(storage)?;
+        if subscription
+            .metadata
+            .get(ITEM_CHANGE_KEY)
+            .map(String::as_str)
+            == Some(idempotency_key)
+        {
+            tracing::info!("item change already applied");
+            return Ok(());
+        }
+        let items = item_quantity_updates(&subscription, &changes)?;
+        if items.is_empty() {
+            return Ok(());
+        }
+        let adds = changes.iter().any(|change| change.delta > 0);
+        let billable = match subscription.status {
+            stripe::SubscriptionStatus::Active | stripe::SubscriptionStatus::Trialing => true,
+            // Removing items from a subscription behind on payment still
+            // stops what it bills; adding to one is refused.
+            stripe::SubscriptionStatus::PastDue | stripe::SubscriptionStatus::Unpaid => !adds,
+            _ => false,
+        };
+        if !billable {
+            return Err(CustomerError::SubscriptionNotActive);
+        }
+        self.update_retrieved_items(
+            subscription,
+            items,
+            ItemUpdateOptions {
+                idempotency_key: Some(idempotency_key),
+                error_if_incomplete: true,
+            },
+        )
+        .await
+    }
+
+    #[tracing::instrument(skip(self), err)]
+    async fn subscription_terms(
+        &self,
+        subscription_id: &stripe::SubscriptionId,
+    ) -> Result<SubscriptionTerms, CustomerError> {
+        let subscription = stripe::Subscription::retrieve(&self.client, subscription_id, &[])
+            .await
+            .map_err(storage)?;
+        let interval = subscription
+            .items
+            .data
+            .iter()
+            .find_map(|item| item.price.as_ref()?.recurring.as_ref())
+            .map(|recurring| cadence(recurring.interval))
+            .ok_or(SubscriptionDataError::MissingRecurringItem)?;
+        let current_period_end =
+            chrono::DateTime::from_timestamp(subscription.current_period_end, 0)
+                .ok_or(SubscriptionDataError::InvalidPeriodEnd)?;
+        Ok(SubscriptionTerms {
+            current_period_end,
+            interval,
+            currency: subscription.currency.to_string(),
+        })
+    }
+
+    #[tracing::instrument(skip(self), err)]
+    async fn price(
+        &self,
+        price_id: &stripe_price_id::StripePriceId,
+    ) -> Result<PriceInfo, CustomerError> {
+        let id: stripe::PriceId = price_id.as_str().parse().map_err(|error| {
+            SubscriptionDataError::Internal(rootcause::Report::new(error).into_dynamic())
+        })?;
+        let price = stripe::Price::retrieve(&self.client, &id, &[])
+            .await
+            .map_err(storage)?;
+        Ok(PriceInfo {
+            amount: price
+                .unit_amount
+                .ok_or(SubscriptionDataError::MissingUnitAmount)?,
+            currency: price
+                .currency
+                .ok_or(SubscriptionDataError::MissingCurrency)?
+                .to_string(),
+            interval: price.recurring.map(|recurring| cadence(recurring.interval)),
+        })
+    }
+
+    #[tracing::instrument(skip(self), err)]
     async fn cancel_subscription(
         &self,
         subscription_id: &stripe::SubscriptionId,
     ) -> Result<(), CustomerError> {
-        let _billing = self.subscription_guard(subscription_id).await?;
+        let _billing = self.subscription_guard(subscription_id, None).await?;
         // Cancelling is idempotent: a subscription that is already cancelled,
         // or that went away with its customer, needs nothing further.
         match stripe::Subscription::retrieve(&self.client, subscription_id, &[]).await {
@@ -748,7 +517,7 @@ impl CustomerRepository for CustomerRepositoryImpl {
         team_id: &uuid::Uuid,
         team_owner_id: &macro_user_id::user_id::MacroUserIdStr<'_>,
     ) -> Result<(), CustomerError> {
-        let _billing = self.subscription_guard(subscription_id).await?;
+        let _billing = self.subscription_guard(subscription_id, None).await?;
         let mut metadata = HashMap::new();
         metadata.insert("team_id".to_string(), team_id.to_string());
         metadata.insert("owner_id".to_string(), team_owner_id.to_string());
@@ -803,6 +572,8 @@ fn paying_subscription(subscriptions: Vec<stripe::Subscription>) -> Option<strip
 }
 
 const OWNED_KEY: &str = "macro_plan_schedule";
+/// Provider metadata holding the key of the last atomically applied item change.
+const ITEM_CHANGE_KEY: &str = "macro_item_change";
 const PENDING_KEY: &str = "macro_pending_seats";
 const APPLIED_KEY: &str = "macro_renewed_seats";
 
@@ -821,6 +592,7 @@ struct ScheduleUpdate<'a> {
 fn storage(error: stripe::StripeError) -> CustomerError {
     CustomerError::StorageLayerError(error.into())
 }
+
 fn require_owned_schedule(schedule: &stripe::SubscriptionSchedule) -> Result<(), CustomerError> {
     if schedule
         .metadata

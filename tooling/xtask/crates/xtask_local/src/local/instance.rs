@@ -120,6 +120,11 @@ pub enum Port {
     PreviewSsh = 2222,
     /// Local wildcard preview TLS listener.
     PreviewHttps = 8443,
+    /// Agent git remotes (`agent-git-service`). Appended at the end so existing
+    /// per-instance port offsets stay stable.
+    AgentGit = 8111,
+    /// Local-only plaintext gateway reachable from Macro computers.
+    ComputerGateway = 8112,
 }
 
 impl Port {
@@ -209,6 +214,12 @@ impl Instance {
     /// External `auth` network name.
     pub fn network_auth(&self) -> String {
         self.suffixed_dash("auth")
+    }
+
+    /// The compose `services` network, `<project>_services`: what app
+    /// services, local sandboxes and Docker computers dial each other on.
+    pub fn network_services(&self) -> String {
+        format!("{}_services", self.project_name)
     }
 
     pub fn volume_postgres(&self) -> String {

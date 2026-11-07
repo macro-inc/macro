@@ -325,6 +325,15 @@ impl TeamService for FakeTeamService {
         panic!("unexpected is_user_premium call")
     }
 
+    async fn offer_harnesses_with_invites(
+        &self,
+        _invite_ids: &[uuid::Uuid],
+        _invited_by: &MacroUserIdStr<'_>,
+        _harness_ids: &[uuid::Uuid],
+    ) -> Result<(), InviteUsersToTeamError> {
+        Ok(())
+    }
+
     async fn invite_users_to_team(
         &self,
         entity_access_receipt: EntityAccessReceipt<MemberTeamRole>,
@@ -522,6 +531,30 @@ impl TeamService for FakeTeamService {
         _user_id: &MacroUserIdStr<'_>,
     ) -> Result<Option<TeamMember<'static>>, JoinTeamDirectlyError> {
         panic!("unexpected try_join_team_by_domain call")
+    }
+
+    async fn add_team_agent(
+        &self,
+        _entity_access_receipt: EntityAccessReceipt<AdminTeamRole>,
+        _agent_user_id: &MacroUserIdStr<'_>,
+        _bill_seat: bool,
+    ) -> Result<Option<crate::domain::model::SeatSubscriptionItem>, JoinTeamDirectlyError> {
+        panic!("unexpected add_team_agent call")
+    }
+
+    async fn undo_team_agent_join(
+        &self,
+        _entity_access_receipt: EntityAccessReceipt<AdminTeamRole>,
+        _agent_user_id: &MacroUserIdStr<'_>,
+    ) -> Result<(), crate::domain::model::RemoveUserFromTeamError> {
+        panic!("unexpected undo_team_agent_join call")
+    }
+
+    async fn quote_team_agent_seat(
+        &self,
+        _entity_access_receipt: EntityAccessReceipt<AdminTeamRole>,
+    ) -> Result<Option<crate::domain::model::SeatQuote>, TeamError> {
+        panic!("unexpected quote_team_agent_seat call")
     }
 }
 
@@ -968,4 +1001,10 @@ async fn get_team_invites_reads_the_named_current_team() {
             role: TeamRole::Admin,
         }]
     );
+}
+
+#[tokio::test]
+async fn disabled_agent_invites_return_forbidden() {
+    let response = InviteUsersToTeamError::AgentsNotEnabled.into_response();
+    assert_eq!(response.status(), StatusCode::FORBIDDEN);
 }

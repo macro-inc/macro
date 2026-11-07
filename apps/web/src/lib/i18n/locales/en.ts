@@ -1,5 +1,6 @@
 import accountManager from './en/account-manager';
 import agentAutoArchive from './en/agent-auto-archive';
+import agentInvite from './en/agent-invite';
 import agentSetup from './en/agent-setup';
 import agentWork from './en/agent-work';
 import calls from './en/calls';
@@ -9,6 +10,7 @@ import channelSections from './en/channel-sections';
 import commandMenu from './en/command-menu';
 import commands from './en/commands';
 import common from './en/common';
+import computers from './en/computers';
 import create from './en/create';
 import crm from './en/crm';
 import entityActions from './en/entity-actions';
@@ -16,6 +18,8 @@ import localRuntime from './en/local-runtime';
 import mobile from './en/mobile';
 import nav from './en/nav';
 import notificationsInbox from './en/notifications-inbox';
+import runtimeSharing from './en/runtime-sharing';
+import settingsBilling from './en/settings-billing';
 import settingsLanguage from './en/settings-language';
 import settingsMobileApp from './en/settings-mobile-app';
 import settingsNav from './en/settings-nav';
@@ -30,6 +34,7 @@ import viewMenus from './en/view-menus';
  */
 export default {
   agentAutoArchive,
+  agentInvite,
   accountManager,
   agentSetup,
   agentWork,
@@ -40,6 +45,7 @@ export default {
   commandMenu,
   commands,
   common,
+  computers,
   create,
   crm,
   entityActions,
@@ -47,6 +53,8 @@ export default {
   mobile,
   nav,
   notificationsInbox,
+  settingsBilling,
+  runtimeSharing,
   settingsLanguage,
   settingsMobileApp,
   settingsNav,

@@ -68,6 +68,9 @@ maybe_env_vars! {
     pub struct PosthogApiKey;
     pub struct PosthogHost;
     pub struct LoopsApiKey;
+    /// Dead Simple Email API key. When set, each team agent gets an email
+    /// inbox.
+    pub struct DeadSimpleMailApiKey;
     /// JSON array of exact email addresses allowed to sign up in Develop.
     pub struct DevelopmentSignupAllowlistJson;
     /// Stripe promotion code GTM invite links grant at checkout. Defaults to `1MF`.
@@ -78,6 +81,14 @@ maybe_env_vars! {
     /// deploy before the price exists in Stripe; until it is set, Max checkout
     /// and plan changes answer 400 and every subscription maps to Premium.
     pub struct StripeMaxPriceId;
+    /// Stripe price ids for Macro computers, one per size and billing
+    /// interval. Absent as a group means computers are not sold here.
+    pub struct StripeComputerStandardMonthlyPriceId;
+    pub struct StripeComputerLargeMonthlyPriceId;
+    pub struct StripeComputerXlMonthlyPriceId;
+    pub struct StripeComputerStandardYearlyPriceId;
+    pub struct StripeComputerLargeYearlyPriceId;
+    pub struct StripeComputerXlYearlyPriceId;
 }
 
 /// The configuration parameters for the application.
@@ -91,6 +102,8 @@ maybe_env_vars! {
 // #[macro_config::from_ref_all]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 pub struct Config {
+    /// Exact verified owner/admin email domain whose agents are included. Required; empty disables it.
+    pub team_agents_included_email_domain: String,
     /// Admit new Outlook accounts only after the deployment is ready. Reconnect is separate.
     #[macro_config_default(false)]
     pub outlook_connections_enabled: bool,
@@ -186,6 +199,9 @@ pub struct Config {
     /// Loops API key (optional). When set, Macro sign-ups are added to our
     /// Loops audience.
     pub loops_api_key: LoopsApiKey,
+    /// Dead Simple Email API key (optional). Without it, team agents get a
+    /// placeholder address and no inbox.
+    pub dead_simple_mail_api_key: DeadSimpleMailApiKey,
     /// JSON array of exact non-Macro email addresses allowed to sign up in Develop.
     ///
     /// All `@macro.com` email addresses are allowed by the Develop policy automatically.
@@ -204,6 +220,13 @@ pub struct Config {
     /// The stripe price id for the Max plan seat (optional, see
     /// [`StripeMaxPriceId`])
     pub stripe_max_price_id: StripeMaxPriceId,
+    /// Macro computer prices: all six or none, independent of fleet attachment.
+    pub stripe_computer_standard_monthly_price_id: StripeComputerStandardMonthlyPriceId,
+    pub stripe_computer_large_monthly_price_id: StripeComputerLargeMonthlyPriceId,
+    pub stripe_computer_xl_monthly_price_id: StripeComputerXlMonthlyPriceId,
+    pub stripe_computer_standard_yearly_price_id: StripeComputerStandardYearlyPriceId,
+    pub stripe_computer_large_yearly_price_id: StripeComputerLargeYearlyPriceId,
+    pub stripe_computer_xl_yearly_price_id: StripeComputerXlYearlyPriceId,
     /// The internal api key
     pub internal_api_key: InternalApiKey,
     /// Comma-separated Kafka bootstrap servers for the macro event broker.
@@ -237,6 +260,67 @@ impl Config {
         )
     }
 
+    /// Reject partial price groups independently of physical fleet attachment.
+    pub fn validate_computer_config(&self) -> anyhow::Result<()> {
+        let prices = [
+            (
+                "STRIPE_COMPUTER_STANDARD_MONTHLY_PRICE_ID",
+                self.stripe_computer_standard_monthly_price_id.value(),
+            ),
+            (
+                "STRIPE_COMPUTER_LARGE_MONTHLY_PRICE_ID",
+                self.stripe_computer_large_monthly_price_id.value(),
+            ),
+            (
+                "STRIPE_COMPUTER_XL_MONTHLY_PRICE_ID",
+                self.stripe_computer_xl_monthly_price_id.value(),
+            ),
+            (
+                "STRIPE_COMPUTER_STANDARD_YEARLY_PRICE_ID",
+                self.stripe_computer_standard_yearly_price_id.value(),
+            ),
+            (
+                "STRIPE_COMPUTER_LARGE_YEARLY_PRICE_ID",
+                self.stripe_computer_large_yearly_price_id.value(),
+            ),
+            (
+                "STRIPE_COMPUTER_XL_YEARLY_PRICE_ID",
+                self.stripe_computer_xl_yearly_price_id.value(),
+            ),
+        ];
+        if prices.iter().any(|(_, value)| value.is_some()) {
+            for (name, value) in prices {
+                anyhow::ensure!(
+                    nonblank_value(value).is_some(),
+                    "{name} is required when any computer price is set"
+                );
+            }
+        }
+        Ok(())
+    }
+
+    /// The Stripe price of each computer size per billing interval.
+    pub fn computer_prices(
+        &self,
+    ) -> anyhow::Result<crate::domain::computer_billing::ComputerPrices> {
+        self.validate_computer_config()?;
+        let price = |id: Option<&str>| id.map(stripe_price_id::StripePriceId::parse).transpose();
+        Ok(crate::domain::computer_billing::ComputerPrices {
+            standard: crate::domain::computer_billing::IntervalPrices {
+                monthly: price(self.stripe_computer_standard_monthly_price_id.value())?,
+                yearly: price(self.stripe_computer_standard_yearly_price_id.value())?,
+            },
+            large: crate::domain::computer_billing::IntervalPrices {
+                monthly: price(self.stripe_computer_large_monthly_price_id.value())?,
+                yearly: price(self.stripe_computer_large_yearly_price_id.value())?,
+            },
+            xl: crate::domain::computer_billing::IntervalPrices {
+                monthly: price(self.stripe_computer_xl_monthly_price_id.value())?,
+                yearly: price(self.stripe_computer_xl_yearly_price_id.value())?,
+            },
+        })
+    }
+
     pub fn from_env() -> anyhow::Result<Self> {
         let enforcement = ai_usage::config::load_ai_usage_enforcement()
             .map_err(|error| anyhow::anyhow!("{error}"))?;
@@ -246,6 +330,7 @@ impl Config {
             .context("failed to load authentication service config")?;
         config.enable_ai_usage_enforcement = enforcement;
         config.enable_ai_usage_billing = billing;
+        config.computer_prices()?;
         Ok(config)
     }
 

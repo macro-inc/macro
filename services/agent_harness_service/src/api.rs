@@ -79,7 +79,9 @@ pub struct ApiStates<T, R, Opener, Bots, Requests, Access, Auth, Models, Changes
     sharing: Router,
     routine_sessions: Router,
     coding_agents: Router,
+    computer_screen: Router,
     capabilities: Router,
+    voices: Router,
     mode_choice: Router,
     conversations: Router,
     pull_requests: Router,
@@ -132,7 +134,9 @@ impl<T, R, Opener, Bots, Requests, Access, Auth, Models, Changes>
             sharing: Router::new(),
             routine_sessions: Router::new(),
             coding_agents: Router::new(),
+            computer_screen: Router::new(),
             capabilities: Router::new(),
+            voices: Router::new(),
             mode_choice: Router::new(),
             conversations: Router::new(),
             pull_requests: Router::new(),
@@ -189,6 +193,12 @@ impl<T, R, Opener, Bots, Requests, Access, Auth, Models, Changes>
         self
     }
 
+    /// Attach administrator voice discovery and sample routes.
+    pub fn with_voices(mut self, router: Router) -> Self {
+        self.voices = router;
+        self
+    }
+
     /// Attach model-specific harness capability discovery routes.
     pub fn with_capabilities(mut self, router: Router) -> Self {
         self.capabilities = router;
@@ -231,6 +241,12 @@ impl<T, R, Opener, Bots, Requests, Access, Auth, Models, Changes>
         self
     }
 
+    /// Attach Macro computer screen and Claude sign-in routes.
+    pub fn with_computer_screen(mut self, router: Router) -> Self {
+        self.computer_screen = router;
+        self
+    }
+
     /// Attach session-sharing routes with their independent domain service.
     pub fn with_sharing(mut self, router: Router) -> Self {
         self.sharing = router;
@@ -268,23 +284,30 @@ impl<T, R, Opener, Bots, Requests, Access, Auth, Models, Changes>
     }
 }
 
-/// Serve session egress and Macro Internal MCP on the existing egress listener.
+/// Serve session egress, Macro Internal MCP, and the Anthropic gateway on the
+/// existing egress listener.
 ///
-/// Both authenticate session credentials; internal tools also serve external
-/// runtimes. No browser-facing CORS layer or Swagger is needed.
+/// All authenticate session credentials and also serve external runtimes. No
+/// browser-facing CORS layer or Swagger is needed.
 pub async fn serve_egress<Service>(
     service: std::sync::Arc<Service>,
     internal_mcp: Router,
+    anthropic_gateway: Router,
     port: u16,
     shutdown: impl Future<Output = ()> + Send + 'static,
 ) -> anyhow::Result<()>
 where
     Service: EgressService + 'static,
 {
-    let app = egress_app(EgressRouterState::new(service)).merge(mount_at_root_and_prefix(
-        internal_mcp,
-        EGRESS_GATEWAY_PATH_PREFIX,
-    ));
+    let app = egress_app(EgressRouterState::new(service))
+        .merge(mount_at_root_and_prefix(
+            internal_mcp,
+            EGRESS_GATEWAY_PATH_PREFIX,
+        ))
+        .merge(mount_at_root_and_prefix(
+            anthropic_gateway,
+            EGRESS_GATEWAY_PATH_PREFIX,
+        ));
 
     let listener = tokio::net::TcpListener::bind(format!("0.0.0.0:{port}"))
         .await
@@ -409,7 +432,9 @@ where
         .merge(agent_repositories_router(states.repositories))
         .merge(states.routine_sessions)
         .merge(states.coding_agents)
+        .merge(states.computer_screen)
         .merge(states.capabilities)
+        .merge(states.voices)
         .merge(states.mode_choice)
         .merge(states.conversations)
         .nest("/universal_input", states.universal_input)

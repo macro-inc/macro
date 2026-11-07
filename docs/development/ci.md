@@ -6,6 +6,10 @@ reports the result as the `CI gate` commit status on that commit. Each push
 leaves the new commit at `Not run on this commit`, so a PR can merge only after
 a passing run on its latest commit.
 
+The gate accepts every PR base, including stacked feature branches. A stacked
+PR runs against its actual base; requesting CI does not require retargeting it
+to `main`.
+
 Run CI deliberately: at a checkpoint, a coherent locally tested chunk you want
 real CI on before building further, or when you think the PR is done. Never
 after every push, and never instead of local checks.

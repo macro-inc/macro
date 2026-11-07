@@ -15,6 +15,10 @@ note: |-
   `files` in each ts-/tsx-feature-* rule. Block-agent uses `ui/` for
   presentation and `component/` for composition.
 files:
+  - apps/web/src/features/computer-screen/queries/**
+  - apps/web/src/features/computer-screen/primitives/**
+  - apps/web/src/features/computer-screen/components/**
+  - apps/web/src/features/computer-screen/views/**
   - apps/web/src/features/notifications-inbox/queries/**
   - apps/web/src/features/notifications-inbox/primitives/**
   - apps/web/src/features/notifications-inbox/components/**

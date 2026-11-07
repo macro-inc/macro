@@ -5,7 +5,10 @@ exclude = ["vendor"]
 
 members = [
   "crates/access_requests",
+  "crates/agent_git",
+  "crates/agent_credentials",
   "crates/agent_api_keys",
+  "crates/team_agents",
   "crates/routines",
   "crates/routine_program",
   "crates/activity",
@@ -94,9 +97,14 @@ members = [
   "crates/graphql_registered_work",
   "crates/graphql_work_feed",
   "crates/gtm_invite",
+  "crates/computer_id",
+  "crates/pairing_id",
   "crates/harness_id",
   "crates/harness_token",
   "crates/harnesses",
+  "crates/hosted_runtimes",
+  "crates/stripe_price_id",
+  "crates/incus_client",
   "crates/import",
   "crates/import_notion",
   "crates/import_tracker",
@@ -166,6 +174,7 @@ members = [
   "services/calendar_service",
   "services/call_recording_preview_handler",
   "services/connection_gateway",
+  "services/agent_git_service",
   "services/contacts_service",
   "services/convert_service",
   "services/dataloss_prevention_handler",
@@ -213,6 +222,8 @@ members = [
 ]
 
 [workspace.dependencies]
+computer_id = { path = "crates/computer_id" }
+pairing_id = { path = "crates/pairing_id" }
 aes = "0.8.4"
 aes-gcm = { version = "0.10.3", features = ["zeroize"] }
 anyhow = "1.0.100"
@@ -303,6 +314,7 @@ encoding_rs = "0.8"
 http = "1"
 http-body = "1.0.1"
 http-body-util = "0.1.2"
+httparse = "1.10.1"
 httpdate = "1"
 hyper = "1"
 hyper-util = { version = "0.1", features = ["tokio"] }
@@ -370,6 +382,7 @@ pgvector = { version = "0.4", features = ["postgres", "sqlx"] }
 png = "0.18"
 postcard = { version = "1", features = ["use-std"] }
 pollster = "0.4"
+progenitor-client = "0.15.1"
 proptest = { version = "1.11", default-features = false, features = ["std"] }
 prost = "0.14"
 prost-build = "0.14"
