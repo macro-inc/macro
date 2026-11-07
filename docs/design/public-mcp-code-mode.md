@@ -19,7 +19,7 @@ see it.
 
 - `crates/agents/code_execution_core` + `code_execution_outbound`: fresh Deno child per run, prebundled SDK, network
   limited to Macro service hosts, 30 s deadline.
-- `crates/agent_code_mode`: `ExecuteCode`, `DescribeCodeTools`, execution
+- `crates/agents/agent_code_mode`: `ExecuteCode`, `DescribeCodeTools`, execution
   journal, review stacks. Session-bound throughout: `ExecutionIdentity` needs a
   session, turn and agent; the journal is keyed by session; turn Stop cancels;
   owner approval goes through the session's `NativeToolGate`.

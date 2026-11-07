@@ -24,7 +24,7 @@ import type {
  * serves, so the socket and the fetched log fold through one code path.
  *
  * This mirrors `AgentSessionLogEvent` in
- * `crates/agent_session/src/outbound/connection_gateway_realtime.rs`.
+ * `crates/agents/agent_session/src/outbound/connection_gateway_realtime.rs`.
  */
 export type AgentSessionLogEvent = {
   agentSessionId: string;
@@ -39,7 +39,7 @@ export type AgentSessionRenamedEvent = {
 
 /**
  * A session's action queue after a change. Mirrors `AgentSessionQueueEvent`
- * in `crates/agent_session/src/outbound/connection_gateway_realtime.rs`.
+ * in `crates/agents/agent_session/src/outbound/connection_gateway_realtime.rs`.
  *
  * Always the full queue, never a delta — `entries` are the exact rows
  * `GET /agent-sessions/{id}/queue` serves, oldest (next to dispatch) first —
@@ -59,7 +59,7 @@ export type AgentSessionUpdatedEvent = { agentSessionId: string };
  * A session's captured changes moved: a capture started, landed, or failed.
  * Carries only the session id; consumers refetch the changes summary.
  * Mirrors `AGENT_SESSION_CHANGES` in
- * `crates/agent_session/src/outbound/connection_gateway_realtime.rs`.
+ * `crates/agents/agent_session/src/outbound/connection_gateway_realtime.rs`.
  */
 export const AGENT_SESSION_CHANGES_EVENT = 'agent_session_changes';
 export type AgentSessionChangesEvent = { agentSessionId: string };

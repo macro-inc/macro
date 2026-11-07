@@ -70,7 +70,7 @@ setup_test_envs:
     echo "DATABASE_URL={{ DATABASE_URL }}" >> ./crates/comms/contacts_outbound/.env
     echo "DATABASE_URL={{ DATABASE_URL }}" >> ./services/delete_chat_handler/.env
     echo "DATABASE_URL={{ DATABASE_URL }}" >> ./services/email_sfs_delete_handler/.env
-    echo "DATABASE_URL={{ DATABASE_URL }}" >> ./crates/scheduled_action/.env
+    echo "DATABASE_URL={{ DATABASE_URL }}" >> ./crates/agents/scheduled_action/.env
     echo "DATABASE_URL={{ DATABASE_URL }}" >> ./crates/notifications/notification_db_client/.env
     echo "DATABASE_URL={{ DATABASE_URL }}" >> ./crates/notifications/notification/.env
     echo "DATABASE_URL={{ DATABASE_URL }}" >> ./crates/macro_db_client/.env
@@ -119,7 +119,7 @@ setup_test_envs:
     echo "DATABASE_URL={{ DATABASE_URL }}" >> ./services/document_storage_service/.env
     echo "DATABASE_URL={{ DATABASE_URL }}" >> ./crates/projects/task_dedup/.env
     echo "DATABASE_URL={{ DATABASE_URL }}" >> ./crates/databases/crm/.env
-    echo "DATABASE_URL={{ DATABASE_URL }}" >> ./crates/bots/.env
+    echo "DATABASE_URL={{ DATABASE_URL }}" >> ./crates/agents/bots/.env
     echo "DATABASE_URL={{ DATABASE_URL }}" >> ./services/call_recording_preview_handler/.env
     echo "DATABASE_URL={{ DATABASE_URL }}" >> ./crates/entities/share_permission_db_utils/.env
     echo "DATABASE_URL={{ DATABASE_URL }}" >> ./crates/ai/ai_projections/.env

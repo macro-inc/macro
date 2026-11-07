@@ -10,8 +10,8 @@ and the fencing token its writes carry.
 
 - Owns: the id newtypes, their string forms (`FromStr`/`Display`) and serde
   form (a transparent uuid).
-- Not here: the session log and its frames → `crates/folds/agent_fold`; session
-  ownership, claims and storage → `crates/agent_session`. Both re-export these
+- Not here: the session log and its frames → `crates/agents/agent_fold`; session
+  ownership, claims and storage → `crates/agents/agent_session`. Both re-export these
   types from their old paths (`agent_fold::domain::log`,
   `agent_session::domain::model`).
 

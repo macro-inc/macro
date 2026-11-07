@@ -1,0 +1,82 @@
+[package]
+edition = "2024"
+name = "bots"
+publish = false
+version = "0.1.0"
+
+[features]
+ai_tools = [
+  "dep:ai_toolset",
+  "dep:async-trait",
+  "dep:entity_access",
+  "dep:schemars",
+  "entity_access/ports",
+  "ports",
+]
+default = ["inbound", "outbound", "ports"]
+inbound = [
+  "dep:axum",
+  "dep:axum-extra",
+  "dep:channels",
+  "dep:entity_access",
+  "entity_access/inbound",
+  "entity_access/ports",
+  "dep:macro_authorization",
+  "dep:model_error_response",
+  "macro_authorization/axum",
+  "dep:serde_json",
+  "dep:utoipa",
+  "ports",
+]
+outbound = ["dep:sqlx", "dep:macro_uuid", "dep:entity_registry", "dep:model_owner", "dep:rootcause", "ports"]
+ports = ["dep:entity_access", "entity_access/ports", "dep:rootcause", "dep:tokio", "messages/ports"]
+test-utils = ["dep:mockall", "ports"]
+
+[dependencies]
+ai_toolset = { workspace = true, optional = true }
+anyhow = { workspace = true }
+async-trait = { workspace = true, optional = true }
+axum = { workspace = true, optional = true }
+axum-extra = { workspace = true, optional = true, features = ["query"] }
+bot_id = { workspace = true, features = ["schema"] }
+harness_id = { workspace = true, features = ["schema", "sqlx"] }
+channels = { workspace = true, optional = true, features = ["ports"] }
+chrono = { workspace = true }
+entity_access = { workspace = true, optional = true }
+entity_registry = { workspace = true, optional = true }
+model_owner = { workspace = true, optional = true }
+rootcause = { workspace = true, optional = true }
+hex = { workspace = true }
+macro_authorization = { workspace = true, optional = true }
+messages = { workspace = true }
+macro_event_broker = { workspace = true }
+mockall = { workspace = true, optional = true }
+macro_event_topics = { workspace = true }
+macro_user_id = { workspace = true }
+macro_uuid = { workspace = true, optional = true }
+model_error_response = { workspace = true, optional = true }
+rand = { workspace = true }
+schemars = { workspace = true, optional = true }
+serde = { workspace = true }
+serde_json = { workspace = true, optional = true }
+sqlx = { workspace = true, optional = true }
+strum = { workspace = true }
+thiserror = { workspace = true }
+tokio = { workspace = true, optional = true }
+tracing = { workspace = true }
+utoipa = { workspace = true, optional = true }
+uuid = { workspace = true }
+workspace-hack = { version = "0.1", path = "../../workspace-hack" }
+bearer_token = { workspace = true }
+
+[dev-dependencies]
+async-trait = { workspace = true }
+entity_access = { workspace = true, features = [
+  "outbound",
+  "ports",
+] }
+macro_db_migrator = { workspace = true }
+rootcause = { workspace = true }
+serde_json = { workspace = true }
+tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
+tower = { workspace = true }

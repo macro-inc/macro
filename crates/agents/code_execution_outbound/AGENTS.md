@@ -6,7 +6,7 @@ Runs a bounded JavaScript program in a fresh Deno process inside the calling
 service. It implements the `CodeRunner` and `ProgramChecker` ports of
 `crates/agents/code_execution_core`, which owns admission, cancellation and the
 protocol types. Session authentication, token issuance and execution storage
-belong to `crates/agent_code_mode` and its composition root.
+belong to `crates/agents/agent_code_mode` and its composition root.
 
 ## Start here
 
@@ -28,7 +28,7 @@ belong to `crates/agent_code_mode` and its composition root.
 The bundled public SDK makes ordinary HTTP requests. There is no tool-name
 proxy or host-call bridge. Cancellation stops the process; it does not roll back
 completed API writes. SDK and Handlebars bundles, the operation catalog and
-the SDK's type declarations come from `crates/code_mode_assets`, generated from
+the SDK's type declarations come from `crates/agents/code_mode_assets`, generated from
 the public SDK at build time by `packages/code-mode-sdk`. A POST that only reads
 must be listed in the generator's `postReads`, or dry runs skip it.
 

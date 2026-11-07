@@ -20,7 +20,7 @@ is `crates/agents/code_execution_outbound`.
 
 - Depends on: `code_mode_assets` for the generated operation catalog and SDK
   declarations. No process, filesystem or network code.
-- Used by: `crates/agent_code_mode` and `services/agent_harness_service`.
+- Used by: `crates/agents/agent_code_mode` and `services/agent_harness_service`.
 
 ## Checks
 

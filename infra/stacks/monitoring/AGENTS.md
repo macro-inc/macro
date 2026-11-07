@@ -62,7 +62,7 @@ From `infra/`:
   header is the field contract with `services/whatsapp_session_service`.
   Renaming a field there silently turns its monitor into missing data.
 - `monitors/harness-presence.ts` reads `harness_presence_disagreement` logged by
-  `crates/harnesses/src/inbound/axum_router.rs`; its header is the field contract.
+  `crates/agents/harnesses/src/inbound/axum_router.rs`; its header is the field contract.
 - `monitors/outlook-sync.ts` reads the health log, sync spans and Graph and
   token span fields email-service emits; its header is the field contract.
   It finds the Graph and token spans by `@outlook.throttle_origin` and

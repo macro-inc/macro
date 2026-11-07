@@ -10,19 +10,36 @@ members = [
   "crates/accounts/system_status",
   "crates/accounts/user_api_key",
   "crates/accounts/user_language",
-  "crates/agent_api_keys",
-  "crates/agent_changes",
-  "crates/agent_code_mode",
-  "crates/agent_egress",
-  "crates/agent_harness",
-  "crates/agent_inmem",
-  "crates/agent_preview",
-  "crates/agent_runtime_protocol",
-  "crates/agent_session",
-  "crates/agent_session_realtime",
-  "crates/agent_trigger",
+  "crates/agents/agent_api_keys",
+  "crates/agents/agent_changes",
+  "crates/agents/agent_code_mode",
+  "crates/agents/agent_egress",
+  "crates/agents/agent_fold",
+  "crates/agents/agent_harness",
+  "crates/agents/agent_inmem",
+  "crates/agents/agent_preview",
+  "crates/agents/agent_runtime_protocol",
+  "crates/agents/agent_session",
+  "crates/agents/agent_session_realtime",
+  "crates/agents/agent_trigger",
+  "crates/agents/bots",
+  "crates/agents/claude_fold",
   "crates/agents/code_execution_core",
   "crates/agents/code_execution_outbound",
+  "crates/agents/code_mode_assets",
+  "crates/agents/codex_cloud_agents",
+  "crates/agents/codex_connection",
+  "crates/agents/codex_fold",
+  "crates/agents/cursor_api_key",
+  "crates/agents/cursor_cloud_agents",
+  "crates/agents/dynamic_ui",
+  "crates/agents/harnesses",
+  "crates/agents/prompt",
+  "crates/agents/routine_program",
+  "crates/agents/routines",
+  "crates/agents/scheduled_action",
+  "crates/agents/skills",
+  "crates/agents/system_skills",
   "crates/ai/agent",
   "crates/ai/ai_projections",
   "crates/ai/cognition",
@@ -39,7 +56,6 @@ members = [
   "crates/billing/ai_admission",
   "crates/billing/ai_billing",
   "crates/billing/ai_usage",
-  "crates/bots",
   "crates/calendar/calendar_events",
   "crates/calendar/calendar_scheduling",
   "crates/client/cache-core",
@@ -49,9 +65,6 @@ members = [
   "crates/clients/connect_client",
   "crates/clients/gmail_client",
   "crates/clients/loops_client",
-  "crates/code_mode_assets",
-  "crates/codex_cloud_agents",
-  "crates/codex_connection",
   "crates/coding_agent_worker",
   "crates/comms/channel_bots",
   "crates/comms/channel_labels",
@@ -61,8 +74,6 @@ members = [
   "crates/comms/external_chat",
   "crates/comms/messages",
   "crates/comms/slack_integration",
-  "crates/cursor_api_key",
-  "crates/cursor_cloud_agents",
   "crates/databases/crm",
   "crates/databases/database_sql",
   "crates/databases/database_webhooks",
@@ -73,7 +84,6 @@ members = [
   "crates/databases/properties_service",
   "crates/documents/collab_surface",
   "crates/documents/sync_router",
-  "crates/dynamic_ui",
   "crates/email/email_api_client_core",
   "crates/email/email_api_client_outbound",
   "crates/email/generic_email_domains",
@@ -94,9 +104,6 @@ members = [
   "crates/entities/frecency_inbound",
   "crates/entities/frecency_outbound",
   "crates/entities/shared_entity_registry",
-  "crates/folds/agent_fold",
-  "crates/folds/claude_fold",
-  "crates/folds/codex_fold",
   "crates/graphql/complete_graph",
   "crates/graphql/graphql_activity",
   "crates/graphql/graphql_calendar",
@@ -117,7 +124,6 @@ members = [
   "crates/graphql/graphql_soup",
   "crates/graphql/graphql_soup_filter_input",
   "crates/graphql/graphql_work_feed",
-  "crates/harnesses",
   "crates/integration_tests/local_e2e",
   "crates/integrations/git_patch",
   "crates/integrations/granola_sync",
@@ -173,10 +179,6 @@ members = [
   "crates/projects/initiative",
   "crates/projects/initiative_description",
   "crates/projects/task_dedup",
-  "crates/prompt",
-  "crates/routine_program",
-  "crates/routines",
-  "crates/scheduled_action",
   "crates/search/activity",
   "crates/search/attention_feed",
   "crates/search/search_service",
@@ -184,10 +186,8 @@ members = [
   "crates/search/soup_realtime_inbound",
   "crates/search/soup_realtime_outbound",
   "crates/search/work_feed",
-  "crates/skills",
   "crates/soup_filter_cache_adapter",
   "crates/soup_filter_projection",
-  "crates/system_skills",
   "crates/types/agent_session_id",
   "crates/types/bearer_token",
   "crates/types/bot_id",
@@ -607,22 +607,22 @@ access_requests = { path = "crates/entities/access_requests" }
 account_manager = { path = "crates/accounts/account_manager" }
 activity = { path = "crates/search/activity", default-features = false }
 agent = { path = "crates/ai/agent" }
-agent_api_keys = { path = "crates/agent_api_keys" }
-agent_changes = { path = "crates/agent_changes", default-features = false }
-agent_code_mode = { path = "crates/agent_code_mode" }
+agent_api_keys = { path = "crates/agents/agent_api_keys" }
+agent_changes = { path = "crates/agents/agent_changes", default-features = false }
+agent_code_mode = { path = "crates/agents/agent_code_mode" }
 agent_correlation = { path = "crates/platform/agent_correlation" }
-agent_egress = { path = "crates/agent_egress" }
-agent_fold = { path = "crates/folds/agent_fold", default-features = false }
-agent_harness = { path = "crates/agent_harness" }
+agent_egress = { path = "crates/agents/agent_egress" }
+agent_fold = { path = "crates/agents/agent_fold", default-features = false }
+agent_harness = { path = "crates/agents/agent_harness" }
 agent_harness_egress_url = { path = "crates/platform/service_urls/agent_harness_egress_url" }
 agent_harness_service_url = { path = "crates/platform/service_urls/agent_harness_service_url" }
-agent_inmem = { path = "crates/agent_inmem" }
-agent_preview = { path = "crates/agent_preview" }
-agent_runtime_protocol = { path = "crates/agent_runtime_protocol", default-features = false }
-agent_session = { path = "crates/agent_session", default-features = false }
+agent_inmem = { path = "crates/agents/agent_inmem" }
+agent_preview = { path = "crates/agents/agent_preview" }
+agent_runtime_protocol = { path = "crates/agents/agent_runtime_protocol", default-features = false }
+agent_session = { path = "crates/agents/agent_session", default-features = false }
 agent_session_id = { path = "crates/types/agent_session_id" }
-agent_session_realtime = { path = "crates/agent_session_realtime", default-features = false }
-agent_trigger = { path = "crates/agent_trigger" }
+agent_session_realtime = { path = "crates/agents/agent_session_realtime", default-features = false }
+agent_trigger = { path = "crates/agents/agent_trigger" }
 ai_admission = { path = "crates/billing/ai_admission" }
 ai_billing = { path = "crates/billing/ai_billing" }
 ai_editing_worker_url = { path = "crates/platform/service_urls/ai_editing_worker_url" }
@@ -640,7 +640,7 @@ auth_service_url = { path = "crates/platform/service_urls/auth_service_url" }
 authentication_service_client = { path = "crates/clients/authentication_service_client" }
 bearer_token = { path = "crates/types/bearer_token" }
 bot_id = { path = "crates/types/bot_id" }
-bots = { path = "crates/bots", default-features = false }
+bots = { path = "crates/agents/bots", default-features = false }
 broadcast = { path = "crates/platform/broadcast" }
 cache-core = { path = "crates/client/cache-core" }
 cache-turso = { path = "crates/client/cache-turso" }
@@ -657,13 +657,13 @@ channels = { path = "crates/comms/channels" }
 chat = { path = "crates/comms/chat", default-features = false }
 chat_id = { path = "crates/types/chat_id" }
 chat_message = { path = "crates/types/chat_message" }
-claude_fold = { path = "crates/folds/claude_fold" }
+claude_fold = { path = "crates/agents/claude_fold" }
 code_execution_core = { path = "crates/agents/code_execution_core" }
 code_execution_outbound = { path = "crates/agents/code_execution_outbound" }
-code_mode_assets = { path = "crates/code_mode_assets" }
-codex_cloud_agents = { path = "crates/codex_cloud_agents" }
-codex_connection = { path = "crates/codex_connection" }
-codex_fold = { path = "crates/folds/codex_fold" }
+code_mode_assets = { path = "crates/agents/code_mode_assets" }
+codex_cloud_agents = { path = "crates/agents/codex_cloud_agents" }
+codex_connection = { path = "crates/agents/codex_connection" }
+codex_fold = { path = "crates/agents/codex_fold" }
 cognition = { path = "crates/ai/cognition" }
 cognition_public_url = { path = "crates/platform/service_urls/cognition_public_url" }
 collab_surface = { path = "crates/documents/collab_surface" }
@@ -685,8 +685,8 @@ contacts_service_url = { path = "crates/platform/service_urls/contacts_service_u
 convert_service_url = { path = "crates/platform/service_urls/convert_service_url" }
 cowlike = { path = "crates/types/cowlike" }
 crm = { path = "crates/databases/crm", default-features = false }
-cursor_api_key = { path = "crates/cursor_api_key" }
-cursor_cloud_agents = { path = "crates/cursor_cloud_agents" }
+cursor_api_key = { path = "crates/agents/cursor_api_key" }
+cursor_cloud_agents = { path = "crates/agents/cursor_cloud_agents" }
 database_env_vars = { path = "crates/platform/database_env_vars" }
 database_sql = { path = "crates/databases/database_sql" }
 database_webhooks = { path = "crates/databases/database_webhooks" }
@@ -701,7 +701,7 @@ document_sub_type = { path = "crates/types/document_sub_type", default-features 
 documents = { path = "crates/documents/documents", default-features = false }
 documents_hex = { package = "documents", path = "crates/documents/documents" }
 docx_engine = { path = "crates/engines/docx_engine" }
-dynamic_ui = { path = "crates/dynamic_ui" }
+dynamic_ui = { path = "crates/agents/dynamic_ui" }
 dynamodb_client = { path = "crates/aws/dynamodb_client" }
 email = { path = "crates/email/email" }
 email_api_client_core = { path = "crates/email/email_api_client_core" }
@@ -762,7 +762,7 @@ graphql_soup_filter_input = { path = "crates/graphql/graphql_soup_filter_input" 
 graphql_work_feed = { path = "crates/graphql/graphql_work_feed" }
 gtm_invite = { path = "crates/accounts/gtm_invite" }
 harness_id = { path = "crates/types/harness_id" }
-harnesses = { path = "crates/harnesses", default-features = false }
+harnesses = { path = "crates/agents/harnesses", default-features = false }
 id_newtype = { path = "crates/types/id_newtype" }
 image_generation = { path = "crates/ai/image_generation" }
 image_proxy_service_url = { path = "crates/platform/service_urls/image_proxy_service_url" }
@@ -864,7 +864,7 @@ preview_gateway_url = { path = "crates/platform/service_urls/preview_gateway_url
 project_id = { path = "crates/types/project_id" }
 projects = { path = "crates/projects/projects", default-features = false }
 projects_hex = { package = "projects", path = "crates/projects/projects" }
-prompt = { path = "crates/prompt" }
+prompt = { path = "crates/agents/prompt" }
 properties = { path = "crates/databases/properties", default-features = false }
 properties_inbound = { path = "crates/databases/properties_inbound", default-features = false }
 psd_engine = { path = "crates/engines/psd_engine" }
@@ -874,12 +874,12 @@ referral = { path = "crates/billing/referral" }
 reminders = { path = "crates/email/reminders" }
 remote_env_var = { path = "crates/platform/remote_env_var" }
 roles_and_permissions = { path = "crates/entities/roles_and_permissions", default-features = false }
-routine_program = { path = "crates/routine_program" }
-routines = { path = "crates/routines" }
+routine_program = { path = "crates/agents/routine_program" }
+routines = { path = "crates/agents/routines" }
 s3_client = { path = "crates/aws/s3_client" }
 s3_key = { path = "crates/types/s3_key" }
 saved_views = { path = "crates/databases/saved_views" }
-scheduled_action = { path = "crates/scheduled_action" }
+scheduled_action = { path = "crates/agents/scheduled_action" }
 scheduled_action_service_url = { path = "crates/platform/service_urls/scheduled_action_service_url" }
 search_processing_service_url = { path = "crates/platform/service_urls/search_processing_service_url" }
 search_service = { path = "crates/search/search_service" }
@@ -890,7 +890,7 @@ service_url = { path = "crates/platform/service_urls/service_url" }
 ses_client = { path = "crates/aws/ses_client" }
 share_permission_db_utils = { path = "crates/entities/share_permission_db_utils" }
 shared_entity_registry = { path = "crates/entities/shared_entity_registry" }
-skills = { path = "crates/skills", default-features = false }
+skills = { path = "crates/agents/skills", default-features = false }
 slack_integration = { path = "crates/comms/slack_integration" }
 sns_client = { path = "crates/aws/sns_client" }
 soup = { path = "crates/search/soup" }
@@ -913,7 +913,7 @@ sync_service_client = { path = "crates/clients/sync_service_client" }
 sync_service_hex = { path = "crates/documents/sync_service_hex" }
 sync_service_url = { path = "crates/platform/service_urls/sync_service_url" }
 system_properties = { path = "crates/databases/system_properties" }
-system_skills = { path = "crates/system_skills" }
+system_skills = { path = "crates/agents/system_skills" }
 system_status = { path = "crates/accounts/system_status" }
 task_dedup = { path = "crates/projects/task_dedup" }
 team_id = { path = "crates/types/team_id" }

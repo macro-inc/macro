@@ -5,7 +5,7 @@ Posts Anthropic status page updates to a Macro channel.
 [status.claude.com](https://status.claude.com) (formerly status.anthropic.com)
 is powered by Atlassian Statuspage. This service receives Statuspage webhook
 notifications, formats them, and forwards them to a channel via the channel
-bot webhook (`crates/bots`), the same mechanism the old SNS deployment-failure
+bot webhook (`crates/agents/bots`), the same mechanism the old SNS deployment-failure
 lambda used.
 
 ## How it works

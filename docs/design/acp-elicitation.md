@@ -169,7 +169,7 @@ web (block-agent)
 Agents that check capabilities (they must) will never send
 `elicitation/create` to us.
 
-We speak `ProtocolVersion::V1` (`crates/agent_session/src/lib.rs`).
+We speak `ProtocolVersion::V1` (`crates/agents/agent_session/src/lib.rs`).
 Elicitation is in the stable schema; it does not require a version bump.
 
 ### Incoming agent requests
@@ -242,7 +242,7 @@ Without the feature there is no `ClientCapabilities::elicitation`, no
 `elicitation/create`. No pin bump is needed. One line in the workspace
 `Cargo.toml` turns it on.
 
-Zed-as-client recordings in `crates/folds/agent_fold/fixtures/real/` already
+Zed-as-client recordings in `crates/agents/agent_fold/fixtures/real/` already
 advertise `"elicitation":{"form":{},"url":{}}` on `initialize`. That is
 Zed's capability object, not ours.
 
@@ -251,7 +251,7 @@ Zed's capability object, not ours.
 What each popular ACP agent actually does when it wants to ask the user
 something, from reading adapter source. The shared idiom (a select plus an
 "Other" free-text companion, and the answer the harness settled on) is read
-through two `HarnessReader` methods in `crates/folds/agent_fold/src/domain/harness/`
+through two `HarnessReader` methods in `crates/agents/agent_fold/src/domain/harness/`
 - `custom_answer_for` and `reported_elicitation_answer` - with the shared
 marker as the neutral reading (`generic.rs`) and each harness's own marker
 and naming fallback in its file (`claude_code.rs`, `codex.rs`). The fold
@@ -565,7 +565,7 @@ is the check.
 
 ### 1. `agent_runtime_protocol` — the action
 
-`crates/agent_runtime_protocol/src/domain/action.rs`.
+`crates/agents/agent_runtime_protocol/src/domain/action.rs`.
 
 ```rust
 /// A JSON-RPC request id as the agent sent it, carried whole so the answer
@@ -753,7 +753,7 @@ service-level tests can drive the loop end-to-end.
 
 ### 3. `agent_fold` — the type surface
 
-`crates/folds/agent_fold/src/domain/model.rs`. Everything here is
+`crates/agents/agent_fold/src/domain/model.rs`. Everything here is
 `Serialize + specta::Type` and lands in
 `apps/web/src/lib/service-clients/service-agent-fold/generated/types.ts`
 via `just gen-agent-fold-types`.

@@ -690,7 +690,7 @@ export async function main({ macro, trigger, steps, run }: StepContext) {
             let problems = code.check_program(&routine).await.unwrap();
             assert_eq!(problems, Vec::new(), "starter {}", starter.key);
         }
-        let doc = include_str!("../../../../crates/routines/src/create_routine.md");
+        let doc = include_str!("../../../../crates/agents/routines/src/create_routine.md");
         let (_, example) = doc.split_once("Its `steps` string holds:\n").unwrap();
         let steps: serde_json::Value = serde_json::from_str(example.trim()).unwrap();
         let problems = code.check_program(&program(steps)).await.unwrap();

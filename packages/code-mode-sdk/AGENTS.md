@@ -9,7 +9,7 @@ HTML worker belong to `packages/sdk-docs`.
 ## Start here
 
 - `scripts/generate.ts`: builds the Deno bundles and backend documentation into
-  the directory it is given; `crates/code_mode_assets` runs it at build time.
+  the directory it is given; `crates/agents/code_mode_assets` runs it at build time.
 - `scripts/typedoc.ts`: index each entity and split linked Markdown into
   per-symbol references (classes, methods, types). A discriminated union over
   the 16 KiB reference size, such as `EditOp`, lists its members, each read as
@@ -43,5 +43,5 @@ the generator refuses to run without `packages/sdk/node_modules`.
 ## Gotchas
 
 - The outputs are never committed. A new file the generator reads must be added
-  to `GENERATOR_INPUTS` in `crates/code_mode_assets/build.rs` and to
+  to `GENERATOR_INPUTS` in `crates/agents/code_mode_assets/build.rs` and to
   `codeModeAssetsSrc` in `nix/cloud-storage.nix`.

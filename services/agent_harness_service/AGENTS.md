@@ -62,7 +62,7 @@ Pulumi stacks; they do not host extra agent processes.
   It also mounts the internal `/universal_input/thread-due-date` route, which reads
   a thread's due date for `email_focus_worker` and meters it as `EmailFocus`.
 - `src/scheduling.rs`: routine HTTP routes and background scheduling;
-  domain/adapters live in `crates/scheduled_action`. Its run observers send
+  domain/adapters live in `crates/agents/scheduled_action`. Its run observers send
   `routine_run_finished` analytics and, for every run, an inbox-only
   `routine_run_finished` notification to the owner
   (`src/scheduling/routine_run_notifications.rs`). AI drafts routines
@@ -85,7 +85,7 @@ Pulumi stacks; they do not host extra agent processes.
   a step that never gets one fails with "Macro was busy running other
   routines".
 - `src/preview.rs` + `src/preview/`: preview control routes, public HTTP and SSH listeners;
-  lease/ticket and authorization logic lives in `crates/agent_preview`. The shared
+  lease/ticket and authorization logic lives in `crates/agents/agent_preview`. The shared
   pool stores replica ownership and credential hashes; startup and ten-second
   heartbeats register this process's private HTTP address for direct forwarding.
 - [Consolidation guide](../../docs/guides/consolidate-agent-services.md):
@@ -94,11 +94,11 @@ Pulumi stacks; they do not host extra agent processes.
 ## Scope
 
 - Owns: the deployed process wiring every agent-session domain crate
-  together — not the domain logic itself, which lives in `crates/agent_harness`,
-  `crates/agent_session`, `crates/agent_changes`, `crates/agent_egress`,
-  `crates/folds/agent_fold`, `crates/agent_inmem`, `crates/agent_trigger`.
+  together — not the domain logic itself, which lives in `crates/agents/agent_harness`,
+  `crates/agents/agent_session`, `crates/agents/agent_changes`, `crates/agents/agent_egress`,
+  `crates/agents/agent_fold`, `crates/agents/agent_inmem`, `crates/agents/agent_trigger`.
 - Not here: coding-agent business logic for a specific runtime (e.g. Cursor
-  API calls) → `crates/codex_connection`, `crates/codex_cloud_agents`.
+  API calls) → `crates/agents/codex_connection`, `crates/agents/codex_cloud_agents`.
 
 ## Recipes
 
