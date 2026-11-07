@@ -27,7 +27,7 @@ key issuance, and account merge/link flows.
   relocation signup, Cursor/Codex API key endpoints, introductory trial
   eligibility and subscription checkout.
 - Not here: authorization/permission decisions on other entities →
-  `crates/macro_authorization`; metered AI credits → `crates/ai_billing`;
+  `crates/platform/macro_authorization`; metered AI credits → `crates/ai_billing`;
   team lifecycle and seats → `crates/teams`; a person's interface language
   (`/user/language`) → `crates/user_language`.
 
@@ -144,7 +144,7 @@ inputs cannot select an agent, and ordinary user credentials remain unattributed
   addresses; never paste operational addresses into code, logs, or docs.
 - New Outlook connections need the deployment switch
   `OUTLOOK_CONNECTIONS_ENABLED` and the user's PostHog flag `enable-outlook`
-  (`src/domain/microsoft.rs`), read with `crates/feature_flags` for the Macro
+  (`src/domain/microsoft.rs`), read with `crates/platform/feature_flags` for the Macro
   user id the web app identifies with. `/link/email/providers` answers
   `outlook: false` and `/link/outlook` answers 404 for a new connection when
   either is off; reconnecting an inbox reads neither. A failed flag load

@@ -1,0 +1,16 @@
+[package]
+edition = "2024"
+name = "remote_env_var"
+publish = false
+version = "0.1.0"
+
+[dependencies]
+macro_env = { workspace = true }
+serde = { workspace = true }
+thiserror = { workspace = true }
+tracing = { workspace = true }
+workspace-hack = { version = "0.1", path = "../../workspace-hack" }
+
+[dev-dependencies]
+macro_env_var = { workspace = true }
+serde_json = { workspace = true }

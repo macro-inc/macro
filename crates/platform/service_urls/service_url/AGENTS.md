@@ -10,7 +10,7 @@ themselves are the sibling crates in `crates/platform/service_urls/`.
 
 - Owns: the macro, override-env resolution, `ServiceUrlVarErr`.
 - Not here: URL values → one sibling crate per URL; the all-in-one re-export
-  and `ServiceUrls` collection → `crates/macro_service_urls`.
+  and `ServiceUrls` collection → `crates/platform/macro_service_urls`.
 
 ## Checks
 

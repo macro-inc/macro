@@ -128,7 +128,7 @@ Follow the [infrastructure guide](../development/infrastructure.md) for the patt
   must be `opt_in` or `modes: &[Mode::Local]`, or `run_dev` steals dev messages.
 - `local/instance.rs`: add the `Port` variant **at the end**; offsets come from
   declaration order.
-- `local/resources.rs` and `crates/macro_queues`: any queue or bucket the service
+- `local/resources.rs` and `crates/platform/macro_queues`: any queue or bucket the service
   needs. A worker whose queue doesn't exist locally spins in a tight loop.
 
 ## 7. API clients (HTTP services)
@@ -143,7 +143,7 @@ Follow the [infrastructure guide](../development/infrastructure.md) for the patt
 
 ## 8. Kafka topics (only if you add one)
 
-Add it to the `topics!` list in `crates/macro_event_topics/src/lib.rs` and run
+Add it to the `topics!` list in `crates/platform/macro_event_topics/src/lib.rs` and run
 `cargo x kafka-topics`. Never hand-edit `.github/kafka-cluster-topics.json`.
 
 ## Verify locally

@@ -5,14 +5,14 @@
 Shared infrastructure: one crate per typed Macro service URL, plus
 `service_url` (the macro and override reader). A crate that calls a service
 depends on that URL's crate only, so changing one URL rebuilds its users
-instead of every crate that knows any URL. `crates/macro_service_urls`
+instead of every crate that knows any URL. `crates/platform/macro_service_urls`
 re-exports all of them and keeps the `ServiceUrls` collection.
 
 ## Recipes
 
 - Add a service URL: copy a sibling crate (Cargo.toml, `src/lib.rs`,
   `AGENTS.md`, `CLAUDE.md` symlink), add it to the root `members`, re-export it
-  and add its field to `ServiceUrls` in `crates/macro_service_urls/src/lib.rs`,
+  and add its field to `ServiceUrls` in `crates/platform/macro_service_urls/src/lib.rs`,
   add a parse test there, then update the other copies of the URL table (see
   the rule).
 - Use a URL: depend on its crate (`app_service_url = { path = ... }`) and

@@ -99,4 +99,4 @@ the token in `x-macro-bot-token` and `x-macro-bot-scope: user`.
   [`goalert-bot`](../../services/bots/goalert-bot/README.md) (threads, edits,
   acting as a user).
 - Server code: [`crates/bots`](../../crates/bots/AGENTS.md). Who a bot may act
-  as is decided in `crates/macro_authorization/src/domain/bot_authorizer.rs`.
+  as is decided in `crates/platform/macro_authorization/src/domain/bot_authorizer.rs`.

@@ -38,7 +38,7 @@ startup loudly.
   (`app_service_url`), not the `macro_service_urls` re-export, and call
   `XServiceUrl::new()`. Never declare a `FOO_SERVICE_URL` env var or match on
   `Environment` to build a URL. Queue names follow the same pattern in
-  `crates/macro_queues`.
+  `crates/platform/macro_queues`.
 - The only override is `OVERRIDE_<SNAKE_NAME>`, read from the process
   environment, not from Doppler. Local in-network overrides live in
   `xtask_local`'s `local_env.rs`; `local` defaults are host ports and do not

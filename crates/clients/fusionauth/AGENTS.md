@@ -46,7 +46,7 @@ passwordless/password flows against the FusionAuth HTTP API.
   statuses the endpoint does not document with
   `FusionAuthClientError::unexpected_response` (or `unexpected` after reading
   the body). They turn outages, throttling, timeouts, and undecodable bodies
-  into `Upstream` (502/503 via `crates/upstream_error`); a hand-written
+  into `Upstream` (502/503 via `crates/platform/upstream_error`); a hand-written
   `Generic` becomes a 500.
 - `#[tracing::instrument]` records every argument it does not skip as a span
   field, and span fields reach the logs. Skip codes, tokens, and other
