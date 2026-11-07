@@ -127,6 +127,22 @@ describe('createHandler', () => {
     });
   });
 
+  test('an entity tool with one operation still takes it as op', async () => {
+    vi.stubGlobal('fetch', async () => Response.json([]));
+    const handle = createHandler(parseConfig(BINDINGS));
+
+    const response = await handle(
+      rpc(
+        'tools/call',
+        { name: 'pins_read', arguments: { op: 'pins.list' } },
+        'user-token'
+      )
+    );
+    const body = await response.json();
+
+    expect(body.result.isError).toBeUndefined();
+  });
+
   test('an op the tool does not offer is an invalid tool result', async () => {
     const handle = createHandler(parseConfig(BINDINGS));
 

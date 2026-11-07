@@ -11,6 +11,7 @@ import {
   type OperationResult,
   runOperation,
   type Tool,
+  type ToolGrouping,
 } from '@macro-inc/sdk-mcp';
 import { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import { WebStandardStreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js';
@@ -40,12 +41,17 @@ function bearerToken(request: Request) {
   return token || undefined;
 }
 
-/** The operation a tool call names, and the inputs left for it. */
+/**
+ * The operation a tool call names, and the inputs left for it. A `method`
+ * tool is its one operation; an `entity` tool names it in `op`, even when it
+ * has only one.
+ */
 function selectOperation(
+  grouping: ToolGrouping,
   tool: Tool,
   args: Readonly<Record<string, unknown>>
 ): { operation: Operation; input: Record<string, unknown> } | undefined {
-  if (tool.operations.size === 1) {
+  if (grouping === 'method') {
     const [only] = tool.operations.values();
     return only ? { operation: only, input: { ...args } } : undefined;
   }
@@ -113,7 +119,7 @@ export function createHandler(config: Config) {
   ): Promise<OperationResult> {
     return Telemetry.span('mcp_chatgpt.tool_call', async (span) => {
       span.setAttr('mcp.tool', tool.name);
-      const selected = selectOperation(tool, args);
+      const selected = selectOperation(config.TOOL_GROUPING, tool, args);
       if (!selected) {
         span.setAttr('mcp.outcome', 'invalid');
         return errorResult(
