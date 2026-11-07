@@ -10,5 +10,5 @@ export type RoutineCauseOneOfFiveType =
 
 // eslint-disable-next-line @typescript-eslint/no-redeclare
 export const RoutineCauseOneOfFiveType = {
-  event: 'event',
+  location: 'location',
 } as const;
