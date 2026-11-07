@@ -16,6 +16,7 @@ pub struct Editor {
     pub(crate) listeners: crate::plugin::Listeners,
     pub(crate) listener_table: ListenerTable,
     pub(crate) initial_commits: Vec<Commit>,
+    pub(crate) initial_diff: Option<Diff>,
     pub(crate) state: EditorState,
     pub(crate) keys: SharedKeyCounter,
     mode: EditorMode,
@@ -36,6 +37,7 @@ impl Editor {
             listeners: Default::default(),
             listener_table: Default::default(),
             initial_commits: vec![],
+            initial_diff: None,
             state: EditorState::empty(registry)?,
             keys: match source {
                 KeySource::PerEditor => SharedKeyCounter::new(),
@@ -159,7 +161,7 @@ pub struct ViewHost {
 impl ViewHost {
     /// Neutral headless configuration.
     pub const HEADLESS: Self = Self {
-        engine: ViewEngine::Native,
+        engine: ViewEngine::Chromium,
         os: ViewOs::Other,
     };
 }

@@ -50,7 +50,7 @@ pub struct HistoryAvailability {
     pub can_redo: bool,
 }
 /// Merge getter state, usable without keeping undo/redo stacks.
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct MergeTracker {
     previous_time: HistoryTime,
     previous_type: ChangeType,
@@ -233,7 +233,7 @@ fn text_unchanged(key: NodeKey, previous: &EditorState, next: &EditorState) -> b
     }
 }
 /// Per-editor snapshot undo/redo history.
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct History {
     current: Option<EditorState>,
     current_commit: Option<CommitId>,

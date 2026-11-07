@@ -47,7 +47,7 @@ pub struct WorkCounters {
     pub bytes_allocated: u64,
 }
 /// An atomically published state transition.
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct Commit {
     /// Host default action was prevented.
     pub default_prevented: bool,

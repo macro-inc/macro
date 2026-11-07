@@ -11,6 +11,7 @@ Development-only schema-2 fixture interpreter for the pinned upstream oracle.
 - `src/api/`: explicit dispatch to model APIs, including caret object identity and metadata.
 - `src/snapshot.rs`: full observable-state comparison.
 - `tests/replay.rs`: one libtest-mimic trial per recorded fixture.
+- `tests/flat_diff.rs` and `tests/flat_diff/decoder.ts`: native Rust producer versus the independent Bun/TypeScript consumer of the flat ABI.
 
 ## Boundaries
 
@@ -23,6 +24,7 @@ Development-only schema-2 fixture interpreter for the pinned upstream oracle.
 
 - `TMPDIR=/home/wolf/tmp cargo test -p lexical_conformance -j4`
 - `TMPDIR=/home/wolf/tmp cargo test -p lexical_model -j4`
+- `TMPDIR=/home/wolf/tmp cargo test -p lexical_conformance --test flat_diff -j4` (requires Bun)
 - `TMPDIR=/home/wolf/tmp cargo check -p lexical_conformance --target wasm32-unknown-unknown -j4`
 - `TMPDIR=/home/wolf/tmp cargo clippy -p lexical_conformance --all-targets -j4 -- -D warnings`
 - `cargo x deps --check`, `cargo shear`, `just check`, `just pr-privacy`
