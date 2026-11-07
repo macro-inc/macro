@@ -7,7 +7,7 @@ use crate::domain::{
     models::{EmailErr, UserProvider, label::system_labels},
     ports::{EmailMessageEnqueuer, EmailRepo},
 };
-use frecency::domain::ports::FrecencyQueryService;
+use frecency_core::ports::FrecencyQueryService;
 use macro_event_broker::MacroEventBroker;
 
 use super::EmailServiceImpl;

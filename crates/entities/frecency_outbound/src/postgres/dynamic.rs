@@ -1,7 +1,7 @@
 //! This module provides dynamic query building for frecency queries with filters
 
-use crate::domain::models::{AggregateFrecency, AggregateId, FrecencyData, TimestampWeight};
 use filter_ast::Expr;
+use frecency_core::models::{AggregateFrecency, AggregateId, FrecencyData, TimestampWeight};
 use item_filters::ast::{
     EntityFilterAst,
     chat::ChatLiteral,
@@ -487,18 +487,13 @@ impl AggregateRow {
             .map(|id| id.into_owned())
             .map_err(|e| sqlx::Error::Decode(Box::new(e)))?;
 
-        Ok(AggregateFrecency {
-            id: AggregateId {
+        Ok(AggregateFrecency::from_stored(
+            AggregateId {
                 entity: entity_type.with_entity_string(entity_id.to_string()),
                 user_id,
             },
-            data: FrecencyData {
-                event_count,
-                frecency_score,
-                first_event,
-                recent_events: recent_events.0,
-            },
-        })
+            FrecencyData::from_stored(event_count, frecency_score, first_event, recent_events.0),
+        ))
     }
 }
 

@@ -1,6 +1,6 @@
 use chrono::{DateTime, Utc};
 use entity_access::domain::models::{EntityAccessReceipt, MemberTeamRole};
-use frecency::domain::models::AggregateFrecency;
+use frecency_core::models::AggregateFrecency;
 use item_filters::ast::{CrmScope, LiteralTree, email::EmailLiteral};
 use macro_user_id::user_id::MacroUserIdStr;
 use models_pagination::{Identify, Query, SimpleSortMethod, SortOn};
