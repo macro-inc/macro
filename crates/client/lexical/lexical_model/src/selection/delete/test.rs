@@ -509,3 +509,24 @@ fn equivalent_container_boundaries_do_not_remove_the_first_line_break() -> Resul
     })?;
     Ok(())
 }
+
+#[test]
+fn interior_surrogate_selection_can_be_ordered_but_not_edited() -> Result<(), Error> {
+    let mut editor = Editor::builder(EditorMode::Headless).build().unwrap();
+    let ((p, text), _) = editor.update(|tx| {
+        let p = tx.create(Paragraph::default())?;
+        let text = tx.create_text("😀")?;
+        tx.append(p, &[text.key()])?;
+        tx.append(NodeKey::ROOT, &[p.key()])?;
+        tx.set_selection(Some(Selection::Range(RangeSelection::new(
+            Point::text(text, Utf16Offset(1)),
+            Point::element(NodeKey::ROOT, ChildIndex(1)),
+        ))))?;
+        Ok((p.key(), text.key()))
+    })?;
+    let state = editor.state();
+    assert!(Point::text(text, Utf16Offset(1)).is_before(state.view(), &Point::element(NodeKey::ROOT, ChildIndex(1)))?);
+    assert!(editor.update(|tx| tx.insert_text("x")).is_err());
+    assert_eq!(editor.state().text_content(p), "😀");
+    Ok(())
+}

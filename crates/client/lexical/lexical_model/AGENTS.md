@@ -34,7 +34,7 @@ node types, immutable snapshots, transactional tree editing, update processing, 
 
 ## Gotchas
 
-- Text positions are UTF-16 code units; reject surrogate-splitting offsets.
+- Text positions are UTF-16 code units; allow interior selection offsets but reject edits that split surrogate pairs.
 - Node ancestry follows the kind trait's `Parent`, never Rust layout casts.
 - Keep key allocation outside rollback, and snapshots independent on first write.
 

@@ -30,7 +30,9 @@ impl<'state> StateRef<'state> {
     fn boundary(self, point: Point) -> Result<Boundary, Error> {
         match point {
             Point::Text { key, offset } => {
-                self.text_data(key)?.text.byte_offset(offset)?;
+                if offset > self.text_data(key)?.text.utf16_len() {
+                    return Err(Error::Utf16OffsetOutOfRange(offset));
+                }
                 Ok(Boundary::Text(key, offset))
             }
             Point::Element { key, offset } => {
