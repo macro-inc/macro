@@ -1,7 +1,5 @@
 //! CreateTag tool for adding a new tag to the caller's personal or team set.
 
-use crate::domain::model::TagScope as DomainTagScope;
-use crate::domain::service::PropertiesService;
 use ai_toolset::{AsyncTool, RequestContext, ServiceContext, ToolCallError, ToolResult};
 use ai_toolset::{ToolAnnotated, ToolAnnotations};
 use async_trait::async_trait;
@@ -9,12 +7,14 @@ use entity_access::domain::ports::EntityAccessService;
 use models_properties::api::{AddPropertyOptionRequest, AddStringOptionRequest};
 use models_properties::service::property_option::PropertyOptionValue;
 use models_properties::service::tag_sets::TagScope;
+use properties::domain::model::TagScope as DomainTagScope;
+use properties::domain::service::PropertiesService;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 use super::{PropertiesToolContext, caller_team_receipt_opt};
-use crate::TagColor;
+use properties::TagColor;
 
 fn default_tag_scope() -> TagScope {
     TagScope::Personal

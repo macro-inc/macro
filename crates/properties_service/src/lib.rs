@@ -1,6 +1,6 @@
 //! Properties Service Library - exposes API routes for integration into other services
 //!
-//! The routes themselves live in `properties::inbound::axum_router`; this crate
+//! The routes themselves live in `properties_inbound::axum_router`; this crate
 //! is the composition shim binding them to the concrete domain and request
 //! authorization service types.
 

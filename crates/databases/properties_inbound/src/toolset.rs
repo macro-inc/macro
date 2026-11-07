@@ -11,13 +11,13 @@ mod set_entity_property;
 #[cfg(test)]
 mod test;
 
-use crate::domain::service::{PropertiesService, TeamReceipt};
 use ai_toolset::{AsyncToolCollection, RequestContext, ServiceContext, ToolCallError};
 use bot_id::BotId;
 use entity_access::domain::models::{
     AccessError, Entity, EntityAccessReceipt, EntityPermission, EntityType,
 };
 use entity_access::domain::ports::EntityAccessService;
+use properties::domain::service::{PropertiesService, TeamReceipt};
 use std::sync::Arc;
 
 pub use bulk_set_entity_property_options::{

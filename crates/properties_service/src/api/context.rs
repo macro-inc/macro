@@ -4,7 +4,7 @@ use notification::domain::service::SqsNotificationIngress;
 use notification::outbound::queue::SqsQueue;
 
 use properties::PropertiesServiceImpl;
-use properties::inbound::axum_router::PropertiesRouterState;
+use properties_inbound::axum_router::PropertiesRouterState;
 
 /// The concrete notification ingress service type.
 type NotificationIngressType = SqsNotificationIngress<SqsQueue>;
