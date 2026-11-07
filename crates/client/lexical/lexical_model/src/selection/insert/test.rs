@@ -983,11 +983,19 @@ fn clearing_one_formatted_text_does_not_reformat_its_neighbor() -> Result<(), Er
     tx.text(selected)?.set_format(TextFormat::BOLD)?;
     tx.append(paragraph, &[selected.key(), next.key()])?;
     tx.append(NodeKey::ROOT, &[paragraph.key()])?;
-    tx.set_selection(Some(Selection::Range(RangeSelection::new(
+    let mut range = RangeSelection::new(
         Point::text(selected, Utf16Offset(0)),
         Point::text(selected, Utf16Offset(1)),
-    ))))?;
+    );
+    range.format = TextFormat::ITALIC;
+    range.style = "color: red".into();
+    tx.set_selection(Some(Selection::Range(range)))?;
     tx.insert_text("")?;
+    let Some(Selection::Range(range)) = tx.selection() else {
+        panic!("range selection");
+    };
+    assert_eq!(range.format, TextFormat::ITALIC);
+    assert_eq!(range.style.as_ref(), "color: red");
     assert_eq!(tx.children_keys(paragraph)?, vec![next.key()]);
     assert_eq!(tx.view().text_data(next)?.format, TextFormat::empty());
     assert_eq!(tx.text_content(next), "a");
