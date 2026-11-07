@@ -72,6 +72,7 @@ impl Sim {
                     }),
                     _ => {}
                 }
+                let fault = self.router_network_fault(fault);
                 if let Some(name) = self.net.fault(fault) {
                     self.break_client(&name, 1006)?;
                 }
@@ -119,15 +120,37 @@ impl Sim {
                 }
             }
             Step::Host { client, signal } => {
+                if let Some(profile) = self
+                    .clients
+                    .get(&client)
+                    .filter(|client| client.routed)
+                    .map(|client| client.spec.profile.clone())
+                {
+                    self.router_input(&profile, doc_sync_core::RouterInput::Host(signal))?;
+                }
                 if let Some(session) = self.clients.get(&client).map(|client| client.session) {
                     self.input(&client, session, SyncInput::Host(signal))?;
                 }
             }
             Step::Offline { client, offline } => {
+                let network = self.network_name(&client);
                 if offline {
+                    self.net.offline.insert(network);
                     self.net.offline.insert(client);
                 } else {
+                    self.net.offline.remove(&network);
                     self.net.offline.remove(&client);
+                    if let Some(profile) = self
+                        .clients
+                        .get(&client)
+                        .filter(|client| client.routed)
+                        .map(|client| client.spec.profile.clone())
+                    {
+                        self.router_input(
+                            &profile,
+                            doc_sync_core::RouterInput::Host(HostSignal::Online),
+                        )?;
+                    }
                     if let Some(session) = self.clients.get(&client).map(|client| client.session) {
                         self.input(&client, session, SyncInput::Host(HostSignal::Online))?;
                     }
@@ -264,12 +287,15 @@ impl Sim {
         };
         let client = SimClient::new(
             spec.clone(),
-            doc_id,
-            session,
-            peer,
+            crate::client::Identity {
+                doc: doc_id,
+                session,
+                peer,
+                user: user.clone(),
+            },
             supply,
-            user.clone(),
             now,
+            self.config.routed,
         )?;
         let server = self
             .servers
@@ -337,10 +363,21 @@ impl Sim {
                 },
             )?;
         }
+        if self.clients.get(&name).is_some_and(|client| client.routed) {
+            self.router_attach(&name)?;
+        }
         Ok(())
     }
 
     fn break_client(&mut self, name: &ClientName, code: u16) -> Result<(), Failure> {
+        if let Some(profile) = self
+            .clients
+            .get(name)
+            .filter(|client| client.routed)
+            .map(|client| client.spec.profile.clone())
+        {
+            return self.router_break(&profile, code);
+        }
         let keys = self
             .net
             .links
@@ -354,6 +391,10 @@ impl Sim {
         Ok(())
     }
     fn crash_client(&mut self, name: &ClientName) -> Result<(), Failure> {
+        let routed = self.clients.get(name).is_some_and(|client| client.routed);
+        if routed {
+            self.router_detach(name)?;
+        }
         if let Some(client) = self.clients.get_mut(name) {
             client.alive = false;
             client.frozen = false;
@@ -363,7 +404,9 @@ impl Sim {
             }
         }
         self.clock.clear_client_wakes(name);
-        self.break_client(name, 1006)?;
+        if !routed {
+            self.break_client(name, 1006)?;
+        }
         self.emit(Fact::Crashed {
             client: name.clone(),
         });
@@ -630,6 +673,13 @@ impl Sim {
             store.fault(StorageFault::Heal);
         }
         self.server_step(ServerStep::Heal)?;
+        let profiles = self.routers.keys().cloned().collect::<Vec<_>>();
+        for profile in profiles {
+            self.router_input(
+                &profile,
+                doc_sync_core::RouterInput::Host(HostSignal::Online),
+            )?;
+        }
         // Settlement provides a recovery session for durable rows left by Stop.
         // Stop itself still closes without waiting for a server acknowledgement.
         let closed = self

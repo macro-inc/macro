@@ -419,6 +419,15 @@ pub enum Fact {
         /// Real core busy reasons.
         busy: BTreeMap<ClientName, String>,
     },
+    /// Observed physical router socket transition, shared by a whole profile.
+    RouterSocket {
+        /// Browser/device sharing the connection.
+        profile: ProfileName,
+        /// Physical socket attempt.
+        connection: u32,
+        /// Whether the physical handshake succeeded.
+        open: bool,
+    },
     /// Server lifecycle transition.
     Server {
         /// Operation.

@@ -19948,6 +19948,7 @@ dependencies = [
 name = "sync_sim"
 version = "0.1.0"
 dependencies = [
+ "anyhow",
  "bebop",
  "doc_sync_core",
  "futures",
@@ -19959,9 +19960,12 @@ dependencies = [
  "serde",
  "serde_json",
  "sync_protocol",
+ "sync_router",
  "sync_server_core",
  "sync_server_sim",
  "thiserror 2.0.18",
+ "tokio",
+ "tokio-util",
  "uuid",
  "xxhash-rust",
 ]

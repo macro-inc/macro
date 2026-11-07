@@ -60,7 +60,10 @@ impl Sim {
                     let event = if failed {
                         TokenEvent::Failed { attempt }
                     } else {
-                        self.tokens.insert(token.clone(), access);
+                        self.tokens.insert(
+                            token.clone(),
+                            crate::model::TokenGrant::issue(client, self.clock.wall(0)),
+                        );
                         TokenEvent::Fetched {
                             attempt,
                             token: doc_sync_core::SyncToken::new(token),
@@ -84,13 +87,10 @@ impl Sim {
                     let Some(client) = self.clients.get_mut(name) else {
                         continue;
                     };
-                    let valid = !std::mem::take(&mut client.expire_token)
-                        && self.tokens.contains_key(token.expose_secret());
-                    let grant = self
-                        .tokens
-                        .get(token.expose_secret())
-                        .copied()
-                        .unwrap_or(Access::Read);
+                    let claims = self.tokens.get(token.expose_secret()).cloned();
+                    let valid = claims.as_ref().is_some_and(|claims| {
+                        claims.doc == client.doc_id && claims.issued_by == session
+                    });
                     let key = (name.clone(), session, conn.0);
                     self.net.links.insert(
                         key,
@@ -98,7 +98,7 @@ impl Sim {
                             socket: None,
                             open: false,
                             doc: client.spec.doc,
-                            grant,
+                            claims,
                             token_valid: valid,
                             tails: [0, 0],
                             up: Reassembler::default(),
@@ -115,6 +115,10 @@ impl Sim {
                     self.schedule(at, Pending::Connect(name.clone(), session, conn.0));
                 }
                 IoEffect::SocketSend { conn, frame } => {
+                    if self.clients.get(name).is_some_and(|client| client.routed) {
+                        self.router_send(name, frame)?;
+                        continue;
+                    }
                     let key = (name.clone(), session, conn.0);
                     let (kind, message) = if let Some(link) = self.net.links.get_mut(&key) {
                         let message = link
@@ -231,9 +235,21 @@ impl Sim {
                         attributes,
                     });
                 }
-                IoEffect::RouteDetach { .. }
-                | IoEffect::RouteReconnect { .. }
-                | IoEffect::RouterConnect { .. } => {
+                IoEffect::RouteDetach { .. } => self.router_detach(name)?,
+                IoEffect::RouteReconnect { doc } => {
+                    let profile = self
+                        .clients
+                        .get(name)
+                        .map(|client| client.spec.profile.clone())
+                        .ok_or_else(|| {
+                            Failure::new("router_owner", "route reconnect without a client")
+                        })?;
+                    if let Some(host) = self.routers.get_mut(&profile) {
+                        host.authority.insert(doc.to_string(), name.clone());
+                    }
+                    self.router_input(&profile, doc_sync_core::RouterInput::Reconnect(doc))?;
+                }
+                IoEffect::RouterConnect { .. } => {
                     return Err(Failure::new(
                         "executor_contract",
                         "routed effect in a direct GenericSurface session",
@@ -318,7 +334,7 @@ impl Sim {
         self.finish_close(name)?;
         Ok(())
     }
-    fn observe_push(
+    pub(super) fn observe_push(
         &mut self,
         name: &ClientName,
         session: SessionId,
@@ -408,6 +424,10 @@ impl Sim {
         kind: FrameKind,
         packet: Packet,
     ) {
+        if self.router_profile(&key).is_some() {
+            self.transmit_router_frame(key, direction, kind, packet);
+            return;
+        }
         let Packet::Binary(frame) = packet else {
             self.transmit_frame(key, direction, kind, packet, false);
             return;
@@ -421,7 +441,58 @@ impl Sim {
         if !final_chunk {
             return;
         }
-        let mut frames = std::mem::take(&mut link.frames[index]);
+        let frames = std::mem::take(&mut link.frames[index]);
+        self.transmit_message(key, direction, frames, None);
+    }
+    fn transmit_router_frame(
+        &mut self,
+        key: LinkKey,
+        direction: Direction,
+        kind: FrameKind,
+        packet: Packet,
+    ) {
+        let Packet::Binary(bytes) = &packet else {
+            self.transmit_frame(key, direction, kind, packet, false);
+            return;
+        };
+        let inner = match direction {
+            Direction::ToServer => match sync_protocol::ToRouter::deserialize(bytes) {
+                Ok(sync_protocol::ToRouter::RouterFrame { doc_id, payload }) => {
+                    Some((doc_id.to_owned(), payload.iter().collect::<Vec<_>>()))
+                }
+                _ => None,
+            },
+            Direction::ToClient => match sync_protocol::FromRouter::deserialize(bytes) {
+                Ok(sync_protocol::FromRouter::RouterDocFrame { doc_id, payload }) => {
+                    Some((doc_id.to_owned(), payload.iter().collect::<Vec<_>>()))
+                }
+                _ => None,
+            },
+        };
+        let Some((doc, frame)) = inner else {
+            self.transmit_frame(key, direction, kind, packet, false);
+            return;
+        };
+        let final_chunk = frame.first() == Some(&1);
+        let identity = (key.clone(), direction, doc.clone());
+        self.net
+            .router_frames
+            .entry(identity.clone())
+            .or_default()
+            .push(frame);
+        if final_chunk {
+            let frames = self.net.router_frames.remove(&identity).unwrap_or_default();
+            self.transmit_message(key, direction, frames, Some(doc));
+        }
+    }
+    fn transmit_message(
+        &mut self,
+        key: LinkKey,
+        direction: Direction,
+        mut frames: Vec<Vec<u8>>,
+        route: Option<String>,
+    ) {
+        let index = usize::from(direction == Direction::ToClient);
         let message = frames
             .iter()
             .flat_map(|frame| frame.iter().skip(1).copied())
@@ -457,7 +528,29 @@ impl Sim {
                 && self.rng.random_bool(hostile.drop_frame.clamp(0.0, 1.0)))
             .then(|| self.rng.random_range(0..frames.len()));
             for (index, frame) in frames.iter().enumerate() {
-                let packet = Packet::Binary(frame.clone());
+                let bytes = if let Some(doc) = &route {
+                    let mut bytes = Vec::new();
+                    let result = match direction {
+                        Direction::ToServer => sync_protocol::ToRouter::RouterFrame {
+                            doc_id: doc,
+                            payload: bebop::SliceWrapper::Raw(frame),
+                        }
+                        .serialize(&mut bytes),
+                        Direction::ToClient => sync_protocol::FromRouter::RouterDocFrame {
+                            doc_id: doc,
+                            payload: bebop::SliceWrapper::Raw(frame),
+                        }
+                        .serialize(&mut bytes),
+                    };
+                    if let Err(error) = result {
+                        self.fail(Failure::new("router_encode", error));
+                        return;
+                    }
+                    bytes
+                } else {
+                    frame.clone()
+                };
+                let packet = Packet::Binary(bytes);
                 if drop == Some(index) {
                     self.frame_fact(&key, direction, kind, &packet, "Dropped");
                 } else {

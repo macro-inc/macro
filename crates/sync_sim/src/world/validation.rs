@@ -74,10 +74,10 @@ impl Sim {
                     format!("{name:?}: Saved with retained or unhealthy work"),
                 ));
             }
-            if !client.frozen
-                && client.core.status().connection == ConnectionStatus::Connected
-                && !self
-                    .net
+            let link_open = if client.routed {
+                self.routed_open(name)
+            } else {
+                self.net
                     .links
                     .iter()
                     .any(|((link_name, session, conn), link)| {
@@ -86,6 +86,10 @@ impl Sim {
                             && client.connection_id() == Some(ConnId(*conn))
                             && link.open
                     })
+            };
+            if !client.frozen
+                && client.core.status().connection == ConnectionStatus::Connected
+                && !link_open
             {
                 failures.push(Failure::new(
                     "status_truthful",

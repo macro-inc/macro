@@ -21,3 +21,9 @@ thiserror.workspace = true
 rand.workspace = true
 rand_chacha.workspace = true
 xxhash-rust.workspace = true
+
+[dev-dependencies]
+sync_router = { path = "../sync_router" }
+tokio.workspace = true
+tokio-util.workspace = true
+anyhow.workspace = true

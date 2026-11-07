@@ -6,6 +6,12 @@ use crate::{
 use doc_sync_core::*;
 use std::collections::{BTreeMap, VecDeque};
 
+pub(crate) struct Identity {
+    pub doc: SyncDocId,
+    pub session: SessionId,
+    pub peer: u64,
+    pub user: String,
+}
 /// A real client core and lending document; runtime effects are executed by the world.
 pub struct SimClient {
     pub(crate) spec: OpenSpec,
@@ -13,6 +19,8 @@ pub struct SimClient {
     pub(crate) doc_id: SyncDocId,
     pub(crate) user: String,
     pub(crate) core: SyncCore,
+    pub(crate) routed: bool,
+    pub(crate) outgoing: sync_protocol::framing::Reassembler,
     pub(crate) doc: SimDoc,
     pub(crate) alive: bool,
     pub(crate) frozen: bool,
@@ -32,13 +40,17 @@ pub struct SimClient {
 impl SimClient {
     pub(crate) fn new(
         spec: OpenSpec,
-        doc: SyncDocId,
-        session: SessionId,
-        peer: u64,
+        identity: Identity,
         supply: Vec<u64>,
-        user: String,
         now: Now,
+        routed: bool,
     ) -> Result<Self, Failure> {
+        let Identity {
+            doc,
+            session,
+            peer,
+            user,
+        } = identity;
         let ai = spec.kind == ClientKind::AiWorker;
         let presence_key = if ai {
             format!("ai-{}", session.0)
@@ -49,7 +61,11 @@ impl SimClient {
             doc: doc.clone(),
             session,
             user: UserKey(user.clone()),
-            transport: TransportKind::Direct,
+            transport: if routed && !ai {
+                TransportKind::Routed
+            } else {
+                TransportKind::Direct
+            },
             persistence: if ai {
                 Persistence::Memory
             } else {
@@ -92,6 +108,8 @@ impl SimClient {
             doc_id: doc,
             user,
             core,
+            routed: routed && !ai,
+            outgoing: sync_protocol::framing::Reassembler::default(),
             doc: SimDoc::new(peer)?,
             alive: true,
             frozen: false,

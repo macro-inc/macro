@@ -35,6 +35,7 @@ fn two_form_clients_run_the_real_cores_and_are_deterministic() {
 }
 
 mod mutations;
+mod routed;
 mod stories;
 
 fn verify(config: SimConfig, script: &[Step]) -> Outcome {
