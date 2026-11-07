@@ -1,6 +1,6 @@
 # Golden worker transcript coverage
 
-The inventory IDs refer to S6 revision R1, sections 1 and 5.2. Each link is a representative scenario, not a claim that every branch has a native coverage measurement. Native replay and its coverage floor start at C8.
+The inventory IDs refer to S6 revision R2, sections 1 and 5.2. Each link is a representative scenario, not a claim that every branch has a native coverage measurement. Native replay and its coverage floor start at C8.
 
 `cargo test -p sync_protocol` checks every inventory and quirk row has a nonempty recorded fixture. Keep the paths current when moving code or tests. Fixtures contain local test data and local JWTs signed with the test key; no hosted environment is used.
 
@@ -98,3 +98,13 @@ Q1–Q12 name the rows of S6 section 5.2 in order; that section does not assign 
 | Q10 | ping requires restored document identity | [transcript_boundaries.test/M2_ping_fails_after_DOCUMENT_ID_is_removed.jsonl](transcript_boundaries.test/M2_ping_fails_after_DOCUMENT_ID_is_removed.jsonl) |
 | Q11 | pending imports disappear at compaction | [transcript_boundaries.test/A4_compaction_drops_acknowledged_pending_imports_from_the_snapshot.jsonl](transcript_boundaries.test/A4_compaction_drops_acknowledged_pending_imports_from_the_snapshot.jsonl) |
 | Q12 | eviction loses pending blame | [transcript_boundaries.test/A5_flushes_blame_but_eviction_loses_the_pending_in-memory_batch.jsonl](transcript_boundaries.test/A5_flushes_blame_but_eviction_loses_the_pending_in-memory_batch.jsonl) |
+
+The corpus lives in `sync_server_sim`; record it from `services/sync-service` with
+`just record-transcripts <temporary-directory>` and compare with
+`just diff-transcripts git:HEAD <temporary-directory>`. Git comparisons also read
+the original service location in pre-C7 commits. `ENABLED` is empty in C7; native
+callback replay starts with C8.
+
+The C4 expired-during-connect capture shows a server-closed socket still present
+in the runtime list. SimPorts retains it until `RuntimeCloses`; it does not infer
+immediate removal from the call to `close`.

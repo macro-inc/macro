@@ -20,7 +20,7 @@ const fixtures = [
 
 for (const [name, message] of fixtures) {
   test(`TypeScript codec matches ${name}`, () => {
-    const path = join('tests/transcripts/codec', `${name}.bin`);
+    const path = join('../../crates/sync_server_sim/tests/transcripts/codec', `${name}.bin`);
     if (process.env.SYNC_WRITE_CODEC_FIXTURES === '1') writeFileSync(path, message.encode());
     expect(Buffer.from(message.encode())).toEqual(readFileSync(path));
   });

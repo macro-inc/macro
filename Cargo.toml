@@ -199,6 +199,7 @@ members = [
   "services/sync-service",
   "crates/sync_protocol",
   "crates/sync_server_core",
+  "crates/sync_server_sim",
   "services/unfurl_service",
   "services/upload_extractor_lambda_handler",
   "services/upload_extractor_lambda_trigger",

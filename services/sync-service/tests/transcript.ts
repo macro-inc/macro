@@ -282,7 +282,7 @@ if (process.env.SYNC_RECORD === '1') {
         if (capture.disposed && !capture.historyKey) captures.delete(mf);
       }
       if (!entries.length) return;
-      const directory = join(process.env.SYNC_TRANSCRIPT_DIR ?? 'tests/transcripts', basename(state.testPath ?? 'unknown', '.ts'));
+      const directory = join(process.env.SYNC_TRANSCRIPT_DIR ?? '../../crates/sync_server_sim/tests/transcripts', basename(state.testPath ?? 'unknown', '.ts'));
       mkdirSync(directory, { recursive: true });
       writeFileSync(join(directory, `${fileName(state.currentTestName ?? 'unknown')}.jsonl`), entries.map(entry => JSON.stringify(entry)).join('\n') + '\n');
     }, 60_000);

@@ -6,6 +6,7 @@ Service responsible for syncing collaborative documents between multiple users.
 .
 ├── ../../crates/sync_protocol/ # shared schema and wire codecs
 ├── ../../crates/sync_server_core/ # pure policy and persisted domain types
+├── ../../crates/sync_server_sim/ # native runtime fakes and golden transcripts
 ├── build.rs # build metadata for the worker
 ├── justfile # justfile for running commands
 ├── src/ # rust worker-rs worker
@@ -255,7 +256,7 @@ durable provenance. Cursor names remain untrusted ephemeral presentation.
 
 `just record-transcripts` builds with the test-only `transcript` feature and runs
 Vitest with `SYNC_RECORD=1`. It writes raw JSONL fixtures beneath
-`tests/transcripts` (pass an output directory to `just record-transcripts`
+`../../crates/sync_server_sim/tests/transcripts` (pass an output directory to `just record-transcripts`
 for independent recordings). `just diff-transcripts` compares those recordings
 with the committed corpus at HEAD; optional arguments select two other corpus
 directories, or a `git:<revision>` baseline.
@@ -289,5 +290,6 @@ and missing identity after eviction; these controls are never bundled.
 `tests/codec_fixtures.test.ts` and the Bebop crate's Rust tests compare every wire
 variant against the same checked-in bytes. Regenerate those bytes only after an
 intentional schema change with `SYNC_WRITE_CODEC_FIXTURES=1 npx vitest run
- tests/codec_fixtures.test.ts`. Native replay and its coverage floor are added in
-C7/C8; the inventory-to-transcript map is in `tests/transcripts/COVERAGE.md`.
+ tests/codec_fixtures.test.ts`. Native ports and transcript loading live in
+`sync_server_sim`; C7 keeps its replay `ENABLED` list empty. Callback replay and
+its coverage floor start with the C8 extraction. The inventory map is in `../../crates/sync_server_sim/tests/transcripts/COVERAGE.md`.

@@ -220,9 +220,18 @@ export function normalize(lines) {
 function corpus(root) {
   if (root.startsWith('git:')) {
     const revision = root.slice(4);
-    const prefix = 'services/sync-service/tests/transcripts/';
-    const paths = execFileSync('git', ['ls-tree', '--full-tree', '-r', '--name-only', revision, '--', prefix], { encoding: 'utf8' }).trim().split('\n').filter(path => path.endsWith('.jsonl'));
-    return new Map(paths.map(path => [path.slice(prefix.length), normalize(execFileSync('git', ['show', `${revision}:${path}`], { encoding: 'utf8', maxBuffer: 256 * 1024 * 1024 }).split('\n'))]));
+    // Old commits retain the original C0 location; new commits own the corpus in the sim.
+    const prefixes = ['crates/sync_server_sim/tests/transcripts/', 'services/sync-service/tests/transcripts/'];
+    const paths = execFileSync('git', ['ls-tree', '--full-tree', '-r', '--name-only', revision, '--', ...prefixes], { encoding: 'utf8' }).trim().split('\n').filter(path => path.endsWith('.jsonl'));
+    const records = new Map();
+    for (const path of paths) {
+      const prefix = prefixes.find(prefix => path.startsWith(prefix));
+      const name = path.slice(prefix.length);
+      if (records.has(name)) throw new Error(`ambiguous transcript ${name} at ${revision}`);
+      records.set(name, normalize(execFileSync('git', ['show', `${revision}:${path}`], { encoding: 'utf8', maxBuffer: 256 * 1024 * 1024 }).split('\n')));
+    }
+    if (!records.size) throw new Error(`no transcript corpus at ${revision}`);
+    return records;
   }
   return new Map(files(root).map(path => [relative(root, path), normalize(readFileSync(path, 'utf8').split('\n'))]));
 }
