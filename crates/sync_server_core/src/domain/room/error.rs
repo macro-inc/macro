@@ -29,6 +29,9 @@ pub type LocalReport = Report<Dynamic, Mutable, Local>;
 /// Failures corresponding exclusively to the previous callback's Err paths.
 #[derive(Debug, thiserror::Error)]
 pub enum RoomError {
+    /// Test-only adapter-selected stop after surface persistence.
+    #[error("injected surface persistence failure")]
+    InjectedSurfacePersistence,
     /// The room has no persisted identity.
     #[error("DOCUMENT_ID not found in storage")]
     NoSession,

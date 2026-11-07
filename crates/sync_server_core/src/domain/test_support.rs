@@ -59,7 +59,9 @@ impl RoomStorage for Store {
     async fn surface_lifecycle(&self) -> io::Result<Option<SurfaceLifecycle>> {
         Ok(self.lifecycle.get())
     }
-    async fn put_surface_lifecycle(&self, _: SurfaceLifecycle) -> io::Result<()> {
+    async fn put_surface_lifecycle(&self, lifecycle: SurfaceLifecycle) -> io::Result<()> {
+        self.events.borrow_mut().push("lifecycle");
+        self.lifecycle.set(Some(lifecycle));
         Ok(())
     }
     async fn source_migration(&self) -> io::Result<Option<SourceState>> {

@@ -174,3 +174,8 @@ session. Ordered projection validates the attribution-delete SQL batch and
 fallback-before-primary deletion; status, headers, body and final storage match.
 The Room test pins close-before-delete and mapped-writing-peer retention. The
 full Worker R10 fixtures cover initialized rooms and external fallback cleanup.
+
+C14 moves all four existing surface recovery unit cases into core. New Room
+tests cover persisted revocation before close, cold expired-grant closure,
+failed initialization recovery, ready reads and snapshot exports. Full S1–S6
+Worker fixtures are re-recorded byte-identically under the normalizer.

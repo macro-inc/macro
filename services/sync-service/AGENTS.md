@@ -35,7 +35,7 @@ updates over WebSocket.
   atomic update use cases, connection metadata and migration state.
 - `src/domain.rs`: compatibility re-exports of the shared core.
 - `../../crates/sync_server_core/src/domain/room/connection.rs`: connect/close, metadata restore and surface-grant validation policy.
-- `src/state.rs`: read-only Loro views for adapter exports; mutable state lives in the core Room.
+- `src/state.rs`: snapshot decoding for the remaining migration adapter; mutable state lives in the core Room.
 
 ## Scope
 
@@ -127,3 +127,5 @@ lock-free. H9 still replaces the operation log and snapshot transport handle.
 Atomic document snapshot/update orchestration lives in `../../crates/sync_server_core/src/domain/room/atomic.rs`; HTTP method, streaming limits and JSON/base64 parsing remain in the Worker adapter.
 
 Session deletion order and volatile cleanup live in `../../crates/sync_server_core/src/domain/room/delete.rs`; snapshot adapters remove fallback storage before primary storage.
+
+Surface identity binding, lifecycle, seed recovery and revocation live in `../../crates/sync_server_core/src/domain/room/surface.rs`; route/method and Bebop parsing remain in the adapter.

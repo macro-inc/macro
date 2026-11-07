@@ -21,7 +21,6 @@ use crate::{
     auth::AuthToken,
     error::ResultExt,
     keepalive::{DEFAULT_TIME_TO_LIVE, keepalive},
-    state::DocumentState,
     storage::SessionStorage,
     tags::get_ws_id_from_tags,
 };
@@ -36,8 +35,6 @@ pub mod status_codes {
     pub const UNAUTH: u16 = 401;
     pub const FORBIDDEN: u16 = 403;
 }
-
-const DOCUMENT_ID_KEY: &str = "DOCUMENT_ID";
 
 mod callbacks;
 pub(crate) mod document_api;
@@ -375,14 +372,6 @@ impl SyncSession<'_> {
             self.operation_log = Some(OperationLog::new(key.clone(), key.kind()));
         }
         Ok(storage)
-    }
-
-    /// Read-only handle; mutations target the owned Room document below.
-    async fn document_state(&mut self) -> Result<DocumentState> {
-        self.room.load_document().await.map_err(room_error)?;
-        Ok(DocumentState::view(
-            self.document.as_ref().expect("document loaded"),
-        ))
     }
 }
 

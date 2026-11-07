@@ -3,36 +3,14 @@
 use bebop::Record;
 use macro_sync_service_jwt::session::{SessionIdentity, SessionKind};
 use sync_protocol::InitializeFromSnapshotRequest;
-use worker::{Method, Request, Response, Result, WebSocket};
+use worker::{Method, Request, Response, Result};
 
 use super::{SyncSession, response, status_codes};
-use crate::{
-    error::ResultExt,
-    state::DocumentState,
-    storage::{get_snapshot_storage, snapshot::SnapshotStorage},
-};
-
-#[cfg(test)]
-mod test;
+use crate::error::ResultExt;
 
 pub(super) const LIFECYCLE_KEY: &str = "SURFACE_LIFECYCLE";
 
 pub(super) use sync_server_core::domain::connection::SurfaceLifecycle;
-
-/// A pending session has no writers. Exact seed bytes identify a retry of the
-/// binary initializer, which has no separate operation ID. Unknown seeds must
-/// be rolled back before another initialization can write a replacement.
-async fn prepare_surface_snapshot(storage: &impl SnapshotStorage, snapshot: &[u8]) -> Result<bool> {
-    if storage.has_snapshot().await? {
-        if storage.get_snapshot().await? != snapshot {
-            storage.delete_snapshot().await?;
-            return Ok(false);
-        }
-    } else {
-        storage.store_snapshot(snapshot).await?;
-    }
-    Ok(true)
-}
 
 impl SyncSession<'_> {
     pub(super) async fn surface_lifecycle(&mut self) -> Result<SurfaceLifecycle> {
@@ -74,17 +52,22 @@ impl SyncSession<'_> {
             return Ok(response(405));
         }
         let key = identity.storage_key();
-        let persisted: Option<String> = self.state.storage().get(super::DOCUMENT_ID_KEY).await?;
-        if persisted.is_some_and(|persisted| persisted != key) {
-            return Ok(response(409));
-        }
-        self.maybe_set_document_id(&key).await?;
-        if *operation == "revoke" {
-            return self.revoke_surface().await;
-        }
-        let lifecycle = self.surface_lifecycle().await?;
-        if lifecycle == SurfaceLifecycle::Revoked {
-            return Ok(response(status_codes::FORBIDDEN));
+        use sync_server_core::domain::room::{SurfacePreparation, SurfaceRequest};
+        let operation_kind = match *operation {
+            "revoke" => SurfaceRequest::Revoke,
+            "initialize" => SurfaceRequest::Initialize,
+            "initialize_verified" | "import" | "verify" | "activate" => SurfaceRequest::Migration,
+            _ => SurfaceRequest::Read,
+        };
+        let storage_key = sync_server_core::domain::types::SessionKey::new(key.clone());
+        match self
+            .room
+            .prepare_surface(&storage_key, operation_kind)
+            .await
+            .map_err(super::room_error)?
+        {
+            SurfacePreparation::Return(status) => return Ok(surface_response(status)),
+            SurfacePreparation::Proceed => {}
         }
         if matches!(
             *operation,
@@ -93,19 +76,7 @@ impl SyncSession<'_> {
             return self.target_migration_handler(req, &key, operation).await;
         }
         if *operation == "initialize" {
-            if self.has_target_migration().await? {
-                return Ok(response(409));
-            }
             return self.initialize_surface(req, &key).await;
-        }
-        if lifecycle != SurfaceLifecycle::Ready {
-            return Ok(response(409));
-        }
-        // Missing/corrupt snapshots must not trigger create-default-state, even
-        // when that development feature is enabled for documents.
-        self.document_state().await?;
-        if !self.validate_surface_sockets(None).await? {
-            return Ok(response(status_codes::FORBIDDEN));
         }
         match *operation {
             "connect" => {
@@ -115,7 +86,11 @@ impl SyncSession<'_> {
                 self.connect(claims, &key).await
             }
             "snapshot" => {
-                let snapshot = self.document_state().await?.export_snapshot(None)?;
+                let snapshot = self
+                    .room
+                    .surface_snapshot()
+                    .await
+                    .map_err(super::room_error)?;
                 Ok(Response::builder().body(worker::ResponseBody::Body(snapshot)))
             }
             "peer" => self.peer_handler(&key, rest.first().copied()).await,
@@ -129,75 +104,29 @@ impl SyncSession<'_> {
         let bytes = req.bytes().await?;
         let body = InitializeFromSnapshotRequest::deserialize(&bytes)
             .context("invalid surface snapshot request")?;
-        DocumentState::try_from_snapshot(&body.snapshot).context("invalid surface snapshot")?;
-        // Claim synchronously before awaiting snapshot IO; a second initializer
-        // must not overwrite either the winner or an existing snapshot.
-        match self.surface_lifecycle().await? {
-            SurfaceLifecycle::Revoked => return Ok(response(status_codes::FORBIDDEN)),
-            SurfaceLifecycle::Ready | SurfaceLifecycle::Initializing => return Ok(response(409)),
-            SurfaceLifecycle::Pending => {}
-        }
-        self.surface_lifecycle = Some(SurfaceLifecycle::Initializing);
-        let result: Result<Response> = async {
-            let storage = get_snapshot_storage(&self.env, &self.state, key.to_owned())?;
-            if !prepare_surface_snapshot(&storage, &body.snapshot).await? {
-                return Ok(response(409));
-            }
-            #[cfg(feature = "migration-test-hooks")]
-            if req.headers().get("x-sync-test-stop-after")?.as_deref() == Some("surface_snapshot") {
-                return Err(worker::Error::from("injected surface persistence failure"));
-            }
-            if self.surface_lifecycle().await? == SurfaceLifecycle::Revoked {
-                return Ok(response(status_codes::FORBIDDEN));
-            }
-            self.state
-                .storage()
-                .put(LIFECYCLE_KEY, SurfaceLifecycle::Ready)
-                .await?;
-            if self.surface_lifecycle().await? == SurfaceLifecycle::Revoked {
-                return Ok(response(status_codes::FORBIDDEN));
-            }
-            self.surface_lifecycle = Some(SurfaceLifecycle::Ready);
-            Ok(response(status_codes::OK))
-        }
-        .await;
-        if !result
-            .as_ref()
-            .is_ok_and(|response| response.status_code() == status_codes::OK)
-        {
-            let lifecycle = &mut self.surface_lifecycle;
-            if *lifecycle != Some(SurfaceLifecycle::Revoked) {
-                // A failed Ready write may have committed. Reload durable truth
-                // rather than admitting a new initializer against a ready seed.
-                *lifecycle = None;
-            }
-        }
-        result
-    }
-
-    pub(super) async fn revoke_surface(&mut self) -> Result<Response> {
-        // Deny in-flight callbacks before yielding, and persist the tombstone
-        // before acknowledging. Retrying revocation is safe, including pending IDs.
-        self.surface_lifecycle = Some(SurfaceLifecycle::Revoked);
-        self.state
-            .storage()
-            .put(LIFECYCLE_KEY, SurfaceLifecycle::Revoked)
-            .await?;
-        for socket in self.state.get_websockets() {
-            socket.close(Some(1008), Some("surface revoked"))?;
-        }
-        Ok(response(status_codes::OK))
-    }
-
-    /// Reload socket grants after hibernation before accepting messages or
-    /// selecting broadcast recipients. Cached grants avoid per-message IO.
-    pub(crate) async fn validate_surface_sockets(
-        &mut self,
-        sender: Option<&WebSocket>,
-    ) -> Result<bool> {
-        self.room
-            .validate_surface_sockets(sender)
+        #[cfg(feature = "migration-test-hooks")]
+        let stop_after_snapshot =
+            req.headers().get("x-sync-test-stop-after")?.as_deref() == Some("surface_snapshot");
+        #[cfg(not(feature = "migration-test-hooks"))]
+        let stop_after_snapshot = false;
+        let status = self
+            .room
+            .initialize_surface(
+                &sync_server_core::domain::types::SessionKey::new(key.to_owned()),
+                &body.snapshot,
+                stop_after_snapshot,
+            )
             .await
-            .map_err(super::room_error)
+            .map_err(super::room_error)?;
+        Ok(surface_response(status))
     }
+}
+
+fn surface_response(status: sync_server_core::domain::room::SurfaceStatus) -> Response {
+    use sync_server_core::domain::room::SurfaceStatus;
+    response(match status {
+        SurfaceStatus::Ok => 200,
+        SurfaceStatus::Conflict => 409,
+        SurfaceStatus::Forbidden => 403,
+    })
 }
