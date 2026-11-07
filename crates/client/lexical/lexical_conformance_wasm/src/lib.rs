@@ -30,6 +30,8 @@ pub fn upstream_version() -> String {
 #[wasm_bindgen]
 pub struct CoreHandle {
     editor: Editor,
+    #[cfg(feature = "js-nodes")]
+    view_editor: Editor,
 }
 #[wasm_bindgen]
 impl CoreHandle {
@@ -85,41 +87,55 @@ impl CoreHandle {
                 Ok(())
             })?;
         }
-        Ok(Self { editor })
+        #[cfg(feature = "js-nodes")]
+        let view_editor = editor.create_conformance_peer(EditorMode::ViewAttached)?;
+        Ok(Self {
+            editor,
+            #[cfg(feature = "js-nodes")]
+            view_editor,
+        })
     }
     fn apply_json(&mut self, input: &str) -> Result<String, BoundaryError> {
         let command: Command = serde_json::from_str(input)?;
         #[cfg(feature = "js-nodes")]
-        self.editor
-            .set_conformance_mode(if command.is_view_input() {
-                EditorMode::ViewAttached
-            } else {
-                EditorMode::Headless
-            });
-        if command.is_view_input() && !self.editor.state().is_empty_state() {
-            // Match the oracle's headless-to-attached setEditorState hydration.
-            self.editor
-                .set_editor_state(self.editor.state().clone(), TagSet::default())?;
+        if command.is_view_input() {
+            Self::transfer_state(&mut self.view_editor, self.editor.state().clone())?;
+            let value = Self::execute(&mut self.view_editor, &command)?;
+            Self::transfer_state(&mut self.editor, self.view_editor.state().clone())?;
+            return Ok(to_js_json_string(&value));
         }
-        let result = self.editor.update(|tx| command.apply(tx));
+        Self::execute(&mut self.editor, &command).map(|value| to_js_json_string(&value))
+    }
+    #[cfg(feature = "js-nodes")]
+    fn transfer_state(editor: &mut Editor, state: EditorState) -> Result<(), BoundaryError> {
+        if state.is_empty_state() {
+            let root = state.view().element_data(NodeKey::ROOT)?.clone();
+            editor.update(|tx| {
+                tx.clear(NodeKey::ROOT)?;
+                tx.set_indent(NodeKey::ROOT, root.indent)?;
+                tx.element(NodeKey::ROOT)?
+                    .set_format(root.format)?
+                    .set_direction(root.direction)?
+                    .set_style(&root.style)?
+                    .set_text_format(root.text_format)?
+                    .set_text_style(&root.text_style)?;
+                tx.set_selection(state.selection().cloned())
+            })?;
+        } else {
+            editor.set_editor_state(state, TagSet::default())?;
+        }
+        Ok(())
+    }
+    fn execute(editor: &mut Editor, command: &Command) -> Result<Value, BoundaryError> {
+        let result = editor.update(|tx| command.apply(tx));
         let (commit, error) = match result {
             Ok(((), commit)) => (Some(commit), None),
             Err(error) => (None, Some(error.to_string())),
         };
-        let mut value = snapshot::capture(
-            self.editor.state(),
-            commit.as_ref().filter(|c| !c.is_noop()),
-        )?;
+        let mut value =
+            snapshot::capture(editor.state(), commit.as_ref().filter(|c| !c.is_noop()))?;
         value["error"] = json!(error);
-        if command.is_view_input() && !self.editor.state().is_empty_state() {
-            #[cfg(feature = "js-nodes")]
-            self.editor.set_conformance_mode(EditorMode::Headless);
-            // The oracle copies the attached state back to its headless editor;
-            // that full state installation does not carry DOM-only update tags.
-            self.editor
-                .set_editor_state(self.editor.state().clone(), TagSet::default())?;
-        }
-        Ok(to_js_json_string(&value))
+        Ok(value)
     }
 }
 #[cfg(test)]
