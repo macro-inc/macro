@@ -86,7 +86,7 @@ pub(crate) struct GraphqlScheduledActionEventFilter {
     entity_ids: Option<Vec<ID>>,
     /// Which GitHub App deliveries satisfy a `GITHUB` filter.
     github: Option<GraphqlScheduledActionGithubSelector>,
-    /// Exact payload tests a GitHub delivery must pass, as a reader would state them.
+    /// Exact payload tests a GitHub delivery or JSON webhook body must pass, as a reader would state them.
     payload_match: Vec<String>,
     /// The task property that must have changed, and the values it must gain.
     property: Option<GraphqlScheduledActionPropertySelector>,
@@ -171,6 +171,8 @@ pub(crate) enum GraphqlScheduledActionEventName {
     CallEnded,
     /// Macro's GitHub App received a delivery.
     Github,
+    /// Someone POSTed to the routine's webhook URL.
+    Webhook,
 }
 
 impl From<EventName> for GraphqlScheduledActionEventName {
@@ -192,6 +194,7 @@ impl From<EventName> for GraphqlScheduledActionEventName {
             EventName::CallStarted => Self::CallStarted,
             EventName::CallEnded => Self::CallEnded,
             EventName::Github => Self::Github,
+            EventName::Webhook => Self::Webhook,
         }
     }
 }
