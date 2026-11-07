@@ -70,8 +70,7 @@ TMPDIR=/home/wolf/tmp cargo test -p sync_server_core -p sync_server_sim -p sync_
 `sync_server_sim` drives the real Room with in-memory ports, explicit clocks and
 fault plans. Its checked-in Worker transcripts compare ordered effects and final
 storage. See `../../crates/sync_server_sim/AGENTS.md` for the recording and coverage
-recipes. Same-session reads retain operation IDs and applied keys. A4 pending-import
-compaction remains preserved until its separate fix.
+recipes. Same-session reads retain operation IDs and applied keys. Compaction retains unresolved updates until their dependencies arrive.
 
 Socket write policy allows viewers to read, document commenters to change only
 comment marks, and editors to write full updates. Surface commenters cannot

@@ -40,4 +40,4 @@ Cloudflare Durable Objects and native simulation.
 - Presence uses clock-injected `sync_protocol::presence`, vendored from Loro 1.16.2.
 - Supply UUIDs through ports and `uuid-types`; ambient randomness belongs to adapters.
 - Production adapters always select `FaultPlan::None`; fault headers are test-only.
-- Retain operation IDs and applied keys across same-session exists/initialize calls. Preserve A4 pending-import compaction until its separate fix.
+- Retain operation IDs and applied keys across same-session exists/initialize calls. Retain unresolved operation keys until the oplog covers them.
