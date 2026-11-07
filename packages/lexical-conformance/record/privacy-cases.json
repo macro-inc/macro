@@ -1,0 +1,31 @@
+{
+  "agent-trigger-context.test.ts": [
+    "*"
+  ],
+  "agent-context.test.ts": [
+    "keeps the prompt thread whole and the rest of the channel as grouped background",
+    "says a top-level prompt replies to nothing and marks it among recent messages",
+    "names a quoted message outright, or its preview when it is elsewhere",
+    "names the owner and requester and requires explicit actor selection",
+    "prefers the current requester and reserves owner access for approval",
+    "does not grant a requester account to a turn without a person"
+  ],
+  "auto-link.test.ts": [
+    "links the original agent message through every import format"
+  ],
+  "mentions.test.ts": [
+    "reduces contact and theme mentions to their names",
+    "unwraps email thread embeds and resolves mentions inside them",
+    "flattens a user mention to the email, not the display name",
+    "takes the email from the user id when the email field is missing",
+    "names other principals Guest, even with an email",
+    "differs from markdownToPlainText only in user mentions"
+  ],
+  "notion-markdown.test.ts": [
+    "turns a matched person into a user mention and anyone else into text"
+  ],
+  "tables.test.ts": [
+    "round-trips colspan, rowspan, header state, col widths and row height",
+    "converts markdown links with video URLs to video nodes"
+  ]
+}

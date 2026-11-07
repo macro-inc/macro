@@ -12,6 +12,8 @@ The upstream source is downloaded by checksum into this worktree's `target/`.
 - `record/replay-js.ts`: independent interpreter; never executes original test bodies.
 - `record/schema.ts`: schema 2 shared with the Rust fixture reader.
 - `diff/README.md`: WP-07 raw-model WASM loader and Tier C text/paragraph harness.
+- `record/initial.ts`: partial-state key layout and selection restoration.
+- `record/inventory.json`: S4 per-file expected counts; mixed files have no exact case labels.
 
 ## Boundaries
 
@@ -30,4 +32,8 @@ The upstream source is downloaded by checksum into this worktree's `target/`.
 
 - `--filter=<file>` is for recorder development only; release fixtures use the full suite.
 - The upstream pin is independent of the app's patched npm packages.
+- Macro tests run separately with markdown indent 2; upstream fixtures keep indent 4.
+- `--filter=macro:<file>` selects the worktree lexical-core pool.
+- Regenerate the full corpus after changing copied Macro or Loro source.
+- Review fixtures for account identities beyond the machine privacy scanner.
 - Entropy, node keys, handles and callback tapes reset for every test.

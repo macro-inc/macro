@@ -11,6 +11,12 @@ export class Encoder {
   readonly keys = new Map<string, number>();
   readonly functions = namedFunctions;
   version = 0;
+  reset(): void {
+    this.handles = new WeakMap();
+    this.next = 0;
+    this.keys.clear();
+    this.version = 0;
+  }
 
   encode(value: unknown): Value {
     if (value === undefined) return { $undef: true };
@@ -29,7 +35,10 @@ export class Encoder {
         return { $klass: value.getType() };
       }
       const name = this.functions.get(value);
-      if (name) return { $fn: name };
+      if (name)
+        return name.startsWith('tape:')
+          ? { $tape: Number(name.slice(5)) }
+          : { $fn: name };
       throw new Error('unsupported-function-value');
     }
     if (typeof value !== 'object')
@@ -48,11 +57,17 @@ export class Encoder {
     if (typeof object.__key === 'string') tag = '$h';
     else if ('_editorState' in object) tag = '$ed';
     else if ('_nodeMap' in object) tag = '$state';
+    else if (typeof object.next === 'function' && Symbol.iterator in object)
+      tag = '$iterator';
     else if ('anchor' in object && 'focus' in object) tag = '$sel';
     else if ('_nodes' in object) tag = '$sel';
     else if ('offset' in object && 'key' in object && 'type' in object)
       tag = '$pt';
-    else if ('origin' in object && 'direction' in object) tag = '$caret';
+    else if (
+      ('origin' in object && 'direction' in object) ||
+      ('caret' in object && 'distance' in object)
+    )
+      tag = '$caret';
     if (tag) {
       const id = this.next++;
       const handle: { [key: string]: Value } = { [tag]: id };
@@ -66,9 +81,14 @@ export class Encoder {
       } else if (tag === '$sel') {
         handle.kind = 'anchor' in object ? 'range' : 'node';
       } else if (tag === '$caret') {
-        handle.origin = this.encode(object.origin);
-        handle.direction = this.encode(object.direction);
         handle.type = this.encode(object.type);
+        if ('caret' in object) {
+          handle.caret = this.encode(object.caret);
+          handle.distance = this.encode(object.distance);
+        } else {
+          handle.origin = this.encode(object.origin);
+          handle.direction = this.encode(object.direction);
+        }
       }
       return { ...handle };
     }
@@ -79,7 +99,17 @@ export class Encoder {
       };
     if (value instanceof Set)
       return { $set: [...value].map((item) => this.encode(item)) };
-    if (value instanceof RegExp) throw new Error('unsupported-regexp-value');
+    if (value instanceof RegExp) {
+      if (Object.getPrototypeOf(value) !== RegExp.prototype)
+        throw new Error(
+          `unsupported-regexp-subclass: ${value.constructor.name}`
+        );
+      return {
+        $regexp: value.source,
+        flags: value.flags,
+        lastIndex: value.lastIndex,
+      };
+    }
     if (
       Object.getPrototypeOf(value) !== Object.prototype &&
       Object.getPrototypeOf(value) !== null

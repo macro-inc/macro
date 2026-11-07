@@ -1,6 +1,7 @@
 import { spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import {
+  cpSync,
   existsSync,
   mkdirSync,
   readdirSync,
@@ -68,6 +69,33 @@ if (
   );
   writeFileSync(path.join(target, '.recorder-pin'), pin.sha256 + stamp);
 }
+const goldenPath = 'static_assets/markdown-golden.1.bin';
+mkdirSync(path.dirname(path.join(target, goldenPath)), { recursive: true });
+cpSync(path.join(root, goldenPath), path.join(target, goldenPath));
+const macro = path.join(target, 'packages/lexical-core');
+rmSync(macro, { recursive: true, force: true });
+cpSync(path.join(root, 'packages/lexical-core'), macro, {
+  recursive: true,
+  filter: (source) =>
+    !source.includes('/node_modules') && !source.includes('/.cache'),
+});
+const mirror = path.join(target, 'packages/loro-mirror');
+rmSync(mirror, { recursive: true, force: true });
+cpSync(path.join(root, 'packages/loro-mirror/src'), path.join(mirror, 'src'), {
+  recursive: true,
+});
+const fixturePath =
+  'crates/slack_integration/tests/fixtures/native-message-links.json';
+mkdirSync(path.dirname(path.join(target, fixturePath)), { recursive: true });
+cpSync(path.join(root, fixturePath), path.join(target, fixturePath));
+const macroFiles = (dir: string): string[] =>
+  readdirSync(dir, { withFileTypes: true })
+    .flatMap((entry) =>
+      entry.isDirectory()
+        ? macroFiles(path.join(dir, entry.name))
+        : [path.join(dir, entry.name)]
+    )
+    .sort();
 const staging = path.join(root, 'target/lexical-recording');
 rmSync(staging, { recursive: true, force: true });
 mkdirSync(staging, { recursive: true });
@@ -77,6 +105,17 @@ const revision = hash(
     .filter((file) => /\.(ts|mts|json|patch)$/.test(file))
     .sort()
     .map((file) => readFileSync(path.join(pkg, 'record', file), 'utf8'))
+    .concat(
+      macroFiles(macro)
+        .filter((file) => /\.(ts|tsx|json)$/.test(file))
+        .map((file) => readFileSync(file, 'utf8'))
+    )
+    .concat(
+      macroFiles(mirror).map((file) => readFileSync(file, 'utf8')),
+      readFileSync(path.join(target, fixturePath), 'utf8'),
+      hash(readFileSync(path.join(target, goldenPath))),
+      readFileSync(path.join(pkg, 'bun.lock'), 'utf8')
+    )
     .join('\n')
 );
 const results: Record<string, Map<string, Case>> = {};
@@ -89,6 +128,7 @@ type Case = {
   lines: Record<string, number[]>;
   calls: number;
   reasons: string[];
+  failures?: string[];
   fixture: Record<string, unknown>;
 };
 for (const [lane, oracle, membrane] of [
@@ -111,8 +151,17 @@ for (const [lane, oracle, membrane] of [
     '--config',
     path.join(pkg, 'record/vitest.record.mts'),
   ];
-  if (filter) args.push(filter);
-  const status = run('node', args, env);
+  const macroFilter = filter?.startsWith('macro:')
+    ? filter.slice(6)
+    : undefined;
+  let status = 0;
+  if (macroFilter === undefined)
+    status = run('node', filter ? [...args, filter] : args, env);
+  if (!filter || macroFilter !== undefined)
+    status = run('node', macroFilter ? [...args, macroFilter] : args, {
+      ...env,
+      LEXICAL_MACRO: '1',
+    });
   // A failed upstream test is classified, never accepted as an oracle.
   if (!existsSync(path.join(output, 'cases')))
     throw new Error(`No cases in ${lane} (exit ${status})`);
@@ -131,8 +180,15 @@ function apiCalls(value: unknown): string[] {
   if (!value || typeof value !== 'object') return [];
   if (Array.isArray(value)) return value.flatMap(apiCalls);
   const object = value as Record<string, unknown>;
-  const own =
-    object.op === 'call' && typeof object.fn === 'string' ? [object.fn] : [];
+  const own = [
+    object.op === 'call'
+      ? object.fn
+      : object.op === 'plugin'
+        ? object.name
+        : undefined,
+    object.$fn,
+    object.$transformer,
+  ].filter((name): name is string => typeof name === 'string');
   return [...own, ...Object.values(object).flatMap(apiCalls)];
 }
 for (const [id, dev] of [...results.dev].sort(([a], [b]) =>
@@ -141,7 +197,12 @@ for (const [id, dev] of [...results.dev].sort(([a], [b]) =>
   const prod = results.prod.get(id);
   const plain = results.plain.get(id);
   const reasons = [...dev.reasons];
-  if (dev.state !== 'passed') reasons.push('upstream-failed');
+  if (dev.state !== 'passed') {
+    reasons.push('upstream-failed');
+    reasons.push(
+      ...(dev.failures ?? []).map((failure) => `upstream-failure: ${failure}`)
+    );
+  }
   if (
     !plain ||
     plain.state !== dev.state ||
@@ -151,7 +212,14 @@ for (const [id, dev] of [...results.dev].sort(([a], [b]) =>
   if (!prod) reasons.push('production-missing');
   else {
     reasons.push(...prod.reasons);
-    if (prod.state !== 'passed') reasons.push('upstream-production-failed');
+    if (prod.state !== 'passed') {
+      reasons.push('upstream-production-failed');
+      reasons.push(
+        ...(prod.failures ?? []).map(
+          (failure) => `production-failure: ${failure}`
+        )
+      );
+    }
   }
   if (!dev.calls) reasons.push('no-model-calls');
   const tier = reasons.some((r) => r.startsWith('view:'))
@@ -181,14 +249,20 @@ for (const [id, dev] of [...results.dev].sort(([a], [b]) =>
               },
             ]
       );
-      fixture.normalize = ['devOutcome'];
+      fixture.normalize = [...(fixture.normalize as string[]), 'devOutcome'];
     }
     files.set(filename, JSON.stringify(fixture, null, 2) + '\n');
   }
   index.push({
     id,
     tier,
-    reasons: [...new Set(reasons)],
+    reasons: [
+      ...new Set(
+        reasons.map((reason) =>
+          reason.replaceAll(`file://${root}/`, '').replaceAll(`${root}/`, '')
+        )
+      ),
+    ],
     file: tier === 'A-rec' ? filename : null,
     calls: apiCalls(dev.fixture.trace).length,
     apis: [...new Set(apiCalls([dev.fixture.trace, dev.fixture.tapes]))].sort(),
@@ -219,15 +293,25 @@ for (const [name, content] of files) {
   });
   writeFileSync(path.join(replayDirectory, name), content);
 }
-if (
-  run('node', [vitest, 'run', '--config', 'record/vitest.config.ts'], {
-    ...process.env,
-    LEXICAL_REPLAY_ONLY: '1',
-    LEXICAL_FIXTURES: replayDirectory,
-    LEXICAL_UPSTREAM: target,
-  })
-)
-  throw new Error('Serialized fixture replay failed');
+for (const macroScope of [false, true]) {
+  if (
+    !index.some(
+      (row) =>
+        row.file && String(row.id).startsWith('lexical-core/') === macroScope
+    )
+  )
+    continue;
+  if (
+    run('node', [vitest, 'run', '--config', 'record/vitest.config.ts'], {
+      ...process.env,
+      LEXICAL_REPLAY_ONLY: '1',
+      LEXICAL_FIXTURES: replayDirectory,
+      LEXICAL_UPSTREAM: target,
+      LEXICAL_MACRO: macroScope ? '1' : '0',
+    })
+  )
+    throw new Error('Serialized fixture replay failed');
+}
 const fixtures = path.join(pkg, 'fixtures');
 if (check) {
   const walk = (dir: string): string[] =>

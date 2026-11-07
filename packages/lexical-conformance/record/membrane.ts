@@ -5,6 +5,7 @@ import {
   namedFunctions,
   namedTransformers,
 } from './encode';
+import { preorderKeys } from './initial';
 import {
   errorValue,
   type Fields,
@@ -25,12 +26,72 @@ export function activate(recorder?: Recorder): void {
   current = recorder;
 }
 
+/** Separate model setup from the original test's DOM assertions. */
+export function testBody<T extends Function>(body: T): T {
+  return new Proxy(body, {
+    apply(fn, receiver, args) {
+      const recorder = current;
+      if (!recorder) return Reflect.apply(fn, receiver, args);
+      recorder.inTestBody = true;
+      const finish = () => {
+        recorder.inTestBody = false;
+      };
+      try {
+        const result = Reflect.apply(fn, receiver, args);
+        if (result && typeof result.then === 'function')
+          return Promise.resolve(result).finally(finish);
+        finish();
+        return result;
+      } catch (error) {
+        finish();
+        throw error;
+      }
+    },
+  });
+}
+
+export function modelDOM<T>(value: T): T {
+  if (
+    current?.inTestBody &&
+    value &&
+    typeof value === 'object' &&
+    'nodeType' in value &&
+    'nodeName' in value
+  )
+    current.reasons.add('view:dom-assertion');
+  return value;
+}
+
+function registerValues(value: unknown, name: string, seen: Set<object>): void {
+  if (
+    !value ||
+    (typeof value !== 'function' && typeof value !== 'object') ||
+    seen.has(value)
+  )
+    return;
+  seen.add(value);
+  if (typeof value === 'function') {
+    namedFunctions.set(value, name);
+    return;
+  }
+  if (
+    'type' in value &&
+    ('regExp' in value || 'regExpStart' in value || 'tag' in value)
+  )
+    namedTransformers.set(value, name);
+  if (Array.isArray(value) || Object.getPrototypeOf(value) === Object.prototype)
+    for (const [key, item] of Object.entries(value))
+      registerValues(item, `${name}.${key}`, seen);
+}
+
 /** Wrap the test boundary only; upstream imports keep their original identity. */
 export function wrapModule<T extends Record<string, unknown>>(
   module: T,
   name: string
 ): T {
   modules.set(name, module);
+  for (const [key, value] of Object.entries(module))
+    registerValues(value, `${name}.${key}`, new Set());
   instrumentTransformers(module, name, () => current);
   for (const [key, value] of Object.entries(module)) {
     if (key.endsWith('_COMMAND') && value && typeof value === 'object')
@@ -98,12 +159,18 @@ export function wrapModule<T extends Record<string, unknown>>(
 }
 
 export class Recorder {
+  constructor(readonly modelProjection = false) {}
+  projectingView = false;
+  inTestBody = false;
   readonly encoder = new Encoder();
   readonly trace: Op[] = [];
   readonly tapes: Fixture['tapes'] = [];
   readonly editors = new Map<object, number>();
+  readonly creationConfigs = new WeakMap<object, Record<string, unknown>>();
   readonly reasons = new Set<string>();
   readonly transformersFired = new Set<string>();
+  initial: Fixture['initial'] = { editorState: null, selection: null };
+  private partialRequested = false;
   private proxies = new WeakMap<object, object>();
   private raw = new WeakMap<object, object>();
   private calls = this.trace;
@@ -115,13 +182,18 @@ export class Recorder {
   private pending = new Map<object, number[]>();
   private causes = new Map<object, Set<string>>();
   private awaitingTest = new WeakSet<object>();
+  private implementationEditors = new WeakSet<object>();
   private cause?: string;
 
-  enter(cause: string): () => void {
+  enter(cause?: string): () => void {
     const depth = this.depth;
     const previous = this.cause;
     this.depth++;
-    if (!['commit', 'microtask'].includes(cause) && previous !== 'history')
+    if (
+      cause &&
+      !['commit', 'microtask'].includes(cause) &&
+      previous !== 'history'
+    )
       this.cause = cause;
     return () => {
       this.depth = depth;
@@ -169,6 +241,9 @@ export class Recorder {
         if (!descriptor) return undefined;
         return {
           ...descriptor,
+          ...(Array.isArray(object) && key === 'length'
+            ? { writable: true }
+            : {}),
           configurable: !(Array.isArray(object) && key === 'length'),
         };
       },
@@ -261,6 +336,14 @@ export class Recorder {
     receiver: unknown,
     args: unknown[]
   ): unknown {
+    // Helpers entered below the membrane still cannot mutate a taped callback's model.
+    if (
+      this.callbackKind === 'tape' &&
+      /getWritable|\.(set|append|remove|insert|clear|toggle|split|merge|replace|splice|delete|select|deselect|markDirty|update|dispatchCommand|format|extract|focus|blur|reset|add|modify|forwardDeletion|collapseAtStart|afterCloneFrom|createParentElementNode|register)|\$(create|set|insert|remove|delete|split|merge|toggle|apply|patch|copy|normalize|add|mark|ensure|move|update|trim|wrap|unwrap|restore|convertFrom|generateNodesFrom)/.test(
+        name
+      )
+    )
+      this.reasons.add('A-hand:mutating-callback');
     const attributed = this.depth === 0 && isTestFrame();
     if (!attributed)
       return Reflect.apply(
@@ -268,18 +351,33 @@ export class Recorder {
         this.unwrap(receiver),
         args.map((arg) => this.unwrap(arg))
       );
+    if (/^@lexical\/code-shiki\.loadCode(Language|Theme)$/.test(name))
+      this.reasons.add('B-only:shiki-loader-cache-requires-async-bootstrap');
+    if (this.modelProjection && name.endsWith('.$generateNodesFromDOM'))
+      this.partialRequested = true;
+    if (
+      this.modelProjection &&
+      name === '@lexical/html.$generateHtmlFromNodes'
+    ) {
+      this.projectingView = true;
+      this.depth++;
+      try {
+        return Reflect.apply(
+          fn,
+          this.unwrap(receiver),
+          args.map((arg) => this.unwrap(arg))
+        );
+      } finally {
+        this.depth--;
+        this.projectingView = false;
+      }
+    }
     if (/dispatchEvent|generateNodesFromDOM|applyDOMRange/.test(name))
       this.reasons.add('B-only:dom-driver');
     if (/createDOM|exportDOM|getElementByKey|getRootElement/.test(name))
       this.reasons.add('view:dom-api');
     if (/register(Update|Mutation|TextContent)Listener/.test(name))
       this.reasons.add('B-only:listener');
-    if (
-      this.callbackKind === 'tape' &&
-      /getWritable|\.set|\.append|\.remove|\.insert|\$set/.test(name)
-    ) {
-      this.reasons.add('A-hand:mutating-callback');
-    }
     if (
       name.endsWith('.createEditor') ||
       name.endsWith('.createHeadlessEditor')
@@ -296,7 +394,14 @@ export class Recorder {
     const rawReceiver = this.unwrap(receiver);
     if (
       name.endsWith('.setRootElement') &&
-      /__tests__\/utils/.test(new Error().stack ?? '')
+      (/__tests__\/utils/.test(new Error().stack ?? '') ||
+        (!this.inTestBody &&
+          (args[0] === null ||
+            (args[0] &&
+              typeof args[0] === 'object' &&
+              fields(args[0]).nodeName === 'DIV' &&
+              fields(args[0]).childNodes &&
+              fields(fields(args[0]).childNodes).length === 0))))
     ) {
       const object = fields(rawReceiver);
       this.editor(object);
@@ -313,22 +418,27 @@ export class Recorder {
     }
     if (/\.(update|read)$/.test(name) && typeof args[0] === 'function') {
       const kind = name.endsWith('.update') ? 'update' : 'read';
+      if (kind === 'read' && this.partialRequested) this.startPartial();
       const object = fields(rawReceiver);
       const editor = '_editorState' in object ? object : undefined;
       if (!editor && !('_nodeMap' in object))
         this.reasons.add('unsupported-read-receiver');
       const id = kind === 'update' ? this.updateId++ : this.updateId;
       const calls: Op[] = [];
+      const options =
+        args[1] === undefined ? undefined : this.argument(args[1]);
       const op: Op = {
         op: kind,
         editor: editor ? this.editor(editor) : 0,
         calls,
       };
       if (!editor) op.state = this.encode(object);
+      if (kind === 'read' && args[1] !== undefined)
+        op.opts = this.encode(options);
       if (kind === 'update') {
         op.id = id;
         op.cause = 'test';
-        op.opts = this.encode(args[1] ?? {});
+        op.opts = this.encode(options ?? {});
         if (this.parent !== undefined) op.parent = this.parent;
         if (editor) {
           this.pending.set(editor, [...(this.pending.get(editor) ?? []), id]);
@@ -350,7 +460,11 @@ export class Recorder {
         });
       this.depth++;
       try {
-        return Reflect.apply(fn, rawReceiver, [wrapped, ...args.slice(1)]);
+        return Reflect.apply(fn, rawReceiver, [
+          wrapped,
+          options,
+          ...args.slice(2),
+        ]);
       } catch (error) {
         op.error = errorValue(error);
         throw error;
@@ -359,7 +473,7 @@ export class Recorder {
       }
     }
     if (
-      /\.register(MarkdownShortcuts|History|RichText|PlainText|List)$/.test(
+      /\.register(MarkdownShortcuts|History|RichText|PlainText|List|CodeHighlighting|TabIndentation)$/.test(
         name
       )
     ) {
@@ -387,11 +501,51 @@ export class Recorder {
     const op: Op = { op: 'call', fn: name, args: [] };
     if (rawReceiver && typeof rawReceiver === 'object')
       op.this = this.encode(rawReceiver);
-    const wrappedArgs = args.map((arg) => {
-      const raw = this.unwrap(arg);
-      if (typeof raw !== 'function') return raw;
-      const exported = this.encoder.functions.get(raw);
-      if (exported) return raw;
+    const wrappedArgs = args.map((arg) => this.argument(arg));
+    const event = wrappedArgs[1];
+    const command = this.unwrap(args[0]);
+    const tabPayload =
+      name.endsWith('.dispatchCommand') &&
+      command &&
+      typeof command === 'object' &&
+      namedCommands.get(command) === 'KEY_TAB_COMMAND' &&
+      event &&
+      typeof event === 'object' &&
+      [...modules.values()].some(
+        (module) =>
+          typeof module.KeyboardEventMock === 'function' &&
+          module.KeyboardEventMock === event.constructor
+      );
+    op.args = wrappedArgs.map((arg, index) =>
+      index === 1 && tabPayload
+        ? {
+            $event: 'keydown',
+            key: 'Tab',
+            shiftKey: Boolean(fields(event).shiftKey),
+            altKey: Boolean(fields(event).altKey),
+            ctrlKey: Boolean(fields(event).ctrlKey),
+            metaKey: Boolean(fields(event).metaKey),
+          }
+        : this.encode(arg)
+    );
+    this.calls.push(op);
+    this.depth++;
+    try {
+      const result = Reflect.apply(fn, rawReceiver, wrappedArgs);
+      op.ret = this.encode(result);
+      return this.wrap(result);
+    } catch (error) {
+      op.throws = errorValue(error);
+      throw error;
+    } finally {
+      this.depth--;
+    }
+  }
+
+  private argument(value: unknown): unknown {
+    const raw = this.unwrap(value);
+    if (typeof raw === 'function') {
+      if (this.encoder.functions.has(raw) || 'getType' in raw) return raw;
       const tape = this.tapes.length;
       this.tapes.push({ invocations: [] });
       const wrapped = (...values: unknown[]) => {
@@ -418,26 +572,69 @@ export class Recorder {
       };
       this.encoder.functions.set(wrapped, `tape:${tape}`);
       return wrapped;
-    });
-    op.args = wrappedArgs.map((arg) => {
-      const exported =
-        typeof arg === 'function' ? this.encoder.functions.get(arg) : undefined;
-      return exported?.startsWith('tape:')
-        ? { $tape: Number(exported.slice(5)) }
-        : this.encode(arg);
-    });
-    this.calls.push(op);
-    this.depth++;
-    try {
-      const result = Reflect.apply(fn, rawReceiver, wrappedArgs);
-      op.ret = this.encode(result);
-      return this.wrap(result);
-    } catch (error) {
-      op.throws = errorValue(error);
-      throw error;
-    } finally {
-      this.depth--;
     }
+    if (!raw || typeof raw !== 'object' || namedTransformers.has(raw))
+      return raw;
+    if (Array.isArray(raw)) {
+      const items = raw.map((item) => this.argument(item));
+      return items.every((item, i) => item === raw[i]) ? raw : items;
+    }
+    if (
+      Object.getPrototypeOf(raw) === Object.prototype ||
+      Object.getPrototypeOf(raw) === null
+    ) {
+      const entries = Object.entries(raw).map(
+        ([key, item]) => [key, this.argument(item)] as const
+      );
+      return entries.every(([key, item]) => item === Reflect.get(raw, key))
+        ? raw
+        : Object.fromEntries(entries);
+    }
+    return raw;
+  }
+
+  private startPartial(): void {
+    this.partialRequested = false;
+    const editor = [...this.editors.keys()].at(-1);
+    const createIndex = this.trace.findIndex((op) => op.op === 'createEditor');
+    if (!editor || createIndex < 0 || this.editors.size !== 1) {
+      this.reasons.add('partial:unsupported-editor-layout');
+      return;
+    }
+    const state = fields(editor)._editorState;
+    const raw = snapshot(editor);
+    const getCounter = modules.get(
+      'lexical/LexicalUtils'
+    )?.getRecorderKeyCounter;
+    if (typeof getCounter !== 'function')
+      throw new Error('Missing initial key counter');
+    this.initial = {
+      editorState: raw.json,
+      selection: raw.selection,
+      keys: preorderKeys(fields(state)),
+      nodeMapKeys: raw.nodeMapKeys as string[],
+      nextKey: getCounter(),
+    };
+    this.encoder.reset();
+    const prefix = this.trace.slice(0, createIndex + 1);
+    prefix[createIndex].ret = this.encode(editor);
+    this.trace.splice(0, this.trace.length, ...prefix);
+    this.calls = this.trace;
+    this.commits.clear();
+    this.pending.clear();
+    this.causes.clear();
+    this.updateId = 0;
+    this.tapes.length = 0;
+    for (const reason of this.reasons)
+      if (!/test-defined-model-class|node-replacement/.test(reason))
+        this.reasons.delete(reason);
+    this.trace.push({
+      op: 'call',
+      fn: 'LexicalEditor.getEditorState',
+      this: this.encode(editor),
+      args: [],
+      ret: this.encode(state),
+    });
   }
 
   editor(editor: object, config?: Record<string, unknown>): number {
@@ -446,6 +643,7 @@ export class Recorder {
     const id = this.editors.size;
     this.editors.set(editor, id);
     const raw = fields(editor);
+    config = this.creationConfigs.get(editor) ?? config;
     const actual = fields(raw._config);
     const registry = raw._nodes;
     const nodes =
@@ -461,11 +659,11 @@ export class Recorder {
           'getType' in node &&
           typeof node.getType === 'function'
         ) {
-          const known = [...modules.entries()].some(
-            ([name, exports]) =>
-              !name.includes('/__tests__/') &&
-              Object.values(exports).includes(node)
-          );
+          const symbol = namedFunctions.get(node);
+          const known =
+            symbol &&
+            !symbol.includes('/__tests__/') &&
+            !symbol.includes('/tests/');
           const defaults = [
             'TestElementNode',
             'TestTextNode',
@@ -478,6 +676,14 @@ export class Recorder {
           if (!known && !defaults.includes(node.name))
             this.reasons.add('A-hand:test-defined-model-class');
           encodedNodes.push(node.getType());
+        } else if (
+          node &&
+          typeof node === 'object' &&
+          'replace' in node &&
+          'with' in node
+        ) {
+          if (typeof node.with !== 'function' || !namedFunctions.has(node.with))
+            this.reasons.add('A-hand:test-defined-node-replacement');
         } else this.reasons.add('B-only:node-replacement');
       }
     }
@@ -486,11 +692,19 @@ export class Recorder {
       id,
       config: {
         namespace: String(actual.namespace),
+        namespaceGenerated: !config?.namespace,
         nodes: encodedNodes,
-        replacements: [],
+        replacements: Array.isArray(nodes)
+          ? nodes
+              .filter(
+                (node) => node && typeof node === 'object' && 'replace' in node
+              )
+              .map((node) => this.encode(node))
+          : [],
         plugins: [],
         theme: this.encode(actual.theme ?? {}),
         editable: raw._editable !== false,
+        headless: raw._headless === true,
         rootElement: raw._rootElement !== null,
       },
       ret: this.encode(editor),
@@ -507,6 +721,9 @@ export class Recorder {
   }
 
   begin(editor: object, options?: { discrete?: boolean }): void {
+    if (!this.editors.has(editor) && this.depth > 0)
+      this.implementationEditors.add(editor);
+    if (this.implementationEditors.has(editor)) return;
     this.editor(editor);
     const cause = this.awaitingTest.has(editor)
       ? 'test'
@@ -537,6 +754,11 @@ export class Recorder {
     dirtyElements: Map<string, boolean>,
     normalized: Set<string>
   ): void {
+    if (
+      this.implementationEditors.has(editor) ||
+      (!this.editors.has(editor) && this.depth > 0)
+    )
+      return;
     const index = (this.commits.get(editor) ?? 0) + 1;
     this.commits.set(editor, index);
     this.encoder.version = index;
@@ -594,6 +816,11 @@ export class Recorder {
   }
 
   error(editor: object, error: unknown, during: string): void {
+    if (
+      this.implementationEditors.has(editor) ||
+      (!this.editors.has(editor) && this.depth > 0)
+    )
+      return;
     this.trace.push({
       op: 'error',
       editor: this.editor(editor),
@@ -663,7 +890,9 @@ export function snapshot(editor: object): Fields {
         };
       }
       return {
-        json: Reflect.apply(state.toJSON as Function, state, []),
+        json: JSON.parse(
+          JSON.stringify(Reflect.apply(state.toJSON as Function, state, []))
+        ),
         selection: serialized,
         text: map.get('root').getTextContent(),
         nodeMapKeys: [...map.keys()],
@@ -676,6 +905,8 @@ export function snapshot(editor: object): Fields {
 Object.assign(globalThis, {
   __lexRec: {
     enter: (cause: string) => current?.enter(cause),
+    created: (editor: object, config?: Record<string, unknown>) =>
+      current?.creationConfigs.set(editor, config ?? {}),
     begin: (editor: object, options?: { discrete?: boolean }) =>
       current?.begin(editor, options),
     commit: (

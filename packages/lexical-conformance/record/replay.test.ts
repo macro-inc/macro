@@ -13,6 +13,22 @@ const aliases = JSON.parse(
 ).compilerOptions.paths as Record<string, string[]>;
 async function load(name: string): Promise<Record<string, unknown>> {
   let relative: string | undefined = aliases[name]?.[0];
+  if (name.startsWith('@macro-inc/lexical-core/')) {
+    const prefix =
+      'packages/lexical-core/' + name.slice('@macro-inc/lexical-core/'.length);
+    relative = ['.ts', '.tsx', '/index.ts']
+      .map((suffix) => prefix + suffix)
+      .find((file) => existsSync(path.join(root, file)));
+  }
+  if (!relative) {
+    const canonical = name.match(/^@lexical\/([^/]+)\/(.+)$/);
+    if (canonical) {
+      const prefix = `packages/lexical-${canonical[1]}/src/${canonical[2]}`;
+      relative = ['.ts', '.tsx', '/index.ts', '/index.tsx']
+        .map((suffix) => prefix + suffix)
+        .find((file) => existsSync(path.join(root, file)));
+    }
+  }
   if (!relative) {
     const parent = Object.keys(aliases)
       .filter((alias) => name.startsWith(`${alias}/`))
@@ -35,6 +51,8 @@ async function load(name: string): Promise<Record<string, unknown>> {
 await load('lexical');
 const utils = await load('lexical/LexicalUtils');
 await load('lexical/__tests__/utils');
+if (process.env.LEXICAL_MACRO === '1')
+  await load('@macro-inc/lexical-core/node-list');
 const reset = utils.resetRandomKey;
 if (typeof reset !== 'function') throw new Error('Missing resetRandomKey');
 const index: { id: string; file: string | null; apis: string[] }[] = JSON.parse(
@@ -42,11 +60,19 @@ const index: { id: string; file: string | null; apis: string[] }[] = JSON.parse(
 );
 for (const name of new Set(
   index
-    .filter((row) => row.file)
-    .flatMap((row) => row.apis)
-    .map((api) => api.slice(0, api.lastIndexOf('.')))
     .filter(
-      (name) => name.startsWith('lexical') || name.startsWith('@lexical/')
+      (row) =>
+        row.file &&
+        row.id.startsWith('lexical-core/') ===
+          (process.env.LEXICAL_MACRO === '1')
+    )
+    .flatMap((row) => row.apis)
+    .map((api) => api.slice(0, api.indexOf('.')))
+    .filter(
+      (name) =>
+        name.startsWith('lexical') ||
+        name.startsWith('@lexical/') ||
+        name.startsWith('@macro-inc/lexical-core/')
     )
 )) {
   if (!modules.has(name)) await load(name);
@@ -54,6 +80,7 @@ for (const name of new Set(
 // Node classes in editor configs need their packages even when no call names them.
 for (const name of [
   '@lexical/code',
+  '@lexical/headless',
   '@lexical/hashtag',
   '@lexical/link',
   '@lexical/list',
@@ -66,6 +93,11 @@ for (const name of [
 }
 for (const row of index) {
   if (!row.file) continue;
+  if (
+    row.id.startsWith('lexical-core/') !==
+    (process.env.LEXICAL_MACRO === '1')
+  )
+    continue;
   const recorded: Fixture = JSON.parse(
     readFileSync(path.join(directory, row.file), 'utf8')
   );
