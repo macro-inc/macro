@@ -13,19 +13,13 @@ use super::error::AgentSessionError;
 // so that this crate can depend on the fold (see `agent_fold::domain::log`).
 // Re-exported here because this is where callers expect session types.
 pub use super::sandbox_size::SandboxSize;
-pub use agent_fold::domain::log::{AgentSessionId, AgentSessionLog, Message};
+pub use agent_fold::domain::log::{
+    AgentSessionId, AgentSessionLog, MACRO_AGENT_SESSION_META_KEY,
+    MACRO_PERMISSION_POLICY_META_KEY, Message,
+};
 pub use agent_fold::domain::model::{
     Author, AuthorKind, FoldEvent, MessageId, OwnedFoldEvent, TurnId,
 };
-
-/// The `_meta` key on `session/new`, `session/load` and `session/resume`
-/// whose string value is the [`AgentSessionId`] the ACP session serves.
-pub const MACRO_AGENT_SESSION_META_KEY: &str = "macro.com/agentSessionId";
-
-/// The `_meta` key on `session/new`, `session/load` and `session/resume`
-/// whose string value is how the session answers permission requests
-/// (`autoAccept` or `prompt`), so a runtime can tell its agent.
-pub const MACRO_PERMISSION_POLICY_META_KEY: &str = "macro.com/permissionPolicy";
 
 /// Identity of one harness participant, minted fresh at construction.
 ///

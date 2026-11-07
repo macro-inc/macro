@@ -1,6 +1,7 @@
 //! Protocol state and actor shell for one agent-runtime connection.
 
 pub(crate) mod actors;
+mod credentials;
 // The file layout (session/session.rs) is a deliberate organizational
 // choice: logic in `session`, vocabulary in `types`.
 #[allow(clippy::module_inception)]

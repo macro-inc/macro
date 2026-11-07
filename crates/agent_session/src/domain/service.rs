@@ -1880,6 +1880,10 @@ where
         boundary: Option<crate::domain::model::HistoryBoundary>,
     ) -> Result<Appended> {
         let session = log.agent_session_id;
+        let log = AgentSessionLog {
+            content: log.content.redacted().map_err(anyhow::Error::from)?,
+            ..log
+        };
 
         // The wire tap: every frame of every session, both directions,
         // crosses here exactly once. Enable with RUST_LOG=agent_session=trace.

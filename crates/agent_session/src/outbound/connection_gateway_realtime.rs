@@ -52,6 +52,9 @@ use model_entity::EntityType as GatewayEntityType;
 use serde::Serialize;
 use std::sync::Arc;
 
+#[cfg(test)]
+mod test;
+
 /// The realtime message type carrying a run of appended log frames.
 ///
 /// Matched on by the web client's websocket dispatch; changing it breaks

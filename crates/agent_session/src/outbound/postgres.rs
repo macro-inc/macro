@@ -14,6 +14,7 @@ mod auto_archive;
 mod pull_request;
 mod queue;
 mod recovery;
+mod scrub_log_credentials;
 mod session_task;
 mod sharing;
 mod source;
@@ -40,6 +41,7 @@ use crate::domain::turn_state::moves_session_list;
 use crate::domain::updates::{CodingAgentUpdatesRepo, UpdateCandidate, UpdateTurnState};
 use crate::outbound::connection_gateway_realtime::SessionAudience;
 use agent_client_protocol::schema::v1::SessionId;
+use agent_fold::domain::log::redact_stored_frame;
 use agent_runtime_protocol::domain::schema::v0::{SystemEvent, ToRuntimeMessage, ToServerMessage};
 use anyhow::Context;
 use bots::domain::models::BotId;
@@ -190,11 +192,16 @@ fn parse_sandbox_size(value: &str) -> anyhow::Result<SandboxSize> {
 
 /// The wire direction and JSON payload for a [`Message`].
 fn message_columns(message: &Message) -> anyhow::Result<(&'static str, serde_json::Value)> {
-    let (direction, mut content) = match message {
-        Message::Notification(message) => ("notification", serde_json::to_value(message)?),
-        Message::ToServer(message) => ("to_server", serde_json::to_value(message)?),
-        Message::ToRuntime(message) => ("to_runtime", serde_json::to_value(message)?),
+    let direction = match message {
+        Message::Notification(_) => "notification",
+        Message::ToServer(_) => "to_server",
+        Message::ToRuntime(_) => "to_runtime",
     };
+    // Through `Message`'s own serialization, which is what removes credentials.
+    let mut content = serde_json::to_value(message)?
+        .get_mut("content")
+        .map(serde_json::Value::take)
+        .ok_or_else(|| anyhow::anyhow!("a logged frame has no content"))?;
     // Postgres `jsonb` rejects U+0000, and a failed log insert stops the session.
     strip_json_nuls(&mut content);
     Ok((direction, content))
@@ -230,16 +237,23 @@ fn strip_json_nuls(value: &mut serde_json::Value) {
     }
 }
 
-/// Reverse of [`message_columns`].
-fn parse_message(direction: &str, content: serde_json::Value) -> anyhow::Result<Message> {
+/// Reverse of [`message_columns`]. Redacts again because rows written before
+/// redaction existed can still hold credentials.
+fn parse_message(direction: &str, mut content: serde_json::Value) -> anyhow::Result<Message> {
     match direction {
         "to_server" => Ok(Message::ToServer(
             serde_json::from_value::<ToServerMessage>(content)?,
         )),
-        "notification" => Ok(Message::Notification(serde_json::from_value(content)?)),
-        "to_runtime" => Ok(Message::ToRuntime(serde_json::from_value::<
-            ToRuntimeMessage,
-        >(content)?)),
+        "notification" => {
+            redact_stored_frame(&mut content);
+            Ok(Message::Notification(serde_json::from_value(content)?))
+        }
+        "to_runtime" => {
+            redact_stored_frame(&mut content);
+            Ok(Message::ToRuntime(serde_json::from_value::<
+                ToRuntimeMessage,
+            >(content)?))
+        }
         other => anyhow::bail!("unknown agent_session_log direction {other:?}"),
     }
 }

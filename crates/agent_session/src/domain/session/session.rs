@@ -181,6 +181,11 @@ impl<Token> SessionMachine<Token> {
         self.pending.len()
     }
 
+    /// MCP servers currently configured for this connection.
+    pub(crate) fn mcp_servers(&self) -> &[McpServer] {
+        &self.mcp_servers
+    }
+
     /// The id of the elicitation this connection is holding for the user, if
     /// any.
     pub fn pending_elicitation(&self) -> Option<&RequestId> {

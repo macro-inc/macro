@@ -18,6 +18,20 @@ initializes only missing projections, checking the latest log cursor while
 holding the session lock. A concurrent append or projection causes that session
 to be skipped; rerunning is safe. It does not change logs or session timestamps.
 
+To clean older stored protocol frames, run the keyset job against the intended
+MacroDB. It previews counts unless `--apply` is given:
+
+```bash
+cargo build -p agent_session --features cli --bin scrub_log_credentials
+target/debug/scrub_log_credentials --database-url "$DATABASE_URL" --limit 100 --pause-ms 100
+target/debug/scrub_log_credentials --database-url "$DATABASE_URL" --limit 100 --pause-ms 100 --apply
+```
+
+The job scans `to_runtime` and `notification` rows in id order and updates only
+changed `content` values. Each update checks that the content still matches the
+read value. Use `--after-id` with the last reported id to resume a pass. A second
+completed apply pass changes zero rows; malformed rows are skipped.
+
 ## Runtime working branches
 
 `agent_session.working_branch` stores the branch a provider actually reports for

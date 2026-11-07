@@ -1,9 +1,37 @@
-use agent_runtime_protocol::domain::schema::v0::{SystemEvent, ToServerMessage};
+use agent_runtime_protocol::domain::schema::v0::{SystemEvent, ToRuntimeMessage, ToServerMessage};
 use agent_session::domain::events::{LogAppendedEntry, LogAppendedMetadata};
 use agent_session::domain::model::{AgentSessionId, Message};
 use macro_uuid::Uuid;
 
 use super::*;
+
+const CREDENTIAL: &str = "Bearer placeholder-session-credential";
+
+#[test]
+fn encoded_session_opening_removes_credentials() {
+    let message: ToRuntimeMessage = serde_json::from_value(serde_json::json!({
+        "type": "acp", "jsonrpc": "2.0", "id": 1, "method": "session/new",
+        "params": {"cwd": "/workspace", "mcpServers": [{"type": "http", "name": "macro", "url": "https://egress.example.test/mcp-macro", "headers": [{"name": "Authorization", "value": CREDENTIAL}]}]}
+    }))
+    .unwrap();
+    let run = LogAppendedMetadata {
+        agent_session_id: AgentSessionId::TEST_A,
+        entries: vec![LogAppendedEntry {
+            id: Uuid::from_u128(1),
+            created_at: chrono::Utc::now(),
+            user_id: None,
+            content: Message::ToRuntime(message),
+        }],
+    };
+
+    let encoded = encode(&run).unwrap();
+    assert!(!encoded.contains(CREDENTIAL));
+    let value: serde_json::Value = serde_json::from_str(&encoded).unwrap();
+    assert_eq!(
+        value["entries"][0]["content"]["content"]["params"]["mcpServers"],
+        serde_json::json!([])
+    );
+}
 
 #[test]
 fn the_retention_floor_trims_entries_older_than_retention() {

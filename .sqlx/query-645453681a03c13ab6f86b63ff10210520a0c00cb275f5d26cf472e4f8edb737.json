@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            UPDATE agent_session_log AS log\n            SET content = changes.updated\n            FROM jsonb_to_recordset($1::jsonb)\n                AS changes(id uuid, original jsonb, updated jsonb)\n            WHERE log.id = changes.id\n              AND log.direction IN ('to_runtime', 'notification')\n              AND log.content = changes.original\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Jsonb"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "645453681a03c13ab6f86b63ff10210520a0c00cb275f5d26cf472e4f8edb737"
+}

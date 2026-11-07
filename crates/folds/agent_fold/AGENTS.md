@@ -103,6 +103,10 @@ session projection carries that state to list rows without loading transcripts.
 
 ## Gotchas
 
+- Serializing a `Message` applies `redact_stored_frame` (`domain/log.rs`): only
+  allowlisted server-to-runtime methods keep their params, and session-opening
+  requests keep an empty `mcpServers`. Deserialize raw frames for runtime use as
+  `ToRuntimeMessage`, never through `Message`.
 - A frame the fold can't account for is logged at `WARN` via `FoldError`, not
   returned as an error — `fold` must stay total (see `domain/fold.rs` docs).
 - `scripts/sanitize_recording.py` strips real-session fixtures before they

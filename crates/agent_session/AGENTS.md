@@ -25,6 +25,8 @@ consumer talks to.
 - `src/domain/updates.rs`: owner-scoped blocked and stalled coding-session updates,
   capped to 25 sessions before folding their logs.
 - `src/outbound/postgres.rs`: the session repository.
+- `src/domain/scrub_log_credentials.rs` and `src/outbound/postgres/scrub_log_credentials.rs`:
+  bounded cleanup of stored protocol frames; the CLI is `src/bin/scrub_log_credentials.rs`.
 - `src/outbound/broker_lifecycle_publisher.rs` /
   `broker_log_realtime.rs`: Kafka publication of lifecycle and log events.
 
@@ -133,6 +135,18 @@ through `set_name` clears it, so a name a person chose is never replaced.
 
 ## Gotchas
 
+- MCP credentials never enter the log. `Message`'s serialization applies
+  `agent_fold::domain::log::redact_stored_frame`, which storage and every reader
+  go through; `LiveSessionLogWriter` also redacts the frame it holds, and
+  `parse_message` redacts rows that predate this. The session's live server list
+  (`attached_mcp_servers`) and the frame sent to the runtime keep them. A new
+  server-to-runtime method is stored without params until it is added to
+  `STORED_WHOLE_METHODS` in that module; only add methods whose params hold no
+  credential.
+- The session actor scrubs current MCP HTTP/SSE header values from inbound log
+  frames before telemetry, handshake retention, and storage. Keep the machine's
+  server list current when replacing MCP servers; outbound frames still need
+  their configured headers.
 - What opened a session is an `agent_session_source` row, referenced by
   `agent_session.source_id` and written in the transaction that writes the session
   (`outbound/postgres/source.rs`). It holds references only, as
