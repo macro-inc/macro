@@ -179,3 +179,34 @@ fn sliced_copy_runs_clone_and_export_hooks_on_ephemeral_text() -> Result<(), Err
     })?;
     Ok(())
 }
+
+#[cfg(feature = "html")]
+#[test]
+fn html_clipboard_uses_selected_slice_and_default_mime_order() -> Result<(), Error> {
+    let mut editor = Editor::builder(EditorMode::Headless).build().unwrap();
+    editor.update(|tx| {
+        let p = tx.create(Paragraph {})?;
+        let text = tx.create_text("abcd")?;
+        tx.append(p, &[text.key()])?;
+        tx.append(NodeKey::ROOT, &[p.key()])?;
+        let selection = Selection::Range(RangeSelection::new(
+            Point::text(text, Utf16Offset(1)),
+            Point::text(text, Utf16Offset(3)),
+        ));
+        let data = get_clipboard_data_from_selection(tx.view(), "test", Some(&selection))?;
+        assert_eq!(
+            data.keys().copied().collect::<Vec<_>>(),
+            vec![MIME_PLAIN, MIME_HTML, MIME_LEXICAL]
+        );
+        assert_eq!(
+            data[MIME_HTML],
+            "<span style=\"white-space:pre-wrap\">bc</span>"
+        );
+        let collapsed =
+            Selection::Range(RangeSelection::collapsed(Point::text(text, Utf16Offset(1))));
+        let data = get_clipboard_data_from_selection(tx.view(), "test", Some(&collapsed))?;
+        assert_eq!(data[MIME_HTML], "");
+        Ok(())
+    })?;
+    Ok(())
+}

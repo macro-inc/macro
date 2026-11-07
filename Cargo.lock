@@ -11780,6 +11780,7 @@ dependencies = [
  "nom 8.0.0",
  "regress",
  "serde",
+ "serde_json",
  "thiserror 2.0.18",
 ]
 
@@ -11819,6 +11820,7 @@ version = "0.1.0"
 dependencies = [
  "bitflags 2.11.1",
  "indexmap 2.14.0",
+ "lexical_html",
  "lexical_model",
  "phf 0.13.1",
  "regress",

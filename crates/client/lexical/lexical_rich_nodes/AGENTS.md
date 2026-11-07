@@ -3,8 +3,8 @@
 ## What it is
 
 Portable model halves of Lexical v0.45.0 rich/plain text, lists, links/autolinks, tables,
-code, marks, selection, tree, offset and clipboard behavior. DOM and layout stay
-in views.
+code, marks, selection, tree, offset and clipboard behavior. The optional `html`
+feature exports owned HTML; browser DOM import and layout stay in views.
 
 ## Boundaries
 
@@ -13,7 +13,7 @@ in views.
 - `code::line`, `code::plain` and `code::language` own line navigation, LF/tab splitting and language catalogs.
 - Keep selection CSS parsing ordered and uncached; detached style inputs differ from active selected text.
 - Use mutation-safe child cursors; collect snapshot DFS results before editing.
-- `clipboard` consumes host MIME strings and HTML nodes; HTML export belongs to WP-24.
+- `clipboard` consumes host MIME strings and HTML nodes; enable `html` for selection HTML export.
 - Depends on model, regex, URL, ordered maps, language tables and tracing facades; no I/O or runtime.
 - Keep this client crate excluded from workspace-hack.
 - Keep block-only registration separate from opt-in transforms and plugins.
@@ -41,3 +41,7 @@ in views.
 
 Port model assertions from upstream as explicit literal tests in sibling
 `test.rs` files. Keep the upstream mapping and view-only exclusions in README.md.
+
+Regenerate pinned export goldens from the repository root with
+`bun crates/client/lexical/lexical_rich_nodes/tools/html-oracle.mts`;
+`cargo test -p lexical_rich_nodes --all-features --test html_oracle -j4` compares them.
