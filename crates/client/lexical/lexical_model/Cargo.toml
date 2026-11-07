@@ -6,6 +6,7 @@ publish = false
 
 [features]
 bench-counters = []
+model-segmentation = ["dep:unicode-segmentation"]
 
 [dependencies]
 imbl = { workspace = true }
@@ -18,3 +19,4 @@ bitflags = { workspace = true }
 strum = { workspace = true }
 nom = { workspace = true }
 ryu-js = { workspace = true }
+unicode-segmentation = { workspace = true, optional = true }

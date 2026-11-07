@@ -472,3 +472,8 @@ mod test;
 
 mod delete;
 mod insert;
+mod modify;
+
+pub use modify::{Alter, Granularity, ModifyTarget};
+
+mod emoji;
