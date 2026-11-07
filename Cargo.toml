@@ -4,6 +4,7 @@ resolver = "2"
 exclude = ["vendor"]
 
 members = [
+  "crates/client/document_session",
   "crates/client/lexical/lexical_loro",
   "crates/client/lexical/lexical_model",
   "crates/client/lexical/lexical_html",
@@ -232,6 +233,7 @@ members = [
 ignored = ["quick-xml", "rand_chacha", "lexical_node_id"]
 
 [workspace.dependencies]
+lexical_loro = { path = "crates/client/lexical/lexical_loro" }
 phf = { version = "0.13.1", features = ["macros"] }
 lexical_model = { path = "crates/client/lexical/lexical_model" }
 lexical_rich_nodes = { path = "crates/client/lexical/lexical_rich_nodes" }
