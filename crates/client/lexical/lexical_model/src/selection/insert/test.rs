@@ -484,3 +484,26 @@ fn element_start_transfers_before_resolving_the_end_boundary() -> Result<(), Err
     assert_eq!(editor.state().root_text_content().as_ref(), "\u{feff}\t");
     Ok(())
 }
+
+#[test]
+fn splitting_text_resolves_parent_selection_and_dirties_original_neighbors() -> Result<(), Error> {
+    let mut editor = Editor::builder(EditorMode::Headless).build().unwrap();
+    let ((p, text, neighbor), _) = editor.update(|tx| {
+        let p = tx.create(Paragraph::default())?;
+        let text = tx.create_text("abc")?;
+        let neighbor = tx.create(LineBreak::default())?;
+        tx.append(p, &[text.key(), neighbor.key()])?;
+        tx.append(NodeKey::ROOT, &[p.key()])?;
+        Ok((p.key(), text.key(), neighbor.key()))
+    })?;
+    let (_, commit) = editor.update(|tx| {
+        tx.set_selection(Some(Selection::Range(RangeSelection::new(
+            Point::element(p, ChildIndex(1)), Point::text(text, Utf16Offset(2)),
+        ))))?;
+        tx.text(text)?.split_text(&[Utf16Offset(2)])?;
+        assert_eq!(tx.anchor()?, Point::element(p, ChildIndex(2)));
+        Ok(())
+    })?;
+    assert!(commit.changes.dirty_leaves.contains(&neighbor));
+    Ok(())
+}
