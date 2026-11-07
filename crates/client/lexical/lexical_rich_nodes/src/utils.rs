@@ -72,5 +72,9 @@ pub(crate) fn lift_to_nearest_root(
     Ok(())
 }
 
+/// Pinned linkify-it domain/email/protocol recognition.
+pub mod linkify;
+/// Shared UTF-16 match arrays and stateless regex/synthetic matching.
+pub mod matcher;
 #[cfg(test)]
 mod test;

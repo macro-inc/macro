@@ -42,6 +42,9 @@ pub(crate) fn call(r: &mut Replayer, tx: &mut Transaction<'_>, op: &Value) -> Re
     if receiver.get("$node").is_some() {
         return super::nodes::call(r, tx, &receiver, short, a);
     }
+    if name.starts_with("@lexical/link.") {
+        return super::rich::call(r, tx, name, a);
+    }
     match name {
         "@lexical/utils.$insertNodeIntoLeaf" => {
             lexical_rich_nodes::utils::insert_node_into_leaf(

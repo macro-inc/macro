@@ -76,3 +76,7 @@ pub use diff::*;
 
 mod core;
 pub use core::*;
+
+#[cfg(test)]
+#[path = "event/test.rs"]
+mod event_test;
