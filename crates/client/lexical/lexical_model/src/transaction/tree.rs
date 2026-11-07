@@ -220,6 +220,12 @@ impl Transaction<'_> {
         result.extend_from_slice(nodes);
         result.extend(after);
         for key in nodes {
+            if let Some(source) = self.parent(*key)
+                && source != parent
+                && let Some(index) = self.index_within_parent(*key)
+            {
+                self.adjust_splice_selection(source, index.0, 1, 0, &[]);
+            }
             self.remove_from_parent(*key)?;
         }
         for key in &old {
@@ -233,13 +239,15 @@ impl Transaction<'_> {
             .copied()
             .filter(|key| !result.contains(key))
             .collect();
-        self.adjust_splice_selection(
-            parent,
-            start as u32,
-            delete_count,
-            nodes.len() as u32,
-            &removed,
-        );
+        if result != old {
+            self.adjust_splice_selection(
+                parent,
+                start as u32,
+                delete_count,
+                nodes.len() as u32,
+                &removed,
+            );
+        }
         if result.is_empty()
             && !self.can_be_empty(parent)
             && !self.is_root_or_shadow_root(parent)
@@ -484,6 +492,8 @@ impl Transaction<'_> {
     /// Remove all children through their virtual remove hooks.
     pub fn clear(&mut self, element: impl Into<NodeKey>) -> Result<(), Error> {
         self.guard_write()?;
+        let element = element.into();
+        self.writable(element)?;
         let children = self.children_keys(element)?;
         for key in children {
             self.remove(key, true)?;
