@@ -30,10 +30,15 @@ impl Caret {
                 (key, Kind::Child)
             }
             Point::Element { key, offset } => {
-                let child = view
-                    .child_at_index(key, ChildIndex(offset.0 - 1))
-                    .ok_or(Error::SpliceOutOfRange)?;
-                (child, Kind::Sibling)
+                let offset = offset.0.min(view.element_data(key)?.children_size());
+                if offset == 0 {
+                    (key, Kind::Child)
+                } else {
+                    let child = view
+                        .child_at_index(key, ChildIndex(offset - 1))
+                        .ok_or(Error::SpliceOutOfRange)?;
+                    (child, Kind::Sibling)
+                }
             }
         };
         Ok(Self {

@@ -37,6 +37,7 @@ impl<'state> StateRef<'state> {
             }
             Point::Element { key, offset } => {
                 self.element_data(key)?;
+                let offset = ChildIndex(offset.0.min(self.children_size(key)));
                 if offset.0 == 0 {
                     Ok(Boundary::Child(key))
                 } else {
