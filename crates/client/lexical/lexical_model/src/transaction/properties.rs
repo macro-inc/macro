@@ -555,12 +555,12 @@ impl TextMut<'_, '_> {
         self.set_text_content(&text)?;
         if let Some(Selection::Range(range)) = &mut self.tx.pending.selection {
             for point in [&mut range.anchor, &mut range.focus] {
-                if let Point::Text { key, offset } = point {
-                    if *key == target {
-                        *key = self.key;
-                        if !before {
-                            *offset = *offset + own_len;
-                        }
+                if let Point::Text { key, offset } = point
+                    && *key == target
+                {
+                    *key = self.key;
+                    if !before {
+                        *offset = *offset + own_len;
                     }
                 }
             }
