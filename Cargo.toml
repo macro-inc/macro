@@ -211,6 +211,7 @@ members = [
   "crates/platform/single_flight",
   "crates/platform/upstream_error",
   "crates/platform/user_events",
+  "crates/platform/worker_rs_otel",
   "crates/predicate_index",
   "crates/projects/initiative",
   "crates/projects/initiative_description",
@@ -266,7 +267,6 @@ members = [
   "crates/whatsapp/whatsmeow",
   "crates/whatsapp/whatsmeow_proto",
   "crates/whatsapp/whatsmeow_signal",
-  "crates/worker_rs_otel",
   "crates/workspace-hack",
   "services/agent_harness_service",
   "services/agent_harness_service/load-test",
@@ -923,8 +923,8 @@ microsoft_login_page_url = { path = "crates/platform/service_urls/microsoft_logi
 microsoft_login_url = { path = "crates/platform/service_urls/microsoft_login_url" }
 mobile_welcome_email_db_client = { path = "crates/accounts/mobile_welcome_email_db_client" }
 model = { path = "crates/types/model" }
-model_entity = { path = "crates/model_entity" }
-model_error_response = { path = "crates/model_error_response" }
+model_entity = { path = "crates/types/model_entity" }
+model_error_response = { path = "crates/types/model_error_response" }
 model_file_type = { path = "crates/types/model_file_type" }
 model_notifications = { path = "crates/notifications/model_notifications" }
 model_owner = { path = "crates/types/model_owner" }
@@ -1057,7 +1057,7 @@ whatsmeow = { path = "crates/whatsapp/whatsmeow" }
 whatsmeow_proto = { path = "crates/whatsapp/whatsmeow_proto" }
 whatsmeow_signal = { path = "crates/whatsapp/whatsmeow_signal" }
 work_feed = { path = "crates/search/work_feed" }
-worker_rs_otel = { path = "crates/worker_rs_otel" }
+worker_rs_otel = { path = "crates/platform/worker_rs_otel" }
 xtask_graph = { path = "tooling/xtask/crates/xtask_graph" }
 xtask_local_telemetry = { path = "tooling/xtask/crates/xtask_local_telemetry" }
 xtask_paths = { path = "tooling/xtask/crates/xtask_paths" }

@@ -31,3 +31,4 @@ crates/stream crates/platform/stream
 crates/upstream_error crates/platform/upstream_error
 crates/user_events crates/platform/user_events
 crates/pinned_tls crates/platform/pinned_tls
+crates/worker_rs_otel crates/platform/worker_rs_otel

@@ -18,8 +18,6 @@ ignore = ["crates/workspace-hack"]
 name = "types"
 paths = [
   "crates/types/**",
-  "crates/model_entity",
-  "crates/model_error_response",
 ]
 may_depend_on = ["types"]
 
@@ -28,7 +26,6 @@ may_depend_on = ["types"]
 name = "platform"
 paths = [
   "crates/platform/**",
-  "crates/worker_rs_otel",
 ]
 may_depend_on = ["types", "platform"]
 
