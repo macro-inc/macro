@@ -1,0 +1,3087 @@
+{
+  "schema": 2,
+  "source": {
+    "repo": "macro",
+    "version": "0.45.0",
+    "file": "packages/lexical-core/tests/agent-chat-reply.test.ts",
+    "test": [
+      "composeAgentChatReply with segments",
+      "shows a running thread reply working once: by its open steps, or else the spinner"
+    ],
+    "recordedWith": "lexical-conformance@a5df4931fde86372f78efe37be5b2166dd88bc6156e4610da787b770aa0f5f7e"
+  },
+  "tier": "A-rec",
+  "partial": false,
+  "covers": [],
+  "normalize": [
+    "listIndent: 2"
+  ],
+  "outcomeDiffers": [],
+  "config": {},
+  "initial": {
+    "editorState": null,
+    "selection": null
+  },
+  "trace": [
+    {
+      "op": "call",
+      "fn": "@macro-inc/lexical-core/utils/agent-chat-reply.composeAgentChatReply",
+      "args": [
+        {
+          "sessionId": "00000000-0000-0000-0000-00000000000a",
+          "body": {
+            "kind": "segments",
+            "segments": [
+              {
+                "kind": "activity",
+                "turn": 0,
+                "segment": 0,
+                "rows": [
+                  {
+                    "id": "t1",
+                    "label": "Ran",
+                    "detail": "cargo test",
+                    "status": "completed"
+                  },
+                  {
+                    "id": "t2",
+                    "label": "Reading",
+                    "status": "running"
+                  }
+                ],
+                "sealed": false
+              }
+            ],
+            "pending": true
+          }
+        }
+      ],
+      "ret": "<m-agent-session-mention>{\"id\":\"00000000-0000-0000-0000-00000000000a\",\"label\":\"Agent session\"}</m-agent-session-mention>\n\n<m-agent-activity>{\"agentSessionId\":\"00000000-0000-0000-0000-00000000000a\",\"turn\":0,\"segment\":0,\"rows\":[{\"id\":\"t1\",\"label\":\"Ran\",\"status\":\"completed\",\"detail\":\"cargo test\"},{\"id\":\"t2\",\"label\":\"Reading\",\"status\":\"running\"}],\"sealed\":false}</m-agent-activity>"
+    },
+    {
+      "op": "entropy",
+      "src": "random",
+      "v": 0.23645552527159452
+    },
+    {
+      "op": "entropy",
+      "src": "random",
+      "v": 0.3692706737201661
+    },
+    {
+      "op": "entropy",
+      "src": "random",
+      "v": 0.5042420323006809
+    },
+    {
+      "op": "entropy",
+      "src": "random",
+      "v": 0.7048832636792213
+    },
+    {
+      "op": "call",
+      "fn": "@macro-inc/lexical-core/utils/markdown-state.markdownToSerializedEditorStateWithIds",
+      "args": [
+        "<m-agent-session-mention>{\"id\":\"00000000-0000-0000-0000-00000000000a\",\"label\":\"Agent session\"}</m-agent-session-mention>\n\n<m-agent-activity>{\"agentSessionId\":\"00000000-0000-0000-0000-00000000000a\",\"turn\":0,\"segment\":0,\"rows\":[{\"id\":\"t1\",\"label\":\"Ran\",\"status\":\"completed\",\"detail\":\"cargo test\"},{\"id\":\"t2\",\"label\":\"Reading\",\"status\":\"running\"}],\"sealed\":false}</m-agent-activity>"
+      ],
+      "ret": {
+        "root": {
+          "children": [
+            {
+              "children": [
+                {
+                  "type": "agent-session-mention",
+                  "version": 3,
+                  "$": {
+                    "id": "uaI5kI0P"
+                  },
+                  "id": "00000000-0000-0000-0000-00000000000a",
+                  "label": "Agent session",
+                  "mentionUuid": {
+                    "$undef": true
+                  }
+                }
+              ],
+              "direction": null,
+              "format": "",
+              "indent": 0,
+              "type": "paragraph",
+              "version": 1,
+              "$": {
+                "id": "Cq-QXVzr"
+              },
+              "textFormat": 0,
+              "textStyle": ""
+            },
+            {
+              "type": "agent-activity",
+              "version": 1,
+              "$": {
+                "id": "cq1Dz5GQ"
+              },
+              "agentSessionId": "00000000-0000-0000-0000-00000000000a",
+              "turn": 0,
+              "segment": 0,
+              "rows": [
+                {
+                  "id": "t1",
+                  "label": "Ran",
+                  "status": "completed",
+                  "detail": "cargo test"
+                },
+                {
+                  "id": "t2",
+                  "label": "Reading",
+                  "status": "running"
+                }
+              ],
+              "sealed": false
+            }
+          ],
+          "direction": null,
+          "format": "",
+          "indent": 0,
+          "type": "root",
+          "version": 1,
+          "$": {
+            "id": "px_uDn8o"
+          }
+        }
+      }
+    },
+    {
+      "op": "entropy",
+      "src": "random",
+      "v": 0.05054362863302231
+    },
+    {
+      "op": "entropy",
+      "src": "random",
+      "v": 0.3695183543022722
+    },
+    {
+      "op": "entropy",
+      "src": "getRandomValues",
+      "v": [
+        198,
+        142,
+        4,
+        163,
+        64,
+        108,
+        151,
+        214
+      ]
+    },
+    {
+      "op": "entropy",
+      "src": "getRandomValues",
+      "v": [
+        60,
+        251,
+        220,
+        83,
+        174,
+        136,
+        55,
+        26
+      ]
+    },
+    {
+      "op": "entropy",
+      "src": "getRandomValues",
+      "v": [
+        18,
+        81,
+        33,
+        181,
+        149,
+        97,
+        67,
+        192
+      ]
+    },
+    {
+      "op": "entropy",
+      "src": "getRandomValues",
+      "v": [
+        238,
+        45,
+        85,
+        251,
+        99,
+        140,
+        119,
+        254
+      ]
+    },
+    {
+      "op": "call",
+      "fn": "get:root",
+      "this": {
+        "root": {
+          "children": [
+            {
+              "children": [
+                {
+                  "type": "agent-session-mention",
+                  "version": 3,
+                  "$": {
+                    "id": "uaI5kI0P"
+                  },
+                  "id": "00000000-0000-0000-0000-00000000000a",
+                  "label": "Agent session",
+                  "mentionUuid": {
+                    "$undef": true
+                  }
+                }
+              ],
+              "direction": null,
+              "format": "",
+              "indent": 0,
+              "type": "paragraph",
+              "version": 1,
+              "$": {
+                "id": "Cq-QXVzr"
+              },
+              "textFormat": 0,
+              "textStyle": ""
+            },
+            {
+              "type": "agent-activity",
+              "version": 1,
+              "$": {
+                "id": "cq1Dz5GQ"
+              },
+              "agentSessionId": "00000000-0000-0000-0000-00000000000a",
+              "turn": 0,
+              "segment": 0,
+              "rows": [
+                {
+                  "id": "t1",
+                  "label": "Ran",
+                  "status": "completed",
+                  "detail": "cargo test"
+                },
+                {
+                  "id": "t2",
+                  "label": "Reading",
+                  "status": "running"
+                }
+              ],
+              "sealed": false
+            }
+          ],
+          "direction": null,
+          "format": "",
+          "indent": 0,
+          "type": "root",
+          "version": 1,
+          "$": {
+            "id": "px_uDn8o"
+          }
+        }
+      },
+      "args": [],
+      "ret": {
+        "children": [
+          {
+            "children": [
+              {
+                "type": "agent-session-mention",
+                "version": 3,
+                "$": {
+                  "id": "uaI5kI0P"
+                },
+                "id": "00000000-0000-0000-0000-00000000000a",
+                "label": "Agent session",
+                "mentionUuid": {
+                  "$undef": true
+                }
+              }
+            ],
+            "direction": null,
+            "format": "",
+            "indent": 0,
+            "type": "paragraph",
+            "version": 1,
+            "$": {
+              "id": "Cq-QXVzr"
+            },
+            "textFormat": 0,
+            "textStyle": ""
+          },
+          {
+            "type": "agent-activity",
+            "version": 1,
+            "$": {
+              "id": "cq1Dz5GQ"
+            },
+            "agentSessionId": "00000000-0000-0000-0000-00000000000a",
+            "turn": 0,
+            "segment": 0,
+            "rows": [
+              {
+                "id": "t1",
+                "label": "Ran",
+                "status": "completed",
+                "detail": "cargo test"
+              },
+              {
+                "id": "t2",
+                "label": "Reading",
+                "status": "running"
+              }
+            ],
+            "sealed": false
+          }
+        ],
+        "direction": null,
+        "format": "",
+        "indent": 0,
+        "type": "root",
+        "version": 1,
+        "$": {
+          "id": "px_uDn8o"
+        }
+      }
+    },
+    {
+      "op": "call",
+      "fn": "get:children",
+      "this": {
+        "children": [
+          {
+            "children": [
+              {
+                "type": "agent-session-mention",
+                "version": 3,
+                "$": {
+                  "id": "uaI5kI0P"
+                },
+                "id": "00000000-0000-0000-0000-00000000000a",
+                "label": "Agent session",
+                "mentionUuid": {
+                  "$undef": true
+                }
+              }
+            ],
+            "direction": null,
+            "format": "",
+            "indent": 0,
+            "type": "paragraph",
+            "version": 1,
+            "$": {
+              "id": "Cq-QXVzr"
+            },
+            "textFormat": 0,
+            "textStyle": ""
+          },
+          {
+            "type": "agent-activity",
+            "version": 1,
+            "$": {
+              "id": "cq1Dz5GQ"
+            },
+            "agentSessionId": "00000000-0000-0000-0000-00000000000a",
+            "turn": 0,
+            "segment": 0,
+            "rows": [
+              {
+                "id": "t1",
+                "label": "Ran",
+                "status": "completed",
+                "detail": "cargo test"
+              },
+              {
+                "id": "t2",
+                "label": "Reading",
+                "status": "running"
+              }
+            ],
+            "sealed": false
+          }
+        ],
+        "direction": null,
+        "format": "",
+        "indent": 0,
+        "type": "root",
+        "version": 1,
+        "$": {
+          "id": "px_uDn8o"
+        }
+      },
+      "args": [],
+      "ret": [
+        {
+          "children": [
+            {
+              "type": "agent-session-mention",
+              "version": 3,
+              "$": {
+                "id": "uaI5kI0P"
+              },
+              "id": "00000000-0000-0000-0000-00000000000a",
+              "label": "Agent session",
+              "mentionUuid": {
+                "$undef": true
+              }
+            }
+          ],
+          "direction": null,
+          "format": "",
+          "indent": 0,
+          "type": "paragraph",
+          "version": 1,
+          "$": {
+            "id": "Cq-QXVzr"
+          },
+          "textFormat": 0,
+          "textStyle": ""
+        },
+        {
+          "type": "agent-activity",
+          "version": 1,
+          "$": {
+            "id": "cq1Dz5GQ"
+          },
+          "agentSessionId": "00000000-0000-0000-0000-00000000000a",
+          "turn": 0,
+          "segment": 0,
+          "rows": [
+            {
+              "id": "t1",
+              "label": "Ran",
+              "status": "completed",
+              "detail": "cargo test"
+            },
+            {
+              "id": "t2",
+              "label": "Reading",
+              "status": "running"
+            }
+          ],
+          "sealed": false
+        }
+      ]
+    },
+    {
+      "op": "call",
+      "fn": "get:type",
+      "this": {
+        "children": [
+          {
+            "type": "agent-session-mention",
+            "version": 3,
+            "$": {
+              "id": "uaI5kI0P"
+            },
+            "id": "00000000-0000-0000-0000-00000000000a",
+            "label": "Agent session",
+            "mentionUuid": {
+              "$undef": true
+            }
+          }
+        ],
+        "direction": null,
+        "format": "",
+        "indent": 0,
+        "type": "paragraph",
+        "version": 1,
+        "$": {
+          "id": "Cq-QXVzr"
+        },
+        "textFormat": 0,
+        "textStyle": ""
+      },
+      "args": [],
+      "ret": "paragraph"
+    },
+    {
+      "op": "call",
+      "fn": "get:children",
+      "this": {
+        "children": [
+          {
+            "type": "agent-session-mention",
+            "version": 3,
+            "$": {
+              "id": "uaI5kI0P"
+            },
+            "id": "00000000-0000-0000-0000-00000000000a",
+            "label": "Agent session",
+            "mentionUuid": {
+              "$undef": true
+            }
+          }
+        ],
+        "direction": null,
+        "format": "",
+        "indent": 0,
+        "type": "paragraph",
+        "version": 1,
+        "$": {
+          "id": "Cq-QXVzr"
+        },
+        "textFormat": 0,
+        "textStyle": ""
+      },
+      "args": [],
+      "ret": [
+        {
+          "type": "agent-session-mention",
+          "version": 3,
+          "$": {
+            "id": "uaI5kI0P"
+          },
+          "id": "00000000-0000-0000-0000-00000000000a",
+          "label": "Agent session",
+          "mentionUuid": {
+            "$undef": true
+          }
+        }
+      ]
+    },
+    {
+      "op": "call",
+      "fn": "get:0",
+      "this": [
+        {
+          "type": "agent-session-mention",
+          "version": 3,
+          "$": {
+            "id": "uaI5kI0P"
+          },
+          "id": "00000000-0000-0000-0000-00000000000a",
+          "label": "Agent session",
+          "mentionUuid": {
+            "$undef": true
+          }
+        }
+      ],
+      "args": [],
+      "ret": {
+        "type": "agent-session-mention",
+        "version": 3,
+        "$": {
+          "id": "uaI5kI0P"
+        },
+        "id": "00000000-0000-0000-0000-00000000000a",
+        "label": "Agent session",
+        "mentionUuid": {
+          "$undef": true
+        }
+      }
+    },
+    {
+      "op": "call",
+      "fn": "get:type",
+      "this": {
+        "type": "agent-session-mention",
+        "version": 3,
+        "$": {
+          "id": "uaI5kI0P"
+        },
+        "id": "00000000-0000-0000-0000-00000000000a",
+        "label": "Agent session",
+        "mentionUuid": {
+          "$undef": true
+        }
+      },
+      "args": [],
+      "ret": "agent-session-mention"
+    },
+    {
+      "op": "call",
+      "fn": "get:type",
+      "this": {
+        "type": "agent-activity",
+        "version": 1,
+        "$": {
+          "id": "cq1Dz5GQ"
+        },
+        "agentSessionId": "00000000-0000-0000-0000-00000000000a",
+        "turn": 0,
+        "segment": 0,
+        "rows": [
+          {
+            "id": "t1",
+            "label": "Ran",
+            "status": "completed",
+            "detail": "cargo test"
+          },
+          {
+            "id": "t2",
+            "label": "Reading",
+            "status": "running"
+          }
+        ],
+        "sealed": false
+      },
+      "args": [],
+      "ret": "agent-activity"
+    },
+    {
+      "op": "call",
+      "fn": "get:type",
+      "this": {
+        "type": "agent-activity",
+        "version": 1,
+        "$": {
+          "id": "cq1Dz5GQ"
+        },
+        "agentSessionId": "00000000-0000-0000-0000-00000000000a",
+        "turn": 0,
+        "segment": 0,
+        "rows": [
+          {
+            "id": "t1",
+            "label": "Ran",
+            "status": "completed",
+            "detail": "cargo test"
+          },
+          {
+            "id": "t2",
+            "label": "Reading",
+            "status": "running"
+          }
+        ],
+        "sealed": false
+      },
+      "args": [],
+      "ret": "agent-activity"
+    },
+    {
+      "op": "call",
+      "fn": "@macro-inc/lexical-core/utils/agent-chat-reply.composeAgentChatReply",
+      "args": [
+        {
+          "sessionId": "00000000-0000-0000-0000-00000000000a",
+          "body": {
+            "kind": "segments",
+            "segments": [
+              {
+                "kind": "activity",
+                "turn": 0,
+                "segment": 0,
+                "rows": [
+                  {
+                    "id": "t1",
+                    "label": "Ran",
+                    "detail": "cargo test",
+                    "status": "completed"
+                  },
+                  {
+                    "id": "t2",
+                    "label": "Reading",
+                    "status": "running"
+                  }
+                ],
+                "sealed": true
+              },
+              {
+                "kind": "prose",
+                "markdown": "On it."
+              }
+            ],
+            "pending": true
+          }
+        }
+      ],
+      "ret": "<m-agent-session-mention>{\"id\":\"00000000-0000-0000-0000-00000000000a\",\"label\":\"Agent session\"}</m-agent-session-mention>\n\n<m-agent-activity>{\"agentSessionId\":\"00000000-0000-0000-0000-00000000000a\",\"turn\":0,\"segment\":0,\"rows\":[{\"id\":\"t1\",\"label\":\"Ran\",\"status\":\"completed\",\"detail\":\"cargo test\"},{\"id\":\"t2\",\"label\":\"Reading\",\"status\":\"running\"}],\"sealed\":true}</m-agent-activity>\n\nOn it.\n\n<m-await>{\"awaitId\":\"UW3IJTNo7zhn7Yx_cOZYH\",\"text\":\"Thinking…\",\"inline\":true}</m-await>"
+    },
+    {
+      "op": "entropy",
+      "src": "random",
+      "v": 0.8750469204969704
+    },
+    {
+      "op": "entropy",
+      "src": "random",
+      "v": 0.7114081925246865
+    },
+    {
+      "op": "entropy",
+      "src": "random",
+      "v": 0.9577301265671849
+    },
+    {
+      "op": "entropy",
+      "src": "random",
+      "v": 0.9749922163318843
+    },
+    {
+      "op": "entropy",
+      "src": "getRandomValues",
+      "v": [
+        39,
+        95,
+        175,
+        41,
+        126,
+        44,
+        151,
+        223,
+        84,
+        4,
+        243,
+        59,
+        212,
+        6,
+        98,
+        11,
+        88,
+        33,
+        207,
+        104,
+        37
+      ]
+    },
+    {
+      "op": "entropy",
+      "src": "random",
+      "v": 0.6109806450549513
+    },
+    {
+      "op": "entropy",
+      "src": "random",
+      "v": 0.7942780656740069
+    },
+    {
+      "op": "call",
+      "fn": "@macro-inc/lexical-core/utils/markdown-state.markdownToSerializedEditorStateWithIds",
+      "args": [
+        "<m-agent-session-mention>{\"id\":\"00000000-0000-0000-0000-00000000000a\",\"label\":\"Agent session\"}</m-agent-session-mention>\n\n<m-agent-activity>{\"agentSessionId\":\"00000000-0000-0000-0000-00000000000a\",\"turn\":0,\"segment\":0,\"rows\":[{\"id\":\"t1\",\"label\":\"Ran\",\"status\":\"completed\",\"detail\":\"cargo test\"},{\"id\":\"t2\",\"label\":\"Reading\",\"status\":\"running\"}],\"sealed\":true}</m-agent-activity>\n\nOn it.\n\n<m-await>{\"awaitId\":\"UW3IJTNo7zhn7Yx_cOZYH\",\"text\":\"Thinking…\",\"inline\":true}</m-await>"
+      ],
+      "ret": {
+        "root": {
+          "children": [
+            {
+              "children": [
+                {
+                  "type": "agent-session-mention",
+                  "version": 3,
+                  "$": {
+                    "id": "Ooopg4F9"
+                  },
+                  "id": "00000000-0000-0000-0000-00000000000a",
+                  "label": "Agent session",
+                  "mentionUuid": {
+                    "$undef": true
+                  }
+                }
+              ],
+              "direction": null,
+              "format": "",
+              "indent": 0,
+              "type": "paragraph",
+              "version": 1,
+              "$": {
+                "id": "27NtSULi"
+              },
+              "textFormat": 0,
+              "textStyle": ""
+            },
+            {
+              "type": "agent-activity",
+              "version": 1,
+              "$": {
+                "id": "ftOdCQQb"
+              },
+              "agentSessionId": "00000000-0000-0000-0000-00000000000a",
+              "turn": 0,
+              "segment": 0,
+              "rows": [
+                {
+                  "id": "t1",
+                  "label": "Ran",
+                  "status": "completed",
+                  "detail": "cargo test"
+                },
+                {
+                  "id": "t2",
+                  "label": "Reading",
+                  "status": "running"
+                }
+              ],
+              "sealed": true
+            },
+            {
+              "children": [
+                {
+                  "detail": 0,
+                  "format": 0,
+                  "mode": "normal",
+                  "style": "",
+                  "text": "On it.",
+                  "type": "text",
+                  "version": 1,
+                  "$": {
+                    "id": "yzXEudcq"
+                  }
+                }
+              ],
+              "direction": null,
+              "format": "",
+              "indent": 0,
+              "type": "paragraph",
+              "version": 1,
+              "$": {
+                "id": "T7OAu-xt"
+              },
+              "textFormat": 0,
+              "textStyle": ""
+            },
+            {
+              "children": [
+                {
+                  "type": "await",
+                  "version": 1,
+                  "$": {
+                    "id": "jw3n3feX"
+                  },
+                  "awaitId": "UW3IJTNo7zhn7Yx_cOZYH",
+                  "text": "Thinking…",
+                  "inline": true
+                }
+              ],
+              "direction": null,
+              "format": "",
+              "indent": 0,
+              "type": "paragraph",
+              "version": 1,
+              "$": {
+                "id": "bRAhMvr1"
+              },
+              "textFormat": 0,
+              "textStyle": ""
+            }
+          ],
+          "direction": null,
+          "format": "",
+          "indent": 0,
+          "type": "root",
+          "version": 1,
+          "$": {
+            "id": "zqFBj9tm"
+          }
+        }
+      }
+    },
+    {
+      "op": "entropy",
+      "src": "random",
+      "v": 0.9333339992444962
+    },
+    {
+      "op": "entropy",
+      "src": "random",
+      "v": 0.011160417925566435
+    },
+    {
+      "op": "entropy",
+      "src": "getRandomValues",
+      "v": [
+        7,
+        255,
+        205,
+        116,
+        100,
+        171,
+        247,
+        187
+      ]
+    },
+    {
+      "op": "entropy",
+      "src": "getRandomValues",
+      "v": [
+        125,
+        106,
+        37,
+        230,
+        191,
+        162,
+        148,
+        137
+      ]
+    },
+    {
+      "op": "entropy",
+      "src": "getRandomValues",
+      "v": [
+        13,
+        107,
+        144,
+        242,
+        86,
+        198,
+        70,
+        233
+      ]
+    },
+    {
+      "op": "entropy",
+      "src": "getRandomValues",
+      "v": [
+        240,
+        110,
+        110,
+        90,
+        5,
+        169,
+        191,
+        113
+      ]
+    },
+    {
+      "op": "entropy",
+      "src": "getRandomValues",
+      "v": [
+        127,
+        215,
+        72,
+        0,
+        89,
+        169,
+        20,
+        75
+      ]
+    },
+    {
+      "op": "entropy",
+      "src": "getRandomValues",
+      "v": [
+        55,
+        62,
+        197,
+        128,
+        157,
+        147,
+        251,
+        122
+      ]
+    },
+    {
+      "op": "entropy",
+      "src": "getRandomValues",
+      "v": [
+        76,
+        252,
+        184,
+        160,
+        115,
+        153,
+        30,
+        240
+      ]
+    },
+    {
+      "op": "entropy",
+      "src": "getRandomValues",
+      "v": [
+        211,
+        2,
+        49,
+        143,
+        4,
+        143,
+        121,
+        116
+      ]
+    },
+    {
+      "op": "call",
+      "fn": "get:root",
+      "this": {
+        "root": {
+          "children": [
+            {
+              "children": [
+                {
+                  "type": "agent-session-mention",
+                  "version": 3,
+                  "$": {
+                    "id": "Ooopg4F9"
+                  },
+                  "id": "00000000-0000-0000-0000-00000000000a",
+                  "label": "Agent session",
+                  "mentionUuid": {
+                    "$undef": true
+                  }
+                }
+              ],
+              "direction": null,
+              "format": "",
+              "indent": 0,
+              "type": "paragraph",
+              "version": 1,
+              "$": {
+                "id": "27NtSULi"
+              },
+              "textFormat": 0,
+              "textStyle": ""
+            },
+            {
+              "type": "agent-activity",
+              "version": 1,
+              "$": {
+                "id": "ftOdCQQb"
+              },
+              "agentSessionId": "00000000-0000-0000-0000-00000000000a",
+              "turn": 0,
+              "segment": 0,
+              "rows": [
+                {
+                  "id": "t1",
+                  "label": "Ran",
+                  "status": "completed",
+                  "detail": "cargo test"
+                },
+                {
+                  "id": "t2",
+                  "label": "Reading",
+                  "status": "running"
+                }
+              ],
+              "sealed": true
+            },
+            {
+              "children": [
+                {
+                  "detail": 0,
+                  "format": 0,
+                  "mode": "normal",
+                  "style": "",
+                  "text": "On it.",
+                  "type": "text",
+                  "version": 1,
+                  "$": {
+                    "id": "yzXEudcq"
+                  }
+                }
+              ],
+              "direction": null,
+              "format": "",
+              "indent": 0,
+              "type": "paragraph",
+              "version": 1,
+              "$": {
+                "id": "T7OAu-xt"
+              },
+              "textFormat": 0,
+              "textStyle": ""
+            },
+            {
+              "children": [
+                {
+                  "type": "await",
+                  "version": 1,
+                  "$": {
+                    "id": "jw3n3feX"
+                  },
+                  "awaitId": "UW3IJTNo7zhn7Yx_cOZYH",
+                  "text": "Thinking…",
+                  "inline": true
+                }
+              ],
+              "direction": null,
+              "format": "",
+              "indent": 0,
+              "type": "paragraph",
+              "version": 1,
+              "$": {
+                "id": "bRAhMvr1"
+              },
+              "textFormat": 0,
+              "textStyle": ""
+            }
+          ],
+          "direction": null,
+          "format": "",
+          "indent": 0,
+          "type": "root",
+          "version": 1,
+          "$": {
+            "id": "zqFBj9tm"
+          }
+        }
+      },
+      "args": [],
+      "ret": {
+        "children": [
+          {
+            "children": [
+              {
+                "type": "agent-session-mention",
+                "version": 3,
+                "$": {
+                  "id": "Ooopg4F9"
+                },
+                "id": "00000000-0000-0000-0000-00000000000a",
+                "label": "Agent session",
+                "mentionUuid": {
+                  "$undef": true
+                }
+              }
+            ],
+            "direction": null,
+            "format": "",
+            "indent": 0,
+            "type": "paragraph",
+            "version": 1,
+            "$": {
+              "id": "27NtSULi"
+            },
+            "textFormat": 0,
+            "textStyle": ""
+          },
+          {
+            "type": "agent-activity",
+            "version": 1,
+            "$": {
+              "id": "ftOdCQQb"
+            },
+            "agentSessionId": "00000000-0000-0000-0000-00000000000a",
+            "turn": 0,
+            "segment": 0,
+            "rows": [
+              {
+                "id": "t1",
+                "label": "Ran",
+                "status": "completed",
+                "detail": "cargo test"
+              },
+              {
+                "id": "t2",
+                "label": "Reading",
+                "status": "running"
+              }
+            ],
+            "sealed": true
+          },
+          {
+            "children": [
+              {
+                "detail": 0,
+                "format": 0,
+                "mode": "normal",
+                "style": "",
+                "text": "On it.",
+                "type": "text",
+                "version": 1,
+                "$": {
+                  "id": "yzXEudcq"
+                }
+              }
+            ],
+            "direction": null,
+            "format": "",
+            "indent": 0,
+            "type": "paragraph",
+            "version": 1,
+            "$": {
+              "id": "T7OAu-xt"
+            },
+            "textFormat": 0,
+            "textStyle": ""
+          },
+          {
+            "children": [
+              {
+                "type": "await",
+                "version": 1,
+                "$": {
+                  "id": "jw3n3feX"
+                },
+                "awaitId": "UW3IJTNo7zhn7Yx_cOZYH",
+                "text": "Thinking…",
+                "inline": true
+              }
+            ],
+            "direction": null,
+            "format": "",
+            "indent": 0,
+            "type": "paragraph",
+            "version": 1,
+            "$": {
+              "id": "bRAhMvr1"
+            },
+            "textFormat": 0,
+            "textStyle": ""
+          }
+        ],
+        "direction": null,
+        "format": "",
+        "indent": 0,
+        "type": "root",
+        "version": 1,
+        "$": {
+          "id": "zqFBj9tm"
+        }
+      }
+    },
+    {
+      "op": "call",
+      "fn": "get:children",
+      "this": {
+        "children": [
+          {
+            "children": [
+              {
+                "type": "agent-session-mention",
+                "version": 3,
+                "$": {
+                  "id": "Ooopg4F9"
+                },
+                "id": "00000000-0000-0000-0000-00000000000a",
+                "label": "Agent session",
+                "mentionUuid": {
+                  "$undef": true
+                }
+              }
+            ],
+            "direction": null,
+            "format": "",
+            "indent": 0,
+            "type": "paragraph",
+            "version": 1,
+            "$": {
+              "id": "27NtSULi"
+            },
+            "textFormat": 0,
+            "textStyle": ""
+          },
+          {
+            "type": "agent-activity",
+            "version": 1,
+            "$": {
+              "id": "ftOdCQQb"
+            },
+            "agentSessionId": "00000000-0000-0000-0000-00000000000a",
+            "turn": 0,
+            "segment": 0,
+            "rows": [
+              {
+                "id": "t1",
+                "label": "Ran",
+                "status": "completed",
+                "detail": "cargo test"
+              },
+              {
+                "id": "t2",
+                "label": "Reading",
+                "status": "running"
+              }
+            ],
+            "sealed": true
+          },
+          {
+            "children": [
+              {
+                "detail": 0,
+                "format": 0,
+                "mode": "normal",
+                "style": "",
+                "text": "On it.",
+                "type": "text",
+                "version": 1,
+                "$": {
+                  "id": "yzXEudcq"
+                }
+              }
+            ],
+            "direction": null,
+            "format": "",
+            "indent": 0,
+            "type": "paragraph",
+            "version": 1,
+            "$": {
+              "id": "T7OAu-xt"
+            },
+            "textFormat": 0,
+            "textStyle": ""
+          },
+          {
+            "children": [
+              {
+                "type": "await",
+                "version": 1,
+                "$": {
+                  "id": "jw3n3feX"
+                },
+                "awaitId": "UW3IJTNo7zhn7Yx_cOZYH",
+                "text": "Thinking…",
+                "inline": true
+              }
+            ],
+            "direction": null,
+            "format": "",
+            "indent": 0,
+            "type": "paragraph",
+            "version": 1,
+            "$": {
+              "id": "bRAhMvr1"
+            },
+            "textFormat": 0,
+            "textStyle": ""
+          }
+        ],
+        "direction": null,
+        "format": "",
+        "indent": 0,
+        "type": "root",
+        "version": 1,
+        "$": {
+          "id": "zqFBj9tm"
+        }
+      },
+      "args": [],
+      "ret": [
+        {
+          "children": [
+            {
+              "type": "agent-session-mention",
+              "version": 3,
+              "$": {
+                "id": "Ooopg4F9"
+              },
+              "id": "00000000-0000-0000-0000-00000000000a",
+              "label": "Agent session",
+              "mentionUuid": {
+                "$undef": true
+              }
+            }
+          ],
+          "direction": null,
+          "format": "",
+          "indent": 0,
+          "type": "paragraph",
+          "version": 1,
+          "$": {
+            "id": "27NtSULi"
+          },
+          "textFormat": 0,
+          "textStyle": ""
+        },
+        {
+          "type": "agent-activity",
+          "version": 1,
+          "$": {
+            "id": "ftOdCQQb"
+          },
+          "agentSessionId": "00000000-0000-0000-0000-00000000000a",
+          "turn": 0,
+          "segment": 0,
+          "rows": [
+            {
+              "id": "t1",
+              "label": "Ran",
+              "status": "completed",
+              "detail": "cargo test"
+            },
+            {
+              "id": "t2",
+              "label": "Reading",
+              "status": "running"
+            }
+          ],
+          "sealed": true
+        },
+        {
+          "children": [
+            {
+              "detail": 0,
+              "format": 0,
+              "mode": "normal",
+              "style": "",
+              "text": "On it.",
+              "type": "text",
+              "version": 1,
+              "$": {
+                "id": "yzXEudcq"
+              }
+            }
+          ],
+          "direction": null,
+          "format": "",
+          "indent": 0,
+          "type": "paragraph",
+          "version": 1,
+          "$": {
+            "id": "T7OAu-xt"
+          },
+          "textFormat": 0,
+          "textStyle": ""
+        },
+        {
+          "children": [
+            {
+              "type": "await",
+              "version": 1,
+              "$": {
+                "id": "jw3n3feX"
+              },
+              "awaitId": "UW3IJTNo7zhn7Yx_cOZYH",
+              "text": "Thinking…",
+              "inline": true
+            }
+          ],
+          "direction": null,
+          "format": "",
+          "indent": 0,
+          "type": "paragraph",
+          "version": 1,
+          "$": {
+            "id": "bRAhMvr1"
+          },
+          "textFormat": 0,
+          "textStyle": ""
+        }
+      ]
+    },
+    {
+      "op": "call",
+      "fn": "get:type",
+      "this": {
+        "children": [
+          {
+            "type": "agent-session-mention",
+            "version": 3,
+            "$": {
+              "id": "Ooopg4F9"
+            },
+            "id": "00000000-0000-0000-0000-00000000000a",
+            "label": "Agent session",
+            "mentionUuid": {
+              "$undef": true
+            }
+          }
+        ],
+        "direction": null,
+        "format": "",
+        "indent": 0,
+        "type": "paragraph",
+        "version": 1,
+        "$": {
+          "id": "27NtSULi"
+        },
+        "textFormat": 0,
+        "textStyle": ""
+      },
+      "args": [],
+      "ret": "paragraph"
+    },
+    {
+      "op": "call",
+      "fn": "get:children",
+      "this": {
+        "children": [
+          {
+            "type": "agent-session-mention",
+            "version": 3,
+            "$": {
+              "id": "Ooopg4F9"
+            },
+            "id": "00000000-0000-0000-0000-00000000000a",
+            "label": "Agent session",
+            "mentionUuid": {
+              "$undef": true
+            }
+          }
+        ],
+        "direction": null,
+        "format": "",
+        "indent": 0,
+        "type": "paragraph",
+        "version": 1,
+        "$": {
+          "id": "27NtSULi"
+        },
+        "textFormat": 0,
+        "textStyle": ""
+      },
+      "args": [],
+      "ret": [
+        {
+          "type": "agent-session-mention",
+          "version": 3,
+          "$": {
+            "id": "Ooopg4F9"
+          },
+          "id": "00000000-0000-0000-0000-00000000000a",
+          "label": "Agent session",
+          "mentionUuid": {
+            "$undef": true
+          }
+        }
+      ]
+    },
+    {
+      "op": "call",
+      "fn": "get:0",
+      "this": [
+        {
+          "type": "agent-session-mention",
+          "version": 3,
+          "$": {
+            "id": "Ooopg4F9"
+          },
+          "id": "00000000-0000-0000-0000-00000000000a",
+          "label": "Agent session",
+          "mentionUuid": {
+            "$undef": true
+          }
+        }
+      ],
+      "args": [],
+      "ret": {
+        "type": "agent-session-mention",
+        "version": 3,
+        "$": {
+          "id": "Ooopg4F9"
+        },
+        "id": "00000000-0000-0000-0000-00000000000a",
+        "label": "Agent session",
+        "mentionUuid": {
+          "$undef": true
+        }
+      }
+    },
+    {
+      "op": "call",
+      "fn": "get:type",
+      "this": {
+        "type": "agent-session-mention",
+        "version": 3,
+        "$": {
+          "id": "Ooopg4F9"
+        },
+        "id": "00000000-0000-0000-0000-00000000000a",
+        "label": "Agent session",
+        "mentionUuid": {
+          "$undef": true
+        }
+      },
+      "args": [],
+      "ret": "agent-session-mention"
+    },
+    {
+      "op": "call",
+      "fn": "get:type",
+      "this": {
+        "type": "agent-activity",
+        "version": 1,
+        "$": {
+          "id": "ftOdCQQb"
+        },
+        "agentSessionId": "00000000-0000-0000-0000-00000000000a",
+        "turn": 0,
+        "segment": 0,
+        "rows": [
+          {
+            "id": "t1",
+            "label": "Ran",
+            "status": "completed",
+            "detail": "cargo test"
+          },
+          {
+            "id": "t2",
+            "label": "Reading",
+            "status": "running"
+          }
+        ],
+        "sealed": true
+      },
+      "args": [],
+      "ret": "agent-activity"
+    },
+    {
+      "op": "call",
+      "fn": "get:type",
+      "this": {
+        "type": "agent-activity",
+        "version": 1,
+        "$": {
+          "id": "ftOdCQQb"
+        },
+        "agentSessionId": "00000000-0000-0000-0000-00000000000a",
+        "turn": 0,
+        "segment": 0,
+        "rows": [
+          {
+            "id": "t1",
+            "label": "Ran",
+            "status": "completed",
+            "detail": "cargo test"
+          },
+          {
+            "id": "t2",
+            "label": "Reading",
+            "status": "running"
+          }
+        ],
+        "sealed": true
+      },
+      "args": [],
+      "ret": "agent-activity"
+    },
+    {
+      "op": "call",
+      "fn": "get:type",
+      "this": {
+        "children": [
+          {
+            "detail": 0,
+            "format": 0,
+            "mode": "normal",
+            "style": "",
+            "text": "On it.",
+            "type": "text",
+            "version": 1,
+            "$": {
+              "id": "yzXEudcq"
+            }
+          }
+        ],
+        "direction": null,
+        "format": "",
+        "indent": 0,
+        "type": "paragraph",
+        "version": 1,
+        "$": {
+          "id": "T7OAu-xt"
+        },
+        "textFormat": 0,
+        "textStyle": ""
+      },
+      "args": [],
+      "ret": "paragraph"
+    },
+    {
+      "op": "call",
+      "fn": "get:children",
+      "this": {
+        "children": [
+          {
+            "detail": 0,
+            "format": 0,
+            "mode": "normal",
+            "style": "",
+            "text": "On it.",
+            "type": "text",
+            "version": 1,
+            "$": {
+              "id": "yzXEudcq"
+            }
+          }
+        ],
+        "direction": null,
+        "format": "",
+        "indent": 0,
+        "type": "paragraph",
+        "version": 1,
+        "$": {
+          "id": "T7OAu-xt"
+        },
+        "textFormat": 0,
+        "textStyle": ""
+      },
+      "args": [],
+      "ret": [
+        {
+          "detail": 0,
+          "format": 0,
+          "mode": "normal",
+          "style": "",
+          "text": "On it.",
+          "type": "text",
+          "version": 1,
+          "$": {
+            "id": "yzXEudcq"
+          }
+        }
+      ]
+    },
+    {
+      "op": "call",
+      "fn": "get:0",
+      "this": [
+        {
+          "detail": 0,
+          "format": 0,
+          "mode": "normal",
+          "style": "",
+          "text": "On it.",
+          "type": "text",
+          "version": 1,
+          "$": {
+            "id": "yzXEudcq"
+          }
+        }
+      ],
+      "args": [],
+      "ret": {
+        "detail": 0,
+        "format": 0,
+        "mode": "normal",
+        "style": "",
+        "text": "On it.",
+        "type": "text",
+        "version": 1,
+        "$": {
+          "id": "yzXEudcq"
+        }
+      }
+    },
+    {
+      "op": "call",
+      "fn": "get:type",
+      "this": {
+        "detail": 0,
+        "format": 0,
+        "mode": "normal",
+        "style": "",
+        "text": "On it.",
+        "type": "text",
+        "version": 1,
+        "$": {
+          "id": "yzXEudcq"
+        }
+      },
+      "args": [],
+      "ret": "text"
+    },
+    {
+      "op": "call",
+      "fn": "get:type",
+      "this": {
+        "children": [
+          {
+            "type": "await",
+            "version": 1,
+            "$": {
+              "id": "jw3n3feX"
+            },
+            "awaitId": "UW3IJTNo7zhn7Yx_cOZYH",
+            "text": "Thinking…",
+            "inline": true
+          }
+        ],
+        "direction": null,
+        "format": "",
+        "indent": 0,
+        "type": "paragraph",
+        "version": 1,
+        "$": {
+          "id": "bRAhMvr1"
+        },
+        "textFormat": 0,
+        "textStyle": ""
+      },
+      "args": [],
+      "ret": "paragraph"
+    },
+    {
+      "op": "call",
+      "fn": "get:children",
+      "this": {
+        "children": [
+          {
+            "type": "await",
+            "version": 1,
+            "$": {
+              "id": "jw3n3feX"
+            },
+            "awaitId": "UW3IJTNo7zhn7Yx_cOZYH",
+            "text": "Thinking…",
+            "inline": true
+          }
+        ],
+        "direction": null,
+        "format": "",
+        "indent": 0,
+        "type": "paragraph",
+        "version": 1,
+        "$": {
+          "id": "bRAhMvr1"
+        },
+        "textFormat": 0,
+        "textStyle": ""
+      },
+      "args": [],
+      "ret": [
+        {
+          "type": "await",
+          "version": 1,
+          "$": {
+            "id": "jw3n3feX"
+          },
+          "awaitId": "UW3IJTNo7zhn7Yx_cOZYH",
+          "text": "Thinking…",
+          "inline": true
+        }
+      ]
+    },
+    {
+      "op": "call",
+      "fn": "get:0",
+      "this": [
+        {
+          "type": "await",
+          "version": 1,
+          "$": {
+            "id": "jw3n3feX"
+          },
+          "awaitId": "UW3IJTNo7zhn7Yx_cOZYH",
+          "text": "Thinking…",
+          "inline": true
+        }
+      ],
+      "args": [],
+      "ret": {
+        "type": "await",
+        "version": 1,
+        "$": {
+          "id": "jw3n3feX"
+        },
+        "awaitId": "UW3IJTNo7zhn7Yx_cOZYH",
+        "text": "Thinking…",
+        "inline": true
+      }
+    },
+    {
+      "op": "call",
+      "fn": "get:type",
+      "this": {
+        "type": "await",
+        "version": 1,
+        "$": {
+          "id": "jw3n3feX"
+        },
+        "awaitId": "UW3IJTNo7zhn7Yx_cOZYH",
+        "text": "Thinking…",
+        "inline": true
+      },
+      "args": [],
+      "ret": "await"
+    },
+    {
+      "op": "call",
+      "fn": "@macro-inc/lexical-core/utils/agent-chat-reply.composeAgentChatReply",
+      "args": [
+        {
+          "sessionId": "00000000-0000-0000-0000-00000000000a",
+          "body": {
+            "kind": "segments",
+            "segments": [
+              {
+                "kind": "prose",
+                "markdown": "On it."
+              },
+              {
+                "kind": "activity",
+                "turn": 0,
+                "segment": 1,
+                "rows": [
+                  {
+                    "id": "t1",
+                    "label": "Ran",
+                    "detail": "cargo test",
+                    "status": "completed"
+                  },
+                  {
+                    "id": "t2",
+                    "label": "Reading",
+                    "status": "running"
+                  }
+                ],
+                "sealed": true
+              }
+            ],
+            "pending": true
+          }
+        }
+      ],
+      "ret": "<m-agent-session-mention>{\"id\":\"00000000-0000-0000-0000-00000000000a\",\"label\":\"Agent session\"}</m-agent-session-mention>\n\nOn it.\n\n<m-agent-activity>{\"agentSessionId\":\"00000000-0000-0000-0000-00000000000a\",\"turn\":0,\"segment\":1,\"rows\":[{\"id\":\"t1\",\"label\":\"Ran\",\"status\":\"completed\",\"detail\":\"cargo test\"},{\"id\":\"t2\",\"label\":\"Reading\",\"status\":\"running\"}],\"sealed\":true}</m-agent-activity>\n\n<m-await>{\"awaitId\":\"ZTPwk67p4oD75m1qDA8sr\",\"text\":\"Thinking…\",\"inline\":true}</m-await>"
+    },
+    {
+      "op": "entropy",
+      "src": "random",
+      "v": 0.44239755091257393
+    },
+    {
+      "op": "entropy",
+      "src": "random",
+      "v": 0.019500724971294403
+    },
+    {
+      "op": "entropy",
+      "src": "random",
+      "v": 0.6803008166607469
+    },
+    {
+      "op": "entropy",
+      "src": "random",
+      "v": 0.9529202026315033
+    },
+    {
+      "op": "entropy",
+      "src": "getRandomValues",
+      "v": [
+        188,
+        129,
+        206,
+        89,
+        163,
+        247,
+        76,
+        199,
+        149,
+        148,
+        35,
+        6,
+        144,
+        214,
+        20,
+        10,
+        245,
+        57,
+        82,
+        75,
+        111
+      ]
+    },
+    {
+      "op": "entropy",
+      "src": "random",
+      "v": 0.7502909805625677
+    },
+    {
+      "op": "entropy",
+      "src": "random",
+      "v": 0.3304888808634132
+    },
+    {
+      "op": "call",
+      "fn": "@macro-inc/lexical-core/utils/markdown-state.markdownToSerializedEditorStateWithIds",
+      "args": [
+        "<m-agent-session-mention>{\"id\":\"00000000-0000-0000-0000-00000000000a\",\"label\":\"Agent session\"}</m-agent-session-mention>\n\nOn it.\n\n<m-agent-activity>{\"agentSessionId\":\"00000000-0000-0000-0000-00000000000a\",\"turn\":0,\"segment\":1,\"rows\":[{\"id\":\"t1\",\"label\":\"Ran\",\"status\":\"completed\",\"detail\":\"cargo test\"},{\"id\":\"t2\",\"label\":\"Reading\",\"status\":\"running\"}],\"sealed\":true}</m-agent-activity>\n\n<m-await>{\"awaitId\":\"ZTPwk67p4oD75m1qDA8sr\",\"text\":\"Thinking…\",\"inline\":true}</m-await>"
+      ],
+      "ret": {
+        "root": {
+          "children": [
+            {
+              "children": [
+                {
+                  "type": "agent-session-mention",
+                  "version": 3,
+                  "$": {
+                    "id": "J81r1sEN"
+                  },
+                  "id": "00000000-0000-0000-0000-00000000000a",
+                  "label": "Agent session",
+                  "mentionUuid": {
+                    "$undef": true
+                  }
+                }
+              ],
+              "direction": null,
+              "format": "",
+              "indent": 0,
+              "type": "paragraph",
+              "version": 1,
+              "$": {
+                "id": "AQijzVSE"
+              },
+              "textFormat": 0,
+              "textStyle": ""
+            },
+            {
+              "children": [
+                {
+                  "detail": 0,
+                  "format": 0,
+                  "mode": "normal",
+                  "style": "",
+                  "text": "On it.",
+                  "type": "text",
+                  "version": 1,
+                  "$": {
+                    "id": "0x3YS7Lx"
+                  }
+                }
+              ],
+              "direction": null,
+              "format": "",
+              "indent": 0,
+              "type": "paragraph",
+              "version": 1,
+              "$": {
+                "id": "L8cbP2SA"
+              },
+              "textFormat": 0,
+              "textStyle": ""
+            },
+            {
+              "type": "agent-activity",
+              "version": 1,
+              "$": {
+                "id": "uADHVuYy"
+              },
+              "agentSessionId": "00000000-0000-0000-0000-00000000000a",
+              "turn": 0,
+              "segment": 1,
+              "rows": [
+                {
+                  "id": "t1",
+                  "label": "Ran",
+                  "status": "completed",
+                  "detail": "cargo test"
+                },
+                {
+                  "id": "t2",
+                  "label": "Reading",
+                  "status": "running"
+                }
+              ],
+              "sealed": true
+            },
+            {
+              "children": [
+                {
+                  "type": "await",
+                  "version": 1,
+                  "$": {
+                    "id": "cNCbFfRt"
+                  },
+                  "awaitId": "ZTPwk67p4oD75m1qDA8sr",
+                  "text": "Thinking…",
+                  "inline": true
+                }
+              ],
+              "direction": null,
+              "format": "",
+              "indent": 0,
+              "type": "paragraph",
+              "version": 1,
+              "$": {
+                "id": "yi2opht8"
+              },
+              "textFormat": 0,
+              "textStyle": ""
+            }
+          ],
+          "direction": null,
+          "format": "",
+          "indent": 0,
+          "type": "root",
+          "version": 1,
+          "$": {
+            "id": "5haNrd_f"
+          }
+        }
+      }
+    },
+    {
+      "op": "entropy",
+      "src": "random",
+      "v": 0.24048714572563767
+    },
+    {
+      "op": "entropy",
+      "src": "random",
+      "v": 0.10230693989433348
+    },
+    {
+      "op": "entropy",
+      "src": "getRandomValues",
+      "v": [
+        177,
+        172,
+        133,
+        124,
+        98,
+        3,
+        179,
+        21
+      ]
+    },
+    {
+      "op": "entropy",
+      "src": "getRandomValues",
+      "v": [
+        221,
+        166,
+        156,
+        123,
+        180,
+        61,
+        174,
+        89
+      ]
+    },
+    {
+      "op": "entropy",
+      "src": "getRandomValues",
+      "v": [
+        98,
+        157,
+        193,
+        204,
+        252,
+        204,
+        78,
+        216
+      ]
+    },
+    {
+      "op": "entropy",
+      "src": "getRandomValues",
+      "v": [
+        25,
+        166,
+        9,
+        18,
+        48,
+        190,
+        78,
+        170
+      ]
+    },
+    {
+      "op": "entropy",
+      "src": "getRandomValues",
+      "v": [
+        215,
+        106,
+        212,
+        102,
+        159,
+        15,
+        151,
+        81
+      ]
+    },
+    {
+      "op": "entropy",
+      "src": "getRandomValues",
+      "v": [
+        122,
+        31,
+        0,
+        28,
+        231,
+        99,
+        153,
+        128
+      ]
+    },
+    {
+      "op": "entropy",
+      "src": "getRandomValues",
+      "v": [
+        78,
+        127,
+        243,
+        22,
+        70,
+        201,
+        125,
+        122
+      ]
+    },
+    {
+      "op": "entropy",
+      "src": "getRandomValues",
+      "v": [
+        191,
+        222,
+        113,
+        171,
+        48,
+        154,
+        34,
+        254
+      ]
+    },
+    {
+      "op": "call",
+      "fn": "get:root",
+      "this": {
+        "root": {
+          "children": [
+            {
+              "children": [
+                {
+                  "type": "agent-session-mention",
+                  "version": 3,
+                  "$": {
+                    "id": "J81r1sEN"
+                  },
+                  "id": "00000000-0000-0000-0000-00000000000a",
+                  "label": "Agent session",
+                  "mentionUuid": {
+                    "$undef": true
+                  }
+                }
+              ],
+              "direction": null,
+              "format": "",
+              "indent": 0,
+              "type": "paragraph",
+              "version": 1,
+              "$": {
+                "id": "AQijzVSE"
+              },
+              "textFormat": 0,
+              "textStyle": ""
+            },
+            {
+              "children": [
+                {
+                  "detail": 0,
+                  "format": 0,
+                  "mode": "normal",
+                  "style": "",
+                  "text": "On it.",
+                  "type": "text",
+                  "version": 1,
+                  "$": {
+                    "id": "0x3YS7Lx"
+                  }
+                }
+              ],
+              "direction": null,
+              "format": "",
+              "indent": 0,
+              "type": "paragraph",
+              "version": 1,
+              "$": {
+                "id": "L8cbP2SA"
+              },
+              "textFormat": 0,
+              "textStyle": ""
+            },
+            {
+              "type": "agent-activity",
+              "version": 1,
+              "$": {
+                "id": "uADHVuYy"
+              },
+              "agentSessionId": "00000000-0000-0000-0000-00000000000a",
+              "turn": 0,
+              "segment": 1,
+              "rows": [
+                {
+                  "id": "t1",
+                  "label": "Ran",
+                  "status": "completed",
+                  "detail": "cargo test"
+                },
+                {
+                  "id": "t2",
+                  "label": "Reading",
+                  "status": "running"
+                }
+              ],
+              "sealed": true
+            },
+            {
+              "children": [
+                {
+                  "type": "await",
+                  "version": 1,
+                  "$": {
+                    "id": "cNCbFfRt"
+                  },
+                  "awaitId": "ZTPwk67p4oD75m1qDA8sr",
+                  "text": "Thinking…",
+                  "inline": true
+                }
+              ],
+              "direction": null,
+              "format": "",
+              "indent": 0,
+              "type": "paragraph",
+              "version": 1,
+              "$": {
+                "id": "yi2opht8"
+              },
+              "textFormat": 0,
+              "textStyle": ""
+            }
+          ],
+          "direction": null,
+          "format": "",
+          "indent": 0,
+          "type": "root",
+          "version": 1,
+          "$": {
+            "id": "5haNrd_f"
+          }
+        }
+      },
+      "args": [],
+      "ret": {
+        "children": [
+          {
+            "children": [
+              {
+                "type": "agent-session-mention",
+                "version": 3,
+                "$": {
+                  "id": "J81r1sEN"
+                },
+                "id": "00000000-0000-0000-0000-00000000000a",
+                "label": "Agent session",
+                "mentionUuid": {
+                  "$undef": true
+                }
+              }
+            ],
+            "direction": null,
+            "format": "",
+            "indent": 0,
+            "type": "paragraph",
+            "version": 1,
+            "$": {
+              "id": "AQijzVSE"
+            },
+            "textFormat": 0,
+            "textStyle": ""
+          },
+          {
+            "children": [
+              {
+                "detail": 0,
+                "format": 0,
+                "mode": "normal",
+                "style": "",
+                "text": "On it.",
+                "type": "text",
+                "version": 1,
+                "$": {
+                  "id": "0x3YS7Lx"
+                }
+              }
+            ],
+            "direction": null,
+            "format": "",
+            "indent": 0,
+            "type": "paragraph",
+            "version": 1,
+            "$": {
+              "id": "L8cbP2SA"
+            },
+            "textFormat": 0,
+            "textStyle": ""
+          },
+          {
+            "type": "agent-activity",
+            "version": 1,
+            "$": {
+              "id": "uADHVuYy"
+            },
+            "agentSessionId": "00000000-0000-0000-0000-00000000000a",
+            "turn": 0,
+            "segment": 1,
+            "rows": [
+              {
+                "id": "t1",
+                "label": "Ran",
+                "status": "completed",
+                "detail": "cargo test"
+              },
+              {
+                "id": "t2",
+                "label": "Reading",
+                "status": "running"
+              }
+            ],
+            "sealed": true
+          },
+          {
+            "children": [
+              {
+                "type": "await",
+                "version": 1,
+                "$": {
+                  "id": "cNCbFfRt"
+                },
+                "awaitId": "ZTPwk67p4oD75m1qDA8sr",
+                "text": "Thinking…",
+                "inline": true
+              }
+            ],
+            "direction": null,
+            "format": "",
+            "indent": 0,
+            "type": "paragraph",
+            "version": 1,
+            "$": {
+              "id": "yi2opht8"
+            },
+            "textFormat": 0,
+            "textStyle": ""
+          }
+        ],
+        "direction": null,
+        "format": "",
+        "indent": 0,
+        "type": "root",
+        "version": 1,
+        "$": {
+          "id": "5haNrd_f"
+        }
+      }
+    },
+    {
+      "op": "call",
+      "fn": "get:children",
+      "this": {
+        "children": [
+          {
+            "children": [
+              {
+                "type": "agent-session-mention",
+                "version": 3,
+                "$": {
+                  "id": "J81r1sEN"
+                },
+                "id": "00000000-0000-0000-0000-00000000000a",
+                "label": "Agent session",
+                "mentionUuid": {
+                  "$undef": true
+                }
+              }
+            ],
+            "direction": null,
+            "format": "",
+            "indent": 0,
+            "type": "paragraph",
+            "version": 1,
+            "$": {
+              "id": "AQijzVSE"
+            },
+            "textFormat": 0,
+            "textStyle": ""
+          },
+          {
+            "children": [
+              {
+                "detail": 0,
+                "format": 0,
+                "mode": "normal",
+                "style": "",
+                "text": "On it.",
+                "type": "text",
+                "version": 1,
+                "$": {
+                  "id": "0x3YS7Lx"
+                }
+              }
+            ],
+            "direction": null,
+            "format": "",
+            "indent": 0,
+            "type": "paragraph",
+            "version": 1,
+            "$": {
+              "id": "L8cbP2SA"
+            },
+            "textFormat": 0,
+            "textStyle": ""
+          },
+          {
+            "type": "agent-activity",
+            "version": 1,
+            "$": {
+              "id": "uADHVuYy"
+            },
+            "agentSessionId": "00000000-0000-0000-0000-00000000000a",
+            "turn": 0,
+            "segment": 1,
+            "rows": [
+              {
+                "id": "t1",
+                "label": "Ran",
+                "status": "completed",
+                "detail": "cargo test"
+              },
+              {
+                "id": "t2",
+                "label": "Reading",
+                "status": "running"
+              }
+            ],
+            "sealed": true
+          },
+          {
+            "children": [
+              {
+                "type": "await",
+                "version": 1,
+                "$": {
+                  "id": "cNCbFfRt"
+                },
+                "awaitId": "ZTPwk67p4oD75m1qDA8sr",
+                "text": "Thinking…",
+                "inline": true
+              }
+            ],
+            "direction": null,
+            "format": "",
+            "indent": 0,
+            "type": "paragraph",
+            "version": 1,
+            "$": {
+              "id": "yi2opht8"
+            },
+            "textFormat": 0,
+            "textStyle": ""
+          }
+        ],
+        "direction": null,
+        "format": "",
+        "indent": 0,
+        "type": "root",
+        "version": 1,
+        "$": {
+          "id": "5haNrd_f"
+        }
+      },
+      "args": [],
+      "ret": [
+        {
+          "children": [
+            {
+              "type": "agent-session-mention",
+              "version": 3,
+              "$": {
+                "id": "J81r1sEN"
+              },
+              "id": "00000000-0000-0000-0000-00000000000a",
+              "label": "Agent session",
+              "mentionUuid": {
+                "$undef": true
+              }
+            }
+          ],
+          "direction": null,
+          "format": "",
+          "indent": 0,
+          "type": "paragraph",
+          "version": 1,
+          "$": {
+            "id": "AQijzVSE"
+          },
+          "textFormat": 0,
+          "textStyle": ""
+        },
+        {
+          "children": [
+            {
+              "detail": 0,
+              "format": 0,
+              "mode": "normal",
+              "style": "",
+              "text": "On it.",
+              "type": "text",
+              "version": 1,
+              "$": {
+                "id": "0x3YS7Lx"
+              }
+            }
+          ],
+          "direction": null,
+          "format": "",
+          "indent": 0,
+          "type": "paragraph",
+          "version": 1,
+          "$": {
+            "id": "L8cbP2SA"
+          },
+          "textFormat": 0,
+          "textStyle": ""
+        },
+        {
+          "type": "agent-activity",
+          "version": 1,
+          "$": {
+            "id": "uADHVuYy"
+          },
+          "agentSessionId": "00000000-0000-0000-0000-00000000000a",
+          "turn": 0,
+          "segment": 1,
+          "rows": [
+            {
+              "id": "t1",
+              "label": "Ran",
+              "status": "completed",
+              "detail": "cargo test"
+            },
+            {
+              "id": "t2",
+              "label": "Reading",
+              "status": "running"
+            }
+          ],
+          "sealed": true
+        },
+        {
+          "children": [
+            {
+              "type": "await",
+              "version": 1,
+              "$": {
+                "id": "cNCbFfRt"
+              },
+              "awaitId": "ZTPwk67p4oD75m1qDA8sr",
+              "text": "Thinking…",
+              "inline": true
+            }
+          ],
+          "direction": null,
+          "format": "",
+          "indent": 0,
+          "type": "paragraph",
+          "version": 1,
+          "$": {
+            "id": "yi2opht8"
+          },
+          "textFormat": 0,
+          "textStyle": ""
+        }
+      ]
+    },
+    {
+      "op": "call",
+      "fn": "get:type",
+      "this": {
+        "children": [
+          {
+            "type": "agent-session-mention",
+            "version": 3,
+            "$": {
+              "id": "J81r1sEN"
+            },
+            "id": "00000000-0000-0000-0000-00000000000a",
+            "label": "Agent session",
+            "mentionUuid": {
+              "$undef": true
+            }
+          }
+        ],
+        "direction": null,
+        "format": "",
+        "indent": 0,
+        "type": "paragraph",
+        "version": 1,
+        "$": {
+          "id": "AQijzVSE"
+        },
+        "textFormat": 0,
+        "textStyle": ""
+      },
+      "args": [],
+      "ret": "paragraph"
+    },
+    {
+      "op": "call",
+      "fn": "get:children",
+      "this": {
+        "children": [
+          {
+            "type": "agent-session-mention",
+            "version": 3,
+            "$": {
+              "id": "J81r1sEN"
+            },
+            "id": "00000000-0000-0000-0000-00000000000a",
+            "label": "Agent session",
+            "mentionUuid": {
+              "$undef": true
+            }
+          }
+        ],
+        "direction": null,
+        "format": "",
+        "indent": 0,
+        "type": "paragraph",
+        "version": 1,
+        "$": {
+          "id": "AQijzVSE"
+        },
+        "textFormat": 0,
+        "textStyle": ""
+      },
+      "args": [],
+      "ret": [
+        {
+          "type": "agent-session-mention",
+          "version": 3,
+          "$": {
+            "id": "J81r1sEN"
+          },
+          "id": "00000000-0000-0000-0000-00000000000a",
+          "label": "Agent session",
+          "mentionUuid": {
+            "$undef": true
+          }
+        }
+      ]
+    },
+    {
+      "op": "call",
+      "fn": "get:0",
+      "this": [
+        {
+          "type": "agent-session-mention",
+          "version": 3,
+          "$": {
+            "id": "J81r1sEN"
+          },
+          "id": "00000000-0000-0000-0000-00000000000a",
+          "label": "Agent session",
+          "mentionUuid": {
+            "$undef": true
+          }
+        }
+      ],
+      "args": [],
+      "ret": {
+        "type": "agent-session-mention",
+        "version": 3,
+        "$": {
+          "id": "J81r1sEN"
+        },
+        "id": "00000000-0000-0000-0000-00000000000a",
+        "label": "Agent session",
+        "mentionUuid": {
+          "$undef": true
+        }
+      }
+    },
+    {
+      "op": "call",
+      "fn": "get:type",
+      "this": {
+        "type": "agent-session-mention",
+        "version": 3,
+        "$": {
+          "id": "J81r1sEN"
+        },
+        "id": "00000000-0000-0000-0000-00000000000a",
+        "label": "Agent session",
+        "mentionUuid": {
+          "$undef": true
+        }
+      },
+      "args": [],
+      "ret": "agent-session-mention"
+    },
+    {
+      "op": "call",
+      "fn": "get:type",
+      "this": {
+        "children": [
+          {
+            "detail": 0,
+            "format": 0,
+            "mode": "normal",
+            "style": "",
+            "text": "On it.",
+            "type": "text",
+            "version": 1,
+            "$": {
+              "id": "0x3YS7Lx"
+            }
+          }
+        ],
+        "direction": null,
+        "format": "",
+        "indent": 0,
+        "type": "paragraph",
+        "version": 1,
+        "$": {
+          "id": "L8cbP2SA"
+        },
+        "textFormat": 0,
+        "textStyle": ""
+      },
+      "args": [],
+      "ret": "paragraph"
+    },
+    {
+      "op": "call",
+      "fn": "get:children",
+      "this": {
+        "children": [
+          {
+            "detail": 0,
+            "format": 0,
+            "mode": "normal",
+            "style": "",
+            "text": "On it.",
+            "type": "text",
+            "version": 1,
+            "$": {
+              "id": "0x3YS7Lx"
+            }
+          }
+        ],
+        "direction": null,
+        "format": "",
+        "indent": 0,
+        "type": "paragraph",
+        "version": 1,
+        "$": {
+          "id": "L8cbP2SA"
+        },
+        "textFormat": 0,
+        "textStyle": ""
+      },
+      "args": [],
+      "ret": [
+        {
+          "detail": 0,
+          "format": 0,
+          "mode": "normal",
+          "style": "",
+          "text": "On it.",
+          "type": "text",
+          "version": 1,
+          "$": {
+            "id": "0x3YS7Lx"
+          }
+        }
+      ]
+    },
+    {
+      "op": "call",
+      "fn": "get:0",
+      "this": [
+        {
+          "detail": 0,
+          "format": 0,
+          "mode": "normal",
+          "style": "",
+          "text": "On it.",
+          "type": "text",
+          "version": 1,
+          "$": {
+            "id": "0x3YS7Lx"
+          }
+        }
+      ],
+      "args": [],
+      "ret": {
+        "detail": 0,
+        "format": 0,
+        "mode": "normal",
+        "style": "",
+        "text": "On it.",
+        "type": "text",
+        "version": 1,
+        "$": {
+          "id": "0x3YS7Lx"
+        }
+      }
+    },
+    {
+      "op": "call",
+      "fn": "get:type",
+      "this": {
+        "detail": 0,
+        "format": 0,
+        "mode": "normal",
+        "style": "",
+        "text": "On it.",
+        "type": "text",
+        "version": 1,
+        "$": {
+          "id": "0x3YS7Lx"
+        }
+      },
+      "args": [],
+      "ret": "text"
+    },
+    {
+      "op": "call",
+      "fn": "get:type",
+      "this": {
+        "type": "agent-activity",
+        "version": 1,
+        "$": {
+          "id": "uADHVuYy"
+        },
+        "agentSessionId": "00000000-0000-0000-0000-00000000000a",
+        "turn": 0,
+        "segment": 1,
+        "rows": [
+          {
+            "id": "t1",
+            "label": "Ran",
+            "status": "completed",
+            "detail": "cargo test"
+          },
+          {
+            "id": "t2",
+            "label": "Reading",
+            "status": "running"
+          }
+        ],
+        "sealed": true
+      },
+      "args": [],
+      "ret": "agent-activity"
+    },
+    {
+      "op": "call",
+      "fn": "get:type",
+      "this": {
+        "type": "agent-activity",
+        "version": 1,
+        "$": {
+          "id": "uADHVuYy"
+        },
+        "agentSessionId": "00000000-0000-0000-0000-00000000000a",
+        "turn": 0,
+        "segment": 1,
+        "rows": [
+          {
+            "id": "t1",
+            "label": "Ran",
+            "status": "completed",
+            "detail": "cargo test"
+          },
+          {
+            "id": "t2",
+            "label": "Reading",
+            "status": "running"
+          }
+        ],
+        "sealed": true
+      },
+      "args": [],
+      "ret": "agent-activity"
+    },
+    {
+      "op": "call",
+      "fn": "get:type",
+      "this": {
+        "children": [
+          {
+            "type": "await",
+            "version": 1,
+            "$": {
+              "id": "cNCbFfRt"
+            },
+            "awaitId": "ZTPwk67p4oD75m1qDA8sr",
+            "text": "Thinking…",
+            "inline": true
+          }
+        ],
+        "direction": null,
+        "format": "",
+        "indent": 0,
+        "type": "paragraph",
+        "version": 1,
+        "$": {
+          "id": "yi2opht8"
+        },
+        "textFormat": 0,
+        "textStyle": ""
+      },
+      "args": [],
+      "ret": "paragraph"
+    },
+    {
+      "op": "call",
+      "fn": "get:children",
+      "this": {
+        "children": [
+          {
+            "type": "await",
+            "version": 1,
+            "$": {
+              "id": "cNCbFfRt"
+            },
+            "awaitId": "ZTPwk67p4oD75m1qDA8sr",
+            "text": "Thinking…",
+            "inline": true
+          }
+        ],
+        "direction": null,
+        "format": "",
+        "indent": 0,
+        "type": "paragraph",
+        "version": 1,
+        "$": {
+          "id": "yi2opht8"
+        },
+        "textFormat": 0,
+        "textStyle": ""
+      },
+      "args": [],
+      "ret": [
+        {
+          "type": "await",
+          "version": 1,
+          "$": {
+            "id": "cNCbFfRt"
+          },
+          "awaitId": "ZTPwk67p4oD75m1qDA8sr",
+          "text": "Thinking…",
+          "inline": true
+        }
+      ]
+    },
+    {
+      "op": "call",
+      "fn": "get:0",
+      "this": [
+        {
+          "type": "await",
+          "version": 1,
+          "$": {
+            "id": "cNCbFfRt"
+          },
+          "awaitId": "ZTPwk67p4oD75m1qDA8sr",
+          "text": "Thinking…",
+          "inline": true
+        }
+      ],
+      "args": [],
+      "ret": {
+        "type": "await",
+        "version": 1,
+        "$": {
+          "id": "cNCbFfRt"
+        },
+        "awaitId": "ZTPwk67p4oD75m1qDA8sr",
+        "text": "Thinking…",
+        "inline": true
+      }
+    },
+    {
+      "op": "call",
+      "fn": "get:type",
+      "this": {
+        "type": "await",
+        "version": 1,
+        "$": {
+          "id": "cNCbFfRt"
+        },
+        "awaitId": "ZTPwk67p4oD75m1qDA8sr",
+        "text": "Thinking…",
+        "inline": true
+      },
+      "args": [],
+      "ret": "await"
+    }
+  ],
+  "tapes": [],
+  "final": null
+}
