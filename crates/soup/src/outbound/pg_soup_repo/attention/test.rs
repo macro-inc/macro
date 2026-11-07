@@ -382,6 +382,25 @@ async fn discussions_on_visible_projects_and_crm_records_are_candidates(
         ]
     );
 
+    // The retired switch is false in the fixture. Missing settings must
+    // likewise preserve record visibility, without enrolling any mailbox.
+    sqlx::query!("DELETE FROM team_crm_settings")
+        .execute(&pool)
+        .await?;
+    for own_work in [ATTENTION, WORK] {
+        for keying in [AttentionKeying::ThreadScoped, AttentionKeying::FiledEntity] {
+            let mut request = req(own_work, &link_ids, &sources);
+            request.types = DISCUSSION_TYPES;
+            request.filter = Some(&filter);
+            request.crm = true;
+            request.keying = keying;
+            assert_eq!(
+                keys(&attention_soup_page(&pool, request).await?),
+                keys(&page)
+            );
+        }
+    }
+
     // Without a CRM receipt to hydrate them, CRM records are not candidates.
     let mut request = req(ATTENTION, &link_ids, &sources);
     request.types = DISCUSSION_TYPES;
@@ -389,6 +408,19 @@ async fn discussions_on_visible_projects_and_crm_records_are_candidates(
     let page = attention_soup_page(&pool, request).await?;
     assert_eq!(
         keys(&page),
+        vec![(EntityType::Initiative, PROJECT_1.to_string())]
+    );
+
+    // Membership is still required even if a caller supplies the CRM flag.
+    sqlx::query!("DELETE FROM team_user WHERE user_id = $1", USER_1)
+        .execute(&pool)
+        .await?;
+    let mut request = req(ATTENTION, &link_ids, &sources);
+    request.types = DISCUSSION_TYPES;
+    request.filter = Some(&filter);
+    request.crm = true;
+    assert_eq!(
+        keys(&attention_soup_page(&pool, request).await?),
         vec![(EntityType::Initiative, PROJECT_1.to_string())]
     );
 

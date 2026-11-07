@@ -6,8 +6,8 @@
  * OpenAPI spec version: 0.1.0
  */
 
-import type { DraftedRoutineStepsItem } from './draftedRoutineStepsItem';
 import type { DraftedRoutineTrigger } from './draftedRoutineTrigger';
+import type { RoutineStep } from './routineStep';
 import type { StepProblem } from './stepProblem';
 
 /**
@@ -19,6 +19,6 @@ export interface DraftedRoutine {
   problems: StepProblem[];
   /** What it does, in the shape a routine's task holds steps, each code
 step named as saving names it. */
-  steps: DraftedRoutineStepsItem[];
+  steps: RoutineStep[];
   trigger?: DraftedRoutineTrigger;
 }

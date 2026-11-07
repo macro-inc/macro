@@ -186,6 +186,7 @@ async fn mentions_mail_and_calls_only_admit_their_recipient_even_when_others_hav
         let event = IncomingEvent {
             event_id: generate_uuid_v7(),
             schema_version: 1,
+            routine_id: None,
             payload,
         };
         assert_eq!(
@@ -218,6 +219,7 @@ fn github_delivery(conclusion: &str, sender_type: &str) -> IncomingEvent {
     IncomingEvent {
         event_id: generate_uuid_v7(),
         schema_version: 1,
+        routine_id: None,
         payload: crate::domain::event_trigger::EventPayload::Github(
             github::broker::GithubWebhookTopicEvent::Received(delivery),
         ),

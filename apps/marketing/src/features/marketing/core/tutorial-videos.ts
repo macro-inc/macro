@@ -7,7 +7,7 @@ export const TUTORIAL_VIDEOS = {
   mail: { title: 'Learn how to use Macro Mail', length: '1:42' },
   tasks: { title: 'Learn how to use Macro Tasks', length: '1:57' },
   chat: { title: 'Learn how to use Macro Chat', length: '1:30' },
-  docs: { title: 'Learn how to use Macro Docs', length: '1:46' },
+  docs: { title: 'Learn how to use Macro Docs', length: '1:15' },
   calls: { title: 'Learn how to use Macro Calls', length: '1:10' },
   crm: { title: 'Learn how to use Macro CRM', length: '1:26' },
   agents: { title: 'Learn how to use Macro Agents', length: '1:05' },

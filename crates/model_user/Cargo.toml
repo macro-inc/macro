@@ -8,7 +8,6 @@ version = "0.1.0"
 sqlx = ["dep:sqlx"]
 
 [dependencies]
-macro_user_id = { path = "../macro_user_id" }
 serde = { workspace = true }
 sqlx = { workspace = true, optional = true }
 strum = { workspace = true }

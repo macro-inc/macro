@@ -324,7 +324,13 @@ export type {
 export { ReviewItem, SessionReview } from './entities/agent-sessions/review';
 export { ToolApproval } from './entities/agent-sessions/tool-approval';
 export type { SessionView } from './entities/agent-sessions/view';
-export { Agent, type AgentOptions } from './entities/agents/agent';
+export {
+  Agent,
+  type AgentApps,
+  type AgentOptions,
+  type AgentPatch,
+} from './entities/agents/agent';
+export type { CodingAgent } from './entities/agents/namespace';
 export { UserApiKey } from './entities/api-keys/api-key';
 export {
   Bot,
@@ -334,6 +340,24 @@ export {
   type UpdateBotOptions,
 } from './entities/bots/bot';
 export { BotToken } from './entities/bots/token';
+export {
+  Canvas,
+  type CanvasApplyOptions,
+  type CanvasApplyResult,
+  type CanvasBounds,
+  type CanvasEditOptions,
+  CanvasEditRejectedError,
+  type CanvasEditResult,
+  CanvasRenderImage,
+  type CanvasRenderObject,
+  type CanvasRenderOptions,
+  CanvasRevisionConflictError,
+  type CanvasScene,
+  type CanvasSceneItem,
+  type CanvasSceneOptions,
+  type CanvasTextLayout,
+  type CanvasUnavailable,
+} from './entities/canvases/canvas';
 export { ChannelAccessRequest } from './entities/channels/access-request';
 export { ChannelActivity } from './entities/channels/activity';
 export { ChannelPicture } from './entities/channels/picture';
@@ -364,6 +388,18 @@ export type {
   QueryTableVersion,
 } from './entities/databases/query';
 export {
+  SAVED_QUERY_CHART_MODES,
+  SAVED_QUERY_HEIGHT_RANGE,
+  SAVED_QUERY_MAX_SERIES,
+  SavedQuery,
+  type SavedQueryChart,
+  type SavedQueryChartMode,
+  type SavedQueryDisplay,
+  type SavedQueryDisplayMode,
+  type SavedQueryView,
+  type SaveQueryOptions,
+} from './entities/databases/saved-query';
+export {
   type DocumentEditOptions,
   DocumentEditRefusedError,
   type DocumentEditResult,
@@ -371,6 +407,17 @@ export {
 } from './entities/documents/ai-edit';
 export { DocumentAnchor } from './entities/documents/anchor';
 export type { FileContent } from './entities/documents/namespace';
+export {
+  RevisionConflictError,
+  Spreadsheet,
+  type SpreadsheetCalculateOptions,
+  type SpreadsheetCalculation,
+  type SpreadsheetEdited,
+  type SpreadsheetEditOptions,
+  type SpreadsheetRead,
+  type SpreadsheetReadOptions,
+  type SpreadsheetSheet,
+} from './entities/documents/spreadsheet';
 export { DocumentVersion } from './entities/documents/version';
 export {
   DraftAttachment,
