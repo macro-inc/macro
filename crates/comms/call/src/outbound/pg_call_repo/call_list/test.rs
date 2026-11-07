@@ -95,9 +95,14 @@ async fn list(
     limit: u32,
     page: CallRecordPage,
 ) -> anyhow::Result<Vec<CallRecord>> {
-    Ok(PgCallRepo::new(pool.clone())
-        .get_call_records_by_user(user(VIEWER), limit, filter, page)
-        .await?)
+    Ok(PgCallRepo::new(
+        pool.clone(),
+        std::sync::Arc::new(channels_outbound::channel_name::PgChannelNames::new(
+            pool.clone(),
+        )),
+    )
+    .get_call_records_by_user(user(VIEWER), limit, filter, page)
+    .await?)
 }
 
 fn ids(records: &[CallRecord]) -> Vec<Uuid> {
@@ -276,7 +281,14 @@ async fn archiving_leaves_one_listable_row_per_call_id(pool: Pool<Postgres>) -> 
     // than copying it. The native `call_entities` mirror keeps the id and
     // is never listed, so the count leaves it out. The archived call keeps
     // its place by start.
-    PgCallRepo::new(pool.clone()).archive_call(&L1).await?;
+    PgCallRepo::new(
+        pool.clone(),
+        std::sync::Arc::new(channels_outbound::channel_name::PgChannelNames::new(
+            pool.clone(),
+        )),
+    )
+    .archive_call(&L1)
+    .await?;
     let tables = sqlx::query_scalar!(
         r#"
         SELECT (SELECT count(*) FROM calls WHERE id = $1)

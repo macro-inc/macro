@@ -8,7 +8,7 @@ mod test;
 
 use std::collections::{HashMap, HashSet};
 
-use channels_outbound::channel_name::batch_resolve_channel_names;
+use channels::domain::channel_names::ChannelNames;
 use entity_access::domain::models::AccessLevel;
 use item_filters::ast::{LiteralTree, call::CallLiteral};
 use macro_user_id::{cowlike::CowLike, user_id::MacroUserIdStr};
@@ -33,6 +33,7 @@ use crate::domain::models::{
 /// memory. Records the filter's shape on the current span.
 pub(super) async fn list_call_records(
     pool: &PgPool,
+    channel_names: &dyn ChannelNames<Err = sqlx::Error>,
     user_id: MacroUserIdStr<'_>,
     limit: u32,
     filter: &LiteralTree<CallLiteral>,
@@ -102,7 +103,7 @@ pub(super) async fn list_call_records(
     }
     let (mut people, channel_names) = tokio::try_join!(
         load_people(pool, &live, &archived, &imported),
-        batch_resolve_channel_names(pool, &page_channels, user_id.copied()),
+        channel_names.batch_resolve_channel_names(&page_channels, user_id.copied()),
     )?;
 
     Ok(rows

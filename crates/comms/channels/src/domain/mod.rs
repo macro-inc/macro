@@ -9,6 +9,8 @@ pub mod broker_events;
 /// Agent personas that converse in a channel.
 #[cfg(feature = "ports")]
 pub mod channel_agents;
+/// The viewer-aware channel name port.
+pub mod channel_names;
 /// Direct-message identity and batch commands.
 pub mod dm;
 #[cfg(feature = "entity_mutation")]

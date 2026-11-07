@@ -7,7 +7,6 @@ version = "0.1.0"
 [dependencies]
 cached = { workspace = true }
 channels = { workspace = true }
-channels_outbound = { workspace = true }
 chrono = { workspace = true }
 macro_user_id = { workspace = true }
 models_opensearch = { workspace = true }

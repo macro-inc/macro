@@ -131,7 +131,10 @@ async fn repo(pool: PgPool) -> PgCallRepo {
             .await
             .unwrap();
     }
-    PgCallRepo::new(pool)
+    PgCallRepo::new(
+        pool.clone(),
+        std::sync::Arc::new(channels_outbound::channel_name::PgChannelNames::new(pool)),
+    )
 }
 
 fn meeting() -> Meeting {

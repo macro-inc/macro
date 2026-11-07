@@ -1,6 +1,7 @@
 use agent_session::domain::search::AgentSessionSearchMetadataService;
 use axum::extract::FromRef;
 use calendar_events::domain::ports::CalendarEventLabelReader;
+use channels::domain::channel_names::ChannelNames;
 use entity_access::domain::service::EntityAccessServiceImpl;
 use entity_access_outbound::PgAccessRepository;
 use macro_authorization::{
@@ -25,6 +26,8 @@ pub struct SearchHandlerState {
     pub db: ReadOnlyPool,
     /// Primary database for fresh CRM authorization.
     pub crm_db: sqlx::PgPool,
+    /// Viewer-aware channel names for channel and call results.
+    pub channel_names: Arc<dyn ChannelNames<Err = sqlx::Error>>,
     /// OpenSearch client for full-text search
     pub opensearch_client: Arc<OpensearchClient>,
     /// Resolves the caller's team membership to mint CRM capability receipts.

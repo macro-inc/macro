@@ -13,10 +13,9 @@ mod team_share;
 mod test;
 
 use std::collections::{HashMap, HashSet};
+use std::sync::Arc;
 
-use channels_outbound::channel_name::{
-    batch_resolve_channel_names, resolve_channel_name_for_viewers,
-};
+use channels::domain::channel_names::ChannelNames;
 use chrono::{DateTime, SubsecRound, Utc};
 use entity_access::domain::models::AccessLevel;
 use filter_ast::Expr;
@@ -244,12 +243,18 @@ fn status_set_for_expr(expr: &Expr<CallLiteral>) -> Option<CallStatusSet> {
 #[derive(Clone)]
 pub struct PgCallRepo {
     pool: PgPool,
+    /// Viewer-aware channel names for call previews; the composition root
+    /// supplies the implementation.
+    channel_names: Arc<dyn ChannelNames<Err = sqlx::Error>>,
 }
 
 impl PgCallRepo {
-    /// Create a new repo with the given connection pool.
-    pub fn new(pool: PgPool) -> Self {
-        Self { pool }
+    /// Create a new repo with the given connection pool and channel names.
+    pub fn new(pool: PgPool, channel_names: Arc<dyn ChannelNames<Err = sqlx::Error>>) -> Self {
+        Self {
+            pool,
+            channel_names,
+        }
     }
 }
 
@@ -1681,8 +1686,10 @@ impl CallRepository for PgCallRepo {
                 .collect()
         };
 
-        let channel_names =
-            batch_resolve_channel_names(&self.pool, &unique_channel_ids, user_id).await?;
+        let channel_names = self
+            .channel_names
+            .batch_resolve_channel_names(&unique_channel_ids, user_id)
+            .await?;
 
         let previews = unique_call_ids
             .into_iter()
@@ -1720,7 +1727,15 @@ impl CallRepository for PgCallRepo {
         filter: &LiteralTree<CallLiteral>,
         page: CallRecordPage,
     ) -> Result<Vec<CallRecord>, Self::Err> {
-        call_list::list_call_records(&self.pool, user_id, limit, filter, page).await
+        call_list::list_call_records(
+            &self.pool,
+            &*self.channel_names,
+            user_id,
+            limit,
+            filter,
+            page,
+        )
+        .await
     }
 
     #[tracing::instrument(err, skip(self))]
@@ -1777,7 +1792,10 @@ impl CallRepository for PgCallRepo {
         channel_id: &Uuid,
         user_id: MacroUserIdStr<'a>,
     ) -> Result<Option<String>, Self::Err> {
-        let mut map = batch_resolve_channel_names(&self.pool, &[*channel_id], user_id).await?;
+        let mut map = self
+            .channel_names
+            .batch_resolve_channel_names(&[*channel_id], user_id)
+            .await?;
         Ok(map.remove(channel_id))
     }
 
@@ -1787,7 +1805,9 @@ impl CallRepository for PgCallRepo {
         channel_id: &Uuid,
         viewer_ids: &[MacroUserIdStr<'a>],
     ) -> Result<HashMap<MacroUserIdStr<'static>, String>, Self::Err> {
-        resolve_channel_name_for_viewers(&self.pool, *channel_id, viewer_ids).await
+        self.channel_names
+            .resolve_channel_name_for_viewers(*channel_id, viewer_ids)
+            .await
     }
 
     #[tracing::instrument(err, skip(self))]
