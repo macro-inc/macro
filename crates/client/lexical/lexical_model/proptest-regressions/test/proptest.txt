@@ -7,3 +7,4 @@
 cc 26ad0c2b68fb5b9877d864519c50d20f4c348f2502fe934c08221562a8d2aaa5 # shrinks to trees = [Text("", 0, false, 0)], commands = [InsertText("😀"), SelectAll(None)], attached = false
 cc 5c6acd3b5665b63f6d975736caaaec52d9f7e8721b4ae13fe0ddc238dfaa13ea # shrinks to trees = [Text("😀", 0, false, 0)], commands = [FormatText(Italic), InsertText(""), SelectAll(None), FormatText(Bold)], attached = true
 cc 5a590f9983282e349a738a70e64a4b13ea9c42005d717bbe9d8185e585164258 # shrinks to trees = [Element([Text("a", 0, false, 0)]), Element([Text("😀", 1, false, 0)])], commands = [FormatText(Bold), InsertText("é")], attached = true
+cc 94bc000a3ac11f20fa46bbe62715bf811c74840f8d0b058fd693b6f7c782d00c # shrinks to trees = [Element([Decorator, Element([])])], commands = [DeleteCharacter { direction: Forward, target: NoView }, DeleteCharacter { direction: Forward, target: NoView }, InsertLineBreak { select_start: false }], attached = false

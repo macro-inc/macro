@@ -108,6 +108,34 @@ Selection utilities port ordered CSS parsing, selected-run splitting, style quer
 `offset` retains the deprecated upstream arena and its first-child parent-link, inclusive boundary and diff-adjustment quirks.
 
 `clipboard` exports sliced JSON through ephemeral clone/export hooks without mutating snapshots, hoists excluded wrappers, imports fresh keys and routes generated nodes through the command bus. Rich paste uses lexical/HTML/plain/URI priority, catches failed importers and accepts HTML nodes supplied by the view. `do_drop_in_namespace` preserves the target editor namespace for internal payloads; `do_drop` uses the empty default namespace. The crate does not own browser clipboard access or HTML conversion. HTML export and the `html` feature belong to WP-24, which provides the absent `lexical_html` crate. Invalid clipboard warnings contain only byte lengths.
+`table::nodes` ports TableNode, TableRowNode and TableCellNode payloads, shadow-root
+flags and JSON coercions. `table::map` preserves ragged rows, holes, truncated
+bottom overflow, rectangle expansion and map-time writable identity. Table row
+height null is intentionally imported as absent; negative/fractional imported
+spans are rejected by the typed payload. DOM creation and HTML conversion belong
+to the view/HTML layers.
+
+`table::ops` ports dimension creation, logical/deprecated physical row and
+column edits, merging, unmerging and simple-table column moves. Repeated span
+writes intentionally follow upstream live-cell identity. `table::grid` derives
+physical coordinates and span geometry from model snapshots; host elements and
+highlight state remain outside the model.
+
+`register_table` installs table selection hooks and integrity transforms, with
+optional cell-unmerge and background-removal policies. Table selections retain
+upstream row-major, reverse-descendant traversal and detached-range formatting.
+Observer actions return model outcomes to the view. The four application
+clear-text tests preserve one childless paragraph per cleared cell before
+normalization, including a key-allocation guard against an empty text child.
+
+`table::commands` implements insertion, select-all, triple-click and table paste.
+Clipboard tables unmerge/grow/fill the destination using upstream's captured
+intermediate maps. Shared caret-based root insertion also serves list lifting.
+`table::handlers` returns event-claiming and observer effects; `TableView` supplies
+only typeahead, cell-element presence and visual caret-edge facts. Clipboard I/O,
+pointer lifecycle, highlights and event cancellation remain in the host.
+Literal tests cover caret navigation, merged rectangles, edge paragraphs, Tab,
+cut/deletion, formatting, crossing ranges and touch/Firefox selection correction.
 
 `link` ports LinkNode/AutoLinkNode JSON, inline hooks, URL formatting/sanitization,
 link splitting/toggling, caret-preserving block lifting and adjacent-link merging.

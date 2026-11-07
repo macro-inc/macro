@@ -3,9 +3,24 @@ import { mkdir, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import type { Reporter, TestCase, TestModule } from 'vitest/node';
 
+type NamedCase = { id: string; fullName: string };
+
+export function caseName(
+  test: NamedCase,
+  declared: Iterable<NamedCase>
+): string {
+  const siblings = [...declared].filter(
+    (entry) => entry.fullName === test.fullName
+  );
+  const occurrence = siblings.findIndex((entry) => entry.id === test.id);
+  if (occurrence < 0) throw new Error('Test missing from its declaration tree');
+  return occurrence
+    ? `${test.fullName} [case ${occurrence + 1}]`
+    : test.fullName;
+}
+
 /** Persist all classifications; only passing, independently replayed cases are fixtures. */
 export default class FixtureReporter implements Reporter {
-  private names = new Map<string, number>();
   async onTestCaseResult(test: TestCase): Promise<void> {
     const dir = process.env.LEXICAL_RECORD_OUTPUT;
     if (!dir) throw new Error('LEXICAL_RECORD_OUTPUT is required');
@@ -23,10 +38,7 @@ export default class FixtureReporter implements Reporter {
       assertions: number;
       calls: number;
     };
-    const base = `${test.module.moduleId.split('/packages/')[1]}::${test.fullName}`;
-    const occurrence = this.names.get(base) ?? 0;
-    this.names.set(base, occurrence + 1);
-    const id = occurrence ? `${base} [case ${occurrence + 1}]` : base;
+    const id = `${test.module.moduleId.split('/packages/')[1]}::${caseName(test, test.module.children.allTests())}`;
     const slug = createHash('sha256').update(id).digest('hex');
     if (
       'source' in value.fixture &&
