@@ -626,7 +626,12 @@ impl Transaction<'_> {
         } else {
             slot
         };
-        let (block, index) = self.split_selection_boundary(slot)?;
+        let (_, index) = self.split_selection_boundary(slot)?;
+        let block = self
+            .selection_block(self.anchor_at(slot)?)
+            .ok_or(Error::Invariant(
+                "Expected ancestor to be a block ElementNode",
+            ))?;
         let tail = self
             .children(block)
             .skip(index.0 as usize)
@@ -779,43 +784,58 @@ impl Transaction<'_> {
         slot: SelectionSlot,
     ) -> Result<(NodeKey, ChildIndex), Error> {
         let point = self.anchor_at(slot)?;
-        let (mut parent, mut index) = match point {
-            Point::Element { key, offset } => (key, offset),
-            Point::Text { key, offset } => {
-                let parent = self.parent_or_err(key)?;
-                let index = self.index_within_parent(key).ok_or(Error::NoParent(key))?;
-                let len = self.text_content_size(key);
-                if offset == Utf16Offset::ZERO {
-                    (parent, index)
-                } else if offset == len {
-                    (parent, ChildIndex(index.0 + 1))
-                } else {
-                    self.text(key)?.split_text(&[offset])?;
-                    (parent, ChildIndex(index.0 + 1))
+        let mut node = point.key();
+        let mut offset = point.offset();
+        while !self.is_block(node) {
+            let previous = node;
+            let Some(parent) = self.parent(node) else {
+                let paragraph = self.create(Paragraph::default())?;
+                self.append(NodeKey::ROOT, &[paragraph.key()])?;
+                self.select_start(paragraph)?;
+                node = NodeKey::ROOT;
+                offset = 0;
+                if previous == node {
+                    break;
                 }
-            }
-        };
-        while self.is_inline(parent) {
-            let outer = self.parent_or_err(parent)?;
+                continue;
+            };
             let position = self
-                .index_within_parent(parent)
-                .ok_or(Error::NoParent(parent))?;
-            if index.0 == 0 {
-                index = position;
-            } else if index.0 == self.children_size(parent) {
-                index = ChildIndex(position.0 + 1);
+                .index_within_parent(node)
+                .ok_or(Error::NoParent(node))?;
+            if self.is_text(node) {
+                let parts = self.text(node)?.split_text(&[Utf16Offset(offset)])?;
+                offset = match parts.first().copied() {
+                    Some(first) => {
+                        self.index_within_parent(first)
+                            .ok_or(Error::NoParent(first))?
+                            .0
+                            + u32::from(offset != 0)
+                    }
+                    None => position.0,
+                };
+            } else if !self.is_element(node) || offset == 0 {
+                offset = position.0;
             } else {
-                let copy = self.copy_node(parent, false)?;
-                let tail = self
-                    .children(parent)
-                    .skip(index.0 as usize)
-                    .collect::<Vec<_>>();
-                self.append(copy, &tail)?;
-                self.insert_after(parent, copy, false)?;
-                index = ChildIndex(position.0 + 1);
+                if let Some(first) = self.child_at_index(node, ChildIndex(offset)) {
+                    let tail = std::iter::once(first)
+                        .chain(self.next_siblings(first))
+                        .collect::<Vec<_>>();
+                    let temporary = self.detach_selection(Selection::Range(
+                        RangeSelection::collapsed(Point::element(node, ChildIndex(offset))),
+                    ));
+                    let next = self.insert_new_after(node, temporary, true)?;
+                    self.take_detached(temporary)?;
+                    if let Some(next) = next {
+                        self.append(next, &tail)?;
+                    }
+                }
+                offset = position.0 + 1;
             }
-            parent = outer;
+            node = parent;
+            if previous == node {
+                break;
+            }
         }
-        Ok((parent, index))
+        Ok((node, ChildIndex(offset)))
     }
 }

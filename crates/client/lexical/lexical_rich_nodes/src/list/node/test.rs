@@ -181,3 +181,26 @@ fn splitting_raw_text_in_list_dispatches_parent_splice() -> Result<()> {
     assert_eq!(tx.text_content(children[1]), "ab");
     Ok(())
 }
+
+#[test]
+fn paragraph_insertion_at_a_list_boundary_uses_the_root_fallback() -> Result<()> {
+    let mut editor = register_list_nodes(Editor::builder(EditorMode::Headless))
+        .build()
+        .expect("editor");
+    let mut tx = editor.transaction();
+    let list = create_list_node(&mut tx, ListType::Bullet, 1)?;
+    let item = create_list_item_node(&mut tx, None)?;
+    tx.append(list, &[item.key()])?;
+    tx.append(NodeKey::ROOT, &[list.key()])?;
+    tx.set_selection(Some(Selection::Range(RangeSelection::collapsed(
+        Point::element(list, ChildIndex(0)),
+    ))))?;
+    tx.insert_paragraph()?;
+    let children = tx.children_keys(NodeKey::ROOT)?;
+    assert_eq!(children.len(), 3);
+    assert_eq!(children[0], list.key());
+    assert!(tx.is::<Paragraph>(children[1]));
+    assert!(tx.is::<Paragraph>(children[2]));
+    assert_eq!(tx.anchor()?, Point::element(children[2], ChildIndex(0)));
+    Ok(())
+}
