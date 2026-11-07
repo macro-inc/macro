@@ -85,11 +85,10 @@ impl LoroProjection {
                 for (view, parent) in [(prev, prev.parent(key)), (next, next.parent(key))] {
                     if let Some(parent) = parent
                         && let Some(owner) = synced_owner(view, parent, self.policy)
+                        && next.is_attached(owner)
                     {
-                        if next.is_attached(owner) {
-                            structure.insert(owner);
-                            dirty.insert(owner, Mutation::Updated);
-                        }
+                        structure.insert(owner);
+                        dirty.insert(owner, Mutation::Updated);
                     }
                 }
             }
@@ -135,6 +134,18 @@ impl LoroProjection {
                 }
             }
         }
+        // Element exports can derive fields from descendants (textStyle and
+        // textFormat). Visit their own JSON without materializing child lists.
+        let changed_keys = dirty.keys().copied().collect::<Vec<_>>();
+        for key in changed_keys {
+            for parent in next.ancestors(key) {
+                if synced_owner(next, parent, self.policy) == Some(parent)
+                    && !self.policy.is_transparent(next, parent)
+                {
+                    dirty.entry(parent).or_insert(Mutation::Updated);
+                }
+            }
+        }
         let before_vv = doc.oplog_vv();
         let mut stats = ProjectionStats::default();
         let mut handled = OrderedSet::default();
@@ -164,10 +175,17 @@ impl LoroProjection {
                     Some(list) => list,
                     None => {
                         stats.containers_written += 1;
+                        written.insert(key);
                         map.insert_container("children", LoroMovableList::new())?
                     }
                 };
-                if self.diff_children(next, &list, &b, &mut handled, &mut stats)? {
+                let current = projected_children(&map, self.policy)?
+                    .iter()
+                    .map(|map| self.index.owner.get(&map.id()).map(|(key, _)| *key))
+                    .collect::<Option<Vec<_>>>();
+                if current.as_deref() != Some(b.as_slice())
+                    && self.diff_children(next, &list, &b, &mut handled, &mut stats)?
+                {
                     written.insert(key);
                 }
                 self.index.bind(key, &map, self.policy)?;
@@ -187,13 +205,23 @@ impl LoroProjection {
             } else {
                 SerializedNode::new()
             };
-            if origin == FIXUP_ORIGIN {
-                if let Some(text) = map.get("text") {
-                    before.insert("text".into(), schema::read_value(&text)?);
-                }
+            if origin == FIXUP_ORIGIN
+                && let Some(text) = map.get("text")
+            {
+                before.insert("text".into(), schema::read_value(&text)?);
             }
             let new = own(next, key, self.policy)?;
-            if before == new {
+            if origin == FIXUP_ORIGIN {
+                let mut current = schema::own_map(&map)?;
+                mask_local(&mut current, self.policy);
+                if schema::owned_equal(
+                    &serde_json::Value::Object(current),
+                    Some(&serde_json::Value::Object(before.clone())),
+                    &serde_json::Value::Object(new.clone()),
+                ) {
+                    continue;
+                }
+            } else if before == new {
                 continue;
             }
             let old_type = map
@@ -256,6 +284,22 @@ impl LoroProjection {
         handled: &mut OrderedSet<NodeKey>,
         stats: &mut ProjectionStats,
     ) -> Result<bool> {
+        let mut normalized = false;
+        for i in (0..list.len()).rev() {
+            let map = schema::map_at(list.get(i), "children item")?;
+            if self.policy.is_transparent_json(&schema::own_map(&map)?)
+                && projected_children(&map, self.policy)?
+                    .iter()
+                    .any(|child| self.index.owner.contains_key(&child.id()))
+            {
+                // A persisted transparent wrapper containing adopted nodes is
+                // part of the synced view, not a genuinely foreign child.
+                list.delete(i, 1)?;
+                self.unbind_removed(&map)?;
+                normalized = true;
+                stats.containers_written += 1;
+            }
+        }
         let mut old = Vec::new();
         for i in 0..list.len() {
             let map = schema::map_at(list.get(i), "children item")?;
@@ -342,13 +386,13 @@ impl LoroProjection {
             live.insert(i, Some(*key));
         }
         // Rebind surviving positions only if necessary; cross-parent moves already replaced their own entries.
-        Ok(original != live)
+        Ok(normalized || original != live)
     }
     fn unbind_removed(&mut self, map: &LoroMap) -> Result<()> {
-        if let Some((key, _)) = self.index.owner.get(&map.id()).copied() {
-            if self.container_of(key) == Some(&map.id()) {
-                self.index.unbind(key);
-            }
+        if let Some((key, _)) = self.index.owner.get(&map.id()).copied()
+            && self.container_of(key) == Some(&map.id())
+        {
+            self.index.unbind(key);
         }
         for child in projected_children(map, self.policy)? {
             self.unbind_removed(&child)?;

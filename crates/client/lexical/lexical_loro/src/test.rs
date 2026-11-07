@@ -318,3 +318,7 @@ mod peers;
 mod differential;
 
 mod regressions;
+
+mod policy;
+
+mod lifecycle;

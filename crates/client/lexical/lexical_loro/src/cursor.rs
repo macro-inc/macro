@@ -61,9 +61,10 @@ impl LoroProjection {
             list.get_cursor(point.offset() as usize, Side::Middle)?
         } else {
             let path = doc.get_path_to_container(&slots.map)?;
-            let (parent, loro::Index::Seq(index)) = path.last()? else {
+            let (_, loro::Index::Seq(index)) = path.last()? else {
                 return None;
             };
+            let (parent, _) = path.get(path.len().checked_sub(2)?)?;
             let Container::MovableList(list) = doc.get_container(parent.clone())? else {
                 return None;
             };
@@ -100,7 +101,7 @@ impl LoroProjection {
         let slots = self.index.nodes.get(&key)?;
         let own_children = doc
             .get_path_to_container(&cursor.cursor.container)
-            .and_then(|p| p.last().cloned())
+            .and_then(|p| p.get(p.len().checked_sub(2)?).cloned())
             .is_some_and(|(parent, _)| parent == slots.map)
             && matches!(
                 doc.get_container(cursor.cursor.container.clone()),

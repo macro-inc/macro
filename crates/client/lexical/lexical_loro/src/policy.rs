@@ -63,6 +63,7 @@ pub(crate) fn own(
 ) -> Result<SerializedNode> {
     let mut json = view.export_json(key)?;
     json.remove("children");
+    json.values_mut().for_each(schema::normalize_numbers);
     mask_local(&mut json, policy);
     Ok(json)
 }
