@@ -12,9 +12,9 @@ opensearch_client = { path = "../opensearch_client" }
 schemars = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
+soup_property = { path = "../types/soup_property", features = ["schema"] }
 strum = { workspace = true }
 utoipa = { workspace = true }
 document_sub_type = { path = "../document_sub_type" }
-models_soup = { path = "../models_soup", features = ["schema"] }
 uuid = { workspace = true }
 workspace-hack = { version = "0.1", path = "../workspace-hack" }

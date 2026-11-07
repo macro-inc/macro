@@ -13475,11 +13475,11 @@ dependencies = [
  "document_sub_type",
  "item_filters",
  "model_file_type",
- "models_soup",
  "opensearch_client",
  "schemars 1.2.1",
  "serde",
  "serde_json",
+ "soup_property",
  "strum 0.27.2",
  "utoipa",
  "uuid",
@@ -13527,6 +13527,7 @@ dependencies = [
  "models_properties",
  "serde",
  "serde_json",
+ "soup_property",
  "strum 0.27.2",
  "utoipa",
  "uuid",
@@ -18911,6 +18912,17 @@ dependencies = [
  "serde",
  "soup",
  "thiserror 2.0.18",
+ "uuid",
+ "workspace-hack",
+]
+
+[[package]]
+name = "soup_property"
+version = "0.1.0"
+dependencies = [
+ "models_properties",
+ "serde",
+ "utoipa",
  "uuid",
  "workspace-hack",
 ]

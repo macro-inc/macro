@@ -6,7 +6,7 @@ version = "0.1.0"
 
 [features]
 mock = []
-schema = ["dep:utoipa", "item_filters/schema"]
+schema = ["dep:utoipa", "item_filters/schema", "soup_property/schema"]
 
 [dependencies]
 call = { path = "../call", default-features = false }
@@ -23,6 +23,7 @@ model_owner = { path = "../model_owner" }
 models_pagination = { path = "../models_pagination" }
 models_properties = { path = "../models_properties" }
 serde = { workspace = true }
+soup_property = { path = "../types/soup_property" }
 serde_json = { workspace = true }
 strum = { workspace = true }
 utoipa = { workspace = true, optional = true }

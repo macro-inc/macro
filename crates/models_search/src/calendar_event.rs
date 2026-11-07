@@ -1,8 +1,8 @@
 use crate::{SearchHighlight, SearchResponse, SearchResponseItem};
 use chrono::{DateTime, Utc};
-use models_soup::SoupProperty;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
+use soup_property::SoupProperty;
 use utoipa::ToSchema;
 
 /// Which calendar events a unified search covers.
