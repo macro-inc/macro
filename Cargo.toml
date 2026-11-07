@@ -252,6 +252,7 @@ members = [
   "crates/types/database_id",
   "crates/types/email_thread_id",
   "crates/types/entity_basic_types",
+  "crates/types/form_id",
   "crates/types/harness_id",
   "crates/types/harness_token",
   "crates/types/id_newtype",
@@ -823,6 +824,7 @@ fig_engine = { path = "crates/engines/fig_engine", default-features = false }
 filter_ast = { path = "crates/types/filter_ast" }
 firecracker_host_api = { path = "crates/clients/firecracker_host_api" }
 foreign_entity = { path = "crates/entities/foreign_entity", default-features = false }
+form_id = { path = "crates/types/form_id" }
 forms = { path = "crates/databases/forms" }
 frecency = { path = "crates/entities/frecency" }
 frecency_core = { path = "crates/entities/frecency_core" }
