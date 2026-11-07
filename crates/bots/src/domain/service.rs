@@ -15,7 +15,7 @@ use super::{
     ports::{BotError, BotRepo, BotService, HarnessRemoved, McpAppCatalog},
     tokens,
 };
-use bot_token::HashedBotToken;
+use bearer_token::HashedBotToken;
 use chrono::{DateTime, Utc};
 use entity_access::domain::models::{
     BotReceiptScope, Entity, EntityAccessReceipt, EntityPermission, EntityType,

@@ -12,10 +12,10 @@ use hosted_pairing::{grant_team_access, insert_harness};
 use persistence_error::HarnessPersistenceError;
 
 use anyhow::Context;
+use bearer_token::HashedHarnessToken;
 use chrono::{DateTime, Utc};
 use entity_access_db_utils::{EntityType, delete_entity_access_rows, team_share};
 use harness_id::HarnessId;
-use harness_token::HashedHarnessToken;
 use macro_user_id::user_id::MacroUserIdStr;
 use models_permissions::share_permission::access_level::AccessLevel;
 use sqlx::PgPool;

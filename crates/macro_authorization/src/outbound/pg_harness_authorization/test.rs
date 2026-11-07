@@ -30,7 +30,7 @@ async fn insert_harness_token(
     .execute(pool)
     .await
     .unwrap();
-    let hashed = harness_token::HashedHarnessToken::from_raw(TOKEN);
+    let hashed = bearer_token::HashedHarnessToken::from_raw(TOKEN);
     sqlx::query!(
         r#"
         INSERT INTO harness_tokens (id, harness_id, token_hash, token_prefix, revoked_at)
