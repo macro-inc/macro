@@ -229,6 +229,7 @@ impl Transaction<'_> {
         } else {
             let backward = range.is_backward(self.view())?;
             let nodes = range.nodes(self.view())?;
+            let (start, end) = if backward { (range.focus, range.anchor) } else { (range.anchor, range.focus) };
             let mut formats = None;
             for (i, key) in nodes.iter().enumerate() {
                 if let Some(text) = self.view().text(*key) {
@@ -243,8 +244,8 @@ impl Transaction<'_> {
                         context.dom_focus_offset
                     };
                     if text.text.utf16_len() == Utf16Offset::ZERO
-                        || (i == 0 && from == text.text.utf16_len().get())
-                        || (i + 1 == nodes.len() && to == 0)
+                        || (i == 0 && *key == start.key() && from == text.text.utf16_len().get())
+                        || (i + 1 == nodes.len() && *key == end.key() && to == 0)
                     {
                         continue;
                     }

@@ -535,3 +535,29 @@ fn merging_text_resolves_both_parent_selection_endpoints() -> Result<(), Error> 
     );
     Ok(())
 }
+
+#[test]
+fn view_format_intersection_does_not_treat_root_offsets_as_text_offsets() -> Result<(), Error> {
+    let mut editor = Editor::builder(EditorMode::Headless).build().unwrap();
+    editor.update(|tx| {
+        let first = tx.create(Paragraph::default())?;
+        let second = tx.create(Paragraph::default())?;
+        let last = tx.create(Paragraph::default())?;
+        let plain = tx.create_text("ab")?;
+        let bold = tx.create_text("cde")?;
+        tx.text(bold)?.set_format(TextFormat::BOLD)?;
+        tx.append(last, &[plain.key(), bold.key()])?;
+        tx.append(NodeKey::ROOT, &[first.key(), second.key(), last.key()])?;
+        tx.selection_from_view(ViewSelection::Range {
+            anchor: Point::text(bold, Utf16Offset(1)),
+            focus: Point::element(NodeKey::ROOT, ChildIndex(2)),
+            resolution_dirty: false,
+        })?;
+        tx.selection_change_format(&SelectionChangeContext {
+            dom_anchor_offset: 1, dom_focus_offset: 2, ..SelectionChangeContext::default()
+        })?;
+        assert_eq!(tx.range_selection()?.format, TextFormat::empty());
+        Ok(())
+    })?;
+    Ok(())
+}
