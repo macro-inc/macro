@@ -117,6 +117,13 @@ pub struct SendNotificationRequest<'a, T, U> {
     pub(crate) mobile_push_exclusions: MobilePushRecipients,
 }
 
+impl<T, U> SendNotificationRequest<'_, T, U> {
+    /// Whether the request is also sent through the connection gateway.
+    pub fn send_conn_gateway(&self) -> bool {
+        self.send_conn_gateway
+    }
+}
+
 impl<'a, T: NotificationExtIos, U> SendNotificationRequest<'a, T, U> {
     /// Add a custom APNS notification builder.
     pub fn with_apns(self) -> SendNotificationRequest<'a, T, T::NotifData> {
@@ -308,7 +315,7 @@ pub enum NotificationStatus {
 impl NotificationStatus {
     /// States needing an entity-scoped update, plus whether to include rows missing a view time.
     /// ID-scoped writes still return every requested owned row to reconcile retries.
-    pub(crate) fn entity_update_filter(&self) -> (&'static [super::NotificationState], bool) {
+    pub fn entity_update_filter(&self) -> (&'static [super::NotificationState], bool) {
         use super::NotificationState;
         match self {
             Self::Seen => (&[NotificationState::Unseen], true),

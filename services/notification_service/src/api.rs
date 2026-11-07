@@ -1,5 +1,5 @@
 use crate::api::context::{ApiContext, AuthorizationService};
-use ::notification::inbound::http::NotificationRouterState;
+use ::notification_inbound::http::NotificationRouterState;
 use anyhow::Context;
 use axum::Router;
 use macro_tower_layers::MacroRequestIdAndTracingLayer;
@@ -86,7 +86,7 @@ fn api_router<S: ::notification::domain::service::NotificationReader>(
     let internal_router = Router::new()
         .nest(
             "/device",
-            ::notification::inbound::http::device::device_router::<S, AuthorizationService>(),
+            ::notification_inbound::http::device::device_router::<S, AuthorizationService>(),
         )
         .nest("/user_notifications", user_notification::router())
         .with_state(ingress_state)

@@ -36,7 +36,7 @@ stack settings still default to disabled/dry-run, and manual invocations with
 
 The notification domain owns policy and batching in
 `crates/notifications/notification/src/domain/retention.rs`. Its outbound adapter owns checked
-SQL and transactions in `crates/notifications/notification/src/outbound/retention.rs`. The
+SQL and transactions in `crates/notifications/notification_outbound/src/retention.rs`. The
 Lambda only parses an internal event, computes remaining invocation time, and
 calls the domain service. There is no HTTP route or user-callable cleanup API.
 IAM controls invocation; do not grant end users permission to invoke this Lambda.

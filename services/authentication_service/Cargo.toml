@@ -153,6 +153,7 @@ models_permissions = { workspace = true }
 native_app_service = { workspace = true }
 non_empty = { workspace = true }
 notification = { workspace = true, default-features = true }
+notification_outbound = { workspace = true }
 onboarding = { workspace = true }
 rand = { workspace = true }
 rate_limit = { workspace = true }

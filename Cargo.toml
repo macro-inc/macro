@@ -867,7 +867,9 @@ non_empty = { path = "crates/types/non_empty" }
 notification = { path = "crates/notifications/notification", default-features = false }
 notification_db_client = { path = "crates/notifications/notification_db_client" }
 notification_hex = { package = "notification", path = "crates/notifications/notification" }
+notification_inbound = { path = "crates/notifications/notification_inbound", default-features = false }
 notification_inbox = { path = "crates/notifications/notification_inbox" }
+notification_outbound = { path = "crates/notifications/notification_outbound" }
 notification_service_url = { path = "crates/platform/service_urls/notification_service_url" }
 notification_state = { path = "crates/types/notification_state" }
 onboarding = { path = "crates/accounts/onboarding" }

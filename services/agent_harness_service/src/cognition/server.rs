@@ -57,9 +57,9 @@ use macro_authorization::{
 use notification::domain::service::{
     NotificationReaderService, PlatformArnConfig, SqsNotificationIngress,
 };
-use notification::outbound::queue::SqsQueue;
-use notification::outbound::repository::DbNotificationRepository;
-use notification::outbound::websocket::ConnectionGatewayClient;
+use notification_outbound::queue::SqsQueue;
+use notification_outbound::repository::DbNotificationRepository;
+use notification_outbound::websocket::ConnectionGatewayClient;
 use readonly_pool::ReadOnlyPool;
 use search_service_client::SearchServiceClient;
 use static_file_service_url::StaticFileServiceUrl;
@@ -241,7 +241,7 @@ pub async fn build(
         realtime: notification::domain::ports::NoopNotificationRealtimePublisher,
     };
     let notification_tool_context =
-        notification::inbound::ai_tool::NotificationToolContext::new(notification_reader_service);
+        notification_inbound::ai_tool::NotificationToolContext::new(notification_reader_service);
 
     tracing::info!("initialized notification ingress service");
     let entity_access_service = Arc::new(EntityAccessServiceImpl::new(PgAccessRepository::new(

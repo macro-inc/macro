@@ -92,6 +92,8 @@ models_databases = { workspace = true }
 models_pagination = { workspace = true }
 models_permissions = { workspace = true }
 notification = { workspace = true, default-features = true, features = ["ai_tool"] }
+notification_inbound = { workspace = true, features = ["ai_tool"] }
+notification_outbound = { workspace = true }
 prompt = { workspace = true }
 models_properties = { workspace = true }
 models_search = { workspace = true }

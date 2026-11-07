@@ -2,7 +2,7 @@ use notification::domain::models::android::FCMMessage;
 use notification::domain::models::apple::APNSPushNotification;
 use notification::domain::models::mobile::MessageAttributes;
 use notification::domain::ports::NotificationSender;
-use notification::outbound::mobile::MobilePushAdapter;
+use notification_outbound::mobile::MobilePushAdapter;
 use rootcause::Report;
 use serde::Serialize;
 use tokio::sync::mpsc;

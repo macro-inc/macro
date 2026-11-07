@@ -1,0 +1,64 @@
+[package]
+edition = "2024"
+name = "notification_inbound"
+publish = false
+version = "0.1.0"
+
+[features]
+# The AI notification tool.
+ai_tool = [
+  "dep:ai_toolset",
+  "dep:anyhow",
+  "dep:async-trait",
+  "dep:schemars",
+  "notification/ai_tool",
+]
+# The HTTP routes.
+axum = [
+  "dep:axum",
+  "dep:macro_authorization",
+  "dep:model_error_response",
+  "dep:model_user",
+  "dep:serde_with",
+  "dep:utoipa",
+  "models_pagination/axum",
+  "notification/schema",
+]
+
+[dependencies]
+notification = { workspace = true }
+ai_toolset = { workspace = true, optional = true }
+anyhow = { workspace = true, optional = true }
+async-trait = { workspace = true, optional = true }
+axum = { workspace = true, optional = true }
+chrono = { workspace = true }
+cowlike = { workspace = true }
+hmac = { workspace = true }
+macro_authorization = { workspace = true, features = [
+  "axum",
+], optional = true }
+macro_user_id = { workspace = true }
+model_entity = { workspace = true }
+model_error_response = { workspace = true, optional = true }
+model_user = { workspace = true, optional = true }
+models_pagination = { workspace = true }
+reqwest = { workspace = true }
+rootcause = { workspace = true }
+schemars = { workspace = true, optional = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+serde_with = { workspace = true, optional = true }
+sha2 = { workspace = true }
+tokio = { workspace = true, features = ["time"] }
+tracing = { workspace = true }
+url = { workspace = true }
+utoipa = { workspace = true, optional = true }
+uuid = { workspace = true }
+workspace-hack = { version = "0.1", path = "../../workspace-hack" }
+notification_service_url = { workspace = true }
+
+[dev-dependencies]
+notification = { workspace = true, features = ["schema"] }
+http-body-util = { workspace = true }
+tokio = { workspace = true, features = ["macros", "rt", "test-util"] }
+tower = { workspace = true }

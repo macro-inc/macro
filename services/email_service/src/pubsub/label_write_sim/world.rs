@@ -276,7 +276,7 @@ impl World {
             redis_client: wiring::redis_client(redis_client.clone()),
             notification_ingress_service: Arc::new(
                 notification::domain::service::SqsNotificationIngress {
-                    queue: notification::outbound::queue::SqsQueue::new(
+                    queue: notification_outbound::queue::SqsQueue::new(
                         sqs_sdk.clone(),
                         format!("{services_url}/queue/notifications"),
                     ),

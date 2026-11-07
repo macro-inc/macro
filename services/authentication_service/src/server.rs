@@ -52,10 +52,9 @@ use native_app_service::{
     domain::{models::PlatformData, service::NativeAppServiceImpl},
     outbound::DefaultBundleFetcher,
 };
-use notification::outbound::queue::SqsQueue;
-use notification::{
-    domain::service::SqsNotificationIngress, outbound::rate_limit::RedisRateLimitAdapter,
-};
+use notification::domain::service::SqsNotificationIngress;
+use notification_outbound::queue::SqsQueue;
+use notification_outbound::rate_limit::RedisRateLimitAdapter;
 use rate_limit::domain::service::RateLimitServiceImpl;
 use roles_and_permissions::{
     domain::service::UserRolesAndPermissionsServiceImpl, outbound::pgpool::MacroDB,

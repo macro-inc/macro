@@ -11,7 +11,7 @@ use macro_authorization::{InternalOnly, MacroAuthorizationExtractor};
 use macro_user_id::user_id::MacroUserIdStr;
 use model::{authentication::webhooks::FusionAuthUserWebhook, user::UserInfo};
 use notification::domain::ports::NotificationRepository;
-use notification::outbound::repository::DbNotificationRepository;
+use notification_outbound::repository::DbNotificationRepository;
 use sqlx::{Pool, Postgres};
 use tracing::Instrument;
 

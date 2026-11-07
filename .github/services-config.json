@@ -117,6 +117,8 @@
         "crates/accounts/teams/**",
         "crates/email/invite_email/**",
         "crates/notifications/notification/**",
+        "crates/notifications/notification_inbound/**",
+        "crates/notifications/notification_outbound/**",
         "crates/notifications/model_notifications/**",
         "crates/comms/call/**",
         "crates/integrations/github/**",

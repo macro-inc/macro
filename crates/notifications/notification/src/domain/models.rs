@@ -280,7 +280,7 @@ impl<T> UserNotificationRow<T> {
 #[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(transparent)]
 #[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
-pub(crate) struct NotificationTypeName(Cow<'static, str>);
+pub struct NotificationTypeName(Cow<'static, str>);
 
 impl NotificationTypeName {
     pub(crate) fn new_from_notif<T: Notification>(_v: &T) -> Self {
@@ -300,6 +300,23 @@ impl AsRef<str> for NotificationTypeName {
 pub struct TaggedContent<T> {
     pub(crate) tag: NotificationTypeName,
     pub(crate) content: T,
+}
+
+impl<T> TaggedContent<T> {
+    /// The notification's type name.
+    pub fn tag(&self) -> &NotificationTypeName {
+        &self.tag
+    }
+
+    /// The notification's content.
+    pub fn content(&self) -> &T {
+        &self.content
+    }
+
+    /// Takes the notification's content.
+    pub fn into_content(self) -> T {
+        self.content
+    }
 }
 
 impl<T: Notification> TaggedContent<Arc<T>> {

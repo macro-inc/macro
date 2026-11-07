@@ -78,7 +78,7 @@ Then decide two lists in other crates; nothing will force you to:
   not be able to turn it off (account-security kinds like `inbox_reauth_required`
   stay out). The preferences endpoint rejects disabling any type not listed.
 - **Category filter:** check `push_include_types_filter` in
-  `crates/notifications/notification/src/outbound/repository.rs`. Categories mostly match on
+  `crates/notifications/notification_outbound/src/repository.rs`. Categories mostly match on
   `event_item_type`, and `Message` also matches any metadata with a `messageId`.
   A new kind filed under an existing entity type joins that category, which leaked
   agent rows into the channel filter once. GitHub kinds are a hand-kept list
@@ -243,7 +243,7 @@ kinds introduced by a newer backend.
   `static_assets/schema.graphql`; adding enum values is compatible, removing
   them is not.
 - **Channel unread scoping:** channel thread SQL in
-  `crates/notifications/notification/src/outbound/entity_notifications.rs` lists event types by
+  `crates/notifications/notification_outbound/src/entity_notifications.rs` lists event types by
   name. Add a channel-scoped kind there, with tests beside it.
 
 ## 8. Docs
