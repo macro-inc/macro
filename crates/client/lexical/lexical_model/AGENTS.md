@@ -85,6 +85,6 @@ Generated properties cover S4 P1–P13 for the core node subset. P5 follows S1 �
 cache eligibility; P10 compares dirty records before cache writes per S1 §8.7.
 Exact history JSON identity (P11) uses headless mode: restoring view-attached
 snapshots can reconcile cached element defaults, as the upstream literal guard
-demonstrates. P14 awaits the markdown crate. Persist shrinking seeds in
+demonstrates. Place P14 markdown round-trip properties in lexical_markdown. Persist shrinking seeds in
 `proptest-regressions/`. Keep the decorator count in sync with record insertion
 and removal; opaque text hooks rule out the local root-text proof.

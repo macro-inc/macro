@@ -84,7 +84,7 @@ pub struct Commit {
     pub work: WorkCounters,
 }
 impl Commit {
-    /// Nothing dirty and no selection change.
+    /// Nothing dirty, no selection change and no emitted events.
     pub fn is_noop(&self) -> bool {
         self.changes.is_empty() && !self.selection_changed && self.events.is_empty()
     }
