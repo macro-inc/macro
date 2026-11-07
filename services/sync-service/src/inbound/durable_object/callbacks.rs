@@ -88,8 +88,7 @@ impl SyncSession {
         if !self.validate_surface_sockets(Some(&ws)).await? {
             return Ok(());
         }
-        const PONG: &str = "pong";
-        const PING: &str = "ping";
+        use sync_protocol::{PING, PONG};
         let binary_message = match msg {
             WebSocketIncomingMessage::String(message) => {
                 // Heartbeat: deliberately unspanned to keep it out of traces.
