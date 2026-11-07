@@ -6569,6 +6569,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "document_id"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "serde_json",
+ "sqlx",
+ "thiserror 2.0.18",
+ "utoipa",
+ "uuid",
+]
+
+[[package]]
 name = "document_storage_service"
 version = "0.1.0"
 dependencies = [
@@ -11724,6 +11736,17 @@ dependencies = [
  "messages",
  "rootcause",
  "workspace-hack",
+]
+
+[[package]]
+name = "lexical_node_id"
+version = "0.1.0"
+dependencies = [
+ "nutype",
+ "serde",
+ "serde_json",
+ "sqlx",
+ "utoipa",
 ]
 
 [[package]]
