@@ -5,6 +5,7 @@ edition = "2024"
 publish = false
 
 [dependencies]
+imbl = { workspace = true }
 rustc-hash = { workspace = true }
 indexmap = { workspace = true }
 serde = { workspace = true, features = ["derive", "rc"] }

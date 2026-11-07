@@ -114,3 +114,58 @@ pub enum KeySource {
 }
 #[cfg(test)]
 mod test;
+
+/// A key with proof of registered node ancestry at the time it was obtained.
+/// s2: ID-01
+pub struct Id<Node: crate::NodeType> {
+    key: NodeKey,
+    node_type: std::marker::PhantomData<fn() -> Node>,
+}
+impl<Node: crate::NodeType> Id<Node> {
+    pub(crate) fn new_unchecked(key: NodeKey) -> Self {
+        Self {
+            key,
+            node_type: std::marker::PhantomData,
+        }
+    }
+    /// The untyped identity.
+    pub fn key(self) -> NodeKey {
+        self.key
+    }
+    /// Move one level up the declared parent chain.
+    pub fn upcast(self) -> Id<crate::ParentOf<Node>> {
+        Id::new_unchecked(self.key)
+    }
+}
+impl<Node: crate::NodeType> Copy for Id<Node> {}
+impl<Node: crate::NodeType> Clone for Id<Node> {
+    fn clone(&self) -> Self {
+        *self
+    }
+}
+impl<Node: crate::NodeType> PartialEq for Id<Node> {
+    fn eq(&self, other: &Self) -> bool {
+        self.key == other.key
+    }
+}
+impl<Node: crate::NodeType> Eq for Id<Node> {}
+impl<Node: crate::NodeType> std::hash::Hash for Id<Node> {
+    fn hash<Hasher: std::hash::Hasher>(&self, h: &mut Hasher) {
+        self.key.hash(h);
+    }
+}
+impl<Node: crate::NodeType> fmt::Debug for Id<Node> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        self.key.fmt(f)
+    }
+}
+impl<Node: crate::NodeType> fmt::Display for Id<Node> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        self.key.fmt(f)
+    }
+}
+impl<Node: crate::NodeType> From<Id<Node>> for NodeKey {
+    fn from(id: Id<Node>) -> Self {
+        id.key
+    }
+}
