@@ -557,7 +557,23 @@ jobs:
       working-directory: apps/web
     - name: show sccache stats
       if: always()
-      run: sccache --show-stats || true
+      run: |
+        sccache --show-stats || true
+        mkdir -p "$STATS_DIR"
+        sccache --show-stats --stats-format json > "$STATS_DIR/sccache.json" \
+          || rm -f "$STATS_DIR/sccache.json"
+      shell: bash
+      env:
+        STATS_DIR: ${{ runner.temp }}/ci-cache-stats
+    - name: Upload sccache stats
+      if: always()
+      uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+      with:
+        name: ci-cache-stats-${{ job.check_run_id }}
+        path: ${{ runner.temp }}/ci-cache-stats/sccache.json
+        if-no-files-found: ignore
+        retention-days: '1'
+      continue-on-error: true
     - name: Teardown Nix
       if: always()
       uses: './.github/actions/teardown-nix'
@@ -675,6 +691,25 @@ jobs:
       env:
         VITEST_MODULE_CACHE_DIR: /home/runner/.cache/vitest-modules
       working-directory: apps/web
+    - name: show sccache stats
+      if: always()
+      run: |
+        sccache --show-stats || true
+        mkdir -p "$STATS_DIR"
+        sccache --show-stats --stats-format json > "$STATS_DIR/sccache.json" \
+          || rm -f "$STATS_DIR/sccache.json"
+      shell: bash
+      env:
+        STATS_DIR: ${{ runner.temp }}/ci-cache-stats
+    - name: Upload sccache stats
+      if: always()
+      uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+      with:
+        name: ci-cache-stats-${{ job.check_run_id }}
+        path: ${{ runner.temp }}/ci-cache-stats/sccache.json
+        if-no-files-found: ignore
+        retention-days: '1'
+      continue-on-error: true
     - name: Teardown Nix
       if: always()
       uses: './.github/actions/teardown-nix'
@@ -759,7 +794,23 @@ jobs:
       working-directory: apps/web
     - name: show sccache stats
       if: always()
-      run: sccache --show-stats || true
+      run: |
+        sccache --show-stats || true
+        mkdir -p "$STATS_DIR"
+        sccache --show-stats --stats-format json > "$STATS_DIR/sccache.json" \
+          || rm -f "$STATS_DIR/sccache.json"
+      shell: bash
+      env:
+        STATS_DIR: ${{ runner.temp }}/ci-cache-stats
+    - name: Upload sccache stats
+      if: always()
+      uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+      with:
+        name: ci-cache-stats-${{ job.check_run_id }}
+        path: ${{ runner.temp }}/ci-cache-stats/sccache.json
+        if-no-files-found: ignore
+        retention-days: '1'
+      continue-on-error: true
     - name: Teardown Nix
       if: always()
       uses: './.github/actions/teardown-nix'
@@ -852,6 +903,25 @@ jobs:
         bunx playwright install-deps chromium
         just test-calendar-details-browser
       working-directory: apps/web
+    - name: show sccache stats
+      if: always()
+      run: |
+        sccache --show-stats || true
+        mkdir -p "$STATS_DIR"
+        sccache --show-stats --stats-format json > "$STATS_DIR/sccache.json" \
+          || rm -f "$STATS_DIR/sccache.json"
+      shell: bash
+      env:
+        STATS_DIR: ${{ runner.temp }}/ci-cache-stats
+    - name: Upload sccache stats
+      if: always()
+      uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+      with:
+        name: ci-cache-stats-${{ job.check_run_id }}
+        path: ${{ runner.temp }}/ci-cache-stats/sccache.json
+        if-no-files-found: ignore
+        retention-days: '1'
+      continue-on-error: true
     - name: Teardown Nix
       if: always()
       uses: './.github/actions/teardown-nix'
@@ -961,7 +1031,23 @@ jobs:
       working-directory: apps/web
     - name: show sccache stats
       if: always()
-      run: sccache --show-stats || true
+      run: |
+        sccache --show-stats || true
+        mkdir -p "$STATS_DIR"
+        sccache --show-stats --stats-format json > "$STATS_DIR/sccache.json" \
+          || rm -f "$STATS_DIR/sccache.json"
+      shell: bash
+      env:
+        STATS_DIR: ${{ runner.temp }}/ci-cache-stats
+    - name: Upload sccache stats
+      if: always()
+      uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+      with:
+        name: ci-cache-stats-${{ job.check_run_id }}
+        path: ${{ runner.temp }}/ci-cache-stats/sccache.json
+        if-no-files-found: ignore
+        retention-days: '1'
+      continue-on-error: true
     - id: preview-credentials
       name: Configure AWS Credentials
       if: needs.path-check.outputs.web_artifact_changed == 'true' && !contains(github.event.pull_request.title, '[no preview]') && github.event.pull_request.head.repo.full_name == github.repository

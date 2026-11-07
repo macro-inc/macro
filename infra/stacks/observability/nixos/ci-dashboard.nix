@@ -239,7 +239,7 @@ let
     panels = [ ];
   };
 
-  tracesTop = 47;
+  tracesTop = 58;
   panel = id: title: description: filter: fields: {
     inherit id title description;
     type = "table";
@@ -289,7 +289,7 @@ let
     title = "Macro CI";
     description = "Where CI time goes. The top section reads the exporter's push, job and step events in Loki, kept 30 days, over the selected range; set it to a day or more for percentiles. The bottom section searches the run traces in Tempo, kept 7 days: open a trace for its execution waterfall. Trace tables are bounded search results, not complete counts.";
     schemaVersion = 39;
-    version = 3;
+    version = 4;
     editable = false;
     tags = [
       "macro"
@@ -366,6 +366,7 @@ let
       )
       (lokiTable 16 "hours" (grid 12 39 6 8))
       (lokiStat 17 "exporter" (grid 18 39 6 8))
+      (lokiTable 18 "sccache" (grid 0 47 24 10))
       (row 101 (tracesTop - 1) "Run traces, from Tempo")
       (panel 1 "Workflow runs — open a trace for jobs and steps"
         "Workflow duration includes waiting; for reruns the upstream exporter starts the root span at the original run creation. Use job durations for execution timing. The url attribute links to GitHub."
