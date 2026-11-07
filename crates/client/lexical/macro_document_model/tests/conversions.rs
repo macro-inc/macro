@@ -92,3 +92,48 @@ fn source_markdown_conversions() {
     );
     assert!(count > 500);
 }
+
+#[test]
+fn external_document_card_requires_an_explicit_hostname() -> macro_document_model::Result<()> {
+    use macro_document_model::nodes::{DocumentCardNode, Maybe};
+    let mut editor = export_builder().build().unwrap();
+    editor.update(|tx| {
+        let node = tx.create(DocumentCardNode {
+            document_id: Maybe::Value("doc".into()),
+            document_name: Maybe::Value("Example".into()),
+            block_name: Maybe::Value("md".into()),
+            ..Default::default()
+        })?;
+        tx.append(NodeKey::ROOT, &[node.key()])?;
+        Ok(())
+    })?;
+    let registry = lexical_markdown::Transformers::new([transformer(
+        "E_DOCUMENT_CARD",
+        &MacroMarkdownOptions::default(),
+    )?]);
+    assert!(matches!(
+        macro_document_model::markdown::convert_to_markdown_string(
+            editor.state(),
+            &registry,
+            None,
+            &Default::default()
+        ),
+        Err(macro_document_model::Error::MissingHostname)
+    ));
+    let registry = lexical_markdown::Transformers::new([transformer(
+        "E_DOCUMENT_CARD",
+        &MacroMarkdownOptions {
+            app_hostname: Some("localhost".into()),
+        },
+    )?]);
+    assert_eq!(
+        macro_document_model::markdown::convert_to_markdown_string(
+            editor.state(),
+            &registry,
+            None,
+            &Default::default()
+        )?,
+        "[Example](https://dev.macro.com/app/md/doc)"
+    );
+    Ok(())
+}

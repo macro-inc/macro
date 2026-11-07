@@ -116,7 +116,7 @@ pub fn is_supported_node_type(name: &str) -> bool {
         || SUPPORTED_REGISTRATIONS.iter().any(|(ty, _)| *ty == name)
 }
 /// Register one named source class, retaining the caller's mode and other classes.
-pub fn register_supported_node(builder: EditorBuilder, name: &str) -> crate::Result<EditorBuilder> {
+pub fn register_supported_node(builder: EditorBuilder, name: &str) -> crate::ModelResult<EditorBuilder> {
     if matches!(name, "root" | "paragraph" | "text" | "tab" | "linebreak") {
         return Ok(builder);
     }

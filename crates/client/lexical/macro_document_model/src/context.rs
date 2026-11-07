@@ -11,11 +11,11 @@ pub struct NodeRandom(pub Arc<dyn Fn(usize) -> Vec<u8> + Send + Sync>);
 #[derive(Clone, Default)]
 pub struct NodeHost(pub Option<Arc<str>>);
 /// Read the installed clock; every host installs it explicitly.
-pub fn now_ms(tx: &Transaction<'_>) -> crate::Result<u64> {
+pub fn now_ms(tx: &Transaction<'_>) -> crate::ModelResult<u64> {
     Ok((tx.extension::<NodeClock>()?.0)())
 }
 /// Generate an unvalidated URL-safe nanoid using host-provided random bytes.
-pub fn nanoid(tx: &Transaction<'_>, length: usize) -> crate::Result<String> {
+pub fn nanoid(tx: &Transaction<'_>, length: usize) -> crate::ModelResult<String> {
     let bytes = (tx.extension::<NodeRandom>()?.0)(length);
     if bytes.len() != length {
         return Err(Error::Invariant("node RNG returned an invalid byte count"));
@@ -32,7 +32,7 @@ pub fn nanoid(tx: &Transaction<'_>, length: usize) -> crate::Result<String> {
         .ok_or(Error::Invariant("invalid nanoid alphabet index"))
 }
 /// Format the injected clock with JavaScript Date.toISOString precision.
-pub fn now_iso(tx: &Transaction<'_>) -> crate::Result<String> {
+pub fn now_iso(tx: &Transaction<'_>) -> crate::ModelResult<String> {
     let millis = i64::try_from(now_ms(tx)?).map_err(|error| Error::invariant(error.to_string()))?;
     let date = chrono::DateTime::<chrono::Utc>::from_timestamp_millis(millis)
         .ok_or(Error::Invariant("invalid node timestamp"))?;

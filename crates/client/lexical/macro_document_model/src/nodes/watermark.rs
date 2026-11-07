@@ -14,10 +14,10 @@ impl NodeType for WatermarkNode {
     fn flag_probe() -> Option<Self> {
         Some(Self::default())
     }
-    fn import(tx: &mut Transaction<'_>, json: &SerializedNode) -> crate::Result<NodeKey> {
+    fn import(tx: &mut Transaction<'_>, json: &SerializedNode) -> crate::ModelResult<NodeKey> {
         super::wire::import_node::<Self>(tx, json)
     }
-    fn import_json(json: &SerializedNode) -> crate::Result<Self> {
+    fn import_json(json: &SerializedNode) -> crate::ModelResult<Self> {
         let json = super::wire::own_json(Self::TYPE, json)?;
         Ok(serde_json::from_value(Value::Object(json))?)
     }
@@ -43,7 +43,7 @@ impl DecoratorNode for WatermarkNode {
     fn text_content<'s>(&self, _: DecoratorView<'s>) -> Cow<'s, str> {
         (js_optional(&self.content).to_owned()).into()
     }
-    fn remove(_: &mut Transaction<'_>, _: Id<Self>, _: bool) -> crate::Result<()> {
+    fn remove(_: &mut Transaction<'_>, _: Id<Self>, _: bool) -> crate::ModelResult<()> {
         Ok(())
     }
 }
@@ -53,14 +53,14 @@ impl SearchText for WatermarkNode {}
 pub fn force_remove_watermark(
     tx: &mut Transaction<'_>,
     id: Id<WatermarkNode>,
-) -> crate::Result<()> {
+) -> crate::ModelResult<()> {
     tx.default_remove(id.key(), true, false)
 }
 /// Create an unattached watermark through configured replacement.
 pub fn create_watermark_node(
     tx: &mut Transaction<'_>,
     content: Option<String>,
-) -> crate::Result<Id<WatermarkNode>> {
+) -> crate::ModelResult<Id<WatermarkNode>> {
     tx.create(WatermarkNode {
         content: Maybe::from_option(content),
     })
@@ -69,7 +69,7 @@ pub fn create_watermark_node(
 pub fn append_watermark_node_to_last(
     tx: &mut Transaction<'_>,
     content: Option<String>,
-) -> crate::Result<Option<Id<WatermarkNode>>> {
+) -> crate::ModelResult<Option<Id<WatermarkNode>>> {
     let Some(content) = content.filter(|s| !s.is_empty()) else {
         return Ok(None);
     };

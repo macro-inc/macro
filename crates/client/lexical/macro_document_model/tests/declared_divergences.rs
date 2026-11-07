@@ -9,7 +9,7 @@ fn divergence_magic_chip_status_rejects_unknown_enum_values() -> Result<()> {
     let unknown = input.replace("acp_ready", "future_status");
     assert!(matches!(
         editor.parse_editor_state_str(&unknown),
-        Err(Error::Json(_))
+        Err(lexical_model::Error::Json(_))
     ));
     Ok(())
 }

@@ -24,10 +24,10 @@ impl NodeType for CustomCodeNode {
         node.code.language = Some(normalize_custom_language(self.code.language()));
         Some(node)
     }
-    fn import(tx: &mut Transaction<'_>, json: &SerializedNode) -> crate::Result<NodeKey> {
+    fn import(tx: &mut Transaction<'_>, json: &SerializedNode) -> crate::ModelResult<NodeKey> {
         super::wire::import_node::<Self>(tx, json)
     }
-    fn import_json(json: &SerializedNode) -> crate::Result<Self> {
+    fn import_json(json: &SerializedNode) -> crate::ModelResult<Self> {
         let json = super::wire::own_json(Self::TYPE, json)?;
         Ok(serde_json::from_value(Value::Object(json))?)
     }

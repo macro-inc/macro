@@ -27,10 +27,10 @@ impl NodeType for AgentSessionMentionNode {
     fn flag_probe() -> Option<Self> {
         Some(Self::default())
     }
-    fn import(tx: &mut Transaction<'_>, json: &SerializedNode) -> crate::Result<NodeKey> {
+    fn import(tx: &mut Transaction<'_>, json: &SerializedNode) -> crate::ModelResult<NodeKey> {
         super::wire::import_node::<Self>(tx, json)
     }
-    fn import_json(json: &SerializedNode) -> crate::Result<Self> {
+    fn import_json(json: &SerializedNode) -> crate::ModelResult<Self> {
         let json = super::wire::own_json(Self::TYPE, json)?;
         Ok(serde_json::from_value(Value::Object(json))?)
     }
@@ -73,7 +73,7 @@ impl SearchText for AgentSessionMentionNode {
 pub fn agent_session_mention_transform(
     tx: &mut Transaction<'_>,
     id: Id<AgentSessionMentionNode>,
-) -> crate::Result<()> {
+) -> crate::ModelResult<()> {
     let Some(parent) = tx.parent(id) else {
         return Ok(());
     };

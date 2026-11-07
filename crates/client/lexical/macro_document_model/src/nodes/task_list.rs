@@ -15,10 +15,10 @@ impl NodeType for TaskListNode {
     fn flag_probe() -> Option<Self> {
         Some(Self::default())
     }
-    fn import(tx: &mut Transaction<'_>, json: &SerializedNode) -> crate::Result<NodeKey> {
+    fn import(tx: &mut Transaction<'_>, json: &SerializedNode) -> crate::ModelResult<NodeKey> {
         super::wire::import_node::<Self>(tx, json)
     }
-    fn import_json(json: &SerializedNode) -> crate::Result<Self> {
+    fn import_json(json: &SerializedNode) -> crate::ModelResult<Self> {
         let list = serde_json::from_value(Value::Object(json.clone()))?;
         Ok(Self { list })
     }
@@ -65,7 +65,7 @@ pub static TASK_LIST_VIEW: StateKey<TaskListViewSettings> =
 pub fn get_task_list_view_settings(
     state: &impl Read,
     key: NodeKey,
-) -> crate::Result<TaskListViewSettings> {
+) -> crate::ModelResult<TaskListViewSettings> {
     state.view().get_state(key, &TASK_LIST_VIEW)
 }
 /// Set persisted display settings; null clears the value.
@@ -73,6 +73,6 @@ pub fn set_task_list_view_settings(
     tx: &mut Transaction<'_>,
     key: NodeKey,
     settings: TaskListViewSettings,
-) -> crate::Result<()> {
+) -> crate::ModelResult<()> {
     tx.set_state(key, &TASK_LIST_VIEW, settings)
 }

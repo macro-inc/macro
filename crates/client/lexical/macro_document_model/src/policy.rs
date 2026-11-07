@@ -31,7 +31,7 @@ pub trait SearchText {
 pub fn import_with_policy<T: ImportPolicy>(
     tx: &mut Transaction<'_>,
     json: &SerializedNode,
-) -> crate::Result<NodeKey> {
+) -> crate::ModelResult<NodeKey> {
     let mut json = json.clone();
     let state = match T::IMPORTED_STATE {
         ImportedState::Full => StateImportFilter::All,

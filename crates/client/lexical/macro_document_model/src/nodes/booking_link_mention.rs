@@ -32,7 +32,7 @@ impl NodeType for BookingLinkMentionNode {
     fn flag_probe() -> Option<Self> {
         Some(Self::default())
     }
-    fn import(tx: &mut Transaction<'_>, json: &SerializedNode) -> crate::Result<NodeKey> {
+    fn import(tx: &mut Transaction<'_>, json: &SerializedNode) -> crate::ModelResult<NodeKey> {
         let host = tx
             .try_extension::<crate::NodeHost>()
             .and_then(|host| host.0.clone());
@@ -46,7 +46,7 @@ impl NodeType for BookingLinkMentionNode {
         tx.get_mut::<Self>(key)?.host = host;
         Ok(key)
     }
-    fn import_json(json: &SerializedNode) -> crate::Result<Self> {
+    fn import_json(json: &SerializedNode) -> crate::ModelResult<Self> {
         let json = super::wire::own_json(Self::TYPE, json)?;
         Ok(serde_json::from_value(Value::Object(json))?)
     }
@@ -131,7 +131,7 @@ fn booking_url(node: &BookingLinkMentionNode) -> String {
 pub fn create_booking_link_mention_node(
     tx: &mut Transaction<'_>,
     mut node: BookingLinkMentionNode,
-) -> crate::Result<Id<BookingLinkMentionNode>> {
+) -> crate::ModelResult<Id<BookingLinkMentionNode>> {
     node.host = tx
         .try_extension::<crate::NodeHost>()
         .and_then(|host| host.0.clone());

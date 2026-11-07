@@ -29,6 +29,9 @@ pub enum Error {
     /// Invalid regular expression or flags.
     #[error(transparent)]
     Matcher(#[from] lexical_rich_nodes::utils::matcher::MatcherError),
+    /// A registered application callback returned a typed error.
+    #[error(transparent)]
+    Transformer(Box<dyn std::error::Error + Send + Sync>),
     /// Invalid caller argument.
     #[error("invalid markdown argument: {0}")]
     InvalidArgument(&'static str),

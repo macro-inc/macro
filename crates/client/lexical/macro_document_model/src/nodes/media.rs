@@ -193,7 +193,7 @@ pub fn create_image_node(
     tx: &mut Transaction<'_>,
     media: CreateMedia,
     alt: Option<String>,
-) -> crate::Result<Id<ImageNode>> {
+) -> crate::ModelResult<Id<ImageNode>> {
     tx.create(ImageNode {
         media: media.into(),
         alt: alt.unwrap_or_default(),
@@ -205,7 +205,7 @@ pub fn create_video_node(
     tx: &mut Transaction<'_>,
     media: CreateMedia,
     controls: Option<bool>,
-) -> crate::Result<Id<VideoNode>> {
+) -> crate::ModelResult<Id<VideoNode>> {
     tx.create(VideoNode {
         media: media.into(),
         controls: controls.unwrap_or(true),
