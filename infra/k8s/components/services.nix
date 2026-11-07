@@ -92,6 +92,8 @@ lib.mapAttrs (name: bin: {
   terminationGracePeriod = if name == "whatsapp-session-service" then 120 else 30;
   sharedEnv = true;
   env = {
+    # The dev loader is /proc/self/exe; retain the actual service identity.
+    DD_SERVICE = name;
     PORT = "8080";
   }
   // lib.optionalAttrs (name == "document-storage-service" && instance.devBinaries != null) {
