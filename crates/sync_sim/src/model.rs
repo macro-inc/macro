@@ -183,6 +183,24 @@ impl Default for Budgets {
         }
     }
 }
+/// Initial GenericSurface field history; cached snapshots are ancestors of the server state.
+#[derive(Clone, Debug, Default)]
+pub enum SeedDocument {
+    /// Empty fields and the configured ordered field list.
+    #[default]
+    Empty,
+    /// Field writes applied before clients open.
+    Form(Vec<(u16, u16)>),
+    /// Old local and S3 snapshots racing current server state, all from one real history.
+    Cached {
+        /// Field writes producing the authoritative server version.
+        server: Vec<(u16, u16)>,
+        /// Earlier cache writes and its injected host delivery delay.
+        s3: Option<(Vec<(u16, u16)>, Millis)>,
+        /// Earliest profile-local snapshot writes; load uses storage latency.
+        local: Option<Vec<(u16, u16)>>,
+    },
+}
 /// Deterministic whole-world configuration.
 #[derive(Clone, Debug)]
 pub struct SimConfig {
@@ -192,6 +210,8 @@ pub struct SimConfig {
     pub fields: u16,
     /// Number of independent documents (at least one).
     pub documents: u8,
+    /// Per-document seed histories; omitted documents start empty.
+    pub seeds: BTreeMap<DocIx, SeedDocument>,
     /// Network conditions.
     pub net: NetProfile,
     /// Storage conditions.
@@ -212,6 +232,7 @@ impl SimConfig {
             seed,
             fields: 8,
             documents: 1,
+            seeds: BTreeMap::new(),
             net: NetProfile::calm(),
             storage: StorageProfile::fast(),
             budgets: Budgets::default(),

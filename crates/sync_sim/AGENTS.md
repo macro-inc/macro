@@ -17,6 +17,9 @@ clients and real `sync_server_core::Room` callbacks over `sync_server_sim` ports
 - One thread, one virtual clock, one seeded ChaCha8 RNG. No ambient clocks,
   sleeps, environment reads, threads or random identity generation.
 - Run real cores; never infer server outputs from expected outcomes.
+- Build cached seed versions from one Loro history; install profile-local cache
+  once per profile/document and observe real `Seeded` events. The core defers a
+  remote seed while local load is pending; never bypass that arbitration.
 - GenericSurface/Loro clients are available before editor/session siblings.
   Editor projection, undo and comment-gate parity remain pending integration;
   never claim a skipped editor check establishes an editor safety property.

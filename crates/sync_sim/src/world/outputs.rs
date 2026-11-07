@@ -238,7 +238,16 @@ impl Sim {
         let mut ready = false;
         for event in out.events {
             match event {
-                SyncEvent::Seeded { .. } | SyncEvent::Replaced => ready = true,
+                SyncEvent::Seeded { kind, replayed_wal } => {
+                    ready = true;
+                    self.emit(Fact::Seeded {
+                        client: name.clone(),
+                        session,
+                        kind: format!("{kind:?}"),
+                        replayed_wal,
+                    });
+                }
+                SyncEvent::Replaced => ready = true,
                 SyncEvent::Status(status) => self.emit(Fact::Status {
                     client: name.clone(),
                     status,

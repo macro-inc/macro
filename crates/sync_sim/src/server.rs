@@ -37,6 +37,9 @@ pub(crate) struct Callback {
 /// One real Room and its existing synchronous simulation ports per document.
 pub struct SimServer {
     doc: DocIx,
+    pub(crate) local_seed: Option<Vec<u8>>,
+    pub(crate) s3_seed: Option<(Vec<u8>, Millis)>,
+    pub(crate) optimistic_seed: bool,
     pub(crate) room: SimRoom,
     pub(crate) ports: SimPorts,
     pub(crate) key: SessionKey,
@@ -56,6 +59,7 @@ impl SimServer {
     pub(crate) fn new(
         doc: DocIx,
         fields: u16,
+        seed_spec: &SeedDocument,
         storage_latency: Millis,
         now: SimNow,
     ) -> Result<(Self, Vec<Effect>, Vv), Failure> {
@@ -66,21 +70,11 @@ impl SimServer {
         let ports = SimPorts::new();
         ports.set_now(now);
         let mut room = SimRoom::new(ports.clone());
-        let seed = SimDoc::new(1 + u64::from(doc.0))?;
-        for index in 0..fields.max(1) {
-            seed.loro
-                .get_movable_list("order")
-                .push(i64::from(index))
-                .map_err(|e| Failure::new("seed_document", e))?;
-        }
-        seed.loro
-            .commit_with(loro::CommitOptions::default().timestamp(now.unix_ms / 1_000));
-        let snapshot = seed
-            .loro
-            .export(loro::ExportMode::snapshot())
-            .map_err(|e| Failure::new("seed_document", e))?;
+        let seed =
+            crate::document::seed_snapshots(1 + u64::from(doc.0), fields, now.unix_ms, seed_spec)?;
+        let snapshot = &seed.server;
         let request = sync_protocol::InitializeFromSnapshotRequest {
-            snapshot: SliceWrapper::from_cooked(&snapshot),
+            snapshot: SliceWrapper::from_cooked(snapshot),
         };
         let mut body = Vec::new();
         request
@@ -96,6 +90,9 @@ impl SimServer {
         Ok((
             Self {
                 doc,
+                local_seed: seed.local,
+                s3_seed: seed.s3,
+                optimistic_seed: !matches!(seed_spec, SeedDocument::Cached { .. }),
                 room,
                 ports,
                 key,
@@ -112,7 +109,7 @@ impl SimServer {
                 sniffers: BTreeMap::new(),
             },
             effects,
-            vv(&seed.loro.oplog_vv()),
+            seed.vv,
         ))
     }
     pub(crate) fn now(wall: i64, mono: u64) -> SimNow {

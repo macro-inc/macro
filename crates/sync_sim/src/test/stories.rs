@@ -377,3 +377,113 @@ fn concurrent_four_client_moves_and_fields_replay_across_many_seeds() {
         );
     }
 }
+
+#[test]
+fn cached_local_s3_and_remote_each_win_once_without_replacing_later_edits() {
+    for (local_after, s3_after, expected) in [
+        (1, 1_500, "Local"),
+        (500, 1, "CachedS3"),
+        (500, 1_500, "Remote"),
+    ] {
+        let mut config = SimConfig::calm(79);
+        config.storage.latency = (Millis(local_after), Millis(local_after));
+        config.seeds.insert(
+            DocIx(0),
+            SeedDocument::Cached {
+                server: vec![(1, 42)],
+                s3: Some((vec![(1, 23)], Millis(s3_after))),
+                local: (expected != "Remote").then_some(vec![(1, 7)]),
+            },
+        );
+        let outcome = verify(
+            config,
+            &[
+                Step::Open(OpenSpec::form("a", "cached-profile")),
+                Step::Run(Millis(800)),
+                Step::Edit {
+                    client: ClientName("a".into()),
+                    op: AbstractOp::FormSet {
+                        field: 2,
+                        value: 81,
+                    },
+                },
+                Step::Settle,
+            ],
+        );
+        let winners = outcome
+            .events
+            .iter()
+            .filter_map(|event| match &event.fact {
+                Fact::Seeded { kind, .. } => Some(kind.as_str()),
+                _ => None,
+            })
+            .collect::<Vec<_>>();
+        assert_eq!(winners, [expected]);
+        assert_eq!(
+            outcome.finals.servers[&DocIx(0)].deep_value["fields"]["1"],
+            42
+        );
+        assert_eq!(
+            outcome.finals.servers[&DocIx(0)].deep_value["fields"]["2"],
+            81
+        );
+    }
+}
+
+#[test]
+fn cached_reopen_adopts_and_replays_durable_wal_after_seed_choice() {
+    let mut config = SimConfig::calm(83);
+    config.seeds.insert(
+        DocIx(0),
+        SeedDocument::Cached {
+            server: vec![(1, 42)],
+            s3: Some((vec![(1, 23)], Millis(1_500))),
+            local: Some(vec![(1, 7)]),
+        },
+    );
+    let outcome = verify(
+        config,
+        &[
+            Step::Open(OpenSpec::form("a", "cached-profile")),
+            Step::Run(Millis(800)),
+            Step::Net(NetStep::Partition(ClientName("a".into()))),
+            Step::Edit {
+                client: ClientName("a".into()),
+                op: AbstractOp::FormSet {
+                    field: 2,
+                    value: 81,
+                },
+            },
+            Step::Run(Millis(40)),
+            Step::Crash {
+                client: ClientName("a".into()),
+            },
+            Step::ReopenCrashed,
+            Step::Settle,
+        ],
+    );
+    assert_eq!(
+        outcome
+            .events
+            .iter()
+            .filter(|event| matches!(event.fact, Fact::Seeded { .. }))
+            .count(),
+        2
+    );
+    let adopted = outcome
+        .events
+        .iter()
+        .position(|event| matches!(event.fact, Fact::WalAdopted { .. }))
+        .unwrap();
+    assert!(
+        outcome.events[adopted + 1..]
+            .iter()
+            .any(|event| matches!(&event.fact,
+        Fact::Imported { origin, error: None, .. } if origin == "WalReplay"))
+    );
+    assert_eq!(
+        outcome.finals.servers[&DocIx(0)].deep_value["fields"]["2"],
+        81
+    );
+    assert!(outcome.stats.adopted_rows > 0);
+}
