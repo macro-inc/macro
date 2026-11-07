@@ -11,6 +11,7 @@ pub(crate) struct Identity {
     pub session: SessionId,
     pub peer: u64,
     pub user: String,
+    pub color: PaletteColor,
 }
 /// A real client core and lending document; runtime effects are executed by the world.
 pub struct SimClient {
@@ -43,13 +44,14 @@ impl SimClient {
         identity: Identity,
         supply: Vec<u64>,
         now: Now,
-        routed: bool,
+        defaults: &SessionDefaults,
     ) -> Result<Self, Failure> {
         let Identity {
             doc,
             session,
             peer,
             user,
+            color,
         } = identity;
         let ai = spec.kind == ClientKind::AiWorker;
         let presence_key = if ai {
@@ -61,10 +63,10 @@ impl SimClient {
             doc: doc.clone(),
             session,
             user: UserKey(user.clone()),
-            transport: if routed && !ai {
-                TransportKind::Routed
-            } else {
+            transport: if ai {
                 TransportKind::Direct
+            } else {
+                defaults.transport
             },
             persistence: if ai {
                 Persistence::Memory
@@ -74,18 +76,22 @@ impl SimClient {
             access: spec.access.core(),
             initial_token: None,
             traceparent: None,
-            timeouts: Timeouts::default(),
-            heartbeat: HeartbeatPolicy::default(),
-            backoff: BackoffPolicy::default(),
-            converge: ConvergePolicy::default(),
-            wal: WalPolicy::default(),
-            snapshot_interval: Some(doc_sync_core::Millis(5_000)),
+            timeouts: defaults.timeouts,
+            heartbeat: defaults.heartbeat,
+            backoff: defaults.backoff,
+            converge: defaults.converge,
+            wal: defaults.wal,
+            snapshot_interval: defaults.snapshot_interval,
             presence: PresencePolicy {
-                timeout: WallDuration(5_000),
-                refresh: Some(doc_sync_core::Millis(if ai { 2_000 } else { 3_000 })),
+                timeout: defaults.presence_timeout,
+                refresh: if ai {
+                    Some(doc_sync_core::Millis(2000))
+                } else {
+                    defaults.presence_refresh
+                },
                 user: PresenceUser {
                     user_id: None,
-                    color: PaletteColor::Blue,
+                    color,
                 },
                 key: if ai {
                     PresenceKeyMode::Fixed(presence_key.clone())
@@ -94,7 +100,7 @@ impl SimClient {
                 },
             },
             chatter: !ai,
-            reset_budget: ResetBudget::default(),
+            reset_budget: defaults.reset_budget,
         };
         let mut peers = PeerSupply::new(if ai { PeerRange::Ai } else { PeerRange::User });
         peers
@@ -108,7 +114,7 @@ impl SimClient {
             doc_id: doc,
             user,
             core,
-            routed: routed && !ai,
+            routed: defaults.transport == TransportKind::Routed && !ai,
             outgoing: sync_protocol::framing::Reassembler::default(),
             doc: SimDoc::new(peer)?,
             alive: true,

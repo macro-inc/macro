@@ -2,7 +2,10 @@
 #![deny(missing_docs)]
 
 mod facts;
+mod replay;
 pub use facts::*;
+mod defaults;
+pub use defaults::*;
 mod model;
 pub use model::*;
 mod clock;

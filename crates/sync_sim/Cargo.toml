@@ -23,6 +23,7 @@ rand_chacha.workspace = true
 xxhash-rust.workspace = true
 
 [dev-dependencies]
+macro_env_var = { path = "../macro_env_var" }
 sync_router = { path = "../sync_router" }
 tokio.workspace = true
 tokio-util.workspace = true

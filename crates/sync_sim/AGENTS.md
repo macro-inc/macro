@@ -12,10 +12,15 @@ clients and real `sync_server_core::Room` callbacks over `sync_server_sim` ports
 - `src/network.rs`: FIFO links and injected failures.
 - `src/router.rs`: bounded server router protocol fake; `src/world/router.rs` wires
   real client RouterCore instances to physical profile sockets and real room routes.
+- `src/defaults.rs`: host-supplied production session policies.
+- `src/replay.rs`: exact replay and first-differing-event/port/final diagnostics.
 - `src/invariants.rs`: queries over the immutable Outcome facts.
 
 ## Boundaries
 
+- Configure client/physical-router policies through SimConfig.session; preserve the
+  AI-worker direct/fixed-key/two-second-refresh behavior. None transport can settle
+  without a physical connection. Presence queries use the configured timeout.
 - One thread, one virtual clock, one seeded ChaCha8 RNG. No ambient clocks,
   sleeps, environment reads, threads or random identity generation.
 - Run real cores; never infer server outputs from expected outcomes.
@@ -55,4 +60,7 @@ clients and real `sync_server_core::Room` callbacks over `sync_server_sim` ports
 - `cargo clippy -p sync_sim --all-targets -- -D warnings`
 - `just check`, `cargo x deps --check`
 - Same seed/script must yield byte-identical canonical event logs.
+- `SIM_SEED=197 cargo test -p sync_sim --test replay -- --nocapture` runs the
+  explicit replay story; only this CLI test host reads SIM_SEED. Use Outcome::replay
+  for an arbitrary stored script and compare_replay for first-difference evidence.
 - Re-record the Worker suite and require zero normalized transcript differences.

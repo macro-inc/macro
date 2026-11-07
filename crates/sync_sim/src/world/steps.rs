@@ -271,6 +271,20 @@ impl Sim {
             .parse()
             .map_err(|e| Failure::new("document_id", e))?;
         let session = SessionId(self.uuid());
+        let colors = [
+            doc_sync_core::PaletteColor::Red,
+            doc_sync_core::PaletteColor::Orange,
+            doc_sync_core::PaletteColor::Yellow,
+            doc_sync_core::PaletteColor::Lime,
+            doc_sync_core::PaletteColor::Green,
+            doc_sync_core::PaletteColor::Teal,
+            doc_sync_core::PaletteColor::Cyan,
+            doc_sync_core::PaletteColor::Blue,
+            doc_sync_core::PaletteColor::Violet,
+            doc_sync_core::PaletteColor::Purple,
+            doc_sync_core::PaletteColor::Pink,
+        ];
+        let color = colors[self.rng.random_range(0..colors.len())];
         let peer = self.peer(spec.kind);
         let supply = (0..16).map(|_| self.peer(spec.kind)).collect::<Vec<_>>();
         let profile = self
@@ -289,10 +303,11 @@ impl Sim {
                 session,
                 peer,
                 user: user.clone(),
+                color,
             },
             supply,
             now,
-            self.config.routed,
+            &self.config.session,
         )?;
         let server = self
             .servers
@@ -707,7 +722,16 @@ impl Sim {
         let deadline = self.clock.now.saturating_add(self.config.budgets.settle.0);
         // The heal's selection updates coalesce and traverse the calm network before
         // the first presence snapshot. The heartbeat hold ignores later refreshes.
-        self.advance(100);
+        let presence_batch = self
+            .config
+            .session
+            .wal
+            .coalesce
+            .0
+            .saturating_add(self.net.profile.latency.1.0.saturating_mul(2))
+            .max(100);
+        self.advance(presence_batch);
+        let heartbeat = self.config.session.heartbeat.interval.0.max(1);
         let mut held_since = None;
         let mut settled_clients = BTreeSet::new();
         while self.clock.now <= deadline && !self.budget_hit {
@@ -751,7 +775,8 @@ impl Sim {
                             .collect(),
                     );
                 }
-                if held_since.is_some_and(|since| self.clock.now.saturating_sub(since) >= 10_000) {
+                if held_since.is_some_and(|since| self.clock.now.saturating_sub(since) >= heartbeat)
+                {
                     self.emit(Fact::Settled);
                     return Ok(());
                 }
@@ -759,7 +784,7 @@ impl Sim {
                 held_since = None;
             }
             let limit = held_since
-                .map(|since: u64| since.saturating_add(10_000))
+                .map(|since: u64| since.saturating_add(heartbeat))
                 .unwrap_or(deadline)
                 .min(deadline);
             if self.clock.now == deadline {

@@ -40,7 +40,15 @@ impl Sim {
             self.routers.insert(
                 profile.clone(),
                 Host {
-                    core: RouterCore::new(RouterConfig::default(), self.router_now()),
+                    core: RouterCore::new(
+                        RouterConfig {
+                            timeouts: self.config.session.timeouts,
+                            heartbeat: self.config.session.heartbeat,
+                            backoff: self.config.session.backoff,
+                            traceparent: None,
+                        },
+                        self.router_now(),
+                    ),
                     protocol: SimRouter::default(),
                     owner: name.clone(),
                     session,

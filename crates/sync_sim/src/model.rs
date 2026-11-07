@@ -28,12 +28,14 @@ pub struct IdSpan {
 }
 /// Explicit invariant failure; never a panic for a synchronization failure.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, thiserror::Error)]
-#[error("{invariant} at {at:?}: {detail}")]
+#[error("{invariant} at {at:?}, step{step:?}: {detail}")]
 pub struct Failure {
     /// Check that failed.
     pub invariant: String,
     /// Virtual occurrence time, if known.
     pub at: Option<Millis>,
+    /// Active literal-script step index; final-only queries may have none.
+    pub step: Option<usize>,
     /// Reproduction evidence.
     pub detail: String,
 }
@@ -42,6 +44,7 @@ impl Failure {
         Self {
             invariant: check.into(),
             at: None,
+            step: None,
             detail: detail.to_string(),
         }
     }
@@ -222,8 +225,8 @@ pub struct SimConfig {
     pub documents: u8,
     /// Rooms using isolated collaborative-surface identity and lifecycle.
     pub surfaces: BTreeSet<DocIx>,
-    /// Share one real RouterCore socket per profile for tab sessions (requires two documents).
-    pub routed: bool,
+    /// Current-build client policies; Routed transport requires two documents.
+    pub session: crate::SessionDefaults,
     /// Per-document seed histories; omitted documents start empty.
     pub seeds: BTreeMap<DocIx, SeedDocument>,
     /// Network conditions.
@@ -248,7 +251,7 @@ impl SimConfig {
             documents: 1,
             seeds: BTreeMap::new(),
             surfaces: BTreeSet::new(),
-            routed: false,
+            session: crate::SessionDefaults::production(),
             net: NetProfile::calm(),
             storage: StorageProfile::fast(),
             budgets: Budgets::default(),
@@ -256,6 +259,13 @@ impl SimConfig {
             server_storage_latency: Millis(2),
             per_step: true,
         }
+    }
+    /// Two documents over one shared physical router per tab profile.
+    pub fn routed(seed: u64) -> Self {
+        let mut config = Self::calm(seed);
+        config.documents = 2;
+        config.session.transport = doc_sync_core::TransportKind::Routed;
+        config
     }
 }
 /// One direction on a physical connection.
