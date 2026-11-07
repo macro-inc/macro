@@ -65,7 +65,7 @@ agent_fold = { path = "../folds/agent_fold" }
 agent_session = { path = "../agent_session", features = ["test-utils"] }
 bot_id = { path = "../bot_id", features = ["test-utils"] }
 futures = { workspace = true }
-rig-agent = "0.41.0"
+rig-agent = { workspace = true }
 opentelemetry = { workspace = true, features = ["trace"] }
 opentelemetry_sdk = { workspace = true, features = ["testing", "trace"] }
 tracing-opentelemetry = { workspace = true }

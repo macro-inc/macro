@@ -127,6 +127,22 @@ workspace-members = [
     "soup-filter-cache-adapter",
 ]
 
+# Heavy third-party crates with few owners. Unifying them through
+# workspace-hack made every member that depends on workspace-hack (so nearly
+# every crate) wait for them in a cold build, and its build-dependencies
+# section compiled them a second time for the host. Their owners still get
+# them; nothing else does. The root [workspace.dependencies] entries carry the
+# union of their features, so every service still builds each one the same way.
+[final-excludes]
+third-party = [
+    { name = "rig-core" },
+    { name = "rig-agent" },
+    { name = "async-openai" },
+    { name = "rmcp" },
+    { name = "redis" },
+    { name = "async-graphql" },
+]
+
 # Xtask extension (the hakari engine ignores this table; `cargo x deps` in
 # tooling/xtask/crates/xtask_deps expands it into traversal excludes).
 # Entries are workspace-relative member-path prefixes ending in `*`.

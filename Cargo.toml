@@ -231,9 +231,12 @@ agent-client-protocol = { git = "https://github.com/agentclientprotocol/rust-sdk
 arboard = { version = "3.6.1", default-features = false, features = ["wayland-data-control"] }
 # Templates use built-in defaults; omit the unused config parser and basic-toml.
 askama = { version = "0.14", default-features = false, features = ["derive", "std", "urlencode"] }
-async-graphql = "7.2.1"
+# Features unified here, not by workspace-hack (.config/hakari.toml final-excludes).
+async-graphql = { version = "7.2.1", features = ["chrono", "dataloader"] }
 async-lock = "3"
+# Features unified here, not by workspace-hack (.config/hakari.toml final-excludes).
 async-openai = { version = "0.36.1", features = [
+  "audio",
   "byot",
   "chat-completion",
   "completions",
@@ -386,7 +389,8 @@ rdkafka = { version = "0.37", default-features = false, features = [
 ] }
 readonly = "0.2"
 recursion = "0.5.4"
-redis = "1.0.3"
+# Features unified here, not by workspace-hack (.config/hakari.toml final-excludes).
+redis = { version = "1.0.3", features = ["cluster-async", "connection-manager", "tokio-rustls-comp"] }
 regex = "1.11.1"
 reqwest = { version = "0.13", default-features = false, features = [
   "form",
@@ -394,7 +398,15 @@ reqwest = { version = "0.13", default-features = false, features = [
   "json",
   "rustls",
 ] }
-rmcp = "1.6.0"
+rig-agent = "0.41.0"
+rig-core = "0.41.0"
+# Features unified here, not by workspace-hack (.config/hakari.toml final-excludes).
+rmcp = { version = "1.6.0", features = [
+  "auth",
+  "client",
+  "transport-streamable-http-client-reqwest",
+  "transport-streamable-http-server",
+] }
 skrifa = { version = "0.48", default-features = false, features = ["std"] }
 sse-stream = "0.2"
 rootcause = { version = "0.12", features = ["compat-anyhow1"] }
