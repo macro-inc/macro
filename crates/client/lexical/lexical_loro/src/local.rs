@@ -40,7 +40,6 @@ pub(crate) fn lis(sequence: &[usize]) -> OrderedSet<usize> {
 }
 impl LoroProjection {
     /// Project a complete output's commit/follow-up chain as one explicit Loro commit.
-    #[tracing::instrument(name = "doc.projection.local", skip_all, err)]
     pub fn local_commit(
         &mut self,
         doc: &LoroDoc,
