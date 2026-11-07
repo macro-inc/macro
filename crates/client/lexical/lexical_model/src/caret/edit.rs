@@ -286,15 +286,11 @@ impl Transaction<'_> {
                     self.caret_replace_or_insert(before.into(), plain, false)?;
                     next.origin = plain;
                 }
-                if anchors.first().is_some_and(|c| c.origin() == origin) {
-                    if let Some(first) = anchors.first_mut() {
-                        *first = next.into();
-                    }
+                if let Some(first) = anchors.first_mut().filter(|caret| caret.origin() == origin) {
+                    *first = next.into();
                 }
-                if focuses.first().is_some_and(|c| c.origin() == origin) {
-                    if let Some(first) = focuses.first_mut() {
-                        *first = next.flipped().into();
-                    }
+                if let Some(first) = focuses.first_mut().filter(|caret| caret.origin() == origin) {
+                    *first = next.flipped().into();
                 }
             }
         }
