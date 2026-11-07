@@ -39,6 +39,7 @@ ai_toolset = { path = "../ai_toolset" }
 anyhow = { workspace = true }
 bot_id = { path = "../bot_id" }
 attachment = { path = "../attachment" }
+chat_id = { path = "../types/chat_id" }
 chrono = { workspace = true }
 entity_access = { path = "../entity_access", default-features = false }
 entity_access_db_utils = { path = "../entity_access_db_utils", optional = true }

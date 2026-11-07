@@ -9,6 +9,7 @@ use serde_json::json;
 
 use super::*;
 use crate::domain::models::{PatchChatMessageArgs, WebCitation};
+use chat_id::ChatId;
 
 const CHAT_ID: &str = "3f6f8b0a-6f9f-4a3f-9c3a-2b1e5d4c7a90";
 const MESSAGE_ID: &str = "7d2c1e5a-4b3f-4c6d-8e9f-0a1b2c3d4e5f";
@@ -219,7 +220,7 @@ async fn create_publishes_user_message_sent_keyed_by_chat_id() {
     let resolved = service
         .create(
             &test_user_id(),
-            CHAT_ID,
+            &ChatId::from(CHAT_ID),
             new_message(Role::User, Some(attachments)),
         )
         .await
@@ -251,7 +252,11 @@ async fn create_without_attachments_publishes_zero_attachment_count() {
     let service = service_with_broker(StubMessageRepo::default(), broker.clone());
 
     service
-        .create(&test_user_id(), CHAT_ID, new_message(Role::User, None))
+        .create(
+            &test_user_id(),
+            &ChatId::from(CHAT_ID),
+            new_message(Role::User, None),
+        )
         .await
         .expect("create succeeds");
 
@@ -267,7 +272,7 @@ async fn store_publishes_assistant_message_sent_without_actor() {
     let service = service_with_broker(StubMessageRepo::default(), broker.clone());
 
     let message_id = service
-        .store(CHAT_ID, new_message(Role::Assistant, None))
+        .store(&ChatId::from(CHAT_ID), new_message(Role::Assistant, None))
         .await
         .expect("store succeeds");
     assert_eq!(message_id, MESSAGE_ID);
@@ -319,12 +324,16 @@ async fn failed_create_publishes_no_event() {
     let service = service_with_broker(StubMessageRepo::failing(), broker.clone());
 
     let create_result = service
-        .create(&test_user_id(), CHAT_ID, new_message(Role::User, None))
+        .create(
+            &test_user_id(),
+            &ChatId::from(CHAT_ID),
+            new_message(Role::User, None),
+        )
         .await;
     assert!(create_result.is_err());
 
     let store_result = service
-        .store(CHAT_ID, new_message(Role::Assistant, None))
+        .store(&ChatId::from(CHAT_ID), new_message(Role::Assistant, None))
         .await;
     assert!(store_result.is_err());
 
@@ -345,13 +354,17 @@ async fn broker_scheduling_failure_does_not_fail_the_call() {
     let service = service_with_broker(StubMessageRepo::default(), RecordingEventBroker::failing());
 
     let resolved = service
-        .create(&test_user_id(), CHAT_ID, new_message(Role::User, None))
+        .create(
+            &test_user_id(),
+            &ChatId::from(CHAT_ID),
+            new_message(Role::User, None),
+        )
         .await
         .expect("create succeeds despite broker failure");
     assert_eq!(resolved.message_id, MESSAGE_ID);
 
     let message_id = service
-        .store(CHAT_ID, new_message(Role::Assistant, None))
+        .store(&ChatId::from(CHAT_ID), new_message(Role::Assistant, None))
         .await
         .expect("store succeeds despite broker failure");
     assert_eq!(message_id, MESSAGE_ID);

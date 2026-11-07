@@ -26,6 +26,7 @@ path = "src/scheduling_openapi.rs"
 
 [dependencies]
 agent_correlation = { path = "../../crates/agent_correlation", features = ["http", "postgres"] }
+chat_id = { path = "../../crates/types/chat_id" }
 universal_input = { path = "../../crates/universal_input" }
 models_ai_projection = { path = "../../crates/models_ai_projection" }
 activity = { path = "../../crates/activity", default-features = false, features = ["outbound", "schema"] }
