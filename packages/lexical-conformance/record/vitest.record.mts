@@ -35,6 +35,9 @@ export default defineConfig({
       },
     ],
     maxWorkers: 2,
+    // Inlined functions can disappear from V8's per-test coverage samples.
+    pool: 'forks',
+    execArgv: ['--no-opt', '--no-maglev'],
     maxConcurrency: 1, fileParallelism: true,
     reporters: ['default', path.join(record, 'reporter.ts')],
     sequence: { hooks: 'stack' },

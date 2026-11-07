@@ -63,8 +63,13 @@ are therefore reported against every observed case, without inventing a mapping.
 
 The source-range manifest in `record/s2-ranges.json` is the resolved file/line
 citations from the S2 feature inventory for this upstream pin. V8 offsets are
-mapped through the oracle's source maps before intersecting these citations;
+mapped through the oracle's source maps and back through `hooks.patch` before
+intersecting these citations. Mapped points belong to their innermost source
+function; absent child counters cannot inherit an enclosing V8 range, and
+zero-count branches remain excluded. Inserted instrumentation is not coverage;
 coverage is evidence, not a replacement for the per-id primary-test gate.
+Recorder forks disable V8 optimizing compilers to keep helper counters stable.
+Duplicate test titles use declaration order rather than result arrival order.
 
 For recorder development, `--filter=LexicalNormalization` runs a selected upstream
 file; `--filter=macro:<file>` selects lexical-core (`macro:` runs its entire pool).

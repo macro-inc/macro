@@ -38,10 +38,15 @@
  function clearHistory(
 --- a/packages/lexical/src/LexicalEditor.ts
 +++ b/packages/lexical/src/LexicalEditor.ts
-@@ -908,1 +908,2 @@
+@@ -906,6 +906,7 @@
+   }
+ 
    registerDefaultCommandHandlers(editor);
 +  globalThis.__lexRec?.created(editor, editorConfig);
-@@ -1535,6 +1535,8 @@
+ 
+   return editor;
+ }
+@@ -1535,6 +1536,8 @@
     * @param options - options for the update.
     */
    setEditorState(editorState: EditorState, options?: EditorSetOptions): void {
@@ -50,7 +55,7 @@
      if (editorState.isEmpty()) {
        invariant(
          false,
-@@ -1579,7 +1581,9 @@
+@@ -1579,7 +1582,9 @@
      if (!this._updating) {
        $commitPendingUpdates(this);
      }
@@ -61,7 +66,7 @@
  
    /**
     * Parses a SerializedEditorState (usually produced by {@link EditorState.toJSON}) and returns
-@@ -1609,6 +1613,7 @@
+@@ -1609,6 +1614,7 @@
     * @param callbackFn - A function that has access to read-only editor state.
     */
    read<T>(callbackFn: () => T): T {
@@ -243,14 +248,19 @@
      }
 --- a/packages/lexical/src/LexicalUtils.ts
 +++ b/packages/lexical/src/LexicalUtils.ts
-@@ -117,1 +117,6 @@
+@@ -116,6 +116,11 @@
+ 
  let keyCounter = 1;
-+
+ 
 +export function getRecorderKeyCounter(): number {
 +  return keyCounter;
 +}
 +export function setRecorderKeyCounter(next: number): void { keyCounter = next; }
-@@ -151,7 +151,7 @@
++
+ export function resetRandomKey(): void {
+   keyCounter = 1;
+ }
+@@ -151,7 +156,7 @@
  export const isArray = Array.isArray;
  
  /** @internal */
@@ -259,7 +269,7 @@
    typeof queueMicrotask === 'function'
      ? queueMicrotask
      : fn => {
-@@ -2496,3 +2496,8 @@
+@@ -2496,3 +2501,8 @@
    }
    return children;
  }
