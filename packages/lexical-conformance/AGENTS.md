@@ -27,7 +27,7 @@ The upstream source is downloaded by checksum into this worktree's `target/`.
 
 - In this package: `bun install --frozen-lockfile`, `bunx tsc --noEmit`, `bun run test`.
 - From the repository: `just lexical-fixtures --check` twice, then `just check`.
-- Differential changes: `bunx tsc --noEmit -p diff/tsconfig.json` in this package; from root, `STEPS=10000 bunx vitest run --config packages/lexical-conformance/diff/vitest.config.mts`.
+- Differential changes: `bunx tsc --noEmit -p diff/tsconfig.json` and `STEPS=10000 bunx vitest run --config diff/vitest.config.mts` in this package (uses its pinned Vitest).
 
 - In this package: `bunx tsc --noEmit -p coverage/tsconfig.json`, `bunx vitest run --config coverage/vitest.config.ts`.
 - From the repository: `just lexical-coverage-seed --check`, `just lexical-coverage --check`.

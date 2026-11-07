@@ -48,11 +48,6 @@ export default defineConfig({
     include: ['diff/**/*.test.ts'],
     setupFiles: [path.join(pkg, 'diff/setup.ts')],
     environment: 'jsdom',
-    environmentOptions: {
-      jsdom: {
-        userAgent: 'Mozilla/5.0 AppleWebKit/537.36 Chrome/124.0 Safari/537.36',
-      },
-    },
     maxWorkers: 1,
     testTimeout: 300000,
     env: { LEXICAL_VERSION: JSON.stringify(version) },
