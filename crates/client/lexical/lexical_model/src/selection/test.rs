@@ -554,7 +554,9 @@ fn view_format_intersection_does_not_treat_root_offsets_as_text_offsets() -> Res
             resolution_dirty: false,
         })?;
         tx.selection_change_format(&SelectionChangeContext {
-            dom_anchor_offset: 1, dom_focus_offset: 2, ..SelectionChangeContext::default()
+            dom_anchor_offset: 1,
+            dom_focus_offset: 2,
+            ..SelectionChangeContext::default()
         })?;
         assert_eq!(tx.range_selection()?.format, TextFormat::empty());
         Ok(())

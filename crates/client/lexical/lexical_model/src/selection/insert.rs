@@ -117,9 +117,13 @@ impl Transaction<'_> {
         {
             let replacement = self.create_text(text)?;
             self.replace(*key, replacement, false)?;
-            return self.finish_text_insertion(slot, true,
+            return self.finish_text_insertion(
+                slot,
+                true,
                 Point::text(replacement, TextBuffer::new(text).utf16_len()),
-                original.format, original.style);
+                original.format,
+                original.style,
+            );
         }
         let first_format = selected
             .first()
