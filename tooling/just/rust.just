@@ -90,11 +90,11 @@ setup_test_envs:
     echo "DATABASE_URL={{ DATABASE_URL }}" >> ./crates/comms/slack_integration/.env
     echo "DATABASE_URL={{ DATABASE_URL }}" >> ./services/slack_import_worker/.env
     echo "DATABASE_URL={{ DATABASE_URL }}" >> ./crates/accounts/user_api_key/.env
-    echo "DATABASE_URL={{ DATABASE_URL }}" >> ./crates/soup/.env
+    echo "DATABASE_URL={{ DATABASE_URL }}" >> ./crates/search/soup/.env
     echo "DATABASE_URL={{ DATABASE_URL }}" >> ./crates/email/email/.env
     echo "DATABASE_URL={{ DATABASE_URL }}" >> ./crates/system_properties/.env
     echo "DATABASE_URL={{ DATABASE_URL }}" >> ./crates/properties/.env
-    echo "DATABASE_URL={{ DATABASE_URL }}" >> ./crates/name_search/.env
+    echo "DATABASE_URL={{ DATABASE_URL }}" >> ./crates/search/name_search/.env
     echo "DATABASE_URL={{ DATABASE_URL }}" >> ./services/email_scheduled_handler/.env
     echo "DATABASE_URL={{ DATABASE_URL }}" >> ./crates/saved_views/.env
     echo "DATABASE_URL={{ DATABASE_URL }}" >> ./crates/comms/channels/.env

@@ -10,7 +10,6 @@ members = [
   "crates/accounts/system_status",
   "crates/accounts/user_api_key",
   "crates/accounts/user_language",
-  "crates/activity",
   "crates/agent",
   "crates/agent_api_keys",
   "crates/agent_changes",
@@ -29,7 +28,6 @@ members = [
   "crates/ai_engine",
   "crates/ai_projections",
   "crates/ai_usage",
-  "crates/attention_feed",
   "crates/billing/ai_admission",
   "crates/bots",
   "crates/calendar/calendar_events",
@@ -173,10 +171,13 @@ members = [
   "crates/routine_program",
   "crates/routines",
   "crates/scheduled_action",
+  "crates/search/activity",
+  "crates/search/attention_feed",
+  "crates/search/search_service",
   "crates/search/soup_realtime_core",
   "crates/search/soup_realtime_inbound",
   "crates/search/soup_realtime_outbound",
-  "crates/search_service",
+  "crates/search/work_feed",
   "crates/skills",
   "crates/soup_filter_cache_adapter",
   "crates/soup_filter_projection",
@@ -218,7 +219,6 @@ members = [
   "crates/whatsapp/whatsmeow",
   "crates/whatsapp/whatsmeow_proto",
   "crates/whatsapp/whatsmeow_signal",
-  "crates/work_feed",
   "crates/worker_rs_otel",
   "crates/workspace-hack",
   "services/agent_harness_service",
@@ -605,7 +605,7 @@ subtle = "2.6.1"
 # current paths. Depend on them with `name = { workspace = true }`.
 access_requests = { path = "crates/entities/access_requests" }
 account_manager = { path = "crates/accounts/account_manager" }
-activity = { path = "crates/activity", default-features = false }
+activity = { path = "crates/search/activity", default-features = false }
 agent = { path = "crates/agent" }
 agent_api_keys = { path = "crates/agent_api_keys" }
 agent_changes = { path = "crates/agent_changes", default-features = false }
@@ -635,7 +635,7 @@ analytics_client = { path = "crates/clients/analytics_client" }
 anthropic = { path = "crates/clients/anthropic" }
 app_service_url = { path = "crates/platform/service_urls/app_service_url" }
 attachment = { path = "crates/attachment" }
-attention_feed = { path = "crates/attention_feed" }
+attention_feed = { path = "crates/search/attention_feed" }
 auth_service_url = { path = "crates/platform/service_urls/auth_service_url" }
 authentication_service_client = { path = "crates/clients/authentication_service_client" }
 bearer_token = { path = "crates/types/bearer_token" }
@@ -776,7 +776,7 @@ initiative_description = { path = "crates/initiative_description" }
 invite_email = { path = "crates/email/invite_email" }
 ip_extractor = { path = "crates/platform/ip_extractor" }
 item-filter-index = { path = "crates/item_filter_index" }
-item_filters = { path = "crates/item_filters", default-features = false }
+item_filters = { path = "crates/search/item_filters", default-features = false }
 jev = { path = "crates/jev" }
 kafka_util = { path = "crates/platform/kafka_util" }
 lambda_client = { path = "crates/aws/lambda_client" }
@@ -840,12 +840,12 @@ models_opensearch = { path = "crates/types/models_opensearch" }
 models_pagination = { path = "crates/types/models_pagination" }
 models_permissions = { path = "crates/types/models_permissions" }
 models_properties = { path = "crates/types/models_properties" }
-models_search = { path = "crates/models_search" }
+models_search = { path = "crates/search/models_search" }
 models_search_cursor = { path = "crates/types/models_search_cursor" }
 models_sfs = { path = "crates/types/models_sfs" }
-models_soup = { path = "crates/models_soup" }
+models_soup = { path = "crates/search/models_soup" }
 models_team = { path = "crates/types/models_team" }
-name_search = { path = "crates/name_search" }
+name_search = { path = "crates/search/name_search" }
 native_app_service = { path = "crates/accounts/native_app_service" }
 non_empty = { path = "crates/types/non_empty" }
 notification = { path = "crates/notifications/notification", default-features = false }
@@ -882,7 +882,7 @@ saved_views = { path = "crates/saved_views" }
 scheduled_action = { path = "crates/scheduled_action" }
 scheduled_action_service_url = { path = "crates/platform/service_urls/scheduled_action_service_url" }
 search_processing_service_url = { path = "crates/platform/service_urls/search_processing_service_url" }
-search_service = { path = "crates/search_service" }
+search_service = { path = "crates/search/search_service" }
 search_service_client = { path = "crates/clients/search_service_client" }
 secretsmanager_client = { path = "crates/aws/secretsmanager_client" }
 serde_utils = { path = "crates/platform/serde_utils" }
@@ -893,7 +893,7 @@ shared_entity_registry = { path = "crates/entities/shared_entity_registry" }
 skills = { path = "crates/skills", default-features = false }
 slack_integration = { path = "crates/comms/slack_integration" }
 sns_client = { path = "crates/aws/sns_client" }
-soup = { path = "crates/soup" }
+soup = { path = "crates/search/soup" }
 soup-filter-cache-adapter = { path = "crates/soup_filter_cache_adapter" }
 soup-filter-projection = { path = "crates/soup_filter_projection", default-features = false }
 soup_property = { path = "crates/types/soup_property" }
@@ -938,7 +938,7 @@ whatsapp_store_pg = { path = "crates/whatsapp/whatsapp_store_pg" }
 whatsmeow = { path = "crates/whatsapp/whatsmeow" }
 whatsmeow_proto = { path = "crates/whatsapp/whatsmeow_proto" }
 whatsmeow_signal = { path = "crates/whatsapp/whatsmeow_signal" }
-work_feed = { path = "crates/work_feed" }
+work_feed = { path = "crates/search/work_feed" }
 worker_rs_otel = { path = "crates/worker_rs_otel" }
 xtask_graph = { path = "tooling/xtask/crates/xtask_graph" }
 xtask_paths = { path = "tooling/xtask/crates/xtask_paths" }

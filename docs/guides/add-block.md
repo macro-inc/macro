@@ -167,7 +167,7 @@ you are only giving it an editor (as `pptx` and `docx` did).
   search OpenAPI specs. Regenerate the web clients (`bun run gen-api` in
   `apps/web`) and the SDK (`just update-generated` in `packages/sdk`); CI's
   Generated Code Check fails on stale output. The `item_filters` snapshot
-  `crates/item_filters/src/ast/tests/other.json` also changes with each new
+  `crates/search/item_filters/src/ast/tests/other.json` also changes with each new
   type in a category it expands.
 - **Frontend mirror.** `apps/web/src/lib/service-clients/service-storage/fileTypeMap.ts`
   is a copy of the Rust enum that no codegen step refreshes. Generate the rows
@@ -191,7 +191,7 @@ you are only giving it an editor (as `pptx` and `docx` did).
   `fileTypeToBlockName` and `verifyBlockName` in `allBlocks.ts` as `write`
   does.
 - **Search.** Add the type to `is_searchable_file_type` in
-  `crates/models_search/src/unified.rs`, a parser in
+  `crates/search/models_search/src/unified.rs`, a parser in
   `services/search_processing_service/src/parsers/<type>.rs` (registered in
   `parsers/mod.rs`), and the dispatch in
   `services/search_processing_service/src/process/document/raw_document.rs`.

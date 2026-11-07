@@ -12,6 +12,6 @@
 //!
 //! Paging, notification loading, acknowledgment and the adapters over the
 //! services that own the data are the shared feed layer's
-//! (`crates/attention_feed`).
+//! (`crates/search/attention_feed`).
 
 pub mod domain;

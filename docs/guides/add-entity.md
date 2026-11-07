@@ -221,12 +221,12 @@ Required for anything people act on; Recent is built from activity.
 - **Activity:** implement `activity::ActivitySource` in
   `crates/<kind>/src/domain/activity.rs` with an exhaustive match. Shared actions
   use `CommonAction`; new `Action` variants go in
-  `crates/activity/src/domain/models.rs` (codec and `ActionTag`),
-  `crates/activity/src/inbound/toolset/read_activity.rs`, and
+  `crates/search/activity/src/domain/models.rs` (codec and `ActionTag`),
+  `crates/search/activity/src/inbound/toolset/read_activity.rs`, and
   `crates/graphql/graphql_activity/src/objects.rs`.
 - Register the topic in `services/document_storage_service/src/service/activity.rs`
   (`declare_topics!` and an `ingest` arm). Hard deletes return `Ingest::Purge`.
-- **`crates/activity/src/outbound/pg_activity_repo.rs`:** the const fn
+- **`crates/search/activity/src/outbound/pg_activity_repo.rs`:** the const fn
   `_rankable_entity_types_are_exhaustive` forces an arm, but the list in
   `rankable_entity_types()` beside it is not checked. Update both.
 - **Lesson:** events that reference other entities (an initiative's tasks) must be
@@ -243,14 +243,14 @@ target, but REST Soup still serves users behind `enable-graphql-soup`, so the
 kind must work on both; a kind that only worked on one path showed empty lists
 on the other.
 
-- **Model:** `crates/models_soup/src/<kind>.rs` and a `SoupItem` variant in
+- **Model:** `crates/search/models_soup/src/<kind>.rs` and a `SoupItem` variant in
   `item.rs`.
-- **Filters:** `crates/item_filters/src/ast/<kind>.rs`, a field on
+- **Filters:** `crates/search/item_filters/src/ast/<kind>.rs`, a field on
   `EntityFilterAst` in `ast.rs` (plus `expand_ast` and `IsEmpty`), and
   `<Kind>Filters` in `lib.rs`. Make the kind **opt-in**: an empty filter excludes
   it. Set the new field in every `EntityFilterAst { .. }` literal the compiler
   reports.
-- **Postgres legs** in `crates/soup/src/outbound/pg_soup_repo/`: `<kind>.rs` with
+- **Postgres legs** in `crates/search/soup/src/outbound/pg_soup_repo/`: `<kind>.rs` with
   `<kind>/by_ids.sql` (hydration, registered in both by-ids paths of
   `pg_soup_repo.rs`); `expanded/dynamic/<kind>.rs` with detail and grouped SQL;
   an `include_<kind>` gate in both builders of `expanded/dynamic.rs`; and a
@@ -260,11 +260,11 @@ on the other.
 - **Feeds** (if it belongs in Recent, inbox, or the Home work feed):
   `candidate_gates.rs`, `touched.rs` (Recent, which reads activity, so section 7
   is a prerequisite), `notified.rs` with `notified/query.sql`, `attention/`, and
-  the routing arms in `crates/soup/src/domain/service.rs` and
+  the routing arms in `crates/search/soup/src/domain/service.rs` and
   `domain/service/favorites.rs`. Keep new gates index-only; these queries have
   been cancelled on the replica in production for scanning too much.
-- **Prefer a listing port** owned by your crate (`crates/soup/src/domain/models/contact_listing.rs`
-  is the pattern) over SQL inside `crates/soup` when the kind's data lives in its
+- **Prefer a listing port** owned by your crate (`crates/search/soup/src/domain/models/contact_listing.rs`
+  is the pattern) over SQL inside `crates/search/soup` when the kind's data lives in its
   own crate.
 - **Projection:** `crates/soup_filter_projection/src/lib.rs` returns `Ok(None)` and
   `crates/item_filter_index/src/lib.rs` returns `Unsupported(..)` unless you build
@@ -363,10 +363,10 @@ Quick Access (section 15) and agents through their list tools. That is the
 minimum.
 
 For full-text search, follow the `AGENTS.md` recipes in
-`crates/clients/opensearch_client` (index shapes), `crates/models_search`,
-`crates/search_service` (queries), and `services/search_processing_service`
+`crates/clients/opensearch_client` (index shapes), `crates/search/models_search`,
+`crates/search/search_service` (queries), and `services/search_processing_service`
 (Kafka consumer and backfill). Agent sessions are the newest example.
-`crates/name_search` covers name-only search from Postgres. **Deploys never
+`crates/search/name_search` covers name-only search from Postgres. **Deploys never
 create OpenSearch indices or aliases**; that is a manual step for a person, and
 upserts must not create an index by accident.
 

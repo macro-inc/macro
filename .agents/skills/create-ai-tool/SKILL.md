@@ -16,7 +16,7 @@ Decide which domain crate the tool belongs in. Tools live at `crates/<crate>/src
 Study an existing tool for patterns:
 - `crates/documents/src/inbound/toolset/` — tools: `read_content.rs`, `read_metadata.rs`, `create_document.rs`
 - `crates/email/email/src/inbound/toolset/` — tools: `send_email.rs`, `get_thread.rs`, `update_thread_labels.rs`
-- `crates/soup/src/inbound/toolset/` — tool: `list_entities.rs`
+- `crates/search/soup/src/inbound/toolset/` — tool: `list_entities.rs`
 - `crates/comms/call/src/inbound/toolset/` — call-related tools
 
 Each tool is a struct that derives `JsonSchema` and `Deserialize`, with `#[schemars(title = "...", description = "...")]` on the struct and `#[schemars(description = "...")]` on each field. The struct implements `AsyncTool<Context>` from the `ai_toolset` crate.
