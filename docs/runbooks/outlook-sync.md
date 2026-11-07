@@ -109,7 +109,10 @@ needs a few more failures to alert.
 ## Reauthorization
 
 More Outlook mailboxes need reauthorization than an hour ago. Their sync stops
-until each user reconnects, so a spike is user-visible.
+until each user reconnects, so a spike is user-visible. Sync claims skip a
+flagged mailbox, so its queued work waits (`queued` stays above zero) without
+asking authentication-service for tokens; it resumes once a reconnect or a
+token that works again clears the flag.
 
 - List them: `env:prod "outlook mailbox health" @needs_reauth:true`,
   grouped by `@link_id`.

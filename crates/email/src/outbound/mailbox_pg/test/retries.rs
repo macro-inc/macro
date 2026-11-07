@@ -377,3 +377,35 @@ async fn an_invitation_waits_for_its_calendar_parts_then_imports_without_them(db
     .unwrap();
     assert_eq!(stored, 1);
 }
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn sync_claims_skip_a_mailbox_that_needs_reauth_until_it_is_cleared(db: PgPool) {
+    let (repo, link) = fixture(&db).await;
+    sqlx::query!(
+        "INSERT INTO email_sync_streams (id,link_id,generation,kind,scope_id) VALUES ($1,$2,1,'folder_catalog','mail')",
+        Uuid::now_v7(),
+        link
+    )
+    .execute(&db)
+    .await
+    .unwrap();
+    queue(&db, link, "waiting", 0).await;
+    let set_reauth = |needs_reauth: bool| {
+        sqlx::query!(
+            "UPDATE email_links SET needs_reauth = $2 WHERE id = $1",
+            link,
+            needs_reauth
+        )
+        .execute(&db)
+    };
+
+    set_reauth(true).await.unwrap();
+    assert!(repo.claim_catalog(Uuid::now_v7()).await.unwrap().is_none());
+    assert!(repo.claim_stream(Uuid::now_v7()).await.unwrap().is_none());
+    assert!(repo.claim_message(Uuid::now_v7()).await.unwrap().is_none());
+
+    set_reauth(false).await.unwrap();
+    assert!(repo.claim_catalog(Uuid::now_v7()).await.unwrap().is_some());
+    assert!(repo.claim_stream(Uuid::now_v7()).await.unwrap().is_some());
+    assert!(repo.claim_message(Uuid::now_v7()).await.unwrap().is_some());
+}

@@ -197,6 +197,8 @@ tools — hexagonal, heavily feature-gated.
   that reads queued or import-running state must leave those rows out, as
   `settle_import`, the health snapshot, the backfill status and resync do.
   Throttling and token refusals give their claim back to `attempts`.
+- Outlook sync claims (catalog, folder streams, messages, contacts) skip a
+  link with `needs_reauth`; clearing the flag resumes them.
 - Import counts for the health snapshot stay in memory (`ImportTally`) and are
   flushed once a minute to `email_mailbox_import_minutes`; never write per
   imported message for telemetry.
