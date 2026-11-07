@@ -1,5 +1,5 @@
-import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
 import { hasLoginCookie } from '@core/util/cookies';
+import { isTauri } from '@core/util/platform';
 import { authKeys } from '../../auth/keys';
 import type { UserInfoData } from '../../auth/user-info';
 import { queryClient } from '../../client';
@@ -31,7 +31,7 @@ export function documentSessionEpoch(): string {
 export const offlineDocumentContextCache = createOfflineDocumentContextCache({
   store: createPerQueryIDBStore({ dbName: 'native-document-open-persist-v1' }),
   identity: () => {
-    if (!isNativeMobilePlatform() || !hasLoginCookie()) return;
+    if (!isTauri() || !hasLoginCookie()) return;
     const state = queryClient.getQueryState<UserInfoData>(
       authKeys.userInfo.queryKey
     );
@@ -42,7 +42,7 @@ export const offlineDocumentContextCache = createOfflineDocumentContextCache({
 
 /** Rotate before asynchronous clearing so late work cannot restore a logged-out session. */
 export async function clearOfflineDocumentContexts(): Promise<void> {
-  if (!isNativeMobilePlatform()) return;
+  if (!isTauri()) return;
   volatileEpoch = crypto.randomUUID();
   try {
     localStorage.setItem(EPOCH_KEY, volatileEpoch);

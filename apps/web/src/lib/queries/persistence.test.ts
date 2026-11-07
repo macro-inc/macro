@@ -18,8 +18,9 @@ import {
   shouldPersistChannelQuery,
 } from './persistence-scopes';
 
-vi.mock('@core/mobile/isNativeMobilePlatform', () => ({
-  isNativeMobilePlatform: () => true,
+vi.mock('@core/util/platform', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@core/util/platform')>()),
+  isTauri: () => true,
 }));
 vi.mock('@core/util/cookies', () => ({ hasLoginCookie: () => true }));
 
