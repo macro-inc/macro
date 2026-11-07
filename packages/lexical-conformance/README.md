@@ -94,6 +94,8 @@ in [UPSTREAM-LICENSE](UPSTREAM-LICENSE).
 Schema-2 additions used by this corpus: `$regexp` carries `flags` and `lastIndex`;
 `$iterator` binds iterable-iterator identity; caret slices use `$caret` with `type:
 "slice"`, `caret`, and `distance`. Editor config records `headless` and
-`namespaceGenerated`. Partial initial states carry `keys` (preorder), `nodeMapKeys`
+`namespaceGenerated`. Config `nodeClasses` maps registered node types to source
+`$fn` references, including classes configured without any direct API call.
+Partial initial states carry `keys` (preorder), `nodeMapKeys`
 (insertion order), and `nextKey` alongside JSON and selection. Downstream fixture
 readers must support these explicit fields; no allocation keys are normalized away.
