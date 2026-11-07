@@ -26,6 +26,17 @@ let
   '';
 in
 rec {
+  # Make the addressing scheme explicit while retaining the immutable store hash.
+  imageReference =
+    drv:
+    let
+      imageTag = "build.${drv.imageTag}";
+    in
+    drv
+    // {
+      inherit imageTag;
+      ref = builtins.unsafeDiscardStringContext "${drv.imageName}:${imageTag}";
+    };
   jobName =
     instance: name: w:
     "${name}-${
@@ -93,7 +104,7 @@ rec {
         // lib.optionalAttrs (workingDir != null) { WorkingDir = workingDir; };
       };
     in
-    drv // { ref = drv.imageRefUnsafe; };
+    imageReference drv;
 
   # Pushes `images` (name -> image) to the registry, skipping any it already
   # holds. Skopeo itself skips layers the registry has, so a rebuilt service

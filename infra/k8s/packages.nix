@@ -67,7 +67,7 @@ rec {
         };
       };
     in
-    drv // { ref = drv.imageRefUnsafe; };
+    platformLib.imageReference drv;
 
   inherit
     (import ./node.nix {
@@ -143,7 +143,7 @@ rec {
         };
       };
     in
-    drv // { ref = drv.imageRefUnsafe; };
+    platformLib.imageReference drv;
 
   postgres = pkgs.postgresql_18.withPackages (p: [ p.pgvector ]);
   sqlx = pkgs.sqlx-cli;
