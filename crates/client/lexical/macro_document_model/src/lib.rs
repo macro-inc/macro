@@ -28,3 +28,8 @@ pub mod parsers;
 
 /// Reader-oriented XML serialization and shared ordered element builders.
 pub mod xml;
+
+/// Durable node identity and depth-first mapping helpers.
+pub mod node_ids;
+/// Typed authored message references and parsed markdown extraction.
+pub mod mentions;

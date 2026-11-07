@@ -22,6 +22,7 @@ pub fn nanoid(tx: &Transaction<'_>, length: usize) -> crate::ModelResult<String>
     }
     bytes
         .iter()
+        .rev()
         .map(|byte| {
             lexical_node_id::NANOID_URL_ALPHABET
                 .get(usize::from(byte & 63))
@@ -37,4 +38,38 @@ pub fn now_iso(tx: &Transaction<'_>) -> crate::ModelResult<String> {
     let date = chrono::DateTime::<chrono::Utc>::from_timestamp_millis(millis)
         .ok_or(Error::Invariant("invalid node timestamp"))?;
     Ok(date.to_rfc3339_opts(chrono::SecondsFormat::Millis, true))
+}
+
+/// Explicit host capabilities for high-level headless document operations.
+#[derive(Clone)]
+pub struct DocumentContext {
+    /// Constructor clock.
+    pub clock: NodeClock,
+    /// Cryptographic bytes provided by the host, with no ambient RNG reads.
+    pub random: NodeRandom,
+    /// Optional app hostname.
+    pub host: NodeHost,
+    /// Optional shared allocation namespace, for hosts operating across editors.
+    pub keys: KeySource,
+    /// Optional host observer invoked for each newly constructed headless editor.
+    pub editor_created: Option<Arc<dyn Fn() + Send + Sync>>,
+}
+impl DocumentContext {
+    /// Build the source headless registry with this operation's capabilities.
+    pub fn builder(&self) -> EditorBuilder {
+        if let Some(created) = &self.editor_created {
+            created();
+        }
+        crate::headless_builder()
+            .key_source(self.keys.clone())
+            .extension_state(self.clock.clone())
+            .extension_state(self.random.clone())
+            .extension_state(self.host.clone())
+    }
+    /// Explicit external-link configuration for this host.
+    pub fn markdown_options(&self) -> crate::transformers::MacroMarkdownOptions {
+        crate::transformers::MacroMarkdownOptions {
+            app_hostname: self.host.0.clone(),
+        }
+    }
 }

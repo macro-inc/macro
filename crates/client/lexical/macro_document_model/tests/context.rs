@@ -40,3 +40,17 @@ fn booking_import_and_clone_use_explicit_host_without_serializing_it() -> Result
     assert_eq!(parse_booking_url("https://macro.com/app/book/%ZZ"), None);
     Ok(())
 }
+
+#[test]
+fn browser_nanoid_reads_injected_bytes_from_the_end() -> Result<()> {
+    let mut editor = export_builder()
+        .extension_state(NodeRandom(std::sync::Arc::new(|size| {
+            assert_eq!(size, 8);
+            vec![12, 94, 198, 142, 4, 163, 64, 108]
+        })))
+        .build()
+        .unwrap();
+    let tx = editor.transaction();
+    assert_eq!(nanoid(&tx, 8)?, "_uDn8oR1");
+    Ok(())
+}
