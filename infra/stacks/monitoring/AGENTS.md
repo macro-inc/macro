@@ -69,5 +69,5 @@ From `infra/`:
   `@outlook.token_cache`, not by name: Datadog renames an HTTP client span to
   `http.client.request` with its method as the resource.
 - `monitors/calls.ts` matches the text of the `voip push: SNS delivery failed`
-  log in `crates/notification/src/domain/service/voip.rs` and the
+  log in `crates/notifications/notification/src/domain/service/voip.rs` and the
   `PushEndpointUnavailable` message. Rewording either silently breaks it.

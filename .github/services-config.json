@@ -21,7 +21,7 @@
       "source_paths": [
         "services/authentication_service/**",
         "crates/referral/**",
-        "crates/teams/**",
+        "crates/accounts/teams/**",
         "services/user_link_cleanup_handler/**"
       ],
       "stack_path": "infra/stacks/authentication-service/**",
@@ -112,10 +112,10 @@
         "crates/import/**",
         "crates/platform/macro_queues/**",
         "crates/platform/service_urls/**",
-        "crates/teams/**",
+        "crates/accounts/teams/**",
         "crates/invite_email/**",
-        "crates/notification/**",
-        "crates/model_notifications/**",
+        "crates/notifications/notification/**",
+        "crates/notifications/model_notifications/**",
         "crates/call/**",
         "crates/github/**",
         "crates/initiative/**",

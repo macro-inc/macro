@@ -25,7 +25,7 @@ Names: the variant is `PascalCase`; `Notification::TYPE_NAME`, the serde tag, th
 
 ## 1. Metadata type (required)
 
-In `crates/model_notifications/src/metadata.rs` (or a submodule like
+In `crates/notifications/model_notifications/src/metadata.rs` (or a submodule like
 `metadata/crm_discussion.rs`):
 
 - Define `<Name>Metadata` with `#[derive(Serialize, Deserialize, Debug, Clone, ToSchema)]`
@@ -51,9 +51,9 @@ In `crates/model_notifications/src/metadata.rs` (or a submodule like
   banner on the device and is also the Android identifier, so key it on what a
   newer notification should supersede (the reaction keys on message + emoji, a
   reminder on its reminder id). Android pushes are derived from the APNS payload
-  in `crates/notification/src/domain/service/egress.rs`; there is no separate
+  in `crates/notifications/notification/src/domain/service/egress.rs`; there is no separate
   Android formatter.
-- Add title/body tests to `crates/model_notifications/src/metadata/test.rs`.
+- Add title/body tests to `crates/notifications/model_notifications/src/metadata/test.rs`.
 
 Only invite-style kinds send direct email (`NotificationExtEmail`, see
 `crates/invite_email`). Everything else reaches email through the digest, which
@@ -61,7 +61,7 @@ formats any `NotifEvent` via `NotificationTitle`.
 
 ## 2. Register the variant (required)
 
-In `crates/model_notifications/src/lib.rs`:
+In `crates/notifications/model_notifications/src/lib.rs`:
 
 - Re-export the type from the `pub use metadata::{...}` list.
 - Add the variant **at the end** of `NotifEvent` inside `define_notif_event!`. The
@@ -78,7 +78,7 @@ Then decide two lists in other crates; nothing will force you to:
   not be able to turn it off (account-security kinds like `inbox_reauth_required`
   stay out). The preferences endpoint rejects disabling any type not listed.
 - **Category filter:** check `push_include_types_filter` in
-  `crates/notification/src/outbound/repository.rs`. Categories mostly match on
+  `crates/notifications/notification/src/outbound/repository.rs`. Categories mostly match on
   `event_item_type`, and `Message` also matches any metadata with a `messageId`.
   A new kind filed under an existing entity type joins that category, which leaked
   agent rows into the channel filter once. GitHub kinds are a hand-kept list
@@ -213,7 +213,7 @@ consumer matches on `notification_metadata.tag`.
    data (channel, message, and nullable thread-root IDs) plus a per-recipient
    `recipientId`, allowing a matching signed-in account to open the destination
    before notification hydration. Add channel destinations in
-   `crates/model_notifications/src/metadata/channel_push.rs` and the metadata's
+   `crates/notifications/model_notifications/src/metadata/channel_push.rs` and the metadata's
    `NotificationExtIos` implementation; regenerate the service OpenAPI and the
    web push validators with `scripts/generate-api-schema.ts`. Older pushes and
    other notification kinds still follow the lookup path, so step 3 covers
@@ -233,7 +233,7 @@ kinds introduced by a newer backend.
   and `is_channel_event` / `is_comment_event` matches if it belongs to a
   conversation.
 - **Notifications inbox:** `place_event` in
-  `crates/notification_inbox/src/domain/rows.rs` matches every `NotifEvent`, so
+  `crates/notifications/notification_inbox/src/domain/rows.rs` matches every `NotifEvent`, so
   the compiler asks where a new kind's row goes: an existing slot, a new slot
   (one row per request id), or none. Hide noise there rather than dropping it,
   so done still acknowledges it. Give the row its actor in `actor` and any
@@ -243,7 +243,7 @@ kinds introduced by a newer backend.
   `static_assets/schema.graphql`; adding enum values is compatible, removing
   them is not.
 - **Channel unread scoping:** channel thread SQL in
-  `crates/notification/src/outbound/entity_notifications.rs` lists event types by
+  `crates/notifications/notification/src/outbound/entity_notifications.rs` lists event types by
   name. Add a channel-scoped kind there, with tests beside it.
 
 ## 8. Docs

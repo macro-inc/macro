@@ -10,8 +10,8 @@ domain depends on the other.
 
 ## Recipes
 
-- Run it through the `crates/teams` recipes:
-  `just crates/teams/backfill_teammate_dms_local` (or `_dev` / `_prod`, which
+- Run it through the `crates/accounts/teams` recipes:
+  `just crates/accounts/teams/backfill_teammate_dms_local` (or `_dev` / `_prod`, which
   confirm first).
 
 ## Gotchas

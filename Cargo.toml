@@ -5,7 +5,12 @@ exclude = ["vendor"]
 
 members = [
   "crates/access_requests",
-  "crates/account_manager",
+  "crates/accounts/account_manager",
+  "crates/accounts/gtm_invite",
+  "crates/accounts/onboarding",
+  "crates/accounts/system_status",
+  "crates/accounts/user_api_key",
+  "crates/accounts/user_language",
   "crates/activity",
   "crates/agent",
   "crates/agent_api_keys",
@@ -101,7 +106,6 @@ members = [
   "crates/graphql/graphql_soup",
   "crates/graphql/graphql_soup_filter_input",
   "crates/graphql/graphql_work_feed",
-  "crates/gtm_invite",
   "crates/harnesses",
   "crates/image_generation",
   "crates/import",
@@ -118,8 +122,7 @@ members = [
   "crates/mcp_toolset",
   "crates/memory",
   "crates/messages",
-  "crates/notification_inbox",
-  "crates/onboarding",
+  "crates/notifications/notification_inbox",
   "crates/pipedream_mcp",
   "crates/platform/agent_correlation",
   "crates/platform/broadcast",
@@ -179,7 +182,6 @@ members = [
   "crates/soup_filter_projection",
   "crates/sync_router",
   "crates/system_skills",
-  "crates/system_status",
   "crates/task_dedup",
   "crates/types/agent_session_id",
   "crates/types/bearer_token",
@@ -207,8 +209,6 @@ members = [
   "crates/types/trigger_context",
   "crates/unfurl",
   "crates/universal_input",
-  "crates/user_api_key",
-  "crates/user_language",
   "crates/web_search",
   "crates/webhook_signature",
   "crates/whatsapp_e2e",
@@ -604,7 +604,7 @@ subtle = "2.6.1"
 # Workspace crates other members depend on, kept by `cargo x deps` at their
 # current paths. Depend on them with `name = { workspace = true }`.
 access_requests = { path = "crates/access_requests" }
-account_manager = { path = "crates/account_manager" }
+account_manager = { path = "crates/accounts/account_manager" }
 activity = { path = "crates/activity", default-features = false }
 agent = { path = "crates/agent" }
 agent_api_keys = { path = "crates/agent_api_keys" }
@@ -760,7 +760,7 @@ graphql_scheduled_action = { path = "crates/graphql/graphql_scheduled_action" }
 graphql_soup = { path = "crates/graphql/graphql_soup" }
 graphql_soup_filter_input = { path = "crates/graphql/graphql_soup_filter_input" }
 graphql_work_feed = { path = "crates/graphql/graphql_work_feed" }
-gtm_invite = { path = "crates/gtm_invite" }
+gtm_invite = { path = "crates/accounts/gtm_invite" }
 harness_id = { path = "crates/types/harness_id" }
 harnesses = { path = "crates/harnesses", default-features = false }
 id_newtype = { path = "crates/types/id_newtype" }
@@ -780,7 +780,7 @@ item_filters = { path = "crates/item_filters", default-features = false }
 jev = { path = "crates/jev" }
 kafka_util = { path = "crates/platform/kafka_util" }
 lambda_client = { path = "crates/aws/lambda_client" }
-last_online_tracker = { path = "crates/last_online_tracker" }
+last_online_tracker = { path = "crates/accounts/last_online_tracker" }
 lexical_client = { path = "crates/clients/lexical_client" }
 lexical_mention_extractor = { path = "crates/lexical_mention_extractor" }
 lexical_service_url = { path = "crates/platform/service_urls/lexical_service_url" }
@@ -820,12 +820,12 @@ memory = { path = "crates/memory" }
 mention_utils = { path = "crates/mention_utils" }
 message_parent = { path = "crates/types/message_parent" }
 messages = { path = "crates/messages" }
-mobile_welcome_email_db_client = { path = "crates/mobile_welcome_email_db_client" }
+mobile_welcome_email_db_client = { path = "crates/accounts/mobile_welcome_email_db_client" }
 model = { path = "crates/types/model" }
 model_entity = { path = "crates/model_entity" }
 model_error_response = { path = "crates/model_error_response" }
 model_file_type = { path = "crates/types/model_file_type" }
-model_notifications = { path = "crates/model_notifications" }
+model_notifications = { path = "crates/notifications/model_notifications" }
 model_owner = { path = "crates/types/model_owner" }
 model_user = { path = "crates/types/model_user" }
 models_ai_projection = { path = "crates/types/models_ai_projection" }
@@ -846,15 +846,15 @@ models_sfs = { path = "crates/types/models_sfs" }
 models_soup = { path = "crates/models_soup" }
 models_team = { path = "crates/types/models_team" }
 name_search = { path = "crates/name_search" }
-native_app_service = { path = "crates/native_app_service" }
+native_app_service = { path = "crates/accounts/native_app_service" }
 non_empty = { path = "crates/types/non_empty" }
-notification = { path = "crates/notification", default-features = false }
-notification_db_client = { path = "crates/notification_db_client" }
-notification_hex = { package = "notification", path = "crates/notification" }
-notification_inbox = { path = "crates/notification_inbox" }
+notification = { path = "crates/notifications/notification", default-features = false }
+notification_db_client = { path = "crates/notifications/notification_db_client" }
+notification_hex = { package = "notification", path = "crates/notifications/notification" }
+notification_inbox = { path = "crates/notifications/notification_inbox" }
 notification_service_url = { path = "crates/platform/service_urls/notification_service_url" }
 notification_state = { path = "crates/types/notification_state" }
-onboarding = { path = "crates/onboarding" }
+onboarding = { path = "crates/accounts/onboarding" }
 opensearch_client = { path = "crates/clients/opensearch_client" }
 opensearch_query_builder = { path = "crates/clients/opensearch_query_builder" }
 pipedream_mcp = { path = "crates/pipedream_mcp" }
@@ -914,10 +914,10 @@ sync_service_hex = { path = "crates/sync_service" }
 sync_service_url = { path = "crates/platform/service_urls/sync_service_url" }
 system_properties = { path = "crates/system_properties" }
 system_skills = { path = "crates/system_skills" }
-system_status = { path = "crates/system_status" }
+system_status = { path = "crates/accounts/system_status" }
 task_dedup = { path = "crates/task_dedup" }
 team_id = { path = "crates/types/team_id" }
-teams = { path = "crates/teams", default-features = false }
+teams = { path = "crates/accounts/teams", default-features = false }
 trigger_context = { path = "crates/types/trigger_context" }
 turso-opfs = { path = "crates/client/turso-opfs" }
 unfurl = { path = "crates/unfurl" }
@@ -925,8 +925,8 @@ unfurl_service = { path = "services/unfurl_service" }
 unfurl_service_url = { path = "crates/platform/service_urls/unfurl_service_url" }
 universal_input = { path = "crates/universal_input" }
 upstream_error = { path = "crates/platform/upstream_error", default-features = false }
-user_api_key = { path = "crates/user_api_key" }
-user_language = { path = "crates/user_language" }
+user_api_key = { path = "crates/accounts/user_api_key" }
+user_language = { path = "crates/accounts/user_language" }
 user_quota = { path = "crates/types/user_quota" }
 web_search = { path = "crates/web_search" }
 webhook = { path = "crates/webhook", default-features = false }
