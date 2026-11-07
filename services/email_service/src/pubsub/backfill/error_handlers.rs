@@ -227,7 +227,7 @@ pub async fn handle_retryable_error(
         }
         BackfillOperation::DepopulateCrmForUser(payload) => {
             tracing::warn!(
-                macro_id = %payload.macro_id,
+                team_id = %payload.team_id,
                 "Retryable error depopulating CRM for user"
             )
         }

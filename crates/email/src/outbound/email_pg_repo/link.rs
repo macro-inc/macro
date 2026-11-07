@@ -9,7 +9,7 @@ use uuid::Uuid;
 
 use super::db_types::{DbLink, DbUserProvider};
 
-#[tracing::instrument(err, skip(pool))]
+#[tracing::instrument(err, skip(pool, macro_id))]
 pub(super) async fn link_by_fusionauth_and_macro_id(
     pool: &PgPool,
     fusionauth_user_id: &str,
@@ -77,7 +77,7 @@ pub(super) async fn link_by_fusionauth_email_provider(
         .map_err(|e| sqlx::Error::Decode(Box::new(e)))
 }
 
-#[tracing::instrument(err, skip(pool))]
+#[tracing::instrument(err, skip(pool, macro_id))]
 pub(super) async fn owned_link_for_thread(
     pool: &PgPool,
     thread_id: Uuid,
@@ -111,7 +111,7 @@ pub(super) async fn owned_link_for_thread(
         .map_err(|e| sqlx::Error::Decode(Box::new(e)))
 }
 
-#[tracing::instrument(err, skip(pool))]
+#[tracing::instrument(err, skip(pool, macro_id))]
 pub(super) async fn inboxes_for_macro_id(
     pool: &PgPool,
     macro_id: MacroUserIdStr<'_>,
@@ -245,7 +245,7 @@ impl DbInboxDetailsRow {
 
 /// Fetch and map the enriched, user-scoped inbox details used by inbound
 /// email catalog adapters.
-#[tracing::instrument(err, skip(pool))]
+#[tracing::instrument(err, skip(pool, macro_id))]
 pub(super) async fn inbox_details_for_macro_id(
     pool: &PgPool,
     macro_id: &MacroUserIdStr<'_>,
