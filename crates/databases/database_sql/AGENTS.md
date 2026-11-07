@@ -26,15 +26,16 @@ uses the wasm build directly).
 - Owns: the SQL grammar, catalog binding, GraphQL-query splitting, and the row
   fold — i.e. the engine itself, with no knowledge of Postgres, Soup, or HTTP.
 - Not here: the domain service that stores tables/rows and exposes the ops API
-  → `crates/databases`; the agent-facing adapter that runs this engine over
-  that service and Soup → `crates/databases_sql`.
+  → `crates/databases/databases`; the agent-facing adapter that runs this engine over
+  that service and Soup → `crates/databases/databases_sql`.
 
 ## Boundaries
 
 - Depends on: `filter_ast`, `item_filters` (predicate ASTs shared with other
   filtering code), `models_databases` (wire types).
-- Used by: `crates/databases` and `crates/databases_sql` natively; the web
-  app's database SQL console via the `wasm` module (crate-type `cdylib`).
+- Used by: `crates/databases/databases` and `crates/databases/databases_sql` natively; the web
+  app's database SQL console via the `wasm` module, built as the
+  `database_sql_wasm` wrapper's cdylib.
 
 ## Recipes
 

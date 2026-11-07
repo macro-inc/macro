@@ -17,6 +17,7 @@ lists what this group may depend on. `cargo x deps` reports edges that break it.
 | [`agent_credentials`](agent_credentials/AGENTS.md) | Validated bootstrap credentials shared by agent git, team-agent provisioning and the standalone brain gateway, and the agent teammates rollout for agent accounts. |
 | [`agent_egress`](agent_egress/AGENTS.md) | Part of agent sessions: the security boundary for sandboxed coding agents. |
 | [`agent_fold`](agent_fold/AGENTS.md) | Core to the agent sessions feature: collapses an agent session's raw ACP/ARP protocol log into the renderable message vocabulary every caller (harness, web, exports) … |
+| [`agent_fold_wasm`](agent_fold_wasm/AGENTS.md) | The browser build of `agent_fold` (the agent transcript fold the web app runs in a worker). |
 | [`agent_git`](agent_git/AGENTS.md) | Agent teammates (`docs/design/agent-teammates.md`, "The repo"): exactly one bare git repo per agent user, served over smart HTTP behind Macro auth, plus the internal … |
 | [`agent_harness`](agent_harness/AGENTS.md) | Part of agent sessions: orchestrates sandboxed coding-agent sessions end to end — provisioning containers, speaking to each coding-agent runtime (Cursor, Codex), routing … |
 | [`agent_inmem`](agent_inmem/AGENTS.md) | Part of agent sessions: the lightweight alternative to `agent_harness`'s sandboxed containers — serves the agent side of ACP in-process, running the same agentic loop … |

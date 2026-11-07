@@ -1,0 +1,13 @@
+[package]
+edition = "2024"
+name = "agent_fold_wasm"
+publish = false
+version = "0.1.0"
+
+# The browser build of `agent_fold`: wasm-pack builds this crate, and its
+# cdylib is the only one, so native builds of `agent_fold` link no `.so`.
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+agent_fold = { workspace = true, default-features = false }

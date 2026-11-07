@@ -35,16 +35,16 @@ const OUTPUT_REL: &str = ".github/workspace-dep-closures.json";
 /// The packages `apps/web/justfile` passes to `scripts/cached-wasm-build.sh`,
 /// whose key script refuses a package missing here.
 pub(crate) const WASM_PACKAGES: &[&str] = &[
-    "agent_fold",
-    "ai_engine",
+    "agent_fold_wasm",
+    "ai_engine_wasm",
     "cache-wasm",
-    "database_sql",
-    "docx_engine",
-    "fig_engine",
+    "database_sql_wasm",
+    "docx_engine_wasm",
+    "fig_engine_wasm",
     "natural_time",
     "password_import_wasm",
-    "pptx_engine",
-    "psd_engine",
+    "pptx_engine_wasm",
+    "psd_engine_wasm",
 ];
 
 const WASM_TARGET: &str = "wasm32-unknown-unknown";

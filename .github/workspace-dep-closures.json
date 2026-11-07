@@ -639,6 +639,17 @@
       "crates/types/macro_uuid",
       "crates/types/non_empty"
     ],
+    "agent_fold_wasm": [
+      "crates/agents/agent_fold",
+      "crates/agents/agent_fold_wasm",
+      "crates/agents/agent_runtime_protocol",
+      "crates/agents/dynamic_ui",
+      "crates/types/agent_session_id",
+      "crates/types/cowlike",
+      "crates/types/macro_user_id",
+      "crates/types/macro_uuid",
+      "crates/types/non_empty"
+    ],
     "agent_git": [
       "crates/accounts/last_online_tracker",
       "crates/accounts/teams",
@@ -2022,6 +2033,11 @@
     ],
     "ai_engine": [
       "crates/engines/ai_engine",
+      "crates/engines/fig_engine"
+    ],
+    "ai_engine_wasm": [
+      "crates/engines/ai_engine",
+      "crates/engines/ai_engine_wasm",
       "crates/engines/fig_engine"
     ],
     "ai_tools": [
@@ -4919,6 +4935,24 @@
       "crates/types/non_empty",
       "crates/types/notification_state"
     ],
+    "database_sql_wasm": [
+      "crates/databases/database_sql",
+      "crates/databases/database_sql_wasm",
+      "crates/search/item_filters",
+      "crates/types/bot_id",
+      "crates/types/cowlike",
+      "crates/types/document_sub_type",
+      "crates/types/filter_ast",
+      "crates/types/id_newtype",
+      "crates/types/macro_user_id",
+      "crates/types/macro_uuid",
+      "crates/types/maybe_send",
+      "crates/types/model_file_type",
+      "crates/types/model_owner",
+      "crates/types/models_databases",
+      "crates/types/non_empty",
+      "crates/types/notification_state"
+    ],
     "database_webhooks": [
       "crates/accounts/last_online_tracker",
       "crates/agents/harnessd_protocol",
@@ -6007,6 +6041,11 @@
     ],
     "docx_engine": [
       "crates/engines/docx_engine",
+      "crates/engines/pptx_engine"
+    ],
+    "docx_engine_wasm": [
+      "crates/engines/docx_engine",
+      "crates/engines/docx_engine_wasm",
       "crates/engines/pptx_engine"
     ],
     "docx_unzip_handler": [
@@ -7283,6 +7322,10 @@
     ],
     "fig_engine": [
       "crates/engines/fig_engine"
+    ],
+    "fig_engine_wasm": [
+      "crates/engines/fig_engine",
+      "crates/engines/fig_engine_wasm"
     ],
     "filter_ast": [
       "crates/types/filter_ast"
@@ -11950,6 +11993,10 @@
     "pptx_engine": [
       "crates/engines/pptx_engine"
     ],
+    "pptx_engine_wasm": [
+      "crates/engines/pptx_engine",
+      "crates/engines/pptx_engine_wasm"
+    ],
     "predicate-index": [
       "crates/predicate_index"
     ],
@@ -12261,6 +12308,11 @@
     "psd_engine": [
       "crates/engines/fig_engine",
       "crates/engines/psd_engine"
+    ],
+    "psd_engine_wasm": [
+      "crates/engines/fig_engine",
+      "crates/engines/psd_engine",
+      "crates/engines/psd_engine_wasm"
     ],
     "rate_limit": [
       "crates/platform/rate_limit",
@@ -16139,8 +16191,9 @@
     ]
   },
   "wasm_closures": {
-    "agent_fold": [
+    "agent_fold_wasm": [
       "crates/agents/agent_fold",
+      "crates/agents/agent_fold_wasm",
       "crates/agents/agent_runtime_protocol",
       "crates/agents/dynamic_ui",
       "crates/types/agent_session_id",
@@ -16149,8 +16202,9 @@
       "crates/types/macro_uuid",
       "crates/types/non_empty"
     ],
-    "ai_engine": [
+    "ai_engine_wasm": [
       "crates/engines/ai_engine",
+      "crates/engines/ai_engine_wasm",
       "crates/engines/fig_engine"
     ],
     "cache-wasm": [
@@ -16180,8 +16234,9 @@
       "crates/types/notification_state",
       "crates/types/subsequence_match"
     ],
-    "database_sql": [
+    "database_sql_wasm": [
       "crates/databases/database_sql",
+      "crates/databases/database_sql_wasm",
       "crates/search/item_filters",
       "crates/types/bot_id",
       "crates/types/cowlike",
@@ -16197,12 +16252,14 @@
       "crates/types/non_empty",
       "crates/types/notification_state"
     ],
-    "docx_engine": [
+    "docx_engine_wasm": [
       "crates/engines/docx_engine",
+      "crates/engines/docx_engine_wasm",
       "crates/engines/pptx_engine"
     ],
-    "fig_engine": [
-      "crates/engines/fig_engine"
+    "fig_engine_wasm": [
+      "crates/engines/fig_engine",
+      "crates/engines/fig_engine_wasm"
     ],
     "natural_time": [
       "crates/types/natural_time"
@@ -16211,12 +16268,14 @@
       "crates/accounts/password_import",
       "crates/accounts/password_import_wasm"
     ],
-    "pptx_engine": [
-      "crates/engines/pptx_engine"
+    "pptx_engine_wasm": [
+      "crates/engines/pptx_engine",
+      "crates/engines/pptx_engine_wasm"
     ],
-    "psd_engine": [
+    "psd_engine_wasm": [
       "crates/engines/fig_engine",
-      "crates/engines/psd_engine"
+      "crates/engines/psd_engine",
+      "crates/engines/psd_engine_wasm"
     ]
   }
 }

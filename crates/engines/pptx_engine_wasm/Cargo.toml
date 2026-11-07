@@ -1,0 +1,19 @@
+[package]
+edition = "2024"
+name = "pptx_engine_wasm"
+publish = false
+version = "0.1.0"
+
+# The browser build of `pptx_engine`: wasm-pack builds this crate, and its
+# cdylib is the only one, so native builds of `pptx_engine` link no `.so`.
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+pptx_engine = { workspace = true, features = ["wasm-bindings"] }
+
+# wasm-opt saves only ~7% here (most of the module is font data), and
+# binaryen releases older than wasm-bindgen's output mis-handle its externref
+# table, so the module ships as rustc + wasm-bindgen produce it.
+[package.metadata.wasm-pack.profile.release]
+wasm-opt = false
