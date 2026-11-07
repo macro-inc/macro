@@ -1,0 +1,18 @@
+[package]
+name = "lexical_conformance"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+[dependencies]
+lexical_model = { workspace = true }
+serde = { workspace = true, features = ["derive"] }
+serde_json = { workspace = true, features = ["preserve_order"] }
+thiserror = { workspace = true }
+
+[dev-dependencies]
+libtest-mimic = { workspace = true }
+
+[[test]]
+name = "replay"
+harness = false

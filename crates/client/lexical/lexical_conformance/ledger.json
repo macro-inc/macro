@@ -1,0 +1,1179 @@
+{
+  "upstream": "0.45.0",
+  "patches": [],
+  "strictPackages": [
+    "lexical"
+  ],
+  "entries": [
+    {
+      "file": "packages/lexical-code/src/__tests__/unit/LexicalCodeNode.test.ts",
+      "test": "LexicalCodeNode tests > CodeNode.constructor",
+      "status": "xfail",
+      "reason": "not-ported",
+      "reviewedBy": "coding-agent",
+      "decision": "WORKPLAN later package layers (rich nodes, markdown, lists/tables); WP-06 core subset",
+      "note": "Missing capability: @lexical/code.$createCodeNode. No model mismatch is masked; this exact unsupported diagnostic must still occur.",
+      "failure": "op 4: call 0: unmapped API: @lexical/code.$createCodeNode"
+    },
+    {
+      "file": "packages/lexical-code/src/__tests__/unit/LexicalCodeNode.test.ts",
+      "test": "LexicalCodeNode tests > CodeNode.exportJSON() should return and object conforming to the expected schema",
+      "status": "xfail",
+      "reason": "not-ported",
+      "reviewedBy": "coding-agent",
+      "decision": "WORKPLAN later package layers (rich nodes, markdown, lists/tables); WP-06 core subset",
+      "note": "Missing capability: @lexical/code.$createCodeNode. No model mismatch is masked; this exact unsupported diagnostic must still occur.",
+      "failure": "op 4: call 0: unmapped API: @lexical/code.$createCodeNode"
+    },
+    {
+      "file": "packages/lexical-hashtag/src/__tests__/unit/LexicalHashtagNode.test.ts",
+      "test": "LexicalHashtagNode tests > HashtagNode.exportJSON() should return and object conforming to the expected schema",
+      "status": "xfail",
+      "reason": "not-ported",
+      "reviewedBy": "coding-agent",
+      "decision": "WORKPLAN later package layers (rich nodes, markdown, lists/tables); WP-06 core subset",
+      "note": "Missing capability: @lexical/hashtag.$createHashtagNode. No model mismatch is masked; this exact unsupported diagnostic must still occur.",
+      "failure": "op 4: call 0: unmapped API: @lexical/hashtag.$createHashtagNode"
+    },
+    {
+      "file": "packages/lexical-link/src/__tests__/unit/LexicalLinkNode.test.ts",
+      "test": "LexicalLinkNode tests > $isLinkNode()",
+      "status": "xfail",
+      "reason": "not-ported",
+      "reviewedBy": "coding-agent",
+      "decision": "WORKPLAN later package layers (rich nodes, markdown, lists/tables); WP-06 core subset",
+      "note": "Missing capability: @lexical/link.$createLinkNode. No model mismatch is masked; this exact unsupported diagnostic must still occur.",
+      "failure": "op 4: call 0: unmapped API: @lexical/link.$createLinkNode"
+    },
+    {
+      "file": "packages/lexical-link/src/__tests__/unit/LexicalLinkNode.test.ts",
+      "test": "LexicalLinkNode tests > $toggleLink adds link with embedded LineBreakNode",
+      "status": "xfail",
+      "reason": "not-ported",
+      "reviewedBy": "coding-agent",
+      "decision": "WORKPLAN later package layers (rich nodes, markdown, lists/tables); WP-06 core subset",
+      "note": "Missing capability: @lexical/link.$toggleLink. No model mismatch is masked; this exact unsupported diagnostic must still occur.",
+      "failure": "op 4: call 9: unmapped API: @lexical/link.$toggleLink"
+    },
+    {
+      "file": "packages/lexical-link/src/__tests__/unit/LexicalLinkNode.test.ts",
+      "test": "LexicalLinkNode tests > $toggleLink applies the title attribute when creating",
+      "status": "xfail",
+      "reason": "not-ported",
+      "reviewedBy": "coding-agent",
+      "decision": "WORKPLAN later package layers (rich nodes, markdown, lists/tables); WP-06 core subset",
+      "note": "Missing capability: @lexical/link.$toggleLink. No model mismatch is masked; this exact unsupported diagnostic must still occur.",
+      "failure": "op 4: call 6: unmapped API: @lexical/link.$toggleLink"
+    },
+    {
+      "file": "packages/lexical-link/src/__tests__/unit/LexicalLinkNode.test.ts",
+      "test": "LexicalLinkNode tests > $toggleLink correctly removes link when link contains heading",
+      "status": "xfail",
+      "reason": "not-ported",
+      "reviewedBy": "coding-agent",
+      "decision": "WORKPLAN later package layers (rich nodes, markdown, lists/tables); WP-06 core subset",
+      "note": "Missing capability: @lexical/link.$createLinkNode. No model mismatch is masked; this exact unsupported diagnostic must still occur.",
+      "failure": "op 4: call 1: unmapped API: @lexical/link.$createLinkNode"
+    },
+    {
+      "file": "packages/lexical-link/src/__tests__/unit/LexicalLinkNode.test.ts",
+      "test": "LexicalLinkNode tests > $toggleLink correctly removes link when textnode has children(like marknode)",
+      "status": "xfail",
+      "reason": "not-ported",
+      "reviewedBy": "coding-agent",
+      "decision": "WORKPLAN later package layers (rich nodes, markdown, lists/tables); WP-06 core subset",
+      "note": "Missing capability: @lexical/link.$createLinkNode. No model mismatch is masked; this exact unsupported diagnostic must still occur.",
+      "failure": "op 4: call 4: unmapped API: @lexical/link.$createLinkNode"
+    },
+    {
+      "file": "packages/lexical-link/src/__tests__/unit/LexicalLinkNode.test.ts",
+      "test": "LexicalLinkNode tests > $toggleLink removes link from leading space only",
+      "status": "xfail",
+      "reason": "not-ported",
+      "reviewedBy": "coding-agent",
+      "decision": "WORKPLAN later package layers (rich nodes, markdown, lists/tables); WP-06 core subset",
+      "note": "Missing capability: @lexical/link.$createLinkNode. No model mismatch is masked; this exact unsupported diagnostic must still occur.",
+      "failure": "op 4: call 3: unmapped API: @lexical/link.$createLinkNode"
+    },
+    {
+      "file": "packages/lexical-link/src/__tests__/unit/LexicalLinkNode.test.ts",
+      "test": "LexicalLinkNode tests > $toggleLink removes link from middle word only, preserving surrounding spaces",
+      "status": "xfail",
+      "reason": "not-ported",
+      "reviewedBy": "coding-agent",
+      "decision": "WORKPLAN later package layers (rich nodes, markdown, lists/tables); WP-06 core subset",
+      "note": "Missing capability: @lexical/link.$createLinkNode. No model mismatch is masked; this exact unsupported diagnostic must still occur.",
+      "failure": "op 4: call 3: unmapped API: @lexical/link.$createLinkNode"
+    },
+    {
+      "file": "packages/lexical-link/src/__tests__/unit/LexicalLinkNode.test.ts",
+      "test": "LexicalLinkNode tests > $toggleLink removes link from trailing space only",
+      "status": "xfail",
+      "reason": "not-ported",
+      "reviewedBy": "coding-agent",
+      "decision": "WORKPLAN later package layers (rich nodes, markdown, lists/tables); WP-06 core subset",
+      "note": "Missing capability: @lexical/link.$createLinkNode. No model mismatch is masked; this exact unsupported diagnostic must still occur.",
+      "failure": "op 4: call 3: unmapped API: @lexical/link.$createLinkNode"
+    },
+    {
+      "file": "packages/lexical-link/src/__tests__/unit/LexicalLinkNode.test.ts",
+      "test": "LexicalLinkNode tests > $toggleLink removes link when selection is collapsed",
+      "status": "xfail",
+      "reason": "not-ported",
+      "reviewedBy": "coding-agent",
+      "decision": "WORKPLAN later package layers (rich nodes, markdown, lists/tables); WP-06 core subset",
+      "note": "Missing capability: @lexical/link.$toggleLink. No model mismatch is masked; this exact unsupported diagnostic must still occur.",
+      "failure": "op 4: call 6: unmapped API: @lexical/link.$toggleLink"
+    },
+    {
+      "file": "packages/lexical-link/src/__tests__/unit/LexicalLinkNode.test.ts",
+      "test": "LexicalLinkNode tests > LinkNode.canInsertTextAfter()",
+      "status": "xfail",
+      "reason": "not-ported",
+      "reviewedBy": "coding-agent",
+      "decision": "WORKPLAN later package layers (rich nodes, markdown, lists/tables); WP-06 core subset",
+      "note": "Missing capability: @lexical/link.$createLinkNode. No model mismatch is masked; this exact unsupported diagnostic must still occur.",
+      "failure": "op 4: call 0: unmapped API: @lexical/link.$createLinkNode"
+    },
+    {
+      "file": "packages/lexical-link/src/__tests__/unit/LexicalLinkNode.test.ts",
+      "test": "LexicalLinkNode tests > LinkNode.canInsertTextBefore()",
+      "status": "xfail",
+      "reason": "not-ported",
+      "reviewedBy": "coding-agent",
+      "decision": "WORKPLAN later package layers (rich nodes, markdown, lists/tables); WP-06 core subset",
+      "note": "Missing capability: @lexical/link.$createLinkNode. No model mismatch is masked; this exact unsupported diagnostic must still occur.",
+      "failure": "op 4: call 0: unmapped API: @lexical/link.$createLinkNode"
+    },
+    {
+      "file": "packages/lexical-link/src/__tests__/unit/LexicalLinkNode.test.ts",
+      "test": "LexicalLinkNode tests > LinkNode.clone()",
+      "status": "xfail",
+      "reason": "not-ported",
+      "reviewedBy": "coding-agent",
+      "decision": "WORKPLAN later package layers (rich nodes, markdown, lists/tables); WP-06 core subset",
+      "note": "Missing capability: @lexical/link.$createLinkNode. No model mismatch is masked; this exact unsupported diagnostic must still occur.",
+      "failure": "op 4: call 0: unmapped API: @lexical/link.$createLinkNode"
+    },
+    {
+      "file": "packages/lexical-link/src/__tests__/unit/LexicalLinkNode.test.ts",
+      "test": "LexicalLinkNode tests > LinkNode.constructor",
+      "status": "xfail",
+      "reason": "not-ported",
+      "reviewedBy": "coding-agent",
+      "decision": "WORKPLAN later package layers (rich nodes, markdown, lists/tables); WP-06 core subset",
+      "note": "Missing capability: @lexical/link.$createLinkNode. No model mismatch is masked; this exact unsupported diagnostic must still occur.",
+      "failure": "op 4: call 0: unmapped API: @lexical/link.$createLinkNode"
+    },
+    {
+      "file": "packages/lexical-link/src/__tests__/unit/LexicalLinkNode.test.ts",
+      "test": "LexicalLinkNode tests > LinkNode.getRel()",
+      "status": "xfail",
+      "reason": "not-ported",
+      "reviewedBy": "coding-agent",
+      "decision": "WORKPLAN later package layers (rich nodes, markdown, lists/tables); WP-06 core subset",
+      "note": "Missing capability: @lexical/link.$createLinkNode. No model mismatch is masked; this exact unsupported diagnostic must still occur.",
+      "failure": "op 4: call 0: unmapped API: @lexical/link.$createLinkNode"
+    },
+    {
+      "file": "packages/lexical-link/src/__tests__/unit/LexicalLinkNode.test.ts",
+      "test": "LexicalLinkNode tests > LinkNode.getTarget()",
+      "status": "xfail",
+      "reason": "not-ported",
+      "reviewedBy": "coding-agent",
+      "decision": "WORKPLAN later package layers (rich nodes, markdown, lists/tables); WP-06 core subset",
+      "note": "Missing capability: @lexical/link.$createLinkNode. No model mismatch is masked; this exact unsupported diagnostic must still occur.",
+      "failure": "op 4: call 0: unmapped API: @lexical/link.$createLinkNode"
+    },
+    {
+      "file": "packages/lexical-link/src/__tests__/unit/LexicalLinkNode.test.ts",
+      "test": "LexicalLinkNode tests > LinkNode.getTitle()",
+      "status": "xfail",
+      "reason": "not-ported",
+      "reviewedBy": "coding-agent",
+      "decision": "WORKPLAN later package layers (rich nodes, markdown, lists/tables); WP-06 core subset",
+      "note": "Missing capability: @lexical/link.$createLinkNode. No model mismatch is masked; this exact unsupported diagnostic must still occur.",
+      "failure": "op 4: call 0: unmapped API: @lexical/link.$createLinkNode"
+    },
+    {
+      "file": "packages/lexical-link/src/__tests__/unit/LexicalLinkNode.test.ts",
+      "test": "LexicalLinkNode tests > LinkNode.getURL()",
+      "status": "xfail",
+      "reason": "not-ported",
+      "reviewedBy": "coding-agent",
+      "decision": "WORKPLAN later package layers (rich nodes, markdown, lists/tables); WP-06 core subset",
+      "note": "Missing capability: @lexical/link.$createLinkNode. No model mismatch is masked; this exact unsupported diagnostic must still occur.",
+      "failure": "op 4: call 0: unmapped API: @lexical/link.$createLinkNode"
+    },
+    {
+      "file": "packages/lexical-link/src/__tests__/unit/LexicalLinkNode.test.ts",
+      "test": "LexicalLinkNode tests > LinkNode.setRel()",
+      "status": "xfail",
+      "reason": "not-ported",
+      "reviewedBy": "coding-agent",
+      "decision": "WORKPLAN later package layers (rich nodes, markdown, lists/tables); WP-06 core subset",
+      "note": "Missing capability: @lexical/link.$createLinkNode. No model mismatch is masked; this exact unsupported diagnostic must still occur.",
+      "failure": "op 4: call 0: unmapped API: @lexical/link.$createLinkNode"
+    },
+    {
+      "file": "packages/lexical-link/src/__tests__/unit/LexicalLinkNode.test.ts",
+      "test": "LexicalLinkNode tests > LinkNode.setTarget()",
+      "status": "xfail",
+      "reason": "not-ported",
+      "reviewedBy": "coding-agent",
+      "decision": "WORKPLAN later package layers (rich nodes, markdown, lists/tables); WP-06 core subset",
+      "note": "Missing capability: @lexical/link.$createLinkNode. No model mismatch is masked; this exact unsupported diagnostic must still occur.",
+      "failure": "op 4: call 0: unmapped API: @lexical/link.$createLinkNode"
+    },
+    {
+      "file": "packages/lexical-link/src/__tests__/unit/LexicalLinkNode.test.ts",
+      "test": "LexicalLinkNode tests > LinkNode.setTitle()",
+      "status": "xfail",
+      "reason": "not-ported",
+      "reviewedBy": "coding-agent",
+      "decision": "WORKPLAN later package layers (rich nodes, markdown, lists/tables); WP-06 core subset",
+      "note": "Missing capability: @lexical/link.$createLinkNode. No model mismatch is masked; this exact unsupported diagnostic must still occur.",
+      "failure": "op 4: call 0: unmapped API: @lexical/link.$createLinkNode"
+    },
+    {
+      "file": "packages/lexical-link/src/__tests__/unit/LexicalLinkNode.test.ts",
+      "test": "LexicalLinkNode tests > LinkNode.setURL()",
+      "status": "xfail",
+      "reason": "not-ported",
+      "reviewedBy": "coding-agent",
+      "decision": "WORKPLAN later package layers (rich nodes, markdown, lists/tables); WP-06 core subset",
+      "note": "Missing capability: @lexical/link.$createLinkNode. No model mismatch is masked; this exact unsupported diagnostic must still occur.",
+      "failure": "op 4: call 0: unmapped API: @lexical/link.$createLinkNode"
+    },
+    {
+      "file": "packages/lexical-link/src/__tests__/unit/LexicalLinkNode.test.ts",
+      "test": "formatUrl > should add https:// to URLs without protocols",
+      "status": "xfail",
+      "reason": "not-ported",
+      "reviewedBy": "coding-agent",
+      "decision": "WORKPLAN later package layers (rich nodes, markdown, lists/tables); WP-06 core subset",
+      "note": "Missing capability: @lexical/link.formatUrl. No model mismatch is masked; this exact unsupported diagnostic must still occur.",
+      "failure": "op 0 call: unmapped API: @lexical/link.formatUrl"
+    },
+    {
+      "file": "packages/lexical-link/src/__tests__/unit/LexicalLinkNode.test.ts",
+      "test": "formatUrl > should not modify relative paths",
+      "status": "xfail",
+      "reason": "not-ported",
+      "reviewedBy": "coding-agent",
+      "decision": "WORKPLAN later package layers (rich nodes, markdown, lists/tables); WP-06 core subset",
+      "note": "Missing capability: @lexical/link.formatUrl. No model mismatch is masked; this exact unsupported diagnostic must still occur.",
+      "failure": "op 0 call: unmapped API: @lexical/link.formatUrl"
+    },
+    {
+      "file": "packages/lexical-list/src/__tests__/unit/LexicalListItemNode.test.ts",
+      "test": "LexicalListItemNode tests > Can serialize a node that is not attached",
+      "status": "xfail",
+      "reason": "not-ported",
+      "reviewedBy": "coding-agent",
+      "decision": "WORKPLAN later package layers (rich nodes, markdown, lists/tables); WP-06 core subset",
+      "note": "Missing capability: @lexical/list.$createListItemNode. No model mismatch is masked; this exact unsupported diagnostic must still occur.",
+      "failure": "op 4: call 0: unmapped API: @lexical/list.$createListItemNode"
+    },
+    {
+      "file": "packages/lexical-list/src/__tests__/unit/utils.test.ts",
+      "test": "Lexical List Utils tests > getListDepth should return the 1-based depth of a list with one levels",
+      "status": "xfail",
+      "reason": "not-ported",
+      "reviewedBy": "coding-agent",
+      "decision": "WORKPLAN later package layers (rich nodes, markdown, lists/tables); WP-06 core subset",
+      "note": "Missing capability: @lexical/list.$createListNode. No model mismatch is masked; this exact unsupported diagnostic must still occur.",
+      "failure": "op 4: call 1: unmapped API: @lexical/list.$createListNode"
+    },
+    {
+      "file": "packages/lexical-mark/__tests__/unit/LexicalMarkNode.test.ts",
+      "test": "LexicalMarkNode tests > $wrapSelectionInMarkNode > does not include block element nodes",
+      "status": "xfail",
+      "reason": "not-ported",
+      "reviewedBy": "coding-agent",
+      "decision": "WORKPLAN later package layers (rich nodes, markdown, lists/tables); WP-06 core subset",
+      "note": "Missing capability: @lexical/mark.$wrapSelectionInMarkNode. No model mismatch is masked; this exact unsupported diagnostic must still occur.",
+      "failure": "op 6: call 13: unmapped API: @lexical/mark.$wrapSelectionInMarkNode"
+    },
+    {
+      "file": "packages/lexical-mark/__tests__/unit/LexicalMarkNode.test.ts",
+      "test": "LexicalMarkNode tests > $wrapSelectionInMarkNode > includes inline decorator nodes",
+      "status": "xfail",
+      "reason": "not-ported",
+      "reviewedBy": "coding-agent",
+      "decision": "WORKPLAN later package layers (rich nodes, markdown, lists/tables); WP-06 core subset",
+      "note": "Missing capability: @lexical/mark.$wrapSelectionInMarkNode. No model mismatch is masked; this exact unsupported diagnostic must still occur.",
+      "failure": "op 6: call 13: unmapped API: @lexical/mark.$wrapSelectionInMarkNode"
+    },
+    {
+      "file": "packages/lexical-mark/__tests__/unit/LexicalMarkNode.test.ts",
+      "test": "LexicalMarkNode tests > $wrapSelectionInMarkNode > includes inline element nodes",
+      "status": "xfail",
+      "reason": "not-ported",
+      "reviewedBy": "coding-agent",
+      "decision": "WORKPLAN later package layers (rich nodes, markdown, lists/tables); WP-06 core subset",
+      "note": "Missing capability: @lexical/mark.$wrapSelectionInMarkNode. No model mismatch is masked; this exact unsupported diagnostic must still occur.",
+      "failure": "op 6: call 13: unmapped API: @lexical/mark.$wrapSelectionInMarkNode"
+    },
+    {
+      "file": "packages/lexical-mark/__tests__/unit/LexicalMarkNode.test.ts",
+      "test": "LexicalMarkNode tests > $wrapSelectionInMarkNode > keeps decorator nodes inside an existing mark",
+      "status": "xfail",
+      "reason": "not-ported",
+      "reviewedBy": "coding-agent",
+      "decision": "WORKPLAN later package layers (rich nodes, markdown, lists/tables); WP-06 core subset",
+      "note": "Missing capability: @lexical/mark.$wrapSelectionInMarkNode. No model mismatch is masked; this exact unsupported diagnostic must still occur.",
+      "failure": "op 6: call 6: unmapped API: @lexical/mark.$wrapSelectionInMarkNode"
+    },
+    {
+      "file": "packages/lexical-mark/__tests__/unit/LexicalMarkNode.test.ts",
+      "test": "LexicalMarkNode tests > $wrapSelectionInMarkNode > splits a text node if the selection is not at the start/end",
+      "status": "xfail",
+      "reason": "not-ported",
+      "reviewedBy": "coding-agent",
+      "decision": "WORKPLAN later package layers (rich nodes, markdown, lists/tables); WP-06 core subset",
+      "note": "Missing capability: @lexical/mark.$wrapSelectionInMarkNode. No model mismatch is masked; this exact unsupported diagnostic must still occur.",
+      "failure": "op 6: call 11: unmapped API: @lexical/mark.$wrapSelectionInMarkNode"
+    },
+    {
+      "file": "packages/lexical-mark/__tests__/unit/LexicalMarkNode.test.ts",
+      "test": "LexicalMarkNode tests > $wrapSelectionInMarkNode > wraps a whole text node",
+      "status": "xfail",
+      "reason": "not-ported",
+      "reviewedBy": "coding-agent",
+      "decision": "WORKPLAN later package layers (rich nodes, markdown, lists/tables); WP-06 core subset",
+      "note": "Missing capability: @lexical/mark.$wrapSelectionInMarkNode. No model mismatch is masked; this exact unsupported diagnostic must still occur.",
+      "failure": "op 6: call 12: unmapped API: @lexical/mark.$wrapSelectionInMarkNode"
+    },
+    {
+      "file": "packages/lexical-markdown/src/__tests__/unit/LexicalMarkdown.test.ts",
+      "test": "$convertSelectionToMarkdownString > returns empty string for null selection",
+      "status": "xfail",
+      "reason": "not-ported",
+      "reviewedBy": "coding-agent",
+      "decision": "WORKPLAN later package layers (rich nodes, markdown, lists/tables); WP-06 core subset",
+      "note": "Missing capability: @lexical/markdown.$convertSelectionToMarkdownString. No model mismatch is masked; this exact unsupported diagnostic must still occur.",
+      "failure": "op 0 call: unmapped API: @lexical/markdown.$convertSelectionToMarkdownString"
+    },
+    {
+      "file": "packages/lexical-markdown/src/__tests__/unit/LexicalMarkdown.test.ts",
+      "test": "normalizeMarkdown - shouldMergeAdjacentLines = false > collapses whitespace-only lines to empty (paragraph separator)",
+      "status": "xfail",
+      "reason": "not-ported",
+      "reviewedBy": "coding-agent",
+      "decision": "WORKPLAN later package layers (rich nodes, markdown, lists/tables); WP-06 core subset",
+      "note": "Missing capability: @lexical/markdown/MarkdownTransformers.normalizeMarkdown. No model mismatch is masked; this exact unsupported diagnostic must still occur.",
+      "failure": "op 0 call: unmapped API: @lexical/markdown/MarkdownTransformers.normalizeMarkdown"
+    },
+    {
+      "file": "packages/lexical-markdown/src/__tests__/unit/LexicalMarkdown.test.ts",
+      "test": "normalizeMarkdown - shouldMergeAdjacentLines = false > preserves leading whitespace on content lines",
+      "status": "xfail",
+      "reason": "not-ported",
+      "reviewedBy": "coding-agent",
+      "decision": "WORKPLAN later package layers (rich nodes, markdown, lists/tables); WP-06 core subset",
+      "note": "Missing capability: @lexical/markdown/MarkdownTransformers.normalizeMarkdown. No model mismatch is masked; this exact unsupported diagnostic must still occur.",
+      "failure": "op 0 call: unmapped API: @lexical/markdown/MarkdownTransformers.normalizeMarkdown"
+    },
+    {
+      "file": "packages/lexical-markdown/src/__tests__/unit/LexicalMarkdown.test.ts",
+      "test": "normalizeMarkdown - shouldMergeAdjacentLines = false > preserves trailing whitespace on content lines",
+      "status": "xfail",
+      "reason": "not-ported",
+      "reviewedBy": "coding-agent",
+      "decision": "WORKPLAN later package layers (rich nodes, markdown, lists/tables); WP-06 core subset",
+      "note": "Missing capability: @lexical/markdown/MarkdownTransformers.normalizeMarkdown. No model mismatch is masked; this exact unsupported diagnostic must still occur.",
+      "failure": "op 0 call: unmapped API: @lexical/markdown/MarkdownTransformers.normalizeMarkdown"
+    },
+    {
+      "file": "packages/lexical-markdown/src/__tests__/unit/LexicalMarkdown.test.ts",
+      "test": "normalizeMarkdown - shouldMergeAdjacentLines = false > should not combine lines separated by a single \n",
+      "status": "xfail",
+      "reason": "not-ported",
+      "reviewedBy": "coding-agent",
+      "decision": "WORKPLAN later package layers (rich nodes, markdown, lists/tables); WP-06 core subset",
+      "note": "Missing capability: @lexical/markdown/MarkdownTransformers.normalizeMarkdown. No model mismatch is masked; this exact unsupported diagnostic must still occur.",
+      "failure": "op 0 call: unmapped API: @lexical/markdown/MarkdownTransformers.normalizeMarkdown"
+    },
+    {
+      "file": "packages/lexical-markdown/src/__tests__/unit/LexicalMarkdown.test.ts",
+      "test": "normalizeMarkdown - shouldMergeAdjacentLines = false > tables",
+      "status": "xfail",
+      "reason": "not-ported",
+      "reviewedBy": "coding-agent",
+      "decision": "WORKPLAN later package layers (rich nodes, markdown, lists/tables); WP-06 core subset",
+      "note": "Missing capability: @lexical/markdown/MarkdownTransformers.normalizeMarkdown. No model mismatch is masked; this exact unsupported diagnostic must still occur.",
+      "failure": "op 0 call: unmapped API: @lexical/markdown/MarkdownTransformers.normalizeMarkdown"
+    },
+    {
+      "file": "packages/lexical-markdown/src/__tests__/unit/LexicalMarkdown.test.ts",
+      "test": "normalizeMarkdown - shouldMergeAdjacentLines = true > does not merge across HTML-like tags (opening, content, closing, after)",
+      "status": "xfail",
+      "reason": "not-ported",
+      "reviewedBy": "coding-agent",
+      "decision": "WORKPLAN later package layers (rich nodes, markdown, lists/tables); WP-06 core subset",
+      "note": "Missing capability: @lexical/markdown/MarkdownTransformers.normalizeMarkdown. No model mismatch is masked; this exact unsupported diagnostic must still occur.",
+      "failure": "op 0 call: unmapped API: @lexical/markdown/MarkdownTransformers.normalizeMarkdown"
+    },
+    {
+      "file": "packages/lexical-markdown/src/__tests__/unit/LexicalMarkdown.test.ts",
+      "test": "normalizeMarkdown - shouldMergeAdjacentLines = true > does not merge the fence line with the first line after a code block",
+      "status": "xfail",
+      "reason": "not-ported",
+      "reviewedBy": "coding-agent",
+      "decision": "WORKPLAN later package layers (rich nodes, markdown, lists/tables); WP-06 core subset",
+      "note": "Missing capability: @lexical/markdown/MarkdownTransformers.normalizeMarkdown. No model mismatch is masked; this exact unsupported diagnostic must still occur.",
+      "failure": "op 0 call: unmapped API: @lexical/markdown/MarkdownTransformers.normalizeMarkdown"
+    },
+    {
+      "file": "packages/lexical-markdown/src/__tests__/unit/LexicalMarkdown.test.ts",
+      "test": "normalizeMarkdown - shouldMergeAdjacentLines = true > mdx start tag followed by content, than closing tag preceded by content",
+      "status": "xfail",
+      "reason": "not-ported",
+      "reviewedBy": "coding-agent",
+      "decision": "WORKPLAN later package layers (rich nodes, markdown, lists/tables); WP-06 core subset",
+      "note": "Missing capability: @lexical/markdown/MarkdownTransformers.normalizeMarkdown. No model mismatch is masked; this exact unsupported diagnostic must still occur.",
+      "failure": "op 0 call: unmapped API: @lexical/markdown/MarkdownTransformers.normalizeMarkdown"
+    },
+    {
+      "file": "packages/lexical-markdown/src/__tests__/unit/LexicalMarkdown.test.ts",
+      "test": "normalizeMarkdown - shouldMergeAdjacentLines = true > merges a soft break before a hard-breaking line",
+      "status": "xfail",
+      "reason": "not-ported",
+      "reviewedBy": "coding-agent",
+      "decision": "WORKPLAN later package layers (rich nodes, markdown, lists/tables); WP-06 core subset",
+      "note": "Missing capability: @lexical/markdown/MarkdownTransformers.normalizeMarkdown. No model mismatch is masked; this exact unsupported diagnostic must still occur.",
+      "failure": "op 0 call: unmapped API: @lexical/markdown/MarkdownTransformers.normalizeMarkdown"
+    },
+    {
+      "file": "packages/lexical-markdown/src/__tests__/unit/LexicalMarkdown.test.ts",
+      "test": "normalizeMarkdown - shouldMergeAdjacentLines = true > merges adjacent plain text lines with a single space",
+      "status": "xfail",
+      "reason": "not-ported",
+      "reviewedBy": "coding-agent",
+      "decision": "WORKPLAN later package layers (rich nodes, markdown, lists/tables); WP-06 core subset",
+      "note": "Missing capability: @lexical/markdown/MarkdownTransformers.normalizeMarkdown. No model mismatch is masked; this exact unsupported diagnostic must still occur.",
+      "failure": "op 0 call: unmapped API: @lexical/markdown/MarkdownTransformers.normalizeMarkdown"
+    },
+    {
+      "file": "packages/lexical-markdown/src/__tests__/unit/LexicalMarkdown.test.ts",
+      "test": "normalizeMarkdown - shouldMergeAdjacentLines = true > merges while trimming the next line and inserting a single space",
+      "status": "xfail",
+      "reason": "not-ported",
+      "reviewedBy": "coding-agent",
+      "decision": "WORKPLAN later package layers (rich nodes, markdown, lists/tables); WP-06 core subset",
+      "note": "Missing capability: @lexical/markdown/MarkdownTransformers.normalizeMarkdown. No model mismatch is masked; this exact unsupported diagnostic must still occur.",
+      "failure": "op 0 call: unmapped API: @lexical/markdown/MarkdownTransformers.normalizeMarkdown"
+    },
+    {
+      "file": "packages/lexical-markdown/src/__tests__/unit/LexicalMarkdown.test.ts",
+      "test": "normalizeMarkdown - shouldMergeAdjacentLines = true > preserves backslash hard-breaks when merging adjacent lines",
+      "status": "xfail",
+      "reason": "not-ported",
+      "reviewedBy": "coding-agent",
+      "decision": "WORKPLAN later package layers (rich nodes, markdown, lists/tables); WP-06 core subset",
+      "note": "Missing capability: @lexical/markdown/MarkdownTransformers.normalizeMarkdown. No model mismatch is masked; this exact unsupported diagnostic must still occur.",
+      "failure": "op 0 call: unmapped API: @lexical/markdown/MarkdownTransformers.normalizeMarkdown"
+    },
+    {
+      "file": "packages/lexical-markdown/src/__tests__/unit/LexicalMarkdown.test.ts",
+      "test": "normalizeMarkdown - shouldMergeAdjacentLines = true > preserves exact hard-break trailing spaces when merging adjacent lines",
+      "status": "xfail",
+      "reason": "not-ported",
+      "reviewedBy": "coding-agent",
+      "decision": "WORKPLAN later package layers (rich nodes, markdown, lists/tables); WP-06 core subset",
+      "note": "Missing capability: @lexical/markdown/MarkdownTransformers.normalizeMarkdown. No model mismatch is masked; this exact unsupported diagnostic must still occur.",
+      "failure": "op 0 call: unmapped API: @lexical/markdown/MarkdownTransformers.normalizeMarkdown"
+    },
+    {
+      "file": "packages/lexical-markdown/src/__tests__/unit/LexicalMarkdown.test.ts",
+      "test": "normalizeMarkdown - shouldMergeAdjacentLines = true > preserves hard-break trailing spaces when merging adjacent lines",
+      "status": "xfail",
+      "reason": "not-ported",
+      "reviewedBy": "coding-agent",
+      "decision": "WORKPLAN later package layers (rich nodes, markdown, lists/tables); WP-06 core subset",
+      "note": "Missing capability: @lexical/markdown/MarkdownTransformers.normalizeMarkdown. No model mismatch is masked; this exact unsupported diagnostic must still occur.",
+      "failure": "op 0 call: unmapped API: @lexical/markdown/MarkdownTransformers.normalizeMarkdown"
+    },
+    {
+      "file": "packages/lexical-markdown/src/__tests__/unit/LexicalMarkdown.test.ts",
+      "test": "normalizeMarkdown - shouldMergeAdjacentLines = true > should combine lines separated by a single \n unless they are in a codeblock",
+      "status": "xfail",
+      "reason": "not-ported",
+      "reviewedBy": "coding-agent",
+      "decision": "WORKPLAN later package layers (rich nodes, markdown, lists/tables); WP-06 core subset",
+      "note": "Missing capability: @lexical/markdown/MarkdownTransformers.normalizeMarkdown. No model mismatch is masked; this exact unsupported diagnostic must still occur.",
+      "failure": "op 0 call: unmapped API: @lexical/markdown/MarkdownTransformers.normalizeMarkdown"
+    },
+    {
+      "file": "packages/lexical-markdown/src/__tests__/unit/LexicalMarkdown.test.ts",
+      "test": "normalizeMarkdown - shouldMergeAdjacentLines = true > tables",
+      "status": "xfail",
+      "reason": "not-ported",
+      "reviewedBy": "coding-agent",
+      "decision": "WORKPLAN later package layers (rich nodes, markdown, lists/tables); WP-06 core subset",
+      "note": "Missing capability: @lexical/markdown/MarkdownTransformers.normalizeMarkdown. No model mismatch is masked; this exact unsupported diagnostic must still occur.",
+      "failure": "op 0 call: unmapped API: @lexical/markdown/MarkdownTransformers.normalizeMarkdown"
+    },
+    {
+      "file": "packages/lexical-markdown/src/__tests__/unit/LexicalMarkdown.test.ts",
+      "test": "normalizeMarkdown - shouldMergeAdjacentLines = true > treats whitespace-only lines as empty separators (no merge across them)",
+      "status": "xfail",
+      "reason": "not-ported",
+      "reviewedBy": "coding-agent",
+      "decision": "WORKPLAN later package layers (rich nodes, markdown, lists/tables); WP-06 core subset",
+      "note": "Missing capability: @lexical/markdown/MarkdownTransformers.normalizeMarkdown. No model mismatch is masked; this exact unsupported diagnostic must still occur.",
+      "failure": "op 0 call: unmapped API: @lexical/markdown/MarkdownTransformers.normalizeMarkdown"
+    },
+    {
+      "file": "packages/lexical-rich-text/src/__tests__/unit/LexicalHeadingNode.test.ts",
+      "test": "Backspace at start of heading (#4359) > 'legacy merge still applies when previ\u2026'",
+      "status": "xfail",
+      "reason": "not-ported",
+      "reviewedBy": "coding-agent",
+      "decision": "WORKPLAN later package layers (rich nodes, markdown, lists/tables); WP-06 core subset",
+      "note": "Missing capability: @lexical/rich-text.$createHeadingNode. No model mismatch is masked; this exact unsupported diagnostic must still occur.",
+      "failure": "op 4: call 4: unmapped API: @lexical/rich-text.$createHeadingNode"
+    },
+    {
+      "file": "packages/lexical-rich-text/src/__tests__/unit/LexicalHeadingNode.test.ts",
+      "test": "Backspace at start of heading (#4359) > 'preserves heading when previous block\u2026'",
+      "status": "xfail",
+      "reason": "not-ported",
+      "reviewedBy": "coding-agent",
+      "decision": "WORKPLAN later package layers (rich nodes, markdown, lists/tables); WP-06 core subset",
+      "note": "Missing capability: @lexical/rich-text.$createHeadingNode. No model mismatch is masked; this exact unsupported diagnostic must still occur.",
+      "failure": "op 4: call 2: unmapped API: @lexical/rich-text.$createHeadingNode"
+    },
+    {
+      "file": "packages/lexical-rich-text/src/__tests__/unit/LexicalHeadingNode.test.ts",
+      "test": "Backspace at start of heading (#4359) > 'preserves quote when previous block i\u2026'",
+      "status": "xfail",
+      "reason": "not-ported",
+      "reviewedBy": "coding-agent",
+      "decision": "WORKPLAN later package layers (rich nodes, markdown, lists/tables); WP-06 core subset",
+      "note": "Missing capability: @lexical/rich-text.$createQuoteNode. No model mismatch is masked; this exact unsupported diagnostic must still occur.",
+      "failure": "op 4: call 2: unmapped API: @lexical/rich-text.$createQuoteNode"
+    },
+    {
+      "file": "packages/lexical-rich-text/src/__tests__/unit/LexicalHeadingNode.test.ts",
+      "test": "Backspace at start of heading (#4359) > 'removes only the empty paragraph betw\u2026'",
+      "status": "xfail",
+      "reason": "not-ported",
+      "reviewedBy": "coding-agent",
+      "decision": "WORKPLAN later package layers (rich nodes, markdown, lists/tables); WP-06 core subset",
+      "note": "Missing capability: @lexical/rich-text.$createHeadingNode. No model mismatch is masked; this exact unsupported diagnostic must still occur.",
+      "failure": "op 4: call 5: unmapped API: @lexical/rich-text.$createHeadingNode"
+    },
+    {
+      "file": "packages/lexical-rich-text/src/__tests__/unit/LexicalHeadingNode.test.ts",
+      "test": "Backspace at start of heading (#4359) > HeadingNode.collapseAtStart converts an empty heading to a paragraph",
+      "status": "xfail",
+      "reason": "not-ported",
+      "reviewedBy": "coding-agent",
+      "decision": "WORKPLAN later package layers (rich nodes, markdown, lists/tables); WP-06 core subset",
+      "note": "Missing capability: @lexical/rich-text.$createHeadingNode. No model mismatch is masked; this exact unsupported diagnostic must still occur.",
+      "failure": "op 4: call 0: unmapped API: @lexical/rich-text.$createHeadingNode"
+    },
+    {
+      "file": "packages/lexical-rich-text/src/__tests__/unit/LexicalHeadingNode.test.ts",
+      "test": "Backspace at start of heading (#4359) > HeadingNode.collapseAtStart preserves a non-empty heading",
+      "status": "xfail",
+      "reason": "not-ported",
+      "reviewedBy": "coding-agent",
+      "decision": "WORKPLAN later package layers (rich nodes, markdown, lists/tables); WP-06 core subset",
+      "note": "Missing capability: @lexical/rich-text.$createHeadingNode. No model mismatch is masked; this exact unsupported diagnostic must still occur.",
+      "failure": "op 4: call 0: unmapped API: @lexical/rich-text.$createHeadingNode"
+    },
+    {
+      "file": "packages/lexical-rich-text/src/__tests__/unit/LexicalHeadingNode.test.ts",
+      "test": "Backspace at start of heading (#4359) > preserves heading wrapped inside another ElementNode",
+      "status": "xfail",
+      "reason": "not-ported",
+      "reviewedBy": "coding-agent",
+      "decision": "WORKPLAN later package layers (rich nodes, markdown, lists/tables); WP-06 core subset",
+      "note": "Missing capability: @lexical/rich-text.$createHeadingNode. No model mismatch is masked; this exact unsupported diagnostic must still occur.",
+      "failure": "op 4: call 1: unmapped API: @lexical/rich-text.$createHeadingNode"
+    },
+    {
+      "file": "packages/lexical-rich-text/src/__tests__/unit/LexicalHeadingNode.test.ts",
+      "test": "LexicalHeadingNode tests > HeadingNode.setTag()",
+      "status": "xfail",
+      "reason": "not-ported",
+      "reviewedBy": "coding-agent",
+      "decision": "WORKPLAN later package layers (rich nodes, markdown, lists/tables); WP-06 core subset",
+      "note": "Missing capability: @lexical/rich-text.$createHeadingNode. No model mismatch is masked; this exact unsupported diagnostic must still occur.",
+      "failure": "op 4: call 1: unmapped API: @lexical/rich-text.$createHeadingNode"
+    },
+    {
+      "file": "packages/lexical-rich-text/src/__tests__/unit/LexicalQuoteNode.test.ts",
+      "test": "LexicalQuoteNode tests > QuoteNode.constructor",
+      "status": "xfail",
+      "reason": "not-ported",
+      "reviewedBy": "coding-agent",
+      "decision": "WORKPLAN later package layers (rich nodes, markdown, lists/tables); WP-06 core subset",
+      "note": "Missing capability: @lexical/rich-text.$createQuoteNode. No model mismatch is masked; this exact unsupported diagnostic must still occur.",
+      "failure": "op 4: call 0: unmapped API: @lexical/rich-text.$createQuoteNode"
+    },
+    {
+      "file": "packages/lexical-rich-text/src/__tests__/unit/LexicalTabNode.test.ts",
+      "test": "LexicalTabNode tests > INSERT_TAB_COMMAND applies selection format and style to TabNode",
+      "status": "xfail",
+      "reason": "not-ported",
+      "reviewedBy": "coding-agent",
+      "decision": "WORKPLAN WP-13 command/plugin dispatch",
+      "note": "Fixture registers a plugin whose model extension is not implemented yet.",
+      "failure": "op 4 plugin: unmapped operation: plugin"
+    },
+    {
+      "file": "packages/lexical-rich-text/src/__tests__/unit/LexicalTabNode.test.ts",
+      "test": "LexicalTabNode tests > format preserved when typing between tabs inserted in bold text",
+      "status": "xfail",
+      "reason": "not-ported",
+      "reviewedBy": "coding-agent",
+      "decision": "WORKPLAN WP-13 command/plugin dispatch",
+      "note": "Fixture registers a plugin whose model extension is not implemented yet.",
+      "failure": "op 4 plugin: unmapped operation: plugin"
+    },
+    {
+      "file": "packages/lexical-table/src/__tests__/unit/LexicalTableCellNode.test.ts",
+      "test": "LexicalTableCellNode tests > TableCellNode.constructor",
+      "status": "xfail",
+      "reason": "not-ported",
+      "reviewedBy": "coding-agent",
+      "decision": "WORKPLAN later package layers (rich nodes, markdown, lists/tables); WP-06 core subset",
+      "note": "Missing capability: @lexical/table.$createTableCellNode. No model mismatch is masked; this exact unsupported diagnostic must still occur.",
+      "failure": "op 4: call 0: unmapped API: @lexical/table.$createTableCellNode"
+    },
+    {
+      "file": "packages/lexical-table/src/__tests__/unit/LexicalTableRowNode.test.ts",
+      "test": "LexicalTableRowNode tests > TableRowNode.constructor",
+      "status": "xfail",
+      "reason": "not-ported",
+      "reviewedBy": "coding-agent",
+      "decision": "WORKPLAN later package layers (rich nodes, markdown, lists/tables); WP-06 core subset",
+      "note": "Missing capability: @lexical/table.$createTableRowNode. No model mismatch is masked; this exact unsupported diagnostic must still occur.",
+      "failure": "op 4: call 0: unmapped API: @lexical/table.$createTableRowNode"
+    },
+    {
+      "file": "packages/lexical-utils/src/__tests__/unit/LexicalNodeHelpers.test.ts",
+      "test": "LexicalNodeHelpers tests > DFS of empty ParagraphNode returns only itself",
+      "status": "xfail",
+      "reason": "not-ported",
+      "reviewedBy": "coding-agent",
+      "decision": "WORKPLAN WP-12; upstream caret-backed DFS utilities require the caret layer",
+      "note": "Missing capability: @lexical/utils.$dfs. No model mismatch is masked; this exact unsupported diagnostic must still occur.",
+      "failure": "op 9: call 1: unmapped API: @lexical/utils.$dfs"
+    },
+    {
+      "file": "packages/lexical-utils/src/__tests__/unit/LexicalNodeHelpers.test.ts",
+      "test": "LexicalNodeHelpers tests > DFS triggers getLatest()",
+      "status": "xfail",
+      "reason": "not-ported",
+      "reviewedBy": "coding-agent",
+      "decision": "WORKPLAN WP-12; upstream caret-backed DFS utilities require the caret layer",
+      "note": "Missing capability: @lexical/utils.$dfs. No model mismatch is masked; this exact unsupported diagnostic must still occur.",
+      "failure": "op 9: call 7: unmapped API: @lexical/utils.$dfs"
+    },
+    {
+      "file": "packages/lexical-utils/src/__tests__/unit/LexicalNodeHelpers.test.ts",
+      "test": "LexicalNodeHelpers tests > DFS with endNode as ElementNode should stop at the ElementNode, not include children",
+      "status": "xfail",
+      "reason": "not-ported",
+      "reviewedBy": "coding-agent",
+      "decision": "WORKPLAN WP-12; upstream caret-backed DFS utilities require the caret layer",
+      "note": "Missing capability: @lexical/utils.$dfs. No model mismatch is masked; this exact unsupported diagnostic must still occur.",
+      "failure": "op 4: call 10: unmapped API: @lexical/utils.$dfs"
+    },
+    {
+      "file": "packages/lexical-utils/src/__tests__/unit/LexicalNodeHelpers.test.ts",
+      "test": "LexicalNodeHelpers tests > reverse DFS of empty ParagraphNode returns only itself",
+      "status": "xfail",
+      "reason": "not-ported",
+      "reviewedBy": "coding-agent",
+      "decision": "WORKPLAN WP-12; upstream caret-backed DFS utilities require the caret layer",
+      "note": "Missing capability: @lexical/utils.$reverseDfs. No model mismatch is masked; this exact unsupported diagnostic must still occur.",
+      "failure": "op 9: call 1: unmapped API: @lexical/utils.$reverseDfs"
+    },
+    {
+      "file": "packages/lexical-utils/src/__tests__/unit/LexicalNodeHelpers.test.ts",
+      "test": "LexicalNodeHelpers tests > reverse DFS of empty RootNode returns only itself",
+      "status": "xfail",
+      "reason": "not-ported",
+      "reviewedBy": "coding-agent",
+      "decision": "WORKPLAN WP-12; upstream caret-backed DFS utilities require the caret layer",
+      "note": "Missing capability: @lexical/utils.$reverseDfs. No model mismatch is masked; this exact unsupported diagnostic must still occur.",
+      "failure": "op 4: call 0: unmapped API: @lexical/utils.$reverseDfs"
+    },
+    {
+      "file": "packages/lexical-utils/src/__tests__/unit/LexicalNodeHelpers.test.ts",
+      "test": "LexicalNodeHelpers tests > reverse DFS triggers getLatest()",
+      "status": "xfail",
+      "reason": "not-ported",
+      "reviewedBy": "coding-agent",
+      "decision": "WORKPLAN WP-12; upstream caret-backed DFS utilities require the caret layer",
+      "note": "Missing capability: @lexical/utils.$reverseDfs. No model mismatch is masked; this exact unsupported diagnostic must still occur.",
+      "failure": "op 9: call 7: unmapped API: @lexical/utils.$reverseDfs"
+    },
+    {
+      "file": "packages/lexical/src/__tests__/unit/LexicalEditorState.test.ts",
+      "test": "LexicalEditorState tests > constructor",
+      "status": "xfail",
+      "reason": "not-ported",
+      "reviewedBy": "coding-agent",
+      "decision": "S1 \u00a74 built-in factory table: $createRootNode is n/a (root always exists)",
+      "note": "Missing capability: lexical/nodes/LexicalRootNode.$createRootNode. No model mismatch is masked; this exact unsupported diagnostic must still occur.",
+      "failure": "op 4 call: unmapped API: lexical/nodes/LexicalRootNode.$createRootNode"
+    },
+    {
+      "file": "packages/lexical/src/__tests__/unit/LexicalExtensionCore.test.ts",
+      "test": "declarePeerDependency > validates the type argument",
+      "status": "xfail",
+      "reason": "not-ported",
+      "reviewedBy": "coding-agent",
+      "decision": "WORKPLAN WP-13; S1 \u00a714 extension installation",
+      "note": "Missing capability: lexical.defineExtension. No model mismatch is masked; this exact unsupported diagnostic must still occur.",
+      "failure": "op 0 call: unmapped API: lexical.defineExtension"
+    },
+    {
+      "file": "packages/lexical/src/__tests__/unit/LexicalExtensionCore.test.ts",
+      "test": "defineExtension > can define an extension without config",
+      "status": "xfail",
+      "reason": "not-ported",
+      "reviewedBy": "coding-agent",
+      "decision": "WORKPLAN WP-13; S1 \u00a714 extension installation",
+      "note": "Missing capability: lexical.defineExtension. No model mismatch is masked; this exact unsupported diagnostic must still occur.",
+      "failure": "op 0 call: unmapped API: lexical.defineExtension"
+    },
+    {
+      "file": "packages/lexical/src/__tests__/unit/LexicalExtensionCore.test.ts",
+      "test": "defineExtension > infers the expected type (base case)",
+      "status": "xfail",
+      "reason": "not-ported",
+      "reviewedBy": "coding-agent",
+      "decision": "WORKPLAN WP-13; S1 \u00a714 extension installation",
+      "note": "Missing capability: lexical.defineExtension. No model mismatch is masked; this exact unsupported diagnostic must still occur.",
+      "failure": "op 0 call: unmapped API: lexical.defineExtension"
+    },
+    {
+      "file": "packages/lexical/src/__tests__/unit/LexicalExtensionCore.test.ts",
+      "test": "defineExtension > infers the expected type (config inference)",
+      "status": "xfail",
+      "reason": "not-ported",
+      "reviewedBy": "coding-agent",
+      "decision": "WORKPLAN WP-13; S1 \u00a714 extension installation",
+      "note": "Missing capability: lexical.defineExtension. No model mismatch is masked; this exact unsupported diagnostic must still occur.",
+      "failure": "op 0 call: unmapped API: lexical.defineExtension"
+    },
+    {
+      "file": "packages/lexical/src/__tests__/unit/LexicalGenMap.test.ts",
+      "test": "cloneMap > plain Map below threshold returns a fresh plain Map",
+      "status": "xfail",
+      "reason": "genmap",
+      "reviewedBy": "coding-agent",
+      "decision": "S1 \u00a75.1 persistent NodeMap; S4 \u00a72.6 genmap",
+      "note": "Upstream GenMap is replaced by the persistent map; its private clone helper has no port.",
+      "failure": "op 0 call: unmapped API: lexical/LexicalGenMap.cloneMap"
+    },
+    {
+      "file": "packages/lexical/src/__tests__/unit/LexicalNode.test.ts",
+      "test": "Element-anchored selection on old parent (#6031) > cross-parent move > 'insertAfter' with restoreSelection=false skips the source-parent shift",
+      "status": "xfail",
+      "reason": "dev-only-invariant",
+      "reviewedBy": "coding-agent",
+      "decision": "S4 \u00a71.3 item 4 / \u00a71.7 devOutcome; S1 D-11",
+      "note": "DEV/production invariant policy needs its explicit normalization implementation; trace is not silently rewritten.",
+      "failure": "unimplemented declared normalization: [\"devOutcome\"]"
+    },
+    {
+      "file": "packages/lexical/src/__tests__/unit/LexicalNode.test.ts",
+      "test": "Element-anchored selection on old parent (#6031) > cross-parent move > 'insertBefore' with restoreSelection=false skips the source-parent shift",
+      "status": "xfail",
+      "reason": "dev-only-invariant",
+      "reviewedBy": "coding-agent",
+      "decision": "S4 \u00a71.3 item 4 / \u00a71.7 devOutcome; S1 D-11",
+      "note": "DEV/production invariant policy needs its explicit normalization implementation; trace is not silently rewritten.",
+      "failure": "unimplemented declared normalization: [\"devOutcome\"]"
+    },
+    {
+      "file": "packages/lexical/src/__tests__/unit/LexicalNodeState.test.ts",
+      "test": "Element-anchored selection on old parent (#6031) > cross-parent move > 'insertAfter' with restoreSelection=false skips the source-parent shift",
+      "status": "xfail",
+      "reason": "dev-only-invariant",
+      "reviewedBy": "coding-agent",
+      "decision": "S4 \u00a71.3 item 4 / \u00a71.7 devOutcome; S1 D-11",
+      "note": "DEV/production invariant policy needs its explicit normalization implementation; trace is not silently rewritten.",
+      "failure": "unimplemented declared normalization: [\"devOutcome\"]"
+    },
+    {
+      "file": "packages/lexical/src/__tests__/unit/LexicalNodeState.test.ts",
+      "test": "Element-anchored selection on old parent (#6031) > cross-parent move > 'insertBefore' with restoreSelection=false skips the source-parent shift",
+      "status": "xfail",
+      "reason": "dev-only-invariant",
+      "reviewedBy": "coding-agent",
+      "decision": "S4 \u00a71.3 item 4 / \u00a71.7 devOutcome; S1 D-11",
+      "note": "DEV/production invariant policy needs its explicit normalization implementation; trace is not silently rewritten.",
+      "failure": "unimplemented declared normalization: [\"devOutcome\"]"
+    },
+    {
+      "file": "packages/lexical/src/__tests__/unit/LexicalReconciler.test.ts",
+      "test": "LexicalReconciler > Should allow overriding direction of root node children when root node has no direction",
+      "status": "xfail",
+      "reason": "reconciler-internal",
+      "reviewedBy": "coding-agent",
+      "decision": "S1 \u00a70 model/view boundary; S4 \u00a72.6 reconciler-internal",
+      "note": "DOM reconciliation API is outside the sans-I/O model: unmapped API: lexical/LexicalReconciler.$getReconciledDirection",
+      "failure": "op 5: call 2: unmapped API: lexical/LexicalReconciler.$getReconciledDirection"
+    },
+    {
+      "file": "packages/lexical/src/__tests__/unit/LexicalReconciler.test.ts",
+      "test": "LexicalReconciler > Should set direction of root node children to auto if root node has no direction",
+      "status": "xfail",
+      "reason": "reconciler-internal",
+      "reviewedBy": "coding-agent",
+      "decision": "S1 \u00a70 model/view boundary; S4 \u00a72.6 reconciler-internal",
+      "note": "DOM reconciliation API is outside the sans-I/O model: unmapped API: lexical/LexicalReconciler.$getReconciledDirection",
+      "failure": "op 5: call 2: unmapped API: lexical/LexicalReconciler.$getReconciledDirection"
+    },
+    {
+      "file": "packages/lexical/src/__tests__/unit/LexicalSelection.test.ts",
+      "test": "Regression #3181 > Point.isBefore edge case with mixed TextNode & ElementNode and matching descendants",
+      "status": "xfail",
+      "reason": "not-ported",
+      "reviewedBy": "coding-agent",
+      "decision": "WORKPLAN WP-12; S1 \u00a710 caret APIs",
+      "note": "Missing capability: lexical.$caretRangeFromSelection. No model mismatch is masked; this exact unsupported diagnostic must still occur.",
+      "failure": "op 4: call 17: unmapped API: lexical.$caretRangeFromSelection"
+    },
+    {
+      "file": "packages/lexical/src/__tests__/unit/LexicalUtils.test.ts",
+      "test": "LexicalUtils tests > $onUpdate > adding fn throws outside update",
+      "status": "xfail",
+      "reason": "not-ported",
+      "reviewedBy": "coding-agent",
+      "decision": "S1 API inventory: $onUpdate n/a; code runs after commit; WORKPLAN WP-13 callbacks",
+      "note": "Missing capability: lexical.$onUpdate. No model mismatch is masked; this exact unsupported diagnostic must still occur.",
+      "failure": "op 4 call: unmapped API: lexical.$onUpdate"
+    },
+    {
+      "file": "packages/lexical/src/__tests__/unit/LexicalUtils.test.ts",
+      "test": "LexicalUtils tests > generateRandomKey()",
+      "status": "xfail",
+      "reason": "not-ported",
+      "reviewedBy": "coding-agent",
+      "decision": "S1 \u00a71 NodeKey allocation is private to node creation; no standalone raw-key factory",
+      "note": "Missing capability: lexical/LexicalUtils.generateRandomKey. No model mismatch is masked; this exact unsupported diagnostic must still occur.",
+      "failure": "op 4 call: unmapped API: lexical/LexicalUtils.generateRandomKey"
+    },
+    {
+      "file": "packages/lexical/src/__tests__/unit/LexicalUtils.test.ts",
+      "test": "LexicalUtils tests > resetRandomKey()",
+      "status": "xfail",
+      "reason": "not-ported",
+      "reviewedBy": "coding-agent",
+      "decision": "S1 \u00a71 NodeKey allocation is private to node creation; no standalone raw-key factory",
+      "note": "Missing capability: lexical/LexicalUtils.generateRandomKey. No model mismatch is masked; this exact unsupported diagnostic must still occur.",
+      "failure": "op 5 call: unmapped API: lexical/LexicalUtils.generateRandomKey"
+    },
+    {
+      "file": "packages/lexical/src/caret/__tests__/unit/LexicalCaret.test.ts",
+      "test": "$splitAtPointCaretNext > Does not split a TextNode at the beginning",
+      "status": "xfail",
+      "reason": "not-ported",
+      "reviewedBy": "coding-agent",
+      "decision": "WORKPLAN WP-12; S1 \u00a710 caret APIs",
+      "note": "Missing capability: lexical.$getTextPointCaret. No model mismatch is masked; this exact unsupported diagnostic must still occur.",
+      "failure": "op 4: call 6: unmapped API: lexical.$getTextPointCaret"
+    },
+    {
+      "file": "packages/lexical/src/caret/__tests__/unit/LexicalCaret.test.ts",
+      "test": "$splitAtPointCaretNext > Splits a ParagraphNode",
+      "status": "xfail",
+      "reason": "not-ported",
+      "reviewedBy": "coding-agent",
+      "decision": "WORKPLAN WP-12; S1 \u00a710 caret APIs",
+      "note": "Missing capability: lexical.$getSiblingCaret. No model mismatch is masked; this exact unsupported diagnostic must still occur.",
+      "failure": "op 4: call 7: unmapped API: lexical.$getSiblingCaret"
+    },
+    {
+      "file": "packages/lexical/src/caret/__tests__/unit/LexicalCaret.test.ts",
+      "test": "$splitAtPointCaretNext > Splits a TextNode in the middle",
+      "status": "xfail",
+      "reason": "not-ported",
+      "reviewedBy": "coding-agent",
+      "decision": "WORKPLAN WP-12; S1 \u00a710 caret APIs",
+      "note": "Missing capability: lexical.$getTextPointCaret. No model mismatch is masked; this exact unsupported diagnostic must still occur.",
+      "failure": "op 4: call 6: unmapped API: lexical.$getTextPointCaret"
+    },
+    {
+      "file": "packages/lexical/src/caret/__tests__/unit/LexicalCaret.test.ts",
+      "test": "LexicalCaret > $removeTextFromCaretRange > ported File e2e tests > $selectAll() with nesting and a trailing decorator",
+      "status": "xfail",
+      "reason": "not-ported",
+      "reviewedBy": "coding-agent",
+      "decision": "WORKPLAN later package layers (rich nodes, markdown, lists/tables); WP-06 core subset",
+      "note": "Missing capability: @lexical/list.$createListNode. No model mismatch is masked; this exact unsupported diagnostic must still occur.",
+      "failure": "op 4: call 5: unmapped API: @lexical/list.$createListNode"
+    },
+    {
+      "file": "packages/lexical/src/caret/__tests__/unit/LexicalCaret.test.ts",
+      "test": "LexicalCaret > $removeTextFromCaretRange > ported Headings e2e tests > Pressing return in the middle of a heading creates a new heading below",
+      "status": "xfail",
+      "reason": "not-ported",
+      "reviewedBy": "coding-agent",
+      "decision": "WORKPLAN later package layers (rich nodes, markdown, lists/tables); WP-06 core subset",
+      "note": "Missing capability: @lexical/rich-text.$createHeadingNode. No model mismatch is masked; this exact unsupported diagnostic must still occur.",
+      "failure": "op 4: call 1: unmapped API: @lexical/rich-text.$createHeadingNode"
+    },
+    {
+      "file": "packages/lexical/src/caret/__tests__/unit/LexicalCaret.test.ts",
+      "test": "LexicalCaret > $removeTextFromCaretRange > ported LexicalSelection tests > remove partial initial TextNode and partial segmented TextNode",
+      "status": "xfail",
+      "reason": "not-ported",
+      "reviewedBy": "coding-agent",
+      "decision": "WORKPLAN WP-12; S1 \u00a710 caret APIs",
+      "note": "Missing capability: lexical.$caretRangeFromSelection. No model mismatch is masked; this exact unsupported diagnostic must still occur.",
+      "failure": "op 4: call 16: unmapped API: lexical.$caretRangeFromSelection"
+    },
+    {
+      "file": "packages/lexical/src/caret/__tests__/unit/LexicalCaret.test.ts",
+      "test": "LexicalCaret > $removeTextFromCaretRange > ported Table e2e tests > Can delete all with range selection anchored in table",
+      "status": "xfail",
+      "reason": "not-ported",
+      "reviewedBy": "coding-agent",
+      "decision": "WORKPLAN later package layers (rich nodes, markdown, lists/tables); WP-06 core subset",
+      "note": "Missing capability: @lexical/table.$createTableNode. No model mismatch is masked; this exact unsupported diagnostic must still occur.",
+      "failure": "op 4: call 0: unmapped API: @lexical/table.$createTableNode"
+    },
+    {
+      "file": "packages/lexical/src/caret/__tests__/unit/LexicalCaret.test.ts",
+      "test": "LexicalCaret > $removeTextFromCaretRange > single block > remove first TextNode with second in token mode",
+      "status": "xfail",
+      "reason": "not-ported",
+      "reviewedBy": "coding-agent",
+      "decision": "WORKPLAN WP-12; S1 \u00a710 caret APIs",
+      "note": "Missing capability: lexical.$caretRangeFromSelection. No model mismatch is masked; this exact unsupported diagnostic must still occur.",
+      "failure": "op 8: call 12: unmapped API: lexical.$caretRangeFromSelection"
+    },
+    {
+      "file": "packages/lexical/src/caret/__tests__/unit/LexicalCaret.test.ts",
+      "test": "LexicalCaret > $removeTextFromCaretRange > single block > remove second TextNode when wrapped in a LinkNode that will become empty",
+      "status": "xfail",
+      "reason": "not-ported",
+      "reviewedBy": "coding-agent",
+      "decision": "WORKPLAN later package layers (rich nodes, markdown, lists/tables); WP-06 core subset",
+      "note": "Missing capability: @lexical/link.$createLinkNode. No model mismatch is masked; this exact unsupported diagnostic must still occur.",
+      "failure": "op 8: call 4: unmapped API: @lexical/link.$createLinkNode"
+    },
+    {
+      "file": "packages/lexical/src/caret/__tests__/unit/LexicalCaret.test.ts",
+      "test": "LexicalSelectionHelpers > with a fully-selected text node preceded by an inline element > a single text node",
+      "status": "xfail",
+      "reason": "not-ported",
+      "reviewedBy": "coding-agent",
+      "decision": "WORKPLAN later package layers (rich nodes, markdown, lists/tables); WP-06 core subset",
+      "note": "Missing capability: @lexical/link.$createLinkNode. No model mismatch is masked; this exact unsupported diagnostic must still occur.",
+      "failure": "op 4: call 3: unmapped API: @lexical/link.$createLinkNode"
+    },
+    {
+      "file": "packages/lexical/src/caret/__tests__/unit/docs-traversals.test.ts",
+      "test": "traversals.md > Traversal Strategies > Adjacent Caret Traversals > iteration does not include the origin",
+      "status": "xfail",
+      "reason": "not-ported",
+      "reviewedBy": "coding-agent",
+      "decision": "WORKPLAN later package layers (rich nodes, markdown, lists/tables); WP-06 core subset",
+      "note": "Missing capability: @lexical/link.$createLinkNode. No model mismatch is masked; this exact unsupported diagnostic must still occur.",
+      "failure": "op 4: call 2: unmapped API: @lexical/link.$createLinkNode"
+    },
+    {
+      "file": "packages/lexical/src/caret/__tests__/unit/docs-traversals.test.ts",
+      "test": "traversals.md > Traversal Strategies > Adjacent Caret Traversals > root has no siblings",
+      "status": "xfail",
+      "reason": "not-ported",
+      "reviewedBy": "coding-agent",
+      "decision": "WORKPLAN later package layers (rich nodes, markdown, lists/tables); WP-06 core subset",
+      "note": "Missing capability: @lexical/link.$createLinkNode. No model mismatch is masked; this exact unsupported diagnostic must still occur.",
+      "failure": "op 4: call 2: unmapped API: @lexical/link.$createLinkNode"
+    },
+    {
+      "file": "packages/lexical/src/caret/__tests__/unit/docs-traversals.test.ts",
+      "test": "traversals.md > Traversal Strategies > Adjacent Caret Traversals > root has paragraph children",
+      "status": "xfail",
+      "reason": "not-ported",
+      "reviewedBy": "coding-agent",
+      "decision": "WORKPLAN later package layers (rich nodes, markdown, lists/tables); WP-06 core subset",
+      "note": "Missing capability: @lexical/link.$createLinkNode. No model mismatch is masked; this exact unsupported diagnostic must still occur.",
+      "failure": "op 4: call 2: unmapped API: @lexical/link.$createLinkNode"
+    },
+    {
+      "file": "packages/lexical/src/caret/__tests__/unit/docs-traversals.test.ts",
+      "test": "traversals.md > Traversal Strategies > Depth First Caret Traversals > $iterCaretsDepthFirst > via CaretRange",
+      "status": "xfail",
+      "reason": "not-ported",
+      "reviewedBy": "coding-agent",
+      "decision": "WORKPLAN later package layers (rich nodes, markdown, lists/tables); WP-06 core subset",
+      "note": "Missing capability: @lexical/link.$createLinkNode. No model mismatch is masked; this exact unsupported diagnostic must still occur.",
+      "failure": "op 4: call 2: unmapped API: @lexical/link.$createLinkNode"
+    },
+    {
+      "file": "packages/lexical/src/caret/__tests__/unit/docs-traversals.test.ts",
+      "test": "traversals.md > Traversal Strategies > Depth First Caret Traversals > $iterNodesDepthFirst > includes only wholly included nodes",
+      "status": "xfail",
+      "reason": "not-ported",
+      "reviewedBy": "coding-agent",
+      "decision": "WORKPLAN later package layers (rich nodes, markdown, lists/tables); WP-06 core subset",
+      "note": "Missing capability: @lexical/link.$createLinkNode. No model mismatch is masked; this exact unsupported diagnostic must still occur.",
+      "failure": "op 4: call 2: unmapped API: @lexical/link.$createLinkNode"
+    },
+    {
+      "file": "packages/lexical/src/caret/__tests__/unit/docs-traversals.test.ts",
+      "test": "traversals.md > Traversal Strategies > Depth First Caret Traversals > full traversal",
+      "status": "xfail",
+      "reason": "not-ported",
+      "reviewedBy": "coding-agent",
+      "decision": "WORKPLAN later package layers (rich nodes, markdown, lists/tables); WP-06 core subset",
+      "note": "Missing capability: @lexical/link.$createLinkNode. No model mismatch is masked; this exact unsupported diagnostic must still occur.",
+      "failure": "op 4: call 2: unmapped API: @lexical/link.$createLinkNode"
+    },
+    {
+      "file": "packages/lexical/src/nodes/__tests__/unit/LexicalLineBreakNode.test.ts",
+      "test": "LexicalLineBreakNode tests > LineBreakNode.updateDOM()",
+      "status": "xfail",
+      "reason": "reconciler-internal",
+      "reviewedBy": "coding-agent",
+      "decision": "S1 \u00a70 model/view boundary; S4 \u00a72.6 reconciler-internal",
+      "note": "DOM reconciliation API is outside the sans-I/O model: unmapped API: Node.updateDOM",
+      "failure": "op 4: call 1: unmapped API: Node.updateDOM"
+    },
+    {
+      "file": "packages/lexical/src/nodes/__tests__/unit/LexicalRootNode.test.ts",
+      "test": "LexicalRootNode tests > Cached getTextContent with decorators",
+      "status": "xfail",
+      "reason": "not-ported",
+      "reviewedBy": "coding-agent",
+      "decision": "S1 \u00a74 built-in factory table: $createRootNode is n/a (root always exists)",
+      "note": "Missing capability: lexical/nodes/LexicalRootNode.$createRootNode. No model mismatch is masked; this exact unsupported diagnostic must still occur.",
+      "failure": "op 4: call 0: unmapped API: lexical/nodes/LexicalRootNode.$createRootNode"
+    },
+    {
+      "file": "packages/lexical/src/nodes/__tests__/unit/LexicalRootNode.test.ts",
+      "test": "LexicalRootNode tests > RootNode is selected when its selected child is removed",
+      "status": "xfail",
+      "reason": "not-ported",
+      "reviewedBy": "coding-agent",
+      "decision": "S1 \u00a74 built-in factory table: $createRootNode is n/a (root always exists)",
+      "note": "Missing capability: lexical/nodes/LexicalRootNode.$createRootNode. No model mismatch is masked; this exact unsupported diagnostic must still occur.",
+      "failure": "op 4: call 0: unmapped API: lexical/nodes/LexicalRootNode.$createRootNode"
+    },
+    {
+      "file": "packages/lexical/src/nodes/__tests__/unit/LexicalRootNode.test.ts",
+      "test": "LexicalRootNode tests > RootNode.clear() to handle selection update",
+      "status": "xfail",
+      "reason": "not-ported",
+      "reviewedBy": "coding-agent",
+      "decision": "S1 \u00a74 built-in factory table: $createRootNode is n/a (root always exists)",
+      "note": "Missing capability: lexical/nodes/LexicalRootNode.$createRootNode. No model mismatch is masked; this exact unsupported diagnostic must still occur.",
+      "failure": "op 4: call 0: unmapped API: lexical/nodes/LexicalRootNode.$createRootNode"
+    },
+    {
+      "file": "packages/lexical/src/nodes/__tests__/unit/LexicalRootNode.test.ts",
+      "test": "LexicalRootNode tests > RootNode.clone()",
+      "status": "xfail",
+      "reason": "not-ported",
+      "reviewedBy": "coding-agent",
+      "decision": "S1 \u00a74 built-in factory table: $createRootNode is n/a (root always exists)",
+      "note": "Missing capability: lexical/nodes/LexicalRootNode.$createRootNode. No model mismatch is masked; this exact unsupported diagnostic must still occur.",
+      "failure": "op 4: call 0: unmapped API: lexical/nodes/LexicalRootNode.$createRootNode"
+    },
+    {
+      "file": "packages/lexical/src/nodes/__tests__/unit/LexicalRootNode.test.ts",
+      "test": "LexicalRootNode tests > RootNode.constructor",
+      "status": "xfail",
+      "reason": "not-ported",
+      "reviewedBy": "coding-agent",
+      "decision": "S1 \u00a74 built-in factory table: $createRootNode is n/a (root always exists)",
+      "note": "Missing capability: lexical/nodes/LexicalRootNode.$createRootNode. No model mismatch is masked; this exact unsupported diagnostic must still occur.",
+      "failure": "op 4: call 0: unmapped API: lexical/nodes/LexicalRootNode.$createRootNode"
+    },
+    {
+      "file": "packages/lexical/src/nodes/__tests__/unit/LexicalRootNode.test.ts",
+      "test": "LexicalRootNode tests > RootNode.exportJSON() should return and object conforming to the expected schema",
+      "status": "xfail",
+      "reason": "not-ported",
+      "reviewedBy": "coding-agent",
+      "decision": "S1 \u00a74 built-in factory table: $createRootNode is n/a (root always exists)",
+      "note": "Missing capability: lexical/nodes/LexicalRootNode.$createRootNode. No model mismatch is masked; this exact unsupported diagnostic must still occur.",
+      "failure": "op 4: call 0: unmapped API: lexical/nodes/LexicalRootNode.$createRootNode"
+    },
+    {
+      "file": "packages/lexical/src/nodes/__tests__/unit/LexicalRootNode.test.ts",
+      "test": "LexicalRootNode tests > RootNode.isAttached()",
+      "status": "xfail",
+      "reason": "not-ported",
+      "reviewedBy": "coding-agent",
+      "decision": "S1 \u00a74 built-in factory table: $createRootNode is n/a (root always exists)",
+      "note": "Missing capability: lexical/nodes/LexicalRootNode.$createRootNode. No model mismatch is masked; this exact unsupported diagnostic must still occur.",
+      "failure": "op 4: call 0: unmapped API: lexical/nodes/LexicalRootNode.$createRootNode"
+    },
+    {
+      "file": "packages/lexical/src/nodes/__tests__/unit/LexicalRootNode.test.ts",
+      "test": "LexicalRootNode tests > RootNode.isRootNode()",
+      "status": "xfail",
+      "reason": "not-ported",
+      "reviewedBy": "coding-agent",
+      "decision": "S1 \u00a74 built-in factory table: $createRootNode is n/a (root always exists)",
+      "note": "Missing capability: lexical/nodes/LexicalRootNode.$createRootNode. No model mismatch is masked; this exact unsupported diagnostic must still occur.",
+      "failure": "op 4: call 0: unmapped API: lexical/nodes/LexicalRootNode.$createRootNode"
+    },
+    {
+      "file": "packages/lexical/src/nodes/__tests__/unit/LexicalRootNode.test.ts",
+      "test": "LexicalRootNode tests > RootNode.updateDOM()",
+      "status": "xfail",
+      "reason": "not-ported",
+      "reviewedBy": "coding-agent",
+      "decision": "S1 \u00a74 built-in factory table: $createRootNode is n/a (root always exists)",
+      "note": "Missing capability: lexical/nodes/LexicalRootNode.$createRootNode. No model mismatch is masked; this exact unsupported diagnostic must still occur.",
+      "failure": "op 4: call 0: unmapped API: lexical/nodes/LexicalRootNode.$createRootNode"
+    },
+    {
+      "file": "packages/lexical/src/nodes/__tests__/unit/LexicalTabNode.test.tsx",
+      "test": "LexicalTabNode tests > TabNode at selection boundaries with normal TextNode sibling (#7602) > TabNode \"x\\tx\" to \"xy\" at 1 (next)",
+      "status": "xfail",
+      "reason": "not-ported",
+      "reviewedBy": "coding-agent",
+      "decision": "WORKPLAN WP-12; S1 \u00a710 caret APIs",
+      "note": "Missing capability: lexical.$getTextPointCaret. No model mismatch is masked; this exact unsupported diagnostic must still occur.",
+      "failure": "op 10: call 5: unmapped API: lexical.$getTextPointCaret"
+    },
+    {
+      "file": "packages/lexical/src/nodes/__tests__/unit/LexicalTabNode.test.tsx",
+      "test": "LexicalTabNode tests > TabNode at selection boundaries with normal TextNode sibling (#7602) > TabNode \"x\\tx\" to \"xy\" at 1 (previous)",
+      "status": "xfail",
+      "reason": "not-ported",
+      "reviewedBy": "coding-agent",
+      "decision": "WORKPLAN WP-12; S1 \u00a710 caret APIs",
+      "note": "Missing capability: lexical.$getTextPointCaret. No model mismatch is masked; this exact unsupported diagnostic must still occur.",
+      "failure": "op 10: call 5: unmapped API: lexical.$getTextPointCaret"
+    },
+    {
+      "file": "packages/lexical/src/nodes/__tests__/unit/LexicalTabNode.test.tsx",
+      "test": "LexicalTabNode tests > TabNode at selection boundaries with normal TextNode sibling (#7602) > TabNode \"x\\tx\" to \"yx\" at 0 (next)",
+      "status": "xfail",
+      "reason": "not-ported",
+      "reviewedBy": "coding-agent",
+      "decision": "WORKPLAN WP-12; S1 \u00a710 caret APIs",
+      "note": "Missing capability: lexical.$getTextPointCaret. No model mismatch is masked; this exact unsupported diagnostic must still occur.",
+      "failure": "op 10: call 5: unmapped API: lexical.$getTextPointCaret"
+    },
+    {
+      "file": "packages/lexical/src/nodes/__tests__/unit/LexicalTabNode.test.tsx",
+      "test": "LexicalTabNode tests > TabNode at selection boundaries with normal TextNode sibling (#7602) > TabNode \"x\\tx\" to \"yx\" at 0 (previous)",
+      "status": "xfail",
+      "reason": "not-ported",
+      "reviewedBy": "coding-agent",
+      "decision": "WORKPLAN WP-12; S1 \u00a710 caret APIs",
+      "note": "Missing capability: lexical.$getTextPointCaret. No model mismatch is masked; this exact unsupported diagnostic must still occur.",
+      "failure": "op 10: call 5: unmapped API: lexical.$getTextPointCaret"
+    }
+  ]
+}
