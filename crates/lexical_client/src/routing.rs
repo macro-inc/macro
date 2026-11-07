@@ -1,11 +1,14 @@
 //! Startup configuration and shared execution/trace policy.
 use anyhow::Result;
+use nom::Parser;
 use serde::{Deserialize, Deserializer, Serialize};
 use std::{future::Future, str::FromStr};
+use strum::{AsRefStr, EnumString, IntoStaticStr};
 use tracing::Instrument;
 
 /// Execution mode for a route group.
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, EnumString, AsRefStr)]
+#[strum(serialize_all = "snake_case")]
 pub enum RouteMode {
     /// Preserve the lexical-service response and errors.
     #[default]
@@ -16,7 +19,8 @@ pub enum RouteMode {
     Shadow,
 }
 /// Independently deployable route groups from S3 §4.4.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, EnumString)]
+#[strum(serialize_all = "snake_case")]
 pub enum RouteGroup {
     /// Document exports, search, cognition and comment marks.
     Markdown,
@@ -37,8 +41,25 @@ pub struct RouteModes {
 }
 /// Invalid configuration; deliberately excludes untrusted configuration text.
 #[derive(Debug, thiserror::Error, PartialEq, Eq)]
-#[error("invalid LEXICAL_ROUTE_MODES: {0}")]
-pub struct RouteModesError(&'static str);
+pub enum RouteModesError {
+    /// Expected a comma-separated map of group=mode assignments.
+    #[error("invalid LEXICAL_ROUTE_MODES syntax")]
+    Syntax,
+    /// Each group may be assigned at most once.
+    #[error("duplicate LEXICAL_ROUTE_MODES group")]
+    DuplicateGroup,
+    /// The group is outside the supported route map.
+    #[error("unknown LEXICAL_ROUTE_MODES group")]
+    UnknownGroup,
+    /// The mode is outside the supported execution policies.
+    #[error("unknown LEXICAL_ROUTE_MODES mode")]
+    UnknownMode,
+}
+fn assignment(input: &str) -> nom::IResult<&str, (&str, &str)> {
+    use nom::{bytes::complete::take_while1, character::complete::char, sequence::separated_pair};
+    let identifier = |c: char| c.is_ascii_lowercase() || c == '_';
+    separated_pair(take_while1(identifier), char('='), take_while1(identifier)).parse(input)
+}
 impl FromStr for RouteModes {
     type Err = RouteModesError;
     fn from_str(value: &str) -> std::result::Result<Self, Self::Err> {
@@ -47,25 +68,23 @@ impl FromStr for RouteModes {
         if value.is_empty() {
             return Ok(modes);
         }
-        for pair in value.split(',') {
-            let (group, mode) = pair
-                .split_once('=')
-                .ok_or(RouteModesError("expected group=mode"))?;
+        let (_, assignments) = nom::combinator::all_consuming(nom::multi::separated_list1(
+            nom::character::complete::char(','),
+            assignment,
+        ))
+        .parse(value)
+        .map_err(|_| RouteModesError::Syntax)?;
+        for (group, mode) in assignments {
+            let group: RouteGroup = group.parse().map_err(|_| RouteModesError::UnknownGroup)?;
+            let mode = mode.parse().map_err(|_| RouteModesError::UnknownMode)?;
             if !seen.insert(group) {
-                return Err(RouteModesError("duplicate group"));
+                return Err(RouteModesError::DuplicateGroup);
             }
-            let mode = match mode {
-                "http" => RouteMode::Http,
-                "in_process" => RouteMode::InProcess,
-                "shadow" => RouteMode::Shadow,
-                _ => return Err(RouteModesError("unknown mode")),
-            };
             match group {
-                "markdown" => modes.markdown = mode,
-                "snapshot" => modes.snapshot = mode,
-                "composers" => modes.composers = mode,
-                "html" => modes.html = mode,
-                _ => return Err(RouteModesError("unknown group")),
+                RouteGroup::Markdown => modes.markdown = mode,
+                RouteGroup::Snapshot => modes.snapshot = mode,
+                RouteGroup::Composers => modes.composers = mode,
+                RouteGroup::Html => modes.html = mode,
             }
         }
         Ok(modes)
@@ -107,7 +126,8 @@ pub(crate) async fn unavailable<T>(route: &'static str) -> Result<T> {
     Err(NotYetPorted { route }.into())
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, IntoStaticStr)]
+#[strum(serialize_all = "snake_case")]
 pub(crate) enum Route {
     Search,
     Markdown,
@@ -148,24 +168,7 @@ impl Route {
         }
     }
     fn name(self) -> &'static str {
-        match self {
-            Self::Search => "search",
-            Self::Markdown => "markdown",
-            Self::CommentMark => "comment_mark",
-            Self::Cognition => "cognition",
-            Self::CognitionPresigned => "cognition_presigned",
-            Self::Cognitionv2 => "cognitionv2",
-            Self::SnapshotMarkdown => "snapshot_markdown",
-            Self::Html => "html",
-            Self::Mentions => "mentions",
-            Self::ImageMarkdown => "image_markdown",
-            Self::AgentAnnouncement => "agent_announcement",
-            Self::AgentConnectionPrompt => "agent_connection_prompt",
-            Self::AgentChatReply => "agent_chat_reply",
-            Self::AgentContext => "agent_context",
-            Self::ExtractReply => "extract_reply",
-            Self::SnapshotNotion => "snapshot_notion",
-        }
+        self.into()
     }
     fn span(self) -> tracing::Span {
         macro_rules! route_span {
@@ -221,11 +224,9 @@ fn comparable<T: Serialize>(result: &Result<T>, group: RouteGroup) -> Option<Com
     if group == RouteGroup::Composers
         && let serde_json::Value::String(markdown) = &value
     {
-        static AWAIT_ID: std::sync::LazyLock<regex::Regex> = std::sync::LazyLock::new(|| {
-            regex::Regex::new(r#""awaitId":"[A-Za-z0-9_-]{21}""#).expect("static awaitId pattern")
-        });
+        let await_id = lazy_regex::regex!(r#""awaitId":"[A-Za-z0-9_-]{21}""#);
         return Some(Comparable::Composer(
-            AWAIT_ID.split(markdown).map(str::to_owned).collect(),
+            await_id.split(markdown).map(str::to_owned).collect(),
         ));
     }
     Some(Comparable::Value(value))
@@ -243,14 +244,7 @@ pub(crate) async fn dispatch<T: Serialize>(
     let group = route.group();
     let route = route.name();
     span.record("route", route);
-    span.record(
-        "mode",
-        match mode {
-            RouteMode::Http => "http",
-            RouteMode::InProcess => "in_process",
-            RouteMode::Shadow => "shadow",
-        },
-    );
+    span.record("mode", mode.as_ref());
     span.record("document_id", document_id);
     span.record("bytes_in", bytes_in);
     let result = async {
