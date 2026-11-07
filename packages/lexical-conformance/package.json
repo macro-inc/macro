@@ -11,6 +11,7 @@
   "devDependencies": {
     "@floating-ui/react": "0.27.19",
     "@jridgewell/trace-mapping": "0.3.31",
+    "@lexical/code": "0.45.0",
     "@lexical/headless": "0.45.0",
     "@lexical/internal": "0.45.0",
     "@lexical/list": "0.45.0",
@@ -41,6 +42,9 @@
     "loro-crdt": "1.16.3",
     "nanoid": "5.1.5",
     "prettier": "3.8.1",
+    "prettier-plugin-hermes-parser": "0.36.0",
+    "prettier-plugin-organize-attributes": "1.0.0",
+    "prettier-plugin-tailwindcss": "0.8.0",
     "prismjs": "1.30.0",
     "react": "19.2.5",
     "react-dom": "19.2.5",

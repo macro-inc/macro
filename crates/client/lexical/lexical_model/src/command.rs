@@ -1,32 +1,173 @@
-//! Typed plugin commands and upstream priority ordering.
-use crate::{collections::HashMap, *};
-use std::{
-    any::Any,
-    fmt,
-    hash::{Hash, Hasher},
-    marker::PhantomData,
-    sync::Arc,
-};
-
-/// Identity shared by typed application-command keys.
-pub trait AnyCommandKey: Send + Sync + fmt::Debug {
-    /// Diagnostic name; identity is the static's address, not this string.
-    fn name(&self) -> &'static str;
+//! Plain-data model commands and static listener indexing.
+use crate::*;
+use std::{any::Any, fmt, marker::PhantomData, sync::Arc};
+/// Model command translated from view input or emitted by another plugin.
+#[derive(Clone, PartialEq, Debug)]
+pub enum Command {
+    /// Upstream InsertText command.
+    InsertText(String),
+    /// Upstream DeleteCharacter command.
+    DeleteCharacter {
+        /// Edit direction.
+        direction: EditDirection,
+        /// Host movement answer.
+        target: ModifyTarget,
+    },
+    /// Upstream DeleteWord command.
+    DeleteWord {
+        /// Edit direction.
+        direction: EditDirection,
+        /// Host movement answer.
+        target: ModifyTarget,
+        /// Character fallback movement answer.
+        character_target: ModifyTarget,
+    },
+    /// Upstream DeleteLine command.
+    DeleteLine {
+        /// Edit direction.
+        direction: EditDirection,
+        /// Host movement answer.
+        target: ModifyTarget,
+        /// Character fallback movement answer.
+        character_target: ModifyTarget,
+    },
+    /// Upstream RemoveText command.
+    RemoveText,
+    /// Upstream InsertParagraph command.
+    InsertParagraph,
+    /// Upstream InsertLineBreak command.
+    InsertLineBreak {
+        /// Select the start after insertion.
+        select_start: bool,
+    },
+    /// Upstream InsertTab command.
+    InsertTab,
+    /// Upstream IndentContent command.
+    IndentContent,
+    /// Upstream OutdentContent command.
+    OutdentContent,
+    /// Upstream FormatText command.
+    FormatText(TextFormatType),
+    /// Upstream FormatElement command.
+    FormatElement(ElementFormat),
+    /// Upstream SelectAll command.
+    SelectAll(Option<KeyEvent>),
+    /// Upstream SelectionChange command.
+    SelectionChange,
+    /// Upstream InsertClipboardNodes command.
+    InsertClipboardNodes {
+        /// Detached nodes to insert.
+        nodes: Vec<NodeKey>,
+        /// Selection slot to insert at.
+        selection: SelectionSlot,
+    },
+    /// Upstream KeyDown command.
+    KeyDown(KeyEvent),
+    /// Upstream Key command.
+    Key {
+        /// Keyboard command subtype.
+        command: KeyCommand,
+        /// Optional host keyboard facts.
+        event: Option<KeyEvent>,
+    },
+    /// Upstream Paste command.
+    Paste(ClipboardPayload),
+    /// Upstream ClearEditor command.
+    ClearEditor,
+    /// Upstream ClearHistory command.
+    ClearHistory,
+    /// Upstream Undo command.
+    Undo,
+    /// Upstream Redo command.
+    Redo,
+    /// Upstream Extension command.
+    Extension(ExtensionCommand),
 }
-/// A static, typed application-command identity.
+/// Keyboard command subtype.
+#[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
+pub enum KeyCommand {
+    /// Enter key action.
+    Enter,
+    /// Backspace key action.
+    Backspace,
+    /// Delete key action.
+    Delete,
+    /// Tab key action.
+    Tab,
+    /// Escape key action.
+    Escape,
+    /// Space key action.
+    Space,
+    /// ArrowUp key action.
+    ArrowUp,
+    /// ArrowDown key action.
+    ArrowDown,
+    /// ArrowLeft key action.
+    ArrowLeft,
+    /// ArrowRight key action.
+    ArrowRight,
+    /// MoveToStart key action.
+    MoveToStart,
+    /// MoveToEnd key action.
+    MoveToEnd,
+    /// Modifier key action.
+    Modifier,
+}
+/// Keyboard facts read by model handlers.
+#[derive(Clone, PartialEq, Eq, Debug, Default)]
+pub struct KeyEvent {
+    /// Logical key.
+    pub key: Arc<str>,
+    /// Physical key code.
+    pub code: Arc<str>,
+    /// Keyboard shift flag.
+    pub shift: bool,
+    /// Keyboard alt flag.
+    pub alt: bool,
+    /// Keyboard ctrl flag.
+    pub ctrl: bool,
+    /// Keyboard meta flag.
+    pub meta: bool,
+    /// Keyboard repeat flag.
+    pub repeat: bool,
+    /// Keyboard is_composing flag.
+    pub is_composing: bool,
+}
+/// Clipboard data already read by the host.
+#[derive(Clone, PartialEq, Debug, Default)]
+pub struct ClipboardPayload {
+    /// MIME entries in source order.
+    pub data: crate::collections::IndexMap<String, String>,
+    /// Host has file attachments.
+    pub has_files: bool,
+    /// Host-imported HTML nodes.
+    pub html_nodes: Option<Vec<SerializedNode>>,
+}
+impl ClipboardPayload {
+    /// Read one MIME entry.
+    pub fn get(&self, mime: &str) -> Option<&str> {
+        self.data.get(mime).map(String::as_str)
+    }
+}
+/// Type-erased command identity, compared by its static address.
+pub trait AnyCommandKey: fmt::Debug + Send + Sync + 'static {
+    /// Address of the concrete key.
+    fn identity(&self) -> usize;
+}
+/// Static identity of an application command.
 pub struct CommandKey<Payload: Clone + fmt::Debug + Send + Sync + 'static> {
     name: &'static str,
     payload: PhantomData<fn() -> Payload>,
 }
 impl<Payload: Clone + fmt::Debug + Send + Sync + 'static> CommandKey<Payload> {
-    /// Declare a static command key.
+    /// Define a static command key.
     pub const fn new(name: &'static str) -> Self {
         Self {
             name,
             payload: PhantomData,
         }
     }
-    /// Diagnostic command name.
+    /// Human-readable diagnostic name.
     pub fn name(&self) -> &'static str {
         self.name
     }
@@ -37,259 +178,143 @@ impl<Payload: Clone + fmt::Debug + Send + Sync + 'static> fmt::Debug for Command
     }
 }
 impl<Payload: Clone + fmt::Debug + Send + Sync + 'static> AnyCommandKey for CommandKey<Payload> {
-    fn name(&self) -> &'static str {
-        self.name
+    fn identity(&self) -> usize {
+        std::ptr::from_ref(self) as usize
     }
 }
-fn same_key(a: &dyn AnyCommandKey, b: &dyn AnyCommandKey) -> bool {
-    std::ptr::addr_eq(a, b)
-}
-/// An application command with a typed, cloneable payload.
-#[derive(Clone)]
+/// A static key and an immutable, type-erased payload.
+#[derive(Clone, Debug)]
 pub struct ExtensionCommand {
     key: &'static dyn AnyCommandKey,
-    value: Arc<dyn Any + Send + Sync>,
+    payload: Arc<dyn Any + Send + Sync>,
+}
+impl PartialEq for ExtensionCommand {
+    fn eq(&self, other: &Self) -> bool {
+        self.key.identity() == other.key.identity() && Arc::ptr_eq(&self.payload, &other.payload)
+    }
 }
 impl ExtensionCommand {
-    /// Construct a command, retaining its key identity across clones.
+    /// Pair a static key with its typed payload.
     pub fn new<Payload: Clone + fmt::Debug + Send + Sync + 'static>(
         key: &'static CommandKey<Payload>,
         payload: Payload,
     ) -> Self {
         Self {
             key,
-            value: Arc::new(payload),
+            payload: Arc::new(payload),
         }
     }
-    /// Read this payload only when the static key matches.
+    /// Read the payload only for the same static key.
     pub fn payload<Payload: Clone + fmt::Debug + Send + Sync + 'static>(
         &self,
         key: &'static CommandKey<Payload>,
     ) -> Option<&Payload> {
-        if same_key(self.key, key) {
-            self.value.downcast_ref()
-        } else {
-            None
+        if self.key.identity() != key.identity() {
+            return None;
         }
+        self.payload.downcast_ref()
     }
 }
-impl fmt::Debug for ExtensionCommand {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_struct("ExtensionCommand")
-            .field("key", &self.key)
-            .finish_non_exhaustive()
-    }
-}
-impl PartialEq for ExtensionCommand {
-    fn eq(&self, other: &Self) -> bool {
-        same_key(self.key, other.key) && Arc::ptr_eq(&self.value, &other.value)
-    }
-}
-/// Commands needed by selection plugins and application extensions.
-#[derive(Clone, Debug, PartialEq)]
-pub enum Command {
-    /// The host selection and typing attributes have changed.
-    SelectionChange,
-    /// An application-defined typed command.
-    Extension(ExtensionCommand),
-}
-impl Command {
-    /// Listener-list identity for this command.
-    pub fn kind(&self) -> CommandKind {
-        match self {
-            Self::SelectionChange => CommandKind::SelectionChange,
-            Self::Extension(command) => CommandKind::Extension(command.key),
-        }
-    }
-}
-/// Const-constructible listener-list identity.
+/// Discriminant used to index listener lists.
 #[derive(Clone, Copy, Debug)]
 pub enum CommandKind {
-    /// Selection changes from the host.
+    /// InsertText listener list.
+    InsertText,
+    /// DeleteCharacter listener list.
+    DeleteCharacter,
+    /// DeleteWord listener list.
+    DeleteWord,
+    /// DeleteLine listener list.
+    DeleteLine,
+    /// RemoveText listener list.
+    RemoveText,
+    /// InsertParagraph listener list.
+    InsertParagraph,
+    /// InsertLineBreak listener list.
+    InsertLineBreak,
+    /// InsertTab listener list.
+    InsertTab,
+    /// IndentContent listener list.
+    IndentContent,
+    /// OutdentContent listener list.
+    OutdentContent,
+    /// FormatText listener list.
+    FormatText,
+    /// FormatElement listener list.
+    FormatElement,
+    /// SelectAll listener list.
+    SelectAll,
+    /// SelectionChange listener list.
     SelectionChange,
-    /// An application-command static.
+    /// InsertClipboardNodes listener list.
+    InsertClipboardNodes,
+    /// KeyDown listener list.
+    KeyDown,
+    /// Key listener list.
+    Key(KeyCommand),
+    /// Paste listener list.
+    Paste,
+    /// ClearEditor listener list.
+    ClearEditor,
+    /// ClearHistory listener list.
+    ClearHistory,
+    /// Undo listener list.
+    Undo,
+    /// Redo listener list.
+    Redo,
+    /// Extension listener list.
     Extension(&'static dyn AnyCommandKey),
 }
 impl PartialEq for CommandKind {
     fn eq(&self, other: &Self) -> bool {
         match (self, other) {
-            (Self::SelectionChange, Self::SelectionChange) => true,
-            (Self::Extension(a), Self::Extension(b)) => same_key(*a, *b),
-            _ => false,
+            (Self::Key(a), Self::Key(b)) => a == b,
+            (Self::Extension(a), Self::Extension(b)) => a.identity() == b.identity(),
+            _ => std::mem::discriminant(self) == std::mem::discriminant(other),
         }
     }
 }
 impl Eq for CommandKind {}
-impl Hash for CommandKind {
-    fn hash<H: Hasher>(&self, state: &mut H) {
+impl std::hash::Hash for CommandKind {
+    fn hash<Hasher: std::hash::Hasher>(&self, state: &mut Hasher) {
         std::mem::discriminant(self).hash(state);
-        if let Self::Extension(key) = self {
-            std::ptr::from_ref(*key).cast::<()>().hash(state);
+        match self {
+            Self::Key(key) => key.hash(state),
+            Self::Extension(key) => key.identity().hash(state),
+            _ => {}
         }
     }
 }
-/// Whether command propagation stops at a listener.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum Handled {
-    /// Stop propagation.
-    Yes,
-    /// Continue to the next listener.
-    No,
-}
-/// Upstream listener priority, visited from Critical to Editor.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
-pub enum CommandPriority {
-    /// Default editor behavior.
-    Editor = 0,
-    /// Low priority.
-    Low = 1,
-    /// Normal priority.
-    Normal = 2,
-    /// High priority.
-    High = 3,
-    /// Critical priority.
-    Critical = 4,
-}
-/// Position within a priority level.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum Placement {
-    /// Prepend to this priority; later registrations run first.
-    Before,
-    /// Append to this priority in registration order.
-    After,
-}
-/// One command listener declared by a plugin.
-#[derive(Clone, Copy, Debug)]
-pub struct CommandRegistration {
-    /// Listener-list identity.
-    pub command: CommandKind,
-    /// Listener priority.
-    pub priority: CommandPriority,
-    /// Registration placement at this priority.
-    pub placement: Placement,
-}
-/// Immutable command behavior; mutable plugin data lives in `ExtensionState`.
-pub trait Plugin: Send + Sync + 'static {
-    /// Diagnostic identity for duplicate-install detection.
-    fn name(&self) -> &'static str;
-    /// Commands and priorities declared by this plugin.
-    fn commands(&self) -> &[CommandRegistration];
-    /// Handle a declared command; nested dispatch runs inline without a flush.
-    fn handle(&self, tx: &mut Transaction<'_>, command: &Command) -> Result<Handled, Error>;
-}
-#[derive(Clone)]
-struct Listener {
-    plugin: Arc<dyn Plugin>,
-    registration: CommandRegistration,
-    order: usize,
-}
-#[derive(Clone, Default)]
-pub(crate) struct CommandListeners(HashMap<CommandKind, Vec<Listener>>);
-impl CommandListeners {
-    pub(crate) fn new(plugins: &[Arc<dyn Plugin>]) -> Result<Self, BuildError> {
-        let mut names = Vec::new();
-        let mut lists: HashMap<CommandKind, Vec<Listener>> = HashMap::default();
-        let mut order = 0;
-        for plugin in plugins {
-            if names.contains(&plugin.name()) {
-                return Err(BuildError::DuplicatePlugin {
-                    name: plugin.name(),
-                });
-            }
-            names.push(plugin.name());
-            for registration in plugin.commands() {
-                lists
-                    .entry(registration.command)
-                    .or_default()
-                    .push(Listener {
-                        plugin: plugin.clone(),
-                        registration: *registration,
-                        order,
-                    });
-                order += 1;
-            }
+impl Command {
+    /// Listener-list discriminant.
+    pub fn kind(&self) -> CommandKind {
+        match self {
+            Self::InsertText(..) => CommandKind::InsertText,
+            Self::DeleteCharacter { .. } => CommandKind::DeleteCharacter,
+            Self::DeleteWord { .. } => CommandKind::DeleteWord,
+            Self::DeleteLine { .. } => CommandKind::DeleteLine,
+            Self::RemoveText => CommandKind::RemoveText,
+            Self::InsertParagraph => CommandKind::InsertParagraph,
+            Self::InsertLineBreak { .. } => CommandKind::InsertLineBreak,
+            Self::InsertTab => CommandKind::InsertTab,
+            Self::IndentContent => CommandKind::IndentContent,
+            Self::OutdentContent => CommandKind::OutdentContent,
+            Self::FormatText(..) => CommandKind::FormatText,
+            Self::FormatElement(..) => CommandKind::FormatElement,
+            Self::SelectAll(..) => CommandKind::SelectAll,
+            Self::SelectionChange => CommandKind::SelectionChange,
+            Self::InsertClipboardNodes { .. } => CommandKind::InsertClipboardNodes,
+            Self::KeyDown(..) => CommandKind::KeyDown,
+            Self::Key { command, .. } => CommandKind::Key(*command),
+            Self::Paste(..) => CommandKind::Paste,
+            Self::ClearEditor => CommandKind::ClearEditor,
+            Self::ClearHistory => CommandKind::ClearHistory,
+            Self::Undo => CommandKind::Undo,
+            Self::Redo => CommandKind::Redo,
+            Self::Extension(command) => CommandKind::Extension(command.key),
         }
-        for listeners in lists.values_mut() {
-            listeners.sort_by(|a, b| {
-                b.registration
-                    .priority
-                    .cmp(&a.registration.priority)
-                    .then_with(
-                        || match (a.registration.placement, b.registration.placement) {
-                            (Placement::Before, Placement::Before) => b.order.cmp(&a.order),
-                            (Placement::Before, Placement::After) => std::cmp::Ordering::Less,
-                            (Placement::After, Placement::Before) => std::cmp::Ordering::Greater,
-                            (Placement::After, Placement::After) => a.order.cmp(&b.order),
-                        },
-                    )
-            });
-        }
-        Ok(Self(lists))
     }
 }
-impl Transaction<'_> {
-    /// Dispatch declared listeners inline; staged writes are visible to reentrant handlers.
-    pub fn dispatch(&mut self, command: &Command) -> Result<Handled, Error> {
-        let listeners = self
-            .editor
-            .listeners
-            .0
-            .get(&command.kind())
-            .cloned()
-            .unwrap_or_default();
-        for listener in listeners {
-            if listener.plugin.handle(self, command)? == Handled::Yes {
-                return Ok(Handled::Yes);
-            }
-        }
-        Ok(Handled::No)
-    }
-}
-impl Editor {
-    /// Dispatch from outside an update, flushing between nonempty priority levels.
-    pub fn dispatch(&mut self, command: &Command) -> Result<(Handled, Commit), Error> {
-        let listeners = self
-            .listeners
-            .0
-            .get(&command.kind())
-            .cloned()
-            .unwrap_or_default();
-        if listeners.is_empty() {
-            return Ok((
-                Handled::No,
-                Commit {
-                    id: self.keys.next_commit()?,
-                    prev: self.state.clone(),
-                    next: self.state.clone(),
-                    changes: Changes::default(),
-                    tags: TagSet::default(),
-                    normalized: Default::default(),
-                    selection_changed: false,
-                    composition_key: self.composition_key,
-                    composition_changed: false,
-                    full_reconcile: false,
-                    preceding: None,
-                    #[cfg(feature = "bench-counters")]
-                    work: WorkCounters::default(),
-                },
-            ));
-        }
-        let mut tx = self.transaction();
-        let mut previous_priority = None;
-        let mut handled = Handled::No;
-        for listener in listeners {
-            let priority = listener.registration.priority;
-            if previous_priority.is_some_and(|previous| previous != priority) {
-                tx.flush()?;
-            }
-            previous_priority = Some(priority);
-            handled = listener.plugin.handle(&mut tx, command)?;
-            if handled == Handled::Yes {
-                break;
-            }
-        }
-        Ok((handled, tx.commit()?))
-    }
-}
+
 #[cfg(test)]
 mod test;

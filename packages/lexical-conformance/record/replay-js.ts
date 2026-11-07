@@ -17,6 +17,8 @@ function difference(a: unknown, b: unknown, path = 'commit'): string {
   if (isDeepStrictEqual(a, b)) return '';
   if (a && b && typeof a === 'object' && typeof b === 'object') {
     for (const key of new Set([...Object.keys(a), ...Object.keys(b)])) {
+      if (Object.hasOwn(a, key) !== Object.hasOwn(b, key))
+        return `${path}.${key} (presence)`;
       const found = difference(
         fields(a)[key],
         fields(b)[key],
@@ -89,7 +91,15 @@ export async function replay(
   };
   const compare = (expected: Value, actual: unknown): void => {
     if (expected && typeof expected === 'object' && !Array.isArray(expected)) {
-      for (const tag of ['$h', '$ed', '$state', '$sel', '$pt', '$caret']) {
+      for (const tag of [
+        '$h',
+        '$ed',
+        '$state',
+        '$sel',
+        '$pt',
+        '$caret',
+        '$iterator',
+      ]) {
         if (tag in expected) {
           const key = `${tag}:${expected[tag]}`;
           if (handles.has(key)) {
@@ -166,7 +176,15 @@ export async function replay(
   const decode = (value: Value): unknown => {
     if (value === null || typeof value !== 'object') return value;
     if (Array.isArray(value)) return value.map(decode);
-    for (const tag of ['$h', '$ed', '$state', '$sel', '$pt', '$caret']) {
+    for (const tag of [
+      '$h',
+      '$ed',
+      '$state',
+      '$sel',
+      '$pt',
+      '$caret',
+      '$iterator',
+    ]) {
       if (tag in value) {
         const key = `${tag}:${value[tag]}`;
         if (!handles.has(key)) throw new Error(`Unknown handle ${key}`);
@@ -180,6 +198,18 @@ export async function replay(
       const regexp = new RegExp(String(value.$regexp), String(value.flags));
       regexp.lastIndex = Number(value.lastIndex);
       return regexp;
+    }
+    if ('$event' in value) {
+      if (value.$event !== 'keydown' || value.key !== 'Tab')
+        throw new Error('Unsupported model event');
+      return new KeyboardEvent('keydown', {
+        key: 'Tab',
+        cancelable: true,
+        shiftKey: Boolean(value.shiftKey),
+        altKey: Boolean(value.altKey),
+        ctrlKey: Boolean(value.ctrlKey),
+        metaKey: Boolean(value.metaKey),
+      });
     }
     if ('$fn' in value) return lookup(String(value.$fn));
     if ('$cmd' in value) {
@@ -252,7 +282,7 @@ export async function replay(
   };
   const comparableSnapshot = (value: unknown): unknown => {
     if (!value || typeof value !== 'object') return value;
-    if (Array.isArray(value)) return value.map(comparableSnapshot);
+    if (Array.isArray(value)) return Array.from(value, comparableSnapshot);
     const object = fields(value);
     if ('$key' in object) return object.raw;
     return Object.fromEntries(
@@ -295,7 +325,11 @@ export async function replay(
             editable: config.editable,
             nodes: [
               ...(config.nodes as Value[]).map((node) =>
-                decode({ $klass: node })
+                decode(
+                  (config.nodeClasses as Record<string, Value> | undefined)?.[
+                    String(node)
+                  ] ?? { $klass: node }
+                )
               ),
               ...((config.replacements ?? []) as Value[]).map(decode),
             ],

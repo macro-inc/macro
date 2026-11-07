@@ -8,6 +8,12 @@ import { fixture as makeFixture } from './fixture';
 import { activate, current, modules, Recorder } from './membrane';
 import { replay } from './replay-js';
 
+function hasCodeHighlight(value: unknown): boolean {
+  if (!value || typeof value !== 'object') return false;
+  if ('type' in value && value.type === 'code-highlight') return true;
+  return Object.values(value).some(hasCodeHighlight);
+}
+
 let recorder: Recorder;
 let entropy: Entropy;
 let restoreEvents: () => void;
@@ -88,6 +94,7 @@ afterEach(async (context) => {
       test: [context.task.name],
       recordedWith: `lexical-conformance@${process.env.LEXICAL_RECORDER_REV ?? 'development'}`,
     });
+    if (hasCodeHighlight(fixture)) fixture.normalize.push('codeHighlight');
     if (fixture.source.repo === 'macro')
       fixture.normalize.push('listIndent: 2');
     entropy.dispose();

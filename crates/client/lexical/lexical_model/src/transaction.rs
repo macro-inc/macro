@@ -19,7 +19,9 @@ pub enum DirtyIntent {
 }
 /// Pending state, published only by commit. Allocated keys are never rewound.
 pub struct Transaction<'editor> {
-    pub(crate) extensions: crate::extension::ExtensionStore,
+    pub(crate) extensions: crate::extension::Extensions,
+    pub(crate) events: Vec<PluginEvent>,
+    pub(crate) default_prevented: bool,
     pub(crate) editor: &'editor mut Editor,
     pub(crate) pending: EditorState,
     pub(crate) dirty_leaves: IndexSet<NodeKey>,
@@ -42,7 +44,6 @@ pub struct Transaction<'editor> {
 }
 impl<'editor> Transaction<'editor> {
     pub(crate) fn new(editor: &'editor mut Editor) -> Self {
-        let extensions = editor.extensions.clone();
         let pending = editor.state.pending();
         let composition_key = editor.composition_key;
         let options = UpdateOptions {
@@ -50,7 +51,9 @@ impl<'editor> Transaction<'editor> {
             ..UpdateOptions::default()
         };
         Self {
-            extensions,
+            extensions: editor.extensions.clone(),
+            events: vec![],
+            default_prevented: false,
             editor,
             pending,
             dirty_leaves: IndexSet::default(),
@@ -230,7 +233,7 @@ impl<'editor> Transaction<'editor> {
                 .ok_or(Error::Invariant("missing replacement"))?
                 .replace(slot.data.as_any())?;
             // The original allocation is burned, exactly as $applyNodeReplacement does.
-            self.pending.nodes.remove(&original.key());
+            self.pending.remove_record(original.key());
             self.dirty_leaves.shift_remove(&original.key());
             self.dirty_elements.shift_remove(&original.key());
             let base = (self.pending.registry.vtable(replacement).initial_base)(data.as_any())?;
@@ -284,6 +287,9 @@ impl<'editor> Transaction<'editor> {
         }
         self.guard_write()?;
         let key = self.editor.keys.next()?;
+        if matches!(base, BaseData::Decorator) {
+            self.pending.opaque_text_count += 1;
+        }
         self.pending.nodes.insert(
             key,
             Arc::new(NodeSlot {
@@ -587,8 +593,7 @@ impl<'editor> Transaction<'editor> {
         self.pending.selection = selection;
         Ok(())
     }
-    /// Install a newly allocated selection object, preserving its observable identity boundary.
-    /// Use set_selection for value installation when identity is managed by the caller.
+    /// Install a new selection object and expose its identity replacement.
     pub fn replace_selection(&mut self, selection: Option<Selection>) -> Result<(), Error> {
         self.guard_write()?;
         self.selection_replacements += 1;

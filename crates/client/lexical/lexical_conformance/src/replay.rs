@@ -436,10 +436,10 @@ impl Replayer {
                 let result = crate::api::lexical::call(self, tx, op);
                 if replacements != tx.selection_replacements()
                     && let Some(id) = self.active_selection.take()
-                        && let Some(selection) = selection
-                    {
-                        self.selections[id] = tx.detach_selection(selection);
-                    }
+                    && let Some(selection) = selection
+                {
+                    self.selections[id] = tx.detach_selection(selection);
+                }
                 if let Some(expected) = op.get("throws") {
                     match result {
                         Ok(value) => {
