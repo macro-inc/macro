@@ -200,6 +200,7 @@ impl Transaction<'_> {
         };
         let composition_changed = self.editor.composition_key != self.composition_key;
         self.editor.composition_key = self.composition_key;
+        self.editor.extensions = self.extensions.clone();
         Ok(Commit {
             id: next_id,
             prev,

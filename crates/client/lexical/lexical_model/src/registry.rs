@@ -195,6 +195,9 @@ enum TransformTarget {
 type TransformRegistrations = Vec<(TransformTarget, RegisteredTransform)>;
 /// Configuration builder; the six built-in types are always registered first.
 pub struct EditorBuilder {
+    extensions: crate::extension::ExtensionStore,
+    duplicate_extension: Option<&'static str>,
+    plugins: Vec<Arc<dyn Plugin>>,
     table_selection_hooks: Option<Arc<dyn TableSelectionHooks>>,
     vtables: Vec<NodeVTable>,
     mode: EditorMode,
@@ -208,6 +211,9 @@ impl EditorBuilder {
     /// Build with an explicit headless or view-attached mode.
     pub fn new(mode: EditorMode) -> Self {
         Self {
+            extensions: Default::default(),
+            duplicate_extension: None,
+            plugins: vec![],
             table_selection_hooks: None,
             vtables: vec![],
             mode,
@@ -223,6 +229,18 @@ impl EditorBuilder {
         .node::<Tab>()
         .node::<Paragraph>()
         .node::<Artificial>()
+    }
+    /// Install one typed per-editor state value for transforms and plugins.
+    pub fn extension_state<State: ExtensionState>(mut self, state: State) -> Self {
+        if !self.extensions.insert(state) {
+            self.duplicate_extension = Some(std::any::type_name::<State>());
+        }
+        self
+    }
+    /// Register immutable command behavior in builder order.
+    pub fn plugin(mut self, plugin: impl Plugin) -> Self {
+        self.plugins.push(Arc::new(plugin));
+        self
     }
     /// Supply table geometry and editing behavior.
     pub fn table_selection_hooks(mut self, hooks: impl TableSelectionHooks) -> Self {
@@ -296,6 +314,10 @@ impl EditorBuilder {
     /// Validate registrations and compute type-level flags in isolated scratch states.
     /// s2: CFG-08
     pub fn build(self) -> Result<Editor, BuildError> {
+        if let Some(type_name) = self.duplicate_extension {
+            return Err(BuildError::DuplicateExtensionState { type_name });
+        }
+        let listeners = crate::command::CommandListeners::new(&self.plugins)?;
         let mut registry = Registry {
             table_selection_hooks: self.table_selection_hooks,
             nodes: vec![],
@@ -468,7 +490,10 @@ impl EditorBuilder {
             inner.nodes[usize::from(row.index.0)].flags = row.flags;
         }
         inner.table = rows;
-        Editor::new(registry, self.mode, self.keys, self.view_host)
-            .map_err(|e| BuildError::InitialState(Box::new(e)))
+        let mut editor = Editor::new(registry, self.mode, self.keys, self.view_host)
+            .map_err(|e| BuildError::InitialState(Box::new(e)))?;
+        editor.extensions = self.extensions;
+        editor.listeners = listeners;
+        Ok(editor)
     }
 }

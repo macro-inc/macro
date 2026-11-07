@@ -4,6 +4,9 @@ use crate::{NodeKey, Utf16Offset};
 /// A failed model operation; the editor remains unchanged when an update fails.
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
+    /// Required per-editor state was not installed.
+    #[error("unknown extension state")]
+    UnknownExtensionState,
     /// unknown selection slot.
     #[error("unknown selection slot")]
     UnknownSelectionSlot,
@@ -177,6 +180,18 @@ pub enum Error {
 /// Invalid editor configuration.
 #[derive(Debug, thiserror::Error)]
 pub enum BuildError {
+    /// An extension's state was installed more than once.
+    #[error("extension state {type_name} registered twice")]
+    DuplicateExtensionState {
+        /// Duplicate state's Rust type.
+        type_name: &'static str,
+    },
+    /// Command behavior was installed more than once.
+    #[error("plugin {name} registered twice")]
+    DuplicatePlugin {
+        /// Duplicate plugin's diagnostic name.
+        name: &'static str,
+    },
     /// A serialized name identifies multiple Rust types.
     #[error("node type {type_name} registered twice ({first}, {second})")]
     DuplicateNodeType {
@@ -231,6 +246,7 @@ impl Error {
     /// Stable variant name for cross-boundary error classification.
     pub fn kind(&self) -> &'static str {
         match self {
+            Self::UnknownExtensionState => "UnknownExtensionState",
             Self::UnknownSelectionSlot => "UnknownSelectionSlot",
             Self::NoSelection => "NoSelection",
             Self::NoRangeSelection => "NoRangeSelection",
