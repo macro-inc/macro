@@ -7,6 +7,7 @@
 #[cfg(test)]
 mod test;
 
+use calendar_event_id::CalendarEventId;
 use std::sync::Arc;
 
 use axum::{
@@ -193,7 +194,10 @@ where
 {
     let request = state
         .service
-        .request_to_join(user.authorization.user.macro_user_id.as_ref(), event_id)
+        .request_to_join(
+            user.authorization.user.macro_user_id.as_ref(),
+            CalendarEventId::from_uuid(event_id),
+        )
         .await?;
     Ok(Json(request))
 }
@@ -223,7 +227,10 @@ where
 {
     let requests = state
         .service
-        .list_join_requests(user.authorization.user.macro_user_id.as_ref(), event_id)
+        .list_join_requests(
+            user.authorization.user.macro_user_id.as_ref(),
+            CalendarEventId::from_uuid(event_id),
+        )
         .await?;
     Ok(Json(CalendarJoinRequestsResponse { requests }))
 }

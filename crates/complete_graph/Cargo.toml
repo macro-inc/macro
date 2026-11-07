@@ -69,6 +69,7 @@ model_entity = { workspace = true }
 saved_views = { workspace = true }
 
 [dev-dependencies]
+calendar_event_id = { workspace = true }
 contacts = { workspace = true, features = ["ports"] }
 bot_id = { workspace = true }
 crm = { workspace = true, features = ["ports"] }

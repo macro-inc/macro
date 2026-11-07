@@ -38,6 +38,7 @@ teams = { workspace = true, features = ["ports"], optional = true }
 macro_user_id = { workspace = true, optional = true }
 
 [dev-dependencies]
+calendar_event_id = { workspace = true }
 model_user = { workspace = true }
 reqwest = { workspace = true }
 tokio = { workspace = true }

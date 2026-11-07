@@ -7,6 +7,7 @@
 //! asks for everything after it; visibility is resolved at read time from the
 //! links the viewer owns or is delegated.
 
+use calendar_event_id::CalendarEventId;
 use std::{
     collections::{BTreeMap, HashMap, HashSet},
     future::Future,
@@ -249,7 +250,7 @@ pub trait CalendarChangeQueryService: Send + Sync + 'static {
     fn event_change(
         &self,
         viewer: &str,
-        event_id: Uuid,
+        event_id: CalendarEventId,
     ) -> impl Future<Output = Result<Option<CalendarEventChange>, Report>> + Send;
 }
 
@@ -409,8 +410,9 @@ impl<R: CalendarChangeRepository> CalendarChangeQueryService for CalendarChangeS
     fn event_change(
         &self,
         viewer: &str,
-        event_id: Uuid,
+        event_id: CalendarEventId,
     ) -> impl Future<Output = Result<Option<CalendarEventChange>, Report>> + Send {
+        let event_id = event_id.into_uuid();
         CalendarChangeService::event_change(self, viewer, event_id)
     }
 }

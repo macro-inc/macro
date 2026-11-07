@@ -1,5 +1,6 @@
 //! Ports implemented by calendar adapters.
 
+use calendar_event_id::CalendarEventId;
 use std::collections::HashMap;
 use std::future::Future;
 
@@ -567,7 +568,7 @@ pub trait CalendarOccurrenceService: Send + Sync + 'static {
     fn meeting_copies(
         &self,
         requester_id: &str,
-        event_id: Uuid,
+        event_id: CalendarEventId,
     ) -> impl Future<Output = Result<Vec<MeetingCopy>, Report>> + Send;
 
     /// Render an event the requester can see — their own, or one shared with
@@ -576,7 +577,7 @@ pub trait CalendarOccurrenceService: Send + Sync + 'static {
     fn event_ics(
         &self,
         requester_id: &str,
-        event_id: Uuid,
+        event_id: CalendarEventId,
     ) -> impl Future<Output = Result<Option<CalendarEventIcs>, Report>> + Send;
 }
 
@@ -1013,14 +1014,14 @@ pub trait CalendarJoinRequestService: Send + Sync + 'static {
     fn request_to_join(
         &self,
         requester_id: &str,
-        event_id: Uuid,
+        event_id: CalendarEventId,
     ) -> impl Future<Output = Result<CalendarJoinRequest, CalendarJoinRequestError>> + Send;
 
     /// Pending requests on an event the requester can change.
     fn list_join_requests(
         &self,
         requester_id: &str,
-        event_id: Uuid,
+        event_id: CalendarEventId,
     ) -> impl Future<Output = Result<Vec<CalendarJoinRequest>, CalendarJoinRequestError>> + Send;
 }
 
