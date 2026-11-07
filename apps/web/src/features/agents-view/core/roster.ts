@@ -1,3 +1,4 @@
+import type { AgentMentionItem } from '@core/component/LexicalMarkdown/utils/mentionsUtils';
 import {
   CURSOR_BOT_HANDLE,
   CURSOR_BOT_ID,
@@ -7,6 +8,7 @@ import {
   isMacroAgentId,
   MACRO_AGENT_HANDLE,
   MACRO_AGENT_NAME,
+  MACRO_AGENT_PRINCIPAL_ID,
   MACRO_HARNESS_NAME,
 } from '@core/constant/macroAgent';
 import { type AgentKind, kindForHarness, systemBotKind } from './agent-kind';
@@ -221,6 +223,34 @@ export function rosterForAgentPicker(
     (agent) =>
       agent.id !== MACRO_PERSONA_ID && !isMacroAgentId(agent.botId ?? agent.id)
   );
+}
+
+/**
+ * The agents `@` offers in the new conversation composer. An offline agent
+ * stays listed, greyed out, as in channels; one that needs setup is left to
+ * the picker, which offers to connect it.
+ */
+export function rosterAgentMentions(
+  roster: readonly RosterAgent[]
+): AgentMentionItem[] {
+  return roster
+    .filter(
+      (agent) =>
+        (agent.id === MACRO_PERSONA_ID ||
+          !isMacroAgentId(agent.botId ?? agent.id)) &&
+        (!agent.unavailableReason || agent.offline)
+    )
+    .map((agent) => ({
+      kind: 'agent',
+      id: agent.id,
+      searchText: `${agent.name} ${agent.handle}`,
+      data: {
+        id: agent.botId ? `bot|${agent.botId}` : MACRO_AGENT_PRINCIPAL_ID,
+        name: agent.name,
+        photoUrl: agent.avatarUrl,
+        offline: agent.offline,
+      },
+    }));
 }
 
 /**

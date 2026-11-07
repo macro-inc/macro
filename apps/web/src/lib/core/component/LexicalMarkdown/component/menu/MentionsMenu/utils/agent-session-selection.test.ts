@@ -41,6 +41,29 @@ const item: AgentSessionMentionItem = {
   },
 };
 
+describe('agent menu selection', () => {
+  it('removes the typed query, reports the agent, and inserts nothing', async () => {
+    const dispatchCommand = vi.fn();
+    const onAgentMention = vi.fn();
+    const onUserMention = vi.fn();
+    const handler = createItemHandler({
+      editor: { dispatchCommand } as unknown as LexicalEditor,
+      onAgentMention,
+      onUserMention,
+    });
+    await handler({
+      kind: 'agent',
+      id: 'cursor',
+      searchText: 'Cursor cursor',
+      data: { id: 'bot|cursor', name: 'Cursor' },
+    });
+    expect(dispatchCommand.mock.calls).toEqual([['remove-search', undefined]]);
+    expect(onAgentMention).toHaveBeenCalledWith('cursor');
+    expect(onUserMention).not.toHaveBeenCalled();
+    expect(trackMention).not.toHaveBeenCalled();
+  });
+});
+
 describe('agent session menu selection', () => {
   beforeEach(() => {
     trackMention.mockReset();

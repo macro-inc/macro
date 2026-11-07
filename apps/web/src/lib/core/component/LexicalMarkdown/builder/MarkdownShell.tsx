@@ -295,6 +295,8 @@ export const MarkdownShell: Component<MarkdownShellProps> = (props) => {
               showOpenTabs={builderConfig.mentions?.showOpenTabs}
               entities={builderConfig.mentions?.entities}
               users={builderConfig.mentions?.users}
+              agents={builderConfig.mentions?.agents}
+              onAgentMention={builderConfig.mentions?.onAgentMention}
               onUserMention={builderConfig.mentions?.onUserMention}
               onDocumentMention={builderConfig.mentions?.onDocumentMention}
               onEmailMention={builderConfig.mentions?.onEmailMention}

@@ -20,6 +20,7 @@ import {
   TYPE_SKILL_SYMBOL_COMMAND,
 } from '@core/component/LexicalMarkdown/plugins';
 import { createComposerLayout } from '@core/component/LexicalMarkdown/utils/create-composer-layout';
+import type { AgentMentionItem } from '@core/component/LexicalMarkdown/utils/mentionsUtils';
 import { toast } from '@core/component/Toast/Toast';
 import { hapticImpact } from '@core/mobile/haptics';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
@@ -70,6 +71,9 @@ export function ChatComposer(props: {
   drawer?: JSX.Element;
   drawerOpen?: boolean;
   placeholder?: string;
+  /** Agents `@` can switch to, where the composer still has an agent to pick. */
+  agentMentions?: AgentMentionItem[];
+  onMentionAgent?: (agentId: string) => void;
 }) {
   const attachments = () => props.attachments ?? [];
   const hasContent = () => !!props.draft.trim() || attachments().length > 0;
@@ -119,7 +123,12 @@ export function ChatComposer(props: {
   const editor = buildConfig('chat')
     .withAppLinkResolver(useMacroMentionLinkResolver())
     .namespace('agents-chat-composer')
-    .withMentions({ showOpenTabs: true, block: 'agent' })
+    .withMentions({
+      showOpenTabs: true,
+      block: 'agent',
+      agents: () => props.agentMentions ?? [],
+      onAgentMention: (agentId) => props.onMentionAgent?.(agentId),
+    })
     .withEmojis()
     .withLinks({ floatingMenu: true, autoLinkMatchMode: 'common-tlds' })
     .withHistory({ timeGap: 400 })

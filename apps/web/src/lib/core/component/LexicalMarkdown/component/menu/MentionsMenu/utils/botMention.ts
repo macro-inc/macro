@@ -7,5 +7,6 @@ export function isBotMentionUser(item: UserItem): boolean {
 }
 
 export function isBotMentionItem(item: MentionItem): boolean {
+  if (item.kind === 'agent') return true;
   return item.kind === 'user' && isBotMentionUser(item);
 }
