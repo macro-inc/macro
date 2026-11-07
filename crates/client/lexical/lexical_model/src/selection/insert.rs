@@ -384,7 +384,10 @@ impl Transaction<'_> {
         let mut wrapped = Vec::new();
         let mut wrapper = None;
         for key in nodes {
-            if (self.is_element(*key) || self.is_decorator(*key)) && !self.is_inline(*key) {
+            if (self.is_element(*key) || self.is_decorator(*key))
+                && !self.is_inline(*key)
+                && !self.is_parent_required(*key)
+            {
                 wrapper = None;
                 wrapped.push(*key);
             } else if let Some(parent) = wrapper {
