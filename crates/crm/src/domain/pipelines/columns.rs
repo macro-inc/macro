@@ -30,7 +30,7 @@ pub(super) fn tracked_columns(
             protections: vec![ColumnProtection::Delete, ColumnProtection::ChangeType],
         },
         ProvisionedColumn {
-            id: ColumnId::new(),
+            id: ColumnId::generate(),
             nullable: true,
             protections: vec![],
             name: "Stage".into(),
@@ -47,7 +47,7 @@ pub(super) fn tracked_columns(
                 .collect(),
         },
         ProvisionedColumn {
-            id: ColumnId::new(),
+            id: ColumnId::generate(),
             nullable: true,
             protections: vec![],
             name: "Owner".into(),
@@ -56,7 +56,7 @@ pub(super) fn tracked_columns(
             options: vec![],
         },
         ProvisionedColumn {
-            id: ColumnId::new(),
+            id: ColumnId::generate(),
             nullable: true,
             protections: vec![],
             name: "Revenue".into(),

@@ -9,11 +9,11 @@ use crate::domain::models::{ForbiddenWidget, FormUpdate, LayoutReplacement, Upda
 fn file_question(table: &Table) -> FormLayout {
     FormLayout {
         sections: vec![FormSection::Questions {
-            id: FormSectionId::new(),
+            id: FormSectionId::generate(),
             title: "".into(),
             description: "".into(),
             questions: vec![QuestionLayout {
-                id: FormQuestionId::new(),
+                id: FormQuestionId::generate(),
                 column: table.first,
                 help_text: "".into(),
                 required: false,
@@ -258,7 +258,7 @@ async fn a_layout_reusing_another_forms_ids_is_refused_by_id_and_both_layouts_st
     );
     let reusing_question = FormLayout {
         sections: vec![FormSection::Questions {
-            id: FormSectionId::new(),
+            id: FormSectionId::generate(),
             title: "".into(),
             description: "".into(),
             questions: vec![QuestionLayout {
@@ -305,7 +305,7 @@ async fn two_forms_putting_one_new_id_at_once_leave_it_with_exactly_one(pool: Pg
     repo.create_form(&second, &layout_over(&other_table), false)
         .await
         .unwrap();
-    let shared = FormSectionId::new();
+    let shared = FormSectionId::generate();
     let layout = FormLayout {
         sections: vec![FormSection::Questions {
             id: shared,

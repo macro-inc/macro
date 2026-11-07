@@ -50,8 +50,8 @@ pub struct StarterBlueprint {
 impl Default for StarterBlueprint {
     fn default() -> Self {
         Self {
-            database_id: DatabaseId::new(),
-            table_id: TableId::new(),
+            database_id: DatabaseId::generate(),
+            table_id: TableId::generate(),
             name: "Getting started",
             table_name: "Ideas",
             title_name: "Name",
@@ -80,7 +80,7 @@ impl StarterBlueprint {
         let board_position = key_between(None, None)?;
         let table_position = key_between(None, Some(&board_position))?;
         let view = |name: &str, position: Position, layout: ViewLayout| DatabaseView {
-            id: ViewId::new(),
+            id: ViewId::generate(),
             database_id: self.database_id,
             table_id: self.table_id,
             name: name.into(),

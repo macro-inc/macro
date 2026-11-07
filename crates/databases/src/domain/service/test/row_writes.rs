@@ -12,7 +12,7 @@ async fn a_write_to_a_row_of_another_table_is_refused() {
         seeded.table_id,
         seeded.row_id,
     );
-    let (sessions, title) = (TableId::new(), ColumnId::new());
+    let (sessions, title) = (TableId::generate(), ColumnId::generate());
     svc.apply_ops(
         edit(database_id),
         viewer(OWNER),

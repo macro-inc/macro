@@ -12,7 +12,7 @@ async fn reordering_three_tables_rewrites_every_position_and_reads_back_in_order
     let guests = guests(&pool).await;
     let service = service(&pool);
     let repo = PgDatabasesRepo::new(pool.clone(), PropertiesPgRepo::new(pool.clone()));
-    let (hosts, budget) = (TableId::new(), TableId::new());
+    let (hosts, budget) = (TableId::generate(), TableId::generate());
     service
         .apply_ops(
             edit(guests.database_id),
@@ -90,7 +90,7 @@ async fn reordering_three_tables_rewrites_every_position_and_reads_back_in_order
     );
 
     // A table created afterwards still lands at the end.
-    let notes = TableId::new();
+    let notes = TableId::generate();
     service
         .apply_ops(
             edit(guests.database_id),
@@ -119,7 +119,7 @@ async fn an_order_missing_or_repeating_a_table_is_refused_and_changes_nothing(po
     let guests = guests(&pool).await;
     let service = service(&pool);
     let repo = PgDatabasesRepo::new(pool.clone(), PropertiesPgRepo::new(pool.clone()));
-    let hosts = TableId::new();
+    let hosts = TableId::generate();
     service
         .apply_ops(
             edit(guests.database_id),

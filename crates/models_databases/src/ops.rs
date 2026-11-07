@@ -3,7 +3,7 @@
 //!
 //! A request's ops apply in order, in one transaction, so a later op may name
 //! what an earlier one created: tables, columns, options and views carry ids
-//! the client mints (UUIDv7, `TableId::new()` and the like). An id that
+//! the client mints (UUIDv7, `TableId::generate()` and the like). An id that
 //! already names something refuses the request. Rows keep server-minted ids,
 //! which an insert's result answers.
 

@@ -4,7 +4,7 @@ use super::*;
 async fn discovery_includes_nested_tables_in_tab_order_but_not_private_or_trashed_data() {
     let seeded = seeded().await;
     let (world, service, database_id) = (seeded.world, seeded.service, seeded.database_id);
-    let tickets = TableId::new();
+    let tickets = TableId::generate();
     service
         .apply_ops(
             edit(database_id),

@@ -69,7 +69,7 @@ async fn a_cell_of_a_column_of_its_rows_table_is_accepted(pool: PgPool) {
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn a_cell_of_a_column_of_another_table_is_refused(pool: PgPool) {
     let (repo, guests, name) = fixture(&pool).await;
-    let hosts = TableId::new();
+    let hosts = TableId::generate();
     let email = insert_definition(&pool, "Email").await;
     commit(
         &pool,
@@ -178,7 +178,7 @@ async fn deleting_a_table_or_its_database_deletes_its_cells(pool: PgPool) {
 async fn deleting_a_column_deletes_its_cells_in_that_table_only(pool: PgPool) {
     let (repo, guests, name) = fixture(&pool).await;
     let email = insert_definition(&pool, "Email").await;
-    let hosts = TableId::new();
+    let hosts = TableId::generate();
     commit(
         &pool,
         guests.database_id,

@@ -54,7 +54,7 @@ pub(crate) async fn append_rows(
     let positions = keys_between(last_position(max_position)?.as_ref(), None, count)?;
     let mut rows = Vec::with_capacity(count);
     for position in positions {
-        let id = RowId::new();
+        let id = RowId::generate();
         sqlx::query!(
             "INSERT INTO database_rows (id, table_id, position, created_by) VALUES ($1, $2, $3, $4)",
             id.into_uuid(),

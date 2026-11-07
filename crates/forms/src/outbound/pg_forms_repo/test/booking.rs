@@ -17,11 +17,11 @@ async fn a_booking_step_reads_back_with_its_target_in_its_own_column(pool: PgPoo
     let layout = FormLayout {
         sections: vec![
             FormSection::Questions {
-                id: FormSectionId::new(),
+                id: FormSectionId::generate(),
                 title: "About you".into(),
                 description: "".into(),
                 questions: vec![QuestionLayout {
-                    id: FormQuestionId::new(),
+                    id: FormQuestionId::generate(),
                     column: table.first,
                     help_text: "Your team".into(),
                     required: true,
@@ -30,7 +30,7 @@ async fn a_booking_step_reads_back_with_its_target_in_its_own_column(pool: PgPoo
                 show_when: None,
             },
             FormSection::Gate {
-                id: FormSectionId::new(),
+                id: FormSectionId::generate(),
                 title: "Check".into(),
                 description: "".into(),
                 rules: FilterGroup {
@@ -90,7 +90,7 @@ async fn a_stored_booking_target_of_the_wrong_shape_is_corrupt(pool: PgPool) {
     let table = insert_table(&pool).await;
     let repo = PgFormsRepo::new(pool.clone());
     let form = form_over(&table);
-    let booking = FormSectionId::new();
+    let booking = FormSectionId::generate();
     repo.create_form(
         &form,
         &FormLayout {
@@ -99,8 +99,8 @@ async fn a_stored_booking_target_of_the_wrong_shape_is_corrupt(pool: PgPool) {
                 title: "Book".into(),
                 description: "".into(),
                 target: BookingTarget {
-                    profile_id: BookingProfileId::new(),
-                    event_type_id: BookingEventTypeId::new(),
+                    profile_id: BookingProfileId::generate(),
+                    event_type_id: BookingEventTypeId::generate(),
                 },
             }],
         },

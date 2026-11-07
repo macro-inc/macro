@@ -9,7 +9,7 @@ struct EmptyColumn {
 
 async fn empty_column() -> EmptyColumn {
     let seeded = seeded().await;
-    let column_id = ColumnId::new();
+    let column_id = ColumnId::generate();
     seeded
         .service
         .apply_ops(
@@ -275,7 +275,7 @@ async fn inference_rejects_stale_wrong_database_trashed_and_fixed_columns() {
 
     let error = svc
         .infer_column_type(
-            receipt(DatabaseId::new(), OWNER, AccessLevel::Edit),
+            receipt(DatabaseId::generate(), OWNER, AccessLevel::Edit),
             command(TableVersion(3)),
         )
         .await
@@ -393,7 +393,7 @@ async fn inference_flag_is_rejected_for_an_explicitly_typed_creation() {
             viewer(OWNER),
             OpBatch::from(vec![DatabaseOp::Column {
                 table: table_id,
-                column: ColumnId::new(),
+                column: ColumnId::generate(),
                 change: ColumnChange::Create {
                     definition: NewColumn::New {
                         name: "Number".into(),

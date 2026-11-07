@@ -34,7 +34,7 @@ fn refusal(result: Result<Vec<OpResult>, DatabaseError>) -> String {
 #[tokio::test]
 async fn a_derived_column_is_created_with_a_number_definition_and_its_formula() {
     let seeded = seeded().await;
-    let seats = ColumnId::new();
+    let seats = ColumnId::generate();
 
     let results = apply(
         &seeded,
@@ -83,7 +83,7 @@ async fn formulas_that_do_not_fit_are_refused() {
     let create = |formula: Formula| {
         vec![DatabaseOp::Column {
             table: seeded.table_id,
-            column: ColumnId::new(),
+            column: ColumnId::generate(),
             change: ColumnChange::Create {
                 definition: NewColumn::Derived {
                     name: "Bad".into(),
@@ -116,7 +116,7 @@ async fn formulas_that_do_not_fit_are_refused() {
         apply(
             &seeded,
             create(Formula::Column {
-                column: ColumnId::new(),
+                column: ColumnId::generate(),
             }),
         )
         .await,
@@ -130,7 +130,7 @@ async fn formulas_that_do_not_fit_are_refused() {
 #[tokio::test]
 async fn a_derived_column_takes_no_writes_and_keeps_its_inputs() {
     let seeded = seeded().await;
-    let seats = ColumnId::new();
+    let seats = ColumnId::generate();
     apply(
         &seeded,
         vec![DatabaseOp::Column {
@@ -209,7 +209,7 @@ async fn a_derived_column_takes_no_writes_and_keeps_its_inputs() {
 #[tokio::test]
 async fn setting_a_formula_keeps_the_definition_and_undo_puts_the_old_one_back() {
     let seeded = seeded().await;
-    let seats = ColumnId::new();
+    let seats = ColumnId::generate();
     apply(
         &seeded,
         vec![DatabaseOp::Column {
@@ -296,7 +296,7 @@ async fn setting_a_formula_keeps_the_definition_and_undo_puts_the_old_one_back()
 #[tokio::test]
 async fn a_formula_cannot_read_its_own_column() {
     let seeded = seeded().await;
-    let seats = ColumnId::new();
+    let seats = ColumnId::generate();
     apply(
         &seeded,
         vec![DatabaseOp::Column {
@@ -340,7 +340,7 @@ async fn a_formula_cannot_read_its_own_column() {
 #[tokio::test]
 async fn a_formula_cell_is_derived_on_creation_on_a_new_formula_and_on_each_input_write() {
     let seeded = seeded().await;
-    let seats = ColumnId::new();
+    let seats = ColumnId::generate();
     let seats_cell = |seeded: &Seeded| {
         let world = seeded.world.lock().unwrap();
         let definition = world

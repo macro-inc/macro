@@ -73,7 +73,7 @@ fn formula_column(column: ColumnId, name: &str, formula: Formula, guests: &Guest
 
 async fn orders(pool: &PgPool) -> Orders {
     let guests = guests(pool).await;
-    let [price, qty, total, double] = [(); 4].map(|_| ColumnId::new());
+    let [price, qty, total, double] = [(); 4].map(|_| ColumnId::generate());
     apply(
         pool,
         &guests,
@@ -287,7 +287,7 @@ async fn a_formula_column_added_to_a_table_with_rows_computes_every_row(pool: Pg
         ],
     )
     .await;
-    let quadruple = ColumnId::new();
+    let quadruple = ColumnId::generate();
 
     apply(
         &pool,
@@ -448,7 +448,7 @@ async fn formula_cells_are_not_writable(pool: PgPool) {
 async fn undoing_an_input_edit_or_a_removal_derives_the_formula_again(pool: PgPool) {
     let wedding = wedding(&pool).await;
     let (maria, omar) = insert_guests(&pool, &wedding).await;
-    let seats = ColumnId::new();
+    let seats = ColumnId::generate();
     let service = service(&pool);
     let change = |ops: Vec<DatabaseOp>| {
         let service = &service;

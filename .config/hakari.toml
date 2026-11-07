@@ -112,6 +112,8 @@ workspace-members = [
     # models_databases: the typed write ops the SQL engine will emit, so it
     # joins database_sql in the browser and must stay wasm-safe too.
     "models_databases",
+    # id_newtype: the id macro models_databases builds its ids with.
+    "id_newtype",
     # natural_time: date phrases are read in the browser's date fields as well
     # as in services, so it must stay wasm-safe.
     "natural_time",

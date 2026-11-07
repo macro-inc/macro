@@ -62,7 +62,7 @@ pub(super) fn rows(
     };
     let now = chrono::Utc::now();
     let view = DatabaseView {
-        id: ViewId::new(),
+        id: ViewId::generate(),
         database_id: entry.table.database_id,
         table_id: entry.table.id,
         name: String::new(),

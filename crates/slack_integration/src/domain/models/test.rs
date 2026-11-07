@@ -372,3 +372,33 @@ fn diagnostics_and_search_receipts_have_sanitized_stable_shapes() {
         json!({ "kind": "known", "sourceId": "T012ABC" })
     );
 }
+
+#[test]
+fn rejected_ids_report_their_validation_error() {
+    let nil = from_value::<JobId>(json!("00000000-0000-0000-0000-000000000000")).unwrap_err();
+    assert_eq!(nil.to_string(), "invalid identifier");
+    assert_eq!("x".parse::<JobId>(), Err(ValidationError::InvalidId));
+    let traversal = from_value::<KeySegment>(json!("..")).unwrap_err();
+    assert_eq!(traversal.to_string(), "unsafe key segment");
+    assert_eq!(
+        "..".parse::<KeySegment>(),
+        Err(ValidationError::UnsafeKeySegment)
+    );
+}
+
+#[cfg(feature = "inbound")]
+#[test]
+fn id_schemas_are_documented_strings() {
+    use utoipa::{PartialSchema, ToSchema};
+
+    assert_eq!(<JobId as ToSchema>::name(), "JobId");
+    assert_eq!(
+        serde_json::to_string(&<JobId as PartialSchema>::schema()).unwrap(),
+        r#"{"type":"string","format":"uuid","description":"Import job identity. Generate UUIDv7 in application code."}"#
+    );
+    assert_eq!(<ConversationId as ToSchema>::name(), "ConversationId");
+    assert_eq!(
+        serde_json::to_string(&<ConversationId as PartialSchema>::schema()).unwrap(),
+        r#"{"type":"string","description":"Source Slack conversation ID (C, G or D prefix); unique only within a source."}"#
+    );
+}

@@ -9,7 +9,7 @@ async fn create_table_announces_only_the_committed_table() {
         world.published.clear();
         world.broker_events.clear();
     }
-    let tickets = TableId::new();
+    let tickets = TableId::generate();
     let results = svc
         .apply_ops(
             edit(db),
@@ -52,7 +52,7 @@ async fn create_table_announces_only_the_committed_table() {
             edit(db),
             viewer(OWNER),
             OpBatch::from(vec![DatabaseOp::Table {
-                table: TableId::new(),
+                table: TableId::generate(),
                 change: TableChange::Create {
                     name: "tickets".into(),
                 },
@@ -82,7 +82,7 @@ async fn a_table_name_differing_only_in_non_ascii_case_is_taken() {
         edit(db),
         viewer(OWNER),
         OpBatch::from(vec![DatabaseOp::Table {
-            table: TableId::new(),
+            table: TableId::generate(),
             change: TableChange::Create {
                 name: "Ärger".into(),
             },
@@ -96,7 +96,7 @@ async fn a_table_name_differing_only_in_non_ascii_case_is_taken() {
             edit(db),
             viewer(OWNER),
             OpBatch::from(vec![DatabaseOp::Table {
-                table: TableId::new(),
+                table: TableId::generate(),
                 change: TableChange::Create {
                     name: "ärger".into(),
                 },
@@ -133,7 +133,7 @@ async fn parent_disappearing_at_table_write_stays_not_found_and_publishes_nothin
             edit(db),
             viewer(OWNER),
             OpBatch::from(vec![DatabaseOp::Table {
-                table: TableId::new(),
+                table: TableId::generate(),
                 change: TableChange::Create {
                     name: "Unavailable".into(),
                 },
@@ -165,7 +165,7 @@ async fn parent_disappearing_at_table_write_stays_not_found_and_publishes_nothin
 async fn a_new_table_is_empty_and_named_by_its_quoted_sql_name() {
     let seeded = seeded().await;
     let (world, svc, db) = (seeded.world, seeded.service, seeded.database_id);
-    let sales = TableId::new();
+    let sales = TableId::generate();
     svc.apply_ops(
         edit(db),
         viewer(OWNER),
@@ -214,7 +214,7 @@ async fn reordering_three_tables_answers_and_lists_them_in_the_new_order() {
         seeded.database_id,
         seeded.table_id,
     );
-    let (budget, venues) = (TableId::new(), TableId::new());
+    let (budget, venues) = (TableId::generate(), TableId::generate());
     svc.apply_ops(
         edit(db),
         viewer(OWNER),
@@ -308,7 +308,7 @@ async fn an_order_missing_a_table_is_rejected_without_publishing() {
         edit(db),
         viewer(OWNER),
         OpBatch::from(vec![DatabaseOp::Table {
-            table: TableId::new(),
+            table: TableId::generate(),
             change: TableChange::Create {
                 name: "Budget".into(),
             },

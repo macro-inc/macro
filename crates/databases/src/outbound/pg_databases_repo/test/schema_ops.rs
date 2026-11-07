@@ -91,9 +91,9 @@ async fn protected_schema_ops_are_refused_and_stale_writes_are_rechecked(pool: P
 async fn one_batch_creates_a_table_a_select_column_on_it_and_rows_filling_it(pool: PgPool) {
     let guests = guests(&pool).await;
     let before = version(&pool, guests.table_id).await;
-    let hosts = TableId::new();
-    let role = ColumnId::new();
-    let (lead, crew) = (OptionId::new(), OptionId::new());
+    let hosts = TableId::generate();
+    let role = ColumnId::generate();
+    let (lead, crew) = (OptionId::generate(), OptionId::generate());
 
     let results = service(&pool)
         .apply_ops(
@@ -245,10 +245,10 @@ async fn a_batch_refused_at_its_last_op_leaves_none_of_its_schema_behind(pool: P
     .fetch_one(&pool)
     .await
     .unwrap();
-    let hosts = TableId::new();
-    let role = ColumnId::new();
-    let lead = OptionId::new();
-    let ghost = RowId::new();
+    let hosts = TableId::generate();
+    let role = ColumnId::generate();
+    let lead = OptionId::generate();
+    let ghost = RowId::generate();
 
     let error = service(&pool)
         .apply_ops(
@@ -420,14 +420,14 @@ async fn an_option_id_another_definition_already_has_is_refused_as_taken(pool: P
         .unwrap()
         .1[0]
         .id;
-    let taken = OptionId::new();
+    let taken = OptionId::generate();
     service
         .apply_ops(
             edit(elsewhere.id),
             viewer(),
             vec![DatabaseOp::Column {
                 table: elsewhere_table,
-                column: ColumnId::new(),
+                column: ColumnId::generate(),
                 change: ColumnChange::Create {
                     definition: NewColumn::New {
                         name: "Stage".into(),
@@ -514,7 +514,7 @@ async fn a_view_id_another_database_already_has_is_refused_as_taken(pool: PgPool
         .await
         .unwrap();
     let elsewhere_table = repo.get_database(elsewhere.id).await.unwrap().unwrap().1[0].id;
-    let taken = ViewId::new();
+    let taken = ViewId::generate();
     service
         .apply_ops(
             edit(elsewhere.id),
@@ -594,7 +594,7 @@ async fn a_view_id_another_database_already_has_is_refused_as_taken(pool: PgPool
 async fn a_stale_expected_version_conflicts_and_writes_nothing(pool: PgPool) {
     let guests = guests(&pool).await;
     let before = version(&pool, guests.table_id).await;
-    let hosts = TableId::new();
+    let hosts = TableId::generate();
 
     let outcome = cells(&pool)
         .apply_writes(&Writes {
@@ -660,7 +660,7 @@ async fn a_type_change_converts_stored_cells_and_rewrites_views_testing_the_colu
                 },
                 DatabaseOp::View {
                     table: guests.table_id,
-                    view: ViewId::new(),
+                    view: ViewId::generate(),
                     change: ViewChange::Create {
                         view: NewView {
                             name: "Ones".into(),
@@ -834,7 +834,7 @@ async fn a_derived_column_stores_its_formula_and_keeps_its_definition_across_edi
     use crate::domain::models::ColumnConfig;
     use models_databases::{Formula, Operator};
     let guests = guests(&pool).await;
-    let (seats, doubled) = (ColumnId::new(), ColumnId::new());
+    let (seats, doubled) = (ColumnId::generate(), ColumnId::generate());
     let times = |factor: f64| Formula::Binary {
         operator: Operator::Multiply,
         left: Box::new(Formula::Column { column: seats }),

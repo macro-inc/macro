@@ -229,7 +229,7 @@ async fn reorder_validates_complete_ids_and_delete_preserves_definitions() {
     for invalid in [
         vec![],
         vec![ids[0]; 3],
-        vec![ColumnId::new(); 3],
+        vec![ColumnId::generate(); 3],
         vec![ids[0], ids[1]],
     ] {
         let error = svc
@@ -375,7 +375,7 @@ async fn schema_mutations_reject_wrong_database_stale_and_trashed_database() {
         base_versions: HashMap::from([(table_id, version)]),
     };
 
-    let elsewhere = DatabaseId::new();
+    let elsewhere = DatabaseId::generate();
     for op in &ops {
         let result = svc
             .apply_ops(edit(elsewhere), viewer(OWNER), at(op, seeded_version))

@@ -351,10 +351,10 @@ where
         first_table: FirstTable,
     ) -> Result<Database, Self::Error> {
         let mut transaction = self.pool.begin().await?;
-        let table_id = TableId::new();
+        let table_id = TableId::generate();
         let database = insert_owned_database(
             &mut transaction,
-            DatabaseId::new(),
+            DatabaseId::generate(),
             &command.name,
             command.owner_id.as_ref(),
             table_id,
@@ -379,7 +379,7 @@ where
             .map_err(|error| PgDatabasesRepoError::Properties(Box::new(error)))?;
         insert_column(
             &mut transaction,
-            ColumnId::new(),
+            ColumnId::generate(),
             table_id,
             title.definition.id,
             &position_after(None)?,

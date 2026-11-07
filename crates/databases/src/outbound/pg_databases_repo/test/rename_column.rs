@@ -17,8 +17,8 @@ async fn a_column_rename_relabels_that_placement_alone_and_checks_what_the_calle
     let guests = guests(&pool).await;
     let service = service(&pool);
     let repo = PgDatabasesRepo::new(pool.clone(), PropertiesPgRepo::new(pool.clone()));
-    let hosts = TableId::new();
-    let host_name = ColumnId::new();
+    let hosts = TableId::generate();
+    let host_name = ColumnId::generate();
     service
         .apply_ops(
             edit(guests.database_id),

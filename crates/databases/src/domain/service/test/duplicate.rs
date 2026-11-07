@@ -26,10 +26,10 @@ struct Source {
 async fn source() -> Source {
     let seeded = seeded().await;
     let (sessions_table, title_column, relation_column, board) = (
-        TableId::new(),
-        ColumnId::new(),
-        ColumnId::new(),
-        ViewId::new(),
+        TableId::generate(),
+        ColumnId::generate(),
+        ColumnId::generate(),
+        ViewId::generate(),
     );
     let status = seeded.status_column.property_definition_id;
     let going = option_id(&seeded.world, status, "Going");
@@ -568,7 +568,7 @@ async fn relations_into_other_databases_follow_what_the_duplicator_can_see() {
         .find(|t| t.database_id == other.id)
         .unwrap()
         .id;
-    let venue = ColumnId::new();
+    let venue = ColumnId::generate();
     seeded
         .service
         .apply_ops(
@@ -768,7 +768,7 @@ async fn a_shared_property_the_duplicator_cannot_bind_is_copied_into_one_the_cop
         w.columns.push(Column {
             protections: vec![],
             nullable: true,
-            id: ColumnId::new(),
+            id: ColumnId::generate(),
             table_id: seeded.table_id,
             property_definition_id: shared_id,
             display_name: None,
@@ -853,7 +853,7 @@ async fn a_shared_property_the_duplicator_cannot_bind_is_copied_into_one_the_cop
 #[tokio::test]
 async fn a_formula_column_is_copied_with_its_values_computed_in_the_copy() {
     let seeded = seeded().await;
-    let seats = ColumnId::new();
+    let seats = ColumnId::generate();
     seeded
         .service
         .apply_ops(

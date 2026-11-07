@@ -400,7 +400,7 @@ async fn unrelated_schema_additions_do_not_block_targeted_help_edits() {
         state.database_mut(RSVP_DATABASE).tables[0]
             .columns
             .push(FakeColumn {
-                id: ColumnId::new(),
+                id: ColumnId::generate(),
                 name: "Internal sales notes".into(),
                 kind: ColumnKind::Text,
                 options: vec![],
@@ -458,7 +458,7 @@ async fn owners_can_close_an_open_form_with_an_invalid_newer_draft() {
     let FormSection::Questions { questions, .. } = &mut layout.sections[0] else {
         panic!("questions");
     };
-    questions[0].column = ColumnId::new();
+    questions[0].column = ColumnId::generate();
     let change = crate::domain::collaboration::replace_layout(&bytes, &layout).unwrap();
     FakeDrafts(world.clone())
         .update(RSVP_FORM, change.expected_revision, change.update)
@@ -512,7 +512,7 @@ async fn owners_can_close_an_open_form_with_an_invalid_newer_draft() {
 async fn editing_unrelated_questions_preserves_an_existing_private_booking_target() {
     let world = world();
     seed_rsvp(&world, Audience::Members);
-    let booking_id = models_forms::FormSectionId::new();
+    let booking_id = models_forms::FormSectionId::generate();
     {
         let mut state = world.lock().unwrap();
         state
@@ -528,8 +528,8 @@ async fn editing_unrelated_questions_preserves_an_existing_private_booking_targe
                 title: "Book".into(),
                 description: String::new(),
                 target: models_forms::BookingTarget {
-                    profile_id: models_forms::BookingProfileId::new(),
-                    event_type_id: models_forms::BookingEventTypeId::new(),
+                    profile_id: models_forms::BookingProfileId::generate(),
+                    event_type_id: models_forms::BookingEventTypeId::generate(),
                 },
             });
     }
@@ -583,8 +583,8 @@ async fn editing_unrelated_questions_preserves_an_existing_private_booking_targe
                 changes: vec![Change::SetBookingTarget {
                     section_id: booking_id,
                     target: models_forms::BookingTarget {
-                        profile_id: models_forms::BookingProfileId::new(),
-                        event_type_id: models_forms::BookingEventTypeId::new(),
+                        profile_id: models_forms::BookingProfileId::generate(),
+                        event_type_id: models_forms::BookingEventTypeId::generate(),
                     },
                     qualification: Qualification::Advisory,
                 }],
@@ -661,12 +661,12 @@ async fn edited_question_schema_is_rechecked_after_remote_booking_validation() {
                     },
                     Change::AddSection {
                         section: FormSection::Booking {
-                            id: FormSectionId::new(),
+                            id: FormSectionId::generate(),
                             title: "Call".into(),
                             description: String::new(),
                             target: models_forms::BookingTarget {
-                                profile_id: models_forms::BookingProfileId::new(),
-                                event_type_id: models_forms::BookingEventTypeId::new(),
+                                profile_id: models_forms::BookingProfileId::generate(),
+                                event_type_id: models_forms::BookingEventTypeId::generate(),
                             },
                         },
                         after: saved.layout.sections.last().map(FormSection::id),
@@ -746,7 +746,7 @@ async fn review_regression_metadata_edit_preserves_human_reference_questions_and
                         show_when: None,
                     },
                     FormSection::Gate {
-                        id: FormSectionId::new(),
+                        id: FormSectionId::generate(),
                         title: "Optional screening".into(),
                         description: String::new(),
                         rules: FilterGroup {
@@ -837,7 +837,7 @@ async fn review_regression_sharing_preserves_human_reference_questions_and_empty
                         show_when: None,
                     },
                     FormSection::Gate {
-                        id: FormSectionId::new(),
+                        id: FormSectionId::generate(),
                         title: "Optional screening".into(),
                         description: String::new(),
                         rules: FilterGroup {
@@ -966,7 +966,7 @@ async fn review_regression_equivalent_revision_bytes_remain_projected_and_editab
     let FormSection::Questions { questions, .. } = &mut invalid.sections[0] else {
         panic!("questions")
     };
-    questions[0].column = ColumnId::new();
+    questions[0].column = ColumnId::generate();
     let change =
         collaboration::replace_layout(&world.lock().unwrap().drafts[&RSVP_FORM], &invalid).unwrap();
     FakeDrafts(world.clone())
@@ -1192,7 +1192,7 @@ async fn crdt_merge_refuses_to_strand_a_concurrently_added_screening_rule() {
     let column = questions[0].column;
     let mut human = saved.layout.clone();
     human.sections.push(FormSection::Gate {
-        id: models_forms::FormSectionId::new(),
+        id: models_forms::FormSectionId::generate(),
         title: "Screening".into(),
         description: String::new(),
         message: "Name required".into(),
@@ -1282,7 +1282,7 @@ async fn crdt_merge_revalidates_authoring_limits_after_a_concurrent_addition() {
         .await
         .unwrap();
     let section = || FormSection::Questions {
-        id: FormSectionId::new(),
+        id: FormSectionId::generate(),
         title: String::new(),
         description: String::new(),
         questions: vec![],
@@ -1380,7 +1380,7 @@ async fn malformed_worker_updates_are_rejected_before_schema_mutations() {
                     form_id: saved.form.id,
                     changes: vec![],
                     new_columns: vec![NewColumnDraft {
-                        id: ColumnId::new(),
+                        id: ColumnId::generate(),
                         name: "Must not exist".into(),
                         kind: ColumnKind::Text,
                         options: vec![],

@@ -159,7 +159,7 @@ async fn insert_row(pool: &PgPool, table: TableId, position: &str) -> RowId {
 
 fn form_over(table: &Table) -> Form {
     Form {
-        id: FormId::new(),
+        id: FormId::generate(),
         name: "Q4 offsite RSVP".into(),
         description: "Tell us".into(),
         owner_id: OWNER.into(),
@@ -186,11 +186,11 @@ fn layout_over(table: &Table) -> FormLayout {
     FormLayout {
         sections: vec![
             FormSection::Questions {
-                id: FormSectionId::new(),
+                id: FormSectionId::generate(),
                 title: "About you".into(),
                 description: "".into(),
                 questions: vec![QuestionLayout {
-                    id: FormQuestionId::new(),
+                    id: FormQuestionId::generate(),
                     column: table.first,
                     help_text: "Your team".into(),
                     required: true,
@@ -199,7 +199,7 @@ fn layout_over(table: &Table) -> FormLayout {
                 show_when: None,
             },
             FormSection::Gate {
-                id: FormSectionId::new(),
+                id: FormSectionId::generate(),
                 title: "Check".into(),
                 description: "".into(),
                 rules: FilterGroup {
@@ -214,7 +214,7 @@ fn layout_over(table: &Table) -> FormLayout {
                 message: "Answer first".into(),
             },
             FormSection::Questions {
-                id: FormSectionId::new(),
+                id: FormSectionId::generate(),
                 title: "Empty".into(),
                 description: "".into(),
                 questions: vec![],
@@ -255,7 +255,9 @@ async fn a_created_form_reads_back_with_its_layout_and_owner_grant(pool: PgPool)
         vec![form.clone()]
     );
     assert_eq!(
-        repo.forms_by_ids(&[form.id, FormId::new()]).await.unwrap(),
+        repo.forms_by_ids(&[form.id, FormId::generate()])
+            .await
+            .unwrap(),
         vec![form]
     );
 }
@@ -296,19 +298,19 @@ async fn a_layout_is_replaced_whole_and_a_trashed_forms_is_not(pool: PgPool) {
         .unwrap();
     let reordered = FormLayout {
         sections: vec![FormSection::Questions {
-            id: FormSectionId::new(),
+            id: FormSectionId::generate(),
             title: "".into(),
             description: "".into(),
             questions: vec![
                 QuestionLayout {
-                    id: FormQuestionId::new(),
+                    id: FormQuestionId::generate(),
                     column: table.second,
                     help_text: "".into(),
                     required: false,
                     widget: None,
                 },
                 QuestionLayout {
-                    id: FormQuestionId::new(),
+                    id: FormQuestionId::generate(),
                     column: table.first,
                     help_text: "".into(),
                     required: false,
@@ -354,8 +356,8 @@ async fn a_sections_show_when_rules_read_back_as_written_and_clear_with_a_replac
     let table = insert_table(&pool).await;
     let repo = PgFormsRepo::new(pool.clone());
     let form = form_over(&table);
-    let first = FormSectionId::new();
-    let branch = FormSectionId::new();
+    let first = FormSectionId::generate();
+    let branch = FormSectionId::generate();
     let branching = FormLayout {
         sections: vec![
             FormSection::Questions {
@@ -363,7 +365,7 @@ async fn a_sections_show_when_rules_read_back_as_written_and_clear_with_a_replac
                 title: "About you".into(),
                 description: "".into(),
                 questions: vec![QuestionLayout {
-                    id: FormQuestionId::new(),
+                    id: FormQuestionId::generate(),
                     column: table.first,
                     help_text: "".into(),
                     required: true,
@@ -376,7 +378,7 @@ async fn a_sections_show_when_rules_read_back_as_written_and_clear_with_a_replac
                 title: "Follow-up".into(),
                 description: "".into(),
                 questions: vec![QuestionLayout {
-                    id: FormQuestionId::new(),
+                    id: FormQuestionId::generate(),
                     column: table.second,
                     help_text: "".into(),
                     required: true,

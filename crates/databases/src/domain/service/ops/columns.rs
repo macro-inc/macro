@@ -449,7 +449,7 @@ impl Planner {
             validate_option_labels(target.data_type, &converter.labels, &[])
                 .map_err(|error| schema_refusal(place, error))?
                 .into_iter()
-                .map(|value| (OptionId::new(), value))
+                .map(|value| (OptionId::generate(), value))
                 .collect();
         let option_ids: HashMap<String, OptionId> = options
             .iter()

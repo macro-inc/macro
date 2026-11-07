@@ -10,7 +10,7 @@ fn viewer() -> MacroUserIdStr<'static> {
 
 fn field(kind: FieldKind) -> PipelineField {
     PipelineField {
-        id: ColumnId::new(),
+        id: ColumnId::generate(),
         name: "Field".into(),
         kind,
         multiple: false,
@@ -21,7 +21,7 @@ fn field(kind: FieldKind) -> PipelineField {
 }
 
 fn stage() -> (PipelineField, OptionId, OptionId) {
-    let (lead, won) = (OptionId::new(), OptionId::new());
+    let (lead, won) = (OptionId::generate(), OptionId::generate());
     let field = PipelineField {
         name: "Stage".into(),
         options: vec![(lead, "Lead".into()), (won, "Won".into())],

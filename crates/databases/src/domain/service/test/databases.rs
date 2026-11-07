@@ -59,7 +59,7 @@ async fn create_database_grants_owner_and_starter_table() {
 async fn database_details_answer_every_live_database_the_viewer_holds_a_grant_on() {
     let seeded = seeded().await;
     let (svc, offsite, guests) = (seeded.service, seeded.database_id, seeded.table_id);
-    let sessions = TableId::new();
+    let sessions = TableId::generate();
     svc.apply_ops(
         edit(offsite),
         viewer(OWNER),
@@ -181,7 +181,7 @@ async fn rename_validates_the_name_and_writes_it() {
 
     let err = svc
         .rename_database(
-            receipt::<EditAccessLevel>(DatabaseId::new(), OWNER, AccessLevel::Owner),
+            receipt::<EditAccessLevel>(DatabaseId::generate(), OWNER, AccessLevel::Owner),
             "Elsewhere".into(),
         )
         .await
@@ -267,7 +267,7 @@ async fn table_rename_rejects_invalid_names_foreign_tables_and_trashed_databases
         edit(db),
         viewer(OWNER),
         OpBatch::from(vec![DatabaseOp::Table {
-            table: TableId::new(),
+            table: TableId::generate(),
             change: TableChange::Create {
                 name: "People".into(),
             },
@@ -443,11 +443,11 @@ async fn schema_operations_respect_receipts() {
     let (svc, db, table_id) = (seeded.service, seeded.database_id, seeded.table_id);
     let err = svc
         .apply_ops(
-            edit(DatabaseId::new()),
+            edit(DatabaseId::generate()),
             viewer(OWNER),
             OpBatch::from(vec![DatabaseOp::Column {
                 table: table_id,
-                column: ColumnId::new(),
+                column: ColumnId::generate(),
                 change: ColumnChange::Create {
                     definition: NewColumn::New {
                         name: "X".into(),

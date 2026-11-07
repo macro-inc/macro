@@ -6,7 +6,7 @@ async fn a_projection_commits_its_layout_and_revision_together(pool: PgPool) {
     let table = insert_table(&pool).await;
     let repository = PgFormsRepo::new(pool);
     let form = Form {
-        id: FormId::new(),
+        id: FormId::generate(),
         name: "Interview screening".into(),
         description: "".into(),
         owner_id: OWNER.into(),
@@ -29,11 +29,11 @@ async fn a_projection_commits_its_layout_and_revision_together(pool: PgPool) {
     };
     let layout = FormLayout {
         sections: vec![FormSection::Questions {
-            id: FormSectionId::new(),
+            id: FormSectionId::generate(),
             title: "About you".into(),
             description: "".into(),
             questions: vec![QuestionLayout {
-                id: FormQuestionId::new(),
+                id: FormQuestionId::generate(),
                 column: table.first,
                 help_text: "Your name".into(),
                 required: true,
@@ -144,7 +144,7 @@ async fn concurrent_projections_commit_exactly_one_revision_and_its_layout(pool:
         workers.push(tokio::spawn(async move {
             let layout = FormLayout {
                 sections: vec![FormSection::Questions {
-                    id: FormSectionId::new(),
+                    id: FormSectionId::generate(),
                     title: title.into(),
                     description: "".into(),
                     questions: vec![],

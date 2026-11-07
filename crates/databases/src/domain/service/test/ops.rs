@@ -543,7 +543,7 @@ async fn a_value_that_does_not_fit_its_column_names_the_op_row_and_column() {
 #[tokio::test]
 async fn a_relation_cell_names_rows_of_its_target_table() {
     let seeded = seeded().await;
-    let (sessions, relation) = (TableId::new(), ColumnId::new());
+    let (sessions, relation) = (TableId::generate(), ColumnId::generate());
     seeded
         .service
         .apply_ops(

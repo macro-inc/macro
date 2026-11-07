@@ -481,7 +481,7 @@ pub(crate) fn pipeline_blueprint(
     labels: Vec<String>,
 ) -> PipelineBlueprint {
     let id = macro_uuid::generate_uuid_v7();
-    let primary_column_id = ColumnId::new();
+    let primary_column_id = ColumnId::generate();
     let columns = match input.record_type {
         Some(record_type) => tracked_columns(primary_column_id, record_type, labels),
         None => generic_columns(primary_column_id),
@@ -495,8 +495,8 @@ pub(crate) fn pipeline_blueprint(
         creator,
         primary_column_id,
         database: StorageBlueprint {
-            id: DatabaseId::new(),
-            table_id: TableId::new(),
+            id: DatabaseId::generate(),
+            table_id: TableId::generate(),
             columns,
         },
     }

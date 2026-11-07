@@ -162,7 +162,7 @@ async fn a_number_cast_with_a_value_that_is_not_a_number_is_refused_and_keeps_th
 async fn a_cell_with_two_options_refuses_a_single_select_and_keeps_both() {
     let seeded = seeded().await;
     let svc = &seeded.service;
-    let tags = ColumnId::new();
+    let tags = ColumnId::generate();
     svc.apply_ops(
         edit(seeded.database_id),
         viewer(OWNER),
@@ -175,11 +175,11 @@ async fn a_cell_with_two_options_refuses_a_single_select_and_keeps_both() {
                     kind: ColumnKind::Select { multi: true },
                     options: vec![
                         NewOption {
-                            id: OptionId::new(),
+                            id: OptionId::generate(),
                             label: "Vegan".into(),
                         },
                         NewOption {
-                            id: OptionId::new(),
+                            id: OptionId::generate(),
                             label: "Nut-free".into(),
                         },
                     ],
@@ -341,7 +341,7 @@ async fn a_link_cast_with_a_value_that_is_not_a_url_is_refused_and_keeps_the_cel
 async fn a_cell_with_two_references_refuses_a_single_reference_and_keeps_both() {
     let seeded = seeded().await;
     let svc = &seeded.service;
-    let hosts = ColumnId::new();
+    let hosts = ColumnId::generate();
     svc.apply_ops(
         edit(seeded.database_id),
         viewer(OWNER),
@@ -450,7 +450,7 @@ async fn a_cell_with_two_references_refuses_a_single_reference_and_keeps_both() 
 async fn a_date_becomes_its_calendar_day_as_text_unless_it_has_a_time() {
     let seeded = seeded().await;
     let svc = &seeded.service;
-    let arrives = ColumnId::new();
+    let arrives = ColumnId::generate();
     svc.apply_ops(
         edit(seeded.database_id),
         viewer(OWNER),
@@ -678,7 +678,7 @@ async fn the_dry_run_answers_every_menu_target_for_a_viewer() {
 async fn a_text_column_converts_into_a_new_number_column_beside_it() {
     let seeded = seeded().await;
     let svc = &seeded.service;
-    let size = ColumnId::new();
+    let size = ColumnId::generate();
     svc.apply_ops(
         edit(seeded.database_id),
         viewer(OWNER),
@@ -782,7 +782,7 @@ async fn a_text_column_converts_into_a_new_number_column_beside_it() {
         }
     );
 
-    let as_number = ColumnId::new();
+    let as_number = ColumnId::generate();
     svc.apply_ops(
         edit(seeded.database_id),
         viewer(OWNER),
@@ -860,7 +860,7 @@ async fn a_text_column_converts_into_a_new_number_column_beside_it() {
 async fn a_text_column_converts_into_a_new_select_column_with_its_labels_as_options() {
     let seeded = seeded().await;
     let svc = &seeded.service;
-    let diet = ColumnId::new();
+    let diet = ColumnId::generate();
     svc.apply_ops(
         edit(seeded.database_id),
         viewer(OWNER),
@@ -958,7 +958,11 @@ async fn a_text_column_converts_into_a_new_select_column_with_its_labels_as_opti
         }
     );
 
-    let (as_select, vegan, nut_free) = (ColumnId::new(), OptionId::new(), OptionId::new());
+    let (as_select, vegan, nut_free) = (
+        ColumnId::generate(),
+        OptionId::generate(),
+        OptionId::generate(),
+    );
     svc.apply_ops(
         edit(seeded.database_id),
         viewer(OWNER),
@@ -1042,7 +1046,7 @@ async fn a_text_column_converts_into_a_new_select_column_with_its_labels_as_opti
 async fn numeric_selects_offer_dates_only_while_the_column_is_empty() {
     for multi in [false, true] {
         let seeded = seeded().await;
-        let column = ColumnId::new();
+        let column = ColumnId::generate();
         seeded
             .service
             .apply_ops(
@@ -1057,7 +1061,7 @@ async fn numeric_selects_offer_dates_only_while_the_column_is_empty() {
                             kind: ColumnKind::SelectNumber { multi },
                             options: (1..=4)
                                 .map(|n| NewOption {
-                                    id: OptionId::new(),
+                                    id: OptionId::generate(),
                                     label: n.to_string(),
                                 })
                                 .collect(),

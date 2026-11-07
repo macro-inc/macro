@@ -102,7 +102,7 @@ impl DatabasesRepo for FakeRepo {
         first_table: FirstTable,
     ) -> Result<Database, FakeError> {
         let database = Database {
-            id: DatabaseId::new(),
+            id: DatabaseId::generate(),
             name: command.name.clone(),
             owner_id: command.owner_id.as_ref().to_string(),
             created_at: Utc::now(),
@@ -118,7 +118,7 @@ impl DatabasesRepo for FakeRepo {
             },
         );
         let table = Table {
-            id: TableId::new(),
+            id: TableId::generate(),
             database_id: database.id,
             name: first_table.name.to_string(),
             position: key_between(None, None).unwrap(),
@@ -129,7 +129,7 @@ impl DatabasesRepo for FakeRepo {
         world.columns.push(Column {
             protections: vec![],
             nullable: true,
-            id: ColumnId::new(),
+            id: ColumnId::generate(),
             table_id: table.id,
             property_definition_id: title.definition.id,
             display_name: None,
@@ -390,7 +390,7 @@ impl DatabasesRepo for FakeRepo {
         created_by: &MacroUserIdStr<'_>,
     ) -> Result<SavedQuery, FakeError> {
         let saved = SavedQuery {
-            id: QueryId::new(),
+            id: QueryId::generate(),
             definition: definition.clone(),
             database_id,
             created_by: Some(created_by.as_ref().to_string()),
