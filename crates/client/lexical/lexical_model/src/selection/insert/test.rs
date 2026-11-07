@@ -564,3 +564,25 @@ fn element_text_replacement_shifts_the_end_past_a_leaf_insertion() -> Result<(),
     })?;
     Ok(())
 }
+
+#[test]
+fn multi_node_formatting_skips_an_unselected_start_text_boundary() -> Result<(), Error> {
+    let mut editor = Editor::builder(EditorMode::Headless).build().unwrap();
+    editor.update(|tx| {
+        let p = tx.create(Paragraph::default())?;
+        let first = tx.create_text("a")?;
+        let middle = tx.create_text("b")?;
+        let last = tx.create_text("c")?;
+        tx.text(middle)?.set_format(TextFormat::BOLD)?;
+        tx.text(last)?.set_format(TextFormat::ITALIC)?;
+        tx.append(p, &[first.key(), middle.key(), last.key()])?;
+        tx.append(NodeKey::ROOT, &[p.key()])?;
+        tx.set_selection(Some(Selection::Range(RangeSelection::new(
+            Point::text(last, Utf16Offset(1)), Point::text(first, Utf16Offset(1)),
+        ))))?;
+        tx.format_text(TextFormatType::Underline, None)?;
+        assert_eq!(tx.focus()?, Point::text(middle, Utf16Offset::ZERO));
+        Ok(())
+    })?;
+    Ok(())
+}
