@@ -59,7 +59,6 @@ use models_pagination::{
 };
 use models_properties::service::property_definition_with_options::PropertyDefinitionWithOptions;
 use models_soup::{
-    call_record::SoupCallRecord,
     comms::{SoupChannel, SoupChannelThread},
     crm_company::SoupCrmCompany,
     crm_contact::SoupCrmContact,
@@ -1352,7 +1351,7 @@ where
                 .map(|r| {
                     r.into_iter().map(|mut c| {
                         let frecency_score = c.frecency_score.take();
-                        let soup_channel = SoupChannel::new_from_channels(c);
+                        let soup_channel = SoupChannel::from(c);
                         SoupCandidate {
                             item: SoupItem::Channel(soup_channel),
                             document_server_facts: None,
@@ -1382,9 +1381,7 @@ where
                 .map_err(|_| SoupErr::CommsErr)?
                 .into_iter()
                 .map(|message| {
-                    SoupCandidate::plain(SoupItem::ChannelThread(
-                        SoupChannelThread::new_from_channel_message(message),
-                    ))
+                    SoupCandidate::plain(SoupItem::ChannelThread(SoupChannelThread::from(message)))
                 }),
         ))
     }
@@ -1471,7 +1468,7 @@ where
             .map_err(|_| SoupErr::CallErr)?
             .into_iter()
             .map(|record| {
-                SoupItem::Call(SoupCallRecord::from_record_for_user(record, &user_id_str))
+                SoupItem::Call(call::soup::soup_call_record_for_user(record, &user_id_str))
             })
             .collect();
 

@@ -98,6 +98,7 @@ model-entity = { path = "../model-entity" }
 non_empty = { path = "../non_empty", optional = true }
 model-error-response = { path = "../model-error-response", optional = true }
 models_pagination = { path = "../models_pagination" }
+models_soup = { path = "../models_soup" }
 models_email = { path = "../models_email", optional = true }
 sqs_client = { path = "../sqs_client", default-features = false, features = ["email"], optional = true }
 rand = { workspace = true }

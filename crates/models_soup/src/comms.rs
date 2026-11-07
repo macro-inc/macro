@@ -1,4 +1,4 @@
-use macro_user_id::{cowlike::CowLike, user_id::MacroUserIdStr};
+use macro_user_id::user_id::MacroUserIdStr;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
@@ -287,188 +287,26 @@ pub struct ChannelParticipant {
     pub left_at: Option<chrono::DateTime<chrono::Utc>>,
 }
 
-impl ChannelType {
-    /// Converts a channels-domain channel type into the Soup channel type.
-    pub fn new_from_channels(channel_type: channels::domain::models::ChannelType) -> Self {
-        match channel_type {
-            channels::domain::models::ChannelType::Public => Self::Public,
-            channels::domain::models::ChannelType::Private => Self::Private,
-            channels::domain::models::ChannelType::DirectMessage => Self::DirectMessage,
-            channels::domain::models::ChannelType::Team => Self::Team,
-        }
-    }
-}
-
-impl ParticipantRole {
-    /// Converts a channels-domain participant role into the Soup participant role.
-    pub fn new_from_channels(role: channels::domain::models::ParticipantRole) -> Self {
-        match role {
-            channels::domain::models::ParticipantRole::Owner => Self::Owner,
-            channels::domain::models::ParticipantRole::Admin => Self::Admin,
-            channels::domain::models::ParticipantRole::Member => Self::Member,
-        }
-    }
-}
-
-impl Channel {
-    /// Converts a channels-domain list item into Soup channel metadata.
-    pub fn new_from_channels(channel: channels::domain::models::ChannelListItem) -> Self {
-        Self {
-            id: ChannelId(channel.id),
-            name: channel.name,
-            channel_type: ChannelType::new_from_channels(channel.channel_type),
-            org_id: channel
-                .org_id
-                .and_then(|org_id| u32::try_from(org_id).ok())
-                .map(OrganizationId),
-            team_id: channel.team_id,
-            created_at: channel.created_at,
-            updated_at: channel.updated_at,
-            owner_id: channel.owner_id,
-        }
-    }
-}
-
-impl ChannelMessage {
-    /// Converts a channels-domain recent message into a Soup channel message.
-    pub fn new_from_recent_channel_message(
-        message: channels::domain::models::RecentChannelMessage,
-    ) -> Self {
-        Self {
-            message_id: message.message_id,
-            thread_id: message.thread_id,
-            sender_id: message.sender_id,
-            content: message.content,
-            created_at: message.created_at,
-            updated_at: message.updated_at,
-            deleted_at: message.deleted_at,
-            mentions: message.mentions,
-        }
-    }
-
-    /// Converts a channels-domain channel message into a Soup channel message.
-    pub fn new_from_channel_message(message: channels::domain::models::ChannelMessage) -> Self {
-        Self {
-            message_id: message.id,
-            thread_id: None,
-            sender_id: message.sender_id,
-            content: message.content,
-            created_at: message.created_at,
-            updated_at: message.updated_at,
-            deleted_at: message.deleted_at,
-            mentions: Vec::new(),
-        }
-    }
-
-    /// Converts a channels-domain thread reply into a Soup channel message.
-    pub fn new_from_thread_reply(
-        parent_id: Uuid,
-        reply: channels::domain::models::ThreadReply,
-    ) -> Self {
-        Self {
-            message_id: reply.id,
-            thread_id: Some(parent_id),
-            sender_id: reply.sender_id,
-            content: reply.content,
-            created_at: reply.created_at,
-            updated_at: reply.updated_at,
-            deleted_at: None,
-            mentions: Vec::new(),
-        }
-    }
-
-    /// Converts a raw channels-domain top-level message row into a Soup channel message.
-    pub fn new_from_top_level_message_row(
-        row: channels::domain::models::TopLevelMessageRow,
-    ) -> Self {
-        Self {
-            message_id: row.id,
-            thread_id: None,
-            sender_id: row.sender_id,
-            content: row.content,
-            created_at: row.created_at,
-            updated_at: row.updated_at,
-            deleted_at: row.deleted_at,
-            mentions: Vec::new(),
-        }
-    }
-
-    /// Converts a raw channels-domain thread reply row into a Soup channel message.
-    pub fn new_from_thread_reply_row(row: channels::domain::models::ThreadReplyRow) -> Self {
-        Self {
-            message_id: row.id,
-            thread_id: Some(row.thread_id),
-            sender_id: row.sender_id,
-            content: row.content,
-            created_at: row.created_at,
-            updated_at: row.updated_at,
-            deleted_at: None,
-            mentions: Vec::new(),
-        }
-    }
-}
-
-impl LatestMessage {
-    /// Converts channels-domain latest message data into Soup latest message data.
-    pub fn new_from_channels(latest_message: channels::domain::models::LatestMessage) -> Self {
-        Self {
-            latest_message: latest_message
-                .latest_message
-                .map(ChannelMessage::new_from_recent_channel_message),
-            latest_non_thread_message: latest_message
-                .latest_non_thread_message
-                .map(ChannelMessage::new_from_recent_channel_message),
-        }
-    }
-}
-
-impl ChannelParticipant {
-    /// Converts a channels-domain participant into a Soup participant.
-    pub fn try_new_from_channels(
-        participant: channels::domain::models::ChannelParticipant,
-    ) -> Result<Self, macro_user_id::error::ParseErr> {
-        Ok(Self {
-            channel_id: ChannelId(participant.channel_id),
-            user_id: MacroUserIdStr::parse_from_str(&participant.user_id)?.into_owned(),
-            role: ParticipantRole::new_from_channels(participant.role),
-            joined_at: participant.joined_at,
-            left_at: participant.left_at,
-        })
-    }
-}
-
-impl ChannelWithParticipants {
-    /// Converts channels-domain metadata and participants into the Soup shape.
-    pub fn new_from_channels(channel: channels::domain::models::ChannelWithParticipants) -> Self {
-        Self {
-            channel: Channel::new_from_channels(channel.channel),
-            participants: channel
-                .participants
-                .into_iter()
-                .filter_map(|participant| {
-                    ChannelParticipant::try_new_from_channels(participant).ok()
-                })
-                .collect(),
-            is_participant: channel.is_participant,
-        }
-    }
-}
-
-impl SoupChannel {
-    /// Converts channels-domain channel data with latest messages into Soup.
-    pub fn new_from_channels(channel: channels::domain::models::ChannelWithLatest) -> Self {
-        Self {
-            channel: ChannelWithParticipants::new_from_channels(channel.channel),
-            latest_message: LatestMessage::new_from_channels(channel.latest_message),
-            viewed_at: channel.viewed_at,
-            interacted_at: channel.interacted_at,
-        }
-    }
-}
-
 impl SoupMessageSender {
+    /// Resolves a sender from its `channel_sender` storage string, filling the
+    /// bot display name and avatar for bot senders when the caller has them.
+    pub fn from_message_sender(
+        sender_id: &str,
+        bot_name: Option<String>,
+        bot_avatar_url: Option<String>,
+    ) -> Self {
+        let mut sender = Self::from_storage_string(sender_id);
+        if matches!(sender.sender_type, SoupMessageSenderType::Bot)
+            && let Some(name) = bot_name
+        {
+            sender.name = Some(name);
+            sender.avatar_url = bot_avatar_url;
+        }
+        sender
+    }
+
     fn from_storage_string(sender_id: &str) -> Self {
-        let Ok(sender) = channels::domain::models::ChannelSender::parse_from_str(sender_id) else {
+        let Ok(sender) = channel_sender::ChannelSender::parse_from_str(sender_id) else {
             return Self {
                 sender_type: SoupMessageSenderType::User,
                 id: sender_id.to_string(),
@@ -498,88 +336,6 @@ impl SoupMessageSender {
                 name: None,
                 avatar_url: None,
             }
-        }
-    }
-
-    fn from_message_sender(
-        sender_id: &str,
-        bot_profile: Option<channels::domain::models::BotSenderProfile>,
-    ) -> Self {
-        let mut sender = Self::from_storage_string(sender_id);
-        if matches!(sender.sender_type, SoupMessageSenderType::Bot)
-            && let Some(profile) = bot_profile
-        {
-            sender.name = Some(profile.name);
-            sender.avatar_url = profile.avatar_url;
-        }
-        sender
-    }
-}
-
-impl From<channels::domain::models::CountedReaction> for SoupCountedReaction {
-    fn from(reaction: channels::domain::models::CountedReaction) -> Self {
-        Self {
-            emoji: reaction.emoji,
-            users: reaction.users,
-        }
-    }
-}
-
-impl From<channels::domain::models::MessageAttachment> for SoupMessageAttachment {
-    fn from(attachment: channels::domain::models::MessageAttachment) -> Self {
-        Self {
-            id: attachment.id,
-            entity_type: attachment.entity_type,
-            entity_id: attachment.entity_id,
-            width: attachment.width,
-            height: attachment.height,
-            created_at: attachment.created_at,
-        }
-    }
-}
-
-impl From<channels::domain::models::ThreadReply> for SoupThreadReply {
-    fn from(reply: channels::domain::models::ThreadReply) -> Self {
-        Self {
-            id: reply.id,
-            sender: SoupMessageSender::from_message_sender(&reply.sender_id, reply.bot_profile),
-            sender_id: reply.sender_id,
-            content: reply.content,
-            created_at: reply.created_at,
-            updated_at: reply.updated_at,
-            edited_at: reply.edited_at,
-            reactions: reply.reactions.into_iter().map(Into::into).collect(),
-            attachments: reply.attachments.into_iter().map(Into::into).collect(),
-        }
-    }
-}
-
-impl From<channels::domain::models::ThreadInfo> for SoupThreadInfo {
-    fn from(thread: channels::domain::models::ThreadInfo) -> Self {
-        Self {
-            reply_count: thread.reply_count,
-            latest_reply_at: thread.latest_reply_at,
-            preview: thread.preview.into_iter().map(Into::into).collect(),
-        }
-    }
-}
-
-impl SoupChannelThread {
-    /// Converts a channels-domain channel message into a Soup thread root.
-    pub fn new_from_channel_message(message: channels::domain::models::ChannelMessage) -> Self {
-        Self {
-            id: message.id,
-            channel_id: message.channel_id,
-            sender: SoupMessageSender::from_message_sender(&message.sender_id, message.bot_profile),
-            sender_id: message.sender_id,
-            content: message.content,
-            created_at: message.created_at,
-            updated_at: message.updated_at,
-            edited_at: message.edited_at,
-            deleted_at: message.deleted_at,
-            thread: SoupThreadInfo::from(message.thread),
-            reactions: message.reactions.into_iter().map(Into::into).collect(),
-            attachments: message.attachments.into_iter().map(Into::into).collect(),
         }
     }
 }

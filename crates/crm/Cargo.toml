@@ -70,6 +70,7 @@ futures = { workspace = true, optional = true }
 chrono = { workspace = true }
 filter_ast = { path = "../filter_ast" }
 item_filters = { path = "../item_filters", default-features = false }
+models_soup = { path = "../models_soup" }
 serde = { workspace = true }
 serde_json = { workspace = true }
 thiserror = { workspace = true }

@@ -42,6 +42,7 @@ kafka_consumer = [
 ]
 list = [
   "dep:filter_ast",
+  "dep:models_soup",
   "dep:frecency",
   "dep:model-entity",
   "dep:recursion",
@@ -132,6 +133,7 @@ model_notifications = { path = "../model_notifications", optional = true }
 model_owner = { path = "../model_owner" }
 models_pagination = { path = "../models_pagination" }
 models_permissions = { path = "../models_permissions", optional = true }
+models_soup = { path = "../models_soup", optional = true }
 non_empty = { path = "../non_empty", optional = true }
 notification_hex = { path = "../notification", package = "notification", optional = true }
 rdkafka = { workspace = true, optional = true }
