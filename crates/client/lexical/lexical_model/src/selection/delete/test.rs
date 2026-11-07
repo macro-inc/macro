@@ -525,7 +525,10 @@ fn interior_surrogate_selection_can_be_ordered_but_not_edited() -> Result<(), Er
         Ok((p.key(), text.key()))
     })?;
     let state = editor.state();
-    assert!(Point::text(text, Utf16Offset(1)).is_before(state.view(), &Point::element(NodeKey::ROOT, ChildIndex(1)))?);
+    assert!(
+        Point::text(text, Utf16Offset(1))
+            .is_before(state.view(), &Point::element(NodeKey::ROOT, ChildIndex(1)))?
+    );
     assert!(editor.update(|tx| tx.insert_text("x")).is_err());
     assert_eq!(editor.state().text_content(p), "😀");
     Ok(())
@@ -546,13 +549,17 @@ fn range_removal_marks_leaves_inside_completely_selected_blocks() -> Result<(), 
         tx.append(last, &[last_text.key()])?;
         tx.append(NodeKey::ROOT, &[first.key(), middle.key(), last.key()])?;
         tx.set_selection(Some(Selection::Range(RangeSelection::new(
-            Point::text(first_text, Utf16Offset(1)), Point::text(last_text, Utf16Offset(1)),
+            Point::text(first_text, Utf16Offset(1)),
+            Point::text(last_text, Utf16Offset(1)),
         ))))?;
         Ok(middle_text.key())
     })?;
     let (_, commit) = editor.update(|tx| tx.remove_text())?;
     assert!(commit.changes.dirty_leaves.contains(&middle_text));
-    assert_eq!(commit.changes.mutations.get(&middle_text), Some(&Mutation::Destroyed));
+    assert_eq!(
+        commit.changes.mutations.get(&middle_text),
+        Some(&Mutation::Destroyed)
+    );
     Ok(())
 }
 
@@ -565,7 +572,8 @@ fn root_child_range_removes_the_selected_paragraph_identity() -> Result<(), Erro
         tx.append(p, &[text.key()])?;
         tx.append(NodeKey::ROOT, &[p.key()])?;
         tx.set_selection(Some(Selection::Range(RangeSelection::new(
-            Point::element(NodeKey::ROOT, ChildIndex(1)), Point::element(NodeKey::ROOT, ChildIndex(0)),
+            Point::element(NodeKey::ROOT, ChildIndex(1)),
+            Point::element(NodeKey::ROOT, ChildIndex(0)),
         ))))?;
         Ok(p.key())
     })?;
@@ -585,10 +593,29 @@ fn removal_collapses_at_the_preceding_text_boundary() -> Result<(), Error> {
         tx.append(p, &[tab.key(), text.key()])?;
         tx.append(NodeKey::ROOT, &[p.key()])?;
         tx.set_selection(Some(Selection::Range(RangeSelection::new(
-            Point::text(text, Utf16Offset(2)), Point::element(p, ChildIndex(1)),
+            Point::text(text, Utf16Offset(2)),
+            Point::element(p, ChildIndex(1)),
         ))))?;
         tx.remove_text()?;
         assert_eq!(tx.anchor()?, Point::text(tab, Utf16Offset(1)));
+        Ok(())
+    })?;
+    Ok(())
+}
+
+#[test]
+fn removing_a_root_child_range_collapses_inside_the_following_paragraph() -> Result<(), Error> {
+    let mut editor = Editor::builder(EditorMode::Headless).build().unwrap();
+    editor.update(|tx| {
+        let first = tx.create(Paragraph::default())?;
+        let next = tx.create(Paragraph::default())?;
+        tx.append(NodeKey::ROOT, &[first.key(), next.key()])?;
+        tx.set_selection(Some(Selection::Range(RangeSelection::new(
+            Point::element(NodeKey::ROOT, ChildIndex(0)),
+            Point::element(NodeKey::ROOT, ChildIndex(1)),
+        ))))?;
+        tx.remove_text()?;
+        assert_eq!(tx.anchor()?, Point::element(next, ChildIndex(0)));
         Ok(())
     })?;
     Ok(())
