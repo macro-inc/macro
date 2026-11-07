@@ -181,7 +181,11 @@ function apiCalls(value: unknown): string[] {
   if (Array.isArray(value)) return value.flatMap(apiCalls);
   const object = value as Record<string, unknown>;
   const own = [
-    object.op === 'call' ? object.fn : undefined,
+    object.op === 'call'
+      ? object.fn
+      : object.op === 'plugin'
+        ? object.name
+        : undefined,
     object.$fn,
     object.$transformer,
   ].filter((name): name is string => typeof name === 'string');

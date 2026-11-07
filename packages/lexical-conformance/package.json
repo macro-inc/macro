@@ -11,6 +11,7 @@
   "devDependencies": {
     "@floating-ui/react": "0.27.19",
     "@jridgewell/trace-mapping": "0.3.31",
+    "@lexical/code": "0.45.0",
     "@lexical/headless": "0.45.0",
     "@lexical/internal": "0.45.0",
     "@lexical/list": "0.45.0",

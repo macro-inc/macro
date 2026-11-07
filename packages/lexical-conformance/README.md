@@ -76,10 +76,22 @@ concrete operations, source-exported helpers and explicitly registered plugins r
 Nested inline transformer callbacks use the same strict invocation tapes as direct
 callback arguments. Regular expressions retain source, flags and lastIndex;
 headless factories, generated namespaces and named node replacements retain their
-creation behavior. Calls
+creation behavior. Iterator results use identity handles (`$iterator`) so their
+`next` calls and yielded caret/node objects replay independently. Named code
+highlighting and tab-indentation plugins run as oracle plugins; the known upstream
+Tab mock is encoded only at `KEY_TAB_COMMAND` as S4's `$event` payload. Fixtures
+that allocate highlight nodes declare `codeHighlight`; JavaScript replay still
+compares exact upstream snapshots. Calls
 originating inside upstream source are excluded using both call-site attribution
 and a depth guard; callback scopes restore depth in `finally`. Cached proxies
 preserve identity, while shadow targets permit reads from frozen selections.
 
 The recorded oracle is derived from upstream Lexical; its MIT notice is retained
 in [UPSTREAM-LICENSE](UPSTREAM-LICENSE).
+
+Schema-2 additions used by this corpus: `$regexp` carries `flags` and `lastIndex`;
+`$iterator` binds iterable-iterator identity; caret slices use `$caret` with `type:
+"slice"`, `caret`, and `distance`. Editor config records `headless` and
+`namespaceGenerated`. Partial initial states carry `keys` (preorder), `nodeMapKeys`
+(insertion order), and `nextKey` alongside JSON and selection. Downstream fixture
+readers must support these explicit fields; no allocation keys are normalized away.
