@@ -30,3 +30,6 @@ pub mod operation_log;
 
 /// Owned room memory and capabilities.
 pub mod room;
+
+#[cfg(test)]
+mod test_support;

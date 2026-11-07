@@ -110,3 +110,11 @@ impl<Ports: RoomPorts> Room<Ports> {
         &mut self.memory
     }
 }
+
+mod connection;
+mod error;
+pub use connection::{ConnectOutcome, SocketOf};
+pub use error::{PortName, RoomError};
+
+#[cfg(test)]
+mod test;

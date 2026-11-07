@@ -108,3 +108,17 @@ callback replay starts with C8.
 The C4 expired-during-connect capture shows a server-closed socket still present
 in the runtime list. SimPorts retains it until `RuntimeCloses`; it does not infer
 immediate removal from the call to `close`.
+
+## Native replay during callback extraction
+
+C8 enables `document_sync.test/document_sync_tests_should_receive_initial_sync_on_connect.jsonl`
+through the real `Room` connect/close callbacks (plus its teardown heartbeat).
+The native projection compares ordered storage and connection calls, sends,
+scheduling calls and the final transactional/snapshot dump. Snapshot backend
+SQL and fallback reads are projected to the typed snapshot port; unknown
+operations fail closed. The real-runtime re-record comparison continues to
+check those adapter SQL calls verbatim. This fixture has no configured external
+notification destination, so its observable publication is the scheduling call;
+core fake tests separately assert FirstJoin/LastLeave payload selection.
+The four C8 invariant tests live in `sync_server_core::domain::room::test`.
+Other callbacks remain explicitly unsupported until their extraction commits.

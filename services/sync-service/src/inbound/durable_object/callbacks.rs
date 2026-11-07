@@ -13,12 +13,12 @@ impl SyncSession<'_> {
         if !self.validate_surface_sockets(Some(&ws)).await? {
             return Ok(());
         }
-        use sync_protocol::{PING, PONG};
+        use sync_protocol::PING;
         let binary_message = match msg {
             WebSocketIncomingMessage::String(message) => {
                 // Heartbeat: deliberately unspanned to keep it out of traces.
                 if message == PING {
-                    ws.send_with_str(PONG).ok();
+                    self.room.heartbeat(&ws);
                 } else {
                     return worker_rs_otel::scope(&self.env, self.state.as_ref(), async {
                         warn!("Received unknown 'String' message: {message:?}");
@@ -184,45 +184,9 @@ impl SyncSession<'_> {
         _reason: String,
         _was_clean: bool,
     ) -> Result<()> {
-        if self.source_blocked().await? {
-            self.forget_websocket_metadata(&ws).await;
-            return Ok(());
-        }
-        let env = self.env.clone();
-        let runtime = self.state.clone();
-        worker_rs_otel::scope(&env, runtime.as_ref(), async {
-            // Sockets closed by `delete_handler` report back after the session is gone.
-            if self.try_document_id().await?.is_none() {
-                self.forget_websocket_metadata(&ws).await;
-                return Ok(());
-            }
-            self.validate_surface_sockets(None).await?;
-            let peer_ids = Wsm::new(self, &ws).get_peer_ids(true).await?;
-            for peer_id in peer_ids {
-                self.awareness.delete(&peer_id.to_string());
-                let update = self.awareness.encode(&peer_id.to_string());
-
-                // Don't silently discard the error
-                protocol::broadcast_awareness(self, &self.socket_for(&ws), update.as_slice())
-                    .context("failed to broadcast awareness")?;
-            }
-
-            if self.state.get_websockets().len() == 1
-                && let Ok(state) = self.document_state().await
-                && let Ok(document_id) = self.document_id().await
-                && let Ok(snapshot) = state.export_shallow_snapshot()
-            {
-                let editors = take_editors(&mut self.pending_editors);
-                let env = self.env.clone();
-                self.state.wait_until(crate::background(async move {
-                    report_new_doc_state(&document_id, &snapshot, &env, editors).await;
-                    report_interaction(&document_id, &env, InteractionReason::LastLeave).await;
-                }));
-            }
-            self.forget_websocket_metadata(&ws).await;
-            Ok(())
-        })
-        .await
+        worker_rs_otel::scope(&self.env, self.state.as_ref(), self.room.on_close(&ws))
+            .await
+            .map_err(room_error)
     }
 }
 

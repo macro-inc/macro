@@ -9,6 +9,8 @@ openapi = ["dep:utoipa"]
 
 [dependencies]
 loro.workspace = true
+bebop.workspace = true
+rootcause.workspace = true
 sync_protocol.workspace = true
 lazy-regex.workspace = true
 macro_sync_service_jwt.workspace = true

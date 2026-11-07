@@ -3,13 +3,18 @@ use crate::{
     ports::{Effect, SimNow, SimPorts},
     transcript::{ServerInput, Transcript},
 };
-use std::collections::BTreeMap;
+use futures::FutureExt;
 use sync_protocol::time::WallDuration;
-use sync_server_core::domain::room::{Room, RoomConfig};
+use sync_server_core::domain::{
+    ports::{Connections, RoomPorts},
+    room::{Room, RoomConfig},
+};
+mod golden;
 
 /// Golden fixtures with every callback implemented by the native room.
 /// Add names with the callback extraction commits starting at C8.
-pub const ENABLED: &[&str] = &[];
+pub const ENABLED: &[&str] =
+    &["document_sync.test/document_sync_tests_should_receive_initial_sync_on_connect.jsonl"];
 
 /// Parsing, unsupported-callback and parity failures stay distinguishable.
 #[derive(Debug, thiserror::Error)]
@@ -17,6 +22,9 @@ pub enum ReplayError {
     /// The recording cannot be decoded losslessly.
     #[error("invalid transcript: {0}")]
     Invalid(String),
+    /// The extracted callback failed.
+    #[error("room callback failed: {0}")]
+    Callback(String),
     /// A callback still belongs to the Worker adapter.
     #[error("callback not yet extracted into Room: {0}")]
     Unsupported(String),
@@ -65,6 +73,15 @@ impl SimRoom {
     /// Drive only already-extracted events; never substitute fake callback outputs.
     pub fn step(&mut self, now: SimNow, input: ServerInput) -> Result<StepResult, ReplayError> {
         self.room.ports().set_now(now);
+        match &input {
+            ServerInput::NewObject
+            | ServerInput::AdvanceClock(_)
+            | ServerInput::RuntimeCloses(_)
+            | ServerInput::Connect { .. }
+            | ServerInput::Close(_) => {}
+            ServerInput::Text { text, .. } if text == sync_protocol::PING => {}
+            other => return Err(ReplayError::Unsupported(other.kind().into())),
+        }
         match input {
             ServerInput::NewObject => {
                 let ports = self.room.ports().clone();
@@ -75,7 +92,35 @@ impl SimRoom {
                 monotonic: now.monotonic + duration,
             }),
             ServerInput::RuntimeCloses(socket) => self.room.ports().runtime_closes(&socket),
-            other => return Err(ReplayError::Unsupported(other.kind().into())),
+            other => {
+                let future = async {
+                    match other {
+                        ServerInput::Connect { grant, key } => {
+                            self.room.connect(grant, key).await?;
+                        }
+                        ServerInput::Close(socket) => self.room.on_close(&socket).await?,
+                        ServerInput::Text { socket, text } if text == sync_protocol::PING => {
+                            if self.room.source_blocked().await? {
+                                self.room.ports().connections().close(&socket, sync_server_core::domain::ports::CloseReason::SessionFrozenOrRetired).map_err(sync_server_core::domain::room::RoomError::runtime_connections)?;
+                            } else if self.room.validate_surface_sockets(Some(&socket)).await? {
+                                self.room.heartbeat(&socket);
+                            }
+                        }
+                        _ => unreachable!("unsupported inputs rejected before polling"),
+                    }
+                    Ok::<(), sync_server_core::domain::room::RoomError>(())
+                };
+                match future.now_or_never() {
+                    Some(Ok(())) => {}
+                    Some(Err(error)) => return Err(ReplayError::Callback(error.to_string())),
+                    None if self.room.ports().crashed() => {}
+                    None => {
+                        return Err(ReplayError::Mismatch(
+                            "native port did not complete on its first poll".into(),
+                        ));
+                    }
+                }
+            }
         }
         let effects = self.room.ports().take_effects();
         Ok(if self.room.ports().crashed() {
@@ -91,15 +136,5 @@ pub fn replay(transcript: &Transcript) -> Result<Vec<Effect>, ReplayError> {
     if !ENABLED.contains(&transcript.name.as_str()) {
         return Err(ReplayError::NotEnabled(transcript.name.clone()));
     }
-    let mut rooms = BTreeMap::new();
-    let mut effects = Vec::new();
-    for recorded in transcript.inputs()? {
-        let room = rooms
-            .entry(recorded.room)
-            .or_insert_with(|| SimRoom::new(SimPorts::new()));
-        match room.step(recorded.now, recorded.input)? {
-            StepResult::Done(next) | StepResult::Crashed(next) => effects.extend(next),
-        }
-    }
-    Ok(effects)
+    golden::replay(transcript)
 }

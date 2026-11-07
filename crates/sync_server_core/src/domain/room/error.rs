@@ -1,0 +1,63 @@
+//! Room failures; CS-56: runtime errors remain local to the single-threaded callback.
+use super::super::{
+    socket::{SocketTagError, WebSocketId},
+    state_error::StateError,
+};
+use rootcause::{
+    Report,
+    markers::{Dynamic, Local, Mutable},
+};
+
+/// Runtime capability that failed.
+#[derive(Debug, Clone, Copy)]
+pub enum PortName {
+    /// Transactional room storage.
+    Storage,
+    /// Session snapshot transport.
+    Snapshots,
+    /// Socket transport.
+    Connections,
+    /// Durable alarms.
+    Alarm,
+    /// Peer attribution directory.
+    Peers,
+}
+/// Local error report retaining the original runtime error.
+pub type LocalReport = Report<Dynamic, Mutable, Local>;
+/// Failures corresponding exclusively to the previous callback's Err paths.
+#[derive(Debug, thiserror::Error)]
+pub enum RoomError {
+    /// The room has no persisted identity.
+    #[error("DOCUMENT_ID not found in storage")]
+    NoSession,
+    /// A socket tag has no persisted metadata.
+    #[error("WebSocketMetadata not found in storage")]
+    MissingConnectionMetadata(WebSocketId),
+    /// Invalid hibernation tags.
+    #[error(transparent)]
+    SocketTag(#[from] SocketTagError),
+    /// Loro rejected document content.
+    #[error(transparent)]
+    Loro(#[from] StateError),
+    /// An outbound runtime capability failed.
+    #[error("{report}")]
+    Port {
+        /// Capability that failed.
+        port: PortName,
+        /// Original, possibly non-Send runtime failure.
+        report: LocalReport,
+    },
+}
+impl RoomError {
+    /// Preserve a runtime connection failure at an inbound adapter boundary.
+    pub fn runtime_connections<E: std::error::Error + 'static>(error: E) -> Self {
+        Self::port(PortName::Connections, error)
+    }
+
+    pub(super) fn port<E: std::error::Error + 'static>(port: PortName, error: E) -> Self {
+        Self::Port {
+            port,
+            report: Report::new(error).into_dynamic(),
+        }
+    }
+}

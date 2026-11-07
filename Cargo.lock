@@ -19798,10 +19798,12 @@ dependencies = [
 name = "sync_server_core"
 version = "0.1.0"
 dependencies = [
+ "bebop",
  "futures",
  "lazy-regex",
  "loro",
  "macro_sync_service_jwt",
+ "rootcause",
  "serde",
  "serde_json",
  "sync_protocol",

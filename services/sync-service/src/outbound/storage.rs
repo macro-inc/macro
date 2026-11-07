@@ -54,7 +54,7 @@ fn snapshot_read_error(error: SnapshotReadError<worker::Error>) -> worker::Error
 
 impl SessionStorage {
     pub fn new(
-        snapshot_storage: Storage,
+        snapshot_storage: Rc<Storage>,
         storage: DurableKVStorage,
         key: String,
         state: Rc<State>,
@@ -66,20 +66,6 @@ impl SessionStorage {
             storage,
             key,
         }
-    }
-    /// Load document state and apply any pending operations.
-    pub async fn load_document_state(
-        &self,
-        operations: &mut OperationLog,
-    ) -> Result<sync_server_core::domain::state::DocumentState> {
-        operations
-            .load_document_state(
-                &self.storage,
-                &self.snapshots,
-                cfg!(feature = "create-default-state"),
-            )
-            .await
-            .map_err(snapshot_error)
     }
     pub async fn get_pending_operations(&self) -> Result<Vec<Result<(String, Vec<u8>)>>> {
         self.storage.get_pending_operations().await

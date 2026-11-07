@@ -10,6 +10,7 @@ Native in-memory room capabilities and the golden Worker transcript corpus.
 - `src/ports.rs`: synchronous in-memory ports, ordered effects, clocks, faults,
   output-gate confirmation and socket lifecycle.
 - `src/replay.rs`: the real core Room and the explicit `ENABLED` allowlist.
+- `src/replay/golden.rs`: ordered Worker-boundary projection and final storage checks.
 - `src/transcript.rs`: lossless JSONL parsing and comparison helpers.
 - `tests/transcripts/COVERAGE.md`: behavior inventory and representative fixtures.
 
@@ -17,8 +18,8 @@ Native in-memory room capabilities and the golden Worker transcript corpus.
 
 - Depends on the pure core and protocol; never Worker, Tokio, HTTP clients or a DB.
 - Used by native replay and the later sync simulation driver.
-- C7 has no enabled callback transcripts. Reject unsupported callbacks; never
-  replay recorded outputs as if the core produced them. Enable fixtures only
+- The explicit `ENABLED` list grows with extracted callbacks. Reject unsupported
+  callbacks; never replay recorded outputs as if the core produced them. Enable fixtures only
   with the corresponding callback extraction and complete effect comparison.
 
 ## Checks
