@@ -158,3 +158,33 @@ fn subclass_inherits_splice_numbering_and_intrinsic_merge() -> Result<()> {
     assert_eq!(st.text_content(st.first_child_or_err(task)?), "wrapped");
     Ok(())
 }
+
+#[test]
+fn imported_null_and_absent_values_share_parent_setter_state() -> Result<()> {
+    let mut editor = Editor::builder(EditorMode::Headless)
+        .node::<ListNode>()
+        .node::<ListItemNode>()
+        .build()
+        .unwrap();
+    let mut tx = editor.transaction();
+    for input in [
+        serde_json::json!({"type":"list","listType":null,"start":null}),
+        serde_json::json!({"type":"list"}),
+    ] {
+        let json = input.as_object().unwrap();
+        let key = tx.import_node(json)?;
+        let before = tx.view().export_json(key)?;
+        assert_eq!(before.get("listType"), json.get("listType"));
+        assert_eq!(before.get("start"), json.get("start"));
+        tx.set_indent(key, 2)?;
+        assert_eq!(tx.view().export_json(key)?.get("start"), json.get("start"));
+        let mut node = tx.get_mut::<ListNode>(key)?;
+        node.set_start(3);
+        node.set_list_type(ListType::Check);
+        let after = tx.view().export_json(key)?;
+        assert_eq!(after.get("start"), Some(&3.into()));
+        assert_eq!(after.get("listType"), Some(&"check".into()));
+        assert_eq!(after.get("tag"), Some(&"ul".into()));
+    }
+    Ok(())
+}
