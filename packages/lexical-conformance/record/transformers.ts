@@ -1,4 +1,4 @@
-import { namedTransformers } from './encode';
+import { namedFunctions, namedTransformers } from './encode';
 import type { Recorder } from './membrane';
 
 const patched = new WeakSet<object>();
@@ -35,6 +35,7 @@ export function instrumentTransformers(
           recorder()?.transformersFired.add(id);
         return result;
       });
+      namedFunctions.set(Reflect.get(value, hook), `${id}.${hook}`);
     }
     for (const field of ['regExp', 'regExpStart', 'regExpEnd']) {
       const regexp = Reflect.get(value, field);

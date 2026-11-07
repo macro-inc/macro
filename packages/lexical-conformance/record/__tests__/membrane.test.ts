@@ -1,3 +1,8 @@
+// @vitest-environment jsdom
+
+import * as codeModule from '@lexical/code';
+import * as headlessModule from '@lexical/headless';
+import * as htmlModule from '@lexical/html';
 import * as listModule from '@lexical/list';
 import * as markdownModule from '@lexical/markdown';
 import * as richTextModule from '@lexical/rich-text';
@@ -7,10 +12,20 @@ import { afterEach, beforeEach, expect, test } from 'vitest';
 import { isOracleFrame } from '../attribution';
 import { Entropy } from '../entropy';
 import { fixture } from '../fixture';
-import { activate, current, Recorder, wrapModule } from '../membrane';
+import {
+  activate,
+  current,
+  modelDOM,
+  Recorder,
+  testBody,
+  wrapModule,
+} from '../membrane';
 import { replay } from '../replay-js';
 
 const lexical = wrapModule(upstream, 'lexical');
+const code = wrapModule(codeModule, '@lexical/code');
+const html = wrapModule(htmlModule, '@lexical/html');
+const headless = wrapModule(headlessModule, '@lexical/headless');
 const list = wrapModule(listModule, '@lexical/list');
 const markdown = wrapModule(markdownModule, '@lexical/markdown');
 wrapModule(richTextModule, '@lexical/rich-text');
@@ -18,7 +33,9 @@ const utils = wrapModule(utilsModule, '@lexical/utils');
 const utilsPath =
   process.cwd() +
   '/../../target/lexical-upstream/packages/lexical/src/LexicalUtils.ts';
-const { resetRandomKey } = await import(/* @vite-ignore */ utilsPath);
+const counterModule = await import(/* @vite-ignore */ utilsPath);
+wrapModule(counterModule, 'lexical/LexicalUtils');
+const { resetRandomKey } = counterModule;
 const source = {
   repo: 'lexical',
   version: '0.45.0',
@@ -83,6 +100,234 @@ test('read flush and deferred callbacks expose their batching boundaries', async
 });
 
 let tape: Entropy;
+test('nested inline transformer hooks and headless selection replay without original callbacks', async () => {
+  const recorder = new Recorder();
+  activate(recorder);
+  const editor = headless.createHeadlessEditor({
+    namespace: '',
+  });
+  editor.update(
+    () =>
+      markdown.$convertFromMarkdownString('plain', [
+        {
+          type: 'text-match',
+          dependencies: [],
+          regExp: /never-match$/,
+          importRegExp: /never-match/,
+          replace: () => {
+            throw new Error('unused hook was executed');
+          },
+          export: () => null,
+        },
+      ]),
+    { discrete: true }
+  );
+  editor.getEditorState().read(() => lexical.$getSelection());
+  const result = fixture(recorder, source);
+  expect(result.config.headless).toBe(true);
+  expect(recorder.reasons.size).toBe(0);
+  await replay(JSON.parse(JSON.stringify(result)), resetRandomKey);
+});
+test('HTML-seeded markdown export restores a partial JSON state and key layout', async () => {
+  const recorder = new Recorder(true);
+  activate(recorder);
+  const editor = headless.createHeadlessEditor();
+  editor.update(
+    () => {
+      const document = new DOMParser().parseFromString(
+        '<p>seeded text</p>',
+        'text/html'
+      );
+      lexical
+        .$getRoot()
+        .append(...html.$generateNodesFromDOM(editor, document));
+    },
+    { discrete: true }
+  );
+  let output: string | undefined;
+  editor.getEditorState().read(
+    () => {
+      output = markdown.$convertToMarkdownString([]);
+    },
+    { editor }
+  );
+  expect(output).toBe('seeded text');
+  const result = fixture(recorder, source);
+  expect(result.partial).toBe(true);
+  expect(result.initial.keys).toEqual(['root', '1', '2']);
+  expect(recorder.reasons.size).toBe(0);
+  await replay(JSON.parse(JSON.stringify(result)), resetRandomKey);
+});
+
+test('source-exported transformer arrays retain custom RegExp behavior', async () => {
+  class NeverMatch extends RegExp {
+    override exec() {
+      return null;
+    }
+  }
+  const exported = wrapModule(
+    {
+      TRANSFORMERS: [
+        {
+          type: 'text-match' as const,
+          dependencies: [],
+          regExp: new NeverMatch(''),
+          importRegExp: new NeverMatch(''),
+          replace: () => {
+            throw new Error('custom RegExp was flattened');
+          },
+        },
+      ],
+    },
+    '@lexical/fixture-transformers'
+  );
+  const recorder = new Recorder();
+  activate(recorder);
+  const editor = headless.createHeadlessEditor();
+  editor.update(
+    () => markdown.$convertFromMarkdownString('literal', exported.TRANSFORMERS),
+    { discrete: true }
+  );
+  expect(recorder.reasons.size).toBe(0);
+  await replay(
+    JSON.parse(JSON.stringify(fixture(recorder, source))),
+    resetRandomKey
+  );
+});
+
+test('raw DOM assertions are classified only during the original test body', () => {
+  const recorder = new Recorder();
+  activate(recorder);
+  const root = document.createElement('div');
+  modelDOM(root).innerHTML;
+  expect(recorder.reasons.size).toBe(0);
+  testBody(() => {
+    modelDOM(root).innerHTML;
+  })();
+  expect(recorder.reasons.has('view:dom-assertion')).toBe(true);
+  expect(recorder.inTestBody).toBe(false);
+});
+
+test('deferred update completion callbacks replay as strict invocation tapes', async () => {
+  const recorder = new Recorder();
+  activate(recorder);
+  const editor = headless.createHeadlessEditor();
+  await new Promise<void>((resolve) => {
+    editor.update(
+      () => {
+        lexical.$getRoot().append(lexical.$createParagraphNode());
+      },
+      { onUpdate: () => resolve() }
+    );
+  });
+  expect(recorder.reasons.size).toBe(0);
+  expect(recorder.tapes[0].invocations).toHaveLength(1);
+  await replay(
+    JSON.parse(JSON.stringify(fixture(recorder, source))),
+    resetRandomKey
+  );
+});
+
+test('caught exceptions inside nested callbacks remain observable during replay', async () => {
+  const api = wrapModule(
+    {
+      run(options: { check: () => void }) {
+        try {
+          options.check();
+          return false;
+        } catch {
+          return true;
+        }
+      },
+    },
+    '@lexical/fixture-callbacks'
+  );
+  const recorder = new Recorder();
+  activate(recorder);
+  expect(
+    api.run({
+      check: () => {
+        throw new Error('predicate failed');
+      },
+    })
+  ).toBe(true);
+  const result = JSON.parse(JSON.stringify(fixture(recorder, source)));
+  await replay(result, resetRandomKey);
+  delete result.tapes[0].invocations[0].throws;
+  await expect(replay(result, resetRandomKey)).rejects.toThrow(
+    'Value mismatch'
+  );
+});
+
+test('inline callbacks that clear the model require a hand port', () => {
+  const api = wrapModule(
+    {
+      run(callback: () => void) {
+        callback();
+      },
+    },
+    '@lexical/fixture-mutator'
+  );
+  const recorder = new Recorder();
+  activate(recorder);
+  const editor = headless.createHeadlessEditor();
+  editor.update(
+    () => {
+      lexical.$getRoot().append(lexical.$createParagraphNode());
+      api.run(() => {
+        lexical.$getRoot().clear();
+      });
+    },
+    { discrete: true }
+  );
+  expect(recorder.reasons.has('A-hand:mutating-callback')).toBe(true);
+});
+
+test('caret iterators retain identity and replay their yielded model objects', async () => {
+  const recorder = new Recorder();
+  activate(recorder);
+  const editor = headless.createHeadlessEditor();
+  editor.update(
+    () => {
+      const root = lexical.$getRoot();
+      root.append(
+        lexical
+          .$createParagraphNode()
+          .append(lexical.$createTextNode('iterator'))
+      );
+      const range = lexical.$caretRangeFromSelection(root.select(0, 1));
+      const iterator = range.iterNodeCarets();
+      expect([...iterator].length).toBeGreaterThan(0);
+    },
+    { discrete: true }
+  );
+  expect(recorder.reasons.size).toBe(0);
+  await replay(
+    JSON.parse(JSON.stringify(fixture(recorder, source))),
+    resetRandomKey
+  );
+});
+
+test('serialized snapshots omit undefined optional fields from code nodes', async () => {
+  const recorder = new Recorder();
+  activate(recorder);
+  const editor = headless.createHeadlessEditor({
+    nodes: [codeModule.CodeNode, codeModule.CodeHighlightNode],
+  });
+  editor.update(
+    () => {
+      lexical
+        .$getRoot()
+        .append(
+          code.$createCodeNode().append(code.$createCodeHighlightNode('plain'))
+        );
+    },
+    { discrete: true }
+  );
+  const result = JSON.parse(JSON.stringify(fixture(recorder, source)));
+  await replay(result, resetRandomKey);
+});
+
 beforeEach(() => {
   resetRandomKey();
   tape = new Entropy((op) => current?.trace.push(op), undefined, isOracleFrame);

@@ -8,6 +8,12 @@ import { fixture as makeFixture } from './fixture';
 import { activate, current, modules, Recorder } from './membrane';
 import { replay } from './replay-js';
 
+function hasCodeHighlight(value: unknown): boolean {
+  if (!value || typeof value !== 'object') return false;
+  if ('type' in value && value.type === 'code-highlight') return true;
+  return Object.values(value).some(hasCodeHighlight);
+}
+
 let recorder: Recorder;
 let entropy: Entropy;
 let restoreEvents: () => void;
@@ -21,7 +27,9 @@ modules.set(
       '/packages/lexical/src/index.ts'
   )
 );
-const { resetRandomKey } = await import(/* @vite-ignore */ resetModule);
+const utils = await import(/* @vite-ignore */ resetModule);
+modules.set('lexical/LexicalUtils', utils);
+const { resetRandomKey } = utils;
 const coverage =
   process.env.LEXICAL_ORACLE === 'development' &&
   process.env.LEXICAL_MEMBRANE !== 'off'
@@ -33,17 +41,22 @@ afterAll(async () => {
 });
 const disabled = process.env.LEXICAL_MEMBRANE === 'off';
 
-beforeEach(async () => {
+beforeEach(async (context) => {
   moduleEntropy.dispose();
   await coverage?.reset();
   resetRandomKey();
-  recorder = new Recorder();
+  recorder = new Recorder(
+    context.task.file.filepath.endsWith('/LexicalMarkdown.test.ts') &&
+      /^(can import|can export|should not select when importing)/.test(
+        context.task.name
+      )
+  );
   recorder.trace.push(...moduleReads);
   if (!disabled) activate(recorder);
   entropy = new Entropy(
     (op) => recorder.trace.push(op),
     undefined,
-    isOracleFrame
+    () => !recorder.projectingView && isOracleFrame()
   );
   entropy.install();
   restoreEvents = captureEvents(
@@ -70,7 +83,9 @@ afterEach(async (context) => {
     }
     const covered = await coverage?.take();
     const fixture = makeFixture(recorder, {
-      repo: 'lexical',
+      repo: context.task.file.filepath.includes('/lexical-core/')
+        ? 'macro'
+        : 'lexical',
       version: '0.45.0',
       file: context.task.file.filepath.replace(
         `${process.env.LEXICAL_UPSTREAM}/`,
@@ -79,6 +94,9 @@ afterEach(async (context) => {
       test: [context.task.name],
       recordedWith: `lexical-conformance@${process.env.LEXICAL_RECORDER_REV ?? 'development'}`,
     });
+    if (hasCodeHighlight(fixture)) fixture.normalize.push('codeHighlight');
+    if (fixture.source.repo === 'macro')
+      fixture.normalize.push('listIndent: 2');
     entropy.dispose();
     restoreEvents();
     activate();
