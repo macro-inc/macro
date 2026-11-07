@@ -2,7 +2,7 @@
 
 ## What it is
 
-Test support: the local end-to-end suite that drives an isolated local stack (`local_e2e`), and the helpers other crates' tests use against it. Only dev-dependencies may point here.
+Test support: the local end-to-end suite that drives an isolated local stack (`local_e2e`), the helpers other crates' tests use against it, and the Gmail and Outlook emulators. Only dev-dependencies may point here.
 
 Layer: `testing` in [`.config/layers.toml`](../../.config/layers.toml), which
 lists what this group may depend on. `cargo x deps` reports edges that break it.

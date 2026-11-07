@@ -2,7 +2,7 @@
 
 ## What it is
 
-Accounts and teams: team membership and seats, onboarding, user API keys and languages, invites, account managers, system status, the native app service, last-online tracking, and the Microsoft OAuth grant and mobile welcome email stores.
+Accounts and teams: team membership and seats, onboarding, user API keys and languages, invites, account managers, system status, the native app service, last-online tracking, the password vault and its import, and the Microsoft OAuth grant and mobile welcome email stores.
 
 Layer: `domain` in [`.config/layers.toml`](../../.config/layers.toml), which
 lists what this group may depend on. `cargo x deps` reports edges that break it.

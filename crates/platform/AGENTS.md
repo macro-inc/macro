@@ -2,7 +2,7 @@
 
 ## What it is
 
-Service plumbing every backend binary shares: configuration and env vars (`macro_config`, `macro_env_var`), service URLs and queue names, startup and tracing (`macro_entrypoint`, `genai_telemetry`), HTTP middleware and auth extraction, Kafka events, rate limiting and feature flags. No product logic lives here.
+Service plumbing every backend binary shares: configuration and env vars (`macro_config`, `macro_env_var`), service URLs and queue names, startup and tracing (`macro_entrypoint`, `genai_telemetry`), HTTP middleware and auth extraction, Kafka events and user events, rate limiting, single-flight coalescing and feature flags. No product logic lives here.
 
 Layer: `platform` in [`.config/layers.toml`](../../.config/layers.toml), which
 lists what this group may depend on. `cargo x deps` reports edges that break it.
