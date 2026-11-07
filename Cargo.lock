@@ -4167,6 +4167,7 @@ dependencies = [
  "axum",
  "base64 0.22.1",
  "bot_id",
+ "channels",
  "channels_outbound",
  "chrono",
  "cloudfront_sign",

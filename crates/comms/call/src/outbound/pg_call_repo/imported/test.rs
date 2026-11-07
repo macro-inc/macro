@@ -97,7 +97,10 @@ async fn imported_calls_are_listed_for_their_owner(pool: Pool<Postgres>) -> anyh
     let call_id = PgImportedCallRepository::new(pool.clone())
         .upsert(granola_meeting("import-a"))
         .await?;
-    let repo = PgCallRepo::new(pool);
+    let repo = PgCallRepo::new(
+        pool.clone(),
+        std::sync::Arc::new(channels_outbound::channel_name::PgChannelNames::new(pool)),
+    );
 
     let records = repo
         .get_call_records_by_user(user("import-a").copied(), 10, &None, LATEST_FIRST)
@@ -141,7 +144,10 @@ async fn imported_call_record_reads_source_and_transcript(
     let call_id = PgImportedCallRepository::new(pool.clone())
         .upsert(granola_meeting("import-a"))
         .await?;
-    let repo = PgCallRepo::new(pool);
+    let repo = PgCallRepo::new(
+        pool.clone(),
+        std::sync::Arc::new(channels_outbound::channel_name::PgChannelNames::new(pool)),
+    );
 
     let record = repo
         .get_call_record_by_call_id(&call_id)

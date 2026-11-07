@@ -23,7 +23,7 @@ outbound = [
   "dep:ai_usage",
   "dep:aws-sdk-s3",
   "dep:cloudfront_sign",
-  "dep:channels_outbound",
+  "dep:channels",
   "dep:entity_access_db_utils",
   "dep:feature_flags",
   "dep:livekit-api",
@@ -51,7 +51,7 @@ chrono = { workspace = true }
 cloudfront_sign = { workspace = true, optional = true }
 ip_extractor = { workspace = true, optional = true }
 rate_limit = { workspace = true, features = ["axum"], optional = true }
-channels_outbound = { workspace = true, optional = true }
+channels = { workspace = true, optional = true }
 connection = { workspace = true, features = [
   "ports",
 ] }
@@ -102,6 +102,7 @@ subtle = { workspace = true }
 models_soup = { workspace = true }
 
 [dev-dependencies]
+channels_outbound = { workspace = true }
 base64 = { workspace = true }
 macro_db_migrator = { workspace = true }
 mockall = { workspace = true }

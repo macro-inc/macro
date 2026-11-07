@@ -88,6 +88,8 @@ use agent_session::{
     domain::search::{AgentSessionSearchMetadataService, AgentSessionSearchMetadataServiceImpl},
     outbound::postgres::PgAgentSessionRepo,
 };
+use channels::domain::channel_names::ChannelNames;
+use channels_outbound::channel_name::PgChannelNames;
 use collab_surface::inbound::axum_router::CollabSurfaceRouterState;
 use databases::{
     inbound::axum_router::DatabasesRouterState,
@@ -1055,6 +1057,8 @@ impl From<&ApiContext> for SearchHandlerState {
     fn from(ctx: &ApiContext) -> Self {
         SearchHandlerState {
             db: ctx.readonly_db.clone(),
+            channel_names: Arc::new(PgChannelNames::new(ctx.readonly_db.0.clone()))
+                as Arc<dyn ChannelNames<Err = sqlx::Error>>,
             opensearch_client: ctx.opensearch_client.clone(),
             entity_access_service: ctx.entity_access_service.clone(),
             authorization_state: ctx.authorization_state.clone(),

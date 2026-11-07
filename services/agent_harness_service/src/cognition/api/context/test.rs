@@ -275,7 +275,12 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
             ReadonlyEmailPreviewAdapter(email_service),
             channels_service,
             call::domain::service::CallRecordQueryServiceImpl::new(
-                call::outbound::pg_call_repo::PgCallRepo::new(pool.clone()),
+                call::outbound::pg_call_repo::PgCallRepo::new(
+                    pool.clone(),
+                    std::sync::Arc::new(channels_outbound::channel_name::PgChannelNames::new(
+                        pool.clone(),
+                    )),
+                ),
             ),
             crm::domain::service::NoOpCrmService,
             github_pull_request_service,
@@ -423,7 +428,12 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
     );
 
     let call_service = call::domain::service::CallServiceImpl::new(
-        call::outbound::pg_call_repo::PgCallRepo::new(pool.clone()),
+        call::outbound::pg_call_repo::PgCallRepo::new(
+            pool.clone(),
+            std::sync::Arc::new(channels_outbound::channel_name::PgChannelNames::new(
+                pool.clone(),
+            )),
+        ),
         ai_tools::NoOpCallRtcClient,
         ai_tools::NoOpConnectionService,
         (*entity_access_service).clone(),

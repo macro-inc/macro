@@ -789,7 +789,12 @@ async fn run_server() -> anyhow::Result<()> {
     );
     let call_connection_service =
         ConnectionServiceImpl::new(entity_access_service.clone(), connection_gateway.clone());
-    let call_repo = PgCallRepo::new(db.clone());
+    let call_repo = PgCallRepo::new(
+        db.clone(),
+        std::sync::Arc::new(channels_outbound::channel_name::PgChannelNames::new(
+            db.clone(),
+        )),
+    );
     let egress_config = match (
         config::CallRecordingS3Bucket::new(),
         config::CallRecordingS3Region::new(),
@@ -1160,9 +1165,7 @@ async fn run_server() -> anyhow::Result<()> {
         let cancellation_token = consumer_cancellation_token.clone();
         let consumer = crm::inbound::call_archived::CallArchivedConsumer::new(
             crm::domain::call_links::CallRecordLinker::new(
-                call::domain::service::CallRecordQueryServiceImpl::new(PgCallRepo::new(
-                    db.clone(),
-                )),
+                call::domain::service::CallRecordQueryServiceImpl::new(PgCallRepo::new(db.clone(), std::sync::Arc::new(channels_outbound::channel_name::PgChannelNames::new(db.clone())))),
                 crm::outbound::call_link::PgCallCrmLinker::new(
                     db.clone(),
                     (*system_properties_service).clone(),
@@ -1749,7 +1752,12 @@ async fn run_server() -> anyhow::Result<()> {
                 frecency_storage.clone(),
             )
             .with_agent_dm_profiles(agent_dm_profiles),
-            call::domain::service::CallRecordQueryServiceImpl::new(PgCallRepo::new(db.clone())),
+            call::domain::service::CallRecordQueryServiceImpl::new(PgCallRepo::new(
+                db.clone(),
+                std::sync::Arc::new(channels_outbound::channel_name::PgChannelNames::new(
+                    db.clone(),
+                )),
+            )),
             crm_service.clone(),
             GithubPullRequestServiceImpl::new(
                 ForeignEntityServiceImpl::new(PgForeignEntityRepo::new(db.clone())),
@@ -1801,6 +1809,9 @@ async fn run_server() -> anyhow::Result<()> {
             )),
             call::domain::service::CallRecordQueryServiceImpl::new(PgCallRepo::new(
                 readonly_db.clone(),
+                std::sync::Arc::new(channels_outbound::channel_name::PgChannelNames::new(
+                    readonly_db.clone(),
+                )),
             )),
             crm_service.clone(),
             GithubPullRequestServiceImpl::new(

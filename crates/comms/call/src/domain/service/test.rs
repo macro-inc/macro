@@ -3911,7 +3911,12 @@ async fn enroll_stable_speaker_voices_links_all_voices_for_consistent_diarized_s
     use crate::outbound::{pg_call_repo::PgCallRepo, pg_voice_repo::PgVoiceRepo};
     use chrono::{Duration, Utc};
 
-    let call_repo = PgCallRepo::new(pool.clone());
+    let call_repo = PgCallRepo::new(
+        pool.clone(),
+        std::sync::Arc::new(channels_outbound::channel_name::PgChannelNames::new(
+            pool.clone(),
+        )),
+    );
     let voice_repo = PgVoiceRepo::new(pool.clone());
     let user_a = MacroUserIdStr::parse_from_str("macro|user-a@test.com")?;
     let user_b = MacroUserIdStr::parse_from_str("macro|user-b@test.com")?;
