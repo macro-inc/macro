@@ -7,6 +7,7 @@ import { contactsClient } from '@service-contacts/client';
 import { useQuery } from '@tanstack/solid-query';
 import { type Accessor, createMemo } from 'solid-js';
 import { contactsKeys } from './keys';
+import { requestContactRefresh } from './refresh';
 
 export function contactsQueryOptions() {
   return {
@@ -45,5 +46,6 @@ export function useContacts(
 }
 
 export function invalidateContacts() {
+  requestContactRefresh();
   return queryClient.invalidateQueries(contactsQueryOptions());
 }

@@ -2142,6 +2142,46 @@ describe('CacheWorkerCore', () => {
     expect(onStorageResetRequired).not.toHaveBeenCalled();
   });
 
+  it('forwards a guarded hydration and publishes nothing on scope rejection', async () => {
+    const hydrateQuery = vi
+      .fn()
+      .mockRejectedValue(new Error('cache hydration scope changed'));
+    loadCacheWasmMock.mockResolvedValue({
+      openCache: vi.fn().mockResolvedValue({ hydrateQuery }),
+    });
+    const port = { postMessage: vi.fn() };
+    const core = new CacheWorkerCore();
+    core.addPort(port);
+    await core.handleRequest(port, { id: 1, kind: 'init', scope: 'scope-1' });
+    port.postMessage.mockClear();
+    const scope = {
+      identity: 'viewer',
+      storageGeneration: '00000000-0000-4000-8000-000000000001',
+    };
+    await core.handleRequest(port, {
+      id: 2,
+      kind: 'hydrate',
+      query: '{ user { id } }',
+      data: {},
+      identity: 'viewer',
+      hydrationScope: scope,
+    });
+    expect(hydrateQuery).toHaveBeenCalledWith(
+      '{ user { id } }',
+      undefined,
+      undefined,
+      {},
+      'viewer',
+      scope
+    );
+    expect(port.postMessage).not.toHaveBeenCalledWith(
+      expect.objectContaining({ kind: 'cache-hydrated' })
+    );
+    expect(port.postMessage).not.toHaveBeenCalledWith(
+      expect.objectContaining({ kind: 'cache-changed' })
+    );
+  });
+
   it('records and broadcasts identity-changing hydration as a logical reset', async () => {
     const hydrateQuery = vi.fn().mockResolvedValue({
       revision: INITIAL_CACHE_REVISION,

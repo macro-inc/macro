@@ -1175,14 +1175,59 @@ wildcards still scan selected buckets. Storage schema 12 makes the browse index
 covering by appending search text and source hashes. This is an incompatible
 cutover, not a migration: native caches reset, including queued mutations;
 browsers open a fresh `s4.v4.t12` file and do not replay older files' queues.
-Existing cleanup safeguards for those older files remain. The wire API, record
-format, schema epoch, and search projection version are unchanged. See
+Existing cleanup safeguards for those older files remain. That streaming-search
+cutover did not change the record format or schema epoch. See
 [streaming text search](../../../crates/client/README.md#streaming-text-search)
 for the memory boundary and native/OPFS verification.
 
+## Contact cache foundation
+
+Projection 5 indexes only viewer-scoped `GraphqlContact` records into `person`;
+public profiles and the authenticated viewer record do not establish directory
+membership. Names and emails share the existing streamed matcher. Search replies
+advertise `projectionVersion`, absent on older native engines, so future callers
+can gate contact search rather than interpreting unsupported projection as empty.
+
+`ContactDirectoryBackfill` persists nodes through hydration and returns the
+generated cursor-only projection. Hydration omits viewer contact-page and exact
+lookup wrappers. Foreground contact query variants share Soup's 64-page / 512 KiB
+budget; retention version 2 compacts older viewers without clearing entities,
+queue state, or storage generation.
+
+Contact synchronization shares Soup's authenticated leader and rollout gate.
+Fetch-only transport returns one 500-row page for explicit scoped admission:
+the core checks the captured generation and expected/response identities under
+the same engine lock as the write, without switching accounts. Coordinator
+protocol 11 forwards that scope; native hosts refuse guarded writes on older
+engines. Checkpoints advance only after persistence and a generation recheck.
+Invalidations coalesce on a 15-minute cadence without interrupting active scans;
+hourly passes refresh names. Scan omissions never delete records.
+
+The first UI consumer is `/app/debug/data`: its contact card uses one replaceable
+50-row window, with immediately collected query history. The reader validates
+viewer identity and storage generation around cache reads, preserves target user
+IDs, and uses bounded server pages for cold/unsupported caches. Offline windows
+remain explicitly incomplete; authorization failures never become cached successes.
+Server continuations stay server-side even if hydration finishes between pages.
+Exact ID/email resolution derives only requested viewer-scoped UUIDv5 keys
+(verified against shared backend fixtures) and projects bounded records offline.
+Online batches check current membership; omissions never resurrect cached rows.
+Guarded foreground hydration warms returned contacts on supported engines.
+Calendar search organizer/attendee filters now combine bounded suggestions with
+independent selected-email labels and do not use the global full-list hook.
+Their avatars consume resolved names rather than adding name-store history.
+Drive creators and CRM Notes creators now use the same reads via lazy option
+sources in the shared list filter menu and mobile drawer. Selected IDs and Me
+remain separate from the bounded visible page; selection changes do not shuffle
+clicked rows or accumulate prior pages. Only replaces the whole current group,
+including selected IDs outside the page. Tasks' AI-filter catalog and CRM company
+owner/team semantics have not been changed.
+Other picker migrations, before-limit DM ranking/exclusions, and authoritative
+removal reconciliation remain in [the contacts checklist](../../../docs/design/disk-backed-contacts.md).
+
 ## Cached email Quick Access
 
-The disposable Quick Access projection is version 4; version 4 added task
+The disposable Quick Access projection is version 5; version 4 added task
 projects (`GraphqlSoupInitiative`, bucket `initiative`), searched on their display
 name with viewed-first recency read from their embedded `metadata`. Email rows index the thread
 subject, latest sender name/address, and embedded `senders` names/addresses, so an

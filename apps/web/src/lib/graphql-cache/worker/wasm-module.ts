@@ -25,6 +25,7 @@ import type {
   EnqueueOptimisticMutationResult,
   EntityFilterCacheArgs,
   EntityFilterCacheResult,
+  HydrationScope,
   HydrationSearchChanges,
   OptimisticLinkPatchWire,
   QueryRevalidationWire,
@@ -130,7 +131,8 @@ export interface CacheEngine {
     operationName: string | undefined,
     variables: Record<string, unknown> | undefined,
     data: unknown,
-    identity: string | undefined
+    identity: string | undefined,
+    hydrationScope?: HydrationScope
   ): Promise<CacheEngineHydrationResult>;
   inspectMutations(): Promise<MutationInspection[]>;
   enqueueOptimisticMutation(

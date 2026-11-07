@@ -55,6 +55,7 @@ import type {
   CacheChangeOptions,
   CacheGenerationChange,
   CacheHost,
+  CacheHydrateArgs,
   CacheReadArgs,
   CacheWriteArgs,
   EnqueueOptimisticMutationArgs,
@@ -174,6 +175,7 @@ export function createTauriCacheHost(options: TauriHostOptions): CacheHost {
   let entityFilterUnavailable = false;
   // Binaries before incremental watches still serve full reads.
   let watchUnavailable = false;
+  let scopedHydrationSupported: Promise<boolean> | undefined;
   // Native binaries before the calendar range index answer `unsupported`, so
   // the calendar keeps reading from the network until the app updates.
   let calendarUnavailable = false;
@@ -619,20 +621,44 @@ export function createTauriCacheHost(options: TauriHostOptions): CacheHost {
       });
     },
 
-    async hydrateQuery(
-      args: Omit<CacheWriteArgs, 'opKey'>
-    ): Promise<HydrationResult> {
+    async hydrateQuery(args: CacheHydrateArgs): Promise<HydrationResult> {
       await ready;
-      const result = await request<NativeHydrationResult>(
-        'graphql_cache_hydrate',
-        {
-          query: args.query,
-          operationName: args.operationName,
-          variables: args.variables,
-          data: args.data,
-          identity: args.identity,
-        }
-      );
+      if (args.hydrationScope) {
+        scopedHydrationSupported ??= request<SearchCachePage>(
+          'graphql_cache_search',
+          {
+            request: {
+              profile: 'quick-access-v1',
+              buckets: ['person'],
+              query: '',
+              limit: 1,
+              nowMs: 0,
+            },
+          }
+        )
+          .then((page) => (page.projectionVersion ?? 0) >= 5)
+          .catch((error: unknown) => {
+            scopedHydrationSupported = undefined;
+            throw error;
+          });
+        if (!(await scopedHydrationSupported))
+          throw new Error('Scoped cache hydration is unsupported');
+      }
+      const payload = {
+        query: args.query,
+        operationName: args.operationName,
+        variables: args.variables,
+        data: args.data,
+        identity: args.identity,
+      };
+      const result = args.hydrationScope
+        ? await request<NativeHydrationResult>('graphql_cache_hydrate_scoped', {
+            request: { ...payload, hydrationScope: args.hydrationScope },
+          })
+        : await request<NativeHydrationResult>(
+            'graphql_cache_hydrate',
+            payload
+          );
       const newlyObserved = observeRevision(
         parseCacheRevision(result.revision)
       );

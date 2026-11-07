@@ -1,7 +1,10 @@
 use super::*;
 use crate::{
     domain::{
-        models::page::ContactPageSize,
+        models::{
+            page::ContactPageSize,
+            query::{ContactLookup, ContactSearch},
+        },
         ports::ContactDirectory,
         service::{ContactsDomainService, directory::ContactsDirectoryService},
     },
@@ -66,6 +69,62 @@ async fn enriched_pages_preserve_profile_precedence_and_private_address_book_nam
     assert_ne!(first.contacts[0].id, second.contacts[0].id);
     assert!(first.next_cursor.is_none());
     assert!(second.next_cursor.is_none());
+    let search = ContactSearch::new("first private").unwrap();
+    let first_matches = service
+        .search_contacts(
+            MacroUserIdStr::try_from_email("first@example.com").unwrap(),
+            &search,
+            None,
+            ContactPageSize::DEFAULT,
+        )
+        .await
+        .unwrap();
+    assert_eq!(first_matches.contacts.len(), 1);
+    assert_eq!(
+        first_matches.contacts[0].user_id.email_str(),
+        "external@example.com"
+    );
+    let second_matches = service
+        .search_contacts(
+            MacroUserIdStr::try_from_email("second@example.com").unwrap(),
+            &search,
+            None,
+            ContactPageSize::DEFAULT,
+        )
+        .await
+        .unwrap();
+    assert!(second_matches.contacts.is_empty());
+    assert!(second_matches.next_cursor.is_none());
+    let lookup = ContactLookup::new(
+        [
+            "profile@example.com",
+            "second@example.com",
+            "unknown@example.com",
+            "first@example.com",
+        ]
+        .map(|email| MacroUserIdStr::try_from_email(email).unwrap())
+        .to_vec(),
+    )
+    .unwrap();
+    let resolved = service
+        .lookup_contacts(
+            MacroUserIdStr::try_from_email("first@example.com").unwrap(),
+            &lookup,
+        )
+        .await
+        .unwrap();
+    assert_eq!(
+        resolved
+            .iter()
+            .map(|contact| contact.user_id.email_str())
+            .collect::<Vec<_>>(),
+        [
+            "profile@example.com",
+            "unknown@example.com",
+            "first@example.com"
+        ]
+    );
+    assert_eq!(resolved[0].id, first.contacts[2].id);
     sqlx::query!("UPDATE macro_user_info SET first_name = 'Renamed' WHERE macro_user_id = '00000000-0000-4000-8000-000000000103'")
         .execute(&pool).await.unwrap();
     let renamed = service

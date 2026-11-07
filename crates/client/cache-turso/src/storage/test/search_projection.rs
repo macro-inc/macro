@@ -73,7 +73,7 @@ fn viewed_first_browse_order_is_applied_before_the_page_limit() {
 #[test]
 fn reopen_rebuilds_old_search_rows_once_without_replacing_durable_data() {
     block_on(async {
-        for old_version in [None, Some("1"), Some("2")] {
+        for old_version in [None, Some("1"), Some("2"), Some("3"), Some("4")] {
             let database =
                 TursoMemoryDatabase::new(format!("projection-upgrade-{old_version:?}.db"));
             let mut storage = database.open("scope").unwrap();
@@ -114,6 +114,22 @@ fn reopen_rebuilds_old_search_rows_once_without_replacing_durable_data() {
             };
             entries.push((key("GraphqlSoupEmailThread:thread"), email));
             entries.push((key("Thing:retained"), record("unchanged")));
+            for typename in ["GraphqlContact", "GraphqlUser"] {
+                entries.push((
+                    key(&format!("{typename}:person")),
+                    Record {
+                        fields: [
+                            ("__typename".into(), CacheValue::String(typename.into())),
+                            ("name".into(), CacheValue::String("Person".into())),
+                            (
+                                "email".into(),
+                                CacheValue::String("person@example.com".into()),
+                            ),
+                        ]
+                        .into(),
+                    },
+                ));
+            }
             storage.put_batch(entries.clone()).await.unwrap();
             storage.enqueue_mutation(queued("Pending")).await.unwrap();
             let pending = storage.load_mutation_queue().await.unwrap();
@@ -123,6 +139,18 @@ fn reopen_rebuilds_old_search_rows_once_without_replacing_durable_data() {
             raw_execute(
                 &storage,
                 "UPDATE search_documents SET search_text = 'weekly update quartz' WHERE __typename = 'GraphqlSoupEmailThread'",
+                vec![],
+            );
+            // Old engines accepted contact metadata without projecting it, and
+            // incorrectly treated public profiles as directory membership.
+            raw_execute(
+                &storage,
+                "DELETE FROM search_documents WHERE __typename = 'GraphqlContact'",
+                vec![],
+            );
+            raw_execute(
+                &storage,
+                "INSERT INTO search_documents (profile, bucket, __typename, id, search_text, timestamp_ms, source_hash) VALUES ('quick-access-v1', 'person', 'GraphqlUser', 'person', 'person', 0, 'legacy')",
                 vec![],
             );
             // Model rows written by the previous max(viewedAt, updatedAt) projection.
@@ -160,6 +188,12 @@ fn reopen_rebuilds_old_search_rows_once_without_replacing_durable_data() {
                 .load_search_documents(SearchProfile::QuickAccessV1, "email")
                 .await
                 .unwrap();
+            let people = storage
+                .load_search_documents(SearchProfile::QuickAccessV1, "person")
+                .await
+                .unwrap();
+            assert_eq!(people.len(), 1);
+            assert_eq!(people[0].record_key.as_ref(), "GraphqlContact:person");
             assert_eq!(emails.len(), 1);
             assert!(emails[0].search_text.contains("teo@sender.test"));
             assert!(!emails[0].search_text.contains("quartz"));

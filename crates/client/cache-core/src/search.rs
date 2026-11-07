@@ -10,6 +10,7 @@ use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::cmp::Ordering;
 use std::collections::BTreeSet;
+use subsequence_match::{normalize_text as normalize_search_text, subsequence_score};
 use thiserror::Error;
 
 mod changes;
@@ -155,6 +156,10 @@ pub struct SearchRequest {
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SearchPage {
+    /// Revision of the projection maintained by this engine. Older native
+    /// engines omit this field; callers must not mistake unsupported contact
+    /// projection for an empty directory.
+    pub projection_version: u32,
     /// Ranked compact documents.
     pub documents: Vec<SearchDocument>,
     /// Empty-query continuation cursor when more cached documents exist.
@@ -177,7 +182,7 @@ pub enum SearchError {
 
 /// Revision of the derived Quick Access rows. Storage adapters rebuild existing
 /// rows when this changes; normalized records and pending writes remain valid.
-pub const QUICK_ACCESS_PROJECTION_VERSION: u32 = 4;
+pub const QUICK_ACCESS_PROJECTION_VERSION: u32 = 5;
 
 /// Normalized entity types used by the Quick Access projection. Storage rebuilds
 /// restrict decoding to this set so unrelated payloads do not delay readiness.
@@ -190,14 +195,13 @@ pub const QUICK_ACCESS_TYPENAMES: &[&str] = &[
     "GraphqlSoupCrmCompany",
     "GraphqlSoupCrmContact",
     "GraphqlSoupInitiative",
-    "GraphqlUser",
-    "User",
+    "GraphqlContact",
 ];
 
 /// Maximum number of compact documents returned by one RPC.
 pub const MAX_SEARCH_LIMIT: usize = 500;
 /// Maximum accepted query length in bytes.
-pub const MAX_SEARCH_QUERY_BYTES: usize = 512;
+pub const MAX_SEARCH_QUERY_BYTES: usize = subsequence_match::MAX_QUERY_BYTES;
 /// Restores the Quick Access preference for matching direct messages.
 const DM_SEARCH_BOOST: f64 = 1.8;
 
@@ -256,7 +260,9 @@ fn quick_access_fields<'a>(
         "GraphqlSoupCrmCompany" => ("crm_company", &["crmCompanyName", "name", "domains"]),
         "GraphqlSoupCrmContact" => ("crm_contact", &["crmContactName", "name", "email"]),
         "GraphqlSoupInitiative" => ("initiative", &["displayName"]),
-        "GraphqlUser" | "User" => ("person", &["name", "email"]),
+        // Only the viewer-scoped directory record proves membership. Public
+        // profiles (including the authenticated viewer) are not contact rows.
+        "GraphqlContact" => ("person", &["name", "email"]),
         _ => return None,
     };
 
@@ -370,14 +376,6 @@ impl SearchQuery {
         self.tokens()
             .all(|token| subsequence_score(text, token).is_some())
     }
-}
-
-fn normalize_search_text(value: &str) -> String {
-    value
-        .split_whitespace()
-        .collect::<Vec<_>>()
-        .join(" ")
-        .to_lowercase()
 }
 
 fn quick_access_timestamp(typename: &str, record: &Record) -> i64 {
@@ -514,33 +512,6 @@ fn score_normalized_query(
     } else {
         score
     })
-}
-
-fn subsequence_score(haystack: &str, needle: &str) -> Option<f64> {
-    if let Some(start) = haystack.find(needle) {
-        let prefix = start == 0
-            || haystack[..start]
-                .chars()
-                .next_back()
-                .is_some_and(|character| !character.is_alphanumeric());
-        return Some(if prefix { 1.0 } else { 0.9 });
-    }
-    let mut chars = needle.chars();
-    let mut wanted = chars.next()?;
-    let mut first = None;
-    for (position, character) in haystack.chars().enumerate() {
-        if character == wanted {
-            first.get_or_insert(position);
-            match chars.next() {
-                Some(next) => wanted = next,
-                None => {
-                    let span = position.saturating_sub(first.unwrap_or(position)) + 1;
-                    return Some((needle.chars().count() as f64 / span as f64).clamp(0.1, 0.8));
-                }
-            }
-        }
-    }
-    None
 }
 
 fn parse_rfc3339_millis(value: &str) -> Option<i64> {

@@ -10479,6 +10479,24 @@ type GraphqlUser {
 	"""
 	activityOverview(input: ActivityOverviewInput!): GraphqlActivityOverview!
 	"""
+	Resolve up to 500 exact target user IDs, omitting unrelated or unknown people.
+	"""
+	contactsByUserIds(
+		"""
+		Target user IDs, not GraphqlContact record IDs; empty input returns no contacts.
+		"""
+		userIds: [ID!]!
+	): [GraphqlContact!]!
+	"""
+	Resolve up to 500 exact email addresses, restricted to the viewer's contacts or self.
+	"""
+	contactsByEmails(
+		"""
+		Email addresses normalized by the user-ID parser; empty input returns no contacts.
+		"""
+		emails: [String!]!
+	): [GraphqlContact!]!
+	"""
 	Read one page of the viewer's personal contacts with resolved names.
 	"""
 	contacts(
@@ -10489,7 +10507,11 @@ type GraphqlUser {
 		"""
 		Opaque nextCursor from an earlier page in this directory.
 		"""
-		after: String
+		after: String,
+		"""
+		Optional name/email subsequence filter, at most 512 UTF-8 bytes. Results stay in source-ID order; a scan-budget-limited page may be empty with nextCursor.
+		"""
+		search: String
 	): GraphqlContactPage!
 	"""
 	Every calendar visible across owned and delegated inboxes, primaries

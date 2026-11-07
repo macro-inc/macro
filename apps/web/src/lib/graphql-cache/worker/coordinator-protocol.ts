@@ -5,6 +5,7 @@ import {
   isCachePush,
   isCacheResponse,
   isCacheRevision,
+  isStorageGeneration,
   isValidCacheSearchBucket,
   isValidCacheSearchCursor,
   isValidCacheSearchLimit,
@@ -24,7 +25,7 @@ import {
 export { isCachePush, isCacheResponse, isWorkerMessage };
 
 /** Version of the topology envelope and routed cache RPC surface. */
-export const CACHE_COORDINATOR_PROTOCOL_VERSION = 10 as const;
+export const CACHE_COORDINATOR_PROTOCOL_VERSION = 11 as const;
 /**
  * Startup phases in order. The engine may touch storage only in
  * `opening-database`, which begins once it holds the database owner lock. It
@@ -555,7 +556,16 @@ export function isCacheRequest(value: unknown): value is CacheRequest {
       );
     case 'hydrate':
       return (
+        (value.hydrationScope === undefined ||
+          (isRecord(value.hydrationScope) &&
+            hasOnlyKeys(value.hydrationScope, [
+              'storageGeneration',
+              'identity',
+            ]) &&
+            isNonEmptyString(value.hydrationScope.identity) &&
+            isStorageGeneration(value.hydrationScope.storageGeneration))) &&
         hasOnlyKeys(value, [
+          'hydrationScope',
           'id',
           'kind',
           'query',

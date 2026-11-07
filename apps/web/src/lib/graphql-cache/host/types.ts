@@ -26,6 +26,7 @@ import type {
   EntityFilterCacheArgs,
   EntityFilterCacheResult,
   HydrationResult,
+  HydrationScope,
   MutationClaim,
   MutationSettlement,
   OptimisticLinkPatchWire,
@@ -80,6 +81,11 @@ export interface CacheWriteArgs extends Omit<CacheReadArgs, 'priority'> {
   registerDependencies?: boolean;
   /** Opaque session tag; see protocol.ts `identity`. */
   identity?: string;
+}
+
+export interface CacheHydrateArgs extends Omit<CacheWriteArgs, 'opKey'> {
+  /** Reject a response from another account or cleared database before writing. */
+  hydrationScope?: HydrationScope;
 }
 
 export interface EnqueueOptimisticMutationArgs extends CacheWriteArgs {
@@ -164,7 +170,7 @@ export interface CacheHost {
    * notifying foreground subscribers unless the write resets cache identity.
    * Cache-only consumers can opt into hydration via onCacheChanged.
    */
-  hydrateQuery(args: Omit<CacheWriteArgs, 'opKey'>): Promise<HydrationResult>;
+  hydrateQuery(args: CacheHydrateArgs): Promise<HydrationResult>;
   /** Durably queues an optimistic mutation and claims the strict head. */
   enqueueOptimisticMutation(
     args: EnqueueOptimisticMutationArgs,

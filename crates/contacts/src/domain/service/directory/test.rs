@@ -1,9 +1,25 @@
 use super::*;
-use crate::domain::models::{contact::ContactName, page::ContactIdPage};
+mod search;
+use crate::domain::models::{
+    contact::ContactName,
+    page::{ContactIdEntry, ContactIdPage},
+};
 use std::sync::Mutex;
 
 struct Pages(ContactIdPage);
 impl ContactsPageService for Pages {
+    async fn lookup_contact_ids(
+        &self,
+        _viewer: MacroUserIdStr<'_>,
+        lookup: &ContactLookup,
+    ) -> Result<Vec<MacroUserIdStr<'static>>, Report> {
+        Ok(lookup
+            .ids()
+            .iter()
+            .filter(|id| self.0.contacts.iter().any(|row| &row.user_id == *id))
+            .cloned()
+            .collect())
+    }
     async fn contact_id_page(
         &self,
         _viewer: MacroUserIdStr<'_>,
@@ -58,7 +74,9 @@ async fn enriches_only_members_and_scopes_names_and_identity_to_the_viewer() {
     let cursor = ContactCursor::from_position("legacy-position".into()).unwrap();
     let service = ContactsDirectoryService::new(
         Arc::new(Pages(ContactIdPage {
-            contacts: vec![known.clone(), unknown.clone()],
+            contacts: [known.clone(), unknown.clone()]
+                .map(|id| ContactIdEntry::parse(id.to_string()).unwrap())
+                .to_vec(),
             next_cursor: Some(cursor.clone()),
         })),
         names.clone(),
@@ -130,10 +148,9 @@ async fn oversized_source_page_is_rejected_before_enrichment() {
     let names = Arc::new(Names::default());
     let service = ContactsDirectoryService::new(
         Arc::new(Pages(ContactIdPage {
-            contacts: vec![
-                MacroUserIdStr::try_from_email("first@example.com").unwrap(),
-                MacroUserIdStr::try_from_email("second@example.com").unwrap(),
-            ],
+            contacts: ["macro|first@example.com", "macro|second@example.com"]
+                .map(|id| ContactIdEntry::parse(id.into()).unwrap())
+                .to_vec(),
             next_cursor: None,
         })),
         names.clone(),

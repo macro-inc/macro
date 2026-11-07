@@ -5,6 +5,14 @@ single Vite build that runs identically for web, desktop, iOS, and Android — t
 platform is detected at runtime via `getPlatform()` rather than baked into the
 bundle.
 
+## Scoped cache hydration
+
+Contact backfill uses the additive `graphql_cache_hydrate_scoped` command with a
+required account/storage-generation guard. Register it alongside the deployed
+unscoped command; never silently drop the guard for older binaries. JS checks
+projection 5 support, and a missing scoped command must reject without fallback.
+This requires a native rebuild; legacy unscoped callers remain compatible.
+
 ## Native authentication cookies
 
 The native HTTP plugin stores its cookie jar at `$APPLOCALDATA/.cookies`, which

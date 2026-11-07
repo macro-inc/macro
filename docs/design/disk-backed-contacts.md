@@ -1,11 +1,17 @@
 # Disk-backed contacts
 
-**Status:** phase 1 in progress. Bounded pages now include viewer-scoped names and
-identities and are exposed as `user.contacts(limit, after)` through GraphQL. The
-frontend still uses the full directory; the generated page operation has no UI
-consumer yet.
-**Next step:** add bounded search and exact ID/email resolution, then connect the
-first cached search consumer with hydration-page retention handled explicitly.
+**Status:** phase 1 backend contract implemented. Phase 2 now has cache-side
+contact hydration, bounded page retention, a `person` projection, and a generated
+cursor-only backfill result. Background hydration is now wired under Soup's
+existing authenticated tab leadership and cache flag. It admits pages under an
+engine-checked account/storage generation and saves only committed cursors.
+The contact debug inspector, Calendar search's organizer/attendee pickers,
+Drive creator filters and CRM Notes creator filters now use bounded windows. Explicit selected ID/email lookup reads viewer-scoped
+keys offline and authoritative bounded batches online; selected values remain
+independent of suggestions. Other product menus still retain legacy arrays.
+**Next step:** migrate Soup and CRM owner filters; handle Tasks' AI-filter people
+catalog before migrating its people controls. Quick Access/shared recipients
+still need before-limit DM ranking/exclusions.
 
 ## Goal and scope
 
@@ -47,8 +53,8 @@ branch changes, not a claim that the feature is deployed.
   path currently excludes `person`, even though the core search profile has that bucket.
 - [`useCombinedRecipient.ts`](../../apps/web/src/lib/core/signal/useCombinedRecipient.ts)
   derives additional arrays, consumed by email, sharing, invitations, and creation flows.
-- Filters, calendar editors, onboarding, imports, debug views, and the database SQL
-  `people` source also request the full directory.
+- Filters, calendar editors, onboarding, imports, and the database SQL `people`
+  source still request the full directory. The contact debug inspector no longer does.
 
 ## Target data flow
 
@@ -85,10 +91,13 @@ and search projection, not a new database or bespoke contact-storage subsystem.
   target. Names do not affect identity.
   Do not reuse `GraphqlUser`, which is the authenticated viewer/identity witness;
   do not merge viewer-specific names into a global public-profile record.
-- [ ] Provide bounded search and batch ID/email resolution under the same authorized
-  contract. Cached user-profile data alone must not imply contact membership.
-- [ ] Set explicit limits for search results and lookup batches; the enriched read
-  page limit is already 500 (default 100).
+- [x] Provide bounded search and batch ID/email resolution under the same authorized
+  contract. `user.contacts(search, limit, after)` filters names/emails using the same
+  matcher as cache search. `contactsByUserIds` / `contactsByEmails` resolve only
+  requested graph members or self, in first-requested order; unknown people are
+  omitted and empty input returns nothing. Cached profiles never imply membership.
+- [x] Bound read/search results and raw lookup inputs to 500 (page default 100),
+  before lookup deduplication. Search text is capped at 512 UTF-8 bytes.
 - [x] Generate the SDL, `ContactDirectoryPage` operation types, and cache entity
   metadata from their source of truth. Do not use this foreground page operation
   for full background ingestion until phase 2 omits retained page wrappers.
@@ -98,30 +107,66 @@ Read [contacts ownership](../../crates/contacts/AGENTS.md),
 [GraphQL field guide](../guides/add-graphql-field.md) before implementing.
 Keep deployed full-list APIs compatible until their clients can be retired.
 
+### Server search contract
+
+Server search is source-ID-ordered pagination, not the cache's ranked top-K search.
+Each nonempty search enriches at most four batches of 500 source rows; pagination
+also reads one lookahead ID per batch. Reaching this work budget can return an
+empty or short page with a continuation. Only `nextCursor: null` proves exhaustion.
+Callers must follow continuations for more matches, reset them when the query
+changes, and never turn a budget-limited empty page into "no matches."
+
+Per-row cursors preserve original database positions independently of canonical
+user IDs, so stopping inside a batch cannot skip case-normalized legacy rows.
+The shared dependency-free `subsequence_match` crate keeps Unicode normalization
+and token eligibility identical on the server and in the native/WASM cache;
+ranking policy remains in the owning consumer. Exact lookup uses indexed,
+bounded point reads before resolving names.
+
 ## Phase 2 — cache ingestion and query-driven search
 
-- [ ] Hydrate one bounded page at a time, persist it, then release its payload.
-  Keep checkpoints scoped to the account and durable storage generation.
-- [ ] Do not accumulate response pages or a root record containing all contact IDs.
-  `@cacheOnly` limits returned fields; it does not by itself prevent retained page
-  wrappers. Extend the relevant hydration-retention policy deliberately.
-- [ ] Project the new contact type into `person`, using the existing covering index
-  and borrowed-row ranker. Include names and emails in matching. Materialized
-  `IUser.id` must remain the target `userId`; the viewer-scoped `GraphqlContact.id`
-  is the normalized cache key, not a DM/navigation target.
+- [x] Hydrate one 500-row page at a time, persist it, then release its payload.
+  Checkpoints belong to the account and durable storage generation. Fetch-only
+  transport checks cancellation before explicit hydration; the shared core
+  checks generation and both expected/response identities under its engine lock.
+  Reset, account change, disposal, and failed writes cannot advance the cursor.
+- [x] Omit contact page and exact-lookup wrappers during core hydration. Foreground
+  contact queries share the existing 64-page / 512 KiB viewer-snapshot budget
+  with Soup. `ContactDirectoryBackfill` marks nodes `@cacheOnly` and generates
+  its cursor-only result. The background runner uses scoped cache admission.
+- [x] Project `GraphqlContact` names/emails into `person` through the existing
+  covering index and borrowed-row ranker (projection version 5). Public `User` /
+  `GraphqlUser` profiles no longer imply contact membership. No timestamps are
+  invented from relationship metadata.
+- [x] Materialize bounded `IUser` windows with target `userId` as `IUser.id`;
+  the viewer-scoped `GraphqlContact.id` is a cache key, not a DM/navigation target.
+  `directory.ts` maps returned names directly without populating the global name store.
 - [ ] Preserve DM recency, deduplication, and secondary-inbox exclusions. Ranking
   facts needed to choose the top results must apply before the result limit;
   relationship `updated_at` is not automatically equivalent to DM activity.
-- [ ] Add shared contact operations under `apps/web/src/lib/queries/contacts`:
-  bounded search, cursor-based browse, explicit ID/email resolution, and
-  loading/error/synchronization status. These replace the all-array contract.
-- [ ] Bound retained result windows and query-history caches, not just SQL result
-  counts. Keep selected contacts independently of the current suggestions.
-- [ ] For cold, disabled, or unsupported caches, use bounded server reads through
-  the same frontend contract. Never fall back to downloading the full directory.
-- [ ] Account for older native engines: runtime GraphQL metadata can accept a new
+- [x] Add bounded search/browse under `apps/web/src/lib/queries/contacts`, with
+  pending/error, snapshot/partial/cold, and offline/source status. Cursors bind to
+  source, account, query and (for cache) generation; pagination never switches sources.
+- [x] Add shared exact ID/email resolution, including offline selected contacts.
+  Bound raw input to 500 before deduplication. Derive only requested normalized
+  keys with the standard UUIDv5 identity contract, checked by shared Rust/TS
+  fixtures. Online omissions remain authoritative for that batch; offline
+  unresolved IDs never imply non-membership. Successful reads warm supported
+  caches through guarded hydration without retaining lookup wrappers.
+- [x] Bound result windows and query history in the new API: one page per observer,
+  immediate TanStack garbage collection, plain copied cursors, and no page accumulation.
+- [x] Provide an independent, account/epoch-fenced selection resolver with no
+  query history. Calendar people filters use it and preserve unknown/custom
+  emails across searches, page replacement, failures, and offline gaps.
+- [x] For cold, disabled, or unsupported caches, the new reader uses one bounded
+  server page. Offline fallback requires an identity-checked cached window and
+  never masks authorization errors; legacy full-list APIs are not a fallback.
+- [x] Account for older native engines: runtime GraphQL metadata can accept a new
   type, but its handwritten search projection still needs a rebuilt native binary.
   Gate local contact-search capability rather than treating missing support as no matches.
+  Search responses now advertise `projectionVersion`; missing or below 5 means
+  the engine lacks contact projection/retention. The background runner and native
+  guarded-write boundary and the bounded UI reader now gate on this capability.
 - [ ] Wire Quick Access `person` materialization and query-driven shared recipient
   selection; remove global contact indexing and full-directory recipient transforms.
 
@@ -130,7 +175,11 @@ Keep deployed full-list APIs compatible until their clients can be retired.
 Use resumable paginated hydration and coalesced refreshes rather than introducing
 a new change-log subsystem. Existing `contacts_invalidation` notifications should
 schedule bounded work, not cause a complete 100k-contact scan on every event.
-Choose a refresh/coalescing policy that prevents continuous rescans under activity.
+The runner uses 250 ms between pages, a 15-minute maintenance cadence, and a
+15-minute minimum between completed scans. Invalidations do not interrupt or
+rewind an active pass. Hourly passes refresh profile/address-book names even
+without graph events. Leadership/account/generation changes interrupt the job;
+interrupted scans resume from their last durable cursor.
 
 Track cold, partial, complete, and failed synchronization distinctly. Discard stale
 async responses after account/generation changes. Interrupted or failed scans never
@@ -139,8 +188,9 @@ prove that omitted contacts were removed.
 Name freshness needs an explicit policy: contact-relationship timestamps do not
 capture profile or email-contact name updates. Address this through bounded name
 refresh and directory refresh behavior; do not claim graph timestamps synchronize
-all display fields. Determine removal reconciliation from authoritative source
-semantics, not absence from an incomplete scan.
+all display fields. Removal reconciliation remains pending: keyset scans are not a transactional
+snapshot, so even a completed pass does not delete omitted records. A completion
+checkpoint describes a cached snapshot, not current authoritative membership.
 
 ## Phase 3 — eliminate remaining full-list consumers
 
@@ -148,13 +198,25 @@ semantics, not absence from an incomplete scan.
   `useCombinedRecipients()` consumers: query-driven suggestions and separate selection.
 - [ ] Calendar guests, event editors, participant menus, and mentions: bounded
   search plus explicit resolution of attendees/participants already present.
-- [ ] Drive, Tasks, Soup, CRM, and calendar people filters: searchable pages plus
-  explicit resolution of persisted selected IDs.
+- [x] Drive creator and CRM Notes creator filters: lazy sources in the existing
+  desktop submenu and mobile drawer, bounded search/browse, and independent
+  persisted-ID resolution. Self is an explicit pin, selected/unknown IDs survive
+  off-page searches, and Only changes only its own group.
+- [ ] Tasks, Soup, and CRM owner filters: searchable pages plus explicit
+  resolution of persisted selected IDs. Tasks currently passes the whole people
+  catalog to its AI filter planner; replacing that catalog with a suggestion page
+  would silently lose people and must not be used as a migration shortcut.
+- [x] Calendar search organizer/attendee filters: bounded suggestion pages and
+  separate selected-email lookup, with desktop/phone focus and keyboard coverage.
+  Render resolved names through `UserIcon.name` rather than filling the global
+  name store again. Calendar guest editors remain on the migration list.
 - [ ] Onboarding: bounded same-domain lookup instead of collecting every contact email.
 - [ ] Imports: batch exact matching of the imported assignees, plus bounded picker search.
 - [ ] Database SQL `people`: move filtering/aggregation to an appropriate execution
   boundary. Paging everyone and concatenating the pages in JS is not a solution.
-- [ ] Debug views: counts and paginated inspection, not the full directory.
+- [x] Contact debug view: visible counts, search and paginated inspection; JSON
+  export contains only the current window. Desktop/phone browser coverage uses
+  the production reader/window/inspector with bounded stand-in cache/network sources.
 - [ ] Bound and account-scope the shared display-name cache. Retain active/selected
   names without creating eviction/refetch loops; TTL alone is not a size bound.
 - [ ] Remove `useContacts()`, `useContactsQuery()`, the full-list query options,

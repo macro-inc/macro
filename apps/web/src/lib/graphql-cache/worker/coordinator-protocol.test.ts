@@ -24,6 +24,28 @@ import {
   validateTabToCoordinatorEnvelope,
 } from './coordinator-protocol';
 
+it('validates guarded hydration without stripping or weakening its scope', () => {
+  const request = {
+    id: 1,
+    kind: 'hydrate',
+    query: '{ user { id } }',
+    data: {},
+    hydrationScope: {
+      identity: 'viewer',
+      storageGeneration: '00000000-0000-4000-8000-000000000001',
+    },
+  };
+  expect(isCacheRequest(request)).toBe(true);
+  for (const hydrationScope of [
+    { identity: 'viewer' },
+    { ...request.hydrationScope, storageGeneration: 'bad' },
+    { ...request.hydrationScope, identity: '' },
+    null,
+  ]) {
+    expect(isCacheRequest({ ...request, hydrationScope })).toBe(false);
+  }
+});
+
 const version = {
   coordinatorVersion: CACHE_COORDINATOR_PROTOCOL_VERSION,
 } as const;

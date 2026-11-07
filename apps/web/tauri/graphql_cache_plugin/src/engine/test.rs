@@ -44,6 +44,38 @@ fn spawn_handle() -> EngineHandle {
 }
 
 #[test]
+fn scoped_native_hydration_rejects_late_pages_after_clear() {
+    let handle = spawn_handle();
+    let scope = HydrationScope {
+        storage_generation: block_on(handle.current_storage_generation())
+            .unwrap()
+            .parse()
+            .unwrap(),
+        identity: "viewer".into(),
+    };
+    let hydrate = || {
+        block_on(handle.hydrate_query(
+            "{ user { id } }".into(),
+            None,
+            Variables::new(),
+            serde_json::json!({"user":{"id":"viewer"}}),
+            Some("viewer".into()),
+            Some(scope.clone()),
+        ))
+    };
+    assert!(!hydrate().unwrap().write_result.reset);
+    block_on(handle.clear()).unwrap();
+    assert_eq!(
+        hydrate().err().as_deref(),
+        Some("cache hydration scope changed")
+    );
+    assert_ne!(
+        block_on(handle.current_storage_generation()).unwrap(),
+        scope.storage_generation.to_string()
+    );
+}
+
+#[test]
 fn storage_generation_survives_native_reopening_and_rotates_after_clear() {
     let dir = tempfile::tempdir().unwrap();
     let database = cache_turso::TursoFileDatabase::new(dir.path().join("cache.turso")).unwrap();
@@ -243,6 +275,7 @@ fn identical_hydration_does_not_advance_the_native_revision() {
             variables(),
             soup_data(true),
             None,
+            None,
         ))
         .unwrap()
         .write_result
@@ -262,6 +295,7 @@ fn hydration_returns_only_unmarked_fields_and_retains_entities_without_pages() {
         Some("Soup".to_string()),
         variables(),
         soup_data(true),
+        None,
         None,
     ))
     .unwrap();

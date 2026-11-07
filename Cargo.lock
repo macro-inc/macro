@@ -3747,6 +3747,7 @@ dependencies = [
  "serde",
  "serde_json",
  "sha2 0.10.9",
+ "subsequence_match",
  "thiserror 2.0.18",
  "uuid",
 ]
@@ -5166,6 +5167,7 @@ dependencies = [
  "serde_json",
  "sqlx",
  "sqs_worker",
+ "subsequence_match",
  "tokio",
  "tower 0.5.3",
  "tracing",
@@ -9215,6 +9217,7 @@ dependencies = [
  "macro_user_id",
  "models_pagination",
  "rootcause",
+ "serde_json",
  "tokio",
  "tracing",
  "workspace-hack",
@@ -19624,6 +19627,10 @@ dependencies = [
  "quote",
  "syn 2.0.117",
 ]
+
+[[package]]
+name = "subsequence_match"
+version = "0.1.0"
 
 [[package]]
 name = "subtle"

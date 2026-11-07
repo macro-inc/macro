@@ -413,6 +413,7 @@ pub async fn graphql_cache_hydrate<R: Runtime>(
             variables.unwrap_or_default(),
             data,
             identity,
+            None,
         )
         .await?;
     if result.write_result.reset {
@@ -425,7 +426,51 @@ pub async fn graphql_cache_hydrate<R: Runtime>(
             );
         }
     }
-    Ok(match result.data {
+    Ok(hydration_result(result))
+}
+
+/// Required scoped-admission inputs for background responses. Kept separate
+/// from the deployed unscoped command so old binaries cannot ignore a guard.
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct ScopedHydrationRequest {
+    query: String,
+    operation_name: Option<String>,
+    variables: Option<Variables>,
+    data: serde_json::Value,
+    identity: Option<String>,
+    hydration_scope: cache_core::engine::HydrationScope,
+}
+
+/// Admits a background response without switching account or data generation.
+#[tracing::instrument(
+    name = "graphql_cache.ipc.receive",
+    skip_all,
+    fields(graphql_cache.ipc.command = "hydrate_scoped", upstream.trace_id = traceparent.as_deref().and_then(|parent| parent.split('-').nth(1))),
+    err
+)]
+#[tauri::command]
+pub async fn graphql_cache_hydrate_scoped(
+    state: State<'_, CacheState>,
+    request: ScopedHydrationRequest,
+    traceparent: Option<String>,
+) -> Result<HydrationResultWire, String> {
+    let result = engine_handle(&state)?
+        .hydrate_query(
+            request.query,
+            request.operation_name,
+            request.variables.unwrap_or_default(),
+            request.data,
+            request.identity,
+            Some(request.hydration_scope),
+        )
+        .await?;
+    // Guarded writes never reset identity; JS publishes ordinary hydration hints.
+    Ok(hydration_result(result))
+}
+
+fn hydration_result(result: crate::engine::HydrationWriteResultWire) -> HydrationResultWire {
+    match result.data {
         Some(data) => HydrationResultWire::Data {
             unchanged_views: result.unchanged_views,
             search_changed_buckets: result.search_changed_buckets,
@@ -439,7 +484,7 @@ pub async fn graphql_cache_hydrate<R: Runtime>(
             revision: result.write_result.revision,
             revision_advanced: result.write_result.revision_advanced,
         },
-    })
+    }
 }
 
 /// Durably queues an optimistic mutation and attempts to claim the strict

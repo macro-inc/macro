@@ -82,7 +82,13 @@ Sales Tasks use the normal Tasks filters (status, priority, assignee, creator,
 and tags), sorting and grouping, with list/board/Gantt layouts when enabled. Touch
 uses the normal list and filter drawer. The default is open tasks grouped by date.
 Sales Email exposes the normal read/done, attachment, calendar and tag filters. Sales
-Notes has creator/tag filters and Sales Calls has audience/tag filters. All three support
+Notes has creator/tag filters and Sales Calls has audience/tag filters. Sales Notes' creator chooser
+uses bounded contact pages in the desktop submenu and mobile drawer; Me and
+persisted/unknown selections are independent of the suggestion window. Next
+options replaces the page, and Only affects creators without clearing other
+facets or the fixed CRM association. Company owner/team selectors are unchanged.
+Desktop/phone regression: `src/lib/core/internal/browser-test/list-filters.browser.e2e.ts`
+with stand-in data. Sales Email, Sales Notes and Sales Calls support
 last-updated/created/viewed sorting, newest/oldest direction, and date/none grouping.
 Sales Email defaults to last-update date groups; Sales Notes and Sales Calls start ungrouped. Date
 headings use the selected sort field and viewer-local time. Filter controls share one

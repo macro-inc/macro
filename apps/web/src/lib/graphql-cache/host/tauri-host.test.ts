@@ -141,6 +141,90 @@ describe('createTauriCacheHost', () => {
     host.dispose();
   });
 
+  it('never sends scoped hydration to an older native engine', async () => {
+    invokeMock.mockImplementation(async (command: string) =>
+      command === 'graphql_cache_search'
+        ? { documents: [], nextCursor: null }
+        : null
+    );
+    const host = createTauriCacheHost({ scope: 'scope-1' });
+    await expect(
+      host.hydrateQuery({
+        query: '{ user { id } }',
+        data: {},
+        hydrationScope: {
+          identity: 'viewer',
+          storageGeneration: '00000000-0000-4000-8000-000000000001',
+        },
+      })
+    ).rejects.toThrow('unsupported');
+    expect(
+      invokeMock.mock.calls.some(
+        ([command]) => command === 'graphql_cache_hydrate'
+      )
+    ).toBe(false);
+    host.dispose();
+  });
+
+  it('passes the complete captured scope to a supporting native engine', async () => {
+    invokeMock.mockImplementation(async (command: string) => {
+      if (command === 'graphql_cache_search')
+        return { projectionVersion: 5, documents: [], nextCursor: null };
+      if (command === 'graphql_cache_hydrate_scoped')
+        return {
+          kind: 'data',
+          data: {},
+          revision: INITIAL_CACHE_REVISION,
+          revisionAdvanced: false,
+        };
+      return null;
+    });
+    const host = createTauriCacheHost({ scope: 'scope-1' });
+    const scope = {
+      identity: 'viewer',
+      storageGeneration: '00000000-0000-4000-8000-000000000001',
+    };
+    await host.hydrateQuery({
+      query: '{ user { id } }',
+      data: {},
+      hydrationScope: scope,
+    });
+    expect(invokeMock).toHaveBeenCalledWith(
+      'graphql_cache_hydrate_scoped',
+      expect.objectContaining({
+        request: expect.objectContaining({ hydrationScope: scope }),
+      })
+    );
+    host.dispose();
+  });
+
+  it('never downgrades to an unguarded write when the scoped native command is absent', async () => {
+    invokeMock.mockImplementation(async (command: string) => {
+      if (command === 'graphql_cache_search')
+        return { projectionVersion: 5, documents: [], nextCursor: null };
+      if (command === 'graphql_cache_hydrate_scoped')
+        throw new Error('Command graphql_cache_hydrate_scoped not found');
+      return null;
+    });
+    const host = createTauriCacheHost({ scope: 'scope-1' });
+    await expect(
+      host.hydrateQuery({
+        query: '{ user { id } }',
+        data: {},
+        hydrationScope: {
+          identity: 'viewer',
+          storageGeneration: '00000000-0000-4000-8000-000000000001',
+        },
+      })
+    ).rejects.toThrow('not found');
+    expect(
+      invokeMock.mock.calls.some(
+        ([command]) => command === 'graphql_cache_hydrate'
+      )
+    ).toBe(false);
+    host.dispose();
+  });
+
   it('reads the database generation after native initialization', async () => {
     const generation = '00000000-0000-4000-8000-000000000001';
     invokeMock.mockImplementation(async (command: string) =>

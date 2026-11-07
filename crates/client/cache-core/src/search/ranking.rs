@@ -101,6 +101,7 @@ impl<'a> SearchRanker<'a> {
                 record_key: last.record_key.clone(),
             });
         SearchPage {
+            projection_version: super::QUICK_ACCESS_PROJECTION_VERSION,
             documents,
             next_cursor,
         }

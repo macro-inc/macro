@@ -33,5 +33,6 @@ bounded, enriched pages under `GraphqlUser`; these are not CRM contacts.
 - Construct the query only from the authenticated root viewer, never a user argument.
 - `GraphqlContact.id` identifies the viewer/person pair; `userId` identifies the target.
   Viewer-specific names must not merge into public user profiles or `GraphqlUser`.
-- Only a null continuation proves exhaustion. Invalid legacy IDs can leave empty pages.
+- Only a null continuation proves exhaustion. Search budget exhaustion or invalid legacy IDs can leave empty pages. Reset cursors for a new query; server search returns ID-ordered pages, not ranked top-K results.
+- `contactsByUserIds` takes target user IDs, not viewer-scoped record IDs; `contactsByEmails` uses the same membership checks. Both cap raw input at 500, preserve first-requested order, and return nothing for empty input.
 - No query strings, cursor contents, names, or email-based user IDs belong in tracing fields.

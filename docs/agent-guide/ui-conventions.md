@@ -157,6 +157,16 @@ touch devices. Touch rows and checkbox hit areas use the shared touch sizing.
 Existing mobile filter drawers retain their toggle-and-stay-open behavior.
 Inbox selectors retain their explicit **Only**/**All** reset action.
 
+Query-driven filter groups keep the existing menu/drawer controls but load only
+while open. Their source keeps all selected IDs in the collection (including
+unavailable values), separately from the current visible window. Do not apply a
+second substring filter to already matched source rows. Next options replaces
+the window; scroll and virtual focus reset only when a replacement is committed,
+not when selection labels or highlights change. Checkbox toggles keep row order
+stable within a window. A zero-result page can still offer Next options.
+`ListFilterGroup.createSource` requires explicit `selectedIds` and multiselect;
+static groups keep their existing behavior.
+
 | Pointer dropdown | Touch dropdown |
 | --- | --- |
 | ![Only appears on the highlighted row](assets/multiselect-dropdown-desktop.png) | ![Only stays visible on touch rows](assets/multiselect-dropdown-touch.png) |

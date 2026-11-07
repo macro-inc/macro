@@ -17,6 +17,7 @@ serde = { workspace = true }
 # Opaque JSON scalars must preserve floating-point values when reparsed.
 serde_json = { workspace = true, features = ["float_roundtrip"] }
 sha2 = { workspace = true }
+subsequence_match = { path = "../../subsequence_match" }
 thiserror = { workspace = true }
 uuid = { workspace = true }
 

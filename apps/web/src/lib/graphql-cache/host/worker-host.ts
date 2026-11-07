@@ -84,6 +84,7 @@ import type {
   CacheChangeOptions,
   CacheGenerationChange,
   CacheHost,
+  CacheHydrateArgs,
   CacheReadArgs,
   CacheWriteArgs,
   EnqueueOptimisticMutationArgs,
@@ -1464,11 +1465,10 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
       )) as WriteResult;
     },
 
-    async hydrateQuery(
-      args: Omit<CacheWriteArgs, 'opKey'>
-    ): Promise<HydrationResult> {
+    async hydrateQuery(args: CacheHydrateArgs): Promise<HydrationResult> {
       return (await initializedRequest({
         kind: 'hydrate',
+        hydrationScope: args.hydrationScope,
         query: args.query,
         operationName: args.operationName,
         variables: args.variables,
