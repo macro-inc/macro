@@ -1,0 +1,127 @@
+import json
+import unittest
+
+import generate_chart as g
+
+
+def deployment():
+    return {
+        "kind": "Deployment",
+        "metadata": {
+            "name": "email-service",
+            "namespace": "macro-selfhost",
+            "annotations": {"argocd.argoproj.io/sync-wave": "-2"},
+            "labels": {
+                "app.kubernetes.io/name": "email-service",
+                "macro.com/instance": "selfhost",
+            },
+        },
+        "spec": {
+            "replicas": 1,
+            "selector": {"matchLabels": {"macro.com/instance": "selfhost"}},
+            "template": {
+                "metadata": {"labels": {"macro.com/instance": "selfhost"}},
+                "spec": {
+                    "containers": [
+                        {
+                            "name": "email-service",
+                            "image": "localhost:5000/macro/email_service:abc123",
+                            "resources": {},
+                        }
+                    ]
+                },
+            },
+        },
+    }
+
+
+class Chart(unittest.TestCase):
+    def render(self, item):
+        component, rewritten = g.template_item(item)
+        return g.render_document(component, rewritten)
+
+    def test_namespaces_are_left_to_helm(self):
+        self.assertIsNone(g.template_item({"kind": "Namespace", "metadata": {}}))
+
+    def test_a_deployment_templates_only_the_allowed_fields(self):
+        text = self.render(deployment())
+        self.assertIn('{{ index .Values.replicas "email-service" | default 1 }}', text)
+        self.assertIn(
+            '{{ .Values.image.registry }}/email_service:{{ index .Values.image.tags "email-service" }}',
+            text,
+        )
+        self.assertIn('{{ .Release.Name }}', text)
+        self.assertNotIn("argocd", text)
+        self.assertNotIn("macro-selfhost", text)
+        self.assertTrue(text.startswith('---\n{{- if not (has "email-service"'))
+
+    def test_services_wait_for_provisioning_and_the_data_plane_does_not(self):
+        def tiered(tier):
+            item = deployment()
+            item["metadata"]["labels"]["macro.com/tier"] = tier
+            return g.template_item(item)[1]["spec"]["template"]["spec"]
+
+        self.assertEqual(tiered("app")["initContainers"][0]["name"], "wait-for-provisioning")
+        self.assertNotIn("initContainers", tiered("infra"))
+        rendered = self.render(
+            {**deployment(), "metadata": {**deployment()["metadata"], "labels": {
+                **deployment()["metadata"]["labels"], "macro.com/tier": "app"}}}
+        )
+        self.assertIn(
+            '{{ .Values.image.registry }}/postgres:{{ index .Values.image.tags "postgres" }}',
+            rendered,
+        )
+        self.assertNotIn(g.WAIT_IMAGE, rendered)
+
+    def test_workloads_sharing_an_image_name_keep_their_own_builds(self):
+        def workload(name, tag):
+            item = deployment()
+            item["metadata"]["labels"]["app.kubernetes.io/name"] = name
+            item["spec"]["template"]["spec"]["containers"][0]["image"] = (
+                f"localhost:5000/macro/postgres:{tag}"
+            )
+            return item
+
+        tags = g.image_tags([workload("db", "aaa"), workload("postgres", "bbb")])
+        self.assertEqual(tags, {"db": "aaa", "postgres": "bbb"})
+
+    def test_a_cron_job_waits_for_provisioning_and_takes_its_size(self):
+        pod = deployment()["spec"]["template"]
+        cron = {
+            "kind": "CronJob",
+            "metadata": {"name": "sha-cleanup", "labels": {"app.kubernetes.io/name": "sha-cleanup"}},
+            "spec": {"schedule": "0 * * * *", "jobTemplate": {"spec": {"template": pod}}},
+        }
+        component, rewritten = g.template_item(cron)
+        self.assertEqual(component, "sha-cleanup")
+        template = rewritten["spec"]["jobTemplate"]["spec"]["template"]
+        self.assertEqual(template["spec"]["initContainers"][0]["name"], "wait-for-provisioning")
+        self.assertIn("sha-cleanup", template["spec"]["containers"][0]["resources"])
+
+    def test_jobs_get_a_new_name_per_revision(self):
+        job = {
+            "kind": "Job",
+            "metadata": {"name": "provision-abc", "labels": {"macro.com/job": "provision"}},
+            "spec": {"template": {"metadata": {"labels": {}}, "spec": {"containers": [{}]}}},
+        }
+        _, rewritten = g.template_item(job)
+        self.assertEqual(rewritten["metadata"]["name"], "provision-{{ .Release.Revision }}")
+
+    def test_ingress_uses_the_host_value_and_optional_tls(self):
+        ingress = {
+            "kind": "Ingress",
+            "metadata": {"name": "edge", "labels": {}},
+            "spec": {
+                "ingressClassName": "traefik",
+                "tls": [{"hosts": ["selfhost.localhost"], "secretName": "macro-tls"}],
+                "rules": [{"host": "selfhost.localhost", "http": {"paths": []}}],
+            },
+        }
+        component, rewritten = g.template_item(ingress)
+        text = g.render_document(component, rewritten)
+        self.assertIn('"host": "{{ .Values.host }}"', text)
+        self.assertIn("{{ if .Values.tls.secretName }}", text)
+
+
+if __name__ == "__main__":
+    unittest.main()

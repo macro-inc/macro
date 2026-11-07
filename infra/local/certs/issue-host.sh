@@ -4,6 +4,9 @@ set -euo pipefail
 certs_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 output_dir="${1:?output directory required}"
 host="${2:?hostname required}"
+# `exact`: name only this host. A cluster ingress picks a certificate per SNI
+# across instances, so a shared *.localhost entry would serve the wrong one.
+mode="${3:-machine}"
 if [[ ! "$host" =~ ^[a-zA-Z0-9][a-zA-Z0-9.-]*$ ]]; then
   echo "Invalid development hostname: $host" >&2
   exit 1
@@ -18,7 +21,7 @@ openssl x509 -req -in "$output_dir/server.csr" \
   -set_serial "0x$(openssl rand -hex 16)" -days 365 \
   -out "$output_dir/server-leaf.pem" \
   -extfile <(printf '%s\n' \
-    "subjectAltName=DNS:localhost,DNS:*.localhost,DNS:$host,IP:127.0.0.1,IP:::1" \
+    "subjectAltName=$(if [[ "$mode" == exact ]]; then echo "DNS:$host"; else echo "DNS:localhost,DNS:*.localhost,DNS:$host,IP:127.0.0.1,IP:::1"; fi)" \
     'basicConstraints=critical,CA:FALSE' \
     'keyUsage=critical,digitalSignature' \
     'extendedKeyUsage=serverAuth')

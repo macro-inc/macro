@@ -1,0 +1,112 @@
+# DO NOT EDIT — regenerate with `cargo x workflows` (from the repository root).
+# Source: tooling/xtask/crates/xtask_workflows/src/workflows/code_check_infra.rs
+name: infra code check
+on:
+  pull_request: {}
+jobs:
+  path-check:
+    runs-on: linux-ci
+    outputs:
+      should_run: ${{ steps.filter.outputs.should_run }}
+    steps:
+    - name: Put Cargo on PATH
+      run: echo "$HOME/.cargo/bin" >> "$GITHUB_PATH"
+    - name: Checkout Repo
+      uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
+      with:
+        fetch-depth: '0'
+    - id: filter
+      name: Filter changed paths
+      uses: dorny/paths-filter@d1c1ffe0248fe513906c8e24db8ea791d46f8590
+      with:
+        filters: |
+          should_run:
+            - 'infra/**'
+            - 'flake.nix'
+            - 'flake.lock'
+            - '.github/actions/setup-nix-dev-shell/**'
+            - '.github/actions/teardown-nix/**'
+            - '.github/workflows/code_check_infra.yml'
+        token: ''
+  biome-check:
+    needs:
+    - path-check
+    if: needs.path-check.outputs.should_run == 'true'
+    name: Biome Check
+    runs-on: linux-ci
+    steps:
+    - name: Put Cargo on PATH
+      run: echo "$HOME/.cargo/bin" >> "$GITHUB_PATH"
+    - name: Checkout Repo
+      uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
+      with:
+        fetch-depth: '0'
+    - name: Setup Nix
+      uses: ./.github/actions/setup-nix
+    - name: Setup Nix dev shell
+      uses: ./.github/actions/setup-nix-dev-shell
+    - name: Run Biome
+      run: biome ci --changed --no-errors-on-unmatched --error-on-warnings
+      working-directory: infra
+    - name: Teardown Nix
+      if: always()
+      uses: ./.github/actions/teardown-nix
+  check:
+    needs:
+    - path-check
+    if: needs.path-check.outputs.should_run == 'true'
+    runs-on: linux-ci
+    steps:
+    - name: Put Cargo on PATH
+      run: echo "$HOME/.cargo/bin" >> "$GITHUB_PATH"
+    - name: Checkout Repo
+      uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
+    - name: Restore caches
+      uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830
+      continue-on-error: true
+      with:
+        path: /home/runner/.bun/install/cache
+        key: forge-check-${{ hashFiles('**/bun.lock', '**/Cargo.lock') }}
+        restore-keys: forge-check-
+    - name: Setup Nix
+      uses: ./.github/actions/setup-nix
+    - name: Setup Nix dev shell
+      uses: ./.github/actions/setup-nix-dev-shell
+    - name: install
+      run: bun install --frozen-lockfile
+      working-directory: infra
+    - name: check
+      run: bun run check
+      working-directory: infra
+    - name: Teardown Nix
+      if: always()
+      uses: ./.github/actions/teardown-nix
+  status-check:
+    needs:
+    - path-check
+    - biome-check
+    - check
+    if: always()
+    name: Infra Status Check
+    runs-on: linux-ci
+    steps:
+    - name: Put Cargo on PATH
+      run: echo "$HOME/.cargo/bin" >> "$GITHUB_PATH"
+    - name: Check job results
+      run: |
+        echo "path-check: ${{ needs.path-check.result }}"
+        echo "biome-check: ${{ needs.biome-check.result }}"
+        echo "check: ${{ needs.check.result }}"
+
+        # Fail if any job failed (skipped and success are both OK)
+        if [[ "${{ needs.path-check.result }}" == "failure" ]] || \
+           [[ "${{ needs.biome-check.result }}" == "failure" ]] || \
+           [[ "${{ needs.check.result }}" == "failure" ]]; then
+          echo "❌ One or more jobs failed"
+          exit 1
+        fi
+
+        echo "✅ All jobs passed or were skipped"
+concurrency:
+  group: ${{ github.workflow }}-${{ github.head_ref || github.ref }}
+  cancel-in-progress: true

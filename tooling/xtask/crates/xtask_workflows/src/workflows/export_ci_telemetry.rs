@@ -65,6 +65,7 @@ const OBSERVED_WORKFLOWS: &[&str] = &[
     "check generated workflows",
     "check node_modules nix",
     "check tauri lockfiles",
+    "platform parity",
     "cloud storage code check",
     "conventions code check",
     "deploy pulumi service",

@@ -11547,6 +11547,26 @@ dependencies = [
 ]
 
 [[package]]
+name = "kms_gateway"
+version = "0.1.0"
+dependencies = [
+ "axum",
+ "base64 0.22.1",
+ "macro_config",
+ "macro_entrypoint",
+ "macro_env",
+ "macro_tower_layers",
+ "rand 0.9.4",
+ "reqwest 0.13.4",
+ "rootcause",
+ "serde_json",
+ "tokio",
+ "tracing",
+ "uuid",
+ "workspace-hack",
+]
+
+[[package]]
 name = "lambda_client"
 version = "0.1.0"
 dependencies = [
@@ -12319,6 +12339,7 @@ name = "macro_aws_config"
 version = "0.1.0"
 dependencies = [
  "aws-config",
+ "aws-credential-types",
  "aws-sdk-s3",
  "aws-sdk-sqs",
  "macro_env_var",
@@ -16079,6 +16100,27 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7f6d64c71eb498fe9eae14ce4ec935c555749aef511cca85b5568910d6e48001"
 dependencies = [
  "bytemuck",
+]
+
+[[package]]
+name = "queue_gateway"
+version = "0.1.0"
+dependencies = [
+ "axum",
+ "kafka_util",
+ "macro_config",
+ "macro_entrypoint",
+ "macro_env",
+ "macro_tower_layers",
+ "md-5 0.10.6",
+ "rdkafka",
+ "rootcause",
+ "serde",
+ "serde_json",
+ "tokio",
+ "tracing",
+ "uuid",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -23309,6 +23351,7 @@ dependencies = [
  "aws-sdk-kms",
  "aws-sdk-s3",
  "aws-sdk-sqs",
+ "base64 0.22.1",
  "bollard",
  "clap",
  "console 0.15.11",

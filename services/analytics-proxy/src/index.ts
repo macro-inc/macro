@@ -167,8 +167,12 @@ app.use('*', async (c, next) => {
     (isLocalhost ? 'local-development' : null);
   if (!clientIp) return c.text('Missing CF-Connecting-IP', 400);
 
-  const { success } = await c.env.RATE_LIMITER.limit({ key: clientIp });
-  if (!success) return c.text('Too Many Requests', 429);
+  // Cloudflare's binding. Self-hosted runtimes have no equivalent; there the
+  // cluster ingress limits request rates instead.
+  if (c.env.RATE_LIMITER) {
+    const { success } = await c.env.RATE_LIMITER.limit({ key: clientIp });
+    if (!success) return c.text('Too Many Requests', 429);
+  }
 
   await next();
 });

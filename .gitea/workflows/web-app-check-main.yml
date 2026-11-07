@@ -1,0 +1,784 @@
+# DO NOT EDIT — regenerate with `cargo x workflows` (from the repository root).
+# Source: tooling/xtask/crates/xtask_workflows/src/workflows/web_app_check_main.rs
+name: Web App Pr Checks
+on:
+  pull_request: {}
+jobs:
+  path-check:
+    runs-on: linux-ci
+    outputs:
+      should_run: ${{ steps.filter.outputs.should_run }}
+      codegen_changed: ${{ steps.codegen.outputs.codegen_changed }}
+      web_artifact_changed: ${{ steps.filter.outputs.web_artifact_changed }}
+      i18n_changed: ${{ steps.filter.outputs.i18n_changed }}
+      database_grid_changed: ${{ steps.filter.outputs.database_grid_changed }}
+      calendar_details_changed: ${{ steps.filter.outputs.calendar_details_changed }}
+    steps:
+    - name: Put Cargo on PATH
+      run: echo "$HOME/.cargo/bin" >> "$GITHUB_PATH"
+    - name: Checkout Repo
+      uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
+      with:
+        filter: blob:none
+        sparse-checkout: .github
+        fetch-depth: '0'
+    - id: filter
+      name: Filter changed paths
+      uses: dorny/paths-filter@d1c1ffe0248fe513906c8e24db8ea791d46f8590
+      with:
+        filters: |
+          should_run:
+            - 'package.json'
+            - 'bun.lock'
+            - 'apps/web/**'
+            - 'packages/**'
+            - 'crates/folds/agent_fold/**'
+            - 'crates/agent_runtime_protocol/**'
+            - 'crates/client/cache-core/**'
+            - 'crates/client/cache-turso/**'
+            - 'crates/client/cache-wasm/**'
+            - 'crates/client/turso-opfs/**'
+            - 'crates/database_sql/**'
+            - 'crates/filter_ast/**'
+            - 'crates/item_filters/**'
+            - 'static_assets/schema.graphql'
+            - 'Cargo.toml'
+            - 'Cargo.lock'
+            - 'rust-toolchain.toml'
+            - 'services/lexical-service/**'
+            - 'packages/sdk/**'
+            - 'packages/sdk-docs/**'
+            - 'services/ai-editing-worker/**'
+            - 'packages/code-mode-sdk/**'
+            - 'crates/agent_code_mode/SKILL.md'
+            - '.github/actions/setup-reqs-web/**'
+          web_artifact_changed:
+            - 'package.json'
+            - 'bun.lock'
+            - 'apps/web/**'
+            - 'packages/**'
+            - 'crates/folds/agent_fold/**'
+            - 'crates/agent_runtime_protocol/**'
+            - 'crates/client/cache-core/**'
+            - 'crates/client/cache-turso/**'
+            - 'crates/client/cache-wasm/**'
+            - 'crates/client/turso-opfs/**'
+            - 'crates/database_sql/**'
+            - 'crates/filter_ast/**'
+            - 'crates/item_filters/**'
+            - 'static_assets/schema.graphql'
+            - 'Cargo.toml'
+            - 'Cargo.lock'
+            - 'rust-toolchain.toml'
+          codegen_inputs:
+            - 'apps/web/scripts/generate-api-schema.ts'
+            - 'apps/web/scripts/services.ts'
+            - 'packages/sdk/**'
+            - 'apps/docs/**'
+            - '.github/actions/setup-reqs-web/**'
+          i18n_changed:
+            - 'apps/web/src/lib/i18n/**'
+            - 'apps/web/src/lib/core/component/ContextMenu.tsx'
+            - 'apps/web/src/lib/core/constant/settingsTabsConfig.tsx'
+            - 'apps/web/src/components/ui/components/Dropdown.tsx'
+            - 'apps/web/src/features/settings/**'
+          database_grid_changed:
+            - 'apps/web/src/features/database/**'
+          calendar_details_changed:
+            - 'apps/web/src/features/calendar-view/**'
+            - 'apps/web/src/features/calendar/**'
+            - 'apps/web/src/lib/queries/calendar/**'
+        token: ''
+    - id: codegen
+      name: Detect schema changes
+      run: |
+        set -euo pipefail
+        result() {
+          echo "$1"
+          echo "codegen_changed=$2" >> "$GITHUB_OUTPUT"
+          exit 0
+        }
+        [ "$CODEGEN_INPUTS" = true ] && result "A generator input changed." true
+        # The merge commit's first parent is the main this merge result was
+        # built on; a fresh fetch of main could be newer.
+        base=$(git cat-file -p HEAD | sed -n 's/^parent //p' | sed -n 1p)
+        [ -n "$base" ] || result "No base commit to compare with." true
+        git fetch -q --depth=1 origin "$base"
+        names='utoipa|ToSchema|IntoParams|specta|schemars|JsonSchema'
+        manifests=$(git diff "$base" HEAD -- Cargo.toml Cargo.lock)
+        if grep -E "^[-+].*($names)" <<< "$manifests"; then
+          result "A schema crate's version changed." true
+        fi
+        changed=$(git diff --name-only --no-renames "$base" HEAD -- 'crates/*.rs' 'services/*.rs')
+        while IFS= read -r file; do
+          [ -n "$file" ] || continue
+          for revision in HEAD "$base"; do
+            [ -n "$(git ls-tree "$revision" -- "$file")" ] || continue
+            contents=$(git show "$revision:$file")
+            if grep -E "$names" <<< "$contents" > /dev/null; then
+              result "$file names a schema item." true
+            fi
+          done
+        done <<< "$changed"
+        result "No changed Rust file names a schema item." false
+      env:
+        CODEGEN_INPUTS: ${{ steps.filter.outputs.codegen_inputs }}
+  build:
+    needs:
+    - path-check
+    if: needs.path-check.outputs.should_run == 'true'
+    name: Build
+    runs-on: linux-ci
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+    - name: Put Cargo on PATH
+      run: echo "$HOME/.cargo/bin" >> "$GITHUB_PATH"
+    - name: Checkout Repo
+      uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
+    - name: Restore caches
+      uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830
+      continue-on-error: true
+      with:
+        path: |-
+          /home/runner/.bun/install/cache
+          /home/runner/.cargo/registry
+          /home/runner/.cargo/git
+          /home/runner/.cache/.wasm-pack
+          /home/runner/.cache/wasm-pkgs
+        key: forge-build-${{ hashFiles('**/bun.lock', '**/Cargo.lock') }}
+        restore-keys: forge-build-
+    - name: Setup Nix
+      uses: ./.github/actions/setup-nix
+    - name: Setup
+      uses: ./.github/actions/setup-reqs-web
+    - name: Configure Namespace remote sccache
+      if: (github.event_name != 'pull_request' && github.event_name != 'pull_request_target') || github.event.pull_request.head.repo.full_name == github.repository
+      run: |-
+        set -euo pipefail
+        env_file="$(mktemp "$RUNNER_TEMP/namespace-sccache.XXXXXX")"
+        trap 'rm -f "$env_file"' EXIT
+        if nsc cache sccache setup --cache_name web-ci > "$env_file"; then
+          # Register credential values as masked BEFORE exporting: GitHub only
+          # masks `secrets.*`, so without this SCCACHE_WEBDAV_TOKEN — a broad,
+          # ~24h Namespace workspace token (registry + cache write) — printed
+          # verbatim in every subsequent step's env dump. Masking is selective by
+          # key name: masking non-secrets like the endpoint URL or key prefix
+          # would redact those strings everywhere in the logs.
+          while IFS= read -r line; do
+            k="${line%%=*}"
+            v="${line#*=}"
+            [ -n "$v" ] && [ "$k" != "$line" ] || continue
+            case "$k" in
+              *TOKEN*|*SECRET*|*PASSWORD*) echo "::add-mask::$v" ;;
+            esac
+          done < "$env_file"
+          cat "$env_file" >> "$GITHUB_ENV"
+          # The server checks the WebDAV backend before it reports ready, and the
+          # client's default 10s wait can run out. This limit has no env var.
+          sccache_conf="$RUNNER_TEMP/sccache.toml"
+          echo 'server_startup_timeout_ms = 60000' > "$sccache_conf"
+          echo "SCCACHE_CONF=$sccache_conf" >> "$GITHUB_ENV"
+          # Force the next compiler invocation to start a server with the new remote
+          # backend even if a setup hook happened to launch one already.
+          sccache --stop-server >/dev/null 2>&1 || true
+        else
+          echo "::warning::Namespace remote sccache setup failed; using local cache fallback"
+        fi
+    - name: Start sccache server
+      run: sccache --start-server
+    - name: Build
+      run: just build-dev
+      env:
+        CARGO_PROFILE_FIG_ENGINE_WASM_LTO: off
+        CARGO_PROFILE_FIG_ENGINE_WASM_CODEGEN_UNITS: '16'
+        CARGO_PROFILE_PSD_ENGINE_WASM_LTO: off
+        CARGO_PROFILE_PSD_ENGINE_WASM_CODEGEN_UNITS: '16'
+        CARGO_PROFILE_AI_ENGINE_WASM_LTO: off
+        CARGO_PROFILE_AI_ENGINE_WASM_CODEGEN_UNITS: '16'
+        WASM_PKG_CACHE_DIR: /home/runner/.cache/wasm-pkgs
+        VITE_SEGMENT_WRITE_KEY: ${{ secrets.SEGMENT_WRITE_KEY_PRODUCTION }}
+        VITE_POSTHOG_API_KEY: ${{ secrets.POSTHOG_API_KEY }}
+      working-directory: apps/web
+    - name: show sccache stats
+      if: always()
+      run: sccache --show-stats || true
+    - name: Teardown Nix
+      if: always()
+      uses: ./.github/actions/teardown-nix
+  typescript:
+    needs:
+    - path-check
+    if: needs.path-check.outputs.should_run == 'true'
+    name: Typecheck
+    runs-on: linux-ci
+    steps:
+    - name: Put Cargo on PATH
+      run: echo "$HOME/.cargo/bin" >> "$GITHUB_PATH"
+    - name: Checkout Repo
+      uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
+    - name: Restore caches
+      uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830
+      continue-on-error: true
+      with:
+        path: /home/runner/.bun/install/cache
+        key: forge-typescript-${{ hashFiles('**/bun.lock', '**/Cargo.lock') }}
+        restore-keys: forge-typescript-
+    - name: Setup Nix
+      uses: ./.github/actions/setup-nix
+      with:
+        seed-cache: sccache-ci
+    - name: Setup Prereqs
+      uses: ./.github/actions/setup-reqs-web
+    - name: Install SDK Documentation Dependencies
+      run: bun install --frozen-lockfile
+      working-directory: packages/sdk
+    - name: Run checks
+      run: |
+        set -uo pipefail
+        logs="$RUNNER_TEMP/typecheck"
+        mkdir -p "$logs"
+        names=()
+        pids=()
+        check() {
+          local name="$1" directory="$2" command="$3"
+          ( cd "$directory" && eval "$command" ) > "$logs/${#names[@]}.log" 2>&1 &
+          names+=("$name")
+          pids+=("$!")
+        }
+        check 'Check Types' 'apps/web' 'bun run type-check'
+        check 'Check Floating Promises' '.' 'bun run lint:oxlint --quiet'
+        check 'Check Functional Test Types' 'apps/web' 'bun ../../node_modules/typescript-native/bin/tsc --noEmit --skipLibCheck --project tests/functional/tsconfig.json'
+        check 'Check Collaboration Package Types' 'packages/collaboration' 'bun run type-check'
+        check 'Check Lexical Service Types' 'services/lexical-service' 'bun run check'
+        check 'Test Lexical Service Endpoints' 'services/lexical-service' 'bun test src'
+        check 'Check SDK Documentation' 'packages/sdk-docs' 'bun run type-check && bun run test'
+        check 'Check Editing Worker' 'services/ai-editing-worker' 'bun run type-check'
+        check 'Check Code Mode SDK' 'packages/code-mode-sdk' 'bun run type-check && bun run test'
+        failed=0
+        for index in "${!names[@]}"; do
+          status=0
+          wait "${pids[$index]}" || status=$?
+          echo "::group::${names[$index]} (exit $status)"
+          cat "$logs/$index.log"
+          echo "::endgroup::"
+          if [ "$status" -ne 0 ]; then
+            echo "::error::${names[$index]} failed with exit code $status"
+            failed=1
+          fi
+        done
+        exit "$failed"
+    - name: Teardown Nix
+      if: always()
+      uses: ./.github/actions/teardown-nix
+  generated-code:
+    needs:
+    - path-check
+    if: needs.path-check.outputs.codegen_changed == 'true'
+    name: Generated Code Check
+    runs-on: linux-ci
+    env:
+      CARGO_PROFILE_DEV_DEBUG: '0'
+      RUSTFLAGS: -C link-arg=-fuse-ld=mold
+    timeout-minutes: 45
+    steps:
+    - name: Put Cargo on PATH
+      run: echo "$HOME/.cargo/bin" >> "$GITHUB_PATH"
+    - name: Checkout Repo
+      uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
+    - name: Restore caches
+      uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830
+      continue-on-error: true
+      with:
+        path: |-
+          /home/runner/.bun/install/cache
+          /home/runner/.cargo/registry
+          /home/runner/.cargo/git
+        key: forge-generated-code-${{ hashFiles('**/bun.lock', '**/Cargo.lock') }}
+        restore-keys: forge-generated-code-
+    - name: Setup Nix
+      uses: ./.github/actions/setup-nix
+      with:
+        seed-cache: sccache-ci
+    - name: Setup Prereqs
+      uses: ./.github/actions/setup-reqs-web
+      timeout-minutes: 15
+    - name: Configure Namespace remote sccache
+      if: (github.event_name != 'pull_request' && github.event_name != 'pull_request_target') || github.event.pull_request.head.repo.full_name == github.repository
+      run: |-
+        set -euo pipefail
+        env_file="$(mktemp "$RUNNER_TEMP/namespace-sccache.XXXXXX")"
+        trap 'rm -f "$env_file"' EXIT
+        if nsc cache sccache setup --cache_name web-ci > "$env_file"; then
+          # Register credential values as masked BEFORE exporting: GitHub only
+          # masks `secrets.*`, so without this SCCACHE_WEBDAV_TOKEN — a broad,
+          # ~24h Namespace workspace token (registry + cache write) — printed
+          # verbatim in every subsequent step's env dump. Masking is selective by
+          # key name: masking non-secrets like the endpoint URL or key prefix
+          # would redact those strings everywhere in the logs.
+          while IFS= read -r line; do
+            k="${line%%=*}"
+            v="${line#*=}"
+            [ -n "$v" ] && [ "$k" != "$line" ] || continue
+            case "$k" in
+              *TOKEN*|*SECRET*|*PASSWORD*) echo "::add-mask::$v" ;;
+            esac
+          done < "$env_file"
+          cat "$env_file" >> "$GITHUB_ENV"
+          # The server checks the WebDAV backend before it reports ready, and the
+          # client's default 10s wait can run out. This limit has no env var.
+          sccache_conf="$RUNNER_TEMP/sccache.toml"
+          echo 'server_startup_timeout_ms = 60000' > "$sccache_conf"
+          echo "SCCACHE_CONF=$sccache_conf" >> "$GITHUB_ENV"
+          # Force the next compiler invocation to start a server with the new remote
+          # backend even if a setup hook happened to launch one already.
+          sccache --stop-server >/dev/null 2>&1 || true
+        else
+          echo "::warning::Namespace remote sccache setup failed; using local cache fallback"
+        fi
+    - name: Build code-mode assets
+      run: |
+        set -euo pipefail
+
+        # Build the code-mode assets once per SDK state, not once per job. Cache volumes
+        # are forks of past jobs, so most jobs miss the store path another job just built.
+        # The key is the store path, which covers every input of the build.
+        assets="$(nix eval --raw .#code-mode-assets.outPath)"
+        echo "CODE_MODE_ASSETS_DIR=$assets" >> "$GITHUB_ENV"
+
+        if nix-store --check-validity "$assets" 2>/dev/null; then
+          echo "Code-mode assets already in the store"
+          exit 0
+        fi
+
+        # Forks have no remote cache credentials.
+        if [ -z "${SCCACHE_WEBDAV_ENDPOINT:-}" ]; then
+          nix build --no-link --print-build-logs .#code-mode-assets
+          exit 0
+        fi
+
+        cache_url="$SCCACHE_WEBDAV_ENDPOINT/code-mode-assets/$(basename "$assets").closure.gz"
+
+        # The token goes through a config descriptor so it stays out of curl's arguments.
+        cache_request() {
+          curl --fail --silent --show-error --max-time 30 --retry 2 \
+            -K <(printf 'header = "Authorization: Bearer %s"\n' "$SCCACHE_WEBDAV_TOKEN") "$@"
+        }
+
+        if cache_request "$cache_url" | gunzip | nix-store --import; then
+          echo "Code-mode assets restored from the remote cache"
+          exit 0
+        fi
+
+        # Installing node_modules is most of a build and changes far less often than the SDK,
+        # so it has its own entry.
+        modules="$(nix eval --raw .#macro-js-node-modules.outPath)"
+        modules_url="$SCCACHE_WEBDAV_ENDPOINT/code-mode-assets/$(basename "$modules").zst"
+        save_modules=false
+
+        if ! nix-store --check-validity "$modules" 2>/dev/null; then
+          # No retries: a retry would restart the stream into the same pipe, and past the limit
+          # a rebuild is faster.
+          if cache_request --retry 0 --max-time 60 "$modules_url" | zstd -d | nix-store --import; then
+            echo "node_modules restored from the remote cache"
+          else
+            save_modules=true
+          fi
+        fi
+
+        nix build --no-link --print-build-logs .#code-mode-assets
+
+        if [ "$save_modules" = true ] \
+          && ! nix-store --export "$modules" | zstd -T0 -3 | cache_request --max-time 120 --upload-file - "$modules_url"; then
+          echo "::warning::Could not save node_modules to the remote cache"
+        fi
+
+        # Losing the upload costs the next job a rebuild, not a failure.
+        if nix-store --export "$assets" | gzip | cache_request --upload-file - "$cache_url"; then
+          echo "Code-mode assets saved to the remote cache"
+        else
+          echo "::warning::Could not save code-mode assets to the remote cache"
+        fi
+    - name: Build schema binaries
+      run: |
+        set -euo pipefail
+        read -ra openapi_bins <<< "$(cd apps/web && bun scripts/generate-api-schema.ts --print-cargo-bins)"
+        SQLX_OFFLINE=true cargo build "${openapi_bins[@]}" --bin gen_tool_schemas \
+          --bin agent_fold_types --bin export_review_types
+    - name: Generate API Types
+      run: bun run gen-api -- --check
+      working-directory: apps/web
+    - name: Regenerate SDK code
+      run: |
+        bun install --frozen-lockfile
+        bun run sync-specs
+        bun run generate
+      working-directory: packages/sdk
+    - name: Verify SDK generated code is fresh
+      run: |
+        if [ -n "$(git status --porcelain -- packages/sdk)" ]; then
+          echo "packages/sdk generated code is stale. Run 'just update-generated' in packages/sdk and commit the result."
+          git status --porcelain -- packages/sdk
+          git diff -- packages/sdk | head -200
+          exit 1
+        fi
+    - name: Regenerate MCP tool pages
+      run: bun run generate:tools
+      working-directory: apps/docs
+    - name: Verify docs tool reference is fresh
+      run: |
+        if [ -n "$(git status --porcelain -- apps/docs)" ]; then
+          echo "apps/docs tool reference is stale. Run 'bun run generate:tools' in apps/docs and commit the result."
+          git status --porcelain -- apps/docs
+          git diff -- apps/docs | head -200
+          exit 1
+        fi
+    - name: Check Specta Types
+      run: |
+        just gen-agent-fold-types
+        just gen-database-sql-types
+        just gen-dynamic-ui-types
+        just gen-agent-review-types
+        if ! git diff --exit-code -- src/lib/service-clients/service-agent-fold/generated src/lib/core/database-sql/generated src/features/dynamic-ui/generated ../../packages/lexical-core/generated src/lib/service-clients/service-agent-reviews/generated ../../packages/sdk/generated/agent-reviews; then
+          echo "Generated specta types are stale. Run 'just gen-agent-fold-types', 'just gen-database-sql-types', 'just gen-dynamic-ui-types' and 'just gen-agent-review-types' in apps/web and commit the result."
+          exit 1
+        fi
+      env:
+        SPECTA_BIN_DIR: ${{ github.workspace }}/target/debug
+      working-directory: apps/web
+    - name: show sccache stats
+      if: always()
+      run: sccache --show-stats || true
+    - name: Teardown Nix
+      if: always()
+      uses: ./.github/actions/teardown-nix
+  biome-check:
+    needs:
+    - path-check
+    if: needs.path-check.outputs.should_run == 'true'
+    name: Biome Check
+    runs-on: linux-ci
+    steps:
+    - name: Put Cargo on PATH
+      run: echo "$HOME/.cargo/bin" >> "$GITHUB_PATH"
+    - name: Checkout Repo
+      uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
+      with:
+        fetch-depth: '0'
+    - name: Setup Nix
+      uses: ./.github/actions/setup-nix
+      with:
+        seed-cache: sccache-ci
+    - name: Setup Nix dev shell
+      uses: ./.github/actions/setup-nix-dev-shell
+    - name: Run Biome
+      run: biome ci --changed --no-errors-on-unmatched --error-on-warnings
+      working-directory: apps/web
+    - name: Run Collaboration Package Biome
+      run: biome ci --changed --no-errors-on-unmatched --error-on-warnings
+      working-directory: packages/collaboration
+    - name: Check Browser Floor and Native Permissions
+      run: bunx --yes @ast-grep/cli@0.44.1 scan --filter '^(tsx?-browser-floor-apis|plist-media-.+)$'
+    - name: Teardown Nix
+      if: always()
+      uses: ./.github/actions/teardown-nix
+  test:
+    needs:
+    - path-check
+    if: needs.path-check.outputs.should_run == 'true'
+    name: Test (${{ matrix.shard }}/6)
+    runs-on: linux-ci
+    strategy:
+      matrix:
+        shard:
+        - 1
+        - 2
+        - 3
+        - 4
+        - 5
+        - 6
+      fail-fast: false
+    steps:
+    - name: Put Cargo on PATH
+      run: echo "$HOME/.cargo/bin" >> "$GITHUB_PATH"
+    - name: Checkout Repo
+      uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
+    - name: Restore caches
+      uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830
+      continue-on-error: true
+      with:
+        path: |-
+          /home/runner/.bun/install/cache
+          /home/runner/.cargo/registry
+          /home/runner/.cargo/git
+          /home/runner/.cache/.wasm-pack
+          /home/runner/.cache/vitest-modules
+          /home/runner/.cache/wasm-pkgs
+        key: forge-test-${{ hashFiles('**/bun.lock', '**/Cargo.lock') }}
+        restore-keys: forge-test-
+    - name: Setup Nix
+      uses: ./.github/actions/setup-nix
+      with:
+        seed-cache: sccache-ci
+    - name: Setup
+      uses: ./.github/actions/setup-reqs-web
+    - name: Configure Namespace remote sccache
+      if: (github.event_name != 'pull_request' && github.event_name != 'pull_request_target') || github.event.pull_request.head.repo.full_name == github.repository
+      run: |-
+        set -euo pipefail
+        env_file="$(mktemp "$RUNNER_TEMP/namespace-sccache.XXXXXX")"
+        trap 'rm -f "$env_file"' EXIT
+        if nsc cache sccache setup --cache_name web-ci > "$env_file"; then
+          # Register credential values as masked BEFORE exporting: GitHub only
+          # masks `secrets.*`, so without this SCCACHE_WEBDAV_TOKEN — a broad,
+          # ~24h Namespace workspace token (registry + cache write) — printed
+          # verbatim in every subsequent step's env dump. Masking is selective by
+          # key name: masking non-secrets like the endpoint URL or key prefix
+          # would redact those strings everywhere in the logs.
+          while IFS= read -r line; do
+            k="${line%%=*}"
+            v="${line#*=}"
+            [ -n "$v" ] && [ "$k" != "$line" ] || continue
+            case "$k" in
+              *TOKEN*|*SECRET*|*PASSWORD*) echo "::add-mask::$v" ;;
+            esac
+          done < "$env_file"
+          cat "$env_file" >> "$GITHUB_ENV"
+          # The server checks the WebDAV backend before it reports ready, and the
+          # client's default 10s wait can run out. This limit has no env var.
+          sccache_conf="$RUNNER_TEMP/sccache.toml"
+          echo 'server_startup_timeout_ms = 60000' > "$sccache_conf"
+          echo "SCCACHE_CONF=$sccache_conf" >> "$GITHUB_ENV"
+          # Force the next compiler invocation to start a server with the new remote
+          # backend even if a setup hook happened to launch one already.
+          sccache --stop-server >/dev/null 2>&1 || true
+        else
+          echo "::warning::Namespace remote sccache setup failed; using local cache fallback"
+        fi
+    - name: Build agent-fold WASM for tests
+      run: just build-agent-fold-wasm
+      env:
+        WASM_PKG_CACHE_DIR: /home/runner/.cache/wasm-pkgs
+      timeout-minutes: 15
+      working-directory: apps/web
+    - name: Test
+      run: bun run test --shard=${{ matrix.shard }}/6
+      env:
+        VITEST_MODULE_CACHE_DIR: /home/runner/.cache/vitest-modules
+      working-directory: apps/web
+    - name: Teardown Nix
+      if: always()
+      uses: ./.github/actions/teardown-nix
+  functional:
+    needs:
+    - path-check
+    if: needs.path-check.outputs.should_run == 'true'
+    name: Functional Tests
+    runs-on: linux-ci
+    steps:
+    - name: Put Cargo on PATH
+      run: echo "$HOME/.cargo/bin" >> "$GITHUB_PATH"
+    - name: Checkout Repo
+      uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
+    - name: Restore caches
+      uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830
+      continue-on-error: true
+      with:
+        path: |-
+          /home/runner/.bun/install/cache
+          /home/runner/.cargo/registry
+          /home/runner/.cargo/git
+          /home/runner/.cache/.wasm-pack
+          /home/runner/.cache/wasm-pkgs
+        key: forge-functional-${{ hashFiles('**/bun.lock', '**/Cargo.lock') }}
+        restore-keys: forge-functional-
+    - name: Setup Nix
+      uses: ./.github/actions/setup-nix
+      with:
+        seed-cache: sccache-ci
+    - name: Setup
+      uses: ./.github/actions/setup-reqs-web
+      with:
+        playwright: 'true'
+    - name: Configure Namespace remote sccache
+      if: (github.event_name != 'pull_request' && github.event_name != 'pull_request_target') || github.event.pull_request.head.repo.full_name == github.repository
+      run: |-
+        set -euo pipefail
+        env_file="$(mktemp "$RUNNER_TEMP/namespace-sccache.XXXXXX")"
+        trap 'rm -f "$env_file"' EXIT
+        if nsc cache sccache setup --cache_name web-ci > "$env_file"; then
+          # Register credential values as masked BEFORE exporting: GitHub only
+          # masks `secrets.*`, so without this SCCACHE_WEBDAV_TOKEN — a broad,
+          # ~24h Namespace workspace token (registry + cache write) — printed
+          # verbatim in every subsequent step's env dump. Masking is selective by
+          # key name: masking non-secrets like the endpoint URL or key prefix
+          # would redact those strings everywhere in the logs.
+          while IFS= read -r line; do
+            k="${line%%=*}"
+            v="${line#*=}"
+            [ -n "$v" ] && [ "$k" != "$line" ] || continue
+            case "$k" in
+              *TOKEN*|*SECRET*|*PASSWORD*) echo "::add-mask::$v" ;;
+            esac
+          done < "$env_file"
+          cat "$env_file" >> "$GITHUB_ENV"
+          # The server checks the WebDAV backend before it reports ready, and the
+          # client's default 10s wait can run out. This limit has no env var.
+          sccache_conf="$RUNNER_TEMP/sccache.toml"
+          echo 'server_startup_timeout_ms = 60000' > "$sccache_conf"
+          echo "SCCACHE_CONF=$sccache_conf" >> "$GITHUB_ENV"
+          # Force the next compiler invocation to start a server with the new remote
+          # backend even if a setup hook happened to launch one already.
+          sccache --stop-server >/dev/null 2>&1 || true
+        else
+          echo "::warning::Namespace remote sccache setup failed; using local cache fallback"
+        fi
+    - name: Start sccache server
+      run: sccache --start-server
+    - name: Build wasm packages
+      run: just build-wasm
+      env:
+        CARGO_PROFILE_FIG_ENGINE_WASM_LTO: off
+        CARGO_PROFILE_FIG_ENGINE_WASM_CODEGEN_UNITS: '16'
+        CARGO_PROFILE_PSD_ENGINE_WASM_LTO: off
+        CARGO_PROFILE_PSD_ENGINE_WASM_CODEGEN_UNITS: '16'
+        CARGO_PROFILE_AI_ENGINE_WASM_LTO: off
+        CARGO_PROFILE_AI_ENGINE_WASM_CODEGEN_UNITS: '16'
+        WASM_PKG_CACHE_DIR: /home/runner/.cache/wasm-pkgs
+      working-directory: apps/web
+    - name: Functional Browser Tests
+      run: bun run test:functional
+      env:
+        FUNCTIONAL_TEST_WORKERS: '8'
+      working-directory: apps/web
+    - name: show sccache stats
+      if: always()
+      run: sccache --show-stats || true
+    - name: Teardown Nix
+      if: always()
+      uses: ./.github/actions/teardown-nix
+  browser:
+    needs:
+    - path-check
+    if: needs.path-check.outputs.should_run == 'true'
+    name: Browser Tests
+    runs-on: linux-ci
+    steps:
+    - name: Put Cargo on PATH
+      run: echo "$HOME/.cargo/bin" >> "$GITHUB_PATH"
+    - name: Checkout Repo
+      uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
+    - name: Restore caches
+      uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830
+      continue-on-error: true
+      with:
+        path: |-
+          /home/runner/.bun/install/cache
+          /home/runner/.cargo/registry
+          /home/runner/.cargo/git
+          /home/runner/.cache/.wasm-pack
+          /home/runner/.cache/vitest-modules
+          /home/runner/.cache/wasm-pkgs
+        key: forge-browser-${{ hashFiles('**/bun.lock', '**/Cargo.lock') }}
+        restore-keys: forge-browser-
+    - name: Setup Nix
+      uses: ./.github/actions/setup-nix
+      with:
+        seed-cache: sccache-ci
+    - name: Setup
+      uses: ./.github/actions/setup-reqs-web
+      with:
+        playwright: 'true'
+    - name: Configure Namespace remote sccache
+      if: (github.event_name != 'pull_request' && github.event_name != 'pull_request_target') || github.event.pull_request.head.repo.full_name == github.repository
+      run: |-
+        set -euo pipefail
+        env_file="$(mktemp "$RUNNER_TEMP/namespace-sccache.XXXXXX")"
+        trap 'rm -f "$env_file"' EXIT
+        if nsc cache sccache setup --cache_name web-ci > "$env_file"; then
+          # Register credential values as masked BEFORE exporting: GitHub only
+          # masks `secrets.*`, so without this SCCACHE_WEBDAV_TOKEN — a broad,
+          # ~24h Namespace workspace token (registry + cache write) — printed
+          # verbatim in every subsequent step's env dump. Masking is selective by
+          # key name: masking non-secrets like the endpoint URL or key prefix
+          # would redact those strings everywhere in the logs.
+          while IFS= read -r line; do
+            k="${line%%=*}"
+            v="${line#*=}"
+            [ -n "$v" ] && [ "$k" != "$line" ] || continue
+            case "$k" in
+              *TOKEN*|*SECRET*|*PASSWORD*) echo "::add-mask::$v" ;;
+            esac
+          done < "$env_file"
+          cat "$env_file" >> "$GITHUB_ENV"
+          # The server checks the WebDAV backend before it reports ready, and the
+          # client's default 10s wait can run out. This limit has no env var.
+          sccache_conf="$RUNNER_TEMP/sccache.toml"
+          echo 'server_startup_timeout_ms = 60000' > "$sccache_conf"
+          echo "SCCACHE_CONF=$sccache_conf" >> "$GITHUB_ENV"
+          # Force the next compiler invocation to start a server with the new remote
+          # backend even if a setup hook happened to launch one already.
+          sccache --stop-server >/dev/null 2>&1 || true
+        else
+          echo "::warning::Namespace remote sccache setup failed; using local cache fallback"
+        fi
+    - name: Build agent-fold WASM for tests
+      run: just build-agent-fold-wasm
+      env:
+        WASM_PKG_CACHE_DIR: /home/runner/.cache/wasm-pkgs
+      timeout-minutes: 15
+      working-directory: apps/web
+    - name: Sign-up Browser Tests
+      run: just test-signup-browser
+      working-directory: apps/web
+    - name: Interface Language Browser Tests
+      if: needs.path-check.outputs.i18n_changed == 'true'
+      run: |-
+        env -u LD_LIBRARY_PATH bunx playwright install-deps chromium
+        just test-i18n-browser
+      working-directory: apps/web
+    - name: Database Grid Browser Tests
+      if: needs.path-check.outputs.database_grid_changed == 'true'
+      run: |-
+        env -u LD_LIBRARY_PATH bunx playwright install-deps chromium
+        just test-database-browser
+      working-directory: apps/web
+    - name: Calendar Event Details Browser Tests
+      if: needs.path-check.outputs.calendar_details_changed == 'true'
+      run: |-
+        env -u LD_LIBRARY_PATH bunx playwright install-deps chromium
+        just test-calendar-details-browser
+      working-directory: apps/web
+    - name: Teardown Nix
+      if: always()
+      uses: ./.github/actions/teardown-nix
+  cycles:
+    needs:
+    - path-check
+    if: needs.path-check.outputs.should_run == 'true'
+    name: Cycles Import Check
+    runs-on: linux-ci
+    steps:
+    - name: Put Cargo on PATH
+      run: echo "$HOME/.cargo/bin" >> "$GITHUB_PATH"
+    - name: Checkout
+      uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
+    - name: Setup Nix
+      uses: ./.github/actions/setup-nix
+      with:
+        seed-cache: sccache-ci
+    - name: Setup Nix dev shell
+      uses: ./.github/actions/setup-nix-dev-shell
+    - name: Cycles Import Check
+      run: biome lint --changed --no-errors-on-unmatched --only=suspicious/noImportCycles
+      working-directory: apps/web
+    - name: Collaboration Package Cycles Import Check
+      run: biome lint --changed --no-errors-on-unmatched --only=suspicious/noImportCycles
+      working-directory: packages/collaboration
+    - name: Teardown Nix
+      if: always()
+      uses: ./.github/actions/teardown-nix
+concurrency:
+  group: ${{ github.workflow }}-${{ github.head_ref || github.ref }}
+  cancel-in-progress: true

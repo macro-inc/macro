@@ -36,6 +36,20 @@ pub fn write_kickstart(
     google: Option<&kickstart::GoogleIdp>,
     github: Option<&kickstart::GithubIdp>,
 ) -> Result<()> {
+    write_kickstart_for_origins(instance, &[], google, github)
+}
+
+/// [`write_kickstart`], also authorizing OAuth callbacks on `extra_origins`:
+/// the public origin of a cluster environment (`cargo x env`), which is
+/// neither localhost nor this machine's name.
+pub fn write_kickstart_for_origins(
+    instance: &Instance,
+    extra_origins: &[String],
+    google: Option<&kickstart::GoogleIdp>,
+    github: Option<&kickstart::GithubIdp>,
+) -> Result<()> {
+    let mut origins = vec![proxy::url(instance), frontend::https_origin(instance)?];
+    origins.extend(extra_origins.iter().cloned());
     let dir = gen_compose::kickstart_dir(instance);
     std::fs::create_dir_all(&dir)
         .with_context(|| format!("creating kickstart dir {}", dir.display()))?;
@@ -43,7 +57,7 @@ pub fn write_kickstart(
     let doc = kickstart::build(
         instance.port(Port::Frontend),
         instance.port(Port::Auth),
-        &[proxy::url(instance), frontend::https_origin(instance)?],
+        &origins,
         &read_lambda(POPULATE_JWT_LAMBDA)?,
         &read_lambda(RECONCILE_LAMBDA)?,
         google,

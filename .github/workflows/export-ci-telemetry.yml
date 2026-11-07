@@ -58,6 +58,7 @@ name: Export CI telemetry
     - check generated workflows
     - check node_modules nix
     - check tauri lockfiles
+    - platform parity
     - cloud storage code check
     - conventions code check
     - deploy pulumi service

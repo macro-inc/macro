@@ -19,6 +19,8 @@ const ACCOUNT_ID: &str = "000000000000";
 /// The doc-storage bucket — referenced by the upload-finalizer wiring and the
 /// seed env, so it is named rather than inlined.
 pub const DOC_STORAGE_BUCKET: &str = "doc-storage";
+/// Bulk uploads land here before their extractor runs.
+pub const BULK_UPLOAD_STAGING_BUCKET: &str = "bulk-upload-staging";
 
 /// The queue doc-storage ObjectCreated events publish to — referenced by the
 /// upload-finalizer wiring, so it is named.
@@ -32,6 +34,9 @@ pub const BULK_UPLOAD_TABLE: &str = "bulk-upload";
 pub const CONNECTION_GATEWAY_TABLE: &str = "connection-gateway-table";
 /// The static-file metadata table.
 pub const STATIC_FILE_TABLE: &str = "static-file-metadata";
+
+/// The bucket the proxy's `/static-file/*` route reads from.
+pub const STATIC_FILE_BUCKET: &str = "static-file-storage";
 
 /// Alias for the KMS key that encrypts users' Cursor API keys.
 ///
@@ -198,6 +203,21 @@ pub const QUEUES: &[Queue] = &[
         name: UPLOAD_FINALIZER_QUEUE,
         bindings: &[("DOCUMENT_UPLOAD_FINALIZER_QUEUE_URL", Url)],
     },
+    // Their workers may be scaled to zero until the first message, on the platform.
+    Queue {
+        name: macro_queues::OrganizationRetentionQueue::LOCAL,
+        bindings: &[(
+            macro_queues::OrganizationRetentionQueue::OVERRIDE_ENV_VAR_NAME,
+            Url,
+        )],
+    },
+    Queue {
+        name: macro_queues::UploadExtractorQueue::LOCAL,
+        bindings: &[(
+            macro_queues::UploadExtractorQueue::OVERRIDE_ENV_VAR_NAME,
+            Url,
+        )],
+    },
     Queue {
         name: macro_queues::DocumentTextExtractorQueue::LOCAL,
         bindings: &[("DOCUMENT_TEXT_EXTRACTOR_QUEUE", Name)],
@@ -298,11 +318,11 @@ pub const BUCKETS: &[Bucket] = &[
         env_key: "DOCX_DOCUMENT_UPLOAD_BUCKET",
     },
     Bucket {
-        name: "static-file-storage",
+        name: STATIC_FILE_BUCKET,
         env_key: "STATIC_STORAGE_BUCKET",
     },
     Bucket {
-        name: "bulk-upload-staging",
+        name: BULK_UPLOAD_STAGING_BUCKET,
         env_key: "UPLOAD_STAGING_BUCKET",
     },
     Bucket {

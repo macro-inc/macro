@@ -21,7 +21,8 @@ use xtask_paths::RepoGlob;
 
 use crate::workflows::{
     cargo_deny, cargo_workspace_dependency_check, check_generated, check_node_modules_nix,
-    check_tauri_lockfiles, observability_image, sdk_check, steps, test_macrod_update,
+    check_tauri_lockfiles, observability_image, platform_parity, sdk_check, steps,
+    test_macrod_update,
 };
 
 #[cfg(test)]
@@ -109,6 +110,12 @@ const CALLS: &[Call] = &[
         paths: Some(check_tauri_lockfiles::PATHS),
     },
     Call {
+        id: "platform-parity",
+        name: "Platform parity",
+        file: "platform_parity.yml",
+        paths: Some(platform_parity::PATHS),
+    },
+    Call {
         id: "sdk",
         name: "SDK",
         file: "sdk-check.yml",
@@ -127,6 +134,11 @@ const CALLS: &[Call] = &[
         paths: Some(test_macrod_update::PATHS),
     },
 ];
+
+/// The files that make `PR CI` run `file`, if it is path-filtered.
+pub fn paths_of(file: &str) -> Option<&'static [RepoGlob<'static>]> {
+    CALLS.iter().find(|call| call.file == file)?.paths
+}
 
 /// Build the workflow.
 pub fn pr_ci() -> Workflow {

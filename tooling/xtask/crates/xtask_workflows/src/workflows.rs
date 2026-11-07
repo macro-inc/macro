@@ -47,6 +47,7 @@ mod deploy_web_app;
 mod deploy_website;
 mod ensure_daytona_snapshot;
 mod export_ci_telemetry;
+mod forge;
 mod ios_app_store_publish;
 mod ios_app_store_release;
 mod ios_preview;
@@ -55,6 +56,7 @@ mod ios_release_watch;
 mod native_check_label;
 mod observability_image;
 mod path_validation;
+mod platform_parity;
 mod pr_ci;
 mod pr_privacy_check;
 mod publish_sdk;
@@ -447,6 +449,11 @@ const WORKFLOWS: &[WorkflowFile] = &[
         render_yaml: || render_gh_workflow(check_tauri_lockfiles::check_tauri_lockfiles)(),
     },
     WorkflowFile {
+        slug: "platform_parity",
+        file_name: "platform_parity.yml",
+        render_yaml: || render_gh_workflow(platform_parity::platform_parity)(),
+    },
+    WorkflowFile {
         slug: "check_generated",
         file_name: "check_generated.yml",
         render_yaml: || render_gh_workflow(check_generated::check_generated_workflows)(),
@@ -472,6 +479,14 @@ pub fn generate() -> Result<()> {
             .with_context(|| format!("writing {}", path.display()))?;
         println!("generated {}", path.display());
     }
+    let forge_dir = xtask_paths::repo_root().join(forge::DIR);
+    fs::create_dir_all(&forge_dir)?;
+    for ported in forge::PORTED {
+        let path = forge_dir.join(ported.file_name);
+        fs::write(&path, render_forge(ported)?)
+            .with_context(|| format!("writing {}", path.display()))?;
+        println!("generated {}", path.display());
+    }
     Ok(())
 }
 
@@ -487,6 +502,15 @@ pub fn check() -> Result<()> {
             stale.push(workflow.file_name.to_string());
         }
     }
+    let forge_dir = xtask_paths::repo_root().join(forge::DIR);
+    for ported in forge::PORTED {
+        let path = forge_dir.join(ported.file_name);
+        let on_disk =
+            fs::read_to_string(&path).with_context(|| format!("reading {}", path.display()))?;
+        if on_disk != render_forge(ported)? {
+            stale.push(format!("{}/{}", forge::DIR, ported.file_name));
+        }
+    }
     if !stale.is_empty() {
         bail!(
             "generated workflows are stale: {}\nrun `cargo x workflows` from the repository root and commit the result",
@@ -495,6 +519,24 @@ pub fn check() -> Result<()> {
     }
     println!("all generated workflows are up to date");
     Ok(())
+}
+
+/// A workflow as the forge runs it, derived from its GitHub rendering.
+fn render_forge(ported: &forge::Ported) -> Result<String> {
+    let workflow = WORKFLOWS
+        .iter()
+        .find(|w| w.file_name == ported.file_name)
+        .with_context(|| format!("{} is not a generated workflow", ported.file_name))?;
+    let yaml =
+        (workflow.render_yaml)().with_context(|| format!("serializing {}", workflow.file_name))?;
+    let paths: Vec<String> = pr_ci::paths_of(ported.file_name)
+        .unwrap_or_default()
+        .iter()
+        .map(|path| path.as_str().to_owned())
+        .collect();
+    let body = forge::port(&yaml, ported.dropped_jobs, &paths)
+        .with_context(|| format!("porting {}", workflow.file_name))?;
+    Ok(format!("{}{body}", disclaimer(workflow.slug)))
 }
 
 /// Serialize a workflow to YAML and prepend the "do not edit" header.

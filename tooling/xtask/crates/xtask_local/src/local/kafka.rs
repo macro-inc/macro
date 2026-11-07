@@ -64,12 +64,17 @@ pub fn ensure_available(command: &str) -> Result<()> {
 /// synchronous (same shape as `localstack::provision`).
 #[cfg(feature = "local-stack")]
 pub fn provision(instance: &Instance) -> Result<()> {
-    let brokers = format!("localhost:{}", instance.port(Port::Kafka));
+    provision_at(&format!("localhost:{}", instance.port(Port::Kafka)))
+}
+
+/// [`provision`] against explicit brokers (an in-cluster Job).
+#[cfg(feature = "local-stack")]
+pub fn provision_at(brokers: &str) -> Result<()> {
     let rt = tokio::runtime::Builder::new_multi_thread()
         .enable_all()
         .build()
         .context("building tokio runtime")?;
-    rt.block_on(provision_async(&brokers))
+    rt.block_on(provision_async(brokers))
 }
 
 /// Feature-off stub: unreachable in practice because [`ensure_available`]
@@ -77,6 +82,12 @@ pub fn provision(instance: &Instance) -> Result<()> {
 /// compiling and fails loudly if a new path forgets the dispatch guard.
 #[cfg(not(feature = "local-stack"))]
 pub fn provision(_instance: &Instance) -> Result<()> {
+    ensure_available("kafka-provision")
+}
+
+/// Feature-off stub, as [`provision`].
+#[cfg(not(feature = "local-stack"))]
+pub fn provision_at(_brokers: &str) -> Result<()> {
     ensure_available("kafka-provision")
 }
 

@@ -1,0 +1,74 @@
+# DO NOT EDIT — regenerate with `cargo x workflows` (from the repository root).
+# Source: tooling/xtask/crates/xtask_workflows/src/workflows/check_tauri_lockfiles.rs
+name: check tauri lockfiles
+on:
+  pull_request:
+    paths:
+    - apps/web/tauri/**
+    - crates/**/Cargo.toml
+    - Cargo.toml
+    - nix/tauri-desktop.nix
+    - flake.nix
+    - flake.lock
+    - .github/workflows/check_tauri_lockfiles.yml
+permissions:
+  contents: read
+jobs:
+  check-tauri-lockfiles:
+    name: check Tauri lockfiles
+    runs-on: linux-ci
+    outputs:
+      vendoring_inputs: ${{ steps.filter.outputs.vendoring_inputs }}
+    steps:
+    - name: Put Cargo on PATH
+      run: echo "$HOME/.cargo/bin" >> "$GITHUB_PATH"
+    - name: Checkout
+      uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+      with:
+        clean: 'false'
+        fetch-depth: '0'
+    - id: filter
+      name: Filter changed paths
+      uses: dorny/paths-filter@d1c1ffe0248fe513906c8e24db8ea791d46f8590
+      with:
+        filters: |
+          vendoring_inputs:
+            - 'apps/web/tauri/Cargo.lock'
+            - 'apps/web/tauri/desktop-cef/Cargo.lock'
+            - 'nix/tauri-desktop.nix'
+            - 'flake.nix'
+            - 'flake.lock'
+            - '.github/workflows/check_tauri_lockfiles.yml'
+        token: ''
+    - name: Setup Rust
+      uses: ./.github/actions/setup-rust
+      with:
+        sccache: 'false'
+        rust-cache: 'false'
+    - name: Check lockfiles match their manifests
+      run: |
+        cargo update --workspace --locked --manifest-path apps/web/tauri/Cargo.toml
+        cargo update --workspace --locked --manifest-path apps/web/tauri/desktop-cef/Cargo.toml
+  check-tauri-vendoring:
+    needs:
+    - check-tauri-lockfiles
+    if: needs.check-tauri-lockfiles.outputs.vendoring_inputs == 'true'
+    name: check Tauri vendoring
+    runs-on: linux-ci
+    steps:
+    - name: Put Cargo on PATH
+      run: echo "$HOME/.cargo/bin" >> "$GITHUB_PATH"
+    - name: Checkout
+      uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+      with:
+        clean: 'false'
+    - name: Setup Nix
+      uses: ./.github/actions/setup-nix
+    - name: Resolve Tauri lockfiles offline
+      run: nix build --no-link -L .#checks.x86_64-linux.tauri-cargo-lockfiles
+    - name: Teardown Nix
+      if: always()
+      uses: ./.github/actions/teardown-nix
+concurrency:
+  group: ${{ github.workflow }}-${{ github.head_ref || github.ref }}
+  cancel-in-progress: true

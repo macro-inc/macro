@@ -23,6 +23,7 @@ jobs:
       generated_workflows: ${{ steps.filter.outputs.generated_workflows }}
       node_modules_nix: ${{ steps.filter.outputs.node_modules_nix }}
       tauri_lockfiles: ${{ steps.filter.outputs.tauri_lockfiles }}
+      platform_parity: ${{ steps.filter.outputs.platform_parity }}
       sdk: ${{ steps.filter.outputs.sdk }}
       observability_image: ${{ steps.filter.outputs.observability_image }}
       macrod_update: ${{ steps.filter.outputs.macrod_update }}
@@ -498,6 +499,7 @@ jobs:
             - 'tooling/xtask/**'
             - 'crates/macro_event_topics/**'
             - '.github/workflows/**'
+            - '.gitea/workflows/**'
             - '.github/kafka-cluster-topics.json'
           node_modules_nix:
             - 'bun.lock'
@@ -522,6 +524,11 @@ jobs:
             - 'flake.nix'
             - 'flake.lock'
             - '.github/workflows/check_tauri_lockfiles.yml'
+          platform_parity:
+            - 'infra/platform/**'
+            - 'nix/platform.nix'
+            - 'flake.lock'
+            - '.github/workflows/platform_parity.yml'
           sdk:
             - 'packages/sdk/**'
             - '.github/workflows/sdk-check.yml'
@@ -593,6 +600,13 @@ jobs:
     name: Tauri lockfiles
     uses: ./.github/workflows/check_tauri_lockfiles.yml
     secrets: inherit
+  platform-parity:
+    needs:
+    - start
+    if: needs.start.outputs.platform_parity == 'true'
+    name: Platform parity
+    uses: ./.github/workflows/platform_parity.yml
+    secrets: inherit
   sdk:
     needs:
     - start
@@ -626,6 +640,7 @@ jobs:
     - generated-workflows
     - node-modules-nix
     - tauri-lockfiles
+    - platform-parity
     - sdk
     - observability-image
     - macrod-update

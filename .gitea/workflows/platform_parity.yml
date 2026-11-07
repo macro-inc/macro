@@ -1,0 +1,35 @@
+# DO NOT EDIT — regenerate with `cargo x workflows` (from the repository root).
+# Source: tooling/xtask/crates/xtask_workflows/src/workflows/platform_parity.rs
+name: platform parity
+on:
+  pull_request:
+    paths:
+    - infra/platform/**
+    - nix/platform.nix
+    - flake.lock
+    - .github/workflows/platform_parity.yml
+permissions:
+  contents: read
+jobs:
+  parity:
+    name: local and prod differ only in size
+    runs-on: linux-ci
+    steps:
+    - name: Put Cargo on PATH
+      run: echo "$HOME/.cargo/bin" >> "$GITHUB_PATH"
+    - name: Checkout
+      uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+      with:
+        clean: 'false'
+    - name: Setup Nix
+      uses: ./.github/actions/setup-nix
+    - name: Compare renderings
+      run: nix build --no-link -L .#platform.parity
+    - name: Validate the AWS configuration
+      run: nix build --no-link -L .#platform.awsCheck
+    - name: Teardown Nix
+      if: always()
+      uses: ./.github/actions/teardown-nix
+concurrency:
+  group: ${{ github.workflow }}-${{ github.head_ref || github.ref }}
+  cancel-in-progress: true
