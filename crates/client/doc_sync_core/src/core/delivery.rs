@@ -37,6 +37,7 @@ impl SyncCore {
                     .filter(|e| {
                         failed_seq.is_some_and(|seq| e.seq >= seq)
                             && !e.foreign
+                            && update_covers(&bytes, &e.bytes)
                             && !self.is_delivered(e.seq)
                     })
                     .map(|e| e.seq)
@@ -424,4 +425,21 @@ impl SyncCore {
         }
         self.flushes = pending;
     }
+}
+
+// A newer current-peer export cannot supersede adopted bytes from another peer.
+fn update_covers(new: &[u8], old: &[u8]) -> bool {
+    let Ok(new) = loro::LoroDoc::decode_import_blob_meta(new, true) else {
+        return false;
+    };
+    let Ok(old) = loro::LoroDoc::decode_import_blob_meta(old, true) else {
+        return false;
+    };
+    old.partial_end_vv.iter().all(|(peer, end)| {
+        new.partial_end_vv
+            .get(peer)
+            .is_some_and(|new_end| new_end >= end)
+            && new.partial_start_vv.get(peer).copied().unwrap_or(0)
+                <= old.partial_start_vv.get(peer).copied().unwrap_or(0)
+    })
 }
