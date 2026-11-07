@@ -58,7 +58,7 @@ impl Transaction<'_> {
                 }
             }
         }
-        let slot = if self.is_root_or_shadow_root(self.anchor_at(slot)?.key()) {
+        let slot = if self.anchor_at(slot)?.key() == NodeKey::ROOT {
             self.insert_paragraph_at(slot)?;
             SelectionSlot::Active
         } else {

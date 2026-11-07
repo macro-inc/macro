@@ -601,7 +601,7 @@ impl Transaction<'_> {
         // Root insertion is a splice at the anchor, even for a noncollapsed range.
         // Upstream checks this before removing the selected block contents.
         let point = self.anchor_at(slot)?;
-        if self.is_root_or_shadow_root(point.key()) {
+        if point.key() == NodeKey::ROOT {
             let p = self.create(Paragraph::default())?;
             self.splice(point.key(), ChildIndex(point.offset()), 0, &[p.key()])?;
             let range = self.range_at(slot)?.clone();
