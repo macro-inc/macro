@@ -1,8 +1,10 @@
+#[cfg(feature = "axum")]
 use axum::{
     body::Body,
     http::{Response, StatusCode},
 };
 pub use model_error_response::ErrorResponse;
+#[cfg(feature = "axum")]
 use serde_json::{Value, json};
 use utoipa::ToSchema;
 
@@ -77,6 +79,7 @@ impl GenericResponse {
         self
     }
 
+    #[cfg(feature = "axum")]
     pub fn send(self, status_code: StatusCode) -> Response<Body> {
         let mut json_response = serde_json::Map::new();
 

@@ -24,7 +24,7 @@ ip_extractor = { workspace = true, optional = true }
 macro_db_client = { workspace = true, default-features = true, optional = true }
 macro_user_id = { workspace = true, optional = true }
 macro_uuid = { workspace = true }
-model = { workspace = true }
+model = { workspace = true, features = ["axum"] }
 model-entity = { workspace = true }
 models_permissions = { workspace = true }
 serde = { workspace = true }
