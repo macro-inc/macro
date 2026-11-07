@@ -251,11 +251,20 @@ impl Transaction<'_> {
     }
     fn set_children(&mut self, parent: NodeKey, children: &[NodeKey]) -> Result<(), Error> {
         for (i, key) in children.iter().enumerate() {
-            self.writable(*key)?.links = Links {
+            let links = Links {
                 parent: Some(parent),
                 prev: i.checked_sub(1).and_then(|j| children.get(j)).copied(),
                 next: children.get(i + 1).copied(),
             };
+            if self
+                .view()
+                .slot(*key)
+                .ok_or(Error::NodeNotFound(*key))?
+                .links
+                != links
+            {
+                self.writable(*key)?.links = links;
+            }
         }
         match &mut self.writable(parent)?.base {
             BaseData::Element(data) => {

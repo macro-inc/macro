@@ -124,7 +124,7 @@ impl TextData {
         self.format.toggled(kind, align)
     }
 }
-#[derive(Clone, Copy, Debug, Default)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub(crate) struct Links {
     pub parent: Option<NodeKey>,
     pub prev: Option<NodeKey>,

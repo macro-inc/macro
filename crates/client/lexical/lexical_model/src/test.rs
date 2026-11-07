@@ -648,3 +648,22 @@ mod nodes;
 mod editing;
 
 mod state;
+
+#[test]
+fn appending_sibling_leaves_unchanged_prefix_records_clean() -> Result<(), Error> {
+    let mut editor = Editor::builder(EditorMode::Headless).build().unwrap();
+    let ((first, last), _) = editor.update(|tx| {
+        let first = tx.create(Paragraph::default())?;
+        let last = tx.create(Paragraph::default())?;
+        tx.append(NodeKey::ROOT, &[first.key(), last.key()])?;
+        Ok((first.key(), last.key()))
+    })?;
+    let (_, commit) = editor.update(|tx| {
+        let next = tx.create(Paragraph::default())?;
+        tx.append(NodeKey::ROOT, &[next.key()])
+    })?;
+    assert!(!commit.changes.dirty_elements.contains_key(&first));
+    assert!(!commit.changes.mutations.contains_key(&first));
+    assert!(commit.changes.dirty_elements.contains_key(&last));
+    Ok(())
+}
