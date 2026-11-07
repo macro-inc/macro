@@ -3856,7 +3856,6 @@ dependencies = [
  "async-trait",
  "aws-sdk-sqs",
  "axum",
- "call",
  "chrono",
  "chrono-tz",
  "email_utils",
