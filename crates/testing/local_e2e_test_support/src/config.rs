@@ -78,11 +78,12 @@ impl LocalE2eConfig {
 }
 
 fn find_repo_root() -> anyhow::Result<PathBuf> {
+    // The workspace root holds Cargo.lock, however deep the crate sits.
     Path::new(env!("CARGO_MANIFEST_DIR"))
-        .parent()
-        .and_then(Path::parent)
+        .ancestors()
+        .find(|dir| dir.join("Cargo.lock").is_file())
         .map(Path::to_path_buf)
-        .context("CARGO_MANIFEST_DIR must be under crates/<crate>")
+        .context("CARGO_MANIFEST_DIR must be inside the workspace")
 }
 
 #[cfg(test)]
