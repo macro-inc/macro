@@ -22662,7 +22662,7 @@
         {
           "type": "object",
           "title": "Document.webUrl",
-          "description": "The document's URL in the Macro web app.",
+          "description": "The document's URL in the Macro web app. A native canvas or spreadsheet\nwhose detail has loaded links to its own editor; use `canvas().webUrl()`\nor `documents.spreadsheet()` when it has not.",
           "properties": {
             "op": {
               "const": "Document.webUrl"
@@ -23041,9 +23041,9 @@
         "SpreadsheetColumnType": {
           "enum": [
             "number",
+            "text",
             "date",
             "time",
-            "text",
             "checkbox",
             "datetime",
             "dropdown",
@@ -23341,7 +23341,7 @@
   {
     "name": "documents_write",
     "title": "documents: create and change",
-    "description": "Use when writing, creating, reading or editing a document of any kind, such as a brief, notes, a spec, a canvas, a spreadsheet or a deck; not databases, tasks or email.\n\nOperations (create and change); pass one as `op` with its inputs:\n- Comment.edit: Replace the comment's text.\n- Comment.reply: Reply in this comment's thread.\n- Document.access.request: Ask the item's reviewers for more access in the caller's name, as the Share menu's Request access does, superseding the caller's latest request.\n- Document.access.submit: Request access, optionally naming the revision of an earlier request.\n- Document.canvas.apply: Apply exact edits by running CanvasEditor code against the revision you read, without a model; the batch commits whole or not at all.\n- Document.canvas.edit: Edit the canvas by natural-language instructions, which an AI designer carries out live; prefer {@link Canvas.apply} for exact, known changes.\n- Document.canvas.render: Render the canvas to a PNG with Macro's real canvas renderer, kept as a static image to attach to messages with `channel.send(text, { images })`.\n- Document.comment: Add a comment.\n- Document.copy: Copy the document under a new name, optionally from a specific version.\n- Document.copyPresentation: Create a new presentation from this deck with `operations` (at most 100, none for a plain copy) applied to the copy; this deck is left unchanged.\n- Document.createHighlight: Create a standalone PDF highlight.\n- Document.edit: Change a markdown document's or task body's text in place: pass natural-language instructions and an AI editor applies them, merging with concurrent edits.\n- Document.editPresentation: Edit a PowerPoint (.pptx) deck with an ordered batch of 1 to 100 operations, applied atomically and saved as a new version: if any operation fails, nothing is …\n- Document.editWord: Edit an uploaded Word (.docx) document in place with an ordered batch of 1 to 50 operations, applied atomically to its live copy: everyone with it open sees th…\n- Document.favorite: Add this entity to the user's favorites.\n- Document.move: Move the document into a project (or out of one, with `null`).\n- Document.prepareSave: Prepare a multipart file upload; to change a markdown document's text, use `edit`.\n- Document.rename: Rename the document.\n- Document.restore: Restore a soft-deleted document.\n- Document.setProperty: Set a property value on this entity, or attach the property without a value when `value` is omitted.\n- Document.setSkillDescription: Set when to use this skill: one line starting \"Use when\", at most 300 characters, e.g.\n- Document.setTeamShare: Share the document with the owner's team, or unshare it.\n- Document.unfavorite: Remove this entity from the user's favorites.\n- Document.updateSharePermissions: Change who can open the document: the link share and its access level, the owner's team, and channel grants.\n- DocumentAnchor.edit: Edit a placeable comment's position and display settings.\n- documents.create: Create a markdown document.\n- documents.createCanvas: Create a native Canvas with shared content ready for reading and editing; work on it with `document.canvas()`.\n- documents.createSkill: Create a skill: markdown instructions that AI reads and follows.\n- documents.createSnippet: Create a snippet: a reusable markdown document.\n- documents.createSpreadsheet: Create a blank native spreadsheet, ready to read and edit; fill it with `applyEdits`.\n- documents.createUpload: Reserve a binary document and return a presigned URL to PUT its content to.\n- documents.upload: Upload a file as a new document, up to 25 MiB: generated output such as a CSV, a rendered PDF or an image, or bytes read with `Document.bytes()`.\n- Spreadsheet.applyEdits: Apply one atomic batch of up to 25 operations, planned on the revision a `read()` returned: every operation validates before anything is saved.\n- Spreadsheet.edit: Edit the workbook by natural-language instructions, which an AI writer carries out in one atomic batch, as `applyEdits` would.",
+    "description": "Use when writing, creating, reading or editing a document of any kind, such as a brief, notes, a spec, a canvas, a spreadsheet or a deck; not databases, tasks or email.\n\nOperations (create and change); pass one as `op` with its inputs:\n- Comment.edit: Replace the comment's text.\n- Comment.reply: Reply in this comment's thread.\n- Document.access.request: Ask the item's reviewers for more access in the caller's name, as the Share menu's Request access does, superseding the caller's latest request.\n- Document.access.submit: Request access, optionally naming the revision of an earlier request.\n- Document.canvas.apply: Apply exact edits by running CanvasEditor code against the revision you read, without a model; the batch commits whole or not at all.\n- Document.canvas.edit: Edit the canvas by natural-language instructions, which an AI designer carries out live; prefer {@link Canvas.apply} for exact, known changes.\n- Document.canvas.render: Render the canvas to a PNG with Macro's real canvas renderer, kept as a static image: show it in a reply with `toMarkdown()` (never a document mention of its i…\n- Document.comment: Add a comment.\n- Document.copy: Copy the document under a new name, optionally from a specific version.\n- Document.copyPresentation: Create a new presentation from this deck with `operations` (at most 100, none for a plain copy) applied to the copy; this deck is left unchanged.\n- Document.createHighlight: Create a standalone PDF highlight.\n- Document.edit: Change a markdown document's or task body's text in place: pass natural-language instructions and an AI editor applies them, merging with concurrent edits.\n- Document.editPresentation: Edit a PowerPoint (.pptx) deck with an ordered batch of 1 to 100 operations, applied atomically and saved as a new version: if any operation fails, nothing is …\n- Document.editWord: Edit an uploaded Word (.docx) document in place with an ordered batch of 1 to 50 operations, applied atomically to its live copy: everyone with it open sees th…\n- Document.favorite: Add this entity to the user's favorites.\n- Document.move: Move the document into a project (or out of one, with `null`).\n- Document.prepareSave: Prepare a multipart file upload; to change a markdown document's text, use `edit`.\n- Document.rename: Rename the document.\n- Document.restore: Restore a soft-deleted document.\n- Document.setProperty: Set a property value on this entity, or attach the property without a value when `value` is omitted.\n- Document.setSkillDescription: Set when to use this skill: one line starting \"Use when\", at most 300 characters, e.g.\n- Document.setTeamShare: Share the document with the owner's team, or unshare it.\n- Document.unfavorite: Remove this entity from the user's favorites.\n- Document.updateSharePermissions: Change who can open the document: the link share and its access level, the owner's team, and channel grants.\n- DocumentAnchor.edit: Edit a placeable comment's position and display settings.\n- documents.create: Create a markdown document.\n- documents.createCanvas: Create a native Canvas with shared content ready for reading and editing; work on it with `document.canvas()`.\n- documents.createSkill: Create a skill: markdown instructions that AI reads and follows.\n- documents.createSnippet: Create a snippet: a reusable markdown document.\n- documents.createSpreadsheet: Create a blank native spreadsheet, ready to read and edit; fill it with `applyEdits`.\n- documents.createUpload: Reserve a binary document and return a presigned URL to PUT its content to.\n- documents.upload: Upload a file as a new document, up to 25 MiB: generated output such as a CSV, a rendered PDF or an image, or bytes read with `Document.bytes()`.\n- Spreadsheet.applyEdits: Apply one atomic batch of up to 25 operations, planned on the revision a `read()` returned: every operation validates before anything is saved.\n- Spreadsheet.edit: Edit the workbook by natural-language instructions, which an AI writer carries out in one atomic batch, as `applyEdits` would.",
     "annotations": {
       "title": "documents: create and change",
       "readOnlyHint": false,
@@ -23593,7 +23593,7 @@
         {
           "type": "object",
           "title": "Document.canvas.render",
-          "description": "Render the canvas to a PNG with Macro's real canvas renderer, kept as a\nstatic image to attach to messages with `channel.send(text, { images })`.\n\nPass `items` to fit a selection or `crop` for exact world bounds. No UI,\ncursors or selection is drawn; referenced media the renderer can't load\nis listed in `unavailable`, never fetched. The image's pixels map linearly\nonto `crop`; use {@link Canvas.scene} for exact geometry. Anyone with the\nimage's `url` can open it.",
+          "description": "Render the canvas to a PNG with Macro's real canvas renderer, kept as a\nstatic image: show it in a reply with `toMarkdown()` (never a document\nmention of its id), or attach it with `channel.send(text, { images })`.\n\nPass `items` to fit a selection or `crop` for exact world bounds. No UI,\ncursors or selection is drawn; referenced media the renderer can't load\nis listed in `unavailable`, never fetched. The image's pixels map linearly\nonto `crop`; use {@link Canvas.scene} for exact geometry. Anyone with the\nimage's `url` can open it.",
           "properties": {
             "op": {
               "const": "Document.canvas.render"
@@ -29606,8 +29606,8 @@
         },
         "PlaceholderKind": {
           "enum": [
-            "content",
             "text",
+            "content",
             "table",
             "chart",
             "smartArt",
@@ -30317,9 +30317,9 @@
         "SpreadsheetColumnType": {
           "enum": [
             "number",
+            "text",
             "date",
             "time",
-            "text",
             "checkbox",
             "datetime",
             "dropdown",
@@ -31078,10 +31078,10 @@
                 {
                   "enum": [
                     "number",
+                    "text",
                     "date",
                     "time",
                     "general",
-                    "text",
                     "percent",
                     "currency",
                     "accounting",
@@ -40782,13 +40782,13 @@
             },
             "widget": {
               "enum": [
+                "choice",
                 "url",
                 "date",
                 "short",
                 "paragraph",
                 "datetime",
                 "file",
-                "choice",
                 "dropdown",
                 "checkboxes"
               ]
@@ -41532,6 +41532,82 @@
           "required": [
             "op",
             "harness"
+          ],
+          "additionalProperties": false
+        }
+      ]
+    }
+  },
+  {
+    "name": "images_read",
+    "title": "images: read",
+    "description": "Use when generating an image; not structured output or classification (`macro.ai`).\n\nOperations (read); pass one as `op` with its inputs:\n- StaticImage.toMarkdown: The `<m-image>` tag that shows this image in an agent reply, a channel message or a Markdown document.",
+    "annotations": {
+      "title": "images: read",
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": false
+    },
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "op": {
+          "type": "string",
+          "enum": [
+            "StaticImage.toMarkdown"
+          ],
+          "description": "The operation to run."
+        }
+      },
+      "required": [
+        "op"
+      ],
+      "oneOf": [
+        {
+          "type": "object",
+          "title": "StaticImage.toMarkdown",
+          "description": "The `<m-image>` tag that shows this image in an agent reply, a channel\nmessage or a Markdown document. Put it on a line of its own.",
+          "properties": {
+            "op": {
+              "const": "StaticImage.toMarkdown"
+            },
+            "staticImage": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string"
+                },
+                "size": {
+                  "type": "object",
+                  "properties": {
+                    "width": {
+                      "type": "number"
+                    },
+                    "height": {
+                      "type": "number"
+                    }
+                  },
+                  "required": [
+                    "width",
+                    "height"
+                  ],
+                  "additionalProperties": false
+                }
+              },
+              "required": [
+                "id"
+              ],
+              "additionalProperties": false,
+              "description": "The StaticImage to act on: A StaticImage, by the ids that locate it. An image in static file storage: an upload, a render from `canvas.render()`, or one made with `macro.images.generate()`."
+            },
+            "alt": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "op",
+            "staticImage"
           ],
           "additionalProperties": false
         }
@@ -45894,7 +45970,7 @@
   {
     "name": "routines_write",
     "title": "routines: create and change",
-    "description": "Use when the agent should do something later, on a schedule or whenever an event occurs: reminders, recurring reports, checking back on something; not a task with a due date or a meeting.\n\nOperations (create and change); pass one as `op` with its inputs:\n- Routine.activateTemplate: Create the caller's own routine from this routine's shared template, with its references already filled in for them.\n- Routine.execute: Start an execution immediately and return its transcript handle if available.\n- Routine.setEnabled: Enable or disable triggering.\n- Routine.shareAsTemplate: Share this routine as a template, or update its shared snapshot.\n- Routine.update: Replace the routine's task and trigger configuration.\n- routines.create: Create an agent routine.",
+    "description": "Use when the agent should do something later, on a schedule or whenever an event occurs: reminders, recurring reports, checking back on something; not a task with a due date or a meeting.\n\nOperations (create and change); pass one as `op` with its inputs:\n- Routine.activateTemplate: Create the caller's own routine from this routine's shared template, with its references already filled in for them.\n- Routine.execute: Start an execution immediately and return its transcript handle if available.\n- Routine.setEnabled: Enable or disable triggering.\n- Routine.shareAsTemplate: Share this routine as a template, or update its shared snapshot.\n- Routine.update: Replace the routine's task and trigger configuration.\n- routines.create: Create a routine: one agent task (`prompt`, with `model`, `agent`, or both), or code and Ask AI `steps`.",
     "annotations": {
       "title": "routines: create and change",
       "readOnlyHint": false,
@@ -46054,7 +46130,7 @@
         {
           "type": "object",
           "title": "routines.create",
-          "description": "Create an agent routine. To check on something later, such as a spawned\nsession or a long job, create a routine instead of waiting in a program.\nSet `model`, `agent`, or both. A cron `schedule` has 6 fields (second\nminute hour day-of-month month day-of-week) or 7 with a year; a 7-field\nschedule that names one date runs once. A rejected routine throws a\n`MacroApiError` whose message says what the server refused.",
+          "description": "Create a routine: one agent task (`prompt`, with `model`, `agent`, or\nboth), or code and Ask AI `steps`. Set `dangerouslyOperateAsUser` only\nwhen the user explicitly asked for it to act, send or post as them. To\ncheck on something later, such as a spawned session or a long job, create\na routine instead of waiting in a program. A cron `schedule` has 6 fields\n(second minute hour day-of-month month day-of-week) or 7 with a year; a\n7-field schedule that names one date runs once. A code step's `source`\nexports `async function main({ macro, run, trigger, steps, knobs })` and\nis type-checked against this SDK when saved. A rejected routine throws a\n`MacroApiError` whose message says what the server refused, including\ntype-check errors.",
           "properties": {
             "op": {
               "const": "routines.create"
@@ -46071,6 +46147,57 @@
         }
       ],
       "$defs": {
+        "AgentRoutineOptions": {
+          "type": "object",
+          "properties": {
+            "prompt": {
+              "type": "string",
+              "description": "Instructions delivered to the agent."
+            },
+            "userPrompt": {
+              "type": "string",
+              "description": "Original user instructions."
+            },
+            "model": {
+              "type": "string",
+              "description": "Model to run the task, e.g. `anthropic/claude-sonnet-5-5`, or the model\noverride for `agent`. Set `model`, `agent`, or both."
+            },
+            "agent": {
+              "type": "string",
+              "description": "Agent to run the task: a built-in agent, or one the caller owns or can\nuse, including one on a self-hosted runtime. Access is checked on save and\nagain on every run. Set `model`, `agent`, or both."
+            },
+            "name": {
+              "type": "string",
+              "description": "Display name."
+            },
+            "trigger": {
+              "allOf": [
+                {
+                  "$ref": "#/$defs/RoutineTriggerOptions"
+                }
+              ],
+              "description": "Schedules or Macro events that start the routine. A cron `schedule` has 6\nor 7 fields: `sec min hour day-of-month month day-of-week [year]`."
+            },
+            "enabled": {
+              "type": "boolean",
+              "description": "Whether triggers can start executions. Defaults to true on creation."
+            },
+            "runVisibility": {
+              "enum": [
+                "listed",
+                "unlisted"
+              ],
+              "description": "Whether runs appear in Home and the Agents list. Defaults to `unlisted` on\ncreation; an update that omits it keeps the stored value."
+            }
+          },
+          "required": [
+            "prompt",
+            "userPrompt",
+            "name",
+            "trigger"
+          ],
+          "additionalProperties": false
+        },
         "EntityReference": {
           "anyOf": [
             {
@@ -46691,56 +46818,267 @@
           ],
           "additionalProperties": false
         },
-        "RoutineOptions": {
-          "type": "object",
-          "properties": {
-            "name": {
-              "type": "string",
-              "description": "Display name."
-            },
-            "trigger": {
-              "allOf": [
-                {
-                  "$ref": "#/$defs/RoutineTriggerOptions"
+        "RoutineKnob": {
+          "anyOf": [
+            {
+              "type": "object",
+              "properties": {
+                "label": {
+                  "type": "string",
+                  "description": "What it is, for the owner, e.g. \"Label for money email\"."
+                },
+                "name": {
+                  "type": "string",
+                  "description": "How the code reads it: `knobs.<name>`."
+                },
+                "type": {
+                  "const": "text"
+                },
+                "value": {
+                  "type": "string",
+                  "description": "Its value."
                 }
+              },
+              "required": [
+                "label",
+                "name",
+                "type",
+                "value"
               ],
-              "description": "Schedules or Macro events that start the routine. A cron `schedule` has 6\nor 7 fields: `sec min hour day-of-month month day-of-week [year]`."
+              "additionalProperties": false
             },
-            "prompt": {
-              "type": "string",
-              "description": "Instructions delivered to the agent."
-            },
-            "userPrompt": {
-              "type": "string",
-              "description": "Original user instructions."
-            },
-            "model": {
-              "type": "string",
-              "description": "Model to run the task, e.g. `anthropic/claude-sonnet-5-5`, or the model\noverride for `agent`. Set `model`, `agent`, or both."
-            },
-            "agent": {
-              "type": "string",
-              "description": "Agent to run the task: a built-in agent, or one the caller owns or can\nuse, including one on a self-hosted runtime. Access is checked on save and\nagain on every run. Set `model`, `agent`, or both."
-            },
-            "enabled": {
-              "type": "boolean",
-              "description": "Whether triggers can start executions. Defaults to true on creation."
-            },
-            "runVisibility": {
-              "enum": [
-                "listed",
-                "unlisted"
+            {
+              "type": "object",
+              "properties": {
+                "label": {
+                  "type": "string",
+                  "description": "What it is, for the owner."
+                },
+                "max": {
+                  "anyOf": [
+                    {
+                      "type": "null"
+                    },
+                    {
+                      "type": "number"
+                    }
+                  ],
+                  "description": "The largest value the owner may set."
+                },
+                "min": {
+                  "anyOf": [
+                    {
+                      "type": "null"
+                    },
+                    {
+                      "type": "number"
+                    }
+                  ],
+                  "description": "The smallest value the owner may set."
+                },
+                "name": {
+                  "type": "string",
+                  "description": "How the code reads it: `knobs.<name>`."
+                },
+                "type": {
+                  "const": "number"
+                },
+                "value": {
+                  "type": "number",
+                  "description": "Its value."
+                }
+              },
+              "required": [
+                "label",
+                "name",
+                "type",
+                "value"
               ],
-              "description": "Whether runs appear in Home and the Agents list. Defaults to `unlisted` on\ncreation; an update that omits it keeps the stored value."
+              "additionalProperties": false
+            },
+            {
+              "type": "object",
+              "properties": {
+                "label": {
+                  "type": "string",
+                  "description": "What it is, for the owner."
+                },
+                "name": {
+                  "type": "string",
+                  "description": "How the code reads it: `knobs.<name>`."
+                },
+                "type": {
+                  "const": "boolean"
+                },
+                "value": {
+                  "type": "boolean",
+                  "description": "Its value."
+                }
+              },
+              "required": [
+                "label",
+                "name",
+                "type",
+                "value"
+              ],
+              "additionalProperties": false
+            },
+            {
+              "type": "object",
+              "properties": {
+                "label": {
+                  "type": "string",
+                  "description": "What it is, for the owner."
+                },
+                "name": {
+                  "type": "string",
+                  "description": "How the code reads it: `knobs.<name>`."
+                },
+                "options": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  },
+                  "description": "Every option, in the order they are offered."
+                },
+                "type": {
+                  "const": "choice"
+                },
+                "value": {
+                  "type": "string",
+                  "description": "The chosen option."
+                }
+              },
+              "required": [
+                "label",
+                "name",
+                "options",
+                "type",
+                "value"
+              ],
+              "additionalProperties": false
+            },
+            {
+              "type": "object",
+              "properties": {
+                "label": {
+                  "type": "string",
+                  "description": "The condition as a short clause that reads inside the step's\nsentence, e.g. \"it's about money\"."
+                },
+                "name": {
+                  "type": "string",
+                  "description": "How the code reads it: `knobs.<name>`."
+                },
+                "type": {
+                  "const": "question"
+                },
+                "value": {
+                  "type": "string",
+                  "description": "The question AI is asked, e.g. \"Is this email about money:\ninvestors, fundraising or finance?\"."
+                }
+              },
+              "required": [
+                "label",
+                "name",
+                "type",
+                "value"
+              ],
+              "additionalProperties": false
             }
-          },
-          "required": [
-            "name",
-            "trigger",
-            "prompt",
-            "userPrompt"
-          ],
-          "additionalProperties": false
+          ]
+        },
+        "RoutineOptions": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/AgentRoutineOptions"
+            },
+            {
+              "$ref": "#/$defs/StepsRoutineOptions"
+            }
+          ]
+        },
+        "RoutineStepOptions": {
+          "anyOf": [
+            {
+              "type": "object",
+              "properties": {
+                "type": {
+                  "const": "code"
+                },
+                "id": {
+                  "anyOf": [
+                    {
+                      "type": "null"
+                    },
+                    {
+                      "type": "string"
+                    }
+                  ]
+                },
+                "knobs": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/$defs/RoutineKnob"
+                  },
+                  "description": "Values its owner can change without new code, which the code reads\nas `knobs.<name>`."
+                },
+                "sentence": {
+                  "anyOf": [
+                    {
+                      "type": "null"
+                    },
+                    {
+                      "type": "string"
+                    }
+                  ],
+                  "description": "What it does as one sentence for its owner, with `{name}` where a\nknob's value shows and `{?name}` where a question knob's question\nshows, e.g. \"Label it {label} when {?aboutMoney}\". Saving checks every\nslot names one of its knobs."
+                },
+                "source": {
+                  "type": "string",
+                  "description": "A module exporting `async function main({ macro, run, routine,\ntrigger, steps }: StepContext)`: `run` is this run (its time, zone and\nthe previous run), `trigger` what started it (a schedule, an event and\nits item, or a person), `steps` the typed outputs of the steps before\nit. What `main` returns, as JSON of at most 64 KB, is the step's output."
+                },
+                "summary": {
+                  "type": "string",
+                  "description": "One or two sentences on how, for the routine's owner."
+                },
+                "title": {
+                  "type": "string",
+                  "description": "What the step does, in a few words, e.g. \"Label invoices\"."
+                }
+              },
+              "required": [
+                "type",
+                "source",
+                "title"
+              ],
+              "additionalProperties": false
+            },
+            {
+              "type": "object",
+              "properties": {
+                "type": {
+                  "const": "agent"
+                },
+                "instructions": {
+                  "type": "string",
+                  "description": "What the model or agent should do; it also sees earlier steps' output."
+                },
+                "model": {
+                  "type": "string",
+                  "description": "Model to run the step, or the model override for `agent`. Set `model`, `agent`, or both."
+                },
+                "agent": {
+                  "type": "string",
+                  "description": "Agent to run the step. Set `model`, `agent`, or both."
+                }
+              },
+              "required": [
+                "type",
+                "instructions"
+              ],
+              "additionalProperties": false
+            }
+          ]
         },
         "RoutineTriggerOptions": {
           "anyOf": [
@@ -46896,6 +47234,51 @@
               "additionalProperties": false
             }
           ]
+        },
+        "StepsRoutineOptions": {
+          "type": "object",
+          "properties": {
+            "steps": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/RoutineStepOptions"
+              },
+              "description": "Run in order; a failed step stops the run. Saving type-checks the code."
+            },
+            "dangerouslyOperateAsUser": {
+              "type": "boolean",
+              "description": "Make code steps' messages, comments and emails appear written by the\nowner, with no agent badge. Set it only when the user explicitly asked\nfor the routine to act, send or post as them; never infer it from what\nthe routine does. Omitted, writes are attributed to Macro's agent acting\nfor the owner, and an update that omits it turns it off."
+            },
+            "name": {
+              "type": "string",
+              "description": "Display name."
+            },
+            "trigger": {
+              "allOf": [
+                {
+                  "$ref": "#/$defs/RoutineTriggerOptions"
+                }
+              ],
+              "description": "Schedules or Macro events that start the routine. A cron `schedule` has 6\nor 7 fields: `sec min hour day-of-month month day-of-week [year]`."
+            },
+            "enabled": {
+              "type": "boolean",
+              "description": "Whether triggers can start executions. Defaults to true on creation."
+            },
+            "runVisibility": {
+              "enum": [
+                "listed",
+                "unlisted"
+              ],
+              "description": "Whether runs appear in Home and the Agents list. Defaults to `unlisted` on\ncreation; an update that omits it keeps the stored value."
+            }
+          },
+          "required": [
+            "steps",
+            "name",
+            "trigger"
+          ],
+          "additionalProperties": false
         },
         "TemplateVariable": {
           "anyOf": [

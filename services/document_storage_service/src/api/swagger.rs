@@ -627,6 +627,8 @@ use utoipa::OpenApi;
         crm::inbound::pipelines::update_permissions,
         crm::inbound::pipelines::trash,
         crm::inbound::axum_router::set_email_sync::handler,
+        crm::inbound::axum_router::email_privacy::get_handler,
+        crm::inbound::axum_router::email_privacy::update_handler,
         crm::inbound::axum_router::set_company_hidden::handler,
         crm::inbound::axum_router::set_company_name::handler,
         crm::inbound::axum_router::set_contact_hidden::handler,

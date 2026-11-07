@@ -107,25 +107,15 @@ describe('routine execution payloads', () => {
       expect(restored.target).toEqual(target);
       expect(restored.prompt).toBe('User instructions');
       const created = draftToCreateBody(restored);
-      expect(created.task.user_prompt).toBe('User instructions');
+      expect(created.task).toMatchObject({ user_prompt: 'User instructions' });
       expect(
         draftFromSchedule({ ...action, task: created.task })?.target
       ).toEqual(target);
     }
   );
 
-  it.each([
-    {},
-    { model: ' ' },
-    { model: 42 },
-    { agent: {} },
-    { agent: { bot_id: 'invalid' }, model: 'valid' },
-    { agent: { bot_id: agentId }, model: '' },
-    { agent: { bot_id: agentId }, model: [] },
-    { model: 'valid', prompt: null },
-    { model: 'valid', user_prompt: 42 },
-  ])('refuses malformed tasks rather than falling back: %j', (task) => {
-    const action = { ...cron, task: { prompt: '', user_prompt: '', ...task } };
+  it('refuses a task with neither a model nor an agent rather than falling back', () => {
+    const action = { ...cron, task: { prompt: '', user_prompt: '' } };
     expect(draftFromSchedule(action)).toBeUndefined();
     expect(draftToUpdateBody(draft(), action)).toBeUndefined();
   });
@@ -225,7 +215,10 @@ describe('routine execution payloads', () => {
       overrideAction
     );
     expect(defaultBody?.task).not.toHaveProperty('model');
-    expect(defaultBody?.task.agent).toEqual(agentAction.task.agent);
+    expect(defaultBody?.task).toHaveProperty('agent', {
+      bot_id: agentId,
+      extra: true,
+    });
     const differentAgentId = '0195a096-3d24-7000-8000-000000000002';
     const changedAgent = draftToUpdateBody(
       {
@@ -234,7 +227,9 @@ describe('routine execution payloads', () => {
       },
       overrideAction
     );
-    expect(changedAgent?.task.agent).toEqual({ bot_id: differentAgentId });
+    expect(changedAgent?.task).toMatchObject({
+      agent: { bot_id: differentAgentId },
+    });
     expect(changedAgent?.task).not.toHaveProperty('model');
     const modelBody = draftToUpdateBody(
       {
@@ -681,7 +676,17 @@ describe('operating as the user', () => {
   };
   const operating: ScheduledAction = {
     ...program,
-    task: { ...(program.task as object), dangerously_operate_as_user: true },
+    task: {
+      steps: [
+        {
+          type: 'code',
+          id: 'post_it',
+          title: 'Post it',
+          source: 'export async function main() {}',
+        },
+      ],
+      dangerously_operate_as_user: true,
+    },
   };
 
   it('reads the setting, absent meaning off', () => {

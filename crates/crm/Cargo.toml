@@ -45,6 +45,8 @@ inbound = ["axum", "ports"]
 # Read-only company/contact identity for other domains. Pulls only sqlx + ports.
 lookup = ["dep:messages", "dep:rootcause", "dep:sqlx", "ports"]
 outbound = [
+  "dep:opentelemetry",
+  "dep:tracing-opentelemetry",
   "dep:entity_access_db_utils",
   "dep:macro_user_id",
   "dep:models_properties",
@@ -103,6 +105,8 @@ model-error-response = { path = "../model-error-response", optional = true }
 utoipa = { workspace = true, optional = true }
 
 # Outbound dependencies
+opentelemetry = { workspace = true, features = ["trace"], optional = true }
+tracing-opentelemetry = { workspace = true, optional = true }
 sqlx = { workspace = true, optional = true }
 unfurl = { path = "../unfurl", features = ["ports"], optional = true }
 workspace-hack = { version = "0.1", path = "../workspace-hack" }

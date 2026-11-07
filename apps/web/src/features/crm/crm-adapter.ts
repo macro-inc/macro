@@ -19,6 +19,7 @@ import { idToEmail } from '@core/user/util';
 import { fireAndForget } from '@core/util/fireAndForget';
 import type { EntityData } from '@entity';
 import { useTagSets, useTagSetsReady } from '@property/tags/tag-sets-context';
+import { usePrimaryEmailLinkId } from '@queries/email/link';
 import { queryReadyGate } from '@queries/gate';
 import { useListPropertiesQuery } from '@queries/properties/definitions';
 import { useBulkSaveEntityPropertiesMutation } from '@queries/properties/entity';
@@ -34,6 +35,7 @@ import {
 } from '@queries/team/teams';
 import { patchTeamCrmSettings } from '@service-auth/crm';
 import { storageServiceClient } from '@service-storage/client';
+import { crmEmailPrivacyClient } from '@service-storage/crm-email-privacy';
 import { getGraphqlSoupClient } from '@service-storage/graphql-soup';
 import { useNavigate } from '@solidjs/router';
 import { useQueryClient } from '@tanstack/solid-query';
@@ -81,6 +83,7 @@ import {
   useSetContactHiddenMutation,
   useSetContactNameMutation,
 } from './queries/contacts';
+import { createEmailPrivacySource } from './queries/email-privacy';
 import { fetchCrmExportCompanies } from './queries/export';
 import { useCrmLists } from './queries/lists';
 import { createPipelineTransfer } from './queries/pipeline-transfer';
@@ -210,6 +213,14 @@ export function createAppCrmContext(): CrmContext {
   };
   const createSettings = () => useTeamCrmConfig(deps);
   return {
+    createEmailPrivacy: () => {
+      const team = useCurrentTeamQuery();
+      return createEmailPrivacySource(
+        { ...deps, privacy: crmEmailPrivacyClient },
+        () => (team.isSuccess ? team.data?.team.id : undefined),
+        userId
+      );
+    },
     registerTaskComposerRecord(source) {
       if (!panel) return () => {};
       return createContext.register(panel.handle.id, () => ({
@@ -245,11 +256,19 @@ export function createAppCrmContext(): CrmContext {
     },
     createCompanyEmails: (...args) =>
       withRowNotifications(
-        useCompanyEmailsQuery(useSoupAstItemsQuery, ...args)
+        useCompanyEmailsQuery(
+          useSoupAstItemsQuery,
+          ...args,
+          usePrimaryEmailLinkId()
+        )
       ),
     createContactEmails: (...args) =>
       withRowNotifications(
-        useContactEmailsQuery(useSoupAstItemsQuery, ...args)
+        useContactEmailsQuery(
+          useSoupAstItemsQuery,
+          ...args,
+          usePrimaryEmailLinkId()
+        )
       ),
     openCreateItem: (kind) => fireAndForget(openCreateItem(kind), 'crm'),
     openEmailComposer: (recipient) =>

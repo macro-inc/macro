@@ -1,9 +1,12 @@
-import { match } from 'ts-pattern';
+import { match, P } from 'ts-pattern';
 import type {
   ActionTrigger,
   AgentTask,
+  CodeStep,
   EventFilter,
   RoutineModelId,
+  RoutineStep,
+  RoutineTask,
   RoutineTemplate as RoutineTemplateRecord,
   RoutineTrigger,
   RunVisibility,
@@ -69,8 +72,25 @@ function triggerBody(trigger: RoutineTriggerOptions): ActionTrigger {
     .exhaustive();
 }
 
-/** Configuration of an agent routine. */
-export interface RoutineOptions {
+/**
+ * A routine step. A `code` step runs TypeScript against this SDK, as the
+ * routine's owner; an `agent` ("Ask AI") step hands the run to a model or
+ * agent with instructions. A routine has at most one agent step.
+ */
+export type RoutineStepOptions =
+  | ({ type: 'code' } & CodeStep)
+  | {
+      type: 'agent';
+      /** What the model or agent should do; it also sees earlier steps' output. */
+      instructions: string;
+      /** Model to run the step, or the model override for `agent`. Set `model`, `agent`, or both. */
+      model?: RoutineModelId;
+      /** Agent to run the step. Set `model`, `agent`, or both. */
+      agent?: Agent;
+    };
+
+/** What every routine has, whatever it runs. */
+interface RoutineCommonOptions {
   /** Display name. */
   name: string;
   /**
@@ -78,6 +98,17 @@ export interface RoutineOptions {
    * or 7 fields: `sec min hour day-of-month month day-of-week [year]`.
    */
   trigger: RoutineTriggerOptions;
+  /** Whether triggers can start executions. Defaults to true on creation. */
+  enabled?: boolean;
+  /**
+   * Whether runs appear in Home and the Agents list. Defaults to `unlisted` on
+   * creation; an update that omits it keeps the stored value.
+   */
+  runVisibility?: RunVisibility;
+}
+
+/** A routine that hands each run to one model or agent. */
+export interface AgentRoutineOptions extends RoutineCommonOptions {
   /** Instructions delivered to the agent. */
   prompt: string;
   /** Original user instructions. */
@@ -93,14 +124,30 @@ export interface RoutineOptions {
    * again on every run. Set `model`, `agent`, or both.
    */
   agent?: Agent;
-  /** Whether triggers can start executions. Defaults to true on creation. */
-  enabled?: boolean;
-  /**
-   * Whether runs appear in Home and the Agents list. Defaults to `unlisted` on
-   * creation; an update that omits it keeps the stored value.
-   */
-  runVisibility?: RunVisibility;
+  steps?: never;
+  dangerouslyOperateAsUser?: never;
 }
+
+/** A routine that runs code and Ask AI steps in order. */
+export interface StepsRoutineOptions extends RoutineCommonOptions {
+  /** Run in order; a failed step stops the run. Saving type-checks the code. */
+  steps: readonly RoutineStepOptions[];
+  /**
+   * Make code steps' messages, comments and emails appear written by the
+   * owner, with no agent badge. Set it only when the user explicitly asked
+   * for the routine to act, send or post as them; never infer it from what
+   * the routine does. Omitted, writes are attributed to Macro's agent acting
+   * for the owner, and an update that omits it turns it off.
+   */
+  dangerouslyOperateAsUser?: boolean;
+  prompt?: never;
+  userPrompt?: never;
+  model?: never;
+  agent?: never;
+}
+
+/** Configuration of a routine: one agent task, or code and Ask AI steps. */
+export type RoutineOptions = AgentRoutineOptions | StepsRoutineOptions;
 
 /** A scheduled or event-triggered agent task. */
 export class Routine extends MacroEntity<ScheduledActionResponse> {
@@ -372,20 +419,44 @@ export class RoutineExecution {
   }
 }
 
+function stepBody(step: RoutineStepOptions): RoutineStep {
+  return match(step)
+    .returnType<RoutineStep>()
+    .with({ type: 'code' }, (code) => code)
+    .with({ type: 'agent' }, ({ agent, ...rest }) => ({
+      ...rest,
+      agent: agent ? { bot_id: agent.id } : undefined,
+    }))
+    .exhaustive();
+}
+
+function taskBody(options: RoutineOptions): RoutineTask {
+  return match(options)
+    .returnType<RoutineTask>()
+    .with({ steps: P.array() }, (program) => ({
+      steps: program.steps.map(stepBody),
+      dangerously_operate_as_user: program.dangerouslyOperateAsUser,
+    }))
+    .with(
+      { prompt: P.string },
+      (agentTask): AgentTask => ({
+        prompt: agentTask.prompt,
+        user_prompt: agentTask.userPrompt,
+        model: agentTask.model,
+        agent: agentTask.agent ? { bot_id: agentTask.agent.id } : undefined,
+      }),
+    )
+    .exhaustive();
+}
+
 /** Translate typed routine options into the generated wire contract. */
 export function routineBody(options: RoutineOptions) {
-  const task: AgentTask = {
-    prompt: options.prompt,
-    user_prompt: options.userPrompt,
-    model: options.model,
-    agent: options.agent ? { bot_id: options.agent.id } : undefined,
-  };
   return {
     kind: 'Agent' as const,
     name: options.name,
     enabled: options.enabled,
     run_visibility: options.runVisibility,
     trigger: triggerBody(options.trigger),
-    task: { ...task },
+    task: taskBody(options),
   };
 }

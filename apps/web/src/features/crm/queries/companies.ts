@@ -153,7 +153,7 @@ function wipeCompanyEmailCache(
  * display name + optional domain). Seeds the company detail cache from the
  * response and invalidates soup so the new company appears in the
  * Customers listings. Server-side failures worth surfacing: 409 when the
- * team already tracks the domain, 403 when CRM is disabled for the team,
+ * team already tracks the domain, 403 without team membership,
  * 400 on a malformed/generic-provider domain.
  */
 export function useCreateCompanyMutation(deps: CrmRecordDependencies) {
@@ -210,8 +210,7 @@ export function createCompanyImporter(
  * optional email). Invalidates the company detail query (contacts arrive
  * embedded there) and soup so contact listings refresh. Server-side
  * failures worth surfacing: 409 when the email is already tracked, 404 when
- * the company isn't visible to the caller, 403 when CRM is disabled for the
- * team.
+ * the company isn't visible to the caller, 403 without team membership.
  */
 export function useCreateContactMutation(deps: CrmRecordDependencies) {
   return useMutation(
@@ -404,9 +403,9 @@ export function useSetCompanyHiddenMutation(deps: CrmRecordDependencies) {
 
 /**
  * Toggles `crm_companies.email_sync` via `PUT /crm/companies/{id}/email-sync`.
- * Purely a read-side visibility gate controlling whether the team can see each
- * other's emails with this company — existing CRM data is never destroyed and
- * re-enabling needs no backfill.
+ * Blocks ingestion and CRM email visibility for the company's domains while
+ * preserving its records. Re-enabling schedules a backfill for consenting
+ * contributors.
  */
 export function useSetEmailSyncMutation(deps: CrmRecordDependencies) {
   return useMutation(

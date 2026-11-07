@@ -1194,7 +1194,10 @@ through the SDK, including AI document and task edits
 (`document.edit(instructions)`; `EditDocument` is hidden in code mode) and
 canvas reads and edits (`document.canvas()`'s `scene`, `apply`, `edit` and
 `render`; `ReadCanvas`, `ApplyCanvasEdits` and `EditCanvas` are hidden, while
-`RenderCanvas` stays direct so the model can see the image),
+`RenderCanvas` stays direct so the model can see the image; a program's
+render or generated image shows in the reply through the image's
+`toMarkdown()` `<m-image>` line, since a document mention of a static file id
+reads "Deleted", and `canvas.webUrl()` links `/app/canvas/<id>`),
 native spreadsheets (`macro.documents.spreadsheet(document)` reads, calculates
 and applies edit batches; `ReadSpreadsheet`, `CalculateSpreadsheet` and
 `EditSpreadsheet` are hidden in code mode), and
@@ -1299,7 +1302,8 @@ that creates a saved review immediately emits a separate completed **PresentRevi
 ACP call.
 Its card can appear before the program finishes and stays editable afterwards.
 Presentation means “Presented to the user,” not approved or sent. After
-presenting, the agent asks “Should I kick it off?”; when the person whose
+presenting, the agent asks “Should I kick it off?”, unless the user said not
+to send it yet; when the person whose
 account the review uses answers yes, it submits the review with
 **DecideReview**, and the card then reads “Started by the agent at your
 request”. SDK operation

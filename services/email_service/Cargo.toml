@@ -198,5 +198,9 @@ macro_service_urls = { path = "../../crates/macro_service_urls" }
 workspace-hack = { version = "0.1", path = "../../crates/workspace-hack" }
 
 [dev-dependencies]
+opentelemetry = { workspace = true, features = ["trace"] }
+opentelemetry_sdk = { workspace = true, features = ["trace", "testing"] }
+tracing-opentelemetry = { workspace = true }
+tracing-subscriber = { workspace = true }
 macro_auth = { path = "../../crates/macro_auth", features = ["testing"] }
 macro_db_migrator = { path = "../../crates/macro_db_migrator" }

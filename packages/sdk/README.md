@@ -401,7 +401,9 @@ These will render as @mentions in the Macro UI.
 `macro.images.generate()` makes an image with Google's Nano Banana model, charged
 to the acting user's AI allowance, and stores it as a static file. Attach it to a
 message with `images`; its width and height let the message reserve space before
-the image loads. Pass up to three image documents or earlier images as
+the image loads. `image.toMarkdown()` is the `<m-image>` tag that shows it inline
+in Markdown, such as an agent's reply; a static image is not a document, so never
+mention its id as one. Pass up to three image documents or earlier images as
 `referenceImages` to edit or combine them. `examples/generate-image.ts` runs this
 end to end.
 
@@ -448,6 +450,29 @@ const routine = await macro.routines.create({
 await routine.setEnabled(false);
 const transcript = await routine.execute(); // Chat or AgentSession, if available
 const executions = await routine.history(); // Each retains its parent routine
+```
+
+A routine can instead run `steps` in order: `code` steps run TypeScript against
+this SDK as the owner, type-checked when saved, and an `agent` ("Ask AI") step
+hands the run to a model or agent. Code steps' writes are attributed to Macro's
+agent acting for the owner; set `dangerouslyOperateAsUser: true` only when the
+user explicitly asks for the routine to act, send or post as them:
+
+```ts
+await macro.routines.create({
+  name: 'Say hello',
+  trigger: { type: 'once', at: '2027-11-03T14:30:00Z' },
+  steps: [
+    {
+      type: 'code',
+      title: 'Post hello',
+      source: `export async function main({ macro }: StepContext) {
+  await macro.channels.byId(channelId).send('Hello');
+}`,
+    },
+  ],
+  dangerouslyOperateAsUser: true,
+});
 ```
 
 Event triggers use `{ type: 'events', filters: [{ events, entities, condition }] }`;
@@ -667,7 +692,7 @@ not at all: `CanvasRevisionConflictError` (the scene changed since
 changed; `EditOutcomeUnknownError` means read the scene before retrying. `edit`
 takes natural-language instructions, like `document.edit`, and is billed as an
 AI edit. `render` keeps the PNG as a static file you own, ready to attach to a
-message.
+message. A canvas links to `canvas.webUrl()` (`/app/canvas/<id>`).
 
 ### Spreadsheets
 
