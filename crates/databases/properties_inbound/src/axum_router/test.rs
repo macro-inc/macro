@@ -32,7 +32,7 @@ use super::{
     PropertiesRouterState, PropertyTeamExtractor,
     extract::{EditReceiptExtractor, ViewReceiptExtractor},
 };
-use crate::{
+use properties::{
     PropertiesServiceImpl,
     domain::ports::{MockNotificationService, MockPermissionService, MockPropertiesRepo},
 };
@@ -525,7 +525,7 @@ fn properties_router(
 
 #[tokio::test]
 async fn bulk_options_across_entities_skips_denied_and_applies_granted() {
-    use crate::domain::model::EntityPropertyOptionSelection;
+    use properties::domain::model::EntityPropertyOptionSelection;
 
     let property_id = Uuid::new_v4();
     let option_id = Uuid::new_v4();
@@ -541,11 +541,10 @@ async fn bulk_options_across_entities_skips_denied_and_applies_granted() {
         .withf(|entity_id, _, _| entity_id == "doc-granted")
         .returning(move |_, _, _| {
             Box::pin(async move {
-                Ok(vec![EntityPropertyOptionSelection {
-                    property_definition_id: property_id,
-                    option_ids: vec![option_id],
-                    mutation: None,
-                }])
+                Ok(vec![EntityPropertyOptionSelection::unchanged(
+                    property_id,
+                    vec![option_id],
+                )])
             })
         });
 
@@ -660,7 +659,7 @@ fn tag_promotion_repo(
     repo.expect_get_or_create_tag_definition()
         .returning(move |_| {
             Box::pin(async move {
-                Ok(crate::domain::model::GetOrCreateTagDefinitionResult {
+                Ok(properties::domain::model::GetOrCreateTagDefinitionResult {
                     definition: tag_def(
                         team_definition_id,
                         models_properties::PropertyOwner::Team {
@@ -694,7 +693,7 @@ async fn promote_tag_conflict_returns_the_team_label_the_caller_can_merge_into()
     let mut repo = tag_promotion_repo(personal_definition_id, team_definition_id, option_id);
     repo.expect_promote_tag_option().returning(move |_, _, _| {
         Box::pin(async move {
-            Ok(crate::domain::model::TagPromotionOutcome::Conflict(
+            Ok(properties::domain::model::TagPromotionOutcome::Conflict(
                 tag_option(conflict_id, team_definition_id, "urgent", "#00ff00"),
             ))
         })
@@ -740,8 +739,8 @@ async fn promote_tag_returns_the_label_hanging_off_the_team_definition() {
     let mut repo = tag_promotion_repo(personal_definition_id, team_definition_id, option_id);
     repo.expect_promote_tag_option().returning(move |_, _, _| {
         Box::pin(async move {
-            Ok(crate::domain::model::TagPromotionOutcome::Promoted(
-                crate::domain::model::TagRemapOutcome {
+            Ok(properties::domain::model::TagPromotionOutcome::Promoted(
+                properties::domain::model::TagRemapOutcome {
                     option: tag_option(option_id, team_definition_id, "Urgent", "#ff0000"),
                     mutations: Vec::new(),
                 },

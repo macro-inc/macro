@@ -1,7 +1,5 @@
 //! GetEntityProperties tool for reading properties attached to an entity.
 
-use crate::domain::model::{EntityPropertyInfo, PropertyOptionInfo};
-use crate::domain::service::PropertiesService;
 use ai_toolset::{AsyncTool, RequestContext, ServiceContext, ToolCallError, ToolResult};
 use ai_toolset::{ToolAnnotated, ToolAnnotations};
 use async_trait::async_trait;
@@ -12,6 +10,8 @@ use models_properties::service::property_option::PropertyOptionValue;
 use models_properties::service::property_value::PropertyValue;
 use models_properties::service::tag_sets::TagScope;
 use models_properties::{DataType, EntityType};
+use properties::domain::model::{EntityPropertyInfo, PropertyOptionInfo};
+use properties::domain::service::PropertiesService;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;

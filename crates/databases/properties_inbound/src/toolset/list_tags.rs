@@ -1,6 +1,5 @@
 //! ListTags tool for reading the tags available to the caller.
 
-use crate::domain::service::PropertiesService;
 use ai_toolset::{AsyncTool, RequestContext, ServiceContext, ToolCallError, ToolResult};
 use ai_toolset::{ToolAnnotated, ToolAnnotations};
 use async_trait::async_trait;
@@ -8,6 +7,7 @@ use entity_access::domain::ports::EntityAccessService;
 use models_properties::PropertyOwner;
 use models_properties::service::property_option::PropertyOptionValue;
 use models_properties::service::tag_sets::TagScope;
+use properties::domain::service::PropertiesService;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;

@@ -22,3 +22,4 @@ properties = { workspace = true, default-features = true }
 serde_json = { workspace = true }
 utoipa = { workspace = true }
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
+properties_inbound = { workspace = true, default-features = true }

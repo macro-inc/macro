@@ -15,9 +15,9 @@ use utoipa::ToSchema;
 use uuid::Uuid;
 
 use super::{PropertiesRouterState, PropertyTeamExtractor, properties_err_status};
-use crate::domain::error::PropertiesErr;
-use crate::domain::model as properties_model;
-use crate::domain::service::PropertiesService;
+use properties::domain::error::PropertiesErr;
+use properties::domain::model as properties_model;
+use properties::domain::service::PropertiesService;
 
 /// Which owner a tag set belongs to.
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, ToSchema, PartialEq)]

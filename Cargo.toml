@@ -58,6 +58,7 @@ members = [
   "crates/database_sql",
   "crates/database_webhooks",
   "crates/databases",
+  "crates/databases/properties_inbound",
   "crates/databases_sql",
   "crates/dictation",
   "crates/docx_engine",
@@ -865,6 +866,7 @@ projects = { path = "crates/projects", default-features = false }
 projects_hex = { package = "projects", path = "crates/projects" }
 prompt = { path = "crates/prompt" }
 properties = { path = "crates/properties", default-features = false }
+properties_inbound = { path = "crates/databases/properties_inbound", default-features = false }
 psd_engine = { path = "crates/psd_engine" }
 rate_limit = { path = "crates/rate_limit" }
 readonly_pool = { path = "crates/readonly_pool" }

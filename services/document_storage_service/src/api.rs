@@ -226,7 +226,7 @@ fn api_router(state: ApiContext) -> Router {
         )
         .nest(
             "/properties",
-            properties::inbound::axum_router::router()
+            properties_inbound::axum_router::router()
                 .with_state(PropertiesHandlerState::from_ref(&state)),
         )
         .nest(

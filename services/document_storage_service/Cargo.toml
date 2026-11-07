@@ -321,6 +321,7 @@ sync_service_url = { workspace = true }
 soup_realtime_core = { workspace = true }
 soup_realtime_inbound = { workspace = true }
 soup_realtime_outbound = { workspace = true, features = ["consumer"] }
+properties_inbound = { workspace = true, default-features = true }
 
 [dev-dependencies]
 bebop = { workspace = true }

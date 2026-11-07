@@ -4,8 +4,8 @@ use models_properties::PropertyOwner;
 use models_properties::api::CreatePropertyScope;
 use uuid::Uuid;
 
-use crate::domain::error::PropertiesErr;
-use crate::domain::service::{PropertiesService, TeamReceipt};
+use properties::domain::error::PropertiesErr;
+use properties::domain::service::{PropertiesService, TeamReceipt};
 
 use super::PropertiesRouterState;
 

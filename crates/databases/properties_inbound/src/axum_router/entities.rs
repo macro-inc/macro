@@ -1,8 +1,8 @@
 //! Entity property endpoints.
 //!
 //! Access control happens in the receipt extractors ([`super::extract`]): the
-//! handlers receive a minted [`ViewReceipt`](crate::domain::model::ViewReceipt)
-//! or [`EditReceipt`](crate::domain::model::EditReceipt) and pass it into the
+//! handlers receive a minted [`ViewReceipt`](properties::domain::model::ViewReceipt)
+//! or [`EditReceipt`](properties::domain::model::EditReceipt) and pass it into the
 //! service, whose entity-scoped methods only accept receipts.
 
 use std::collections::HashMap;
@@ -26,10 +26,12 @@ use uuid::Uuid;
 use super::extract::{EditReceiptExtractor, ViewReceiptExtractor};
 use super::extract::{mint_authenticated_receipt, mint_view_receipt, target_entity_type};
 use super::{PropertiesRouterState, properties_err_status};
-use crate::domain::error::PropertiesErr;
-use crate::domain::model::PropertyAccessReceiptExt;
-use crate::domain::model::{EditReceipt, EntityOptionUpdateOutcome, EntityPropertyOptionUpdate};
-use crate::domain::service::PropertiesService;
+use properties::domain::error::PropertiesErr;
+use properties::domain::model::PropertyAccessReceiptExt;
+use properties::domain::model::{
+    EditReceipt, EntityOptionUpdateOutcome, EntityPropertyOptionUpdate,
+};
+use properties::domain::service::PropertiesService;
 
 #[cfg(test)]
 mod test;

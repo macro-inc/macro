@@ -16,7 +16,7 @@ the routes and domain logic now live entirely in `properties`.
   `AuthorizationServiceType`, `PropertiesHandlerState`) — this is the whole
   wiring decision this crate makes.
 - `src/api.rs`: `router()`, which just returns
-  `properties::inbound::axum_router::router()`.
+  `properties_inbound::axum_router::router()`.
 - `src/openapi.rs`: the standalone OpenAPI-generation binary
   (`properties_service_openapi`).
 
