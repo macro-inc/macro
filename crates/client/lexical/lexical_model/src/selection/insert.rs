@@ -81,6 +81,23 @@ impl Transaction<'_> {
             }
             self.set_point_at(slot, end_role, end_point)?;
         }
+        let first_point = if backward {
+            original.focus
+        } else {
+            original.anchor
+        };
+        if self
+            .view()
+            .text(first_point.key())
+            .is_some_and(|data| data.is_segmented())
+            && first_point.offset() != self.text_content_size(first_point.key()).get()
+        {
+            let content = self.text_content(first_point.key()).into_owned();
+            let plain = self.create_text(&content)?;
+            self.text(plain)?.set_format(original.format)?;
+            self.replace(first_point.key(), plain, false)?;
+            original = self.range_at(slot)?.clone();
+        }
         let selected = original.nodes(self.view())?;
         if selected.len() == 1
             && (if backward {
@@ -250,13 +267,6 @@ impl Transaction<'_> {
                 range.format,
                 range.style.clone(),
             );
-        } else if data.is_segmented() {
-            let plain = self.create_text(data.text.as_str())?;
-            self.text(plain)?
-                .set_format(range.format)?
-                .set_style(&range.style)?;
-            self.replace(key, plain, false)?;
-            key = plain.key();
         }
         let current = self.view().text_data(key)?.clone();
         let (format, style) = if original.is_collapsed() {
