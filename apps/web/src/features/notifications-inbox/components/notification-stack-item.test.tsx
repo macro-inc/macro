@@ -71,7 +71,7 @@ describe('NotificationStackItem', () => {
     expect(separator()).toBeNull();
   });
 
-  it('puts an unread notification\'s dot just left of its own avatar', () => {
+  it("puts an unread notification's dot just left of its own avatar", () => {
     setup();
     const gutter = screen.getByLabelText('Unread').parentElement;
     const avatar = document.querySelector('[data-avatar]');

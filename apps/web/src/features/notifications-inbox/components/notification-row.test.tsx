@@ -153,7 +153,7 @@ describe('NotificationRow', () => {
     expect(gutter?.className).toContain('absolute');
   });
 
-  it('leaves a read row\'s gutter empty, with its avatar where an unread one has it', () => {
+  it("leaves a read row's gutter empty, with its avatar where an unread one has it", () => {
     setup({ count: 1 });
     const unreadCell = avatar()?.parentElement?.className;
     document.body.innerHTML = '';
