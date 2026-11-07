@@ -20,6 +20,13 @@ per-editor state is staged separately from document snapshots and rolls back wit
 the transaction. Stock editing-command registration, History, listener-table exports,
 postcommit hooks and view diffs remain follow-on layers.
 
+`lexical_conformance` interprets the recorder's schema-2 fixtures against this
+model. It checks call results, versioned identities, strict core key allocation,
+commits and final snapshots. Its exact expected-failure ledger keeps later work
+packages visible; ledgered trials do not count as passing fixtures. Run
+`cargo test -p lexical_conformance --test replay -- --report-coverage` for
+per-package pass/fail/ledger counts and blocking APIs.
+
 `lexical_workspace_tests` verifies the patched regex dependency and Loro snapshot
 compatibility alongside the model packages. `lexical_rich_nodes` adds rich/plain
 text command functions, heading/quote/hashtag/overflow nodes, text entities and

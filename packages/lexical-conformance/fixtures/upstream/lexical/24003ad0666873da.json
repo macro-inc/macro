@@ -1,0 +1,722 @@
+{
+  "schema": 2,
+  "source": {
+    "repo": "lexical",
+    "version": "0.45.0",
+    "file": "packages/lexical/src/nodes/__tests__/unit/LexicalGC.test.tsx",
+    "test": [
+      "LexicalGC tests",
+      "RootNode.clear() with a child and three subchildren, subchild 1 removed first"
+    ],
+    "recordedWith": "lexical-conformance@7b0571565019751ce41daea27d0180ecc078b1de654205def4258d1d7d0d5e04"
+  },
+  "tier": "A-rec",
+  "partial": false,
+  "covers": [],
+  "normalize": [],
+  "outcomeDiffers": [],
+  "config": {
+    "namespace": "test",
+    "nodes": [
+      "heading",
+      "list",
+      "listitem",
+      "quote",
+      "code",
+      "table",
+      "tablecell",
+      "tablerow",
+      "hashtag",
+      "code-highlight",
+      "autolink",
+      "link",
+      "overflow",
+      "test_block",
+      "test_segmented",
+      "test_exclude_from_copy_block",
+      "test_decorator",
+      "test_inline_block",
+      "test_shadow_root",
+      "test_text",
+      "mark"
+    ],
+    "replacements": [],
+    "plugins": [],
+    "theme": {
+      "__lexicalClassNameCache": {}
+    },
+    "editable": true,
+    "rootElement": true
+  },
+  "initial": {
+    "editorState": null,
+    "selection": null
+  },
+  "trace": [
+    {
+      "op": "call",
+      "fn": "lexical/LexicalUtils.resetRandomKey",
+      "args": [],
+      "ret": {
+        "$undef": true
+      }
+    },
+    {
+      "op": "entropy",
+      "src": "random",
+      "v": 0.23645552527159452
+    },
+    {
+      "op": "createEditor",
+      "id": 0,
+      "config": {
+        "namespace": "test",
+        "nodes": [
+          "heading",
+          "list",
+          "listitem",
+          "quote",
+          "code",
+          "table",
+          "tablecell",
+          "tablerow",
+          "hashtag",
+          "code-highlight",
+          "autolink",
+          "link",
+          "overflow",
+          "test_block",
+          "test_segmented",
+          "test_exclude_from_copy_block",
+          "test_decorator",
+          "test_inline_block",
+          "test_shadow_root",
+          "test_text",
+          "mark"
+        ],
+        "replacements": [],
+        "plugins": [],
+        "theme": {
+          "__lexicalClassNameCache": {}
+        },
+        "editable": true,
+        "rootElement": true
+      },
+      "ret": {
+        "$ed": 0
+      }
+    },
+    {
+      "op": "commit",
+      "editor": 0,
+      "index": 1,
+      "updates": [],
+      "causes": [],
+      "snapshot": {
+        "json": {
+          "root": {
+            "children": [],
+            "direction": null,
+            "format": "",
+            "indent": 0,
+            "type": "root",
+            "version": 1
+          }
+        },
+        "selection": null,
+        "text": "",
+        "nodeMapKeys": [
+          "root"
+        ],
+        "tags": [
+          "history-merge"
+        ],
+        "dirty": {
+          "leaves": [],
+          "elements": [
+            [
+              "root",
+              true
+            ]
+          ]
+        },
+        "normalized": []
+      }
+    },
+    {
+      "op": "update",
+      "editor": 0,
+      "calls": [
+        {
+          "op": "call",
+          "fn": "lexical.$createTextNode",
+          "args": [
+            "foo"
+          ],
+          "ret": {
+            "$h": 1,
+            "key": "1",
+            "type": "text",
+            "ver": 2
+          }
+        },
+        {
+          "op": "call",
+          "fn": "lexical.$createTextNode",
+          "args": [
+            "bar"
+          ],
+          "ret": {
+            "$h": 2,
+            "key": "2",
+            "type": "text",
+            "ver": 2
+          }
+        },
+        {
+          "op": "call",
+          "fn": "TextNode.toggleUnmergeable",
+          "args": [],
+          "this": {
+            "$h": 2
+          },
+          "ret": {
+            "$h": 2
+          }
+        },
+        {
+          "op": "call",
+          "fn": "lexical.$createTextNode",
+          "args": [
+            "zzz"
+          ],
+          "ret": {
+            "$h": 3,
+            "key": "3",
+            "type": "text",
+            "ver": 2
+          }
+        },
+        {
+          "op": "call",
+          "fn": "TextNode.toggleUnmergeable",
+          "args": [],
+          "this": {
+            "$h": 3
+          },
+          "ret": {
+            "$h": 3
+          }
+        },
+        {
+          "op": "call",
+          "fn": "lexical.$createParagraphNode",
+          "args": [],
+          "ret": {
+            "$h": 4,
+            "key": "4",
+            "type": "paragraph",
+            "ver": 2
+          }
+        },
+        {
+          "op": "call",
+          "fn": "ParagraphNode.append",
+          "args": [
+            {
+              "$h": 1
+            },
+            {
+              "$h": 2
+            },
+            {
+              "$h": 3
+            }
+          ],
+          "this": {
+            "$h": 4
+          },
+          "ret": {
+            "$h": 4
+          }
+        },
+        {
+          "op": "call",
+          "fn": "lexical.$getRoot",
+          "args": [],
+          "ret": {
+            "$h": 5,
+            "key": "root",
+            "type": "root",
+            "ver": 2
+          }
+        },
+        {
+          "op": "call",
+          "fn": "RootNode.append",
+          "args": [
+            {
+              "$h": 4
+            }
+          ],
+          "this": {
+            "$h": 5
+          },
+          "ret": {
+            "$h": 6,
+            "key": "root",
+            "type": "root",
+            "ver": 2
+          }
+        }
+      ],
+      "id": 0,
+      "cause": "test",
+      "opts": {}
+    },
+    {
+      "op": "tick",
+      "n": 0,
+      "reason": "microtask"
+    },
+    {
+      "op": "tick",
+      "n": 1,
+      "reason": "microtask"
+    },
+    {
+      "op": "commit",
+      "editor": 0,
+      "index": 2,
+      "updates": [
+        0
+      ],
+      "causes": [
+        "test"
+      ],
+      "snapshot": {
+        "json": {
+          "root": {
+            "children": [
+              {
+                "children": [
+                  {
+                    "detail": 0,
+                    "format": 0,
+                    "mode": "normal",
+                    "style": "",
+                    "text": "foo",
+                    "type": "text",
+                    "version": 1
+                  },
+                  {
+                    "detail": 2,
+                    "format": 0,
+                    "mode": "normal",
+                    "style": "",
+                    "text": "bar",
+                    "type": "text",
+                    "version": 1
+                  },
+                  {
+                    "detail": 2,
+                    "format": 0,
+                    "mode": "normal",
+                    "style": "",
+                    "text": "zzz",
+                    "type": "text",
+                    "version": 1
+                  }
+                ],
+                "direction": null,
+                "format": "",
+                "indent": 0,
+                "type": "paragraph",
+                "version": 1,
+                "textFormat": 0,
+                "textStyle": ""
+              }
+            ],
+            "direction": null,
+            "format": "",
+            "indent": 0,
+            "type": "root",
+            "version": 1
+          }
+        },
+        "selection": null,
+        "text": "foobarzzz",
+        "nodeMapKeys": [
+          "root",
+          "1",
+          "2",
+          "3",
+          "4"
+        ],
+        "tags": [],
+        "dirty": {
+          "leaves": [
+            1,
+            2,
+            3
+          ],
+          "elements": [
+            [
+              4,
+              true
+            ],
+            [
+              6,
+              true
+            ]
+          ]
+        },
+        "normalized": []
+      }
+    },
+    {
+      "op": "tick",
+      "n": 2,
+      "reason": "await"
+    },
+    {
+      "op": "call",
+      "fn": "LexicalEditor.getEditorState",
+      "args": [],
+      "this": {
+        "$ed": 0
+      },
+      "ret": {
+        "$state": 7
+      }
+    },
+    {
+      "op": "call",
+      "fn": "get:_nodeMap",
+      "this": {
+        "$state": 7
+      },
+      "args": [],
+      "ret": {
+        "$map": [
+          [
+            {
+              "$key": 6,
+              "raw": "root"
+            },
+            {
+              "$h": 6
+            }
+          ],
+          [
+            {
+              "$key": 1,
+              "raw": "1"
+            },
+            {
+              "$h": 1
+            }
+          ],
+          [
+            {
+              "$key": 2,
+              "raw": "2"
+            },
+            {
+              "$h": 2
+            }
+          ],
+          [
+            {
+              "$key": 3,
+              "raw": "3"
+            },
+            {
+              "$h": 3
+            }
+          ],
+          [
+            {
+              "$key": 4,
+              "raw": "4"
+            },
+            {
+              "$h": 4
+            }
+          ]
+        ]
+      }
+    },
+    {
+      "op": "call",
+      "fn": "get:size",
+      "this": {
+        "$map": [
+          [
+            {
+              "$key": 6,
+              "raw": "root"
+            },
+            {
+              "$h": 6
+            }
+          ],
+          [
+            {
+              "$key": 1,
+              "raw": "1"
+            },
+            {
+              "$h": 1
+            }
+          ],
+          [
+            {
+              "$key": 2,
+              "raw": "2"
+            },
+            {
+              "$h": 2
+            }
+          ],
+          [
+            {
+              "$key": 3,
+              "raw": "3"
+            },
+            {
+              "$h": 3
+            }
+          ],
+          [
+            {
+              "$key": 4,
+              "raw": "4"
+            },
+            {
+              "$h": 4
+            }
+          ]
+        ]
+      },
+      "args": [],
+      "ret": 5
+    },
+    {
+      "op": "update",
+      "editor": 0,
+      "calls": [
+        {
+          "op": "call",
+          "fn": "lexical.$getRoot",
+          "args": [],
+          "ret": {
+            "$h": 6
+          }
+        },
+        {
+          "op": "call",
+          "fn": "RootNode.getFirstChild",
+          "args": [],
+          "this": {
+            "$h": 6
+          },
+          "ret": {
+            "$h": 4
+          }
+        },
+        {
+          "op": "call",
+          "fn": "lexical.$isElementNode",
+          "args": [
+            {
+              "$h": 4
+            }
+          ],
+          "ret": true
+        },
+        {
+          "op": "call",
+          "fn": "ParagraphNode.getChildAtIndex",
+          "args": [
+            1
+          ],
+          "this": {
+            "$h": 4
+          },
+          "ret": {
+            "$h": 2
+          }
+        },
+        {
+          "op": "call",
+          "fn": "TextNode.getTextContent",
+          "args": [],
+          "this": {
+            "$h": 2
+          },
+          "ret": "bar"
+        },
+        {
+          "op": "call",
+          "fn": "TextNode.remove",
+          "args": [],
+          "this": {
+            "$h": 2
+          },
+          "ret": {
+            "$undef": true
+          }
+        },
+        {
+          "op": "call",
+          "fn": "RootNode.clear",
+          "args": [],
+          "this": {
+            "$h": 6
+          },
+          "ret": {
+            "$h": 8,
+            "key": "root",
+            "type": "root",
+            "ver": 3
+          }
+        }
+      ],
+      "id": 1,
+      "cause": "test",
+      "opts": {}
+    },
+    {
+      "op": "tick",
+      "n": 3,
+      "reason": "microtask"
+    },
+    {
+      "op": "tick",
+      "n": 4,
+      "reason": "microtask"
+    },
+    {
+      "op": "commit",
+      "editor": 0,
+      "index": 3,
+      "updates": [
+        1
+      ],
+      "causes": [
+        "test"
+      ],
+      "snapshot": {
+        "json": {
+          "root": {
+            "children": [],
+            "direction": null,
+            "format": "",
+            "indent": 0,
+            "type": "root",
+            "version": 1
+          }
+        },
+        "selection": null,
+        "text": "",
+        "nodeMapKeys": [
+          "root"
+        ],
+        "tags": [],
+        "dirty": {
+          "leaves": [
+            2,
+            1,
+            3
+          ],
+          "elements": [
+            [
+              4,
+              true
+            ],
+            [
+              8,
+              true
+            ]
+          ]
+        },
+        "normalized": []
+      }
+    },
+    {
+      "op": "tick",
+      "n": 5,
+      "reason": "await"
+    },
+    {
+      "op": "call",
+      "fn": "LexicalEditor.getEditorState",
+      "args": [],
+      "this": {
+        "$ed": 0
+      },
+      "ret": {
+        "$state": 9
+      }
+    },
+    {
+      "op": "call",
+      "fn": "get:_nodeMap",
+      "this": {
+        "$state": 9
+      },
+      "args": [],
+      "ret": {
+        "$map": [
+          [
+            {
+              "$key": 8,
+              "raw": "root"
+            },
+            {
+              "$h": 8
+            }
+          ]
+        ]
+      }
+    },
+    {
+      "op": "call",
+      "fn": "get:size",
+      "this": {
+        "$map": [
+          [
+            {
+              "$key": 8,
+              "raw": "root"
+            },
+            {
+              "$h": 8
+            }
+          ]
+        ]
+      },
+      "args": [],
+      "ret": 1
+    }
+  ],
+  "tapes": [],
+  "final": {
+    "json": {
+      "root": {
+        "children": [],
+        "direction": null,
+        "format": "",
+        "indent": 0,
+        "type": "root",
+        "version": 1
+      }
+    },
+    "selection": null,
+    "text": "",
+    "nodeMapKeys": [
+      "root"
+    ]
+  }
+}

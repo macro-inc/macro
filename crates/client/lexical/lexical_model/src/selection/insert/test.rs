@@ -468,3 +468,28 @@ fn insert_text_between_tabs_keeps_tabs_and_typing_attributes() -> Result<(), Err
     assert_eq!(tx.anchor()?, Point::text(children[1], Utf16Offset(1)));
     Ok(())
 }
+
+/// upstream: LexicalTabNode can type between two protected leaf nodes.
+#[test]
+fn inserting_between_tabs_creates_an_ordinary_text_node() -> Result<(), Error> {
+    let mut editor = Editor::builder(EditorMode::Headless)
+        .build()
+        .expect("builder");
+    let mut tx = editor.transaction();
+    let p = tx.create(Paragraph::default())?;
+    let a = tx.create(Tab::default())?;
+    let b = tx.create(Tab::default())?;
+    tx.append(p, &[a.key(), b.key()])?;
+    tx.append(NodeKey::ROOT, &[p.key()])?;
+    tx.text(a)?
+        .select(Some(Utf16Offset(1)), Some(Utf16Offset(1)))?;
+    tx.insert_text("f")?;
+    let children = tx.children_keys(p)?;
+    assert_eq!(children.len(), 3);
+    assert_eq!(children[0], a.key());
+    assert_eq!(children[2], b.key());
+    assert!(tx.is::<Text>(children[1]));
+    assert_eq!(tx.text_content(p), "\tf\t");
+    assert_eq!(tx.anchor()?, Point::text(children[1], Utf16Offset(1)));
+    Ok(())
+}

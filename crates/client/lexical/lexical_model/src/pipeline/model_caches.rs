@@ -1,9 +1,19 @@
 use crate::*;
 use std::sync::Arc;
-/// Cache writes happen after mutation reporting and never mark a record dirty.
+/// Cache writes happen after mutation reporting. Root reconciliation retains
+/// upstream's intentional dirty mark without adding a cache-only mutation.
 pub(crate) fn apply(tx: &mut Transaction<'_>) {
     if tx.editor.mode() != EditorMode::ViewAttached {
         return;
+    }
+    // Reconciliation writes the root text cache through getWritable. Keep its
+    // record identity distinct even though the cache itself lives on the state.
+    if tx.pending.root_text_content() != tx.editor.state.root_text_content()
+        && let Some(root) = tx.pending.nodes.get_mut(&NodeKey::ROOT)
+    {
+        Arc::make_mut(root);
+        tx.dirty_elements
+            .insert(NodeKey::ROOT, DirtyIntent::Intentional);
     }
     let keys = if tx.full_reconcile {
         tx.pending.nodes.keys().copied().collect::<Vec<_>>()

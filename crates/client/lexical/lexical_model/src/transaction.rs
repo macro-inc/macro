@@ -98,6 +98,10 @@ impl<'editor> Transaction<'editor> {
         }
         Ok(Arc::make_mut(slot))
     }
+    /// Whether node processing is required, before normalization or collection.
+    pub fn has_dirty_nodes(&self) -> bool {
+        !self.dirty_leaves.is_empty() || !self.dirty_elements.is_empty()
+    }
     /// Mark a record and its ancestors without cloning ancestor records.
     /// s2: ID-02, ID-03
     pub fn mark_dirty(&mut self, key: impl Into<NodeKey>) -> Result<(), Error> {
