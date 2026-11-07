@@ -40,6 +40,9 @@ uncovered; it never makes a pending row pass.
 `just lexical-replay-wasm` embeds the same complete corpus and executes it using
 wasm-bindgen-test in Node, preserving exact ledger diagnostics and allocation-key
 checks. Model divergences remain failing results, not new ledger entries.
+The wasm job also runs the available Tier C upstream text/paragraph subset at
+10,000 fixed-seed steps. Broader profiles and nightly million-step budgets remain
+pending their generator work packages.
 
 The session check first verifies every client crate excludes workspace-hack. The
 artifact/size/desktop gates start when `document_session_wasm` lands. Until then

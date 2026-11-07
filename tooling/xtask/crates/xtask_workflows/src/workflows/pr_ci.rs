@@ -55,6 +55,18 @@ struct Call {
 
 const CALLS: &[Call] = &[
     Call {
+        id: "lexical",
+        name: "Lexical",
+        file: "lexical_conformance.yml",
+        paths: Some(super::lexical_conformance::PATHS),
+    },
+    Call {
+        id: "document-session",
+        name: "Document session",
+        file: "document_session.yml",
+        paths: Some(super::lexical_conformance::SESSION_PATHS),
+    },
+    Call {
         id: "cloud-storage",
         name: "Cloud Storage",
         file: "code_check_cloud_storage.yml",

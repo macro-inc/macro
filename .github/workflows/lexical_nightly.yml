@@ -1,0 +1,215 @@
+# DO NOT EDIT — regenerate with `cargo x workflows` (from the repository root).
+# Source: tooling/xtask/crates/xtask_workflows/src/workflows/lexical_nightly.rs
+name: Lexical nightly
+'on':
+  schedule:
+  - cron: '17 3 * * *'
+permissions:
+  contents: read
+jobs:
+  native:
+    name: Native replay and traceability
+    runs-on: namespace-profile-linux-rust-ci;overrides.cache-tag=sccache-ci
+    env:
+      PROPTEST_CASES: '20000'
+      LEXICAL_COVERAGE_BASE: ${{ github.event.pull_request.base.sha || github.sha }}
+    timeout-minutes: 60
+    steps:
+    - name: Checkout
+      uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+      with:
+        clean: 'false'
+        fetch-depth: '0'
+        persist-credentials: 'false'
+    - name: Clear prior execution evidence
+      run: rm -rf packages/lexical-conformance/coverage/results target/lexical-conformance/cases.json
+    - name: Mount Namespace cache volume
+      uses: namespacelabs/nscloud-cache-action@15799a6b54e5765f85b2aac25b3f0df43ed571c0
+      with:
+        path: |-
+          /nix
+          ./target
+          /home/runner/.cargo/registry
+          /home/runner/.cargo/git
+          /home/runner/.cargo/.global-cache
+      continue-on-error: true
+    - name: Setup Nix
+      uses: './.github/actions/setup-nix'
+      with:
+        seed-cache: sccache-ci
+    - name: Setup Nix dev shell
+      uses: './.github/actions/setup-nix-dev-shell'
+    - name: Setup Bun
+      uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6
+      with:
+        bun-version: '1.3.13'
+    - name: Install conformance dependencies
+      run: bun install --cwd packages/lexical-conformance --frozen-lockfile --ignore-scripts
+    - name: Validate traceability tooling
+      run: |-
+        bunx tsc --noEmit -p coverage/tsconfig.json
+        bunx vitest run --config coverage/vitest.config.ts
+      working-directory: packages/lexical-conformance
+    - name: Model unit and handwritten tests
+      run: bun packages/lexical-conformance/coverage/run-tests.ts
+    - name: Replay every recorded fixture
+      if: always()
+      run: just lexical-replay
+    - name: Trace every required symbol
+      if: always()
+      run: |-
+        just lexical-coverage-seed --check
+        just lexical-coverage --check
+    - name: Upload lexical-native-results artifact
+      if: always()
+      uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+      with:
+        name: lexical-native-results
+        path: packages/lexical-conformance/coverage/results
+        if-no-files-found: error
+        retention-days: '30'
+    - name: Teardown Nix
+      if: always()
+      uses: './.github/actions/teardown-nix'
+  wasm:
+    name: Wasm and boundary checks
+    runs-on: namespace-profile-linux-rust-ci;overrides.cache-tag=sccache-ci
+    timeout-minutes: 60
+    steps:
+    - name: Checkout
+      uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+      with:
+        clean: 'false'
+        fetch-depth: '0'
+        persist-credentials: 'false'
+    - name: Clear prior execution evidence
+      run: rm -rf packages/lexical-conformance/coverage/results target/lexical-conformance/cases.json
+    - name: Mount Namespace cache volume
+      uses: namespacelabs/nscloud-cache-action@15799a6b54e5765f85b2aac25b3f0df43ed571c0
+      with:
+        path: |-
+          /nix
+          ./target
+          /home/runner/.cargo/registry
+          /home/runner/.cargo/git
+          /home/runner/.cargo/.global-cache
+      continue-on-error: true
+    - name: Setup Nix
+      uses: './.github/actions/setup-nix'
+      with:
+        seed-cache: sccache-ci
+    - name: Setup Nix dev shell
+      uses: './.github/actions/setup-nix-dev-shell'
+    - name: Setup Bun
+      uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6
+      with:
+        bun-version: '1.3.13'
+    - name: Install conformance dependencies
+      run: bun install --cwd packages/lexical-conformance --frozen-lockfile --ignore-scripts
+    - name: Compile wasm interpreters
+      run: cargo check -p lexical_conformance -p lexical_conformance_wasm --target wasm32-unknown-unknown
+    - name: Replay every fixture on wasm32
+      run: just lexical-replay-wasm
+    - name: Flat ABI differential
+      if: always()
+      run: cargo test -p lexical_conformance --test flat_diff
+    - name: Build both conformance wasm targets
+      if: always()
+      run: just build-lexical-conformance-wasm
+    - name: Tier C upstream text and paragraph subset
+      if: always()
+      run: STEPS=10000 bunx vitest run --config diff/vitest.config.mts
+      working-directory: packages/lexical-conformance
+    - name: Development-only boundary checks
+      if: always()
+      run: bun packages/lexical-conformance/coverage/boundaries.ts
+    - name: Teardown Nix
+      if: always()
+      uses: './.github/actions/teardown-nix'
+  fixtures:
+    name: Pinned recorder transparency
+    runs-on: namespace-profile-linux-rust-ci;overrides.cache-tag=sccache-ci
+    timeout-minutes: 60
+    steps:
+    - name: Checkout
+      uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+      with:
+        clean: 'false'
+        fetch-depth: '0'
+        persist-credentials: 'false'
+    - name: Clear prior execution evidence
+      run: rm -rf packages/lexical-conformance/coverage/results target/lexical-conformance/cases.json
+    - name: Mount Namespace cache volume
+      uses: namespacelabs/nscloud-cache-action@15799a6b54e5765f85b2aac25b3f0df43ed571c0
+      with:
+        path: |-
+          /nix
+          ./target
+          /home/runner/.cargo/registry
+          /home/runner/.cargo/git
+          /home/runner/.cargo/.global-cache
+      continue-on-error: true
+    - name: Setup Nix
+      uses: './.github/actions/setup-nix'
+      with:
+        seed-cache: sccache-ci
+    - name: Setup Nix dev shell
+      uses: './.github/actions/setup-nix-dev-shell'
+    - name: Setup Bun
+      uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6
+      with:
+        bun-version: '1.3.13'
+    - name: Install conformance dependencies
+      run: bun install --cwd packages/lexical-conformance --frozen-lockfile --ignore-scripts
+    - name: Cache verified upstream archive
+      uses: actions/cache@0400d5f644dc74513175e3cd8d07132dd4860809
+      with:
+        path: |-
+          target/lexical-upstream.tar.gz
+          target/lexical-upstream
+        key: lexical-upstream-${{ hashFiles('packages/lexical-conformance/upstream.lock', 'packages/lexical-conformance/record/hooks.patch') }}
+    - name: Re-record, replay and verify no diff
+      run: just lexical-fixtures --check
+    - name: Teardown Nix
+      if: always()
+      uses: './.github/actions/teardown-nix'
+  session:
+    name: Document session client contract
+    runs-on: namespace-profile-linux-rust-ci;overrides.cache-tag=sccache-ci
+    timeout-minutes: 60
+    steps:
+    - name: Checkout
+      uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+      with:
+        clean: 'false'
+        fetch-depth: '0'
+        persist-credentials: 'false'
+    - name: Clear prior execution evidence
+      run: rm -rf packages/lexical-conformance/coverage/results target/lexical-conformance/cases.json
+    - name: Mount Namespace cache volume
+      uses: namespacelabs/nscloud-cache-action@15799a6b54e5765f85b2aac25b3f0df43ed571c0
+      with:
+        path: |-
+          /nix
+          ./target
+          /home/runner/.cargo/registry
+          /home/runner/.cargo/git
+          /home/runner/.cargo/.global-cache
+      continue-on-error: true
+    - name: Setup Nix
+      uses: './.github/actions/setup-nix'
+      with:
+        seed-cache: sccache-ci
+    - name: Setup Nix dev shell
+      uses: './.github/actions/setup-nix-dev-shell'
+    - name: Setup Bun
+      uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6
+      with:
+        bun-version: '1.3.13'
+    - name: Install conformance dependencies
+      run: bun install --cwd packages/lexical-conformance --frozen-lockfile --ignore-scripts
+    - name: Session wasm, size and host contract
+      run: bun packages/lexical-conformance/coverage/document-session.ts
+    - name: Teardown Nix
+      if: always()
+      uses: './.github/actions/teardown-nix'
