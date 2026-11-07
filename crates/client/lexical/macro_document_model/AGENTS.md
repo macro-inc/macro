@@ -13,6 +13,7 @@ The transformer layer uses the shared lexical_markdown engine; route adapters ar
 - Validate activity envelopes separately from lenient stored-node imports; keep unknown card objects.
 - Parse notification attributes in source order and unescape embedded internal link payloads.
 - Share URL matching and preview/search/embedding projections through links.rs and parsers.rs.
+- Build reader-oriented XML through xml.rs without importing or normalizing stored node payloads.
 - Use ImportPolicy as the single state/base import mechanism; reproduce upstream loss.
 - Preserve the Export registry without code/list replacements; Headless applies both.
 - Inject NodeClock, NodeRandom and NodeHost through editor extension state; perform no I/O.
