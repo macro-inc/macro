@@ -25,3 +25,6 @@ pub mod transformers;
 pub mod links;
 /// Mention projections for previews, search, and embeddings.
 pub mod parsers;
+
+/// Reader-oriented XML serialization and shared ordered element builders.
+pub mod xml;
