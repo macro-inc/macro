@@ -20,11 +20,12 @@ summary. Legacy `memory` rows remain private and are not copied into shared prof
 - `src/inbound/toolset.rs`: ReadMemory, UpdateMemory, GetUserActivity.
 - `src/inbound/axum_router.rs`: `GET /memory` (composed), `GET`/`PATCH
   /memory/explicit` and `GET /memory/activity`, the SDK's equivalents of the tools.
-- `src/schedule.rs`: tracked internal cron closure hosted by cognition in nonlocal
-  environments; retries due users every five minutes, generating completed days.
-  The PostHog flag `disable-memory-refresh` (service context `memory-refresh`)
-  is read before each claim and stops the batch while it is on; a failed flag read
-  keeps refresh running.
+- `services/agent_harness_service/src/cognition/memory_schedule.rs`: tracked
+  internal cron closure hosted by cognition in nonlocal environments; retries due
+  users every five minutes, generating completed days. The PostHog flag
+  `disable-memory-refresh` (service context `memory-refresh`) is read before each
+  claim and stops the batch while it is on; a failed flag read keeps refresh
+  running.
 - `../ai_tools/src/memory.rs`: composition root, allowlisted read-only research, and
   the activity-log adapter behind `MemoryActivity`.
 - `../ai_tools/src/bin/memory.rs`: awaited one-user CLI (`cargo run -p ai_tools
