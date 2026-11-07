@@ -380,6 +380,8 @@ impl TextMut<'_, '_> {
         let parent = self.tx.parent(original);
         let insertion_index = self.tx.index_within_parent(original);
         let original_selection = self.tx.pending.selection.clone();
+        let backward = original_selection.as_ref().and_then(Selection::as_range)
+            .map(|range| range.is_backward(self.tx.view())).transpose()?.unwrap_or(false);
         for sibling in [self.tx.prev_sibling(original), self.tx.next_sibling(original)].into_iter().flatten() {
             self.tx.writable(sibling)?;
         }
@@ -424,23 +426,27 @@ impl TextMut<'_, '_> {
             };
             parts.push(part);
         }
-        let map_point = |point: &mut Point| -> Result<(), Error> {
-            if let Point::Text { key, offset } = point
-                && *key == original
-            {
-                let i = bounds
-                    .windows(2)
-                    .position(|window| window.get(1).is_some_and(|end| *offset <= *end))
-                    .unwrap_or(parts.len() - 1);
-                let start = *bounds.get(i).ok_or(Error::Invariant("split point bound"))?;
-                *key = *parts.get(i).ok_or(Error::Invariant("split point node"))?;
-                *offset = *offset - start;
+        if let (Some(Selection::Range(previous)), Some(Selection::Range(mut range))) =
+            (&original_selection, self.tx.pending.selection.clone())
+        {
+            let (start, end, old_start, old_end) = if backward {
+                (&mut range.focus, &mut range.anchor, previous.focus, previous.anchor)
+            } else {
+                (&mut range.anchor, &mut range.focus, previous.anchor, previous.focus)
+            };
+            let mut start_pending = old_start.point_type() == PointType::Text && old_start.key() == original;
+            let end_pending = old_end.point_type() == PointType::Text && old_end.key() == original;
+            for (i, window) in bounds.windows(2).enumerate() {
+                if start_pending && old_start.offset() >= window[0].get() && old_start.offset() <= window[1].get() {
+                    *start = Point::text(parts[i], Utf16Offset(old_start.offset() - window[0].get()));
+                    if old_start.offset() < window[1].get() { start_pending = false; }
+                }
+                if end_pending && old_end.offset() >= window[0].get() && old_end.offset() <= window[1].get() {
+                    *end = Point::text(parts[i], Utf16Offset(old_end.offset() - window[0].get()));
+                    break;
+                }
             }
-            Ok(())
-        };
-        if let Some(Selection::Range(range)) = &mut self.tx.pending.selection {
-            map_point(&mut range.anchor)?;
-            map_point(&mut range.focus)?;
+            self.tx.pending.selection = Some(Selection::Range(range));
         }
         if let (Some(parent), Some(index), Some(Selection::Range(previous)), Some(Selection::Range(mut range))) =
             (parent, insertion_index, original_selection, self.tx.pending.selection.clone())

@@ -525,3 +525,21 @@ fn inserting_line_break_before_text_selects_the_text_start() -> Result<(), Error
     })?;
     Ok(())
 }
+
+#[test]
+fn split_start_prefers_the_next_part_when_the_end_is_later() -> Result<(), Error> {
+    let mut editor = Editor::builder(EditorMode::Headless).build().unwrap();
+    editor.update(|tx| {
+        let p = tx.create(Paragraph::default())?;
+        let text = tx.create_text("abcd")?;
+        tx.append(p, &[text.key()])?;
+        tx.append(NodeKey::ROOT, &[p.key()])?;
+        tx.set_selection(Some(Selection::Range(RangeSelection::new(
+            Point::text(text, Utf16Offset(2)), Point::element(NodeKey::ROOT, ChildIndex(1)),
+        ))))?;
+        let parts = tx.text(text)?.split_text(&[Utf16Offset(2)])?;
+        assert_eq!(tx.anchor()?, Point::text(parts[1], Utf16Offset::ZERO));
+        Ok(())
+    })?;
+    Ok(())
+}
