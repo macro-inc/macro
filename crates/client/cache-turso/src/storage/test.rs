@@ -12,7 +12,9 @@ mod page_retention;
 mod predicate_cost;
 mod projection_writes;
 mod search_bucket_cost;
+mod search_options;
 mod search_projection;
+mod search_streaming;
 mod startup;
 use cache_core::normalize::RecordUpdates;
 use pollster::block_on;
@@ -22,6 +24,22 @@ use turso_core::{
     Buffer, Clock, Completion, CompletionError, File, IO, LimboError, MemoryIO, MonotonicInstant,
     OpenFlags, WallClockInstant,
 };
+
+// Projection inspection only: production text search never collects this list.
+impl TursoStorage {
+    async fn load_search_documents(
+        &self,
+        profile: SearchProfile,
+        bucket: &str,
+    ) -> Result<Vec<SearchDocument>, TursoStorageError> {
+        let mut rows = Vec::new();
+        self.visit_search_documents(profile, bucket, &SearchQuery::new(""), |row| {
+            rows.push(row.into_owned())
+        })
+        .await?;
+        Ok(rows)
+    }
+}
 
 fn key(value: &str) -> EntityKey<'static> {
     EntityKey(value.to_owned().into())

@@ -75,7 +75,9 @@ projections keep their unframed postcard encoding, so a format upgrade never
 re-encodes them.
 
 Only the immediately prior cache format version is migratable
-(`MIGRATABLE_CACHE_FORMAT_VERSIONS`). Opening one drops records, search
+(`MIGRATABLE_CACHE_FORMAT_VERSIONS`), and only while the storage schema still
+matches. A storage-schema mismatch instead follows physical reset. Opening a
+migratable format drops records, search
 projections, index facts, and calendar ranges — all refetchable — and keeps
 queued mutations, optimistic layers, and their projections, then rewrites the
 namespace in the same transaction. An interrupted migration therefore retries on
@@ -243,20 +245,49 @@ sent as network revalidations. Callers should supply an explicit targeted query
 for recovery when the parent/field is missing; the exchange can then enqueue
 entity-only optimism and retain that recovery query for eventual commit/replay.
 
-## Text search catalogs
+## Streaming text search
 
-Text search loads compact rows lazily per `(profile, bucket)` through the existing
-`search_documents_browse_idx`. Searching documents does not load cached emails;
-changing categories loads only newly requested buckets, including caching empty
-buckets. Empty bucket selection still means every bucket in the profile.
+Text search binds normalized subsequence patterns to Turso queries scoped by
+`(profile, bucket)` through `search_documents_browse_idx`. Every query token must
+match: `abc` becomes `%a%b%c%`, with literal SQL wildcards and escapes quoted in
+the bound value. Rows containing NUL pass the SQL prefilter because SQLite LIKE
+stops at NUL; Rust verifies them without truncation. Searching documents does not
+read cached email buckets. Empty bucket selection still means every profile bucket.
+The index includes `search_text` and `source_hash` after its existing browse keys,
+so filtering and result reads use an index-only scan without table lookups.
 
-Ranking borrows catalog and optimistic entries, normalizes the query once, and
-retains at most `limit + 1` references in a heap. Only the final returned rows are
-cloned. Fuzzy/freshness scoring, DM priority, recency/key tie breaks and browse
-cursors are unchanged. Write-through updates remove old bucket membership before
-updating already-loaded buckets; unopened buckets stay lazy. Optimistic shadows
-replace durable hits without mutating the catalogs, so rollback restores them.
-No storage schema, projection version, or database migration changes are needed.
+The driver borrows each Turso row directly instead of collecting or copying it.
+The adapter validates every row and reuses one canonical-key buffer; only winning
+rows become owned documents. One Rust ranker retains at most `limit + 1` owned
+documents across all requested buckets; there is no retained text-search catalog. Do not limit SQL matches before
+ranking. Fuzzy/freshness scoring, DM priority and recency/key tie breaks remain
+unchanged. Optimistic shadows suppress their durable counterparts before ranking,
+including deleted and nonmatching replacements. Empty-query browsing retains its
+indexed recent path and cursors. Leading-wildcard matching still scans the selected
+buckets: this bounds application search memory, not search work or database page
+cache memory. The existing SQL telemetry includes streamed processing and cleanup.
+Storage schema 12 introduces this covering index through an intentionally
+incompatible cutover, not a migration. Native `open_or_reset` replaces a schema-11
+cache, including its records, queued mutations, and optimistic layers. Browsers
+open a fresh `s4.v4.t12` database; existing cleanup still keeps older files with
+pending mutations, but the new engine does not replay those queues. Backfill
+restarts against the new storage generation. The GraphQL schema epoch, record
+format, search projection version, and wire API are unchanged. Native binaries
+must be rebuilt to gain the new index; an OTA frontend update alone cannot add it.
+
+`cargo test -p cache-turso --test search` checks matching/ranking parity, including
+Unicode, escapes, NUL, and late high-ranking matches. Run the ignored 100k-row
+measurement with `cargo test -p cache-turso --test search -- --ignored --nocapture`.
+The `web` test target exercises the same parity contract over real browser OPFS;
+its ignored `search_100k_rows_over_opfs` measurement runs with
+`-- --include-ignored --nocapture` under the browser runner.
+The ignored native `compare_search_scan_options` test separately compares prepared
+statement reuse, covering-index scans, and borrowed-row decoding against the same
+100k rows (release build, alternating order, seven warm samples). Its disposable
+fixture adds a legacy non-covering index for comparison with the production
+covering index. Statement reuse has not shown a material benefit and is not
+enabled in production. See [search performance](search-performance.md) for
+measured costs, memory boundaries, and the schema-12 reset behavior.
 
 ## Browser OPFS writes
 

@@ -21,7 +21,7 @@ use cache_core::queue::{
 };
 use cache_core::search::{
     QUICK_ACCESS_PROJECTION_VERSION, QUICK_ACCESS_TYPENAMES, SearchCursor, SearchDocument,
-    SearchProfile, project_search_documents,
+    SearchDocumentRef, SearchProfile, SearchQuery, project_search_documents,
 };
 use cache_core::store::{QueueDiagnostics, QueueDiagnosticsAvailability, Storage};
 use cache_core::value::{EntityKey, Record};
@@ -55,7 +55,7 @@ use turso_opfs::{
 };
 
 /// Frozen storage schema version, independent of cache postcard versions.
-pub const STORAGE_SCHEMA_VERSION: u32 = 11;
+pub const STORAGE_SCHEMA_VERSION: u32 = 12;
 
 const QUICK_ACCESS_PROJECTION_VERSION_KEY: &str = "quick_access_projection_version";
 const SEARCH_REBUILD_BATCH_SIZE: i64 = 256;
@@ -77,7 +77,7 @@ const CREATE_SCHEMA: [&str; 28] = [
     "CREATE TABLE meta (key TEXT PRIMARY KEY, value TEXT NOT NULL)",
     "CREATE TABLE records (__typename TEXT NOT NULL, id TEXT NOT NULL, value BLOB NOT NULL, PRIMARY KEY (__typename, id))",
     "CREATE TABLE search_documents (profile TEXT NOT NULL, __typename TEXT NOT NULL, id TEXT NOT NULL, bucket TEXT NOT NULL, search_text TEXT NOT NULL, timestamp_ms INTEGER NOT NULL, source_hash TEXT NOT NULL, PRIMARY KEY (profile, __typename, id))",
-    "CREATE INDEX search_documents_browse_idx ON search_documents(profile, bucket, timestamp_ms DESC, __typename, id)",
+    "CREATE INDEX search_documents_browse_idx ON search_documents(profile, bucket, timestamp_ms DESC, __typename, id, search_text, source_hash)",
     "CREATE TABLE mutation_queue (id INTEGER PRIMARY KEY AUTOINCREMENT, uuid TEXT NOT NULL, superseded INTEGER NOT NULL DEFAULT 0, query TEXT NOT NULL, operation_name TEXT, variables_json TEXT NOT NULL, identity TEXT, attempt_count INTEGER NOT NULL DEFAULT 0, next_attempt_at_ms INTEGER, lease_owner TEXT, lease_generation INTEGER NOT NULL DEFAULT 0, lease_expires_at_ms INTEGER, last_error TEXT, created_at_ms INTEGER NOT NULL)",
     "CREATE INDEX mutation_queue_created_at_ms_idx ON mutation_queue(created_at_ms)",
     "CREATE UNIQUE INDEX mutation_queue_current_uuid_idx ON mutation_queue(uuid) WHERE superseded = 0",
@@ -1035,25 +1035,19 @@ impl Storage for TursoStorage {
         self.latch_result(result)
     }
 
-    async fn load_search_documents(
+    async fn visit_search_documents(
         &self,
         profile: SearchProfile,
         bucket: &str,
-    ) -> Result<Vec<SearchDocument>, Self::Error> {
+        query: &SearchQuery,
+        mut visit: impl FnMut(SearchDocumentRef<'_>) + maybe_send::MaybeSend,
+    ) -> Result<(), Self::Error> {
         self.require_healthy()?;
-        let result = {
-            let connection = self.connection();
-            driver::query(
-                &connection,
-                SEARCH_LOAD,
-                vec![text(profile.as_str()), text(bucket)],
-            )
-            .and_then(|rows| {
-                rows.into_iter()
-                    .map(|row| parse_search_document(&row, profile))
-                    .collect()
-            })
-        };
+        let (sql, values) = search::statement(profile, bucket, query);
+        let mut key = String::new();
+        let result = driver::query_each(&self.connection(), &sql, values, |row| {
+            search::visit_row(row, profile, &mut key, &mut visit)
+        });
         self.latch_result(result)
     }
 
@@ -4030,6 +4024,8 @@ fn validate_search_indexes(connection: &Arc<Connection>) -> Result<(), TursoStor
         (5, "timestamp_ms", 1, 1),
         (1, "__typename", 0, 1),
         (2, "id", 0, 1),
+        (4, "search_text", 0, 1),
+        (6, "source_hash", 0, 1),
     ];
     if index_rows.len() != expected.len() + 1 {
         return Err(compatibility());
@@ -5201,6 +5197,7 @@ mod integrity;
 mod mutation_retry;
 mod page_retention;
 mod record_batch;
+mod search;
 
 #[cfg(all(test, target_arch = "wasm32"))]
 mod browser_test;

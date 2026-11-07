@@ -52,8 +52,8 @@ use crate::record_selection::{
 };
 use crate::revision::{CacheRevision, Revisioned};
 use crate::search::{
-    SearchCatalogs, SearchCursor, SearchDocument, SearchError, SearchPage, SearchProfile,
-    SearchRequest, collect_search_changes, project_search_documents, rank_documents,
+    SearchCursor, SearchDocument, SearchDocumentRef, SearchError, SearchPage, SearchProfile,
+    SearchQuery, SearchRanker, SearchRequest, collect_search_changes, project_search_documents,
     snapshot_search_fields, validate_search_request,
 };
 use crate::store::{QueueDiagnostics, Storage};
@@ -369,9 +369,6 @@ pub struct Engine<S: Storage> {
     /// Ordered optimistic mutation layers hydrated from durable storage.
     optimistic: Vec<OptimisticLayer>,
     optimistic_hydrated: bool,
-    /// Compact durable catalogs are loaded lazily for text search. Empty
-    /// queries use the storage index directly and do not populate this map.
-    search_catalogs: SearchCatalogs,
 }
 
 impl<S: Storage> Engine<S> {
@@ -402,7 +399,6 @@ impl<S: Storage> Engine<S> {
             identity: IdentityState::NotHydrated,
             optimistic: Vec::new(),
             optimistic_hydrated: false,
-            search_catalogs: SearchCatalogs::default(),
         }
     }
 
@@ -1190,7 +1186,7 @@ impl<S: Storage> Engine<S> {
     /// decoding normalized-record payloads.
     ///
     /// Empty queries fan out over the per-profile/per-bucket timestamp index.
-    /// Text queries lazily load only requested buckets and rank borrowed entries.
+    /// Text queries stream storage-filtered rows into one bounded ranker.
     /// Active optimistic layers are projected from their fully composed record
     /// values and overlaid explicitly on either durable path.
     pub async fn search(
@@ -1211,68 +1207,54 @@ impl<S: Storage> Engine<S> {
         };
         let bucket_set: BTreeSet<_> = buckets.iter().map(String::as_str).collect();
         let overlay = self.optimistic_search_overlay(request.profile).await?;
-        let trimmed_query = request.query.trim();
-
-        let browse_candidates: HashMap<EntityKey<'static>, SearchDocument> =
-            if trimmed_query.is_empty() {
-                // Fetch enough extra durable rows to compensate for optimistic
-                // replacements/removals without turning this into a record scan.
+        let query = SearchQuery::new(&request.query);
+        let mut ranker = SearchRanker::new(request, &query);
+        for bucket in &buckets {
+            if !request.profile.buckets().contains(&bucket.as_str()) {
+                continue;
+            }
+            // A shadow removes its durable counterpart even if its new value
+            // is deleted, moved to another bucket, or no longer matches.
+            let mut visit = |document: SearchDocumentRef<'_>| {
+                if !overlay.contains_key(document.record_key)
+                    && cursor_allows(request.cursor.as_ref(), document)
+                {
+                    ranker.push(document);
+                }
+            };
+            if request.query.trim().is_empty() {
                 let per_bucket_limit = request
                     .limit
                     .saturating_add(overlay.len())
                     .saturating_add(1);
-                let mut candidates = HashMap::new();
-                for bucket in &buckets {
-                    let rows = self
-                        .storage
-                        .browse_search_documents(
-                            request.profile,
-                            bucket,
-                            request.cursor.as_ref(),
-                            per_bucket_limit,
-                        )
-                        .await
-                        .map_err(EngineError::Storage)?;
-                    for document in rows {
-                        candidates.insert(document.record_key.clone(), document);
-                    }
+                let rows = self
+                    .storage
+                    .browse_search_documents(
+                        request.profile,
+                        bucket,
+                        request.cursor.as_ref(),
+                        per_bucket_limit,
+                    )
+                    .await
+                    .map_err(EngineError::Storage)?;
+                for document in rows {
+                    visit(document.as_borrowed());
                 }
-                candidates
             } else {
-                for bucket in &buckets {
-                    // Unknown (but syntactically valid) buckets have no projection.
-                    // Do not grow the catalog map with arbitrary empty names.
-                    if !request.profile.buckets().contains(&bucket.as_str()) {
-                        continue;
-                    }
-                    if self.search_catalogs.get(request.profile, bucket).is_none() {
-                        let documents = self
-                            .storage
-                            .load_search_documents(request.profile, bucket)
-                            .await
-                            .map_err(EngineError::Storage)?;
-                        self.search_catalogs
-                            .insert(request.profile, bucket.clone(), documents);
-                    }
-                }
-                HashMap::new()
-            };
-
-        let cached = buckets
-            .iter()
-            .filter(|_| !trimmed_query.is_empty())
-            .filter_map(|bucket| self.search_catalogs.get(request.profile, bucket))
-            .flat_map(|catalog| catalog.values());
-        // A shadow removes its durable counterpart even when the optimistic
-        // value is deleted, moved to another bucket, or excluded by the cursor.
-        let candidates = browse_candidates
-            .values()
-            .chain(cached)
-            .filter(|document| !overlay.contains_key(&document.record_key))
-            .chain(overlay.values().filter_map(Option::as_ref))
-            .filter(|document| bucket_set.contains(document.bucket.as_str()))
-            .filter(|document| cursor_allows(request.cursor.as_ref(), document));
-        Ok(rank_documents(request, candidates))
+                self.storage
+                    .visit_search_documents(request.profile, bucket, &query, visit)
+                    .await
+                    .map_err(EngineError::Storage)?;
+            }
+        }
+        for document in overlay.values().filter_map(Option::as_ref) {
+            if bucket_set.contains(document.bucket.as_str())
+                && cursor_allows(request.cursor.as_ref(), document.as_borrowed())
+            {
+                ranker.push(document.as_borrowed());
+            }
+        }
+        Ok(ranker.finish())
     }
 
     async fn optimistic_search_overlay(
@@ -1295,10 +1277,6 @@ impl<S: Storage> Engine<S> {
                 (key, document)
             })
             .collect())
-    }
-
-    fn update_loaded_search_catalogs(&mut self, entries: &[(EntityKey<'static>, Record)]) {
-        self.search_catalogs.update(entries);
     }
 
     /// Normalizes and stores a network response. Returns changed records and
@@ -1747,7 +1725,6 @@ impl<S: Storage> Engine<S> {
         }
         // Publish only after the atomic write succeeds. Otherwise a failed
         // write could poison the hot tier and make its retry look unchanged.
-        self.update_loaded_search_catalogs(&touched);
         for (key, record) in touched {
             self.hot.put(key, record);
         }
@@ -2646,7 +2623,6 @@ impl<S: Storage> Engine<S> {
             return Err(EngineError::StaleMutationClaim(transaction));
         }
         let revision = self.advance_revision()?;
-        self.update_loaded_search_catalogs(&entries);
         for (key, record) in entries {
             self.hot.put(key, record);
         }
@@ -2946,7 +2922,6 @@ impl<S: Storage> Engine<S> {
         self.query_watches = watch_query::QueryWatches::default();
         self.docs.clear();
         self.optimistic.clear();
-        self.search_catalogs.clear();
         // Another engine may have rebound the shared storage and changed the
         // durable queue, so both identity and optimism must re-hydrate.
         self.optimistic_hydrated = false;
@@ -2985,9 +2960,6 @@ impl<S: Storage> Engine<S> {
             self.hot.pop(key);
             affected.extend(self.deps.ops_for_keys([key]));
         }
-        // The durable projection was updated by the writing context. Reload
-        // only the compact catalog on the next text search.
-        self.search_catalogs.clear();
         affected
     }
 
@@ -3010,7 +2982,6 @@ impl<S: Storage> Engine<S> {
             .map_err(EngineError::Storage)?;
         for key in keys {
             self.hot.pop(key);
-            self.search_catalogs.remove(key);
         }
         self.advance_revision()?;
         Ok(self.revisioned(affected))
@@ -3027,7 +2998,6 @@ impl<S: Storage> Engine<S> {
         self.query_watches = watch_query::QueryWatches::default();
         self.optimistic.clear();
         self.optimistic_hydrated = true;
-        self.search_catalogs.clear();
         self.deps = DepIndex::new();
         // The wipe below removes the binding record too.
         self.identity = IdentityState::Missing;
@@ -3169,7 +3139,6 @@ impl<S: PredicateIndexStorage> Engine<S> {
             .map_err(EngineError::Storage)?;
         for key in keys {
             self.hot.pop(key);
-            self.search_catalogs.remove(key);
         }
         self.advance_revision()?;
         Ok(self.revisioned(affected))
@@ -3330,11 +3299,12 @@ fn layer_keys(layers: &[OptimisticLayer]) -> BTreeSet<EntityKey<'static>> {
         .collect()
 }
 
-fn cursor_allows(cursor: Option<&SearchCursor>, document: &SearchDocument) -> bool {
+fn cursor_allows(cursor: Option<&SearchCursor>, document: SearchDocumentRef<'_>) -> bool {
     cursor.is_none_or(|cursor| {
         document.timestamp_ms < cursor.timestamp_ms
             || (document.timestamp_ms == cursor.timestamp_ms
-                && document.record_key > cursor.record_key)
+                && crate::search::compare_record_keys(document.record_key, &cursor.record_key)
+                    .is_gt())
     })
 }
 

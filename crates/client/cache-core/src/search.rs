@@ -12,12 +12,10 @@ use std::cmp::Ordering;
 use std::collections::BTreeSet;
 use thiserror::Error;
 
-mod catalog;
 mod changes;
 mod ranking;
-pub(crate) use catalog::SearchCatalogs;
 pub(crate) use changes::{collect_search_changes, snapshot_search_fields};
-pub(crate) use ranking::rank_documents;
+pub(crate) use ranking::SearchRanker;
 
 /// Current compact projection profile used by Quick Access, Cmd-K and entity
 /// mention pickers. Profile names are persisted and therefore versioned.
@@ -87,6 +85,52 @@ pub struct SearchDocument {
     pub source_hash: String,
 }
 
+/// A row borrowed from storage or an optimistic projection. Only ranked winners
+/// need an owned document; the storage visitor may reuse its buffers immediately.
+#[derive(Clone, Copy)]
+pub struct SearchDocumentRef<'a> {
+    /// Projection profile.
+    pub profile: SearchProfile,
+    /// Canonical normalized-record key.
+    pub record_key: &'a EntityKey<'a>,
+    /// Quick Access bucket.
+    pub bucket: &'a str,
+    /// Normalized matching text.
+    pub search_text: &'a str,
+    /// Recency timestamp.
+    pub timestamp_ms: i64,
+    /// Hash of the source record.
+    pub source_hash: &'a str,
+}
+
+impl SearchDocumentRef<'_> {
+    /// Retains a winning row independently of the next storage step.
+    pub fn into_owned(self) -> SearchDocument {
+        SearchDocument {
+            profile: self.profile,
+            record_key: self.record_key.clone().into_owned(),
+            bucket: self.bucket.to_owned(),
+            search_text: self.search_text.to_owned(),
+            timestamp_ms: self.timestamp_ms,
+            source_hash: self.source_hash.to_owned(),
+        }
+    }
+}
+
+impl SearchDocument {
+    /// Borrows an already-materialized projection for ranking.
+    pub fn as_borrowed(&self) -> SearchDocumentRef<'_> {
+        SearchDocumentRef {
+            profile: self.profile,
+            record_key: &self.record_key,
+            bucket: &self.bucket,
+            search_text: &self.search_text,
+            timestamp_ms: self.timestamp_ms,
+            source_hash: &self.source_hash,
+        }
+    }
+}
+
 /// Bounded search request over cached contents.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -126,7 +170,7 @@ pub enum SearchError {
     /// Bucket names cross storage boundaries and must remain compact.
     #[error("invalid search bucket")]
     InvalidBucket,
-    /// Query text is bounded before loading/ranking the catalog.
+    /// Query text is bounded before filtering and streaming storage matches.
     #[error("search query is too long")]
     QueryTooLong,
 }
@@ -304,6 +348,30 @@ fn search_value_text(value: &CacheValue) -> Vec<&str> {
     }
 }
 
+/// Normalized text-search input shared by storage filtering and ranking.
+/// Storage may return a superset of matches; the ranker always checks each row.
+pub struct SearchQuery(String);
+
+impl SearchQuery {
+    /// Applies the same Unicode lowercase and whitespace normalization as the projection.
+    pub fn new(query: &str) -> Self {
+        Self(normalize_search_text(query))
+    }
+
+    /// Whitespace/comma-separated tokens, each matching an ordered subsequence.
+    pub fn tokens(&self) -> impl Iterator<Item = &str> {
+        self.0
+            .split(|c: char| c.is_whitespace() || c == ',')
+            .filter(|token| !token.is_empty())
+    }
+
+    /// Whether every token matches, independent of freshness and ranking.
+    pub fn matches(&self, text: &str) -> bool {
+        self.tokens()
+            .all(|token| subsequence_score(text, token).is_some())
+    }
+}
+
 fn normalize_search_text(value: &str) -> String {
     value
         .split_whitespace()
@@ -389,20 +457,32 @@ pub(crate) fn compare_record_keys(left: &EntityKey<'_>, right: &EntityKey<'_>) -
 
 /// Sorts recent browse results deterministically.
 pub fn compare_recent(left: &SearchDocument, right: &SearchDocument) -> Ordering {
+    compare_recent_rows(left.as_borrowed(), right.as_borrowed())
+}
+
+fn compare_recent_rows(left: SearchDocumentRef<'_>, right: SearchDocumentRef<'_>) -> Ordering {
     right
         .timestamp_ms
         .cmp(&left.timestamp_ms)
-        .then_with(|| compare_record_keys(&left.record_key, &right.record_key))
+        .then_with(|| compare_record_keys(left.record_key, right.record_key))
 }
 
 /// Returns a fuzzy+freshness score, or `None` when every query token fails to
 /// match as an ordered subsequence. Fuzzy relevance contributes 70%, freshness
 /// contributes 30%, and matching direct messages receive the legacy 1.8x boost.
 pub fn fuzzy_freshness_score(document: &SearchDocument, query: &str, now_ms: i64) -> Option<f64> {
-    score_normalized_query(document, &normalize_search_text(query), now_ms)
+    score_normalized_query(
+        document.as_borrowed(),
+        &normalize_search_text(query),
+        now_ms,
+    )
 }
 
-fn score_normalized_query(document: &SearchDocument, normalized: &str, now_ms: i64) -> Option<f64> {
+fn score_normalized_query(
+    document: SearchDocumentRef<'_>,
+    normalized: &str,
+    now_ms: i64,
+) -> Option<f64> {
     if normalized.is_empty() {
         return Some(1.0);
     }
@@ -415,7 +495,7 @@ fn score_normalized_query(document: &SearchDocument, normalized: &str, now_ms: i
         .filter(|token| !token.is_empty())
     {
         tokens += 1;
-        score += subsequence_score(&document.search_text, token)?;
+        score += subsequence_score(document.search_text, token)?;
     }
     if tokens == 0 {
         return None;

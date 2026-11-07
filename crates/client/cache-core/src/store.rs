@@ -20,7 +20,10 @@ use crate::queue::{
     ClaimedMutation, MutationClaimRequest, MutationClaimToken, MutationId, MutationQueueSnapshot,
     MutationUpsertKind, MutationUpsertResult, NewQueuedMutation, QueuedMutation,
 };
-use crate::search::{SearchCursor, SearchDocument, SearchProfile, project_search_documents};
+use crate::search::{
+    SearchCursor, SearchDocument, SearchDocumentRef, SearchProfile, SearchQuery,
+    project_search_documents,
+};
 use crate::value::{EntityKey, Record};
 use maybe_send::MaybeSend;
 use predicate_index::{
@@ -85,15 +88,16 @@ pub trait Storage: MaybeSend {
         keys: &[EntityKey<'static>],
     ) -> impl Future<Output = Result<(), Self::Error>> + MaybeSend;
 
-    /// Loads one compact bucket for text search. Must use the profile/bucket
-    /// index, never unrelated buckets or normalized record payloads.
-    fn load_search_documents(
+    /// Streams compact text matches from one indexed profile/bucket, without
+    /// collecting the bucket or decoding normalized records. May return a
+    /// superset of matches; must not omit matches or limit before ranking.
+    fn visit_search_documents(
         &self,
-        _profile: SearchProfile,
-        _bucket: &str,
-    ) -> impl Future<Output = Result<Vec<SearchDocument>, Self::Error>> + MaybeSend {
-        async { Ok(Vec::new()) }
-    }
+        profile: SearchProfile,
+        bucket: &str,
+        query: &SearchQuery,
+        visit: impl FnMut(SearchDocumentRef<'_>) + MaybeSend,
+    ) -> impl Future<Output = Result<(), Self::Error>> + MaybeSend;
 
     /// Reads one bucket in indexed recent order. `after` is exclusive.
     fn browse_search_documents(
@@ -296,8 +300,8 @@ pub struct InMemoryStorage {
     mutations: BTreeMap<MutationId, InMemoryQueuedMutation>,
     next_mutation_id: MutationId,
     record_get_count: Arc<AtomicUsize>,
-    search_catalog_load_count: Arc<AtomicUsize>,
-    search_catalog_rows_loaded: Arc<AtomicUsize>,
+    search_query_count: Arc<AtomicUsize>,
+    search_rows_visited: Arc<AtomicUsize>,
     mutation_queue_load_count: Arc<AtomicUsize>,
     calendar_ranges: HashMap<EntityKey<'static>, CalendarRangeRow>,
     calendar_coverage: Vec<CalendarSpan>,
@@ -392,14 +396,14 @@ impl InMemoryStorage {
         self.record_get_count.load(Ordering::Relaxed)
     }
 
-    /// Number of compact catalog loads (test diagnostics).
-    pub fn search_catalog_load_count(&self) -> usize {
-        self.search_catalog_load_count.load(Ordering::Relaxed)
+    /// Number of text queries against storage (test diagnostics).
+    pub fn search_query_count(&self) -> usize {
+        self.search_query_count.load(Ordering::Relaxed)
     }
 
-    /// Number of compact rows loaded across bucket reads (test diagnostics).
-    pub fn search_catalog_rows_loaded(&self) -> usize {
-        self.search_catalog_rows_loaded.load(Ordering::Relaxed)
+    /// Number of matching compact rows passed to visitors (test diagnostics).
+    pub fn search_rows_visited(&self) -> usize {
+        self.search_rows_visited.load(Ordering::Relaxed)
     }
 
     /// Number of full mutation-queue loads (test diagnostics).
@@ -448,22 +452,23 @@ impl Storage for InMemoryStorage {
         Ok(())
     }
 
-    async fn load_search_documents(
+    async fn visit_search_documents(
         &self,
         profile: SearchProfile,
         bucket: &str,
-    ) -> Result<Vec<SearchDocument>, Self::Error> {
-        self.search_catalog_load_count
-            .fetch_add(1, Ordering::Relaxed);
-        let documents: Vec<_> = self
-            .search_documents
-            .values()
-            .filter(|document| document.profile == profile && document.bucket == bucket)
-            .cloned()
-            .collect();
-        self.search_catalog_rows_loaded
-            .fetch_add(documents.len(), Ordering::Relaxed);
-        Ok(documents)
+        query: &SearchQuery,
+        mut visit: impl FnMut(SearchDocumentRef<'_>) + MaybeSend,
+    ) -> Result<(), Self::Error> {
+        self.search_query_count.fetch_add(1, Ordering::Relaxed);
+        for document in self.search_documents.values().filter(|document| {
+            document.profile == profile
+                && document.bucket == bucket
+                && query.matches(&document.search_text)
+        }) {
+            self.search_rows_visited.fetch_add(1, Ordering::Relaxed);
+            visit(document.as_borrowed());
+        }
+        Ok(())
     }
 
     async fn browse_search_documents(

@@ -97,6 +97,7 @@ fn commas_separate_query_tokens_in_any_order() {
             fuzzy_freshness_score(&group, query, 1_000).is_some(),
             "{query} must match"
         );
+        assert!(SearchQuery::new(query).matches(&group.search_text));
     }
     assert!(fuzzy_freshness_score(&group, "blair, casey", 1_000).is_none());
     assert!(fuzzy_freshness_score(&group, " , ", 1_000).is_none());
@@ -234,17 +235,20 @@ fn email_projection_matches_subject_and_all_senders_but_never_bodies() {
     assert!(!documents[0].search_text.contains("quartz"));
     assert!(!documents[0].search_text.contains("zebra"));
     for query in ["t", "te", "teo", "teo@sender.test", "weekly"] {
-        let page = rank_documents(
-            &SearchRequest {
-                profile: SearchProfile::QuickAccessV1,
-                buckets: vec!["email".into()],
-                query: query.into(),
-                cursor: None,
-                limit: 50,
-                now_ms: 0,
-            },
-            &documents,
-        );
+        let request = SearchRequest {
+            profile: SearchProfile::QuickAccessV1,
+            buckets: vec!["email".into()],
+            query: query.into(),
+            cursor: None,
+            limit: 50,
+            now_ms: 0,
+        };
+        let normalized = SearchQuery::new(query);
+        let mut ranker = SearchRanker::new(&request, &normalized);
+        for document in &documents {
+            ranker.push(document.as_borrowed());
+        }
+        let page = ranker.finish();
         assert_eq!(page.documents.len(), 1, "{query}");
     }
     record.fields.insert("name".into(), CacheValue::Null);

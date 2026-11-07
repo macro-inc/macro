@@ -57,6 +57,7 @@ wasm-bindgen shell exposing `cache-core` + `cache-turso` + `turso-opfs` as a
 
 - Email send persistence and cancellation belong to the frontend email journal, not the normalized cache or its mutation queue.
 
+- Search uses the shared core's bounded ranker over streamed Turso matches; browser parity coverage lives in `cache-turso/tests/web.rs`.
 - The engine is guarded by an async mutex so overlapping JS calls serialize
   instead of causing reentrancy — don't bypass it with a second entry point.
 - Compiles to an empty shell off-wasm specifically so plain `cargo test` across

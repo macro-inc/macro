@@ -1165,6 +1165,21 @@ supply this negative evidence. The existing authoritative-write telemetry covers
 this preparation/write path; no new worker command or database migration is needed.
 See [cached Mail verification](../../../docs/agent-guide/email.md#cached-mail-filtering).
 
+## Bounded Quick Access search
+
+Typed cache search binds normalized subsequence patterns into Turso and streams
+matching compact projections into a Rust heap of at most `limit + 1` documents.
+It no longer retains per-bucket text catalogs. Matching and ranking semantics,
+optimistic overlays, and indexed empty-query browsing are preserved; leading
+wildcards still scan selected buckets. Storage schema 12 makes the browse index
+covering by appending search text and source hashes. This is an incompatible
+cutover, not a migration: native caches reset, including queued mutations;
+browsers open a fresh `s4.v4.t12` file and do not replay older files' queues.
+Existing cleanup safeguards for those older files remain. The wire API, record
+format, schema epoch, and search projection version are unchanged. See
+[streaming text search](../../../crates/client/README.md#streaming-text-search)
+for the memory boundary and native/OPFS verification.
+
 ## Cached email Quick Access
 
 The disposable Quick Access projection is version 4; version 4 added task
