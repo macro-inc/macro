@@ -7,6 +7,9 @@ import subprocess
 import unittest
 import io
 import json
+import base64
+import hashlib
+import hmac
 from contextlib import redirect_stderr
 from pathlib import Path
 from unittest.mock import patch
@@ -299,6 +302,42 @@ class GitleaksMergeTest(unittest.TestCase):
     def test_non_merge_retains_tool_result(self):
         (self.root / ".git/MERGE_HEAD").unlink()
         self.assertEqual(self.run_tool([], code=7), 7)
+
+    def test_transcript_jwts_require_staged_local_signatures(self):
+        path = "services/sync-service/tests/transcripts/example.test/scenario.jsonl"
+        file = self.root / path
+        file.parent.mkdir(parents=True)
+
+        def token(key=b"local", algorithm="HS256", payload=b'{"user_id":"test-user"}'):
+            encode = lambda value: base64.urlsafe_b64encode(value).decode().rstrip("=")
+            header = encode(json.dumps({"alg": algorithm}).encode())
+            body = f"{header}.{encode(payload)}"
+            return body + "." + encode(hmac.new(key, body.encode(), hashlib.sha256).digest())
+
+        valid = token()
+        finding = {**self.finding(path), "EndLine": 1, "Tags": []}
+        for value, allowed in (
+            (valid, True), (token(b"another-key"), False),
+            (token(algorithm="none"), False), (token(payload=b"not-json"), False),
+            (valid + " " + token(b"another-key"), False), ("eyJbroken.broken.broken", False),
+            (valid + " " + token(b"another-key", payload='{"value":"\uffff"}'.encode()).replace("_", "/"), False),
+        ):
+            with self.subTest(allowed=allowed, length=len(value)):
+                file.write_text(json.dumps({"token": value}) + "\n")
+                self.git("add", path)
+                file.write_text(json.dumps({"token": valid}) + "\n")
+                self.assertEqual(self.run_tool([finding]), 0 if allowed else 1)
+
+        file.write_text(json.dumps({"token": valid}) + "\n")
+        self.git("add", path)
+        for field in ({"RuleID": "generic-api-key"}, {"Tags": ["decoded:base64"]}, {"EndLine": 2}):
+            self.assertEqual(self.run_tool([{**finding, **field}]), 1)
+        outside = self.root / "ordinary.jsonl"
+        outside.write_text(file.read_text())
+        self.git("add", "ordinary.jsonl")
+        self.assertEqual(self.run_tool([{**finding, "File": "ordinary.jsonl"}]), 1)
+        (self.root / ".git/MERGE_HEAD").unlink()
+        self.assertEqual(self.run_tool([finding]), 0)
 
     def test_invalid_parent_and_empty_merge_state_fail_closed(self):
         for value in ("not-a-commit\n", "imported.txt\n", ""):

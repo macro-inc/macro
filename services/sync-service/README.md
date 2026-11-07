@@ -267,6 +267,9 @@ SQL, D1 and snapshot-KV state. A ping/pong fence and a stdout dump marker keep
 late callback output within the scenario. Shared runtimes include preceding
 inputs in each fixture so they can be replayed independently, including across
 persisted-runtime restarts. Explicit seed events retain test-side KV and D1 writes.
+The commit hook verifies transcript JWT signatures against the public `local`
+test key before accepting those synthetic-token findings; other secrets remain
+blocked.
 
 Recording seeds client document IDs, Loro peer IDs and input bytes, and delivers
 client HTTP/WebSocket inputs in invocation order. The explicit overlapping-fetch
