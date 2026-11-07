@@ -1,4 +1,5 @@
 use crate::*;
+mod structural;
 /// Whether movement replaces or extends a range.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Alter {
@@ -67,51 +68,8 @@ impl Transaction<'_> {
             };
             return self.collapsed_selection_at(slot, point, range.format, range.style);
         }
-        if let Some(adjacent) = self.adjacent_node(&range.focus, direction)? {
-            if self.is_decorator(adjacent) && !self.is_isolated(adjacent) {
-                if alter == Alter::Move
-                    && granularity != Granularity::LineBoundary
-                    && self.is_keyboard_selectable(adjacent)
-                {
-                    let mut nodes = NodeSelection::new();
-                    nodes.add(adjacent);
-                    return self
-                        .install_selection_at(SelectionSlot::Active, Selection::Node(nodes));
-                }
-                let parent = self.parent_or_err(adjacent)?;
-                let index = self
-                    .index_within_parent(adjacent)
-                    .ok_or(Error::NoParent(adjacent))?;
-                let point = Point::element(parent, ChildIndex(index.0 + u32::from(!backward)));
-                self.set_point_at(slot, PointRole::Focus, point)?;
-                if alter == Alter::Move {
-                    self.set_point_at(slot, PointRole::Anchor, point)?;
-                }
-                let focus_parent = if self.is_element(range.focus.key()) {
-                    Some(range.focus.key())
-                } else {
-                    self.parent(range.focus.key())
-                };
-                if granularity != Granularity::LineBoundary || focus_parent != Some(parent) {
-                    return Ok(());
-                }
-                self.adjust_line_decorators(slot, alter, direction)?;
-            }
-            if self.is_element(adjacent)
-                && !self.is_inline(adjacent)
-                && !(alter == Alter::Extend && self.is_shadow_root(adjacent))
-            {
-                let point = if backward {
-                    self.end_point(adjacent)?
-                } else {
-                    self.start_point(adjacent)?
-                };
-                self.set_point_at(slot, PointRole::Focus, point)?;
-                if alter == Alter::Move {
-                    self.set_point_at(slot, PointRole::Anchor, point)?;
-                }
-                return Ok(());
-            }
+        if self.modify_structural_boundary(slot, alter, direction, granularity, true)? {
+            return Ok(());
         }
         match target {
             ModifyTarget::NoView => Ok(()),
@@ -142,7 +100,7 @@ impl Transaction<'_> {
                 next.style = range.style;
                 self.install_selection_at(slot, Selection::Range(next))?;
                 if granularity == Granularity::LineBoundary {
-                    self.adjust_line_decorators(slot, alter, direction)?;
+                    self.modify_structural_boundary(slot, alter, direction, granularity, false)?;
                 }
                 Ok(())
             }
@@ -216,32 +174,8 @@ impl Transaction<'_> {
             return Ok(());
         }
         if range.is_collapsed() {
-            if let Some(adjacent) = self.adjacent_node(&range.anchor, direction)? {
-                if self.is_decorator(adjacent) {
-                    if !self.is_isolated(adjacent) {
-                        if matches!(range.anchor,Point::Element{key,..} if self.is_empty(key))
-                            && (self.is_keyboard_selectable(adjacent) || !self.is_inline(adjacent))
-                        {
-                            self.remove(range.anchor.key(), false)?;
-                            let mut nodes = NodeSelection::new();
-                            nodes.add(adjacent);
-                            self.install_selection_at(
-                                SelectionSlot::Active,
-                                Selection::Node(nodes),
-                            )?;
-                        } else {
-                            self.remove(adjacent, false)?;
-                        }
-                    }
-                    return Ok(());
-                }
-                if self.is_element(adjacent)
-                    && self.is_empty(adjacent)
-                    && !self.is_shadow_root(adjacent)
-                {
-                    self.remove(adjacent, true)?;
-                    return Ok(());
-                }
+            if self.delete_structural_boundary(slot, direction)? {
+                return Ok(());
             }
             self.modify_selection_at(
                 slot,
@@ -342,38 +276,6 @@ impl Transaction<'_> {
             }
         }
         self.remove_text_at(slot)
-    }
-    fn adjust_line_decorators(
-        &mut self,
-        slot: SelectionSlot,
-        alter: Alter,
-        direction: EditDirection,
-    ) -> Result<(), Error> {
-        loop {
-            let focus = self.focus_at(slot)?;
-            let Some(adjacent) = self.adjacent_node(&focus, direction)? else {
-                break;
-            };
-            if !self.is_decorator(adjacent) || self.is_isolated(adjacent) {
-                break;
-            }
-            let parent = self.parent_or_err(adjacent)?;
-            let index = self
-                .index_within_parent(adjacent)
-                .ok_or(Error::NoParent(adjacent))?;
-            let point = Point::element(
-                parent,
-                ChildIndex(index.0 + u32::from(direction == EditDirection::Forward)),
-            );
-            self.set_point_at(slot, PointRole::Focus, point)?;
-            if alter == Alter::Move {
-                self.set_point_at(slot, PointRole::Anchor, point)?;
-            }
-            if !self.is_inline(adjacent) {
-                break;
-            }
-        }
-        Ok(())
     }
     fn remove_segment_at(
         &mut self,

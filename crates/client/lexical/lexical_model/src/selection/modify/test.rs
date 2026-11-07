@@ -469,3 +469,25 @@ fn forward_delete_at_segmented_end_removes_last_segment_and_restores_selection()
     assert_eq!(range.focus, range.anchor);
     Ok(())
 }
+
+#[test]
+fn no_view_movement_does_not_enter_a_direct_child_block() -> Result<(), Error> {
+    let mut editor = Editor::builder(EditorMode::Headless)
+        .build()
+        .expect("editor");
+    let mut tx = editor.transaction();
+    let outer = tx.create(Paragraph::default())?;
+    let inner = tx.create(Paragraph::default())?;
+    tx.append(outer, &[inner.key()])?;
+    tx.append(NodeKey::ROOT, &[outer.key()])?;
+    let point = Point::element(outer, ChildIndex(0));
+    tx.set_selection(Some(Selection::Range(RangeSelection::collapsed(point))))?;
+    tx.delete_word(
+        EditDirection::Forward,
+        ModifyTarget::NoView,
+        ModifyTarget::NoView,
+    )?;
+    assert_eq!(tx.anchor()?, point);
+    assert_eq!(tx.focus()?, point);
+    Ok(())
+}
