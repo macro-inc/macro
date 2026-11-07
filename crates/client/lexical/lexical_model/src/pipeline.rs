@@ -53,15 +53,16 @@ impl Transaction<'_> {
         self.dirty_since_flush = true;
         Ok(())
     }
-    pub(crate) fn drain_updates(&mut self) -> Result<(), Error> {
+    pub(crate) fn drain_updates(&mut self) -> Result<bool, Error> {
+        let mut skip_transforms = false;
         while let Some((update, options)) = self.nested.pop_front() {
-            self.options.skip_transforms |= options.skip_transforms;
+            skip_transforms |= options.skip_transforms;
             for tag in options.tags.iter() {
                 self.add_tag(tag.clone());
             }
             update(self)?;
         }
-        Ok(())
+        Ok(skip_transforms)
     }
     /// Run the model pipeline using the transaction's options.
     pub fn flush(&mut self) -> Result<(), Error> {
@@ -84,21 +85,28 @@ impl Transaction<'_> {
         result
     }
     fn flush_inner(&mut self, mode: FlushMode) -> Result<(), Error> {
-        self.drain_updates()?;
-        if let Some(Selection::Range(range)) = self.pending.selection.clone() {
-            let mut previous = None;
-            for point in [range.anchor, range.focus] {
-                if let Point::Text { key, .. } = point {
-                    let index = self.type_index(key).ok_or(Error::PointNodeNotFound(key))?;
-                    if previous != Some(key) {
-                        (self.pending.registry.vtable(index).selection_transform)(self, key)?;
-                    }
-                    previous = Some(key);
-                }
-            }
+        let nested_skip_transforms = self.drain_updates()?;
+        let anchor = self
+            .range_at(SelectionSlot::Active)
+            .map(|range| range.anchor);
+        let mut anchor_key = None;
+        if let Some(Point::Text { key, .. }) = anchor {
+            self.run_selection_transform(key)?;
+            anchor_key = Some(key);
+        }
+        // The anchor hook may move the live focus, including to a newly created node.
+        if let Some(Point::Text { key, .. }) = self
+            .range_at(SelectionSlot::Active)
+            .map(|range| range.focus)
+            && Some(key) != anchor_key
+        {
+            self.run_selection_transform(key)?;
         }
         if !self.dirty_leaves.is_empty() || !self.dirty_elements.is_empty() {
-            if mode == FlushMode::NormalizeOnly || self.options.skip_transforms {
+            if mode == FlushMode::NormalizeOnly
+                || self.options.skip_transforms
+                || nested_skip_transforms
+            {
                 for key in self.dirty_leaves.clone() {
                     normalize::normalize_text_node(self, key)?;
                 }
@@ -131,6 +139,10 @@ impl Transaction<'_> {
         }
         Ok(())
     }
+    fn run_selection_transform(&mut self, key: NodeKey) -> Result<(), Error> {
+        let index = self.type_index(key).ok_or(Error::PointNodeNotFound(key))?;
+        (self.pending.registry.vtable(index).selection_transform)(self, key)
+    }
     /// Normalize the active range, preserving point-set side effects.
     pub fn normalize_selection(&mut self) -> Result<(), Error> {
         self.normalize_selection_at(SelectionSlot::Active)
@@ -142,6 +154,9 @@ impl Transaction<'_> {
         };
         let before = range.clone();
         normalize_range_selection(self.view(), &mut range)?;
+        if before == range {
+            return Ok(());
+        }
         if let Some(composing) = self.composition_key {
             for (old, new) in [(before.anchor, range.anchor), (before.focus, range.focus)] {
                 if old != new && old.key() == composing {

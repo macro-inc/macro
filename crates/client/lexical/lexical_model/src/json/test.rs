@@ -184,3 +184,17 @@ fn float_serde_adapter_and_file_envelope_use_portable_values() -> Result<(), Err
     assert_eq!(doc.last_saved, 3);
     Ok(())
 }
+
+#[test]
+fn parsing_a_typed_document_does_not_normalize_adjacent_text() -> Result<(), Error> {
+    let mut editor = Editor::builder(EditorMode::Headless)
+        .build()
+        .expect("builder");
+    let document: SerializedEditorState = serde_json::from_value(
+        json!({"root":{"type":"root","children":[{"type":"paragraph","children":[{"type":"text","text":"a","mode":"normal"},{"type":"text","text":"b","mode":"normal"}]}]}}),
+    )?;
+    let state = editor.parse_editor_state(&document)?;
+    assert_eq!(state.view().all_text_nodes(NodeKey::ROOT).count(), 2);
+    assert!(editor.state().is_empty_state());
+    Ok(())
+}

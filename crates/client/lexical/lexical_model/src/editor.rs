@@ -15,7 +15,6 @@ pub struct Editor {
     pub(crate) keys: SharedKeyCounter,
     mode: EditorMode,
     pub(crate) carried_tags: TagSet,
-    pub(crate) commit_counter: u64,
     pub(crate) view_host: ViewHost,
     pub(crate) composition_key: Option<NodeKey>,
 }
@@ -36,7 +35,6 @@ impl Editor {
             view_host,
             composition_key: None,
             carried_tags: TagSet::default(),
-            commit_counter: 0,
         })
     }
     /// Configure an editor with an explicit mode.
