@@ -5,6 +5,15 @@ limit of 50, release builds, and one local machine. They are not production
 latency guarantees. Those comparisons preserved their original matching/ranking;
 the subsequent deterministic person policy is measured separately below.
 
+A full-frontend contact diagnostic at `1932eec7` found directory-sized main-thread
+JS retention and a missing person
+capability in the app's retiring-host wrapper. Its UI queries used server fallback.
+Later full-app runs restore the capability; at `bd5748ab`, Home/command runs retain
+56.6 MiB of JS at 100k versus 55.8–55.9 MiB at 1k, with no legacy directory reads
+or command-person server fallback. Other surfaces and total-memory acceptance
+remain open, and warm broad DOM-result samples still take 600–616 ms. Keep those
+full-app observations separate from the engine timings below.
+
 ## SQL scan comparison
 
 Run from the repository root:
@@ -103,8 +112,9 @@ The existing joined-record path decodes one matching record at a time; it does
 not retain the directory but is slower than the covering-only generic search.
 Scope publication, secondary-inbox/explicit exclusions, late DM winners and
 conversation deduplication are checked separately over native and OPFS storage.
-Host transport and scoped context publishing are implemented; Quick Access reader
-wiring is not yet enabled. Publisher batches/pending IDs cap at 500, while its input
+Host transport, scoped context publishing and the Quick Access person reader are
+implemented. UI person windows and CRM alias resolution do not append private
+contact history; shared recipients and planner pools still need migration. Publisher batches/pending IDs cap at 500, while its input
 maps scale with existing DM peers/inboxes, not directory contacts. These engine
 timings do not measure that frontend derivation or the remaining channel catalogs.
 They also measure first windows only: ranked command continuations can perform a

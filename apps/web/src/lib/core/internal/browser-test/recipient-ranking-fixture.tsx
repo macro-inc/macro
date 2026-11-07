@@ -8,6 +8,16 @@ import { createSignal } from 'solid-js';
 const OPTIONS: CombinedRecipientItem<'user'>[] = [
   {
     kind: 'user',
+    id: 'macro|notifications@example.com',
+    data: {
+      id: 'macro|notifications@example.com',
+      email: 'notifications@example.com',
+      name: 'Notifications mailbox',
+      lastInteraction: new Date(),
+    },
+  },
+  {
+    kind: 'user',
     id: 'macro|recent@example.com',
     data: {
       id: 'macro|recent@example.com',

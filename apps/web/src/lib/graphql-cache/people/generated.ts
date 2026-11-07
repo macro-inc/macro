@@ -2,6 +2,8 @@
 
 import { z } from 'zod/v3';
 
+export const PEOPLE_POLICY_VERSION = 4;
+
 export const MAX_PEOPLE_BATCH = 500;
 
 export const MAX_PEOPLE_QUERY_BYTES = 512;
@@ -83,6 +85,7 @@ export const PeopleSearchSchema = z
       z.literal('command'),
       z.literal('recipient'),
       z.literal('mention'),
+      z.literal('property'),
     ]),
     nowMs: z.number().int(),
     query: z.string(),
@@ -124,6 +127,7 @@ export const PeopleSearchResultSchema = z.union([
         userId: z.string(),
       })
     ),
+    policyVersion: z.number().int().gte(0),
     truncated: z.boolean(),
   }),
 ]);

@@ -65,6 +65,7 @@ it('reads context-ranked windows with pinned continuations and no unbounded mate
   const base = host();
   const search = vi.fn<PeopleCache['search']>().mockResolvedValue({
     kind: 'page',
+    policyVersion: 4,
     people: [
       {
         recordKey: document.recordKey,
@@ -145,6 +146,34 @@ it('reads context-ranked windows with pinned continuations and no unbounded mate
     )
   ).rejects.toBeInstanceOf(ContactDirectoryScopeError);
   expect(fetch).not.toHaveBeenCalled();
+});
+
+it('uses bounded server fallback when the native policy predates recipient exclusions', async () => {
+  const cache = {
+    ...host(),
+    people: {
+      search: vi.fn<PeopleCache['search']>().mockResolvedValue({
+        kind: 'page',
+        policyVersion: 3,
+        people: [],
+        truncated: false,
+        nextCursor: null,
+      }),
+      context: vi.fn<PeopleCache['context']>(),
+      update: vi.fn<PeopleCache['update']>(),
+    },
+  };
+  const fetch = server();
+  const page = await readContactDirectory(
+    VIEWER,
+    cache,
+    { query: '', policy: { mode: 'recipient', excluded: [] } },
+    signal(),
+    fetch
+  );
+  expect(page.source).toBe('server');
+  expect(page.users[0].id).toBe(contact.userId);
+  expect(fetch).toHaveBeenCalledOnce();
 });
 
 it('keeps unavailable policy fallback source-ordered and preserves empty-page continuation after exclusions', async () => {

@@ -9,6 +9,8 @@ pub(crate) const CONTEXT_FIELD: &str = "__contact_search_context_v1";
 pub(crate) const CONTEXT_META: &str = "__meta:contact-search-context-v1";
 /// Hard limit on context patches, excluded people, and returned people.
 pub const MAX_PEOPLE_BATCH: usize = 500;
+/// Before-limit matching, exclusion and ranking contract advertised to clients.
+pub const PEOPLE_POLICY_VERSION: u32 = 4;
 
 /// The one-to-one conversation a command result opens, with its visible name
 /// and viewed-first recency. Group DMs do not occupy this slot.
@@ -97,6 +99,8 @@ pub enum PeopleMode {
     Recipient,
     /// Name/email relevance and user interaction recency for mentions.
     Mention,
+    /// Property user pickers: personal interaction, domain preference and self pinning.
+    Property,
 }
 
 /// A ranked window over the current cached directory, not a completeness claim.
@@ -162,6 +166,10 @@ pub enum PeopleSearchResult {
     ContextPending,
     /// Bounded ranked results from the cache snapshot.
     Page {
+        /// Menu-policy contract version; older native binaries may not apply
+        /// current matching, exclusions and ranking before their result limit.
+        #[serde(rename = "policyVersion")]
+        policy_version: u32,
         /// Fully materialized winners only.
         people: Vec<PersonHit>,
         /// Additional matches were seen.

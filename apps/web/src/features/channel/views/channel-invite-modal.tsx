@@ -22,7 +22,7 @@ export function ChannelInviteModal(props: {
   teamError: boolean;
   participantsReady: boolean;
   participantIds: string[];
-  options: PeoplePickerProps['options'];
+  options: NonNullable<PeoplePickerProps['options']>;
   onAdd: (participantIds: string[]) => Promise<unknown>;
   onClose: () => void;
 }) {

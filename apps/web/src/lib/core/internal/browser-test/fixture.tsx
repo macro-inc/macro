@@ -15,6 +15,7 @@ import {
   NotesListFilterFixture,
 } from './list-filter-fixture';
 import { changeViewer, fetchContactDirectoryPage } from './network';
+import { RecipientDirectoryFixture } from './recipient-directory-fixture';
 import { RecipientRankingFixture } from './recipient-ranking-fixture';
 
 const client = new QueryClient();
@@ -138,6 +139,11 @@ render(
   () => (
     <QueryClientProvider client={client}>
       <Switch fallback={<App />}>
+        <Match
+          when={new URLSearchParams(location.search).has('recipient-directory')}
+        >
+          <RecipientDirectoryFixture />
+        </Match>
         <Match
           when={new URLSearchParams(location.search).has('recipient-ranking')}
         >

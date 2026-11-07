@@ -135,6 +135,17 @@ settings sizes retain their existing geometry. Native keyboard behavior, form
 values, labels, disabled/read-only state, and surrounding row hit targets stay
 unchanged. See the [selection-control API contract](../../.agents/rules/web/ui-primitives.md#selection-controls).
 
+## Recipient suggestions
+
+New message/channel, main email, call, routine-template and sharing pickers search personal
+contacts through one bounded window. Type to find later contacts; **Next options**
+or PageDown replaces the window, and ArrowDown at its end advances it. An empty
+window can still have a next page. Touch Next preserves input focus. Closing and
+reopening starts at the first window, without clearing selected/custom chips.
+Explicit participant/agent/thread choices remain scoped extras. Matching addresses
+are deduplicated while keeping the caller's selected representation. Other recipient surfaces
+are migrating separately; these controls do not change the AI planner's people pool.
+
 ## Multiselect dropdowns
 
 Use `Dropdown.MultiSelectItem` for filter options, not independent settings.

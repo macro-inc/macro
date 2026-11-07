@@ -27,7 +27,7 @@ export interface InputDisplay {
   resolveAppLink?: MentionLinkResolver;
   captureMessageMentions?(read: (() => ItemMention[]) | undefined): void;
   messageRecipients(): ReturnType<
-    RecipientSelectorProps<'user' | 'channel'>['options']
+    NonNullable<RecipientSelectorProps<'user' | 'channel'>['options']>
   >;
   captureCalendarEditor?(editor: LexicalEditor | undefined): void;
   captureEmailEditor?(editor: LexicalEditor | undefined): void;

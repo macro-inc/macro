@@ -4,9 +4,10 @@ import {
   selectRecords,
 } from '@graphql-cache/exchange/record-selection';
 import type { CacheHost } from '@graphql-cache/host/types';
-import type {
-  PeopleSearch,
-  PeopleSearchResult,
+import {
+  PEOPLE_POLICY_VERSION,
+  type PeopleSearch,
+  type PeopleSearchResult,
 } from '@graphql-cache/people/generated';
 import {
   isStaleHydrationScopeError,
@@ -31,6 +32,13 @@ export { ContactDirectoryScopeError } from './cache-scope';
 
 const CONTACT_SELECTION = selectRecords(ContactDirectoryFieldsFragmentDoc);
 export const CONTACT_WINDOW_SIZE = 50;
+
+/** A later local hydration/context hint may make this read available. */
+export class ContactDirectoryOfflineError extends Error {
+  constructor() {
+    super('Contacts are unavailable offline');
+  }
+}
 
 /** Cursors retain their source, account and query; cache cursors also require
  * the same durable generation. A source switch must start at the beginning. */
@@ -113,7 +121,8 @@ async function cachedPage(
         request.cursor?.source === 'people' ? request.cursor.after : undefined,
     });
     signal.throwIfAborted();
-    if (result.kind !== 'page') return;
+    if (result.kind !== 'page' || result.policyVersion < PEOPLE_POLICY_VERSION)
+      return;
     if (result.people.length > limit)
       throw new Error('Contact response exceeds its window');
     await assertContactCacheScope(host, viewer, generation, signal);
@@ -280,7 +289,7 @@ export async function readContactDirectory(
       result = { ...local, offline: !online };
     } else {
       try {
-        if (!online) throw new Error('Contacts are unavailable offline');
+        if (!online) throw new ContactDirectoryOfflineError();
         const page = await fetchPage(
           {
             limit,

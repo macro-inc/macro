@@ -3,6 +3,7 @@
 - Use `bun` as the package manager and script runner (`bun run build`, `bunx tsc`).
 - `bun run test`: run tests
 - `bun run check`: check typescript changes
+- Forward `CacheHost.people` through the app's retiring host, resolving the current host on each call even for captured methods; retired reads return unsupported and context writes reject rather than acknowledge discarded publication.
 - `CacheHost.people` contracts come from cache-core models: `bun run gen-cache-people-schema --rust` regenerates Rust JSON plus Zod/types; `--check --rust` verifies both. `bun run check` verifies JSON-to-frontend generation, while cache-core tests verify Rust-to-JSON drift. Missing native person commands mean unsupported, never permission to issue an unscoped write.
 - `bun run lint`: lint with biome
 - `bun run format`: format changes with biome
@@ -40,10 +41,38 @@ than publishing an empty snapshot. `context-publisher.ts` caps pending IDs and
 write batches at 500, replaces overflowing/uncertain snapshots with a new epoch,
 and never writes directory names or membership. `useContactContextPublisher`
 shares Soup's leader, rollout and generation lifecycle; do not add another leader.
-The bounded directory window accepts external search/policy inputs. Ranked person
-cursors require coordinator protocol 13; they bind scope/policy/epoch and retain
+The bounded directory window accepts external search/policy inputs. Bind continuations
+to each input transition, not just equal query strings; returning to an earlier input
+must start at page one. Person hydration wakes an initially unavailable offline
+window, never an authorization error or server continuation. Resolve self separately
+when 500 explicit selections fill the lookup batch. Prefer current-search DM metadata
+over a person's stored command target, then use recent conversations as fallback.
+Ranked person
+cursors require coordinator protocol 14; native menu policy version 4 retains
+mention scoring/property boosts and excludes automated recipient addresses before
+the limit unless their full address was typed. Generate the policy floor from Rust
+with the transport schema; older policy replies are not ranked
+native windows. Cursors bind scope/policy/epoch and retain
 only a scoring position/clock, not previous result IDs. Honor continuations on
 short/empty pages and keep server fallback explicitly source-ordered.
+Quick Access person lists are per-observer windows, never global item-cache rows.
+Forward live queries from commands, mentions and property selectors; resolve CRM
+aliases only for their current window. Reset virtual focus/scroll on window
+replacement, not label updates. Keep explicit participant/team pools scoped and
+selected IDs/self independent of suggestion pages. `RecipientSelector.createSource`
+constructs a per-picker source from live query/open/self/domain inputs; use
+`useContactRecipientSource` or `useCombinedRecipientSource` for personal suggestions
+and keep `options` for explicit scoped extras. Closing releases the page and reopening
+starts at the first window. Selected chips remain caller-owned; Next options/PageDown
+can advance empty windows. Main email To/Cc/Bcc inputs receive the factory through
+`EmailComposeContext.createRecipientSource`; scoped hosts opt out explicitly with
+`undefined`. Thread extras and personal hits deduplicate by canonical email while
+preserving the selected representation. Keep selection/outside dismissal synchronous;
+a delayed combobox close must not cancel a new query after refocus. Pass supplied
+names to option/chip avatars instead of filling the global name store. The internal
+recipient and email app-browser fixtures cover desktop/touch.
+Universal task inference still uses the existing shared-recipient pool until its
+planner resolver migrates; never substitute a suggestion page for that catalog.
 
 ## Verifying a change in a real browser
 

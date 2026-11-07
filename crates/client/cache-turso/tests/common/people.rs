@@ -63,7 +63,7 @@ pub async fn seed<S: Storage>(storage: &mut S, count: usize) {
     }
     storage
         .put_batch(
-            [WINNER, BLOCKED, DUPLICATE, EXACT]
+            [WINNER, BLOCKED, DUPLICATE, EXACT, VIEWER]
                 .into_iter()
                 .map(|user| {
                     let key = contact_key(user);
@@ -167,6 +167,7 @@ pub async fn assert_policy<S: Storage>(storage: S) -> S {
         people,
         truncated,
         next_cursor,
+        ..
     } = engine.search_people(&request).await.unwrap()
     else {
         panic!("published context must be ready")
@@ -303,6 +304,40 @@ pub async fn assert_policy<S: Storage>(storage: S) -> S {
     };
     assert_eq!(people[0].user_id.as_ref(), "macro|p000001@example.com");
     assert_eq!(people[0].match_rank, 3);
+    request.mode = PeopleMode::Mention;
+    request.query = "al".into();
+    let PeopleSearchResult::Page { people, .. } = engine.search_people(&request).await.unwrap()
+    else {
+        panic!("ready")
+    };
+    assert_eq!(
+        people[0].user_id.as_ref(),
+        EXACT,
+        "mention name tiers must apply before limiting, not only after hydration"
+    );
+    request.mode = PeopleMode::Property;
+    request.query = "alpha".into();
+    request.sender_domain = Some("example.com".into());
+    let PeopleSearchResult::Page { people, .. } = engine.search_people(&request).await.unwrap()
+    else {
+        panic!("ready")
+    };
+    assert_eq!(
+        people[0].user_id.as_ref(),
+        VIEWER,
+        "property self boost applies before the window limit"
+    );
+    request.query.clear();
+    let PeopleSearchResult::Page { people, .. } = engine.search_people(&request).await.unwrap()
+    else {
+        panic!("ready")
+    };
+    assert_eq!(
+        people[0].user_id.as_ref(),
+        VIEWER,
+        "property browse pins self even without interaction history"
+    );
+    request.sender_domain = None;
     // A new full snapshot expires facts for relationships no longer present.
     let replacement = Uuid::now_v7();
     engine

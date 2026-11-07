@@ -124,6 +124,43 @@ pub fn recipient_match_rank_normalized(text: &str, email: Option<&str>, query: &
     }
 }
 
+/// Whether an already-lowercased recipient local part denotes an automated
+/// mailbox. The caller parses the address; explicit typed addresses remain valid.
+pub fn is_automated_recipient_local_part(local: &str) -> bool {
+    const PREFIXES: [&str; 4] = ["notifications", "mailer-daemon", "postmaster", "bounce"];
+    const MARKERS: [&str; 20] = [
+        "noreply",
+        "no.reply",
+        "no_reply",
+        "no-reply",
+        "donotreply",
+        "donot.reply",
+        "donot_reply",
+        "donot-reply",
+        "do.notreply",
+        "do.not.reply",
+        "do.not_reply",
+        "do.not-reply",
+        "do_notreply",
+        "do_not.reply",
+        "do_not_reply",
+        "do_not-reply",
+        "do-notreply",
+        "do-not.reply",
+        "do-not_reply",
+        "do-not-reply",
+    ];
+    PREFIXES.iter().any(|prefix| {
+        local.strip_prefix(prefix).is_some_and(|suffix| {
+            suffix.is_empty()
+                || suffix
+                    .as_bytes()
+                    .first()
+                    .is_some_and(|first| matches!(first, b'+' | b'.' | b'_' | b'-'))
+        })
+    }) || MARKERS.iter().any(|marker| local.contains(marker))
+}
+
 /// Fixed blend weights for one surface, rather than a request's result corpus.
 #[derive(Clone, Copy, Debug)]
 pub struct Weights {

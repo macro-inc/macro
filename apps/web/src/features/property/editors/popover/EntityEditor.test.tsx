@@ -36,12 +36,16 @@ vi.mock('@core/user/util', () => ({
   },
 }));
 vi.mock('@core/component/UserIcon', () => ({ UserIcon: () => <span /> }));
+vi.mock('@queries/contacts/use-directory', () => ({
+  usePinnedContactUsers: () => () => [],
+}));
 vi.mock('@core/context/quickAccess', () => ({
   useQuickAccess: () => ({
     isLoading: () => false,
-    useList: (...buckets: string[]) => ({
+    useList: (options: { buckets: string[] }) => ({
+      isLoading: () => false,
       items: () =>
-        buckets.includes('initiative')
+        options.buckets.includes('initiative')
           ? [
               {
                 kind: 'initiative',

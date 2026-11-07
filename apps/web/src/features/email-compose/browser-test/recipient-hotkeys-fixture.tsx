@@ -11,19 +11,99 @@ import {
   useHotkeyDOMScope,
 } from '@core/hotkey/hotkeys';
 import { EntityProvider } from '@entity';
-import { QueryClient, QueryClientProvider } from '@tanstack/solid-query';
+import type { readContactDirectory } from '@queries/contacts/directory';
+import { createContactRecipientSource } from '@queries/contacts/recipient-window';
+import {
+  hashKey,
+  QueryClient,
+  QueryClientProvider,
+} from '@tanstack/solid-query';
 import { createSignal, type JSX, onMount, Show } from 'solid-js';
 import { render } from 'solid-js/web';
 import { message } from '../../email-message/tests/messages';
 import type { EmailComposeContext } from '../context/compose-capabilities';
 import { ComposeProvider } from '../context/compose-context';
 import { EmailFormContextProvider } from '../context/email-form-context';
+import { convertContactInfoToEmailRecipient } from '../core/recipient-conversion';
 import type { ReplyType } from '../core/reply-type';
 import { createEmailComposer } from '../primitives/email-composer';
 import { ComposeLayout } from '../views/compose-layout';
 import { ReplyInputView } from '../views/reply-input';
 
+const directoryEnabled = new URLSearchParams(location.search).has('directory');
+const mobile = new URLSearchParams(location.search).has('mobile');
+const [directoryReads, setDirectoryReads] = createSignal(0);
+const [directoryRows, setDirectoryRows] = createSignal(0);
+const scopedRecipients = () =>
+  directoryEnabled
+    ? [
+        convertContactInfoToEmailRecipient({
+          email: 'sender@example.com',
+          name: 'Thread sender',
+        }),
+      ]
+    : [];
+const readDirectory: typeof readContactDirectory = async (
+  viewer,
+  _host,
+  request
+) => {
+  setDirectoryReads((count) => count + 1);
+  const offset =
+    request.cursor?.source === 'server' ? Number(request.cursor.after) : 0;
+  const ids =
+    request.query === 'late'
+      ? [99_999]
+      : request.query.includes('sender')
+        ? [-1]
+        : request.query
+          ? []
+          : Array.from(
+              { length: Math.min(50, 100_000 - offset) },
+              (_, i) => offset + i
+            );
+  setDirectoryRows(ids.length);
+  return {
+    source: 'server',
+    sync: 'unavailable',
+    offline: false,
+    query: request.query,
+    users: ids.map((id) =>
+      id === -1
+        ? {
+            id: 'macro|sender@example.com',
+            email: 'sender@example.com',
+            name: 'Directory sender',
+          }
+        : {
+            id: `macro|person${id}@example.com`,
+            email: `person${id}@example.com`,
+            name: id === 99_999 ? 'Late Person' : `Person ${id}`,
+          }
+    ),
+    nextCursor:
+      !request.query && offset + ids.length < 100_000
+        ? {
+            source: 'server',
+            after: String(offset + ids.length),
+            userId: viewer,
+            query: request.query,
+            policyKey: hashKey([request.policy]),
+          }
+        : null,
+  };
+};
+
 const context: EmailComposeContext = {
+  createRecipientSource: directoryEnabled
+    ? (input) =>
+        createContactRecipientSource(
+          () => ({ userId: 'macro|me@example.com' }),
+          input,
+          () => false,
+          readDirectory
+        )
+    : undefined,
   drafts: {
     saveDraft: async () => ({
       draftId: 'draft',
@@ -82,8 +162,8 @@ const context: EmailComposeContext = {
     viewerLoading: () => false,
     onUpgrade: () => {},
     prepareSignatureLinks: () => {},
-    isTouch: () => false,
-    isMobile: () => false,
+    isTouch: () => mobile,
+    isMobile: () => mobile,
     scheduleEnabled: false,
     signaturesEnabled: () => false,
   },
@@ -140,18 +220,20 @@ function ThreadScope(props: { children: JSX.Element }) {
 function NewEmail() {
   const state = createEmailComposer({
     ...context,
-    initialTo: ['colleague@example.com'],
+    initialTo: directoryEnabled ? [] : ['colleague@example.com'],
+    recipientOptions: scopedRecipients,
   });
   return (
     <ComposeProvider
       value={{
         ...state.context,
+        createRecipientSource: context.createRecipientSource,
         bodyActions: {
           recipientAdded: () => {},
           readDroppedFiles: () => {},
           insertFiles: () => {},
         },
-        isMobile: () => false,
+        isMobile: () => mobile,
         scheduleEnabled: false,
       }}
     >
@@ -189,7 +271,7 @@ function Reply(props: { replyType: ReplyType }) {
             link_id: 'inbox',
             inbox_visible: true,
           }),
-          recipientOptions: () => [],
+          recipientOptions: scopedRecipients,
           ownsThreadInbox: () => true,
           isPersonalReply: () => false,
           onDraftRemoved: () => {},
@@ -225,6 +307,12 @@ function Fixture() {
                 <ChannelsContextProvider>
                   <QuickAccessProvider>
                     <main class="min-h-screen bg-surface p-4 text-ink">
+                      <output data-testid="directory-reads">
+                        {directoryReads()}
+                      </output>
+                      <output data-testid="directory-rows">
+                        {directoryRows()}
+                      </output>
                       <ThreadScope>
                         <Show when={replyType} fallback={<NewEmail />}>
                           {(type) => <Reply replyType={type()} />}

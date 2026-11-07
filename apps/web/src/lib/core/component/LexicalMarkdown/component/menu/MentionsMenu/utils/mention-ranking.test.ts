@@ -79,7 +79,11 @@ describe('mention ranking', () => {
   it('preserves broader cache matches and their identity without admitting unrelated custom items', () => {
     const broad = item('broad', 'Some early afternoon music', 'task');
     const direct = item('direct', 'Seamu notes', 'initiative');
-    expect(rankMentions([broad, direct], 'seamu')).toEqual([direct, broad]);
+    const unrelated = item('unrelated', 'XYZ', 'task');
+    expect(rankMentions([broad, direct, unrelated], 'seamu')).toEqual([
+      direct,
+      broad,
+    ]);
     expect(rankMentions([broad, direct], 'seamu', true)).toEqual([
       direct,
       broad,

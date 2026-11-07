@@ -1,7 +1,7 @@
 use super::cursor::{Cursor, Position, fingerprint};
 use super::*;
 use crate::value::{CacheValue, Record};
-use macro_user_id::cowlike::CowLike;
+use macro_user_id::{cowlike::CowLike, email::ReadEmailParts};
 use std::{
     cmp::Ordering,
     collections::{BinaryHeap, HashSet},
@@ -9,8 +9,8 @@ use std::{
 use subsequence_match::{
     normalize_text,
     ranking::{
-        Weights, blend, match_quality_normalized, name_match_rank_normalized,
-        recipient_match_rank_normalized,
+        Weights, blend, is_automated_recipient_local_part, match_quality_normalized,
+        name_match_rank_normalized, recipient_match_rank_normalized,
     },
     subsequence_score,
 };
@@ -113,6 +113,12 @@ impl<'a> PeopleRanker<'a> {
             return;
         }
         let normalized_email = user_id.email_str();
+        if self.request.mode == PeopleMode::Recipient
+            && self.query != normalized_email
+            && is_automated_recipient_local_part(user_id.email_part().local_part())
+        {
+            return;
+        }
         let name = match record.fields.get("name") {
             Some(CacheValue::String(value)) => value.as_str(),
             None | Some(CacheValue::Null) => email.split('@').next().unwrap_or(email),
@@ -165,7 +171,9 @@ impl<'a> PeopleRanker<'a> {
         let (fuzzy, time, brevity, gap, start) = match self.request.mode {
             PeopleMode::Command => (0.7, 0.7, 0.0, 0.4, 0.2),
             PeopleMode::Recipient => (0.5, 1.5, 1.0, 0.0, 0.0),
-            PeopleMode::Mention => (0.5, 0.4, 0.1, 0.0, 0.0),
+            PeopleMode::Mention if self.query.is_empty() => (0.0, 0.9, 0.0, 0.0, 0.0),
+            PeopleMode::Mention => (0.7, 0.2, 0.1, 0.4, 0.2),
+            PeopleMode::Property => (0.5, 0.4, 0.1, 0.0, 0.0),
         };
         let Some(quality) = match_quality_normalized(rank_label, text, &self.query, gap, start)
         else {
@@ -178,6 +186,14 @@ impl<'a> PeopleRanker<'a> {
                     .is_some_and(|(_, email_domain)| email_domain.eq_ignore_ascii_case(domain))
             });
             multiplier = match self.request.mode {
+                PeopleMode::Mention => {
+                    if self.query.is_empty() {
+                        1.2
+                    } else {
+                        1.6
+                    }
+                }
+                PeopleMode::Property if user == self.request.scope.identity => 11.0,
                 PeopleMode::Recipient if !self.query.is_empty() => {
                     1.25 + if same_domain { 0.0625 } else { 0.0 }
                 }
@@ -191,17 +207,24 @@ impl<'a> PeopleRanker<'a> {
             };
         }
         let match_rank = if self.query.is_empty() {
-            0
+            u8::from(
+                self.request.mode == PeopleMode::Property && user == self.request.scope.identity,
+            )
         } else {
             match self.request.mode {
                 PeopleMode::Command => name_match_rank_normalized(rank_label, &self.query),
                 PeopleMode::Recipient => {
                     recipient_match_rank_normalized(&base_text, Some(normalized_email), &self.query)
                 }
-                PeopleMode::Mention => 0,
+                PeopleMode::Mention => name_match_rank_normalized(rank_label, &self.query),
+                PeopleMode::Property => 0,
             }
         };
-        let score = if self.request.mode == PeopleMode::Command && self.query.is_empty() {
+        let score = if matches!(
+            self.request.mode,
+            PeopleMode::Command | PeopleMode::Property
+        ) && self.query.is_empty()
+        {
             0.0
         } else {
             blend(
@@ -324,6 +347,7 @@ impl<'a> PeopleRanker<'a> {
             None
         };
         Ok(PeopleSearchResult::Page {
+            policy_version: PEOPLE_POLICY_VERSION,
             people: hits
                 .into_iter()
                 .filter(|hit| {
@@ -339,3 +363,6 @@ impl<'a> PeopleRanker<'a> {
         })
     }
 }
+
+#[cfg(test)]
+mod test;

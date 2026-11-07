@@ -11,6 +11,7 @@ type UseUsersMentionOptions = {
   /** Custom users list if necessary */
   users?: Accessor<IUser[]>;
   searchTerm: Accessor<string>;
+  enabled?: Accessor<boolean>;
   /**
    * Whether the composer posts to a channel. Group mentions are an editor
    * configuration, not a block-context lookup: the channels view hosts a
@@ -25,6 +26,11 @@ type UseUsersMentionResult = {
   currentUserDomain: Accessor<string | undefined>;
   groups: Accessor<GroupMentionItem[]>;
   usersAndGroups: Accessor<(UserItem | GroupMentionItem)[]>;
+  windowKey: Accessor<string | undefined>;
+  hasMore: Accessor<boolean>;
+  isLoading: Accessor<boolean>;
+  isLoadingMore: Accessor<boolean>;
+  loadMore: () => Promise<void>;
 };
 
 /** Available group aliases and their match functions */
@@ -46,7 +52,13 @@ export function useUsersMention(
 ): UseUsersMentionResult {
   const { users: customUsers, searchTerm, isChannelBlock } = options;
   const quickAccess = useQuickAccess();
-  const workspaceUsers = quickAccess.useList('person').items;
+  const workspace = quickAccess.useList({
+    buckets: ['person'],
+    searchTerm,
+    peopleMode: 'mention',
+    enabled: () => !customUsers && options.enabled?.() !== false,
+  });
+  const workspaceUsers = workspace.items;
   const currentUserEmail = useEmail();
 
   const currentUserDomain = () => {
@@ -59,19 +71,17 @@ export function useUsersMention(
 
     // Custom lists scope who can be mentioned, but should retain the same
     // interaction ranking as the document body's workspace list.
-    const workspaceUsersById = new Map(
-      workspaceUsers().map((item) => [item.id, item])
-    );
     return customUsers().map((user) => ({
       id: user.id,
       data: user,
       kind: 'user',
       bucket: 'person',
-      sortTimestamp: workspaceUsersById.get(user.id)?.sortTimestamp ?? 0,
+      sortTimestamp: new Date(
+        quickAccess.interactionForUser(user.id) ?? user.lastInteraction ?? 0
+      ).getTime(),
       timestamps: {
         lastInteraction:
-          workspaceUsersById.get(user.id)?.timestamps.lastInteraction ??
-          user.lastInteraction,
+          quickAccess.interactionForUser(user.id) ?? user.lastInteraction,
       },
       searchText: `${user.name || user.email} | ${user.email}`,
     }));
@@ -130,5 +140,12 @@ export function useUsersMention(
     currentUserDomain,
     groups,
     usersAndGroups,
+    windowKey: () => (!customUsers ? workspace.windowKey?.() : undefined),
+    hasMore: () => !customUsers && workspace.hasMore(),
+    isLoading: () => !customUsers && workspace.isLoading(),
+    isLoadingMore: () => !customUsers && workspace.isLoadingMore(),
+    loadMore: async () => {
+      if (!customUsers) await workspace.loadMore();
+    },
   };
 }
