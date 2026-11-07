@@ -621,3 +621,23 @@ fn raw_splice_relocates_a_removed_descendant_after_a_line_break() -> Result<(), 
     assert_eq!(tx.focus()?, Point::element(paragraph, ChildIndex(0)));
     Ok(())
 }
+
+#[test]
+fn raw_splice_relocation_skips_a_predecessor_moved_into_the_range() -> Result<(), Error> {
+    let mut editor = Editor::builder(EditorMode::Headless)
+        .build()
+        .expect("editor");
+    let mut tx = editor.transaction();
+    let paragraph = tx.create(Paragraph::default())?;
+    let a = tx.create_text("a")?;
+    let b = tx.create_text("b")?;
+    let c = tx.create_text("c")?;
+    tx.append(paragraph, &[a.key(), b.key(), c.key()])?;
+    tx.append(NodeKey::ROOT, &[paragraph.key()])?;
+    tx.select_end(b)?;
+    tx.splice(paragraph, ChildIndex(1), 1, &[a.key()])?;
+    assert_eq!(tx.children_keys(paragraph)?, vec![a.key(), c.key()]);
+    assert_eq!(tx.anchor()?, Point::text(c, Utf16Offset(0)));
+    assert_eq!(tx.focus()?, Point::text(c, Utf16Offset(0)));
+    Ok(())
+}
