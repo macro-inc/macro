@@ -29,7 +29,9 @@ pub mod text;
 pub mod text_entity {
     pub use crate::text::entity::*;
 }
+pub mod click_after_last_block;
 pub mod hashtag;
+pub mod normalize_triple_click;
 pub mod plain_text;
 pub mod rich_text;
 pub mod selection;

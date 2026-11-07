@@ -51,3 +51,21 @@ RichTextNodeSelectionEnter (block/inline decorators), and both
 RichTextInlineDecoratorMoveToStart/End suites (including no-op/safety cases).
 Additional explicit tests cover rich/plain command return values, host-resolved
 deletion, indentation limits, selection slots and UTF-16 drop positions.
+
+`register_hashtag` installs a per-editor `HashtagConfig`; its matcher can be
+replaced transactionally without affecting another editor. `normalize_triple_click`
+registers a critical before-listener for selection changes and consumes the host's
+triple-click fact. `click_after_last_block` registers a typed application command
+and re-reads the root's last child before testing the configured predicate. Omit
+registration to disable either plugin. Mouse timing, geometry, read-only click
+claiming and preventDefault remain view responsibilities.
+
+The plugin tests cover triple/ordinary/disabled selection changes and the model
+cases from ClickAfterLastBlock.test.ts: block decorator, rejected predicate,
+disabled registration and empty root. Shadow-root and stale-last-child cases are
+additional literal checks. Its read-only test is a DOM claim test and remains in
+the view. RichTextImportExtension tests are DOM import tests, outside this model
+package. The heading test involving an empty ListItem inside ListNode belongs to
+the list-node port; this package covers all its non-list heading/quote cases.
+Tier A rich-text/plain-text/hashtag fixture replay is a later conformance layer;
+these unit ports run directly against the model without a fixture replay DSL.

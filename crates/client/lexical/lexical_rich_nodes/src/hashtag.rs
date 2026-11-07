@@ -1,8 +1,8 @@
 //! Hashtag text nodes and the upstream legacy JavaScript pattern.
-use crate::text::entity::{EntityMatch, TextEntity, TextEntityBuilderExt};
+use crate::text::entity::{EntityMatch, GetMatch, TextEntity};
 use lexical_model::*;
 use serde::{Deserialize, Serialize};
-use std::sync::LazyLock;
+use std::sync::{Arc, LazyLock};
 
 /// Upstream `HashtagNode`.
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
@@ -65,9 +65,40 @@ pub fn get_hashtag_match(text: &str) -> Option<EntityMatch> {
         end: Utf16Offset(end),
     })
 }
-/// Register the hashtag type and its forward/reverse transforms.
-pub fn register_hashtag(builder: EditorBuilder) -> EditorBuilder {
-    builder.node::<HashtagNode>().text_entity::<HashtagNode>()
+/// A per-editor matcher, permitting host-specific hashtag syntax.
+#[derive(Clone)]
+pub struct HashtagConfig {
+    /// Return the first match in UTF-16 code units.
+    pub get_hashtag_match: GetMatch,
+}
+impl Default for HashtagConfig {
+    fn default() -> Self {
+        Self {
+            get_hashtag_match: Arc::new(get_hashtag_match),
+        }
+    }
+}
+fn hashtag_text_transform(
+    tx: &mut Transaction<'_>,
+    node: Id<Text>,
+) -> std::result::Result<(), lexical_model::Error> {
+    let matcher = tx.extension::<HashtagConfig>()?.get_hashtag_match.clone();
+    crate::text::entity::transform_text::<HashtagNode>(tx, node, |text| matcher(text))
+}
+fn hashtag_reverse_transform(
+    tx: &mut Transaction<'_>,
+    node: Id<HashtagNode>,
+) -> std::result::Result<(), lexical_model::Error> {
+    let matcher = tx.extension::<HashtagConfig>()?.get_hashtag_match.clone();
+    crate::text::entity::transform_reverse::<HashtagNode>(tx, node, |text| matcher(text))
+}
+/// Register the hashtag type, matcher state and forward/reverse transforms.
+pub fn register_hashtag(builder: EditorBuilder, config: HashtagConfig) -> EditorBuilder {
+    builder
+        .node::<HashtagNode>()
+        .extension_state(config)
+        .transform::<Text>(hashtag_text_transform)
+        .transform::<HashtagNode>(hashtag_reverse_transform)
 }
 #[cfg(test)]
 mod test;

@@ -81,9 +81,12 @@ fn matcher_preserves_utf16_boundaries_and_legacy_character_classes() {
 }
 #[test]
 fn registered_transforms_split_plain_text_into_hashtag_entities() -> crate::Result<()> {
-    let mut editor = register_hashtag(Editor::builder(EditorMode::Headless))
-        .build()
-        .unwrap();
+    let mut editor = register_hashtag(
+        Editor::builder(EditorMode::Headless),
+        HashtagConfig::default(),
+    )
+    .build()
+    .unwrap();
     let (p, _) = editor.update(|tx| {
         let p = tx.create(Paragraph {})?;
         let t = tx.create_text("hello #world and ＃日本語")?;
@@ -98,5 +101,54 @@ fn registered_transforms_split_plain_text_into_hashtag_entities() -> crate::Resu
     assert_eq!(state.text_content(children[1]), "#world");
     assert_eq!(state.type_name(children[3])?, "hashtag");
     assert_eq!(state.text_content(children[3]), "＃日本語");
+    Ok(())
+}
+#[test]
+fn custom_matcher_is_per_editor_and_changes_with_transactional_config() -> crate::Result<()> {
+    let config = HashtagConfig {
+        get_hashtag_match: Arc::new(|text| {
+            text.find('@').map(|start| EntityMatch {
+                start: Utf16Offset(start as u32),
+                end: Utf16Offset((start + 4) as u32),
+            })
+        }),
+    };
+    let mut editor = register_hashtag(Editor::builder(EditorMode::Headless), config)
+        .build()
+        .unwrap();
+    let (p, _) = editor.update(|tx| {
+        let p = tx.create(Paragraph {})?;
+        let t = tx.create_text("@abc")?;
+        tx.append(p, &[t.key()])?;
+        tx.append(NodeKey::ROOT, &[p.key()])?;
+        Ok(p)
+    })?;
+    let entity = editor.state().first_child(p).unwrap();
+    assert!(editor.state().is::<HashtagNode>(entity));
+    editor.update(|tx| {
+        tx.extension_mut::<HashtagConfig>()?.get_hashtag_match = Arc::new(|_| None);
+        tx.mark_dirty(entity)
+    })?;
+    let plain = editor.state().first_child(p).unwrap();
+    assert!(editor.state().is_simple_text(plain));
+    assert_eq!(editor.state().text_content(plain), "@abc");
+    let mut default = register_hashtag(
+        Editor::builder(EditorMode::Headless),
+        HashtagConfig::default(),
+    )
+    .build()
+    .unwrap();
+    let (p, _) = default.update(|tx| {
+        let p = tx.create(Paragraph {})?;
+        let t = tx.create_text("@abc")?;
+        tx.append(p, &[t.key()])?;
+        tx.append(NodeKey::ROOT, &[p.key()])?;
+        Ok(p)
+    })?;
+    assert!(
+        default
+            .state()
+            .is_simple_text(default.state().first_child(p).unwrap())
+    );
     Ok(())
 }

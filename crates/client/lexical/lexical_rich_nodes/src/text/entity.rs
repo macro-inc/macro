@@ -9,6 +9,9 @@ pub struct EntityMatch {
     /// Exclusive end.
     pub end: Utf16Offset,
 }
+/// A configurable matcher shared by entities and their per-editor configuration.
+pub type GetMatch = std::sync::Arc<dyn Fn(&str) -> Option<EntityMatch> + Send + Sync>;
+
 /// A text subtype that recognizes and creates entities from plain text.
 pub trait TextEntity: TextNode {
     /// Find the first entity in a string.
