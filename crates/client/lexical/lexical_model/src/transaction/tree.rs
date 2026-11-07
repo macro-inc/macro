@@ -216,6 +216,13 @@ impl Transaction<'_> {
             .copied()
             .filter(|key| !unique.contains(key))
             .collect();
+        let mut previous = start
+            .checked_sub(1)
+            .and_then(|index| old.get(index))
+            .copied();
+        if nodes.first().copied() == previous {
+            previous = previous.and_then(|key| self.prev_sibling(key));
+        }
         let mut result = before;
         result.extend_from_slice(nodes);
         result.extend(after);
@@ -244,10 +251,6 @@ impl Transaction<'_> {
                             .any(|key| point.key() == *key || self.has_ancestor(point.key(), *key))
                 })
             });
-            let previous = start
-                .checked_sub(1)
-                .and_then(|index| old.get(index))
-                .copied();
             let next = old.get(end).copied();
             let point = match previous.or(next) {
                 Some(key) if self.is_text(key) => Some(Point::text(
