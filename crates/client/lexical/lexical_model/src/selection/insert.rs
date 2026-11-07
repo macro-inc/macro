@@ -26,7 +26,8 @@ impl Transaction<'_> {
         };
         if let Point::Element { key, offset } = start {
             // Upstream transfers an element start to a new empty text before
-            // resolving the end boundary. Existing child offsets stay unchanged.
+            // resolving the end boundary. Leaf insertBefore updates element
+            // offsets; direct paragraph splices leave them unchanged.
             let text = self.create_text("")?;
             self.text(text)?
                 .set_format(original.format)?
@@ -42,7 +43,10 @@ impl Transaction<'_> {
                 self.splice(key, offset, 0, &[text.key()])?;
             }
             let next = Point::text(text, Utf16Offset::ZERO);
-            let end = if start == end { next } else { end };
+            let shifted = self.range_at(slot)?;
+            let end = if start == end { next } else if placement.is_some_and(|child| self.is::<Paragraph>(child)) {
+                end
+            } else if backward { shifted.anchor } else { shifted.focus };
             if backward {
                 original.focus = next;
                 original.anchor = end;

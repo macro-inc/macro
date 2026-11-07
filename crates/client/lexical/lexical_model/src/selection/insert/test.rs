@@ -543,3 +543,24 @@ fn split_start_prefers_the_next_part_when_the_end_is_later() -> Result<(), Error
     })?;
     Ok(())
 }
+
+#[test]
+fn element_text_replacement_shifts_the_end_past_a_leaf_insertion() -> Result<(), Error> {
+    let mut editor = Editor::builder(EditorMode::Headless).build().unwrap();
+    editor.update(|tx| {
+        let p = tx.create(Paragraph::default())?;
+        let first = tx.create_text("a")?;
+        let line = tx.create(LineBreak::default())?;
+        let last = tx.create(Tab::default())?;
+        tx.append(p, &[first.key(), line.key(), last.key()])?;
+        tx.append(NodeKey::ROOT, &[p.key()])?;
+        tx.set_selection(Some(Selection::Range(RangeSelection::new(
+            Point::element(p, ChildIndex(1)), Point::element(p, ChildIndex(2)),
+        ))))?;
+        tx.insert_text("b")?;
+        assert_eq!(tx.text_content(p), "ab\t");
+        assert!(!tx.is_attached(line));
+        Ok(())
+    })?;
+    Ok(())
+}
