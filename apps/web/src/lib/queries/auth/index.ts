@@ -22,6 +22,7 @@ export {
   type GithubLinkStatus,
   githubLinkAuthorizationUrl,
   invalidateGithubLinkStatus,
+  readGithubLinkStatus,
   useDeleteGithubLinkMutation,
   useGithubLinkStatusQuery,
   useInitGithubLinkMutation,
