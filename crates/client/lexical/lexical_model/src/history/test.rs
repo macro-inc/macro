@@ -544,3 +544,47 @@ fn upstream_undo_in_commits_pending_work_before_installing_snapshot() {
     }
     assert_eq!(editor.state().view().text_content(text), "a");
 }
+
+#[test]
+fn replacing_old_anchor_is_not_classified_as_first_character_typing() {
+    let mut editor = Editor::builder(EditorMode::Headless).build().unwrap();
+    let ((parent, text), initial) = editor
+        .update(|tx| {
+            let parent = tx.create(Paragraph::default())?;
+            let text = tx.create_text("a")?;
+            tx.append(NodeKey::ROOT, &[parent.key()])?;
+            tx.append(parent, &[text.key()])?;
+            tx.set_selection(Some(Selection::Range(RangeSelection::collapsed(
+                Point::text(text, Utf16Offset(1)),
+            ))))?;
+            Ok((parent.key(), text.key()))
+        })
+        .unwrap();
+    let mut tracker = MergeTracker::new(300, HistoryTime(0));
+    tracker.classify(&initial, HistoryTime(0));
+    let (_, typed) = editor
+        .update(|tx| {
+            tx.text(text)?
+                .splice_text(Utf16Offset(1)..Utf16Offset(1), "b", true)?;
+            Ok(())
+        })
+        .unwrap();
+    assert_eq!(
+        tracker.classify(&typed, HistoryTime(1)),
+        HistoryAction::Push
+    );
+    let (_, replaced) = editor
+        .update(|tx| {
+            let next = tx.create_text("x")?;
+            tx.splice(parent, ChildIndex(0), 1, &[next.key()])?;
+            tx.set_selection(Some(Selection::Range(RangeSelection::collapsed(
+                Point::text(next, Utf16Offset(1)),
+            ))))
+        })
+        .unwrap();
+    assert!(!replaced.next.view().contains(text));
+    assert_eq!(
+        tracker.classify(&replaced, HistoryTime(2)),
+        HistoryAction::Push
+    );
+}

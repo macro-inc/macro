@@ -331,3 +331,71 @@ fn initial_state_hooks_are_drained_once() {
         "id: assigned"
     );
 }
+
+#[derive(Clone)]
+struct SavedState(EditorState);
+struct EarlyThenFail;
+impl Plugin for EarlyThenFail {
+    fn name(&self) -> &'static str {
+        "early-failure"
+    }
+    fn commands(&self) -> &[CommandRegistration] {
+        &[]
+    }
+    fn handle(&self, _: &mut Transaction<'_>, _: &Command) -> Result<Handled, Error> {
+        Ok(Handled::No)
+    }
+    fn after_commit(&self, tx: &mut Transaction<'_>, _: &Commit) -> Result<(), Error> {
+        let state = tx.extension::<SavedState>()?.0.clone();
+        let text = tx
+            .first_descendant(NodeKey::ROOT)
+            .ok_or(Error::Invariant("text"))?;
+        tx.text(text)?.set_text_content("early write")?;
+        tx.set_editor_state(state, TagSet::default())?;
+        Err(Error::Invariant("after early publication"))
+    }
+}
+#[test]
+fn failed_hook_round_rolls_back_even_after_set_editor_state_early_publication() {
+    let mut editor = Editor::builder(EditorMode::Headless).build().unwrap();
+    editor
+        .update(|tx| {
+            let p = tx.create(Paragraph::default())?;
+            let text = tx.create_text("saved")?;
+            tx.append(NodeKey::ROOT, &[p.key()])?;
+            tx.append(p, &[text.key()])
+        })
+        .unwrap();
+    let saved = editor.state().clone();
+    let mut editor = Editor::builder(EditorMode::Headless)
+        .extension_state(SavedState(saved))
+        .plugin(EarlyThenFail)
+        .build()
+        .unwrap();
+    // The saved state uses another registry, so create a same-editor checkpoint.
+    let ((text, _), commit) = editor
+        .update(|tx| {
+            let p = tx.create(Paragraph::default())?;
+            let text = tx.create_text("main")?;
+            tx.append(NodeKey::ROOT, &[p.key()])?;
+            tx.append(p, &[text.key()])?;
+            tx.extension_mut::<SavedState>()?.0 = tx.pending.clone();
+            Ok((text.key(), p.key()))
+        })
+        .unwrap();
+    assert_eq!(&*editor.state().root_text_content(), "main");
+    assert_eq!(commit.following.len(), 0);
+    assert_eq!(
+        commit.follow_up_error.as_ref().unwrap().plugin,
+        "early-failure"
+    );
+    assert_eq!(commit.next.view().text_content(text), "main");
+    assert_eq!(
+        &*editor
+            .extension::<SavedState>()
+            .unwrap()
+            .0
+            .root_text_content(),
+        "main"
+    );
+}

@@ -103,18 +103,16 @@ impl MergeTracker {
             } else {
                 HistoryAction::Discard
             }
-        } else if !push
+        } else if (!push
             && change != ChangeType::Other
             && change == self.previous_type
-            && now.0 < self.previous_time.0.saturating_add(self.delay_ms)
-        {
-            HistoryAction::Merge
-        } else if commit.changes.dirty_leaves.len() == 1
-            && commit
-                .changes
-                .dirty_leaves
-                .first()
-                .is_some_and(|key| text_unchanged(*key, previous, &commit.next))
+            && now.0 < self.previous_time.0.saturating_add(self.delay_ms))
+            || (commit.changes.dirty_leaves.len() == 1
+                && commit
+                    .changes
+                    .dirty_leaves
+                    .first()
+                    .is_some_and(|key| text_unchanged(*key, previous, &commit.next)))
         {
             HistoryAction::Merge
         } else {
@@ -173,7 +171,7 @@ fn change_type(previous: &EditorState, commit: &Commit) -> ChangeType {
         let key = next_selection.anchor.key();
         // Pinned upstream requires a single UTF-16 unit for the first character.
         if !prev.contains(key)
-            && prev.contains(prev_selection.anchor.key())
+            && next.contains(prev_selection.anchor.key())
             && next
                 .text(key)
                 .is_some_and(|data| data.text.utf16_len() == Utf16Offset(1))
