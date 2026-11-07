@@ -7,6 +7,7 @@ Development-only schema-2 fixture interpreter for the pinned upstream oracle.
 ## Start here
 
 - `src/fixture.rs`: recorder wire schema.
+- `src/config.rs`: strict host/provenance and constructor-reference validation.
 - `src/replay.rs`: operation ordering, identities and callback tapes.
 - `src/api/`: explicit dispatch to model APIs, including caret object identity and metadata.
 - `src/snapshot.rs`: full observable-state comparison.
@@ -28,6 +29,11 @@ Development-only schema-2 fixture interpreter for the pinned upstream oracle.
 - Unmapped APIs fail loudly. Ledger entries require an exact test identity, reason and spec decision; stale entries fail.
 - Partial recordings restore and validate the complete initial JSON, selection, key layout and next allocation counter before replay; no import transforms or synthetic commits run.
 - Generated namespace metadata consumes two host draws; explicit namespaces consume one. Macro recordings pass their declared list indentation to markdown conversions.
+
+- Link fixtures use real link transforms and captured raw parent/attribute records; code and mark factories use their package implementations.
+- Unmapped APIs fail loudly. Ledger entries require an exact test identity, reason and spec decision; stale entries fail. Macro policy and live Prism tokenization use the S4 `macro-patch` and `d6-highlight` reasons. Keep interpreter coverage gaps distinct from native incompatibilities.
+- Preserve caret range/point/slice object identities, slice distances, lazy iterator consumption and post-commit snapshot identities. Never synthesize a private cache from computed content.
+- Keep nondiscrete updates batched across intervening clock/log observations; only recorded boundaries publish transitions.
 - Native loading lives in `source.rs`; the interpreter itself has no filesystem dependency.
 
 ## Checks

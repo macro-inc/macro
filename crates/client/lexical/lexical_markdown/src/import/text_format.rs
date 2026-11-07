@@ -1,4 +1,5 @@
 //! CommonMark delimiter processing over UTF-16 units.
+use crate::util::is_js_whitespace;
 use crate::{matcher::*, util::*, *};
 use lexical_model::*;
 use std::collections::HashMap;

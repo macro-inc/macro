@@ -609,3 +609,28 @@ fn comparing_different_nodes_checks_text_caret_bounds() -> Result<(), Error> {
     assert!(!stale.is_before(tx.view(), &Point::text(text, Utf16Offset(0)))?);
     Ok(())
 }
+
+#[test]
+fn character_offsets_allow_interior_surrogate_positions_without_editing() -> Result<(), Error> {
+    let mut editor = Editor::builder(EditorMode::Headless).build().unwrap();
+    editor.update(|tx| {
+        let p = tx.create(Paragraph {})?;
+        let text = tx.create_text("a😀b")?;
+        tx.append(p, &[text.key()])?;
+        tx.append(NodeKey::ROOT, &[p.key()])?;
+        let selection = Selection::Range(RangeSelection::new(
+            Point::text(text, Utf16Offset(2)),
+            Point::text(text, Utf16Offset(3)),
+        ));
+        assert_eq!(
+            tx.character_offsets(&selection)?,
+            (Utf16Offset(2), Utf16Offset(3))
+        );
+        assert!(matches!(
+            tx.text(text)?.split_text(&[Utf16Offset(2)]),
+            Err(Error::Utf16OffsetSplitsSurrogatePair(Utf16Offset(2)))
+        ));
+        Ok(())
+    })?;
+    Ok(())
+}
