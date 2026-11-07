@@ -12,3 +12,5 @@ pub mod inbound;
 /// Outbound layer: LiveKit RTC client adapter.
 #[cfg(feature = "outbound")]
 pub mod outbound;
+/// Conversion into the Soup wire model.
+pub mod soup;

@@ -30,3 +30,6 @@ pub mod inbound;
     feature = "call_link"
 ))]
 pub mod outbound;
+
+/// Conversions into the Soup wire models.
+pub mod soup;
