@@ -26,6 +26,42 @@ export function activate(recorder?: Recorder): void {
   current = recorder;
 }
 
+/** Separate model setup from the original test's DOM assertions. */
+export function testBody<T extends Function>(body: T): T {
+  return new Proxy(body, {
+    apply(fn, receiver, args) {
+      const recorder = current;
+      if (!recorder) return Reflect.apply(fn, receiver, args);
+      recorder.inTestBody = true;
+      const finish = () => {
+        recorder.inTestBody = false;
+      };
+      try {
+        const result = Reflect.apply(fn, receiver, args);
+        if (result && typeof result.then === 'function')
+          return Promise.resolve(result).finally(finish);
+        finish();
+        return result;
+      } catch (error) {
+        finish();
+        throw error;
+      }
+    },
+  });
+}
+
+export function modelDOM<T>(value: T): T {
+  if (
+    current?.inTestBody &&
+    value &&
+    typeof value === 'object' &&
+    'nodeType' in value &&
+    'nodeName' in value
+  )
+    current.reasons.add('view:dom-assertion');
+  return value;
+}
+
 function registerValues(value: unknown, name: string, seen: Set<object>): void {
   if (
     !value ||
@@ -38,6 +74,11 @@ function registerValues(value: unknown, name: string, seen: Set<object>): void {
     namedFunctions.set(value, name);
     return;
   }
+  if (
+    'type' in value &&
+    ('regExp' in value || 'regExpStart' in value || 'tag' in value)
+  )
+    namedTransformers.set(value, name);
   if (Array.isArray(value) || Object.getPrototypeOf(value) === Object.prototype)
     for (const [key, item] of Object.entries(value))
       registerValues(item, `${name}.${key}`, seen);
@@ -120,10 +161,12 @@ export function wrapModule<T extends Record<string, unknown>>(
 export class Recorder {
   constructor(readonly modelProjection = false) {}
   projectingView = false;
+  inTestBody = false;
   readonly encoder = new Encoder();
   readonly trace: Op[] = [];
   readonly tapes: Fixture['tapes'] = [];
   readonly editors = new Map<object, number>();
+  readonly creationConfigs = new WeakMap<object, Record<string, unknown>>();
   readonly reasons = new Set<string>();
   readonly transformersFired = new Set<string>();
   initial: Fixture['initial'] = { editorState: null, selection: null };
@@ -347,7 +390,14 @@ export class Recorder {
     const rawReceiver = this.unwrap(receiver);
     if (
       name.endsWith('.setRootElement') &&
-      /__tests__\/utils/.test(new Error().stack ?? '')
+      (/__tests__\/utils/.test(new Error().stack ?? '') ||
+        (!this.inTestBody &&
+          (args[0] === null ||
+            (args[0] &&
+              typeof args[0] === 'object' &&
+              fields(args[0]).nodeName === 'DIV' &&
+              fields(args[0]).childNodes &&
+              fields(fields(args[0]).childNodes).length === 0))))
     ) {
       const object = fields(rawReceiver);
       this.editor(object);
@@ -371,6 +421,8 @@ export class Recorder {
         this.reasons.add('unsupported-read-receiver');
       const id = kind === 'update' ? this.updateId++ : this.updateId;
       const calls: Op[] = [];
+      const options =
+        args[1] === undefined ? undefined : this.argument(args[1]);
       const op: Op = {
         op: kind,
         editor: editor ? this.editor(editor) : 0,
@@ -378,11 +430,11 @@ export class Recorder {
       };
       if (!editor) op.state = this.encode(object);
       if (kind === 'read' && args[1] !== undefined)
-        op.opts = this.encode(this.argument(args[1]));
+        op.opts = this.encode(options);
       if (kind === 'update') {
         op.id = id;
         op.cause = 'test';
-        op.opts = this.encode(args[1] ?? {});
+        op.opts = this.encode(options ?? {});
         if (this.parent !== undefined) op.parent = this.parent;
         if (editor) {
           this.pending.set(editor, [...(this.pending.get(editor) ?? []), id]);
@@ -404,7 +456,11 @@ export class Recorder {
         });
       this.depth++;
       try {
-        return Reflect.apply(fn, rawReceiver, [wrapped, ...args.slice(1)]);
+        return Reflect.apply(fn, rawReceiver, [
+          wrapped,
+          options,
+          ...args.slice(2),
+        ]);
       } catch (error) {
         op.error = errorValue(error);
         throw error;
@@ -558,6 +614,7 @@ export class Recorder {
     const id = this.editors.size;
     this.editors.set(editor, id);
     const raw = fields(editor);
+    config = this.creationConfigs.get(editor) ?? config;
     const actual = fields(raw._config);
     const registry = raw._nodes;
     const nodes =
@@ -606,7 +663,7 @@ export class Recorder {
       id,
       config: {
         namespace: String(actual.namespace),
-        namespaceGenerated: config?.namespace === undefined,
+        namespaceGenerated: !config?.namespace,
         nodes: encodedNodes,
         replacements: Array.isArray(nodes)
           ? nodes
@@ -817,6 +874,8 @@ export function snapshot(editor: object): Fields {
 Object.assign(globalThis, {
   __lexRec: {
     enter: (cause: string) => current?.enter(cause),
+    created: (editor: object, config?: Record<string, unknown>) =>
+      current?.creationConfigs.set(editor, config ?? {}),
     begin: (editor: object, options?: { discrete?: boolean }) =>
       current?.begin(editor, options),
     commit: (

@@ -61,7 +61,11 @@ export class Encoder {
     else if ('_nodes' in object) tag = '$sel';
     else if ('offset' in object && 'key' in object && 'type' in object)
       tag = '$pt';
-    else if ('origin' in object && 'direction' in object) tag = '$caret';
+    else if (
+      ('origin' in object && 'direction' in object) ||
+      ('caret' in object && 'distance' in object)
+    )
+      tag = '$caret';
     if (tag) {
       const id = this.next++;
       const handle: { [key: string]: Value } = { [tag]: id };
@@ -75,9 +79,14 @@ export class Encoder {
       } else if (tag === '$sel') {
         handle.kind = 'anchor' in object ? 'range' : 'node';
       } else if (tag === '$caret') {
-        handle.origin = this.encode(object.origin);
-        handle.direction = this.encode(object.direction);
         handle.type = this.encode(object.type);
+        if ('caret' in object) {
+          handle.caret = this.encode(object.caret);
+          handle.distance = this.encode(object.distance);
+        } else {
+          handle.origin = this.encode(object.origin);
+          handle.direction = this.encode(object.direction);
+        }
       }
       return { ...handle };
     }
@@ -88,12 +97,17 @@ export class Encoder {
       };
     if (value instanceof Set)
       return { $set: [...value].map((item) => this.encode(item)) };
-    if (value instanceof RegExp)
+    if (value instanceof RegExp) {
+      if (Object.getPrototypeOf(value) !== RegExp.prototype)
+        throw new Error(
+          `unsupported-regexp-subclass: ${value.constructor.name}`
+        );
       return {
         $regexp: value.source,
         flags: value.flags,
         lastIndex: value.lastIndex,
       };
+    }
     if (
       Object.getPrototypeOf(value) !== Object.prototype &&
       Object.getPrototypeOf(value) !== null

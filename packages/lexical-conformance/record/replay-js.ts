@@ -190,8 +190,12 @@ export async function replay(
     }
     if ('$transformer' in value) {
       const name = String(value.$transformer);
-      const dot = name.lastIndexOf('.');
-      return modules.get(name.slice(0, dot))?.[name.slice(dot + 1)];
+      const dot = name.indexOf('.');
+      let result: unknown = modules.get(name.slice(0, dot));
+      for (const part of name.slice(dot + 1).split('.'))
+        result = fields(result)[part];
+      if (!result) throw new Error(`Unknown transformer ${name}`);
+      return result;
     }
     if ('$klass' in value) {
       for (const module of modules.values()) {
@@ -395,7 +399,7 @@ export async function replay(
             )
           )
             throw new Error(
-              `Commit snapshot mismatch: ${difference(actual, op)}`
+              `Commit snapshot mismatch: ${difference(actual && { ...actual, snapshot: comparableSnapshot(actual.snapshot) }, { ...op, snapshot: comparableSnapshot(op.snapshot) })}`
             );
         } else if (op.op === 'log') {
           if (!isDeepStrictEqual(logs.shift(), op))
@@ -416,7 +420,8 @@ export async function replay(
         if (mismatch) throw mismatch;
       } catch (error) {
         mismatch ??= new Error(
-          `self-replay-failed: ${index} ${op.op} ${op.fn ?? ''}: ${errorValue(error).message}`
+          `self-replay-failed: ${index} ${op.op} ${op.fn ?? ''}: ${errorValue(error).message}`,
+          { cause: error }
         );
         throw mismatch;
       } finally {

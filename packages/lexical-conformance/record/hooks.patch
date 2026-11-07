@@ -38,6 +38,9 @@
  function clearHistory(
 --- a/packages/lexical/src/LexicalEditor.ts
 +++ b/packages/lexical/src/LexicalEditor.ts
+@@ -908,1 +908,2 @@
+   registerDefaultCommandHandlers(editor);
++  globalThis.__lexRec?.created(editor, editorConfig);
 @@ -1535,6 +1535,8 @@
     * @param options - options for the update.
     */
