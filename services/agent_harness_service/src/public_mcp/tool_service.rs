@@ -128,16 +128,13 @@ impl<Context> AuthenticatedToolService<Context> {
         }
     }
 
-    /// The mode for one request: code mode wherever this deployment can run
-    /// code, except for ChatGPT, whose plugin directory refuses generic
-    /// executors.
-    fn tool_mode(&self, extensions: &rmcp::model::Extensions) -> ToolMode {
-        if self.code_mode.is_none()
-            || caller(extensions).is_ok_and(|caller| may_be_chatgpt(&caller))
-        {
-            ToolMode::Standard
-        } else {
-            ToolMode::Code
+    /// The mode for every request: code mode wherever this deployment can run
+    /// code. ChatGPT, whose plugin directory refuses generic executors, uses
+    /// the SDK-generated tools of `services/mcp-chatgpt-worker` instead.
+    fn tool_mode(&self) -> ToolMode {
+        match self.code_mode {
+            Some(_) => ToolMode::Code,
+            None => ToolMode::Standard,
         }
     }
 
@@ -167,30 +164,6 @@ fn caller(extensions: &rmcp::model::Extensions) -> Result<ToolCaller, rmcp::Erro
         .ok_or_else(|| {
             rmcp::ErrorData::internal_error("missing tool caller — is auth configured?", None)
         })
-}
-
-/// Tools ChatGPT is never offered. Each one runs code or hands an open-ended
-/// task to an agent, and the plugin directory refuses generic executors.
-const HIDDEN_FROM_CHATGPT: [&str; 6] = [
-    "BashCodeExecution",
-    "CreateAgentSession",
-    "DispatchCodingAgent",
-    "ManageAgentSession",
-    "Subagent",
-    "TextEditorCodeExecution",
-];
-
-/// Whether an OAuth caller might be ChatGPT: registered under its name, or
-/// holding a token with no recorded client, which fails closed until the next
-/// refresh records one. The name is self-reported, which is fine here: this
-/// picks how tools are presented and grants nothing, and a client naming itself
-/// ChatGPT only loses code mode and the tools above.
-fn may_be_chatgpt(caller: &ToolCaller) -> bool {
-    match caller {
-        ToolCaller::McpClient { name: None } => true,
-        ToolCaller::McpClient { name: Some(name) } => name.eq_ignore_ascii_case("chatgpt"),
-        ToolCaller::Agent(_) | ToolCaller::ApiKey => false,
-    }
 }
 
 #[cfg(test)]
@@ -264,7 +237,7 @@ where
             context.peer.set_peer_info(request);
         }
         let mut info = self.get_info();
-        if self.tool_mode(&context.extensions) == ToolMode::Code {
+        if self.tool_mode() == ToolMode::Code {
             let base_url = self.item_base_url.trim_end_matches('/');
             info.instructions = Some(format!(
                 "{}\n\n{}",
@@ -281,11 +254,8 @@ where
         context: rmcp::service::RequestContext<rmcp::RoleServer>,
     ) -> Result<ListToolsResult, rmcp::ErrorData> {
         Self::authenticated_user_id(&context.extensions)?;
-        let mode = self.tool_mode(&context.extensions);
-        let mut tools = self.tool_definitions_for(mode);
-        if caller(&context.extensions).is_ok_and(|caller| may_be_chatgpt(&caller)) {
-            tools.retain(|tool| !HIDDEN_FROM_CHATGPT.contains(&tool.name.as_ref()));
-        }
+        let mode = self.tool_mode();
+        let tools = self.tool_definitions_for(mode);
 
         Ok(ListToolsResult {
             tools,
@@ -338,16 +308,6 @@ where
             Err(error) => return (ToolCallOutcome::InvalidRequest, Err(error)),
         };
 
-        if may_be_chatgpt(&caller) && HIDDEN_FROM_CHATGPT.contains(&request.name.as_ref()) {
-            return (
-                ToolCallOutcome::InvalidRequest,
-                Err(rmcp::ErrorData::resource_not_found(
-                    format!("tool {} not found", request.name),
-                    None,
-                )),
-            );
-        }
-
         let Some(arguments) = request.arguments.map(serde_json::Value::Object) else {
             return (
                 ToolCallOutcome::InvalidRequest,
@@ -358,7 +318,7 @@ where
         if let Some(code_mode) = &self.code_mode
             && code_mode.tools.tools.contains_key(request.name.as_ref())
         {
-            if self.tool_mode(&context.extensions) != ToolMode::Code {
+            if self.tool_mode() != ToolMode::Code {
                 return (
                     ToolCallOutcome::InvalidRequest,
                     Err(rmcp::ErrorData::resource_not_found(

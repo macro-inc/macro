@@ -1,6 +1,7 @@
 # Code mode on the public MCP
 
-Status: implemented, on for every client but ChatGPT. The agent guide's "Code mode on the
+Status: implemented, on for every client. ChatGPT connects to its own
+SDK-generated server instead (`docs/architecture/mcp-surfaces.md`). The agent guide's "Code mode on the
 public MCP" section is the current behaviour; this document keeps the reasoning.
 
 Sources:
@@ -12,8 +13,9 @@ Sources:
 
 Give external MCP clients (Claude, ChatGPT, Cursor) the code mode that agent
 sessions already have: write one JavaScript module against the real Macro SDK
-instead of chaining many tool calls. Every client but ChatGPT sees it: ChatGPT's
-plugin directory refuses generic executors.
+instead of chaining many tool calls. Every client sees it. ChatGPT's plugin
+directory refuses generic executors, so ChatGPT uses a separate server of
+generated per-operation tools.
 
 ## What exists
 
