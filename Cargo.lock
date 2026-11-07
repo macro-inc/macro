@@ -12606,7 +12606,6 @@ dependencies = [
  "lexical_model",
  "lexical_node_id",
  "lexical_rich_nodes",
- "nom 8.0.0",
  "regress",
  "serde",
  "serde_json",

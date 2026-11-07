@@ -1,10 +1,11 @@
 ---
 description: "Lexical nodes bump the version counter on breaking changes and render at their final height on first paint."
 paths:
+  - "crates/client/lexical/macro_document_model/src/nodes/**"
   - "packages/lexical-core/nodes/**"
   - "apps/web/src/lib/core/component/LexicalMarkdown/component/decorator/**"
   - "apps/web/src/lib/core/component/LexicalMarkdown/version.ts"
-globs: "packages/lexical-core/nodes/**,apps/web/src/lib/core/component/LexicalMarkdown/component/decorator/**,apps/web/src/lib/core/component/LexicalMarkdown/version.ts"
+globs: "crates/client/lexical/macro_document_model/src/nodes/**,packages/lexical-core/nodes/**,apps/web/src/lib/core/component/LexicalMarkdown/component/decorator/**,apps/web/src/lib/core/component/LexicalMarkdown/version.ts"
 alwaysApply: false
 ---
 
@@ -33,3 +34,10 @@ every row and the channel visibly jumps.
 
 Check: open a channel with the node in an older message, reload, and confirm the
 scroll position does not move while the node loads.
+
+## Keep TypeScript and Rust nodes aligned
+
+Until M3, update the TypeScript and Rust node implementations together when
+changing serialized fields, import/export rules or model behavior. Regenerate
+the S4 §3.6b corpus with `bun packages/lexical-conformance/corpus/synthetic.ts`
+and require `just lexical-fixtures --check` for either node path.
