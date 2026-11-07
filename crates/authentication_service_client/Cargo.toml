@@ -8,6 +8,7 @@ version = "0.1.0"
 anyhow = { workspace = true }
 chrono = { workspace = true }
 model = { path = "../model" }
+model-error-response = { path = "../model-error-response", features = ["anyhow"] }
 reqwest = { workspace = true }
 serde = { workspace = true }
 thiserror = { workspace = true }

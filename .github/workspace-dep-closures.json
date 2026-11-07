@@ -130,6 +130,7 @@
       "crates/macro_event_topics",
       "crates/macro_user_id",
       "crates/model-entity",
+      "crates/model-error-response",
       "crates/model_owner",
       "crates/remote_env_var",
       "crates/workspace-hack"
@@ -472,6 +473,7 @@
       "crates/macro_env",
       "crates/macro_env_var",
       "crates/macro_user_id",
+      "crates/model-error-response",
       "crates/remote_env_var",
       "crates/workspace-hack"
     ],
@@ -7115,6 +7117,7 @@
     ],
     "fusionauth": [
       "crates/fusionauth",
+      "crates/model-error-response",
       "crates/upstream_error",
       "crates/workspace-hack"
     ],
@@ -10243,6 +10246,7 @@
       "crates/macro_env",
       "crates/macro_env_var",
       "crates/macro_user_id",
+      "crates/model-error-response",
       "crates/remote_env_var",
       "crates/workspace-hack"
     ],
@@ -10256,6 +10260,7 @@
       "crates/macro_env",
       "crates/macro_env_var",
       "crates/macro_user_id",
+      "crates/model-error-response",
       "crates/remote_env_var",
       "crates/workspace-hack"
     ],
@@ -10405,6 +10410,7 @@
       "crates/macro_event_broker",
       "crates/macro_event_topics",
       "crates/macro_user_id",
+      "crates/model-error-response",
       "crates/remote_env_var",
       "crates/workspace-hack"
     ],

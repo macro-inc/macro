@@ -12,7 +12,7 @@ chrono = { workspace = true }
 document_sub_type = { path = "../document_sub_type" }
 macro_user_id = { path = "../macro_user_id", features = ["schema"] }
 model-entity = { path = "../model-entity" }
-model-error-response = { path = "../model-error-response" }
+model-error-response = { path = "../model-error-response", features = ["anyhow"] }
 model_owner = { path = "../model_owner" }
 model_file_type = { path = "../model_file_type", features = ["utoipa"] }
 model_user = { path = "../model_user" }

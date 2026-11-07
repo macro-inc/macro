@@ -7,6 +7,7 @@ version = "0.1.0"
 [dependencies]
 anyhow = { workspace = true }
 model = { path = "../model" }
+model-error-response = { path = "../model-error-response", features = ["anyhow"] }
 model_owner = { path = "../model_owner" }
 models_bulk_upload = { path = "../models_bulk_upload" }
 models_permissions = { path = "../models_permissions" }
