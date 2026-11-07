@@ -132,7 +132,15 @@ export class Upstream {
     vi.advanceTimersByTime(oracleClock - performance.now());
     resetRandomKey();
     const onError = (e: Error) => {
-      this.errors.push(e);
+      const caret =
+        /^\$getTextNodeOffset: invalid offset (\d+) for size \d+ at key /.exec(
+          e.message
+        );
+      this.errors.push(
+        caret
+          ? new Error(`UTF-16 offset Utf16Offset(${caret[1]}) is out of range`)
+          : e
+      );
     };
     this.editor = createHeadlessEditor({ namespace: 'conformance', onError });
     this.dom = createEditor({ namespace: 'conformance', onError });

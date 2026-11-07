@@ -18,6 +18,7 @@ The upstream source is downloaded by checksum into this worktree's `target/`.
 ## Boundaries
 
 - Never import the recorder from shipped packages.
+- Retain S1 D-11 error-mode caret validation in the production differential oracle.
 - Keep recorder source patches in `record/hooks.patch`; differential-only patches and observation hooks use a separate disposable source tree.
 - A failed upstream test, transparency check or self-replay cannot become A-rec.
 - Keep unsupported cases in `fixtures/index.json` with a reason; never silently omit them.
