@@ -575,3 +575,49 @@ fn collapsing_an_empty_paragraph_selects_its_sibling_element() -> Result<(), Err
     assert_eq!(tx.focus()?, Point::element(next, ChildIndex(0)));
     Ok(())
 }
+
+#[test]
+fn raw_splice_preserves_parent_offsets_while_sibling_insertion_adjusts_them() -> Result<(), Error> {
+    let mut editor = Editor::builder(EditorMode::Headless)
+        .build()
+        .expect("editor");
+    let mut tx = editor.transaction();
+    let parent = tx.create(Paragraph::default())?;
+    let a = tx.create(Paragraph::default())?;
+    let b = tx.create(Paragraph::default())?;
+    let c = tx.create(Paragraph::default())?;
+    tx.append(parent, &[a.key(), b.key(), c.key()])?;
+    tx.append(NodeKey::ROOT, &[parent.key()])?;
+    tx.set_selection(Some(Selection::Range(RangeSelection::collapsed(
+        Point::element(parent, ChildIndex(2)),
+    ))))?;
+    let inserted = tx.create(Paragraph::default())?;
+    tx.splice(parent, ChildIndex(0), 0, &[inserted.key()])?;
+    assert_eq!(tx.anchor()?, Point::element(parent, ChildIndex(2)));
+    tx.splice(parent, ChildIndex(0), 1, &[])?;
+    assert_eq!(tx.anchor()?, Point::element(parent, ChildIndex(2)));
+    tx.insert_before(c, inserted, true)?;
+    assert_eq!(tx.anchor()?, Point::element(parent, ChildIndex(3)));
+    Ok(())
+}
+
+#[test]
+fn raw_splice_relocates_a_removed_descendant_after_a_line_break() -> Result<(), Error> {
+    let mut editor = Editor::builder(EditorMode::Headless)
+        .node::<Inline>()
+        .build()
+        .expect("editor");
+    let mut tx = editor.transaction();
+    let paragraph = tx.create(Paragraph::default())?;
+    let line = tx.create(LineBreak {})?;
+    let inline = tx.create(Inline {})?;
+    let text = tx.create_text("a")?;
+    tx.append(inline, &[text.key()])?;
+    tx.append(paragraph, &[line.key(), inline.key()])?;
+    tx.append(NodeKey::ROOT, &[paragraph.key()])?;
+    tx.select_start(text)?;
+    tx.splice(paragraph, ChildIndex(1), 1, &[])?;
+    assert_eq!(tx.anchor()?, Point::element(paragraph, ChildIndex(0)));
+    assert_eq!(tx.focus()?, Point::element(paragraph, ChildIndex(0)));
+    Ok(())
+}
