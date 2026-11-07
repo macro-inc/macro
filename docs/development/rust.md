@@ -62,6 +62,11 @@ idle `target/` directories instead). kache also deletes the `target/` of a
 worktree that no longer exists. To build without it, `export RUSTC_WRAPPER=`
 (or point it at `sccache`, which CI uses) after entering the shell.
 
+Gate wasm-only features such as `uuid/js` on
+`[target.'cfg(target_arch = "wasm32")'.dependencies]`: enabled natively, they
+change the feature set of a shared dependency and rebuild everything above it
+whenever you switch between services.
+
 For deployable Lambda artifacts, use `just build_lambdas` or the relevant
 service's build recipe, e.g. `just services/document_text_extractor/build`.
 Use `just --show <recipe>` to check prerequisites; do not assume all Lambdas
