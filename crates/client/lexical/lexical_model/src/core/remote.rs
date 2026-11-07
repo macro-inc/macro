@@ -14,12 +14,7 @@ impl Transaction<'_> {
             .get("type")
             .and_then(serde_json::Value::as_str)
             .ok_or(Error::Invariant("remote node type"))?;
-        let index = self
-            .pending
-            .registry
-            .get(name)
-            .ok_or_else(|| Error::UnknownSerializedType(name.to_owned()))?
-            .index;
+        let index = self.pending.registry.import_index(name, json)?;
         let key = (self.pending.registry.vtable(index).import_exact)(self, json)?;
         self.apply_remote_fields(key, json)?;
         Ok(key)

@@ -322,3 +322,79 @@ mod regressions;
 mod policy;
 
 mod lifecycle;
+
+#[test]
+fn unknown_remote_element_and_text_roundtrip_through_projection_and_core() -> Result<()> {
+    let source = Editor::builder(EditorMode::Headless).opaque_unknown_types(true)
+        .initial_state(serde_json::from_value(json!({"root":{"type":"root","version":1,"children":[
+            {"type":"future-block","version":5,"payload":{"x":true},"children":[
+                {"type":"future-text","version":3,"text":"a😀b","format":0,"mode":"normal","detail":0,"style":""}
+            ]}
+        ]}})).expect("literal state")).build().expect("source");
+    let remote = new_doc(12)?;
+    LoroProjection::initialize(&remote, source.state(), &PLAIN, 0)?;
+    let doc = new_doc(13)?;
+    let editor = Editor::builder(EditorMode::Headless)
+        .opaque_unknown_types(true)
+        .build()
+        .expect("target");
+    let mut projection = LoroProjection::initialize(&doc, editor.state(), &PLAIN, 0)?;
+    // Share a common empty root, then insert future nodes using the remote projection.
+    let baseline = doc.oplog_vv();
+    let peer = fork_doc(&doc, 14)?;
+    let mut peer_editor = Editor::builder(EditorMode::Headless)
+        .opaque_unknown_types(true)
+        .build()
+        .expect("peer");
+    let mut peer_projection = LoroProjection::attach(&peer, peer_editor.state(), &PLAIN)?;
+    let (_, commit) = peer_editor.update(|tx| {
+        let block = tx.import_node(
+            source.state().to_json()?.root["children"][0]
+                .as_object()
+                .expect("block"),
+        )?;
+        tx.append(NodeKey::ROOT, &[block])?;
+        Ok(())
+    })?;
+    peer_projection.local_commit(&peer, &[commit], LOCAL_ORIGIN, 1)?;
+    let bytes = peer.export(ExportMode::updates(&baseline))?;
+    let (_, changes) = projection.remote(&doc, editor.state(), &bytes)?;
+    let mut core = EditorCore::new(
+        editor,
+        CoreConfig {
+            history: None,
+            editable: true,
+            diff: DiffOptions::default(),
+            track_text_content: false,
+        },
+    );
+    let output = core
+        .apply(
+            Input::ApplyRemote {
+                changes: changes.changes.clone(),
+                options: UpdateOptions::default(),
+            },
+            HistoryTime(1),
+        )
+        .expect("apply unknown nodes");
+    let created = output
+        .effects
+        .iter()
+        .find_map(|effect| {
+            if let Effect::RemoteNodesCreated(nodes) = effect {
+                Some(nodes.as_slice())
+            } else {
+                None
+            }
+        })
+        .expect("created keys");
+    projection.bind_created(changes, created)?;
+    assert_eq!(
+        core.state().to_json()?.root["children"],
+        source.state().to_json()?.root["children"]
+    );
+    projection
+        .check(&doc, core.state())
+        .expect("consistent unknown nodes");
+    Ok(())
+}

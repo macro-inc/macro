@@ -554,6 +554,21 @@ impl<'editor> Transaction<'editor> {
                     .as_any_mut(),
                 json,
             )?;
+            if crate::opaque::raw(
+                self.view()
+                    .slot(key)
+                    .ok_or(Error::NodeNotFound(key))?
+                    .data
+                    .as_ref(),
+            )
+            .is_some()
+            {
+                let baseline = self.view().export_framework_json(key)?;
+                let slot = self.writable(key)?;
+                let data =
+                    Arc::get_mut(&mut slot.data).ok_or(Error::Invariant("payload shared"))?;
+                crate::opaque::set_baseline(data, baseline);
+            }
         }
         Ok(())
     }
@@ -563,12 +578,7 @@ impl<'editor> Transaction<'editor> {
             .get("type")
             .and_then(serde_json::Value::as_str)
             .ok_or(Error::Invariant("node type missing"))?;
-        let index = self
-            .pending
-            .registry
-            .get(name)
-            .ok_or_else(|| Error::UnknownSerializedType(name.to_owned()))?
-            .index;
+        let index = self.pending.registry.import_index(name, json)?;
         let key = (self.pending.registry.vtable(index).import)(self, json)?;
         if self.kind(key) == Some(NodeKind::Element)
             && let Some(children) = json.get("children").and_then(serde_json::Value::as_array)
