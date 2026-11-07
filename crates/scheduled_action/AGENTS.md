@@ -135,6 +135,9 @@ that listener is ready. Cancellation can stop the gate before startup finishes.
   dates are never kept, so those properties only support any-change filters.
 - Enabling a GitHub trigger needs the owner's GitHub link
   (`with_github_links`); without it the service returns `GithubNotLinked`.
+- GitHub presets do not configure subscriptions: use `../github/README.md`
+  and `../github/app-webhooks.json` for App registration and permission approval.
+  Keep event names open so new subscriptions need no routine parser changes.
 - `TODO.md` tracks open follow-ups (unified history list, delete schedules,
   sharing/permissions) — check it before assuming a listed gap is unintentional.
 - A new configuration field needs `#[serde(default)]` in `ActionConfiguration`
