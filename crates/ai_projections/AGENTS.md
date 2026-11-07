@@ -19,8 +19,9 @@ regenerated on demand or when cold.
   fresh statement snapshot.
 - `src/domain/ai_projection_service.rs`: the upsert/read/invalidate logic.
 - `src/domain/projection_generator.rs`: the generation port.
-- `src/outbound/agent_generator.rs`: the agent-backed generator (behind the
-  `agent` feature) — two-phase when `output_schema` is set (tool-enabled
+- `services/agent_harness_service/src/cognition/service/projection_generator.rs`:
+  the agent-backed generator, in the composition root because it runs the
+  `ai_tools` toolset — two-phase when `output_schema` is set (tool-enabled
   agent gathers context, then a structured completion distills it).
 - `src/worker.rs`: the SQS-polling worker that drains `ai_projection_queue`.
 
@@ -41,8 +42,8 @@ regenerated on demand or when cold.
 ## Recipes
 
 - Add a projection type: define its prompt/schema at the frontend-defined
-  id → `src/domain/model.rs` if a new output shape → `src/outbound/agent_generator.rs`
-  if it needs the two-phase schema path.
+  id → `src/domain/model.rs` if a new output shape → the AHS
+  `projection_generator.rs` if it needs the two-phase schema path.
 
 ## Checks
 

@@ -983,7 +983,7 @@ pub async fn build(
     // Generator that materializes projections by running their prompt through
     // the shared AI toolset, attributed to the requesting user.
     let projection_generator =
-        ai_projections::outbound::agent_generator::AgentProjectionGenerator::new(
+        crate::cognition::service::projection_generator::AgentProjectionGenerator::new(
             tool_service_context.clone(),
             ai_tools::tools_for(ai_tools::AiHost::Chat),
         );

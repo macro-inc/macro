@@ -44,7 +44,7 @@ agent_session_realtime = { path = "../../crates/agent_session_realtime" }
 agent_trigger = { path = "../../crates/agent_trigger", features = ["outbound"] }
 ai_billing = { path = "../../crates/ai_billing", features = ["pg-admission"] }
 agent_api_keys = { path = "../../crates/agent_api_keys" }
-ai_projections = { path = "../../crates/ai_projections", features = ["agent"] }
+ai_projections = { path = "../../crates/ai_projections" }
 ai_tools = { path = "../../crates/ai_tools" }
 ai_toolset = { path = "../../crates/ai_toolset" }
 calendar_events = { path = "../../crates/calendar_events", features = ["postgres"] }

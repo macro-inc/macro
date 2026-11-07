@@ -22,7 +22,7 @@ use ai_usage::{AiFeature, UsageContext};
 use futures::StreamExt;
 use macro_user_id::{cowlike::CowLike, user_id::MacroUserIdStr};
 
-use crate::domain::{
+use ai_projections::domain::{
     model::AiProjectionError,
     projection_generator::{GenerationRequest, ProjectionGenerator},
 };
