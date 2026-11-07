@@ -1,0 +1,22 @@
+--- a/packages/lexical/src/LexicalUpdates.ts
++++ b/packages/lexical/src/LexicalUpdates.ts
+@@ -248,0 +249 @@
++  globalThis.__lexRec?.begin(editor);
+@@ -460 +461,2 @@
+-      editor._onError(error);
++      globalThis.__lexRec?.error(editor, error, 'update');
++        editor._onError(error);
+@@ -579,0 +582 @@
++        globalThis.__lexRec?.error(editor, error, 'commit');
+@@ -720,0 +724 @@
++  globalThis.__lexRec?.commit(editor, tags, dirtyLeaves, dirtyElements, normalizedNodes);
+@@ -874,0 +879 @@
++        globalThis.__lexRec?.error(editor, error, 'listener');
+@@ -961,0 +967 @@
++  globalThis.__lexRec?.begin(editor);
+@@ -1069 +1075,2 @@
+-      editor._onError(error);
++      globalThis.__lexRec?.error(editor, error, 'update');
++        editor._onError(error);
+@@ -1102,0 +1110 @@
++        globalThis.__lexRec?.tick();

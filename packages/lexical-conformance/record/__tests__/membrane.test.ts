@@ -1,87 +1,304 @@
-import { afterEach, describe, expect, test } from 'vitest';
-import { Encoder } from '../encode';
+import * as listModule from '@lexical/list';
+import * as markdownModule from '@lexical/markdown';
+import * as richTextModule from '@lexical/rich-text';
+import * as utilsModule from '@lexical/utils';
+import * as upstream from 'lexical';
+import { afterEach, beforeEach, expect, test } from 'vitest';
+import { isOracleFrame } from '../attribution';
 import { Entropy } from '../entropy';
-import { isTestFrame } from '../attribution';
-import { activate, Recorder, wrapModule } from '../membrane';
+import { fixture } from '../fixture';
+import { activate, current, Recorder, wrapModule } from '../membrane';
+import { replay } from '../replay-js';
 
-// covers: recorder:B1, recorder:B2, recorder:B3, recorder:B4, recorder:B7, recorder:B9
-describe('recorder membrane', () => {
-  afterEach(() => activate());
+const lexical = wrapModule(upstream, 'lexical');
+const list = wrapModule(listModule, '@lexical/list');
+const markdown = wrapModule(markdownModule, '@lexical/markdown');
+wrapModule(richTextModule, '@lexical/rich-text');
+const utils = wrapModule(utilsModule, '@lexical/utils');
+const utilsPath =
+  process.cwd() +
+  '/../../target/lexical-upstream/packages/lexical/src/LexicalUtils.ts';
+const { resetRandomKey } = await import(/* @vite-ignore */ utilsPath);
+const source = {
+  repo: 'lexical',
+  version: '0.45.0',
+  file: 'record/__tests__/membrane.test.ts',
+  test: [],
+  recordedWith: 'lexical-conformance@schema-2',
+};
 
-  test('attributes async plugin re-entry to its actual source', () => {
-    expect(isTestFrame('Error\n at work (/upstream/packages/lexical/src/LexicalEvents.ts:1:1)\n at test (/upstream/packages/lexical/src/__tests__/test.ts:2:1)')).toBe(false);
-    expect(isTestFrame('Error\n at test (/upstream/packages/lexical/src/__tests__/test.ts:2:1)')).toBe(true);
+let tape: Entropy;
+beforeEach(() => {
+  resetRandomKey();
+  tape = new Entropy((op) => current?.trace.push(op), undefined, isOracleFrame);
+  tape.install();
+});
+afterEach(() => {
+  tape.dispose();
+  activate();
+});
+
+// covers: recorder:B1
+test('listener-enqueued shortcut records the input and replays the plugin', async () => {
+  const recorder = new Recorder();
+  activate(recorder);
+  const editor = lexical.createEditor({
+    namespace: 'test',
+    nodes: [
+      richTextModule.HeadingNode,
+      richTextModule.QuoteNode,
+      listModule.ListNode,
+      listModule.ListItemNode,
+    ],
   });
-
-  test('update closures keep their calls inside the update', () => {
-    const recorder = new Recorder();
-    activate(recorder);
-    const api = wrapModule({ value: () => 17 }, 'fixture');
-    const editor = { _editorState: {}, _config: { namespace: 'test' }, _rootElement: null,
-      update: (callback: () => void) => callback() };
-    const wrapped = recorder.wrap(editor);
-    wrapped.update(() => api.value());
-    expect(recorder.trace).toEqual([
-      { op: 'createEditor', id: 0, config: { namespace: 'test', nodes: [], replacements: [], plugins: [], theme: {}, editable: true, rootElement: false }, ret: { $ed: 0 } },
-      { op: 'update', editor: 0, id: 0, cause: 'test', opts: {}, calls: [{ op: 'call', fn: 'fixture.value', args: [], ret: 17 }] },
-    ]);
+  markdown.registerMarkdownShortcuts(editor, [markdown.HEADING]);
+  editor.update(
+    () => {
+      const paragraph = lexical.$createParagraphNode();
+      lexical.$getRoot().append(paragraph);
+      paragraph.select();
+    },
+    { discrete: true }
+  );
+  editor.update(
+    () => {
+      const selection = lexical.$getSelection();
+      if (!lexical.$isRangeSelection(selection))
+        throw new Error('Expected range');
+      selection.insertText('#');
+    },
+    { discrete: true }
+  );
+  await Promise.resolve();
+  editor.update(
+    () => {
+      const selection = lexical.$getSelection();
+      if (!lexical.$isRangeSelection(selection))
+        throw new Error('Expected range');
+      selection.insertText(' ');
+    },
+    { discrete: true }
+  );
+  await Promise.resolve();
+  const result = fixture(recorder, source);
+  expect(JSON.stringify(result.trace)).toContain('insertText');
+  expect(
+    result.trace.some(
+      (op) => op.op === 'update' && op.cause === 'listener-enqueued'
+    )
+  ).toBe(true);
+  expect(result.final).toMatchObject({
+    json: { root: { children: [{ type: 'heading' }] } },
   });
+  expect(JSON.stringify(result.trace)).not.toContain('$createHeadingNode');
+  expect(
+    result.trace.filter((op) => op.op === 'plugin').map((op) => op.name)
+  ).toEqual(['@lexical/markdown.registerMarkdownShortcuts']);
+  expect(recorder.reasons).toEqual(new Set());
+  await replay(result, resetRandomKey);
+});
 
-  test('predicate reads are in a tape, not the outer trace', () => {
-    const recorder = new Recorder();
-    activate(recorder);
-    const api = wrapModule({ find: (predicate: (node: { getType(): string }) => boolean) => predicate(Object.assign({ getType: () => 'text' }, { __key: '1', __type: 'text' })) }, 'fixture');
-    api.find((node: { getType(): string }) => node.getType() === 'text');
-    expect(recorder.trace).toHaveLength(1);
-    expect(recorder.tapes[0].invocations[0].calls).toEqual([
-      { op: 'call', fn: 'Object.getType', this: { $h: 0 }, args: [], ret: 'text' },
-    ]);
-    expect(recorder.tapes[0].invocations[0].ret).toBe(true);
-  });
+// covers: recorder:B2
+test('update closure records its exact call tree on upstream', async () => {
+  const recorder = new Recorder();
+  activate(recorder);
+  const editor = lexical.createEditor({ namespace: 'test' });
+  editor.update(
+    () => lexical.$getRoot().append(lexical.$createParagraphNode()),
+    { discrete: true }
+  );
+  const result = fixture(recorder, source);
+  expect(result.trace.filter((op) => op.op === 'update')).toEqual([
+    {
+      op: 'update',
+      editor: 0,
+      id: 0,
+      cause: 'test',
+      opts: { discrete: true },
+      calls: [
+        {
+          op: 'call',
+          fn: 'lexical.$getRoot',
+          args: [],
+          ret: { $h: 1, key: 'root', type: 'root', ver: 1 },
+        },
+        {
+          op: 'call',
+          fn: 'lexical.$createParagraphNode',
+          args: [],
+          ret: { $h: 2, key: '1', type: 'paragraph', ver: 1 },
+        },
+        {
+          op: 'call',
+          fn: 'RootNode.append',
+          this: { $h: 1 },
+          args: [{ $h: 2 }],
+          ret: { $h: 3, key: 'root', type: 'root', ver: 1 },
+        },
+      ],
+    },
+  ]);
+  await replay(result, resetRandomKey);
+});
 
-  test('nested updates retain the parent id', () => {
-    const recorder = new Recorder();
-    activate(recorder);
-    const wrapped = recorder.wrap({ _editorState: {}, _config: { namespace: 'test' }, _rootElement: null,
-      update: (callback: () => void) => callback() });
-    wrapped.update(() => wrapped.update(() => {}));
-    expect(recorder.trace[1].calls).toEqual([
-      { op: 'update', editor: 0, id: 1, parent: 0, cause: 'test', opts: {}, calls: [] },
-    ]);
+// covers: recorder:B2
+test('tape predicates keep their reads inside the invocation', async () => {
+  const recorder = new Recorder();
+  activate(recorder);
+  const editor = lexical.createEditor({
+    namespace: 'test',
+    nodes: [listModule.ListNode, listModule.ListItemNode],
   });
+  editor.update(
+    () => {
+      const node = list.$createListItemNode();
+      lexical.$getRoot().append(list.$createListNode('bullet').append(node));
+      utils.$findMatchingParent(node, (parent) => {
+        parent.getType();
+        return list.$isListItemNode(parent);
+      });
+    },
+    { discrete: true }
+  );
+  expect(recorder.tapes).toHaveLength(1);
+  expect(recorder.tapes[0].invocations[0].calls.map((op) => op.fn)).toEqual([
+    'ListItemNode.getType',
+    '@lexical/list.$isListItemNode',
+  ]);
+  await replay(fixture(recorder, source), resetRandomKey);
+});
 
-  test('lazy arrays and maps preserve node identity', () => {
-    const recorder = new Recorder();
-    const node = { __key: '1', __type: 'text' };
-    const array = recorder.wrap([node]);
-    const map = recorder.wrap(new Map([['1', node]]));
-    expect(array[0]).toBe(recorder.wrap(node));
-    expect(map.get('1')).toBe(array[0]);
-    expect([...array][0]).toBe(array[0]);
-  });
+// covers: recorder:B2
+test('nested upstream updates carry their enclosing update id', async () => {
+  const recorder = new Recorder();
+  activate(recorder);
+  const editor = lexical.createEditor({ namespace: 'test' });
+  editor.update(
+    () => {
+      lexical.$getRoot().append(lexical.$createParagraphNode());
+      editor.update(() => lexical.$getRoot().getChildrenSize());
+    },
+    { discrete: true }
+  );
+  const update = recorder.trace.find((op) => op.op === 'update');
+  expect(JSON.stringify(update)).toContain('"parent":0');
+  await replay(fixture(recorder, source), resetRandomKey);
+});
 
-  test('stale handles differ by object and retain their version', () => {
-    const encoder = new Encoder();
-    encoder.version = 1;
-    const old = { __key: '1', __type: 'text', __text: 'before' };
-    expect(encoder.encode(old)).toEqual({ $h: 0, key: '1', type: 'text', ver: 1 });
-    encoder.version = 2;
-    expect(encoder.encode({ ...old, __text: 'after' })).toEqual({ $h: 1, key: '1', type: 'text', ver: 2 });
-    expect(encoder.encode(old)).toEqual({ $h: 0 });
-    expect(old.__text).toBe('before');
-  });
+// covers: recorder:B3
+test('upstream container reads preserve identity', async () => {
+  const recorder = new Recorder();
+  activate(recorder);
+  const editor = lexical.createEditor({ namespace: 'test' });
+  editor.update(
+    () => {
+      const paragraph = lexical.$createParagraphNode();
+      lexical.$getRoot().append(paragraph);
+      expect(lexical.$getRoot().getChildren()[0]).toBe(
+        lexical.$getNodeByKey(paragraph.getKey())
+      );
+    },
+    { discrete: true }
+  );
+  expect(recorder.reasons).toEqual(new Set());
+  await replay(fixture(recorder, source), resetRandomKey);
+});
 
-  test('records errors routed to a supplied handler', () => {
-    const recorder = new Recorder();
-    const editor = { _editorState: {}, _config: { namespace: 'test' }, _rootElement: null };
-    recorder.error(editor, new Error('transform failed'), 'update');
-    expect(recorder.trace[1]).toEqual({ op: 'error', editor: 0, during: 'update', name: 'Error', message: 'transform failed' });
-  });
+// covers: recorder:B4
+test('upstream writable clones leave old field reads stale', async () => {
+  const recorder = new Recorder();
+  activate(recorder);
+  const editor = lexical.createEditor({ namespace: 'test' });
+  let old: upstream.TextNode;
+  editor.update(
+    () => {
+      old = lexical.$createTextNode('before');
+      lexical.$getRoot().append(lexical.$createParagraphNode().append(old));
+    },
+    { discrete: true }
+  );
+  editor.update(
+    () => {
+      old.getWritable().setTextContent('after');
+      expect(old.__text).toBe('before');
+    },
+    { discrete: true }
+  );
+  await replay(fixture(recorder, source), resetRandomKey);
+});
 
-  test('untaped Math.random fails instead of using ambient randomness', () => {
-    const entropy = new Entropy();
-    entropy.install();
-    try { expect(() => Math.random()).toThrow('untaped-entropy: random'); }
-    finally { entropy.dispose(); }
+// covers: recorder:B7
+test('upstream transform errors are captured through onError', () => {
+  const recorder = new Recorder();
+  activate(recorder);
+  const errors: Error[] = [];
+  const editor = lexical.createEditor({
+    namespace: 'test',
+    onError: (error) => errors.push(error),
   });
+  editor.registerNodeTransform(upstream.TextNode, () => {
+    throw new Error('transform failed');
+  });
+  editor.update(
+    () =>
+      lexical
+        .$getRoot()
+        .append(
+          lexical.$createParagraphNode().append(lexical.$createTextNode('text'))
+        ),
+    { discrete: true }
+  );
+  expect(errors.map((error) => error.message)).toEqual(['transform failed']);
+  expect(recorder.trace.filter((op) => op.op === 'error')).toEqual([
+    {
+      op: 'error',
+      editor: 0,
+      during: 'update',
+      name: 'Error',
+      message: 'transform failed',
+    },
+  ]);
+});
+
+// covers: recorder:B9
+test('an upstream package random read without a tape fails recording', () => {
+  const entropy = new Entropy();
+  entropy.install();
+  try {
+    expect(() => upstream.createEditor({ namespace: 'test' })).toThrow(
+      'untaped-entropy: random'
+    );
+  } finally {
+    entropy.dispose();
+  }
+});
+
+// covers: recorder:self-replay-integrity
+test('serialized replay rejects corrupt batching, handle versions and operations', async () => {
+  const recorder = new Recorder();
+  activate(recorder);
+  const editor = lexical.createEditor({ namespace: 'test' });
+  editor.update(
+    () => lexical.$getRoot().append(lexical.$createParagraphNode()),
+    { discrete: true }
+  );
+  const recorded = fixture(recorder, source);
+  const corruptBatch = structuredClone(recorded);
+  const commit = corruptBatch.trace.find((op) => op.op === 'commit');
+  expect(commit).toBeDefined();
+  if (commit) commit.updates = [99];
+  await expect(replay(corruptBatch, resetRandomKey)).rejects.toThrow(
+    'Commit snapshot mismatch'
+  );
+  const corruptVersion = JSON.parse(
+    JSON.stringify(recorded).replace('"ver":1', '"ver":99')
+  );
+  await expect(replay(corruptVersion, resetRandomKey)).rejects.toThrow(
+    'Node version mismatch'
+  );
+  const corruptOperation = structuredClone(recorded);
+  corruptOperation.trace.push({ op: 'unknown' });
+  await expect(replay(corruptOperation, resetRandomKey)).rejects.toThrow(
+    'Unsupported operation unknown'
+  );
 });
