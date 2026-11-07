@@ -117,7 +117,7 @@ export default {
   automaticPermissionsTitle: 'Automatic permissions',
   automaticPermissionsBlock: 'Automatic permissions',
   automaticPermissionsSnippet:
-    'Anything you @mention in a channel is shared with its members',
+    'Documents, tasks and files you @mention in a channel are shared with its members',
   automaticPermissionsLength: '0:42',
   workspaceEventsTitle: 'Workspace events',
   workspaceEventsBlock: 'Workspace events',
