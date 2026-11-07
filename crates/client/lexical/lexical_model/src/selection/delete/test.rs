@@ -467,3 +467,26 @@ fn root_boundary_replacement_preserves_the_first_paragraph_identity() -> Result<
     })?;
     Ok(())
 }
+
+#[test]
+fn collapsed_root_removal_keeps_its_element_coordinate() -> Result<(), Error> {
+    let mut editor = Editor::builder(EditorMode::Headless).build().unwrap();
+    editor.update(|tx| {
+        let p = tx.create(Paragraph::default())?;
+        tx.append(NodeKey::ROOT, &[p.key()])?;
+        tx.set_selection(Some(Selection::Range(RangeSelection::collapsed(
+            Point::element(NodeKey::ROOT, ChildIndex(1)),
+        ))))
+    })?;
+    let (_, commit) = editor.update(|tx| tx.remove_text())?;
+    assert_eq!(
+        commit
+            .next
+            .selection()
+            .and_then(Selection::as_range)
+            .unwrap()
+            .anchor,
+        Point::element(NodeKey::ROOT, ChildIndex(1))
+    );
+    Ok(())
+}
