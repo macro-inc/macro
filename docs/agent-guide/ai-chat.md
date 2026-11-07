@@ -1330,8 +1330,10 @@ provider usage and completed writes may remain after cancellation.
 ## Code mode on the public MCP
 
 The public workspace MCP (`mcp-server[-dev].macro.com`) runs code mode for every
-client but ChatGPT (whose plugin directory refuses generic executors) wherever
-the harness can run code. Those clients see only
+client wherever the harness can run code. ChatGPT, whose plugin directory
+refuses generic executors, connects to its own server
+(`mcp-chatgpt[.dev].macro.com`) with SDK-generated tools instead. Clients of
+the public MCP see only
 `ExecuteCode`, `DescribeCodeTools` and `ReadCodeDocs` on `tools/list` — not the
 individual Macro tools — and the server instructions tell the client to call
 `DescribeCodeTools` with a `task`, then `ReadCodeDocs` for the symbols it uses,

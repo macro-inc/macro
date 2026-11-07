@@ -380,8 +380,8 @@ verify that its tool response includes the matching attachment URLs.
 ## Messages sent through an MCP client
 
 A message, comment, or thread reply a user's MCP client (Claude Code, Cursor,
-ChatGPT) posts through Macro MCP, with a direct tool such as
-`SendChannelMessage` or from code mode (`ExecuteCode`), shows the client as its
+ChatGPT) posts through Macro MCP, from code mode (`ExecuteCode`) or, for
+ChatGPT, a generated tool such as `channels_write`, shows the client as its
 sender: **Claude Code · Agent** with the client's initial as its avatar and a
 **from <user>** pill underneath. The client is the name it registered with
 Macro's OAuth broker, or "MCP client" if it registered none. Notifications name
