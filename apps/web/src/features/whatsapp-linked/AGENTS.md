@@ -50,7 +50,7 @@ own shareable external chat (`POST /external-chats` with `provider:
   its sidebar and the `/external/chat/:chatId` route →
   `features/external-view`; HTTP → `lib/service-clients/service-storage/whatsapp-linked.ts`
   (DSS `/whatsapp/*`) and `external-chats.ts` (adding); shared queries →
-  `lib/queries/whatsapp-linked`; DSS routes → `crates/whatsapp_linked`.
+  `lib/queries/whatsapp-linked`; DSS routes → `crates/whatsapp/whatsapp_linked`.
 
 ## Gotchas
 
@@ -69,7 +69,7 @@ own shareable external chat (`POST /external-chats` with `provider:
   cancelled at once.
 - Disconnect results are toasts, not page state.
 - Wire types come from DSS's generated `@service-storage/generated/schemas`
-  (`WhatsApp*`, `ExternalChat*`); change `crates/whatsapp_linked` and
+  (`WhatsApp*`, `ExternalChat*`); change `crates/whatsapp/whatsapp_linked` and
   regenerate, never hand-type.
 - Add failures carry DSS's `LinkedError` code (`whatsappErrorResponse`);
   `core/add.ts` words each one. Never show a catch-all message.

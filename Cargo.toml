@@ -35,11 +35,6 @@ members = [
   "crates/bots",
   "crates/calendar/calendar_events",
   "crates/calendar/calendar_scheduling",
-  "crates/channel_bots",
-  "crates/channel_labels",
-  "crates/chat/contacts_core",
-  "crates/chat/contacts_inbound",
-  "crates/chat/contacts_outbound",
   "crates/client/cache-core",
   "crates/client/cache-turso",
   "crates/client/cache-wasm",
@@ -53,6 +48,14 @@ members = [
   "crates/coding_agent_worker",
   "crates/cognition",
   "crates/collab_surface",
+  "crates/comms/channel_bots",
+  "crates/comms/channel_labels",
+  "crates/comms/contacts_core",
+  "crates/comms/contacts_inbound",
+  "crates/comms/contacts_outbound",
+  "crates/comms/external_chat",
+  "crates/comms/messages",
+  "crates/comms/slack_integration",
   "crates/crm",
   "crates/cursor_api_key",
   "crates/cursor_cloud_agents",
@@ -77,7 +80,6 @@ members = [
   "crates/entity_registry/entity_registry",
   "crates/entity_registry/entity_registry_db_utils",
   "crates/entity_registry/shared_entity_registry",
-  "crates/external_chat",
   "crates/favorites",
   "crates/fig_engine",
   "crates/folds/agent_fold",
@@ -122,7 +124,6 @@ members = [
   "crates/mcp_select",
   "crates/mcp_toolset",
   "crates/memory",
-  "crates/messages",
   "crates/notifications/notification_inbox",
   "crates/pipedream_mcp",
   "crates/platform/agent_correlation",
@@ -177,7 +178,6 @@ members = [
   "crates/search/soup_realtime_outbound",
   "crates/search_service",
   "crates/skills",
-  "crates/slack_integration",
   "crates/soup_filter_cache_adapter",
   "crates/soup_filter_projection",
   "crates/sync_router",
@@ -211,13 +211,13 @@ members = [
   "crates/universal_input",
   "crates/web_search",
   "crates/webhook_signature",
-  "crates/whatsapp_e2e",
-  "crates/whatsapp_fake_server",
-  "crates/whatsapp_linked",
-  "crates/whatsapp_store_pg",
-  "crates/whatsmeow",
-  "crates/whatsmeow_proto",
-  "crates/whatsmeow_signal",
+  "crates/whatsapp/whatsapp_e2e",
+  "crates/whatsapp/whatsapp_fake_server",
+  "crates/whatsapp/whatsapp_linked",
+  "crates/whatsapp/whatsapp_store_pg",
+  "crates/whatsapp/whatsmeow",
+  "crates/whatsapp/whatsmeow_proto",
+  "crates/whatsapp/whatsmeow_signal",
   "crates/work_feed",
   "crates/worker_rs_otel",
   "crates/workspace-hack",
@@ -391,7 +391,7 @@ jsonwebtoken = { git = "https://github.com/whutchinson98/jsonwebtoken", features
 lambda_runtime = "0.13.0"
 lazy-regex = "3.6.1"
 lazy_static = "1.5.0"
-# Signal's curve25519 keys and XEdDSA; see crates/whatsmeow_signal/AGENTS.md.
+# Signal's curve25519 keys and XEdDSA; see crates/whatsapp/whatsmeow_signal/AGENTS.md.
 libsignal-core = { git = "https://github.com/signalapp/libsignal", tag = "v0.105.2" }
 livekit-api = { version = "0.4.16", default-features = false, features = [
   "access-token",
@@ -649,12 +649,12 @@ calendar_event_id = { path = "crates/types/calendar_event_id" }
 calendar_events = { path = "crates/calendar/calendar_events" }
 calendar_scheduling = { path = "crates/calendar/calendar_scheduling" }
 calendar_service_url = { path = "crates/platform/service_urls/calendar_service_url" }
-call = { path = "crates/call", default-features = false }
-channel_bots = { path = "crates/channel_bots" }
-channel_labels = { path = "crates/channel_labels" }
+call = { path = "crates/comms/call", default-features = false }
+channel_bots = { path = "crates/comms/channel_bots" }
+channel_labels = { path = "crates/comms/channel_labels" }
 channel_sender = { path = "crates/types/channel_sender" }
-channels = { path = "crates/channels" }
-chat = { path = "crates/chat", default-features = false }
+channels = { path = "crates/comms/channels" }
+chat = { path = "crates/comms/chat", default-features = false }
 chat_id = { path = "crates/types/chat_id" }
 chat_message = { path = "crates/types/chat_message" }
 claude_fold = { path = "crates/folds/claude_fold" }
@@ -667,20 +667,20 @@ codex_fold = { path = "crates/folds/codex_fold" }
 cognition = { path = "crates/cognition" }
 cognition_public_url = { path = "crates/platform/service_urls/cognition_public_url" }
 collab_surface = { path = "crates/collab_surface" }
-comms_db_client = { path = "crates/comms_db_client" }
+comms_db_client = { path = "crates/comms/comms_db_client" }
 complete_graph = { path = "crates/graphql/complete_graph" }
 connect_api_url = { path = "crates/platform/service_urls/connect_api_url" }
 connect_client = { path = "crates/clients/connect_client" }
-connection = { path = "crates/connection", default-features = false }
+connection = { path = "crates/comms/connection", default-features = false }
 connection_gateway = { path = "services/connection_gateway" }
 connection_gateway_client = { path = "crates/clients/connection_gateway_client" }
 connection_gateway_models = { path = "crates/types/connection_gateway_models" }
 connection_gateway_url = { path = "crates/platform/service_urls/connection_gateway_url" }
 connection_gateway_websocket_url = { path = "crates/platform/service_urls/connection_gateway_websocket_url" }
-contacts = { path = "crates/contacts", default-features = false }
-contacts_core = { path = "crates/chat/contacts_core" }
-contacts_inbound = { path = "crates/chat/contacts_inbound", default-features = false }
-contacts_outbound = { path = "crates/chat/contacts_outbound" }
+contacts = { path = "crates/comms/contacts", default-features = false }
+contacts_core = { path = "crates/comms/contacts_core" }
+contacts_inbound = { path = "crates/comms/contacts_inbound", default-features = false }
+contacts_outbound = { path = "crates/comms/contacts_outbound" }
 contacts_service_url = { path = "crates/platform/service_urls/contacts_service_url" }
 convert_service_url = { path = "crates/platform/service_urls/convert_service_url" }
 cowlike = { path = "crates/types/cowlike" }
@@ -721,7 +721,7 @@ entity_basic_types = { path = "crates/types/entity_basic_types" }
 entity_mutation = { path = "crates/entity_mutation" }
 entity_registry = { path = "crates/entity_registry/entity_registry" }
 entity_registry_db_utils = { path = "crates/entity_registry/entity_registry_db_utils" }
-external_chat = { path = "crates/external_chat" }
+external_chat = { path = "crates/comms/external_chat" }
 favorites = { path = "crates/favorites" }
 feature_flags = { path = "crates/platform/feature_flags" }
 fig_engine = { path = "crates/fig_engine", default-features = false }
@@ -817,9 +817,9 @@ mcp_select = { path = "crates/mcp_select" }
 mcp_service_url = { path = "crates/platform/service_urls/mcp_service_url" }
 mcp_toolset = { path = "crates/mcp_toolset" }
 memory = { path = "crates/memory" }
-mention_utils = { path = "crates/mention_utils" }
+mention_utils = { path = "crates/comms/mention_utils" }
 message_parent = { path = "crates/types/message_parent" }
-messages = { path = "crates/messages" }
+messages = { path = "crates/comms/messages" }
 mobile_welcome_email_db_client = { path = "crates/accounts/mobile_welcome_email_db_client" }
 model = { path = "crates/types/model" }
 model_entity = { path = "crates/model_entity" }
@@ -891,7 +891,7 @@ ses_client = { path = "crates/aws/ses_client" }
 share_permission_db_utils = { path = "crates/share_permission_db_utils" }
 shared_entity_registry = { path = "crates/entity_registry/shared_entity_registry" }
 skills = { path = "crates/skills", default-features = false }
-slack_integration = { path = "crates/slack_integration" }
+slack_integration = { path = "crates/comms/slack_integration" }
 sns_client = { path = "crates/aws/sns_client" }
 soup = { path = "crates/soup" }
 soup-filter-cache-adapter = { path = "crates/soup_filter_cache_adapter" }
@@ -931,13 +931,13 @@ user_quota = { path = "crates/types/user_quota" }
 web_search = { path = "crates/web_search" }
 webhook = { path = "crates/webhook", default-features = false }
 webhook_signature = { path = "crates/webhook_signature" }
-whatsapp_fake_server = { path = "crates/whatsapp_fake_server" }
-whatsapp_linked = { path = "crates/whatsapp_linked" }
+whatsapp_fake_server = { path = "crates/whatsapp/whatsapp_fake_server" }
+whatsapp_linked = { path = "crates/whatsapp/whatsapp_linked" }
 whatsapp_session_service = { path = "services/whatsapp_session_service" }
-whatsapp_store_pg = { path = "crates/whatsapp_store_pg" }
-whatsmeow = { path = "crates/whatsmeow" }
-whatsmeow_proto = { path = "crates/whatsmeow_proto" }
-whatsmeow_signal = { path = "crates/whatsmeow_signal" }
+whatsapp_store_pg = { path = "crates/whatsapp/whatsapp_store_pg" }
+whatsmeow = { path = "crates/whatsapp/whatsmeow" }
+whatsmeow_proto = { path = "crates/whatsapp/whatsmeow_proto" }
+whatsmeow_signal = { path = "crates/whatsapp/whatsmeow_signal" }
 work_feed = { path = "crates/work_feed" }
 worker_rs_otel = { path = "crates/worker_rs_otel" }
 xtask_graph = { path = "tooling/xtask/crates/xtask_graph" }

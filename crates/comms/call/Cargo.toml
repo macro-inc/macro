@@ -1,0 +1,114 @@
+[package]
+edition = "2024"
+name = "call"
+publish = false
+version = "0.1.0"
+
+[features]
+ai_tools = ["dep:ai_toolset", "dep:async-trait", "dep:schemars", "ports"]
+default = ["ai_tools", "inbound", "outbound", "ports"]
+inbound = [
+  "dep:axum",
+  "dep:ip_extractor",
+  "dep:macro_authorization",
+  "dep:model_error_response",
+  "dep:rate_limit",
+  "dep:utoipa",
+  "entity_access/inbound",
+  "item_filters/schema",
+  "ports",
+]
+outbound = [
+  "dep:agent",
+  "dep:ai_usage",
+  "dep:aws-sdk-s3",
+  "dep:cloudfront_sign",
+  "channels/outbound",
+  "dep:entity_access_db_utils",
+  "dep:feature_flags",
+  "dep:livekit-api",
+  "dep:livekit-protocol",
+  "dep:macro_aws_config",
+  "dep:pgvector",
+  "dep:share_permission_db_utils",
+  "dep:sqlx",
+  "dep:urlencoding",
+  "ports",
+]
+ports = ["dep:entity_access", "dep:tokio", "dep:async-trait", "dep:messages", "dep:futures"]
+
+[dependencies]
+activity = { workspace = true }
+agent = { workspace = true, optional = true }
+ai_usage = { workspace = true, optional = true }
+ai_toolset = { workspace = true, optional = true }
+anyhow = { workspace = true }
+async-trait = { workspace = true, optional = true }
+bot_id = { workspace = true }
+aws-sdk-s3 = { workspace = true, optional = true }
+axum = { workspace = true, optional = true }
+chrono = { workspace = true }
+cloudfront_sign = { workspace = true, optional = true }
+ip_extractor = { workspace = true, optional = true }
+rate_limit = { workspace = true, features = ["axum"], optional = true }
+channels = { workspace = true, optional = true }
+connection = { workspace = true, features = [
+  "ports",
+] }
+entity_access = { workspace = true, optional = true, features = [
+  "ports",
+] }
+entity_mutation = { workspace = true }
+entity_access_db_utils = { workspace = true, optional = true }
+filter_ast = { workspace = true }
+futures = { workspace = true, optional = true }
+item_filters = { workspace = true, default-features = true }
+invite_email = { workspace = true }
+livekit-api = { workspace = true, optional = true }
+livekit-protocol = { workspace = true, optional = true }
+macro_authorization = { workspace = true, optional = true, features = [
+  "axum",
+] }
+macro_aws_config = { workspace = true, optional = true, features = [
+  "s3",
+] }
+macro_event_broker = { workspace = true }
+macro_event_topics = { workspace = true }
+macro_user_id = { workspace = true }
+macro_uuid = { workspace = true }
+feature_flags = { workspace = true, optional = true }
+messages = { workspace = true, features = ["ports"], optional = true }
+model_entity = { workspace = true }
+model_error_response = { workspace = true, optional = true }
+models_pagination = { workspace = true }
+models_permissions = { workspace = true }
+notification = { workspace = true, default-features = true }
+rootcause = { workspace = true }
+pgvector = { workspace = true, optional = true }
+schemars = { workspace = true, optional = true }
+serde = { workspace = true }
+share_permission_db_utils = { workspace = true, optional = true }
+serde_json = { workspace = true }
+sqlx = { workspace = true, optional = true }
+strum = { workspace = true }
+thiserror = { workspace = true }
+tokio = { workspace = true, features = ["macros"], optional = true }
+tracing = { workspace = true }
+utoipa = { workspace = true, optional = true }
+urlencoding = { workspace = true, optional = true }
+uuid = { workspace = true }
+workspace-hack = { version = "0.1", path = "../../workspace-hack" }
+subtle = { workspace = true }
+models_soup = { workspace = true }
+
+[dev-dependencies]
+base64 = { workspace = true }
+macro_db_migrator = { workspace = true }
+mockall = { workspace = true }
+model_user = { workspace = true }
+rate_limit = { workspace = true, features = ["axum", "testing"] }
+rootcause = { workspace = true }
+sha2 = { workspace = true }
+sqlx = { workspace = true }
+tokio = { workspace = true }
+tower = { workspace = true, features = ["util"] }

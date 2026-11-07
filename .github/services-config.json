@@ -106,9 +106,9 @@
       "source_paths": [
         "services/document_storage_service/**",
         "services/slack_import_worker/**",
-        "crates/slack_integration/**",
-        "crates/channels/**",
-        "crates/messages/**",
+        "crates/comms/slack_integration/**",
+        "crates/comms/channels/**",
+        "crates/comms/messages/**",
         "crates/import/**",
         "crates/platform/macro_queues/**",
         "crates/platform/service_urls/**",
@@ -116,7 +116,7 @@
         "crates/email/invite_email/**",
         "crates/notifications/notification/**",
         "crates/notifications/model_notifications/**",
-        "crates/call/**",
+        "crates/comms/call/**",
         "crates/github/**",
         "crates/initiative/**",
         "crates/email/reminders/**",
@@ -198,7 +198,7 @@
         "crates/models_search/**",
         "crates/types/models_opensearch/**",
         "crates/clients/opensearch_client/**",
-        "crates/comms_db_client/**"
+        "crates/comms/comms_db_client/**"
       ],
       "stack_path": "infra/stacks/search-processing-service/**",
       "deploy_binaries": [
@@ -308,11 +308,11 @@
     "whatsapp-session-service": {
       "source_paths": [
         "services/whatsapp_session_service/**",
-        "crates/whatsapp_linked/**",
-        "crates/whatsapp_store_pg/**",
-        "crates/whatsmeow/**",
-        "crates/whatsmeow_proto/**",
-        "crates/whatsmeow_signal/**"
+        "crates/whatsapp/whatsapp_linked/**",
+        "crates/whatsapp/whatsapp_store_pg/**",
+        "crates/whatsapp/whatsmeow/**",
+        "crates/whatsapp/whatsmeow_proto/**",
+        "crates/whatsapp/whatsmeow_signal/**"
       ],
       "stack_path": "infra/stacks/whatsapp-session-service/**",
       "deploy_binaries": [

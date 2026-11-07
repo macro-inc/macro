@@ -1148,7 +1148,7 @@ async fn ensuring_comment_access_upgrades_view_and_preserves_stronger_grants(
 }
 
 #[sqlx::test(
-    fixtures(path = "../../call/fixtures", scripts("call_repo")),
+    fixtures(path = "../../comms/call/fixtures", scripts("call_repo")),
     migrator = "MACRO_DB_MIGRATIONS"
 )]
 async fn participant_grants_reject_channel_calls_nonparticipants_and_departed_users(

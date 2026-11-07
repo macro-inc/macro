@@ -188,7 +188,7 @@ async fn archive(repo: &PgImportRepo, channels: &PgChannelsRepo) -> Uuid {
 
 #[sqlx::test(
     migrations = "../macro_db_client/migrations",
-    fixtures(path = "../../../channels/fixtures", scripts("channels_repo"))
+    fixtures(path = "../../../comms/channels/fixtures", scripts("channels_repo"))
 )]
 async fn concurrent_onboarding_and_archive_publish_one_canonical_ledger_target(pool: sqlx::PgPool) {
     let repo = PgImportRepo::new(pool.clone());
@@ -224,7 +224,7 @@ async fn concurrent_onboarding_and_archive_publish_one_canonical_ledger_target(p
 
 #[sqlx::test(
     migrations = "../macro_db_client/migrations",
-    fixtures(path = "../../../channels/fixtures", scripts("channels_repo"))
+    fixtures(path = "../../../comms/channels/fixtures", scripts("channels_repo"))
 )]
 async fn onboarding_crash_retry_completes_the_original_reserved_channel(pool: sqlx::PgPool) {
     let repo = PgImportRepo::new(pool.clone());

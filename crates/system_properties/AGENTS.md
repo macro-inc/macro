@@ -26,7 +26,7 @@ for their fixed property catalogs.
 
 - Depends on: `macro_user_id`, `macro_uuid`, `models_properties`, `sqlx`.
 - Used by: `crates/crm`, `crates/initiative`, `crates/projects`,
-  `crates/messages`, `crates/soup`, `crates/search/soup_realtime_inbound`, `crates/ai_tools`,
+  `crates/comms/messages`, `crates/soup`, `crates/search/soup_realtime_inbound`, `crates/ai_tools`,
   `crates/agent_trigger`, `crates/item_filter_index`, `crates/task_dedup`,
   `services/agent_harness_service`, `services/agent_trigger_service`,
   `services/email_service`, `crates/scheduled_action`.

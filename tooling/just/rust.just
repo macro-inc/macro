@@ -67,7 +67,7 @@ build_lambdas compiler="":
 
 # Copies over necessary .env files for sqlx tests
 setup_test_envs:
-    echo "DATABASE_URL={{ DATABASE_URL }}" >> ./crates/chat/contacts_outbound/.env
+    echo "DATABASE_URL={{ DATABASE_URL }}" >> ./crates/comms/contacts_outbound/.env
     echo "DATABASE_URL={{ DATABASE_URL }}" >> ./services/delete_chat_handler/.env
     echo "DATABASE_URL={{ DATABASE_URL }}" >> ./services/email_sfs_delete_handler/.env
     echo "DATABASE_URL={{ DATABASE_URL }}" >> ./crates/scheduled_action/.env
@@ -76,7 +76,7 @@ setup_test_envs:
     echo "DATABASE_URL={{ DATABASE_URL }}" >> ./crates/macro_db_client/.env
     echo "DATABASE_URL={{ DATABASE_URL }}" >> ./crates/email/email_db_client/.env
     echo "DATABASE_URL={{ DATABASE_URL }}" >> ./services/email_refresh_handler/.env
-    echo "DATABASE_URL={{ DATABASE_URL }}" >> ./crates/comms_db_client/.env
+    echo "DATABASE_URL={{ DATABASE_URL }}" >> ./crates/comms/comms_db_client/.env
     echo "DATABASE_URL={{ DATABASE_URL }}" >> ./services/document_text_extractor/.env
     echo "DATABASE_URL={{ DATABASE_URL }}" >> ./services/organization_retention_handler/.env
     echo "DATABASE_URL={{ DATABASE_URL }}" >> ./services/organization_retention_trigger/.env
@@ -87,7 +87,7 @@ setup_test_envs:
     echo "DATABASE_URL={{ DATABASE_URL }}" >> ./crates/entities/frecency_outbound/.env
     echo "DATABASE_URL={{ DATABASE_URL }}" >> ./crates/favorites/.env
     echo "DATABASE_URL={{ DATABASE_URL }}" >> ./crates/email/reminders/.env
-    echo "DATABASE_URL={{ DATABASE_URL }}" >> ./crates/slack_integration/.env
+    echo "DATABASE_URL={{ DATABASE_URL }}" >> ./crates/comms/slack_integration/.env
     echo "DATABASE_URL={{ DATABASE_URL }}" >> ./services/slack_import_worker/.env
     echo "DATABASE_URL={{ DATABASE_URL }}" >> ./crates/accounts/user_api_key/.env
     echo "DATABASE_URL={{ DATABASE_URL }}" >> ./crates/soup/.env
@@ -97,7 +97,7 @@ setup_test_envs:
     echo "DATABASE_URL={{ DATABASE_URL }}" >> ./crates/name_search/.env
     echo "DATABASE_URL={{ DATABASE_URL }}" >> ./services/email_scheduled_handler/.env
     echo "DATABASE_URL={{ DATABASE_URL }}" >> ./crates/saved_views/.env
-    echo "DATABASE_URL={{ DATABASE_URL }}" >> ./crates/channels/.env
+    echo "DATABASE_URL={{ DATABASE_URL }}" >> ./crates/comms/channels/.env
     echo "DATABASE_URL={{ DATABASE_URL }}" >> ./crates/documents/.env
     echo "DATABASE_URL={{ DATABASE_URL }}" >> ./crates/projects/.env
     echo "DATABASE_URL={{ DATABASE_URL }}" >> ./crates/foreign_entity/.env
@@ -106,10 +106,10 @@ setup_test_envs:
     echo "DATABASE_URL={{ DATABASE_URL }}" >> ./crates/github/.env
     echo "DATABASE_URL={{ DATABASE_URL }}" >> ./crates/initiative/.env
     echo "DATABASE_URL={{ DATABASE_URL }}" >> ./crates/referral/.env
-    echo "DATABASE_URL={{ DATABASE_URL }}" >> ./crates/chat/.env
+    echo "DATABASE_URL={{ DATABASE_URL }}" >> ./crates/comms/chat/.env
     echo "DATABASE_URL={{ DATABASE_URL }}" >> ./crates/memory/.env
     echo "DATABASE_URL={{ DATABASE_URL }}" >> ./crates/ai_usage/.env
-    echo "DATABASE_URL={{ DATABASE_URL }}" >> ./crates/call/.env
+    echo "DATABASE_URL={{ DATABASE_URL }}" >> ./crates/comms/call/.env
     echo "DATABASE_URL={{ DATABASE_URL }}" >> ./crates/entity_access_management/.env
     echo "DATABASE_URL={{ DATABASE_URL }}" >> ./crates/accounts/mobile_welcome_email_db_client/.env
     echo "DATABASE_URL={{ DATABASE_URL }}" >> ./crates/entity_access_db_utils/.env
