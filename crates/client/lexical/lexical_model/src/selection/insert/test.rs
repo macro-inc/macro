@@ -586,3 +586,22 @@ fn multi_node_formatting_skips_an_unselected_start_text_boundary() -> Result<(),
     })?;
     Ok(())
 }
+
+#[test]
+fn text_replacement_preserves_the_legacy_root_element_end_rule() -> Result<(), Error> {
+    let mut editor = Editor::builder(EditorMode::Headless).build().unwrap();
+    editor.update(|tx| {
+        let p = tx.create(Paragraph::default())?;
+        let tab = tx.create(Tab::default())?;
+        let tail = tx.create_text("\u{2028}")?;
+        tx.append(p, &[tab.key(), tail.key()])?;
+        tx.append(NodeKey::ROOT, &[p.key()])?;
+        tx.set_selection(Some(Selection::Range(RangeSelection::new(
+            Point::element(p, ChildIndex(0)), Point::element(NodeKey::ROOT, ChildIndex(1)),
+        ))))?;
+        tx.insert_text("new")?;
+        assert_eq!(tx.text_content(p), "new\u{2028}");
+        Ok(())
+    })?;
+    Ok(())
+}

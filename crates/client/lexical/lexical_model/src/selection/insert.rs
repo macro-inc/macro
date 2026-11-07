@@ -56,7 +56,19 @@ impl Transaction<'_> {
             }
             self.install_selection_at(slot, Selection::Range(original.clone()))?;
         }
+        let end_role = if backward { PointRole::Anchor } else { PointRole::Focus };
+        let end_point = if backward { original.anchor } else { original.focus };
+        if end_point.point_type() == PointType::Element {
+            let end_point = super::comparison_point(self.view(), end_point)?;
+            if backward { original.anchor = end_point; } else { original.focus = end_point; }
+            self.set_point_at(slot, end_role, end_point)?;
+        }
         let selected = original.nodes(self.view())?;
+        if selected.len() > 1 && selected.iter().all(|key| {
+            self.is::<Paragraph>(*key) || self.parent(*key).is_some_and(|parent| self.is::<Paragraph>(parent))
+        }) {
+            return self.insert_text_across_paragraph_nodes(slot, &original, &selected, text);
+        }
         let first_format = selected
             .first()
             .and_then(|key| self.view().text(*key))
@@ -250,6 +262,71 @@ impl Transaction<'_> {
                 .is_some_and(Selection::is_range)
         {
             self.collapsed_selection_at(SelectionSlot::Active, point, format, style)?;
+        }
+        Ok(())
+    }
+    // Upstream insertText still uses its older node-based replacement algorithm,
+    // whose element-end semantics differ from caret-range removeText.
+    fn insert_text_across_paragraph_nodes(
+        &mut self, slot: SelectionSlot, range: &RangeSelection, nodes: &[NodeKey], text: &str,
+    ) -> Result<(), Error> {
+        let first = *nodes.first().ok_or(Error::NoRangeSelection)?;
+        let mut last = *nodes.last().ok_or(Error::NoRangeSelection)?;
+        let backward = range.is_backward(self.view())?;
+        let (start, end) = if backward { (range.focus, range.anchor) } else { (range.anchor, range.focus) };
+        let first_data = self.view().text_data(first)?.clone();
+        let first_parent = self.parent_or_err(first)?;
+        let last_parent = if self.is_element(last) { last } else { self.parent_or_err(last)? };
+        let last_child = last;
+        let mut keep = crate::collections::IndexSet::default();
+        keep.extend(self.ancestors(first)); keep.extend(self.ancestors(last));
+        let mutate_last = if end.point_type() == PointType::Text {
+            end.offset() != 0 || self.text_content_size(last) == Utf16Offset::ZERO
+        } else { self.index_within_parent(last).is_some_and(|index| index.0 < end.offset()) };
+        if mutate_last {
+            if self.is_text(last) && !self.is_token_or_tab(last) && end.offset() != self.text_content_size(last).get() {
+                if self.view().text(last).is_some_and(|data| data.is_segmented()) {
+                    let replacement = self.create_text(&self.text_content(last).into_owned())?;
+                    self.replace(last, replacement, false)?; last = replacement.key();
+                }
+                if end.point_type() == PointType::Text {
+                    self.text(last)?.splice_text(Utf16Offset::ZERO..Utf16Offset(end.offset()), "", false)?;
+                }
+                keep.insert(last);
+            } else { self.remove(last, false)?; }
+        } else { keep.insert(last); }
+        let selected = nodes.iter().copied().collect::<crate::collections::IndexSet<_>>();
+        for child in self.children_keys(last_parent)?.into_iter().rev() {
+            if child == first || self.has_ancestor(first, child) { break; }
+            if self.is_attached(child) {
+                if !selected.contains(&child) || child == last_child {
+                    if first_parent != last_parent { self.insert_after(first, child, false)?; }
+                } else { self.remove(child, false)?; }
+            }
+        }
+        if first_parent != last_parent {
+            let mut parent = Some(last_parent);
+            let mut removed = None;
+            while let Some(key) = parent {
+                if self.is_empty(key) || self.last_child(key) == removed {
+                    keep.shift_remove(&key); removed = Some(key);
+                }
+                parent = self.parent(key);
+            }
+        }
+        if !self.is_token_or_tab(first) {
+            self.text(first)?.splice_text(Utf16Offset(start.offset())..first_data.text.utf16_len(), text, false)?;
+            self.finish_text_insertion(slot, false, Point::text(first, Utf16Offset(start.offset()) + TextBuffer::new(text).utf16_len()), first_data.format, first_data.style)?;
+            if self.text_content_size(first) == Utf16Offset::ZERO { self.remove(first, false)?; }
+        } else if start.offset() == first_data.text.utf16_len().get() {
+            self.select_end(first)?;
+        } else {
+            let replacement = self.create_text(text)?;
+            self.replace(first, replacement, false)?;
+            self.finish_text_insertion(slot, true, Point::text(replacement, TextBuffer::new(text).utf16_len()), TextFormat::empty(), "".into())?;
+        }
+        for key in nodes.iter().copied().skip(1) {
+            if !keep.contains(&key) && self.is_attached(key) { self.remove(key, false)?; }
         }
         Ok(())
     }
