@@ -185,7 +185,7 @@ impl DocumentUpdatePort for UpdateHarness {
         &self.doc
     }
 
-    async fn apply_and_persist(&self, update: &[u8]) -> Result<(), DocumentError> {
+    async fn apply_and_persist(&mut self, update: &[u8]) -> Result<(), DocumentError> {
         self.calls.borrow_mut().push("persist");
         self.doc.import(update).unwrap();
         if self.fail_persist {
@@ -196,7 +196,7 @@ impl DocumentUpdatePort for UpdateHarness {
 }
 
 impl DocumentUpdateEffects for UpdateHarness {
-    fn broadcast(&self, update: &[u8]) -> Result<(), DocumentError> {
+    fn broadcast(&mut self, update: &[u8]) -> Result<(), DocumentError> {
         self.calls.borrow_mut().push("broadcast");
         let preview = self.doc.fork();
         preview.import(update).unwrap();
@@ -204,7 +204,7 @@ impl DocumentUpdateEffects for UpdateHarness {
         Ok(())
     }
 
-    fn publish_changed_document(&self) -> Result<(), DocumentError> {
+    fn publish_changed_document(&mut self) -> Result<(), DocumentError> {
         self.calls.borrow_mut().push("publish");
         if self.fail_publish.get() {
             return Err(DocumentError::Notification);
@@ -212,7 +212,7 @@ impl DocumentUpdateEffects for UpdateHarness {
         Ok(())
     }
 
-    async fn keep_alive(&self) -> Result<(), DocumentError> {
+    async fn keep_alive(&mut self) -> Result<(), DocumentError> {
         self.calls.borrow_mut().push("keep_alive");
         Ok(())
     }
@@ -220,11 +220,11 @@ impl DocumentUpdateEffects for UpdateHarness {
 
 #[test]
 fn update_use_case_persists_before_broadcast_and_publishes_new_edits() {
-    let port = UpdateHarness::new();
+    let mut port = UpdateHarness::new();
     let revision = port.doc.oplog_vv().encode();
     let delta = delta(&port.doc, "properties", "A1", "42");
     let prepared =
-        futures::executor::block_on(update(&access(), &port, &port, &revision, &delta)).unwrap();
+        futures::executor::block_on(update(&access(), &mut port, &revision, &delta)).unwrap();
     assert!(prepared.applied);
     assert_eq!(
         *port.calls.borrow(),
@@ -233,7 +233,7 @@ fn update_use_case_persists_before_broadcast_and_publishes_new_edits() {
 
     port.calls.borrow_mut().clear();
     let retried =
-        futures::executor::block_on(update(&access(), &port, &port, &revision, &delta)).unwrap();
+        futures::executor::block_on(update(&access(), &mut port, &revision, &delta)).unwrap();
     assert!(!retried.applied);
     assert_eq!(*port.calls.borrow(), ["persist", "broadcast", "keep_alive"]);
 }
@@ -244,23 +244,23 @@ fn rejected_or_unpersisted_update_never_notifies() {
     let revision = port.doc.oplog_vv().encode();
     let delta = delta(&port.doc, "properties", "A1", "42");
     let viewer = DocumentAccess::authorize("doc", "doc", false).unwrap();
-    let result = futures::executor::block_on(update(&viewer, &port, &port, &revision, &delta));
+    let result = futures::executor::block_on(update(&viewer, &mut port, &revision, &delta));
     assert!(matches!(result, Err(DocumentError::Forbidden)));
     assert!(port.calls.borrow().is_empty());
 
     port.fail_persist = true;
-    let result = futures::executor::block_on(update(&access(), &port, &port, &revision, &delta));
+    let result = futures::executor::block_on(update(&access(), &mut port, &revision, &delta));
     assert!(matches!(result, Err(DocumentError::Persistence)));
     assert_eq!(*port.calls.borrow(), ["persist"]);
 }
 
 #[test]
 fn notification_failure_preserves_durable_update_and_allows_idempotent_retry() {
-    let port = UpdateHarness::new();
+    let mut port = UpdateHarness::new();
     let revision = port.doc.oplog_vv().encode();
     let delta = delta(&port.doc, "properties", "A1", "42");
     port.fail_publish.set(true);
-    let result = futures::executor::block_on(update(&access(), &port, &port, &revision, &delta));
+    let result = futures::executor::block_on(update(&access(), &mut port, &revision, &delta));
     assert!(matches!(result, Err(DocumentError::Notification)));
     assert_eq!(*port.calls.borrow(), ["persist", "broadcast", "publish"]);
     assert!(port.doc.get_map("properties").get("A1").is_some());
@@ -268,7 +268,7 @@ fn notification_failure_preserves_durable_update_and_allows_idempotent_retry() {
     port.calls.borrow_mut().clear();
     port.fail_publish.set(false);
     let retried =
-        futures::executor::block_on(update(&access(), &port, &port, &revision, &delta)).unwrap();
+        futures::executor::block_on(update(&access(), &mut port, &revision, &delta)).unwrap();
     assert!(!retried.applied);
     assert_eq!(*port.calls.borrow(), ["persist", "broadcast", "keep_alive"]);
 }

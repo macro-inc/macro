@@ -31,7 +31,7 @@ updates over WebSocket.
 - `../../crates/sync_server_core/src/domain/`: shared session permission policy,
   atomic update use cases, connection metadata and migration state.
 - `src/domain.rs`: compatibility re-exports of the shared core.
-- `src/state.rs`: temporary RefCell adapter for core state while callers share Arc handles.
+- `src/state.rs`: read-only Loro views for adapter exports; mutable state lives in the core Room.
 
 ## Scope
 
@@ -81,7 +81,7 @@ to the requested surface. These are scoped sync JWTs, not app-session tokens.
   10s of inactivity even with open connections; the alarm-based heartbeat in
   `src/keepalive.rs` is what keeps it warm, not WebSocket traffic.
 - The Durable Object handles one request or WebSocket message at a time
-  (`mutation_barrier` in `src/inbound/durable_object.rs`). Keep per-update work
+  (`Arc<futures::lock::Mutex<Room<WorkerPorts>>>` in `src/inbound/durable_object.rs`). Keep per-update work
   proportional to the update; `LoroDoc::diff`, `fork`, and checkouts cost time
   that grows with document history. A backlog past `DEFAULT_TIMEOUT_MS` (4.5 s)
   makes the front worker fail connects, which clients see as close 1006.
@@ -114,3 +114,8 @@ to the requested surface. These are scoped sync JWTs, not app-session tokens.
   tests/canvas_initialization.test.ts`; the usual test build seeds automatically.
 
 - Preserve signed document-grant agent correlation in editor metadata and pending batches; different invocations remain distinct editors.
+
+The request gate and Axum handler share one owned room guard. Handler adapters
+borrow the room for the whole request; background work receives owned snapshots
+and editor batches, never a room guard. `websocket_error` only logs and stays
+lock-free. H9 still replaces the operation log and snapshot transport handle.

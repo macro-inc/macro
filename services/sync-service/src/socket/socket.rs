@@ -1,24 +1,18 @@
-use std::{collections::HashMap, sync::Arc};
+use std::collections::HashMap;
 
 use bebop::Record;
 use worker::{Result, WebSocket};
 
-use crate::{error::ResultExt, mutex::Mutex};
+use crate::error::ResultExt;
 use sync_protocol::framing::{self, Reassembler};
-
-/// Per-connection inbound reassembly buffers, keyed by websocket id. Lives on the
-/// durable object (shared via `Arc`) so partial messages persist across the
-/// `websocket_message` events that deliver each frame.
-pub(crate) type InboundBuffers = Arc<Mutex<HashMap<String, Reassembler>>>;
 
 /// A single peer websocket, but abstracted so that we can wrap our own transport layer.
 pub(crate) struct Socket {
     ws: WebSocket,
-    inbound: InboundBuffers,
 }
 
-/// Sockets are equal when they wrap the same peer websocket; the shared inbound
-/// buffer handle is not part of identity (used to skip the sender in broadcasts).
+/// Sockets are equal when they wrap the same peer websocket (used to skip the
+/// sender in broadcasts). Reassembly buffers belong to RoomMemory.
 impl PartialEq for Socket {
     fn eq(&self, other: &Self) -> bool {
         self.ws == other.ws
@@ -27,8 +21,8 @@ impl PartialEq for Socket {
 impl Eq for Socket {}
 
 impl Socket {
-    pub(crate) fn new(ws: WebSocket, inbound: InboundBuffers) -> Self {
-        Self { ws, inbound }
+    pub(crate) fn new(ws: WebSocket) -> Self {
+        Self { ws }
     }
 
     /// The underlying peer websocket.
@@ -53,10 +47,16 @@ impl Socket {
     /// Feeds one inbound frame for the connection identified by `ws_id`. Returns
     /// the complete message once its final frame arrives, otherwise `None` while
     /// earlier frames are still buffering.
-    pub(crate) fn receive(&self, ws_id: &str, frame: &[u8]) -> Result<Option<Vec<u8>>> {
-        let mut inbound = self.inbound.lock("Socket::receive");
+    pub(crate) fn receive(
+        inbound: &mut HashMap<sync_server_core::domain::socket::WebSocketId, Reassembler>,
+        ws_id: &str,
+        frame: &[u8],
+    ) -> Result<Option<Vec<u8>>> {
         let message = inbound
-            .entry(ws_id.to_string())
+            .entry(
+                sync_server_core::domain::socket::WebSocketId::from_tags(&[ws_id.to_string()])
+                    .map_err(|error| worker::Error::from(error.to_string()))?,
+            )
             .or_default()
             .push(frame)
             .map_err(|error| worker::Error::from(error.to_string()))?;
@@ -64,11 +64,5 @@ impl Socket {
             inbound.remove(ws_id);
         }
         Ok(message)
-    }
-
-    /// Discards any partially-buffered inbound message for a connection. Call
-    /// when the connection closes so a dropped mid-message doesn't leak.
-    pub(crate) fn forget(&self, ws_id: &str) {
-        self.inbound.lock("Socket::forget").remove(ws_id);
     }
 }

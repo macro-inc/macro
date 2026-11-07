@@ -50,3 +50,14 @@ impl fmt::Display for WebSocketId {
 
 #[cfg(test)]
 mod test;
+
+impl std::borrow::Borrow<String> for WebSocketId {
+    fn borrow(&self) -> &String {
+        &self.0
+    }
+}
+impl std::borrow::Borrow<str> for WebSocketId {
+    fn borrow(&self) -> &str {
+        self.as_str()
+    }
+}

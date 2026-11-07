@@ -1,12 +1,9 @@
 use crate::outbound::room_ports::WorkerClock;
 use crate::{
-    error::ResultExt,
-    state::{DocumentState, ImportedUpdate},
-    storage::backends::durable_kv::DurableKVStorage,
+    error::ResultExt, state::ImportedUpdate, storage::backends::durable_kv::DurableKVStorage,
 };
 use backends::Storage;
-use macro_sync_service_jwt::session::SessionKind;
-use std::{cell::RefCell, rc::Rc};
+use std::rc::Rc;
 use sync_server_core::domain::{
     document::DocumentAttribution,
     operation_log::{OperationError, OperationLog, SnapshotError},
@@ -24,7 +21,6 @@ use room_snapshot::WorkerSnapshots;
 pub struct SessionStorage {
     snapshots: WorkerSnapshots,
     storage: DurableKVStorage,
-    operations: RefCell<OperationLog>,
     key: SessionKey,
 }
 
@@ -56,36 +52,10 @@ fn snapshot_read_error(error: SnapshotReadError<worker::Error>) -> worker::Error
     }
 }
 
-/// Outbound adapter for atomic document updates, sharing the websocket log.
-pub struct DocumentUpdateStorage<'a> {
-    pub document_state: &'a DocumentState,
-    pub storage: &'a SessionStorage,
-    pub attribution: Option<&'a DocumentAttribution>,
-}
-impl crate::domain::document::DocumentUpdatePort for DocumentUpdateStorage<'_> {
-    fn document(&self) -> &loro::LoroDoc {
-        &self.document_state.loro_doc
-    }
-    async fn apply_and_persist(
-        &self,
-        update: &[u8],
-    ) -> std::result::Result<(), crate::domain::document::DocumentError> {
-        self.storage
-            .apply_with_attribution(update, self.document_state, self.attribution)
-            .await
-            .map(|_| ())
-            .map_err(|error| {
-                tracing::error!(error = ?error, "failed to persist document update");
-                crate::domain::document::DocumentError::Persistence
-            })
-    }
-}
-
 impl SessionStorage {
     pub fn new(
         snapshot_storage: Storage,
         storage: DurableKVStorage,
-        kind: SessionKind,
         key: String,
         state: Rc<State>,
     ) -> Self {
@@ -94,21 +64,21 @@ impl SessionStorage {
         Self {
             snapshots,
             storage,
-            operations: RefCell::new(OperationLog::new(key.clone(), kind)),
             key,
         }
     }
     /// Load document state and apply any pending operations.
-    pub async fn load_document_state(&self) -> Result<DocumentState> {
-        self.operations
-            .borrow_mut()
+    pub async fn load_document_state(
+        &self,
+        operations: &mut OperationLog,
+    ) -> Result<sync_server_core::domain::state::DocumentState> {
+        operations
             .load_document_state(
                 &self.storage,
                 &self.snapshots,
                 cfg!(feature = "create-default-state"),
             )
             .await
-            .map(DocumentState::from_core)
             .map_err(snapshot_error)
     }
     pub async fn get_pending_operations(&self) -> Result<Vec<Result<(String, Vec<u8>)>>> {
@@ -126,43 +96,30 @@ impl SessionStorage {
             .await
             .map_err(snapshot_read_error)
     }
-    pub async fn store_snapshot(&self, state: &DocumentState) -> Result<()> {
-        let operations = self.operations.borrow();
-        let pending = {
-            let document = state.core();
-            operations.store_snapshot(&self.storage, &self.snapshots, &document)
-        };
-        pending.await.map_err(snapshot_error)
-    }
-    pub async fn append_pending_operation(
+    pub async fn store_snapshot(
         &self,
-        update: &[u8],
-        state: &DocumentState,
-    ) -> Result<ImportedUpdate> {
-        self.apply_with_attribution(update, state, None).await
+        operations: &OperationLog,
+        state: &sync_server_core::domain::state::DocumentState,
+    ) -> Result<()> {
+        operations
+            .store_snapshot(&self.storage, &self.snapshots, state)
+            .await
+            .map_err(snapshot_error)
     }
     pub async fn apply_with_attribution(
         &self,
+        operations: &mut OperationLog,
+        state: &mut sync_server_core::domain::state::DocumentState,
         update: &[u8],
-        state: &DocumentState,
         attribution: Option<&DocumentAttribution>,
     ) -> Result<ImportedUpdate> {
-        let mut operations = self.operations.borrow_mut();
-        let pending = {
-            let mut document = state.core_mut();
-            operations.apply(
-                &self.storage,
-                &mut document,
-                update,
-                attribution,
-                &WorkerClock,
-            )
-        };
-        pending.await.map_err(operation_error)
+        operations
+            .apply(&self.storage, state, update, attribution, &WorkerClock)
+            .await
+            .map_err(operation_error)
     }
-    pub async fn clear_applied_ops(&self) -> Result<()> {
-        self.operations
-            .borrow_mut()
+    pub async fn clear_applied_ops(&self, operations: &mut OperationLog) -> Result<()> {
+        operations
             .clear_applied(&self.storage)
             .await
             .map_err(operation_error)

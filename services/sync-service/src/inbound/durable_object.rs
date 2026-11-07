@@ -1,16 +1,19 @@
+//! Worker callback adapter. CS-61: the single-threaded DO uses a futures mutex
+//! as its whole-callback barrier; runtime handles never enter RoomMemory.
 use super::cors::{cors, is_origin_allowed};
 use crate::outbound::room_ports::WorkerPorts;
-use std::{
-    borrow::Cow,
-    collections::{BTreeMap, BTreeSet, HashMap},
-    rc::Rc,
-    sync::Arc,
-};
+use std::{borrow::Cow, collections::BTreeSet, rc::Rc, sync::Arc};
 use sync_protocol::InitializeFromSnapshotRequest;
-use sync_server_core::domain::ports::RoomPorts;
+use sync_protocol::time::WallDuration;
+use sync_server_core::domain::{
+    operation_log::OperationLog,
+    ports::RoomPorts,
+    room::{Room, RoomConfig, RoomMemory},
+    types::SessionKey,
+};
 
 use bebop::Record;
-use loro::{ExportMode, awareness::EphemeralStore};
+use loro::ExportMode;
 use macro_sync_service_jwt::session::SessionKind;
 use tracing::{Instrument, debug, error, info, instrument, trace, warn};
 use worker::{
@@ -27,8 +30,7 @@ use crate::{
     dss_internal::InteractionReason,
     error::ResultExt,
     keepalive::{DEFAULT_TIME_TO_LIVE, keepalive},
-    mutex::Mutex,
-    socket::{InboundBuffers, Socket, protocol},
+    socket::{Socket, protocol},
     state::DocumentState,
     storage::{SessionStorage, get_snapshot_storage, snapshot::SnapshotStorage},
     tags::{get_ws_id_from_tags, new_ws_id},
@@ -55,7 +57,7 @@ mod surface_api;
 pub(crate) mod surface_migration;
 
 use document_effects::{report_interaction, report_new_doc_state};
-use surface_api::{SurfaceLifecycle, session_kind_from_storage_key};
+use surface_api::session_kind_from_storage_key;
 
 pub fn response(status_code: u16) -> Response {
     Response::builder().with_status(status_code).empty()
@@ -82,44 +84,36 @@ macro_rules! maybe_404 {
 
 pub use sync_server_core::domain::connection::ConnectionMetadata as WebSocketMetadata;
 
-pub type WsMetaMap = BTreeMap<String, WebSocketMetadata>;
-
-pub struct SyncSession {
+/// A callback-local adapter borrowing the single locked room.
+pub struct SyncSession<'room> {
+    room: &'room mut Room<WorkerPorts>,
     state: Rc<State>,
     env: Env,
-    ports: WorkerPorts,
-    /// id of the document, comes from URL path
-    document_id: Mutex<Option<Arc<String>>>,
-    /// Current document state
-    document_state: Mutex<Option<Arc<DocumentState>>>,
-    /// Access to document related IO
-    session_storage: Mutex<Option<Rc<SessionStorage>>>,
-    awareness: EphemeralStore,
-    /// a map from websocket's ID's to websocket metadata
-    ws_meta_map: Arc<Mutex<WsMetaMap>>,
-    /// Partial inbound messages, isolated by connection.
-    inbound: InboundBuffers,
-    /// Buffered blame events. Flushed via D1 batch on each alarm tick.
-    pending_blame: Arc<Mutex<Vec<crate::d1::BlameEvent>>>,
-    /// Distinct editors since the last snapshot notification.
-    pending_editors: Arc<Mutex<BTreeSet<DocumentAttribution>>>,
-    /// Writing peers already recorded in D1 since this object woke, so
-    /// updates skip remapping them.
-    mapped_writing_peers: Mutex<BTreeSet<u64>>,
-    surface_lifecycle: Mutex<Option<SurfaceLifecycle>>,
-    source_migration: Mutex<Option<surface_migration::SourceState>>,
-    // Serialize whole callbacks, including persistence awaits. A freeze must
-    // drain every in-flight mutation before it exports or closes writers.
-    mutation_barrier: futures::lock::Mutex<()>,
+}
+impl<'room> SyncSession<'room> {
+    pub(super) fn new(room: &'room mut Room<WorkerPorts>, state: Rc<State>, env: Env) -> Self {
+        Self { room, state, env }
+    }
+}
+impl std::ops::Deref for SyncSession<'_> {
+    type Target = RoomMemory;
+    fn deref(&self) -> &Self::Target {
+        self.room.memory_view()
+    }
+}
+impl std::ops::DerefMut for SyncSession<'_> {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        self.room.memory_mut()
+    }
 }
 
-pub struct Wsm<'a> {
-    dss: &'a SyncSession,
+pub struct Wsm<'a, 'room> {
+    dss: &'a mut SyncSession<'room>,
     ws: &'a WebSocket,
     ws_id: Option<String>,
 }
-impl<'a> Wsm<'a> {
-    pub fn new(dss: &'a SyncSession, ws: &'a WebSocket) -> Self {
+impl<'a, 'room> Wsm<'a, 'room> {
+    pub fn new(dss: &'a mut SyncSession<'room>, ws: &'a WebSocket) -> Self {
         Self {
             dss,
             ws,
@@ -136,12 +130,7 @@ impl<'a> Wsm<'a> {
     }
     async fn maybe_update_ws_meta_map(&mut self) -> Result<()> {
         let ws_id = self.get_ws_id()?.to_string();
-        if !self
-            .dss
-            .ws_meta_map
-            .lock("Wsm::maybe_update_ws_meta_map contains_key")
-            .contains_key(&ws_id)
-        {
+        if !self.dss.connections.contains_key(&ws_id) {
             let wsm: WebSocketMetadata = self
                 .dss
                 .state
@@ -149,10 +138,11 @@ impl<'a> Wsm<'a> {
                 .get(&ws_id)
                 .await?
                 .ok_or(Error::from("WebSocketMetadata not found in storage"))?;
-            self.dss
-                .ws_meta_map
-                .lock("Wsm::maybe_update_ws_meta_map insert")
-                .insert(ws_id, wsm);
+            self.dss.connections.insert(
+                sync_server_core::domain::socket::WebSocketId::from_tags(&[ws_id])
+                    .map_err(|error| Error::from(error.to_string()))?,
+                wsm,
+            );
         }
         Ok(())
     }
@@ -161,8 +151,7 @@ impl<'a> Wsm<'a> {
         let ws_id = self.get_ws_id()?.to_string();
         Ok(self
             .dss
-            .ws_meta_map
-            .lock("Wsm::get_peer_ids get")
+            .connections
             .get(&ws_id)
             .ok_or(Error::from("missing ws metadata"))?
             .active_peer_ids(include_ai))
@@ -171,7 +160,7 @@ impl<'a> Wsm<'a> {
     pub async fn edit_attribution(&mut self) -> Result<Option<DocumentAttribution>> {
         self.maybe_update_ws_meta_map().await?;
         let ws_id = self.get_ws_id()?.to_string();
-        let map = self.dss.ws_meta_map.lock("Wsm::edit_attribution");
+        let map = &self.dss.connections;
         let meta = map.get(&ws_id).context("missing ws metadata")?;
         DocumentAttribution::from_session_claims(
             meta.actor.clone(),
@@ -186,8 +175,7 @@ impl<'a> Wsm<'a> {
         let ws_id = self.get_ws_id()?.to_string();
         Ok(self
             .dss
-            .ws_meta_map
-            .lock("Wsm::write_access get")
+            .connections
             .get(&ws_id)
             .ok_or(Error::from("missing ws metadata"))?
             .write_access(surface_api::now_seconds()))
@@ -199,7 +187,7 @@ impl<'a> Wsm<'a> {
         let ws_id = self.get_ws_id()?.to_string();
 
         let new_peer = {
-            let mut wmm = self.dss.ws_meta_map.lock("Wsm::add_new_peerid get_mut");
+            let wmm = &mut self.dss.connections;
             let meta = wmm
                 .get_mut(&ws_id)
                 .ok_or(Error::from("missing ws metadata"))?;
@@ -261,19 +249,17 @@ async fn bump_alarm(state: &State) -> Result<()> {
     Ok(())
 }
 
-fn take_editors(editors: &Mutex<BTreeSet<DocumentAttribution>>) -> Vec<DocumentAttribution> {
-    std::mem::take(&mut *editors.lock("take document editors"))
-        .into_iter()
-        .collect()
+fn take_editors(editors: &mut BTreeSet<DocumentAttribution>) -> Vec<DocumentAttribution> {
+    std::mem::take(editors).into_iter().collect()
 }
 
-impl SyncSession {
+impl SyncSession<'_> {
     pub(crate) fn env(&self) -> &Env {
         &self.env
     }
 
     pub(crate) fn socket_for(&self, ws: &WebSocket) -> Socket {
-        Socket::new(ws.clone(), self.inbound.clone())
+        Socket::new(ws.clone())
     }
 
     pub(crate) fn get_sockets(&self) -> Vec<Socket> {
@@ -287,42 +273,35 @@ impl SyncSession {
         self.active_websockets()
     }
 
-    pub(crate) fn record_editor(&self, attribution: Option<&DocumentAttribution>) {
+    pub(crate) fn record_editor(&mut self, attribution: Option<&DocumentAttribution>) {
         if let Some(attribution) = attribution {
-            self.pending_editors
-                .lock("record document editor")
-                .insert(attribution.clone());
+            self.pending_editors.insert(attribution.clone());
         }
     }
 
-    async fn forget_websocket_metadata(&self, ws: &WebSocket) {
+    async fn forget_websocket_metadata(&mut self, ws: &WebSocket) {
         let Ok(ws_id) = get_ws_id(&self.state, ws) else {
             return;
         };
-        self.socket_for(ws).forget(&ws_id);
-        self.ws_meta_map
-            .lock("SyncSession::forget_websocket_metadata")
-            .remove(&ws_id);
+        self.inbound.remove(&ws_id);
+        self.connections.remove(&ws_id);
         if let Err(err) = self.state.storage().delete(&ws_id).await {
             warn!(error=?err, ws_id, "failed to delete websocket metadata");
         }
     }
 
-    pub fn push_blame_events(&self, events: Vec<crate::d1::BlameEvent>) {
+    pub fn push_blame_events(&mut self, events: Vec<crate::d1::BlameEvent>) {
         if events.is_empty() {
             return;
         }
-        self.pending_blame
-            .lock("SyncSession::push_blame_events")
-            .extend(events);
+        self.pending_blame.extend(events);
     }
 
     /// Drain the pending blame buffer and write all events via a single D1
     /// batch in the background. Returns immediately; the actual write runs
     /// inside `wait_until` so the alarm handler doesn't block on D1.
-    fn flush_pending_blame(&self) {
-        let pending: Vec<crate::d1::BlameEvent> =
-            std::mem::take(&mut *self.pending_blame.lock("SyncSession::flush_pending_blame"));
+    fn flush_pending_blame(&mut self) {
+        let pending: Vec<crate::d1::BlameEvent> = std::mem::take(&mut self.pending_blame);
         if pending.is_empty() {
             return;
         }
@@ -333,15 +312,11 @@ impl SyncSession {
             }
         }));
     }
-    pub(super) fn secrets(&self) -> crate::secrets::Secrets {
-        crate::secrets::Secrets::from(&self.env)
-    }
-
-    pub(super) async fn debug_get(&self, key: &str) -> Result<Response> {
+    pub(super) async fn debug_get(&mut self, key: &str) -> Result<Response> {
         Response::from_json(&self.session_storage().await?.debug_do_kv_get(key).await?)
     }
 
-    pub(super) async fn debug_list(&self, prefix: &str) -> Result<Response> {
+    pub(super) async fn debug_list(&mut self, prefix: &str) -> Result<Response> {
         let values: Vec<(String, Vec<u8>)> = self
             .session_storage()
             .await?
@@ -353,7 +328,7 @@ impl SyncSession {
         Response::from_json(&values)
     }
 
-    async fn inner_fetch(self: &Rc<Self>, req: Request) -> Result<Response> {
+    async fn gate_request(&mut self, req: &Request) -> Result<Option<Response>> {
         let url = req.url()?;
         let segments: Vec<_> = url.path().split('/').collect();
         if let ["", "document", id, ..] = segments.as_slice() {
@@ -361,17 +336,13 @@ impl SyncSession {
         }
         let migration = matches!(segments.as_slice(), ["", "document", _, "migration", _]);
         if !url.path().starts_with("/surface/") && !migration && self.source_blocked().await? {
-            return Ok(response(status_codes::FORBIDDEN));
+            return Ok(Some(response(status_codes::FORBIDDEN)));
         }
-        use tower_service::Service;
-        let mut router = super::router::document_router(self.clone());
-        let response = router.call(worker::HttpRequest::try_from(req)?).await;
-        let response = response.unwrap_or_else(|error: std::convert::Infallible| match error {});
-        Response::try_from(response)
+        Ok(None)
     }
 
     pub(in crate::inbound) async fn initialize_handler(
-        &self,
+        &mut self,
         mut req: Request,
         document_id: &str,
     ) -> Result<Response> {
@@ -393,26 +364,12 @@ impl SyncSession {
             insert_missing_user_mappings(&db, document_id, SYSTEM_AUTHOR_ID, None, &writers)
                 .await?;
             storage.store_snapshot(&body.snapshot).await?;
-            *self
-                .document_id
-                .lock("SyncSession::document_id set within initialize_handler") =
-                Some(Arc::new(document_id.to_string()));
+            self.session_key = Some(SessionKey::new(document_id.to_string()));
             self.state
                 .storage()
                 .put(DOCUMENT_ID_KEY, document_id.to_string())
                 .await?;
-            let dkv_storage = self.ports.storage().clone();
-            let session_storage = Rc::new(SessionStorage::new(
-                storage,
-                dkv_storage,
-                SessionKind::Document,
-                document_id.to_string(),
-                self.state.clone(),
-            ));
-            *self
-                .session_storage
-                .lock("SyncSession::session_storage set within initialize_handler") =
-                Some(session_storage);
+            self.reset_session_storage(storage, document_id, SessionKind::Document);
         }
 
         // Broadcast initial sync to any sockets that connected before init landed.
@@ -445,7 +402,7 @@ impl SyncSession {
     /// Active peer ids. With `include_ai = false`, AI editors (peer ids from the
     /// reserved AI block or signed agent actors) are filtered out.
     pub(in crate::inbound) async fn active_peer_ids_handler(
-        &self,
+        &mut self,
         include_ai: bool,
     ) -> Result<Response> {
         if !self.state.get_websockets().is_empty() {
@@ -464,7 +421,7 @@ impl SyncSession {
         Ok(ResponseBuilder::new().body(ResponseBody::Body(result)))
     }
 
-    pub(in crate::inbound) async fn exists_handler(&self, id: &str) -> Result<Response> {
+    pub(in crate::inbound) async fn exists_handler(&mut self, id: &str) -> Result<Response> {
         Ok(response(if self.exists(id).await? {
             status_codes::OK
         } else {
@@ -472,7 +429,7 @@ impl SyncSession {
         }))
     }
 
-    pub(in crate::inbound) async fn raw_handler(&self, document_id: &str) -> Result<Response> {
+    pub(in crate::inbound) async fn raw_handler(&mut self, document_id: &str) -> Result<Response> {
         if !self.exists(document_id).await? {
             return Ok(response(status_codes::NOT_FOUND));
         }
@@ -481,7 +438,7 @@ impl SyncSession {
     }
 
     pub(in crate::inbound) async fn snapshot_handler(
-        &self,
+        &mut self,
         mut req: Request,
         document_id: &str,
     ) -> Result<Response> {
@@ -517,7 +474,10 @@ impl SyncSession {
         Ok(ResponseBuilder::new().body(ResponseBody::Body(out)))
     }
 
-    pub(in crate::inbound) async fn dump_operations(&self, document_id: &str) -> Result<Response> {
+    pub(in crate::inbound) async fn dump_operations(
+        &mut self,
+        document_id: &str,
+    ) -> Result<Response> {
         if !self.exists(document_id).await? {
             return Ok(response(status_codes::NOT_FOUND));
         }
@@ -549,7 +509,7 @@ impl SyncSession {
     }
 
     pub(in crate::inbound) async fn peer_handler(
-        &self,
+        &mut self,
         document_id: &str,
         peer_id: Option<&str>,
     ) -> Result<Response> {
@@ -566,7 +526,7 @@ impl SyncSession {
         ResponseBuilder::new().from_json(&PeerResponse { peer_id, user_id })
     }
 
-    pub(in crate::inbound) async fn wakeup(&self, document_id: &str) -> Result<Response> {
+    pub(in crate::inbound) async fn wakeup(&mut self, document_id: &str) -> Result<Response> {
         let _ = self.warmup(document_id).await.inspect_err(
             |error| warn!(document_id = document_id, error = ?error, "failed to warm up document"),
         );
@@ -575,7 +535,7 @@ impl SyncSession {
         ResponseBuilder::new().from_json(&out)
     }
 
-    async fn warmup(&self, document_id: &str) -> Result<()> {
+    async fn warmup(&mut self, document_id: &str) -> Result<()> {
         if !self.exists(document_id).await? {
             return Ok(());
         }
@@ -585,7 +545,10 @@ impl SyncSession {
         Ok(())
     }
 
-    pub(in crate::inbound) async fn metadata_handler(&self, document_id: &str) -> Result<Response> {
+    pub(in crate::inbound) async fn metadata_handler(
+        &mut self,
+        document_id: &str,
+    ) -> Result<Response> {
         if !self.exists(document_id).await? {
             return Ok(response(status_codes::NOT_FOUND));
         }
@@ -600,7 +563,7 @@ impl SyncSession {
     }
 
     pub(in crate::inbound) async fn blame_handler(
-        &self,
+        &mut self,
         node_id: Option<&str>,
     ) -> Result<Response> {
         let node_id = node_id.ok_or_else(|| Error::from("missing node_id"))?;
@@ -613,7 +576,7 @@ impl SyncSession {
     }
 
     pub(in crate::inbound) async fn connect(
-        &self,
+        &mut self,
         claims: AuthToken,
         document_id: &str,
     ) -> Result<Response> {
@@ -649,9 +612,11 @@ impl SyncSession {
             };
 
             self.state.storage().put(&ws_id, &ws_meta).await?;
-            self.ws_meta_map
-                .lock("SyncSession::ws_meta_map insert in connect_handler")
-                .insert(ws_id, ws_meta);
+            self.connections.insert(
+                sync_server_core::domain::socket::WebSocketId::from_tags(&[ws_id])
+                    .map_err(|error| Error::from(error.to_string()))?,
+                ws_meta,
+            );
 
             // A surface may have been revoked while socket metadata was being
             // persisted. Recheck before sending any initial content.
@@ -712,17 +677,14 @@ impl SyncSession {
         Ok(res)
     }
 
-    async fn maybe_set_document_id(&self, document_id: &str) -> Result<bool> {
+    async fn maybe_set_document_id(&mut self, document_id: &str) -> Result<bool> {
         if !self.document_id_is_some() {
             debug!("Setting DO::kv({DOCUMENT_ID_KEY}, {document_id})");
             self.state
                 .storage()
                 .put(DOCUMENT_ID_KEY, document_id)
                 .await?;
-            *self
-                .document_id
-                .lock("SyncSession::document_id set within maybe_set_document_id") =
-                Some(Arc::new(document_id.to_string()));
+            self.session_key = Some(SessionKey::new(document_id.to_string()));
             Ok(true)
         } else {
             Ok(false)
@@ -730,38 +692,30 @@ impl SyncSession {
     }
 
     /// A connected room identity does not imply initialized collaborative content.
-    async fn exists(&self, document_id: &str) -> Result<bool> {
+    async fn exists(&mut self, document_id: &str) -> Result<bool> {
         let snapshot_storage =
             get_snapshot_storage(&self.env, &self.state, document_id.to_string())?;
 
         if snapshot_storage.has_snapshot().await? {
             self.maybe_set_document_id(document_id).await?;
             // set up session storage
-            let dkv_storage = self.ports.storage().clone();
-            let session_storage = Rc::new(SessionStorage::new(
+            self.reset_session_storage(
                 snapshot_storage,
-                dkv_storage,
+                document_id,
                 session_kind_from_storage_key(document_id),
-                document_id.to_string(),
-                self.state.clone(),
-            ));
-            *self
-                .session_storage
-                .lock("SyncSession::session_storage set within exists") = Some(session_storage);
+            );
             return Ok(true);
         }
         Ok(false)
     }
 
     fn document_id_is_some(&self) -> bool {
-        self.document_id
-            .lock("SyncSession::document_id check is_some()")
-            .is_some()
+        self.session_key.is_some()
     }
 
     #[instrument(skip_all, err)]
-    /// Get the `document_id`. First try checking self.document_id, if not there get from DOKV.
-    async fn document_id(&self) -> Result<Arc<String>> {
+    /// Get the `document_id`. First try checking self.session_key, if not there get from DOKV.
+    async fn document_id(&mut self) -> Result<String> {
         self.try_document_id()
             .await?
             .ok_or(Error::from("DOCUMENT_ID not found in storage"))
@@ -769,14 +723,9 @@ impl SyncSession {
 
     /// Like [`Self::document_id`], but `None` instead of an error when this
     /// object holds no session.
-    async fn try_document_id(&self) -> Result<Option<Arc<String>>> {
-        if let Some(id) = self
-            .document_id
-            .lock("SyncSession::document_id get within main document_id fn")
-            .as_ref()
-            .cloned()
-        {
-            return Ok(Some(id));
+    async fn try_document_id(&mut self) -> Result<Option<String>> {
+        if let Some(id) = self.session_key.as_ref().cloned() {
+            return Ok(Some(id.to_string()));
         }
         let Some(id) = self
             .state
@@ -792,55 +741,71 @@ impl SyncSession {
         else {
             return Ok(None);
         };
-        let id = Arc::new(id);
-        *self
-            .document_id
-            .lock("SyncSession::document_id set within main document_id fn") = Some(id.clone());
+        let key = SessionKey::new(id.clone());
+        self.session_key = Some(key);
         Ok(Some(id))
     }
 
-    async fn session_storage(&self) -> Result<Rc<SessionStorage>> {
-        if let Some(ss) = self
-            .session_storage
-            .lock("session_storage get within main session_storage fn")
-            .as_ref()
-        {
-            Ok(ss.clone())
-        } else {
-            let id = self.document_id().await?.to_string();
-            let snapshot_storage = get_snapshot_storage(&self.env, &self.state, id.clone())?;
-            let dkv_storage = self.ports.storage().clone();
-            let ss = Rc::new(SessionStorage::new(
-                snapshot_storage,
-                dkv_storage,
-                session_kind_from_storage_key(&id),
-                id.clone(),
-                self.state.clone(),
-            ));
-            *self
-                .session_storage
-                .lock("SyncSession::session_storage set within main session_storage fn") =
-                Some(ss.clone());
-            Ok(ss)
+    fn reset_session_storage(
+        &mut self,
+        snapshot: crate::storage::backends::Storage,
+        id: &str,
+        kind: SessionKind,
+    ) {
+        let storage = SessionStorage::new(
+            snapshot,
+            self.room.ports().storage().clone(),
+            id.to_owned(),
+            self.state.clone(),
+        );
+        self.room.ports_mut().session_storage = Some(Rc::new(storage));
+        self.operation_log = Some(OperationLog::new(SessionKey::new(id.to_owned()), kind));
+    }
+    async fn session_storage(&mut self) -> Result<Rc<SessionStorage>> {
+        if let Some(storage) = &self.room.ports().session_storage {
+            return Ok(storage.clone());
         }
+        let id = self.document_id().await?;
+        let snapshot = get_snapshot_storage(&self.env, &self.state, id.clone())?;
+        self.reset_session_storage(snapshot, &id, session_kind_from_storage_key(&id));
+        Ok(self
+            .room
+            .ports()
+            .session_storage
+            .as_ref()
+            .expect("storage initialized")
+            .clone())
     }
 
-    /// Gets DocumentState, loading it if needed
-    async fn document_state(&self) -> Result<Arc<DocumentState>> {
-        let Some(x) = self
-            .document_state
-            .lock("SyncSession::document_state get within main document_state fn")
-            .as_ref()
-            .cloned()
-        else {
-            let ss = Arc::new(self.session_storage().await?.load_document_state().await?);
-            *self
-                .document_state
-                .lock("SyncSession::document_state set within main document_state fn") =
-                Some(ss.clone());
-            return Ok(ss);
-        };
-        Ok(x)
+    /// Read-only handle; mutations target the owned Room document below.
+    async fn document_state(&mut self) -> Result<DocumentState> {
+        if self.document.is_none() {
+            let storage = self.session_storage().await?;
+            let document = storage
+                .load_document_state(self.operation_log.as_mut().expect("log initialized"))
+                .await?;
+            self.document = Some(document);
+        }
+        Ok(DocumentState::view(
+            self.document.as_ref().expect("document loaded"),
+        ))
+    }
+    pub(crate) async fn apply_update(
+        &mut self,
+        update: &[u8],
+        attribution: Option<&DocumentAttribution>,
+    ) -> Result<crate::state::ImportedUpdate> {
+        let storage = self.session_storage().await?;
+        self.document_state().await?;
+        let memory = self.room.memory_mut();
+        storage
+            .apply_with_attribution(
+                memory.operation_log.as_mut().expect("log initialized"),
+                memory.document.as_mut().expect("document loaded"),
+                update,
+                attribution,
+            )
+            .await
     }
 }
 
@@ -848,76 +813,10 @@ pub use crate::domain::models::{
     CopyDocumentRequest, DocumentMetadata, GetSnapshotRequest, PeerResponse,
 };
 
-/// Cloudflare callback adapter. The shared session is confined to one isolate.
+/// Cloudflare callback adapter. One owned guard is the callback barrier.
 #[durable_object]
 pub struct DocumentSyncSession {
-    session: Rc<SyncSession>,
-}
-
-impl DurableObject for DocumentSyncSession {
-    fn new(state: State, env: Env) -> Self {
-        Self {
-            session: Rc::new(SyncSession::new(state, env)),
-        }
-    }
-
-    async fn fetch(&self, req: Request) -> Result<Response> {
-        #[cfg(feature = "transcript")]
-        return crate::transcript::scope(
-            self.session.state.id().to_string(),
-            self.session.fetch(req),
-        )
-        .await;
-        #[cfg(not(feature = "transcript"))]
-        self.session.fetch(req).await
-    }
-
-    async fn websocket_message(&self, ws: WebSocket, msg: WebSocketIncomingMessage) -> Result<()> {
-        #[cfg(feature = "transcript")]
-        return crate::transcript::scope(
-            self.session.state.id().to_string(),
-            self.session.websocket_message(ws, msg),
-        )
-        .await;
-        #[cfg(not(feature = "transcript"))]
-        self.session.websocket_message(ws, msg).await
-    }
-
-    async fn alarm(&self) -> Result<Response> {
-        #[cfg(feature = "transcript")]
-        return crate::transcript::scope(self.session.state.id().to_string(), self.session.alarm())
-            .await;
-        #[cfg(not(feature = "transcript"))]
-        self.session.alarm().await
-    }
-
-    async fn websocket_close(
-        &self,
-        ws: WebSocket,
-        code: usize,
-        reason: String,
-        was_clean: bool,
-    ) -> Result<()> {
-        #[cfg(feature = "transcript")]
-        return crate::transcript::scope(
-            self.session.state.id().to_string(),
-            self.session.websocket_close(ws, code, reason, was_clean),
-        )
-        .await;
-        #[cfg(not(feature = "transcript"))]
-        self.session
-            .websocket_close(ws, code, reason, was_clean)
-            .await
-    }
-
-    async fn websocket_error(&self, ws: WebSocket, error: Error) -> Result<()> {
-        #[cfg(feature = "transcript")]
-        return crate::transcript::scope(
-            self.session.state.id().to_string(),
-            self.session.websocket_error(ws, error),
-        )
-        .await;
-        #[cfg(not(feature = "transcript"))]
-        self.session.websocket_error(ws, error).await
-    }
+    state: Rc<State>,
+    env: Env,
+    room: Arc<futures::lock::Mutex<Room<WorkerPorts>>>,
 }

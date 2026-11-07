@@ -1,5 +1,5 @@
 use bebop::{Record, SliceWrapper};
-use loro::{VersionVector, awareness::EphemeralStore};
+use loro::VersionVector;
 use sync_protocol::{FromPeer, FromRemote};
 use tracing::trace;
 use worker::Result;
@@ -12,7 +12,6 @@ use crate::{
     lexical_service::LexicalServiceClient,
     socket::Socket,
     state::DocumentState,
-    storage::SessionStorage,
 };
 
 /// Decodes an inbound WebSocket payload once, before its trace span is created.
@@ -138,7 +137,7 @@ pub fn send_initial_sync(socket: &Socket, snapshot: &[u8], awareness: &[u8]) -> 
 }
 
 /// Broadcasts an awareness update to every connected peer except `from`.
-pub fn broadcast_awareness(dss: &SyncSession, from: &Socket, awareness: &[u8]) -> Result<()> {
+pub fn broadcast_awareness(dss: &SyncSession<'_>, from: &Socket, awareness: &[u8]) -> Result<()> {
     for socket in dss.get_sockets() {
         if socket == *from {
             continue;
@@ -164,10 +163,8 @@ pub async fn process_message(
     sender: &Socket,
     document_id: &str,
     document_state: &DocumentState,
-    session_storage: &SessionStorage,
-    awareness: &EphemeralStore,
     message: FromPeer<'_>,
-    dss: &SyncSession,
+    dss: &mut SyncSession<'_>,
     telemetry: &mut InboundMessageTelemetry,
 ) -> Result<()> {
     // Loading the document after hibernation can yield to a revocation. Check
@@ -246,9 +243,7 @@ pub async fn process_message(
             #[cfg(feature = "transcript")]
             crate::transcript::clock("blame_ms", now_ms);
             for update in &updates {
-                let imported = session_storage
-                    .append_pending_operation(update, document_state)
-                    .await?;
+                let imported = dss.apply_update(update, None).await?;
                 if imported.changed {
                     dss.record_editor(attribution.as_ref());
                 }
@@ -310,11 +305,11 @@ pub async fn process_message(
         FromPeer::PeerAwareness {
             awareness: awareness_update,
         } => {
-            if let Err(e) = awareness.apply(*awareness_update) {
+            if let Err(e) = dss.awareness.apply(*awareness_update) {
                 tracing::warn!(error = ?e, "failed to apply awareness update; ignoring it");
                 return Ok(());
             }
-            let encodede = awareness.encode_all();
+            let encodede = dss.awareness.encode_all();
             let sockets = dss.get_sockets();
             telemetry.broadcast_targets =
                 Some(sockets.iter().filter(|socket| *socket != sender).count());
@@ -368,7 +363,7 @@ pub async fn process_message(
 /// comment marks. Anything that cannot be checked is refused.
 #[tracing::instrument(skip_all, fields(document.id = %document_id, op.id = %op_id))]
 async fn changes_only_comment_marks(
-    dss: &SyncSession,
+    dss: &SyncSession<'_>,
     document_state: &DocumentState,
     updates: &[SliceWrapper<'_, u8>],
     document_id: &str,

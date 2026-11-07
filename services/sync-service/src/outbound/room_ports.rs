@@ -51,6 +51,7 @@ pub struct WorkerConnections {
     accepted_client: RefCell<Option<WebSocket>>,
 }
 impl WorkerConnections {
+    #[expect(dead_code, reason = "used when connect moves into Room in C8")]
     pub fn take_accepted_client(&self) -> Option<WebSocket> {
         self.accepted_client.borrow_mut().take()
     }
@@ -262,6 +263,7 @@ impl BackgroundEffects for WorkerBackground {
 
 /// Concrete worker capabilities; no IO is performed by construction.
 pub struct WorkerPorts {
+    pub(crate) session_storage: Option<Rc<crate::storage::SessionStorage>>,
     clock: WorkerClock,
     entropy: WorkerEntropy,
     connections: WorkerConnections,
@@ -275,6 +277,7 @@ pub struct WorkerPorts {
 impl WorkerPorts {
     pub fn new(state: Rc<State>, env: Env) -> Self {
         Self {
+            session_storage: None,
             clock: WorkerClock,
             entropy: WorkerEntropy,
             connections: WorkerConnections {
