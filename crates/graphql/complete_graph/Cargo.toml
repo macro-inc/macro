@@ -62,6 +62,7 @@ saved_views = { workspace = true }
 soup_realtime_core = { workspace = true }
 
 [dev-dependencies]
+calendar_event_id = { workspace = true }
 bot_id = { workspace = true }
 crm = { workspace = true, features = ["ports"] }
 databases = { workspace = true, features = ["ports"] }
