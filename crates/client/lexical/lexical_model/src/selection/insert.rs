@@ -100,6 +100,21 @@ impl Transaction<'_> {
             }
             self.set_point_at(slot, end_role, end)?;
         }
+        if !original.is_collapsed() && !text.is_empty() {
+            let first_parent = selected.first().and_then(|key| self.parent(*key));
+            let last_parent = selected.last().and_then(|key| self.parent(*key));
+            if first_parent.into_iter().chain(last_parent).any(|parent| {
+                !self.can_insert_text_before(parent) || !self.can_insert_text_after(parent)
+            }) {
+                // Upstream clears protected inline parents first, then resolves
+                // the surviving boundary before inserting the replacement.
+                self.insert_text_at(slot, "")?;
+                let mut normalized = self.range_at(slot)?.clone();
+                self.normalize_view_boundaries(&mut normalized)?;
+                self.install_selection_at(slot, Selection::Range(normalized))?;
+                return self.insert_text_at(slot, text);
+            }
+        }
         if selected.len() > 1 {
             return self.insert_text_across_nodes(slot, &original, &selected, text, backward);
         }
