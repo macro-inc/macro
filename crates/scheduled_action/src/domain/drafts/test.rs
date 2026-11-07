@@ -1,71 +1,211 @@
-use std::collections::VecDeque;
+use std::collections::HashMap;
 use std::sync::Mutex;
 
+use agent_session::domain::routines::{
+    PreparedRoutineSession, RoutinePendingReason, RoutinePromptAccepted, ValidatedRoutineSession,
+};
 use ai_billing::{AdmissionFuture, AiAdmissionError, DisabledAiAdmissionService};
+use chrono::DateTime;
 use serde_json::json;
 
 use super::*;
-use crate::domain::code_check::test::Checker;
+use crate::domain::code_check::{self, test::Checker};
+use macro_uuid::Uuid;
+use crate::domain::models::{ActionConfiguration, ActionKind};
+use crate::domain::ports::{HandedBack, StaleDraft};
 
 const OWNER: &str = "macro|owner@example.com";
+const BUG_REPORTS: &str = "every time a message gets sent in bug-reports make a task";
 
 fn owner() -> MacroUserIdStr<'static> {
     MacroUserIdStr::parse_from_str(OWNER).unwrap()
 }
 
-/// Answers each request for a draft with the next queued answer, `None` once
-/// they run out, and every request for symbols to read with `symbols`.
-/// Records both.
+/// Drafts in memory, as the table keeps them.
 #[derive(Default)]
-struct Model {
-    answers: Mutex<VecDeque<Option<Value>>>,
-    asked: Mutex<Vec<(String, String, Value)>>,
-    symbols: Vec<String>,
-    symbol_requests: Mutex<Vec<String>>,
-    /// The names it lists for lookup.
-    lookups: Vec<Value>,
-    /// Never answers a draft.
-    hangs: bool,
+struct Rows {
+    drafts: Mutex<HashMap<Uuid, (MacroUserIdStr<'static>, BotId, HandedBack, DateTime<Utc>)>>,
+    finished: Mutex<Vec<Uuid>>,
 }
 
-impl Model {
-    fn answering(answers: impl IntoIterator<Item = Option<Value>>) -> Arc<Self> {
-        Arc::new(Self {
-            answers: Mutex::new(answers.into_iter().collect()),
-            ..Default::default()
+#[async_trait::async_trait]
+impl DraftHandBacks for Rows {
+    async fn begin(&self, session: Uuid, owner: &MacroUserIdStr<'static>, agent: BotId) -> Result<()> {
+        self.drafts.lock().unwrap().insert(
+            session,
+            (owner.clone(), agent, HandedBack::default(), Utc::now()),
+        );
+        Ok(())
+    }
+
+    async fn record(
+        &self,
+        session: Uuid,
+        owner: &MacroUserIdStr<'static>,
+        check: &RoutineCheck,
+    ) -> Result<bool> {
+        let mut drafts = self.drafts.lock().unwrap();
+        let Some((started_by, _, handed_back, _)) = drafts.get_mut(&session) else {
+            return Ok(false);
+        };
+        if started_by != owner {
+            return Ok(false);
+        }
+        handed_back.check = Some(check.clone());
+        handed_back.checks += 1;
+        Ok(true)
+    }
+
+    async fn handed_back(&self, session: Uuid) -> Result<HandedBack> {
+        Ok(self
+            .drafts
+            .lock()
+            .unwrap()
+            .get(&session)
+            .map(|(_, _, handed_back, _)| handed_back.clone())
+            .unwrap_or_default())
+    }
+
+    async fn finish(&self, session: Uuid) -> Result<()> {
+        self.drafts.lock().unwrap().remove(&session);
+        self.finished.lock().unwrap().push(session);
+        Ok(())
+    }
+
+    async fn stale(&self, before: DateTime<Utc>, _limit: u16) -> Result<Vec<StaleDraft>> {
+        Ok(self
+            .drafts
+            .lock()
+            .unwrap()
+            .iter()
+            .filter(|(_, (_, _, _, started))| *started < before)
+            .map(|(session, (owner, agent, _, _))| StaleDraft {
+                session: *session,
+                owner: owner.clone(),
+                agent: *agent,
+            })
+            .collect())
+    }
+}
+
+/// What the draft's session does with its prompt: the routines it checks,
+/// in order, written from the prompt.
+type Turn = Box<dyn Fn(&str) -> Vec<ActionConfiguration> + Send + Sync>;
+
+/// The routine sessions a draft opens: preparing and prompting are
+/// recorded, and the prompt's turn checks its routines into `rows` as the
+/// check route would, then ends, unless the session `hangs`.
+struct Sessions {
+    rows: Arc<Rows>,
+    code: Arc<Checker>,
+    turn: Turn,
+    hangs: bool,
+    refuses: Option<RoutineSessionError>,
+    prepared: Mutex<Vec<PrepareRoutineSession>>,
+    prompts: Mutex<Vec<String>>,
+    cancelled: Mutex<Vec<AgentSessionId>>,
+    deleted: Mutex<Vec<AgentSessionId>>,
+}
+
+impl Sessions {
+    fn new(rows: &Arc<Rows>, turn: Turn) -> Self {
+        Self {
+            rows: Arc::clone(rows),
+            code: Arc::new(Checker::default()),
+            turn,
+            hangs: false,
+            refuses: None,
+            prepared: Mutex::new(Vec::new()),
+            prompts: Mutex::new(Vec::new()),
+            cancelled: Mutex::new(Vec::new()),
+            deleted: Mutex::new(Vec::new()),
+        }
+    }
+}
+
+impl RoutineSessions for Sessions {
+    async fn validate(
+        &self,
+        _: ValidateRoutineSession,
+    ) -> Result<ValidatedRoutineSession, RoutineSessionError> {
+        unreachable!("drafts never validate a selection")
+    }
+
+    async fn prepare(
+        &self,
+        command: PrepareRoutineSession,
+    ) -> Result<PreparedRoutineSession, RoutineSessionError> {
+        if let Some(error) = self.refuses {
+            return Err(error);
+        }
+        let session_id = command.session_id;
+        self.prepared.lock().unwrap().push(command);
+        Ok(PreparedRoutineSession { session_id })
+    }
+
+    async fn prompt(
+        &self,
+        command: PromptRoutineSession,
+    ) -> Result<RoutinePromptAccepted, RoutineSessionError> {
+        self.prompts.lock().unwrap().push(command.prompt.clone());
+        for routine in (self.turn)(&command.prompt) {
+            let check = checked(self.code.as_ref(), routine).await;
+            self.rows
+                .record(
+                    command.action.session_id.as_uuid(),
+                    &command.action.owner,
+                    &check,
+                )
+                .await
+                .unwrap();
+        }
+        Ok(RoutinePromptAccepted {
+            action_id: command.action.action_id,
+            queued: false,
         })
     }
 
-    fn asked(&self) -> Vec<(String, String, Value)> {
-        self.asked.lock().unwrap().clone()
+    async fn status(
+        &self,
+        _: RoutineSessionAction,
+    ) -> Result<RoutineActionStatus, RoutineSessionError> {
+        Ok(if self.hangs {
+            RoutineActionStatus::Pending(RoutinePendingReason::Running)
+        } else {
+            RoutineActionStatus::Succeeded
+        })
+    }
+
+    async fn cancel(&self, command: RoutineSessionAction) -> Result<(), RoutineSessionError> {
+        self.cancelled.lock().unwrap().push(command.session_id);
+        Ok(())
+    }
+
+    async fn delete_draft(&self, command: RoutineSessionAction) -> Result<(), RoutineSessionError> {
+        self.deleted.lock().unwrap().push(command.session_id);
+        Ok(())
     }
 }
 
-impl DraftModel for Model {
-    async fn complete(
-        &self,
-        _: &MacroUserIdStr<'static>,
-        completion: DraftCompletion<'_>,
-    ) -> Option<Value> {
-        if completion.schema.name == "lookups" {
-            return Some(json!({ "lookups": self.lookups }));
-        }
-        if completion.schema.name == "symbols" {
-            self.symbol_requests
-                .lock()
-                .unwrap()
-                .push(completion.instructions.to_owned());
-            return Some(json!({ "symbols": self.symbols }));
-        }
-        if self.hangs {
-            std::future::pending::<()>().await;
-        }
-        self.asked.lock().unwrap().push((
-            completion.instructions.to_owned(),
-            completion.prompt.to_owned(),
-            completion.schema.schema.clone(),
-        ));
-        self.answers.lock().unwrap().pop_front().flatten()
+/// What the check route answers for `routine`: its code type-checked as
+/// saving checks it.
+async fn checked(code: &Checker, routine: ActionConfiguration) -> RoutineCheck {
+    let mut routine = routine;
+    routine.task = code_check::named_steps(&routine.task);
+    let (steps, task) = match code_check::checked_task(code, &routine.task, None).await {
+        Ok(task) => (Vec::new(), task),
+        Err(code_check::CodeCheckError::DoesNotCheck { steps }) => (
+            crate::domain::service::step_positions(&routine.task, steps),
+            routine.task.clone(),
+        ),
+        Err(error) => panic!("{error}"),
+    };
+    routine.task = task;
+    RoutineCheck {
+        ok: steps.is_empty(),
+        problems: Vec::new(),
+        steps,
+        routine,
     }
 }
 
@@ -77,11 +217,20 @@ impl AiAdmissionService for Refused {
     }
 }
 
-fn drafts(checker: Checker, model: &Arc<Model>) -> RoutineDrafts<Checker, Model> {
+fn agent() -> DraftAgent {
+    DraftAgent {
+        bot: bot_id::MACRO_NEW_BOT_ID,
+        model: Some("google/gemini-3.8-flash".into()),
+    }
+}
+
+fn drafts(rows: &Arc<Rows>, sessions: &Arc<Sessions>) -> RoutineDrafts<Checker, Sessions> {
     RoutineDrafts::new(
-        Arc::new(checker),
-        Arc::clone(model),
+        Arc::new(Checker::default()),
+        Arc::clone(sessions),
+        Arc::clone(rows) as Arc<dyn DraftHandBacks>,
         Arc::new(DisabledAiAdmissionService),
+        agent(),
     )
     .with_conditions_enabled(true)
 }
@@ -110,11 +259,27 @@ fn agent_step() -> Value {
     json!({ "type": "agent", "model": "anthropic/claude-sonnet-5-5", "instructions": "Research it." })
 }
 
-fn answer(triggers: Value, steps: Value) -> Option<Value> {
-    Some(json!({ "name": " Label invoices ", "triggers": triggers, "steps": steps }))
+/// A routine as `macro.routines.check` sends it.
+fn configuration(name: &str, trigger: Value, steps: Value) -> ActionConfiguration {
+    ActionConfiguration {
+        name: name.into(),
+        trigger: serde_json::from_value(trigger).unwrap(),
+        kind: ActionKind::Agent,
+        task: json!({ "steps": steps }),
+        enabled: true,
+        run_visibility: Default::default(),
+        description: String::new(),
+    }
 }
 
-async fn draft(drafts: &RoutineDrafts<Checker, Model>, request: DraftRequest) -> Draft {
+fn message_posted(ids: &[Uuid]) -> Value {
+    json!({
+        "type": "events",
+        "filters": [{ "events": ["channel.message_posted"], "ids": ids }],
+    })
+}
+
+async fn draft(drafts: &RoutineDrafts<Checker, Sessions>, request: DraftRequest) -> Draft {
     drafts.draft(owner(), request, context()).await.unwrap()
 }
 
@@ -132,305 +297,297 @@ fn drafted_step(draft: Draft) -> DraftedStep {
     }
 }
 
-#[tokio::test]
-async fn drafts_an_event_routine_with_named_code() {
-    let model = Model::answering([answer(
-        json!([{ "type": "event", "events": ["email.message_received", "github", "nope"], "ids": [] }]),
-        json!([code_step(
-            "Label invoices",
-            "export async function main() {}"
-        )]),
-    )]);
-    let drafts = drafts(Checker::default(), &model);
-
-    let routine = drafted_routine(draft(&drafts, routine("label invoices")).await);
-
-    assert_eq!(routine.name, "Label invoices");
-    assert_eq!(
-        serde_json::to_value(&routine.trigger).unwrap(),
-        json!({ "type": "events", "filters": [{ "events": ["email.message_received"] }] })
-    );
-    assert_eq!(routine.steps[0]["id"], "label_invoices");
-    assert!(routine.problems.is_empty());
-    let asked = model.asked();
-    let (instructions, prompt, schema) = &asked[0];
-    assert_eq!(prompt, "label invoices");
-    assert!(instructions.contains(&format!(r#""me":"{OWNER}""#)));
-    assert!(instructions.contains("TaskNamespace methods for: label invoices"));
-    assert!(instructions.contains("\"timezone\":\"America/New_York\""));
-    // In the scheduler's cron, weekday 1 is Sunday: "1-5" would skip Friday.
-    assert!(instructions.contains("weekdays named MON-SUN"));
-    assert_eq!(
-        schema["properties"]["steps"]["items"]["properties"]["type"]["enum"],
-        json!(["code", "agent"])
-    );
+/// A workspace's channels as a search pages through them: `per_page` at a
+/// time, best match first, and the session pages until it finds the one
+/// named exactly.
+struct Channels {
+    ranked: Vec<(String, Uuid)>,
+    per_page: usize,
 }
 
-#[tokio::test]
-async fn a_drafted_routine_never_operates_as_its_owner() {
-    // Only the owner turns this on, by asking for it; a draft that tries is
-    // still attributed to the agent.
-    let model = Model::answering([Some(json!({
-        "name": "Post standup",
-        "triggers": [],
-        "dangerously_operate_as_user": true,
-        "dangerouslyOperateAsUser": true,
-        "steps": [{
-            "type": "code",
-            "title": "Post standup",
-            "summary": "",
-            "source": "export async function main() {}",
-            "dangerously_operate_as_user": true,
-        }],
-    }))]);
-    let drafts = drafts(Checker::default(), &model);
-
-    let draft = draft(&drafts, routine("post my standup as me in eng")).await;
-
-    let routine = serde_json::to_value(&draft).unwrap();
-    assert_eq!(
-        routine,
-        json!({
-            "outcome": "routine",
-            "name": "Post standup",
-            "trigger": null,
-            "steps": [{
-                "type": "code",
-                "id": "post_standup",
-                "title": "Post standup",
-                "source": "export async function main() {}",
-            }],
-            "problems": [],
-        })
-    );
-}
-
-#[tokio::test]
-async fn keeps_one_off_times_beside_repeating_schedules() {
-    let model = Model::answering([answer(
-        json!([
-            { "type": "once", "at": "2026-12-01T14:30:00-05:00" },
-            { "type": "cron", "expression": "0 0 9 * * MON", "timezone": "America/New_York" },
-            { "type": "once", "at": "next week" },
-        ]),
-        json!([agent_step()]),
-    )]);
-    let drafts = drafts(Checker::default(), &model);
-
-    let routine = drafted_routine(draft(&drafts, routine("remind me")).await);
-
-    assert_eq!(
-        serde_json::to_value(&routine.trigger).unwrap(),
-        json!({ "type": "multiple", "triggers": [
-            { "type": "once", "at": "2026-12-01T19:30:00Z" },
-            { "type": "cron", "schedule": "0 0 9 * * MON", "timezone": "America/New_York" },
-        ] })
-    );
-}
-
-#[tokio::test]
-async fn gives_an_ask_ai_step_without_a_model_the_persons() {
-    let model = Model::answering([answer(
-        json!([]),
-        json!([{ "type": "agent", "instructions": "Research it.", "extra": true }]),
-    )]);
-    let drafts = drafts(Checker::default(), &model);
-
-    let routine = drafted_routine(draft(&drafts, routine("research")).await);
-
-    assert_eq!(routine.trigger, None);
-    assert_eq!(
-        routine.steps,
-        vec![
-            json!({ "type": "agent", "model": "anthropic/claude-sonnet-5-5", "instructions": "Research it." })
-        ]
-    );
-}
-
-#[tokio::test]
-async fn explains_drafts_it_cannot_use() {
-    for (output, message) in [
-        (
-            Some(json!({ "name": "x" })),
-            "The draft came back incomplete. Try rephrasing.",
-        ),
-        (
-            answer(json!([]), json!([{ "type": "shell", "command": "ls" }])),
-            "The draft used steps Macro can’t run. Try rephrasing.",
-        ),
-        (None, ROUTINE_FAILED),
-    ] {
-        let model = Model::answering([output]);
-        assert_eq!(
-            draft(&drafts(Checker::default(), &model), routine("x")).await,
-            failed(message)
-        );
+impl Channels {
+    fn find(&self, name: &str) -> (Option<Uuid>, usize) {
+        let mut pages = 0;
+        for page in self.ranked.chunks(self.per_page) {
+            pages += 1;
+            if let Some((_, id)) = page.iter().find(|(channel, _)| channel == name) {
+                return (Some(*id), pages);
+            }
+        }
+        (None, pages)
     }
 }
 
 #[tokio::test]
-async fn refuses_a_trigger_that_asks_ai_where_conditions_are_off() {
-    let asks = || {
-        answer(
-            json!([{ "type": "event", "events": ["email.message_received"], "condition": "Is it an invoice?" }]),
-            json!([agent_step()]),
-        )
-    };
-    let model = Model::answering([asks()]);
-    let off = drafts(Checker::default(), &model).with_conditions_enabled(false);
-    let Draft::Failed { message } = draft(&off, routine("invoices")).await else {
-        panic!("a condition can't be answered here");
-    };
-    assert!(message.contains("needs AI to decide when it runs"));
-    assert!(model.asked()[0].0.contains("never add a \"condition\""));
+async fn a_draft_runs_in_a_hidden_read_only_session_and_hands_back_its_last_check() {
+    let rows = Arc::new(Rows::default());
+    let sessions = Arc::new(Sessions::new(
+        &rows,
+        Box::new(|_| {
+            vec![
+                // Its first check finds the code doesn't type-check...
+                configuration(
+                    "Bug tasks",
+                    message_posted(&[]),
+                    json!([code_step("Make a task", "bad")]),
+                ),
+                // ...so it fixes the code and checks the finished routine.
+                configuration(
+                    " Bug tasks ",
+                    message_posted(&[]),
+                    json!([code_step("Make a task", "good")]),
+                ),
+            ]
+        }),
+    ));
+    let drafts = drafts(&rows, &sessions);
 
-    let model = Model::answering([asks()]);
-    let routine = drafted_routine(draft(&drafts(Checker::default(), &model), routine("x")).await);
+    let drafted = drafted_routine(draft(&drafts, routine(BUG_REPORTS)).await);
+
+    assert_eq!(drafted.name, "Bug tasks");
+    assert!(drafted.problems.is_empty());
+    assert_eq!(drafted.steps.len(), 1);
+    assert_eq!(drafted.steps[0]["source"], "good");
+    // Saving names code steps; the check named this one as saving will.
+    assert_eq!(drafted.steps[0]["id"], "make_a_task");
+    let prepared = sessions.prepared.lock().unwrap().clone();
+    let [prepared] = prepared.as_slice() else {
+        panic!("one session per draft");
+    };
+    assert_eq!(prepared.visibility, SessionVisibility::Hidden);
+    assert_eq!(prepared.source, SessionSource::Routine);
     assert_eq!(
-        serde_json::to_value(&routine.trigger).unwrap()["filters"][0]["condition"],
-        "Is it an invoice?"
+        prepared.origin,
+        trigger_context::TriggerOrigin::RoutineDraft { by: owner() }
     );
+    assert_eq!(prepared.selection.bot_id, bot_id::MACRO_NEW_BOT_ID);
+    assert_eq!(
+        prepared.selection.model.as_deref(),
+        Some("google/gemini-3.8-flash")
+    );
+    assert!(prepared.selection.mcp_servers.is_empty());
+    let prompt = sessions.prompts.lock().unwrap()[0].clone();
+    assert!(prompt.contains(BUG_REPORTS), "{prompt}");
+    assert!(prompt.contains("macro.routines.check"), "{prompt}");
+    assert!(prompt.contains("Never create"), "{prompt}");
+    // The session and its row are gone once the draft is back.
+    let session = prepared.session_id;
+    assert_eq!(*sessions.deleted.lock().unwrap(), [session]);
+    assert_eq!(*rows.finished.lock().unwrap(), [session.as_uuid()]);
+    assert!(rows.drafts.lock().unwrap().is_empty());
+}
+
+/// The bug a large workspace hit: the web sent every channel and the
+/// request was refused as too large. The request carries the description
+/// and settings alone (lists older web builds still send are ignored); the
+/// session finds the channel itself and the draft watches it.
+#[tokio::test]
+async fn a_large_workspace_drafts_the_channel_the_description_names() {
+    let bug_reports = macro_uuid::generate_uuid_v7();
+    let mut ranked: Vec<(String, Uuid)> = (0..5_000)
+        .map(|index| (format!("channel-{index:04}"), macro_uuid::generate_uuid_v7()))
+        .collect();
+    ranked[4_000] = ("bug-reports".to_owned(), bug_reports);
+    let channels = Arc::new(Channels {
+        ranked,
+        per_page: 50,
+    });
+    let found = Arc::clone(&channels);
+    let rows = Arc::new(Rows::default());
+    let sessions = Arc::new(Sessions::new(
+        &rows,
+        Box::new(move |_| {
+            let (id, _) = found.find("bug-reports");
+            vec![configuration(
+                "Tasks from bug reports",
+                message_posted(&[id.unwrap()]),
+                json!([code_step("Make a task", "good")]),
+            )]
+        }),
+    ));
+    let drafts = drafts(&rows, &sessions);
+    let workspace: Vec<Value> = channels
+        .ranked
+        .iter()
+        .map(|(name, id)| json!({ "name": name, "id": id }))
+        .collect();
+    let context: DraftContext = serde_json::from_value(json!({
+        "timezone": "America/New_York",
+        "agentModel": "anthropic/claude-sonnet-5-5",
+        "code": true,
+        "conditions": true,
+        "workspace": { "channels": workspace },
+    }))
+    .unwrap();
+
+    let drafted = drafted_routine(drafts.draft(owner(), routine(BUG_REPORTS), context).await.unwrap());
+
+    let Some(ActionTrigger::Events { filters }) = drafted.trigger else {
+        panic!("expected an event trigger: {:?}", drafted.trigger);
+    };
+    assert_eq!(
+        serde_json::to_value(&filters).unwrap()[0]["ids"],
+        json!([bug_reports])
+    );
+    let prompt = sessions.prompts.lock().unwrap()[0].clone();
+    assert!(!prompt.contains("channel-0001"), "the prompt carries no workspace");
+}
+
+/// Search ranks loose matches before the exact name, so the channel isn't
+/// on its first page; the session pages on until it finds it.
+#[tokio::test]
+async fn a_channel_past_searchs_first_page_is_still_found() {
+    let bug_reports = macro_uuid::generate_uuid_v7();
+    let mut ranked: Vec<(String, Uuid)> = [
+        "bug-reports-archive",
+        "bug-reports-2025",
+        "bug-reports-mobile",
+        "bug-reports-web",
+        "old-bug-reports",
+        "bug-reports-triage",
+    ]
+    .into_iter()
+    .map(|name| (name.to_owned(), macro_uuid::generate_uuid_v7()))
+    .collect();
+    ranked.push(("bug-reports".to_owned(), bug_reports));
+    let channels = Arc::new(Channels { ranked, per_page: 5 });
+    let (_, pages) = channels.find("bug-reports");
+    assert_eq!(pages, 2, "the exact channel is outside the top five");
+    let rows = Arc::new(Rows::default());
+    let sessions = Arc::new(Sessions::new(
+        &rows,
+        Box::new(move |_| {
+            let (id, _) = channels.find("bug-reports");
+            vec![configuration(
+                "Tasks from bug reports",
+                message_posted(&[id.unwrap()]),
+                json!([code_step("Make a task", "good")]),
+            )]
+        }),
+    ));
+
+    let drafted = drafted_routine(draft(&drafts(&rows, &sessions), routine(BUG_REPORTS)).await);
+
+    let trigger = serde_json::to_value(drafted.trigger).unwrap();
+    assert_eq!(trigger["filters"][0]["ids"], json!([bug_reports]));
 }
 
 #[tokio::test]
-async fn fixes_code_the_type_checker_rejects() {
-    let model = Model::answering([
-        answer(json!([]), json!([agent_step(), code_step("Count", "bad")])),
-        answer(json!([]), json!([agent_step(), code_step("Count", "good")])),
-    ]);
-    let checker = Checker::default();
-    let drafts = drafts(checker, &model);
+async fn code_still_failing_at_the_last_check_comes_back_on_its_step() {
+    let rows = Arc::new(Rows::default());
+    let sessions = Arc::new(Sessions::new(
+        &rows,
+        Box::new(|_| {
+            vec![configuration(
+                "Research and label",
+                message_posted(&[]),
+                json!([agent_step(), code_step("Label", "bad")]),
+            )]
+        }),
+    ));
 
-    let routine = drafted_routine(draft(&drafts, routine("count")).await);
+    let drafted = drafted_routine(draft(&drafts(&rows, &sessions), routine("label mail")).await);
 
-    assert!(routine.problems.is_empty());
-    assert_eq!(routine.steps[1]["source"], "good");
-    let asked = model.asked();
-    assert_eq!(asked.len(), 2);
-    let fix = &asked[1].1;
-    assert!(fix.starts_with("count\n\nYour routine so far, as JSON:\n"));
-    assert!(fix.contains("\"Count\":\nTS2339"));
-    assert!(fix.contains("The SDK's declarations for those types:\ndeclarations for 1 problems"));
+    let [problem] = drafted.problems.as_slice() else {
+        panic!("{:?}", drafted.problems);
+    };
+    // Its place among all the steps, not among code steps.
+    assert_eq!(problem.index, 1);
+    assert!(problem.problems[0].contains("TS2339"));
 }
 
 #[tokio::test]
-async fn returns_problems_it_could_not_fix_on_their_step() {
-    let bad = || answer(json!([]), json!([agent_step(), code_step("Count", "bad")]));
-    let model = Model::answering([bad(), bad(), bad(), bad()]);
-    let drafts = drafts(Checker::default(), &model);
+async fn a_session_that_hands_nothing_back_says_the_draft_failed() {
+    let rows = Arc::new(Rows::default());
+    let sessions = Arc::new(Sessions::new(&rows, Box::new(|_| Vec::new())));
 
-    let routine = drafted_routine(draft(&drafts, routine("count")).await);
+    assert_eq!(
+        draft(&drafts(&rows, &sessions), routine("label mail")).await,
+        failed(ROUTINE_FAILED)
+    );
+    assert_eq!(sessions.deleted.lock().unwrap().len(), 1);
+}
 
-    assert_eq!(model.asked().len(), 1 + MAX_CODE_FIXES);
-    assert_eq!(routine.problems.len(), 1);
-    assert_eq!(routine.problems[0].index, 1);
-    assert!(routine.problems[0].problems[0].starts_with("TS2339"));
+#[tokio::test(start_paused = true)]
+async fn a_draft_that_runs_out_of_time_says_so_and_cleans_up() {
+    let rows = Arc::new(Rows::default());
+    let mut sessions = Sessions::new(&rows, Box::new(|_| Vec::new()));
+    sessions.hangs = true;
+    let sessions = Arc::new(sessions);
+
+    let draft = draft(&drafts(&rows, &sessions), routine("label mail")).await;
+
+    assert_eq!(draft, failed(TIMED_OUT));
+    let session = sessions.prepared.lock().unwrap()[0].session_id;
+    assert_eq!(*sessions.cancelled.lock().unwrap(), [session]);
+    assert_eq!(*sessions.deleted.lock().unwrap(), [session]);
+    assert!(rows.drafts.lock().unwrap().is_empty());
+}
+
+#[tokio::test(start_paused = true)]
+async fn a_check_handed_back_before_the_time_runs_out_is_kept() {
+    let rows = Arc::new(Rows::default());
+    let mut sessions = Sessions::new(
+        &rows,
+        Box::new(|_| {
+            vec![configuration(
+                "Bug tasks",
+                message_posted(&[]),
+                json!([code_step("Make a task", "good")]),
+            )]
+        }),
+    );
+    sessions.hangs = true;
+    let sessions = Arc::new(sessions);
+
+    let drafted = drafted_routine(draft(&drafts(&rows, &sessions), routine(BUG_REPORTS)).await);
+
+    assert_eq!(drafted.name, "Bug tasks");
 }
 
 #[tokio::test]
-async fn asks_again_once_when_the_model_gives_no_answer() {
-    let model = Model::answering([None, answer(json!([]), json!([agent_step()]))]);
-    let drafts = drafts(Checker::default(), &model);
-
-    drafted_routine(draft(&drafts, routine("x")).await);
-
-    assert_eq!(model.asked().len(), 2);
-}
-
-/// Asks for a routine with `code`, and checks the model was told to write
-/// Ask AI steps only.
-async fn assert_ask_ai_only<Code: RoutineCode>(code: Code, context: DraftContext) {
-    let model = Model::answering([answer(json!([]), json!([agent_step()]))]);
+async fn a_refused_admission_is_an_error_and_starts_no_session() {
+    let rows = Arc::new(Rows::default());
+    let sessions = Arc::new(Sessions::new(&rows, Box::new(|_| Vec::new())));
     let drafts = RoutineDrafts::new(
-        Arc::new(code),
-        Arc::clone(&model),
-        Arc::new(DisabledAiAdmissionService),
-    );
-    drafted_routine(drafts.draft(owner(), routine("x"), context).await.unwrap());
-    let (instructions, _, schema) = &model.asked()[0];
-    assert!(instructions.contains("Code steps are unavailable here"));
-    assert_eq!(
-        schema["properties"]["steps"]["items"]["properties"]["type"]["enum"],
-        json!(["agent"])
-    );
-}
-
-#[tokio::test]
-async fn writes_ask_ai_only_when_code_steps_are_off_or_cannot_be_checked() {
-    let off = DraftContext {
-        code: false,
-        ..context()
-    };
-    assert_ask_ai_only(Checker::default(), off).await;
-    assert_ask_ai_only(crate::domain::ports::NoRoutineCode, context()).await;
-}
-
-#[tokio::test]
-async fn bills_the_draft_before_asking_the_model() {
-    let model = Model::answering([]);
-    let refused = RoutineDrafts::new(
         Arc::new(Checker::default()),
-        Arc::clone(&model),
+        Arc::clone(&sessions),
+        Arc::clone(&rows) as Arc<dyn DraftHandBacks>,
         Arc::new(Refused),
+        agent(),
     );
 
-    let error = refused
-        .draft(owner(), routine("x"), context())
+    let error = drafts
+        .draft(owner(), routine("label mail"), context())
         .await
         .unwrap_err();
 
     assert!(error.downcast_ref::<AiAdmissionError>().is_some());
-    assert!(model.asked().is_empty());
+    assert!(sessions.prepared.lock().unwrap().is_empty());
 }
 
 #[tokio::test]
-async fn refuses_requests_it_cannot_draft() {
-    let model = Model::answering([]);
-    let drafts = drafts(Checker::default(), &model);
-    let invalid = |draft: DraftRequest, context: DraftContext| {
-        let drafts = &drafts;
-        async move {
-            drafts
-                .draft(owner(), draft, context)
-                .await
-                .unwrap_err()
-                .downcast::<InvalidDraft>()
-                .is_ok()
-        }
-    };
-    assert!(invalid(routine("  "), context()).await);
-    assert!(
-        invalid(
-            routine("x"),
-            DraftContext {
-                timezone: "Mars/Olympus".into(),
-                ..context()
-            }
-        )
+async fn a_session_the_allowance_refuses_is_an_error_and_cleaned_up() {
+    let rows = Arc::new(Rows::default());
+    let mut sessions = Sessions::new(&rows, Box::new(|_| Vec::new()));
+    sessions.refuses = Some(RoutineSessionError::Admission(AiAdmissionError::Unavailable));
+    let sessions = Arc::new(sessions);
+
+    let error = drafts(&rows, &sessions)
+        .draft(owner(), routine("label mail"), context())
         .await
-    );
-    assert!(
-        invalid(
-            DraftRequest::ChangeStep {
-                instruction: "shorter".into(),
-                routine: RoutineSoFar {
-                    trigger: None,
-                    steps: vec![agent_step()],
-                },
-                index: 0,
-            },
-            context()
-        )
-        .await
-    );
-    assert!(model.asked().is_empty());
+        .unwrap_err();
+
+    assert!(error.downcast_ref::<AiAdmissionError>().is_some());
+    assert!(rows.drafts.lock().unwrap().is_empty());
+    assert_eq!(sessions.deleted.lock().unwrap().len(), 1);
 }
 
 fn add(description: &str, steps: Vec<Value>, kind: Option<StepKind>) -> DraftRequest {
     DraftRequest::AddStep {
         description: description.into(),
         routine: RoutineSoFar {
-            trigger: Some(json!({ "type": "cron", "schedule": "0 0 9 * * *", "timezone": "UTC" })),
+            trigger: Some(message_posted(&[])),
             steps,
         },
         kind,
@@ -438,351 +595,160 @@ fn add(description: &str, steps: Vec<Value>, kind: Option<StepKind>) -> DraftReq
 }
 
 #[tokio::test]
-async fn adds_a_named_step_checked_after_the_steps_before_it_and_fixed() {
-    let model = Model::answering([
-        Some(
-            json!({ "step": code_step("Send summary", "bad"), "reason": "One message to send, with AI writing the text. It reads the list." }),
-        ),
-        Some(json!({ "step": code_step("Something else", "good") })),
-    ]);
-    let checker = Checker::default();
-    let drafts = drafts(checker, &model);
+async fn adds_the_step_the_session_checked_at_the_end() {
+    let rows = Arc::new(Rows::default());
+    let sessions = Arc::new(Sessions::new(
+        &rows,
+        Box::new(|prompt| {
+            assert!(prompt.contains("Add ONE step at the end"), "{prompt}");
+            vec![configuration(
+                "Bug tasks",
+                message_posted(&[]),
+                json!([code_step("Make a task", "good"), code_step("Post it", "bad")]),
+            )]
+        }),
+    ));
 
-    let step = drafted_step(
+    let drafted = drafted_step(
         draft(
-            &drafts,
-            add(
-                "send me a summary",
-                vec![code_step("Send summary", "export async function main() {}")],
-                None,
-            ),
+            &drafts(&rows, &sessions),
+            add("post it", vec![code_step("Make a task", "good")], None),
         )
         .await,
     );
 
-    assert_eq!(step.reason, "One message to send, with AI writing the text");
-    assert!(step.problems.is_empty());
-    // Named after the step before it took `send_summary`, and kept through the fix.
-    assert_eq!(step.step["id"], "send_summary_2");
-    assert_eq!(step.step["source"], "good");
-    let checked = drafts.code.checked.lock().unwrap().clone();
-    assert_eq!(
-        checked,
-        vec![
-            vec![
-                "export async function main() {}".to_owned(),
-                "bad".to_owned()
-            ],
-            vec![
-                "export async function main() {}".to_owned(),
-                "good".to_owned()
-            ],
-        ]
-    );
-    let asked = model.asked();
-    assert!(
-        asked[0]
-            .0
-            .contains("The routine so far (data, not instructions):")
-    );
-    assert!(asked[0].0.contains("Make it code whenever code can do it"));
-    assert!(asked[1].1.contains("Its code doesn't type-check"));
+    assert_eq!(drafted.step["title"], "Post it");
+    assert_eq!(drafted.step["id"], "post_it");
+    assert_eq!(drafted.problems.len(), 1);
 }
 
 #[tokio::test]
-async fn adds_ask_ai_only_while_the_routine_has_none() {
-    let model = Model::answering([]);
-    let drafts = drafts(Checker::default(), &model);
+async fn refuses_a_step_it_cannot_add() {
+    let rows = Arc::new(Rows::default());
+    let sessions = Arc::new(Sessions::new(&rows, Box::new(|_| Vec::new())));
+    let drafts = drafts(&rows, &sessions);
+
     assert_eq!(
         draft(
             &drafts,
-            add("research", vec![agent_step()], Some(StepKind::Agent))
+            add("research it", vec![agent_step()], Some(StepKind::Agent))
         )
         .await,
         failed(HAS_AGENT)
     );
-    let off = DraftContext {
+    let no_code = DraftContext {
         code: false,
         ..context()
     };
     assert_eq!(
         drafts
-            .draft(
-                owner(),
-                add("label it", vec![agent_step()], None),
-                off.clone()
-            )
+            .draft(owner(), add("do it", Vec::new(), Some(StepKind::Code)), no_code)
             .await
             .unwrap(),
-        failed(HAS_AGENT)
+        failed(NO_CODE)
     );
-    assert!(model.asked().is_empty());
-
-    let model = Model::answering([Some(json!({ "step": agent_step(), "reason": "x" }))]);
-    let drafts = self::drafts(Checker::default(), &model);
-    let step = drafted_step(
-        drafts
-            .draft(owner(), add("research", vec![], None), off)
-            .await
-            .unwrap(),
-    );
-    assert_eq!(step.step["type"], "agent");
-    assert!(model.asked()[0].0.contains("It must be an Ask AI step."));
+    assert!(sessions.prepared.lock().unwrap().is_empty());
 }
 
 #[tokio::test]
-async fn refuses_a_step_of_the_wrong_kind() {
-    let model = Model::answering([Some(json!({ "step": agent_step(), "reason": "x" }))]);
-    let drafts = drafts(Checker::default(), &model);
+async fn a_session_that_adds_the_wrong_kind_of_step_fails_the_draft() {
+    let rows = Arc::new(Rows::default());
+    let sessions = Arc::new(Sessions::new(
+        &rows,
+        Box::new(|_| {
+            vec![configuration(
+                "Bug tasks",
+                message_posted(&[]),
+                json!([code_step("Make a task", "good"), agent_step()]),
+            )]
+        }),
+    ));
 
     assert_eq!(
-        draft(&drafts, add("label it", vec![agent_step()], None)).await,
+        draft(
+            &drafts(&rows, &sessions),
+            add("post it", vec![code_step("Make a task", "good")], Some(StepKind::Code)),
+        )
+        .await,
         failed(STEP_FAILED)
     );
 }
 
 #[tokio::test]
 async fn changes_a_code_step_in_place_keeping_its_output_name() {
-    let model = Model::answering([Some(json!({ "step": {
-        "type": "code", "id": "renamed", "title": "Label bills", "source": "export async function main() { return 2 }",
-    } }))]);
-    let checker = Checker::default();
-    let drafts = drafts(checker, &model);
-    let steps = vec![
-        json!({ "type": "code", "id": "label", "title": "Label", "source": "export async function main() { return 1 }" }),
-        code_step("Report", "export async function main() {}"),
-    ];
+    let rows = Arc::new(Rows::default());
+    let sessions = Arc::new(Sessions::new(
+        &rows,
+        Box::new(|_| {
+            vec![configuration(
+                "Bug tasks",
+                message_posted(&[]),
+                json!([{ "type": "code", "id": "renamed", "title": "Make two tasks", "summary": "", "source": "good again" }]),
+            )]
+        }),
+    ));
+    let request = DraftRequest::ChangeStep {
+        instruction: "make two".into(),
+        routine: RoutineSoFar {
+            trigger: None,
+            steps: vec![json!({ "type": "code", "id": "make_a_task", "title": "Make a task", "summary": "", "source": "good" })],
+        },
+        index: 0,
+    };
 
-    let step = drafted_step(
-        draft(
-            &drafts,
+    let drafted = drafted_step(draft(&drafts(&rows, &sessions), request).await);
+
+    assert_eq!(drafted.step["id"], "make_a_task");
+    assert_eq!(drafted.step["source"], "good again");
+}
+
+#[tokio::test]
+async fn refuses_requests_it_cannot_draft() {
+    let rows = Arc::new(Rows::default());
+    let sessions = Arc::new(Sessions::new(&rows, Box::new(|_| Vec::new())));
+    let drafts = drafts(&rows, &sessions);
+    for (request, context) in [
+        (routine("  "), context()),
+        (
+            routine("label mail"),
+            DraftContext {
+                timezone: "Mars/Olympus".into(),
+                ..context()
+            },
+        ),
+        (
             DraftRequest::ChangeStep {
-                instruction: "label bills too".into(),
+                instruction: "make two".into(),
                 routine: RoutineSoFar {
                     trigger: None,
-                    steps,
+                    steps: vec![agent_step()],
                 },
                 index: 0,
             },
-        )
-        .await,
-    );
-
-    assert_eq!(step.step["id"], "label");
-    assert_eq!(step.step["title"], "Label bills");
-    assert_eq!(step.reason, "");
-    assert_eq!(
-        drafts.code.checked.lock().unwrap()[0],
-        vec![
-            "export async function main() { return 2 }".to_owned(),
-            "export async function main() {}".to_owned(),
-        ]
-    );
-    let (instructions, prompt, _) = &model.asked()[0];
-    assert_eq!(prompt, "label bills too");
-    assert!(instructions.contains("The person wants to change this code step:"));
-    assert!(instructions.contains("TaskNamespace methods for: Label: label bills too"));
-}
-
-#[tokio::test]
-async fn reads_the_reference_for_the_symbols_its_code_will_use_before_writing() {
-    let model = Arc::new(Model {
-        answers: Mutex::new([answer(json!([]), json!([code_step("Count", "good")]))].into()),
-        symbols: vec!["TaskNamespace.search".into(), "SearchOpts".into()],
-        ..Default::default()
-    });
-    let drafts = drafts(Checker::default(), &model);
-
-    drafted_routine(draft(&drafts, routine("count my tasks")).await);
-
-    let read = model.symbol_requests.lock().unwrap().clone();
-    assert_eq!(read.len(), 1);
-    assert!(read[0].contains("TaskNamespace methods for: count my tasks"));
-    assert!(read[0].ends_with(READ_SYMBOLS));
-    let (instructions, _, _) = &model.asked()[0];
-    assert!(instructions.contains("reference for TaskNamespace.search, SearchOpts"));
-    assert!(!instructions.contains(READ_SYMBOLS));
-}
-
-#[tokio::test]
-async fn writes_without_references_when_it_names_none_or_writes_no_code() {
-    let model = Model::answering([answer(json!([]), json!([code_step("Count", "good")]))]);
-    let drafts = drafts(Checker::default(), &model);
-    drafted_routine(draft(&drafts, routine("count")).await);
-    assert!(
-        !model.asked()[0]
-            .0
-            .contains("The SDK reference for what the code uses")
-    );
-
-    let off = DraftContext {
-        code: false,
-        ..context()
-    };
-    let model = Model::answering([answer(json!([]), json!([agent_step()]))]);
-    let drafts = self::drafts(Checker::default(), &model);
-    drafts
-        .draft(owner(), routine("research"), off)
-        .await
-        .unwrap();
-    assert!(model.symbol_requests.lock().unwrap().is_empty());
-}
-
-#[test]
-fn keeps_one_short_reason_and_drops_the_model_thinking_aloud() {
-    assert_eq!(
-        short_reason("  Sends one message. Then more. "),
-        "Sends one message"
-    );
-    assert_eq!(short_reason("Runs every time!"), "Runs every time");
-    assert_eq!(short_reason("v1.2 changes nothing"), "v1.2 changes nothing");
-    let rambling = "Let me think about whether this should be code or not because the person said they want to send something and it could be either";
-    assert_eq!(short_reason(rambling), "");
-}
-
-const BUG_REPORTS: &str = "every time a message gets sent in bug-reports make a task";
-
-#[tokio::test]
-async fn a_large_workspace_drafts_the_channel_the_description_names() {
-    // The channel the person named is far past what any list sent with the
-    // request could show the model.
-    let bug_reports = Uuid::from_u128(4_000);
-    let channels: Vec<Value> = (0..5_000u128)
-        .map(|n| {
-            let name = if n == 4_000 {
-                "bug-reports".to_owned()
-            } else {
-                format!("channel-{n}")
-            };
-            json!({ "name": name, "id": Uuid::from_u128(n).to_string() })
-        })
-        .collect();
-    let context: DraftContext = serde_json::from_value(json!({
-        "timezone": "America/New_York",
-        "agentModel": "anthropic/claude-sonnet-5-5",
-        "code": true,
-        "conditions": true,
-        "workspace": { "channels": channels },
-    }))
-    .unwrap();
-    let model = Arc::new(Model {
-        answers: Mutex::new(VecDeque::from([answer(
-            json!([{ "type": "event", "events": ["channel.message_posted"], "ids": [bug_reports] }]),
-            json!([code_step("Make a task", "export async function main() {}")]),
-        )])),
-        lookups: vec![json!({ "kind": "channel", "name": "bug-reports" })],
-        ..Default::default()
-    });
-    let checker = Checker {
-        runs: Some(json!([{
-            "kind": "channel",
-            "name": "bug-reports",
-            "matches": [
-                { "name": "bug-reports-archive", "id": Uuid::from_u128(4_001).to_string() },
-                { "name": "bug-reports", "id": bug_reports.to_string() },
-            ],
-        }])),
-        ..Default::default()
-    };
-    let drafts = drafts(checker, &model);
-
-    let routine = drafted_routine(
-        drafts
-            .draft(owner(), routine(BUG_REPORTS), context)
-            .await
-            .unwrap(),
-    );
-
-    let asked = model.asked();
-    let (instructions, _, _) = &asked[0];
-    assert!(instructions.contains(&format!(r#"{{"name":"bug-reports","id":"{bug_reports}"}}"#)));
-    assert!(!instructions.contains("channel-0"));
-    assert_eq!(
-        serde_json::to_value(&routine.trigger).unwrap(),
-        json!({ "type": "events", "filters": [{ "events": ["channel.message_posted"], "ids": [bug_reports] }] })
-    );
-}
-
-#[tokio::test]
-async fn looks_up_the_names_as_a_dry_run_and_counts_its_turns() {
-    let model = Arc::new(Model {
-        answers: Mutex::new(VecDeque::from([answer(json!([]), json!([agent_step()]))])),
-        lookups: vec![
-            json!({ "kind": "label", "name": "Finance" }),
-            json!({ "kind": "person", "name": "  " }),
-        ],
-        ..Default::default()
-    });
-    let checker = Arc::new(Checker {
-        runs: Some(
-            json!([{ "kind": "label", "name": "Finance", "matches": [{ "name": "Finance", "id": "l1" }] }]),
+            context(),
         ),
-        ..Default::default()
-    });
-    let drafts = RoutineDrafts::new(
-        Arc::clone(&checker),
-        Arc::clone(&model),
-        Arc::new(DisabledAiAdmissionService),
-    );
-
-    drafted_routine(draft(&drafts, routine("label finance mail")).await);
-
-    // Blank names are dropped before the lookup runs.
-    let ran = checker.ran.lock().unwrap().clone();
-    assert_eq!(ran.len(), 1);
-    let asked: Value = serde_json::from_str(ran[0]["lookups"].as_str().unwrap()).unwrap();
-    assert_eq!(asked, json!([{ "kind": "label", "name": "Finance" }]));
-    assert!(model.asked()[0].0.contains(r#""emailLabels":["Finance"]"#));
+    ] {
+        let error = drafts.draft(owner(), request, context).await.unwrap_err();
+        assert!(error.downcast_ref::<InvalidDraft>().is_some(), "{error}");
+    }
+    assert!(sessions.prepared.lock().unwrap().is_empty());
 }
 
 #[tokio::test]
-async fn names_are_left_for_the_person_when_code_cant_look_them_up() {
-    let model = Arc::new(Model {
-        answers: Mutex::new(VecDeque::from([answer(json!([]), json!([agent_step()]))])),
-        lookups: vec![json!({ "kind": "channel", "name": "bug-reports" })],
-        ..Default::default()
-    });
-    let drafts = RoutineDrafts::new(
-        Arc::new(crate::domain::ports::NoRoutineCode),
-        Arc::clone(&model),
-        Arc::new(DisabledAiAdmissionService),
+async fn the_sweep_deletes_drafts_a_stopped_process_left_behind() {
+    let rows = Arc::new(Rows::default());
+    let sessions = Arc::new(Sessions::new(&rows, Box::new(|_| Vec::new())));
+    let (old, new) = (macro_uuid::generate_uuid_v7(), macro_uuid::generate_uuid_v7());
+    rows.begin(old, &owner(), bot_id::MACRO_NEW_BOT_ID).await.unwrap();
+    rows.begin(new, &owner(), bot_id::MACRO_NEW_BOT_ID).await.unwrap();
+    rows.drafts.lock().unwrap().get_mut(&old).unwrap().3 =
+        Utc::now() - chrono::Duration::hours(1);
+
+    assert_eq!(drafts(&rows, &sessions).sweep().await.unwrap(), 1);
+
+    assert_eq!(
+        *sessions.deleted.lock().unwrap(),
+        [AgentSessionId::new_from_uuid(old)]
     );
-
-    let drafted = drafts.draft(owner(), routine(BUG_REPORTS), context()).await;
-    drafted_routine(drafted.unwrap());
-
-    let asked = model.asked();
-    assert!(asked[0].0.contains(r#""channels":[]"#));
-}
-
-#[tokio::test(start_paused = true)]
-async fn a_lookup_that_runs_out_of_time_drafts_without_it() {
-    let model = Arc::new(Model {
-        answers: Mutex::new(VecDeque::from([answer(json!([]), json!([agent_step()]))])),
-        lookups: vec![json!({ "kind": "channel", "name": "bug-reports" })],
-        ..Default::default()
-    });
-    let checker = Checker {
-        hangs: true,
-        ..Default::default()
-    };
-    let drafts = drafts(checker, &model);
-
-    let routine = drafted_routine(draft(&drafts, routine(BUG_REPORTS)).await);
-
-    assert_eq!(routine.steps.len(), 1);
-    assert!(model.asked()[0].0.contains(r#""channels":[]"#));
-}
-
-#[tokio::test(start_paused = true)]
-async fn a_draft_that_runs_out_of_time_says_so() {
-    let model = Arc::new(Model {
-        hangs: true,
-        ..Default::default()
-    });
-    let drafts = drafts(Checker::default(), &model);
-
-    let draft = draft(&drafts, routine(BUG_REPORTS)).await;
-
-    assert_eq!(draft, failed(TIMED_OUT));
+    assert!(rows.drafts.lock().unwrap().contains_key(&new));
 }

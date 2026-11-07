@@ -157,6 +157,85 @@
         }
       }
     },
+    "/scheduled-actions/check": {
+      "post": {
+        "tags": ["scheduled actions"],
+        "summary": "What saving this routine would find wrong, without saving it: the same\nchecks as creating it. A routine draft's session hands its draft back\nthis way.",
+        "operationId": "check_scheduled_action",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ActionConfiguration"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RoutineCheck"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/scheduled-actions/code/starters": {
       "get": {
         "tags": ["scheduled actions"],
@@ -1345,6 +1424,29 @@
           }
         }
       },
+      "CheckedStepProblems": {
+        "type": "object",
+        "description": "A code step that doesn't type-check.",
+        "required": ["index", "title", "problems"],
+        "properties": {
+          "index": {
+            "type": "integer",
+            "description": "Its place among the routine's steps, from zero.",
+            "minimum": 0
+          },
+          "problems": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "What the type checker reports, first problems first."
+          },
+          "title": {
+            "type": "string",
+            "description": "Its title."
+          }
+        }
+      },
       "CodeIdentity": {
         "type": "string",
         "description": "Who a routine's code steps write as.",
@@ -1539,7 +1641,7 @@
       },
       "DraftContext": {
         "type": "object",
-        "description": "What the drafter may write, and the person's workspace by name and id.",
+        "description": "What the drafter may write. It looks up the items the person's words\nname itself, with their access.",
         "required": ["timezone", "agentModel"],
         "properties": {
           "agentModel": {
@@ -1557,9 +1659,6 @@
           "timezone": {
             "type": "string",
             "description": "IANA time zone schedules are written in, e.g. `America/New_York`."
-          },
-          "workspace": {
-            "$ref": "#/components/schemas/Workspace"
           }
         },
         "additionalProperties": false
@@ -1925,20 +2024,6 @@
         "type": "string",
         "description": "How code reads a knob: a lowercase letter, then up to 31 letters or\ndigits, e.g. `dueWithinDays`."
       },
-      "NamedItem": {
-        "type": "object",
-        "description": "An item and its name.",
-        "required": ["name", "id"],
-        "properties": {
-          "id": {
-            "type": "string"
-          },
-          "name": {
-            "type": "string"
-          }
-        },
-        "additionalProperties": false
-      },
       "PayloadCondition": {
         "type": "object",
         "description": "`path` walks objects by key; `*` steps into every element of an array and\na number into one. Give exactly one test. `notIn` also passes when the\npath finds nothing.",
@@ -2024,6 +2109,35 @@
           }
         },
         "additionalProperties": false
+      },
+      "RoutineCheck": {
+        "type": "object",
+        "description": "What saving a routine would find wrong, without saving it: the answer to\n`POST /scheduled-actions/check`.",
+        "required": ["ok", "problems", "steps", "routine"],
+        "properties": {
+          "ok": {
+            "type": "boolean",
+            "description": "Whether saving it would succeed: no problems and no failing steps."
+          },
+          "problems": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Why saving it would fail, other than its code, for its author."
+          },
+          "routine": {
+            "$ref": "#/components/schemas/ActionConfiguration",
+            "description": "The routine as saving would store it: code steps named and the SDK\ntheir code checks against stamped."
+          },
+          "steps": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CheckedStepProblems"
+            },
+            "description": "Code steps that don't type-check against Macro's SDK."
+          }
+        }
       },
       "RoutineKnob": {
         "oneOf": [
@@ -2834,84 +2948,6 @@
         "type": "string",
         "description": "How a variable is filled when someone activates the template.",
         "enum": ["activator", "shared", "choice"]
-      },
-      "Workspace": {
-        "type": "object",
-        "description": "The items AI may name in a draft. They are data for the model; saving\nchecks every id the draft uses.",
-        "properties": {
-          "agents": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/WorkspaceAgent"
-            },
-            "description": "Agents a step may hand the run to."
-          },
-          "channels": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/NamedItem"
-            }
-          },
-          "folders": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/NamedItem"
-            },
-            "description": "Projects."
-          },
-          "labels": {
-            "type": "array",
-            "items": {
-              "type": "string"
-            },
-            "description": "Email label names."
-          },
-          "people": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/NamedItem"
-            }
-          },
-          "tags": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/WorkspaceTag"
-            },
-            "description": "Tag options, by the property definition they belong to."
-          }
-        },
-        "additionalProperties": false
-      },
-      "WorkspaceAgent": {
-        "type": "object",
-        "description": "An agent and its bot id.",
-        "required": ["name", "botId"],
-        "properties": {
-          "botId": {
-            "type": "string"
-          },
-          "name": {
-            "type": "string"
-          }
-        },
-        "additionalProperties": false
-      },
-      "WorkspaceTag": {
-        "type": "object",
-        "description": "A tag: one option of a property.",
-        "required": ["label", "definitionId", "optionId"],
-        "properties": {
-          "definitionId": {
-            "type": "string"
-          },
-          "label": {
-            "type": "string"
-          },
-          "optionId": {
-            "type": "string"
-          }
-        },
-        "additionalProperties": false
       }
     }
   },

@@ -25,7 +25,6 @@ mod preview;
 mod public_mcp;
 mod pull_request_archive;
 mod routine_code;
-mod routine_drafts;
 mod routine_sessions;
 mod runtime_commands;
 mod scheduling;
@@ -723,7 +722,6 @@ async fn run() -> anyhow::Result<()> {
         pool.clone(),
         std::net::SocketAddr::from(([127, 0, 0, 1], config.port)),
         routine_code,
-        routine_drafts::ModelDrafts::new(Arc::clone(&recorder)),
         http_ready,
         Arc::clone(&notifications),
     )

@@ -164,6 +164,17 @@ pub trait ScheduledActionService: Send + Sync + 'static {
         input: ActionConfiguration,
     ) -> impl Future<Output = Result<ScheduledAction>> + Send;
 
+    /// What saving `input` as `principal`'s routine would find wrong, and the
+    /// routine as it would be stored, without saving anything. A check made
+    /// by a routine draft's session (`correlation`, the code-mode invocation
+    /// the request's credential names) is kept as that draft's answer.
+    fn check_action(
+        &self,
+        principal: &CreationPrincipal,
+        input: ActionConfiguration,
+        correlation: Option<Uuid>,
+    ) -> impl Future<Output = Result<super::models::RoutineCheck>> + Send;
+
     /// `create_action` for a routine activated from `template_id`, recorded
     /// as given: callers check that the template exists.
     fn create_action_from_template(
@@ -235,34 +246,72 @@ pub trait RoutineDraftService: Send + Sync + 'static {
     ) -> impl Future<Output = Result<super::drafts::Draft>> + Send;
 }
 
-/// The model that drafts routines.
-pub trait DraftModel: Send + Sync + 'static {
-    /// One answer in `completion.schema`'s shape, billed to `owner`; `None`
-    /// when the model gave none, e.g. it failed, timed out or broke the
-    /// schema.
-    fn complete(
+/// Where a draft's session hands its routine back: one row per draft,
+/// keyed by the draft session's id, so the drafter reads what the session
+/// checked whichever replicas each ran on. Object-safe: the drafter and the
+/// check share one erased store.
+#[async_trait::async_trait]
+pub trait DraftHandBacks: Send + Sync + 'static {
+    /// Start a draft whose session is `session`, run as `agent` for `owner`.
+    async fn begin(
         &self,
+        session: Uuid,
         owner: &MacroUserIdStr<'static>,
-        completion: DraftCompletion<'_>,
-    ) -> impl Future<Output = Option<serde_json::Value>> + Send;
+        agent: bot_id::BotId,
+    ) -> Result<()>;
+
+    /// Keep `check` as the routine `session`'s draft hands back, if
+    /// `session` is a draft `owner` started. Whether it was.
+    async fn record(
+        &self,
+        session: Uuid,
+        owner: &MacroUserIdStr<'static>,
+        check: &super::models::RoutineCheck,
+    ) -> Result<bool>;
+
+    /// The draft's latest check, and how many checks it made.
+    async fn handed_back(&self, session: Uuid) -> Result<HandedBack>;
+
+    /// Forget the draft.
+    async fn finish(&self, session: Uuid) -> Result<()>;
+
+    /// Drafts started before `before`, oldest first, at most `limit`.
+    async fn stale(&self, before: DateTime<Utc>, limit: u16) -> Result<Vec<StaleDraft>>;
 }
 
-/// One request to the drafting model.
-#[derive(Debug, Clone, Copy)]
-pub struct DraftCompletion<'a> {
-    /// What the model is told before the request.
-    pub instructions: &'a str,
-    /// The person's words, or what to fix.
-    pub prompt: &'a str,
-    pub schema: &'a OutputSchema,
+/// What a draft's session handed back so far.
+#[derive(Debug, Clone, Default, PartialEq)]
+pub struct HandedBack {
+    /// Its latest check; `None` before its first.
+    pub check: Option<super::models::RoutineCheck>,
+    /// How many checks it made.
+    pub checks: u32,
 }
 
-/// A JSON schema the model's answer must match.
+/// A draft left behind, for the sweep.
 #[derive(Debug, Clone, PartialEq)]
-pub struct OutputSchema {
-    pub name: &'static str,
-    pub description: &'static str,
-    pub schema: serde_json::Value,
+pub struct StaleDraft {
+    pub session: Uuid,
+    pub owner: MacroUserIdStr<'static>,
+    pub agent: bot_id::BotId,
+}
+
+/// The agent session a code-mode request came from, by the invocation its
+/// credential names. Object-safe for the same reason.
+#[async_trait::async_trait]
+pub trait RequestSessions: Send + Sync + 'static {
+    /// The session behind `correlation`, if it still exists.
+    async fn session_of(&self, correlation: Uuid) -> Result<Option<Uuid>>;
+}
+
+/// No code-mode requests reach this host.
+pub struct NoRequestSessions;
+
+#[async_trait::async_trait]
+impl RequestSessions for NoRequestSessions {
+    async fn session_of(&self, _correlation: Uuid) -> Result<Option<Uuid>> {
+        Ok(None)
+    }
 }
 
 /// Templates shared from routines, keyed by their source routine's ID.

@@ -102,6 +102,8 @@ const postReads = new Set([
   'email.getMessagesBatch',
   'notification.bulkGetTypedNotificationsByEventItemIds',
   'properties.getBulkEntityProperties',
+  // Checks a routine as saving would, and saves nothing.
+  'scheduled-action.checkScheduledAction',
   'search.simpleUnifiedSearch',
   'search.unifiedSearch',
   'storage.getBatchCallRecordPreview',

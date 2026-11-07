@@ -6,8 +6,8 @@ use crate::domain::drafts::InvalidDraft;
 use crate::domain::event_trigger::ActionTrigger;
 use crate::domain::models::{
     ActionConfiguration, ActionConfigurationUpdate, ActionExecutionRecord, ActionPolicyError,
-    AlreadyRunningError, InProgressExecution, ListedAction, OwnerNotUserError, Schedule,
-    ScheduledAction,
+    AlreadyRunningError, InProgressExecution, ListedAction, OwnerNotUserError, RoutineCheck,
+    Schedule, ScheduledAction,
 };
 use crate::domain::ports::ScheduledActionService;
 use crate::domain::target_validation::TargetValidationError;
@@ -183,6 +183,10 @@ where
             get(list_code_upgrades::<S, Svc, Auth>),
         )
         .route(
+            "/scheduled-actions/check",
+            post(check_action::<S, Svc, Auth>),
+        )
+        .route(
             "/scheduled-actions/code/starters",
             get(code_starters::<S, Svc, Auth>),
         )
@@ -243,6 +247,46 @@ where
 )]
 pub async fn health() -> impl IntoResponse {
     Json(EmptyResponse::default())
+}
+
+#[utoipa::path(
+    post,
+    path = "/scheduled-actions/check",
+    tag = "scheduled actions",
+    operation_id = "check_scheduled_action",
+    request_body = ActionConfiguration,
+    responses(
+        (status = 200, body = RoutineCheck),
+        (status = 400, body = String),
+        (status = 401, body = String),
+        (status = 403, body = String),
+        (status = 500, body = String),
+        (status = 503, body = String),
+    )
+)]
+/// What saving this routine would find wrong, without saving it: the same
+/// checks as creating it. A routine draft's session hands its draft back
+/// this way.
+pub async fn check_action<S, Svc, Auth>(
+    State(state): State<ScheduledActionRouterState<S, Svc, Auth>>,
+    CreationPrincipalExtractor { principal, .. }: CreationPrincipalExtractor<Auth>,
+    body: Result<Json<ActionConfiguration>, JsonRejection>,
+) -> Result<Json<RoutineCheck>, ScheduledActionApiError>
+where
+    S: ScheduledActionService + Send + Sync + 'static,
+    Svc: EntityAccessService,
+    Auth: MacroAuthorizationService,
+{
+    let Json(req) = body.map_err(ScheduledActionApiError::InvalidRequest)?;
+    // The code-mode invocation the credential names, already validated
+    // against its session at the router's boundary.
+    let correlation = agent_correlation::context::current();
+    Ok(Json(
+        state
+            .service
+            .check_action(&principal, req, correlation)
+            .await?,
+    ))
 }
 
 #[utoipa::path(

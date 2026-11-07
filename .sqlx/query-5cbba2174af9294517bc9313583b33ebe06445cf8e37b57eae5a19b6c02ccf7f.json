@@ -1,0 +1,28 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT checked, checks FROM scheduled_action_draft WHERE session_id = $1",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "checked",
+        "type_info": "Jsonb"
+      },
+      {
+        "ordinal": 1,
+        "name": "checks",
+        "type_info": "Int4"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      true,
+      false
+    ]
+  },
+  "hash": "5cbba2174af9294517bc9313583b33ebe06445cf8e37b57eae5a19b6c02ccf7f"
+}

@@ -165,6 +165,24 @@ export type AiAdmissionErrorBody = {
 };
 
 /**
+ * A code step that doesn't type-check.
+ */
+export type CheckedStepProblems = {
+    /**
+     * Its place among the routine's steps, from zero.
+     */
+    index: number;
+    /**
+     * What the type checker reports, first problems first.
+     */
+    problems: Array<string>;
+    /**
+     * Its title.
+     */
+    title: string;
+};
+
+/**
  * Who a routine's code steps write as.
  */
 export type CodeIdentity = 'agent' | 'owner';
@@ -259,7 +277,8 @@ export type Draft = (DraftedRoutine & {
 };
 
 /**
- * What the drafter may write, and the person's workspace by name and id.
+ * What the drafter may write. It looks up the items the person's words
+ * name itself, with their access.
  */
 export type DraftContext = {
     /**
@@ -280,7 +299,6 @@ export type DraftContext = {
      * IANA time zone schedules are written in, e.g. `America/New_York`.
      */
     timezone: string;
-    workspace?: Workspace;
 };
 
 /**
@@ -461,14 +479,6 @@ export type InProgressExecution = {
 export type KnobName = string;
 
 /**
- * An item and its name.
- */
-export type NamedItem = {
-    id: string;
-    name: string;
-};
-
-/**
  * `path` walks objects by key; `*` steps into every element of an array and
  * a number into one. Give exactly one test. `notIn` also passes when the
  * path finds nothing.
@@ -516,6 +526,30 @@ export type PropertySelector = {
      * add. Any change to the property matches when empty.
      */
     values?: Array<string>;
+};
+
+/**
+ * What saving a routine would find wrong, without saving it: the answer to
+ * `POST /scheduled-actions/check`.
+ */
+export type RoutineCheck = {
+    /**
+     * Whether saving it would succeed: no problems and no failing steps.
+     */
+    ok: boolean;
+    /**
+     * Why saving it would fail, other than its code, for its author.
+     */
+    problems: Array<string>;
+    /**
+     * The routine as saving would store it: code steps named and the SDK
+     * their code checks against stamped.
+     */
+    routine: ActionConfiguration;
+    /**
+     * Code steps that don't type-check against Macro's SDK.
+     */
+    steps: Array<CheckedStepProblems>;
 };
 
 /**
@@ -966,48 +1000,6 @@ export type UpgradeOutcome = 'running' | 'checked' | 'rewritten' | 'needs_update
  */
 export type VariableFill = 'activator' | 'shared' | 'choice';
 
-/**
- * The items AI may name in a draft. They are data for the model; saving
- * checks every id the draft uses.
- */
-export type Workspace = {
-    /**
-     * Agents a step may hand the run to.
-     */
-    agents?: Array<WorkspaceAgent>;
-    channels?: Array<NamedItem>;
-    /**
-     * Projects.
-     */
-    folders?: Array<NamedItem>;
-    /**
-     * Email label names.
-     */
-    labels?: Array<string>;
-    people?: Array<NamedItem>;
-    /**
-     * Tag options, by the property definition they belong to.
-     */
-    tags?: Array<WorkspaceTag>;
-};
-
-/**
- * An agent and its bot id.
- */
-export type WorkspaceAgent = {
-    botId: string;
-    name: string;
-};
-
-/**
- * A tag: one option of a property.
- */
-export type WorkspaceTag = {
-    definitionId: string;
-    label: string;
-    optionId: string;
-};
-
 export type ScheduledActionHealthData = {
     body?: never;
     path?: never;
@@ -1071,6 +1063,29 @@ export type CreateScheduledActionResponses = {
 };
 
 export type CreateScheduledActionResponse = CreateScheduledActionResponses[keyof CreateScheduledActionResponses];
+
+export type CheckScheduledActionData = {
+    body: ActionConfiguration;
+    path?: never;
+    query?: never;
+    url: '/scheduled-actions/check';
+};
+
+export type CheckScheduledActionErrors = {
+    400: string;
+    401: string;
+    403: string;
+    500: string;
+    503: string;
+};
+
+export type CheckScheduledActionError = CheckScheduledActionErrors[keyof CheckScheduledActionErrors];
+
+export type CheckScheduledActionResponses = {
+    200: RoutineCheck;
+};
+
+export type CheckScheduledActionResponse = CheckScheduledActionResponses[keyof CheckScheduledActionResponses];
 
 export type RoutineCodeStartersData = {
     body?: never;

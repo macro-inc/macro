@@ -1,4 +1,5 @@
 import { unwrap } from '../../utils';
+import type { RoutineCheck } from '../../../generated/scheduled-action/types.gen';
 import type { MacroClient } from '../../utils/client';
 import { Routine, type RoutineOptions, routineBody } from './routine';
 
@@ -82,6 +83,29 @@ export class RoutineNamespace {
           body: { ...routineBody(options), enabled: options.enabled ?? true },
         }),
       ),
+    );
+  }
+
+  /**
+   * Check a routine without saving it: the checks `create` makes, including
+   * type-checking its code steps, with nothing saved. Returns whether it
+   * would save (`ok`), what would stop it (`problems`), the code steps that
+   * don't type-check (`steps`, by place among the steps) and the routine as
+   * it would be stored. Check before creating, and fix what it reports.
+   *
+   * @example
+   * const check = await macro.routines.check({
+   *   name: 'Say hello',
+   *   trigger: { type: 'once', at: '2027-11-03T14:30:00Z' },
+   *   steps: [{ type: 'code', title: 'Post hello', source }],
+   * });
+   * if (!check.ok) return { problems: check.problems, steps: check.steps };
+   */
+  async check(options: RoutineOptions): Promise<RoutineCheck> {
+    return unwrap(
+      await this.client.scheduledAction.checkScheduledAction({
+        body: { ...routineBody(options), enabled: options.enabled ?? true },
+      }),
     );
   }
 
