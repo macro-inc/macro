@@ -174,6 +174,7 @@ fn flush_queue_options_and_commit_tag_carry() -> Result<(), Error> {
         },
         |tx| {
             tx.set_selection(Some(Selection::Range(RangeSelection {
+                cached_direction: None,
                 dirty: false,
                 anchor: Point::element(NodeKey::ROOT, ChildIndex(0)),
                 focus: Point::element(NodeKey::ROOT, ChildIndex(0)),
@@ -204,6 +205,7 @@ fn paragraph_points_normalize_to_text_s1_18_1() -> Result<(), Error> {
     tx.append(p, &[first.key(), second.key()])?;
     tx.append(NodeKey::ROOT, &[p.key()])?;
     let mut range = RangeSelection {
+        cached_direction: None,
         dirty: false,
         anchor: Point::element(p, ChildIndex(0)),
         focus: Point::element(p, ChildIndex(2)),
@@ -214,6 +216,7 @@ fn paragraph_points_normalize_to_text_s1_18_1() -> Result<(), Error> {
     assert_eq!(range.anchor, Point::text(first, Utf16Offset(0)));
     assert_eq!(range.focus, Point::text(second, Utf16Offset(1)));
     let slot = tx.detach_selection(Selection::Range(RangeSelection {
+        cached_direction: None,
         dirty: false,
         anchor: Point::element(p, ChildIndex(2)),
         focus: Point::element(p, ChildIndex(0)),
@@ -402,6 +405,7 @@ fn missing_text_endpoint_fails_before_gc_and_empty_node_selection_clears() -> Re
     });
     let result = editor.update(|tx| {
         tx.set_selection(Some(Selection::Range(RangeSelection {
+            cached_direction: None,
             dirty: false,
             anchor: Point::text(missing, Utf16Offset(0)),
             focus: Point::text(missing, Utf16Offset(0)),

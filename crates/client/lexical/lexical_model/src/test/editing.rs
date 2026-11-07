@@ -196,6 +196,7 @@ fn remove_complete_text_span_across_token_collapses_into_paragraph_s1_18_5() -> 
     })?;
     editor.update(|tx| {
         tx.set_selection(Some(Selection::Range(RangeSelection {
+            cached_direction: None,
             dirty: false,
             anchor: Point::text(leading, Utf16Offset(0)),
             focus: Point::text(token, tx.text_content_size(token)),
