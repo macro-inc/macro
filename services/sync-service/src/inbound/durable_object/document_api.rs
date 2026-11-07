@@ -9,7 +9,6 @@ use crate::{
     constants::SYSTEM_AUTHOR_ID,
     d1::insert_missing_user_mappings,
     domain::document::{self, DocumentError, MAX_BINARY_BYTES, MAX_REVISION_BYTES},
-    storage::DocumentUpdateStorage,
 };
 
 const MAX_BODY_BYTES: usize = (MAX_BINARY_BYTES + MAX_REVISION_BYTES).div_ceil(3) * 4 + 1024;
@@ -52,9 +51,9 @@ fn error_response(error: DocumentError) -> Result<Response> {
     )
 }
 
-impl SyncSession {
+impl SyncSession<'_> {
     pub(in crate::inbound) async fn document_handler(
-        &self,
+        &mut self,
         mut req: Request,
         document_id: &str,
         is_update: bool,
@@ -122,7 +121,7 @@ impl SyncSession {
             return error_response(DocumentError::Invalid("Invalid base64 update or revision."));
         };
         let state = self.document_state().await?;
-        let storage = self.session_storage().await?;
+        self.session_storage().await?;
         // Only agent actors are stored with the operation; humans are still editors.
         let is_agent = claims.actor.is_some();
         // Agents write for the user they act on behalf of; tokens without a user
@@ -140,20 +139,16 @@ impl SyncSession {
             Err(error) => return error_response(error),
         };
         let stored_attribution = if is_agent { editor.as_ref() } else { None };
-        let port = DocumentUpdateStorage {
-            document_state: &state,
-            storage: &storage,
-            attribution: stored_attribution,
-        };
-        let effects = WorkerDocumentEffects {
+        let mut effects = WorkerDocumentEffects {
             session: self,
             document_state: &state,
             document_id,
             attribution: editor.as_ref(),
+            store_attribution: is_agent,
         };
         // The service synchronously compares + validates + imports before its
         // first storage await, just like a websocket update in this isolate.
-        let prepared = match document::update(&access, &port, &effects, &revision, &update).await {
+        let prepared = match document::update(&access, &mut effects, &revision, &update).await {
             Ok(prepared) => prepared,
             Err(error) => return error_response(error),
         };

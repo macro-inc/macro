@@ -146,15 +146,7 @@ pub async fn get_peers_for_document_id(
     Ok(peers)
 }
 
-/// A single pending "last edited by" event, buffered until the
-/// next alarm tick flushes everything
-#[derive(Debug, Clone)]
-pub struct BlameEvent {
-    pub document_id: String,
-    pub node_id: String,
-    pub peer_id: u64,
-    pub timestamp_ms: i64,
-}
+pub use sync_server_core::domain::types::BlameEvent;
 
 /// Maximum statements per D1 `batch()` call. D1 has a per-batch statement
 /// limit; chunking keeps us comfortably under it.

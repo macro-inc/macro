@@ -6,7 +6,7 @@ import { MAX_CHUNK_SIZE } from "../../../packages/collaboration/src/websocket/pl
 import {
 	FromPeer,
 	InitializeFromSnapshotRequest,
-} from "../bebop/generated/schema";
+} from "../../../crates/sync_protocol/bebop/generated/schema";
 import { createTestUser, getTokenForDocument, setupMiniflare } from "./utils";
 
 let mf: Miniflare;

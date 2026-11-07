@@ -1,4 +1,8 @@
 //! HTTP routing and route-specific access requirements for sessions.
+#![expect(
+    clippy::await_holding_refcell_ref,
+    reason = "single-threaded DO; the guard is the barrier"
+)]
 #[cfg(feature = "openapi")]
 use super::durable_object::document_api::{SnapshotResponse, UpdateRequest, UpdateResponse};
 #[cfg(feature = "openapi")]
@@ -6,7 +10,10 @@ use crate::domain::models::{BlameRow, DocumentMetadata, GetSnapshotRequest, Peer
 #[cfg(feature = "openapi")]
 use crate::swagger::BinaryBody;
 
-use std::{collections::HashMap, rc::Rc};
+use crate::outbound::room_ports::WorkerPorts;
+use futures::lock::OwnedMutexGuard;
+use std::{cell::RefCell, collections::HashMap, rc::Rc};
+use sync_server_core::domain::room::Room;
 
 use axum::{
     Router,
@@ -30,7 +37,9 @@ use crate::secrets::Secrets;
 /// bounds require Send/Sync. Secrets are extracted once per request.
 #[derive(Clone)]
 pub struct RouterState {
-    pub session: SendWrapper<Rc<SyncSession>>,
+    pub session: SendWrapper<Rc<RefCell<OwnedMutexGuard<Room<WorkerPorts>>>>>,
+    pub runtime: SendWrapper<Rc<worker::State>>,
+    pub env: SendWrapper<worker::Env>,
     pub secrets: Secrets,
 }
 
@@ -51,8 +60,12 @@ impl IntoResponse for AppError {
 
 pub type HandlerResult = Result<Response, AppError>;
 
-pub fn document_router(session: Rc<SyncSession>) -> Router {
-    let secrets = session.secrets();
+pub fn document_router(
+    room: OwnedMutexGuard<Room<WorkerPorts>>,
+    runtime: Rc<worker::State>,
+    env: worker::Env,
+) -> Router {
+    let secrets = Secrets::from(&env);
     Router::new()
         .route("/document/{document_id}/connect", get(connect))
         .route("/document/{document_id}/exists", get(exists))
@@ -101,15 +114,18 @@ pub fn document_router(session: Rc<SyncSession>) -> Router {
         .route("/surface/{surface_id}/verify", post(surface_manage))
         .route("/surface/{surface_id}/activate", post(surface_manage))
         .with_state(RouterState {
-            session: SendWrapper::new(session),
+            session: SendWrapper::new(Rc::new(RefCell::new(room))),
+            runtime: SendWrapper::new(runtime),
+            env: SendWrapper::new(env),
             secrets,
         })
 }
 
 #[worker::send]
 async fn connect(State(state): State<RouterState>, access: SocketAccess) -> HandlerResult {
-    Ok(state
-        .session
+    let mut guard = state.session.borrow_mut();
+    let mut session = SyncSession::new(&mut guard, (*state.runtime).clone(), (*state.env).clone());
+    Ok(session
         .connect(access.claims, &access.document_id)
         .await?
         .into())
@@ -125,7 +141,9 @@ pub(crate) async fn exists(
     State(state): State<RouterState>,
     Path(id): Path<String>,
 ) -> HandlerResult {
-    Ok(state.session.exists_handler(&id).await?.into())
+    let mut guard = state.session.borrow_mut();
+    let mut session = SyncSession::new(&mut guard, (*state.runtime).clone(), (*state.env).clone());
+    Ok(session.exists_handler(&id).await?.into())
 }
 
 #[cfg_attr(feature = "openapi", utoipa::path(
@@ -139,7 +157,9 @@ pub(crate) async fn peer(
     State(state): State<RouterState>,
     Path((id, peer)): Path<(String, String)>,
 ) -> HandlerResult {
-    Ok(state.session.peer_handler(&id, Some(&peer)).await?.into())
+    let mut guard = state.session.borrow_mut();
+    let mut session = SyncSession::new(&mut guard, (*state.runtime).clone(), (*state.env).clone());
+    Ok(session.peer_handler(&id, Some(&peer)).await?.into())
 }
 
 #[cfg_attr(feature = "openapi", utoipa::path(
@@ -152,7 +172,9 @@ pub(crate) async fn wakeup(
     State(state): State<RouterState>,
     Path(id): Path<String>,
 ) -> HandlerResult {
-    Ok(state.session.wakeup(&id).await?.into())
+    let mut guard = state.session.borrow_mut();
+    let mut session = SyncSession::new(&mut guard, (*state.runtime).clone(), (*state.env).clone());
+    Ok(session.wakeup(&id).await?.into())
 }
 
 #[cfg_attr(feature = "openapi", utoipa::path(
@@ -166,11 +188,9 @@ pub(crate) async fn metadata(
     State(state): State<RouterState>,
     access: ViewAccess,
 ) -> HandlerResult {
-    Ok(state
-        .session
-        .metadata_handler(&access.document_id)
-        .await?
-        .into())
+    let mut guard = state.session.borrow_mut();
+    let mut session = SyncSession::new(&mut guard, (*state.runtime).clone(), (*state.env).clone());
+    Ok(session.metadata_handler(&access.document_id).await?.into())
 }
 
 #[cfg_attr(feature = "openapi", utoipa::path(
@@ -186,7 +206,9 @@ pub(crate) async fn blame(
     _: ViewAccess,
     Path((_, node)): Path<(String, String)>,
 ) -> HandlerResult {
-    Ok(state.session.blame_handler(Some(&node)).await?.into())
+    let mut guard = state.session.borrow_mut();
+    let mut session = SyncSession::new(&mut guard, (*state.runtime).clone(), (*state.env).clone());
+    Ok(session.blame_handler(Some(&node)).await?.into())
 }
 
 #[cfg_attr(feature = "openapi", utoipa::path(
@@ -197,7 +219,9 @@ pub(crate) async fn blame(
 ))]
 #[worker::send]
 pub(crate) async fn raw(State(state): State<RouterState>, access: ViewAccess) -> HandlerResult {
-    Ok(state.session.raw_handler(&access.document_id).await?.into())
+    let mut guard = state.session.borrow_mut();
+    let mut session = SyncSession::new(&mut guard, (*state.runtime).clone(), (*state.env).clone());
+    Ok(session.raw_handler(&access.document_id).await?.into())
 }
 
 #[cfg_attr(feature = "openapi", utoipa::path(
@@ -213,8 +237,9 @@ pub(crate) async fn snapshot(
     access: ViewAccess,
     req: Request,
 ) -> HandlerResult {
-    Ok(state
-        .session
+    let mut guard = state.session.borrow_mut();
+    let mut session = SyncSession::new(&mut guard, (*state.runtime).clone(), (*state.env).clone());
+    Ok(session
         .snapshot_handler(worker::Request::try_from(req)?, &access.document_id)
         .await?
         .into())
@@ -236,15 +261,13 @@ pub(crate) async fn active_peers(
     _: ViewAccess,
     Query(params): Query<HashMap<String, String>>,
 ) -> HandlerResult {
+    let mut guard = state.session.borrow_mut();
+    let mut session = SyncSession::new(&mut guard, (*state.runtime).clone(), (*state.env).clone());
     let include_ai = !matches!(
         params.get("include_ai").map(String::as_str),
         Some("false" | "0")
     );
-    Ok(state
-        .session
-        .active_peer_ids_handler(include_ai)
-        .await?
-        .into())
+    Ok(session.active_peer_ids_handler(include_ai).await?.into())
 }
 
 #[cfg_attr(feature = "openapi", utoipa::path(
@@ -260,8 +283,9 @@ pub(crate) async fn initialize(
     access: EditAccess,
     req: Request,
 ) -> HandlerResult {
-    Ok(state
-        .session
+    let mut guard = state.session.borrow_mut();
+    let mut session = SyncSession::new(&mut guard, (*state.runtime).clone(), (*state.env).clone());
+    Ok(session
         .initialize_handler(worker::Request::try_from(req)?, &access.document_id)
         .await?
         .into())
@@ -279,8 +303,9 @@ pub(crate) async fn document_state(
     access: SignedDocumentAccess,
     req: Request,
 ) -> HandlerResult {
-    Ok(state
-        .session
+    let mut guard = state.session.borrow_mut();
+    let mut session = SyncSession::new(&mut guard, (*state.runtime).clone(), (*state.env).clone());
+    Ok(session
         .document_handler(
             worker::Request::try_from(req)?,
             &access.document_id,
@@ -305,8 +330,9 @@ pub(crate) async fn document_update(
     access: SignedDocumentAccess,
     req: Request,
 ) -> HandlerResult {
-    Ok(state
-        .session
+    let mut guard = state.session.borrow_mut();
+    let mut session = SyncSession::new(&mut guard, (*state.runtime).clone(), (*state.env).clone());
+    Ok(session
         .document_handler(
             worker::Request::try_from(req)?,
             &access.document_id,
@@ -330,16 +356,16 @@ pub(crate) async fn delete_document(
     _: InternalAccess,
     Path(id): Path<String>,
 ) -> HandlerResult {
-    Ok(state.session.delete_handler(&id).await?.into())
+    let mut guard = state.session.borrow_mut();
+    let mut session = SyncSession::new(&mut guard, (*state.runtime).clone(), (*state.env).clone());
+    Ok(session.delete_handler(&id).await?.into())
 }
 
 #[worker::send]
 async fn dump_operations(State(state): State<RouterState>, access: AdminAccess) -> HandlerResult {
-    Ok(state
-        .session
-        .dump_operations(&access.document_id)
-        .await?
-        .into())
+    let mut guard = state.session.borrow_mut();
+    let mut session = SyncSession::new(&mut guard, (*state.runtime).clone(), (*state.env).clone());
+    Ok(session.dump_operations(&access.document_id).await?.into())
 }
 
 #[worker::send]
@@ -348,7 +374,9 @@ async fn debug_get(
     _: AdminAccess,
     Path((_, key)): Path<(String, String)>,
 ) -> HandlerResult {
-    Ok(state.session.debug_get(&key).await?.into())
+    let mut guard = state.session.borrow_mut();
+    let mut session = SyncSession::new(&mut guard, (*state.runtime).clone(), (*state.env).clone());
+    Ok(session.debug_get(&key).await?.into())
 }
 
 #[worker::send]
@@ -357,7 +385,9 @@ async fn debug_list(
     _: AdminAccess,
     Path((_, prefix)): Path<(String, String)>,
 ) -> HandlerResult {
-    Ok(state.session.debug_list(&prefix).await?.into())
+    let mut guard = state.session.borrow_mut();
+    let mut session = SyncSession::new(&mut guard, (*state.runtime).clone(), (*state.env).clone());
+    Ok(session.debug_list(&prefix).await?.into())
 }
 
 impl axum::extract::FromRef<RouterState> for Secrets {
@@ -372,8 +402,9 @@ async fn surface_connect(
     access: SurfaceAccess<true>,
     req: Request,
 ) -> HandlerResult {
-    Ok(state
-        .session
+    let mut guard = state.session.borrow_mut();
+    let mut session = SyncSession::new(&mut guard, (*state.runtime).clone(), (*state.env).clone());
+    Ok(session
         .surface_handler(worker::Request::try_from(req)?, Some(access.claims))
         .await?
         .into())
@@ -385,8 +416,9 @@ async fn surface_read(
     access: SurfaceAccess<false>,
     req: Request,
 ) -> HandlerResult {
-    Ok(state
-        .session
+    let mut guard = state.session.borrow_mut();
+    let mut session = SyncSession::new(&mut guard, (*state.runtime).clone(), (*state.env).clone());
+    Ok(session
         .surface_handler(worker::Request::try_from(req)?, Some(access.claims))
         .await?
         .into())
@@ -398,8 +430,9 @@ async fn surface_manage(
     _: InternalAccess,
     req: Request,
 ) -> HandlerResult {
-    Ok(state
-        .session
+    let mut guard = state.session.borrow_mut();
+    let mut session = SyncSession::new(&mut guard, (*state.runtime).clone(), (*state.env).clone());
+    Ok(session
         .surface_handler(worker::Request::try_from(req)?, None)
         .await?
         .into())
@@ -412,9 +445,25 @@ async fn source_migration(
     Path((id, operation)): Path<(String, String)>,
     req: Request,
 ) -> HandlerResult {
-    Ok(state
-        .session
+    let mut guard = state.session.borrow_mut();
+    let mut session = SyncSession::new(&mut guard, (*state.runtime).clone(), (*state.env).clone());
+    Ok(session
         .source_migration_handler(worker::Request::try_from(req)?, &id, &operation)
         .await?
         .into())
+}
+
+/// Dispatch with the same owned guard used for the request gate.
+pub(crate) async fn dispatch(
+    room: OwnedMutexGuard<Room<WorkerPorts>>,
+    runtime: Rc<worker::State>,
+    env: worker::Env,
+    req: worker::Request,
+) -> worker::Result<worker::Response> {
+    use tower_service::Service;
+    let mut router = document_router(room, runtime, env);
+    let response = router.call(worker::HttpRequest::try_from(req)?).await;
+    worker::Response::try_from(
+        response.unwrap_or_else(|error: std::convert::Infallible| match error {}),
+    )
 }

@@ -1,138 +1,128 @@
-use backends::Storage;
-use macro_sync_service_jwt::session::SessionKind;
-use snapshot::SnapshotStorage;
-use tracing::trace;
-use worker::{Env, Error, Result, State};
-
+use crate::outbound::room_ports::WorkerClock;
 use crate::{
-    state::{DocumentState, ImportedUpdate},
-    storage::backends::durable_kv::DurableKVStorage,
-    timeit, timeit_log,
+    error::ResultExt, state::ImportedUpdate, storage::backends::durable_kv::DurableKVStorage,
 };
+use backends::Storage;
+use std::rc::Rc;
+use sync_server_core::domain::{
+    document::DocumentAttribution,
+    operation_log::{OperationError, OperationLog, SnapshotError},
+    ports::{SnapshotReadError, SnapshotStore},
+    types::SessionKey,
+};
+use worker::{Env, Error, Result, State};
 
 pub mod backends;
 pub mod op_log;
+pub mod room_snapshot;
 pub mod snapshot;
+use room_snapshot::WorkerSnapshots;
 
 pub struct SessionStorage {
-    snapshot_storage: Storage,
-    oplog: DurableKVStorage,
-    kind: SessionKind,
+    snapshots: WorkerSnapshots,
+    storage: DurableKVStorage,
+    key: SessionKey,
 }
 
-/// Outbound adapter for atomic document updates, sharing the websocket log.
-pub struct DocumentUpdateStorage<'a> {
-    pub document_state: &'a DocumentState,
-    pub storage: &'a SessionStorage,
-    pub attribution: Option<&'a crate::domain::document::DocumentAttribution>,
-}
-
-impl crate::domain::document::DocumentUpdatePort for DocumentUpdateStorage<'_> {
-    fn document(&self) -> &loro::LoroDoc {
-        &self.document_state.loro_doc
+fn operation_error(error: OperationError<worker::Error>) -> worker::Error {
+    match error {
+        OperationError::Storage(error) => error,
+        OperationError::State(error) => Error::from(error.to_string()),
+        OperationError::PendingRead(error) => Err::<(), _>(error)
+            .context("get_pending_operations failed")
+            .unwrap_err(),
+        OperationError::Replay(error) => Err::<(), _>(Error::from(error.to_string()))
+            .context("failed applying pending ops")
+            .unwrap_err(),
     }
-
-    async fn apply_and_persist(
-        &self,
-        update: &[u8],
-    ) -> std::result::Result<(), crate::domain::document::DocumentError> {
-        self.storage
-            .oplog
-            .apply_op_with_attribution(self.document_state, update, self.attribution)
-            .await
-            .map(|_| ())
-            .map_err(|error| {
-                tracing::error!(error = ?error, "failed to persist document update");
-                crate::domain::document::DocumentError::Persistence
-            })
+}
+fn snapshot_error(error: SnapshotError<worker::Error, worker::Error>) -> worker::Error {
+    match error {
+        SnapshotError::Operation(error) => operation_error(error),
+        SnapshotError::Write(error) => error,
+        SnapshotError::Unavailable(error) => {
+            Error::from(format!("document snapshot not found: {error}"))
+        }
+    }
+}
+fn snapshot_read_error(error: SnapshotReadError<worker::Error>) -> worker::Error {
+    match error {
+        SnapshotReadError::Storage(error) => error,
+        SnapshotReadError::Missing => Error::from("no snapshot is stored"),
     }
 }
 
 impl SessionStorage {
-    pub fn new(snapshot_storage: Storage, oplog: DurableKVStorage, kind: SessionKind) -> Self {
+    pub fn new(
+        snapshot_storage: Storage,
+        storage: DurableKVStorage,
+        key: String,
+        state: Rc<State>,
+    ) -> Self {
+        let snapshots = WorkerSnapshots::fixed(snapshot_storage, state);
+        let key = SessionKey::new(key);
         Self {
-            snapshot_storage,
-            oplog,
-            kind,
+            snapshots,
+            storage,
+            key,
         }
     }
-
-    /// Load document state and apply any pending ops
-    pub async fn load_document_state(&self) -> Result<DocumentState> {
-        let snapshot = self.get_snapshot().await;
-        let allow_default =
-            self.kind == SessionKind::Document && cfg!(feature = "create-default-state");
-        let state = match (snapshot, allow_default) {
-            (Ok(snapshot), _) => DocumentState::try_from_snapshot(snapshot.as_slice()),
-            (Err(_e), true) => {
-                let state = DocumentState::new();
-                timeit_log!("ensure_initialized new store_snapshot", {
-                    self.store_snapshot(&state).await?;
-                });
-                Ok(state)
-            }
-            (Err(e), false) => {
-                return Err(Error::from(format!("document snapshot not found: {e}")));
-            }
-        }?;
-        self.oplog
-            .cmp_vv_with_last_snapshot_vv(&state.loro_doc.oplog_vv())
-            .await?;
-        self.oplog.apply_pending_ops(&state).await?;
-        Ok(state)
-    }
-
-    pub async fn get_pending_operations(&self) -> Result<Vec<Result<(String, Vec<u8>)>>> {
-        self.oplog.get_pending_operations().await
-    }
-
-    pub async fn debug_do_kv_get(&self, key: &str) -> Result<Option<Vec<u8>>> {
-        self.oplog.get_key(key).await
-    }
-
-    pub async fn debug_list_do_kv(&self, prefix: &str) -> Result<Vec<Result<(String, Vec<u8>)>>> {
-        self.oplog.list_do_kv(prefix).await
-    }
-
-    /// Get the current snapshot from the snapshot storage
-    pub async fn get_snapshot(&self) -> Result<Vec<u8>> {
-        let (res, elap) = timeit!(self.snapshot_storage.get_snapshot().await?);
-        trace!(
-            num_bytes = res.len(),
-            duration_ms = elap.as_millis(),
-            "get_snapshot"
-        );
-        Ok(res)
-    }
-
-    /// Store a new snapshot in the snapshot storage
-    pub async fn store_snapshot(&self, doc_state: &DocumentState) -> Result<()> {
-        let snapshot = doc_state.export_snapshot(None)?;
-        let num_bytes = snapshot.len();
-        let (res, elap) = timeit!(self.snapshot_storage.store_snapshot(&snapshot).await?);
-        trace!(
-            num_bytes = num_bytes,
-            duration_ms = elap.as_millis(),
-            "store_snapshot"
-        );
-        self.oplog
-            .store_version_vector(&doc_state.loro_doc.oplog_vv())
-            .await?;
-        Ok(res)
-    }
-
-    /// Persist an update and return its change status and touched Lexical nodes.
-    pub async fn append_pending_operation(
+    /// Load document state and apply any pending operations.
+    pub async fn load_document_state(
         &self,
-        operation: &[u8],
-        document_state: &DocumentState,
-    ) -> Result<ImportedUpdate> {
-        self.oplog.apply_op(document_state, operation).await
+        operations: &mut OperationLog,
+    ) -> Result<sync_server_core::domain::state::DocumentState> {
+        operations
+            .load_document_state(
+                &self.storage,
+                &self.snapshots,
+                cfg!(feature = "create-default-state"),
+            )
+            .await
+            .map_err(snapshot_error)
     }
-
-    pub async fn clear_applied_ops(&self) -> Result<()> {
-        self.oplog.clear_applied_ops().await?;
-        Ok(())
+    pub async fn get_pending_operations(&self) -> Result<Vec<Result<(String, Vec<u8>)>>> {
+        self.storage.get_pending_operations().await
+    }
+    pub async fn debug_do_kv_get(&self, key: &str) -> Result<Option<Vec<u8>>> {
+        self.storage.get_key(key).await
+    }
+    pub async fn debug_list_do_kv(&self, prefix: &str) -> Result<Vec<Result<(String, Vec<u8>)>>> {
+        self.storage.list_do_kv(prefix).await
+    }
+    pub async fn get_snapshot(&self) -> Result<Vec<u8>> {
+        self.snapshots
+            .get(&self.key)
+            .await
+            .map_err(snapshot_read_error)
+    }
+    pub async fn store_snapshot(
+        &self,
+        operations: &OperationLog,
+        state: &sync_server_core::domain::state::DocumentState,
+    ) -> Result<()> {
+        operations
+            .store_snapshot(&self.storage, &self.snapshots, state)
+            .await
+            .map_err(snapshot_error)
+    }
+    pub async fn apply_with_attribution(
+        &self,
+        operations: &mut OperationLog,
+        state: &mut sync_server_core::domain::state::DocumentState,
+        update: &[u8],
+        attribution: Option<&DocumentAttribution>,
+    ) -> Result<ImportedUpdate> {
+        operations
+            .apply(&self.storage, state, update, attribution, &WorkerClock)
+            .await
+            .map_err(operation_error)
+    }
+    pub async fn clear_applied_ops(&self, operations: &mut OperationLog) -> Result<()> {
+        operations
+            .clear_applied(&self.storage)
+            .await
+            .map_err(operation_error)
     }
 }
 

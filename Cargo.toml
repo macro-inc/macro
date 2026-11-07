@@ -10,6 +10,10 @@ members = [
   "crates/client/lexical/lexical_rich_nodes",
   "crates/client/lexical/lexical_conformance_wasm",
   "crates/client/lexical/lexical_workspace_tests",
+  "crates/sync_doc_id",
+  "crates/client/doc_sync_core",
+  "crates/lexical_node_id",
+  "crates/document_id",
   "crates/access_requests",
   "crates/agent_api_keys",
   "crates/routines",
@@ -203,7 +207,9 @@ members = [
   "services/static_file_service",
   "crates/sync_router",
   "services/sync-service",
-  "services/sync-service/bebop-schema",
+  "crates/sync_protocol",
+  "crates/sync_server_core",
+  "crates/sync_server_sim",
   "services/unfurl_service",
   "services/upload_extractor_lambda_handler",
   "services/upload_extractor_lambda_trigger",
@@ -221,7 +227,7 @@ members = [
 # WP-00 reserves these dependencies for the following Lexical work packages.
 # Remove each exception when its first consumer lands (model, replay, XML, HTML).
 [workspace.metadata.cargo-shear]
-ignored = ["quick-xml", "rand_chacha"]
+ignored = ["quick-xml", "rand_chacha", "lexical_node_id"]
 
 [workspace.dependencies]
 phf = { version = "0.13.1", features = ["macros"] }
@@ -239,6 +245,15 @@ insta = { version = "1.48.0", default-features = false }
 libtest-mimic = { version = "0.8.2", default-features = false }
 rand_chacha = { version = "0.9.0", default-features = false }
 ryu-js = { version = "1.0.2", default-features = false }
+macro_user_id = { path = "crates/macro_user_id" }
+sync_doc_id = { path = "crates/sync_doc_id" }
+lexical_node_id = { path = "crates/lexical_node_id" }
+document_id = { path = "crates/document_id" }
+# Parsing-only UUIDs for wasm-safe value crates; no random generation.
+uuid_value = { package = "uuid", version = "1.15.1", default-features = false }
+macro_sync_service_jwt = { path = "crates/macro_sync_service_jwt" }
+sync_server_core = { path = "crates/sync_server_core" }
+sync_protocol = { path = "crates/sync_protocol" }
 aes = "0.8.4"
 aes-gcm = { version = "0.10.3", features = ["zeroize"] }
 anyhow = "1.0.100"
@@ -509,6 +524,8 @@ utoipa = { version = "5.4.0", features = [
 # the crate and every service above it differ per checkout.
 utoipa-swagger-ui = { version = "9", features = ["axum", "vendored", "debug-embed"] }
 uuid = { version = "1.15.1", features = ["fast-rng", "serde", "v4", "v5", "v7"] }
+# Pure domains receive UUID values from their adapters; no ambient RNG backend.
+uuid-types = { package = "uuid", version = "1.15.1", default-features = false, features = ["std", "serde"] }
 webpki-roots = "1.0.10"
 wiremock = "0.6.5"
 zeroize = "1.8.2"
@@ -609,3 +626,4 @@ codegen-units = 1
 inherits = "release"
 lto = "fat"
 codegen-units = 1
+

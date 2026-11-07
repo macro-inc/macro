@@ -6,8 +6,9 @@ import jwt from 'jsonwebtoken';
 import { LoroDoc } from 'loro-crdt';
 import type { Miniflare } from 'miniflare';
 import { afterAll, afterEach, beforeAll, expect, it } from 'vitest';
-import { FromPeer, FromRemote, InitializeFromSnapshotRequest } from '../bebop/generated/schema';
+import { FromPeer, FromRemote, InitializeFromSnapshotRequest } from '../../../crates/sync_protocol/bebop/generated/schema';
 import { createTestWebSocket, setupMiniflare } from './utils';
+import { closeRecordedInput } from './transcript';
 
 type Editor = { actor: string; on_behalf_of: string | null };
 type Notification = { editors: Editor[] };
@@ -235,7 +236,11 @@ it('preserves agent subjects and excludes anonymous editors on last leave', asyn
   await edit(aliceAgent);
   await edit(bobAgent);
   await edit(anonymous);
-  for (const client of [aliceAgent, bobAgent, anonymous]) client.getWebSocket().close();
+  // The recorded scenario closes the anonymous connection first. Fence the
+  // callbacks so concurrent client closes cannot change the replay inputs.
+  for (const client of [anonymous, aliceAgent, bobAgent]) {
+    await closeRecordedInput(client.getWebSocket());
+  }
   await waitForBatches(id, 1);
   expect(batches(id)[0].editors).toHaveLength(2);
   expect(batches(id)[0].editors).toEqual(expect.arrayContaining([

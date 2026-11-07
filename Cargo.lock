@@ -6563,6 +6563,23 @@ dependencies = [
 ]
 
 [[package]]
+name = "doc_sync_core"
+version = "0.1.0"
+dependencies = [
+ "bebop",
+ "loro",
+ "macro_user_id",
+ "postcard",
+ "rootcause",
+ "serde",
+ "strum 0.27.2",
+ "sync_doc_id",
+ "sync_protocol",
+ "thiserror 2.0.18",
+ "uuid",
+]
+
+[[package]]
 name = "docker-compose-types"
 version = "0.24.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -6572,6 +6589,18 @@ dependencies = [
  "indexmap 2.14.0",
  "serde",
  "serde_yaml",
+]
+
+[[package]]
+name = "document_id"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "serde_json",
+ "sqlx",
+ "thiserror 2.0.18",
+ "utoipa",
+ "uuid",
 ]
 
 [[package]]
@@ -6728,8 +6757,8 @@ dependencies = [
  "sqs_client",
  "sqs_worker",
  "static_file_service_client",
+ "sync_protocol",
  "sync_router",
- "sync_service_bebop_schema",
  "sync_service_client",
  "sync_service_hex",
  "system_properties",
@@ -11812,6 +11841,17 @@ dependencies = [
  "strum 0.27.2",
  "thiserror 2.0.18",
  "unicode-segmentation",
+]
+
+[[package]]
+name = "lexical_node_id"
+version = "0.1.0"
+dependencies = [
+ "nutype",
+ "serde",
+ "serde_json",
+ "sqlx",
+ "utoipa",
 ]
 
 [[package]]
@@ -19924,6 +19964,24 @@ dependencies = [
 ]
 
 [[package]]
+name = "sync_doc_id"
+version = "0.1.0"
+dependencies = [
+ "document_id",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.18",
+]
+
+[[package]]
+name = "sync_protocol"
+version = "0.1.0"
+dependencies = [
+ "bebop",
+ "thiserror 2.0.18",
+]
+
+[[package]]
 name = "sync_router"
 version = "0.1.0"
 dependencies = [
@@ -19933,7 +19991,7 @@ dependencies = [
  "mockall",
  "opentelemetry",
  "rustls",
- "sync_service_bebop_schema",
+ "sync_protocol",
  "thiserror 2.0.18",
  "tokio",
  "tokio-tungstenite 0.28.0",
@@ -19943,6 +20001,40 @@ dependencies = [
  "url",
  "webpki-roots 1.0.10",
  "workspace-hack",
+]
+
+[[package]]
+name = "sync_server_core"
+version = "0.1.0"
+dependencies = [
+ "futures",
+ "lazy-regex",
+ "loro",
+ "macro_sync_service_jwt",
+ "serde",
+ "serde_json",
+ "sync_protocol",
+ "thiserror 2.0.18",
+ "tracing",
+ "utoipa",
+ "uuid",
+]
+
+[[package]]
+name = "sync_server_sim"
+version = "0.1.0"
+dependencies = [
+ "base64 0.22.1",
+ "bebop",
+ "futures",
+ "loro",
+ "macro_sync_service_jwt",
+ "serde",
+ "serde_json",
+ "sync_protocol",
+ "sync_server_core",
+ "thiserror 2.0.18",
+ "uuid",
 ]
 
 [[package]]
@@ -19960,8 +20052,8 @@ dependencies = [
  "serde_json",
  "sha2 0.10.9",
  "subtle",
- "sync_service_bebop_schema",
- "thiserror 2.0.18",
+ "sync_protocol",
+ "sync_server_core",
  "time",
  "tower-service",
  "tracing",
@@ -19973,13 +20065,6 @@ dependencies = [
  "web-time",
  "worker",
  "worker-rs-otel",
-]
-
-[[package]]
-name = "sync_service_bebop_schema"
-version = "0.1.0"
-dependencies = [
- "bebop",
 ]
 
 [[package]]

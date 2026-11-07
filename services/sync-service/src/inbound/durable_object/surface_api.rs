@@ -2,14 +2,12 @@
 
 use bebop::Record;
 use macro_sync_service_jwt::session::{SessionIdentity, SessionKind};
-use serde::{Deserialize, Serialize};
+use sync_protocol::InitializeFromSnapshotRequest;
 use worker::{Date, Method, Request, Response, Result, WebSocket};
 
-use super::{SyncSession, WebSocketMetadata, Wsm, response, status_codes};
+use super::{SyncSession, Wsm, response, status_codes};
 use crate::{
-    auth::WriteAccess,
     error::ResultExt,
-    generated::schema::InitializeFromSnapshotRequest,
     state::DocumentState,
     storage::{get_snapshot_storage, snapshot::SnapshotStorage},
 };
@@ -29,37 +27,7 @@ pub(super) fn session_kind_from_storage_key(key: &str) -> SessionKind {
     }
 }
 
-pub(super) fn document_kind() -> SessionKind {
-    SessionKind::Document
-}
-
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case")]
-pub(super) enum SurfaceLifecycle {
-    #[default]
-    Pending,
-    /// In-flight initialization; only kept in memory, never considered ready.
-    Initializing,
-    Ready,
-    Revoked,
-}
-
-impl WebSocketMetadata {
-    pub(super) fn grant_active(&self, kind: SessionKind, now: usize) -> bool {
-        self.session_kind == kind
-            && match kind {
-                SessionKind::Document => true,
-                SessionKind::Surface => self.expires_at.is_some_and(|expiry| expiry > now),
-            }
-    }
-
-    pub(super) fn write_access(&self) -> WriteAccess {
-        if !self.grant_active(self.session_kind, now_seconds()) {
-            return WriteAccess::None;
-        }
-        self.access_level.write_access_for(self.session_kind)
-    }
-}
+pub(super) use sync_server_core::domain::connection::SurfaceLifecycle;
 
 /// A pending session has no writers. Exact seed bytes identify a retry of the
 /// binary initializer, which has no separate operation ID. Unknown seeds must
@@ -76,13 +44,17 @@ async fn prepare_surface_snapshot(storage: &impl SnapshotStorage, snapshot: &[u8
     Ok(true)
 }
 
-fn now_seconds() -> usize {
-    (Date::now().as_millis() / 1000) as usize
+pub(super) fn now_seconds() -> u64 {
+    let now = Date::now().as_millis();
+    #[cfg(feature = "transcript")]
+    crate::transcript::clock("surface_expiry_ms", now);
+    // Preserve the adapter's original target-width conversion before widening.
+    ((now / 1000) as usize) as u64
 }
 
-impl SyncSession {
-    pub(super) async fn surface_lifecycle(&self) -> Result<SurfaceLifecycle> {
-        if let Some(value) = *self.surface_lifecycle.lock("surface lifecycle cached") {
+impl SyncSession<'_> {
+    pub(super) async fn surface_lifecycle(&mut self) -> Result<SurfaceLifecycle> {
+        if let Some(value) = self.surface_lifecycle {
             return Ok(value);
         }
         let value = self
@@ -91,13 +63,13 @@ impl SyncSession {
             .get(LIFECYCLE_KEY)
             .await?
             .unwrap_or_default();
-        let mut cached = self.surface_lifecycle.lock("surface lifecycle loaded");
+        let cached = &mut self.surface_lifecycle;
         // Do not overwrite a transition made while the storage read was pending.
         Ok(*cached.get_or_insert(value))
     }
 
     pub(in crate::inbound) async fn surface_handler(
-        &self,
+        &mut self,
         req: Request,
         claims: Option<crate::auth::AuthToken>,
     ) -> Result<Response> {
@@ -179,7 +151,7 @@ impl SyncSession {
         }
     }
 
-    async fn initialize_surface(&self, mut req: Request, key: &str) -> Result<Response> {
+    async fn initialize_surface(&mut self, mut req: Request, key: &str) -> Result<Response> {
         let bytes = req.bytes().await?;
         let body = InitializeFromSnapshotRequest::deserialize(&bytes)
             .context("invalid surface snapshot request")?;
@@ -191,8 +163,7 @@ impl SyncSession {
             SurfaceLifecycle::Ready | SurfaceLifecycle::Initializing => return Ok(response(409)),
             SurfaceLifecycle::Pending => {}
         }
-        *self.surface_lifecycle.lock("claim surface initialization") =
-            Some(SurfaceLifecycle::Initializing);
+        self.surface_lifecycle = Some(SurfaceLifecycle::Initializing);
         let result: Result<Response> = async {
             let storage = get_snapshot_storage(&self.env, &self.state, key.to_owned())?;
             if !prepare_surface_snapshot(&storage, &body.snapshot).await? {
@@ -212,7 +183,7 @@ impl SyncSession {
             if self.surface_lifecycle().await? == SurfaceLifecycle::Revoked {
                 return Ok(response(status_codes::FORBIDDEN));
             }
-            *self.surface_lifecycle.lock("surface ready") = Some(SurfaceLifecycle::Ready);
+            self.surface_lifecycle = Some(SurfaceLifecycle::Ready);
             Ok(response(status_codes::OK))
         }
         .await;
@@ -220,9 +191,7 @@ impl SyncSession {
             .as_ref()
             .is_ok_and(|response| response.status_code() == status_codes::OK)
         {
-            let mut lifecycle = self
-                .surface_lifecycle
-                .lock("release surface initialization");
+            let lifecycle = &mut self.surface_lifecycle;
             if *lifecycle != Some(SurfaceLifecycle::Revoked) {
                 // A failed Ready write may have committed. Reload durable truth
                 // rather than admitting a new initializer against a ready seed.
@@ -232,10 +201,10 @@ impl SyncSession {
         result
     }
 
-    pub(super) async fn revoke_surface(&self) -> Result<Response> {
+    pub(super) async fn revoke_surface(&mut self) -> Result<Response> {
         // Deny in-flight callbacks before yielding, and persist the tombstone
         // before acknowledging. Retrying revocation is safe, including pending IDs.
-        *self.surface_lifecycle.lock("revoke surface") = Some(SurfaceLifecycle::Revoked);
+        self.surface_lifecycle = Some(SurfaceLifecycle::Revoked);
         self.state
             .storage()
             .put(LIFECYCLE_KEY, SurfaceLifecycle::Revoked)
@@ -249,7 +218,7 @@ impl SyncSession {
     /// Reload socket grants after hibernation before accepting messages or
     /// selecting broadcast recipients. Cached grants avoid per-message IO.
     pub(crate) async fn validate_surface_sockets(
-        &self,
+        &mut self,
         sender: Option<&WebSocket>,
     ) -> Result<bool> {
         let key = self.document_id().await?;
@@ -261,12 +230,11 @@ impl SyncSession {
         for socket in self.state.get_websockets() {
             let mut wsm = Wsm::new(self, &socket);
             wsm.maybe_update_ws_meta_map().await?;
-            let ws_id = wsm.get_ws_id()?;
+            let ws_id = wsm.get_ws_id()?.to_owned();
             let active = ready
                 && self
-                    .ws_meta_map
-                    .lock("validate surface grant")
-                    .get(ws_id)
+                    .connections
+                    .get(&ws_id)
                     .is_some_and(|meta| meta.grant_active(SessionKind::Surface, now));
             if !active {
                 socket.close(Some(1008), Some("surface grant expired or revoked"))?;
@@ -279,19 +247,17 @@ impl SyncSession {
     }
 
     pub(super) fn active_websockets(&self) -> Vec<WebSocket> {
-        let key = self.document_id.lock("broadcast session identity");
+        let key = &self.session_key;
         let Some(key) = key.as_ref() else {
             return Vec::new();
         };
         if session_kind_from_storage_key(key) == SessionKind::Document {
             return self.state.get_websockets();
         }
-        if *self.surface_lifecycle.lock("broadcast surface lifecycle")
-            != Some(SurfaceLifecycle::Ready)
-        {
+        if self.surface_lifecycle != Some(SurfaceLifecycle::Ready) {
             return Vec::new();
         }
-        let metas = self.ws_meta_map.lock("broadcast surface grants");
+        let metas = &self.connections;
         let now = now_seconds();
         self.state
             .get_websockets()

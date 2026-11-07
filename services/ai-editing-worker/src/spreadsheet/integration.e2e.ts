@@ -15,7 +15,7 @@ import {
   FromPeer,
   FromRemote,
   InitializeFromSnapshotRequest,
-} from '../../../sync-service/bebop/generated/schema';
+} from '../../../../crates/sync_protocol/bebop/generated/schema';
 
 const repo = fileURLToPath(new URL('../../../../', import.meta.url));
 const syncPath = join(repo, 'services/sync-service');
