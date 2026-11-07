@@ -289,11 +289,13 @@ impl AccessGrant {
         }
     }
 
-    pub(crate) fn email_attachment_reason(value: &str) -> Option<EmailAttachmentReason> {
+    /// Parses an email attachment reason as the database stores it.
+    pub fn email_attachment_reason(value: &str) -> Option<EmailAttachmentReason> {
         EmailAttachmentReason::parse_db(value)
     }
 
-    pub(crate) fn foreign_entity_auth(value: &str) -> Option<ForeignEntityAuthEntity> {
+    /// Parses a foreign entity's auth target as the database stores it.
+    pub fn foreign_entity_auth(value: &str) -> Option<ForeignEntityAuthEntity> {
         ForeignEntityAuthEntity::parse_db(value)
     }
 }

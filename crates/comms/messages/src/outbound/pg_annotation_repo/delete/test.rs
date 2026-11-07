@@ -103,7 +103,7 @@ async fn delete_document_anchor(
     crate::domain::annotations::AnnotationService::new(
         super::super::PgAnnotationRepository(pool.clone()),
         entity_access::domain::service::EntityAccessServiceImpl::new(
-            entity_access::outbound::PgAccessRepository::new(pool.clone()),
+            entity_access_outbound::PgAccessRepository::new(pool.clone()),
         ),
         events,
     )

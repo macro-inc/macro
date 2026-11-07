@@ -11,13 +11,11 @@ use crate::domain::{
 use crate::inbound::toolset::{InitiativeToolContext, UpdateInitiativeSharing};
 use activity::outbound::pg_activity_repo::PgActivityRepo;
 use ai_toolset::{AsyncTool, RequestContext, ServiceContext};
-use entity_access::{
-    domain::{
-        models::{EditAccessLevel, Entity, EntityAccessAuth, EntityAccessReceipt, ViewAccessLevel},
-        service::EntityAccessServiceImpl,
-    },
-    outbound::PgAccessRepository,
+use entity_access::domain::{
+    models::{EditAccessLevel, Entity, EntityAccessAuth, EntityAccessReceipt, ViewAccessLevel},
+    service::EntityAccessServiceImpl,
 };
+use entity_access_outbound::PgAccessRepository;
 use macro_event_broker::MacroEvent;
 use std::{
     collections::HashMap,

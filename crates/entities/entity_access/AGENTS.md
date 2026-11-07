@@ -16,11 +16,8 @@ depended-on crates in the backend.
   `EntityAccessReceipt` — the typed receipt proving a checked access level.
 - `src/inbound/axum_extractors.rs`: Axum extractors that resolve a receipt
   from the request (feature `inbound`).
-- `src/outbound/pg_access_repo.rs`: the Postgres adapter (feature `outbound`).
-  Form Edit/Owner grants Edit on the backing database; form View grants
-  database View only when that form shares its responses.
-- `src/bin/explain_access.rs`: CLI to explain why a user has (or lacks)
-  access to an entity (feature `explain_binary`).
+- The Postgres adapter and the `explain_access` CLI live in
+  `crates/entities/entity_access_outbound`.
 
 ## Scope
 
@@ -42,17 +39,19 @@ depended-on crates in the backend.
 ## Recipes
 
 - Add an entity kind's access check: `src/domain/ports.rs`
-  (`AccessRepository` method) → `src/domain/service.rs` → `src/outbound/pg_access_repo.rs`.
+  (`AccessRepository` method) → `src/domain/service.rs` →
+  `entity_access_outbound`'s `src/pg_access_repo.rs`.
   If its users are exactly its `entity_access` grants, also list it in
   `GRANT_AUDIENCE_KINDS` (`src/domain/service.rs`) so bulk lookups group it; otherwise
   it falls back to one lookup per entity.
-- Debug a specific grant: `cargo run -p entity_access --bin explain_access
-  --features explain_binary`.
+- Depend on `entity_access_outbound` only where you construct
+  `PgAccessRepository` (composition roots, and tests as a dev-dependency);
+  domain crates take the `AccessRepository`/`EntityAccessService` ports.
 
 ## Checks
 
-- `cargo test -p entity_access` (`SQLX_OFFLINE` unset; requires local
-  MacroDB — `just setup_macrodb`).
+- `cargo test -p entity_access`; the database tests are in
+  `entity_access_outbound`.
 
 The message sender extractor maps signed user `agent_id` attribution to a bot
 receipt scoped to that same user and organization only for new posts. Reads,
@@ -65,27 +64,12 @@ the entity-access domain service.
 - `EntityAccessReceipt<R: RequiredPermission>` is the only proof a caller
   checked access at the right level; domain code downstream (e.g.
   `entity_mutation`) takes a receipt, not a raw boolean/level.
-- `get_documents_access` checks many documents in one statement
-  (`queries/document_access/documents_access.sql`) and must answer each one as
-  `get_document_access` does: change their sources together, and extend
-  `test/documents_access.rs` and its fixture, which compare the two.
 - Spans here never record a user id (a `MacroUserId` is an email): skip it.
   Checks record how many source ids they bound as `source_id_count`, through
-  `user_source_ids` in the Postgres adapter and `domain::telemetry`; a caller
+  `user_source_ids` in `entity_access_outbound` and `domain::telemetry`; a caller
   wraps its checks in `observe_source_ids` to record the count on its own span,
   as `initiative.read` does. A new check that fetches source ids goes through
   `user_source_ids` so its span gets the count.
-- `EntityAudienceLookup::get_entity_audiences` resolves many entities' users at
-  once: kinds whose users are exactly their `entity_access` grants go through
-  one grouped lookup (`queries/entity_audiences.rs`: grants, then team and
-  channel members once per distinct source). CRM audiences always read current
-  membership; other kinds and single ids use the cached per-entity
-  `get_users_by_entity`. Keep it in step with
-  `get_entity_users`.
-- `get_user_source_ids` is cached for 10 s per process and concurrent misses
-  for one user share one query through `single_flight`. A failure then arrives
-  as `Arc<sqlx::Error>`; `anyhow_access_error` classifies both forms, so route
-  new callers' errors through it.
 - `ExternalChat` resolves ordinary entity-access/link/team grants through `external_chat_access_level`; its extractor reads `chat_id`.
 
 ## Related

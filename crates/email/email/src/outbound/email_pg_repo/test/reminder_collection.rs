@@ -1,14 +1,12 @@
 use super::thread_unread::service;
 use super::*;
 use crate::domain::followup::{EmailFollowupMailbox, ReminderAttachmentKind, ReminderThreadFilter};
-use entity_access::{
-    domain::{
-        models::{EntityAccessReceipt, ViewAccessLevel},
-        ports::EntityAccessService,
-        service::EntityAccessServiceImpl,
-    },
-    outbound::PgAccessRepository,
+use entity_access::domain::{
+    models::{EntityAccessReceipt, ViewAccessLevel},
+    ports::EntityAccessService,
+    service::EntityAccessServiceImpl,
 };
+use entity_access_outbound::PgAccessRepository;
 
 async fn receipts(
     pool: &Pool<Postgres>,

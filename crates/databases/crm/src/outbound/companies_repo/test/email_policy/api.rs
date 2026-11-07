@@ -14,7 +14,8 @@ use axum::{
     http::{Request, StatusCode},
     routing::{get, post},
 };
-use entity_access::{domain::service::EntityAccessServiceImpl, outbound::PgAccessRepository};
+use entity_access::domain::service::EntityAccessServiceImpl;
+use entity_access_outbound::PgAccessRepository;
 use macro_authorization::{
     CredentialOrigin, InternalAuthConfig, JwtValidator, MacroAuthorizationError,
     MacroAuthorizationServiceImpl, MacroAuthorizationState, NoBotAuthorizer,

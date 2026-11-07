@@ -17,7 +17,8 @@ use connection_gateway::service::connection::ConnectionRepo;
 use document_storage_service_client::DocumentStorageServiceClient;
 use documents::inbound::attachment::DocumentAttachmentService;
 use email::inbound::attachment::EmailAttachmentService;
-use entity_access::{domain::service::EntityAccessServiceImpl, outbound::PgAccessRepository};
+use entity_access::domain::service::EntityAccessServiceImpl;
+use entity_access_outbound::PgAccessRepository;
 use entity_registry::NonUserOwners;
 use macro_auth::InternalApiKey;
 use macro_authorization::{

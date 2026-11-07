@@ -4,7 +4,8 @@ use std::collections::HashSet;
 
 use channels::domain::historical::{HistoricalChannel, HistoricalChannelKind};
 use channels::outbound::pg_channels_repo::PgChannelsRepo;
-use entity_access::{domain::service::EntityAccessServiceImpl, outbound::PgAccessRepository};
+use entity_access::domain::service::EntityAccessServiceImpl;
+use entity_access_outbound::PgAccessRepository;
 use import::{domain::ports::CanonicalImportRepo, outbound::pg_import_repo::PgImportRepo};
 use macro_user_id::user_id::MacroUserIdStr;
 use slack_integration::{

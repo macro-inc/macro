@@ -5,7 +5,7 @@ use databases::domain::models::{CreateDatabase, TableId};
 use databases::domain::ports::{DatabaseRowReads, DatabasesService};
 use entity_access::domain::models::{EntityAccessReceipt, EntityType, ViewAccessLevel};
 use entity_access::domain::service::EntityAccessServiceImpl;
-use entity_access::outbound::PgAccessRepository;
+use entity_access_outbound::PgAccessRepository;
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
 use macro_event_broker::domain::service::NoopMacroEventBroker;
 use macro_user_id::user_id::MacroUserIdStr;

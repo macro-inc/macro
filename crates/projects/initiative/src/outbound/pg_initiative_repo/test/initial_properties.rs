@@ -9,14 +9,12 @@ use crate::domain::{
     service::InitiativeServiceImpl,
 };
 use crate::outbound::resources::ProjectResources;
-use entity_access::{
-    domain::{
-        models::{EntityAccessReceipt, EntityType, ViewAccessLevel},
-        ports::EntityAccessService,
-        service::EntityAccessServiceImpl,
-    },
-    outbound::PgAccessRepository,
+use entity_access::domain::{
+    models::{EntityAccessReceipt, EntityType, ViewAccessLevel},
+    ports::EntityAccessService,
+    service::EntityAccessServiceImpl,
 };
+use entity_access_outbound::PgAccessRepository;
 use models_properties::{api::requests::SetPropertyValue, service::property_value::PropertyValue};
 use properties::{
     PermissionServiceImpl, PropertiesPgRepo, PropertiesService, PropertiesServiceImpl,

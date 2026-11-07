@@ -20,7 +20,7 @@ async fn direct_mcp_credentials_follow_revocation_while_established_previews_sur
         sessions: repo.clone(),
         access: Arc::new(
             entity_access::domain::service::EntityAccessServiceImpl::new(
-                entity_access::outbound::PgAccessRepository::new(pool),
+                entity_access_outbound::PgAccessRepository::new(pool),
             ),
         ),
     };

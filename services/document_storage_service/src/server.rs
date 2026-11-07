@@ -455,7 +455,7 @@ async fn run_server() -> anyhow::Result<()> {
     ));
     let entity_access_service = Arc::new(
         entity_access::domain::service::EntityAccessServiceImpl::new(
-            entity_access::outbound::PgAccessRepository::new(db.clone()),
+            entity_access_outbound::PgAccessRepository::new(db.clone()),
         ),
     );
 
@@ -1837,7 +1837,7 @@ async fn run_server() -> anyhow::Result<()> {
         ),
         api::context::SlackAdminAuthorizer(
             entity_access_service.clone(),
-            entity_access::outbound::PgAccessRepository::new(db.clone()),
+            entity_access_outbound::PgAccessRepository::new(db.clone()),
         ),
         Box::new(move |_| slack_enabled),
         slack_limits,

@@ -6,7 +6,8 @@ use std::sync::Arc;
 use analytics_client::{
     AnalyticsClient, AnalyticsClientConfig, BackgroundSender, PostHogConfig, ProductEventProperties,
 };
-use entity_access::{domain::ports::AccessRepository, outbound::PgAccessRepository};
+use entity_access::domain::ports::AccessRepository;
+use entity_access_outbound::PgAccessRepository;
 use macro_env::Environment;
 use macro_user_id::user_id::MacroUserIdStr;
 use serde::Serialize;

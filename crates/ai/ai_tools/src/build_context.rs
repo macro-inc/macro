@@ -30,7 +30,7 @@ use email::outbound::EmailPgRepo;
 use email_service_client::EmailServiceClientExternal;
 use email_service_url::EmailServiceUrl;
 use entity_access::domain::service::EntityAccessServiceImpl;
-use entity_access::outbound::PgAccessRepository;
+use entity_access_outbound::PgAccessRepository;
 use entity_registry::OwnerGrantPolicy;
 use entity_registry_db_utils::OwnedEntityRegistrar;
 use foreign_entity::{

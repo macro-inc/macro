@@ -16,7 +16,8 @@ use std::{
 };
 
 use analytics_client::{AnalyticsClient, BackgroundSender, ProductEventProperties};
-use entity_access::{domain::ports::AccessRepository, outbound::PgAccessRepository};
+use entity_access::domain::ports::AccessRepository;
+use entity_access_outbound::PgAccessRepository;
 use lru::LruCache;
 use macro_env::Environment;
 use macro_user_id::user_id::MacroUserIdStr;

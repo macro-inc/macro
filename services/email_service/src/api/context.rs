@@ -17,8 +17,9 @@ use email::{
 
 use crate::config::Config;
 use crate::outbound::mailbox_init::{MicrosoftGrantSource, PgMailboxInitialization};
-use entity_access::{domain::service::EntityAccessServiceImpl, outbound::PgAccessRepository};
+use entity_access::domain::service::EntityAccessServiceImpl;
 use entity_access_management::domain::service::EntityAccessManagementServiceImpl;
+use entity_access_outbound::PgAccessRepository;
 use frecency::{domain::services::FrecencyQueryServiceImpl, outbound::postgres::FrecencyPgStorage};
 use macro_auth::InternalApiKey;
 use macro_authorization::{

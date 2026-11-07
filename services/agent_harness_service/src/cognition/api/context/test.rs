@@ -334,7 +334,7 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
     };
     let entity_access_service = Arc::new(
         entity_access::domain::service::EntityAccessServiceImpl::new(
-            entity_access::outbound::PgAccessRepository::new(pool.clone()),
+            entity_access_outbound::PgAccessRepository::new(pool.clone()),
         ),
     );
     // Producer creation is lazy: nothing connects to Kafka unless an event

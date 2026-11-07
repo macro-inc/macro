@@ -11,10 +11,8 @@ use crate::outbound::pg::PgWhatsAppRepository;
 use async_trait::async_trait;
 use axum::body::Body;
 use axum::http::{Method, Request, header};
-use entity_access::{
-    domain::{models::EntityType, service::EntityAccessServiceImpl},
-    outbound::PgAccessRepository,
-};
+use entity_access::domain::{models::EntityType, service::EntityAccessServiceImpl};
+use entity_access_outbound::PgAccessRepository;
 use external_chat::{
     domain::{
         models::*,

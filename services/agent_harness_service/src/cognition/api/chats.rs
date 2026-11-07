@@ -16,7 +16,7 @@ use chat::inbound::http::router::{
 };
 use chat::outbound::postgres::PgChatRepo;
 use entity_access::domain::service::EntityAccessServiceImpl;
-use entity_access::outbound::PgAccessRepository;
+use entity_access_outbound::PgAccessRepository;
 use entity_registry::OwnerGrantPolicy;
 use entity_registry_db_utils::OwnedEntityRegistrar;
 use macro_authorization::{MacroAuthorizationExtractor, UserOrInternal};

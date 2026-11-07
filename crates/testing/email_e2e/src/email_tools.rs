@@ -21,10 +21,11 @@ use email::{
     inbound::toolset::{EmailToolContext, email_toolset},
     outbound::EmailPgRepo,
 };
-use entity_access::{domain::service::EntityAccessServiceImpl, outbound::PgAccessRepository};
+use entity_access::domain::service::EntityAccessServiceImpl;
 use entity_access_management::{
     domain::service::EntityAccessManagementServiceImpl, outbound::PgRepository,
 };
+use entity_access_outbound::PgAccessRepository;
 use frecency::{domain::services::FrecencyQueryServiceImpl, outbound::postgres::FrecencyPgStorage};
 use macro_user_id::user_id::MacroUserIdStr;
 use rootcause::prelude::*;
