@@ -31,9 +31,9 @@
       "status": "xfail",
       "reason": "not-ported",
       "reviewedBy": "coding-agent",
-      "decision": "WORKPLAN later package layers (rich nodes, markdown, lists/tables); WP-06 core subset",
-      "note": "Missing capability: @lexical/link.$createLinkNode. No model mismatch is masked; this exact unsupported diagnostic must still occur.",
-      "failure": "op 4: call 4: unmapped API: @lexical/link.$createLinkNode"
+      "decision": "WP-20 owns MarkNode; WP-17 link toggling is implemented without placeholder marks.",
+      "note": "This literal case requires MarkNode construction and ID assertions; keep its exact unsupported MarkNode API visible until WP-20.",
+      "failure": "op 4: call 7: unmapped API: @lexical/mark.$createMarkNode"
     },
     {
       "file": "packages/lexical-mark/__tests__/unit/LexicalMarkNode.test.ts",
