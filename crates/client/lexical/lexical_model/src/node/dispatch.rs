@@ -63,6 +63,7 @@ pub struct NodeVTable {
     pub(crate) probe: fn() -> Option<Arc<dyn AnyNodeData>>,
     pub(crate) default_data: fn() -> Option<Arc<dyn AnyNodeData>>,
     pub(crate) initial_base: fn(&dyn Any) -> Result<BaseData, Error>,
+    pub(crate) import_exact: fn(&mut Transaction<'_>, &SerializedNode) -> Result<NodeKey, Error>,
     pub(crate) import: fn(&mut Transaction<'_>, &SerializedNode) -> Result<NodeKey, Error>,
     pub(crate) update: fn(&mut dyn Any, &SerializedNode) -> Result<(), Error>,
     pub(crate) json_version: fn(data: &dyn Any) -> u32,

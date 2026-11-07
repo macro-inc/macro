@@ -9,6 +9,7 @@ bench-counters = []
 model-segmentation = ["dep:unicode-segmentation"]
 
 [dependencies]
+smallvec = { workspace = true }
 imbl = { workspace = true }
 rustc-hash = { workspace = true }
 indexmap = { workspace = true }

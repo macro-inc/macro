@@ -4,6 +4,27 @@ use crate::{NodeKey, Utf16Offset};
 /// A failed model operation; the editor remains unchanged when an update fails.
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
+    /// input cannot be batched.
+    #[error("input cannot be batched")]
+    InputNotBatchable,
+    /// view selection supplied to headless editor.
+    #[error("view selection supplied to headless editor")]
+    ViewSelectionInHeadless,
+    /// remote create cannot include children.
+    #[error("remote create cannot include children")]
+    RemoteChildrenInCreate,
+    /// remote child list contains a duplicate.
+    #[error("remote child list contains a duplicate")]
+    DuplicateRemoteChild,
+    /// invalid remote text range.
+    #[error("invalid remote text range")]
+    InvalidRemoteTextRange,
+    /// Local target was not created earlier in this input.
+    #[error("unknown remote local node {0:?}")]
+    UnknownLocalNode(crate::LocalNode),
+    /// One remote local id was allocated twice.
+    #[error("duplicate remote local node {0:?}")]
+    DuplicateLocalNode(crate::LocalNode),
     /// Initial-state follow-up failed.
     #[error("initial follow-up failed: {0}")]
     InitialFollowUpFailed(std::sync::Arc<Error>),
@@ -287,6 +308,13 @@ impl Error {
     /// Stable variant name for cross-boundary error classification.
     pub fn kind(&self) -> &'static str {
         match self {
+            Self::InputNotBatchable => "InputNotBatchable",
+            Self::ViewSelectionInHeadless => "ViewSelectionInHeadless",
+            Self::RemoteChildrenInCreate => "RemoteChildrenInCreate",
+            Self::DuplicateRemoteChild => "DuplicateRemoteChild",
+            Self::InvalidRemoteTextRange => "InvalidRemoteTextRange",
+            Self::UnknownLocalNode(..) => "UnknownLocalNode",
+            Self::DuplicateLocalNode(..) => "DuplicateLocalNode",
             Self::InitialFollowUpFailed(..) => "InitialFollowUpFailed",
             Self::UnknownExtensionState { .. } => "UnknownExtensionState",
             Self::EndlessFollowUps => "EndlessFollowUps",

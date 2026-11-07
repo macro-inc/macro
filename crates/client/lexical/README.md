@@ -14,15 +14,22 @@ editors synchronize text caches after mutation reporting. JSON import/export pre
 unknown NodeState and upstream property order; `to_js_json_string` provides JavaScript
 number formatting and integer-key ordering. Selection values, detached slots, formatting,
 insertion and deletion share those transactions. Movement accepts host-resolved points;
-the optional `model-segmentation` feature supplies text-only Unicode movement. History
-and view diffs remain follow-on layers.
+the optional `model-segmentation` feature supplies text-only Unicode movement. Directional
+carets and eager cursors support mutation during traversal. Commands dispatch through
+priority-indexed plugins; extension state stages with transactions, and post-commit hooks
+share bounded follow-up rounds. History supplies snapshot undo/redo and independent merge
+classification. EditorCore consumes explicit inputs and returns commits, structural diffs
+and host effects, including DOM-first text suppression. Diffs encode the versioned
+11-opcode word/UTF-8 ABI without wire derives on model inputs.
 
 `lexical_conformance` interprets the recorder's schema-2 fixtures against this
 model. It checks call results, versioned identities, strict core key allocation,
 commits and final snapshots. Its exact expected-failure ledger keeps later work
 packages visible; ledgered trials do not count as passing fixtures. Run
 `cargo test -p lexical_conformance --test replay -- --report-coverage` for
-per-package pass/fail/ledger counts and blocking APIs.
+per-package pass/fail/ledger counts and blocking APIs. The native `flat_diff` integration
+test runs Bun against an independent TypeScript decoder for every opcode and malformed
+buffers; it does not require a wasm runtime.
 
 `lexical_workspace_tests` verifies the patched regex dependency and Loro snapshot
 compatibility alongside the model package. Future rich-node,
