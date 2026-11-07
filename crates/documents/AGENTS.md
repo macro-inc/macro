@@ -94,7 +94,7 @@ word docs, Illustrator/Photoshop files).
   `ai_engine`/`ai_toolset`/`ai_billing`/`ai_usage` (AI tools), `pptx_engine`/
   `psd_engine` (file formats), `lexical_client` (sync-service calls),
   `comms_db_client` (create/purge adapters), `macro_db_client` (purge/backfill).
-- Used by: `ai_tools`, `agent_harness`, `webhook`, `soup_realtime`, `memory`,
+- Used by: `ai_tools`, `agent_harness`, `webhook`, `soup_realtime_inbound`, `memory`,
   `projects`, `skills`, `github` — this crate's service and toolset are widely
   reused; check callers before changing a port signature.
 

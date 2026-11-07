@@ -40,7 +40,7 @@ use models_soup::{
     project::SoupProject,
 };
 use rootcause::Report;
-use soup_realtime::domain::models::Patch;
+use soup_realtime_core::models::Patch;
 use uuid::Uuid;
 
 use super::*;

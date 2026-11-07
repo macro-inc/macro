@@ -176,12 +176,11 @@ use soup::{
     domain::service::SoupImpl, inbound::axum_router::SoupRouterState,
     outbound::pg_soup_repo::PgSoupRepo,
 };
-use soup_realtime::{
-    domain::service::{SoupRealtimeConsumerService, SoupRealtimeServiceImpl},
-    outbound::{
-        entity_access::EntityAccessExpander, kafka_publisher::KafkaSoupRealtimePublisher,
-        soup_consumer::SoupTopicConsumer,
-    },
+use soup_realtime_core::service::{SoupRealtimeConsumerService, SoupRealtimeServiceImpl};
+use soup_realtime_inbound::kafka_consumer::run_entity_update_consumer;
+use soup_realtime_outbound::{
+    entity_access::EntityAccessExpander, kafka_publisher::KafkaSoupRealtimePublisher,
+    soup_consumer::SoupTopicConsumer,
 };
 use sqlx::postgres::PgPoolOptions;
 use std::{sync::Arc, time::Duration};
@@ -1988,15 +1987,15 @@ async fn run_server() -> anyhow::Result<()> {
                     KafkaSoupRealtimePublisher::new(macro_event_broker.clone()),
                 );
                 tracing::info!("starting realtime Soup entity consumer");
-                let result = fanout_service
-                    .run_entity_update_consumer(
-                        &brokers,
-                        &soup_realtime::outbound::agent_sessions::AgentSessionPullRequestLookup(
-                            session_repo.clone(),
-                        ),
-                        cancellation_token.cancelled(),
-                    )
-                    .await;
+                let result = run_entity_update_consumer(
+                    &fanout_service,
+                    &brokers,
+                    &soup_realtime_outbound::agent_sessions::AgentSessionPullRequestLookup(
+                        session_repo.clone(),
+                    ),
+                    cancellation_token.cancelled(),
+                )
+                .await;
 
                 if cancellation_token.is_cancelled() {
                     break;

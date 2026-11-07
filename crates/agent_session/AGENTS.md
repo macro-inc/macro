@@ -43,7 +43,7 @@ consumer talks to.
 - Used by: `agent_harness`, `agent_inmem`, `agent_egress`, `agent_trigger`,
   `agent_changes`, `agent_session_realtime`, `ai_tools` (coding-agent
   toolset), `complete_graph`, `graphql_registered_work`, `webhook`,
-  `search_service`, `soup_realtime`,
+  `search_service`, `soup_realtime_outbound`,
   and the cloud-agent crates (`cursor_cloud_agents`, `codex_cloud_agents`).
 
 ## Recipes
@@ -109,7 +109,7 @@ archive path must call `end_work_registrations_on_archive`; the sweep ends idle 
 sessions and catches up on the rest, in one guarded statement that is safe across replicas.
 `WorkRegistrationRealtime` wraps a session service's realtime so turn, rename, and archive
 changes reach viewers of registered sessions as Soup patches
-(`soup_realtime::outbound::agent_sessions::SoupWorkRegistrationSignal`); wrap any new
+(`soup_realtime_outbound::agent_sessions::SoupWorkRegistrationSignal`); wrap any new
 publisher of list-field changes. GraphQL is `graphql_registered_work`.
 
 Followers: a session started from a thread (`SessionPurpose::visibility`, any

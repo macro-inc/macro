@@ -16,7 +16,7 @@ use macro_event_broker::{
 use rdkafka::message::Message as _;
 use rootcause::prelude::{Report, ResultExt as _};
 
-use crate::domain::{
+use soup_realtime_core::{
     models::{SoupMacroEvent, SoupRealtimeMessage},
     ports::SoupRealtimeConsumer,
 };

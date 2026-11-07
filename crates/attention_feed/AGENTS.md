@@ -36,7 +36,7 @@ whose `DoneReceipt` is the undo token. Subscriptions run `FeedTriggers` through
 ## Boundaries
 
 - Depends on: `notification`, `entity_access` (ports; `inbound` feature);
-  `soup`, `email`, `activity`, `soup_realtime` (feature `outbound`).
+  `soup`, `email`, `activity`, `soup_realtime_core` (feature `outbound`).
 - Used by: `work_feed`, `notification_inbox` and their GraphQL adapters,
   `document_storage_service` (composition), `complete_graph` (tests).
 

@@ -8,7 +8,7 @@ use agent_session::domain::{
 use async_graphql::futures_util::{StreamExt as _, future::BoxFuture, pin_mut};
 use chrono::{DateTime, Utc};
 use model_entity::Entity;
-use soup_realtime::domain::models::Patch;
+use soup_realtime_core::models::Patch;
 
 use super::*;
 use crate::{RegisteredWorkGraphqlContext, RegisteredWorkGraphqlService};

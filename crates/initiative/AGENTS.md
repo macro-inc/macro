@@ -31,7 +31,7 @@ properties, and activity.
   `macro_event_broker`/`macro_event_topics`, optionally `properties` /
   `system_properties` (feature `resources`).
 - Used by: `graphql_initiative`, `ai_tools`, `initiative_description`,
-  `agent_trigger`, `messages`, `soup_realtime`.
+  `agent_trigger`, `messages`, `soup_realtime_inbound`.
 
 ## Recipes
 

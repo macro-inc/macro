@@ -10,7 +10,7 @@ use macro_user_id::user_id::MacroUserIdStr;
 use model_entity::{Entity, EntityType};
 use rootcause::prelude::{Report, ResultExt as _};
 
-use crate::domain::ports::UserAccessExpander;
+use soup_realtime_core::ports::UserAccessExpander;
 
 /// Narrow seam over the external entity-access service used by this adapter.
 ///

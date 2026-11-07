@@ -28,7 +28,7 @@ adapters, and lifecycle events. See `README.md` for the Kafka event schema.
 
 - Depends on: `attachment` (feature `attachment`), `entity_access_db_utils`,
   `share_permission_db_utils`, `macro_uuid`.
-- Used by: `ai_tools`, `agent_inmem`, `soup_realtime`.
+- Used by: `ai_tools`, `agent_inmem`, `soup_realtime_inbound`.
 
 ## Recipes
 

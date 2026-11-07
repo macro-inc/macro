@@ -124,7 +124,8 @@ macro_entrypoint = { path = "../../crates/macro_entrypoint" }
 macro_env = { path = "../../crates/macro_env" }
 macro_env_var = { path = "../../crates/macro_env_var" }
 macro_event_broker = { path = "../../crates/macro_event_broker", features = ["outbound"] }
-soup_realtime = { path = "../../crates/soup_realtime", default-features = false, features = ["outbound"] }
+soup_realtime_core = { path = "../../crates/search/soup_realtime_core" }
+soup_realtime_outbound = { path = "../../crates/search/soup_realtime_outbound" }
 macro_middleware = { path = "../../crates/macro_middleware", default-features = false, features = ["cloud_storage"] }
 macro_queues = { path = "../../crates/macro_queues" }
 macro_service_urls = { path = "../../crates/macro_service_urls" }

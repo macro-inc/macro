@@ -15,7 +15,7 @@ graphql_common = { path = "../graphql_common" }
 graphql_soup = { path = "../graphql_soup" }
 macro_user_id = { path = "../macro_user_id" }
 model-entity = { path = "../model-entity" }
-soup_realtime = { path = "../soup_realtime", default-features = false, features = ["ports"] }
+soup_realtime_core = { path = "../search/soup_realtime_core" }
 tokio = { workspace = true, features = ["macros", "sync", "time"] }
 tracing = { workspace = true }
 uuid = { workspace = true }

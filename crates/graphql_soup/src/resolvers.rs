@@ -19,7 +19,7 @@ use macro_user_id::user_id::MacroUserIdStr;
 use model_entity::EntityType;
 use models_pagination::TypeEraseCursor;
 use soup::domain::{models::grouping::build_grouped_response, ports::SoupService};
-use soup_realtime::domain::{models::Patch, ports::SoupRealtimeSubscriptionService};
+use soup_realtime_core::{models::Patch, ports::SoupRealtimeSubscriptionService};
 
 use crate::{
     inputs::{GroupedSoupInput, SoupInput},

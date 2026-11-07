@@ -267,10 +267,9 @@ soup = { path = "../../crates/soup", features = [
   "inbound",
   "outbound",
 ] }
-soup_realtime = { path = "../../crates/soup_realtime", default-features = false, features = [
-  "consumer",
-  "outbound",
-] }
+soup_realtime_core = { path = "../../crates/search/soup_realtime_core" }
+soup_realtime_inbound = { path = "../../crates/search/soup_realtime_inbound" }
+soup_realtime_outbound = { path = "../../crates/search/soup_realtime_outbound", features = ["consumer"] }
 sqlx = { workspace = true }
 sqs_client = { path = "../../crates/sqs_client", default-features = false, features = [
   "document",
