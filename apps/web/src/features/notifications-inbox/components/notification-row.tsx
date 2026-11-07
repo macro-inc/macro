@@ -4,9 +4,9 @@ import {
   twoLineClampMarkdownTheme,
   unifiedListMarkdownTheme,
 } from '@core/component/LexicalMarkdown/theme';
+import { isMobile } from '@core/mobile/isMobile';
 import CaretDownIcon from '@icon/system/regular/caret-down.svg';
 import CheckIcon from '@icon/system/regular/check.svg';
-import { isMobile } from '@core/mobile/isMobile';
 import { Button, cn } from '@ui';
 import { type JSX, Show } from 'solid-js';
 

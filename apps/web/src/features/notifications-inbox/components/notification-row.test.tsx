@@ -58,7 +58,9 @@ describe('NotificationRow', () => {
 
     expect(onToggleStack).toHaveBeenCalledOnce();
     expect(onClick).not.toHaveBeenCalled();
-    expect(screen.queryByRole('button', { name: /3 notifications/ })).toBeNull();
+    expect(
+      screen.queryByRole('button', { name: /3 notifications/ })
+    ).toBeNull();
   });
 
   it('unfolds and folds from its caret on a phone without opening', () => {

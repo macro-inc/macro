@@ -1,8 +1,8 @@
 import { t } from '@app/lib/i18n';
 import { StaticMarkdown } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
 import { twoLineClampMarkdownTheme } from '@core/component/LexicalMarkdown/theme';
-import CheckIcon from '@icon/system/regular/check.svg';
 import { isMobile } from '@core/mobile/isMobile';
+import CheckIcon from '@icon/system/regular/check.svg';
 import { Button, cn } from '@ui';
 import { type JSX, Show } from 'solid-js';
 import { RowSeparator, StackFoldButton } from './notification-row';

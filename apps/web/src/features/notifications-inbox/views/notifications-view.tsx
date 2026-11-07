@@ -98,10 +98,10 @@ import {
   dateHeaderLabel,
   type InboxListItem,
   type InboxStackItemPlace,
+  inboxSectionEnds,
   isInboxNotification,
   isInboxRow,
   isInboxStackItem,
-  inboxSectionEnds,
 } from '../primitives/inbox-date-headers';
 import { createInboxFilters } from '../primitives/inbox-filters';
 import { createInboxList } from '../primitives/inbox-list';
