@@ -33,3 +33,6 @@ pub mod xml;
 pub mod node_ids;
 /// Typed authored message references and parsed markdown extraction.
 pub mod mentions;
+
+/// Node-authored agent chat replies and session announcements.
+pub mod agent_reply;
