@@ -152,6 +152,7 @@ export function RoutineTriggers(props: {
             <RoutinePayloadTests
               subject="JSON body"
               pathPlaceholder="status"
+              listExample="alerts.*.severity"
               tests={trigger().match ?? []}
               onChange={(match) => onChange({ match })}
             />

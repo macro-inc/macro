@@ -33,6 +33,8 @@ export function RoutinePayloadTests(props: {
   subject?: string;
   /** An example field for the first input; a GitHub one by default. */
   pathPlaceholder?: string;
+  /** A field reaching into a list, for the help line; a GitHub one by default. */
+  listExample?: string;
   tests: PayloadTestDraft[];
   onChange: (tests: PayloadTestDraft[] | undefined) => void;
 }) {
@@ -118,7 +120,8 @@ export function RoutinePayloadTests(props: {
       </Show>
       <p class="text-xs text-ink-extra-muted">
         Fields are keys joined by dots; <code>*</code> checks every item of a
-        list, like <code>pull_request.labels.*.name</code>.
+        list, like{' '}
+        <code>{props.listExample ?? 'pull_request.labels.*.name'}</code>.
       </p>
     </div>
   );

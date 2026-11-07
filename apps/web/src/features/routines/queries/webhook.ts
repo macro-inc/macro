@@ -11,6 +11,7 @@ import type {
 } from '@service-scheduled-action/generated/schemas';
 import { queryOptions, useMutation, useQuery } from '@tanstack/solid-query';
 import { type Accessor, createSignal } from 'solid-js';
+import type { RoutineWebhookState } from '../core/webhook';
 import { scheduledActionKeys } from './keys';
 
 /** A routine without a URL has none: `null`, not an error. */
@@ -64,17 +65,6 @@ async function deleteWebhook(scheduleId: string) {
     setWebhook(scheduleId, null);
   });
 }
-
-export type RoutineWebhookState = {
-  /** Undefined while loading or before the routine is saved; null without a URL. */
-  webhook: RoutineWebhook | null | undefined;
-  /** The full URL just made, shown only until the panel closes. */
-  createdUrl: string | undefined;
-  failed: boolean;
-  pending: boolean;
-  create: () => void;
-  remove: () => void;
-};
 
 /**
  * A saved routine's webhook URL and how to make, replace or delete it. Its

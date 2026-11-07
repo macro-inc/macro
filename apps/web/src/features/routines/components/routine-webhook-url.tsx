@@ -3,7 +3,7 @@ import { writeClipboardData } from '@core/util/dataTransfer';
 import CopyIcon from '@icon/system/regular/copy.svg';
 import { Button, CopyButton, Input } from '@ui';
 import { Match, Show, Switch } from 'solid-js';
-import type { RoutineWebhookState } from '../queries/webhook';
+import type { RoutineWebhookState } from '../core/webhook';
 
 async function copy(text: string) {
   const copied = await writeClipboardData({ 'text/plain': text });
