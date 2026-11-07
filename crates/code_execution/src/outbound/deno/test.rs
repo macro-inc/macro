@@ -138,6 +138,7 @@ async fn real_sdk_nested_calls_are_authenticated_and_concurrent() {
             web_app_url: "https://app.example.test".into(),
         },
         unattended: None,
+        dry_run: false,
     };
     let source = r#"
 import { Macro } from '@macro-inc/sdk';
@@ -224,6 +225,7 @@ async fn a_program_presents_a_view_through_its_session() {
             web_app_url: "https://app.example.test".into(),
         },
         unattended: None,
+        dry_run: false,
     };
     let source = r#"
 export async function main({execution}) {
@@ -683,8 +685,8 @@ fn unattended(
         },
         unattended: Some(Unattended {
             arguments: arguments.as_object().unwrap().clone(),
-            dry_run,
         }),
+        dry_run,
         ..RunEnvironment::default()
     }
 }
@@ -844,6 +846,93 @@ export async function main({ macro, host }: { macro: any; host: string }) {
     assert!(progress.iter().any(|event| event["service"] == "email"
         && event["operation"] == "archiveThread"
         && event["status"] == "skipped"));
+    server.await.unwrap();
+    service.shutdown().await;
+}
+
+#[tokio::test]
+#[ignore = "requires pinned Deno runtime"]
+async fn a_read_only_session_program_reads_but_sends_no_writes() {
+    let (_root, service) = setup(Limits::default()).await;
+    let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let host = format!("http://{}", listener.local_addr().unwrap());
+    let server = tokio::spawn(async move {
+        let (mut stream, _) = listener.accept().await.unwrap();
+        let request = read_request(&mut stream).await;
+        assert!(request.starts_with("POST /decisions "), "{request}");
+        respond(&mut stream, r#"{"probabilities":{"yes":0.9}}"#).await;
+        // The write is skipped and the raw request stopped in the process.
+        assert!(
+            tokio::time::timeout(Duration::from_millis(500), listener.accept())
+                .await
+                .is_err()
+        );
+    });
+    // An agent's program, not a routine step: `main.mjs` with the session's
+    // handles, run for a session that may only read.
+    let source = format!(
+        r#"
+export async function main({{ macro, token }}) {{
+  const decision = await macro.ai.decide({{ input: "x", questions: {{ yes: "Yes?" }} }});
+  const archived = await macro._client.email.archiveThread({{ path: {{ id: "thread-1" }}, body: {{ archived: true }} }});
+  const sdkToken = macro._client.email.client.getConfig().auth;
+  let raw = "sent";
+  try {{
+    await fetch("{host}/email/labels", {{ method: "POST", headers: {{ authorization: `Bearer ${{sdkToken}}` }} }});
+  }} catch (error) {{
+    raw = String(error);
+  }}
+  let net = "loaded";
+  try {{ await import("node:" + "net"); }} catch {{ net = "unavailable"; }}
+  return {{ yes: decision.probabilities.yes, archived: archived.data, raw, token: token ?? null, net, connect: typeof Deno.connect }};
+}}
+"#
+    );
+    let environment = RunEnvironment {
+        token: "fixture-run-token".into(),
+        session_id: Some(uuid::Uuid::from_u128(1)),
+        execution_id: Some(uuid::Uuid::from_u128(2)),
+        endpoints: SdkEndpoints {
+            hosts: BTreeMap::from([
+                ("cognition".into(), host.clone()),
+                ("email".into(), host.clone()),
+            ]),
+            ..SdkEndpoints::default()
+        },
+        dry_run: true,
+        ..RunEnvironment::default()
+    };
+    let (events, outcome) = collect(
+        service
+            .execute(
+                ExecuteRequest {
+                    source,
+                    timeout_ms: 10_000,
+                },
+                environment,
+            )
+            .unwrap(),
+    )
+    .await;
+    let Outcome::Succeeded { value } = outcome else {
+        panic!("{outcome:?}");
+    };
+    assert_eq!(value["yes"], 0.9, "{value}");
+    assert_eq!(value["archived"], serde_json::json!({}));
+    assert_eq!(value["token"], serde_json::Value::Null);
+    assert_eq!(value["net"], "unavailable");
+    assert_eq!(value["connect"], "undefined");
+    assert!(
+        value["raw"]
+            .as_str()
+            .unwrap()
+            .contains("A dry run doesn't send changes."),
+        "{value}"
+    );
+    assert!(events.iter().any(|event| matches!(
+        &event.kind,
+        EventKind::Progress { value } if value["operation"] == "archiveThread" && value["status"] == "skipped"
+    )));
     server.await.unwrap();
     service.shutdown().await;
 }

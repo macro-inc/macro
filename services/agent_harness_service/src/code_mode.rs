@@ -59,6 +59,7 @@ impl ExecutionCredentials for RunCredentials {
             session_id: Some(identity.session.as_uuid()),
             execution_id: Some(identity.execution.as_uuid()),
             unattended: None,
+            dry_run: false,
         })
     }
 }
@@ -124,6 +125,7 @@ impl UserExecutionCredentials for UserRunCredentials {
             session_id: None,
             execution_id: None,
             unattended: None,
+            dry_run: false,
         })
     }
 }

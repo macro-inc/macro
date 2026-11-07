@@ -74,10 +74,12 @@ AbortSignal.timeout = sleepBanned("AbortSignal.timeout");
 Atomics.wait = sleepBanned("Atomics.wait");
 Atomics.waitAsync = sleepBanned("Atomics.waitAsync");
 try {
-  const {maxResultBytes, operations, unattended, ...context} = await new Response(Deno.stdin.readable).json();
+  const {maxResultBytes, operations, unattended, dryRun: dryRunRequested, ...context} = await new Response(Deno.stdin.readable).json();
   // A dry run answers each write with an empty result, so it shows what the
   // program would do. Operations missing from the catalog count as writes.
-  const dryRun = unattended?.dryRun === true;
+  // A routine's test run asks for one, and so does every run of a session
+  // that may only read.
+  const dryRun = dryRunRequested === true;
   const catalog = new Map((operations ?? []).map(operation => [operation.key, operation]));
   const routes = (operations ?? []).map(operation => ({
     ...operation,
@@ -124,7 +126,7 @@ try {
   // permissions. Compute this specifier so the entire generated graph is loaded
   // at runtime and every local module read requires the scratch permission.
   const program = new URL(unattended ? "./main.ts" : "./main.mjs", import.meta.url).href;
-  if (unattended) {
+  if (unattended || dryRun) {
     // A dry run's backstop lives in fetch; nothing else may reach the
     // network (raw sockets) or start a realm with its own fetch (workers).
     for (const name of ["connect", "connectTls", "startTls"]) Object.defineProperty(Deno, name, {value: undefined});
@@ -140,7 +142,10 @@ try {
     const session = context.sessionId ? macro.agentSessions.byId(context.sessionId) : undefined;
     const execution = session && context.executionId ? session.codeExecutions.byId(context.executionId) : undefined;
     if (typeof main !== "function") throw new Error("Export an async main({macro, session, execution}) function.");
-    value = await main({...context, macro, session, execution});
+    // A session that may only read gets no credential to build its own
+    // client with; the SDK it is handed is gated like a routine's dry run.
+    const supplied = dryRun ? {...context, token: undefined} : context;
+    value = await main({...supplied, macro, session, execution});
   }
   if (unattended) {
     // A step's output feeds later steps whole; one too large fails instead

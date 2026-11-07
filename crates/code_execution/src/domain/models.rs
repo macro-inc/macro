@@ -38,6 +38,12 @@ pub struct RunEnvironment {
     /// instead of an agent's or a person's call.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub unattended: Option<Unattended>,
+    /// No write runs: each one returns an empty result to the program and is
+    /// reported as skipped, so a run shows what it would have done. Writes
+    /// are every catalog operation that isn't a known read, so an operation
+    /// missing from the catalog is a write. A routine's test run sets it, and
+    /// so does every run of a session that may only read (a routine draft's).
+    pub dry_run: bool,
 }
 
 /// The deployment's Macro SDK targets, so a program's requests and links stay
@@ -58,11 +64,6 @@ pub struct SdkEndpoints {
 pub struct Unattended {
     /// Spread into `main`'s argument beside `macro`.
     pub arguments: serde_json::Map<String, Value>,
-    /// No write runs: each one returns an empty result to the program and is
-    /// reported as skipped, so a run shows what it would have done. Writes
-    /// are every catalog operation that isn't a known read, so an operation
-    /// missing from the catalog is a write.
-    pub dry_run: bool,
 }
 
 /// Frame bytes kept beside a full-size result for its `{"type":"result",...}` envelope.

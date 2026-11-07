@@ -29,6 +29,10 @@ const IMPORTS: &str = r#"{"imports":{"@macro-inc/sdk":"./sdk.mjs","handlebars":"
 /// connections or threads resolve to a module that doesn't exist. Timers
 /// refuse to sleep, as above.
 const UNATTENDED_IMPORTS: &str = r#"{"imports":{"@macro-inc/sdk":"./sdk.mjs","node:timers":"./timers.mjs","node:timers/promises":"./timers.mjs","timers":"./timers.mjs","timers/promises":"./timers.mjs","node:net":"./unavailable.mjs","node:tls":"./unavailable.mjs","node:http":"./unavailable.mjs","node:https":"./unavailable.mjs","node:http2":"./unavailable.mjs","node:dgram":"./unavailable.mjs","node:worker_threads":"./unavailable.mjs","worker_threads":"./unavailable.mjs","node:child_process":"./unavailable.mjs","node:cluster":"./unavailable.mjs","node:inspector":"./unavailable.mjs"}}"#;
+/// A session program that may only read keeps Handlebars, but, like an
+/// unattended one, every request it makes goes through the bootstrap's
+/// gated `fetch`.
+const READ_ONLY_IMPORTS: &str = r#"{"imports":{"@macro-inc/sdk":"./sdk.mjs","handlebars":"./handlebars.mjs","node:timers":"./timers.mjs","node:timers/promises":"./timers.mjs","timers":"./timers.mjs","timers/promises":"./timers.mjs","node:net":"./unavailable.mjs","node:tls":"./unavailable.mjs","node:http":"./unavailable.mjs","node:https":"./unavailable.mjs","node:http2":"./unavailable.mjs","node:dgram":"./unavailable.mjs","node:worker_threads":"./unavailable.mjs","worker_threads":"./unavailable.mjs","node:child_process":"./unavailable.mjs","node:cluster":"./unavailable.mjs","node:inspector":"./unavailable.mjs"}}"#;
 /// Runtime version pinned by the container and checked at startup.
 pub const DENO_VERSION: &str = "2.9.6";
 
@@ -123,6 +127,8 @@ impl DenoRunner {
             root.join("imports.json"),
             if job.environment.unattended.is_some() {
                 UNATTENDED_IMPORTS
+            } else if job.environment.dry_run {
+                READ_ONLY_IMPORTS
             } else {
                 IMPORTS
             },
@@ -301,8 +307,9 @@ struct ChildContext<'a> {
     #[serde(flatten)]
     environment: &'a RunEnvironment,
     max_result_bytes: usize,
-    /// For an unattended program, the catalog a dry run tells reads from
-    /// writes with, both for SDK operations and the requests they send.
+    /// For an unattended program or a dry run, the catalog a dry run tells
+    /// reads from writes with, both for SDK operations and the requests they
+    /// send.
     #[serde(skip_serializing_if = "Option::is_none")]
     operations: Option<&'static [CatalogEntry]>,
 }
@@ -359,7 +366,8 @@ async fn bridge(
     let mut initial = serde_json::to_vec(&ChildContext {
         environment,
         max_result_bytes: limits.max_result_bytes,
-        operations: environment.unattended.as_ref().map(|_| CATALOG.as_slice()),
+        operations: (environment.unattended.is_some() || environment.dry_run)
+            .then(|| CATALOG.as_slice()),
     })
     .map_err(internal)?;
     initial.push(b'\n');
