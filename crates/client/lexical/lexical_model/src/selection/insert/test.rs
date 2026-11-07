@@ -498,7 +498,8 @@ fn splitting_text_resolves_parent_selection_and_dirties_original_neighbors() -> 
     })?;
     let (_, commit) = editor.update(|tx| {
         tx.set_selection(Some(Selection::Range(RangeSelection::new(
-            Point::element(p, ChildIndex(1)), Point::text(text, Utf16Offset(2)),
+            Point::element(p, ChildIndex(1)),
+            Point::text(text, Utf16Offset(2)),
         ))))?;
         tx.text(text)?.split_text(&[Utf16Offset(2)])?;
         assert_eq!(tx.anchor()?, Point::element(p, ChildIndex(2)));
@@ -516,7 +517,10 @@ fn inserting_line_break_before_text_selects_the_text_start() -> Result<(), Error
         let text = tx.create_text("ab")?;
         tx.append(p, &[text.key()])?;
         tx.append(NodeKey::ROOT, &[p.key()])?;
-        tx.select_points(Point::text(text, Utf16Offset(1)), Point::text(text, Utf16Offset(1)))?;
+        tx.select_points(
+            Point::text(text, Utf16Offset(1)),
+            Point::text(text, Utf16Offset(1)),
+        )?;
         tx.insert_line_break(false)?;
         let tail = tx.last_child(p).unwrap();
         assert_eq!(tx.anchor()?, Point::text(tail, Utf16Offset::ZERO));
@@ -535,7 +539,8 @@ fn split_start_prefers_the_next_part_when_the_end_is_later() -> Result<(), Error
         tx.append(p, &[text.key()])?;
         tx.append(NodeKey::ROOT, &[p.key()])?;
         tx.set_selection(Some(Selection::Range(RangeSelection::new(
-            Point::text(text, Utf16Offset(2)), Point::element(NodeKey::ROOT, ChildIndex(1)),
+            Point::text(text, Utf16Offset(2)),
+            Point::element(NodeKey::ROOT, ChildIndex(1)),
         ))))?;
         let parts = tx.text(text)?.split_text(&[Utf16Offset(2)])?;
         assert_eq!(tx.anchor()?, Point::text(parts[1], Utf16Offset::ZERO));
@@ -555,7 +560,8 @@ fn element_text_replacement_shifts_the_end_past_a_leaf_insertion() -> Result<(),
         tx.append(p, &[first.key(), line.key(), last.key()])?;
         tx.append(NodeKey::ROOT, &[p.key()])?;
         tx.set_selection(Some(Selection::Range(RangeSelection::new(
-            Point::element(p, ChildIndex(1)), Point::element(p, ChildIndex(2)),
+            Point::element(p, ChildIndex(1)),
+            Point::element(p, ChildIndex(2)),
         ))))?;
         tx.insert_text("b")?;
         assert_eq!(tx.text_content(p), "ab\t");
@@ -578,7 +584,8 @@ fn multi_node_formatting_skips_an_unselected_start_text_boundary() -> Result<(),
         tx.append(p, &[first.key(), middle.key(), last.key()])?;
         tx.append(NodeKey::ROOT, &[p.key()])?;
         tx.set_selection(Some(Selection::Range(RangeSelection::new(
-            Point::text(last, Utf16Offset(1)), Point::text(first, Utf16Offset(1)),
+            Point::text(last, Utf16Offset(1)),
+            Point::text(first, Utf16Offset(1)),
         ))))?;
         tx.format_text(TextFormatType::Underline, None)?;
         assert_eq!(tx.focus()?, Point::text(middle, Utf16Offset::ZERO));
@@ -597,10 +604,51 @@ fn text_replacement_preserves_the_legacy_root_element_end_rule() -> Result<(), E
         tx.append(p, &[tab.key(), tail.key()])?;
         tx.append(NodeKey::ROOT, &[p.key()])?;
         tx.set_selection(Some(Selection::Range(RangeSelection::new(
-            Point::element(p, ChildIndex(0)), Point::element(NodeKey::ROOT, ChildIndex(1)),
+            Point::element(p, ChildIndex(0)),
+            Point::element(NodeKey::ROOT, ChildIndex(1)),
         ))))?;
         tx.insert_text("new")?;
         assert_eq!(tx.text_content(p), "new\u{2028}");
+        Ok(())
+    })?;
+    Ok(())
+}
+
+#[test]
+fn formatting_inherits_unselected_end_node_flags() -> Result<(), Error> {
+    let mut editor = Editor::builder(EditorMode::Headless).build().unwrap();
+    editor.update(|tx| {
+        let p = tx.create(Paragraph::default())?;
+        let first = tx.create_text("abc")?;
+        let last = tx.create_text("last")?;
+        tx.text(first)?.set_format(TextFormat::BOLD)?;
+        tx.text(last)?.set_format(TextFormat::ITALIC)?;
+        tx.append(p, &[first.key(), last.key()])?;
+        tx.append(NodeKey::ROOT, &[p.key()])?;
+        tx.set_selection(Some(Selection::Range(RangeSelection::new(
+            Point::text(first, Utf16Offset(1)), Point::text(last, Utf16Offset(0)),
+        ))))?;
+        tx.format_text(TextFormatType::Underline, None)?;
+        assert_eq!(tx.range_selection()?.format, TextFormat::BOLD | TextFormat::ITALIC | TextFormat::UNDERLINE);
+        assert_eq!(tx.view().text_data(last)?.format, TextFormat::ITALIC);
+        Ok(())
+    })?;
+    Ok(())
+}
+
+#[test]
+fn formatting_resolves_an_element_start_mutated_by_text_split() -> Result<(), Error> {
+    let mut editor = Editor::builder(EditorMode::Headless).build().unwrap();
+    editor.update(|tx| {
+        let p = tx.create(Paragraph::default())?;
+        let text = tx.create_text("abcd")?;
+        tx.append(p, &[text.key()])?;
+        tx.append(NodeKey::ROOT, &[p.key()])?;
+        tx.set_selection(Some(Selection::Range(RangeSelection::new(
+            Point::element(p, ChildIndex(0)), Point::text(text, Utf16Offset(2)),
+        ))))?;
+        tx.format_text(TextFormatType::Bold, None)?;
+        assert_eq!(tx.anchor()?, Point::text(text, Utf16Offset(0)));
         Ok(())
     })?;
     Ok(())
