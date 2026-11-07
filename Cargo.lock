@@ -11778,6 +11778,7 @@ dependencies = [
  "imbl",
  "indexmap 2.14.0",
  "nom 8.0.0",
+ "proptest",
  "rustc-hash 2.1.2",
  "ryu-js",
  "serde",

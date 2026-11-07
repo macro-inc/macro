@@ -649,4 +649,6 @@ mod editing;
 
 mod state;
 
+mod proptest;
+
 mod performance;

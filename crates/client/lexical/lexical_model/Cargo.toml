@@ -21,3 +21,7 @@ strum = { workspace = true }
 nom = { workspace = true }
 ryu-js = { workspace = true }
 unicode-segmentation = { workspace = true, optional = true }
+
+[dev-dependencies]
+proptest = { workspace = true }
+
