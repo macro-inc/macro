@@ -44,34 +44,12 @@ pub(crate) fn lift_to_nearest_root(
     node: NodeKey,
     remove_empty: bool,
 ) -> std::result::Result<(), lexical_model::Error> {
-    let mut parent = tx.parent_or_err(node)?;
-    let mut index = tx
-        .index_within_parent(node)
-        .ok_or(lexical_model::Error::NoParent(node))?
-        .0;
-    tx.remove(node, true)?;
-    while !tx.is_root_or_shadow_root(parent) {
-        let grand = tx.parent_or_err(parent)?;
-        let parent_index = tx
-            .index_within_parent(parent)
-            .ok_or(lexical_model::Error::NoParent(parent))?
-            .0;
-        let size = tx.children_size(parent);
-        if index == 0 {
-            index = parent_index;
-            if remove_empty && size == 0 {
-                tx.remove(parent, false)?;
-            }
-        } else {
-            if index < size {
-                let after: Vec<_> = tx.children(parent).skip(index as usize).collect();
-                let copy = tx.copy_node(parent, false)?;
-                tx.splice(copy, ChildIndex(0), 0, &after)?;
-                tx.insert_after(parent, copy, true)?;
-            }
-            index = parent_index + 1;
-        }
-        parent = grand;
+    let mut caret: PointCaret = SiblingCaret::new(node, CaretDirection::Next).rewind(tx.view())?.into();
+    if caret.node_at_caret(tx.view()) == Some(node) || caret.flipped(tx.view()).node_at_caret(tx.view()) == Some(node) {
+        tx.remove(node, true)?;
     }
-    tx.splice(parent, ChildIndex(index), 0, &[node])
+    let options = SplitAtPointCaretNextOptions { should_split: |_, _, _| false, remove_empty_destination: remove_empty, ..Default::default() };
+    while let Some(next) = tx.split_at_point_caret_next(caret, options)? { caret = next.into(); }
+    tx.caret_insert(caret, node)?;
+    Ok(())
 }
