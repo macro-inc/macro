@@ -1,4 +1,5 @@
 use super::*;
+use crate::DenyReason;
 use crate::domain::{Result as BillingResult, UsageSnapshot};
 use ai_usage::domain::ports::SYSTEM_USER_ID;
 use chrono::{DateTime, Utc};
