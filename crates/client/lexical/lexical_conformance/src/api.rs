@@ -14,3 +14,4 @@ pub(crate) mod macro_model;
 pub(crate) mod wire;
 
 mod macro_edit;
+pub(crate) mod tab;

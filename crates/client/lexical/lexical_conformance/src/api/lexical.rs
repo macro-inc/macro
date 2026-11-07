@@ -14,6 +14,12 @@ pub(crate) fn call(r: &mut Replayer, tx: &mut Transaction<'_>, op: &Value) -> Re
     {
         return Err(ReplayError::NoActiveEditor);
     }
+    if name == "lexical.$onUpdate" && r.in_callback {
+        let callback = op["args"][0].clone();
+        integer(&callback["$tape"])?;
+        r.on_update.push(callback);
+        return Ok(undefined());
+    }
     let args = r.decode(op.get("args").unwrap_or(&json!([])))?;
     let a = args.as_array().ok_or_else(|| fail("args must be array"))?;
     let receiver = op
@@ -30,6 +36,8 @@ pub(crate) fn call(r: &mut Replayer, tx: &mut Transaction<'_>, op: &Value) -> Re
     if receiver.get("$caretValue").is_some()
         || short.contains("Caret")
         || short == "$caretRangeFromSelection"
+        || short == "$getCommonAncestor"
+        || receiver.get("$iteratorValue").is_some()
     {
         return super::caret::call(r, tx, &receiver, short, a);
     }
@@ -71,6 +79,99 @@ pub(crate) fn call(r: &mut Replayer, tx: &mut Transaction<'_>, op: &Value) -> Re
         })));
     }
     match name {
+        "@lexical/utils.$firstToLastIterator" | "@lexical/utils.$lastToFirstIterator" => {
+            let parent = node_key(a.first().ok_or_else(|| fail("iterator parent"))?)?;
+            let cursor = if name.ends_with("$firstToLastIterator") {
+                lexical_rich_nodes::utils::first_to_last(&view, parent)
+            } else {
+                lexical_rich_nodes::utils::last_to_first(&view, parent)
+            };
+            let id = r.iterators.len();
+            r.iterators.push(None);
+            r.child_iterators.insert(id, cursor);
+            Ok(json!({"$iteratorValue":id}))
+        }
+        "@lexical/list/formatList.$handleIndent" => {
+            let key = node_key(a.first().ok_or_else(|| fail("list item"))?)?;
+            let item = tx
+                .cast::<lexical_rich_nodes::list::ListItemNode>(key)
+                .ok_or_else(|| fail("list item"))?;
+            lexical_rich_nodes::list::format::handle_indent(tx, item)?;
+            Ok(undefined())
+        }
+
+        "@lexical/overflow.$createOverflowNode" => {
+            let key = tx.create(crate::test_nodes::OverflowNode::default())?.key();
+            r.node(tx.view(), key)
+        }
+        "@lexical/utils.$getNextSiblingOrParentSibling" => {
+            match lexical_rich_nodes::utils::get_next_sibling_or_parent_sibling(
+                view,
+                node_key(a.first().ok_or_else(|| fail("node"))?)?,
+            ) {
+                Some((key, delta)) => Ok(json!([r.node(view, key)?, delta])),
+                None => Ok(Value::Null),
+            }
+        }
+        "Map.values" => {
+            let values = receiver["$map"]
+                .as_array()
+                .ok_or_else(|| fail("map"))?
+                .iter()
+                .map(|pair| pair[1].clone())
+                .collect();
+            let id = r.iterators.len();
+            r.iterators.push(None);
+            r.value_iterators.insert(id, values);
+            Ok(json!({"$iteratorValue":id}))
+        }
+        "@lexical/code-core.$createCodeNode" => {
+            let key = lexical_rich_nodes::code::create_code_node(
+                tx,
+                a.first().and_then(Value::as_str),
+                a.get(1).and_then(Value::as_str),
+            )?
+            .key();
+            r.node(tx.view(), key)
+        }
+        "@lexical/list.$isListItemNode" => Ok(json!(
+            a.first()
+                .filter(|v| v.get("$node").is_some())
+                .map(node_key)
+                .transpose()?
+                .is_some_and(|key| view.is::<lexical_rich_nodes::list::ListItemNode>(key))
+        )),
+        "@lexical/list.$isListNode" => Ok(json!(
+            a.first()
+                .filter(|v| v.get("$node").is_some())
+                .map(node_key)
+                .transpose()?
+                .is_some_and(|key| lexical_rich_nodes::list::is_list_node(&view, key))
+        )),
+        "@lexical/list.$insertList" => {
+            lexical_rich_nodes::list::format::insert_list(
+                tx,
+                serde_json::from_value(json!(str_arg(a, 0)?))?,
+            )?;
+            Ok(undefined())
+        }
+        "@lexical/list/utils.$getTopListNode" => {
+            let key = lexical_rich_nodes::list::utils::get_top_list_node(
+                &view,
+                node_key(a.first().ok_or_else(|| fail("list item"))?)?,
+            )?
+            .key();
+            r.node(view, key)
+        }
+        "@lexical/list/utils.$isLastItemInList" => {
+            let key = node_key(a.first().ok_or_else(|| fail("list item"))?)?;
+            let id = view
+                .cast::<lexical_rich_nodes::list::ListItemNode>(key)
+                .ok_or_else(|| fail("list item"))?;
+            Ok(json!(
+                lexical_rich_nodes::list::utils::is_last_item_in_list(&view, id)
+            ))
+        }
         "@lexical/utils.$insertNodeIntoLeaf" => {
             lexical_rich_nodes::utils::insert_node_into_leaf(
                 tx,
@@ -226,18 +327,8 @@ pub(crate) fn call(r: &mut Replayer, tx: &mut Transaction<'_>, op: &Value) -> Re
             })))
         }
         "LexicalEditor.dispatchCommand" => {
-            if !r.rich_text_registered {
-                return Ok(json!(false));
-            }
             let command = string(&a.first().ok_or_else(|| fail("command"))?["$cmd"])?;
-            let handled = match command {
-                "FORMAT_TEXT_COMMAND" => lexical_rich_nodes::rich_text::format_text(
-                    tx,
-                    str_arg(a, 1)?.parse().map_err(|_| fail("format"))?,
-                )?,
-                "INSERT_TAB_COMMAND" => lexical_rich_nodes::rich_text::insert_tab(tx)?,
-                _ => return Err(fail(format!("unmapped command: {command}"))),
-            };
+            let handled = super::tab::dispatch(r, tx, command, a.get(1).unwrap_or(&Value::Null))?;
             Ok(json!(handled))
         }
         "lexical/LexicalUtils.scheduleMicroTask" => {
@@ -312,9 +403,15 @@ pub(crate) fn call(r: &mut Replayer, tx: &mut Transaction<'_>, op: &Value) -> Re
                 .is_some_and(Selection::is_node)
         )),
         "lexical.$createTextNode" | "lexical/nodes/LexicalTextNode.$createTextNode" => {
-            let key = tx
-                .create_text(a.first().and_then(Value::as_str).unwrap_or(""))?
-                .key();
+            let text = match a.first() {
+                None => String::new(),
+                Some(value) if value.get("$undef").is_some() => String::new(),
+                Some(value) if value.get("$nodeKey").is_some() => {
+                    key_index(&value["$nodeKey"])?.to_string()
+                }
+                Some(value) => string(value)?.to_owned(),
+            };
+            let key = tx.create_text(&text)?.key();
             r.node(tx.view(), key)
         }
         "lexical.$createParagraphNode"
@@ -416,7 +513,7 @@ pub(crate) fn call(r: &mut Replayer, tx: &mut Transaction<'_>, op: &Value) -> Re
         )),
         "LexicalEditor.getEditorState" => {
             let state = tx.committed_state();
-            let version = (r.editor_id, r.version);
+            let version = (r.editor_id, r.committed_version);
             let id = if let Some(id) = r.saved_editor_states.get(&version) {
                 *id
             } else {
@@ -426,6 +523,31 @@ pub(crate) fn call(r: &mut Replayer, tx: &mut Transaction<'_>, op: &Value) -> Re
                 id
             };
             Ok(json!({"$snapshot":id}))
+        }
+        "LexicalEditor.toJSON" => Ok(json!({"editorState":tx.committed_state().to_json()?})),
+        "lexical/LexicalUtils.getEditorStateTextContent" => {
+            let id =
+                integer(&a.first().ok_or_else(|| fail("editor state"))?["$snapshot"])? as usize;
+            Ok(json!(
+                r.saved_states
+                    .get(id)
+                    .ok_or_else(|| fail("state handle"))?
+                    .root_text_content()
+            ))
+        }
+        "lexical/LexicalUtils.getTextDirection" => {
+            Ok(serde_json::to_value(text_direction(str_arg(a, 0)?))?)
+        }
+        "lexical/LexicalUtils.$getCompositionKey" => Ok(tx
+            .composition_key()
+            .map_or_else(|| Value::Null, |key| json!({"$nodeKey":key.index()}))),
+        "lexical/LexicalUtils.$setCompositionKey" => {
+            let key = match a.first() {
+                Some(v) if !v.is_null() => Some(key_arg(r, v)?),
+                _ => None,
+            };
+            tx.set_composition_key(key)?;
+            Ok(undefined())
         }
         "EditorState.toJSON" => {
             let id = integer(&receiver["$snapshot"])? as usize;

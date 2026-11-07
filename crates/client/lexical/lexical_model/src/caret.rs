@@ -145,7 +145,6 @@ pub fn text_node_offset(
             key: origin,
         });
     }
-    text.byte_offset(offset)?;
     Ok(offset)
 }
 impl TextPointCaret {

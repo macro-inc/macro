@@ -163,7 +163,11 @@ pub(crate) fn configured_builder(nodes: &[String], attached: bool) -> Result<Edi
     } else {
         EditorMode::Headless
     });
+    let mut seen = std::collections::HashSet::new();
     for node in nodes {
+        if !seen.insert(node) {
+            continue;
+        }
         builder = match node.as_str() {
             "test_block" => builder.node::<TestElementNode>(),
             "test_inline_block" => builder.node::<TestInlineElementNode>(),

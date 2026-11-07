@@ -20,7 +20,7 @@ fn main() {
     let ledger: Ledger =
         serde_json::from_str(include_str!("../ledger.json")).expect("ledger schema");
     let mut cases = Vec::new();
-    for package in std::fs::read_dir(root).expect("fixture directory") {
+    for package in std::fs::read_dir(&root).expect("fixture directory") {
         let package = package.expect("package");
         if !package.path().is_dir() {
             continue;
@@ -45,6 +45,7 @@ fn main() {
         .expect("valid ledger");
     let counts = Arc::new(Mutex::new(BTreeMap::<String, Counts>::new()));
     let blocked = Arc::new(Mutex::new(BTreeMap::<String, usize>::new()));
+    let outcomes = Arc::new(Mutex::new(BTreeMap::new()));
     let mut trials = Vec::new();
     for (package, path, fixture) in cases {
         let name = format!("upstream::{package}::{}", fixture.source.test.join(" > "));
@@ -52,10 +53,27 @@ fn main() {
         let strict = ledger.strict_packages.contains(&package);
         let counts = counts.clone();
         let blocked = blocked.clone();
+        let outcomes = outcomes.clone();
+        let fixture_file = format!(
+            "upstream/{}",
+            path.strip_prefix(&root).expect("fixture path").display()
+        );
         trials.push(Trial::test(name, move || {
             let mut replayer = Replayer::default();
             replayer.strict_keys = strict;
             let result = replayer.replay(&fixture);
+            let status = match (&result, &expected) {
+                (Ok(()), None) => "pass",
+                (Err(error), Some(entry)) if entry.matches_failure(error) => "ledger",
+                _ => "fail",
+            };
+            outcomes.lock().expect("outcomes lock").insert(
+                fixture_file,
+                json!({
+                    "status": status,
+                    "error": result.as_ref().err().map(ToString::to_string),
+                }),
+            );
             let mut all = counts.lock().expect("count lock");
             let totals = all.entry(package).or_default();
             match (result, expected) {
@@ -112,5 +130,10 @@ fn main() {
         serde_json::to_vec_pretty(&report).expect("report JSON"),
     )
     .expect("report bytes");
+    std::fs::write(
+        output.join("cases.json"),
+        serde_json::to_vec_pretty(&*outcomes.lock().expect("outcomes lock")).expect("case JSON"),
+    )
+    .expect("case report bytes");
     conclusion.exit();
 }

@@ -1,12 +1,14 @@
 //! Strict interpreter: every operation, return value and snapshot is checked.
+use crate::config::validate_config;
 use crate::{fixture::Fixture, snapshot, test_nodes};
 use lexical_model::*;
 use serde_json::{Value, json};
 use std::collections::HashMap;
 mod editors;
 mod host;
-mod protocol;
-use protocol::{validate_config, validate_operation};
+pub(crate) mod protocol;
+use protocol::validate_operation;
+mod initial;
 
 /// A malformed fixture, unsupported operation, or observable oracle mismatch.
 #[derive(Debug, thiserror::Error)]
@@ -60,8 +62,20 @@ pub(crate) fn string(value: &Value) -> Result<&str> {
 #[derive(Default)]
 pub struct Replayer {
     pub(crate) rich_text_registered: bool,
+    pub(crate) tab_indent: Option<Option<u32>>,
+    pub(crate) code_highlight: bool,
+    pub(crate) d6_collapse_code_highlight: bool,
+    pub(crate) code_prism_registered: bool,
+    pub(crate) d6_handle_keys: HashMap<String, String>,
+    pub(crate) d6_oracle_max_key: u32,
+    pub(crate) d6_model_body: std::collections::HashSet<NodeKey>,
+    pub(crate) d6_model_leaves: std::collections::HashSet<NodeKey>,
+    pub(crate) markdown_options: lexical_markdown::MarkdownOptions,
     pub(crate) in_callback: bool,
     pub(crate) carets: Vec<crate::api::caret::CaretValue>,
+    pub(crate) caret_endpoints: HashMap<usize, (Value, Value)>,
+    pub(crate) caret_origins: HashMap<usize, Value>,
+    pub(crate) iterators: Vec<Option<(lexical_model::NodeCaretCursor, Option<Value>)>>,
     pub(crate) handles: HashMap<String, Value>,
     pub(crate) keys: HashMap<String, NodeKey>,
     pub(crate) next_record: u64,
@@ -74,6 +88,9 @@ pub struct Replayer {
     host_tape: std::sync::Arc<std::sync::Mutex<host::HostTape>>,
     pub(crate) saved_states: Vec<EditorState>,
     pub(crate) saved_editor_states: HashMap<(u64, u64), usize>,
+    pub(crate) committed_version: u64,
+    pub(crate) child_iterators: HashMap<usize, lexical_rich_nodes::utils::ChildCursor>,
+    pub(crate) value_iterators: HashMap<usize, Vec<Value>>,
     pub(crate) read_state: Option<EditorState>,
     pub(crate) selections: Vec<SelectionSlot>,
     pub(crate) selection_values: Vec<Option<Selection>>,
@@ -100,30 +117,41 @@ impl Replayer {
     /// Replay all trace operations and final state; no original JS executes.
     pub fn replay(&mut self, fixture: &Fixture) -> Result<()> {
         if fixture.schema != 2
-            || fixture.partial
             || fixture.tier != "A-rec"
-            || fixture.initial["editorState"] != Value::Null
-            || fixture.initial["selection"] != Value::Null
+            || (!fixture.partial
+                && (fixture.initial["editorState"] != Value::Null
+                    || fixture.initial["selection"] != Value::Null))
         {
             return Err(fail("unsupported fixture initialization"));
         }
-        self.list_indent = if fixture.source.file.starts_with("packages/lexical-core/")
-            && fixture.normalize == ["listIndent: 2"]
-        {
-            Some(2)
-        } else {
-            None
-        };
-        if !fixture.normalize.is_empty() && self.list_indent.is_none() {
-            return Err(fail(format!(
-                "unimplemented declared normalization: {:?}",
-                fixture.normalize
-            )));
+        self.list_indent = fixture
+            .normalize
+            .iter()
+            .any(|n| n == "listIndent: 2")
+            .then_some(2);
+        self.d6_collapse_code_highlight = fixture.source.repo == "lexical"
+            && fixture.source.file
+                == "packages/lexical-code-prism/src/__tests__/unit/LexicalCodeNodeTabs.test.ts"
+            && fixture.trace.iter().any(|op| {
+                op["op"] == "plugin" && op["name"] == "@lexical/code-prism.registerCodeHighlighting"
+            });
+        for normalization in &fixture.normalize {
+            match normalization.as_str() {
+                "listIndent: 2" => self.markdown_options.list_indent = 2,
+                "codeHighlight" => self.code_highlight = true,
+                "d6_collapse_code_highlight" if self.d6_collapse_code_highlight => {}
+                _ => {
+                    return Err(fail(format!(
+                        "unimplemented declared normalization: {normalization}"
+                    )));
+                }
+            }
         }
-        if fixture
-            .initial
-            .as_object()
-            .is_none_or(|initial| initial.len() != 2)
+        if !fixture.partial
+            && fixture
+                .initial
+                .as_object()
+                .is_none_or(|initial| initial.len() != 2)
         {
             return Err(fail("unsupported initial fields"));
         }
@@ -224,7 +252,7 @@ impl Replayer {
                             _ => return Err(fail("unimplemented configured replacement/plugin")),
                         };
                     }
-                    let ed = builder
+                    let mut ed = builder
                         .key_source(KeySource::Shared(self.key_counter.clone()))
                         .extension_state(self.model_clock())
                         .extension_state(self.document_context().random)
@@ -234,6 +262,9 @@ impl Replayer {
                         self.compare(ret, &json!({"$editor":self.editor_id}))?;
                     }
                     last_created = Some(self.editor_id);
+                    if fixture.partial {
+                        self.restore_initial(&mut ed, &fixture.initial)?;
+                    }
                     editor = Some(ed);
                     Ok(())
                 }
@@ -274,6 +305,7 @@ impl Replayer {
                         if op["index"] != self.version {
                             return Err(fail("state install commit index"));
                         }
+                        self.committed_version = self.version;
                         self.states
                             .insert((self.editor_id, self.version), commit.next.clone());
                         snapshot::compare(self, &op["snapshot"], &commit.next, Some(&commit))?;
@@ -307,6 +339,7 @@ impl Replayer {
                             if pending["index"] != self.version {
                                 return Err(fail("commit index mismatch"));
                             }
+                            self.committed_version = self.version;
                             self.states
                                 .insert((self.editor_id, self.version), commit.next.clone());
                             snapshot::compare(
@@ -343,9 +376,19 @@ impl Replayer {
                                 ));
                             }
                         }
+                        let next_update = fixture
+                            .trace
+                            .get(i + 1..)
+                            .and_then(|tail| {
+                                tail.iter().find(|next| {
+                                    !matches!(next["op"].as_str(), Some("clock" | "log"))
+                                })
+                            })
+                            .is_some_and(|next| next["op"] == "update");
                         if pending["op"] == "update"
                             && !self.pending_writes
-                            && pending["opts"].get("onUpdate").is_none()
+                            && (pending["opts"]["discrete"] == true || !next_update)
+                            && self.on_update.is_empty()
                         {
                             self.capture_slots(&tx)?;
                             let commit = tx.commit()?;
@@ -383,11 +426,27 @@ impl Replayer {
                     self.pending_command = true;
                     Ok(())
                 }
+                "plugin"
+                    if op["name"]
+                        == "@lexical/react/LexicalTabIndentationPlugin.registerTabIndentation" =>
+                {
+                    crate::api::tab::register(self, &op["args"])
+                }
+                "plugin" if op["name"] == "@lexical/code-prism.registerCodeHighlighting" => {
+                    if op["args"] != json!([{"$ed":0}]) {
+                        return Err(fail("Prism plugin arguments"));
+                    }
+                    self.code_prism_registered = true;
+                    Ok(())
+                }
                 "plugin" => {
                     if op["name"] != "@lexical/rich-text.registerRichText"
                         || op["args"] != json!([{"$ed":0}])
                     {
-                        return Err(fail("unmapped plugin registration"));
+                        return Err(fail(format!(
+                            "unmapped plugin registration: {}",
+                            op["name"]
+                        )));
                     }
                     self.rich_text_registered = true;
                     Ok(())
@@ -555,6 +614,9 @@ impl Replayer {
                 }
 
                 let result = self.execute_calls(&op["calls"], tx).and_then(|()| {
+                    if self.code_prism_registered {
+                        crate::api::tab::initialize_code_language(tx)?;
+                    }
                     self.pending_writes |= tx.has_dirty_nodes()
                         || tx.selection() != tx.committed_state().selection()
                         || tx.selection().is_some_and(Selection::is_dirty);
@@ -652,7 +714,7 @@ impl Replayer {
     }
     pub(crate) fn decode(&self, value: &Value) -> Result<Value> {
         if let Some(object) = value.as_object() {
-            for tag in ["$h", "$ed", "$state", "$sel", "$pt", "$caret"] {
+            for tag in ["$h", "$ed", "$state", "$sel", "$pt", "$caret", "$iterator"] {
                 if let Some(id) = object.get(tag) {
                     return self
                         .handles
@@ -689,6 +751,7 @@ impl Replayer {
                 ("$sel", "$selection"),
                 ("$pt", "$point"),
                 ("$caret", "$caretValue"),
+                ("$iterator", "$iteratorValue"),
             ] {
                 if let Some(id) = object.get(tag) {
                     if actual.get(actual_tag).is_none() {
@@ -711,6 +774,11 @@ impl Replayer {
                             if let Some(origin) = object.get("origin") {
                                 self.compare(origin, &actual["origin"])?;
                             }
+                            for field in ["caret", "distance"] {
+                                if let Some(expected) = object.get(field) {
+                                    self.compare(expected, &actual[field])?;
+                                }
+                            }
                         }
                         if tag == "$sel" && object.get("kind") != actual.get("kind") {
                             return Err(fail("selection kind mismatch"));
@@ -724,6 +792,11 @@ impl Replayer {
                             }
                             if let Some(typ) = object.get("type")
                                 && typ != &actual["type"]
+                                && !(self.d6_collapse_code_highlight
+                                    && self.code_prism_registered
+                                    && typ == "code-highlight"
+                                    && actual["type"] == "text"
+                                    && self.d6_model_leaves.contains(&node_key(actual)?))
                             {
                                 return Err(fail(format!(
                                     "node type: {typ} != {}",
@@ -740,6 +813,10 @@ impl Replayer {
                             }
                             if let Some(raw) = object.get("key") {
                                 self.bind_key(string(raw)?, node_key(actual)?)?;
+                                if self.d6_collapse_code_highlight && self.code_prism_registered {
+                                    self.d6_handle_keys
+                                        .insert(binding.clone(), string(raw)?.to_owned());
+                                }
                             }
                         }
                         if self

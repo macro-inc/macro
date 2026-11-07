@@ -25,6 +25,9 @@ pub(crate) fn get(
         let id = integer(&receiver["$selection"])?;
         return match name {
             "anchor" | "focus" => Ok(json!({"$point":{"selection":id,"role":name}})),
+            "_cachedIsBackward" => Ok(json!(
+                tx.range_at(r.selections[id as usize])?.cached_is_backward()
+            )),
             "format" => Ok(json!(tx.range_at(r.selections[id as usize])?.format.bits())),
             "style" => Ok(json!(tx.range_at(r.selections[id as usize])?.style)),
             "dirty" => Ok(json!(
@@ -38,7 +41,12 @@ pub(crate) fn get(
         let state = r.saved_states[integer(&receiver["$snapshot"])? as usize].clone();
         let mut pairs = Vec::new();
         for key in crate::snapshot::keys(&state) {
-            pairs.push(json!([{"$nodeKey":key_wire(key)}, r.node(state.view(), key)?]));
+            let raw = if key.generation() == 0 {
+                json!(key.to_string())
+            } else {
+                json!({"$nodeKey":key_wire(key)})
+            };
+            pairs.push(json!([raw, r.node(state.view(), key)?]));
         }
         return Ok(json!({"$map":pairs}));
     }
@@ -92,6 +100,17 @@ pub(crate) fn get(
                 view.get_or_err::<lexical_rich_nodes::table::TableCellNode>(key)?
                     .header_state,
             )?),
+            "__parent" => Ok(view
+                .parent(key)
+                .map_or(Value::Null, |key| json!({"$nodeKey":key_wire(key)}))),
+            "__target" | "__rel" | "__title" => {
+                let link = view.get_or_err::<lexical_rich_nodes::link::LinkNode>(key)?;
+                Ok(json!(match name {
+                    "__target" => &link.target,
+                    "__rel" => &link.rel,
+                    _ => &link.title,
+                }))
+            }
             "__url" => Ok(json!(
                 view.get::<lexical_rich_nodes::link::LinkNode>(key)
                     .ok_or_else(|| fail("link"))?

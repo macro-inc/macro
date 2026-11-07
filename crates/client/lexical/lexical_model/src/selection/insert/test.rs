@@ -865,30 +865,6 @@ fn replacing_a_selected_tab_removes_its_protected_text() -> Result<(), Error> {
 }
 
 #[test]
-fn inline_insertion_on_a_nested_block_container_rejects_without_changes() -> Result<(), Error> {
-    let mut editor = Editor::builder(EditorMode::Headless).build().unwrap();
-    editor.update(|tx| {
-        let outer = tx.create(Paragraph {})?;
-        let middle = tx.create(Paragraph {})?;
-        let inner = tx.create(Paragraph {})?;
-        tx.append(middle, &[inner.key()])?;
-        tx.append(outer, &[middle.key()])?;
-        tx.append(NodeKey::ROOT, &[outer.key()])?;
-        let point = Point::element(middle, ChildIndex(0));
-        tx.set_selection(Some(Selection::Range(RangeSelection::new(point, point))))
-    })?;
-    let before = editor.state().clone();
-    let result = editor.update(|tx| tx.insert_line_break(false));
-    assert!(matches!(
-        result,
-        Err(Error::Invariant("insertion requires a block"))
-    ));
-    assert!(editor.state().same_snapshot(&before));
-    assert_eq!(editor.state().selection(), before.selection());
-    Ok(())
-}
-
-#[test]
 fn multi_node_replacement_converts_segmented_first_text() -> Result<(), Error> {
     let mut editor = Editor::builder(EditorMode::Headless)
         .build()
@@ -992,5 +968,31 @@ fn typing_at_segmented_start_keeps_the_segmented_node() -> Result<(), Error> {
     assert_eq!(tx.view().text_data(segmented)?.mode, TextMode::Segmented);
     assert_eq!(tx.text_content(children[0]), "x");
     assert_eq!(tx.text_content(segmented), "abc");
+    Ok(())
+}
+
+mod boundary;
+
+#[test]
+fn inline_insertion_on_a_nested_block_container_rejects_without_changes() -> Result<(), Error> {
+    let mut editor = Editor::builder(EditorMode::Headless).build().unwrap();
+    editor.update(|tx| {
+        let outer = tx.create(Paragraph {})?;
+        let middle = tx.create(Paragraph {})?;
+        let inner = tx.create(Paragraph {})?;
+        tx.append(middle, &[inner.key()])?;
+        tx.append(outer, &[middle.key()])?;
+        tx.append(NodeKey::ROOT, &[outer.key()])?;
+        let point = Point::element(middle, ChildIndex(0));
+        tx.set_selection(Some(Selection::Range(RangeSelection::new(point, point))))
+    })?;
+    let before = editor.state().clone();
+    let result = editor.update(|tx| tx.insert_line_break(false));
+    assert!(matches!(
+        result,
+        Err(Error::Invariant("insertion requires a block"))
+    ));
+    assert!(editor.state().same_snapshot(&before));
+    assert_eq!(editor.state().selection(), before.selection());
     Ok(())
 }

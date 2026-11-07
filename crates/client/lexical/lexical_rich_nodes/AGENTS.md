@@ -16,6 +16,7 @@ feature exports owned HTML; browser DOM import and layout stay in views.
 - Keep descendant filtering and nearest-root insertion canonical in utils; do not shadow their re-exports.
 - Use mutation-safe child cursors; collect snapshot DFS results before editing.
 - `clipboard` consumes host MIME strings and HTML nodes; enable `html` for selection HTML export.
+
 - Depends on model, regex, URL, ordered maps, language tables and tracing facades; no I/O or runtime.
 - Keep this client crate excluded from workspace-hack.
 - Keep block-only registration separate from opt-in transforms and plugins.

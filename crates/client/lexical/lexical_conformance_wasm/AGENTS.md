@@ -43,3 +43,5 @@ Never import them from production crates or bundles.
 - Keep WP-07 failing tapes under `packages/lexical-conformance/fixtures/fuzz/`.
 - Keep the rich differential harness and its failing tapes outside the repository
   under `/home/wolf/tmp/lexical-port/difffuzz`; never copy that harness here.
+
+Rich snapshots retain dangling table selection points with null paths after final row/column deletion.

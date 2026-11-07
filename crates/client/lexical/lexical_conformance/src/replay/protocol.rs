@@ -1,6 +1,6 @@
 //! Editor routing and validation of the recorded host protocol.
 use super::*;
-pub(super) fn validate_config(config: &Value) -> Result<()> {
+pub(crate) fn validate_config(config: &Value) -> Result<()> {
     let object = config
         .as_object()
         .ok_or_else(|| fail("missing editor config"))?;
@@ -124,6 +124,7 @@ pub(super) fn validate_operation(op: &Value) -> Result<()> {
 #[derive(Default)]
 pub(super) struct EditorSession {
     version: u64,
+    committed_version: u64,
     attached: bool,
     rich_text_registered: bool,
     pending_writes: bool,
@@ -147,6 +148,7 @@ impl Replayer {
     pub(super) fn take_editor_session(&mut self) -> EditorSession {
         EditorSession {
             version: std::mem::take(&mut self.version),
+            committed_version: std::mem::take(&mut self.committed_version),
             attached: std::mem::take(&mut self.attached),
             rich_text_registered: std::mem::take(&mut self.rich_text_registered),
             pending_writes: std::mem::take(&mut self.pending_writes),
@@ -161,6 +163,7 @@ impl Replayer {
     }
     pub(super) fn install_editor_session(&mut self, session: EditorSession) {
         self.version = session.version;
+        self.committed_version = session.committed_version;
         self.attached = session.attached;
         self.rich_text_registered = session.rich_text_registered;
         self.pending_writes = session.pending_writes;
