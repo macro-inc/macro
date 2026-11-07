@@ -54,7 +54,12 @@ async fn outlook(pool: PgPool) -> EmailFollowupService<PgRemindersRepo, Email, F
     EmailFollowupService {
         repo: PgRemindersRepo::new(pool.clone()),
         mailbox: EmailServiceImpl::new(
-            EmailPgRepo::new(pool.clone()),
+            EmailPgRepo::new(
+                pool.clone(),
+                std::sync::Arc::new(entity_access_outbound::PgAccessRepository::new(
+                    pool.clone(),
+                )),
+            ),
             FrecencyQueryServiceImpl::new(FrecencyPgStorage::new(pool.clone())),
             NoOpEnqueuer,
             NoOpCrmService,

@@ -63,7 +63,10 @@ impl Stack {
             .gmail_ops_queue(&queues.named("gmail-ops")?.url)
             .email_scheduled_queue(&queues.named("scheduled")?.url);
         let service = EmailServiceImpl::new(
-            EmailPgRepo::new(pool.clone()),
+            EmailPgRepo::new(
+                pool.clone(),
+                Arc::new(PgAccessRepository::new(pool.clone())),
+            ),
             FrecencyQueryServiceImpl::new(FrecencyPgStorage::new(pool.clone())),
             sqs,
             CrmServiceImpl::new(

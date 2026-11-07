@@ -6,7 +6,10 @@ use crate::domain::{models::EmailBackfillStatus, ports::EmailUserRepo};
     fixtures(path = "../../../../fixtures", scripts("email_message"))
 )]
 async fn test_link_by_fusionauth_and_macro_id_found(pool: Pool<Postgres>) -> anyhow::Result<()> {
-    let repo = EmailPgRepo::new(pool);
+    let repo = EmailPgRepo::new(
+        pool.clone(),
+        std::sync::Arc::new(entity_access_outbound::PgAccessRepository::new(pool)),
+    );
 
     let macro_id = MacroUserIdStr::parse_from_str("macro|user1@test.com")?;
     let link = repo
@@ -33,7 +36,10 @@ async fn test_link_by_fusionauth_and_macro_id_found(pool: Pool<Postgres>) -> any
 async fn test_link_by_fusionauth_and_macro_id_wrong_fusionauth(
     pool: Pool<Postgres>,
 ) -> anyhow::Result<()> {
-    let repo = EmailPgRepo::new(pool);
+    let repo = EmailPgRepo::new(
+        pool.clone(),
+        std::sync::Arc::new(entity_access_outbound::PgAccessRepository::new(pool)),
+    );
 
     let macro_id = MacroUserIdStr::parse_from_str("macro|user1@test.com")?;
     let link = repo
@@ -55,7 +61,10 @@ async fn test_link_by_fusionauth_and_macro_id_wrong_fusionauth(
 async fn test_link_by_fusionauth_and_macro_id_wrong_macro_id(
     pool: Pool<Postgres>,
 ) -> anyhow::Result<()> {
-    let repo = EmailPgRepo::new(pool);
+    let repo = EmailPgRepo::new(
+        pool.clone(),
+        std::sync::Arc::new(entity_access_outbound::PgAccessRepository::new(pool)),
+    );
 
     let macro_id = MacroUserIdStr::parse_from_str("macro|other@test.com")?;
     let link = repo
@@ -117,7 +126,10 @@ async fn test_inboxes_for_macro_id_includes_own_and_delegated(
     .execute(&pool)
     .await?;
 
-    let repo = EmailPgRepo::new(pool);
+    let repo = EmailPgRepo::new(
+        pool.clone(),
+        std::sync::Arc::new(entity_access_outbound::PgAccessRepository::new(pool)),
+    );
     let macro_id = MacroUserIdStr::parse_from_str("macro|alice@test.com")?;
     let links = repo.inboxes_for_macro_id(macro_id.clone()).await?;
 
@@ -205,7 +217,10 @@ async fn user_inbox_details_maps_enriched_owned_inbox(pool: Pool<Postgres>) -> a
     .execute(&pool)
     .await?;
 
-    let details = EmailPgRepo::new(pool)
+    let source_ids = std::sync::Arc::new(entity_access_outbound::PgAccessRepository::new(
+        pool.clone(),
+    ));
+    let details = EmailPgRepo::new(pool, source_ids)
         .user_inbox_details(MacroUserIdStr::parse_from_str("macro|user1@test.com")?)
         .await?;
 
@@ -251,7 +266,10 @@ async fn user_inbox_details_reports_the_calendar_grant(pool: Pool<Postgres>) -> 
     .execute(&pool)
     .await?;
 
-    let details = EmailPgRepo::new(pool)
+    let source_ids = std::sync::Arc::new(entity_access_outbound::PgAccessRepository::new(
+        pool.clone(),
+    ));
+    let details = EmailPgRepo::new(pool, source_ids)
         .user_inbox_details(MacroUserIdStr::parse_from_str("macro|user1@test.com")?)
         .await?;
 
@@ -267,7 +285,10 @@ async fn user_inbox_details_reports_the_calendar_grant(pool: Pool<Postgres>) -> 
     fixtures(path = "../../../../fixtures", scripts("email_message"))
 )]
 async fn test_link_by_fusionauth_email_provider_found(pool: Pool<Postgres>) -> anyhow::Result<()> {
-    let repo = EmailPgRepo::new(pool);
+    let repo = EmailPgRepo::new(
+        pool.clone(),
+        std::sync::Arc::new(entity_access_outbound::PgAccessRepository::new(pool)),
+    );
 
     let link = repo
         .link_by_fusionauth_email_provider("fa-user-1", "user1@test.com", UserProvider::Gmail)
@@ -289,7 +310,10 @@ async fn test_link_by_fusionauth_email_provider_found(pool: Pool<Postgres>) -> a
 async fn test_link_by_fusionauth_email_provider_wrong_email(
     pool: Pool<Postgres>,
 ) -> anyhow::Result<()> {
-    let repo = EmailPgRepo::new(pool);
+    let repo = EmailPgRepo::new(
+        pool.clone(),
+        std::sync::Arc::new(entity_access_outbound::PgAccessRepository::new(pool)),
+    );
 
     let link = repo
         .link_by_fusionauth_email_provider("fa-user-1", "unknown@test.com", UserProvider::Gmail)
@@ -307,7 +331,10 @@ async fn test_link_by_fusionauth_email_provider_wrong_email(
 async fn test_link_by_fusionauth_email_provider_wrong_fusionauth(
     pool: Pool<Postgres>,
 ) -> anyhow::Result<()> {
-    let repo = EmailPgRepo::new(pool);
+    let repo = EmailPgRepo::new(
+        pool.clone(),
+        std::sync::Arc::new(entity_access_outbound::PgAccessRepository::new(pool)),
+    );
 
     let link = repo
         .link_by_fusionauth_email_provider(
@@ -375,7 +402,10 @@ async fn test_owned_link_for_thread_resolves_own_and_delegated(
     .execute(&pool)
     .await?;
 
-    let repo = EmailPgRepo::new(pool);
+    let repo = EmailPgRepo::new(
+        pool.clone(),
+        std::sync::Arc::new(entity_access_outbound::PgAccessRepository::new(pool)),
+    );
     let thread_id = Uuid::parse_str("c0000000-0000-0000-0000-0000000000ff")?;
     let link_id = Uuid::parse_str("c0000000-0000-0000-0000-000000000001")?;
 

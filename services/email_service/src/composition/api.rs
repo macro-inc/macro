@@ -106,7 +106,10 @@ pub(crate) async fn api_context(deps: ApiDependencies) -> anyhow::Result<ApiCont
     );
     let email_service = EmailRouterState::new(
         EmailServiceImpl::new(
-            EmailPgRepo::new(db.clone()),
+            EmailPgRepo::new(
+                db.clone(),
+                std::sync::Arc::new(entity_access_outbound::PgAccessRepository::new(db.clone())),
+            ),
             FrecencyQueryServiceImpl::new(FrecencyPgStorage::new(db.clone())),
             (*sqs_client).clone(),
             crm_service,
@@ -210,7 +213,10 @@ pub(crate) async fn api_context(deps: ApiDependencies) -> anyhow::Result<ApiCont
         );
     let transfer_bytes = Arc::new(
         email::domain::mailbox::drafts::content::DraftContentService {
-            repository: EmailPgRepo::new(db.clone()),
+            repository: EmailPgRepo::new(
+                db.clone(),
+                std::sync::Arc::new(entity_access_outbound::PgAccessRepository::new(db.clone())),
+            ),
             bytes: crate::outbound::mailbox_drafts::MailboxDraftContent {
                 provider: crate::outbound::attachment_access::ProviderAttachmentBytes {
                     s3: s3_client.clone(),
@@ -248,7 +254,10 @@ pub(crate) async fn api_context(deps: ApiDependencies) -> anyhow::Result<ApiCont
     let inbox_connection = Arc::new(email::domain::mailbox::connection::InboxConnectionService {
         links: crate::outbound::inbox_connection::PgConnectionLinks {
             db: db.clone(),
-            lookup: email::outbound::EmailPgRepo::new(db.clone()),
+            lookup: email::outbound::EmailPgRepo::new(
+                db.clone(),
+                std::sync::Arc::new(entity_access_outbound::PgAccessRepository::new(db.clone())),
+            ),
         },
         transactions: crate::outbound::inbox_connection::PgConnectionTransactions(db.clone()),
         provider: crate::outbound::inbox_connection::GoogleConnectionProvider {
@@ -323,7 +332,7 @@ pub(crate) async fn api_context(deps: ApiDependencies) -> anyhow::Result<ApiCont
         message_labels: Arc::new(email::domain::message_labels::MessageLabelService {
             repository: crate::outbound::message_labels::PgMessageLabels(
                 db.clone(),
-                EmailPgRepo::new(db.clone()),
+                EmailPgRepo::new(db.clone(), Arc::new(PgAccessRepository::new(db.clone()))),
             ),
             enqueuer: sqs_client.as_ref().clone(),
             broker: macro_event_broker.clone(),
@@ -332,7 +341,10 @@ pub(crate) async fn api_context(deps: ApiDependencies) -> anyhow::Result<ApiCont
             repository: crate::outbound::message_reads::PgMessageReads(db.clone()),
         }),
         draft_transfers: Arc::new(email::domain::draft_transfer::DraftTransferService {
-            repository: EmailPgRepo::new(db.clone()),
+            repository: EmailPgRepo::new(
+                db.clone(),
+                std::sync::Arc::new(entity_access_outbound::PgAccessRepository::new(db.clone())),
+            ),
             bytes: transfer_bytes,
             storage: crate::outbound::draft_attachment_storage::DraftAttachmentS3 {
                 s3: s3_client.clone(),
@@ -383,7 +395,10 @@ pub(crate) async fn api_context(deps: ApiDependencies) -> anyhow::Result<ApiCont
             },
         )),
         message_sources: Arc::new(email::domain::message_source::MessageSourceService {
-            repository: EmailPgRepo::new(db.clone()),
+            repository: EmailPgRepo::new(
+                db.clone(),
+                std::sync::Arc::new(entity_access_outbound::PgAccessRepository::new(db.clone())),
+            ),
             provider: crate::outbound::message_source::ProviderMessageSource {
                 gmail: email_api.clone(),
                 outlook: outlook_api.clone(),
@@ -391,7 +406,10 @@ pub(crate) async fn api_context(deps: ApiDependencies) -> anyhow::Result<ApiCont
             access: entity_access_service.as_ref().clone(),
         }),
         attachment_reads: Arc::new(email::domain::attachment_access::AttachmentReadService {
-            repository: EmailPgRepo::new(db.clone()),
+            repository: EmailPgRepo::new(
+                db.clone(),
+                std::sync::Arc::new(entity_access_outbound::PgAccessRepository::new(db.clone())),
+            ),
             provider: crate::outbound::attachment_access::ProviderAttachmentBytes {
                 s3: s3_client.clone(),
                 bucket: config.attachment_bucket.to_string(),
@@ -420,7 +438,12 @@ pub(crate) async fn api_context(deps: ApiDependencies) -> anyhow::Result<ApiCont
         event_forward_sender: Arc::new(
             email::domain::service::attachments::StagedAttachmentSender::new(
                 email_service.service(),
-                EmailPgRepo::new(db.clone()),
+                EmailPgRepo::new(
+                    db.clone(),
+                    std::sync::Arc::new(entity_access_outbound::PgAccessRepository::new(
+                        db.clone(),
+                    )),
+                ),
                 crate::outbound::draft_attachment_storage::DraftAttachmentS3 {
                     s3: s3_client.clone(),
                     bucket: config.attachment_bucket.to_string(),
@@ -428,7 +451,10 @@ pub(crate) async fn api_context(deps: ApiDependencies) -> anyhow::Result<ApiCont
             ),
         ),
         draft_attachments: Arc::new(email::domain::draft_attachments::DraftAttachmentService {
-            repository: email::outbound::EmailPgRepo::new(db.clone()),
+            repository: email::outbound::EmailPgRepo::new(
+                db.clone(),
+                std::sync::Arc::new(entity_access_outbound::PgAccessRepository::new(db.clone())),
+            ),
             storage: crate::outbound::draft_attachment_storage::DraftAttachmentS3 {
                 s3: s3_client.clone(),
                 bucket: config.attachment_bucket.to_string(),

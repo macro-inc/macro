@@ -7,7 +7,7 @@ use super::resolve::{ResolvedFilters, can_short_circuit, resolve_filters};
 use crate::domain::models::{PreviewView, PreviewViewStandardLabel};
 use crate::outbound::email_pg_repo::db_types::*;
 use chrono::{DateTime, Utc};
-use entity_access_outbound::get_user_source_ids;
+use entity_access::domain::ports::UserSourceIds;
 use filter_ast::Expr;
 use item_filters::SharedEmailFilter;
 use item_filters::ast::email::EmailLiteral;
@@ -1237,7 +1237,42 @@ fn extract_project_filter(ast: &Expr<EmailLiteral>) -> Vec<String> {
 /// };
 /// let results = dynamic_email_thread_cursor(&pool, &query).await?;
 /// ```
-#[tracing::instrument(skip(pool, view, query, user_id), fields(view = view.span_value()), err)]
+#[expect(
+    clippy::too_many_arguments,
+    reason = "the query's parts plus the access-source port it reads through"
+)]
+#[tracing::instrument(skip(pool, source_ids, view, query, user_id), fields(view = view.span_value()), err)]
+pub(crate) async fn dynamic_email_thread_cursor_with_sources(
+    pool: &PgPool,
+    source_ids: &dyn UserSourceIds,
+    link_ids: &[Uuid],
+    limit: u32,
+    view: &PreviewView,
+    query: Query<Uuid, SimpleSortMethod, Arc<Expr<EmailLiteral>>>,
+    user_id: &str,
+    team_id: Option<Uuid>,
+) -> Result<Vec<ThreadPreviewCursorDbRow>, sqlx::Error> {
+    read_page(
+        pool,
+        source_ids,
+        link_ids,
+        limit,
+        view,
+        query,
+        user_id,
+        team_id,
+        Reads {
+            team: Some(TeamReadTuning::DEFAULT),
+            owned: Some(OwnedReadTuning::DEFAULT),
+        },
+    )
+    .await
+    .map(|(rows, _)| rows)
+}
+
+/// [`dynamic_email_thread_cursor_with_sources`] with the real Postgres source
+/// lookup, for the repository tests.
+#[cfg(test)]
 pub(crate) async fn dynamic_email_thread_cursor(
     pool: &PgPool,
     link_ids: &[Uuid],
@@ -1247,15 +1282,16 @@ pub(crate) async fn dynamic_email_thread_cursor(
     user_id: &str,
     team_id: Option<Uuid>,
 ) -> Result<Vec<ThreadPreviewCursorDbRow>, sqlx::Error> {
-    dynamic_email_thread_cursor_with(
+    let source_ids = entity_access_outbound::PgAccessRepository::new(pool.clone());
+    dynamic_email_thread_cursor_with_sources(
         pool,
+        &source_ids,
         link_ids,
         limit,
         view,
         query,
         user_id,
         team_id,
-        Some(TeamReadTuning::DEFAULT),
     )
     .await
 }
@@ -1263,6 +1299,7 @@ pub(crate) async fn dynamic_email_thread_cursor(
 /// [`dynamic_email_thread_cursor`] with the team read's switch points given,
 /// or with `team_read: None`, team scope read by the general builder, as the
 /// parity tests compare.
+#[cfg(test)]
 #[expect(
     clippy::too_many_arguments,
     reason = "the entry point's arguments plus the team read's tuning"
@@ -1279,6 +1316,7 @@ pub(crate) async fn dynamic_email_thread_cursor_with(
 ) -> Result<Vec<ThreadPreviewCursorDbRow>, sqlx::Error> {
     read_page(
         pool,
+        &entity_access_outbound::PgAccessRepository::new(pool.clone()),
         link_ids,
         limit,
         view,
@@ -1315,6 +1353,7 @@ pub(crate) async fn dynamic_email_thread_cursor_owned_with(
 ) -> Result<(Vec<ThreadPreviewCursorDbRow>, Option<OwnedReadStats>), sqlx::Error> {
     read_page(
         pool,
+        &entity_access_outbound::PgAccessRepository::new(pool.clone()),
         link_ids,
         limit,
         view,
@@ -1343,6 +1382,7 @@ struct Reads {
 )]
 async fn read_page(
     pool: &PgPool,
+    source_ids: &dyn UserSourceIds,
     link_ids: &[Uuid],
     limit: u32,
     view: &PreviewView,
@@ -1372,10 +1412,14 @@ async fn read_page(
         None
     } else {
         let user = MacroUserIdStr::parse_from_str(user_id).ok();
-        match get_user_source_ids(pool, user.as_deref()).await {
+        let resolved = match &user {
+            Some(user) => source_ids.user_source_ids(user).await,
+            None => Ok(Vec::new()),
+        };
+        match resolved {
             Ok(source_ids) => Some(ProjectScope {
                 project_ids,
-                source_ids: source_ids.0,
+                source_ids,
             }),
             Err(e) => {
                 tracing::error!(error=?e, "unable to fetch source ids for project-scoped email query");

@@ -14,7 +14,10 @@ use std::time::Duration;
     fixtures(path = "../../../../fixtures", scripts("email_draft"))
 )]
 async fn test_get_simple_message_found(pool: Pool<Postgres>) -> anyhow::Result<()> {
-    let repo = EmailPgRepo::new(pool);
+    let repo = EmailPgRepo::new(
+        pool.clone(),
+        std::sync::Arc::new(entity_access_outbound::PgAccessRepository::new(pool)),
+    );
 
     let msg_id = Uuid::parse_str("ee000001-0000-0000-0000-000000000001")?;
     let link_id = Uuid::parse_str("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa")?;
@@ -42,7 +45,10 @@ async fn test_get_simple_message_found(pool: Pool<Postgres>) -> anyhow::Result<(
     fixtures(path = "../../../../fixtures", scripts("email_draft"))
 )]
 async fn test_get_simple_message_wrong_link_id(pool: Pool<Postgres>) -> anyhow::Result<()> {
-    let repo = EmailPgRepo::new(pool);
+    let repo = EmailPgRepo::new(
+        pool.clone(),
+        std::sync::Arc::new(entity_access_outbound::PgAccessRepository::new(pool)),
+    );
 
     let msg_id = Uuid::parse_str("ee000001-0000-0000-0000-000000000001")?;
     let wrong_link = Uuid::parse_str("bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb")?;
@@ -58,7 +64,10 @@ async fn test_get_simple_message_wrong_link_id(pool: Pool<Postgres>) -> anyhow::
     fixtures(path = "../../../../fixtures", scripts("email_draft"))
 )]
 async fn test_get_simple_message_across_inboxes(pool: Pool<Postgres>) -> anyhow::Result<()> {
-    let repo = EmailPgRepo::new(pool);
+    let repo = EmailPgRepo::new(
+        pool.clone(),
+        std::sync::Arc::new(entity_access_outbound::PgAccessRepository::new(pool)),
+    );
 
     let msg_id = Uuid::parse_str("ee000001-0000-0000-0000-000000000001")?;
     let owning_link = Uuid::parse_str("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa")?;
@@ -81,7 +90,10 @@ async fn test_get_simple_message_across_inboxes(pool: Pool<Postgres>) -> anyhow:
     fixtures(path = "../../../../fixtures", scripts("email_draft"))
 )]
 async fn test_get_simple_message_not_found(pool: Pool<Postgres>) -> anyhow::Result<()> {
-    let repo = EmailPgRepo::new(pool);
+    let repo = EmailPgRepo::new(
+        pool.clone(),
+        std::sync::Arc::new(entity_access_outbound::PgAccessRepository::new(pool)),
+    );
 
     let missing = Uuid::parse_str("99999999-9999-9999-9999-999999999999")?;
     let link_id = Uuid::parse_str("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa")?;
@@ -97,7 +109,10 @@ async fn test_get_simple_message_not_found(pool: Pool<Postgres>) -> anyhow::Resu
     fixtures(path = "../../../../fixtures", scripts("email_draft"))
 )]
 async fn test_get_simple_message_draft_with_headers(pool: Pool<Postgres>) -> anyhow::Result<()> {
-    let repo = EmailPgRepo::new(pool);
+    let repo = EmailPgRepo::new(
+        pool.clone(),
+        std::sync::Arc::new(entity_access_outbound::PgAccessRepository::new(pool)),
+    );
 
     let msg_id = Uuid::parse_str("ee000002-0000-0000-0000-000000000002")?;
     let link_id = Uuid::parse_str("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa")?;
@@ -118,7 +133,10 @@ async fn test_get_simple_message_draft_with_headers(pool: Pool<Postgres>) -> any
     fixtures(path = "../../../../fixtures", scripts("email_draft"))
 )]
 async fn test_get_draft_replying_to_found(pool: Pool<Postgres>) -> anyhow::Result<()> {
-    let repo = EmailPgRepo::new(pool);
+    let repo = EmailPgRepo::new(
+        pool.clone(),
+        std::sync::Arc::new(entity_access_outbound::PgAccessRepository::new(pool)),
+    );
 
     let link_id = Uuid::parse_str("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa")?;
     let replying_to = Uuid::parse_str("ee000001-0000-0000-0000-000000000001")?;
@@ -139,7 +157,10 @@ async fn test_get_draft_replying_to_found(pool: Pool<Postgres>) -> anyhow::Resul
     fixtures(path = "../../../../fixtures", scripts("email_draft"))
 )]
 async fn test_get_draft_replying_to_not_found(pool: Pool<Postgres>) -> anyhow::Result<()> {
-    let repo = EmailPgRepo::new(pool);
+    let repo = EmailPgRepo::new(
+        pool.clone(),
+        std::sync::Arc::new(entity_access_outbound::PgAccessRepository::new(pool)),
+    );
 
     let link_id = Uuid::parse_str("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa")?;
     let no_reply = Uuid::parse_str("ee000003-0000-0000-0000-000000000003")?;
@@ -155,7 +176,10 @@ async fn test_get_draft_replying_to_not_found(pool: Pool<Postgres>) -> anyhow::R
     fixtures(path = "../../../../fixtures", scripts("email_draft"))
 )]
 async fn test_get_draft_replying_to_wrong_link(pool: Pool<Postgres>) -> anyhow::Result<()> {
-    let repo = EmailPgRepo::new(pool);
+    let repo = EmailPgRepo::new(
+        pool.clone(),
+        std::sync::Arc::new(entity_access_outbound::PgAccessRepository::new(pool)),
+    );
 
     let wrong_link = Uuid::parse_str("bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb")?;
     let replying_to = Uuid::parse_str("ee000001-0000-0000-0000-000000000001")?;
@@ -175,7 +199,10 @@ async fn test_get_draft_replying_to_wrong_link(pool: Pool<Postgres>) -> anyhow::
 async fn test_delete_draft_message_keeps_nonempty_thread(
     pool: Pool<Postgres>,
 ) -> anyhow::Result<()> {
-    let repo = EmailPgRepo::new(pool);
+    let repo = EmailPgRepo::new(
+        pool.clone(),
+        std::sync::Arc::new(entity_access_outbound::PgAccessRepository::new(pool)),
+    );
 
     let draft_id = Uuid::parse_str("ee000002-0000-0000-0000-000000000002")?;
     let thread_id = Uuid::parse_str("11111111-1111-1111-1111-111111111111")?;
@@ -211,7 +238,10 @@ async fn test_delete_draft_message_keeps_nonempty_thread(
 async fn test_delete_draft_message_removes_empty_thread(
     pool: Pool<Postgres>,
 ) -> anyhow::Result<()> {
-    let repo = EmailPgRepo::new(pool);
+    let repo = EmailPgRepo::new(
+        pool.clone(),
+        std::sync::Arc::new(entity_access_outbound::PgAccessRepository::new(pool)),
+    );
 
     let draft_id = Uuid::parse_str("ee000004-0000-0000-0000-000000000004")?;
     let thread_id = Uuid::parse_str("33333333-3333-3333-3333-333333333333")?;
@@ -241,7 +271,10 @@ async fn test_delete_draft_message_removes_empty_thread(
 async fn test_delete_draft_message_rejects_sent_message(
     pool: Pool<Postgres>,
 ) -> anyhow::Result<()> {
-    let repo = EmailPgRepo::new(pool);
+    let repo = EmailPgRepo::new(
+        pool.clone(),
+        std::sync::Arc::new(entity_access_outbound::PgAccessRepository::new(pool)),
+    );
 
     // ee000003 is a sent message, not a draft; deleting it must not succeed.
     let sent_id = Uuid::parse_str("ee000003-0000-0000-0000-000000000003")?;
@@ -275,7 +308,10 @@ async fn test_delete_draft_message_rejects_sent_message(
 async fn test_delete_draft_message_rejects_foreign_link_scope(
     pool: Pool<Postgres>,
 ) -> anyhow::Result<()> {
-    let repo = EmailPgRepo::new(pool);
+    let repo = EmailPgRepo::new(
+        pool.clone(),
+        std::sync::Arc::new(entity_access_outbound::PgAccessRepository::new(pool)),
+    );
 
     // The draft exists, but the caller's link scope doesn't include its
     // inbox: the WHERE-clause guard must match nothing and leave the row —
@@ -308,7 +344,10 @@ async fn test_delete_draft_message_rejects_foreign_link_scope(
     fixtures(path = "../../../../fixtures", scripts("email_draft"))
 )]
 async fn test_cross_inbox_reply_drafts(pool: Pool<Postgres>) -> anyhow::Result<()> {
-    let repo = EmailPgRepo::new(pool);
+    let repo = EmailPgRepo::new(
+        pool.clone(),
+        std::sync::Arc::new(entity_access_outbound::PgAccessRepository::new(pool)),
+    );
 
     let msg1 = Uuid::parse_str("ee000001-0000-0000-0000-000000000001")?;
     let thread1 = Uuid::parse_str("11111111-1111-1111-1111-111111111111")?;
@@ -348,7 +387,10 @@ async fn test_cross_inbox_reply_drafts(pool: Pool<Postgres>) -> anyhow::Result<(
     fixtures(path = "../../../../fixtures", scripts("email_draft"))
 )]
 async fn test_upsert_contacts_existing_contacts(pool: Pool<Postgres>) -> anyhow::Result<()> {
-    let repo = EmailPgRepo::new(pool);
+    let repo = EmailPgRepo::new(
+        pool.clone(),
+        std::sync::Arc::new(entity_access_outbound::PgAccessRepository::new(pool)),
+    );
 
     let link_id = Uuid::parse_str("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa")?;
     let addresses = ParsedAddresses {
@@ -388,7 +430,10 @@ async fn test_upsert_contacts_existing_contacts(pool: Pool<Postgres>) -> anyhow:
     fixtures(path = "../../../../fixtures", scripts("email_draft"))
 )]
 async fn test_upsert_contacts_new_contact(pool: Pool<Postgres>) -> anyhow::Result<()> {
-    let repo = EmailPgRepo::new(pool);
+    let repo = EmailPgRepo::new(
+        pool.clone(),
+        std::sync::Arc::new(entity_access_outbound::PgAccessRepository::new(pool)),
+    );
 
     let link_id = Uuid::parse_str("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa")?;
     let addresses = ParsedAddresses {
@@ -423,7 +468,12 @@ async fn test_upsert_contacts_new_contact(pool: Pool<Postgres>) -> anyhow::Resul
 )]
 #[allow(clippy::disallowed_methods, reason = "legacy code. fix later")]
 async fn test_upsert_contacts_fills_missing_name(pool: Pool<Postgres>) -> anyhow::Result<()> {
-    let repo = EmailPgRepo::new(pool.clone());
+    let repo = EmailPgRepo::new(
+        pool.clone(),
+        std::sync::Arc::new(entity_access_outbound::PgAccessRepository::new(
+            pool.clone(),
+        )),
+    );
 
     let link_id = Uuid::parse_str("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa")?;
     // carol has no name in the fixture
@@ -455,7 +505,10 @@ async fn test_upsert_contacts_fills_missing_name(pool: Pool<Postgres>) -> anyhow
     fixtures(path = "../../../../fixtures", scripts("email_draft"))
 )]
 async fn test_upsert_contacts_mixed_to_cc_bcc(pool: Pool<Postgres>) -> anyhow::Result<()> {
-    let repo = EmailPgRepo::new(pool);
+    let repo = EmailPgRepo::new(
+        pool.clone(),
+        std::sync::Arc::new(entity_access_outbound::PgAccessRepository::new(pool)),
+    );
 
     let link_id = Uuid::parse_str("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa")?;
     let addresses = ParsedAddresses {
@@ -493,7 +546,10 @@ async fn test_upsert_contacts_mixed_to_cc_bcc(pool: Pool<Postgres>) -> anyhow::R
     fixtures(path = "../../../../fixtures", scripts("email_draft"))
 )]
 async fn test_upsert_contacts_case_insensitive(pool: Pool<Postgres>) -> anyhow::Result<()> {
-    let repo = EmailPgRepo::new(pool);
+    let repo = EmailPgRepo::new(
+        pool.clone(),
+        std::sync::Arc::new(entity_access_outbound::PgAccessRepository::new(pool)),
+    );
 
     let link_id = Uuid::parse_str("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa")?;
     let addresses = ParsedAddresses {
@@ -533,7 +589,12 @@ async fn test_upsert_contacts_case_insensitive(pool: Pool<Postgres>) -> anyhow::
 async fn test_insert_draft_message_into_existing_thread(
     pool: Pool<Postgres>,
 ) -> anyhow::Result<()> {
-    let repo = EmailPgRepo::new(pool.clone());
+    let repo = EmailPgRepo::new(
+        pool.clone(),
+        std::sync::Arc::new(entity_access_outbound::PgAccessRepository::new(
+            pool.clone(),
+        )),
+    );
 
     let link_id = Uuid::parse_str("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa")?;
     let thread_db_id = Uuid::parse_str("22222222-2222-2222-2222-222222222222")?;
@@ -627,7 +688,12 @@ async fn test_insert_draft_message_into_existing_thread(
 )]
 #[allow(clippy::disallowed_methods, reason = "legacy code. fix later")]
 async fn test_insert_draft_message_with_new_thread(pool: Pool<Postgres>) -> anyhow::Result<()> {
-    let repo = EmailPgRepo::new(pool.clone());
+    let repo = EmailPgRepo::new(
+        pool.clone(),
+        std::sync::Arc::new(entity_access_outbound::PgAccessRepository::new(
+            pool.clone(),
+        )),
+    );
 
     let link_id = Uuid::parse_str("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa")?;
     let new_thread_id = Uuid::parse_str("44444444-4444-4444-4444-444444444444")?;
@@ -705,7 +771,12 @@ async fn test_insert_draft_message_with_new_thread(pool: Pool<Postgres>) -> anyh
 async fn test_autosave_ignores_send_time_but_immediate_send_preserves_undo_schedule(
     pool: Pool<Postgres>,
 ) -> anyhow::Result<()> {
-    let repo = EmailPgRepo::new(pool.clone());
+    let repo = EmailPgRepo::new(
+        pool.clone(),
+        std::sync::Arc::new(entity_access_outbound::PgAccessRepository::new(
+            pool.clone(),
+        )),
+    );
 
     let link_id = Uuid::parse_str("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa")?;
     let thread_db_id = Uuid::parse_str("22222222-2222-2222-2222-222222222222")?;
@@ -773,7 +844,12 @@ async fn test_autosave_ignores_send_time_but_immediate_send_preserves_undo_sched
     fixtures(path = "../../../../fixtures", scripts("email_draft"))
 )]
 async fn test_insert_draft_message_upsert_existing(pool: Pool<Postgres>) -> anyhow::Result<()> {
-    let repo = EmailPgRepo::new(pool.clone());
+    let repo = EmailPgRepo::new(
+        pool.clone(),
+        std::sync::Arc::new(entity_access_outbound::PgAccessRepository::new(
+            pool.clone(),
+        )),
+    );
 
     let link_id = Uuid::parse_str("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa")?;
     let thread_db_id = Uuid::parse_str("11111111-1111-1111-1111-111111111111")?;
@@ -876,7 +952,12 @@ async fn test_insert_draft_message_upsert_existing(pool: Pool<Postgres>) -> anyh
 async fn test_insert_draft_message_updates_thread_metadata(
     pool: Pool<Postgres>,
 ) -> anyhow::Result<()> {
-    let repo = EmailPgRepo::new(pool.clone());
+    let repo = EmailPgRepo::new(
+        pool.clone(),
+        std::sync::Arc::new(entity_access_outbound::PgAccessRepository::new(
+            pool.clone(),
+        )),
+    );
 
     let link_id = Uuid::parse_str("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa")?;
     let thread_db_id = Uuid::parse_str("22222222-2222-2222-2222-222222222222")?;
@@ -933,7 +1014,12 @@ async fn test_insert_draft_message_updates_thread_metadata(
 )]
 #[allow(clippy::disallowed_methods, reason = "legacy code. fix later")]
 async fn test_insert_message_with_is_draft_false(pool: Pool<Postgres>) -> anyhow::Result<()> {
-    let repo = EmailPgRepo::new(pool.clone());
+    let repo = EmailPgRepo::new(
+        pool.clone(),
+        std::sync::Arc::new(entity_access_outbound::PgAccessRepository::new(
+            pool.clone(),
+        )),
+    );
 
     let link_id = Uuid::parse_str("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa")?;
     let thread_db_id = Uuid::parse_str("22222222-2222-2222-2222-222222222222")?;
@@ -993,7 +1079,12 @@ async fn test_insert_message_with_is_draft_false(pool: Pool<Postgres>) -> anyhow
 async fn test_client_handle_bindings_resolve_scoped_and_cascade(
     pool: Pool<Postgres>,
 ) -> anyhow::Result<()> {
-    let repo = EmailPgRepo::new(pool.clone());
+    let repo = EmailPgRepo::new(
+        pool.clone(),
+        std::sync::Arc::new(entity_access_outbound::PgAccessRepository::new(
+            pool.clone(),
+        )),
+    );
 
     let link = Uuid::parse_str("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa")?;
     let other_link = Uuid::parse_str("bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb")?;
@@ -1109,7 +1200,12 @@ async fn thread_exists(pool: &Pool<Postgres>, id: Uuid) -> anyhow::Result<bool> 
 async fn test_concurrent_first_saves_of_one_handle_settle_on_one_row(
     pool: Pool<Postgres>,
 ) -> anyhow::Result<()> {
-    let repo = EmailPgRepo::new(pool.clone());
+    let repo = EmailPgRepo::new(
+        pool.clone(),
+        std::sync::Arc::new(entity_access_outbound::PgAccessRepository::new(
+            pool.clone(),
+        )),
+    );
 
     let link = Uuid::parse_str("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa")?;
     let handle = Uuid::parse_str("c11e0003-0000-0000-0000-000000000003")?;
@@ -1174,7 +1270,12 @@ async fn test_concurrent_first_saves_of_one_handle_settle_on_one_row(
 async fn test_save_racing_a_committed_binding_adopts_it(
     pool: Pool<Postgres>,
 ) -> anyhow::Result<()> {
-    let repo = EmailPgRepo::new(pool.clone());
+    let repo = EmailPgRepo::new(
+        pool.clone(),
+        std::sync::Arc::new(entity_access_outbound::PgAccessRepository::new(
+            pool.clone(),
+        )),
+    );
 
     let link = Uuid::parse_str("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa")?;
     let handle = Uuid::parse_str("c11e0004-0000-0000-0000-000000000004")?;
@@ -1224,7 +1325,12 @@ async fn test_client_handle_replay_cannot_replace_a_scheduled_or_sent_winner(
 ) -> anyhow::Result<()> {
     use crate::domain::scheduled::{EmailSchedulingRepo, ScheduleChange};
 
-    let repo = EmailPgRepo::new(pool.clone());
+    let repo = EmailPgRepo::new(
+        pool.clone(),
+        std::sync::Arc::new(entity_access_outbound::PgAccessRepository::new(
+            pool.clone(),
+        )),
+    );
     let link = Uuid::parse_str("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa")?;
     let handle = macro_uuid::generate_uuid_v7();
     let actor = MacroUserIdStr::parse_from_str("macro|user1@test.com")?;
@@ -1294,7 +1400,12 @@ async fn test_client_handle_replay_cannot_replace_a_scheduled_or_sent_winner(
 async fn test_rebinding_a_handle_wins_the_cross_inbox_recency_tie(
     pool: Pool<Postgres>,
 ) -> anyhow::Result<()> {
-    let repo = EmailPgRepo::new(pool.clone());
+    let repo = EmailPgRepo::new(
+        pool.clone(),
+        std::sync::Arc::new(entity_access_outbound::PgAccessRepository::new(
+            pool.clone(),
+        )),
+    );
 
     let link_a = Uuid::parse_str("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa")?;
     let link_b = Uuid::parse_str("cccccccc-cccc-cccc-cccc-cccccccccccc")?;
@@ -1401,7 +1512,12 @@ async fn message_snapshot(
 async fn test_upsert_guard_rejects_cross_inbox_overwrite(
     pool: Pool<Postgres>,
 ) -> anyhow::Result<()> {
-    let repo = EmailPgRepo::new(pool.clone());
+    let repo = EmailPgRepo::new(
+        pool.clone(),
+        std::sync::Arc::new(entity_access_outbound::PgAccessRepository::new(
+            pool.clone(),
+        )),
+    );
 
     // A draft owned by the cccc inbox; the write is issued from aaaa. The
     // IDs reaching the upsert come from validated reads, but reads race —
@@ -1443,7 +1559,12 @@ async fn test_upsert_guard_rejects_cross_inbox_overwrite(
 async fn test_upsert_guard_rejects_sent_message_overwrite(
     pool: Pool<Postgres>,
 ) -> anyhow::Result<()> {
-    let repo = EmailPgRepo::new(pool.clone());
+    let repo = EmailPgRepo::new(
+        pool.clone(),
+        std::sync::Arc::new(entity_access_outbound::PgAccessRepository::new(
+            pool.clone(),
+        )),
+    );
 
     // Same inbox, but the row is a sent message — no draft save may rewrite it.
     let victim = Uuid::parse_str("ee000001-0000-0000-0000-000000000001")?;
@@ -1475,7 +1596,10 @@ async fn test_upsert_guard_rejects_sent_message_overwrite(
     fixtures(path = "../../../../fixtures", scripts("email_draft"))
 )]
 async fn test_insert_message_reports_applied_on_create(pool: Pool<Postgres>) -> anyhow::Result<()> {
-    let repo = EmailPgRepo::new(pool);
+    let repo = EmailPgRepo::new(
+        pool.clone(),
+        std::sync::Arc::new(entity_access_outbound::PgAccessRepository::new(pool)),
+    );
 
     let link = Uuid::parse_str("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa")?;
     let thread = Uuid::parse_str("11111111-1111-1111-1111-111111111111")?;

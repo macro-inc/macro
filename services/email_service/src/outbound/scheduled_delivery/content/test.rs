@@ -77,7 +77,10 @@ async fn admit(pool: &PgPool) -> anyhow::Result<SendAttemptId> {
         restore_body_macro: None,
     };
     let attempt = SendAttemptId(macro_uuid::generate_uuid_v7());
-    EmailPgRepo::new(pool.clone())
+    let source_ids = std::sync::Arc::new(entity_access_outbound::PgAccessRepository::new(
+        pool.clone(),
+    ));
+    EmailPgRepo::new(pool.clone(), source_ids)
         .admit_send(
             &MacroUserIdStr::parse_from_str("macro|user1@test.com").unwrap(),
             link(),

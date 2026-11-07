@@ -489,7 +489,10 @@ async fn main() -> anyhow::Result<()> {
     }
     worker_tracker.spawn(email_service::mailbox_sync_worker::run_attachment_cleanup(
         email::domain::attachment_cleanup::DraftObjectCleanup {
-            repository: email::outbound::EmailPgRepo::new(db.clone()),
+            repository: email::outbound::EmailPgRepo::new(
+                db.clone(),
+                std::sync::Arc::new(entity_access_outbound::PgAccessRepository::new(db.clone())),
+            ),
             storage: email_service::outbound::draft_attachment_storage::DraftAttachmentS3 {
                 s3: s3_client.clone(),
                 bucket: config.attachment_bucket.to_string(),
@@ -499,7 +502,10 @@ async fn main() -> anyhow::Result<()> {
     ));
     let draft_content = Arc::new(
         email::domain::mailbox::drafts::content::DraftContentService {
-            repository: email::outbound::EmailPgRepo::new(db.clone()),
+            repository: email::outbound::EmailPgRepo::new(
+                db.clone(),
+                std::sync::Arc::new(entity_access_outbound::PgAccessRepository::new(db.clone())),
+            ),
             bytes: email_service::outbound::mailbox_drafts::MailboxDraftContent {
                 provider: email_service::outbound::attachment_access::ProviderAttachmentBytes {
                     s3: s3_client.clone(),
@@ -519,7 +525,10 @@ async fn main() -> anyhow::Result<()> {
     );
     worker_tracker.spawn(email_service::mailbox_sync_worker::run_transfers(
         email::domain::draft_transfer::DraftRetirementService {
-            repository: email::outbound::EmailPgRepo::new(db.clone()),
+            repository: email::outbound::EmailPgRepo::new(
+                db.clone(),
+                std::sync::Arc::new(entity_access_outbound::PgAccessRepository::new(db.clone())),
+            ),
             gateway: email_service::outbound::email_api::ProviderMailboxGateway(
                 outlook_api.clone(),
             ),

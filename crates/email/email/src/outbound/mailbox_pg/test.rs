@@ -548,7 +548,10 @@ async fn mailbox_previews_distinguish_categories_trash_and_imported_drafts(db: P
         .await
         .unwrap()
         .unwrap();
-    let repo = crate::outbound::EmailPgRepo::new(db.clone());
+    let repo = crate::outbound::EmailPgRepo::new(
+        db.clone(),
+        std::sync::Arc::new(entity_access_outbound::PgAccessRepository::new(db.clone())),
+    );
     let state = email_api_client_core::models::MailboxState {
         in_inbox: true,
         ..Default::default()

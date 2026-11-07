@@ -301,7 +301,12 @@ pub async fn build_tool_service_context_from_env(
         crm::outbound::no_op_resolver::NoOpCompanyMetadataResolver,
     );
     let email_service = EmailServiceImpl::new(
-        EmailPgRepo::new(pool.clone()),
+        EmailPgRepo::new(
+            pool.clone(),
+            std::sync::Arc::new(entity_access_outbound::PgAccessRepository::new(
+                pool.clone(),
+            )),
+        ),
         frecency_service.clone(),
         email::domain::ports::NoOpEnqueuer,
         crm_service.clone(),
@@ -445,7 +450,12 @@ pub async fn build_tool_service_context_from_env(
 
     let user_email_service = Arc::new(
         EmailServiceImpl::new(
-            EmailPgRepo::new(pool.clone()),
+            EmailPgRepo::new(
+                pool.clone(),
+                std::sync::Arc::new(entity_access_outbound::PgAccessRepository::new(
+                    pool.clone(),
+                )),
+            ),
             FrecencyQueryServiceImpl::new(FrecencyPgStorage::new(pool.clone())),
             sqs_client,
             crm_service.clone(),
@@ -468,7 +478,12 @@ pub async fn build_tool_service_context_from_env(
     .with_attachment_sender(
         crate::email_attachments::build_email_attachment_sender(
             user_email_service.clone(),
-            EmailPgRepo::new(pool.clone()),
+            EmailPgRepo::new(
+                pool.clone(),
+                std::sync::Arc::new(entity_access_outbound::PgAccessRepository::new(
+                    pool.clone(),
+                )),
+            ),
             document_tool_context.service.clone(),
         )
         .await,

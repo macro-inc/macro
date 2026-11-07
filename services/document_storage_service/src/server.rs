@@ -466,7 +466,10 @@ async fn run_server() -> anyhow::Result<()> {
         auth_service_url::AuthServiceUrl::new()?.to_string(),
     ));
     let email_service = EmailServiceImpl::new(
-        EmailPgRepo::new(db.clone()),
+        EmailPgRepo::new(
+            db.clone(),
+            std::sync::Arc::new(entity_access_outbound::PgAccessRepository::new(db.clone())),
+        ),
         frecency_service.clone(),
         sqs_client.clone(),
         crm_service.clone(),
@@ -489,7 +492,12 @@ async fn run_server() -> anyhow::Result<()> {
     .with_macro_event_broker(macro_event_broker.clone());
     let readonly_email_service = ReadonlyEmailPreviewAdapter(
         EmailServiceImpl::new(
-            EmailPgRepo::new(readonly_db.clone()),
+            EmailPgRepo::new(
+                readonly_db.clone(),
+                std::sync::Arc::new(entity_access_outbound::PgAccessRepository::new(
+                    readonly_db.clone(),
+                )),
+            ),
             frecency_service.clone(),
             sqs_client.clone(),
             crm_service.clone(),

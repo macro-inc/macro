@@ -41,7 +41,10 @@ async fn setup(
     .unwrap();
     (
         sync,
-        crate::outbound::EmailPgRepo::new(db.clone()),
+        crate::outbound::EmailPgRepo::new(
+            db.clone(),
+            std::sync::Arc::new(entity_access_outbound::PgAccessRepository::new(db.clone())),
+        ),
         work,
         thread,
     )

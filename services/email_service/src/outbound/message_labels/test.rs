@@ -7,15 +7,23 @@ use sqlx::PgPool;
 async fn a_write_that_can_be_neither_queued_nor_undone_fails_the_request(pool: PgPool) {
     pool.close().await;
 
-    let error = PgMessageLabels(pool.clone(), EmailPgRepo::new(pool))
-        .revert_unsent(
-            Uuid::now_v7(),
-            &[Uuid::now_v7()],
-            &[Uuid::now_v7()],
-            Uuid::now_v7(),
-        )
-        .await
-        .unwrap_err();
+    let error = PgMessageLabels(
+        pool.clone(),
+        EmailPgRepo::new(
+            pool.clone(),
+            std::sync::Arc::new(entity_access_outbound::PgAccessRepository::new(
+                pool.clone(),
+            )),
+        ),
+    )
+    .revert_unsent(
+        Uuid::now_v7(),
+        &[Uuid::now_v7()],
+        &[Uuid::now_v7()],
+        Uuid::now_v7(),
+    )
+    .await
+    .unwrap_err();
 
     assert!(matches!(error, MessageLabelPersistenceError::Database(_)));
 }

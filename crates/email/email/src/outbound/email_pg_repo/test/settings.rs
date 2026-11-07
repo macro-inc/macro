@@ -16,7 +16,12 @@ async fn fetch_email_settings_maps_signature_fields(pool: Pool<Postgres>) -> any
     .execute(&pool)
     .await?;
 
-    let settings = EmailPgRepo::new(pool).fetch_email_settings(link_id).await?;
+    let settings = EmailPgRepo::new(
+        pool.clone(),
+        std::sync::Arc::new(entity_access_outbound::PgAccessRepository::new(pool)),
+    )
+    .fetch_email_settings(link_id)
+    .await?;
 
     assert!(settings.signature_on_replies_forwards);
     assert_eq!(settings.signature.as_deref(), Some("<p>Regards</p>"));

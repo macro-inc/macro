@@ -300,7 +300,10 @@ impl World {
             )
         };
         let email = EmailServiceImpl::new(
-            EmailPgRepo::new(db.clone()),
+            EmailPgRepo::new(
+                db.clone(),
+                std::sync::Arc::new(entity_access_outbound::PgAccessRepository::new(db.clone())),
+            ),
             FrecencyQueryServiceImpl::new(FrecencyPgStorage::new(db.clone())),
             sqs_client.clone(),
             crm::domain::service::CrmServiceImpl::new(

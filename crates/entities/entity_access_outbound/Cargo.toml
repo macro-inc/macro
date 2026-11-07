@@ -24,6 +24,7 @@ bot_id = { workspace = true }
 cached = { workspace = true }
 clap = { workspace = true, optional = true }
 database_env_vars = { workspace = true, optional = true }
+futures = { workspace = true }
 entity_access = { workspace = true, features = ["ports", "sqlx"] }
 macro_entrypoint = { workspace = true, optional = true }
 macro_user_id = { workspace = true }
@@ -39,7 +40,6 @@ uuid = { workspace = true }
 workspace-hack = { version = "0.1", path = "../../workspace-hack" }
 
 [dev-dependencies]
-futures = { workspace = true }
 macro_db_migrator = { workspace = true }
 sqlx = { workspace = true, features = ["postgres", "runtime-tokio-rustls"] }
 tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
