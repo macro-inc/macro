@@ -55,7 +55,7 @@ the scan does not retain the replacement migration's exclusive table lock.
   gate it behind a Cargo feature in `Cargo.toml` only if it's optional (see
   `account_merge_request`, `team`).
 
-- Composed-memory tables and refresh leases are owned by `crates/memory`; migrations leave legacy memory rows intact.
+- Composed-memory tables and refresh leases are owned by `crates/ai/memory`; migrations leave legacy memory rows intact.
 
 ## Checks
 

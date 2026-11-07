@@ -126,7 +126,7 @@ that production handling is implemented by this documentation-only task.
    process environment. Disable shell tracing; never print or persist secrets,
    authorization headers, account credentials, or raw user data.
 2. Match `PipedreamClient::access_token` in
-   `crates/pipedream_mcp/src/outbound/api.rs`: POST form-encoded
+   `crates/ai/pipedream_mcp/src/outbound/api.rs`: POST form-encoded
    `grant_type=client_credentials`, `client_id`, and `client_secret` to
    `https://api.pipedream.com/v1/oauth/token`. Keep the bearer only in memory.
 3. GET `/v1/connect/apps/slack` and `/v1/connect/apps/slack_v2` with that bearer;

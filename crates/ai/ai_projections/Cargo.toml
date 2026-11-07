@@ -1,0 +1,91 @@
+[package]
+edition = "2024"
+name = "ai_projections"
+publish = false
+version = "0.1.0"
+
+[features]
+axum = [
+  "dep:axum",
+  "dep:macro_authorization",
+  "dep:model_error_response",
+  "dep:utoipa",
+]
+default = ["axum", "inbound", "outbound", "ports", "worker"]
+inbound = ["axum", "ports"]
+outbound = [
+  "dep:sqlx",
+  "dep:sqs_client",
+  "dep:connection_gateway_client",
+  "dep:model_entity",
+  "ports",
+]
+# Agent-backed projection generator (the outbound adapter that runs the AI
+# toolset). Pulls in the heavy agent/toolset dependencies.
+agent = [
+  "outbound",
+  "dep:ai_tools",
+  "dep:ai_toolset",
+  "dep:agent",
+  "dep:ai_usage",
+  "dep:futures",
+]
+ports = ["dep:tokio"]
+worker = [
+  "ports",
+  "dep:sqs_worker",
+  "dep:aws-sdk-sqs",
+]
+
+[dependencies]
+# Core
+anyhow = { workspace = true }
+chrono = { workspace = true }
+macro_user_id = { workspace = true }
+models_ai_projection = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+sha2 = { workspace = true }
+thiserror = { workspace = true }
+tracing = { workspace = true }
+uuid = { workspace = true }
+workspace-hack = { version = "0.1", path = "../../workspace-hack" }
+
+# Async runtime (for ports)
+tokio = { workspace = true, optional = true }
+
+# Axum dependencies (for inbound)
+axum = { workspace = true, optional = true }
+macro_authorization = { workspace = true, optional = true, features = [
+  "axum",
+] }
+model_error_response = { workspace = true, optional = true }
+utoipa = { workspace = true, optional = true }
+
+# Outbound dependencies
+sqlx = { workspace = true, optional = true }
+sqs_client = { workspace = true, features = [
+  "ai_projection",
+], optional = true }
+connection_gateway_client = { workspace = true, optional = true }
+model_entity = { workspace = true, optional = true }
+
+# Worker (inbound SQS poller) dependencies
+sqs_worker = { workspace = true, optional = true }
+aws-sdk-sqs = { workspace = true, optional = true }
+
+# Agent generator dependencies (the AI toolset adapter)
+ai_tools = { workspace = true, optional = true }
+ai_toolset = { workspace = true, optional = true }
+agent = { workspace = true, optional = true }
+ai_usage = { workspace = true, optional = true }
+futures = { workspace = true, optional = true }
+
+[dev-dependencies]
+http-body-util = { workspace = true }
+macro_db_migrator = { workspace = true }
+model_user = { workspace = true }
+rootcause = { workspace = true }
+serde_json = { workspace = true }
+tokio = { workspace = true }
+tower = { workspace = true }

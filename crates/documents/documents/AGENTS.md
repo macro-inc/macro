@@ -101,7 +101,7 @@ word docs, Illustrator/Photoshop files).
 ## Recipes
 
 - Add an AI document tool: new module under `src/inbound/toolset/` → wire it
-  into `src/inbound/toolset.rs` → register it where `ai_tools`/`crates/ai_tools`
+  into `src/inbound/toolset.rs` → register it where `ai_tools`/`crates/ai/ai_tools`
   assembles the toolset.
 - Add a document route: `src/domain/service.rs` (new domain method) →
   `src/inbound/axum_router.rs` → `src/domain/ports.rs` if it needs a new

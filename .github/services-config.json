@@ -20,7 +20,7 @@
     "authentication-service": {
       "source_paths": [
         "services/authentication_service/**",
-        "crates/referral/**",
+        "crates/billing/referral/**",
         "crates/accounts/teams/**",
         "services/user_link_cleanup_handler/**"
       ],

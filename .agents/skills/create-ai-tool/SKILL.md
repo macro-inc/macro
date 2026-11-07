@@ -5,9 +5,9 @@ description: Build a new AI tool end-to-end — Rust implementation, toolset wir
 
 # Create AI Tool
 
-This skill walks through building a new AI tool from scratch. Before writing any code, read the design guide at `crates/ai_toolset/TOOL_DESIGN.md` and the framework docs/examples in `crates/ai_toolset/src/lib.rs`.
+This skill walks through building a new AI tool from scratch. Before writing any code, read the design guide at `crates/ai/ai_toolset/TOOL_DESIGN.md` and the framework docs/examples in `crates/ai/ai_toolset/src/lib.rs`.
 
-**IMPORTANT:** Never modify the `crates/ai_toolset/` crate. It is the framework — you build tools that use it.
+**IMPORTANT:** Never modify the `crates/ai/ai_toolset/` crate. It is the framework — you build tools that use it.
 
 ## Step 1: Write the tool
 
@@ -33,20 +33,20 @@ If the tool's dependencies are already available in an existing context (e.g. it
 
 ## Step 3: Add the toolset to `all_tools` in the ai_tools crate
 
-Edit `crates/ai_tools/src/lib.rs`:
+Edit `crates/ai/ai_tools/src/lib.rs`:
 - Import your toolset function and context type
 - Add `.add_tool::<YourTool, YourContext>()` or `.add_subtoolset::<YourToolContext>(your_toolset())` to the `all_tools()` function
 
 ## Step 4: Add the context to ToolServiceContext
 
-Edit `crates/ai_tools/src/tool_context.rs`:
+Edit `crates/ai/ai_tools/src/tool_context.rs`:
 - Add any new type aliases for your service implementations (follow the `Tool*` naming pattern)
 - Add your tool context field to the `ToolServiceContext` struct
 - Implement `FromRef<ToolServiceContext>` for your context if needed (or derive it — the struct uses `#[derive(FromRef)]`)
 
 ## Step 5: Wire up env vars and service construction
 
-Edit `crates/ai_tools/src/build_context.rs`:
+Edit `crates/ai/ai_tools/src/build_context.rs`:
 - Add any new env vars to the `env_var!` or `maybe_env_var!` blocks
 - Construct your service/context in `build_tool_service_context_from_env`
 - Add it to the returned `ToolServiceContext`
@@ -76,7 +76,7 @@ Run from `apps/web/`:
 bun gen-tools
 ```
 
-This builds `crates/ai_tools/src/bin/gen_tool_schemas.rs`, generates `crates/ai_tools/schemas/tools.json`, and transpiles the schemas into TypeScript at `apps/web/src/lib/service-clients/service-cognition/generated/tools/`.
+This builds `crates/ai/ai_tools/src/bin/gen_tool_schemas.rs`, generates `crates/ai/ai_tools/schemas/tools.json`, and transpiles the schemas into TypeScript at `apps/web/src/lib/service-clients/service-cognition/generated/tools/`.
 
 ## Step 9: Check what frontend UI is needed
 

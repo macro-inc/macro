@@ -27,7 +27,7 @@ key issuance, and account merge/link flows.
   relocation signup, Cursor/Codex API key endpoints, introductory trial
   eligibility and subscription checkout.
 - Not here: authorization/permission decisions on other entities →
-  `crates/platform/macro_authorization`; metered AI credits → `crates/ai_billing`;
+  `crates/platform/macro_authorization`; metered AI credits → `crates/billing/ai_billing`;
   team lifecycle and seats → `crates/accounts/teams`; a person's interface language
   (`/user/language`) → `crates/accounts/user_language`.
 

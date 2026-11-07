@@ -17,7 +17,7 @@ Mintlify currently requires an LTS Node release for CLI commands. If the CLI rej
 
 - Handwritten pages live directly in `apps/docs/`
 - Generated MCP tool pages are written to `apps/docs/AI/mcp/tools/`
-- The generator rebuilds Rust tool schemas from `crates/ai_tools`
+- The generator rebuilds Rust tool schemas from `crates/ai/ai_tools`
 
 ## Mintlify monorepo setup
 

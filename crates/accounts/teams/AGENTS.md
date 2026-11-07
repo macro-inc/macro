@@ -39,7 +39,7 @@ event contract (schema, sanitization, delivery semantics).
 
 - Owns: the `"Team"` table's lifecycle, membership, invites, and the
   `macro.teams` Kafka producer.
-- Not here: billing/seat pricing logic → `crates/ai_billing` (consumes this
+- Not here: billing/seat pricing logic → `crates/billing/ai_billing` (consumes this
   crate); CRM company/contact sync → `crates/databases/crm` (this crate only enqueues).
 
 ## Boundaries
@@ -48,8 +48,8 @@ event contract (schema, sanitization, delivery semantics).
   `analytics_client`, `ai_toolset` (feature `ai_tools`).
 - Used by: `services/authentication_service`, `services/document_storage_service`,
   `services/calendar_service`, `services/agent_harness_service`,
-  `services/agent_harness_service`, `crates/scheduled_action`, `crates/ai_tools`,
-  `crates/ai_billing`, `crates/calendar/calendar_scheduling`.
+  `services/agent_harness_service`, `crates/scheduled_action`, `crates/ai/ai_tools`,
+  `crates/billing/ai_billing`, `crates/calendar/calendar_scheduling`.
 
 ## Recipes
 

@@ -373,17 +373,17 @@ upserts must not create an index by accident.
 ## 13. AI and MCP tools
 
 Follow the [create-ai-tool skill](../../.agents/skills/create-ai-tool/SKILL.md)
-and `crates/ai_toolset/TOOL_DESIGN.md`. A new kind adds a whole toolset, which
+and `crates/ai/ai_toolset/TOOL_DESIGN.md`. A new kind adds a whole toolset, which
 the skill doesn't cover:
 
-- Register it in `crates/ai_tools/src/lib.rs` (`subagent_toolset()` or the
+- Register it in `crates/ai/ai_tools/src/lib.rs` (`subagent_toolset()` or the
   host-specific branches of `tools_for`), eager or deferred.
 - Give its context to every place `ToolServiceContext` is built:
-  `crates/ai_tools/src/build_context.rs`,
+  `crates/ai/ai_tools/src/build_context.rs`,
   `services/agent_harness_service/src/cognition/server.rs` and its
   `services/agent_harness_service/src/cognition/api/context/test.rs`, and `services/agent_harness_service/src/public_mcp/context.rs`. Add it to
-  `with_actor` in `crates/ai_tools/src/tool_context.rs`, or agent writes are
-  attributed to the default bot. Add a test in `crates/ai_tools/src/test.rs` that
+  `with_actor` in `crates/ai/ai_tools/src/tool_context.rs`, or agent writes are
+  attributed to the default bot. Add a test in `crates/ai/ai_tools/src/test.rs` that
   the tools resolve on every host; hosts have shipped with tools unwired.
 - Agent guidance: a `@routing` sentence ("Use when …; not …") and, when agents
   need rules beyond the API, an `@agent` block in the SDK namespace's TSDoc

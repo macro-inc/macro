@@ -208,7 +208,7 @@ Review at least:
 
 - `crates/databases/properties/src/inbound/toolset/get_entity_properties.rs`
 - `crates/databases/properties/src/inbound/toolset/set_entity_property.rs`
-- `crates/ai_tools/src/tool_context.rs`
+- `crates/ai/ai_tools/src/tool_context.rs`
 - `services/document_storage_service/src/api/context.rs`
 - `crates/documents/documents/src/domain/ports/mod.rs`
 - `crates/documents/documents/src/domain/service.rs`
