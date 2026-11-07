@@ -172,6 +172,7 @@
             buildPhaseCargoCommand = ''
               wasm-pack build ${crate} \
                 --target web \
+                --out-name ${name} \
                 ${if profile == null then "--release" else "--profile ${profile}"} \
                 --mode no-install \
                 --out-dir "$PWD/${outDir}" ${cargoArgs}
@@ -194,44 +195,44 @@
       coreWasmPackages = map mkCoreWasmPackage [
         {
           name = "agent_fold";
-          crate = "crates/agents/agent_fold";
+          crate = "crates/agents/agent_fold_wasm";
           dir = "agent-fold";
           cargoArgs = "-- --no-default-features";
         }
         {
           name = "database_sql";
-          crate = "crates/databases/database_sql";
+          crate = "crates/databases/database_sql_wasm";
           dir = "database-sql";
         }
         {
           name = "pptx_engine";
-          crate = "crates/engines/pptx_engine";
+          crate = "crates/engines/pptx_engine_wasm";
           dir = "pptx-engine";
           simd = true;
         }
         {
           name = "docx_engine";
-          crate = "crates/engines/docx_engine";
+          crate = "crates/engines/docx_engine_wasm";
           dir = "docx-engine";
           simd = true;
         }
         {
           name = "fig_engine";
-          crate = "crates/engines/fig_engine";
+          crate = "crates/engines/fig_engine_wasm";
           dir = "fig-engine";
           simd = true;
           profile = "fig-engine-wasm";
         }
         {
           name = "psd_engine";
-          crate = "crates/engines/psd_engine";
+          crate = "crates/engines/psd_engine_wasm";
           dir = "psd-engine";
           simd = true;
           profile = "psd-engine-wasm";
         }
         {
           name = "ai_engine";
-          crate = "crates/engines/ai_engine";
+          crate = "crates/engines/ai_engine_wasm";
           dir = "ai-engine";
           simd = true;
           profile = "ai-engine-wasm";

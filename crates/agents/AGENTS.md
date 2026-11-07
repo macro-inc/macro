@@ -16,6 +16,7 @@ lists what this group may depend on. `cargo x deps` reports edges that break it.
 | [`agent_code_mode`](agent_code_mode/AGENTS.md) |  |
 | [`agent_egress`](agent_egress/AGENTS.md) | Part of agent sessions: the security boundary for sandboxed coding agents. |
 | [`agent_fold`](agent_fold/AGENTS.md) | Core to the agent sessions feature: collapses an agent session's raw ACP/ARP protocol log into the renderable message vocabulary every caller (harness, web, exports) … |
+| [`agent_fold_wasm`](agent_fold_wasm/AGENTS.md) | The browser build of `agent_fold` (the agent transcript fold the web app runs in a worker). |
 | [`agent_harness`](agent_harness/AGENTS.md) | Part of agent sessions: orchestrates sandboxed coding-agent sessions end to end — provisioning containers, speaking to each coding-agent runtime (Cursor, Codex), routing … |
 | [`agent_inmem`](agent_inmem/AGENTS.md) | Part of agent sessions: the lightweight alternative to `agent_harness`'s sandboxed containers — serves the agent side of ACP in-process, running the same agentic loop … |
 | [`agent_preview`](agent_preview/AGENTS.md) | Part of agent sessions: lets an agent session's dev server be viewed live by other people. |

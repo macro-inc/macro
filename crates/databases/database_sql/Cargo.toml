@@ -4,10 +4,6 @@ name = "database_sql"
 publish = false
 version = "0.1.0"
 
-[lib]
-# `cdylib` for the browser build; `rlib` so services keep linking it normally.
-crate-type = ["cdylib", "rlib"]
-
 [features]
 # OpenAPI schemas for the HTTP SQL query response.
 openapi = ["dep:utoipa"]

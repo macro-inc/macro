@@ -1,0 +1,13 @@
+[package]
+edition = "2024"
+name = "database_sql_wasm"
+publish = false
+version = "0.1.0"
+
+# The browser build of `database_sql`: wasm-pack builds this crate, and its
+# cdylib is the only one, so native builds of `database_sql` link no `.so`.
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+database_sql = { workspace = true }

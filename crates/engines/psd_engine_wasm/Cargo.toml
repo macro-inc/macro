@@ -1,0 +1,19 @@
+[package]
+edition = "2024"
+name = "psd_engine_wasm"
+publish = false
+version = "0.1.0"
+
+# The browser build of `psd_engine`: wasm-pack builds this crate, and its
+# cdylib is the only one, so native builds of `psd_engine` link no `.so`.
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+psd_engine = { workspace = true }
+
+[package.metadata.wasm-pack.profile.release]
+wasm-opt = false
+
+[package.metadata.wasm-pack.profile.custom]
+wasm-opt = false

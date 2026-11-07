@@ -4,10 +4,6 @@ name = "agent_fold"
 publish = false
 version = "0.1.0"
 
-[lib]
-# `cdylib` for the browser build; `rlib` so services keep linking it normally.
-crate-type = ["cdylib", "rlib"]
-
 [features]
 default = ["cli"]
 # The `fold_jsonl` viewer and the `agent_fold_types` codegen binary - native

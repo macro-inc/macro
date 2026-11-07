@@ -474,6 +474,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "agent_fold_wasm"
+version = "0.1.0"
+dependencies = [
+ "agent_fold",
+]
+
+[[package]]
 name = "agent_harness"
 version = "0.1.0"
 dependencies = [
@@ -1204,6 +1211,13 @@ dependencies = [
  "wasm-bindgen",
  "zune-core",
  "zune-jpeg",
+]
+
+[[package]]
+name = "ai_engine_wasm"
+version = "0.1.0"
+dependencies = [
+ "ai_engine",
 ]
 
 [[package]]
@@ -6284,6 +6298,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "database_sql_wasm"
+version = "0.1.0"
+dependencies = [
+ "database_sql",
+]
+
+[[package]]
 name = "database_webhooks"
 version = "0.1.0"
 dependencies = [
@@ -7267,6 +7288,13 @@ dependencies = [
  "serde_json",
  "thiserror 2.0.18",
  "wasm-bindgen",
+]
+
+[[package]]
+name = "docx_engine_wasm"
+version = "0.1.0"
+dependencies = [
+ "docx_engine",
 ]
 
 [[package]]
@@ -8601,6 +8629,13 @@ dependencies = [
  "wasm-bindgen",
  "zune-core",
  "zune-jpeg",
+]
+
+[[package]]
+name = "fig_engine_wasm"
+version = "0.1.0"
+dependencies = [
+ "fig_engine",
 ]
 
 [[package]]
@@ -16050,6 +16085,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "pptx_engine_wasm"
+version = "0.1.0"
+dependencies = [
+ "pptx_engine",
+]
+
+[[package]]
 name = "ppv-lite86"
 version = "0.2.21"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -16583,6 +16625,13 @@ dependencies = [
  "thiserror 2.0.18",
  "tiny-skia",
  "wasm-bindgen",
+]
+
+[[package]]
+name = "psd_engine_wasm"
+version = "0.1.0"
+dependencies = [
+ "psd_engine",
 ]
 
 [[package]]

@@ -32,7 +32,8 @@ uses the wasm build directly).
 - Depends on: `filter_ast`, `item_filters` (predicate ASTs shared with other
   filtering code), `models_databases` (wire types).
 - Used by: `crates/databases/databases` and `crates/databases/databases_sql` natively; the web
-  app's database SQL console via the `wasm` module (crate-type `cdylib`).
+  app's database SQL console via the `wasm` module, built as the
+  `database_sql_wasm` wrapper's cdylib.
 
 ## Recipes
 

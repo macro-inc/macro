@@ -74,6 +74,10 @@ The dev profile builds workspace crates incrementally with line-table debuginfo
 and dependencies without debuginfo, which keeps edit-to-binary rebuilds short.
 Backtraces keep file and line for workspace code. For a debugger, pass
 `--config 'profile.dev.debug="full"' --config 'profile.dev.package."*".debug="full"'`.
+A crate the browser loads keeps its `cdylib` in a thin `<crate>_wasm` wrapper
+(`pub use <crate>::*;`, built with `wasm-pack --out-name <crate>`), never on the
+library itself: a library `cdylib` links an unused `.so` into every native build,
+and two services built in one target dir overwrite each other's copy.
 Gate wasm-only features such as `uuid/js` on
 `[target.'cfg(target_arch = "wasm32")'.dependencies]`: enabled natively, they
 change the feature set of a shared dependency and rebuild everything above it
