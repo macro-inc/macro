@@ -195,6 +195,10 @@ enum TransformTarget {
 type TransformRegistrations = Vec<(TransformTarget, RegisteredTransform)>;
 /// Configuration builder; the six built-in types are always registered first.
 pub struct EditorBuilder {
+    pub(crate) extensions: crate::extension::Extensions,
+    pub(crate) duplicate_extension: Option<&'static str>,
+    pub(crate) plugins: Vec<Arc<dyn Plugin>>,
+    pub(crate) initial_state: Option<SerializedEditorState>,
     table_selection_hooks: Option<Arc<dyn TableSelectionHooks>>,
     vtables: Vec<NodeVTable>,
     mode: EditorMode,
@@ -208,6 +212,10 @@ impl EditorBuilder {
     /// Build with an explicit headless or view-attached mode.
     pub fn new(mode: EditorMode) -> Self {
         Self {
+            extensions: Default::default(),
+            duplicate_extension: None,
+            plugins: vec![],
+            initial_state: None,
             table_selection_hooks: None,
             vtables: vec![],
             mode,
@@ -296,6 +304,9 @@ impl EditorBuilder {
     /// Validate registrations and compute type-level flags in isolated scratch states.
     /// s2: CFG-08
     pub fn build(self) -> Result<Editor, BuildError> {
+        if let Some(type_name) = self.duplicate_extension {
+            return Err(BuildError::DuplicateExtensionState { type_name });
+        }
         let mut registry = Registry {
             table_selection_hooks: self.table_selection_hooks,
             nodes: vec![],
@@ -468,7 +479,39 @@ impl EditorBuilder {
             inner.nodes[usize::from(row.index.0)].flags = row.flags;
         }
         inner.table = rows;
-        Editor::new(registry, self.mode, self.keys, self.view_host)
-            .map_err(|e| BuildError::InitialState(Box::new(e)))
+        let mut editor = Editor::new(registry, self.mode, self.keys, self.view_host)
+            .map_err(|e| BuildError::InitialState(Box::new(e)))?;
+        editor.extensions = self.extensions;
+        (editor.listeners, editor.listener_table) = crate::plugin::listeners(&self.plugins);
+        editor.plugins = self.plugins;
+        if let Some(json) = self.initial_state {
+            let prev = editor.state.clone();
+            let parsed = editor
+                .parse_editor_state(&json)
+                .map_err(|e| BuildError::InitialState(Box::new(e)))?;
+            editor.state = parsed.clone();
+            let mut tx = editor.transaction();
+            tx.request_full_reconcile();
+            let mut initial = tx
+                .commit()
+                .map_err(|e| BuildError::InitialState(Box::new(e)))?;
+            initial.prev = prev;
+            initial
+                .changes
+                .dirty_elements
+                .insert(NodeKey::ROOT, DirtyIntent::Intentional);
+            initial.changes.mutations = std::iter::once(NodeKey::ROOT)
+                .chain(parsed.view().descendants(NodeKey::ROOT).map(|(k, _)| k))
+                .map(|k| (k, Mutation::Created))
+                .collect();
+            let mut initial = editor.run_after_commit(initial);
+            if let Some(failure) = initial.follow_up_error {
+                return Err(BuildError::InitialState(Box::new(
+                    Error::InitialFollowUpFailed(failure.error),
+                )));
+            }
+            editor.initial_commits = std::mem::take(&mut initial.following);
+        }
+        Ok(editor)
     }
 }

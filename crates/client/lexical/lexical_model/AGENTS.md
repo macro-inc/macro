@@ -3,7 +3,7 @@
 ## What it is
 
 Portable editor model for the Lexical port. This crate owns values, registered
-node types, immutable snapshots, transactional tree editing, update processing, JSON interchange, selection editing and directional caret traversal.
+node types, immutable snapshots, transactional tree editing, update processing, JSON interchange, selection editing directional caret traversal, commands, plugins and history.
 
 ## Start here
 
@@ -12,6 +12,8 @@ node types, immutable snapshots, transactional tree editing, update processing, 
 - `src/transaction.rs` owns writes; never mutate a committed snapshot.
 - `src/pipeline/` implements flush order, normalization, GC and view-attached caches.
 - `src/commit.rs` computes mutations before cache writes and atomically publishes snapshots.
+- `src/plugin.rs`, `command.rs` and `extension.rs` own dispatch, follow-up rounds and transactional extension state.
+- `src/history.rs` owns undo/redo stacks and the standalone merge tracker.
 - `src/caret/` implements directional positions, eager cursors, range removal and splitting.
 - `src/json.rs` preserves export order and JavaScript number serialization.
 
@@ -23,7 +25,9 @@ node types, immutable snapshots, transactional tree editing, update processing, 
 - Movement consumes explicit host points; `NoView` runs structural rules only.
 - Optional `model-segmentation` enables Unicode movement within text nodes; visual line boundaries still require host layout.
 - Caret cursors compute successors before returning items; keep the construction-time first step.
-- View diffs and command dispatch remain later layers.
+- Commands visit registered listeners only; external dispatch flushes between levels, inline dispatch does not.
+- Hooks share one follow-up transaction per round and stop at 99 rounds; extension state rolls back with updates.
+- History restores snapshots without rerunning transforms; view diffs remain a later layer.
 
 ## Checks
 

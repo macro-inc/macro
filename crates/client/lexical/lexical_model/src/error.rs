@@ -4,6 +4,18 @@ use crate::{NodeKey, Utf16Offset};
 /// A failed model operation; the editor remains unchanged when an update fails.
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
+    /// Initial-state follow-up failed.
+    #[error("initial follow-up failed: {0}")]
+    InitialFollowUpFailed(std::sync::Arc<Error>),
+    /// A required extension was not installed.
+    #[error("unknown extension state {type_name}")]
+    UnknownExtensionState {
+        /// Concrete state type.
+        type_name: &'static str,
+    },
+    /// Post-commit hooks did not reach a fixpoint.
+    #[error("One or more update listeners are endlessly enqueueing more updates")]
+    EndlessFollowUps,
     /// Invalid explicit caret offset.
     #[error("invalid text offset {offset:?} for size {size:?} at {key}")]
     InvalidTextOffset {
@@ -215,6 +227,12 @@ pub enum Error {
 /// Invalid editor configuration.
 #[derive(Debug, thiserror::Error)]
 pub enum BuildError {
+    /// One state type was installed twice.
+    #[error("extension state {type_name} registered twice")]
+    DuplicateExtensionState {
+        /// Concrete state type.
+        type_name: &'static str,
+    },
     /// A serialized name identifies multiple Rust types.
     #[error("node type {type_name} registered twice ({first}, {second})")]
     DuplicateNodeType {
@@ -269,6 +287,9 @@ impl Error {
     /// Stable variant name for cross-boundary error classification.
     pub fn kind(&self) -> &'static str {
         match self {
+            Self::InitialFollowUpFailed(..) => "InitialFollowUpFailed",
+            Self::UnknownExtensionState { .. } => "UnknownExtensionState",
+            Self::EndlessFollowUps => "EndlessFollowUps",
             Self::InvalidTextOffset { .. } => "InvalidTextOffset",
             Self::CaretFromPointNotText { .. } => "CaretFromPointNotText",
             Self::CaretFromPointNotElement { .. } => "CaretFromPointNotElement",
