@@ -204,6 +204,7 @@ members = [
   "crates/types/chat_id",
   "crates/types/chat_message",
   "crates/types/cowlike",
+  "crates/types/database_id",
   "crates/types/entity_basic_types",
   "crates/types/harness_id",
   "crates/types/harness_token",
@@ -695,6 +696,7 @@ crm = { path = "crates/databases/crm", default-features = false }
 cursor_api_key = { path = "crates/agents/cursor_api_key" }
 cursor_cloud_agents = { path = "crates/agents/cursor_cloud_agents" }
 database_env_vars = { path = "crates/platform/database_env_vars" }
+database_id = { path = "crates/types/database_id" }
 database_sql = { path = "crates/databases/database_sql" }
 database_webhooks = { path = "crates/databases/database_webhooks" }
 databases = { path = "crates/databases/databases" }

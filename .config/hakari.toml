@@ -118,6 +118,8 @@ workspace-members = [
     # models_databases: the typed write ops the SQL engine will emit, so it
     # joins database_sql in the browser and must stay wasm-safe too.
     "models_databases",
+    # database_id: the ids models_databases re-exports, so wasm-safe too.
+    "database_id",
     # id_newtype: the id macro models_databases builds its ids with.
     "id_newtype",
     # Leaf id crates built with it stay light the same way.
