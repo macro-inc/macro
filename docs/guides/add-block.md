@@ -196,7 +196,7 @@ you are only giving it an editor (as `pptx` and `docx` did).
   `parsers/mod.rs`), and the dispatch in
   `services/search_processing_service/src/process/document/raw_document.rs`.
 - **AI tools.** To let agents read or edit the file, add a domain module and
-  toolset under `crates/documents` (`domain/photoshop.rs`,
+  toolset under `crates/documents/documents` (`domain/photoshop.rs`,
   `inbound/toolset/photoshop.rs`), route it in
   `inbound/toolset/read_content.rs`, and give attachments context in
   `inbound/attachment/service.rs`. Follow the

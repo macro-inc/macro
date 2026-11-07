@@ -8,7 +8,7 @@ threads, pins, recents, notifications, folders, activity.
 
 ## Start here
 
-- `src/api/sync.rs`: dedicated authenticated `/sync/ws` endpoint; `crates/sync_router`
+- `src/api/sync.rs`: dedicated authenticated `/sync/ws` endpoint; `crates/documents/sync_router`
   owns multiplex routing and cancellation. Sync-service still owns document state
   and validates scoped tokens. DSS shutdown drains these upgraded sockets.
   This binary WebSocket protocol is intentionally outside the REST OpenAPI/SDK surface.
@@ -65,7 +65,7 @@ threads, pins, recents, notifications, folders, activity.
 - Owns: document/item HTTP CRUD, the Soup GraphQL schema, and cross-entity
   surfaces (history, annotations, threads, pins, recents, notifications,
   folders, saved views, activity).
-- Not here: document content/collaboration itself → `crates/collab_surface`
+- Not here: document content/collaboration itself → `crates/documents/collab_surface`
   and the sync service; AI chat → `document_cognition_service`.
 
 ## Recipes

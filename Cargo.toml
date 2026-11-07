@@ -44,7 +44,6 @@ members = [
   "crates/codex_connection",
   "crates/coding_agent_worker",
   "crates/cognition",
-  "crates/collab_surface",
   "crates/comms/channel_bots",
   "crates/comms/channel_labels",
   "crates/comms/contacts_core",
@@ -64,6 +63,8 @@ members = [
   "crates/databases/properties_inbound",
   "crates/databases/properties_service",
   "crates/dictation",
+  "crates/documents/collab_surface",
+  "crates/documents/sync_router",
   "crates/docx_engine",
   "crates/dynamic_ui",
   "crates/email/email_api_client_core",
@@ -184,7 +185,6 @@ members = [
   "crates/skills",
   "crates/soup_filter_cache_adapter",
   "crates/soup_filter_projection",
-  "crates/sync_router",
   "crates/system_skills",
   "crates/types/agent_session_id",
   "crates/types/bearer_token",
@@ -666,7 +666,7 @@ codex_connection = { path = "crates/codex_connection" }
 codex_fold = { path = "crates/folds/codex_fold" }
 cognition = { path = "crates/cognition" }
 cognition_public_url = { path = "crates/platform/service_urls/cognition_public_url" }
-collab_surface = { path = "crates/collab_surface" }
+collab_surface = { path = "crates/documents/collab_surface" }
 comms_db_client = { path = "crates/comms/comms_db_client" }
 complete_graph = { path = "crates/graphql/complete_graph" }
 connect_api_url = { path = "crates/platform/service_urls/connect_api_url" }
@@ -698,8 +698,8 @@ document_cognition_service_url = { path = "crates/platform/service_urls/document
 document_storage_service_client = { path = "crates/clients/document_storage_service_client" }
 document_storage_service_url = { path = "crates/platform/service_urls/document_storage_service_url" }
 document_sub_type = { path = "crates/types/document_sub_type", default-features = false }
-documents = { path = "crates/documents", default-features = false }
-documents_hex = { package = "documents", path = "crates/documents" }
+documents = { path = "crates/documents/documents", default-features = false }
+documents_hex = { package = "documents", path = "crates/documents/documents" }
 docx_engine = { path = "crates/docx_engine" }
 dynamic_ui = { path = "crates/dynamic_ui" }
 dynamodb_client = { path = "crates/aws/dynamodb_client" }
@@ -782,7 +782,7 @@ kafka_util = { path = "crates/platform/kafka_util" }
 lambda_client = { path = "crates/aws/lambda_client" }
 last_online_tracker = { path = "crates/accounts/last_online_tracker" }
 lexical_client = { path = "crates/clients/lexical_client" }
-lexical_mention_extractor = { path = "crates/lexical_mention_extractor" }
+lexical_mention_extractor = { path = "crates/documents/lexical_mention_extractor" }
 lexical_service_url = { path = "crates/platform/service_urls/lexical_service_url" }
 local_e2e_test_support = { path = "crates/local_e2e_test_support" }
 loops_client = { path = "crates/clients/loops_client" }
@@ -902,15 +902,15 @@ soup_realtime_inbound = { path = "crates/search/soup_realtime_inbound" }
 soup_realtime_outbound = { path = "crates/search/soup_realtime_outbound" }
 sqs_client = { path = "crates/aws/sqs_client", default-features = false }
 sqs_worker = { path = "crates/aws/sqs_worker" }
-static_file = { path = "crates/static_file", default-features = false }
+static_file = { path = "crates/documents/static_file", default-features = false }
 static_file_public_url = { path = "crates/platform/service_urls/static_file_public_url" }
 static_file_service_client = { path = "crates/clients/static_file_service_client" }
 static_file_service_url = { path = "crates/platform/service_urls/static_file_service_url" }
 stream = { path = "crates/platform/stream" }
-sync_router = { path = "crates/sync_router" }
+sync_router = { path = "crates/documents/sync_router" }
 sync_service_bebop_schema = { path = "services/sync-service/bebop-schema" }
 sync_service_client = { path = "crates/clients/sync_service_client" }
-sync_service_hex = { path = "crates/sync_service" }
+sync_service_hex = { path = "crates/documents/sync_service_hex" }
 sync_service_url = { path = "crates/platform/service_urls/sync_service_url" }
 system_properties = { path = "crates/databases/system_properties" }
 system_skills = { path = "crates/system_skills" }

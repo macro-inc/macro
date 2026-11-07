@@ -173,7 +173,7 @@ Postgres repo.
   (`crates/graphql/graphql_entity_mutation`) are generic. Initiatives still use a
   hand-written delete route; don't copy that.
 - **Owned content:** purge owned documents through the documents domain
-  (`crates/documents/src/domain/purge.rs`). Initiatives first reimplemented the
+  (`crates/documents/documents/src/domain/purge.rs`). Initiatives first reimplemented the
   purge in the service with raw SQL and queue messages, and lost the content
   cleanup when the purge failed after the row was deleted. Owned collab surfaces
   are retired through `OwnedSurfaceService`.

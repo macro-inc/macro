@@ -24,7 +24,7 @@ const AI_EDITING_WORKER_HOST =
 
 /**
  * Model fallback chains per worker role. Mirrors the chains the backend
- * EditDocument tool sends (crates/documents editing_worker_client.rs).
+ * EditDocument tool sends (crates/documents/documents editing_worker_client.rs).
  */
 const MODELS = {
   supervisor: [

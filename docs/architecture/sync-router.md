@@ -3,7 +3,7 @@
 When PostHog `sync-via-gateway` is enabled, the browser opens a dedicated
 WebSocket at DSS `/sync/ws` (public gateway prefix: `/dss/sync/ws`). The historical
 flag key remains unchanged. Notifications retain their separate connection-gateway
-socket. DSS hosts the reusable `crates/sync_router` library; no new service,
+socket. DSS hosts the reusable `crates/documents/sync_router` library; no new service,
 Pulumi stack, Redis relay, or distributed subscription registry is required.
 
 ```text

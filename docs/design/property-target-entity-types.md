@@ -210,8 +210,8 @@ Review at least:
 - `crates/databases/properties_inbound/src/toolset/set_entity_property.rs`
 - `crates/ai_tools/src/tool_context.rs`
 - `services/document_storage_service/src/api/context.rs`
-- `crates/documents/src/domain/ports/mod.rs`
-- `crates/documents/src/domain/service.rs`
+- `crates/documents/documents/src/domain/ports/mod.rs`
+- `crates/documents/documents/src/domain/service.rs`
 
 Do not blindly replace every Task occurrence: task relationship values, filters, system-property initialization, and internal repository keys remain Task in this phase.
 

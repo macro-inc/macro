@@ -22,7 +22,7 @@ dependency on any domain crate.
   types used to turn entities into AI context.
 - Not here: resolving a specific entity type — each domain crate implements
   `AttachmentService` in its own `inbound/attachment/` module (e.g. `crates/comms/chat`,
-  `crates/comms/channels`, `crates/documents`, `crates/email/email`).
+  `crates/comms/channels`, `crates/documents/documents`, `crates/email/email`).
 
 ## Boundaries
 
