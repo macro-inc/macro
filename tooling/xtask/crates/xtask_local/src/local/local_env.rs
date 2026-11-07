@@ -494,7 +494,7 @@ struct AgentHarnessEnv {
     bot_id: &'static str,
     snapshot: &'static str,
     /// Image the local provider runs. `run_local` / `stack up` `docker build`
-    /// `crates/agent_harness/container` to this tag (BuildKit cache is the
+    /// `crates/agents/agent_harness/container` to this tag (BuildKit cache is the
     /// freshness check).
     image: &'static str,
     /// Network sandboxes join, so this service can dial their sidecars and a
@@ -771,7 +771,7 @@ impl BootStubEnv {
             "STRIPE_WEBHOOK_SECRET_KEY".into(),
             "local-stripe-webhook-secret".into(),
         );
-        // ai_billing's mandatory pricing (crates/ai_billing/src/config.rs). Every
+        // ai_billing's mandatory pricing (crates/billing/ai_billing/src/config.rs). Every
         // host that composes billing refuses to boot without all four; these
         // mirror the published plan table ($5 free cap, $15 Pro, $150 Max,
         // list price + 25%). Doppler's shared_ai configs are authoritative.

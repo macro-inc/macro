@@ -63,7 +63,7 @@ to a day, or a bug.
 Graph itself throttled more than 2% (warning) or 10% (critical) of the
 Outlook requests that reached it in 15 minutes. The ratio adds 100 requests to
 the denominator, so a quiet quarter hour needs a few more 429s to alert. The
-Redis gate (`crates/email_api_client/src/outbound/microsoft_gate.rs`)
+Redis gate (`crates/email/email_api_client_outbound/src/microsoft_gate.rs`)
 holds every mailbox below Graph's published limits for all Microsoft mail and
 calendar callers together, and a Graph 429 cools the mailbox down, so Graph
 should not throttle.

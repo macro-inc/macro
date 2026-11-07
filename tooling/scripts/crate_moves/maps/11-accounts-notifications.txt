@@ -1,0 +1,15 @@
+crates/teams crates/accounts/teams
+crates/onboarding crates/accounts/onboarding
+crates/user_api_key crates/accounts/user_api_key
+crates/user_language crates/accounts/user_language
+crates/gtm_invite crates/accounts/gtm_invite
+crates/system_status crates/accounts/system_status
+crates/native_app_service crates/accounts/native_app_service
+crates/last_online_tracker crates/accounts/last_online_tracker
+crates/microsoft_oauth_grant_db_utils crates/accounts/microsoft_oauth_grant_db_utils
+crates/mobile_welcome_email_db_client crates/accounts/mobile_welcome_email_db_client
+crates/account_manager crates/accounts/account_manager
+crates/notification crates/notifications/notification
+crates/notification_db_client crates/notifications/notification_db_client
+crates/model_notifications crates/notifications/model_notifications
+crates/notification_inbox crates/notifications/notification_inbox

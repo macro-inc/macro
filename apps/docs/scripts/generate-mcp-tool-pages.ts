@@ -12,7 +12,7 @@ type ToolEntry = {
   output: string;
 };
 
-/** Shape of `crates/ai_tools/schemas/mcp-tools.json`. */
+/** Shape of `crates/ai/ai_tools/schemas/mcp-tools.json`. */
 type ToolSchemaFile = {
   $defs: Record<string, JsonSchema>;
   tools: ToolEntry[];
@@ -28,7 +28,7 @@ type ResolvedTool = {
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const docsDir = path.resolve(__dirname, '..');
 const repoRoot = path.resolve(docsDir, '../..');
-const aiToolsDir = path.join(repoRoot, 'crates', 'ai_tools');
+const aiToolsDir = path.join(repoRoot, 'crates', 'ai', 'ai_tools');
 const toolJsonPath = path.join(aiToolsDir, 'schemas', 'mcp-tools.json');
 const outputDir = path.join(docsDir, 'AI', 'mcp', 'tools');
 const navOutputPath = path.join(docsDir, 'config', 'tool-pages.json');

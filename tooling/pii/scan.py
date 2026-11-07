@@ -269,7 +269,9 @@ def merge_base() -> str:
 
 def changed_diff() -> str:
     base = os.environ.get("CHECK_BASE") or merge_base() or "HEAD"
-    args = ["diff", "-U0", "--diff-filter=AMR", "--no-color", base]
+    # A large refactor moves thousands of files; past git's default rename
+    # limit every moved file counts as added, and its existing fixtures with it.
+    args = ["-c", "diff.renameLimit=50000", "diff", "-U0", "--diff-filter=AMR", "--no-color", base]
     result = git(*args)
     result.check_returncode()
     return result.stdout

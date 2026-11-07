@@ -1,0 +1,32 @@
+[package]
+edition = "2024"
+name = "graphql_soup_filter_input"
+publish = false
+version = "0.1.0"
+
+[features]
+default = []
+server = ["dep:async-graphql", "dep:graphql_common", "notification_state/graphql"]
+
+[dependencies]
+async-graphql = { workspace = true, optional = true }
+chrono = { workspace = true }
+document_sub_type = { workspace = true }
+filter_ast = { workspace = true }
+graphql_common = { workspace = true, optional = true }
+item_filters = { workspace = true }
+macro_user_id = { workspace = true }
+model_file_type = { workspace = true }
+model_owner = { workspace = true }
+notification_state = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+uuid = { workspace = true }
+
+# Browsers have no OS entropy source, so wasm builds need `uuid`'s `js`
+# feature. Enabling it on native targets gives `uuid` a different feature set
+# from every other crate, so each native build containing this crate rebuilds
+# `uuid` and everything above it.
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+uuid = { workspace = true, features = ["js"] }

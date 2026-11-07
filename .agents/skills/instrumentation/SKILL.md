@@ -233,13 +233,13 @@ which sync-service reads with `worker_rs_otel::traceparent_from_request`.
 **Agent editing (web or Rust → ai-editing-worker → sync-service).**
 The web client (`apps/web/src/lib/service-clients/ai-editing-worker/client.ts`)
 opens `http POST /edit` under the document's span; Rust callers
-(`crates/documents/src/outbound/editing_worker_client.rs`) inject headers from
+(`crates/documents/documents/src/outbound/editing_worker_client.rs`) inject headers from
 an instrumented method. The worker
 (`services/ai-editing-worker/src/endpoints/edit.ts`) roots an `edit.session`
 with outcome fields (`edit.mode`, `edit.ops_total`, `edit.blocked`,
 `edit.aborted`), then a child per phase: `edit.sync_init`, `edit.hydrate`,
 `edit.interpret`, `edit.supervise.turn`, `edit.dispatch`, `edit.run_code`,
-`edit.flush`. On the agent side, `crates/agent_session/src/domain/session/telemetry.rs`
+`edit.flush`. On the agent side, `crates/agents/agent_session/src/domain/session/telemetry.rs`
 emits `invoke_agent` and `execute_tool` and propagates into the ACP agent.
 
 **GraphQL mutation queue (web → DSS `graphql.execute` → resolver).**
@@ -252,7 +252,7 @@ enqueue time (`enqueuedAtMs`), so they survive reloads; when it is missing or
 skewed, `mutation_queue.age_known` is false and the age is omitted rather than
 zero. The runner sends inside it, so
 `dssGraphqlFetch` injects `traceparent` and the DSS `graphql.execute` span and
-the instrumented resolvers (`crates/graphql_entity_mutation`,
+the instrumented resolvers (`crates/graphql/graphql_entity_mutation`,
 `graphql_properties`, `graphql_notification`) join the same trace. A loop that
 can repeat forever reports counters instead of lines: each item logs a failure
 class once, and `graphql.mutation_queue.summary` flushes counters every five

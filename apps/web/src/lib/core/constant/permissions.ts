@@ -1,6 +1,6 @@
 /**
  * RBAC permission identifiers, mirroring the backend `PermissionId` enum
- * (crates/roles_and_permissions/src/domain/model.rs). The user's
+ * (crates/entities/roles_and_permissions/src/domain/model.rs). The user's
  * granted permissions are exposed on the frontend via `usePermissions()` /
  * `useHasPermission()` in `@core/context/user`.
  *

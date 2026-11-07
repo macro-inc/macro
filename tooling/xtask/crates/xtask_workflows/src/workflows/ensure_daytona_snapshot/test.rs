@@ -37,7 +37,10 @@ fn publish_job_pushes_amd64_ghcr_tags() {
         yaml.contains("refs/heads/main"),
         "latest must only be tagged on main: {yaml}"
     );
-    assert!(yaml.contains("crates/agent_harness/container"), "{yaml}");
+    assert!(
+        yaml.contains("crates/agents/agent_harness/container"),
+        "{yaml}"
+    );
 }
 
 #[test]

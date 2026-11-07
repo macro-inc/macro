@@ -24,8 +24,8 @@ OpenSearch, and exposes backfill HTTP routes for each.
 - Owns: OpenSearch indexing for calls, agent sessions, documents, emails,
   channels, and other search entities; their Kafka/SQS ingestion and HTTP
   backfill routes.
-- Not here: OpenSearch client/index mapping primitives → `crates/opensearch_client`;
-  agent-session fold/transcript assembly → `crates/folds/agent_fold`.
+- Not here: OpenSearch client/index mapping primitives → `crates/clients/opensearch_client`;
+  agent-session fold/transcript assembly → `crates/agents/agent_fold`.
 
 ## Checks
 

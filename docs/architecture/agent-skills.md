@@ -1,7 +1,7 @@
 # Agent skills
 
 A skill is a markdown document (sub type `skill`) of instructions an agent
-follows. Built-in system skills (`crates/system_skills`) work the same way but
+follows. Built-in system skills (`crates/agents/system_skills`) work the same way but
 have no document.
 
 ## Descriptions
@@ -48,6 +48,6 @@ routes again from its next message.
 `agent.skill_selection` records `candidates`, `loaded` and `suggested` skill
 ids, `top_score`, `bytes` and `selection_status`; never names or request text.
 
-`route_evaluation` in `crates/agent_inmem/src/domain/skill_routing/eval.rs`
+`route_evaluation` in `crates/agents/agent_inmem/src/domain/skill_routing/eval.rs`
 (ignored; needs `TYPESAFE_API_KEY`) routes 20 prompts over a fixture skill
 set through the real Jev and prints the hit rate at several thresholds.

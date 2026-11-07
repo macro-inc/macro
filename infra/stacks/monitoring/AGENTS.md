@@ -62,12 +62,12 @@ From `infra/`:
   header is the field contract with `services/whatsapp_session_service`.
   Renaming a field there silently turns its monitor into missing data.
 - `monitors/harness-presence.ts` reads `harness_presence_disagreement` logged by
-  `crates/harnesses/src/inbound/axum_router.rs`; its header is the field contract.
+  `crates/agents/harnesses/src/inbound/axum_router.rs`; its header is the field contract.
 - `monitors/outlook-sync.ts` reads the health log, sync spans and Graph and
   token span fields email-service emits; its header is the field contract.
   It finds the Graph and token spans by `@outlook.throttle_origin` and
   `@outlook.token_cache`, not by name: Datadog renames an HTTP client span to
   `http.client.request` with its method as the resource.
 - `monitors/calls.ts` matches the text of the `voip push: SNS delivery failed`
-  log in `crates/notification/src/domain/service/voip.rs` and the
+  log in `crates/notifications/notification/src/domain/service/voip.rs` and the
   `PushEndpointUnavailable` message. Rewording either silently breaks it.

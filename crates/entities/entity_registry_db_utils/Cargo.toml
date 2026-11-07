@@ -1,0 +1,21 @@
+[package]
+edition = "2024"
+name = "entity_registry_db_utils"
+publish = false
+version = "0.1.0"
+
+[dependencies]
+entity_access_db_utils = { workspace = true }
+entity_registry = { workspace = true }
+chrono = { workspace = true }
+model_owner = { workspace = true, features = ["sqlx"] }
+rootcause = { workspace = true }
+shared_entity_registry = { workspace = true }
+sqlx = { workspace = true }
+tracing = { workspace = true }
+uuid = { workspace = true }
+workspace-hack = { version = "0.1", path = "../../workspace-hack" }
+
+[dev-dependencies]
+bot_id = { workspace = true }
+macro_db_migrator = { workspace = true }

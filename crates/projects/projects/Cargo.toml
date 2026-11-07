@@ -1,0 +1,130 @@
+[package]
+edition = "2024"
+name = "projects"
+publish = false
+version = "0.1.0"
+
+[features]
+ai_tools = [
+  "dep:ai_toolset",
+  "dep:async-trait",
+  "dep:schemars",
+  "ports",
+]
+axum = [
+  "dep:axum",
+  "dep:entity_registry",
+  "dep:macro_authorization",
+  "dep:utoipa",
+  "entity_access/axum",
+  "entity_registry/axum",
+]
+default = ["axum", "inbound", "outbound", "ports", "service"]
+inbound = ["axum", "ports"]
+outbound = [
+  "dep:async-recursion",
+  "dep:aws-sdk-s3",
+  "dep:base64",
+  "dep:document_sub_type",
+  "dep:documents",
+  "dep:dynamodb_client",
+  "dep:entity_access_db_utils",
+  "dep:entity_registry",
+  "dep:entity_registry_db_utils",
+  "dep:hex",
+  "dep:macro_sha_count_client",
+  "dep:share_permission_db_utils",
+  "dep:sqlx",
+  "dep:sqs_client",
+  "dep:system_properties",
+  "ports",
+]
+ports = ["dep:tokio"]
+service = ["dep:entity_access_management", "dep:shared_entity_registry", "ports"]
+
+[dependencies]
+activity = { workspace = true }
+# Core
+anyhow = { workspace = true }
+chrono = { workspace = true }
+futures = { workspace = true }
+project_id = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+tracing = { workspace = true }
+unicode-segmentation = { workspace = true }
+uuid = { workspace = true }
+
+# Domain models (always included)
+bot_id = { workspace = true }
+entity_access = { workspace = true, default-features = true }
+entity_access_management = { workspace = true, features = [
+  "outbound",
+  "ports",
+], optional = true }
+macro_aws_config = { workspace = true, features = ["s3"] }
+macro_event_broker = { workspace = true }
+macro_event_topics = { workspace = true }
+entity_mutation = { workspace = true }
+macro_user_id = { workspace = true }
+model = { workspace = true }
+model_entity = { workspace = true }
+model_owner = { workspace = true }
+models_bulk_upload = { workspace = true }
+models_permissions = { workspace = true }
+rootcause = { workspace = true }
+s3_key = { workspace = true }
+shared_entity_registry = { workspace = true, optional = true }
+
+# Async runtime (for ports)
+tokio = { workspace = true, optional = true }
+
+# AI toolset dependencies
+ai_toolset = { workspace = true, optional = true }
+async-trait = { workspace = true, optional = true }
+schemars = { workspace = true, optional = true }
+
+# Axum dependencies
+axum = { workspace = true, optional = true }
+macro_authorization = { workspace = true, optional = true, features = [
+  "axum",
+] }
+utoipa = { workspace = true, optional = true }
+
+# Outbound dependencies
+async-recursion = { version = "1.1.1", optional = true }
+aws-sdk-s3 = { workspace = true, optional = true }
+base64 = { workspace = true, optional = true }
+document_sub_type = { workspace = true, default-features = true, optional = true }
+documents = { workspace = true, optional = true }
+dynamodb_client = { workspace = true, optional = true }
+entity_access_db_utils = { workspace = true, optional = true }
+entity_registry = { workspace = true, optional = true }
+entity_registry_db_utils = { workspace = true, optional = true }
+hex = { workspace = true, optional = true }
+macro_sha_count_client = { workspace = true, optional = true }
+share_permission_db_utils = { workspace = true, optional = true }
+sqlx = { workspace = true, optional = true }
+sqs_client = { workspace = true, features = [
+  "document",
+], optional = true }
+system_properties = { workspace = true, optional = true }
+workspace-hack = { version = "0.1", path = "../../workspace-hack" }
+
+[dev-dependencies]
+aws-sdk-sqs = { workspace = true }
+bot_id = { workspace = true, features = ["test-utils"] }
+http-body-util = { workspace = true }
+kafka_util = { workspace = true }
+macro_db_migrator = { workspace = true }
+# Examples need the Kafka adapter (outbound); the library itself only uses ports.
+macro_event_broker = { workspace = true, default-features = true }
+mockall = { workspace = true }
+rdkafka = { workspace = true }
+model_user = { workspace = true }
+serde_json = { workspace = true }
+tokio = { workspace = true, features = ["macros", "rt-multi-thread", "signal"] }
+tower = { workspace = true }
+tracing-subscriber = { workspace = true }
+macro_env_var = { workspace = true }

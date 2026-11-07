@@ -2,7 +2,7 @@
 
 use authentication_service_client::{AuthServiceClient, error::AuthServiceClientError};
 use email::domain::mailbox::{MailboxGateway, MailboxKey};
-use email_api_client::domain::{models::*, ports::*, service::mailbox::MailboxApiService};
+use email_api_client_core::{models::*, ports::*, service::mailbox::MailboxApiService};
 use tracing::Instrument;
 
 mod contacts;
@@ -174,7 +174,7 @@ where
         message: &ProviderId,
         action: &MessageAction,
         expected_version: Option<&str>,
-    ) -> Result<email_api_client::domain::models::MessageWriteReceipt, EmailApiError> {
+    ) -> Result<email_api_client_core::models::MessageWriteReceipt, EmailApiError> {
         self.0
             .apply(access(mailbox), message, action, expected_version)
             .await

@@ -16,7 +16,7 @@ use email::domain::scheduled_delivery::{
     attachments::{ApprovedAttachments, AttachmentSnapshotMismatch},
 };
 use email::domain::send_attempt::{PreparedSendContentUnavailable, SendSnapshot};
-use email_api_client::domain::models::{EmailApiError, PreparedSendMessage, SendRequest, SentIds};
+use email_api_client_core::models::{EmailApiError, PreparedSendMessage, SendRequest, SentIds};
 use email_db_client::messages::scheduled::delivery::{self, DeliveryClaim};
 use macro_event_broker::{KafkaEventPublisher, MacroEventBroker, MacroEventBrokerService};
 use macro_user_id::cowlike::CowLike as _;

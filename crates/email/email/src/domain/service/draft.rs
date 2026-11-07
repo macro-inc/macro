@@ -1,0 +1,950 @@
+use crate::domain::{
+    models::{
+        CreateDraftInput, CreatedDraft, DeletedUserDraft, EmailErr, Link, ParsedAddresses,
+        ResolvedDraftInput, SavedUserDraft, SimpleMessageInfo, ThreadRow,
+    },
+    ports::EmailRepo,
+    send_attempt::SendSourceInbox,
+};
+use base64::Engine;
+use base64::engine::general_purpose::URL_SAFE_NO_PAD;
+use frecency_core::ports::FrecencyQueryService;
+use macro_user_id::cowlike::CowLike;
+use macro_user_id::user_id::MacroUserIdStr;
+use uuid::Uuid;
+
+use super::EmailServiceImpl;
+
+#[cfg(test)]
+mod test;
+
+impl<T, U, E, CS, Eam, B> EmailServiceImpl<T, U, E, CS, Eam, B>
+where
+    T: EmailRepo,
+    U: FrecencyQueryService,
+    E: crate::domain::ports::EmailMessageEnqueuer,
+    CS: crm::domain::service::CrmService,
+    anyhow::Error: From<T::Err>,
+{
+    pub(crate) async fn message_operation_status_impl(
+        &self,
+        actor: macro_user_id::user_id::MacroUserIdStr<'static>,
+        message_id: Uuid,
+    ) -> Result<Option<crate::domain::models::mailbox_operation::MessageOperationStatus>, EmailErr>
+    {
+        let ids = self
+            .email_repo
+            .inboxes_for_macro_id(actor)
+            .await
+            .map_err(anyhow::Error::from)?
+            .into_iter()
+            .map(|link| link.id)
+            .collect::<Vec<_>>();
+        self.email_repo
+            .get_simple_message(message_id, &ids)
+            .await
+            .map_err(anyhow::Error::from)?
+            .ok_or(EmailErr::MessageNotFound(message_id))?;
+        Ok(self
+            .email_repo
+            .message_operation_facts(&[message_id])
+            .await
+            .map_err(anyhow::Error::from)?
+            .remove(&message_id)
+            .map(Into::into))
+    }
+
+    pub(crate) async fn resolve_message_operation_impl(
+        &self,
+        actor: macro_user_id::user_id::MacroUserIdStr<'static>,
+        request: crate::domain::models::mailbox_operation::MessageResolutionRequest,
+    ) -> Result<Uuid, EmailErr> {
+        let ids: Vec<Uuid> = self
+            .email_repo
+            .inboxes_for_macro_id(actor.clone())
+            .await
+            .map_err(anyhow::Error::from)?
+            .into_iter()
+            .map(|link| link.id)
+            .collect();
+        self.email_repo
+            .get_simple_message(request.message_id, &ids)
+            .await
+            .map_err(anyhow::Error::from)?
+            .ok_or(EmailErr::MessageNotFound(request.message_id))?;
+        let facts = self
+            .email_repo
+            .message_operation_facts(&[request.message_id])
+            .await
+            .map_err(anyhow::Error::from)?
+            .remove(&request.message_id)
+            .ok_or(EmailErr::MessageNotFound(request.message_id))?;
+        let plan = crate::domain::models::mailbox_operation::plan_resolution(facts, request)?;
+        self.email_repo
+            .commit_message_resolution(&actor, plan)
+            .await
+    }
+
+    #[tracing::instrument(err, skip(self, link, accessible_inboxes, input))]
+    pub(crate) async fn create_draft_impl(
+        &self,
+        link: &Link,
+        accessible_inboxes: &[Link],
+        mut input: CreateDraftInput,
+    ) -> Result<CreatedDraft, EmailErr> {
+        // Ordinary draft persistence never grants delivery authority. Keep the
+        // legacy field wire-compatible, but only explicit delivery can use it.
+        input.send_time = None;
+        self.prepare_and_insert_db_message(link, accessible_inboxes, input, true)
+            .await
+    }
+
+    #[tracing::instrument(err, skip(self, input))]
+    pub(crate) async fn save_draft_for_user_impl(
+        &self,
+        macro_id: macro_user_id::user_id::MacroUserIdStr<'_>,
+        link_id: Option<Uuid>,
+        mut input: CreateDraftInput,
+    ) -> Result<SavedUserDraft, EmailErr> {
+        input.actor = Some(macro_id.clone().into_owned());
+        let accessible_inboxes = self
+            .email_repo
+            .inboxes_for_macro_id(macro_id.clone())
+            .await
+            .map_err(anyhow::Error::from)?;
+        let link = resolve_target_link(&accessible_inboxes, link_id, &macro_id)?.clone();
+        let accessible_link_ids: Vec<Uuid> = accessible_inboxes.iter().map(|l| l.id).collect();
+        self.resolve_client_handles(&mut input, &accessible_link_ids)
+            .await?;
+        let mut draft = self
+            .create_draft_impl(&link, &accessible_inboxes, input)
+            .await?;
+        let message_ids = [draft.db_id];
+        let (
+            mut attachments,
+            mut attachments_draft,
+            mut attachments_forwarded,
+            mut send_times,
+            timestamps,
+            mut labels,
+            mut operations,
+            mut senders,
+        ) = tokio::try_join!(
+            self.email_repo.attachments_by_message_ids(&message_ids),
+            self.email_repo
+                .draft_attachments_by_message_ids(&message_ids),
+            self.email_repo
+                .forwarded_attachments_by_message_ids(&message_ids),
+            self.email_repo.scheduled_sends_by_message_ids(&message_ids),
+            self.email_repo
+                .message_timestamps(draft.db_id, draft.link_id),
+            self.email_repo.labels_by_message_ids(&message_ids),
+            self.email_repo.message_operation_facts(&message_ids),
+            self.email_repo.senders_by_message_ids(&message_ids),
+        )
+        .map_err(anyhow::Error::from)?;
+        let timestamps =
+            timestamps.ok_or_else(|| anyhow::anyhow!("saved draft metadata is unavailable"))?;
+
+        // Autosaves leave scheduling untouched. Return the stored schedule,
+        // not the usually absent input, so normalized cache writes preserve it.
+        draft.send_time = send_times
+            .remove(&draft.db_id)
+            .map(|schedule| schedule.send_time);
+
+        Ok(SavedUserDraft {
+            operation_status: operations.remove(&draft.db_id).map(Into::into),
+            sender: senders
+                .remove(&draft.db_id)
+                .ok_or_else(|| anyhow::anyhow!("saved draft sender is unavailable"))?,
+            created_at: timestamps.created_at,
+            updated_at: timestamps.updated_at,
+            labels: labels.remove(&draft.db_id).unwrap_or_default(),
+            attachments: attachments.remove(&draft.db_id).unwrap_or_default(),
+            attachments_draft: attachments_draft.remove(&draft.db_id).unwrap_or_default(),
+            attachments_forwarded: attachments_forwarded
+                .remove(&draft.db_id)
+                .unwrap_or_default(),
+            draft,
+            link,
+        })
+    }
+
+    /// Resolve the user-scoped save's client handles into server IDs.
+    ///
+    /// GraphQL saves carry client-generated identity so offline replays stay
+    /// idempotent — but a client-supplied ID must never become a primary key
+    /// in the shared email tables. Each handle resolves through its mapping
+    /// table (scoped to the caller's inboxes, so identical handles from
+    /// different users never interact); an unmapped handle that happens to
+    /// name an accessible row is treated as a server ID from a fetched draft
+    /// and bound to itself; anything else stays unresolved and gets a
+    /// server-minted row, with the binding recorded in the same transaction
+    /// as the insert. Resolution reads are advisory — they run outside that
+    /// transaction and cannot see a concurrent first save's pending binding.
+    /// The race-proof enforcement is inside it: the per-handle lock and the
+    /// re-read it guards converge concurrent first saves on one row, and the
+    /// upsert's owner guard rejects a write the resolution shouldn't have
+    /// reached.
+    pub(super) async fn resolve_client_handles(
+        &self,
+        input: &mut CreateDraftInput,
+        accessible_link_ids: &[Uuid],
+    ) -> Result<(), EmailErr> {
+        if let Some(handle) = input.db_id {
+            // Bind on every save, hit or miss: a sender switch deletes and
+            // recreates the row, cascading the old binding away — the
+            // insert's binding upsert re-points the handle at whatever row
+            // the save converges on.
+            input.draft_client_binding = Some(handle);
+            match self
+                .email_repo
+                .message_id_for_client_draft_id(handle, accessible_link_ids)
+                .await
+                .map_err(anyhow::Error::from)?
+            {
+                Some(message_id) => input.db_id = Some(message_id),
+                None => {
+                    let is_server_id = self
+                        .email_repo
+                        .get_simple_message(handle, accessible_link_ids)
+                        .await
+                        .map_err(anyhow::Error::from)?
+                        .is_some();
+                    if !is_server_id {
+                        input.db_id = None;
+                    }
+                }
+            }
+        }
+        // Thread handles are a compose concern: replies derive their thread
+        // from the reply target, and binding the reply's server-thread hint
+        // here would write junk mapping rows — or, for a cross-inbox reply,
+        // map the original thread's ID onto the newly created thread.
+        if input.replying_to_id.is_none()
+            && let Some(handle) = input.thread_db_id
+        {
+            input.thread_client_binding = Some(handle);
+            if let Some(thread_id) = self
+                .email_repo
+                .thread_id_for_client_thread_id(handle, accessible_link_ids)
+                .await
+                .map_err(anyhow::Error::from)?
+            {
+                input.thread_db_id = Some(thread_id);
+            }
+            // Unmapped handles stay in place: validate_thread_hint
+            // attaches an accessible server thread, and anything else
+            // gets a server-minted thread the binding then points at.
+        }
+        Ok(())
+    }
+
+    #[tracing::instrument(err, skip(self))]
+    pub(crate) async fn delete_draft_for_user_impl(
+        &self,
+        macro_id: macro_user_id::user_id::MacroUserIdStr<'_>,
+        draft_id: Uuid,
+
+        expected_generation: i32,
+    ) -> Result<DeletedUserDraft, EmailErr> {
+        let accessible_link_ids: Vec<Uuid> = self
+            .email_repo
+            .inboxes_for_macro_id(macro_id.clone())
+            .await
+            .map_err(anyhow::Error::from)?
+            .iter()
+            .map(|link| link.id)
+            .collect();
+
+        // The handle resolves like a save's: through the caller-scoped
+        // mapping first, else as a server ID from a fetched draft.
+        //
+        // Known window: this read does not take the save's per-handle
+        // advisory lock, so a delete that lands while a first save of the
+        // same handle is still uncommitted sees no binding and returns the
+        // no-op below; the save then commits a draft the client believes is
+        // gone. The client queue serializes a handle's save and delete, so
+        // reaching it takes a connection drop after the server received the
+        // save. Closing it means a per-handle lock (no inbox in the key) and
+        // resolve-plus-delete in one repo transaction.
+        let resolved_id = self
+            .email_repo
+            .message_id_for_client_draft_id(draft_id, &accessible_link_ids)
+            .await
+            .map_err(anyhow::Error::from)?
+            .unwrap_or(draft_id);
+
+        // Advisory read: classifies the ID for error reporting. Enforcement
+        // is the guarded DELETE below, whose WHERE clause re-checks ownership
+        // and draft state, so a raced read can at most turn the delete into
+        // a no-op — never remove a row the caller doesn't own.
+        let Some(msg) = self
+            .email_repo
+            .get_simple_message(resolved_id, &accessible_link_ids)
+            .await
+            .map_err(anyhow::Error::from)?
+        else {
+            // Absent or someone else's (reported identically so the delete is
+            // no existence oracle): an idempotent no-op, so a delete queued
+            // offline lands cleanly even when it replays after the draft is
+            // already gone.
+            return Ok(DeletedUserDraft {
+                thread_id: None,
+                deleted: false,
+                thread_deleted: false,
+            });
+        };
+
+        if msg.is_sent {
+            return Err(EmailErr::MessageAlreadySent(draft_id));
+        }
+        if !msg.is_draft {
+            return Err(EmailErr::MessageDeliveryConflict(draft_id));
+        }
+
+        let deletion = self
+            .email_repo
+            .delete_draft_message(
+                msg.db_id,
+                msg.thread_db_id,
+                &accessible_link_ids,
+                Some(macro_id.as_ref()),
+                expected_generation,
+            )
+            .await
+            .map_err(anyhow::Error::from)?;
+
+        let Some(deletion) = deletion else {
+            // The guarded delete matched nothing: between the read above and
+            // the DELETE, the draft was removed or sent. Re-read to tell those
+            // apart — a discard that raced a send reports the same
+            // `MessageAlreadySent` the unraced path does, while a row that is
+            // gone stays the idempotent no-op an offline-queued discard
+            // relies on when it replays after the draft is already deleted.
+            let raced = self
+                .email_repo
+                .get_simple_message(msg.db_id, &accessible_link_ids)
+                .await
+                .map_err(anyhow::Error::from)?;
+            if raced.as_ref().is_some_and(|m| m.is_sent) {
+                return Err(EmailErr::MessageAlreadySent(draft_id));
+            }
+            if raced.as_ref().is_some_and(|m| !m.is_draft) {
+                return Err(EmailErr::MessageDeliveryConflict(draft_id));
+            }
+            if self
+                .email_repo
+                .scheduled_sends_by_message_ids(&[msg.db_id])
+                .await
+                .map_err(anyhow::Error::from)?
+                .contains_key(&msg.db_id)
+            {
+                return Err(EmailErr::MessageDeliveryConflict(draft_id));
+            }
+            if raced.is_some() {
+                return Err(EmailErr::MessageDeliveryConflict(draft_id));
+            }
+            return Ok(DeletedUserDraft {
+                thread_id: None,
+                deleted: false,
+                thread_deleted: false,
+            });
+        };
+
+        Ok(DeletedUserDraft {
+            thread_id: Some(msg.thread_db_id),
+            deleted: true,
+            thread_deleted: deletion.thread_deleted,
+        })
+    }
+
+    /// Shared pipeline for creating a draft or a sent message.
+    ///
+    /// Validates existing message / reply-to, decodes and sanitizes the HTML
+    /// body, upserts contacts, builds thread if needed, and inserts the message
+    /// row via the repo layer.
+    /// `is_draft` controls the `is_draft` flag persisted on the message row.
+    #[tracing::instrument(err, skip(self, link, accessible_inboxes, input))]
+    pub(crate) async fn prepare_and_insert_db_message(
+        &self,
+        link: &Link,
+        accessible_inboxes: &[Link],
+        input: CreateDraftInput,
+        is_draft: bool,
+    ) -> Result<CreatedDraft, EmailErr> {
+        let (resolved, contacts, new_thread, _) = self
+            .prepare_message(link, accessible_inboxes, input, is_draft, false)
+            .await?;
+        let link_id = link.id;
+        let accessible_link_ids: Vec<Uuid> = accessible_inboxes.iter().map(|l| l.id).collect();
+
+        // The insert reports the IDs it settled on rather than echoing the
+        // candidates above: a save whose client handle raced a concurrent
+        // first save adopts that save's row, and the client must hear about
+        // the row that actually exists.
+        let Some(settled) = self
+            .email_repo
+            .insert_message(&resolved, &contacts, link_id, new_thread, is_draft)
+            .await?
+        else {
+            // A concurrent first save can settle a client handle on a different
+            // row. Classify the authoritative row, not our discarded candidate.
+            let rejected_id = match resolved.draft_client_id {
+                Some(handle) => self
+                    .email_repo
+                    .message_id_for_client_draft_id(handle, &accessible_link_ids)
+                    .await
+                    .map_err(anyhow::Error::from)?
+                    .unwrap_or(resolved.db_id),
+                None => resolved.db_id,
+            };
+            let rejected = self
+                .email_repo
+                .get_simple_message(rejected_id, &accessible_link_ids)
+                .await
+                .map_err(anyhow::Error::from)?;
+            if rejected.as_ref().is_some_and(|m| m.is_sent) {
+                return Err(EmailErr::MessageAlreadySent(rejected_id));
+            }
+            if rejected.as_ref().is_some_and(|m| !m.is_draft) {
+                return Err(EmailErr::MessageDeliveryConflict(rejected_id));
+            }
+            if rejected.is_some()
+                && self
+                    .email_repo
+                    .scheduled_sends_by_message_ids(&[rejected_id])
+                    .await
+                    .map_err(anyhow::Error::from)?
+                    .contains_key(&rejected_id)
+            {
+                return Err(EmailErr::MessageDeliveryConflict(rejected_id));
+            }
+            return Err(EmailErr::MessageNotFound(rejected_id));
+        };
+
+        Ok(CreatedDraft {
+            draft_generation: resolved.draft_generation,
+            db_id: settled.message_db_id,
+            provider_id: resolved.provider_id,
+            replying_to_id: resolved.replying_to_id,
+            provider_thread_id: resolved.provider_thread_id,
+            thread_db_id: settled.thread_db_id,
+            link_id,
+            subject: resolved.subject,
+            to: resolved.to,
+            cc: resolved.cc,
+            bcc: resolved.bcc,
+            body_text: resolved.body_text,
+            body_html: resolved.body_html,
+            body_macro: resolved.body_macro,
+            headers_json: resolved.headers_json,
+            send_time: resolved.send_time,
+        })
+    }
+
+    pub(super) async fn prepare_message(
+        &self,
+        link: &Link,
+        accessible_inboxes: &[Link],
+        mut input: CreateDraftInput,
+        is_draft: bool,
+        defer_inbox_move: bool,
+    ) -> Result<
+        (
+            ResolvedDraftInput,
+            crate::domain::models::UpsertedContacts,
+            Option<ThreadRow>,
+            Option<SendSourceInbox>,
+        ),
+        EmailErr,
+    > {
+        let link_id = link.id;
+        let sender = self
+            .resolve_sender(link, input.sender_email.as_ref(), !is_draft)
+            .await?;
+        let accessible_link_ids: Vec<Uuid> = accessible_inboxes.iter().map(|l| l.id).collect();
+
+        // The provider binding comes from a stored draft, never from a client.
+        if link.provider == crate::domain::models::UserProvider::Outlook {
+            input.provider_id = None;
+            input.provider_thread_id = None;
+        }
+        // Authorize the reply target before validate_existing_message can move
+        // the draft to another inbox, so a refused target leaves it in place.
+        let reply_target = self
+            .authorized_reply_target(&input, &accessible_link_ids)
+            .await?;
+        let source_inbox = self
+            .validate_existing_message(link_id, accessible_inboxes, &mut input, defer_inbox_move)
+            .await?;
+
+        let source_message_id = input.db_id;
+        self.validate_replying_to(link_id, reply_target.as_ref(), &mut input)
+            .await?;
+        if source_inbox.is_some() && input.db_id != source_message_id {
+            return Err(EmailErr::InvalidSendSnapshot(
+                "another reply draft exists in the selected inbox; review it before sending".into(),
+            ));
+        }
+
+        self.validate_thread_hint(link_id, &mut input).await?;
+
+        decode_and_sanitize_html_body(&mut input)?;
+
+        // On send (not drafts), inject the inbox's signature into the body per
+        // the user's settings + per-message override. Best-effort: never blocks
+        // the send.
+        if !is_draft {
+            self.maybe_inject_signature(link, &mut input).await;
+        }
+
+        // Build parsed addresses
+        let addresses = ParsedAddresses {
+            from_email: sender.email,
+            from_name: sender.name,
+            to: input.to.clone(),
+            cc: input.cc.clone(),
+            bcc: input.bcc.clone(),
+        };
+
+        // Upsert contacts (outside transaction to avoid deadlocks)
+        let contacts = self
+            .email_repo
+            .upsert_contacts(link_id, addresses)
+            .await
+            .map_err(anyhow::Error::from)?;
+
+        // Build new thread if one doesn't already exist
+        let (thread_db_id, new_thread) = self.build_new_thread_if_needed(link_id, &input);
+
+        // Resolve all IDs and build the insert-ready struct
+        let message_db_id = input.db_id.unwrap_or_else(macro_uuid::generate_uuid_v7);
+
+        // Start the undo window only after provider validation and preparation.
+        // A slow send-as lookup must not consume the user's cancellation window.
+        if !is_draft && input.send_time.is_none() {
+            input.send_time = Some(
+                chrono::Utc::now()
+                    + chrono::Duration::seconds(i64::from(self.sent_undo_delay_secs)),
+            );
+        }
+        let resolved = ResolvedDraftInput {
+            draft_generation: input.draft_generation,
+            db_id: message_db_id,
+            provider_id: input.provider_id,
+            replying_to_id: input.replying_to_id,
+            provider_thread_id: input.provider_thread_id,
+            thread_db_id,
+            subject: input.subject,
+            to: input.to,
+            cc: input.cc,
+            bcc: input.bcc,
+            body_text: input.body_text,
+            body_html: input.body_html,
+            body_macro: input.body_macro,
+            headers_json: input.headers_json,
+            send_time: input.send_time,
+            actor_id: input.actor.as_ref().map(|actor| actor.as_ref().to_owned()),
+            draft_client_id: input.draft_client_binding,
+            thread_client_id: input.thread_client_binding,
+        };
+
+        Ok((resolved, contacts, new_thread, source_inbox))
+    }
+
+    /// Appends the inbox's signature to the outgoing body (send path only).
+    /// Gated by the per-message override and the inbox's settings; replies and
+    /// forwards (a `replying_to_id` is present) require
+    /// `signature_on_replies_forwards`. Best-effort — any failure just skips.
+    async fn maybe_inject_signature(&self, link: &Link, input: &mut CreateDraftInput) {
+        if let Some(signature) = &input.frozen_signature_html {
+            super::signature::SignaturePreparation {
+                settings: Some(crate::domain::ports::LinkEmailSettings {
+                    signature: Some(email_utils::sanitize_authored_html(signature)),
+                    signature_on_replies_forwards: true,
+                }),
+                include_signature: Some(!signature.trim().is_empty()),
+            }
+            .apply(
+                input.replying_to_id.is_some(),
+                &mut input.body_html,
+                &mut input.body_text,
+            );
+            return;
+        }
+        let settings = if input.include_signature == Some(false)
+            || input
+                .body_html
+                .as_deref()
+                .is_some_and(super::signature::has_signature)
+        {
+            None
+        } else {
+            self.email_repo.fetch_email_settings(link.id).await
+                .inspect_err(|error| tracing::warn!(error=?error, "failed to fetch settings for signature; skipping"))
+                .ok()
+        };
+        super::signature::SignaturePreparation {
+            settings,
+            include_signature: input.include_signature,
+        }
+        .apply(
+            input.replying_to_id.is_some(),
+            &mut input.body_html,
+            &mut input.body_text,
+        );
+    }
+
+    async fn validate_existing_message(
+        &self,
+        link_id: Uuid,
+        accessible_inboxes: &[Link],
+        input: &mut CreateDraftInput,
+        defer_inbox_move: bool,
+    ) -> Result<Option<SendSourceInbox>, EmailErr> {
+        let accessible_link_ids: Vec<_> = accessible_inboxes.iter().map(|link| link.id).collect();
+        let Some(db_id) = input.db_id else {
+            return Ok(None);
+        };
+
+        let Some(msg) = self
+            .email_repo
+            .get_simple_message(db_id, &accessible_link_ids)
+            .await
+            .map_err(anyhow::Error::from)?
+        else {
+            // A message ID must name an accessible row: REST clients only
+            // send IDs learned from responses, and user-scoped (GraphQL)
+            // saves arrive here with the client handle already resolved —
+            // an unresolvable handle was cleared so the row is server-minted.
+            // A miss is therefore a stale/foreign ID, reported opaquely.
+            return Err(EmailErr::MessageNotFound(db_id));
+        };
+
+        if msg.is_sent {
+            return Err(EmailErr::MessageAlreadySent(db_id));
+        }
+        if !msg.is_draft {
+            return Err(EmailErr::MessageDeliveryConflict(db_id));
+        }
+
+        if msg.link_id != link_id {
+            let portable = accessible_inboxes
+                .iter()
+                .filter(|inbox| inbox.id == link_id || inbox.id == msg.link_id)
+                .all(|inbox| inbox.provider == crate::domain::models::UserProvider::Gmail)
+                && msg.provider_id.is_none();
+            if !portable {
+                return Err(EmailErr::InvalidDraft(
+                    "Use the inbox transfer operation to change this draft's sender".into(),
+                ));
+            }
+            if defer_inbox_move {
+                // Send owns the final snapshot. Preserve attachments and the
+                // source draft until admission can move it under its row lock.
+                input.provider_id = None;
+                input.thread_db_id = None;
+                input.provider_thread_id = None;
+                return Ok(Some(SendSourceInbox {
+                    link_id: msg.link_id,
+                    thread_id: msg.thread_db_id,
+                }));
+            }
+            // The sender was switched to a different inbox. A draft belongs to a
+            // single inbox, so discard it (and its now-empty thread) and create a
+            // fresh draft in the sending inbox; validate_replying_to re-derives
+            // the thread from the reply target. The draft keeps its server ID
+            // across the move, and the delete's cascade drops any client-handle
+            // binding — the save's binding upsert re-points the handle at the
+            // recreated row in the same transaction, so queued offline saves
+            // keep converging. A guarded miss may instead mean the source is
+            // now scheduled: do not continue and adopt another reply draft in
+            // the target inbox while that committed source is still present.
+            let deleted = self
+                .email_repo
+                .delete_draft_message(
+                    msg.db_id,
+                    msg.thread_db_id,
+                    &accessible_link_ids,
+                    input.actor.as_ref().map(|actor| actor.as_ref()),
+                    input.draft_generation,
+                )
+                .await
+                .map_err(anyhow::Error::from)?;
+            if deleted.is_none()
+                && let Some(retained) = self
+                    .email_repo
+                    .get_simple_message(msg.db_id, &accessible_link_ids)
+                    .await
+                    .map_err(anyhow::Error::from)?
+            {
+                if retained.is_sent {
+                    return Err(EmailErr::MessageAlreadySent(msg.db_id));
+                }
+                return Err(EmailErr::MessageDeliveryConflict(msg.db_id));
+            }
+            input.provider_id = None;
+            input.thread_db_id = None;
+            input.provider_thread_id = None;
+            return Ok(None);
+        }
+
+        input.thread_db_id = Some(msg.thread_db_id);
+        input.provider_id = msg.provider_id;
+        input.provider_thread_id = msg.provider_thread_id;
+
+        Ok(None)
+    }
+
+    /// The reply target, authorized on every save, before an existing reply
+    /// draft is reused: that draft is found by a header the client can write.
+    async fn authorized_reply_target(
+        &self,
+        input: &CreateDraftInput,
+        accessible_link_ids: &[Uuid],
+    ) -> Result<Option<SimpleMessageInfo>, EmailErr> {
+        let Some(replying_to_id) = input.replying_to_id else {
+            return Ok(None);
+        };
+        let reply_target = self
+            .reply_target(input.actor.as_ref(), replying_to_id, accessible_link_ids)
+            .await?;
+        if reply_target.is_draft {
+            return Err(EmailErr::CannotReplyToDraft);
+        }
+        Ok(Some(reply_target))
+    }
+
+    async fn validate_replying_to(
+        &self,
+        link_id: Uuid,
+        reply_target: Option<&SimpleMessageInfo>,
+        input: &mut CreateDraftInput,
+    ) -> Result<(), EmailErr> {
+        let Some(reply_target) = reply_target else {
+            return Ok(());
+        };
+
+        // An explicit, validated identity must never be retargeted to a newer
+        // reply draft by a delayed save from an obsolete composer.
+        if input.db_id.is_some() {
+            return Ok(());
+        }
+        // The draft replying to this message lives in the inbox being sent from.
+        if let Some(existing_draft) = self
+            .email_repo
+            .get_draft_replying_to(link_id, reply_target.db_id)
+            .await
+            .map_err(anyhow::Error::from)?
+        {
+            self.apply_existing_draft(input, existing_draft);
+        } else {
+            apply_reply_target(link_id, input, reply_target);
+        }
+
+        Ok(())
+    }
+
+    /// A message the caller may reply to: one in their own inboxes, or one in
+    /// a thread shared with them at edit access. A shared target lives in its
+    /// owner's inbox, so the reply always starts a thread in the caller's.
+    async fn reply_target(
+        &self,
+        actor: Option<&MacroUserIdStr<'static>>,
+        replying_to_id: Uuid,
+        accessible_link_ids: &[Uuid],
+    ) -> Result<SimpleMessageInfo, EmailErr> {
+        if let Some(target) = self
+            .email_repo
+            .get_simple_message(replying_to_id, accessible_link_ids)
+            .await
+            .map_err(anyhow::Error::from)?
+        {
+            return Ok(target);
+        }
+
+        let Some(actor) = actor else {
+            return Err(EmailErr::MessageNotFound(replying_to_id));
+        };
+        let Some(shared_link_id) = self
+            .shared_thread_replies
+            .reply_target_inbox(actor, replying_to_id)
+            .await?
+        else {
+            return Err(EmailErr::MessageNotFound(replying_to_id));
+        };
+
+        self.email_repo
+            .get_simple_message(replying_to_id, &[shared_link_id])
+            .await
+            .map_err(anyhow::Error::from)?
+            .ok_or(EmailErr::MessageNotFound(replying_to_id))
+    }
+
+    fn apply_existing_draft(
+        &self,
+        input: &mut CreateDraftInput,
+        existing_draft: SimpleMessageInfo,
+    ) {
+        input.db_id = Some(existing_draft.db_id);
+        input.provider_id = existing_draft.provider_id;
+        input.thread_db_id = Some(existing_draft.thread_db_id);
+        input.provider_thread_id = existing_draft.provider_thread_id;
+        input.headers_json = existing_draft.headers_json;
+    }
+
+    /// Validate a client-supplied thread hint on the no-reply-target path.
+    /// Reply drafts never reach the decision: their linkage was already
+    /// re-derived from the reply target. A hint naming an accessible thread
+    /// in the sending inbox attaches to it; any other hint — unknown, or a
+    /// thread owned elsewhere, handled identically — gets a fresh
+    /// server-minted thread. Compose saves replayed offline still converge
+    /// on one thread through the client-handle binding, never by letting
+    /// the hint become the thread's primary key.
+    async fn validate_thread_hint(
+        &self,
+        link_id: Uuid,
+        input: &mut CreateDraftInput,
+    ) -> Result<(), EmailErr> {
+        if input.replying_to_id.is_some() {
+            return Ok(());
+        }
+        let Some(thread_db_id) = input.thread_db_id else {
+            return Ok(());
+        };
+        let existing = self
+            .email_repo
+            .thread_by_id(thread_db_id)
+            .await
+            .map_err(anyhow::Error::from)?;
+        match resolve_thread_hint(existing.as_ref(), link_id) {
+            ThreadHintOutcome::Attach { provider_thread_id } => {
+                input.provider_thread_id = provider_thread_id;
+            }
+            ThreadHintOutcome::CreateNew => {
+                input.thread_db_id = None;
+                input.provider_thread_id = None;
+            }
+        }
+        Ok(())
+    }
+
+    /// If the input already has a (validated) thread_db_id, return it with no
+    /// new thread. Otherwise, build a server-minted ThreadRow for creation
+    /// inside the transaction.
+    fn build_new_thread_if_needed(
+        &self,
+        link_id: Uuid,
+        input: &CreateDraftInput,
+    ) -> (Uuid, Option<ThreadRow>) {
+        if let Some(id) = input.thread_db_id {
+            return (id, None);
+        }
+
+        let now = chrono::Utc::now();
+        let thread = ThreadRow {
+            db_id: macro_uuid::generate_uuid_v7(),
+            provider_id: None,
+            link_id,
+            inbox_visible: false,
+            is_read: true,
+            has_received_mail: false,
+            latest_inbound_message_ts: None,
+            latest_outbound_message_ts: None,
+            latest_non_spam_message_ts: None,
+            created_at: now,
+            updated_at: now,
+            project_id: None,
+        };
+
+        let thread_db_id = thread.db_id;
+        (thread_db_id, Some(thread))
+    }
+}
+
+/// Thread a new reply draft under an authorized target.
+fn apply_reply_target(
+    link_id: Uuid,
+    input: &mut CreateDraftInput,
+    reply_target: &SimpleMessageInfo,
+) {
+    if reply_target.link_id == link_id {
+        // Same inbox: thread into the target's existing thread.
+        input.thread_db_id = Some(reply_target.thread_db_id);
+        input.provider_thread_id = reply_target.provider_thread_id.clone();
+    } else {
+        // The target lives in a different inbox (a different provider
+        // account, possibly another user's through a share), so it cannot
+        // thread into that account's provider thread. Start a fresh thread in
+        // the sending inbox; the Macro-In-Reply-To header below preserves the
+        // reference.
+        input.thread_db_id = None;
+        input.provider_thread_id = None;
+    }
+
+    // Generate Macro-In-Reply-To header
+    input.headers_json = Some(serde_json::json!([{
+        "Macro-In-Reply-To": reply_target.db_id.to_string()
+    }]));
+}
+
+/// The decision for a compose draft's client-supplied thread hint.
+enum ThreadHintOutcome {
+    /// The thread exists in the sending inbox — attach, adopting its
+    /// provider thread ID.
+    Attach { provider_thread_id: Option<String> },
+    /// The hint names no thread in the sending inbox — unknown, or owned
+    /// elsewhere. Create a fresh server-minted thread; behaving identically
+    /// for both keeps the hint from acting as a thread-existence oracle.
+    CreateNew,
+}
+
+/// Pure decision for a client-supplied thread hint: attach when the thread
+/// exists in the sending inbox, create a fresh server-minted thread
+/// otherwise. Hints are untrusted input and never become primary keys.
+fn resolve_thread_hint(existing: Option<&ThreadRow>, link_id: Uuid) -> ThreadHintOutcome {
+    match existing {
+        Some(thread) if thread.link_id == link_id => ThreadHintOutcome::Attach {
+            provider_thread_id: thread.provider_id.clone(),
+        },
+        Some(_) | None => ThreadHintOutcome::CreateNew,
+    }
+}
+
+/// Resolve the single inbox a draft save targets from the caller's accessible
+/// `links`. With an explicit `link_id`, the matching accessible link is used;
+/// without one, the caller's own `is_primary` link. The `macro_id` guard
+/// matters: the links list includes delegated inboxes, which are primary for
+/// *their* account. Mirrors the `X-Email-Link-Id` axum extractor's semantics
+/// for transports that carry the inbox by value instead of a header.
+pub(super) fn resolve_target_link<'a>(
+    links: &'a [Link],
+    link_id: Option<Uuid>,
+    caller: &macro_user_id::user_id::MacroUserIdStr<'_>,
+) -> Result<&'a Link, EmailErr> {
+    match link_id {
+        Some(id) => links.iter().find(|link| link.id == id),
+        None => links
+            .iter()
+            .find(|link| link.is_primary && &link.macro_id == caller),
+    }
+    .ok_or(EmailErr::InboxNotFound)
+}
+
+/// Decodes the base64 `body_html` and sanitizes it against the shared email
+/// allowlist.
+///
+/// Sanitizing here is what lets the column be called `body_html_sanitized`: the
+/// body is client-supplied, and a stored thread is rendered via `innerHTML` by
+/// every user who can see it, so an unsanitized locally-authored body is stored
+/// XSS against anyone the thread is shared with. Runs before signature
+/// injection so the `.macro-email-signature` marker the server adds survives.
+fn decode_and_sanitize_html_body(input: &mut CreateDraftInput) -> Result<(), EmailErr> {
+    if let Some(ref html_body) = input.body_html {
+        let decoded = URL_SAFE_NO_PAD.decode(html_body.as_bytes())?;
+        let decoded_str = String::from_utf8(decoded)?;
+        input.body_html = Some(email_utils::sanitize_authored_html(&decoded_str));
+    }
+    Ok(())
+}

@@ -1,0 +1,244 @@
+//! Postgres adapter for channel reference share-permission side effects.
+
+use anyhow::Context;
+use channels::domain::{
+    models::{
+        ReferenceShareOutcome, ReferenceShareResult, ReferencedShareItem, ReferencedShareItemType,
+    },
+    ports::ChannelReferenceSharePermissions,
+    reference_sharing::grant_level,
+};
+use entity_access::domain::{models::EntityType, ports::EntityAccessService};
+use macro_user_id::user_id::MacroUserIdStr;
+use model_file_type::FileType;
+use models_permissions::share_permission::{
+    access_level::AccessLevel,
+    channel_share_permission::{UpdateChannelSharePermission, UpdateOperation},
+};
+use share_permission_db_utils::InsertChannelSharePermissionResult;
+use sqlx::PgPool;
+use std::sync::Arc;
+use uuid::Uuid;
+
+#[cfg(test)]
+mod test;
+
+/// Postgres-backed share-permission adapter for channel message references.
+#[derive(Clone)]
+pub struct PgChannelReferenceSharePermissions<E> {
+    pool: PgPool,
+    entity_access_service: Arc<E>,
+}
+
+impl<E> PgChannelReferenceSharePermissions<E> {
+    /// Create a Postgres-backed reference share-permission adapter.
+    pub fn new(pool: PgPool, entity_access_service: Arc<E>) -> Self {
+        Self {
+            pool,
+            entity_access_service,
+        }
+    }
+}
+
+impl<E> ChannelReferenceSharePermissions for PgChannelReferenceSharePermissions<E>
+where
+    E: EntityAccessService,
+{
+    type Err = anyhow::Error;
+
+    async fn update_channel_share_permissions_for_referenced_items(
+        &self,
+        actor: MacroUserIdStr<'static>,
+        channel_id: Uuid,
+        items: Vec<ReferencedShareItem>,
+    ) -> Result<Vec<ReferenceShareResult>, Self::Err> {
+        let mut results = Vec::with_capacity(items.len());
+        for item in items {
+            let access = self
+                .entity_access_service
+                .get_access_level(
+                    Some(&actor),
+                    item.entity_id(),
+                    entity_access_type_for(item.entity_type()),
+                )
+                .await
+                .context("failed to get user access level")?;
+            let outcome =
+                share_referenced_item_with_channel(&self.pool, channel_id, &item, access).await?;
+            results.push(ReferenceShareResult {
+                entity_id: item.entity_id().to_string(),
+                entity_type: item.entity_type(),
+                outcome,
+            });
+        }
+        Ok(results)
+    }
+}
+
+async fn share_referenced_item_with_channel(
+    db: &PgPool,
+    channel_id: Uuid,
+    item: &ReferencedShareItem,
+    sharer_access: Option<AccessLevel>,
+) -> anyhow::Result<ReferenceShareOutcome> {
+    // A direct agent conversation's sessions are private to their owner, and
+    // their sharing settings refuse to share them; posting one's link
+    // elsewhere does not either.
+    if item.entity_type() == ReferencedShareItemType::AgentSession
+        && is_direct_conversation_session(db, item.entity_id()).await?
+    {
+        return Ok(ReferenceShareOutcome::NotPermitted);
+    }
+    let file_type = match item.entity_type() {
+        ReferencedShareItemType::Document => get_document_file_type(db, item.entity_id()).await?,
+        _ => None,
+    };
+    let Some(level) = grant_level(item.entity_type(), file_type, sharer_access) else {
+        return Ok(ReferenceShareOutcome::NotPermitted);
+    };
+    ensure_referenced_item_visible_to_channel(db, channel_id, item, level).await?;
+    Ok(ReferenceShareOutcome::Shared)
+}
+
+async fn is_direct_conversation_session(db: &PgPool, session_id: &str) -> anyhow::Result<bool> {
+    let session_id = macro_uuid::string_to_uuid(session_id)?;
+    sqlx::query_scalar!(
+        r#"SELECT EXISTS (
+               SELECT 1
+               FROM agent_conversation_sessions session
+               JOIN comms_channel_agents agent
+                 ON agent.channel_id = session.channel_id
+                AND agent.bot_id = session.bot_id
+               WHERE session.session_id = $1
+                 AND agent.kind = 'direct'
+           ) AS "private!""#,
+        session_id,
+    )
+    .fetch_one(db)
+    .await
+    .context("failed to read whether a session belongs to a direct agent conversation")
+}
+
+async fn get_document_file_type(
+    db: &PgPool,
+    document_id: &str,
+) -> anyhow::Result<Option<FileType>> {
+    let file_type = sqlx::query_scalar!(
+        r#"SELECT "fileType" as "file_type?" FROM "Document" WHERE id = $1"#,
+        document_id,
+    )
+    .fetch_optional(db)
+    .await
+    .context("failed to get document file type")?
+    .flatten();
+    Ok(file_type.and_then(|file_type| file_type.parse().ok()))
+}
+
+async fn ensure_referenced_item_visible_to_channel(
+    db: &PgPool,
+    channel_id: Uuid,
+    item: &ReferencedShareItem,
+    level: AccessLevel,
+) -> anyhow::Result<()> {
+    let entity_id = macro_uuid::string_to_uuid(item.entity_id())?;
+
+    if item.entity_type() == ReferencedShareItemType::EmailThread {
+        share_permission_db_utils::ensure_thread_share_permission(db, item.entity_id())
+            .await
+            .context("failed to insert thread share permissions")?;
+    }
+
+    // Session, calendar event, database, form and external chat channel
+    // grants are canonical entity-access rows, and a reference keeps any grant
+    // the owner already chose.
+    if matches!(
+        item.entity_type(),
+        ReferencedShareItemType::AgentSession
+            | ReferencedShareItemType::CalendarEvent
+            | ReferencedShareItemType::Database
+            | ReferencedShareItemType::Form
+            | ReferencedShareItemType::ExternalChat
+    ) {
+        let mut transaction = db.begin().await?;
+        entity_access_db_utils::channel_share::insert_if_absent(
+            &mut transaction,
+            &entity_id,
+            entity_access_db_type_for(item.entity_type()),
+            &channel_id,
+            level,
+        )
+        .await?;
+        transaction.commit().await?;
+        return Ok(());
+    }
+
+    let share_permission_id = share_permission_db_utils::get_share_permission_id(
+        db,
+        item.entity_id(),
+        item.entity_type().as_str(),
+    )
+    .await
+    .context("failed to get share permission id")?;
+
+    let mut transaction = db.begin().await?;
+    let insert_result = share_permission_db_utils::insert_channel_share_permission(
+        &mut *transaction,
+        &share_permission_id,
+        &channel_id.to_string(),
+        level,
+    )
+    .await
+    .context("failed to insert channel share permission")?;
+
+    if insert_result == InsertChannelSharePermissionResult::AlreadyExists {
+        return Ok(());
+    }
+
+    entity_access_db_utils::update_entity_access_channel_share_permissions(
+        &mut transaction,
+        &entity_id,
+        entity_access_db_type_for(item.entity_type()),
+        &[UpdateChannelSharePermission {
+            channel_id: channel_id.to_string(),
+            operation: UpdateOperation::Add,
+            access_level: Some(level),
+        }],
+    )
+    .await
+    .context("failed to update channel entity access")?;
+
+    transaction.commit().await?;
+    Ok(())
+}
+
+fn entity_access_type_for(item_type: ReferencedShareItemType) -> EntityType {
+    match item_type {
+        ReferencedShareItemType::AgentSession => EntityType::AgentSession,
+        ReferencedShareItemType::Database => EntityType::Database,
+        ReferencedShareItemType::Document => EntityType::Document,
+        ReferencedShareItemType::Chat => EntityType::Chat,
+        ReferencedShareItemType::Project => EntityType::Project,
+        ReferencedShareItemType::EmailThread => EntityType::EmailThread,
+        ReferencedShareItemType::Call => EntityType::Call,
+        ReferencedShareItemType::CalendarEvent => EntityType::CalendarEvent,
+        ReferencedShareItemType::Form => EntityType::Form,
+        ReferencedShareItemType::ExternalChat => EntityType::ExternalChat,
+    }
+}
+
+fn entity_access_db_type_for(
+    item_type: ReferencedShareItemType,
+) -> entity_access_db_utils::EntityType {
+    match item_type {
+        ReferencedShareItemType::AgentSession => entity_access_db_utils::EntityType::AgentSession,
+        ReferencedShareItemType::Database => entity_access_db_utils::EntityType::Database,
+        ReferencedShareItemType::Document => entity_access_db_utils::EntityType::Document,
+        ReferencedShareItemType::Chat => entity_access_db_utils::EntityType::Chat,
+        ReferencedShareItemType::Project => entity_access_db_utils::EntityType::Project,
+        ReferencedShareItemType::EmailThread => entity_access_db_utils::EntityType::EmailThread,
+        ReferencedShareItemType::Call => entity_access_db_utils::EntityType::Call,
+        ReferencedShareItemType::CalendarEvent => entity_access_db_utils::EntityType::CalendarEvent,
+        ReferencedShareItemType::Form => entity_access_db_utils::EntityType::Form,
+        ReferencedShareItemType::ExternalChat => entity_access_db_utils::EntityType::ExternalChat,
+    }
+}

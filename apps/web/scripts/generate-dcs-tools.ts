@@ -15,7 +15,7 @@ import { z } from 'zod';
 import { documentCognitionBase } from './services';
 
 const rustWorkspaceDir = path.resolve(import.meta.dirname, '../../..');
-const aiToolsDir = path.join(rustWorkspaceDir, 'crates', 'ai_tools');
+const aiToolsDir = path.join(rustWorkspaceDir, 'crates', 'ai', 'ai_tools');
 const schemasJsonPath = path.join(aiToolsDir, 'schemas', 'tools.json');
 
 const serviceDir = path.resolve(

@@ -333,15 +333,15 @@ fn should_run_includes_fold_wasm_inputs() {
         .next()
         .expect("should_run block");
     assert!(
-        should_run.contains("crates/folds/agent_fold/**"),
+        should_run.contains("crates/agents/agent_fold/**"),
         "fold wasm source must rebuild the web artifact: {should_run}"
     );
     assert!(
-        should_run.contains("crates/agent_runtime_protocol/**"),
+        should_run.contains("crates/agents/agent_runtime_protocol/**"),
         "fold wasm path dep must rebuild the web artifact: {should_run}"
     );
     assert!(
-        should_run.contains("crates/database_sql/**"),
+        should_run.contains("crates/databases/database_sql/**"),
         "SQL engine wasm source must rebuild the web artifact: {should_run}"
     );
 }

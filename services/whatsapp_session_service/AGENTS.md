@@ -211,5 +211,5 @@ JIDs, phone numbers, QR codes or message text.
 
 ## Related
 
-- `crates/whatsapp_linked/AGENTS.md`, `crates/whatsapp_store_pg/AGENTS.md`,
-  `crates/whatsmeow/AGENTS.md`, `infra/stacks/whatsapp-session-service/`
+- `crates/whatsapp/whatsapp_linked/AGENTS.md`, `crates/whatsapp/whatsapp_store_pg/AGENTS.md`,
+  `crates/whatsapp/whatsmeow/AGENTS.md`, `infra/stacks/whatsapp-session-service/`

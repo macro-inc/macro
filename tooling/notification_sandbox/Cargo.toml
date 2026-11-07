@@ -7,17 +7,18 @@ version = "0.1.0"
 [dependencies]
 aws-sdk-sesv2 = { workspace = true }
 aws-sdk-sns = { workspace = true }
-email_formatting = { path = "../../crates/email_formatting" }
+email_formatting = { workspace = true }
 hmac = { workspace = true }
 inquire = { workspace = true }
-macro_aws_config = { path = "../../crates/macro_aws_config" }
-macro_env = { path = "../../crates/macro_env" }
-macro_user_id = { path = "../../crates/macro_user_id" }
-model-entity = { path = "../../crates/model-entity" }
-model_notifications = { path = "../../crates/model_notifications" }
-models_pagination = { path = "../../crates/models_pagination" }
-notification = { path = "../../crates/notification" }
-rate_limit = { path = "../../crates/rate_limit", features = ["testing"] }
+macro_aws_config = { workspace = true }
+macro_env = { workspace = true }
+macro_user_id = { workspace = true }
+model_entity = { workspace = true }
+model_notifications = { workspace = true }
+models_pagination = { workspace = true }
+notification = { workspace = true, default-features = true }
+notification_outbound = { workspace = true }
+rate_limit = { workspace = true, features = ["testing"] }
 redis = { workspace = true, features = [
   "aio",
   "tokio-comp",

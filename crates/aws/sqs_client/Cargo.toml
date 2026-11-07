@@ -1,0 +1,51 @@
+[package]
+edition = "2024"
+name = "sqs_client"
+publish = false
+version = "0.1.0"
+
+[features]
+ai_projection = ["dep:models_ai_projection"]
+chat = []
+convert = ["model"]
+default = [
+  "ai_projection",
+  "chat",
+  "convert",
+  "document",
+  "document_text_extractor",
+  "email",
+  "gmail",
+  "organization_retention",
+  "search",
+  "sfs_delete",
+  "sfs_uploader",
+  "upload_extractor",
+]
+document = []
+document_text_extractor = []
+email = ["uuid", "models_email", "gmail", "dep:opentelemetry", "dep:tracing-opentelemetry"]
+gmail = ["model", "models_email", "uuid"]
+organization_retention = []
+search = ["chrono", "model", "uuid", "futures"]
+sfs_delete = []
+sfs_uploader = []
+upload_extractor = []
+
+[dependencies]
+opentelemetry = { workspace = true, features = ["trace"], optional = true }
+tracing-opentelemetry = { workspace = true, optional = true }
+anyhow = { workspace = true }
+aws-sdk-sqs = { workspace = true }
+chrono = { workspace = true, optional = true }
+model = { workspace = true, optional = true }
+models_ai_projection = { workspace = true, optional = true }
+s3_key = { workspace = true }
+models_email = { workspace = true, optional = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+strum = { workspace = true, features = ["derive"] }
+tracing = { workspace = true }
+uuid = { workspace = true, optional = true }
+futures = { workspace = true, optional = true }
+workspace-hack = { version = "0.1", path = "../../workspace-hack" }

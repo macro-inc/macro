@@ -23,13 +23,13 @@ key issuance, and account merge/link flows.
 
 - Owns: FusionAuth-backed login/session issuance, JWT minting, signup
   allowlisting, OAuth/OAuth2 account linking, GTM invite links, the platform
-  status banner API (`crates/system_status`), shared-mailbox
+  status banner API (`crates/accounts/system_status`), shared-mailbox
   relocation signup, Cursor/Codex API key endpoints, introductory trial
   eligibility and subscription checkout.
 - Not here: authorization/permission decisions on other entities →
-  `crates/macro_authorization`; metered AI credits → `crates/ai_billing`;
-  team lifecycle and seats → `crates/teams`; a person's interface language
-  (`/user/language`) → `crates/user_language`.
+  `crates/platform/macro_authorization`; metered AI credits → `crates/billing/ai_billing`;
+  team lifecycle and seats → `crates/accounts/teams`; a person's interface language
+  (`/user/language`) → `crates/accounts/user_language`.
 
 ## Recipes
 
@@ -87,7 +87,7 @@ inputs cannot select an agent, and ordinary user credentials remain unattributed
 - An agent can do everything a person can, including inviting other agents. Do
   not gate actions on `isAgent`; it only changes signup and labeling. The one
   exception: only an agent can be an account manager, and an agent can't be
-  managed (`crates/account_manager`).
+  managed (`crates/accounts/account_manager`).
 - Routes that mint credentials, link a sign-in, merge accounts, or delete the
   account use `AccountHolderOrInternal`, so an account manager's credential can't
   outlast its own revocation or lock the account's owner out.
@@ -144,7 +144,7 @@ inputs cannot select an agent, and ordinary user credentials remain unattributed
   addresses; never paste operational addresses into code, logs, or docs.
 - New Outlook connections need the deployment switch
   `OUTLOOK_CONNECTIONS_ENABLED` and the user's PostHog flag `enable-outlook`
-  (`src/domain/microsoft.rs`), read with `crates/feature_flags` for the Macro
+  (`src/domain/microsoft.rs`), read with `crates/platform/feature_flags` for the Macro
   user id the web app identifies with. `/link/email/providers` answers
   `outlook: false` and `/link/outlook` answers 404 for a new connection when
   either is off; reconnecting an inbox reads neither. A failed flag load

@@ -1,9 +1,9 @@
 use crate::upload::AttachmentProcessor;
 use crate::{auth, config, database, upload};
 use anyhow::Context;
-use email_api_client::GmailApiClientRepository;
-use email_api_client::domain::ports::AlwaysAllowRateLimiter;
-use email_api_client::domain::service::EmailApiClientServiceImpl;
+use email_api_client_core::ports::AlwaysAllowRateLimiter;
+use email_api_client_core::service::EmailApiClientServiceImpl;
+use email_api_client_outbound::GmailApiClientRepository;
 use email_service::outbound::email_api::StaticTokenSource;
 use futures::{StreamExt, stream};
 use std::sync::Arc;

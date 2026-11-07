@@ -1,0 +1,38 @@
+[package]
+edition = "2024"
+name = "soup_realtime_inbound"
+publish = false
+version = "0.1.0"
+
+[dependencies]
+call = { workspace = true }
+channels = { workspace = true }
+chat = { workspace = true }
+documents = { workspace = true, features = ["service"] }
+email = { workspace = true }
+futures = { workspace = true }
+github_pull_requests = { workspace = true }
+initiative = { workspace = true }
+kafka_util = { workspace = true }
+macro_event_broker = { workspace = true, features = ["outbound"] }
+macro_user_id = { workspace = true }
+messages = { workspace = true, features = ["broker"] }
+model_entity = { workspace = true }
+model_owner = { workspace = true }
+models_properties = { workspace = true }
+projects = { workspace = true, features = ["service"] }
+properties = { workspace = true, features = ["ports"] }
+rdkafka = { workspace = true }
+rootcause = { workspace = true }
+soup_realtime_core = { workspace = true }
+system_properties = { workspace = true }
+tokio = { workspace = true, features = ["sync", "time"] }
+tokio-retry = { workspace = true }
+tracing = { workspace = true }
+workspace-hack = { version = "0.1", path = "../../workspace-hack" }
+
+[dev-dependencies]
+chrono = { workspace = true }
+serde_json = { workspace = true }
+tokio = { workspace = true, features = ["macros", "rt-multi-thread", "test-util", "time"] }
+uuid = { workspace = true }

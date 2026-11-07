@@ -126,7 +126,7 @@ that production handling is implemented by this documentation-only task.
    process environment. Disable shell tracing; never print or persist secrets,
    authorization headers, account credentials, or raw user data.
 2. Match `PipedreamClient::access_token` in
-   `crates/pipedream_mcp/src/outbound/api.rs`: POST form-encoded
+   `crates/ai/pipedream_mcp/src/outbound/api.rs`: POST form-encoded
    `grant_type=client_credentials`, `client_id`, and `client_secret` to
    `https://api.pipedream.com/v1/oauth/token`. Keep the bearer only in memory.
 3. GET `/v1/connect/apps/slack` and `/v1/connect/apps/slack_v2` with that bearer;
@@ -254,10 +254,10 @@ gates, not successful observations:
 ## Fixture checks
 
 ```sh
-ls crates/import/src/outbound/mcp_slack_source/fixtures/
-jq . crates/import/src/outbound/mcp_slack_source/fixtures/*.json
+ls crates/integrations/import/src/outbound/mcp_slack_source/fixtures/
+jq . crates/integrations/import/src/outbound/mcp_slack_source/fixtures/*.json
 grep -n "Canonical slug" docs/runbooks/slack-live-channel-import.md
-grep -rn "@" crates/import/src/outbound/mcp_slack_source/fixtures/ | grep -v example.com
+grep -rn "@" crates/integrations/import/src/outbound/mcp_slack_source/fixtures/ | grep -v example.com
 ```
 
 The final pipeline should emit nothing (exit status 1 means no matching lines).

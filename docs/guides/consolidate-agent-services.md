@@ -46,7 +46,7 @@ The cognition CloudFront signer setting must retain its Secrets Manager
 reference, replacing any obsolete inline harness value under that name. The
 AI tool context uses the separate `_SECRET_NAME` setting for the same key.
 
-Stable public origins now come from `macro_service_urls`: `McpPublicUrl` is the
+Stable public origins now come from the service URL crates: `McpPublicUrl` is the
 original `https://mcp-server[-dev].macro.com` server base and `CognitionPublicUrl`
 is the original `https://document-cognition[-dev].macro.com` integration callback
 base. Keep these distinct from internal gateway API routes. The shared gateway

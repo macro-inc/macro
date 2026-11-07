@@ -253,7 +253,7 @@ const BARE_DATE =
 /**
  * Label for a bare ISO date or timestamp, as written: "Nov 13, 2026" or
  * "Nov 13, 2026, 3:00 PM". Null when it is not a real date and time.
- * `crates/mention_utils` labels bare bodies the same way.
+ * `crates/comms/mention_utils` labels bare bodies the same way.
  */
 function bareDateLabel(body: string): string | null {
   const parts = BARE_DATE.exec(body);

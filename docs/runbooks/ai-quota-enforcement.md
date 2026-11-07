@@ -11,12 +11,12 @@ the separate default-off [`ENABLE_AI_USAGE_BILLING`](#settlement-enable_ai_usage
 policy, never by this flag or the deployment environment. See
 [the separate observation/financial rollout](ai-billing-rollout.md).
 
-The [startup loader](../../crates/ai_usage/src/config.rs) accepts only raw `true` or
+The [startup loader](../../crates/billing/ai_usage/src/config.rs) accepts only raw `true` or
 `false`; absent means false. Empty, quoted, `null`, or otherwise malformed present
 values fail startup. Hosts load the policy once, not per request. Changing it
 requires restarting/redeploying every participating process.
 
-The [shared policy](../../crates/ai_usage/src/domain/counting.rs) is identical for
+The [shared policy](../../crates/billing/ai_usage/src/domain/counting.rs) is identical for
 admission and recording:
 
 | Policy / work | Admission | New `ai_usage.count_usage` |
@@ -54,19 +54,19 @@ automatic reload opt-in, and denial decisions remain in the legacy ledger.
 
 ### Persistence
 
-The [usage service](../../crates/ai_usage/src/domain/service.rs) computes the boolean
+The [usage service](../../crates/billing/ai_usage/src/domain/service.rs) computes the boolean
 for both `record()` and `record_now()`, before the
-[repository insert](../../crates/ai_usage/src/outbound/pg_usage_repo.rs). Clients cannot
-supply it. The [billing reader](../../crates/ai_billing/src/outbound/pg_usage_reader.rs)
+[repository insert](../../crates/billing/ai_usage/src/outbound/pg_usage_repo.rs). Clients cannot
+supply it. The [billing reader](../../crates/billing/ai_billing/src/outbound/pg_usage_reader.rs)
 uses the persisted literal `count_usage = TRUE`, not a mutable feature exclusion
 list. User/team-seat scoping, `[start, end)` periods, at-cost arithmetic, and
 fallback pricing for null totals are retained. Admin analytics still includes
 uncounted rows; repricing can change totals, never eligibility.
 
-[Counting tests](../../crates/ai_usage/src/domain/counting/test.rs),
-[recording tests](../../crates/ai_usage/src/domain/service/test.rs),
-[persistence/repricing tests](../../crates/ai_usage/src/outbound/pg_usage_repo/test.rs),
-and [billing-reader tests](../../crates/ai_billing/src/outbound/pg_usage_reader/test.rs)
+[Counting tests](../../crates/billing/ai_usage/src/domain/counting/test.rs),
+[recording tests](../../crates/billing/ai_usage/src/domain/service/test.rs),
+[persistence/repricing tests](../../crates/billing/ai_usage/src/outbound/pg_usage_repo/test.rs),
+and [billing-reader tests](../../crates/billing/ai_billing/src/outbound/pg_usage_reader/test.rs)
 cover these distinctions. Historical analytics and observations must never be
 backfilled into counted usage or financial authorizations.
 
@@ -75,7 +75,7 @@ backfilled into counted usage or financial authorizations.
 `ENABLE_AI_USAGE_BILLING` enables **legacy settlement of counted usage past a
 payer's allowance**: prepaid credits are consumed and optional automatic reloads
 purchase more credits through Stripe. Direct usage charges are disabled. The
-[startup loader](../../crates/ai_billing/src/config.rs)
+[startup loader](../../crates/billing/ai_billing/src/config.rs)
 parses it exactly like the enforcement flag (absent means false; only raw `true`
 or `false`; malformed present values fail startup) and hosts load it once. It is
 independent of `ENABLE_AI_USAGE_ENFORCEMENT` and of the deployment environment:
@@ -83,8 +83,8 @@ there is no longer an `Environment::Develop` safeguard, so a true value settles
 in production.
 
 Pricing is four mandatory Doppler values, loaded once at startup by every host that
-composes `ai_billing` (see [`config.rs`](../../crates/ai_billing/src/config.rs) and
-[`pricing.rs`](../../crates/ai_billing/src/domain/pricing.rs)): one allowance per plan,
+composes `ai_billing` (see [`config.rs`](../../crates/billing/ai_billing/src/config.rs) and
+[`pricing.rs`](../../crates/billing/ai_billing/src/domain/pricing.rs)): one allowance per plan,
 measured at provider cost — `AI_USAGE_FREE_INCLUDED_ALLOWANCE_CENTS` (the free plan's
 hard cap, per user per UTC calendar month), `AI_USAGE_INCLUDED_ALLOWANCE_CENTS`
 (Premium, per seat per subscription period), and `AI_USAGE_MAX_INCLUDED_ALLOWANCE_CENTS`
@@ -107,11 +107,11 @@ The hosts that participate:
 
 | Host | Gate | When disabled |
 | --- | --- | --- |
-| Authentication service | [`BillingServiceImpl::settle`](../../crates/ai_billing/src/domain/service.rs) guards every caller: summary reads, automatic reload changes, credit-purchase webhooks, the internal settle endpoint, and the [reconciliation sweep](#reconciliation-sweep-and-closed-periods). It also reserves and collects automatic credit reloads | Returns without reading entitlements, consuming credits, reloading credits, or touching Stripe; the sweep is not started. Credit purchases are still booked and remain unconsumed |
-| Document cognition, agent harness, MCP, and scheduled action services | [`SettlingUsageRecorder`](../../crates/ai_billing/src/outbound/settling_recorder.rs) requests settlement after counted usage lands. Document cognition composes it inline around its admission instance; the other three compose it through [`pg_settling_recorder`](../../crates/ai_billing/src/composition.rs) with the [`SettlementRoute`](../../crates/ai_billing/src/composition.rs) their configuration resolves | Usage is still recorded and counted; no settlement request is sent |
+| Authentication service | [`BillingServiceImpl::settle`](../../crates/billing/ai_billing/src/domain/service.rs) guards every caller: summary reads, automatic reload changes, credit-purchase webhooks, the internal settle endpoint, and the [reconciliation sweep](#reconciliation-sweep-and-closed-periods). It also reserves and collects automatic credit reloads | Returns without reading entitlements, consuming credits, reloading credits, or touching Stripe; the sweep is not started. Credit purchases are still booked and remain unconsumed |
+| Document cognition, agent harness, MCP, and scheduled action services | [`SettlingUsageRecorder`](../../crates/billing/ai_billing/src/outbound/settling_recorder.rs) requests settlement after counted usage lands. Document cognition composes it inline around its admission instance; the other three compose it through [`pg_settling_recorder`](../../crates/billing/ai_billing/src/composition.rs) with the [`SettlementRoute`](../../crates/billing/ai_billing/src/composition.rs) their configuration resolves | Usage is still recorded and counted; no settlement request is sent |
 
 Every host composes admission through
-[`pg_admission_service`](../../crates/ai_billing/src/composition.rs) (or document
+[`pg_admission_service`](../../crates/billing/ai_billing/src/composition.rs) (or document
 cognition's inline equivalent), which never settles regardless of
 configuration. The authentication service's policy is authoritative: a request
 from another host is a no-op there while its flag is false, and with every
@@ -136,12 +136,12 @@ reload whose collector died between reserving and invoicing) or never come (a
 period that closed after the payer's last completion). Two mechanisms in the
 authentication service recover such usage without a customer action:
 
-- **The sweep.** [`SettlementSweep`](../../crates/ai_billing/src/domain/sweep.rs)
+- **The sweep.** [`SettlementSweep`](../../crates/billing/ai_billing/src/domain/sweep.rs)
   runs on a schedule
-  ([`run_settlement_sweep`](../../crates/ai_billing/src/inbound/sweep_worker.rs):
+  ([`run_settlement_sweep`](../../crates/billing/ai_billing/src/inbound/sweep_worker.rs):
   a minute after boot, then hourly) and settles, once each, every metered
   payer with a candidate in the last 24 hours
-  ([`PgSettlementCandidates`](../../crates/ai_billing/src/outbound/pg_settlement_candidates.rs)):
+  ([`PgSettlementCandidates`](../../crates/billing/ai_billing/src/outbound/pg_settlement_candidates.rs)):
   users with counted usage, payers whose anchored subscription period began or
   ended, and payers holding a credit reload reserved more than ten minutes ago
   that was never collected. A failure for one payer is logged and the sweep
@@ -150,7 +150,7 @@ authentication service recover such usage without a customer action:
   shutdown.
 - **Closed periods.** `settle` no longer stops at the previous period. Before
   the open period it settles every period frozen within the last
-  [`RECONCILED_CLOSED_PERIODS`](../../crates/ai_billing/src/domain/service.rs)
+  [`RECONCILED_CLOSED_PERIODS`](../../crates/billing/ai_billing/src/domain/service.rs)
   (three) periods, each against its own frozen allowance and keyed exactly as
   its ledger, oldest first. A frozen period ends where the next period
   begins. The derived previous period is settled (from the live entitlement,
@@ -247,7 +247,7 @@ and is the only surface that turns usage billing on.
 
 ## Public failure contracts
 
-The [shared admission port](../../crates/ai_billing/src/domain/admission.rs) returns
+The [shared admission port](../../crates/billing/ai_billing/src/domain/admission.rs) returns
 `Denied(DenyReason)` or sanitized `Unavailable`. Authorization runs first; quota
 errors are not permission grants and must not disclose another user's quota.
 
@@ -259,7 +259,7 @@ errors are not permission grants and must not disclose another user's quota.
 | Overage payment failed | 402 | `ai_overage_payment_failed` | Billing problem must be resolved |
 | Could not validate billing | 503 | `ai_billing_unavailable` | Retry later with bounded backoff; never execute on uncertainty |
 
-The [common HTTP body](../../crates/ai_billing/src/inbound/admission.rs) is
+The [common HTTP body](../../crates/billing/ai_billing/src/inbound/admission.rs) is
 `{"error":"<public explanation>","code":"<stable code>"}`. The 503 explanation is
 `AI usage validation is temporarily unavailable. Please try again.` Internal
 reports are logged server-side, not serialized. A `Retry-After` header is not
@@ -289,7 +289,7 @@ inspect the content type and code rather than assuming every 503 is billing.
   reservation. On exhaustion, the waiting queue is durably removed before queue
   updates, failed announced-reply resolution, and
   `agent_session.command_rejected` lifecycle publication. Its
-  [metadata](../../crates/agent_session/src/domain/events.rs) contains `identity`,
+  [metadata](../../crates/agents/agent_session/src/domain/events.rs) contains `identity`,
   `action_id`, `actor`, optional `announcement_message_id`, and
   `failure: {code, message, retryable}`. It does not invent a runtime turn.
 - Queue validation unavailability preserves FIFO work for a later ordinary
@@ -337,11 +337,11 @@ selection, and tool calls still have their own gates.
 
 Links below identify the actual boundary, production injection/recorder constructor,
 and local regression suite. They are not evidence of live-provider, browser, or
-deployed coverage. Shared factory [R](../../crates/ai_usage/src/lib.rs) means
+deployed coverage. Shared factory [R](../../crates/billing/ai_usage/src/lib.rs) means
 `pg_recorder_with_enforcement`: configured analytics plus separate `pg_tracking`.
-Shared tools [T](../../crates/ai_tools/src/build_context.rs) construct configured
+Shared tools [T](../../crates/ai/ai_tools/src/build_context.rs) construct configured
 admission and take the host's recorder (R, or
-[`pg_settling_recorder`](../../crates/ai_billing/src/composition.rs) where the host
+[`pg_settling_recorder`](../../crates/billing/ai_billing/src/composition.rs) where the host
 requests settlement). Admission itself never records usage or calls settlement.
 
 | Surface / feature | Admission boundary | Production recorder / composition | Regression tests |
@@ -349,23 +349,23 @@ requests settlement). Admission itself never records usage or calls settlement.
 | Cognition chat / Chat | [chat handler](../../services/agent_harness_service/src/cognition/api/stream/chat_message.rs) | [DCS main](../../services/agent_harness_service/src/cognition/main.rs): configured `UsageServiceImpl` inside `SettlingUsageRecorder`, wrapped with `with_tracking` | [pre-creation refusal and permission precedence](../../services/agent_harness_service/src/cognition/api/stream/chat_message/test.rs) |
 | Structured completion / DynamicCompletionsApi | [completion handler](../../services/agent_harness_service/src/cognition/api/structured_completion.rs) | DCS main, same recorder across both phases | [both phases and OpenAPI](../../services/agent_harness_service/src/cognition/api/structured_completion/test.rs) |
 | Chat naming / ChatRename | [chat renamer](../../services/agent_harness_service/src/cognition/service/chat_renamer.rs) | DCS main, same recorder | [safe naming skip](../../services/agent_harness_service/src/cognition/service/chat_renamer/test.rs) |
-| Direct subagent / inherited feature | [operations service](../../crates/ai_tools/src/ai_operations.rs), [subagent](../../crates/ai_tools/src/subagent.rs) | Host common context: T, DCS main, or [MCP context](../../services/agent_harness_service/src/public_mcp/context.rs) using `pg_settling_recorder` | [zero provider calls](../../crates/ai_tools/src/ai_operations/test.rs), [concurrent caller isolation](../../crates/ai_tools/src/subagent/test.rs) |
-| Native Anthropic code tools / inherited feature | [invoke_server_tool](../../crates/anthropic/src/toolset.rs) before both provider branches | Same common contexts via `FromRef`; observation only, **no legacy aggregate producer** | [tool attribution/refusal](../../crates/anthropic/src/toolset/test.rs) |
-| `WebSearch`/`WebFetch` tools and cognition `POST /web/search`, `/web/fetch` / `web_search` | [WebSearchService](../../crates/web_search/src/domain/service.rs) admits `web_search` before the Tavily call | `UsageRecorder` records Tavily's reported credits (`provider_credits`, pricing id `tavily`), counted when enforcement is on | [service and router tests](../../crates/web_search/src/domain/service/test.rs) |
-| AI document editing / AiEditing | [document orchestration](../../crates/documents/src/domain/ai_editing.rs) after verified edit receipt | Common context's recorder, existing per-model worker usage | [domain](../../crates/documents/src/domain/ai_editing/test.rs), [direct tool and permission precedence](../../crates/documents/src/inbound/toolset/edit_document/test.rs) |
-| Notion page imports / Import | [import admission](../../crates/import/src/domain/service/admission.rs), [execution/rechecks](../../crates/import/src/domain/service.rs) | DCS main, wrapped recorder | [delayed/deterministic cases](../../crates/import/src/domain/service/test/admission.rs), [HTTP](../../crates/import/src/inbound/axum_router/test.rs) |
-| Channel responder / ChannelBot | [bot service](../../crates/channel_bots/src/domain/service.rs) | [DSS main](../../services/document_storage_service/src/main.rs), common context T | [response refusal](../../crates/channel_bots/src/domain/service/tests.rs) |
-| Optional channel classification / ChannelBot | [trigger detector](../../crates/channel_bots/src/domain/trigger_detector.rs) | DSS main, independent R for classifier | [explicit routing and inference skip](../../crates/channel_bots/src/domain/trigger_detector/tests.rs) |
-| Trigger inference and image captions / Automation | [trigger service](../../crates/agent_trigger/src/domain/service.rs) | [standalone trigger main](../../services/agent_trigger_service/src/main.rs) R; [harness trigger](../../services/agent_harness_service/src/trigger.rs) receives the harness's settling recorder from harness main | [classification/caption refusal](../../crates/agent_trigger/src/domain/service/test/admission.rs), [no system fallback](../../crates/agent_trigger/src/outbound/jev_judge/test.rs) |
-| Managed session ingress/dispatch/queue / AgentSession | [harness admission](../../crates/agent_harness/src/domain/service/admission.rs) | [harness main](../../services/agent_harness_service/src/main.rs): one `pg_settling_recorder` shared with T for in-memory; managed sandbox inference has **no `ai_usage` producer** | [owner, authorization, runtime funding, restart, queue rejection/outage](../../crates/agent_harness/src/domain/service/test/quota.rs), [HTTP](../../crates/agent_session/src/inbound/axum_router/test.rs), [event shape](../../crates/agent_session/src/domain/events/test.rs) |
-| Direct in-memory ACP/provider commands / AgentSession | [admit_turn](../../crates/agent_inmem/src/domain/admission.rs), [agent execution](../../crates/agent_inmem/src/domain/agent.rs) | Harness main → manager → `RigTurnEngine`, the harness's settling recorder passed into T | [direct ACP, queue, cancel, history](../../crates/agent_inmem/src/domain/agent/test.rs), [manager](../../crates/agent_inmem/src/outbound/manager/test.rs) |
-| Session naming / ChatRename | [name generator gate](../../crates/agent_session/src/domain/name_generation.rs) | Harness main, the same settling recorder for `HaikuAgentSessionNameGenerator` (exempt, so never counted or settled) | [fallback without provider calls](../../crates/agent_session/src/domain/name_generation/test.rs) |
-| Repository chooser / AgentRepositoryChoice | [repository choice service](../../crates/agent_harness/src/domain/repository_choice.rs) | Harness main → `CursorContainerManager`, the same settling recorder | [deterministic bypass / typed model refusal](../../crates/agent_harness/src/domain/repository_choice/test.rs) |
-| Scheduled manual/cron/event model work / Automation | [shared executor](../../crates/scheduled_action/src/domain/execution.rs) | [scheduled service](../../services/agent_harness_service/src/scheduling.rs): `pg_settling_recorder` for the condition classifier; agent targets are funded and metered by the harness | [claims, schedules, terminal events](../../crates/scheduled_action/src/domain/execution/test.rs), [manual HTTP](../../crates/scheduled_action/src/inbound/axum_router/test.rs) |
-| Scheduled agent targets / session funding policy | [target runner](../../crates/scheduled_action/src/domain/target_runner.rs) → session/harness admission | Target runtime's recorder, not duplicate scheduler metering | [delegation and typed errors](../../crates/scheduled_action/src/domain/target_runner/test.rs), [routine error transport](../../crates/agent_session/src/inbound/routine_sessions/test.rs) |
-| Memory, projection, call summary, dictation, chat rename / exempt | [shared admission policy](../../crates/ai_billing/src/domain/admission.rs) skips quota; ordinary permissions still apply | DCS/DSS configured recorders; [memory context](../../crates/ai_tools/src/bin/memory/context.rs) uses T; DSS independent call-summary/dictation recorders use R | [all exempt features](../../crates/ai_usage/src/domain/counting/test.rs), [no billing I/O](../../crates/ai_billing/src/domain/admission/test.rs), [configured recording](../../crates/ai_billing/src/composition/test.rs) |
-| Existing system task duplicate judge / Automation | [system attribution](../../crates/task_dedup/src/outbound/judge.rs), no user quota gate | DSS main, independent R; system events stay uncounted | [system counting](../../crates/ai_usage/src/domain/counting/test.rs), [system recorder behavior](../../crates/ai_billing/src/outbound/settling_recorder/test.rs) |
-| Billing summary (not execution) | [billing service policy](../../crates/ai_billing/src/domain/service.rs) | [authentication main](../../services/authentication_service/src/main.rs) configures the same flag plus `ENABLE_AI_USAGE_BILLING`, no usage producer | [settlement policy/free/unlimited/settlement](../../crates/ai_billing/src/domain/service/test.rs), [authentication configuration](../../services/authentication_service/src/config/test.rs) |
+| Direct subagent / inherited feature | [operations service](../../crates/ai/ai_tools/src/ai_operations.rs), [subagent](../../crates/ai/ai_tools/src/subagent.rs) | Host common context: T, DCS main, or [MCP context](../../services/agent_harness_service/src/public_mcp/context.rs) using `pg_settling_recorder` | [zero provider calls](../../crates/ai/ai_tools/src/ai_operations/test.rs), [concurrent caller isolation](../../crates/ai/ai_tools/src/subagent/test.rs) |
+| Native Anthropic code tools / inherited feature | [invoke_server_tool](../../crates/clients/anthropic/src/toolset.rs) before both provider branches | Same common contexts via `FromRef`; observation only, **no legacy aggregate producer** | [tool attribution/refusal](../../crates/clients/anthropic/src/toolset/test.rs) |
+| `WebSearch`/`WebFetch` tools and cognition `POST /web/search`, `/web/fetch` / `web_search` | [WebSearchService](../../crates/ai/web_search/src/domain/service.rs) admits `web_search` before the Tavily call | `UsageRecorder` records Tavily's reported credits (`provider_credits`, pricing id `tavily`), counted when enforcement is on | [service and router tests](../../crates/ai/web_search/src/domain/service/test.rs) |
+| AI document editing / AiEditing | [document orchestration](../../crates/documents/documents/src/domain/ai_editing.rs) after verified edit receipt | Common context's recorder, existing per-model worker usage | [domain](../../crates/documents/documents/src/domain/ai_editing/test.rs), [direct tool and permission precedence](../../crates/documents/documents/src/inbound/toolset/edit_document/test.rs) |
+| Notion page imports / Import | [import admission](../../crates/integrations/import/src/domain/service/admission.rs), [execution/rechecks](../../crates/integrations/import/src/domain/service.rs) | DCS main, wrapped recorder | [delayed/deterministic cases](../../crates/integrations/import/src/domain/service/test/admission.rs), [HTTP](../../crates/integrations/import/src/inbound/axum_router/test.rs) |
+| Channel responder / ChannelBot | [bot service](../../crates/comms/channel_bots/src/domain/service.rs) | [DSS main](../../services/document_storage_service/src/main.rs), common context T | [response refusal](../../crates/comms/channel_bots/src/domain/service/tests.rs) |
+| Optional channel classification / ChannelBot | [trigger detector](../../crates/comms/channel_bots/src/domain/trigger_detector.rs) | DSS main, independent R for classifier | [explicit routing and inference skip](../../crates/comms/channel_bots/src/domain/trigger_detector/tests.rs) |
+| Trigger inference and image captions / Automation | [trigger service](../../crates/agents/agent_trigger/src/domain/service.rs) | [standalone trigger main](../../services/agent_trigger_service/src/main.rs) R; [harness trigger](../../services/agent_harness_service/src/trigger.rs) receives the harness's settling recorder from harness main | [classification/caption refusal](../../crates/agents/agent_trigger/src/domain/service/test/admission.rs), [no system fallback](../../crates/agents/agent_trigger/src/outbound/jev_judge/test.rs) |
+| Managed session ingress/dispatch/queue / AgentSession | [harness admission](../../crates/agents/agent_harness/src/domain/service/admission.rs) | [harness main](../../services/agent_harness_service/src/main.rs): one `pg_settling_recorder` shared with T for in-memory; managed sandbox inference has **no `ai_usage` producer** | [owner, authorization, runtime funding, restart, queue rejection/outage](../../crates/agents/agent_harness/src/domain/service/test/quota.rs), [HTTP](../../crates/agents/agent_session/src/inbound/axum_router/test.rs), [event shape](../../crates/agents/agent_session/src/domain/events/test.rs) |
+| Direct in-memory ACP/provider commands / AgentSession | [admit_turn](../../crates/agents/agent_inmem/src/domain/admission.rs), [agent execution](../../crates/agents/agent_inmem/src/domain/agent.rs) | Harness main → manager → `RigTurnEngine`, the harness's settling recorder passed into T | [direct ACP, queue, cancel, history](../../crates/agents/agent_inmem/src/domain/agent/test.rs), [manager](../../crates/agents/agent_inmem/src/outbound/manager/test.rs) |
+| Session naming / ChatRename | [name generator gate](../../crates/agents/agent_session/src/domain/name_generation.rs) | Harness main, the same settling recorder for `HaikuAgentSessionNameGenerator` (exempt, so never counted or settled) | [fallback without provider calls](../../crates/agents/agent_session/src/domain/name_generation/test.rs) |
+| Repository chooser / AgentRepositoryChoice | [repository choice service](../../crates/agents/agent_harness/src/domain/repository_choice.rs) | Harness main → `CursorContainerManager`, the same settling recorder | [deterministic bypass / typed model refusal](../../crates/agents/agent_harness/src/domain/repository_choice/test.rs) |
+| Scheduled manual/cron/event model work / Automation | [shared executor](../../crates/agents/scheduled_action/src/domain/execution.rs) | [scheduled service](../../services/agent_harness_service/src/scheduling.rs): `pg_settling_recorder` for the condition classifier; agent targets are funded and metered by the harness | [claims, schedules, terminal events](../../crates/agents/scheduled_action/src/domain/execution/test.rs), [manual HTTP](../../crates/agents/scheduled_action/src/inbound/axum_router/test.rs) |
+| Scheduled agent targets / session funding policy | [target runner](../../crates/agents/scheduled_action/src/domain/target_runner.rs) → session/harness admission | Target runtime's recorder, not duplicate scheduler metering | [delegation and typed errors](../../crates/agents/scheduled_action/src/domain/target_runner/test.rs), [routine error transport](../../crates/agents/agent_session/src/inbound/routine_sessions/test.rs) |
+| Memory, projection, call summary, dictation, chat rename / exempt | [shared admission policy](../../crates/billing/ai_billing/src/domain/admission.rs) skips quota; ordinary permissions still apply | DCS/DSS configured recorders; [memory context](../../crates/ai/ai_tools/src/bin/memory/context.rs) uses T; DSS independent call-summary/dictation recorders use R | [all exempt features](../../crates/billing/ai_usage/src/domain/counting/test.rs), [no billing I/O](../../crates/billing/ai_billing/src/domain/admission/test.rs), [configured recording](../../crates/billing/ai_billing/src/composition/test.rs) |
+| Existing system task duplicate judge / Automation | [system attribution](../../crates/projects/task_dedup/src/outbound/judge.rs), no user quota gate | DSS main, independent R; system events stay uncounted | [system counting](../../crates/billing/ai_usage/src/domain/counting/test.rs), [system recorder behavior](../../crates/billing/ai_billing/src/outbound/settling_recorder/test.rs) |
+| Billing summary (not execution) | [billing service policy](../../crates/billing/ai_billing/src/domain/service.rs) | [authentication main](../../services/authentication_service/src/main.rs) configures the same flag plus `ENABLE_AI_USAGE_BILLING`, no usage producer | [settlement policy/free/unlimited/settlement](../../crates/billing/ai_billing/src/domain/service/test.rs), [authentication configuration](../../services/authentication_service/src/config/test.rs) |
 
 ## Limits and operational risks
 

@@ -5,7 +5,7 @@ use axum::extract::State;
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
 use axum::{Extension, Json};
-use email_api_client::domain::models::{EmailApiError, TokenFreshness};
+use email_api_client_core::models::{EmailApiError, TokenFreshness};
 use email_utils::sanitize_html_fragment;
 use model::response::ErrorResponse;
 use models_email::service::link::Link;

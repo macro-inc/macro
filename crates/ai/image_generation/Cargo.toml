@@ -1,0 +1,47 @@
+[package]
+name = "image_generation"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+[features]
+axum = ["dep:axum", "dep:entity_registry", "dep:macro_authorization", "dep:utoipa"]
+
+[dependencies]
+ai_billing = { workspace = true }
+ai_toolset = { workspace = true }
+ai_usage = { workspace = true }
+anyhow.workspace = true
+async-trait.workspace = true
+attachment = { workspace = true }
+axum = { workspace = true, optional = true }
+base64.workspace = true
+bot_id = { workspace = true }
+entity_registry = { workspace = true, features = ["axum"], optional = true }
+image.workspace = true
+lexical_client = { workspace = true }
+macro_authorization = { workspace = true, features = [
+  "axum",
+], optional = true }
+model = { workspace = true }
+model_entity = { workspace = true }
+model_owner = { workspace = true }
+non_empty = { workspace = true }
+reqwest.workspace = true
+rootcause.workspace = true
+schemars.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+static_file_service_client = { workspace = true }
+thiserror.workspace = true
+tracing.workspace = true
+utoipa = { workspace = true, optional = true }
+uuid.workspace = true
+workspace-hack = { version = "0.1", path = "../../workspace-hack" }
+
+[dev-dependencies]
+macro_user_id = { workspace = true }
+model_user = { workspace = true }
+tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
+tower = { workspace = true, features = ["util"] }
+wiremock.workspace = true

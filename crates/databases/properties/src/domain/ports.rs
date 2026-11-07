@@ -1,0 +1,530 @@
+//! Port definitions (traits) for properties.
+//!
+//! These traits define the interfaces that the domain layer uses.
+//! Implementations live in the outbound module.
+
+use std::collections::HashMap;
+use std::pin::Pin;
+
+use document_sub_type::DocumentSubType;
+use entity_access::domain::models::EntityType as AccessEntityType;
+use macro_user_id::user_id::MacroUserIdStr;
+use models_properties::service::document_metadata::DocumentMetadata;
+use models_properties::service::entity_property::EntityProperty;
+use models_properties::service::entity_property_with_definition::EntityPropertyWithDefinition;
+use models_properties::service::project_metadata::ProjectMetadata;
+use models_properties::service::property_definition::PropertyDefinition;
+use models_properties::service::property_definition_with_options::PropertyDefinitionWithOptions;
+use models_properties::service::property_option::{PropertyOption, PropertyOptionValue};
+use models_properties::service::property_value::PropertyValue;
+use models_properties::service::thread_metadata::ThreadMetadata;
+use models_properties::{DataType, EntityPropertyReference, EntityReference, EntityType};
+use uuid::Uuid;
+
+use super::model::{
+    EditReceipt, EntityPropertiesKey, EntityPropertyInfo, EntityPropertyMutationSnapshot,
+    EntityPropertyOptionSelection, EntityPropertyOptionUpdate, GetOrCreatePropertyOptionResult,
+    GetOrCreateTagDefinitionResult, PropertyDefinitionOwner, PropertyOptionReplaceOutcome,
+    PropertyOptionReplacePlan, TagPromotionOutcome, TagRemapOutcome, TaskAssignedNotification,
+    UpdatePropertyOptionOutcome, ViewReceipt,
+};
+
+/// Repository trait for property operations.
+///
+/// This trait abstracts the database layer, allowing for different implementations
+/// (e.g., PostgreSQL, mock for testing).
+#[cfg_attr(any(test, feature = "mock"), mockall::automock(type Err = anyhow::Error;))]
+pub trait PropertiesRepo: Send + Sync + 'static {
+    type Err;
+
+    /// Get a property definition by ID.
+    /// Returns `None` if the property definition doesn't exist.
+    fn get_property_definition(
+        &self,
+        property_definition_id: Uuid,
+    ) -> impl Future<Output = Result<Option<PropertyDefinition>, Self::Err>> + Send;
+
+    /// Get a property definition by ID with ownership validation.
+    /// Returns `None` if the property doesn't exist, if the caller doesn't own it,
+    /// or if it's a system property. The caller owns it when it is their user
+    /// property, or a property of the team they belong to.
+    // Explicit lifetime required by mockall's automock expansion.
+    #[allow(clippy::needless_lifetimes)]
+    fn get_property_definition_with_owner<'a>(
+        &self,
+        property_definition_id: Uuid,
+        user_id: &MacroUserIdStr<'a>,
+        team_id: Option<Uuid>,
+    ) -> impl Future<Output = Result<Option<PropertyDefinition>, Self::Err>> + Send;
+
+    /// List property definitions owned by the given team and/or user.
+    /// Set `include_system` to true to also include system properties.
+    /// Returns definitions sorted by display name.
+    // Explicit lifetime required by mockall's automock expansion.
+    #[allow(clippy::needless_lifetimes)]
+    fn list_property_definitions<'a>(
+        &self,
+        team_id: Option<Uuid>,
+        user_id: Option<&'a MacroUserIdStr<'a>>,
+        include_system: bool,
+    ) -> impl Future<Output = Result<Vec<PropertyDefinition>, Self::Err>> + Send;
+
+    /// List property definitions with their options, owned by the given team and/or user.
+    /// Set `include_system` to true to also include system properties.
+    /// Returns definitions sorted by display name.
+    // Explicit lifetime required by mockall's automock expansion.
+    #[allow(clippy::needless_lifetimes)]
+    fn list_property_definitions_with_options<'a>(
+        &self,
+        team_id: Option<Uuid>,
+        user_id: Option<&'a MacroUserIdStr<'a>>,
+        include_system: bool,
+    ) -> impl Future<Output = Result<Vec<PropertyDefinitionWithOptions>, Self::Err>> + Send;
+
+    /// Create a property definition, optionally with select options
+    /// (atomically when options are provided).
+    fn create_property_definition<'a>(
+        &self,
+        owner: PropertyDefinitionOwner<'a>,
+        display_name: &str,
+        data_type: DataType,
+        is_multi_select: bool,
+        specific_entity_type: Option<EntityType>,
+        options: Vec<PropertyOption>,
+    ) -> impl Future<Output = Result<PropertyDefinition, Self::Err>> + Send;
+
+    /// Create a definition owned by a database, outside the shared user/team namespace.
+    /// The calling database domain service owns authorization and column-type policy.
+    fn create_database_property_definition(
+        &self,
+        database_id: Uuid,
+        display_name: &str,
+        data_type: DataType,
+        is_multi_select: bool,
+        specific_entity_type: Option<EntityType>,
+    ) -> impl Future<Output = Result<PropertyDefinition, Self::Err>> + Send;
+
+    /// A definition a user may bind as a column of `database_id`: a system
+    /// one, their own, one of their teams', or one the database owns.
+    /// `None` for anything else, including a missing definition.
+    fn get_bindable_property_definition(
+        &self,
+        property_definition_id: Uuid,
+        user_id: &str,
+        database_id: Uuid,
+    ) -> impl Future<Output = Result<Option<PropertyDefinition>, Self::Err>> + Send;
+
+    /// The definitions among `property_definition_ids` a user may change:
+    /// their own, or one of their teams'. Never a system one, nor one a
+    /// database owns, whose changes are that database's to authorize.
+    fn get_editable_property_definition_ids(
+        &self,
+        property_definition_ids: &[Uuid],
+        user_id: &str,
+    ) -> impl Future<Output = Result<Vec<Uuid>, Self::Err>> + Send;
+
+    /// Definitions by id with their options, database-owned ones included.
+    /// Missing ids are skipped; authorization is the caller's.
+    fn get_property_definitions_with_options(
+        &self,
+        property_definition_ids: &[Uuid],
+    ) -> impl Future<Output = Result<Vec<PropertyDefinitionWithOptions>, Self::Err>> + Send;
+
+    /// Delete a property definition and all associated data (cascades).
+    /// A no-op if the definition doesn't exist.
+    fn delete_property_definition(
+        &self,
+        property_definition_id: Uuid,
+    ) -> impl Future<Output = Result<(), Self::Err>> + Send;
+
+    /// Get a single property option by ID.
+    /// Returns `None` if the option doesn't exist.
+    fn get_property_option(
+        &self,
+        option_id: Uuid,
+    ) -> impl Future<Output = Result<Option<PropertyOption>, Self::Err>> + Send;
+
+    /// Get all options for a property definition, ordered for display.
+    fn get_property_options(
+        &self,
+        property_definition_id: Uuid,
+    ) -> impl Future<Output = Result<Vec<PropertyOption>, Self::Err>> + Send;
+
+    /// Read options for requested system, caller-owned, or caller-team definitions.
+    /// Missing or inaccessible definitions are omitted; visible definitions with no options remain.
+    fn get_visible_property_options_batch<'a>(
+        &self,
+        property_definition_ids: &[Uuid],
+        user_id: &MacroUserIdStr<'a>,
+        team_id: Option<Uuid>,
+    ) -> impl Future<Output = Result<HashMap<Uuid, Vec<PropertyOption>>, Self::Err>> + Send;
+
+    /// Create a new property option.
+    fn create_property_option(
+        &self,
+        property_definition_id: Uuid,
+        display_order: i32,
+        value: PropertyOptionValue,
+        color: Option<String>,
+    ) -> impl Future<Output = Result<PropertyOption, Self::Err>> + Send;
+
+    /// Resolve by exact value, inserting if absent. Concurrent calls return the
+    /// same option; an existing option's color and display order are preserved.
+    fn get_or_create_property_option(
+        &self,
+        property_definition_id: Uuid,
+        display_order: i32,
+        value: PropertyOptionValue,
+        color: Option<String>,
+    ) -> impl Future<Output = Result<GetOrCreatePropertyOptionResult, Self::Err>> + Send;
+
+    /// Update a property option's value, color, and display order in place.
+    /// The option id is preserved, so every entity referencing it reflects the
+    /// change with no per-entity rewrite.
+    fn update_property_option(
+        &self,
+        option_id: Uuid,
+        value: PropertyOptionValue,
+        color: Option<String>,
+        display_order: i32,
+    ) -> impl Future<Output = Result<UpdatePropertyOptionOutcome, Self::Err>> + Send;
+
+    /// Apply a whole-set option change in one transaction: deletes (stripping
+    /// ids from entity values), in-place rewrites, then inserts. Rewrites go
+    /// through temporary values so a set of options can trade values.
+    fn replace_property_options(
+        &self,
+        property_definition_id: Uuid,
+        plan: &PropertyOptionReplacePlan,
+    ) -> impl Future<Output = Result<PropertyOptionReplaceOutcome, Self::Err>> + Send;
+
+    /// Delete a property option and strip its id from every entity value that
+    /// references it, atomically. Returns `None` if the option didn't exist,
+    /// otherwise one post-commit snapshot per entity value it was stripped from.
+    fn delete_property_option(
+        &self,
+        property_definition_id: Uuid,
+        option_id: Uuid,
+    ) -> impl Future<Output = Result<Option<Vec<EntityPropertyMutationSnapshot>>, Self::Err>> + Send;
+
+    /// Get the single tag definition owned by the given owner, if it exists.
+    // Explicit lifetime required by mockall's automock expansion.
+    #[allow(clippy::needless_lifetimes)]
+    fn get_tag_definition<'a>(
+        &self,
+        owner: PropertyDefinitionOwner<'a>,
+    ) -> impl Future<Output = Result<Option<PropertyDefinition>, Self::Err>> + Send;
+
+    /// Return the owner's tag definition and whether it was created on this call.
+    // Explicit lifetime required by mockall's automock expansion.
+    #[allow(clippy::needless_lifetimes)]
+    fn get_or_create_tag_definition<'a>(
+        &self,
+        owner: PropertyDefinitionOwner<'a>,
+    ) -> impl Future<Output = Result<GetOrCreateTagDefinitionResult, Self::Err>> + Send;
+
+    /// Move a personal tag option into a team tag definition, keeping the option
+    /// id, and rewrite every entity value that referenced it so the label now
+    /// hangs off the team definition.
+    ///
+    /// The whole move is one transaction that first locks the target definition,
+    /// so two callers promoting the same label name into one team serialize and
+    /// the loser sees the winner's label as a
+    /// [`TagPromotionOutcome::Conflict`] instead of creating a duplicate.
+    /// Names are compared case-insensitively on the trimmed value.
+    fn promote_tag_option(
+        &self,
+        option_id: Uuid,
+        source_definition_id: Uuid,
+        target_definition_id: Uuid,
+    ) -> impl Future<Output = Result<TagPromotionOutcome, Self::Err>> + Send;
+
+    /// Replace a personal tag option with an existing team option: every entity
+    /// carrying the personal label is retagged with the team label (deduped if
+    /// it already has it), then the personal option is deleted.
+    ///
+    /// Returns `None` when `target_option_id` does not belong to
+    /// `target_definition_id`, which the caller reports as a missing option.
+    fn merge_tag_option(
+        &self,
+        source_option_id: Uuid,
+        source_definition_id: Uuid,
+        target_option_id: Uuid,
+        target_definition_id: Uuid,
+    ) -> impl Future<Output = Result<Option<TagRemapOutcome>, Self::Err>> + Send;
+
+    /// Count how many of the provided option IDs exist for the property definition.
+    fn count_valid_property_options(
+        &self,
+        property_definition_id: Uuid,
+        option_ids: &[Uuid],
+    ) -> impl Future<Output = Result<i64, Self::Err>> + Send;
+
+    /// Upsert an entity property value (insert or update).
+    /// If the property doesn't exist, it will be created and attached to the entity.
+    /// If it exists, the value will be updated. Returns the persisted
+    /// assignment together with the pre-write value.
+    fn upsert_entity_property(
+        &self,
+        entity_id: &str,
+        entity_type: EntityType,
+        property_definition_id: Uuid,
+        value: Option<PropertyValue>,
+    ) -> impl Future<Output = Result<EntityPropertyMutationSnapshot, Self::Err>> + Send;
+
+    /// Append entity references atomically while preserving current references.
+    /// Duplicates are ignored and the snapshot captures the locked previous value.
+    fn add_entity_property_references(
+        &self,
+        entity_id: &str,
+        entity_type: EntityType,
+        property_definition_id: Uuid,
+        references: Vec<EntityReference>,
+    ) -> impl Future<Output = Result<EntityPropertyMutationSnapshot, Self::Err>> + Send;
+
+    /// Atomically add one option to a multi-select entity property value,
+    /// attaching the property if needed. Re-adding a present option is deduped.
+    /// Composes with concurrent option changes without a lost update and returns
+    /// the complete persisted state.
+    fn add_entity_property_option(
+        &self,
+        entity_id: &str,
+        entity_type: EntityType,
+        property_definition_id: Uuid,
+        option_id: Uuid,
+    ) -> impl Future<Output = Result<EntityPropertyMutationSnapshot, Self::Err>> + Send;
+
+    /// Atomically remove one option from a multi-select entity property value.
+    /// Returns no snapshot if the property is unattached or the option is not
+    /// present, because no row was mutated.
+    fn remove_entity_property_option(
+        &self,
+        entity_id: &str,
+        entity_type: EntityType,
+        property_definition_id: Uuid,
+        option_id: Uuid,
+    ) -> impl Future<Output = Result<Option<EntityPropertyMutationSnapshot>, Self::Err>> + Send;
+
+    /// Apply option deltas to several of an entity's multi-select property values
+    /// in a single transaction, returning each property's final option ids.
+    ///
+    /// Each property's row is locked (`SELECT ... FOR UPDATE`) before its current
+    /// value is read, diffed, and rewritten, so the whole selection composes with
+    /// concurrent edits without a lost update. The transaction is all-or-nothing:
+    /// any failure rolls back every property in the batch.
+    fn bulk_update_entity_property_options(
+        &self,
+        entity_id: &str,
+        entity_type: EntityType,
+        updates: &[EntityPropertyOptionUpdate],
+    ) -> impl Future<Output = Result<Vec<EntityPropertyOptionSelection>, Self::Err>> + Send;
+
+    /// Atomically link or unlink a task's parent (for Parent Task property).
+    ///
+    /// When `parent_task_id` is `Some(parent)`:
+    /// - Sets task's Parent Task = parent
+    /// - Adds task to parent's Subtasks
+    /// - Removes task from old parent's Subtasks (if different)
+    ///
+    /// When `parent_task_id` is `None`:
+    /// - Clears task's Parent Task
+    /// - Removes task from old parent's Subtasks
+    fn link_parent_task(
+        &self,
+        task_id: Uuid,
+        parent_task_id: Option<Uuid>,
+    ) -> impl Future<Output = Result<Option<EntityProperty>, Self::Err>> + Send;
+
+    /// Atomically set a task's subtasks (for Subtasks property).
+    ///
+    /// - Sets task's Subtasks to the new list
+    /// - For added subtasks: sets their Parent Task = task
+    /// - For removed subtasks: clears their Parent Task
+    fn link_subtasks(
+        &self,
+        task_id: Uuid,
+        subtask_ids: Vec<Uuid>,
+    ) -> impl Future<Output = Result<Option<EntityProperty>, Self::Err>> + Send;
+
+    /// Get a property value for a specific entity and property definition.
+    /// Returns `None` if the property is not attached to the entity.
+    fn get_entity_property_value(
+        &self,
+        entity_id: &str,
+        entity_type: EntityType,
+        property_definition_id: Uuid,
+    ) -> impl Future<Output = Result<Option<PropertyValue>, Self::Err>> + Send;
+
+    /// Get all properties attached to an entity, with definitions, values, and options.
+    /// Tag properties are restricted to the viewer's own and their teams' definitions.
+    /// Returns properties sorted by display name.
+    fn get_entity_properties(
+        &self,
+        entity_id: &str,
+        entity_type: EntityType,
+        tag_viewer_user_id: &str,
+    ) -> impl Future<Output = Result<Vec<EntityPropertyInfo>, Self::Err>> + Send;
+
+    /// Get the tag definitions visible to a user — their own plus their teams' —
+    /// with options attached.
+    fn get_caller_tag_definitions(
+        &self,
+        user_id: &str,
+    ) -> impl Future<Output = Result<Vec<PropertyDefinitionWithOptions>, Self::Err>> + Send;
+
+    /// Get all properties attached to multiple entities, keyed by entity id and type.
+    /// Returns properties sorted by display name for each entity.
+    fn get_entity_properties_batch(
+        &self,
+        entity_refs: Vec<EntityReference>,
+    ) -> impl Future<
+        Output = Result<HashMap<EntityPropertiesKey, Vec<EntityPropertyWithDefinition>>, Self::Err>,
+    > + Send;
+
+    /// Get the properties attached to multiple entities, filtered by property
+    /// definition IDs, keyed by entity id and type. When `tag_viewer_user_id`
+    /// is set, also returns TAG properties whose definition is owned by that
+    /// user or their team.
+    // Explicit lifetime required by mockall's automock expansion.
+    #[allow(clippy::needless_lifetimes)]
+    fn get_entity_properties_batch_filtered<'a>(
+        &self,
+        entity_refs: Vec<EntityReference>,
+        property_ids: Vec<Uuid>,
+        tag_viewer_user_id: Option<&'a MacroUserIdStr<'a>>,
+    ) -> impl Future<
+        Output = Result<HashMap<EntityPropertiesKey, Vec<EntityPropertyWithDefinition>>, Self::Err>,
+    > + Send;
+
+    /// Get an entity's properties with definitions, values, and options,
+    /// sorted by display name.
+    fn get_entity_properties_with_definitions(
+        &self,
+        entity_id: &str,
+        entity_type: EntityType,
+    ) -> impl Future<Output = Result<Vec<EntityPropertyWithDefinition>, Self::Err>> + Send;
+
+    /// Look up an entity property by its ID.
+    /// Returns the entity reference (for permissions) and definition ID
+    /// (for required property checks), or `None` if it doesn't exist.
+    fn lookup_entity_property(
+        &self,
+        entity_property_id: Uuid,
+    ) -> impl Future<Output = Result<Option<EntityPropertyReference>, Self::Err>> + Send;
+
+    /// Delete an entity property by its ID. A no-op if it doesn't exist.
+    fn delete_entity_property(
+        &self,
+        entity_property_id: Uuid,
+    ) -> impl Future<Output = Result<(), Self::Err>> + Send;
+
+    /// Delete all properties attached to an entity.
+    fn delete_entity_properties(
+        &self,
+        entity_reference: &EntityReference,
+    ) -> impl Future<Output = Result<(), Self::Err>> + Send;
+
+    /// Resolve document subtype facts in one batch.
+    ///
+    /// Missing IDs and documents without a subtype are omitted. Callers treat
+    /// either case as a regular document.
+    fn get_document_sub_types(
+        &self,
+        document_ids: &[Uuid],
+    ) -> impl Future<Output = Result<HashMap<Uuid, DocumentSubType>, Self::Err>> + Send;
+
+    /// Get a document's metadata (name, owner, timestamps, project).
+    /// Returns `None` if the document doesn't exist.
+    /// Tasks are stored as documents, so this works for both.
+    fn get_document_metadata(
+        &self,
+        document_id: &str,
+    ) -> impl Future<Output = Result<Option<DocumentMetadata>, Self::Err>> + Send;
+
+    /// Get an email thread's metadata (subject, timestamps, message count).
+    /// Returns `None` if the thread doesn't exist.
+    fn get_thread_metadata(
+        &self,
+        thread_id: Uuid,
+    ) -> impl Future<Output = Result<Option<ThreadMetadata>, Self::Err>> + Send;
+
+    /// Get a project's metadata (name, owner, timestamps, parent).
+    /// Returns `None` if the project doesn't exist or is deleted.
+    fn get_project_metadata(
+        &self,
+        project_id: &str,
+    ) -> impl Future<Output = Result<Option<ProjectMetadata>, Self::Err>> + Send;
+}
+
+/// Permission service trait for entity access control.
+///
+/// This trait abstracts permission operations (receipt minting and granting),
+/// allowing for different implementations (e.g., database-backed, mock for
+/// testing). Minting is the single enforcement point: it encapsulates the
+/// properties-specific access rules (Task shares Document permissions, the
+/// thread-ownership fallback, and deleted entities being visible only to
+/// their owner).
+#[cfg_attr(any(test, feature = "mock"), mockall::automock(type Err = anyhow::Error;))]
+pub trait PermissionService: Send + Sync + 'static {
+    type Err;
+
+    /// Mint a proof that the user (or the public, for `None`) has view access
+    /// to the entity. The owner always has access; deleted entities are only
+    /// visible to their owner. Errors if the caller has no access.
+    // Explicit lifetime required by mockall's automock expansion.
+    #[allow(clippy::needless_lifetimes)]
+    fn mint_view_receipt<'a>(
+        &self,
+        user_id: Option<&'a MacroUserIdStr<'a>>,
+        entity_id: &str,
+        entity_type: AccessEntityType,
+    ) -> impl Future<Output = Result<ViewReceipt, Self::Err>> + Send;
+
+    /// Mint a proof that the user has edit (or owner) access to the entity.
+    /// Errors if the caller has no edit access.
+    // Explicit lifetime required by mockall's automock expansion.
+    #[allow(clippy::needless_lifetimes)]
+    fn mint_edit_receipt<'a>(
+        &self,
+        user_id: &MacroUserIdStr<'a>,
+        entity_id: &str,
+        entity_type: AccessEntityType,
+    ) -> impl Future<Output = Result<EditReceipt, Self::Err>> + Send;
+
+    /// Grant edit permissions to users for a task.
+    /// This is used when task assignees are updated to ensure they can edit the task.
+    fn grant_permissions_to_task<'a>(
+        &self,
+        user_ids: &[MacroUserIdStr<'a>],
+        task_id: &str,
+    ) -> impl Future<Output = Result<(), Self::Err>> + Send;
+}
+
+/// Notification service trait for sending notifications.
+///
+/// This trait abstracts notification operations, allowing for different implementations
+/// (e.g., notification-service-backed, mock for testing). Adapters are expected to
+/// enrich the domain-level notification (task name, sender profile picture) and fan
+/// out delivery per recipient on a best-effort basis.
+#[cfg_attr(any(test, feature = "mock"), mockall::automock(type Err = anyhow::Error;))]
+pub trait NotificationService: Send + Sync + 'static {
+    type Err;
+
+    /// Notify the recipients that they were assigned to a task.
+    fn send_task_assigned<'a>(
+        &self,
+        notification: TaskAssignedNotification<'a>,
+    ) -> impl Future<Output = Result<(), Self::Err>> + Send;
+}
+
+/// Initiative-owned sharing operations required when assigning a project.
+/// The implementation keeps grants on the initiative and its description in
+/// sync while leaving the owning initiative service in charge of sharing side effects.
+pub trait InitiativeAssigneeService: std::fmt::Debug + Send + Sync + 'static {
+    /// Grant assignees edit access, preserving existing grants when cleared.
+    fn grant_assignees<'a>(
+        &'a self,
+        access: &'a EditReceipt,
+        user_ids: Vec<MacroUserIdStr<'static>>,
+    ) -> Pin<Box<dyn Future<Output = Result<(), super::error::PropertiesErr>> + Send + 'a>>;
+}

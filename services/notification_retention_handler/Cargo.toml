@@ -6,9 +6,10 @@ version = "0.1.0"
 
 [dependencies]
 lambda_runtime = { workspace = true }
-macro_entrypoint = { path = "../../crates/macro_entrypoint" }
-macro_env_var = { path = "../../crates/macro_env_var" }
-notification = { path = "../../crates/notification" }
+macro_entrypoint = { workspace = true }
+macro_env_var = { workspace = true }
+notification = { workspace = true, default-features = true }
+notification_outbound = { workspace = true }
 serde = { workspace = true }
 sqlx = { workspace = true }
 tokio = { workspace = true }

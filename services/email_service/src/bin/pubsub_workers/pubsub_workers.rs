@@ -1,24 +1,26 @@
 #![recursion_limit = "256"]
 use anyhow::Context;
+use auth_service_url::AuthServiceUrl;
+use connection_gateway_url::ConnectionGatewayUrl;
 use document_storage_service_client::DocumentStorageServiceClient;
-use email_api_client::GmailApiClientRepository;
+use document_storage_service_url::DocumentStorageServiceUrl;
+use email_api_client_outbound::GmailApiClientRepository;
 use email_service::config::Config;
 use email_service::outbound::email_api::{
     EmailServiceTokenSource, GmailApi, RateBudget, RedisGmailRequestGate,
 };
 use email_service::pubsub::CrmMetadataResolver;
 use email_service::util::redis::RedisClient;
+use entity_access_outbound::PgAccessRepository;
 use macro_entrypoint::{MacroEntrypoint, shutdown_signal};
 use macro_env::Environment;
 use macro_event_broker::{KafkaEventPublisher, MacroEventBrokerService};
-use macro_service_urls::{
-    AuthServiceUrl, ConnectionGatewayUrl, DocumentStorageServiceUrl, StaticFileServiceUrl,
-};
 use notification::domain::service::SqsNotificationIngress;
-use notification::outbound::queue::SqsQueue;
+use notification_outbound::queue::SqsQueue;
 use sqlx::PgPool;
 use sqlx::postgres::PgPoolOptions;
 use static_file_service_client::StaticFileServiceClient;
+use static_file_service_url::StaticFileServiceUrl;
 use std::sync::Arc;
 use std::time::Duration;
 use system_properties::{PgSystemPropertiesRepository, SystemPropertiesServiceImpl};
@@ -295,10 +297,10 @@ async fn main() -> anyhow::Result<()> {
         sqs_client.clone(),
         RateBudget::Live,
     );
-    let outlook_repository = email_api_client::OutlookApiClientRepository::with_gate(Arc::new(
-        email_service::outbound::email_api::RedisMicrosoftRequestGate(redis_conn.clone()),
-    ))?;
-    let outlook_api = email_api_client::domain::service::mailbox::MailboxApiService::new(
+    let outlook_repository = email_api_client_outbound::OutlookApiClientRepository::with_gate(
+        Arc::new(email_service::outbound::email_api::RedisMicrosoftRequestGate(redis_conn.clone())),
+    )?;
+    let outlook_api = email_api_client_core::service::mailbox::MailboxApiService::new(
         outlook_repository.clone(),
         email::domain::mailbox::credentials::MailboxCredentials::new(
             email::outbound::mailbox_pg::PgMailboxSync::new(db.clone()),
@@ -307,7 +309,7 @@ async fn main() -> anyhow::Result<()> {
             ),
         ),
         // Admission is applied to each actual Graph request by the injected gate.
-        email_api_client::domain::ports::AlwaysAllowRateLimiter,
+        email_api_client_core::ports::AlwaysAllowRateLimiter,
     );
     let mailbox_repository = email::outbound::mailbox_pg::PgMailboxSync::new(db.clone());
     if config.outlook_sync_enabled {
@@ -414,7 +416,7 @@ async fn main() -> anyhow::Result<()> {
             email::domain::mailbox::watches::MailboxWatchService::new(
                 mailbox_repository.clone(),
                 email_service::outbound::email_api::ProviderMailboxGateway(outlook_api.clone()),
-                macro_service_urls::EmailServiceUrl::new_for_environment(env)?.to_string(),
+                email_service_url::EmailServiceUrl::new_for_environment(env)?.to_string(),
             ),
             worker_cancellation_token.clone(),
         ));
@@ -441,7 +443,10 @@ async fn main() -> anyhow::Result<()> {
     }
     worker_tracker.spawn(email_service::mailbox_sync_worker::run_attachment_cleanup(
         email::domain::attachment_cleanup::DraftObjectCleanup {
-            repository: email::outbound::EmailPgRepo::new(db.clone()),
+            repository: email::outbound::EmailPgRepo::new(
+                db.clone(),
+                Arc::new(PgAccessRepository::new(db.clone())),
+            ),
             storage: email_service::outbound::draft_attachment_storage::DraftAttachmentS3 {
                 s3: s3_client.clone(),
                 bucket: config.attachment_bucket.to_string(),
@@ -451,7 +456,10 @@ async fn main() -> anyhow::Result<()> {
     ));
     let draft_content = Arc::new(
         email::domain::mailbox::drafts::content::DraftContentService {
-            repository: email::outbound::EmailPgRepo::new(db.clone()),
+            repository: email::outbound::EmailPgRepo::new(
+                db.clone(),
+                Arc::new(PgAccessRepository::new(db.clone())),
+            ),
             bytes: email_service::outbound::mailbox_drafts::MailboxDraftContent {
                 provider: email_service::outbound::attachment_access::ProviderAttachmentBytes {
                     s3: s3_client.clone(),
@@ -465,13 +473,16 @@ async fn main() -> anyhow::Result<()> {
                 bucket: config.attachment_bucket.to_string(),
             },
             access: entity_access::domain::service::EntityAccessServiceImpl::new(
-                entity_access::outbound::PgAccessRepository::new(db.clone()),
+                entity_access_outbound::PgAccessRepository::new(db.clone()),
             ),
         },
     );
     worker_tracker.spawn(email_service::mailbox_sync_worker::run_transfers(
         email::domain::draft_transfer::DraftRetirementService {
-            repository: email::outbound::EmailPgRepo::new(db.clone()),
+            repository: email::outbound::EmailPgRepo::new(
+                db.clone(),
+                Arc::new(PgAccessRepository::new(db.clone())),
+            ),
             gateway: email_service::outbound::email_api::ProviderMailboxGateway(
                 outlook_api.clone(),
             ),

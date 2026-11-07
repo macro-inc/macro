@@ -1,5 +1,5 @@
 /**
- * The JSON shapes exchanged with `pptx_engine` (crates/pptx_engine). They
+ * The JSON shapes exchanged with `pptx_engine` (crates/engines/pptx_engine). They
  * mirror `inspect::{DeckOutline, SlideOutline, ShapeOutline, TextLayoutInfo}`
  * and `edit::{EditOp, EditResult}`; field names are the serde camelCase
  * spellings. Lengths are in points (1/72 inch) in slide coordinates.

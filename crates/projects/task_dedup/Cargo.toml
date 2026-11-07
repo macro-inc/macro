@@ -1,0 +1,76 @@
+[package]
+edition = "2024"
+name = "task_dedup"
+publish = false
+version = "0.1.0"
+
+[[bin]]
+name = "backfill_task_embeddings"
+path = "src/bin/backfill_task_embeddings.rs"
+required-features = ["backfill"]
+
+[[bin]]
+name = "pull_task_corpus"
+path = "src/bin/pull_task_corpus.rs"
+required-features = ["backfill"]
+
+[[bin]]
+name = "expand_eval_corpus"
+path = "src/bin/expand_eval_corpus.rs"
+required-features = ["backfill"]
+
+[features]
+# Pulls in everything the `backfill_task_embeddings` binary needs. The library
+# itself does not require any of these, so default builds stay lean.
+backfill = [
+  "dep:aws-sdk-secretsmanager",
+  "dep:clap",
+  "dep:macro_aws_config",
+  "dep:secretsmanager_client",
+  "dep:tokio",
+  "dep:macro_env_var"
+]
+
+default = ["backfill"]
+
+[dependencies]
+rootcause = { workspace = true }
+agent = { workspace = true }
+ai_usage = { workspace = true }
+anyhow = { workspace = true }
+async-trait = { workspace = true }
+connection_gateway_client = { workspace = true }
+embedding = { workspace = true }
+futures = { workspace = true }
+lexical_client = { workspace = true }
+model_entity = { workspace = true }
+reqwest = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+sqlx = { workspace = true }
+system_properties = { workspace = true }
+thiserror = { workspace = true }
+tracing = { workspace = true }
+utoipa = { workspace = true }
+uuid = { workspace = true }
+
+# Optional — only compiled in for the `backfill` feature (the backfill binary).
+aws-sdk-secretsmanager = { workspace = true, optional = true }
+clap = { workspace = true, optional = true }
+macro_aws_config = { workspace = true, optional = true }
+secretsmanager_client = { workspace = true, optional = true }
+tokio = { workspace = true, features = [
+  "macros",
+  "rt-multi-thread",
+], optional = true }
+macro_env_var = { workspace = true, optional = true }
+workspace-hack = { version = "0.1", path = "../../workspace-hack" }
+
+lexical_service_url = { workspace = true }
+macro_env = { workspace = true }
+
+[dev-dependencies]
+automod = { workspace = true }
+macro_db_migrator = { workspace = true }
+macro_env_var = { workspace = true }
+tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }

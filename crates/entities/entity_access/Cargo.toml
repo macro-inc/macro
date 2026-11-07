@@ -1,0 +1,64 @@
+[package]
+edition = "2024"
+name = "entity_access"
+publish = false
+version = "0.1.0"
+
+[features]
+axum = [
+  "dep:axum",
+  "dep:entity_basic_types",
+  "dep:macro_authorization",
+  "dep:model_error_response",
+]
+default = ["axum", "inbound", "ports"]
+# The access-explanation models and ports, for `entity_access_outbound`'s
+# `explain_access` binary.
+explain_binary = ["ports"]
+inbound = ["axum", "ports"]
+ports = ["dep:tokio"]
+schema = ["dep:utoipa"]
+# `sqlx::Type` derives on domain types the Postgres adapter stores.
+sqlx = []
+
+[dependencies]
+# Core
+futures = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+tracing = { workspace = true }
+uuid = { workspace = true }
+
+# Domain models (always included)
+bot_id = { workspace = true }
+rootcause = { workspace = true }
+macro_user_id = { workspace = true }
+model_entity = { workspace = true }
+models_entity_access_management = { workspace = true, default-features = true }
+models_permissions = { workspace = true }
+
+# Async runtime (for ports)
+tokio = { workspace = true, optional = true }
+
+# Axum dependencies (for inbound)
+axum = { workspace = true, optional = true }
+macro_authorization = { workspace = true, optional = true, features = ["axum"] }
+model_error_response = { workspace = true, optional = true }
+model_owner = { workspace = true }
+
+# OpenAPI schema (optional)
+utoipa = { workspace = true, optional = true }
+
+# Database
+sqlx = { workspace = true }
+workspace-hack = { version = "0.1", path = "../../workspace-hack" }
+entity_basic_types = { workspace = true, optional = true }
+
+[dev-dependencies]
+harness_id = { workspace = true }
+model_user = { workspace = true }
+rootcause = { workspace = true }
+sqlx = { workspace = true, features = ["postgres", "runtime-tokio-rustls"] }
+tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
+tower = { workspace = true }

@@ -1,0 +1,57 @@
+[package]
+name = "agent_code_mode"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+[dependencies]
+agent_runtime_protocol = { workspace = true, default-features = true, features = ["utoipa"] }
+chrono = { workspace = true }
+cognition = { workspace = true }
+agent_session = { workspace = true }
+ai_toolset = { workspace = true }
+dynamic_ui = { workspace = true }
+async-trait = { workspace = true }
+anyhow = { workspace = true }
+axum = { workspace = true }
+bot_id = { workspace = true }
+calendar_events = { workspace = true, features = ["ai_tools"] }
+code_mode_assets = { workspace = true }
+email = { workspace = true, features = ["ai_tools", "inbound"] }
+entity_access = { workspace = true, features = ["ports", "inbound"] }
+futures = { workspace = true }
+import = { workspace = true }
+macro_authorization = { workspace = true, features = ["axum"] }
+macro_user_id = { workspace = true }
+mcp_client = { workspace = true }
+macro_uuid = { workspace = true }
+nutype = { workspace = true }
+pipedream_mcp = { workspace = true }
+rootcause = { workspace = true }
+schemars = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+serde_path_to_error = { workspace = true }
+specta = { workspace = true }
+specta-serde = { workspace = true }
+specta-typescript = { workspace = true }
+sqlx = { workspace = true, features = ["json"] }
+thiserror = { workspace = true }
+tokio = { workspace = true, features = ["rt", "sync"] }
+tokio-util = { workspace = true, features = ["rt"] }
+tracing = { workspace = true }
+utoipa = { workspace = true }
+uuid = { workspace = true }
+workspace-hack = { version = "0.1", path = "../../workspace-hack" }
+code_execution_core = { workspace = true }
+
+[dev-dependencies]
+jev = { workspace = true, features = ["outbound"] }
+tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
+macro_db_migrator = { workspace = true }
+agent_session = { workspace = true, features = ["test-utils", "outbound"] }
+entity_access = { workspace = true, default-features = true }
+
+[package.metadata.cargo-shear]
+# Named only in `#[sqlx::test(migrator = "...")]` strings.
+ignored = ["macro_db_migrator"]

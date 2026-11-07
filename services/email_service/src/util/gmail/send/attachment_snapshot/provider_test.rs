@@ -1,6 +1,7 @@
 use super::*;
 use email::domain::attachment_access::{AttachmentReadRecord, AttachmentReadRepository};
 use email::domain::mailbox::MailboxError;
+use entity_access_outbound::PgAccessRepository;
 use futures::future::BoxFuture;
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
 use models_email::service::message;
@@ -19,11 +20,14 @@ impl AuthorizedAttachmentBytes for Reader {
         Box::pin(async move {
             assert_eq!(actor, "macro|gmail-native@example.com");
             self.read.lock().unwrap().push(id);
-            let record = email::outbound::EmailPgRepo::new(self.db.clone())
-                .attachment_read_record(id)
-                .await
-                .map_err(|_| MailboxError::Persistence)?
-                .ok_or(MailboxError::Persistence)?;
+            let record = email::outbound::EmailPgRepo::new(
+                self.db.clone(),
+                Arc::new(PgAccessRepository::new(self.db.clone())),
+            )
+            .attachment_read_record(id)
+            .await
+            .map_err(|_| MailboxError::Persistence)?
+            .ok_or(MailboxError::Persistence)?;
             Ok((record, vec![1, 2, 3]))
         })
     }
@@ -113,11 +117,14 @@ impl AuthorizedAttachmentBytes for SourceInboxReader {
     ) -> BoxFuture<'a, Result<(AttachmentReadRecord, Vec<u8>), MailboxError>> {
         Box::pin(async move {
             assert_eq!(actor, "macro|forwarder@example.com");
-            let record = email::outbound::EmailPgRepo::new(self.db.clone())
-                .attachment_read_record(id)
-                .await
-                .map_err(|_| MailboxError::Persistence)?
-                .ok_or(MailboxError::Persistence)?;
+            let record = email::outbound::EmailPgRepo::new(
+                self.db.clone(),
+                Arc::new(PgAccessRepository::new(self.db.clone())),
+            )
+            .attachment_read_record(id)
+            .await
+            .map_err(|_| MailboxError::Persistence)?
+            .ok_or(MailboxError::Persistence)?;
             assert_eq!(record.link.id, self.source_link);
             assert_eq!(record.mailbox.link_id, self.source_link);
             assert_eq!(

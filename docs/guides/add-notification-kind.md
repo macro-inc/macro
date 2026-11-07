@@ -14,9 +14,9 @@ If the notification is about an entity type that has never carried notifications
 
 | Building | Copy | Why |
 | --- | --- | --- |
-| A kind on an existing entity, sent from a domain service | `ChannelMessageReaction` (`crates/channels/src/outbound/notification_sender.rs`) | Newest end-to-end kind: push, realtime, GraphQL, inbox stacking, settings toggle |
-| Kinds planned from domain events, with derived ids | `AgentSession*` (`crates/agent_harness/src/domain/notifications.rs`) | Pure planner function, audience rules, idempotent ids, port + ingress adapter |
-| A scheduled kind | `CalendarEventReminder` (`crates/calendar_events/src/outbound/notification_notifier.rs`) | Fired by a poller, collapse key per occurrence |
+| A kind on an existing entity, sent from a domain service | `ChannelMessageReaction` (`crates/comms/channels_outbound/src/notification_sender.rs`) | Newest end-to-end kind: push, realtime, GraphQL, inbox stacking, settings toggle |
+| Kinds planned from domain events, with derived ids | `AgentSession*` (`crates/agents/agent_harness/src/domain/notifications.rs`) | Pure planner function, audience rules, idempotent ids, port + ingress adapter |
+| A scheduled kind | `CalendarEventReminder` (`crates/calendar/calendar_events/src/outbound/notification_notifier.rs`) | Fired by a poller, collapse key per occurrence |
 
 Names: the variant is `PascalCase`; `Notification::TYPE_NAME`, the serde tag, the
 `notification_event_type` column, and the web `tag` are all its `snake_case`
@@ -25,7 +25,7 @@ Names: the variant is `PascalCase`; `Notification::TYPE_NAME`, the serde tag, th
 
 ## 1. Metadata type (required)
 
-In `crates/model_notifications/src/metadata.rs` (or a submodule like
+In `crates/notifications/model_notifications/src/metadata.rs` (or a submodule like
 `metadata/crm_discussion.rs`):
 
 - Define `<Name>Metadata` with `#[derive(Serialize, Deserialize, Debug, Clone, ToSchema)]`
@@ -51,17 +51,17 @@ In `crates/model_notifications/src/metadata.rs` (or a submodule like
   banner on the device and is also the Android identifier, so key it on what a
   newer notification should supersede (the reaction keys on message + emoji, a
   reminder on its reminder id). Android pushes are derived from the APNS payload
-  in `crates/notification/src/domain/service/egress.rs`; there is no separate
+  in `crates/notifications/notification/src/domain/service/egress.rs`; there is no separate
   Android formatter.
-- Add title/body tests to `crates/model_notifications/src/metadata/test.rs`.
+- Add title/body tests to `crates/notifications/model_notifications/src/metadata/test.rs`.
 
 Only invite-style kinds send direct email (`NotificationExtEmail`, see
-`crates/invite_email`). Everything else reaches email through the digest, which
+`crates/email/invite_email`). Everything else reaches email through the digest, which
 formats any `NotifEvent` via `NotificationTitle`.
 
 ## 2. Register the variant (required)
 
-In `crates/model_notifications/src/lib.rs`:
+In `crates/notifications/model_notifications/src/lib.rs`:
 
 - Re-export the type from the `pub use metadata::{...}` list.
 - Add the variant **at the end** of `NotifEvent` inside `define_notif_event!`. The
@@ -78,7 +78,7 @@ Then decide two lists in other crates; nothing will force you to:
   not be able to turn it off (account-security kinds like `inbox_reauth_required`
   stay out). The preferences endpoint rejects disabling any type not listed.
 - **Category filter:** check `push_include_types_filter` in
-  `crates/notification/src/outbound/repository.rs`. Categories mostly match on
+  `crates/notifications/notification_outbound/src/repository.rs`. Categories mostly match on
   `event_item_type`, and `Message` also matches any metadata with a `messageId`.
   A new kind filed under an existing entity type joins that category, which leaked
   agent rows into the channel filter once. GitHub kinds are a hand-kept list
@@ -95,10 +95,10 @@ the domain decides *whether* and *to whom*; an outbound adapter calls
 
 1. **Plan in the domain.** A pure function from the domain fact to the
    notifications it warrants, with tests for every audience rule. Copy
-   `crates/agent_harness/src/domain/notifications.rs`.
+   `crates/agents/agent_harness/src/domain/notifications.rs`.
 2. **Port + adapter.** A domain port (e.g. `AgentSessionNotifier`) and an outbound
    adapter generic over `notification::domain::service::NotificationIngress`
-   (`crates/agent_harness/src/outbound/notifications.rs`). Build the request with
+   (`crates/agents/agent_harness/src/outbound/notifications.rs`). Build the request with
    `SendNotificationRequestBuilder { notification_entity, secondary_notification_entity, notification, sender_id, recipient_ids }`,
    then `.into_request()`, `.with_apns()` for a push, and `.with_conn_gateway()`
    for live delivery.
@@ -137,14 +137,14 @@ producer redeploys.
 
 ## 4. GraphQL (required)
 
-In `crates/graphql_notification/src/notification_event.rs`:
+In `crates/graphql/graphql_notification/src/notification_event.rs`:
 
 - A wrapper `pub struct Graphql<Name>Metadata(<Name>Metadata);` with an
   `#[Object]` impl exposing each field (ids as `ID`).
 - A variant in the `GraphqlNotifEvent` union and an arm in
   `From<NotifEvent> for GraphqlNotifEvent`.
 
-Regenerate the SDL and the web client (see `crates/complete_graph/AGENTS.md`):
+Regenerate the SDL and the web client (see `crates/graphql/complete_graph/AGENTS.md`):
 
 ```sh
 cargo run -p complete_graph --bin graphql_schema -- static_assets/schema.graphql
@@ -213,7 +213,7 @@ consumer matches on `notification_metadata.tag`.
    data (channel, message, and nullable thread-root IDs) plus a per-recipient
    `recipientId`, allowing a matching signed-in account to open the destination
    before notification hydration. Add channel destinations in
-   `crates/model_notifications/src/metadata/channel_push.rs` and the metadata's
+   `crates/notifications/model_notifications/src/metadata/channel_push.rs` and the metadata's
    `NotificationExtIos` implementation; regenerate the service OpenAPI and the
    web push validators with `scripts/generate-api-schema.ts`. Older pushes and
    other notification kinds still follow the lookup path, so step 3 covers
@@ -226,24 +226,24 @@ kinds introduced by a newer backend.
 
 ## 7. Server-built feeds (when relevant)
 
-- **Home work feed:** `crates/attention_feed/src/domain/keying.rs`
+- **Home work feed:** `crates/search/attention_feed/src/domain/keying.rs`
   (`channel_thread_root`) attributes channel notifications to thread roots, and
-  `crates/work_feed/src/domain/stacking.rs` stacks channel and comment events. A
+  `crates/search/work_feed/src/domain/stacking.rs` stacks channel and comment events. A
   new kind defaults to a standalone stack (`_ => None`); add it to the thread-root
   and `is_channel_event` / `is_comment_event` matches if it belongs to a
   conversation.
 - **Notifications inbox:** `place_event` in
-  `crates/notification_inbox/src/domain/rows.rs` matches every `NotifEvent`, so
+  `crates/notifications/notification_inbox/src/domain/rows.rs` matches every `NotifEvent`, so
   the compiler asks where a new kind's row goes: an existing slot, a new slot
   (one row per request id), or none. Hide noise there rather than dropping it,
   so done still acknowledges it. Give the row its actor in `actor` and any
   buttons in `actions` (as data; the client performs them). A new row type or
   action kind also needs `InboxRowType` or `InboxRowActionKind`, its GraphQL
-  enum in `crates/graphql_notification_inbox`, and the regenerated
+  enum in `crates/graphql/graphql_notification_inbox`, and the regenerated
   `static_assets/schema.graphql`; adding enum values is compatible, removing
   them is not.
 - **Channel unread scoping:** channel thread SQL in
-  `crates/notification/src/outbound/entity_notifications.rs` lists event types by
+  `crates/notifications/notification_outbound/src/entity_notifications.rs` lists event types by
   name. Add a channel-scoped kind there, with tests beside it.
 
 ## 8. Docs
@@ -288,4 +288,4 @@ Then trigger the event on a local stack ([running locally](../development/runnin
 and confirm the row in the inbox, its click target, the live update in a second
 tab, and the settings toggle. The `live-debug` skill shows the ingress and egress
 spans; local-e2e notification tests live in
-`crates/integration_tests/local_e2e/tests/channel_mutations.rs`.
+`crates/testing/local_e2e/tests/channel_mutations.rs`.

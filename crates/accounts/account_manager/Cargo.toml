@@ -1,0 +1,46 @@
+[package]
+edition = "2024"
+name = "account_manager"
+publish = false
+version = "0.1.0"
+
+[features]
+default = []
+inbound = [
+  "dep:axum",
+  "dep:macro_authorization",
+  "dep:model_error_response",
+  "dep:utoipa",
+]
+outbound = [
+  "dep:channels",
+  "dep:entity_access",
+  "dep:app_service_url",
+  "dep:messages",
+]
+postgres = ["dep:sqlx"]
+
+[dependencies]
+axum = { workspace = true, optional = true }
+channels = { workspace = true, optional = true, features = ["ports"] }
+chrono = { workspace = true, features = ["serde"] }
+entity_access = { workspace = true, optional = true, features = ["ports"] }
+macro_authorization = { workspace = true, optional = true, features = ["axum"] }
+macro_user_id = { workspace = true }
+messages = { workspace = true, optional = true, features = ["ports"] }
+model_error_response = { workspace = true, optional = true }
+rootcause = { workspace = true }
+serde = { workspace = true }
+sqlx = { workspace = true, optional = true }
+strum = { workspace = true }
+thiserror = { workspace = true }
+tracing = { workspace = true }
+user_api_key = { workspace = true }
+utoipa = { workspace = true, optional = true }
+uuid = { workspace = true, features = ["serde", "v7"] }
+workspace-hack = { version = "0.1", path = "../../workspace-hack" }
+app_service_url = { workspace = true, optional = true }
+
+[dev-dependencies]
+macro_db_migrator = { workspace = true }
+tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }

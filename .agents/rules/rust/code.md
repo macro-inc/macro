@@ -14,6 +14,7 @@ Type design, idioms, errors and observability, performance, and tests.
 
 - **CS-10** Newtype your identifiers and tokens — wrap raw `String`
   ids/tokens/model-ids in a validated newtype that checks shape at construction.
+  A plain UUID id is `id_newtype::uuid_id!`; other newtypes use `nutype`.
 - **CS-11** A closed set of string values is an enum, not a `String` — impl
   `Display`/`FromStr` as needed.
 - **CS-12** Optional means `Option<T>` — don't rely on sentinel values or
@@ -23,7 +24,7 @@ Type design, idioms, errors and observability, performance, and tests.
 - **CS-19** Give third-party errors their own variant — don't collapse e.g. a
   `jsonwebtoken` failure into a generic internal error. A provider outage
   (5xx, 429, unreachable, undecodable) is an `upstream_error::UpstreamError`,
-  answered 502/503 — see `crates/upstream_error`.
+  answered 502/503 — see `crates/platform/upstream_error`.
 - **CS-20** Depending on a rate-limited external provider requires a fallback
   (fallback model, retry story, or documented degradation).
 - **CS-21** Wire usage metering on every invocation path — MCP-triggered tool
@@ -62,10 +63,10 @@ Type design, idioms, errors and observability, performance, and tests.
   mark documentation code blocks `ignore` to skip doctests unless explicitly
   directed.
 - **CS-55** AI spans follow the OpenTelemetry GenAI conventions (`gen_ai.*`, see
-  `crates/genai_telemetry`). Agent sessions of every harness are traced in one
+  `crates/platform/genai_telemetry`). Agent sessions of every harness are traced in one
   place: the session actor projects each session's ACP frames onto
   `invoke_agent` / `execute_tool` spans
-  (`crates/agent_session/src/domain/session/telemetry.rs`), so do not add GenAI
+  (`crates/agents/agent_session/src/domain/session/telemetry.rs`), so do not add GenAI
   spans to a harness runtime — `agent_inmem` runs its agent loop with
   `with_genai_telemetry(false)` for that reason. Outside sessions (chat in
   `agent_harness_service::cognition`), the agent loop and

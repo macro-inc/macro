@@ -20,8 +20,6 @@ aes-gcm = { version = "0.10", features = ["zeroize"] }
 ahash = { version = "0.8", features = ["serde"] }
 aho-corasick = { version = "1" }
 anyhow = { version = "1" }
-async-graphql = { version = "7", features = ["chrono", "dataloader"] }
-async-openai = { version = "0.36", features = ["audio", "byot", "chat-completion", "completions", "embedding"] }
 aws-config = { version = "1", features = ["behavior-version-latest"] }
 aws-credential-types = { version = "1", default-features = false, features = ["hardcoded-credentials", "test-util"] }
 aws-runtime = { version = "1", default-features = false, features = ["event-stream", "http-02x", "http-1x", "sigv4a"] }
@@ -120,14 +118,10 @@ prost = { version = "0.12", features = ["prost-derive"] }
 rand-274715c4dabd11b0 = { package = "rand", version = "0.9" }
 rand-c38e5c1d305a1b54 = { package = "rand", version = "0.8", features = ["small_rng"] }
 rand_core = { version = "0.6", default-features = false, features = ["std"] }
-redis = { version = "1", features = ["cluster-async", "connection-manager", "tokio-rustls-comp"] }
 regex = { version = "1" }
 regex-automata = { version = "0.4" }
 regex-syntax = { version = "0.8" }
 reqwest = { version = "0.13", features = ["form", "gzip", "hickory-dns", "json", "multipart", "query", "stream"] }
-rig-agent = { version = "0.41", features = ["test-utils"] }
-rig-core = { version = "0.41", features = ["test-utils"] }
-rmcp = { version = "1", features = ["auth", "client", "transport-streamable-http-client-reqwest", "transport-streamable-http-server"] }
 rsa = { version = "0.9", features = ["getrandom", "sha1"] }
 rust-embed-utils = { version = "8", default-features = false, features = ["debug-embed"] }
 rustc-hash = { version = "2" }
@@ -182,8 +176,6 @@ aes-gcm = { version = "0.10", features = ["zeroize"] }
 ahash = { version = "0.8", features = ["serde"] }
 aho-corasick = { version = "1" }
 anyhow = { version = "1" }
-async-graphql = { version = "7", features = ["chrono", "dataloader"] }
-async-openai = { version = "0.36", features = ["audio", "byot", "chat-completion", "completions", "embedding"] }
 aws-config = { version = "1", features = ["behavior-version-latest"] }
 aws-credential-types = { version = "1", default-features = false, features = ["hardcoded-credentials", "test-util"] }
 aws-runtime = { version = "1", default-features = false, features = ["event-stream", "http-02x", "http-1x", "sigv4a"] }
@@ -287,14 +279,10 @@ quote = { version = "1" }
 rand-274715c4dabd11b0 = { package = "rand", version = "0.9" }
 rand-c38e5c1d305a1b54 = { package = "rand", version = "0.8", features = ["small_rng"] }
 rand_core = { version = "0.6", default-features = false, features = ["std"] }
-redis = { version = "1", features = ["cluster-async", "connection-manager", "tokio-rustls-comp"] }
 regex = { version = "1" }
 regex-automata = { version = "0.4" }
 regex-syntax = { version = "0.8" }
 reqwest = { version = "0.13", features = ["form", "gzip", "hickory-dns", "json", "multipart", "query", "stream"] }
-rig-agent = { version = "0.41", features = ["test-utils"] }
-rig-core = { version = "0.41", features = ["test-utils"] }
-rmcp = { version = "1", features = ["auth", "client", "transport-streamable-http-client-reqwest", "transport-streamable-http-server"] }
 rsa = { version = "0.9", features = ["getrandom", "sha1"] }
 rust-embed-utils = { version = "8", default-features = false, features = ["debug-embed"] }
 rustc-hash = { version = "2" }

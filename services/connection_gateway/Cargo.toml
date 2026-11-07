@@ -29,20 +29,21 @@ path = "src/openapi.rs"
 local_auth = ["macro_authorization/local_auth"]
 
 [dependencies]
-agent_correlation = { path = "../../crates/agent_correlation", features = ["http", "postgres"] }
+agent_correlation = { workspace = true, features = ["http", "postgres"] }
 anyhow = { workspace = true }
 async-trait = { workspace = true }
 aws-sdk-dynamodb = { workspace = true }
 aws-sdk-secretsmanager = { workspace = true }
 axum = { workspace = true, features = ["macros", "tower-log", "ws"] }
 chrono = { workspace = true }
-connection_gateway_client = { path = "../../crates/connection_gateway_client" }
-connection_gateway_models = { path = "../../crates/connection_gateway_models" }
-cowlike = { path = "../../crates/cowlike" }
+connection_gateway_client = { workspace = true }
+connection_gateway_models = { workspace = true }
+cowlike = { workspace = true }
 dashmap = { workspace = true }
-ensure_exists = { path = "../../crates/ensure_exists", features = ["dynamodb"] }
-entity_access = { path = "../../crates/entity_access", default-features = false, features = ["outbound"] }
-frecency = { path = "../../crates/frecency", features = [
+ensure_exists = { workspace = true, features = ["dynamodb"] }
+entity_access = { workspace = true }
+entity_access_outbound = { workspace = true }
+frecency = { workspace = true, features = [
   "inbound",
   "outbound",
   "postgres",
@@ -50,35 +51,35 @@ frecency = { path = "../../crates/frecency", features = [
 futures = { workspace = true }
 http-body-util = { workspace = true }
 itertools = { workspace = true }
-last_online_tracker = { path = "../../crates/last_online_tracker" }
-macro_auth = { path = "../../crates/macro_auth" }
-macro_authorization = { path = "../../crates/macro_authorization", features = [
+last_online_tracker = { workspace = true }
+macro_auth = { workspace = true }
+macro_authorization = { workspace = true, default-features = true, features = [
   "postgres",
 ] }
-macro_user_id = { path = "../../crates/macro_user_id" }
-macro_aws_config = { path = "../../crates/macro_aws_config" }
-macro_config = { path = "../../crates/macro_config" }
-macro_entrypoint = { path = "../../crates/macro_entrypoint" }
-macro_env = { path = "../../crates/macro_env" }
-macro_env_var = { path = "../../crates/macro_env_var" }
-macro_tower_layers = { path = "../../crates/macro_tower_layers" }
+macro_user_id = { workspace = true }
+macro_aws_config = { workspace = true }
+macro_config = { workspace = true }
+macro_entrypoint = { workspace = true }
+macro_env = { workspace = true }
+macro_env_var = { workspace = true }
+macro_tower_layers = { workspace = true }
 postcard = { workspace = true }
-model = { path = "../../crates/model" }
-model-entity = { path = "../../crates/model-entity" }
-models_bulk_upload = { path = "../../crates/models_bulk_upload" }
+model = { workspace = true }
+model_entity = { workspace = true }
+models_bulk_upload = { workspace = true }
 opentelemetry = { workspace = true, features = ["trace"] }
 redis = { workspace = true, features = [
   "aio",
   "tokio-comp",
   "tokio-rustls-comp",
 ] }
-secretsmanager_client = { path = "../../crates/secretsmanager_client" }
+secretsmanager_client = { workspace = true }
 serde = { workspace = true }
 serde_dynamo = { workspace = true }
 serde_json = { workspace = true }
 sqlx = { workspace = true }
 strum = { workspace = true, features = ["derive"] }
-stream = { path = "../../crates/stream" }
+stream = { workspace = true }
 tokio = { workspace = true }
 tower = { workspace = true }
 tower-http = { workspace = true }
@@ -92,4 +93,4 @@ doppler-config = { workspace = true }
 
 [dev-dependencies]
 cool_asserts = "2"
-macro_auth = { path = "../../crates/macro_auth", features = ["testing"] }
+macro_auth = { workspace = true, features = ["testing"] }

@@ -6,7 +6,7 @@ use agent_correlation::domain::CorrelationRepository;
 use agent_egress::outbound::macro_mcp::MacroApiTokenSigner;
 use agent_inmem::domain::tool_gate::{NativeToolGate, NativeToolVerdict};
 use async_trait::async_trait;
-use code_execution::domain::{RunEnvironment, SdkEndpoints};
+use code_execution_core::{RunEnvironment, SdkEndpoints};
 use macro_user_id::user_id::MacroUserIdStr;
 use std::{collections::BTreeMap, sync::Arc};
 use tokio_util::sync::CancellationToken;
@@ -146,7 +146,21 @@ pub(crate) fn trace_headers() -> BTreeMap<String, String> {
 macro_env_var::env_var! { struct DocumentStorageServiceCloudfrontDistributionUrl; }
 
 pub fn sdk_endpoints() -> anyhow::Result<SdkEndpoints> {
-    use macro_service_urls::*;
+    use agent_harness_service_url::AgentHarnessServiceUrl;
+    use ai_editing_worker_url::AiEditingWorkerUrl;
+    use app_service_url::AppServiceUrl;
+    use auth_service_url::AuthServiceUrl;
+    use calendar_service_url::CalendarServiceUrl;
+    use connection_gateway_url::ConnectionGatewayUrl;
+    use contacts_service_url::ContactsServiceUrl;
+    use document_cognition_service_url::DocumentCognitionServiceUrl;
+    use document_storage_service_url::DocumentStorageServiceUrl;
+    use email_service_url::EmailServiceUrl;
+    use notification_service_url::NotificationServiceUrl;
+    use scheduled_action_service_url::ScheduledActionServiceUrl;
+    use static_file_public_url::StaticFilePublicUrl;
+    use static_file_service_url::StaticFileServiceUrl;
+    use unfurl_service_url::UnfurlServiceUrl;
     let storage = DocumentStorageServiceUrl::new()?.to_string();
     let hosts = [
         (

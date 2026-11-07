@@ -3383,7 +3383,7 @@
             }
           }
         ],
-        "description": "A structured part within an assistant message.\n\nWhen the model responds with tool calls the full turn is persisted as a\nflat sequence of these parts.  [`crate::convert::to_rig_messages`]\nreconstructs the turn boundaries that providers expect."
+        "description": "A structured part within an assistant message.\n\nWhen the model responds with tool calls the full turn is persisted as a\nflat sequence of these parts. `agent`'s `to_rig_messages` reconstructs the\nturn boundaries that providers expect."
       },
       "AttachmentMetadata": {
         "oneOf": [

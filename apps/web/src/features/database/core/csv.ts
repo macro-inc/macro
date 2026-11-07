@@ -23,7 +23,7 @@ export type DatabaseCsvFailure =
   | { kind: 'long-column-name'; column: number }
   | { kind: 'long-row'; row: number };
 
-// The import limits of `crates/databases/src/domain/service/transfer.rs`
+// The import limits of `crates/databases/databases/src/domain/service/transfer.rs`
 // (and `MAX_NAME_LEN` in `service.rs`), checked here before sending.
 const MEBIBYTE = 1024 * 1024;
 export const MAX_CSV_BYTES = 16 * MEBIBYTE;

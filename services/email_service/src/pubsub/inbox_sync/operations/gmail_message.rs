@@ -1,7 +1,7 @@
 use crate::pubsub::context::PubSubContext;
 use crate::pubsub::inbox_sync::email_api_error::handle_operation_error;
 use crate::util::process_pre_insert::sync_labels::sync_labels;
-use email_api_client::domain::models::{EmailApiError, SyncCursor};
+use email_api_client_core::models::{EmailApiError, SyncCursor};
 use models_email::email::service::backfill::BackfillJob;
 use models_email::email::service::backfill::{
     BackfillOperation, BackfillPubsubMessage, InitPayload, JobScopedPayload,

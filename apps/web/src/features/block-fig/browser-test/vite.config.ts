@@ -18,7 +18,7 @@ const corpusDirectory =
   process.env.FIG_CORPUS_DIR ??
   fileURLToPath(
     new URL(
-      '../../../../../../crates/fig_engine/tests/fixtures/',
+      '../../../../../../crates/engines/fig_engine/tests/fixtures/',
       import.meta.url
     )
   );
@@ -31,7 +31,7 @@ export default defineConfig({
     ),
     // The font the fixture's stand-in font sources serve.
     __FIG_FONT_URL__: JSON.stringify(
-      `/@fs${workspaceDirectory}crates/fig_engine/fonts/InterVariable.ttf`
+      `/@fs${workspaceDirectory}crates/engines/fig_engine/fonts/InterVariable.ttf`
     ),
   },
   cacheDir: `${directory}/.vite`,

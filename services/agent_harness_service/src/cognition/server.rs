@@ -11,15 +11,19 @@ use crate::cognition::{
 };
 use ai_tools::{NoOpCallRtcClient, NoOpConnectionService, NoOpNotificationIngress};
 use anyhow::Context;
+use app_service_url::AppServiceUrl;
+use auth_service_url::AuthServiceUrl;
 use bots::outbound::pg_bots_repo::PgBotsRepo;
+use calendar_service_url::CalendarServiceUrl;
 use call::domain::service::{CallRecordQueryServiceImpl, CallServiceImpl};
 use call::inbound::toolset::CallToolContext;
 use call::outbound::pg_call_repo::PgCallRepo;
 use call::outbound::s3_recording_storage::S3RecordingStorage;
-use channels::{
-    domain::list_service::ChannelListServiceImpl, outbound::pg_channels_repo::PgChannelsRepo,
-};
+use channels::domain::list_service::ChannelListServiceImpl;
+use channels_outbound::pg_channels_repo::PgChannelsRepo;
+use connection_gateway_url::ConnectionGatewayUrl;
 use document_storage_service_client::DocumentStorageServiceClient;
+use document_storage_service_url::DocumentStorageServiceUrl;
 use documents::{
     domain::{models::CloudFrontConfig, service::DocumentServiceImpl},
     inbound::toolset::DocumentToolContext,
@@ -29,7 +33,9 @@ use email::domain::ports::ReadonlyEmailPreviewAdapter;
 use email::domain::service::EmailServiceImpl;
 use email::outbound::EmailPgRepo;
 use email_service_client::{EmailServiceClient, EmailServiceClientExternal};
-use entity_access::{domain::service::EntityAccessServiceImpl, outbound::PgAccessRepository};
+use email_service_url::EmailServiceUrl;
+use entity_access::domain::service::EntityAccessServiceImpl;
+use entity_access_outbound::PgAccessRepository;
 use entity_registry::OwnerGrantPolicy;
 use entity_registry_db_utils::OwnedEntityRegistrar;
 use foreign_entity::{
@@ -42,24 +48,22 @@ use github_pull_requests::{
     domain::service::GithubPullRequestServiceImpl,
     outbound::pg_github_pull_request_repo::PgGithubPullRequestRepo,
 };
+use lexical_service_url::LexicalServiceUrl;
 use macro_auth::middleware::decode_jwt::JwtValidationArgs;
 use macro_authorization::{
     InternalAuthConfig, MacroAuthJwtValidator, MacroAuthorizationServiceImpl,
     MacroAuthorizationState, PgUserApiKeyAuthorizationRepo, PgUserApiKeyAuthorizer,
 };
-use macro_service_urls::{
-    AppServiceUrl, AuthServiceUrl, CalendarServiceUrl, ConnectionGatewayUrl,
-    DocumentStorageServiceUrl, EmailServiceUrl, LexicalServiceUrl, StaticFileServiceUrl,
-    SyncServiceUrl,
-};
 use notification::domain::service::{
     NotificationReaderService, PlatformArnConfig, SqsNotificationIngress,
 };
-use notification::outbound::queue::SqsQueue;
-use notification::outbound::repository::DbNotificationRepository;
-use notification::outbound::websocket::ConnectionGatewayClient;
+use notification_outbound::queue::SqsQueue;
+use notification_outbound::repository::DbNotificationRepository;
+use notification_outbound::websocket::ConnectionGatewayClient;
 use readonly_pool::ReadOnlyPool;
 use search_service_client::SearchServiceClient;
+use static_file_service_url::StaticFileServiceUrl;
+use sync_service_url::SyncServiceUrl;
 
 use std::sync::Arc;
 use stream::outbound::redis_pg::RedisPostgresStreamRepo;
@@ -103,7 +107,7 @@ pub async fn build(
     event_broker_tracker: TaskTracker,
     import_jobs: ai_tools::ImportJobs,
 ) -> anyhow::Result<CognitionRuntime> {
-    let public_url = macro_service_urls::CognitionPublicUrl::new()?;
+    let public_url = cognition_public_url::CognitionPublicUrl::new()?;
     let aws_config = macro_aws_config::get_macro_aws_config().await;
     let secretsmanager_client = secretsmanager_client::SecretsManager::new(
         aws_sdk_secretsmanager::Client::new(&aws_config),
@@ -237,7 +241,7 @@ pub async fn build(
         realtime: notification::domain::ports::NoopNotificationRealtimePublisher,
     };
     let notification_tool_context =
-        notification::inbound::ai_tool::NotificationToolContext::new(notification_reader_service);
+        notification_inbound::ai_tool::NotificationToolContext::new(notification_reader_service);
 
     tracing::info!("initialized notification ingress service");
     let entity_access_service = Arc::new(EntityAccessServiceImpl::new(PgAccessRepository::new(
@@ -251,7 +255,7 @@ pub async fn build(
         crm::outbound::no_op_resolver::NoOpCompanyMetadataResolver,
     );
     let email_service = EmailServiceImpl::new(
-        EmailPgRepo::new(db.clone()),
+        EmailPgRepo::new(db.clone(), Arc::new(PgAccessRepository::new(db.clone()))),
         frecency_service.clone(),
         email::domain::ports::NoOpEnqueuer,
         crm_service.clone(),
@@ -277,7 +281,12 @@ pub async fn build(
             frecency_service,
             ReadonlyEmailPreviewAdapter(email_service),
             channels_service,
-            CallRecordQueryServiceImpl::new(PgCallRepo::new(db.clone())),
+            CallRecordQueryServiceImpl::new(PgCallRepo::new(
+                db.clone(),
+                std::sync::Arc::new(channels_outbound::channel_name::PgChannelNames::new(
+                    db.clone(),
+                )),
+            )),
             crm::domain::service::NoOpCrmService,
             github_pull_request_service,
         )
@@ -412,7 +421,7 @@ pub async fn build(
             )),
             entity_access_service.clone(),
         ),
-        channel: channels::inbound::attachment::ChannelAttachmentService::new(
+        channel: channels_inbound::attachment::ChannelAttachmentService::new(
             Arc::new(PgChannelsRepo::new(db.clone())),
             entity_access_service.clone(),
         ),
@@ -445,7 +454,7 @@ pub async fn build(
 
     let user_email_service = Arc::new(
         EmailServiceImpl::new(
-            EmailPgRepo::new(db.clone()),
+            EmailPgRepo::new(db.clone(), Arc::new(PgAccessRepository::new(db.clone()))),
             FrecencyQueryServiceImpl::new(FrecencyPgStorage::new(db.clone())),
             sqs_client.clone(),
             crm_service.clone(),
@@ -467,7 +476,7 @@ pub async fn build(
     .with_attachment_sender(
         ai_tools::email_attachments::build_email_attachment_sender(
             user_email_service.clone(),
-            EmailPgRepo::new(db.clone()),
+            EmailPgRepo::new(db.clone(), Arc::new(PgAccessRepository::new(db.clone()))),
             document_tool_context.service.clone(),
         )
         .await,
@@ -476,7 +485,12 @@ pub async fn build(
     tracing::info!("initialized email tool context");
 
     let call_service = CallServiceImpl::new(
-        PgCallRepo::new(db.clone()),
+        PgCallRepo::new(
+            db.clone(),
+            std::sync::Arc::new(channels_outbound::channel_name::PgChannelNames::new(
+                db.clone(),
+            )),
+        ),
         NoOpCallRtcClient,
         NoOpConnectionService,
         (*entity_access_service).clone(),
@@ -853,11 +867,11 @@ pub async fn build(
         Some(channels_connection_gateway.as_ref().clone()),
         ai_tools::MaybeToolEventBroker::Real(macro_event_broker.clone()),
         ai_tools::FormsToolConfig {
-            app_origin: macro_service_urls::AppServiceUrl::new()?.to_string(),
+            app_origin: app_service_url::AppServiceUrl::new()?.to_string(),
             editing_worker_url: config.ai_editing_worker_url.clone(),
             static_files: static_file_service_client::StaticFileServiceClient::new(
                 internal_api_key.clone(),
-                macro_service_urls::StaticFileServiceUrl::new()?.to_string(),
+                static_file_service_url::StaticFileServiceUrl::new()?.to_string(),
             ),
         },
     );
@@ -931,7 +945,7 @@ pub async fn build(
             entity_access_service.clone(),
         ),
         coding_agent_tool_context: ai_tools::build_coding_agent_tool_context(
-            macro_service_urls::AgentHarnessServiceUrl::new()?,
+            agent_harness_service_url::AgentHarnessServiceUrl::new()?,
             internal_api_key.clone(),
         )?,
         project_tool_context,
@@ -983,7 +997,7 @@ pub async fn build(
     // Generator that materializes projections by running their prompt through
     // the shared AI toolset, attributed to the requesting user.
     let projection_generator =
-        ai_projections::outbound::agent_generator::AgentProjectionGenerator::new(
+        crate::cognition::service::projection_generator::AgentProjectionGenerator::new(
             tool_service_context.clone(),
             ai_tools::tools_for(ai_tools::AiHost::Chat),
         );
@@ -1119,7 +1133,7 @@ pub async fn build(
         event_broker_tracker.clone(),
     );
     if !matches!(config.environment, Environment::Local) {
-        memory::schedule::start(
+        super::memory_schedule::start(
             memory_service.clone(),
             &event_broker_tracker,
             cancellation.clone(),

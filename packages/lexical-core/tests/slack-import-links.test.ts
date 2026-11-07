@@ -11,7 +11,7 @@ import {
   type LexicalNode,
 } from 'lexical';
 import { describe, expect, it } from 'vitest';
-import fixtures from '../../../crates/slack_integration/tests/fixtures/native-message-links.json';
+import fixtures from '../../../crates/comms/slack_integration/tests/fixtures/native-message-links.json';
 import { SupportedNodeTypes } from '../node-list';
 import { INTERNAL_TRANSFORMERS } from '../transformers';
 

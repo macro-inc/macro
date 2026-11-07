@@ -1,7 +1,7 @@
 #![recursion_limit = "256"]
 //! Composition root for the agent harness service.
 //!
-//! The hexagon lives in `crates/agent_harness`; this binary is the shell
+//! The hexagon lives in `crates/agents/agent_harness`; this binary is the shell
 //! around it: it builds the Postgres repositories, the container
 //! manager (Daytona, or local Docker when opted in), and a channel service with the full side-effect stack for
 //! announcements, derives agent triggers from `macro.channels`, then drives
@@ -88,6 +88,7 @@ use agent_harness::outbound::runtime_registry::{HarnessKeyedConnections, Runtime
 use agent_harness::outbound::tool_approvals::{
     ReleaseHeldCallsOnTurnEnd, SessionToolApprovalAnnouncer,
 };
+use agent_harness_egress_url::AgentHarnessEgressUrl;
 use agent_inmem::domain::engine::TurnEngine;
 use agent_inmem::outbound::acp_mcp::AcpMcpConnector;
 use agent_inmem::outbound::egress_mcp::EgressMcpClient;
@@ -115,14 +116,15 @@ use bot_id::BotId;
 use bots::outbound::pg_bots_repo::PgBotsRepo;
 use bots_directory::PgBotDirectory;
 use channels::domain::side_effects::{ChannelSideEffectService, SpawnedChannelEventDispatcher};
-use channels::outbound::connection_gateway_realtime::ConnectionGatewayChannelRealtimePublisher;
-use channels::outbound::contacts_dispatcher::ContactsChannelDispatcher;
-use channels::outbound::notification_sender::NotificationChannelSender;
-use channels::outbound::pg_channels_repo::PgChannelsRepo;
-use channels::outbound::pg_side_effect_context::PgChannelSideEffectContext;
+use channels_outbound::connection_gateway_realtime::ConnectionGatewayChannelRealtimePublisher;
+use channels_outbound::contacts_dispatcher::ContactsChannelDispatcher;
+use channels_outbound::notification_sender::NotificationChannelSender;
+use channels_outbound::pg_channels_repo::PgChannelsRepo;
+use channels_outbound::pg_side_effect_context::PgChannelSideEffectContext;
 use coding_agent::PgCodingAgentSource;
 use config::{Config, Environment};
 use connection_gateway_client::ConnectionGatewayClient;
+use connection_gateway_url::ConnectionGatewayUrl;
 use containers::{InMemRuntime, RoutedContainers};
 use cursor_api_key::cipher::{AwsKmsCiphertexts, KmsCursorApiKeyCipher};
 use cursor_cloud_agents::api::cursor_api_base_url;
@@ -141,6 +143,7 @@ use harness_bindings::{PgHarnessBindings, PgHarnessPresence, RUNTIME_CONNECTION_
 use harnesses::outbound::pg_harness_repo::PgHarnessRepo;
 use kafka_util::{GroupName, KafkaEventConsumer, consumer_span, record_span_error};
 use lexical_client::LexicalClient;
+use lexical_service_url::LexicalServiceUrl;
 use macro_auth::middleware::decode_jwt::JwtValidationArgs;
 use macro_authorization::{
     InternalAuthConfig, MacroAuthJwtValidator, MacroAuthorizationServiceImpl,
@@ -152,13 +155,10 @@ use macro_event_broker::{
     KafkaConsumerAdapter, KafkaEventPublisher, MacroEvent as _, MacroEventBrokerService,
     MacroEventCollection as _, MacroEventConsumerService,
 };
-use macro_service_urls::{
-    AgentHarnessEgressUrl, ConnectionGatewayUrl, LexicalServiceUrl, McpServiceUrl,
-    StaticFilePublicUrl, StaticFileServiceUrl,
-};
 use mcp_client::domain::models::AesKey;
 use mcp_client::outbound::NativeServerStore;
 use mcp_client::outbound::pg_server_repo::PgServerRepo;
+use mcp_service_url::McpServiceUrl;
 use model_providers::{CursorModels, InMemoryModels, MacrodModels, VisibleHarnessAccess};
 use permission_policy::PgPermissionPolicySource;
 use pipedream_mcp::outbound::api::{PipedreamClient, PipedreamConfig};
@@ -167,6 +167,8 @@ use pipedream_mcp::outbound::pg_connection_repo::PgConnectionRepo;
 use rdkafka::consumer::CommitMode;
 use rdkafka::message::{BorrowedMessage, Message as _};
 use sqlx::postgres::PgPoolOptions;
+use static_file_public_url::StaticFilePublicUrl;
+use static_file_service_url::StaticFileServiceUrl;
 use tokio_retry::{Retry, strategy::FixedInterval};
 use tracing::Instrument as _;
 
@@ -296,7 +298,7 @@ async fn run() -> anyhow::Result<()> {
     session_list_policy.reconcile(&session_repo).await?;
     let entity_access = Arc::new(
         entity_access::domain::service::EntityAccessServiceImpl::new(
-            entity_access::outbound::PgAccessRepository::new(pool.clone()),
+            entity_access_outbound::PgAccessRepository::new(pool.clone()),
         ),
     );
     // Frames reach the owner plus whoever currently holds session access,
@@ -326,25 +328,26 @@ async fn run() -> anyhow::Result<()> {
     // Registered work viewers hear session changes as Soup patches, which the GraphQL process
     // already streams to each of them. Signals run off the publishing task.
     let work_registration_signal =
-        soup_realtime::outbound::agent_sessions::SoupWorkRegistrationSignal(Arc::new(
-            soup_realtime::domain::service::SoupRealtimeServiceImpl::new(
-                soup_realtime::outbound::entity_access::EntityAccessExpander::new(
+        soup_realtime_outbound::agent_sessions::SoupWorkRegistrationSignal(Arc::new(
+            soup_realtime_core::service::SoupRealtimeServiceImpl::new(
+                soup_realtime_outbound::entity_access::EntityAccessExpander::new(
                     (*entity_access).clone(),
                 ),
-                soup_realtime::outbound::kafka_publisher::KafkaSoupRealtimePublisher::new(
+                soup_realtime_outbound::kafka_publisher::KafkaSoupRealtimePublisher::new(
                     broker.clone(),
                 ),
             ),
         ));
     let work_registration_tasks = tokio_util::task::TaskTracker::new();
     let notifications = Arc::new(notification::domain::service::SqsNotificationIngress {
-        queue: notification::outbound::queue::SqsQueue::new(
+        queue: notification_outbound::queue::SqsQueue::new(
             aws_sdk_sqs::Client::new(&aws_config),
             macro_queues::NotificationIngressQueue::new().to_string(),
         ),
     });
     let admission = ai_billing::composition::pg_admission_service(
         pool.clone(),
+        teams::outbound::team_repo::TeamRepositoryImpl::new(pool.clone()),
         config.enable_ai_usage_enforcement,
         config.ai_pricing(),
     );
@@ -356,6 +359,7 @@ async fn run() -> anyhow::Result<()> {
     // Billing page view.
     let recorder = ai_billing::composition::pg_settling_recorder(
         pool.clone(),
+        teams::outbound::team_repo::TeamRepositoryImpl::new(pool.clone()),
         config.enable_ai_usage_enforcement,
         config.ai_pricing(),
         config.settlement_route()?,
@@ -603,7 +607,7 @@ async fn run() -> anyhow::Result<()> {
         .with_preview_mcp(
             url::Url::parse(&format!(
                 "{}/mcp",
-                macro_service_urls::PreviewGatewayUrl::new()?
+                preview_gateway_url::PreviewGatewayUrl::new()?
             ))?,
             matches!(config.environment, Environment::Local),
         )?
@@ -644,19 +648,19 @@ async fn run() -> anyhow::Result<()> {
     let code_scratch = tempfile::tempdir()?;
     let code_runner = match &config.deno_binary {
         Some(binary) => {
-            let runner = code_execution::outbound::deno::DenoRunner::new(
+            let runner = code_execution_outbound::deno::DenoRunner::new(
                 binary.into(),
                 code_scratch.path().to_owned(),
                 128,
             )
             .await
             .map_err(|error| anyhow::anyhow!("invalid Deno runtime: {error}"))?;
-            let runner: Arc<dyn code_execution::domain::CodeRunner> = Arc::new(runner);
+            let runner: Arc<dyn code_execution_core::CodeRunner> = Arc::new(runner);
             // Public MCP runs get their own admission budget so external
             // clients cannot exhaust the slots agent sessions rely on.
-            let public = code_execution::domain::ExecutionService::new(
+            let public = code_execution_core::ExecutionService::new(
                 Arc::clone(&runner),
-                code_execution::domain::Limits {
+                code_execution_core::Limits {
                     max_running: 4,
                     max_queued: 8,
                     ..Default::default()
@@ -664,9 +668,9 @@ async fn run() -> anyhow::Result<()> {
             )?;
             // Routines get their own budget too, below the host's priority and
             // with a CPU limit, so unattended code can't crowd out sessions.
-            let routines = code_execution::domain::ExecutionService::new(
+            let routines = code_execution_core::ExecutionService::new(
                 Arc::clone(&runner),
-                code_execution::domain::Limits {
+                code_execution_core::Limits {
                     max_running: ROUTINE_CODE_SLOTS,
                     max_queued: 16,
                     max_cpu: Some(std::time::Duration::from_secs(10)),
@@ -674,18 +678,18 @@ async fn run() -> anyhow::Result<()> {
                     ..Default::default()
                 },
             )?;
-            let checker = code_execution::outbound::deno::check::DenoChecker::new(
+            let checker = code_execution_outbound::deno::check::DenoChecker::new(
                 binary.into(),
                 code_scratch.path().join("checks"),
                 2,
-                code_execution::domain::Limits::default().max_source_bytes,
+                code_execution_core::Limits::default().max_source_bytes,
             )
             .await
             .map_err(|error| anyhow::anyhow!("invalid Deno type checker: {error}"))?;
             Some((
-                code_execution::domain::ExecutionService::new(
+                code_execution_core::ExecutionService::new(
                     runner,
-                    code_execution::domain::Limits::default(),
+                    code_execution_core::Limits::default(),
                 )?,
                 public,
                 routines,
@@ -699,7 +703,7 @@ async fn run() -> anyhow::Result<()> {
         Some((_, _, routines, checker)) => Some(
             routine_code::SdkRoutineCode::new(
                 Arc::new(routines.clone()),
-                Arc::clone(checker) as Arc<dyn code_execution::domain::ProgramChecker>,
+                Arc::clone(checker) as Arc<dyn code_execution_core::ProgramChecker>,
                 MacroApiTokenSigner::new(
                     pool.clone(),
                     config.macro_api_token_issuer.as_ref(),
@@ -815,7 +819,7 @@ async fn run() -> anyhow::Result<()> {
         ),
     );
     let code_executor = code_runner.as_ref().map(|(runner, _, _, _)| {
-        Arc::new(runner.clone()) as Arc<dyn code_execution::domain::ProgramExecutor>
+        Arc::new(runner.clone()) as Arc<dyn code_execution_core::ProgramExecutor>
     });
     let code_mode_enabled = code_executor.is_some();
     let execution_store: Arc<dyn agent_code_mode::domain::ExecutionStore> = Arc::new(
@@ -890,7 +894,7 @@ async fn run() -> anyhow::Result<()> {
                 )),
             ),
             session_metadata_realtime.clone(),
-            macro_service_urls::AppServiceUrl::new()?.as_ref(),
+            app_service_url::AppServiceUrl::new()?.as_ref(),
         ),
     );
     let session_pull_requests: Arc<dyn agent_session::domain::pull_request::SessionPullRequests> =
@@ -917,7 +921,7 @@ async fn run() -> anyhow::Result<()> {
             cognition: tool_context.cognition_tool_context.service.clone(),
             reviews: reviews_cell.clone(),
             gate: owner_tool_gate.clone(),
-            app_url: macro_service_urls::AppServiceUrl::new()?.as_str().into(),
+            app_url: app_service_url::AppServiceUrl::new()?.as_str().into(),
         },
     );
     // One connector for the agent and the telemetry catalog. It pools each
@@ -993,7 +997,10 @@ async fn run() -> anyhow::Result<()> {
                 aws_sdk_kms::Client::new(&aws_config),
             )),
             agent_api_keys::outbound::EntitlementKeyPlans::new(
-                ai_billing::composition::pg_entitlement_source(pool.clone()),
+                ai_billing::composition::pg_entitlement_source(
+                    pool.clone(),
+                    teams::outbound::team_repo::TeamRepositoryImpl::new(pool.clone()),
+                ),
             ),
         ));
     let inmem = InMemRuntime {
@@ -1083,7 +1090,7 @@ async fn run() -> anyhow::Result<()> {
         cursor_cloud_agents::outbound::static_file_artifacts::StaticFileArtifactStore::new(
             static_file_service_client::StaticFileServiceClient::new(
                 config.internal_api_key.clone(),
-                macro_service_urls::StaticFileServiceUrl::new()?.to_string(),
+                static_file_service_url::StaticFileServiceUrl::new()?.to_string(),
             ),
         ),
     )
@@ -1235,12 +1242,12 @@ async fn run() -> anyhow::Result<()> {
         channels::domain::message_delivery::ChannelMessageDelivery::new(
             PgChannelsRepo::new(pool.clone()),
             SpawnedChannelEventDispatcher::new(side_effects),
-            channels::outbound::pg_channel_reference_share_permissions::PgChannelReferenceSharePermissions::new(
+            channels_outbound::pg_channel_reference_share_permissions::PgChannelReferenceSharePermissions::new(
                 pool.clone(),
                 entity_access.clone(),
             ),
             message_realtime.clone(),
-            channels::outbound::pg_agent_creations::PgAgentCreations::new(
+            channels_outbound::pg_agent_creations::PgAgentCreations::new(
                 pool.clone(),
             ),
         ),

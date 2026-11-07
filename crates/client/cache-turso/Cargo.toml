@@ -9,14 +9,14 @@ default = []
 browser-test-hooks = []
 
 [dependencies]
-cache-core = { path = "../cache-core" }
-maybe_send = { path = "../../maybe_send" }
-predicate-index = { path = "../../predicate_index" }
+cache-core = { workspace = true }
+maybe_send = { workspace = true }
+predicate-index = { workspace = true }
 thiserror = { workspace = true }
 uuid = { workspace = true }
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
-turso-opfs = { path = "../turso-opfs" }
+turso-opfs = { workspace = true }
 turso_core = { workspace = true, features = ["fs", "pure-rust-crypto", "uuid"] }
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]

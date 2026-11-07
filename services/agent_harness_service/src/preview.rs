@@ -18,12 +18,12 @@ use axum::{
     response::{IntoResponse, Response},
 };
 use config::Config;
+use connection_gateway_url::ConnectionGatewayUrl;
 use macro_authorization::{
     InternalAuthConfig, MacroAuthJwtValidator, MacroAuthorizationServiceImpl,
     MacroAuthorizationState, PgBotAuthorizationRepo, PgBotAuthorizer,
     PgUserApiKeyAuthorizationRepo, PgUserApiKeyAuthorizer,
 };
-use macro_service_urls::ConnectionGatewayUrl;
 use std::{sync::Arc, time::Duration};
 use tokio::net::TcpListener;
 
@@ -34,8 +34,8 @@ pub async fn build(
     shutdown: tokio_util::sync::CancellationToken,
     tasks: tokio_util::task::TaskTracker,
 ) -> Result<Router, rootcause::Report> {
-    let app_url = macro_service_urls::AppServiceUrl::new()?;
-    let control_url = macro_service_urls::PreviewGatewayUrl::new()?;
+    let app_url = app_service_url::AppServiceUrl::new()?;
+    let control_url = preview_gateway_url::PreviewGatewayUrl::new()?;
     let mut allowed_hosts = Vec::new();
     let mut control_urls = vec![control_url.parse_url()?];
     if matches!(config.environment, macro_env::Environment::Local) {
@@ -55,7 +55,7 @@ pub async fn build(
         secretsmanager_client::SecretsManager::new(aws_sdk_secretsmanager::Client::new(&aws));
     let access = Arc::new(
         entity_access::domain::service::EntityAccessServiceImpl::new(
-            entity_access::outbound::PgAccessRepository::new(pool.clone()),
+            entity_access_outbound::PgAccessRepository::new(pool.clone()),
         ),
     );
     let auth = MacroAuthorizationServiceImpl::new(

@@ -1,0 +1,49 @@
+[package]
+edition = "2024"
+name = "notification"
+publish = false
+version = "0.1.0"
+
+
+[features]
+# The JsonSchema derives the AI tool in `notification_inbound` reads.
+ai_tool = ["dep:schemars", "notification_state/schema"]
+clear_ios_push = []
+docs = ["dep:aquamarine"]
+schema = ["dep:utoipa", "macro_user_id/schema", "notification_state/schema"]
+
+[dependencies]
+aquamarine = { version = "0.6", optional = true }
+broadcast = { workspace = true }
+chrono = { workspace = true }
+cowlike = { workspace = true }
+either = { workspace = true }
+futures = { workspace = true }
+hex = { workspace = true }
+hmac = { workspace = true }
+itertools = { workspace = true }
+macro_event_broker = { workspace = true }
+macro_event_topics = { workspace = true }
+macro_user_id = { workspace = true }
+model_entity = { workspace = true }
+models_pagination = { workspace = true }
+notification_state = { workspace = true }
+rate_limit = { workspace = true }
+rootcause = { workspace = true }
+schemars = { workspace = true, optional = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+sha2 = { workspace = true }
+strum = { workspace = true }
+thiserror = { workspace = true }
+tokio = { workspace = true, features = ["time"] }
+tokio-retry = { workspace = true }
+tracing = { workspace = true }
+url = { workspace = true }
+utoipa = { workspace = true, optional = true }
+uuid = { workspace = true }
+workspace-hack = { version = "0.1", path = "../../workspace-hack" }
+
+[dev-dependencies]
+rate_limit = { workspace = true, features = ["testing"] }
+tokio = { workspace = true, features = ["macros", "rt", "test-util"] }

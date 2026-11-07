@@ -4,7 +4,7 @@ import { createTask } from './create';
 
 /**
  * Maximum task name length in grapheme clusters, matching the backend validation
- * in crates/documents/src/domain/service.rs (limit: 100).
+ * in crates/documents/documents/src/domain/service.rs (limit: 100).
  * Small buffer accounts for possible Unicode version differences between
  * JS Intl.Segmenter and Rust's unicode-segmentation crate.
  */

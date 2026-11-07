@@ -22,25 +22,25 @@ use agent_trigger::outbound::{
 };
 use anyhow::Context as _;
 use bots::outbound::pg_bots_repo::PgBotsRepo;
-use channels::outbound::pg_channels_repo::PgChannelsRepo;
+use channels_outbound::pg_channels_repo::PgChannelsRepo;
 use config::Config;
 use connection_gateway_client::client::ConnectionGatewayClient;
+use connection_gateway_url::ConnectionGatewayUrl;
 use document_storage_service_client::DocumentStorageServiceClient;
+use document_storage_service_url::DocumentStorageServiceUrl;
 use entity_access::domain::{ports::EntityAccessService, service::EntityAccessServiceImpl};
-use entity_access::outbound::PgAccessRepository;
+use entity_access_outbound::PgAccessRepository;
 use entity_registry::OwnerGrantPolicy;
 use entity_registry_db_utils::OwnedEntityRegistrar;
 use jev::domain::JevClassifier;
 use jev::outbound::SystemOneJev;
 use kafka_util::{GroupName, InitialOffset, KafkaEventConsumer, consumer_span, record_span_error};
 use lexical_client::LexicalClient;
+use lexical_service_url::LexicalServiceUrl;
 use macro_entrypoint::{MacroEntrypoint, shutdown_signal};
 use macro_event_broker::{
     KafkaConsumerAdapter, KafkaEventPublisher, MacroEventBrokerService, MacroEventCollection,
     MacroEventConsumerService,
-};
-use macro_service_urls::{
-    ConnectionGatewayUrl, DocumentStorageServiceUrl, LexicalServiceUrl, StaticFileServiceUrl,
 };
 use messages::domain::api::MessageCommands;
 use messages::outbound::pg_message_repo::PgMessageRepository;
@@ -50,6 +50,7 @@ use properties::{
 use rdkafka::consumer::CommitMode;
 use rdkafka::message::{BorrowedMessage, Message as _};
 use sqlx::postgres::PgPoolOptions;
+use static_file_service_url::StaticFileServiceUrl;
 use std::sync::Arc;
 use system_properties::{
     PgSystemPropertiesRepository, SystemPropertiesService, SystemPropertiesServiceImpl,
@@ -75,7 +76,7 @@ type Trigger = AgentTriggerService<
     Option<JevTriggerJudge<JevClassifier<SystemOneJev>>>,
     MessageThreadHistory<
         entity_access::domain::service::EntityAccessServiceImpl<
-            entity_access::outbound::PgAccessRepository,
+            entity_access_outbound::PgAccessRepository,
         >,
     >,
 >;
@@ -144,6 +145,7 @@ async fn run() -> anyhow::Result<()> {
         ai_usage::pg_recorder_with_enforcement(pool.clone(), config.enable_ai_usage_enforcement);
     let admission = ai_billing::composition::pg_admission_service(
         pool.clone(),
+        teams::outbound::team_repo::TeamRepositoryImpl::new(pool.clone()),
         config.enable_ai_usage_enforcement,
         config.ai_pricing(),
     );
@@ -191,7 +193,12 @@ async fn run() -> anyhow::Result<()> {
                 initiative::outbound::PgInitiativeRepo::new(pool.clone()),
             ),
             crm::outbound::lookup::PgCrmParentReader::new(pool.clone()),
-            call::outbound::pg_call_repo::PgCallRepo::new(pool.clone()),
+            call::outbound::pg_call_repo::PgCallRepo::new(
+                pool.clone(),
+                std::sync::Arc::new(channels_outbound::channel_name::PgChannelNames::new(
+                    pool.clone(),
+                )),
+            ),
         ),
         lexical.clone(),
     );
@@ -219,7 +226,7 @@ async fn run() -> anyhow::Result<()> {
         MessageThreadHistory::new(
             message_reader,
             entity_access::domain::service::EntityAccessServiceImpl::new(
-                entity_access::outbound::PgAccessRepository::new(pool.clone()),
+                entity_access_outbound::PgAccessRepository::new(pool.clone()),
             ),
         ),
     )
@@ -248,7 +255,7 @@ async fn run() -> anyhow::Result<()> {
         messages::outbound::pg_discussion_context::PgDiscussionContext(pool.clone()),
         messages::outbound::entity_access_audience::EntityAccessMessageAudience(
             entity_access::domain::service::EntityAccessServiceImpl::new(
-                entity_access::outbound::PgAccessRepository::new(pool.clone()),
+                entity_access_outbound::PgAccessRepository::new(pool.clone()),
             ),
         ),
         messages::outbound::connection_gateway::ConnectionGatewayMessages(Arc::new(

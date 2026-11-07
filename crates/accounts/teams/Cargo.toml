@@ -1,0 +1,120 @@
+[package]
+edition = "2024"
+name = "teams"
+publish = false
+version = "0.1.0"
+
+[features]
+# Serves the AI billing domain's TeamSeats port from TeamRepositoryImpl and
+# teams' OpenSeatRelease port from the billing service. Composition roots
+# enable it; neither domain depends on the other otherwise.
+ai_billing = ["dep:ai_billing", "outbound"]
+ai_tools = [
+  "dep:ai_toolset",
+  "dep:async-trait",
+  "dep:schemars",
+  "entity_access/ports",
+  "ports",
+]
+axum = [
+  "dep:axum",
+  "dep:macro_authorization",
+  "dep:model_error_response",
+  "dep:utoipa",
+  "entity_access/axum",
+  "entity_access/inbound",
+  "entity_access/ports",
+]
+default = ["ai_tools", "axum", "inbound", "outbound", "ports"]
+inbound = ["axum", "ports"]
+outbound = [
+  "model_user/sqlx",
+  "dep:analytics_client",
+  "dep:contacts_core",
+  "dep:entity_access_db_utils",
+  "dep:models_email",
+  "dep:sqlx",
+  "dep:sqs_client",
+  "dep:url",
+  "ports",
+]
+ports = [
+  "dep:model_entity",
+  "dep:model_notifications",
+  "dep:notification",
+  "dep:tokio",
+]
+
+[dependencies]
+ai_billing = { workspace = true, optional = true }
+# Core
+ai_toolset = { workspace = true, optional = true }
+anyhow = { workspace = true }
+async-stripe = { workspace = true, default-features = false, features = [
+  "billing",
+  "checkout",
+  "runtime-tokio-hyper",
+] }
+async-trait = { workspace = true, optional = true }
+bot_id = { workspace = true }
+chrono = { workspace = true }
+macro_authorization = { workspace = true, optional = true, features = [
+  "axum",
+] }
+macro_event_broker = { workspace = true }
+macro_event_topics = { workspace = true }
+macro_user_id = { workspace = true }
+macro_uuid = { workspace = true }
+model_owner = { workspace = true }
+models_permissions = { workspace = true }
+non_empty = { workspace = true }
+roles_and_permissions = { workspace = true, features = [
+  "ports",
+] }
+rootcause = { workspace = true }
+schemars = { workspace = true, optional = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+shared_entity_registry = { workspace = true }
+thiserror = { workspace = true }
+tracing = { workspace = true }
+uuid = { workspace = true }
+
+entity_access = { workspace = true }
+generic_email_domains = { workspace = true }
+
+# Async runtime (for ports)
+tokio = { workspace = true, optional = true }
+
+# Axum dependencies (for inbound)
+axum = { workspace = true, optional = true }
+model_error_response = { workspace = true, optional = true }
+model_user = { workspace = true }
+utoipa = { workspace = true, optional = true }
+
+# Notification dependencies (for ports)
+model_entity = { workspace = true, optional = true }
+model_notifications = { workspace = true, optional = true }
+notification = { workspace = true, optional = true }
+
+# Outbound dependencies
+analytics_client = { workspace = true, optional = true }
+entity_access_db_utils = { workspace = true, optional = true }
+models_email = { workspace = true, optional = true }
+sqlx = { workspace = true, optional = true }
+sqs_client = { workspace = true, features = [
+  "email",
+], optional = true }
+url = { workspace = true, optional = true }
+workspace-hack = { version = "0.1", path = "../../workspace-hack" }
+team_id = { workspace = true }
+contacts_core = { workspace = true, optional = true }
+
+[dev-dependencies]
+roles_and_permissions = { workspace = true, features = [
+  "outbound",
+] }
+wiremock = { workspace = true }
+macro_db_migrator = { workspace = true }
+tokio = { workspace = true }
+tower = { workspace = true }

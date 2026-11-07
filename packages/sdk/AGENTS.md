@@ -85,7 +85,7 @@ enforced by the ordinary backend APIs.
   shows one inline. It must match lexical-core's `I_IMAGE_CONSTRAINED`
   (pinned in `lexical-core/tests/generated-image.test.ts`).
 - `src/entities/web/`: `macro.web.search()` / `macro.web.fetch()` (cognition
-  `POST /web/search`, `/web/fetch`, Tavily via `crates/web_search`), admitted and
+  `POST /web/search`, `/web/fetch`, Tavily via `crates/ai/web_search`), admitted and
   metered against the user's AI allowance; code mode hides the `WebSearch` /
   `WebFetch` tools in their favour.
 - `src/entities/bots/`: `macro.bots` manages bots (`Bot`: profile, channel
@@ -136,7 +136,7 @@ the existing gateway prefixes.
   not …") that agents route on, and may carry an `@agent` block: how that area
   of Macro works, for agents only. Both are stripped from the public
   reference, and code-mode generation fails without the routing sentence. Put
-  an area's rules there, never in `crates/prompt`; cross-namespace search
+  an area's rules there, never in `crates/agents/prompt`; cross-namespace search
   guidance lives on `SearchNamespace` in `search/namespace.ts`.
 - Code mode puts each relevant entity's index in the agent turn, at most 48
   KiB: a method's signature and the first sentence of its doc, cut at 160
@@ -162,7 +162,7 @@ the existing gateway prefixes.
 - Run `bun run generate` to regenerate SDK clients and normalize whitespace-only
   lines; do not hand-edit generated output to satisfy whitespace checks.
 - The SDK reference (`../sdk-docs`) and the code-mode bundle and documentation
-  (`crates/code_mode_assets`) are generated from this source at build time and
+  (`crates/agents/code_mode_assets`) are generated from this source at build time and
   never committed; run `bun run test` in `../sdk-docs` and `../code-mode-sdk`
   after changing public API or comments.
 - `generated/agent-fold/` is not from OpenAPI: `cargo run -p agent_fold --bin

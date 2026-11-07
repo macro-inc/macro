@@ -1,0 +1,846 @@
+/// The main entry point: [`AgentLoop`] and [`Session`].
+use crate::error::AgentError;
+use crate::hook::{BridgeInputs, RegisterFn, ToolLoads, ToolRouter, UserToolFinisher};
+use crate::model::metering::MeteringContext;
+use crate::model::metering_http::MeteredHttpClient;
+use crate::model::router::{ModelRouter, ProviderAgent};
+use crate::model::types::Model;
+use crate::model::{ModelSpeed, PredefinedModel, ReasoningEffort};
+use crate::stream::ChatCompletionStream;
+use crate::telemetry::GenAiContext;
+use crate::tool_adapter::DynToolSetAdapter;
+use crate::tool_result_limit::ToolResultLimit;
+use ai_toolset::tool_search::tools_loaded_by;
+use ai_toolset::{RequestContext, SearchableTool, ToolLoader, ToolSet as AiToolSet};
+use ai_usage::{UsageContext, UsageRecorder};
+use genai_telemetry::ContentPolicy;
+use rig_agent::tool::server::{ToolServer, ToolServerHandle};
+use rig_core::message::{AssistantContent, Message, ToolResultContent, UserContent};
+use std::collections::HashMap;
+use std::future::Future;
+use std::pin::Pin;
+use std::sync::{Arc, Mutex, RwLock};
+use tokio_util::sync::CancellationToken;
+use tracing::Instrument as _;
+
+const DEFAULT_MAX_TURNS: usize = 200;
+
+/// A session's system prompt, optionally split where the part every session
+/// of the agent repeats byte for byte ends, with an optional tail that
+/// changes every turn.
+///
+/// Anthropic caches the shared part apart from the per-session rest
+/// (instructions, memory), so a session reads the shared part back even when
+/// its rest is new. The turn's part comes last, after anything the loop adds
+/// (the model id, connected integrations), so a change to it costs only what
+/// follows it. Other providers receive the parts joined.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SystemPrompt {
+    shared: Option<String>,
+    rest: String,
+    turn: String,
+}
+
+impl SystemPrompt {
+    /// A prompt whose leading `shared` part is the same for every session of
+    /// the agent and whose `rest` is the session's own.
+    pub fn split(shared: impl Into<String>, rest: impl Into<String>) -> Self {
+        Self {
+            shared: Some(shared.into()),
+            rest: rest.into(),
+            turn: String::new(),
+        }
+    }
+
+    /// This prompt with `turn`, the part only this turn sends, at its end.
+    #[must_use]
+    pub fn with_turn(mut self, turn: impl Into<String>) -> Self {
+        self.turn = turn.into();
+        self
+    }
+
+    /// The shared part, when the prompt is split.
+    pub fn shared(&self) -> Option<&str> {
+        self.shared.as_deref()
+    }
+
+    /// Everything after the shared part: the session's own, then the turn's.
+    pub fn rest(&self) -> String {
+        format!("{}{}", self.rest, self.turn)
+    }
+
+    /// The whole prompt as one string.
+    pub(crate) fn joined(&self) -> String {
+        self.to_string()
+    }
+
+    fn push_str(&mut self, text: &str) {
+        self.rest.push_str(text);
+    }
+}
+
+impl std::fmt::Display for SystemPrompt {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            formatter,
+            "{}{}{}",
+            self.shared.as_deref().unwrap_or_default(),
+            self.rest,
+            self.turn
+        )
+    }
+}
+
+impl From<String> for SystemPrompt {
+    fn from(rest: String) -> Self {
+        Self {
+            shared: None,
+            rest,
+            turn: String::new(),
+        }
+    }
+}
+
+impl From<&String> for SystemPrompt {
+    fn from(rest: &String) -> Self {
+        rest.clone().into()
+    }
+}
+
+impl From<&str> for SystemPrompt {
+    fn from(rest: &str) -> Self {
+        rest.to_owned().into()
+    }
+}
+
+/// Factory for creating per-request agent sessions.
+///
+/// Routes each session to the provider serving the selected model id (see
+/// [`ModelRouter`]). The model is a
+/// plain api-id string so the frontend can select it directly; backend
+/// callers may pass a [`PredefinedModel`] via `with_model` (it is `ToString`).
+/// Tools and system prompt are provided per-session since they vary by request
+/// (MCP tools are per-user, system prompt depends on toolset selection).
+pub struct AgentLoop {
+    model: String,
+    reasoning_effort: Option<ReasoningEffort>,
+    speed: ModelSpeed,
+    max_turns: usize,
+    /// The output cap per model response; `None` asks for the model's maximum.
+    max_tokens: Option<u64>,
+    recorder: Arc<dyn UsageRecorder>,
+    user_tool_finisher: Option<UserToolFinisher>,
+    result_limit: Option<ToolResultLimit>,
+    /// The conversation (session) sessions belong to, for telemetry.
+    conversation_id: Option<String>,
+    /// The agent name spans carry; defaults to the usage context's feature.
+    agent_name: Option<String>,
+    /// Whether this loop enriches the runtime's GenAI spans (see
+    /// [`Self::with_genai_telemetry`]).
+    genai_telemetry: bool,
+    /// See [`Self::with_streamed_tool_calls`].
+    stream_tool_calls: bool,
+    /// The router this loop's model calls use instead of the shared one, when
+    /// a caller-supplied key pays for them (see [`Self::with_provider_api_key`]).
+    router: Option<ModelRouter<MeteredHttpClient>>,
+}
+
+impl AgentLoop {
+    /// Create an `AgentLoop` with provider clients from `APP_SECRETS_JSON` or the environment and
+    /// the default model (Opus 4.7).
+    ///
+    /// Sessions log legacy aggregates through `recorder`. When its separate
+    /// tracking capability is present, they also bind observational per-attempt
+    /// scopes; analytics injection alone is not proof of attempt coverage.
+    ///
+    /// `ANTHROPIC_API_KEY` and `OPENAI_API_KEY` are required.
+    pub fn new(recorder: Arc<dyn UsageRecorder>) -> Self {
+        Self {
+            model: PredefinedModel::default().to_string(),
+            reasoning_effort: None,
+            speed: ModelSpeed::Standard,
+            max_turns: DEFAULT_MAX_TURNS,
+            max_tokens: None,
+            recorder,
+            user_tool_finisher: None,
+            result_limit: None,
+            conversation_id: None,
+            agent_name: None,
+            genai_telemetry: true,
+            stream_tool_calls: false,
+            router: None,
+        }
+    }
+
+    /// Run the model's calls on `api_key` instead of the deployment's key for
+    /// its provider. Call after [`Self::with_model`]: the key is for the
+    /// selected model's provider, which must be native Anthropic or OpenAI.
+    ///
+    /// Fails rather than falling back when the model does not route, since a
+    /// fallback would run on the deployment's key while the usage is recorded
+    /// as the caller's. Only the loop's own model calls use the key; tools
+    /// that call models themselves still use the deployment's keys.
+    pub fn with_provider_api_key(mut self, api_key: &str) -> Result<Self, AgentError> {
+        let provider = Model::try_from(self.model.as_str())?.provider().to_owned();
+        let router = ModelRouter::shared()?.with_provider_api_key(&provider, api_key)?;
+        router.route(&self.model)?;
+        self.router = Some(router);
+        Ok(self)
+    }
+
+    /// Select a supported inference speed without changing the model or effort.
+    pub fn with_speed(mut self, speed: ModelSpeed) -> Result<Self, AgentError> {
+        if !speed.supported(&self.model) {
+            return Err(AgentError::Other(anyhow::anyhow!(
+                "speed is not supported by this model"
+            )));
+        }
+        self.speed = speed;
+        Ok(self)
+    }
+
+    /// Finish user tools inside the turn.
+    ///
+    /// A user tool (`ai_toolset::UserTool`) answers `"PendingUserExecution"`
+    /// and leaves the call for the host to finish. Without a finisher that
+    /// answer reaches the model as-is and the host finishes the call later,
+    /// as chat does over HTTP. With one, the bridge hands each pending call
+    /// to `finisher` before the model reads it, and the model sees what the
+    /// user decided instead - the shape a host that can reach its user
+    /// mid-turn wants.
+    pub fn with_user_tool_finisher(mut self, finisher: UserToolFinisher) -> Self {
+        self.user_tool_finisher = Some(finisher);
+        self
+    }
+
+    /// Cut tool results too long for the model to read whole, keeping them in
+    /// `limit`. The host must offer [`crate::ReadToolResult`] over the same
+    /// `limit`, which the note on a cut result tells the model to call.
+    pub fn with_tool_result_limit(mut self, limit: ToolResultLimit) -> Self {
+        self.result_limit = Some(limit);
+        self
+    }
+
+    /// Override the model.
+    ///
+    /// Accepts any stringifiable id — an [`AgentModel`] (backend) or a raw
+    /// api-id string (frontend).
+    pub fn with_model<M: ToString>(mut self, model: M) -> Self {
+        self.model = model.to_string();
+        if !self.speed.supported(&self.model) {
+            self.speed = ModelSpeed::Standard;
+        }
+        self
+    }
+
+    /// Override the model provider's default reasoning effort.
+    pub fn with_reasoning_effort(mut self, effort: ReasoningEffort) -> Self {
+        self.reasoning_effort = Some(effort);
+        self
+    }
+
+    /// Override the default max tool-calling turns.
+    pub fn with_max_turns(mut self, n: usize) -> Self {
+        self.max_turns = n;
+        self
+    }
+
+    /// Cap each model response at `n` output tokens instead of the model's
+    /// maximum.
+    pub fn with_max_tokens(mut self, n: u64) -> Self {
+        self.max_tokens = Some(n);
+        self
+    }
+
+    /// Tag every span of the sessions created from this loop with the
+    /// conversation they belong to (`gen_ai.conversation.id`, e.g. the chat
+    /// id). Observability backends group the turns of one conversation into a
+    /// session by it, which is what session-level evaluations run over.
+    pub fn with_conversation_id<S: Into<String>>(mut self, conversation_id: S) -> Self {
+        self.conversation_id = Some(conversation_id.into());
+        self
+    }
+
+    /// Override the agent name spans carry (`gen_ai.agent.name`). Defaults to
+    /// the usage context's feature (`chat`, `automation`, …).
+    pub fn with_agent_name<S: Into<String>>(mut self, agent_name: S) -> Self {
+        self.agent_name = Some(agent_name.into());
+        self
+    }
+
+    /// Whether this loop records GenAI telemetry on the runtime's spans: the
+    /// `invoke_agent` span with the run's input, output and usage, the
+    /// content, tool definitions and conversation id on each `chat` span, and
+    /// the arguments and result on each `execute_tool` span. On by default.
+    ///
+    /// Off for a loop whose turns are already traced from outside - Macro's
+    /// in-process agent session runtime, whose ACP frames the session actor
+    /// projects onto GenAI spans for every harness alike. With it off the run
+    /// is still wrapped in a span (so the runtime adopts it rather than
+    /// opening an `invoke_agent` of its own), but that span carries no GenAI
+    /// fields, nothing is recorded onto the runtime's spans, and the tool
+    /// calls run with `RequestContext::genai_telemetry` off.
+    pub fn with_genai_telemetry(mut self, enabled: bool) -> Self {
+        self.genai_telemetry = enabled;
+        self
+    }
+
+    /// Report each tool call as soon as the model names it, then its
+    /// arguments as they stream ([`StreamPart::ToolCallStarted`],
+    /// [`StreamPart::ToolCallArgs`]), before the finished
+    /// [`StreamPart::ToolCall`]. Off by default: a host that only renders
+    /// finished calls has nothing to do with the extra parts.
+    ///
+    /// A streamed call uses the provider id available on its first delta,
+    /// or rig's correlation id when none is available. Its final invocation
+    /// and result keep that id so the host updates the existing row.
+    ///
+    /// [`StreamPart::ToolCallStarted`]: crate::StreamPart::ToolCallStarted
+    /// [`StreamPart::ToolCallArgs`]: crate::StreamPart::ToolCallArgs
+    /// [`StreamPart::ToolCall`]: crate::StreamPart::ToolCall
+    pub fn with_streamed_tool_calls(mut self) -> Self {
+        self.stream_tool_calls = true;
+        self
+    }
+
+    /// Start a new streaming session.
+    ///
+    /// `toolset` is the combined tool set (static + MCP) for this request.
+    /// `context` is the shared service context passed to tool calls.
+    /// `system_prompt` is the system prompt for this request.
+    /// `usage_ctx` identifies the calling user (used for tool dispatch) and the
+    /// feature/entity that token usage is recorded against.
+    pub async fn session<Context>(
+        &self,
+        toolset: Arc<dyn AiToolSet<Context> + Send + Sync>,
+        context: Arc<Context>,
+        system_prompt: impl Into<SystemPrompt>,
+        usage_ctx: UsageContext,
+    ) -> Session
+    where
+        Context: Clone + Send + Sync + 'static,
+    {
+        // The frontend selects the model by api id; route it to the provider
+        // that serves it (falling back to the default on unknown / unavailable
+        // ids). The router owns provider-specific agent construction.
+        self.session_with(
+            toolset,
+            context,
+            system_prompt,
+            usage_ctx,
+            |handle, prompt, tool_search, max_turns, max_tokens, telemetry| {
+                let router = match &self.router {
+                    Some(router) => router,
+                    None => ModelRouter::shared().expect("failed to initialize model router"),
+                };
+                let routed = router.route_or_default(&self.model);
+                telemetry.set_model(routed.provider(), routed.model_name());
+                routed.into_agent(
+                    self.reasoning_effort,
+                    self.speed,
+                    handle,
+                    prompt,
+                    tool_search,
+                    max_turns,
+                    max_tokens,
+                    &telemetry,
+                )
+            },
+        )
+        .await
+    }
+
+    /// Like [`Self::session`], but the agent is built by `build` from the live
+    /// tool-server handle and the finalized system prompt. Production routes the
+    /// model through [`ModelRouter`]; tests inject a fake completion model. The
+    /// rest of the per-session wiring (tool adapters, tool search, cancellation
+    /// token) is identical either way.
+    async fn session_with<Context>(
+        &self,
+        toolset: Arc<dyn AiToolSet<Context> + Send + Sync>,
+        context: Arc<Context>,
+        system_prompt: impl Into<SystemPrompt>,
+        usage_ctx: UsageContext,
+        build: impl FnOnce(
+            ToolServerHandle,
+            &SystemPrompt,
+            &ToolSearch,
+            usize,
+            Option<u64>,
+            GenAiContext,
+        ) -> ProviderAgent,
+    ) -> Session
+    where
+        Context: Clone + Send + Sync + 'static,
+    {
+        // On-demand tool search: the toolset's searchable catalog (e.g. MCP
+        // tools) is NOT sent on every request. `SearchTools` reads this catalog
+        // from the request context, matches the model's query, and pushes the
+        // matches into `loaded_buffer` via the loader; the stream bridge then
+        // registers them with the live tool server before the next turn.
+        let catalog = toolset.searchable_catalog();
+        // Names of the connected toolsets (MCP servers) whose tools are
+        // searchable but not advertised upfront. Injected into the system prompt
+        // so the model knows which integrations it can reach via tool search.
+        let searchable_toolset_names = toolset.searchable_toolset_names();
+        let loaded_buffer: Arc<Mutex<Vec<SearchableTool>>> = Arc::new(Mutex::new(Vec::new()));
+        let loader = {
+            let buffer = loaded_buffer.clone();
+            ToolLoader::new(move |tools| {
+                buffer.lock().expect("loaded_buffer poisoned").extend(tools)
+            })
+        };
+        let catalog = Arc::new(catalog);
+        let tool_search = ToolSearch {
+            catalog: catalog.clone(),
+            loads: ToolLoads::default(),
+        };
+        let request_context = RequestContext::new(usage_ctx.user.clone())
+            .with_tool_search(catalog, loader)
+            .with_genai_telemetry(self.genai_telemetry);
+        // TODO this is cringe, make request context a RW lock newtype
+        let request_context_rw = Arc::new(RwLock::new(request_context.clone()));
+
+        // Keep a handle to the toolset so the stream bridge can resolve MCP
+        // routing info (service / display name) for tool calls. This is the
+        // authoritative source rig itself doesn't expose to the hook.
+        let routing_toolset = toolset.clone();
+        let routing: ToolRouter =
+            Arc::new(move |name: &str| routing_toolset.routing_description(name));
+
+        let adapters = DynToolSetAdapter::from_toolset(
+            toolset.clone(),
+            context.clone(),
+            request_context_rw.clone(),
+        );
+
+        let handle = ToolServer::new().run();
+        for adapter in adapters {
+            handle.add_dynamic_tool(adapter).await;
+        }
+
+        // Registers `SearchTools`-discovered tools with the live tool server so
+        // they become advertised + callable next turn. Context-erased so the
+        // bridge (which is not generic over `Context`) can hold it. Captures
+        // strong refs to the session's shared state but is itself only held by
+        // the bridge/session — nothing the handle owns points back to it, so no
+        // reference cycle.
+        // Names already loaded this session, so repeated searches don't register
+        // a tool twice (which would send a duplicate tool definition and 400).
+        let loaded_names: Arc<Mutex<std::collections::HashSet<String>>> =
+            Arc::new(Mutex::new(std::collections::HashSet::new()));
+        let register_loaded: RegisterFn = {
+            let handle = handle.clone();
+            let toolset = toolset.clone();
+            let context = context.clone();
+            Arc::new(move |tools: Vec<SearchableTool>| {
+                let handle = handle.clone();
+                let toolset = toolset.clone();
+                let context = context.clone();
+                let loaded_names = loaded_names.clone();
+                let request_context_rw = request_context_rw.clone();
+                Box::pin(async move {
+                    for tool in tools {
+                        // Skip tools already loaded this session.
+                        if !loaded_names
+                            .lock()
+                            .expect("loaded_names poisoned")
+                            .insert(tool.name.clone())
+                        {
+                            continue;
+                        }
+                        let adapter = DynToolSetAdapter::loaded(
+                            tool.name,
+                            tool.description,
+                            tool.schema,
+                            toolset.clone(),
+                            context.clone(),
+                            request_context_rw.clone(),
+                        );
+                        handle.add_dynamic_tool(adapter).await;
+                    }
+                }) as Pin<Box<dyn Future<Output = ()> + Send>>
+            })
+        };
+
+        // Tell the model which model it is. Done here (not on the frontend)
+        // so the system prompt always reflects the model actually serving the
+        // request. A model's training data predates its own release, so a
+        // newly released model doesn't recognize its own id and may fall back
+        // to identifying as a predecessor — tell it to trust the id.
+        let mut system_prompt = system_prompt.into();
+        system_prompt.push_str(&format!(
+            "\n\nYou are the {} model. If this model id is unfamiliar, \
+             that is because it was released after your training data cutoff — trust \
+             this id over your training data when identifying yourself.",
+            self.model
+        ));
+        // Tell the model which connected integrations it can reach via tool
+        // search. The toolset names are the dynamic data injected here; the
+        // section is omitted when nothing is connected.
+        if let Some(section) = crate::connected_toolsets::render(&searchable_toolset_names) {
+            system_prompt.push_str("\n\n");
+            system_prompt.push_str(&section);
+        }
+
+        // Session-scoped GenAI telemetry: the conversation id ties the spans of
+        // every turn of this session together, the agent name labels them and
+        // the content policy governs what is recorded (see `crate::telemetry`).
+        let telemetry = GenAiContext::new(
+            self.conversation_id.clone(),
+            self.agent_name
+                .clone()
+                .unwrap_or_else(|| usage_ctx.feature.to_string()),
+            ContentPolicy::from_env(),
+            self.genai_telemetry,
+        );
+        let agent = build(
+            handle,
+            &system_prompt,
+            &tool_search,
+            self.max_turns,
+            self.max_tokens,
+            telemetry.clone(),
+        );
+
+        let financial_context = MeteringContext::for_session(
+            self.recorder.clone(),
+            &usage_ctx,
+            &self.model,
+            self.speed,
+        );
+        Session {
+            agent,
+            history: Vec::new(),
+            max_turns: self.max_turns,
+            bridge_inputs: BridgeInputs {
+                routing,
+                loaded_buffer,
+                register_loaded,
+                tool_loads: tool_search.loads.clone(),
+                user_tool_finisher: self.user_tool_finisher.clone(),
+                stream_tool_calls: self.stream_tool_calls,
+                result_limit: self.result_limit.clone(),
+            },
+            recorder: self.recorder.clone(),
+            usage_ctx,
+            model: self.model.clone(),
+            request_context,
+            telemetry,
+            financial_context,
+        }
+    }
+
+    /// Start a session backed by a caller-supplied (fake) completion model
+    /// instead of routing through [`ModelRouter`]. Exercises the real
+    /// per-session wiring and the public [`Session`] surface
+    /// ([`Session::cancellable`], [`Session::send_message`]) without a provider.
+    #[cfg(test)]
+    pub(crate) async fn test_session<Context, M>(
+        &self,
+        toolset: Arc<dyn AiToolSet<Context> + Send + Sync>,
+        context: Arc<Context>,
+        system_prompt: impl Into<SystemPrompt>,
+        usage_ctx: UsageContext,
+        model: M,
+    ) -> Session
+    where
+        Context: Clone + Send + Sync + 'static,
+        M: rig_core::completion::CompletionModel + 'static,
+    {
+        self.session_with(
+            toolset,
+            context,
+            system_prompt,
+            usage_ctx,
+            move |handle, prompt, _, max_turns, max_tokens, telemetry| {
+                ProviderAgent::test(
+                    model,
+                    &prompt.joined(),
+                    max_turns,
+                    max_tokens,
+                    handle,
+                    telemetry,
+                )
+            },
+        )
+        .await
+    }
+
+    /// Start a session routed through `router`, as production routes through
+    /// the shared one: the provider arms build the agent, over whatever
+    /// transport the router's clients were given.
+    #[cfg(test)]
+    pub(crate) async fn test_routed_session<Context, H>(
+        &self,
+        router: &ModelRouter<H>,
+        toolset: Arc<dyn AiToolSet<Context> + Send + Sync>,
+        context: Arc<Context>,
+        system_prompt: impl Into<SystemPrompt>,
+        usage_ctx: UsageContext,
+    ) -> Session
+    where
+        Context: Clone + Send + Sync + 'static,
+        H: rig_core::http_client::HttpClientExt
+            + Clone
+            + Default
+            + std::fmt::Debug
+            + Send
+            + Sync
+            + 'static,
+    {
+        self.session_with(
+            toolset,
+            context,
+            system_prompt,
+            usage_ctx,
+            |handle, prompt, tool_search, max_turns, max_tokens, telemetry| {
+                let routed = router.route_or_default(&self.model);
+                telemetry.set_model(routed.provider(), routed.model_name());
+                ProviderAgent::Test(Box::new(routed.into_agent(
+                    self.reasoning_effort,
+                    self.speed,
+                    handle,
+                    prompt,
+                    tool_search,
+                    max_turns,
+                    max_tokens,
+                    &telemetry,
+                )))
+            },
+        )
+        .await
+    }
+}
+
+/// A session's on-demand tools: the catalog the model loads from, and which
+/// result loaded which of them.
+pub(crate) struct ToolSearch {
+    pub(crate) catalog: Arc<Vec<SearchableTool>>,
+    pub(crate) loads: ToolLoads,
+}
+
+/// A single streaming conversation session.
+pub struct Session {
+    agent: ProviderAgent,
+    history: Vec<Message>,
+    max_turns: usize,
+    /// What every turn's stream bridge is built from: tool routing, the
+    /// on-demand tool loading pair, and the user-tool finisher if any.
+    bridge_inputs: BridgeInputs,
+    recorder: Arc<dyn UsageRecorder>,
+    usage_ctx: UsageContext,
+    model: String,
+    request_context: RequestContext,
+    telemetry: GenAiContext,
+    financial_context: Option<MeteringContext>,
+}
+
+impl Session {
+    /// get the cancel token for this session
+    pub fn cancellable(self) -> (Self, CancellationToken) {
+        let cancel_token = self.request_context.cancel.clone();
+        (self, cancel_token)
+    }
+    /// Send a message and stream the response.
+    ///
+    /// The returned stream yields [`StreamPart`] items compatible with the
+    /// existing DCS consumer code.
+    ///
+    /// The run is wrapped in a span the runtime adopts instead of opening an
+    /// `invoke_agent` of its own. With GenAI telemetry on (the default) that
+    /// span *is* the run's `invoke_agent` span: the semconv fields are declared
+    /// on it and the run's usage and output are recorded onto it by the stream
+    /// driver (see `crate::telemetry`). With it off the span is a plain
+    /// `agent.turn`, traced from outside instead. Either way it stays open
+    /// until the returned stream ends.
+    pub async fn send_message(
+        &mut self,
+        messages: Vec<Message>,
+    ) -> Result<ChatCompletionStream<'_>, AgentError> {
+        // `agent.stream.*` are recorded by the stream driver as the run ends;
+        // see `StreamLiveness` in `crate::model::router`. Declared on both
+        // shapes of the span because either one can be the run's; `agent.turn`
+        // names the model itself, `invoke_agent` through `gen_ai.request.model`.
+        let span = if self.telemetry.enabled() {
+            tracing::info_span!(
+                "invoke_agent",
+                gen_ai.operation.name = "invoke_agent",
+                gen_ai.agent.name = %self.telemetry.agent_name(),
+                gen_ai.conversation.id = self.telemetry.conversation_id(),
+                gen_ai.provider.name = self.telemetry.provider_name(),
+                gen_ai.request.model = self.telemetry.model_name(),
+                agent.stream.items = tracing::field::Empty,
+                agent.stream.first_chunk_ms = tracing::field::Empty,
+                agent.stream.first_chunk_kind = tracing::field::Empty,
+                agent.stream.trailing_silence_ms = tracing::field::Empty,
+            )
+        } else {
+            tracing::info_span!(
+                "agent.turn",
+                agent.name = %self.telemetry.agent_name(),
+                agent.model = self.telemetry.model_name(),
+                agent.stream.items = tracing::field::Empty,
+                agent.stream.first_chunk_ms = tracing::field::Empty,
+                agent.stream.first_chunk_kind = tracing::field::Empty,
+                agent.stream.trailing_silence_ms = tracing::field::Empty,
+            )
+        };
+        let telemetry = self.telemetry.clone();
+        // A newly activated turn may replace the construction-time scope, but
+        // observational/legacy callers must never downgrade an activated session.
+        let current = MeteringContext::current();
+        let financial_context = if current.as_ref().is_some_and(MeteringContext::activated) {
+            current
+        } else if self
+            .financial_context
+            .as_ref()
+            .is_some_and(|context| context.activated() || context.records_per_call())
+        {
+            self.financial_context.clone()
+        } else if current.is_some() {
+            MeteringContext::for_operation(self.recorder.as_ref(), &self.usage_ctx)
+        } else {
+            self.financial_context.clone()
+        };
+        let result = MeteringContext::carry(financial_context, self.send_message_in(messages))
+            .instrument(span.clone())
+            .await;
+        if let Err(error) = &result {
+            // The run never started; the span still says why.
+            telemetry.record_agent_failure(
+                &span,
+                "agent_error",
+                genai_telemetry::attr::finish_reason::ERROR,
+                &error.to_string(),
+            );
+        }
+        result
+    }
+
+    async fn send_message_in(
+        &mut self,
+        messages: Vec<Message>,
+    ) -> Result<ChatCompletionStream<'_>, AgentError> {
+        MeteringContext::require_usage(&self.usage_ctx)
+            .map_err(|error| AgentError::Other(error.into()))?;
+        self.history = messages;
+
+        let Some((prompt, history)) = self.history.split_last() else {
+            return Err(AgentError::Other(anyhow::anyhow!(
+                "messages must not be empty"
+            )));
+        };
+
+        // A session lives for one turn, so whatever the conversation loaded
+        // before is gone. Reload what it loaded or called, in the order it
+        // first did, rather than have the model reload each tool every turn
+        // or call a tool it loaded that is no longer there.
+        let in_use = HistoryTools::of(history, &self.request_context.searchable_tools);
+        for (call_id, tools) in &in_use.loads {
+            self.bridge_inputs.tool_loads.record_call(call_id, tools);
+        }
+        if !in_use.tools.is_empty() {
+            (self.bridge_inputs.register_loaded)(in_use.tools).await;
+        }
+
+        let stream = self
+            .agent
+            .run_stream(
+                prompt.clone(),
+                history.to_vec(),
+                self.max_turns,
+                self.bridge_inputs.clone(),
+                self.recorder.clone(),
+                self.usage_ctx.clone(),
+                self.model.clone(),
+                self.request_context.clone(),
+                self.telemetry.clone(),
+            )
+            .await;
+
+        Ok(stream)
+    }
+
+    /// Get the conversation messages accumulated during this session.
+    pub fn get_history(&self) -> &[Message] {
+        &self.history
+    }
+}
+
+/// The catalog tools `history` loaded or called, in the order it first did.
+#[derive(Default)]
+struct HistoryTools {
+    /// Every such tool, once.
+    tools: Vec<SearchableTool>,
+    /// The tools each `SearchTools` or `LoadTools` call loaded, by the call's
+    /// provider id.
+    loads: Vec<(String, Vec<SearchableTool>)>,
+}
+
+impl HistoryTools {
+    fn of(history: &[Message], catalog: &[SearchableTool]) -> Self {
+        let mut found = Self::default();
+        let mut call_names: HashMap<&str, &str> = HashMap::new();
+        for message in history {
+            match message {
+                Message::Assistant { content, .. } => {
+                    for content in content.iter() {
+                        let AssistantContent::ToolCall(call) = content else {
+                            continue;
+                        };
+                        call_names.insert(&call.id, &call.function.name);
+                        if let Some(tool) =
+                            catalog.iter().find(|tool| tool.name == call.function.name)
+                        {
+                            found.add(tool);
+                        }
+                    }
+                }
+                Message::User { content } => {
+                    for content in content.iter() {
+                        let UserContent::ToolResult(result) = content else {
+                            continue;
+                        };
+                        let Some(tool_name) = call_names.get(result.id.as_str()) else {
+                            continue;
+                        };
+                        let text: String = result
+                            .content
+                            .iter()
+                            .filter_map(|content| match content {
+                                ToolResultContent::Text(text) => Some(text.text.as_str()),
+                                _ => None,
+                            })
+                            .collect();
+                        // Every tool the call loaded, as the live turn
+                        // recorded it, even one an earlier call loaded too.
+                        let loaded: Vec<SearchableTool> = tools_loaded_by(tool_name, &text)
+                            .iter()
+                            .filter_map(|name| catalog.iter().find(|tool| &tool.name == name))
+                            .cloned()
+                            .collect();
+                        for tool in &loaded {
+                            found.add(tool);
+                        }
+                        if !loaded.is_empty() {
+                            // Requests are laid out under the provider's call
+                            // id (see `replay_provider_ids`).
+                            let call_id = result.call_id.as_ref().unwrap_or(&result.id);
+                            found.loads.push((call_id.clone(), loaded));
+                        }
+                    }
+                }
+                Message::System { .. } => {}
+            }
+        }
+        found
+    }
+
+    /// Adds `tool` unless it is already in.
+    fn add(&mut self, tool: &SearchableTool) {
+        if !self.tools.iter().any(|known| known.name == tool.name) {
+            self.tools.push(tool.clone());
+        }
+    }
+}

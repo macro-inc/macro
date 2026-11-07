@@ -4,17 +4,19 @@ use anyhow::{Context, Result};
 use axum::Router;
 use bots::outbound::pg_bots_repo::PgBotsRepo;
 use connection_gateway_client::client::ConnectionGatewayClient;
-use entity_access::{domain::service::EntityAccessServiceImpl, outbound::PgAccessRepository};
+use connection_gateway_url::ConnectionGatewayUrl;
+use entity_access::domain::service::EntityAccessServiceImpl;
+use entity_access_outbound::PgAccessRepository;
 use entity_registry::OwnerGrantPolicy;
 use entity_registry_db_utils::OwnedEntityRegistrar;
 use github::outbound::pg_installation_claims::PgGithubInstallationClaims;
 use jev::{domain::JevClassifier, outbound::SystemOneJev};
+use lexical_service_url::LexicalServiceUrl;
 use macro_auth::middleware::decode_jwt::JwtValidationArgs;
 use macro_authorization::{
     InternalAuthConfig, MacroAuthJwtValidator, MacroAuthorizationServiceImpl,
     MacroAuthorizationState, PgUserApiKeyAuthorizationRepo, PgUserApiKeyAuthorizer,
 };
-use macro_service_urls::{ConnectionGatewayUrl, LexicalServiceUrl};
 pub mod config;
 mod routine_analytics;
 mod routine_run_notifications;
@@ -126,6 +128,7 @@ pub async fn build<Ingress: notification::domain::service::NotificationIngress>(
     ));
     let ai_admission = ai_billing::composition::pg_admission_service(
         db.clone(),
+        teams::outbound::team_repo::TeamRepositoryImpl::new(db.clone()),
         config.enable_ai_usage_enforcement,
         config.ai_pricing(),
     );
@@ -150,6 +153,7 @@ pub async fn build<Ingress: notification::domain::service::NotificationIngress>(
                 provider,
                 ai_billing::composition::pg_settling_recorder(
                     db.clone(),
+                    teams::outbound::team_repo::TeamRepositoryImpl::new(db.clone()),
                     config.enable_ai_usage_enforcement,
                     config.ai_pricing(),
                     config.settlement_route()?,
@@ -384,7 +388,10 @@ fn event_content(
 > {
     Ok(EventContentAdapter::new(
         email::domain::service::EmailServiceImpl::new(
-            email::outbound::EmailPgRepo::new(db.clone()),
+            email::outbound::EmailPgRepo::new(
+                db.clone(),
+                Arc::new(PgAccessRepository::new(db.clone())),
+            ),
             frecency::domain::services::FrecencyQueryServiceImpl::new(
                 frecency::outbound::postgres::FrecencyPgStorage::new(db.clone()),
             ),
@@ -400,7 +407,7 @@ fn event_content(
             messages::domain::ports::NoMessageEventPublisher,
         ),
         channels::domain::service::ChannelServiceImpl::new(
-            channels::outbound::pg_channels_repo::PgChannelsRepo::new(db.clone()),
+            channels_outbound::pg_channels_repo::PgChannelsRepo::new(db.clone()),
         ),
         documents::outbound::pg_document_repo::PgDocumentRepo::new(db.clone(), registrar.clone()),
         properties::PropertiesServiceImpl::new(
@@ -409,7 +416,12 @@ fn event_content(
             None::<NoTaskNotifications>,
         ),
         call::domain::service::CallRecordQueryServiceImpl::new(
-            call::outbound::pg_call_repo::PgCallRepo::new(db.clone()),
+            call::outbound::pg_call_repo::PgCallRepo::new(
+                db.clone(),
+                std::sync::Arc::new(channels_outbound::channel_name::PgChannelNames::new(
+                    db.clone(),
+                )),
+            ),
         ),
         lexical_client::LexicalClient::new(
             config.internal_api_key.to_string(),

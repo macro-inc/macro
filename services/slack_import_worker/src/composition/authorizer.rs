@@ -2,10 +2,8 @@
 
 use std::collections::HashSet;
 
-use channels::{
-    domain::models::{ChannelType, ParticipantRole},
-    outbound::pg_channels_repo::historical,
-};
+use channels::domain::models::{ChannelType, ParticipantRole};
+use channels_outbound::pg_channels_repo::historical;
 use entity_access::domain::{
     models::{AccessError, AdminTeamRole, EntityType},
     ports::EntityAccessService,

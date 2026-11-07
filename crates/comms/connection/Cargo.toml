@@ -1,0 +1,25 @@
+[package]
+edition = "2024"
+name = "connection"
+publish = false
+version = "0.1.0"
+
+[features]
+default = ["outbound", "ports"]
+outbound = ["dep:connection_gateway_client", "dep:model_entity", "ports"]
+ports = ["entity_access/ports"]
+
+[dependencies]
+# Core
+anyhow = { workspace = true }
+entity_access = { workspace = true }
+macro_user_id = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+tracing = { workspace = true }
+
+# Outbound
+connection_gateway_client = { workspace = true, optional = true }
+model_entity = { workspace = true, optional = true }
+workspace-hack = { version = "0.1", path = "../../workspace-hack" }

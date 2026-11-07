@@ -6,9 +6,9 @@ use email::domain::events::{
     EmailMacroEvent, LinkDisconnectReason, LinkDisconnectedMetadata, LinkReauthRequiredMetadata,
 };
 #[cfg(test)]
-use email_api_client::domain::models::AccessToken;
+use email_api_client_core::models::AccessToken;
 #[cfg(test)]
-use email_api_client::domain::models::EmailApiError;
+use email_api_client_core::models::EmailApiError;
 use email_db_client::links::delete::PurgePacing;
 use model_entity::EntityType;
 use model_notifications::InboxReauthRequiredMetadata;

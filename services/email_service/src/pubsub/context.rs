@@ -9,7 +9,7 @@ use crm::outbound::unfurl_resolver::UnfurlCompanyMetadataResolver;
 use document_storage_service_client::DocumentStorageServiceClient;
 use macro_event_broker::{KafkaEventPublisher, MacroEventBrokerService};
 use notification::domain::service::SqsNotificationIngress;
-use notification::outbound::queue::SqsQueue;
+use notification_outbound::queue::SqsQueue;
 use sqlx::PgPool;
 use static_file_service_client::StaticFileServiceClient;
 use std::sync::Arc;

@@ -25,6 +25,7 @@ use axum::middleware::Next;
 use axum::response::IntoResponse;
 use chat::domain::events::{ChatCreatedMetadata, ChatMacroEvent};
 use chat::domain::ports::MessageService;
+use chat_id::ChatId;
 use futures::StreamExt;
 use macro_auth::headers::AccessTokenExtractor;
 use macro_authorization::{MacroAuthorizationExtractor, UserOrInternal};
@@ -307,7 +308,7 @@ async fn send_chat_message_inner(
     // Fetch all resolved attachment content for the chat (current + prior messages)
     let all_resolved_parts: Vec<FormattedParts> = ctx
         .message_service
-        .get_resolved_message_chain(&actual_chat_id)
+        .get_resolved_message_chain(&ChatId::from(actual_chat_id.as_str()))
         .await
         .inspect_err(|e| tracing::error!(error=?e, "failed to fetch resolved message chain"))
         .unwrap_or_default()

@@ -22,6 +22,7 @@ pub const PATHS: &[RepoGlob<'static>] = &[
     xtask_paths::repo_glob!("tooling/xtask/**/Cargo.toml"),
     xtask_paths::repo_glob!("Cargo.lock"),
     xtask_paths::repo_glob!(".config/hakari.toml"),
+    xtask_paths::repo_glob!(".config/layers.toml"),
     xtask_paths::repo_glob!("crates/workspace-hack/**"),
     // Source of `cargo x deps` only — not every xtask crate. A nextest-filter
     // or workflow-generator edit cannot drift the hack crate or closure map.
@@ -96,6 +97,8 @@ fn run_checker() -> Step<Run> {
     "#})
 }
 
+/// Also prints the crate layer report from `.config/layers.toml`, which does
+/// not fail the job.
 fn deps_check() -> Step<Run> {
     Step::new("generated dependency artifacts are up to date").run(indoc::indoc! {r#"
         cargo run -p xtask --locked -- deps --check

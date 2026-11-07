@@ -27,6 +27,7 @@ use agent_session_realtime::{
     domain::service::AgentSessionLogConsumerService,
     outbound::redis_stream::consumer::RedisLogStreamConsumer,
 };
+use ai_editing_worker_url::AiEditingWorkerUrl;
 use analytics_client::{AnalyticsClient, AnalyticsClientConfig, MetaConfig};
 use anyhow::Context;
 use bots::{domain::service::BotServiceImpl, outbound::pg_bots_repo::PgBotsRepo};
@@ -55,21 +56,19 @@ use channel_labels::{
     domain::service::ChannelLabelsServiceImpl, inbound::axum_router::ChannelLabelsRouterState,
     outbound::pg_channel_labels_repo::PgChannelLabelsRepo,
 };
-use channels::{
-    domain::{
-        list_service::ChannelListServiceImpl,
-        service::ChannelServiceImpl,
-        side_effects::{ChannelSideEffectService, SpawnedChannelEventDispatcher},
-    },
-    inbound::{axum_router::ChannelsRouterState, list_router::ChannelListRouterState},
-    outbound::{
-        connection_gateway_realtime::ConnectionGatewayChannelRealtimePublisher,
-        contacts_dispatcher::ContactsChannelDispatcher,
-        notification_sender::{NotificationChannelSender, NotificationReaderCompletion},
-        pg_channel_reference_share_permissions::PgChannelReferenceSharePermissions,
-        pg_channels_repo::PgChannelsRepo,
-        pg_side_effect_context::PgChannelSideEffectContext,
-    },
+use channels::domain::{
+    list_service::ChannelListServiceImpl,
+    service::ChannelServiceImpl,
+    side_effects::{ChannelSideEffectService, SpawnedChannelEventDispatcher},
+};
+use channels_inbound::{axum_router::ChannelsRouterState, list_router::ChannelListRouterState};
+use channels_outbound::{
+    connection_gateway_realtime::ConnectionGatewayChannelRealtimePublisher,
+    contacts_dispatcher::ContactsChannelDispatcher,
+    notification_sender::{NotificationChannelSender, NotificationReaderCompletion},
+    pg_channel_reference_share_permissions::PgChannelReferenceSharePermissions,
+    pg_channels_repo::PgChannelsRepo,
+    pg_side_effect_context::PgChannelSideEffectContext,
 };
 use collab_surface::inbound::axum_router::CollabSurfaceRouterState;
 use connection::{
@@ -77,6 +76,7 @@ use connection::{
     outbound::connection_gateway_client::ConnectionGatewayImpl,
 };
 use connection_gateway_client::client::ConnectionGatewayClient;
+use connection_gateway_url::ConnectionGatewayUrl;
 use documents_hex::domain::models::CloudFrontConfig;
 use documents_hex::domain::service::DocumentServiceImpl;
 use documents_hex::inbound::axum_router::DocumentRouterState;
@@ -88,6 +88,7 @@ use email::{
     outbound::EmailPgRepo,
 };
 use embedding::embedding_provider::openai::TextEmbedding3Small;
+use entity_access_outbound::PgAccessRepository;
 use entity_registry::OwnerGrantPolicy;
 use entity_registry_db_utils::OwnedEntityRegistrar;
 use favorites::{
@@ -130,6 +131,7 @@ use initiative::{
     outbound::PgInitiativeRepo,
 };
 use lexical_client::LexicalClient;
+use lexical_service_url::LexicalServiceUrl;
 use macro_auth::middleware::decode_jwt::JwtValidationArgs;
 use macro_authorization::{
     InternalAuthConfig, MacroAuthJwtValidator, MacroAuthorizationServiceImpl,
@@ -138,16 +140,12 @@ use macro_authorization::{
 };
 use macro_env_var::maybe_env_vars;
 use macro_event_broker::{KafkaEventPublisher, MacroEventBrokerService};
-use macro_service_urls::{
-    AiEditingWorkerUrl, ConnectionGatewayUrl, LexicalServiceUrl, StaticFileServiceUrl,
-    SyncServiceUrl,
-};
 use macro_sha_count_client::Redis;
 use notification::domain::service::{
     NotificationReaderService, PlatformArnConfig, SqsNotificationIngress,
     WebSocketNotificationConsumerService,
 };
-use notification::outbound::{notification_consumer::NotificationTopicConsumer, queue::SqsQueue};
+use notification_outbound::{notification_consumer::NotificationTopicConsumer, queue::SqsQueue};
 use opensearch_client::OpensearchClient;
 use projects_hex::{
     domain::service::ProjectServiceImpl,
@@ -176,16 +174,17 @@ use soup::{
     domain::service::SoupImpl, inbound::axum_router::SoupRouterState,
     outbound::pg_soup_repo::PgSoupRepo,
 };
-use soup_realtime::{
-    domain::service::{SoupRealtimeConsumerService, SoupRealtimeServiceImpl},
-    outbound::{
-        entity_access::EntityAccessExpander, kafka_publisher::KafkaSoupRealtimePublisher,
-        soup_consumer::SoupTopicConsumer,
-    },
+use soup_realtime_core::service::{SoupRealtimeConsumerService, SoupRealtimeServiceImpl};
+use soup_realtime_inbound::kafka_consumer::run_entity_update_consumer;
+use soup_realtime_outbound::{
+    entity_access::EntityAccessExpander, kafka_publisher::KafkaSoupRealtimePublisher,
+    soup_consumer::SoupTopicConsumer,
 };
 use sqlx::postgres::PgPoolOptions;
+use static_file_service_url::StaticFileServiceUrl;
 use std::{sync::Arc, time::Duration};
 use sync_service_client::SyncServiceClient;
+use sync_service_url::SyncServiceUrl;
 use system_properties::{PgSystemPropertiesRepository, SystemPropertiesServiceImpl};
 use task_dedup::{
     TaskDedupService,
@@ -424,12 +423,12 @@ async fn run_server() -> anyhow::Result<()> {
     );
     let entity_access_service = Arc::new(
         entity_access::domain::service::EntityAccessServiceImpl::new(
-            entity_access::outbound::PgAccessRepository::new(db.clone()),
+            entity_access_outbound::PgAccessRepository::new(db.clone()),
         ),
     );
 
     let email_service = EmailServiceImpl::new(
-        EmailPgRepo::new(db.clone()),
+        EmailPgRepo::new(db.clone(), Arc::new(PgAccessRepository::new(db.clone()))),
         frecency_service.clone(),
         sqs_client.clone(),
         crm_service.clone(),
@@ -447,7 +446,7 @@ async fn run_server() -> anyhow::Result<()> {
                     .authentication_service_secret_key
                     .as_ref()
                     .to_string(),
-                macro_service_urls::AuthServiceUrl::new()?.to_string(),
+                auth_service_url::AuthServiceUrl::new()?.to_string(),
             )),
         ),
     ))
@@ -458,7 +457,10 @@ async fn run_server() -> anyhow::Result<()> {
     .with_macro_event_broker(macro_event_broker.clone());
     let readonly_email_service = ReadonlyEmailPreviewAdapter(
         EmailServiceImpl::new(
-            EmailPgRepo::new(readonly_db.clone()),
+            EmailPgRepo::new(
+                readonly_db.clone(),
+                Arc::new(PgAccessRepository::new(readonly_db.clone())),
+            ),
             frecency_service.clone(),
             sqs_client.clone(),
             crm_service.clone(),
@@ -480,7 +482,7 @@ async fn run_server() -> anyhow::Result<()> {
     });
     let graphql_notification_reader: Arc<ai_tools::ToolNotificationService> =
         Arc::new(NotificationReaderService {
-            repository: notification::outbound::repository::DbNotificationRepository::new(
+            repository: notification_outbound::repository::DbNotificationRepository::new(
                 db.clone(),
             ),
             queue: ai_tools::ToolNotificationQueue::Sqs(ingress_queue.clone()),
@@ -583,9 +585,9 @@ async fn run_server() -> anyhow::Result<()> {
     consumer_tracker.spawn(access_requests::inbound::dispatch::run(
         access_requests_repo,
         crate::outbound::access_requests::AccessRequestDelivery {
-            withdrawal: Arc::new(
-                notification::outbound::withdrawal::PgNotificationWithdrawal(db.clone()),
-            ),
+            withdrawal: Arc::new(notification_outbound::withdrawal::PgNotificationWithdrawal(
+                db.clone(),
+            )),
             ingress: notification_ingress_service.clone(),
             reader: graphql_notification_reader.clone(),
             connection: connection_gateway.clone(),
@@ -787,7 +789,12 @@ async fn run_server() -> anyhow::Result<()> {
     );
     let call_connection_service =
         ConnectionServiceImpl::new(entity_access_service.clone(), connection_gateway.clone());
-    let call_repo = PgCallRepo::new(db.clone());
+    let call_repo = PgCallRepo::new(
+        db.clone(),
+        std::sync::Arc::new(channels_outbound::channel_name::PgChannelNames::new(
+            db.clone(),
+        )),
+    );
     let egress_config = match (
         config::CallRecordingS3Bucket::new(),
         config::CallRecordingS3Region::new(),
@@ -863,8 +870,8 @@ async fn run_server() -> anyhow::Result<()> {
             None
         } else {
             let voip_repo =
-                notification::outbound::repository::DbNotificationRepository::new(db.clone());
-            let voip_mobile = notification::outbound::mobile::MobilePushAdapter {
+                notification_outbound::repository::DbNotificationRepository::new(db.clone());
+            let voip_mobile = notification_outbound::mobile::MobilePushAdapter {
                 push_service: aws_sdk_sns::Client::new(&aws_config),
                 apns_bundle_id: bundle_id.to_string(),
                 voip_bundle_id: Some(format!("{}.voip", bundle_id.as_ref())),
@@ -1158,9 +1165,7 @@ async fn run_server() -> anyhow::Result<()> {
         let cancellation_token = consumer_cancellation_token.clone();
         let consumer = crm::inbound::call_archived::CallArchivedConsumer::new(
             crm::domain::call_links::CallRecordLinker::new(
-                call::domain::service::CallRecordQueryServiceImpl::new(PgCallRepo::new(
-                    db.clone(),
-                )),
+                call::domain::service::CallRecordQueryServiceImpl::new(PgCallRepo::new(db.clone(), std::sync::Arc::new(channels_outbound::channel_name::PgChannelNames::new(db.clone())))),
                 crm::outbound::call_link::PgCallCrmLinker::new(
                     db.clone(),
                     (*system_properties_service).clone(),
@@ -1261,7 +1266,9 @@ async fn run_server() -> anyhow::Result<()> {
         NotificationChannelSender::new(notification_ingress_service.clone()).with_completion(
             NotificationReaderCompletion::new(
                 graphql_notification_reader.clone(),
-                Arc::new(notification::outbound::withdrawal::PgNotificationWithdrawal(db.clone())),
+                Arc::new(notification_outbound::withdrawal::PgNotificationWithdrawal(
+                    db.clone(),
+                )),
             ),
         ),
         ContactsChannelDispatcher::new(contacts_ingress.clone()),
@@ -1280,12 +1287,12 @@ async fn run_server() -> anyhow::Result<()> {
             SpawnedChannelEventDispatcher::new(channel_side_effects.clone()),
         )))
         .with_comment_parent_access(Arc::new(
-            channels::outbound::entity_access_comment_parents::EntityAccessCommentParents::new(
+            channels_outbound::entity_access_comment_parents::EntityAccessCommentParents::new(
                 entity_access_service.clone(),
             ),
         ))
         .with_picture_files(
-            channels::outbound::static_file_pictures::StaticFileChannelPictures::new(
+            channels_outbound::static_file_pictures::StaticFileChannelPictures::new(
                 static_file_service_client::StaticFileServiceClient::new(
                     config.internal_api_key.to_string(),
                     StaticFileServiceUrl::new()?.to_string(),
@@ -1321,7 +1328,7 @@ async fn run_server() -> anyhow::Result<()> {
     )
     .with_sharing(messages::outbound::pg_discussion_context::PgDiscussionContext(db.clone()));
     let annotation_service = Arc::new(messages::domain::annotations::AnnotationService::new(
-        macro_db_client::annotations::repository::PgAnnotationRepository(db.clone()),
+        messages::outbound::pg_annotation_repo::PgAnnotationRepository(db.clone()),
         (*entity_access_service).clone(),
         discussion_delivery.clone(),
     ));
@@ -1330,7 +1337,7 @@ async fn run_server() -> anyhow::Result<()> {
         SpawnedChannelEventDispatcher::new(channel_side_effects.clone()),
         PgChannelReferenceSharePermissions::new(db.clone(), entity_access_service.clone()),
         message_realtime,
-        channels::outbound::pg_agent_creations::PgAgentCreations::new(db.clone()),
+        channels_outbound::pg_agent_creations::PgAgentCreations::new(db.clone()),
     );
     let message_service = Arc::new(
         messages::domain::service::MessageService::new(
@@ -1391,7 +1398,7 @@ async fn run_server() -> anyhow::Result<()> {
                 }
 
                 tracing::info!("starting teammate DM consumer");
-                let result = channels::inbound::teammate_dms_consumer::run_teammate_dms_consumer(
+                let result = channels_inbound::teammate_dms_consumer::run_teammate_dms_consumer(
                     &teammate_dms_brokers,
                     channels.clone(),
                     cancellation_token.cancelled(),
@@ -1446,7 +1453,7 @@ async fn run_server() -> anyhow::Result<()> {
                         .authentication_service_secret_key
                         .as_ref()
                         .to_string(),
-                    macro_service_urls::AuthServiceUrl::new()?.to_string(),
+                    auth_service_url::AuthServiceUrl::new()?.to_string(),
                 ),
             ),
         )),
@@ -1593,7 +1600,7 @@ async fn run_server() -> anyhow::Result<()> {
         ),
         api::context::SlackAdminAuthorizer(
             entity_access_service.clone(),
-            entity_access::outbound::PgAccessRepository::new(db.clone()),
+            entity_access_outbound::PgAccessRepository::new(db.clone()),
         ),
         Box::new(move |_| slack_enabled),
         slack_limits,
@@ -1745,16 +1752,23 @@ async fn run_server() -> anyhow::Result<()> {
                 frecency_storage.clone(),
             )
             .with_agent_dm_profiles(agent_dm_profiles),
-            call::domain::service::CallRecordQueryServiceImpl::new(PgCallRepo::new(db.clone())),
+            call::domain::service::CallRecordQueryServiceImpl::new(PgCallRepo::new(
+                db.clone(),
+                std::sync::Arc::new(channels_outbound::channel_name::PgChannelNames::new(
+                    db.clone(),
+                )),
+            )),
             crm_service.clone(),
             GithubPullRequestServiceImpl::new(
                 ForeignEntityServiceImpl::new(PgForeignEntityRepo::new(db.clone())),
                 PgGithubPullRequestRepo::new(db.clone()),
             ),
         )
-        .with_agent_branches(agent_changes::outbound::postgres::PgChangesetRepo::new(
-            db.clone(),
-        )),
+        .with_agent_branches(
+            crate::outbound::agent_working_branches::ChangesetWorkingBranches(
+                agent_changes::outbound::postgres::PgChangesetRepo::new(db.clone()),
+            ),
+        ),
     );
 
     // SQL predicates and follow-up reads use the primary, matching the catalog
@@ -1795,6 +1809,9 @@ async fn run_server() -> anyhow::Result<()> {
             )),
             call::domain::service::CallRecordQueryServiceImpl::new(PgCallRepo::new(
                 readonly_db.clone(),
+                std::sync::Arc::new(channels_outbound::channel_name::PgChannelNames::new(
+                    readonly_db.clone(),
+                )),
             )),
             crm_service.clone(),
             GithubPullRequestServiceImpl::new(
@@ -1803,9 +1820,11 @@ async fn run_server() -> anyhow::Result<()> {
             ),
         )
         .with_favorites(favorites_service.clone())
-        .with_agent_branches(agent_changes::outbound::postgres::PgChangesetRepo::new(
-            readonly_db.clone(),
-        )),
+        .with_agent_branches(
+            crate::outbound::agent_working_branches::ChangesetWorkingBranches(
+                agent_changes::outbound::postgres::PgChangesetRepo::new(readonly_db.clone()),
+            ),
+        ),
     );
 
     let websocket_notification_consumer_service =
@@ -1988,15 +2007,15 @@ async fn run_server() -> anyhow::Result<()> {
                     KafkaSoupRealtimePublisher::new(macro_event_broker.clone()),
                 );
                 tracing::info!("starting realtime Soup entity consumer");
-                let result = fanout_service
-                    .run_entity_update_consumer(
-                        &brokers,
-                        &soup_realtime::outbound::agent_sessions::AgentSessionPullRequestLookup(
-                            session_repo.clone(),
-                        ),
-                        cancellation_token.cancelled(),
-                    )
-                    .await;
+                let result = run_entity_update_consumer(
+                    &fanout_service,
+                    &brokers,
+                    &soup_realtime_outbound::agent_sessions::AgentSessionPullRequestLookup(
+                        session_repo.clone(),
+                    ),
+                    cancellation_token.cancelled(),
+                )
+                .await;
 
                 if cancellation_token.is_cancelled() {
                     break;
@@ -2049,7 +2068,7 @@ async fn run_server() -> anyhow::Result<()> {
             channels_service.clone(),
             message_commands.clone(),
             entity_access_service.clone(),
-            macro_service_urls::AppServiceUrl::new()?,
+            app_service_url::AppServiceUrl::new()?,
         ),
     ));
     let user_api_key_service = Arc::new(UserApiKeyServiceImpl::new(PgUserApiKeysRepo::new(
@@ -2105,7 +2124,7 @@ async fn run_server() -> anyhow::Result<()> {
     let graphql_calendar_mutation_context = graphql_calendar::CalendarGraphqlMutationContext::new(
         Arc::new(
             calendar_events::outbound::calendar_service_mutations::CalendarServiceMutations::new(
-                macro_service_urls::CalendarServiceUrl::new()
+                calendar_service_url::CalendarServiceUrl::new()
                     .context("calendar service url")?
                     .to_string(),
                 config.internal_api_key.to_string(),

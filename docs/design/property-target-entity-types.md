@@ -17,7 +17,7 @@ That creates two property namespaces for the same entity id:
 
 Today a task property mutation from the web client sends `entityType: TASK`, so the properties service writes the assignment under the internal `TASK` namespace. A fresh GraphQL Soup query represents the same task as a `GraphqlSoupDocument`, mints document access, and currently loads properties under `DOCUMENT`. The mutation response is therefore correct and can update the normalized cache immediately, but a fresh read cannot find the row written under `TASK`.
 
-The split is visible in `crates/properties/src/domain/model.rs`:
+The split is visible in `crates/databases/properties/src/domain/model.rs`:
 
 - `access_entity_type(EntityType::Task)` collapses to `entity_access::EntityType::Document`.
 - `PropertiesAccessReceipt` then preserves the original properties `EntityType::Task` specifically so repositories can continue using the separate storage namespace.
@@ -179,11 +179,11 @@ Do not add task-subtype branching to `graphql_soup`, `complete_graph::SoupEdges`
 
 Likely files:
 
-- `crates/graphql_properties/src/mutations.rs`
-- `crates/graphql_properties/src/loaders.rs`
-- `crates/graphql_common/src/property_filter.rs` (only if types must be split/exported here)
-- `crates/complete_graph/src/edges.rs`
-- `crates/complete_graph/src/schema.rs`
+- `crates/graphql/graphql_properties/src/mutations.rs`
+- `crates/graphql/graphql_properties/src/loaders.rs`
+- `crates/graphql/graphql_common/src/property_filter.rs` (only if types must be split/exported here)
+- `crates/graphql/complete_graph/src/edges.rs`
+- `crates/graphql/complete_graph/src/schema.rs`
 - `services/document_storage_service/src/api/graphql_soup.rs`
 - `static_assets/schema.graphql` (generated, never edited manually)
 
@@ -195,10 +195,10 @@ Keep value-level `EntityReference.entity_type` separate so this change does not 
 
 Likely files:
 
-- `crates/models_properties/src/api/**`
-- `crates/properties/src/inbound/axum_router/extract.rs`
-- `crates/properties/src/inbound/axum_router/entities.rs`
-- `crates/properties_service/**` and DSS OpenAPI composition as required
+- `crates/types/models_properties/src/api/**`
+- `crates/databases/properties_inbound/src/axum_router/extract.rs`
+- `crates/databases/properties_inbound/src/axum_router/entities.rs`
+- `crates/databases/properties_service/**` and DSS OpenAPI composition as required
 
 ### Tools and internal adapters
 
@@ -206,12 +206,12 @@ Update user-facing tools to target tasks as documents and pass canonical receipt
 
 Review at least:
 
-- `crates/properties/src/inbound/toolset/get_entity_properties.rs`
-- `crates/properties/src/inbound/toolset/set_entity_property.rs`
-- `crates/ai_tools/src/tool_context.rs`
+- `crates/databases/properties_inbound/src/toolset/get_entity_properties.rs`
+- `crates/databases/properties_inbound/src/toolset/set_entity_property.rs`
+- `crates/ai/ai_tools/src/tool_context.rs`
 - `services/document_storage_service/src/api/context.rs`
-- `crates/documents/src/domain/ports/mod.rs`
-- `crates/documents/src/domain/service.rs`
+- `crates/documents/documents/src/domain/ports/mod.rs`
+- `crates/documents/documents/src/domain/service.rs`
 
 Do not blindly replace every Task occurrence: task relationship values, filters, system-property initialization, and internal repository keys remain Task in this phase.
 
@@ -243,15 +243,15 @@ Authorization comparisons must use canonicalized types. For example, an assignme
 
 Likely files:
 
-- `crates/properties/src/domain/model.rs`
-- `crates/properties/src/domain/service.rs`
-- `crates/properties/src/domain/service_impl/mod.rs`
-- `crates/properties/src/domain/service_impl/task_properties.rs`
-- `crates/properties/src/domain/ports.rs`
-- `crates/properties/src/outbound/metadata_queries.rs`
-- `crates/properties/src/outbound/properties_pg_repo.rs`
-- `crates/properties/src/domain/test.rs`
-- `crates/properties/src/outbound/test.rs` and focused query tests
+- `crates/databases/properties/src/domain/model.rs`
+- `crates/databases/properties/src/domain/service.rs`
+- `crates/databases/properties/src/domain/service_impl/mod.rs`
+- `crates/databases/properties/src/domain/service_impl/task_properties.rs`
+- `crates/databases/properties/src/domain/ports.rs`
+- `crates/databases/properties/src/outbound/metadata_queries.rs`
+- `crates/databases/properties/src/outbound/properties_pg_repo.rs`
+- `crates/databases/properties/src/domain/test.rs`
+- `crates/databases/properties/src/outbound/test.rs` and focused query tests
 
 ## Frontend changes
 

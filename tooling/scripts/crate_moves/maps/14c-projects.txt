@@ -1,0 +1,4 @@
+crates/projects crates/projects/projects
+crates/initiative crates/projects/initiative
+crates/initiative_description crates/projects/initiative_description
+crates/task_dedup crates/projects/task_dedup

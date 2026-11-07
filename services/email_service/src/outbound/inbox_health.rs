@@ -1,6 +1,6 @@
 use contacts::domain::ports::ContactsIngress;
 use email::domain::mailbox::{MailboxError, health::*};
-use email_api_client::domain::{
+use email_api_client_core::{
     models::{AccessToken, EmailApiError, MailboxAccess, TokenError, TokenFreshness},
     ports::MailboxTokenSource,
 };

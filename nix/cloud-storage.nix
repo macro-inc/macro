@@ -53,9 +53,9 @@
       sqlxFilter = path: _type: builtins.match ".*\\.sqlx/.*\\.json$" path != null;
       pdfiumFilter = path: _type: builtins.match ".*pdfium-lib/.*\\.(so|dylib)$" path != null;
       # `.sh` is required so `include_str!` of
-      # `crates/agent_harness/container/ensure_ready.sh` survives the prune;
+      # `crates/agents/agent_harness/container/ensure_ready.sh` survives the prune;
       # `.ttf` and `.xml` for the fonts and preset shape definitions that
-      # `crates/pptx_engine` embeds with `include_bytes!`; `.graphql` for the
+      # `crates/engines/pptx_engine` embeds with `include_bytes!`; `.graphql` for the
       # `static_assets/schema.graphql` that `cache-core`'s build script reads;
       # `.jsonl` for the recorded sessions `agent_fold` tests embed; `.mjs`
       # for the Deno bootstrap and timer shims;
@@ -64,7 +64,7 @@
       assetFilter =
         path: _type:
         builtins.match ".*\\.(md|html|txt|json|jsonl|canvas|sql|sh|ttf|xml|graphql|mjs|proto)$" path != null;
-      # `crates/routine_program` embeds its starter programs with `include_str!`.
+      # `crates/agents/routine_program` embeds its starter programs with `include_str!`.
       # Only these `.ts` files: matching every `.ts` would pull the web app into
       # the Rust source hash.
       routineStartersFilter =
@@ -187,7 +187,7 @@
         '';
 
       # ── Code-mode assets ──────────────────────────────────────────
-      # crates/code_mode_assets embeds the Deno SDK bundle and agent SDK docs.
+      # crates/agents/code_mode_assets embeds the Deno SDK bundle and agent SDK docs.
       # Its build script runs the generator itself unless CODE_MODE_ASSETS_DIR
       # names prebuilt assets, as every Nix build of it does: the sandbox has
       # no network for a bun install. Keep this filter in step with the build
@@ -586,7 +586,7 @@
           commonArgs
           # Only services that embed the assets depend on them, so an SDK
           # change leaves the other deploy derivations cached.
-          // pkgs.lib.optionalAttrs (builtins.elem "crates/code_mode_assets" (
+          // pkgs.lib.optionalAttrs (builtins.elem "crates/agents/code_mode_assets" (
             workspaceDepClosures.${packageName} or [ ]
           )) codeModeAssetsEnv
           // {
@@ -913,7 +913,7 @@
         }) lambdaNames
       );
 
-      # The Namespace CLI, the other sandbox provider crates/agent_harness
+      # The Namespace CLI, the other sandbox provider crates/agents/agent_harness
       # talks to. Only used to mint the bearer tokens its Compute API wants
       # (`just namespace-token`); the harness itself speaks the API directly.
       # Not in nixpkgs either, and shipped as goreleaser tarballs rather than
@@ -958,7 +958,7 @@
           '';
         };
 
-      # The Daytona CLI (sandbox snapshots for crates/agent_harness) is not in
+      # The Daytona CLI (sandbox snapshots for crates/agents/agent_harness) is not in
       # nixpkgs and is only published as prebuilt release binaries, so this
       # installs the asset rather than building from source. Pinned instead of
       # tracking `latest` so the shell stays reproducible; bump the version and
@@ -1248,10 +1248,12 @@
               # cmake-build feature, so no system librdkafka.pc is needed here.
               PKG_CONFIG_PATH_FOR_TARGET = pkgConfigPath;
               LIBCLANG_PATH = "${pkgs.libclang.lib}/lib";
+              # sccache shares third-party crates across worktrees. Cargo builds
+              # only workspace members incrementally, and sccache passes those
+              # through uncached, so incremental stays on: it cut the
+              # agent_harness_service edit-to-binary time by half.
+              # CI derivations do not inherit devShell attributes.
               RUSTC_WRAPPER = "${pkgs.sccache}/bin/sccache";
-              # Local dev shells favor reusable sccache artifacts across JJ
-              # workspaces. CI derivations do not inherit devShell attributes.
-              CARGO_INCREMENTAL = "0";
               SCCACHE_CACHE_SIZE = "30G";
               # Namespace CI runners preserve Cargo's ignored target directory.
               # A flake update can change the Nix C compiler while leaving CMake

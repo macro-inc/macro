@@ -39,7 +39,7 @@ by the composition root.
   polymorphic and has no foreign-key cascade. Retirement blocks new connection
   tokens; it does not reclaim the sync-service session.
 
-Read the [domain ports](../../../crates/collab_surface/src/domain/ports.rs) and
-[parent policy](../../../crates/collab_surface/src/domain/models.rs) before wiring
-a consumer. The [initiative adapter](../../../crates/initiative_description/src/lib.rs)
+Read the [domain ports](../../../crates/documents/collab_surface/src/domain/ports.rs) and
+[parent policy](../../../crates/documents/collab_surface/src/domain/models.rs) before wiring
+a consumer. The [initiative adapter](../../../crates/projects/initiative_description/src/lib.rs)
 shows how a feature reuses the service through its own domain port.

@@ -1,0 +1,243 @@
+# Crate layering rules, checked by `cargo x deps` (report-only for now).
+#
+# A crate's layer is the [[layer]] whose `paths` glob matches its directory
+# (`*` stays inside one directory, `**` spans several). Each layer lists
+# the layers it may depend on, its own included. The rules cover normal and
+# build dependencies between workspace crates; dev-dependencies are exempt,
+# except that only dev-dependencies may point at a `dev_only` layer.
+#
+# Paths name both today's flat directories and the planned group
+# directories (`crates/<group>/`), so a crate keeps its layer when it moves.
+# `[[allow]]` entries name packages, not paths, and record edges that break
+# the rules today, with the reason. See docs/development/rust.md.
+
+ignore = ["crates/workspace-hack"]
+
+# Leaf ids and wire models: no I/O. Third-party deps are not checked here.
+[[layer]]
+name = "types"
+paths = [
+  "crates/types/**",
+]
+may_depend_on = ["types"]
+
+# Service plumbing: config, env, middleware, events, auth.
+[[layer]]
+name = "platform"
+paths = [
+  "crates/platform/**",
+]
+may_depend_on = ["types", "platform"]
+
+# AWS SDK adapters.
+[[layer]]
+name = "aws"
+paths = [
+  "crates/aws/**",
+]
+may_depend_on = ["types", "platform", "aws"]
+
+# HTTP and SDK clients with no domain dependencies.
+[[layer]]
+name = "clients"
+paths = [
+  "crates/clients/**",
+]
+may_depend_on = ["types", "platform", "aws", "clients"]
+
+# Format engines; they compile to wasm.
+[[layer]]
+name = "engines"
+paths = [
+  "crates/engines/**",
+]
+may_depend_on = ["types", "engines"]
+
+# Browser, Tauri and wasm crates. agent_fold is the wasm-safe exception.
+[[layer]]
+name = "client"
+paths = [
+  "crates/client/**",
+  "crates/item_filter_index",
+  "crates/predicate_index",
+  "crates/soup_filter_cache_adapter",
+  "crates/soup_filter_projection",
+]
+may_depend_on = ["types", "client"]
+may_depend_on_packages = ["agent_fold"]
+
+# Feature crates (future groups under crates/<group>/), plus macro_db_client and its migrator.
+[[layer]]
+name = "domain"
+paths = [
+  "crates/macro_db_client",
+  "crates/macro_db_migrator",
+  "crates/agents/**",
+  "crates/ai/**",
+  "crates/billing/**",
+  "crates/comms/**",
+  "crates/whatsapp/**",
+  "crates/email/**",
+  "crates/calendar/**",
+  "crates/databases/**",
+  "crates/documents/**",
+  "crates/entities/**",
+  "crates/search/**",
+  "crates/projects/**",
+  "crates/accounts/**",
+  "crates/notifications/**",
+  "crates/integrations/**",
+  "crates/coding_agent_worker",
+]
+may_depend_on = ["types", "platform", "aws", "clients", "engines", "client", "domain"]
+
+# GraphQL adapters and the composed schema.
+[[layer]]
+name = "graphql"
+paths = [
+  "crates/graphql/**",
+]
+may_depend_on = ["types", "platform", "aws", "clients", "engines", "client", "domain", "graphql"]
+
+# Test support; only dev-dependencies may point here.
+[[layer]]
+name = "testing"
+paths = [
+  "crates/testing/**",
+]
+may_depend_on = ["types", "platform", "aws", "clients", "engines", "client", "domain", "graphql", "testing", "services"]
+dev_only = true
+
+# Deployables. Nothing outside services/ and tooling/ depends on them, and services do not depend on each other.
+[[layer]]
+name = "services"
+paths = [
+  "services/**",
+]
+may_depend_on = ["types", "platform", "aws", "clients", "engines", "client", "domain", "graphql"]
+
+# Developer tools and xtask.
+[[layer]]
+name = "tooling"
+paths = [
+  "tooling/**",
+]
+may_depend_on = ["types", "platform", "aws", "clients", "engines", "client", "domain", "graphql", "testing", "services", "tooling"]
+
+# Baseline: edges that violated the rules when the check was added.
+# Delete an entry when its edge is cut; the report lists stale ones.
+
+[[allow]]
+from = "agent_harness_service"
+to = "connection_gateway"
+reason = "AHS mounts the gateway's library half; move it into crates/"
+
+[[allow]]
+from = "agent_harness_service"
+to = "mcp_auth_proxy"
+reason = "library-only crate under services/; the plan moves it to crates/agents/"
+
+[[allow]]
+from = "agent_harness_service"
+to = "unfurl_service"
+reason = "AHS mounts the unfurl service's library half; move it into crates/"
+
+[[allow]]
+from = "anthropic"
+to = "ai_billing"
+reason = "`toolset` feature admits tool calls through ai_billing; move the toolset adapter out of the client"
+
+[[allow]]
+from = "anthropic"
+to = "ai_toolset"
+reason = "`toolset` feature implements ai_toolset traits; move the toolset adapter out of the client"
+
+[[allow]]
+from = "anthropic"
+to = "ai_usage"
+reason = "`toolset` feature records usage through ai_usage; move the toolset adapter out of the client"
+
+[[allow]]
+from = "document_storage_service_client"
+to = "shared_entity_registry"
+reason = "uses RegisteredEntityType; move it to a types crate"
+
+[[allow]]
+from = "email_service_client"
+to = "email"
+reason = "reuses email::service response models; move them to models_email"
+
+[[allow]]
+from = "item-filter-index"
+to = "item_filters"
+reason = "uses the item_filters AST and NotificationState; needs a wasm-safe types crate"
+
+[[allow]]
+from = "lexical_client"
+to = "agent_fold"
+reason = "uses agent_fold MessageId and ActivityCard; move them to a types crate"
+
+[[allow]]
+from = "macro_cache_client"
+to = "email_validator"
+reason = "uses normalize_email; move email_validator to types or the cache client to accounts"
+
+[[allow]]
+from = "macro_middleware"
+to = "entity_access_db_utils"
+reason = "middleware writes entity access rows; move the DB-backed extractors to their domain"
+
+[[allow]]
+from = "macro_middleware"
+to = "macro_db_client"
+reason = "middleware reads documents and thread permissions; move the DB-backed extractors to their domain"
+
+[[allow]]
+from = "mcp_client"
+to = "ai_toolset"
+reason = "implements ai_toolset traits; it may belong in ai/, not clients/"
+
+[[allow]]
+from = "models_email"
+to = "email_utils"
+reason = "computes parsed bodies and token cache keys with email_utils; move those helpers to types or out of the model crate"
+
+[[allow]]
+from = "search_service_client"
+to = "models_search"
+reason = "models_search is a search domain crate because it depends on models_soup and opensearch_client (plan N14)"
+
+[[allow]]
+from = "soup-filter-cache-adapter"
+to = "graphql_soup_filter_input"
+reason = "uses materialize_graphql_filter; move it to a wasm-safe crate"
+
+[[allow]]
+from = "soup-filter-projection"
+to = "models_soup"
+reason = "projects Soup DTOs in the client; models_soup depends on domains until plan N10"
+
+[[allow]]
+from = "soup-filter-projection"
+to = "soup"
+reason = "uses SoupProjectionHydration and SoupDocumentServerFacts; move them to a types crate"
+
+[[allow]]
+from = "sync_router"
+to = "sync_service_bebop_schema"
+reason = "the bebop schema lives under services/sync-service; plan PR 16 moves it to crates/documents/documents/"
+
+[[allow]]
+from = "sync_service"
+to = "sync_service_bebop_schema"
+reason = "the bebop schema lives under services/sync-service; plan PR 16 moves it to crates/documents/documents/"
+
+[[allow]]
+from = "sync_service_client"
+to = "sync_service_hex"
+reason = "implements the SyncWakeupService port; move the adapter into sync_service_hex's outbound"
+
+[[allow]]
+from = "whatsapp_e2e"
+to = "whatsapp_session_service"
+reason = "e2e crate drives the session service library; move it to testing/ and make the edge a dev-dependency"

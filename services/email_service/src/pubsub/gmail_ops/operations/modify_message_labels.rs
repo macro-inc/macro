@@ -2,7 +2,7 @@ use crate::pubsub::gmail_ops::email_api_error::is_permanent_mutation_error;
 use crate::pubsub::gmail_ops::operations::OperationError;
 use crate::pubsub::gmail_ops::worker::GmailOpsContext;
 use anyhow::Context;
-use email_api_client::domain::service::SEPARATE_LABEL_WRITES_BELOW;
+use email_api_client_core::service::SEPARATE_LABEL_WRITES_BELOW;
 use email_db_client::labels::pending_writes::{self, LabelWriteTurn};
 use futures::future::BoxFuture;
 use models_email::gmail::gmail_ops::{GmailMessageRef, ModifyMessageLabelsBatchPayload};

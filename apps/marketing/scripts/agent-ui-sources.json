@@ -58,22 +58,22 @@
       "consumer": "WorkspaceAgents.tsx"
     },
     {
-      "path": "crates/agent_inmem/src/domain/models.rs",
+      "path": "crates/agents/agent_inmem/src/domain/models.rs",
       "blob": "decc815c424f62bdf0936b49b67100192fa0ad1e",
       "consumer": "agentDemoData.ts"
     },
     {
-      "path": "crates/memory/src/domain/service.rs",
+      "path": "crates/ai/memory/src/domain/service.rs",
       "blob": "5be103c192128b793c6d0fb9ef3cf64e7478c032",
       "consumer": "ProductAgentsPage.tsx memory copy"
     },
     {
-      "path": "crates/ai_tools/src/lib.rs",
+      "path": "crates/ai/ai_tools/src/lib.rs",
       "blob": "30d01f6aad7aea8a7e1fc356b921ede9d2a05ccf",
       "consumer": "ProductAgentsPage.tsx MCP copy"
     },
     {
-      "path": "crates/email/src/inbound/toolset/send_email.rs",
+      "path": "crates/email/email/src/inbound/toolset/send_email.rs",
       "blob": "e0de1039c4f89b4dbc7642c9e21edc5ad248fe0f",
       "consumer": "NorthwindSession.tsx review behavior"
     },
@@ -138,7 +138,7 @@
       "consumer": "AgentWorkflowStories.tsx / frozen MessageRow"
     },
     {
-      "path": "crates/agent_harness/src/outbound/channel_prompt_context.rs",
+      "path": "crates/agents/agent_harness/src/outbound/channel_prompt_context.rs",
       "blob": "2bf528fbe6dce8c25e0af79b7217781c471619ae",
       "consumer": "AgentWorkflowStories.tsx conversation context"
     },

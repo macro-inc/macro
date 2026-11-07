@@ -18,7 +18,7 @@ Set your DATABASE_URL environment variable:
 cp ./.env.sample ./.env
 ```
 
-Now that the database is running, you can run the following commands from `crates/notification_db_client`:
+Now that the database is running, you can run the following commands from `crates/notifications/notification_db_client`:
 This will create the database and run any migrations.
 
 ```bash

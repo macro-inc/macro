@@ -14,7 +14,7 @@ import { markdownToEmbeddingText } from './parsers';
 
 /**
  * Why an agent was called, and what about. Mirrors the Rust `TriggerContext`
- * in `crates/trigger_context/src/lib.rs` exactly as it arrives on the
+ * in `crates/types/trigger_context/src/lib.rs` exactly as it arrives on the
  * wire: snake_case fields, optional fields absent rather than null.
  */
 export type TriggerContext =

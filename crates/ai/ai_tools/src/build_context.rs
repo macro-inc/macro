@@ -1,0 +1,827 @@
+//! Builds a [`ToolServiceContext`] from environment variables.
+//!
+//! Services that host the AI tools (e.g. `memory`, `scheduled_action`) call
+//! [`build_tool_service_context_from_env`] to wire up the shared context
+//! instead of duplicating the wiring logic.
+
+use crate::tool_context::{
+    ChannelSideEffectClients, NoOpCallRtcClient, NoOpConnectionService, NoOpNotificationIngress,
+    NoOpSnsEndpointManager, ToolImportToolContext, ToolNotificationQueue, ToolServiceContext,
+};
+use ai_editing_worker_url::AiEditingWorkerUrl;
+use anthropic::toolset::AnthropicToolContext;
+use anyhow::Context;
+use app_service_url::AppServiceUrl;
+use bots::outbound::pg_bots_repo::PgBotsRepo;
+use calendar_service_url::CalendarServiceUrl;
+use channels::domain::list_service::ChannelListServiceImpl;
+use channels_outbound::pg_channels_repo::PgChannelsRepo;
+use connection_gateway_client::ConnectionGatewayClient;
+use connection_gateway_url::ConnectionGatewayUrl;
+use document_storage_service_url::DocumentStorageServiceUrl;
+use documents::domain::models::CloudFrontConfig;
+use documents::inbound::toolset::DocumentToolContext;
+use documents::outbound::editing_worker_client::ReqwestEditingWorkerClient;
+use documents::outbound::pg_document_repo::PgDocumentRepo;
+use documents::outbound::s3_upload_url::S3UploadUrlAdapter;
+use email::domain::ports::ReadonlyEmailPreviewAdapter;
+use email::domain::service::EmailServiceImpl;
+use email::outbound::EmailPgRepo;
+use email_service_client::EmailServiceClientExternal;
+use email_service_url::EmailServiceUrl;
+use entity_access::domain::service::EntityAccessServiceImpl;
+use entity_access_outbound::PgAccessRepository;
+use entity_registry::OwnerGrantPolicy;
+use entity_registry_db_utils::OwnedEntityRegistrar;
+use foreign_entity::{
+    domain::service::ForeignEntityServiceImpl,
+    outbound::pg_foreign_entity_repo::PgForeignEntityRepo,
+};
+use frecency::domain::services::FrecencyQueryServiceImpl;
+use frecency::outbound::postgres::FrecencyPgStorage;
+use github_pull_requests::{
+    domain::service::GithubPullRequestServiceImpl,
+    outbound::pg_github_pull_request_repo::PgGithubPullRequestRepo,
+};
+use image_generation::domain::ports::{ImageGenerator, UnconfiguredImageGenerator};
+use image_generation::outbound::gemini::GeminiImageGenerator;
+use lexical_client::LexicalClient;
+use lexical_service_url::LexicalServiceUrl;
+use macro_env::Environment;
+use macro_env_var::{env_var, maybe_env_var};
+use notification::domain::service::{NotificationReaderService, PlatformArnConfig};
+use notification_outbound::queue::SqsQueue;
+use notification_outbound::repository::DbNotificationRepository;
+use readonly_pool::ReadOnlyPool;
+use rootcause::compat::anyhow1::IntoAnyhow;
+use search_service_client::SearchServiceClient;
+use secretsmanager_client::{SecretManager, SecretsManager};
+use soup::domain::service::SoupImpl;
+use soup::outbound::pg_soup_repo::PgSoupRepo;
+use std::sync::Arc;
+use sync_service_client::SyncServiceClient;
+use sync_service_url::SyncServiceUrl;
+use tokio_util::task::TaskTracker;
+
+env_var! {
+    struct ToolContextEnvVars {
+        DocumentStorageServiceAuthKey,
+        SyncServiceAuthKey,
+        DocumentStorageBucket,
+        DocxDocumentUploadBucket,
+        DocumentStorageServiceCloudfrontDistributionUrl,
+        DocumentStorageServiceCloudfrontSignerPublicKeyId,
+        DocumentStorageServiceCloudfrontSignerPrivateKeySecretName,
+        DocumentPermissionJwt,
+        InternalApiKey,
+        KafkaBrokers,
+    }
+}
+
+maybe_env_var! {
+    struct ToolContextMaybeEnvVars {
+        EnableEmailScheduledQueue,
+        EnableGmailOpsQueue,
+        EnableNotificationQueue,
+        McpCredentialsKeySecretName,
+    }
+}
+
+maybe_env_var! {
+    struct GoogleGenerativeAiApiKey;
+}
+
+/// The text-to-image provider for the GenerateImage tool: Gemini's Nano
+/// Banana model when `GOOGLE_GENERATIVE_AI_API_KEY` is set, otherwise the
+/// unconfigured generator, whose calls fail with a clear message rather than
+/// keeping the host from booting.
+pub fn build_image_generator_from_env() -> Arc<dyn ImageGenerator> {
+    match GoogleGenerativeAiApiKey::new()
+        .as_ref()
+        .and_then(|key| key.value())
+        .filter(|key| !key.trim().is_empty())
+    {
+        Some(key) => Arc::new(GeminiImageGenerator::new(key.to_string())),
+        None => {
+            tracing::warn!("GOOGLE_GENERATIVE_AI_API_KEY is not set; GenerateImage is disabled");
+            Arc::new(UnconfiguredImageGenerator)
+        }
+    }
+}
+
+/// Compose shared AI generation and decisions using existing service credentials.
+/// The cognition service owns admission, model access, and usage recording.
+pub fn build_cognition_tool_context() -> anyhow::Result<crate::ToolCognitionToolContext> {
+    let client = cognition::outbound::CognitionClient::new(
+        document_cognition_service_url::DocumentCognitionServiceUrl::new()?.as_ref(),
+        &macro_auth::InternalApiKey::new()?,
+        chat::domain::models::FREE_MODEL,
+    )
+    .map_err(rootcause::Report::into_anyhow)?;
+    Ok(crate::ToolCognitionToolContext {
+        service: Some(Arc::new(client)),
+    })
+}
+
+/// Builds a [`ToolServiceContext`] by reading the required environment
+/// variables and wiring up all the shared services.
+///
+/// In `Develop` and `Production`, secret env vars (`SYNC_SERVICE_AUTH_KEY`
+/// and `DOCUMENT_STORAGE_SERVICE_CLOUDFRONT_SIGNER_PRIVATE_KEY_SECRET_NAME`)
+/// are treated as AWS Secrets Manager secret names and resolved through the
+/// secrets manager. In `Local`, their values are used directly.
+///
+/// Required env vars: `SYNC_SERVICE_AUTH_KEY`,
+/// `DOCUMENT_STORAGE_SERVICE_AUTH_KEY`, `DOCUMENT_STORAGE_BUCKET`,
+/// `DOCX_DOCUMENT_UPLOAD_BUCKET`,
+/// `DOCUMENT_STORAGE_SERVICE_CLOUDFRONT_DISTRIBUTION_URL`,
+/// `DOCUMENT_STORAGE_SERVICE_CLOUDFRONT_SIGNER_PUBLIC_KEY_ID`,
+/// `DOCUMENT_STORAGE_SERVICE_CLOUDFRONT_SIGNER_PRIVATE_KEY_SECRET_NAME`,
+/// `INTERNAL_API_KEY` (presented to the lexical service and to the
+/// connection gateway for realtime channel side effects), `KAFKA_BROKERS`.
+///
+/// `MCP_CREDENTIALS_KEY_SECRET_NAME` enables import tools on hosts with access
+/// to the shared connector encryption key; hosts without it remain unwired.
+///
+/// Service URLs are resolved through the per-URL crates in
+/// `crates/platform/service_urls`, and queue names through the `macro_queues`
+/// crate (both using optional `OVERRIDE_*` env vars before environment
+/// defaults).
+///
+/// Queue wiring is opt-in via boolean flags (default `false`); the queue name
+/// itself comes from `macro_queues` when enabled:
+/// - `ENABLE_EMAIL_SCHEDULED_QUEUE`
+/// - `ENABLE_GMAIL_OPS_QUEUE` (if disabled, thread-label updates can't enqueue Gmail sync ops)
+/// - `ENABLE_NOTIFICATION_QUEUE` (if disabled, notification status updates skip push clearing)
+///
+/// `ATTACHMENT_BUCKET` (the email service's draft attachment bucket) is
+/// optional; without it `SendEmail` refuses attachments but still sends.
+///
+/// `enforcement` is validated by the host at startup and shared with all other
+/// AI entry points. It configures quota admission here and must be the policy
+/// `recorder` was composed with. `pricing` is the host's mandatory AI pricing
+/// configuration, shared with every other billing component it composes.
+///
+/// `recorder` is the host's configured usage recorder, shared by every tool in
+/// the context that calls a model. The host composes it so that one process
+/// records, counts, and requests settlement for usage one way: through
+/// [`ai_billing::composition::pg_settling_recorder`] where its usage is
+/// chargeable, or [`ai_usage::pg_recorder_with_enforcement`] where it is not.
+///
+/// `event_task_tracker` tracks event publishes started by the context. Callers
+/// must retain the original tracker, pass a clone here, and close and drain the
+/// original after the host stops broker-backed work.
+///
+/// `import_jobs` runs the context's Notion workspace imports; the host calls
+/// [`crate::ImportJobs::hand_over`] on shutdown so they move to another
+/// process instead of waiting for their leases to lapse.
+///
+/// `linked_github` reads GitHub account-link tokens so GitHub's MCP server
+/// reads as connected for a linked user; `None` where the host cannot reach
+/// the authentication service.
+#[tracing::instrument(
+    skip(pool, event_task_tracker, import_jobs, recorder, linked_github),
+    err
+)]
+pub async fn build_tool_service_context_from_env(
+    pool: sqlx::PgPool,
+    event_task_tracker: TaskTracker,
+    import_jobs: crate::ImportJobs,
+    enforcement: ai_usage::AiUsageEnforcement,
+    pricing: ai_billing::AiPricing,
+    recorder: Arc<dyn ai_usage::UsageRecorder>,
+    linked_github: Option<Arc<dyn mcp_client::domain::ports::LinkedGithubTokens>>,
+) -> anyhow::Result<ToolServiceContext> {
+    let env = ToolContextEnvVars::new()?;
+    let maybe_env = ToolContextMaybeEnvVars::new();
+    let environment = Environment::new_or_prod();
+    let document_storage_service_url = DocumentStorageServiceUrl::new()?.to_string();
+    let sync_service_url = SyncServiceUrl::new()?.to_string();
+    let email_service_url = EmailServiceUrl::new()?.to_string();
+    let calendar_service_url = CalendarServiceUrl::new()?;
+    let lexical_service_url = LexicalServiceUrl::new()?.to_string();
+    let ai_editing_worker_url = AiEditingWorkerUrl::new()?.to_string();
+    let connection_gateway_url = ConnectionGatewayUrl::new()?.to_string();
+
+    let aws_config = macro_aws_config::get_macro_aws_config().await;
+    let aws_sqs_client = aws_sdk_sqs::Client::new(&aws_config);
+    let enable_email_scheduled_queue = maybe_env
+        .enable_email_scheduled_queue
+        .as_ref()
+        .and_then(|v| v.value())
+        .and_then(|v| v.parse::<bool>().ok())
+        .unwrap_or(false);
+    let enable_gmail_ops_queue = maybe_env
+        .enable_gmail_ops_queue
+        .as_ref()
+        .and_then(|v| v.value())
+        .and_then(|v| v.parse::<bool>().ok())
+        .unwrap_or(false);
+    let enable_notification_queue = maybe_env
+        .enable_notification_queue
+        .as_ref()
+        .and_then(|v| v.value())
+        .and_then(|v| v.parse::<bool>().ok())
+        .unwrap_or(false);
+
+    let mut sqs_client = sqs_client::SQS::new(aws_sqs_client.clone());
+    if enable_email_scheduled_queue {
+        let email_scheduled_queue = macro_queues::EmailScheduledQueue::new();
+        sqs_client = sqs_client.email_scheduled_queue(email_scheduled_queue.as_ref());
+    }
+    if enable_gmail_ops_queue {
+        let gmail_ops_queue = macro_queues::GmailOpsQueue::new();
+        sqs_client = sqs_client.gmail_ops_queue(gmail_ops_queue.as_ref());
+    }
+    let notification_queue = if enable_notification_queue {
+        let notification_queue = macro_queues::NotificationIngressQueue::new();
+        ToolNotificationQueue::Sqs(SqsQueue::new(
+            aws_sqs_client.clone(),
+            notification_queue.to_string(),
+        ))
+    } else {
+        ToolNotificationQueue::NoOp
+    };
+
+    let secretsmanager_client =
+        SecretsManager::new(aws_sdk_secretsmanager::Client::new(&aws_config));
+
+    let sync_service_auth_key = secretsmanager_client
+        .get_maybe_secret_value(environment, env.sync_service_auth_key.as_ref())
+        .await
+        .context("failed to get sync service auth key from secrets manager")?
+        .as_ref()
+        .to_string();
+
+    let cloudfront_signer_private_key = secretsmanager_client
+        .get_maybe_secret_value(
+            environment,
+            env.document_storage_service_cloudfront_signer_private_key_secret_name
+                .as_ref(),
+        )
+        .await
+        .context("failed to get CloudFront signer private key from secrets manager")?
+        .as_ref()
+        .to_string();
+
+    let search_client = Arc::new(SearchServiceClient::new(
+        env.document_storage_service_auth_key.to_string(),
+        document_storage_service_url.clone(),
+    ));
+    let sync_client = Arc::new(SyncServiceClient::new(
+        sync_service_auth_key.clone(),
+        sync_service_url,
+    ));
+    let email_ext_client = Arc::new(EmailServiceClientExternal::new(email_service_url.clone()));
+    let lexical_client = LexicalClient::new(env.internal_api_key.to_string(), lexical_service_url);
+
+    let frecency_storage = FrecencyPgStorage::new(pool.clone());
+    let frecency_service = FrecencyQueryServiceImpl::new(frecency_storage.clone());
+    let crm_service = crm::domain::service::CrmServiceImpl::new(
+        crm::outbound::companies_repo::CompaniesRepositoryImpl::new(pool.clone()),
+        crm::outbound::no_op_resolver::NoOpCompanyMetadataResolver,
+    );
+    let email_service = EmailServiceImpl::new(
+        EmailPgRepo::new(
+            pool.clone(),
+            Arc::new(PgAccessRepository::new(pool.clone())),
+        ),
+        frecency_service.clone(),
+        email::domain::ports::NoOpEnqueuer,
+        crm_service.clone(),
+        entity_access_management::domain::service::EntityAccessManagementServiceImpl::new(
+            entity_access_management::outbound::PgRepository::new(pool.clone()),
+        ),
+        0,
+    );
+    let channels_service = ChannelListServiceImpl::new(
+        PgChannelsRepo::new(pool.clone()),
+        PgChannelsRepo::new(pool.clone()),
+        frecency_storage,
+    );
+    let email_service_for_tools: Arc<crate::tool_context::ToolEmailService> =
+        Arc::new(email_service.clone());
+    let github_pull_request_service = GithubPullRequestServiceImpl::new(
+        ForeignEntityServiceImpl::new(PgForeignEntityRepo::new(pool.clone())),
+        PgGithubPullRequestRepo::new(pool.clone()),
+    );
+    let favorites_service = crate::tool_context::build_favorites_service(pool.clone());
+    let soup_service = Arc::new(
+        SoupImpl::new(
+            PgSoupRepo::new(ReadOnlyPool(pool.clone())),
+            frecency_service,
+            ReadonlyEmailPreviewAdapter(email_service),
+            channels_service,
+            call::domain::service::CallRecordQueryServiceImpl::new(
+                call::outbound::pg_call_repo::PgCallRepo::new(
+                    pool.clone(),
+                    std::sync::Arc::new(channels_outbound::channel_name::PgChannelNames::new(
+                        pool.clone(),
+                    )),
+                ),
+            ),
+            crm::domain::service::NoOpCrmService,
+            github_pull_request_service,
+        )
+        .with_favorites(favorites_service.clone()),
+    );
+
+    let s3_client = macro_aws_config::s3_client().await;
+    let document_files = documents::outbound::s3_document_files::S3DocumentFiles::new(
+        pool.clone(),
+        s3_client.clone(),
+        env.document_storage_bucket.to_string(),
+    );
+    let s3_upload_adapter = S3UploadUrlAdapter::new(
+        s3_client,
+        env.document_storage_bucket.to_string(),
+        env.docx_document_upload_bucket.to_string(),
+    );
+    let owned_entity_registrar =
+        OwnedEntityRegistrar::new(OwnerGrantPolicy::new(PgBotsRepo::new(pool.clone())));
+    let document_repo = PgDocumentRepo::new(pool.clone(), owned_entity_registrar.clone());
+    let cloudfront_config = CloudFrontConfig {
+        distribution_url: env
+            .document_storage_service_cloudfront_distribution_url
+            .to_string(),
+        signer_public_key_id: env
+            .document_storage_service_cloudfront_signer_public_key_id
+            .to_string(),
+        signer_private_key: cloudfront_signer_private_key,
+        presigned_url_expiry_seconds: 3600,
+        browser_cache_expiry_seconds: 86400,
+    };
+    let entity_access_service = Arc::new(EntityAccessServiceImpl::new(PgAccessRepository::new(
+        pool.clone(),
+    )));
+    let macro_event_broker = macro_event_broker::MacroEventBrokerService::new(
+        macro_event_broker::KafkaEventPublisher::new(env.kafka_brokers.as_ref())
+            .context("failed to create kafka event publisher")?,
+        event_task_tracker,
+    );
+    let properties_service = crate::tool_context::build_properties_service_with_broker(
+        pool.clone(),
+        entity_access_service.clone(),
+        macro_event_broker.clone(),
+    );
+    let task_properties_service = crate::tool_context::build_task_properties_adapter(
+        pool.clone(),
+        properties_service.clone(),
+        entity_access_service.clone(),
+    );
+    // Channel messages sent by AI tools dispatch the same side effects as the
+    // document-storage channel API (realtime, notifications, contact sync, and
+    // broker events that drive live search indexing), so agent-sent messages
+    // notify mentioned users and stream to connected clients instead of landing
+    // silently.
+    let side_effect_clients = ChannelSideEffectClients {
+        connection_gateway: Arc::new(ConnectionGatewayClient::new(
+            env.internal_api_key.to_string(),
+            connection_gateway_url,
+        )),
+        sqs: aws_sqs_client,
+        macro_event_broker: macro_event_broker.clone(),
+    };
+    let databases_gateway = side_effect_clients.connection_gateway.as_ref().clone();
+    let channel_tool_context = crate::tool_context::build_channel_tool_context_with_side_effects(
+        pool.clone(),
+        Arc::new(lexical_client.clone()),
+        &side_effect_clients,
+    );
+    let document_service = documents::domain::service::DocumentServiceImpl {
+        repo: document_repo,
+        cloudfront_config,
+        sync_service_client: sync_client.as_ref().clone(),
+        upload_url_service: s3_upload_adapter,
+        task_properties_service,
+        connection_service: NoOpConnectionService,
+        entity_access_management_service:
+            entity_access_management::domain::service::EntityAccessManagementServiceImpl::new(
+                entity_access_management::outbound::PgRepository::new(pool.clone()),
+            ),
+        foreign_entity_service: ForeignEntityServiceImpl::new(PgForeignEntityRepo::new(
+            pool.clone(),
+        )),
+        macro_event_broker: macro_event_broker.clone(),
+    };
+
+    let document_tool_context = DocumentToolContext::new(
+        document_service,
+        (*entity_access_service).clone(),
+        lexical_client.clone(),
+        sync_client.as_ref().clone(),
+        ReqwestEditingWorkerClient::new(
+            ai_editing_worker_url.clone(),
+            Arc::new(reqwest::Client::new()),
+        ),
+        env.document_permission_jwt.to_string(),
+        crate::tool_context::build_message_service_with_side_effects(
+            pool.clone(),
+            Arc::new(lexical_client.clone()),
+            &side_effect_clients,
+        ),
+    )
+    .with_presentation_files(Arc::new(document_files.clone()))
+    .with_word_document_files(Arc::new(document_files.clone()))
+    .with_design_files(Arc::new(document_files.clone()))
+    .with_photoshop_files(Arc::new(document_files.clone()))
+    .with_illustrator_files(Arc::new(document_files));
+    let document_tool_context = match crate::canvas_artifacts_rollout_from_env()? {
+        Some(rollout) => document_tool_context.with_canvas_artifacts(rollout),
+        None => document_tool_context,
+    };
+
+    let properties_tool_context = crate::tool_context::build_properties_tool_context(
+        properties_service.clone(),
+        entity_access_service.clone(),
+    );
+
+    let user_email_service = Arc::new(
+        EmailServiceImpl::new(
+            EmailPgRepo::new(
+                pool.clone(),
+                Arc::new(PgAccessRepository::new(pool.clone())),
+            ),
+            FrecencyQueryServiceImpl::new(FrecencyPgStorage::new(pool.clone())),
+            sqs_client,
+            crm_service.clone(),
+            entity_access_management::domain::service::EntityAccessManagementServiceImpl::new(
+                entity_access_management::outbound::PgRepository::new(pool.clone()),
+            ),
+            0,
+        )
+        .with_macro_event_broker(macro_event_broker.clone()),
+    );
+    let email_tool_context = email::inbound::toolset::EmailToolContext::new(
+        user_email_service.clone(),
+        Arc::new(email::domain::ports::NoOpGmailTokenProvider),
+        Arc::new(EntityAccessServiceImpl::new(PgAccessRepository::new(
+            pool.clone(),
+        ))),
+        Arc::new(lexical_client),
+    )
+    .with_attachment_sender(
+        crate::email_attachments::build_email_attachment_sender(
+            user_email_service.clone(),
+            EmailPgRepo::new(
+                pool.clone(),
+                Arc::new(PgAccessRepository::new(pool.clone())),
+            ),
+            document_tool_context.service.clone(),
+        )
+        .await,
+    );
+
+    let call_service = call::domain::service::CallServiceImpl::new(
+        call::outbound::pg_call_repo::PgCallRepo::new(
+            pool.clone(),
+            std::sync::Arc::new(channels_outbound::channel_name::PgChannelNames::new(
+                pool.clone(),
+            )),
+        ),
+        NoOpCallRtcClient,
+        NoOpConnectionService,
+        (*entity_access_service).clone(),
+        NoOpNotificationIngress,
+        None::<call::outbound::s3_recording_storage::S3RecordingStorage>,
+        String::new(),
+    );
+    let call_tool_context = call::inbound::toolset::CallToolContext::new(
+        call_service,
+        (*entity_access_service).clone(),
+    );
+
+    let calendar_tool_context = crate::tool_context::build_calendar_tool_context(
+        pool.clone(),
+        calendar_service_url,
+        env.internal_api_key.to_string(),
+        call_tool_context.service.clone(),
+        AppServiceUrl::new()?,
+        macro_env_var::maybe_read_env("ENABLE_CALENDAR_ADD_SHARED_EVENT")
+            .and_then(|value| value.parse::<bool>().ok())
+            .unwrap_or(false),
+    );
+
+    let notification_reader_service = NotificationReaderService {
+        repository: DbNotificationRepository::new(pool.clone()),
+        queue: notification_queue,
+        sns_endpoint: NoOpSnsEndpointManager,
+        platform_config: PlatformArnConfig {
+            apns_platform_arn: String::new(),
+            fcm_platform_arn: String::new(),
+            apns_voip_platform_arn: String::new(),
+        },
+        realtime: notification::domain::ports::NoopNotificationRealtimePublisher,
+    };
+    let notification_tool_context =
+        notification_inbound::ai_tool::NotificationToolContext::new(notification_reader_service);
+
+    let chat_repo = chat::outbound::postgres::PgChatRepo::new(pool.clone(), owned_entity_registrar);
+    let chat_service = chat::domain::service::ChatServiceImpl::new(
+        chat_repo,
+        Arc::new(ai_toolset::AsyncToolCollection::new()),
+        (),
+        entity_access_management::domain::service::EntityAccessManagementServiceImpl::new(
+            entity_access_management::outbound::PgRepository::new(pool.clone()),
+        ),
+    );
+    let chat_tool_context = chat::inbound::toolset::ChatToolContext::new(
+        chat_service,
+        (*entity_access_service).clone(),
+    );
+
+    let anthropic_tool_context = build_anthropic_tool_context();
+
+    let skill_tool_context = crate::tool_context::build_skill_tool_context(
+        search_client.clone(),
+        soup_service.clone(),
+        &document_tool_context,
+    );
+
+    let initiative_tool_context = crate::tool_context::build_initiative_tool_context(
+        pool.clone(),
+        &document_tool_context,
+        properties_service.clone(),
+        entity_access_service.clone(),
+        side_effect_clients.macro_event_broker,
+    );
+
+    let databases_tool_context = crate::tool_context::build_databases_tool_context(
+        pool.clone(),
+        entity_access_service.clone(),
+        crate::tool_context::ToolTableEventPublisher::Gateway(
+            databases::outbound::gateway_event_publisher::GatewayTableEventPublisher::new(
+                databases_gateway,
+            ),
+        ),
+        crate::tool_context::MaybeToolEventBroker::Real(macro_event_broker.clone()),
+    );
+    let project_tool_context = crate::tool_context::build_project_tool_context(
+        pool.clone(),
+        macro_event_broker.clone(),
+        entity_access_service.clone(),
+        document_tool_context.service.clone(),
+        user_email_service.clone(),
+        databases_tool_context.service.clone(),
+    );
+    let databases_sql_tool_context = crate::tool_context::build_databases_sql_tool_context(
+        &databases_tool_context,
+        soup_service.clone(),
+        pool.clone(),
+    );
+    let crm_tool_context = crate::tool_context::build_crm_tool_context(pool.clone());
+    let pipeline_tool_context = crate::tool_context::build_pipeline_tool_context(
+        pool.clone(),
+        &databases_tool_context,
+        &crm_tool_context,
+    );
+    let crm_transfer_tool_context = crate::tool_context::build_crm_transfer_tool_context(
+        &pipeline_tool_context,
+        &crm_tool_context,
+        &document_tool_context,
+    );
+
+    let forms_tool_context = crate::tool_context::build_forms_tool_context(
+        pool.clone(),
+        &document_tool_context,
+        &databases_tool_context,
+        &calendar_tool_context,
+        Some(side_effect_clients.connection_gateway.as_ref().clone()),
+        crate::tool_context::MaybeToolEventBroker::Real(macro_event_broker.clone()),
+        crate::tool_context::FormsToolConfig {
+            app_origin: app_service_url::AppServiceUrl::new()?.to_string(),
+            editing_worker_url: ai_editing_worker_url,
+            static_files: static_file_service_client::StaticFileServiceClient::new(
+                macro_auth::InternalApiKey::new()?.to_string(),
+                static_file_service_url::StaticFileServiceUrl::new()?.to_string(),
+            ),
+        },
+    );
+
+    let admission = ai_billing::composition::pg_admission_service(
+        pool.clone(),
+        teams::outbound::team_repo::TeamRepositoryImpl::new(pool.clone()),
+        enforcement,
+        pricing,
+    );
+    let pipedream_client = crate::mcp_app_catalog::connector_backends_from_env()?;
+    let native_servers = match maybe_env
+        .mcp_credentials_key_secret_name
+        .as_ref()
+        .and_then(|key| key.value())
+    {
+        Some(secret_name) => {
+            let mcp_credentials_key = secretsmanager_client
+                .get_maybe_secret_value(environment, secret_name)
+                .await
+                .context("failed to load MCP credentials encryption key")?;
+            let mcp_encryption_key =
+                mcp_client::domain::models::AesKey::try_from(mcp_credentials_key.as_ref())
+                    .context("invalid MCP credentials encryption key")?;
+            Some(Arc::new(mcp_client::outbound::NativeServerStore::new(
+                mcp_client::outbound::pg_server_repo::PgServerRepo::new(
+                    pool.clone(),
+                    mcp_encryption_key,
+                ),
+                linked_github,
+            )))
+        }
+        None => None,
+    };
+    let import_tool_context = if let Some(native_servers) = &native_servers {
+        let pipedream_connections = Arc::new(
+            pipedream_mcp::outbound::pg_connection_repo::PgConnectionRepo::new(pool.clone()),
+        );
+        let mcp_selector = Arc::new(mcp_select::McpToolSelector::new(
+            native_servers.clone(),
+            pipedream_connections.clone(),
+            Arc::new(pipedream_client.clone()),
+        ));
+        let import_service = Arc::new(
+            import::domain::service::ImportServiceImpl::new(
+                crate::tool_context::build_import_repo(pool.clone()),
+                mcp_selector.clone(),
+                Arc::new(crate::ToolEntityCreator {
+                    document_creator: document_tool_context.creator.clone(),
+                    entity_access_service: entity_access_service.clone(),
+                    channel_service: channel_tool_context.service.clone(),
+                    task_properties: document_tool_context
+                        .service
+                        .task_properties_service
+                        .clone(),
+                    document_properties:
+                        import::outbound::document_properties::DocumentPropertiesApplicator::new(
+                            properties_service.clone(),
+                        ),
+                    team_repository: crate::tool_context::build_team_repository(pool.clone()),
+                    initiative_service: initiative_tool_context.service.clone(),
+                    project_service: project_tool_context.service.clone(),
+                    databases_service: databases_tool_context.service.clone(),
+                    document_service: document_tool_context.service.clone(),
+                }),
+                recorder.clone(),
+            )
+            .with_slack_source(Arc::new(
+                import::outbound::mcp_slack_source::McpSlackSource::new(mcp_selector),
+            ))
+            .with_tracker_connections(
+                Arc::new(
+                    import_linear::outbound::client::PipedreamLinearConnections::new(
+                        pipedream_connections.clone(),
+                        pipedream_client.clone(),
+                    ),
+                ),
+                Arc::new(
+                    import_jira::outbound::client::PipedreamJiraConnections::new(
+                        pipedream_connections.clone(),
+                        pipedream_client.clone(),
+                    ),
+                ),
+            )
+            .with_notion_connections(Arc::new(
+                import_notion::outbound::pipedream::PipedreamNotionConnections::new(
+                    pipedream_connections.clone(),
+                    pipedream_client.clone(),
+                ),
+            ))
+            .with_admission(admission.clone())
+            .with_notifier(import::outbound::gateway_notifier::gateway_import_notify(
+                side_effect_clients.connection_gateway.clone(),
+            ))
+            .with_job_shutdown(import_jobs.shutdown, import_jobs.tracker),
+        );
+        ToolImportToolContext::wired(import_service)
+    } else {
+        ToolImportToolContext::unwired()
+    };
+    let mcp_server_tool_context = match &native_servers {
+        Some(native_servers) => crate::tool_context::ToolMcpServerToolContext::wired(
+            mcp_client::domain::service::ServerDirectory::new(native_servers.clone()),
+        ),
+        None => crate::tool_context::ToolMcpServerToolContext::unwired(),
+    };
+
+    Ok(ToolServiceContext {
+        memory_tool_context: crate::memory::build_memory_tool_context(
+            pool.clone(),
+            recorder.clone(),
+        ),
+        connector_tool_context: crate::tool_context::build_connector_tool_context(
+            pool.clone(),
+            pipedream_client.clone(),
+            native_servers,
+        ),
+        search_service_client: search_client.clone(),
+        email_service_client: email_ext_client,
+        soup_service,
+        email_service: email_service_for_tools,
+        activity_tool_context: crate::tool_context::build_activity_tool_context(
+            pool.clone(),
+            properties_service,
+            entity_access_service.clone(),
+        ),
+        image_generation_tool_context: crate::build_image_generation_tool_context(
+            &document_tool_context,
+            build_image_generator_from_env(),
+            recorder.clone(),
+        )?,
+        cognition_tool_context: build_cognition_tool_context()?,
+        message_tool_context: crate::tool_context::build_message_tool_context(
+            &document_tool_context,
+        ),
+        document_tool_context,
+        properties_tool_context,
+        email_tool_context,
+        call_tool_context,
+        calendar_tool_context,
+        team_calendar_tool_context: crate::tool_context::build_team_calendar_tool_context(
+            pool.clone(),
+            macro_env_var::maybe_read_env("CALENDAR_TEAM_SHARING_ENABLED")
+                .and_then(|value| value.parse::<bool>().ok())
+                .unwrap_or(false),
+        ),
+        booking_management_tool_context: crate::tool_context::build_booking_management_tool_context(
+            CalendarServiceUrl::new()?,
+            env.internal_api_key.to_string(),
+            environment,
+        ),
+        booking_link_tool_context: crate::tool_context::build_booking_link_tool_context(
+            pool.clone(),
+            environment,
+        ),
+        notification_tool_context,
+        item_notification_preference_tool_context:
+            crate::tool_context::build_item_notification_preference_tool_context(pool.clone()),
+        databases_tool_context,
+        forms_tool_context,
+        databases_sql_tool_context,
+        import_tool_context,
+        mcp_server_tool_context,
+        chat_tool_context,
+        channel_tool_context,
+        channel_media_upload_tool_context: crate::build_channel_media_upload_tool_context()?,
+        bot_tool_context: crate::tool_context::build_bot_tool_context(
+            pool.clone(),
+            crate::tool_context::MaybeToolEventBroker::Real(macro_event_broker.clone()),
+            entity_access_service.clone(),
+            document_storage_service_url,
+            pipedream_client
+                .as_ref()
+                .map(|backends| backends.pipedream().clone()),
+        ),
+        read_agent_session_context: crate::build_read_agent_session_context(
+            pool.clone(),
+            entity_access_service.clone(),
+        ),
+        coding_agent_tool_context: crate::build_coding_agent_tool_context(
+            agent_harness_service_url::AgentHarnessServiceUrl::new()?,
+            env.internal_api_key.to_string(),
+        )?,
+        project_tool_context,
+        favorites_tool_context: crate::tool_context::build_favorites_tool_context(
+            favorites_service,
+            entity_access_service.clone(),
+        ),
+        initiative_tool_context,
+        team_tool_context: crate::tool_context::build_team_tool_context(pool.clone()),
+        crm_tool_context,
+        pipeline_tool_context,
+        crm_transfer_tool_context,
+        skill_tool_context,
+        schedule_tool_context: crate::build_routine_tool_context()?,
+        anthropic_tool_context,
+        web_search_provider: build_web_search_provider_from_env(),
+        admission,
+        recorder,
+        usage_context: ai_usage::UsageContext::system(ai_usage::AiFeature::Chat),
+    })
+}
+
+/// The vendor behind `WebSearch` and `WebFetch`: Tavily, keyed by
+/// `TAVILY_API_KEY`. Without the key the host still boots, logs an error, and
+/// every web call fails with a "not configured" error.
+pub fn build_web_search_provider_from_env() -> Arc<dyn web_search::domain::ports::SearchProvider> {
+    Arc::new(web_search::outbound::tavily::TavilyClient::from_env())
+}
+
+/// Build an [`AnthropicToolContext`] from environment variables.
+///
+/// Reads `ANTHROPIC_API_KEY` and configures the client with the beta header
+/// required for the code execution server tools.
+pub fn build_anthropic_tool_context() -> AnthropicToolContext {
+    let mut config = anthropic::config::Config::dangrously_try_from_env();
+    config.headers.append(
+        anthropic::prelude::CODE_EXECUTION_TOOL_HEADER.0.clone(),
+        anthropic::prelude::CODE_EXECUTION_TOOL_HEADER.1.clone(),
+    );
+    let client = anthropic::client::Client::with_config(config);
+    AnthropicToolContext::new(client, "claude-haiku-4-5".into())
+}
+
+/// Dummy [`AnthropicToolContext`] that does not require an API key.
+#[cfg(any(test, feature = "test-support"))]
+pub fn build_anthropic_tool_context_test() -> AnthropicToolContext {
+    let config = anthropic::config::Config::default();
+    let client = anthropic::client::Client::with_config(config);
+    AnthropicToolContext::new(client, "test-model".into())
+}

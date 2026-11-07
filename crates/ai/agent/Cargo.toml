@@ -1,0 +1,48 @@
+[package]
+edition = "2024"
+name = "agent"
+publish = false
+version = "0.1.0"
+
+[features]
+debug-messages = []
+
+[dependencies]
+anyhow = { workspace = true }
+async-stream = { workspace = true }
+async-trait = { workspace = true }
+bytes = { workspace = true }
+chrono = { workspace = true }
+futures = { workspace = true }
+jsonschema = { workspace = true }
+reqwest = { workspace = true }
+rig-core = { workspace = true }
+rig-agent = { workspace = true }
+schemars = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+utoipa = { workspace = true }
+tokio = { workspace = true }
+tracing = { workspace = true }
+ai_usage = { workspace = true }
+ai_toolset = { workspace = true }
+attachment = { workspace = true }
+genai_telemetry = { workspace = true }
+macro_env_var = { workspace = true }
+macro_user_id = { workspace = true }
+workspace-hack = { version = "0.1", path = "../../workspace-hack" }
+tokio-util.workspace = true
+chat_message = { workspace = true, features = ["schema"] }
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["test-util"] }
+model_entity = { workspace = true }
+non_empty = { workspace = true }
+opentelemetry = { workspace = true, features = ["trace"] }
+opentelemetry_sdk = { workspace = true, features = ["testing", "trace"] }
+tracing-opentelemetry = { workspace = true }
+tracing-subscriber = { workspace = true }
+# Enable rig's scripted MockCompletionModel for tests (fake AI streams).
+rig-core = { workspace = true, features = ["test-utils"] }
+rig-agent = { workspace = true, features = ["test-utils"] }

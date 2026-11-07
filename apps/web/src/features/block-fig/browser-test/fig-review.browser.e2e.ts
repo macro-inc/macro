@@ -1,6 +1,6 @@
 import { expect, type Page, test } from '@playwright/test';
 
-// The engine's prototype fixture (crates/fig_engine/src/testing/prototype.rs):
+// The engine's prototype fixture (crates/engines/fig_engine/src/testing/prototype.rs):
 // page "Flow" holds "Start" (1:10, the flow "Onboarding"; "Next" 1:11 goes
 // to Details with a dissolve, "Open menu" 1:12 opens the Menu overlay),
 // "Details" (1:20; "Back" 1:21, "Finish" 1:22 slides to Done), "Menu"

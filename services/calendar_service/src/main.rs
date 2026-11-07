@@ -3,6 +3,8 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use anyhow::Context;
+use app_service_url::AppServiceUrl;
+use auth_service_url::AuthServiceUrl;
 use calendar_events::{
     domain::{mutations::CalendarMutationServiceImpl, service::CalendarService},
     outbound::{google::GoogleCalendarClient, pg::PgCalendarRepository},
@@ -16,6 +18,8 @@ use calendar_service::calendar_reauth::LinkManagerReauthNotifier;
 use calendar_service::calendar_refresh::ConnectionGatewayCalendarRefresh;
 use calendar_service::calendar_tokens::CalendarTokenProviderAdapter;
 use calendar_service::config::{Config, calendar_watch_config};
+use connection_gateway_url::ConnectionGatewayUrl;
+use document_storage_service_url::DocumentStorageServiceUrl;
 use macro_auth::middleware::decode_jwt::JwtValidationArgs;
 use macro_authorization::{
     InternalAuthConfig, MacroAuthJwtValidator, MacroAuthorizationState,
@@ -24,9 +28,6 @@ use macro_authorization::{
 use macro_entrypoint::MacroEntrypoint;
 use macro_env::Environment;
 use macro_event_broker::{KafkaEventPublisher, MacroEventBrokerService};
-use macro_service_urls::{
-    AppServiceUrl, AuthServiceUrl, ConnectionGatewayUrl, DocumentStorageServiceUrl,
-};
 use sqlx::postgres::PgPoolOptions;
 use tokio_util::{sync::CancellationToken, task::TaskTracker};
 
@@ -196,13 +197,16 @@ async fn main() -> anyhow::Result<()> {
             config.calendar_team_sharing_enabled,
         ),
     );
-    let outlook_provider = email_api_client::OutlookApiClientRepository::with_gate(Arc::new(
-        email_api_client::outbound::microsoft_gate::RedisMicrosoftRequestGate(redis_conn.clone()),
-    ))?
-    .with_rejected_token_refresh(Arc::new(CalendarTokenProviderAdapter::new(
-        redis_conn.clone(),
-        Arc::new(auth_service_client.clone()),
-    )));
+    let outlook_provider =
+        email_api_client_outbound::OutlookApiClientRepository::with_gate(Arc::new(
+            email_api_client_outbound::microsoft_gate::RedisMicrosoftRequestGate(
+                redis_conn.clone(),
+            ),
+        ))?
+        .with_rejected_token_refresh(Arc::new(CalendarTokenProviderAdapter::new(
+            redis_conn.clone(),
+            Arc::new(auth_service_client.clone()),
+        )));
     if config.calendar_sync_enabled && config.outlook_sync_enabled {
         let sync = calendar_events::domain::outlook::OutlookCalendarSync::new(
             PgCalendarRepository::new(db.clone()),

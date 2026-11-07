@@ -2,6 +2,7 @@ use super::*;
 use connection_gateway::model::connection::StoredConnectionEntity;
 use connection_gateway::model::tracking::{EntityConnection, UserEntityConnection};
 use connection_gateway::service::connection::ConnectionRepo;
+use entity_access_outbound::PgAccessRepository;
 use std::sync::Arc;
 use stream::domain::{
     ItemId, ItemStream, Result as StreamResult, StreamEvent, StreamId, StreamRepo,
@@ -175,13 +176,16 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
     let config = Config::new_empty_for_test();
     let enforcement = config.enable_ai_usage_enforcement;
     let pricing = config.ai_pricing();
-    let admission =
-        ai_billing::composition::pg_admission_service(pool.clone(), enforcement, pricing);
+    let admission = ai_billing::composition::pg_admission_service(
+        pool.clone(),
+        teams::outbound::team_repo::TeamRepositoryImpl::new(pool.clone()),
+        enforcement,
+        pricing,
+    );
     let recorder = ai_usage::pg_recorder_with_enforcement(pool.clone(), enforcement);
     use aws_sdk_sqs;
-    use channels::{
-        domain::list_service::ChannelListServiceImpl, outbound::pg_channels_repo::PgChannelsRepo,
-    };
+    use channels::domain::list_service::ChannelListServiceImpl;
+    use channels_outbound::pg_channels_repo::PgChannelsRepo;
     use document_storage_service_client::DocumentStorageServiceClient;
     use email::domain::ports::ReadonlyEmailPreviewAdapter;
     use email::domain::service::EmailServiceImpl;
@@ -201,8 +205,8 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
     use notification::domain::service::{
         NotificationReaderService, PlatformArnConfig, SqsNotificationIngress,
     };
-    use notification::outbound::queue::SqsQueue;
-    use notification::outbound::repository::DbNotificationRepository;
+    use notification_outbound::queue::SqsQueue;
+    use notification_outbound::repository::DbNotificationRepository;
     use search_service_client::SearchServiceClient;
     use soup::domain::service::SoupImpl;
     use soup::outbound::pg_soup_repo::PgSoupRepo;
@@ -241,7 +245,10 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
         crm::outbound::no_op_resolver::NoOpCompanyMetadataResolver,
     );
     let email_service = EmailServiceImpl::new(
-        EmailPgRepo::new(pool.clone()),
+        EmailPgRepo::new(
+            pool.clone(),
+            Arc::new(PgAccessRepository::new(pool.clone())),
+        ),
         frecency_service.clone(),
         email::domain::ports::NoOpEnqueuer,
         crm_service.clone(),
@@ -268,7 +275,12 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
             ReadonlyEmailPreviewAdapter(email_service),
             channels_service,
             call::domain::service::CallRecordQueryServiceImpl::new(
-                call::outbound::pg_call_repo::PgCallRepo::new(pool.clone()),
+                call::outbound::pg_call_repo::PgCallRepo::new(
+                    pool.clone(),
+                    std::sync::Arc::new(channels_outbound::channel_name::PgChannelNames::new(
+                        pool.clone(),
+                    )),
+                ),
             ),
             crm::domain::service::NoOpCrmService,
             github_pull_request_service,
@@ -300,7 +312,7 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
         realtime: notification::domain::ports::NoopNotificationRealtimePublisher,
     };
     let notification_tool_context =
-        notification::inbound::ai_tool::NotificationToolContext::new(notification_reader_service);
+        notification_inbound::ai_tool::NotificationToolContext::new(notification_reader_service);
 
     // Build document tool context for AI tools
     let s3_config = aws_sdk_s3::Config::builder()
@@ -330,7 +342,7 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
     };
     let entity_access_service = Arc::new(
         entity_access::domain::service::EntityAccessServiceImpl::new(
-            entity_access::outbound::PgAccessRepository::new(pool.clone()),
+            entity_access_outbound::PgAccessRepository::new(pool.clone()),
         ),
     );
     // Producer creation is lazy: nothing connects to Kafka unless an event
@@ -392,7 +404,10 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
 
     let user_email_service = Arc::new(
         email::domain::service::EmailServiceImpl::new(
-            email::outbound::EmailPgRepo::new(pool.clone()),
+            email::outbound::EmailPgRepo::new(
+                pool.clone(),
+                Arc::new(PgAccessRepository::new(pool.clone())),
+            ),
             frecency::domain::services::FrecencyQueryServiceImpl::new(
                 frecency::outbound::postgres::FrecencyPgStorage::new(pool.clone()),
             ),
@@ -413,7 +428,12 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
     );
 
     let call_service = call::domain::service::CallServiceImpl::new(
-        call::outbound::pg_call_repo::PgCallRepo::new(pool.clone()),
+        call::outbound::pg_call_repo::PgCallRepo::new(
+            pool.clone(),
+            std::sync::Arc::new(channels_outbound::channel_name::PgChannelNames::new(
+                pool.clone(),
+            )),
+        ),
         ai_tools::NoOpCallRtcClient,
         ai_tools::NoOpConnectionService,
         (*entity_access_service).clone(),
@@ -479,10 +499,10 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
 
     let calendar_tool_context = ai_tools::build_calendar_tool_context(
         pool.clone(),
-        macro_service_urls::ServiceUrl::owned("http://localhost:0").into(),
+        service_url::ServiceUrl::owned("http://localhost:0").into(),
         "test-internal-api-key".to_string(),
         call_tool_context.service.clone(),
-        macro_service_urls::AppServiceUrl::local(),
+        app_service_url::AppServiceUrl::local(),
         true,
     );
     let forms_tool_context = ai_tools::build_forms_tool_context(
@@ -527,7 +547,7 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
         email_tool_context: email_tool_context.clone(),
         call_tool_context: call_tool_context.clone(),
         booking_management_tool_context: ai_tools::build_booking_management_tool_context(
-            macro_service_urls::ServiceUrl::owned("http://localhost:0").into(),
+            service_url::ServiceUrl::owned("http://localhost:0").into(),
             "test-internal-api-key".to_string(),
             macro_env::Environment::Local,
         ),
@@ -537,10 +557,10 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
         ),
         calendar_tool_context: ai_tools::build_calendar_tool_context(
             pool.clone(),
-            macro_service_urls::ServiceUrl::owned("http://localhost:0").into(),
+            service_url::ServiceUrl::owned("http://localhost:0").into(),
             "test-internal-api-key".to_string(),
             call_tool_context.service.clone(),
-            macro_service_urls::AppServiceUrl::local(),
+            app_service_url::AppServiceUrl::local(),
             true,
         ),
         team_calendar_tool_context: ai_tools::build_team_calendar_tool_context(pool.clone(), true),
@@ -570,7 +590,7 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
             entity_access_service.clone(),
         ),
         coding_agent_tool_context: ai_tools::build_coding_agent_tool_context(
-            macro_service_urls::ServiceUrl::owned("http://localhost:0").into(),
+            service_url::ServiceUrl::owned("http://localhost:0").into(),
             "test-internal-api-key".to_string(),
         )
         .expect("valid test coding agent context"),
@@ -676,7 +696,7 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
     );
 
     let projection_generator =
-        ai_projections::outbound::agent_generator::AgentProjectionGenerator::new(
+        crate::cognition::service::projection_generator::AgentProjectionGenerator::new(
             tool_service_context.clone(),
             ai_tools::tools_for(ai_tools::AiHost::Chat),
         );
@@ -762,7 +782,7 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
         notification_ingress_service,
         connection_repo: MockConnectionRepo::new(),
         connection_gateway_client: Arc::new(
-            notification::outbound::websocket::ConnectionGatewayClient::new(
+            notification_outbound::websocket::ConnectionGatewayClient::new(
                 "testing".to_string(),
                 "http://localhost".to_string(),
             ),
@@ -804,7 +824,7 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
                         )),
                         entity_access_service.clone(),
                     ),
-                    channel: channels::inbound::attachment::ChannelAttachmentService::new(
+                    channel: channels_inbound::attachment::ChannelAttachmentService::new(
                         Arc::new(PgChannelsRepo::new(pool.clone())),
                         entity_access_service.clone(),
                     ),

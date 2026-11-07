@@ -3,6 +3,7 @@
 mod api;
 pub mod config;
 mod core;
+mod memory_schedule;
 mod model;
 mod refresh;
 mod server;
