@@ -204,6 +204,10 @@ pub enum Fact {
     WalAdopted {
         /// Profile.
         profile: ProfileName,
+        /// Exact source/target document identity.
+        doc: doc_sync_core::SyncDocId,
+        /// Source sequences actually removed, including covered delivered rows.
+        removed: Vec<WalSeq>,
         /// Previous owner.
         from: WalOwner,
         /// New owner.
@@ -215,6 +219,8 @@ pub enum Fact {
     WalExpired {
         /// Profile.
         profile: ProfileName,
+        /// Exact storage identity.
+        doc: doc_sync_core::SyncDocId,
         /// Owner.
         owner: WalOwner,
         /// Removed sequences.
@@ -427,6 +433,28 @@ pub enum Fact {
         connection: u32,
         /// Whether the physical handshake succeeded.
         open: bool,
+    },
+    /// Actual rollback of delivered flags/rows during the injected power-loss window.
+    WalDeliveryLost {
+        /// Durable profile.
+        profile: ProfileName,
+        /// Exact storage identity.
+        doc: doc_sync_core::SyncDocId,
+        /// Original owner, including legacy rows.
+        owner: doc_sync_core::WalOwner,
+        /// Delivered sequences that actually disappeared or lost their flag.
+        seqs: Vec<doc_sync_core::WalSeq>,
+    },
+    /// Actual deletion of delivered WAL rows covered by a durable snapshot.
+    WalPruned {
+        /// Durable profile.
+        profile: ProfileName,
+        /// Exact storage identity.
+        doc: doc_sync_core::SyncDocId,
+        /// Original owner.
+        owner: doc_sync_core::SessionId,
+        /// Removed sequences, distinguished from attempted prune requests.
+        seqs: Vec<doc_sync_core::WalSeq>,
     },
     /// Server lifecycle transition.
     Server {

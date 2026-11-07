@@ -200,7 +200,9 @@ impl SyncCore {
         }
     }
 
-    pub(super) fn is_delivered(&self, seq: WalSeq) -> bool {
+    /// Whether a retained WAL row has received an acknowledgement, including rows
+    /// above a prefix blocked by another parked row. Pruned rows are no longer retained.
+    pub fn is_delivered(&self, seq: WalSeq) -> bool {
         self.delivered.contains(&seq)
     }
     pub(super) fn park_reason(&self, entry: &WalEntry) -> Option<ParkReason> {

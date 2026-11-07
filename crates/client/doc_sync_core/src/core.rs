@@ -359,6 +359,13 @@ impl SyncCore {
     pub fn wal(&self) -> &Wal {
         &self.wal
     }
+    /// Current own-WAL push identity and exact ordered row range, if one is outstanding.
+    /// Assist pushes are independent and retain their original durable owners.
+    pub fn push_in_flight(&self) -> Option<(&UpdateId, &[WalSeq])> {
+        self.push
+            .as_ref()
+            .map(|push| (&push.id, push.rows.as_slice()))
+    }
     /// Whether the host should provide additional unused peer ids.
     pub fn needs_peer_ids(&self) -> bool {
         self.peers.needs_refill()
