@@ -4,11 +4,13 @@
 
 mod datadog_fmt;
 mod grafana;
+mod postgres;
 mod shutdown;
 
 #[cfg(test)]
 mod test;
 
+pub use postgres::{PgPoolOptionsExt, pg_connect_options};
 pub use shutdown::shutdown_signal;
 
 use macro_env::Environment;

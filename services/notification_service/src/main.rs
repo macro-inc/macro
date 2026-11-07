@@ -25,6 +25,7 @@ use macro_authorization::{
     PgUserApiKeyAuthorizationRepo, PgUserApiKeyAuthorizer,
 };
 use macro_entrypoint::MacroEntrypoint;
+use macro_entrypoint::PgPoolOptionsExt as _;
 use macro_env::Environment;
 use macro_event_broker::{GlobalSpawner, KafkaEventPublisher, MacroEventBrokerService};
 use macro_service_urls::ConnectionGatewayUrl;
@@ -57,7 +58,7 @@ pub async fn main() -> anyhow::Result<()> {
     let db = PgPoolOptions::new()
         .min_connections(min_connections)
         .max_connections(max_connections)
-        .connect(config.database_url.as_ref())
+        .connect_as(config.database_url.as_ref(), "primary")
         .await
         .context("could not connect to db")?;
 

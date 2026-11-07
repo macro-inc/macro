@@ -5,6 +5,7 @@ use lambda_runtime::{
     tracing::{self},
 };
 use macro_entrypoint::MacroEntrypoint;
+use macro_entrypoint::PgPoolOptionsExt as _;
 use macro_env_var::env_vars;
 use sqlx::postgres::PgPoolOptions;
 
@@ -24,7 +25,7 @@ async fn main() -> Result<(), Error> {
     let db = PgPoolOptions::new()
         .min_connections(1)
         .max_connections(1) // We want 1 db connection per dss item (document, project, chat)
-        .connect(database_url.as_ref())
+        .connect_as(database_url.as_ref(), "primary")
         .await
         .context("could not connect to db")?;
 

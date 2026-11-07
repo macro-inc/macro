@@ -2,6 +2,7 @@ use std::sync::Arc;
 
 use anyhow::Context;
 use macro_entrypoint::MacroEntrypoint;
+use macro_entrypoint::PgPoolOptionsExt as _;
 use sha_cleanup_worker::{config::Config, process::process, service};
 use sqlx::postgres::PgPoolOptions;
 
@@ -27,7 +28,7 @@ async fn main() -> Result<(), anyhow::Error> {
 
     let db = PgPoolOptions::new()
         .min_connections(1)
-        .connect(&config.database_url)
+        .connect_as(&config.database_url, "primary")
         .await
         .context("could not connect to db")?;
 

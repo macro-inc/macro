@@ -16,6 +16,7 @@ use macro_authorization::{
     MacroAuthorizationState, PgUserApiKeyAuthorizationRepo, PgUserApiKeyAuthorizer,
 };
 use macro_entrypoint::MacroEntrypoint;
+use macro_entrypoint::PgPoolOptionsExt as _;
 use macro_service_urls::ConnectionGatewayUrl;
 use rate_limit::{RateLimitServiceImpl, RedisRateLimitAdapter};
 use sqlx::postgres::PgPoolOptions;
@@ -35,7 +36,7 @@ async fn connect_to_database(config: &Config) -> anyhow::Result<sqlx::PgPool> {
     let db = PgPoolOptions::new()
         .min_connections(min_connections)
         .max_connections(max_connections)
-        .connect(database_url)
+        .connect_as(database_url, "primary")
         .await
         .context("could not connect to db")?;
     Ok(db)
