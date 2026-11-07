@@ -41,5 +41,5 @@ by the composition root.
 
 Read the [domain ports](../../../crates/collab_surface/src/domain/ports.rs) and
 [parent policy](../../../crates/collab_surface/src/domain/models.rs) before wiring
-a consumer. The [initiative adapter](../../../crates/initiative_description/src/lib.rs)
+a consumer. The [initiative adapter](../../../crates/projects/initiative_description/src/lib.rs)
 shows how a feature reuses the service through its own domain port.
