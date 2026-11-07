@@ -1,3 +1,7 @@
+// @vitest-environment jsdom
+
+import * as headlessModule from '@lexical/headless';
+import * as htmlModule from '@lexical/html';
 import * as listModule from '@lexical/list';
 import * as markdownModule from '@lexical/markdown';
 import * as richTextModule from '@lexical/rich-text';
@@ -11,6 +15,8 @@ import { activate, current, Recorder, wrapModule } from '../membrane';
 import { replay } from '../replay-js';
 
 const lexical = wrapModule(upstream, 'lexical');
+const html = wrapModule(htmlModule, '@lexical/html');
+const headless = wrapModule(headlessModule, '@lexical/headless');
 const list = wrapModule(listModule, '@lexical/list');
 const markdown = wrapModule(markdownModule, '@lexical/markdown');
 wrapModule(richTextModule, '@lexical/rich-text');
@@ -18,7 +24,9 @@ const utils = wrapModule(utilsModule, '@lexical/utils');
 const utilsPath =
   process.cwd() +
   '/../../target/lexical-upstream/packages/lexical/src/LexicalUtils.ts';
-const { resetRandomKey } = await import(/* @vite-ignore */ utilsPath);
+const counterModule = await import(/* @vite-ignore */ utilsPath);
+wrapModule(counterModule, 'lexical/LexicalUtils');
+const { resetRandomKey } = counterModule;
 const source = {
   repo: 'lexical',
   version: '0.45.0',
@@ -83,6 +91,65 @@ test('read flush and deferred callbacks expose their batching boundaries', async
 });
 
 let tape: Entropy;
+test('nested inline transformer hooks and headless selection replay without original callbacks', async () => {
+  const recorder = new Recorder();
+  activate(recorder);
+  const editor = headless.createHeadlessEditor({
+    namespace: 'nested-transformer',
+  });
+  editor.update(
+    () =>
+      markdown.$convertFromMarkdownString('plain', [
+        {
+          type: 'text-match',
+          dependencies: [],
+          regExp: /never-match$/,
+          importRegExp: /never-match/,
+          replace: () => {
+            throw new Error('unused hook was executed');
+          },
+          export: () => null,
+        },
+      ]),
+    { discrete: true }
+  );
+  editor.getEditorState().read(() => lexical.$getSelection());
+  const result = fixture(recorder, source);
+  expect(result.config.headless).toBe(true);
+  expect(recorder.reasons.size).toBe(0);
+  await replay(JSON.parse(JSON.stringify(result)), resetRandomKey);
+});
+test('HTML-seeded markdown export restores a partial JSON state and key layout', async () => {
+  const recorder = new Recorder(true);
+  activate(recorder);
+  const editor = headless.createHeadlessEditor();
+  editor.update(
+    () => {
+      const document = new DOMParser().parseFromString(
+        '<p>seeded text</p>',
+        'text/html'
+      );
+      lexical
+        .$getRoot()
+        .append(...html.$generateNodesFromDOM(editor, document));
+    },
+    { discrete: true }
+  );
+  let output: string | undefined;
+  editor.getEditorState().read(
+    () => {
+      output = markdown.$convertToMarkdownString([]);
+    },
+    { editor }
+  );
+  expect(output).toBe('seeded text');
+  const result = fixture(recorder, source);
+  expect(result.partial).toBe(true);
+  expect(result.initial.keys).toEqual(['root', '1', '2']);
+  expect(recorder.reasons.size).toBe(0);
+  await replay(JSON.parse(JSON.stringify(result)), resetRandomKey);
+});
+
 beforeEach(() => {
   resetRandomKey();
   tape = new Entropy((op) => current?.trace.push(op), undefined, isOracleFrame);

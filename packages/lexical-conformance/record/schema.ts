@@ -37,7 +37,13 @@ export type Fixture = {
   normalize: string[];
   outcomeDiffers: Value[];
   config: Fields;
-  initial: { editorState: null; selection: null };
+  initial: {
+    editorState: Value;
+    selection: Value;
+    keys?: string[];
+    nodeMapKeys?: string[];
+    nextKey?: number;
+  };
   trace: Op[];
   tapes: Tape[];
   final: Value;

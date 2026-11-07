@@ -2,6 +2,7 @@ import { isDeepStrictEqual } from 'node:util';
 import { isOracleFrame } from './attribution';
 import { Entropy } from './entropy';
 import { captureEvents } from './events';
+import { restoreInitial } from './initial';
 import { activate, modules, Recorder, snapshot } from './membrane';
 import {
   errorValue,
@@ -11,6 +12,22 @@ import {
   type Value,
 } from './schema';
 
+/** Locate mismatches without exposing fixture values in diagnostics. */
+function difference(a: unknown, b: unknown, path = 'commit'): string {
+  if (isDeepStrictEqual(a, b)) return '';
+  if (a && b && typeof a === 'object' && typeof b === 'object') {
+    for (const key of new Set([...Object.keys(a), ...Object.keys(b)])) {
+      const found = difference(
+        fields(a)[key],
+        fields(b)[key],
+        `${path}.${key}`
+      );
+      if (found) return found;
+    }
+  }
+  return path;
+}
+
 /** Replays fixture data only. No original test closure runs in this interpreter. */
 export async function replay(
   fixture: Fixture,
@@ -19,9 +36,7 @@ export async function replay(
   activate();
   if (
     fixture.schema !== 2 ||
-    fixture.partial ||
-    fixture.initial.editorState !== null ||
-    fixture.initial.selection !== null
+    (!fixture.partial && fixture.initial.editorState !== null)
   )
     throw new Error('Unsupported fixture initialization');
   if (fixture.trace.some((op) => op.src === 'module-init'))
@@ -48,12 +63,14 @@ export async function replay(
   const originalCommit = observer.commit.bind(observer);
   observer.commit = (...args) => {
     originalCommit(...args);
-    commits.push(observer.trace[observer.trace.length - 1]);
+    if (observer.editors.has(args[0]))
+      commits.push(observer.trace[observer.trace.length - 1]);
   };
   const originalError = observer.error.bind(observer);
   observer.error = (...args) => {
     originalError(...args);
-    errors.push(observer.trace[observer.trace.length - 1]);
+    if (observer.editors.has(args[0]))
+      errors.push(observer.trace[observer.trace.length - 1]);
   };
   const entropy = new Entropy(
     undefined,
@@ -64,9 +81,9 @@ export async function replay(
     isOracleFrame
   );
   const lookup = (name: string): Function => {
-    const dot = name.lastIndexOf('.');
-    const module = modules.get(name.slice(0, dot));
-    const fn = module?.[name.slice(dot + 1)];
+    const dot = name.indexOf('.');
+    let fn: unknown = modules.get(name.slice(0, dot));
+    for (const part of name.slice(dot + 1).split('.')) fn = fields(fn)[part];
     if (typeof fn !== 'function') throw new Error(`Unknown API ${name}`);
     return fn;
   };
@@ -159,6 +176,11 @@ export async function replay(
     if ('$key' in value) return value.raw;
     if ('$undef' in value) return undefined;
     if ('$num' in value) return Number(value.$num);
+    if ('$regexp' in value) {
+      const regexp = new RegExp(String(value.$regexp), String(value.flags));
+      regexp.lastIndex = Number(value.lastIndex);
+      return regexp;
+    }
     if ('$fn' in value) return lookup(String(value.$fn));
     if ('$cmd' in value) {
       for (const module of modules.values())
@@ -173,7 +195,9 @@ export async function replay(
     }
     if ('$klass' in value) {
       for (const module of modules.values()) {
-        for (const item of Object.values(module)) {
+        for (const item of Object.values(module).flatMap((value) =>
+          Array.isArray(value) ? value : [value]
+        )) {
           if (
             typeof item !== 'function' ||
             !('getType' in item) ||
@@ -204,7 +228,9 @@ export async function replay(
           error.name = String(invocation.throws.name);
           throw error;
         }
-        return decode(invocation.ret ?? { $undef: true });
+        return decode(
+          invocation.ret === undefined ? { $undef: true } : invocation.ret
+        );
       };
     }
     if ('$map' in value && Array.isArray(value.$map))
@@ -254,17 +280,32 @@ export async function replay(
           const lexical = modules.get('lexical');
           if (!lexical || typeof lexical.createEditor !== 'function')
             throw new Error('No lexical oracle loaded');
-          const editor = lexical.createEditor({
-            namespace: config.namespace,
+          const create = config.headless
+            ? modules.get('@lexical/headless')?.createHeadlessEditor
+            : lexical.createEditor;
+          if (typeof create !== 'function')
+            throw new Error('Missing editor factory');
+          const editor = create({
+            namespace: config.namespaceGenerated ? undefined : config.namespace,
             theme: decode(config.theme as Value),
             editable: config.editable,
-            nodes: (config.nodes as Value[]).map((node) =>
-              decode({ $klass: node })
-            ),
+            nodes: [
+              ...(config.nodes as Value[]).map((node) =>
+                decode({ $klass: node })
+              ),
+              ...((config.replacements ?? []) as Value[]).map(decode),
+            ],
             onError: (error: Error) => {
               if (errorMustThrow) throw error;
             },
           });
+          if (fixture.partial && op.id === 0)
+            restoreInitial(
+              editor,
+              fixture.initial,
+              lexical,
+              modules.get('lexical/LexicalUtils') ?? {}
+            );
           if (observer.editor(editor) !== op.id)
             throw new Error('Editor id mismatch');
           editors.set(Number(op.id), editor);
@@ -290,6 +331,7 @@ export async function replay(
           let result: unknown;
           let thrown: unknown;
           let didThrow = false;
+          const exit = observer.enter();
           try {
             if (name.startsWith('get:'))
               result = fields(receiver)[name.slice(4)];
@@ -305,13 +347,15 @@ export async function replay(
           } catch (error) {
             didThrow = true;
             thrown = error;
+          } finally {
+            exit();
           }
           if (op.throws) {
             if (!didThrow) throw new Error('Expected throw');
             compare(op.throws, errorValue(thrown));
           } else {
             if (didThrow) throw thrown;
-            compare(op.ret ?? { $undef: true }, result);
+            compare(op.ret === undefined ? { $undef: true } : op.ret, result);
           }
         } else if (op.op === 'update' || op.op === 'read') {
           if (op.op === 'update' && op.cause !== 'test') continue;
@@ -350,7 +394,9 @@ export async function replay(
               comparableSnapshot(op.snapshot)
             )
           )
-            throw new Error('Commit snapshot mismatch');
+            throw new Error(
+              `Commit snapshot mismatch: ${difference(actual, op)}`
+            );
         } else if (op.op === 'log') {
           if (!isDeepStrictEqual(logs.shift(), op))
             throw new Error('Log mismatch');
