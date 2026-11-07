@@ -110,6 +110,7 @@ impl Sim {
     pub fn run(mut self, script: &[Step]) -> Outcome {
         for (index, step) in script.iter().enumerate() {
             self.current_step = Some(index);
+            self.stats.steps += 1;
             if let Err(error) = self.step(step.clone()) {
                 self.fail(error)
             }
@@ -133,6 +134,7 @@ impl Sim {
             self.fail(Failure::new("canonical_log", error));
             Vec::new()
         });
+        self.stats.observe(&self.events, &finals);
         let trace_hash = self.trace(&event_bytes, &finals, &finals_after_quiet);
         Outcome {
             config: self.config.clone(),
@@ -262,6 +264,10 @@ impl Sim {
             wall: doc_sync_core::UnixMillis(self.clock.wall(client.skew)),
         };
         let (out, facts) = client.handle(input, now);
+        self.stats.wal_max_depth = self
+            .stats
+            .wal_max_depth
+            .max(u64::try_from(client.core.wal().entries.len()).unwrap_or(u64::MAX));
         let generation = client.generation;
         self.stats.handles = self.stats.handles.saturating_add(1);
         for fact in facts {

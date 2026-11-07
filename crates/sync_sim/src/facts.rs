@@ -537,6 +537,60 @@ pub struct Finals {
 /// Runtime work counters; derived from observed transitions.
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize)]
 pub struct RunStats {
+    /// Literal script transitions executed.
+    pub steps: u64,
+    /// Edits skipped by actual client lifecycle or authority.
+    pub skipped_ops: u64,
+    /// Observed tab crashes.
+    pub crashes: u64,
+    /// Observed browser-process crashes.
+    pub profile_crashes: u64,
+    /// Observed Room activation crashes.
+    pub server_crashes: u64,
+    /// Socket generations opened after the first per session.
+    pub reconnects: u64,
+    /// Transitions to the real exhausted-retry state.
+    pub gave_up: u64,
+    /// Real corruption resets started.
+    pub resets: u64,
+    /// Imports that actually retained missing dependencies.
+    pub pending_imports: u64,
+    /// Real incremental catchup attempts.
+    pub converge_rounds: u64,
+    /// Acknowledgment frames dropped by the network.
+    pub acks_lost: u64,
+    /// Maximum actual retained client WAL length.
+    pub wal_max_depth: u64,
+    /// Completed adoption transactions with moved rows.
+    pub adoptions: u64,
+    /// Pushes carrying rows owned by another live session.
+    pub assisted_pushes: u64,
+    /// Completed durable chatter-origin rows.
+    pub foreign_rows: u64,
+    /// Observed messages requiring multiple fragments.
+    pub multi_frame_messages: u64,
+    /// Observed authority transitions.
+    pub access_changes: u64,
+    /// Virtual time spent inside Settle transitions.
+    pub settle_ms: u64,
+    /// Actual retained parked rows in live final clients.
+    pub parked_rows_at_end: u64,
+    /// Profiles with two writable tabs of one document simultaneously.
+    pub multi_edit_tab_profiles: u64,
+    /// Issued appends completing after their owning tab crashed.
+    pub late_commits_after_lock_release: u64,
+    /// Observed callback failures from a directory outage.
+    pub d1_outages: u64,
+    /// Observed callback failures from operation-log storage outages.
+    pub storage_outages: u64,
+    /// Observed graceful closes before a pending coalesce deadline.
+    pub close_in_window: u64,
+    /// Actual foreign bytes on real peer pushes.
+    pub foreign_bytes_pushed: u64,
+    /// Actual own bytes on real peer pushes.
+    pub own_bytes_pushed: u64,
+    /// Actual applied operation kinds, including selection.
+    pub ops_by_kind: BTreeMap<String, u64>,
     /// Scheduled events processed.
     pub events: u64,
     /// Real client handle calls.

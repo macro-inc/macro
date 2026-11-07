@@ -308,7 +308,7 @@ impl Sim {
                         doc_sync_core::Access::Read => Access::Read,
                     };
                     if let Some(client) = self.clients.get_mut(name) {
-                        client.spec.access = access;
+                        client.effective_access = access;
                     }
                     self.emit(Fact::AccessChanged {
                         client: name.clone(),
@@ -439,7 +439,7 @@ impl Sim {
             return;
         }
         let Packet::Binary(frame) = packet else {
-            self.transmit_frame(key, direction, kind, packet, false);
+            self.transmit_frame(key, direction, kind, packet, false, 1);
             return;
         };
         let index = usize::from(direction == Direction::ToClient);
@@ -462,7 +462,7 @@ impl Sim {
         packet: Packet,
     ) {
         let Packet::Binary(bytes) = &packet else {
-            self.transmit_frame(key, direction, kind, packet, false);
+            self.transmit_frame(key, direction, kind, packet, false, 1);
             return;
         };
         let inner = match direction {
@@ -480,7 +480,7 @@ impl Sim {
             },
         };
         let Some((doc, frame)) = inner else {
-            self.transmit_frame(key, direction, kind, packet, false);
+            self.transmit_frame(key, direction, kind, packet, false, 1);
             return;
         };
         let final_chunk = frame.first() == Some(&1);
@@ -532,7 +532,11 @@ impl Sim {
         }
         let corrupted = self.net.corrupt_message(&key, direction, &mut frames);
         let copies = if duplicate { 2 } else { 1 };
+        let fragments = u16::try_from(frames.len()).unwrap_or(u16::MAX);
         for _ in 0..copies {
+            if fragments > 1 {
+                self.stats.multi_frame_messages += 1;
+            }
             let drop = (frames.len() > 1
                 && hostile.drop_frame > 0.0
                 && self.rng.random_bool(hostile.drop_frame.clamp(0.0, 1.0)))
@@ -562,9 +566,9 @@ impl Sim {
                 };
                 let packet = Packet::Binary(bytes);
                 if drop == Some(index) {
-                    self.frame_fact(&key, direction, kind, &packet, "Dropped");
+                    self.frame_fact(&key, direction, kind, &packet, "Dropped", fragments);
                 } else {
-                    self.transmit_frame(key.clone(), direction, kind, packet, corrupted);
+                    self.transmit_frame(key.clone(), direction, kind, packet, corrupted, fragments);
                 }
             }
         }
@@ -576,14 +580,17 @@ impl Sim {
         kind: FrameKind,
         packet: Packet,
         corrupted: bool,
+        fragments: u16,
     ) {
         let transit = self
             .net
             .transit(&key, direction, kind, self.clock.now, &mut self.rng);
         match transit {
-            Transit::Dropped => self.frame_fact(&key, direction, kind, &packet, "Dropped"),
+            Transit::Dropped => {
+                self.frame_fact(&key, direction, kind, &packet, "Dropped", fragments)
+            }
             Transit::Broken => {
-                self.frame_fact(&key, direction, kind, &packet, "Lost");
+                self.frame_fact(&key, direction, kind, &packet, "Lost", fragments);
                 if let Err(error) = self.break_link(&key, 1006) {
                     self.fail(error);
                 }
@@ -593,6 +600,7 @@ impl Sim {
                     packet,
                     kind,
                     corrupted,
+                    frames: fragments,
                 };
                 let event = if direction == Direction::ToServer {
                     Pending::Up(key.0.clone(), key.1, key.2, delivery.clone())
@@ -610,6 +618,7 @@ impl Sim {
         kind: FrameKind,
         packet: &Packet,
         fate: &str,
+        frames: u16,
     ) {
         let bytes = match packet {
             Packet::Binary(bytes) => bytes.len(),
@@ -622,7 +631,7 @@ impl Sim {
             direction,
             kind,
             bytes: u32::try_from(bytes).unwrap_or(u32::MAX),
-            frames: 1,
+            frames,
             fate: fate.into(),
         });
     }

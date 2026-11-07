@@ -16,6 +16,7 @@ pub(crate) struct Delivery {
     pub packet: Packet,
     pub kind: FrameKind,
     pub corrupted: bool,
+    pub frames: u16,
 }
 pub(crate) type LinkKey = (ClientName, SessionId, u32);
 pub(crate) struct Link {

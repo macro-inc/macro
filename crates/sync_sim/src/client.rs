@@ -16,6 +16,7 @@ pub(crate) struct Identity {
 /// A real client core and lending document; runtime effects are executed by the world.
 pub struct SimClient {
     pub(crate) spec: OpenSpec,
+    pub(crate) effective_access: crate::Access,
     pub(crate) session: SessionId,
     pub(crate) doc_id: SyncDocId,
     pub(crate) user: String,
@@ -109,6 +110,7 @@ impl SimClient {
         let core = SyncCore::with_peer_supply(config, now, peers)
             .map_err(|e| Failure::new("client_configuration", e))?;
         Ok(Self {
+            effective_access: spec.access,
             spec,
             session,
             doc_id: doc,
@@ -219,7 +221,7 @@ impl SimClient {
             profile: self.spec.profile.clone(),
             user: self.user.clone(),
             doc: self.spec.doc,
-            access: self.spec.access,
+            access: self.effective_access,
             kind: self.spec.kind,
             peer: self.doc.peer_id(),
             oplog_vv: vv(&self.doc.oplog_vv()),

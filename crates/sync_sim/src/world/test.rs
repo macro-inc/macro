@@ -61,6 +61,8 @@ fn duplicate_multi_frame_updates_are_two_complete_fifo_messages() {
         42
     );
     assert_eq!(doc.oplog_vv().get(&9_000), Some(&1));
+    assert_eq!(sim.stats.multi_frame_messages, 2);
+    assert!(sim.events.iter().any(|event| matches!(event.fact, Fact::Frame { frames, kind: FrameKind::Update, .. } if frames > 1)));
 }
 
 #[test]
