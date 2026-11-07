@@ -28,7 +28,6 @@ macro_entrypoint = { workspace = true }
 macro_env = { workspace = true }
 macro_env_var = { workspace = true }
 macro_event_broker = { workspace = true, default-features = true, features = ["outbound"] }
-macro_service_urls = { workspace = true }
 macro_tower_layers = { workspace = true }
 macro_user_id = { workspace = true }
 memory = { workspace = true }
@@ -46,6 +45,8 @@ tracing-opentelemetry = { workspace = true }
 universal_input = { workspace = true }
 uuid = { workspace = true }
 workspace-hack = { version = "0.1", path = "../../crates/workspace-hack" }
+agent_harness_service_url = { workspace = true }
+connection_gateway_url = { workspace = true }
 
 [dev-dependencies]
 macro_db_migrator = { workspace = true }

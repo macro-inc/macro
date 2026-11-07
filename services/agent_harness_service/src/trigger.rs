@@ -17,17 +17,18 @@ use agent_trigger::outbound::{
 use bots::outbound::pg_bots_repo::PgBotsRepo;
 use channels::outbound::pg_channels_repo::PgChannelsRepo;
 use document_storage_service_client::DocumentStorageServiceClient;
+use document_storage_service_url::DocumentStorageServiceUrl;
 use entity_access::domain::{ports::EntityAccessService, service::EntityAccessServiceImpl};
 use entity_access::outbound::PgAccessRepository;
 use entity_registry::OwnerGrantPolicy;
 use entity_registry_db_utils::OwnedEntityRegistrar;
 use kafka_util::{GroupName, InitialOffset, KafkaEventConsumer, consumer_span, record_span_error};
 use lexical_client::LexicalClient;
+use lexical_service_url::LexicalServiceUrl;
 use macro_event_broker::{
     KafkaConsumerAdapter, KafkaEventPublisher, MacroEventBrokerService, MacroEventCollection,
     MacroEventConsumerService,
 };
-use macro_service_urls::{DocumentStorageServiceUrl, LexicalServiceUrl, StaticFileServiceUrl};
 use messages::domain::api::MessageServiceApi;
 use messages::outbound::pg_message_repo::PgMessageRepository;
 use properties::{
@@ -36,6 +37,7 @@ use properties::{
 use rdkafka::consumer::CommitMode;
 use rdkafka::message::{BorrowedMessage, Message as _};
 use sqlx::PgPool;
+use static_file_service_url::StaticFileServiceUrl;
 use std::sync::Arc;
 use system_properties::{
     PgSystemPropertiesRepository, SystemPropertiesService, SystemPropertiesServiceImpl,

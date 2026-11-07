@@ -139,7 +139,6 @@ macro_middleware = { workspace = true, features = [
   "tracking",
 ] }
 mention_utils = { workspace = true }
-macro_service_urls = { workspace = true }
 macro_tower_layers = { workspace = true }
 macro_user_id = { workspace = true }
 macro_uuid = { workspace = true }
@@ -203,6 +202,14 @@ zeroize = { workspace = true }
 doppler-config = { workspace = true }
 workspace-hack = { version = "0.1", path = "../../crates/workspace-hack" }
 database_env_vars = { workspace = true }
+agent_harness_service_url = { workspace = true }
+app_service_url = { workspace = true }
+connection_gateway_url = { workspace = true }
+document_storage_service_url = { workspace = true }
+email_service_url = { workspace = true }
+scheduled_action_service_url = { workspace = true }
+static_file_public_url = { workspace = true }
+static_file_service_url = { workspace = true }
 
 [dev-dependencies]
 cool_asserts = "2"

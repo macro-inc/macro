@@ -193,9 +193,13 @@ urlencoding = { workspace = true }
 utoipa = { workspace = true }
 utoipa-swagger-ui = { workspace = true }
 uuid = { workspace = true }
-
-macro_service_urls = { workspace = true }
 workspace-hack = { version = "0.1", path = "../../crates/workspace-hack" }
+
+auth_service_url = { workspace = true }
+connection_gateway_url = { workspace = true }
+document_storage_service_url = { workspace = true }
+email_service_url = { workspace = true }
+static_file_service_url = { workspace = true }
 
 [dev-dependencies]
 opentelemetry = { workspace = true, features = ["trace"] }

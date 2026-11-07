@@ -27,6 +27,7 @@ use agent_session_realtime::{
     domain::service::AgentSessionLogConsumerService,
     outbound::redis_stream::consumer::RedisLogStreamConsumer,
 };
+use ai_editing_worker_url::AiEditingWorkerUrl;
 use analytics_client::{AnalyticsClient, AnalyticsClientConfig, MetaConfig};
 use anyhow::Context;
 use bots::{domain::service::BotServiceImpl, outbound::pg_bots_repo::PgBotsRepo};
@@ -77,6 +78,7 @@ use connection::{
     outbound::connection_gateway_client::ConnectionGatewayImpl,
 };
 use connection_gateway_client::client::ConnectionGatewayClient;
+use connection_gateway_url::ConnectionGatewayUrl;
 use documents_hex::domain::models::CloudFrontConfig;
 use documents_hex::domain::service::DocumentServiceImpl;
 use documents_hex::inbound::axum_router::DocumentRouterState;
@@ -130,6 +132,7 @@ use initiative::{
     outbound::PgInitiativeRepo,
 };
 use lexical_client::LexicalClient;
+use lexical_service_url::LexicalServiceUrl;
 use macro_auth::middleware::decode_jwt::JwtValidationArgs;
 use macro_authorization::{
     InternalAuthConfig, MacroAuthJwtValidator, MacroAuthorizationServiceImpl,
@@ -138,10 +141,6 @@ use macro_authorization::{
 };
 use macro_env_var::maybe_env_vars;
 use macro_event_broker::{KafkaEventPublisher, MacroEventBrokerService};
-use macro_service_urls::{
-    AiEditingWorkerUrl, ConnectionGatewayUrl, LexicalServiceUrl, StaticFileServiceUrl,
-    SyncServiceUrl,
-};
 use macro_sha_count_client::Redis;
 use notification::domain::service::{
     NotificationReaderService, PlatformArnConfig, SqsNotificationIngress,
@@ -184,8 +183,10 @@ use soup_realtime::{
     },
 };
 use sqlx::postgres::PgPoolOptions;
+use static_file_service_url::StaticFileServiceUrl;
 use std::{sync::Arc, time::Duration};
 use sync_service_client::SyncServiceClient;
+use sync_service_url::SyncServiceUrl;
 use system_properties::{PgSystemPropertiesRepository, SystemPropertiesServiceImpl};
 use task_dedup::{
     TaskDedupService,
@@ -447,7 +448,7 @@ async fn run_server() -> anyhow::Result<()> {
                     .authentication_service_secret_key
                     .as_ref()
                     .to_string(),
-                macro_service_urls::AuthServiceUrl::new()?.to_string(),
+                auth_service_url::AuthServiceUrl::new()?.to_string(),
             )),
         ),
     ))
@@ -1446,7 +1447,7 @@ async fn run_server() -> anyhow::Result<()> {
                         .authentication_service_secret_key
                         .as_ref()
                         .to_string(),
-                    macro_service_urls::AuthServiceUrl::new()?.to_string(),
+                    auth_service_url::AuthServiceUrl::new()?.to_string(),
                 ),
             ),
         )),
@@ -2053,7 +2054,7 @@ async fn run_server() -> anyhow::Result<()> {
             channels_service.clone(),
             message_commands.clone(),
             entity_access_service.clone(),
-            macro_service_urls::AppServiceUrl::new()?,
+            app_service_url::AppServiceUrl::new()?,
         ),
     ));
     let user_api_key_service = Arc::new(UserApiKeyServiceImpl::new(PgUserApiKeysRepo::new(
@@ -2109,7 +2110,7 @@ async fn run_server() -> anyhow::Result<()> {
     let graphql_calendar_mutation_context = graphql_calendar::CalendarGraphqlMutationContext::new(
         Arc::new(
             calendar_events::outbound::calendar_service_mutations::CalendarServiceMutations::new(
-                macro_service_urls::CalendarServiceUrl::new()
+                calendar_service_url::CalendarServiceUrl::new()
                     .context("calendar service url")?
                     .to_string(),
                 config.internal_api_key.to_string(),

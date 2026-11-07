@@ -330,7 +330,7 @@ impl Config {
             .map(|key| {
                 anyhow::Ok(authentication_service_client::AuthServiceClient::new(
                     key.to_owned(),
-                    macro_service_urls::AuthServiceUrl::new()?.to_string(),
+                    auth_service_url::AuthServiceUrl::new()?.to_string(),
                 ))
             })
             .transpose()

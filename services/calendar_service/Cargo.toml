@@ -49,7 +49,6 @@ macro_env = { workspace = true }
 macro_env_var = { workspace = true }
 macro_event_broker = { workspace = true, default-features = true }
 macro_queues = { workspace = true }
-macro_service_urls = { workspace = true }
 models_email = { workspace = true }
 redis = { workspace = true, features = ["tokio-rustls-comp"] }
 reqwest = { workspace = true }
@@ -70,3 +69,7 @@ utoipa = { workspace = true }
 utoipa-swagger-ui = { workspace = true }
 uuid = { workspace = true }
 workspace-hack = { version = "0.1", path = "../../crates/workspace-hack" }
+app_service_url = { workspace = true }
+auth_service_url = { workspace = true }
+connection_gateway_url = { workspace = true }
+document_storage_service_url = { workspace = true }

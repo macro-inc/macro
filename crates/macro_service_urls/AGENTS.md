@@ -2,48 +2,25 @@
 
 ## What it is
 
-Belongs to shared infrastructure: typed per-environment URLs for every Macro
-service and gateway, resolved from `macro_env::Environment` with an
-`OVERRIDE_<NAME>` env var escape hatch.
+Shared infrastructure: re-exports every typed Macro service URL from its own
+crate in `crates/platform/service_urls/` and keeps the `ServiceUrls`
+collection. New code depends on the one URL crate it needs instead, so a URL
+change rebuilds only that URL's users.
 
 ## Start here
 
-- `src/lib.rs`: the `service_url!` macro and the `ServiceUrls` collection — the
-  whole crate is this one file plus its macro-generated types.
-- `src/test.rs`: override-resolution tests; also shows the macro's expected usage.
-
-## Scope
-
-- Owns: the `local`/`dev`/`prod` default for every service URL, the
-  `OVERRIDE_*` env var convention, and the `ServiceUrl<'a>` string wrapper.
-- Not here: the URL value itself used outside Rust → `infra/packages/shared/src/service_urls.ts`,
-  `apps/web/src/lib/core/constant/servers.ts`, `packages/sdk/src/config.ts` (hand-kept
-  in sync; see the config rule).
-
-## Boundaries
-
-- Depends on: `macro_env` (for `Environment`).
-- Used by: nearly every Rust service that calls another service — construct a
-  type with `XServiceUrl::new()`, never a raw string or env var.
+- `src/lib.rs`: the re-exports and `ServiceUrls`.
+- `src/test.rs`: default and override tests for every URL and for the
+  `service_url!` macro, using `service_url`'s `testing` mock.
 
 ## Recipes
 
-- Add a new service URL: add a field to the `service_url! { struct ServiceUrls { ... } }`
-  block in `src/lib.rs` with `local`/`dev`/`prod` values, then update the other
-  three copies of the table (see Related).
+- Add a service URL: see `crates/platform/service_urls/AGENTS.md`; then
+  re-export it here, add its `ServiceUrls` field and a parse test.
 
 ## Checks
 
 - `cargo test -p macro_service_urls` (`SQLX_OFFLINE` unset).
-
-## Agent service URLs
-
-Cognition, scheduling, preview control, and public MCP have distinct API base
-paths but share the agent harness process. `McpPublicUrl` and
-`CognitionPublicUrl` separately preserve the registered public OAuth identities;
-do not substitute the internal API routes when building callbacks. Their direct local defaults use
-port 8101 with `/cognition`, `/scheduled-action`, `/preview`, and the MCP base
-at the root. Gateway paths remain unchanged.
 
 ## Gotchas
 
@@ -52,7 +29,11 @@ at the root. Gateway paths remain unchanged.
   silently changes what override callers must set.
 - `local` defaults are host ports, not Docker-network addresses; a service
   calling another from inside Docker needs an `OVERRIDE_*_URL` entry in
-  `local_env.rs`, not a different `local` default here.
+  `local_env.rs`, not a different `local` default.
+- Cognition, scheduling, preview control, and public MCP share the agent
+  harness process. `McpPublicUrl` and `CognitionPublicUrl` keep the registered
+  public OAuth identities; do not substitute the internal API routes when
+  building callbacks.
 
 ## Related
 

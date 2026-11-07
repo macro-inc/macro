@@ -88,6 +88,7 @@ use agent_harness::outbound::runtime_registry::{HarnessKeyedConnections, Runtime
 use agent_harness::outbound::tool_approvals::{
     ReleaseHeldCallsOnTurnEnd, SessionToolApprovalAnnouncer,
 };
+use agent_harness_egress_url::AgentHarnessEgressUrl;
 use agent_inmem::domain::engine::TurnEngine;
 use agent_inmem::outbound::acp_mcp::AcpMcpConnector;
 use agent_inmem::outbound::egress_mcp::EgressMcpClient;
@@ -123,6 +124,7 @@ use channels::outbound::pg_side_effect_context::PgChannelSideEffectContext;
 use coding_agent::PgCodingAgentSource;
 use config::{Config, Environment};
 use connection_gateway_client::ConnectionGatewayClient;
+use connection_gateway_url::ConnectionGatewayUrl;
 use containers::{InMemRuntime, RoutedContainers};
 use cursor_api_key::cipher::{AwsKmsCiphertexts, KmsCursorApiKeyCipher};
 use cursor_cloud_agents::api::cursor_api_base_url;
@@ -141,6 +143,7 @@ use harness_bindings::{PgHarnessBindings, PgHarnessPresence, RUNTIME_CONNECTION_
 use harnesses::outbound::pg_harness_repo::PgHarnessRepo;
 use kafka_util::{GroupName, KafkaEventConsumer, consumer_span, record_span_error};
 use lexical_client::LexicalClient;
+use lexical_service_url::LexicalServiceUrl;
 use macro_auth::middleware::decode_jwt::JwtValidationArgs;
 use macro_authorization::{
     InternalAuthConfig, MacroAuthJwtValidator, MacroAuthorizationServiceImpl,
@@ -152,13 +155,10 @@ use macro_event_broker::{
     KafkaConsumerAdapter, KafkaEventPublisher, MacroEvent as _, MacroEventBrokerService,
     MacroEventCollection as _, MacroEventConsumerService,
 };
-use macro_service_urls::{
-    AgentHarnessEgressUrl, ConnectionGatewayUrl, LexicalServiceUrl, McpServiceUrl,
-    StaticFilePublicUrl, StaticFileServiceUrl,
-};
 use mcp_client::domain::models::AesKey;
 use mcp_client::outbound::NativeServerStore;
 use mcp_client::outbound::pg_server_repo::PgServerRepo;
+use mcp_service_url::McpServiceUrl;
 use model_providers::{CursorModels, InMemoryModels, MacrodModels, VisibleHarnessAccess};
 use permission_policy::PgPermissionPolicySource;
 use pipedream_mcp::outbound::api::{PipedreamClient, PipedreamConfig};
@@ -167,6 +167,8 @@ use pipedream_mcp::outbound::pg_connection_repo::PgConnectionRepo;
 use rdkafka::consumer::CommitMode;
 use rdkafka::message::{BorrowedMessage, Message as _};
 use sqlx::postgres::PgPoolOptions;
+use static_file_public_url::StaticFilePublicUrl;
+use static_file_service_url::StaticFileServiceUrl;
 use tokio_retry::{Retry, strategy::FixedInterval};
 use tracing::Instrument as _;
 
@@ -605,7 +607,7 @@ async fn run() -> anyhow::Result<()> {
         .with_preview_mcp(
             url::Url::parse(&format!(
                 "{}/mcp",
-                macro_service_urls::PreviewGatewayUrl::new()?
+                preview_gateway_url::PreviewGatewayUrl::new()?
             ))?,
             matches!(config.environment, Environment::Local),
         )?
@@ -892,7 +894,7 @@ async fn run() -> anyhow::Result<()> {
                 )),
             ),
             session_metadata_realtime.clone(),
-            macro_service_urls::AppServiceUrl::new()?.as_ref(),
+            app_service_url::AppServiceUrl::new()?.as_ref(),
         ),
     );
     let session_pull_requests: Arc<dyn agent_session::domain::pull_request::SessionPullRequests> =
@@ -919,7 +921,7 @@ async fn run() -> anyhow::Result<()> {
             cognition: tool_context.cognition_tool_context.service.clone(),
             reviews: reviews_cell.clone(),
             gate: owner_tool_gate.clone(),
-            app_url: macro_service_urls::AppServiceUrl::new()?.as_str().into(),
+            app_url: app_service_url::AppServiceUrl::new()?.as_str().into(),
         },
     );
     // One connector for the agent and the telemetry catalog. It pools each
@@ -1088,7 +1090,7 @@ async fn run() -> anyhow::Result<()> {
         cursor_cloud_agents::outbound::static_file_artifacts::StaticFileArtifactStore::new(
             static_file_service_client::StaticFileServiceClient::new(
                 config.internal_api_key.clone(),
-                macro_service_urls::StaticFileServiceUrl::new()?.to_string(),
+                static_file_service_url::StaticFileServiceUrl::new()?.to_string(),
             ),
         ),
     )

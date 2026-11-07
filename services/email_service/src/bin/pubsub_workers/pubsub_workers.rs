@@ -1,6 +1,9 @@
 #![recursion_limit = "256"]
 use anyhow::Context;
+use auth_service_url::AuthServiceUrl;
+use connection_gateway_url::ConnectionGatewayUrl;
 use document_storage_service_client::DocumentStorageServiceClient;
+use document_storage_service_url::DocumentStorageServiceUrl;
 use email_api_client::GmailApiClientRepository;
 use email_service::config::Config;
 use email_service::outbound::email_api::{
@@ -11,14 +14,12 @@ use email_service::util::redis::RedisClient;
 use macro_entrypoint::{MacroEntrypoint, shutdown_signal};
 use macro_env::Environment;
 use macro_event_broker::{KafkaEventPublisher, MacroEventBrokerService};
-use macro_service_urls::{
-    AuthServiceUrl, ConnectionGatewayUrl, DocumentStorageServiceUrl, StaticFileServiceUrl,
-};
 use notification::domain::service::SqsNotificationIngress;
 use notification::outbound::queue::SqsQueue;
 use sqlx::PgPool;
 use sqlx::postgres::PgPoolOptions;
 use static_file_service_client::StaticFileServiceClient;
+use static_file_service_url::StaticFileServiceUrl;
 use std::sync::Arc;
 use std::time::Duration;
 use system_properties::{PgSystemPropertiesRepository, SystemPropertiesServiceImpl};
@@ -414,7 +415,7 @@ async fn main() -> anyhow::Result<()> {
             email::domain::mailbox::watches::MailboxWatchService::new(
                 mailbox_repository.clone(),
                 email_service::outbound::email_api::ProviderMailboxGateway(outlook_api.clone()),
-                macro_service_urls::EmailServiceUrl::new_for_environment(env)?.to_string(),
+                email_service_url::EmailServiceUrl::new_for_environment(env)?.to_string(),
             ),
             worker_cancellation_token.clone(),
         ));

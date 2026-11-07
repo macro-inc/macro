@@ -48,14 +48,14 @@ pub fn connect_adapter(customer_key: Option<&str>) -> anyhow::Result<Option<Arc<
     let Some(customer_key) = customer_key.filter(|key| !key.is_empty()) else {
         return Ok(None);
     };
-    let public_url = macro_service_urls::CognitionPublicUrl::new()?;
+    let public_url = cognition_public_url::CognitionPublicUrl::new()?;
     let callback_url = url::Url::parse(&format!(
         "{}/pipedream/mcp/connect/callback",
         public_url.as_str().trim_end_matches('/')
     ))
     .context("Connect callback is not a URL")?;
     let adapter = ConnectAdapter::new(ConnectConfig {
-        api_url: macro_service_urls::ConnectApiUrl::new()?.to_string(),
+        api_url: connect_api_url::ConnectApiUrl::new()?.to_string(),
         customer_key: customer_key.to_owned(),
         callback_url,
     })

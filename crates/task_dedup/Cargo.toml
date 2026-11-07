@@ -64,9 +64,10 @@ tokio = { workspace = true, features = [
   "rt-multi-thread",
 ], optional = true }
 macro_env_var = { workspace = true, optional = true }
-
-macro_service_urls = { workspace = true }
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
+
+lexical_service_url = { workspace = true }
+macro_env = { workspace = true }
 
 [dev-dependencies]
 automod = { workspace = true }

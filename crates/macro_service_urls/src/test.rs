@@ -1,6 +1,6 @@
-use super::testing_harness::with_mock_override_env;
 use super::*;
 use macro_env::Environment;
+use service_url::testing::with_mock_override_env;
 
 const ENVS: [Environment; 3] = [
     Environment::Production,
@@ -325,7 +325,7 @@ fn sync_service_url_parses() {
     assert_parses_for_all_environments(SyncServiceUrl::default_for_environment);
 }
 
-crate::service_url! {
+service_url::service_url! {
     #[derive(Debug, Clone)]
     pub struct TestServiceUrl {
         local: "http://localhost:8080",
@@ -412,7 +412,7 @@ fn copied_returns_a_borrowed_view() {
     assert_eq!(copied.borrowed_inner(), Some("https://runtime.macro.com"));
 }
 
-crate::service_url! {
+service_url::service_url! {
     #[derive(Debug)]
     pub struct TestServiceUrls {
         #[derive(Debug, Clone)]

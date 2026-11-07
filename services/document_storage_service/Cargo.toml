@@ -200,7 +200,6 @@ macro_middleware = { workspace = true, features = [
   "cloud_storage",
 ] }
 macro_queues = { workspace = true }
-macro_service_urls = { workspace = true }
 macro_sha_count_client = { workspace = true }
 macro_sync_service_jwt = { workspace = true }
 opentelemetry = { workspace = true }
@@ -315,6 +314,14 @@ webhook = { workspace = true, default-features = true, features = [
 work_feed = { workspace = true }
 workspace-hack = { version = "0.1", path = "../../crates/workspace-hack" }
 zip = { workspace = true }
+ai_editing_worker_url = { workspace = true }
+app_service_url = { workspace = true }
+auth_service_url = { workspace = true }
+calendar_service_url = { workspace = true }
+connection_gateway_url = { workspace = true }
+lexical_service_url = { workspace = true }
+static_file_service_url = { workspace = true }
+sync_service_url = { workspace = true }
 
 [dev-dependencies]
 bebop = { workspace = true }

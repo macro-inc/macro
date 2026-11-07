@@ -25,7 +25,6 @@ macro_aws_config = { workspace = true }
 macro_config = { workspace = true }
 macro_entrypoint = { workspace = true }
 macro_env = { workspace = true }
-macro_service_urls = { workspace = true }
 nom = { workspace = true }
 rootcause = { workspace = true }
 rustls = { workspace = true }
@@ -43,6 +42,7 @@ whatsmeow_signal = { workspace = true }
 whatsapp_linked = { workspace = true, features = ["outbound"] }
 external_chat = { workspace = true, features = ["outbound"] }
 workspace-hack = { version = "0.1", path = "../../crates/workspace-hack" }
+service_url = { workspace = true }
 
 [dev-dependencies]
 macro_db_migrator = { workspace = true }

@@ -41,13 +41,13 @@ dependencies = [
 name = "account_manager"
 version = "0.1.0"
 dependencies = [
+ "app_service_url",
  "axum",
  "channels",
  "chrono",
  "entity_access",
  "macro_authorization",
  "macro_db_migrator",
- "macro_service_urls",
  "macro_user_id",
  "messages",
  "model-error-response",
@@ -560,6 +560,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "agent_harness_egress_url"
+version = "0.1.0"
+dependencies = [
+ "service_url",
+ "workspace-hack",
+]
+
+[[package]]
 name = "agent_harness_service"
 version = "0.1.0"
 dependencies = [
@@ -573,6 +581,8 @@ dependencies = [
  "agent_egress",
  "agent_fold",
  "agent_harness",
+ "agent_harness_egress_url",
+ "agent_harness_service_url",
  "agent_inmem",
  "agent_preview",
  "agent_runtime_protocol",
@@ -580,15 +590,18 @@ dependencies = [
  "agent_session_realtime",
  "agent_trigger",
  "ai_billing",
+ "ai_editing_worker_url",
  "ai_projections",
  "ai_tools",
  "ai_toolset",
  "ai_usage",
  "analytics_client",
  "anyhow",
+ "app_service_url",
  "async-stream",
  "async-trait",
  "attachment",
+ "auth_service_url",
  "authentication_service_client",
  "aws-sdk-dynamodb",
  "aws-sdk-kms",
@@ -600,6 +613,7 @@ dependencies = [
  "bot_id",
  "bots",
  "calendar_events",
+ "calendar_service_url",
  "call",
  "channels",
  "chat",
@@ -608,20 +622,26 @@ dependencies = [
  "codex_cloud_agents",
  "codex_connection",
  "cognition",
+ "cognition_public_url",
  "connection_gateway",
  "connection_gateway_client",
+ "connection_gateway_url",
  "contacts",
+ "contacts_service_url",
  "crm",
  "cursor_api_key",
  "cursor_cloud_agents",
  "database_env_vars",
  "databases",
  "databases_sql",
+ "document_cognition_service_url",
  "document_storage_service_client",
+ "document_storage_service_url",
  "documents",
  "doppler-config",
  "email",
  "email_service_client",
+ "email_service_url",
  "entity_access",
  "entity_access_management",
  "entity_registry",
@@ -648,6 +668,7 @@ dependencies = [
  "kafka_util",
  "lexical_client",
  "lexical_mention_extractor",
+ "lexical_service_url",
  "log",
  "lru 0.16.4",
  "macro_auth",
@@ -663,13 +684,14 @@ dependencies = [
  "macro_event_broker",
  "macro_middleware",
  "macro_queues",
- "macro_service_urls",
  "macro_tower_layers",
  "macro_user_id",
  "macro_uuid",
  "mcp_auth_proxy",
  "mcp_client",
+ "mcp_public_url",
  "mcp_select",
+ "mcp_service_url",
  "memory",
  "messages",
  "model",
@@ -682,8 +704,10 @@ dependencies = [
  "models_permissions",
  "non_empty",
  "notification",
+ "notification_service_url",
  "onboarding",
  "pipedream_mcp",
+ "preview_gateway_url",
  "prompt",
  "properties",
  "rate_limit",
@@ -696,11 +720,13 @@ dependencies = [
  "rootcause",
  "routine_program",
  "scheduled_action",
+ "scheduled_action_service_url",
  "schemars 1.2.1",
  "search_service_client",
  "secretsmanager_client",
  "serde",
  "serde_json",
+ "service_url",
  "share_permission_db_utils",
  "skills",
  "soup",
@@ -709,10 +735,13 @@ dependencies = [
  "sqs_client",
  "sqs_worker",
  "static_file",
+ "static_file_public_url",
  "static_file_service_client",
+ "static_file_service_url",
  "stream",
  "strum 0.27.2",
  "sync_service_client",
+ "sync_service_url",
  "system_properties",
  "teams",
  "tempfile",
@@ -724,12 +753,21 @@ dependencies = [
  "tower-http",
  "tracing",
  "unfurl_service",
+ "unfurl_service_url",
  "universal_input",
  "url",
  "utoipa",
  "utoipa-swagger-ui",
  "uuid",
  "web_search",
+ "workspace-hack",
+]
+
+[[package]]
+name = "agent_harness_service_url"
+version = "0.1.0"
+dependencies = [
+ "service_url",
  "workspace-hack",
 ]
 
@@ -1021,9 +1059,11 @@ dependencies = [
  "call",
  "channels",
  "connection_gateway_client",
+ "connection_gateway_url",
  "crm",
  "database_env_vars",
  "document_storage_service_client",
+ "document_storage_service_url",
  "entity_access",
  "entity_registry",
  "entity_registry_db_utils",
@@ -1031,17 +1071,18 @@ dependencies = [
  "jev",
  "kafka_util",
  "lexical_client",
+ "lexical_service_url",
  "macro_config",
  "macro_entrypoint",
  "macro_env_var",
  "macro_event_broker",
- "macro_service_urls",
  "messages",
  "properties",
  "rdkafka",
  "rootcause",
  "sqlx",
  "static_file",
+ "static_file_service_url",
  "system_properties",
  "teams",
  "tokio",
@@ -1136,6 +1177,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "ai_editing_worker_url"
+version = "0.1.0"
+dependencies = [
+ "service_url",
+ "workspace-hack",
+]
+
+[[package]]
 name = "ai_engine"
 version = "0.1.0"
 dependencies = [
@@ -1194,12 +1243,15 @@ dependencies = [
  "activity",
  "agent",
  "agent_code_mode",
+ "agent_harness_service_url",
  "agent_session",
  "ai_billing",
+ "ai_editing_worker_url",
  "ai_toolset",
  "ai_usage",
  "anthropic",
  "anyhow",
+ "app_service_url",
  "async-trait",
  "aws-sdk-secretsmanager",
  "aws-sdk-sqs",
@@ -1208,24 +1260,31 @@ dependencies = [
  "bots",
  "calendar_events",
  "calendar_scheduling",
+ "calendar_service_url",
  "call",
  "channels",
  "chat",
  "chrono",
  "clap",
  "cognition",
+ "cognition_public_url",
  "collab_surface",
+ "connect_api_url",
  "connection",
  "connection_gateway_client",
+ "connection_gateway_url",
  "contacts",
  "crm",
  "databases",
  "databases_sql",
  "dateparser",
+ "document_cognition_service_url",
+ "document_storage_service_url",
  "documents",
  "dynamic_ui",
  "email",
  "email_service_client",
+ "email_service_url",
  "entity_access",
  "entity_access_management",
  "entity_registry",
@@ -1246,6 +1305,7 @@ dependencies = [
  "item_filters",
  "lexical_client",
  "lexical_mention_extractor",
+ "lexical_service_url",
  "macro_auth",
  "macro_authorization",
  "macro_aws_config",
@@ -1255,7 +1315,6 @@ dependencies = [
  "macro_env_var",
  "macro_event_broker",
  "macro_queues",
- "macro_service_urls",
  "macro_user_id",
  "mcp_client",
  "mcp_select",
@@ -1280,6 +1339,7 @@ dependencies = [
  "reqwest 0.13.4",
  "rootcause",
  "routines",
+ "scheduled_action_service_url",
  "schemars 1.2.1",
  "search_service_client",
  "secretsmanager_client",
@@ -1291,8 +1351,10 @@ dependencies = [
  "sqs_client",
  "static_file",
  "static_file_service_client",
+ "static_file_service_url",
  "strum 0.27.2",
  "sync_service_client",
+ "sync_service_url",
  "system_properties",
  "teams",
  "thiserror 2.0.18",
@@ -1568,6 +1630,14 @@ dependencies = [
  "memchr",
  "rowan",
  "thiserror 2.0.18",
+]
+
+[[package]]
+name = "app_service_url"
+version = "0.1.0"
+dependencies = [
+ "service_url",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -2222,16 +2292,26 @@ dependencies = [
 ]
 
 [[package]]
+name = "auth_service_url"
+version = "0.1.0"
+dependencies = [
+ "service_url",
+ "workspace-hack",
+]
+
+[[package]]
 name = "authentication_service"
 version = "0.1.0"
 dependencies = [
  "aes-gcm 0.10.3",
  "agent_api_keys",
  "agent_correlation",
+ "agent_harness_service_url",
  "ai_billing",
  "ai_usage",
  "analytics_client",
  "anyhow",
+ "app_service_url",
  "async-stripe",
  "async-stripe-webhook",
  "async-trait",
@@ -2250,6 +2330,7 @@ dependencies = [
  "codex_connection",
  "comms_db_client",
  "connection_gateway_client",
+ "connection_gateway_url",
  "contacts",
  "cookie",
  "cool_asserts",
@@ -2259,9 +2340,11 @@ dependencies = [
  "database_env_vars",
  "decode_jwt",
  "document_storage_service_client",
+ "document_storage_service_url",
  "doppler-config",
  "email",
  "email_db_client",
+ "email_service_url",
  "email_validator",
  "entity_access",
  "entity_registry",
@@ -2293,7 +2376,6 @@ dependencies = [
  "macro_event_broker",
  "macro_middleware",
  "macro_queues",
- "macro_service_urls",
  "macro_tower_layers",
  "macro_user_id",
  "macro_uuid",
@@ -2321,6 +2403,7 @@ dependencies = [
  "roles_and_permissions",
  "rootcause",
  "rsa",
+ "scheduled_action_service_url",
  "secretsmanager_client",
  "serde",
  "serde_json",
@@ -2331,7 +2414,9 @@ dependencies = [
  "sha2 0.10.9",
  "sqlx",
  "sqs_client",
+ "static_file_public_url",
  "static_file_service_client",
+ "static_file_service_url",
  "strum 0.27.2",
  "system_status",
  "teams",
@@ -3949,6 +4034,8 @@ version = "0.1.0"
 dependencies = [
  "agent_correlation",
  "anyhow",
+ "app_service_url",
+ "auth_service_url",
  "authentication_service_client",
  "aws-sdk-secretsmanager",
  "aws-sdk-sqs",
@@ -3957,6 +4044,8 @@ dependencies = [
  "calendar_scheduling",
  "chrono",
  "connection_gateway_client",
+ "connection_gateway_url",
+ "document_storage_service_url",
  "email_api_client",
  "email_db_client",
  "email_utils",
@@ -3972,7 +4061,6 @@ dependencies = [
  "macro_env_var",
  "macro_event_broker",
  "macro_queues",
- "macro_service_urls",
  "models_email",
  "redis",
  "reqwest 0.13.4",
@@ -3992,6 +4080,14 @@ dependencies = [
  "utoipa",
  "utoipa-swagger-ui",
  "uuid",
+ "workspace-hack",
+]
+
+[[package]]
+name = "calendar_service_url"
+version = "0.1.0"
+dependencies = [
+ "service_url",
  "workspace-hack",
 ]
 
@@ -4762,6 +4858,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "cognition_public_url"
+version = "0.1.0"
+dependencies = [
+ "service_url",
+ "workspace-hack",
+]
+
+[[package]]
 name = "collab_surface"
 version = "0.1.0"
 dependencies = [
@@ -4973,6 +5077,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "connect_api_url"
+version = "0.1.0"
+dependencies = [
+ "service_url",
+ "workspace-hack",
+]
+
+[[package]]
 name = "connect_client"
 version = "0.1.0"
 dependencies = [
@@ -5091,6 +5203,22 @@ dependencies = [
  "serde",
  "serde_json",
  "utoipa",
+ "workspace-hack",
+]
+
+[[package]]
+name = "connection_gateway_url"
+version = "0.1.0"
+dependencies = [
+ "service_url",
+ "workspace-hack",
+]
+
+[[package]]
+name = "connection_gateway_websocket_url"
+version = "0.1.0"
+dependencies = [
+ "service_url",
  "workspace-hack",
 ]
 
@@ -5215,6 +5343,7 @@ dependencies = [
  "aws-sdk-secretsmanager",
  "aws-sdk-sqs",
  "axum",
+ "connection_gateway_url",
  "contacts",
  "database_env_vars",
  "doppler-config",
@@ -5228,7 +5357,6 @@ dependencies = [
  "macro_env",
  "macro_env_var",
  "macro_queues",
- "macro_service_urls",
  "macro_user_id",
  "rate_limit",
  "redis",
@@ -5241,6 +5369,14 @@ dependencies = [
  "tracing",
  "utoipa",
  "utoipa-swagger-ui",
+ "workspace-hack",
+]
+
+[[package]]
+name = "contacts_service_url"
+version = "0.1.0"
+dependencies = [
+ "service_url",
  "workspace-hack",
 ]
 
@@ -5313,6 +5449,14 @@ dependencies = [
  "utoipa-swagger-ui",
  "workspace-hack",
  "zip",
+]
+
+[[package]]
+name = "convert_service_url"
+version = "0.1.0"
+dependencies = [
+ "service_url",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -6605,6 +6749,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "document_cognition_service_url"
+version = "0.1.0"
+dependencies = [
+ "service_url",
+ "workspace-hack",
+]
+
+[[package]]
 name = "document_storage_service"
 version = "0.1.0"
 dependencies = [
@@ -6616,14 +6768,17 @@ dependencies = [
  "agent_session",
  "agent_session_realtime",
  "ai_billing",
+ "ai_editing_worker_url",
  "ai_tools",
  "ai_usage",
  "analytics_client",
  "anyhow",
+ "app_service_url",
  "async-graphql",
  "async-graphql-axum",
  "async-trait",
  "attention_feed",
+ "auth_service_url",
  "authentication_service_client",
  "aws-sdk-dynamodb",
  "aws-sdk-s3",
@@ -6638,6 +6793,7 @@ dependencies = [
  "bots",
  "cal",
  "calendar_events",
+ "calendar_service_url",
  "call",
  "channel_bots",
  "channel_labels",
@@ -6650,6 +6806,7 @@ dependencies = [
  "complete_graph",
  "connection",
  "connection_gateway_client",
+ "connection_gateway_url",
  "contacts",
  "crm",
  "database_webhooks",
@@ -6695,6 +6852,7 @@ dependencies = [
  "jsonwebtoken 10.3.0",
  "lexical_client",
  "lexical_mention_extractor",
+ "lexical_service_url",
  "macro_auth",
  "macro_authorization",
  "macro_aws_config",
@@ -6709,7 +6867,6 @@ dependencies = [
  "macro_event_broker",
  "macro_middleware",
  "macro_queues",
- "macro_service_urls",
  "macro_sha_count_client",
  "macro_sync_service_jwt",
  "macro_tower_layers",
@@ -6758,10 +6915,12 @@ dependencies = [
  "sqs_client",
  "sqs_worker",
  "static_file_service_client",
+ "static_file_service_url",
  "sync_router",
  "sync_service_bebop_schema",
  "sync_service_client",
  "sync_service_hex",
+ "sync_service_url",
  "system_properties",
  "task_dedup",
  "teams",
@@ -6810,6 +6969,14 @@ dependencies = [
  "tracing",
  "uuid",
  "wiremock",
+ "workspace-hack",
+]
+
+[[package]]
+name = "document_storage_service_url"
+version = "0.1.0"
+dependencies = [
+ "service_url",
  "workspace-hack",
 ]
 
@@ -6866,11 +7033,11 @@ dependencies = [
  "entity_registry_db_utils",
  "lambda_runtime",
  "lexical_client",
+ "lexical_service_url",
  "macro_aws_config",
  "macro_entrypoint",
  "macro_env_var",
  "macro_queues",
- "macro_service_urls",
  "macro_uuid",
  "model",
  "model_owner",
@@ -6881,6 +7048,7 @@ dependencies = [
  "sqlx",
  "sqs_client",
  "sync_service_client",
+ "sync_service_url",
  "tokio",
  "tracing",
  "urlencoding",
@@ -6929,6 +7097,7 @@ dependencies = [
  "jsonwebtoken 10.3.0",
  "kafka_util",
  "lexical_client",
+ "lexical_service_url",
  "loro",
  "macro_authorization",
  "macro_aws_config",
@@ -6938,7 +7107,6 @@ dependencies = [
  "macro_env_var",
  "macro_event_broker",
  "macro_event_topics",
- "macro_service_urls",
  "macro_sha_count_client",
  "macro_sync_service_jwt",
  "macro_tower_layers",
@@ -6971,6 +7139,7 @@ dependencies = [
  "sqlx",
  "sqs_client",
  "sync_service_client",
+ "sync_service_url",
  "system_skills",
  "task_dedup",
  "thiserror 2.0.18",
@@ -7459,10 +7628,12 @@ dependencies = [
 name = "email_focus_worker"
 version = "0.1.0"
 dependencies = [
+ "agent_harness_service_url",
  "ai_usage",
  "calendar_events",
  "chrono",
  "connection_gateway_client",
+ "connection_gateway_url",
  "doppler-config",
  "email",
  "jev",
@@ -7475,7 +7646,6 @@ dependencies = [
  "macro_env",
  "macro_env_var",
  "macro_event_broker",
- "macro_service_urls",
  "macro_tower_layers",
  "macro_user_id",
  "memory",
@@ -7504,10 +7674,10 @@ dependencies = [
  "chrono",
  "hmac 0.12.1",
  "macro_env",
- "macro_service_urls",
  "macro_user_id",
  "model_notifications",
  "notification",
+ "notification_service_url",
  "rootcause",
  "serde",
  "sha2 0.10.9",
@@ -7569,6 +7739,7 @@ version = "0.1.0"
 dependencies = [
  "agent_correlation",
  "anyhow",
+ "auth_service_url",
  "authentication_service_client",
  "aws-sdk-s3",
  "aws-sdk-secretsmanager",
@@ -7582,14 +7753,17 @@ dependencies = [
  "chrono",
  "cloudfront_sign",
  "connection_gateway_client",
+ "connection_gateway_url",
  "contacts",
  "crm",
  "document_storage_service_client",
+ "document_storage_service_url",
  "doppler-config",
  "ego-tree",
  "email",
  "email_api_client",
  "email_db_client",
+ "email_service_url",
  "email_utils",
  "entity_access",
  "entity_access_management",
@@ -7617,7 +7791,6 @@ dependencies = [
  "macro_event_broker",
  "macro_middleware",
  "macro_queues",
- "macro_service_urls",
  "macro_user_id",
  "macro_uuid",
  "mime_guess",
@@ -7647,6 +7820,7 @@ dependencies = [
  "sqs_client",
  "sqs_worker",
  "static_file_service_client",
+ "static_file_service_url",
  "strum_macros 0.27.2",
  "system_properties",
  "thiserror 2.0.18",
@@ -7681,6 +7855,14 @@ dependencies = [
  "tokio",
  "tracing",
  "wiremock",
+ "workspace-hack",
+]
+
+[[package]]
+name = "email_service_url"
+version = "0.1.0"
+dependencies = [
+ "service_url",
  "workspace-hack",
 ]
 
@@ -8996,6 +9178,7 @@ name = "github"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "app_service_url",
  "axum",
  "base64 0.22.1",
  "chrono",
@@ -9017,7 +9200,6 @@ dependencies = [
  "macro_env_var",
  "macro_event_broker",
  "macro_event_topics",
- "macro_service_urls",
  "macro_user_id",
  "macro_uuid",
  "mockall",
@@ -10784,6 +10966,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "image_proxy_service_url"
+version = "0.1.0"
+dependencies = [
+ "service_url",
+ "workspace-hack",
+]
+
+[[package]]
 name = "imgref"
 version = "1.12.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -11780,6 +11970,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "lexical_service_url"
+version = "0.1.0"
+dependencies = [
+ "service_url",
+ "workspace-hack",
+]
+
+[[package]]
 name = "libbz2-rs-sys"
 version = "0.2.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -12603,10 +12801,35 @@ dependencies = [
 name = "macro_service_urls"
 version = "0.1.0"
 dependencies = [
+ "agent_harness_egress_url",
+ "agent_harness_service_url",
+ "ai_editing_worker_url",
+ "app_service_url",
+ "auth_service_url",
+ "calendar_service_url",
+ "cognition_public_url",
+ "connect_api_url",
+ "connection_gateway_url",
+ "connection_gateway_websocket_url",
+ "contacts_service_url",
+ "convert_service_url",
+ "document_cognition_service_url",
+ "document_storage_service_url",
+ "email_service_url",
+ "image_proxy_service_url",
+ "lexical_service_url",
  "macro_env",
- "paste",
- "thiserror 2.0.18",
- "url",
+ "mcp_public_url",
+ "mcp_service_url",
+ "notification_service_url",
+ "preview_gateway_url",
+ "scheduled_action_service_url",
+ "search_processing_service_url",
+ "service_url",
+ "static_file_public_url",
+ "static_file_service_url",
+ "sync_service_url",
+ "unfurl_service_url",
  "workspace-hack",
 ]
 
@@ -12874,6 +13097,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "mcp_public_url"
+version = "0.1.0"
+dependencies = [
+ "service_url",
+ "workspace-hack",
+]
+
+[[package]]
 name = "mcp_select"
 version = "0.1.0"
 dependencies = [
@@ -12888,6 +13119,14 @@ dependencies = [
  "serde_json",
  "tokio",
  "tracing",
+ "workspace-hack",
+]
+
+[[package]]
+name = "mcp_service_url"
+version = "0.1.0"
+dependencies = [
+ "service_url",
  "workspace-hack",
 ]
 
@@ -13900,13 +14139,13 @@ dependencies = [
  "macro_db_migrator",
  "macro_event_broker",
  "macro_event_topics",
- "macro_service_urls",
  "macro_user_id",
  "macro_uuid",
  "model-entity",
  "model-error-response",
  "model_user",
  "models_pagination",
+ "notification_service_url",
  "notification_state",
  "opentelemetry",
  "opentelemetry_sdk",
@@ -14032,6 +14271,7 @@ dependencies = [
  "aws-sdk-sqs",
  "axum",
  "chrono",
+ "connection_gateway_url",
  "database_env_vars",
  "doppler-config",
  "email_formatting",
@@ -14050,7 +14290,6 @@ dependencies = [
  "macro_event_broker",
  "macro_middleware",
  "macro_queues",
- "macro_service_urls",
  "macro_tower_layers",
  "macro_user_id",
  "model",
@@ -14060,6 +14299,7 @@ dependencies = [
  "models_pagination",
  "notification",
  "notification_db_client",
+ "notification_service_url",
  "rate_limit",
  "redis",
  "secretsmanager_client",
@@ -14075,6 +14315,14 @@ dependencies = [
  "utoipa",
  "utoipa-swagger-ui",
  "uuid",
+ "workspace-hack",
+]
+
+[[package]]
+name = "notification_service_url"
+version = "0.1.0"
+dependencies = [
+ "service_url",
  "workspace-hack",
 ]
 
@@ -15717,6 +15965,14 @@ checksum = "479ca8adacdd7ce8f1fb39ce9ecccbfe93a3f1344b3d0d97f20bc0196208f62b"
 dependencies = [
  "proc-macro2",
  "syn 2.0.117",
+]
+
+[[package]]
+name = "preview_gateway_url"
+version = "0.1.0"
+dependencies = [
+ "service_url",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -17618,6 +17874,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "scheduled_action_service_url"
+version = "0.1.0"
+dependencies = [
+ "service_url",
+ "workspace-hack",
+]
+
+[[package]]
 name = "schemars"
 version = "0.9.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -17746,6 +18010,7 @@ dependencies = [
  "http-body-util",
  "kafka_util",
  "lexical_client",
+ "lexical_service_url",
  "macro_auth",
  "macro_authorization",
  "macro_aws_config",
@@ -17759,7 +18024,6 @@ dependencies = [
  "macro_event_topics",
  "macro_middleware",
  "macro_queues",
- "macro_service_urls",
  "macro_user_id",
  "macro_uuid",
  "mention_utils",
@@ -17796,6 +18060,14 @@ dependencies = [
  "utoipa",
  "utoipa-swagger-ui",
  "uuid",
+ "workspace-hack",
+]
+
+[[package]]
+name = "search_processing_service_url"
+version = "0.1.0"
+dependencies = [
+ "service_url",
  "workspace-hack",
 ]
 
@@ -17860,10 +18132,10 @@ dependencies = [
  "anyhow",
  "aws_lambda_events",
  "document_storage_service_client",
+ "document_storage_service_url",
  "lambda_runtime",
  "macro_entrypoint",
  "macro_env_var",
- "macro_service_urls",
  "s3_key",
  "tokio",
  "tracing",
@@ -18356,6 +18628,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "service_url"
+version = "0.1.0"
+dependencies = [
+ "macro_env",
+ "paste",
+ "thiserror 2.0.18",
+ "url",
+ "workspace-hack",
+]
+
+[[package]]
 name = "servo_arc"
 version = "0.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -18768,11 +19051,11 @@ dependencies = [
  "macro_config",
  "macro_entrypoint",
  "macro_queues",
- "macro_service_urls",
  "macro_user_id",
  "messages",
  "reqwest 0.13.4",
  "rootcause",
+ "search_processing_service_url",
  "serde_json",
  "sha2 0.10.9",
  "slack_integration",
@@ -19475,6 +19758,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "static_file_public_url"
+version = "0.1.0"
+dependencies = [
+ "service_url",
+ "workspace-hack",
+]
+
+[[package]]
 name = "static_file_service"
 version = "0.1.0"
 dependencies = [
@@ -19495,7 +19786,6 @@ dependencies = [
  "macro_env",
  "macro_env_var",
  "macro_queues",
- "macro_service_urls",
  "model",
  "models_sfs",
  "s3_key",
@@ -19503,6 +19793,7 @@ dependencies = [
  "serde",
  "serde_dynamo",
  "serde_json",
+ "static_file_public_url",
  "strum_macros 0.27.2",
  "thiserror 2.0.18",
  "tokio",
@@ -19521,13 +19812,21 @@ dependencies = [
  "anyhow",
  "bytes",
  "macro_aws_config",
- "macro_service_urls",
  "models_sfs",
  "reqwest 0.13.4",
  "serde",
  "serde_json",
+ "static_file_service_url",
  "tokio",
  "tracing",
+ "workspace-hack",
+]
+
+[[package]]
+name = "static_file_service_url"
+version = "0.1.0"
+dependencies = [
+ "service_url",
  "workspace-hack",
 ]
 
@@ -19927,6 +20226,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "sync_service_url"
+version = "0.1.0"
+dependencies = [
+ "service_url",
+ "workspace-hack",
+]
+
+[[package]]
 name = "sync_wrapper"
 version = "1.0.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -20088,10 +20395,11 @@ dependencies = [
  "embedding",
  "futures",
  "lexical_client",
+ "lexical_service_url",
  "macro_aws_config",
  "macro_db_migrator",
+ "macro_env",
  "macro_env_var",
- "macro_service_urls",
  "model-entity",
  "reqwest 0.13.4",
  "rootcause",
@@ -21180,6 +21488,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "unfurl_service_url"
+version = "0.1.0"
+dependencies = [
+ "service_url",
+ "workspace-hack",
+]
+
+[[package]]
 name = "unicase"
 version = "2.9.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -21343,6 +21659,7 @@ dependencies = [
  "aws-sdk-s3",
  "aws_lambda_events",
  "connection_gateway_client",
+ "connection_gateway_url",
  "document_storage_service_client",
  "dynamodb_client",
  "futures",
@@ -21350,7 +21667,6 @@ dependencies = [
  "macro_aws_config",
  "macro_entrypoint",
  "macro_env_var",
- "macro_service_urls",
  "model",
  "model-entity",
  "models_bulk_upload",
@@ -22240,12 +22556,12 @@ dependencies = [
  "macro_db_migrator",
  "macro_entrypoint",
  "macro_env",
- "macro_service_urls",
  "nom 8.0.0",
  "rootcause",
  "rustls",
  "serde",
  "serde_json",
+ "service_url",
  "sha2 0.10.9",
  "sqlx",
  "thiserror 2.0.18",

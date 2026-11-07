@@ -82,7 +82,7 @@ pub fn read_receipts(
     db: sqlx::PgPool,
     environment: macro_env::Environment,
 ) -> anyhow::Result<ReadReceipts> {
-    let base = macro_service_urls::EmailServiceUrl::new_for_environment(environment)?;
+    let base = email_service_url::EmailServiceUrl::new_for_environment(environment)?;
     Ok(email::domain::read_receipts::ReadReceiptService::new(
         email::outbound::read_receipts_pg::ReadReceiptPgRepository(db),
         email::domain::read_receipts::PixelUrlPrefix::new(base.as_str()),

@@ -14,10 +14,11 @@ use documents::outbound::markdown_init::LexicalSyncMarkdownInitializer;
 use documents::outbound::pg_document_repo::PgMarkdownBackfillRepo;
 use documents::outbound::s3_markdown_source::S3MarkdownObjectReader;
 use lexical_client::LexicalClient;
+use lexical_service_url::LexicalServiceUrl;
 use macro_env_var::env_vars;
-use macro_service_urls::{LexicalServiceUrl, SyncServiceUrl};
 use sqlx::postgres::PgPoolOptions;
 use sync_service_client::SyncServiceClient;
+use sync_service_url::SyncServiceUrl;
 
 env_vars! {
     struct DatabaseUrl;

@@ -98,7 +98,7 @@ impl Config {
                 anyhow::Ok(std::sync::Arc::new(
                     authentication_service_client::AuthServiceClient::new(
                         key.to_owned(),
-                        macro_service_urls::AuthServiceUrl::new()?.to_string(),
+                        auth_service_url::AuthServiceUrl::new()?.to_string(),
                     ),
                 ))
             })

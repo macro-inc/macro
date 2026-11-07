@@ -23,7 +23,6 @@ model = { workspace = true }
 model-entity = { workspace = true }
 models_bulk_upload = { workspace = true }
 serde_json = { workspace = true }
-macro_service_urls = { workspace = true }
 sha2 = { workspace = true }
 sqs_client = { workspace = true, default-features = true }
 tempfile = { workspace = true }
@@ -34,6 +33,7 @@ tracing = { workspace = true }
 walkdir = "2.3.2"
 zip = { workspace = true }
 workspace-hack = { version = "0.1", path = "../../crates/workspace-hack" }
+connection_gateway_url = { workspace = true }
 
 [package.metadata.cargo-machete]
 ignored = ["connection_gateway_client"]

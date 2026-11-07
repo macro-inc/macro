@@ -5,8 +5,35 @@ publish = false
 version = "0.1.0"
 
 [dependencies]
-macro_env = { workspace = true }
-paste = { workspace = true }
-thiserror = { workspace = true }
-url = { workspace = true }
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
+service_url = { workspace = true }
+app_service_url = { workspace = true }
+auth_service_url = { workspace = true }
+document_storage_service_url = { workspace = true }
+convert_service_url = { workspace = true }
+search_processing_service_url = { workspace = true }
+connection_gateway_url = { workspace = true }
+connection_gateway_websocket_url = { workspace = true }
+document_cognition_service_url = { workspace = true }
+notification_service_url = { workspace = true }
+static_file_service_url = { workspace = true }
+static_file_public_url = { workspace = true }
+agent_harness_service_url = { workspace = true }
+scheduled_action_service_url = { workspace = true }
+agent_harness_egress_url = { workspace = true }
+mcp_service_url = { workspace = true }
+mcp_public_url = { workspace = true }
+cognition_public_url = { workspace = true }
+connect_api_url = { workspace = true }
+unfurl_service_url = { workspace = true }
+contacts_service_url = { workspace = true }
+email_service_url = { workspace = true }
+calendar_service_url = { workspace = true }
+image_proxy_service_url = { workspace = true }
+lexical_service_url = { workspace = true }
+sync_service_url = { workspace = true }
+ai_editing_worker_url = { workspace = true }
+preview_gateway_url = { workspace = true }
+[dev-dependencies]
+macro_env = { workspace = true }
+service_url = { workspace = true, features = ["testing"] }

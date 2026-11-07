@@ -49,11 +49,11 @@ pub fn build_image_generation_tool_context(
             StaticStorageBucket::new()?.as_ref(),
         )
     } else {
-        macro_service_urls::StaticFileServiceUrl::new()?.to_string()
+        static_file_service_url::StaticFileServiceUrl::new()?.to_string()
     };
     let storage = static_file_service_client::StaticFileServiceClient::new(
         InternalApiKey::new()?.to_string(),
-        macro_service_urls::StaticFileServiceUrl::new()?.to_string(),
+        static_file_service_url::StaticFileServiceUrl::new()?.to_string(),
     );
     Ok(build_with_cdn(
         documents, generator, recorder, cdn_base, storage,

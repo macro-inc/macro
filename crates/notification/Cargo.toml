@@ -55,7 +55,6 @@ macro_authorization = { workspace = true, features = [
 ], optional = true }
 macro_event_broker = { workspace = true }
 macro_event_topics = { workspace = true }
-macro_service_urls = { workspace = true }
 macro_user_id = { workspace = true }
 macro_uuid = { workspace = true }
 model-entity = { workspace = true }
@@ -90,6 +89,7 @@ url = { workspace = true }
 utoipa = { workspace = true, optional = true }
 uuid = { workspace = true }
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
+notification_service_url = { workspace = true }
 
 [dev-dependencies]
 opentelemetry_sdk = { workspace = true, features = ["trace", "testing"] }

@@ -27,7 +27,6 @@ macro_uuid = { workspace = true }
 model = { workspace = true }
 model_owner = { workspace = true }
 s3_key = { workspace = true }
-macro_service_urls = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 sha2 = { workspace = true }
@@ -38,6 +37,8 @@ tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
 tracing = { workspace = true }
 urlencoding = { workspace = true }
 workspace-hack = { version = "0.1", path = "../../crates/workspace-hack" }
+lexical_service_url = { workspace = true }
+sync_service_url = { workspace = true }
 
 [[bin]]
 name = "document_upload_finalizer_local_worker"

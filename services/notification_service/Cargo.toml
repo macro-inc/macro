@@ -77,9 +77,10 @@ tracing = { workspace = true }
 utoipa = { workspace = true, features = ["chrono"] }
 utoipa-swagger-ui = { workspace = true }
 uuid = { workspace = true }
-
-macro_service_urls = { workspace = true }
 workspace-hack = { version = "0.1", path = "../../crates/workspace-hack" }
+
+connection_gateway_url = { workspace = true }
+notification_service_url = { workspace = true }
 
 [dev-dependencies]
 macro_auth = { workspace = true, features = ["testing"] }

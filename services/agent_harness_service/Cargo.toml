@@ -127,7 +127,6 @@ macro_event_broker = { workspace = true, default-features = true, features = ["o
 soup_realtime = { workspace = true, features = ["outbound"] }
 macro_middleware = { workspace = true, features = ["cloud_storage"] }
 macro_queues = { workspace = true }
-macro_service_urls = { workspace = true }
 macro_tower_layers = { workspace = true }
 macro_user_id = { workspace = true }
 macro_uuid = { workspace = true }
@@ -192,6 +191,29 @@ utoipa-swagger-ui = { workspace = true, features = ["axum"] }
 uuid = { workspace = true }
 web_search = { workspace = true, features = ["axum"] }
 workspace-hack = { version = "0.1", path = "../../crates/workspace-hack" }
+contacts_service_url = { workspace = true }
+document_cognition_service_url = { workspace = true }
+notification_service_url = { workspace = true }
+scheduled_action_service_url = { workspace = true }
+unfurl_service_url = { workspace = true }
+agent_harness_egress_url = { workspace = true }
+agent_harness_service_url = { workspace = true }
+ai_editing_worker_url = { workspace = true }
+app_service_url = { workspace = true }
+auth_service_url = { workspace = true }
+calendar_service_url = { workspace = true }
+cognition_public_url = { workspace = true }
+connection_gateway_url = { workspace = true }
+document_storage_service_url = { workspace = true }
+email_service_url = { workspace = true }
+lexical_service_url = { workspace = true }
+mcp_public_url = { workspace = true }
+mcp_service_url = { workspace = true }
+preview_gateway_url = { workspace = true }
+service_url = { workspace = true }
+static_file_public_url = { workspace = true }
+static_file_service_url = { workspace = true }
+sync_service_url = { workspace = true }
 
 [dev-dependencies]
 agent = { workspace = true }

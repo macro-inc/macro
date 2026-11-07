@@ -121,9 +121,22 @@ web_search = { workspace = true }
 macro_env = { workspace = true }
 secretsmanager_client = { workspace = true }
 aws-sdk-secretsmanager = { workspace = true }
-
-macro_service_urls = { workspace = true }
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
+
+agent_harness_service_url = { workspace = true }
+ai_editing_worker_url = { workspace = true }
+app_service_url = { workspace = true }
+calendar_service_url = { workspace = true }
+cognition_public_url = { workspace = true }
+connect_api_url = { workspace = true }
+connection_gateway_url = { workspace = true }
+document_cognition_service_url = { workspace = true }
+document_storage_service_url = { workspace = true }
+email_service_url = { workspace = true }
+lexical_service_url = { workspace = true }
+scheduled_action_service_url = { workspace = true }
+static_file_service_url = { workspace = true }
+sync_service_url = { workspace = true }
 
 [dev-dependencies]
 macro_db_migrator = { workspace = true }

@@ -17,6 +17,7 @@ use ::notification::outbound::websocket::{ConnectionGatewayClient, WebSocketGate
 use ::rate_limit::RateLimitServiceImpl;
 use anyhow::Context;
 use config::Config;
+use connection_gateway_url::ConnectionGatewayUrl;
 use email_formatting::EmailDigestNotification;
 use hmac::{Hmac, Mac};
 use macro_auth::middleware::decode_jwt::JwtValidationArgs;
@@ -27,7 +28,6 @@ use macro_authorization::{
 use macro_entrypoint::MacroEntrypoint;
 use macro_env::Environment;
 use macro_event_broker::{GlobalSpawner, KafkaEventPublisher, MacroEventBrokerService};
-use macro_service_urls::ConnectionGatewayUrl;
 use secretsmanager_client::SecretManager;
 use sha2::Sha256;
 use sqlx::postgres::PgPoolOptions;
@@ -238,7 +238,7 @@ pub async fn main() -> anyhow::Result<()> {
             crate::env::SENDER_ADDRESS.clone(),
             config.ses_configuration_set.value().map(str::to_owned),
         ),
-        macro_service_urls::NotificationServiceUrl::new_for_environment(config.environment)?
+        notification_service_url::NotificationServiceUrl::new_for_environment(config.environment)?
             .parse_url()?,
         hmac_key.clone(),
     );

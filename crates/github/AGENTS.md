@@ -36,7 +36,7 @@ link flow, following the hexagonal architecture pattern.
 ## Boundaries
 
 - Depends on: `github_pull_requests` (ports/schema), `foreign_entity`,
-  `documents`, `fusionauth`, `connection_gateway_client`, `macro_service_urls`,
+  `documents`, `fusionauth`, `connection_gateway_client`, `app_service_url`,
   `notification`/`model_notifications`.
 - Used by: `agent_harness_service`, `agent_harness`, `agent_egress`,
   `document_storage_service`, `authentication_service`, `scheduled_action`.

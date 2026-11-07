@@ -54,6 +54,6 @@ tracing.workspace = true
 utoipa = { workspace = true }
 utoipa-swagger-ui = { workspace = true, features = ["axum"] }
 uuid.workspace = true
-
-macro_service_urls = { workspace = true }
 workspace-hack = { version = "0.1", path = "../../crates/workspace-hack" }
+
+static_file_public_url = { workspace = true }

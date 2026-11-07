@@ -15,7 +15,7 @@ inbound = [
 outbound = [
   "dep:channels",
   "dep:entity_access",
-  "dep:macro_service_urls",
+  "dep:app_service_url",
   "dep:messages",
 ]
 postgres = ["dep:sqlx"]
@@ -26,7 +26,6 @@ channels = { workspace = true, optional = true, features = ["ports"] }
 chrono = { workspace = true, features = ["serde"] }
 entity_access = { workspace = true, optional = true, features = ["ports"] }
 macro_authorization = { workspace = true, optional = true, features = ["axum"] }
-macro_service_urls = { workspace = true, optional = true }
 macro_user_id = { workspace = true }
 messages = { workspace = true, optional = true, features = ["ports"] }
 model-error-response = { workspace = true, optional = true }
@@ -40,6 +39,7 @@ user_api_key = { workspace = true }
 utoipa = { workspace = true, optional = true }
 uuid = { workspace = true, features = ["serde", "v7"] }
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
+app_service_url = { workspace = true, optional = true }
 
 [dev-dependencies]
 macro_db_migrator = { workspace = true }
