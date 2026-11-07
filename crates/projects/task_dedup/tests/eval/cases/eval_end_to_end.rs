@@ -35,7 +35,7 @@ use task_dedup::{EmbeddingMarkdown, NewTask, TaskDedupConfig};
 
 #[sqlx::test(
     migrator = "MACRO_DB_MIGRATIONS",
-    fixtures(path = "../../../../documents/fixtures", scripts("documents_test_data"))
+    fixtures(path = "../../../../../documents/fixtures", scripts("documents_test_data"))
 )]
 #[ignore = "hits OpenAI + Anthropic; run locally with API keys"]
 async fn end_to_end_detection_baseline(pool: PgPool) {

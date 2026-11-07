@@ -19,7 +19,7 @@ fi
 python3 - <<'PY'
 from pathlib import Path
 
-path = Path("crates/projects/src/outbound/pg_project_repo/upload_folder.rs")
+path = Path("crates/projects/projects/src/outbound/pg_project_repo/upload_folder.rs")
 source = path.read_text()
 document_create = source.split("async fn create_empty_document", 1)[1].split(
     "async fn create_document_share_permission", 1

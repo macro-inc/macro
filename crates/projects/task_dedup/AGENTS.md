@@ -36,12 +36,12 @@ LLM.
   `src/domain/ports.rs` → new `src/outbound/<provider>.rs` → wire into the
   `TaskDedup` alias in `src/lib.rs`.
 - Add an eval case: drop a file under `tests/eval/cases/` (auto-discovered by
-  `tests/eval/main.rs`) → `just crates/task_dedup/eval [name]`.
+  `tests/eval/main.rs`) → `just crates/projects/task_dedup/eval [name]`.
 
 ## Checks
 
 - `cargo test -p task_dedup` (`SQLX_OFFLINE` unset).
-- `just crates/task_dedup/eval` — real OpenAI/Anthropic/Cohere calls against
+- `just crates/projects/task_dedup/eval` — real OpenAI/Anthropic/Cohere calls against
   the labeled corpus; needs local MacroDB plus `OPENAI_API_KEY`,
   `ANTHROPIC_API_KEY`, `CEREBRAS_API_KEY`. Costs money and is noisy; read
   before running (see `justfile`).

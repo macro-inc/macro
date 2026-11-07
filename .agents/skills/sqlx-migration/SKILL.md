@@ -12,7 +12,7 @@ Use the SQLx CLI to create migration files instead of manually creating timestam
 
 1. Identify the project or crate root where SQLx migrations should live.
    - Prefer the directory that contains an existing `migrations/` directory.
-   - If there are multiple crates/projects, ask the user which one unless the target is obvious.
+   - If there are multiple crates/projects/projects, ask the user which one unless the target is obvious.
 2. Convert the requested migration description to a short snake_case name, for example `create_users_table`.
 3. Run `just setup_test_envs` from the project root
 4. Run the SQLx CLI from `crates/macro_db_client` folder:

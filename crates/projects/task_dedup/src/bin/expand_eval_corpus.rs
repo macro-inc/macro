@@ -21,11 +21,11 @@
 //! Both run entirely on model calls + local files. Usage:
 //! ```text
 //! cargo run -p task_dedup --features backfill --bin expand_eval_corpus -- generate \
-//!   --per-scenario 8 --out crates/task_dedup/fixtures/eval/synthetic_generated.json
+//!   --per-scenario 8 --out crates/projects/task_dedup/fixtures/eval/synthetic_generated.json
 //! cargo run -p task_dedup --features backfill --bin expand_eval_corpus -- mine \
-//!   --prod crates/task_dedup/fixtures/eval/prod_title_only.json \
-//!   --prod crates/task_dedup/fixtures/eval/prod_with_body.json \
-//!   --out  crates/task_dedup/fixtures/eval/prod_mined_pairs.json
+//!   --prod crates/projects/task_dedup/fixtures/eval/prod_title_only.json \
+//!   --prod crates/projects/task_dedup/fixtures/eval/prod_with_body.json \
+//!   --out  crates/projects/task_dedup/fixtures/eval/prod_mined_pairs.json
 //! ```
 //! Requires `ANTHROPIC_API_KEY` / `OPENAI_API_KEY` / `CEREBRAS_API_KEY` (the
 //! agent router).
