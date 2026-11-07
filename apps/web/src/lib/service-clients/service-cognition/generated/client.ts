@@ -16,9 +16,12 @@ import type {
   CreateChatRequest,
   CreateConfirmedCalendarEvent200,
   CreateConfirmedCalendarEventBody,
+  CreateDatabaseSyncRequest,
   CreatePipedreamMcpTokenBody,
   DatabaseQueryAnswer,
   DatabaseQueryRequest,
+  DatabaseSync,
+  DatabaseSyncSources,
   DecisionErrorBody,
   DecisionRequest,
   DecisionResponse,
@@ -39,6 +42,7 @@ import type {
   GetChatsForAttachmentResponse,
   HttpSendChatMessageRequest,
   ImportSource,
+  ListDatabaseSyncsResponse,
   McpAuthCallbackParams,
   MemoryErrorBody,
   MemoryResponse,
@@ -1353,6 +1357,432 @@ export const generateDatabaseQuery = async (
     status: res.status,
     headers: res.headers,
   } as generateDatabaseQueryResponse;
+};
+
+/**
+ * @summary Create a database, named after the source, whose one table is synced
+with it. Retrying with the same `id` answers the first attempt's sync.
+ */
+export type createSyncedDatabaseResponse201 = {
+  data: DatabaseSync;
+  status: 201;
+};
+
+export type createSyncedDatabaseResponse401 = {
+  data: ErrorResponse;
+  status: 401;
+};
+
+export type createSyncedDatabaseResponse404 = {
+  data: ErrorResponse;
+  status: 404;
+};
+
+export type createSyncedDatabaseResponse409 = {
+  data: ErrorResponse;
+  status: 409;
+};
+
+export type createSyncedDatabaseResponse500 = {
+  data: ErrorResponse;
+  status: 500;
+};
+
+export type createSyncedDatabaseResponse502 = {
+  data: ErrorResponse;
+  status: 502;
+};
+
+export type createSyncedDatabaseResponseSuccess =
+  createSyncedDatabaseResponse201 & {
+    headers: Headers;
+  };
+export type createSyncedDatabaseResponseError = (
+  | createSyncedDatabaseResponse401
+  | createSyncedDatabaseResponse404
+  | createSyncedDatabaseResponse409
+  | createSyncedDatabaseResponse500
+  | createSyncedDatabaseResponse502
+) & {
+  headers: Headers;
+};
+
+export type createSyncedDatabaseResponse =
+  | createSyncedDatabaseResponseSuccess
+  | createSyncedDatabaseResponseError;
+
+export const getCreateSyncedDatabaseUrl = () => {
+  return `/databases/syncs`;
+};
+
+export const createSyncedDatabase = async (
+  createDatabaseSyncRequest: CreateDatabaseSyncRequest,
+  options?: RequestInit
+): Promise<createSyncedDatabaseResponse> => {
+  const res = await fetch(getCreateSyncedDatabaseUrl(), {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(createDatabaseSyncRequest),
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: createSyncedDatabaseResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as createSyncedDatabaseResponse;
+};
+
+/**
+ * @summary What the caller can sync a table from: whether Granola is connected,
+and the Notion data sources their connection can read.
+ */
+export type listDatabaseSyncSourcesResponse200 = {
+  data: DatabaseSyncSources;
+  status: 200;
+};
+
+export type listDatabaseSyncSourcesResponse401 = {
+  data: ErrorResponse;
+  status: 401;
+};
+
+export type listDatabaseSyncSourcesResponse500 = {
+  data: ErrorResponse;
+  status: 500;
+};
+
+export type listDatabaseSyncSourcesResponse502 = {
+  data: ErrorResponse;
+  status: 502;
+};
+
+export type listDatabaseSyncSourcesResponseSuccess =
+  listDatabaseSyncSourcesResponse200 & {
+    headers: Headers;
+  };
+export type listDatabaseSyncSourcesResponseError = (
+  | listDatabaseSyncSourcesResponse401
+  | listDatabaseSyncSourcesResponse500
+  | listDatabaseSyncSourcesResponse502
+) & {
+  headers: Headers;
+};
+
+export type listDatabaseSyncSourcesResponse =
+  | listDatabaseSyncSourcesResponseSuccess
+  | listDatabaseSyncSourcesResponseError;
+
+export const getListDatabaseSyncSourcesUrl = () => {
+  return `/databases/syncs/sources`;
+};
+
+export const listDatabaseSyncSources = async (
+  options?: RequestInit
+): Promise<listDatabaseSyncSourcesResponse> => {
+  const res = await fetch(getListDatabaseSyncSourcesUrl(), {
+    ...options,
+    method: 'GET',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: listDatabaseSyncSourcesResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as listDatabaseSyncSourcesResponse;
+};
+
+/**
+ * @summary The database's syncs.
+ */
+export type listDatabaseSyncsResponse200 = {
+  data: ListDatabaseSyncsResponse;
+  status: 200;
+};
+
+export type listDatabaseSyncsResponse401 = {
+  data: ErrorResponse;
+  status: 401;
+};
+
+export type listDatabaseSyncsResponse403 = {
+  data: ErrorResponse;
+  status: 403;
+};
+
+export type listDatabaseSyncsResponse500 = {
+  data: ErrorResponse;
+  status: 500;
+};
+
+export type listDatabaseSyncsResponseSuccess = listDatabaseSyncsResponse200 & {
+  headers: Headers;
+};
+export type listDatabaseSyncsResponseError = (
+  | listDatabaseSyncsResponse401
+  | listDatabaseSyncsResponse403
+  | listDatabaseSyncsResponse500
+) & {
+  headers: Headers;
+};
+
+export type listDatabaseSyncsResponse =
+  | listDatabaseSyncsResponseSuccess
+  | listDatabaseSyncsResponseError;
+
+export const getListDatabaseSyncsUrl = (id: string) => {
+  return `/databases/${id}/syncs`;
+};
+
+export const listDatabaseSyncs = async (
+  id: string,
+  options?: RequestInit
+): Promise<listDatabaseSyncsResponse> => {
+  const res = await fetch(getListDatabaseSyncsUrl(id), {
+    ...options,
+    method: 'GET',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: listDatabaseSyncsResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as listDatabaseSyncsResponse;
+};
+
+/**
+ * @summary Add a table synced with a source to the database. Its writes act with
+the caller's access. Retrying with the same `id` answers the first
+attempt's sync.
+ */
+export type createDatabaseSyncResponse201 = {
+  data: DatabaseSync;
+  status: 201;
+};
+
+export type createDatabaseSyncResponse401 = {
+  data: ErrorResponse;
+  status: 401;
+};
+
+export type createDatabaseSyncResponse403 = {
+  data: ErrorResponse;
+  status: 403;
+};
+
+export type createDatabaseSyncResponse404 = {
+  data: ErrorResponse;
+  status: 404;
+};
+
+export type createDatabaseSyncResponse409 = {
+  data: ErrorResponse;
+  status: 409;
+};
+
+export type createDatabaseSyncResponse500 = {
+  data: ErrorResponse;
+  status: 500;
+};
+
+export type createDatabaseSyncResponse502 = {
+  data: ErrorResponse;
+  status: 502;
+};
+
+export type createDatabaseSyncResponseSuccess =
+  createDatabaseSyncResponse201 & {
+    headers: Headers;
+  };
+export type createDatabaseSyncResponseError = (
+  | createDatabaseSyncResponse401
+  | createDatabaseSyncResponse403
+  | createDatabaseSyncResponse404
+  | createDatabaseSyncResponse409
+  | createDatabaseSyncResponse500
+  | createDatabaseSyncResponse502
+) & {
+  headers: Headers;
+};
+
+export type createDatabaseSyncResponse =
+  | createDatabaseSyncResponseSuccess
+  | createDatabaseSyncResponseError;
+
+export const getCreateDatabaseSyncUrl = (id: string) => {
+  return `/databases/${id}/syncs`;
+};
+
+export const createDatabaseSync = async (
+  id: string,
+  createDatabaseSyncRequest: CreateDatabaseSyncRequest,
+  options?: RequestInit
+): Promise<createDatabaseSyncResponse> => {
+  const res = await fetch(getCreateDatabaseSyncUrl(id), {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(createDatabaseSyncRequest),
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: createDatabaseSyncResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as createDatabaseSyncResponse;
+};
+
+/**
+ * @summary Stop a sync. Its table and rows stay as they are.
+ */
+export type deleteDatabaseSyncResponse204 = {
+  data: void;
+  status: 204;
+};
+
+export type deleteDatabaseSyncResponse401 = {
+  data: ErrorResponse;
+  status: 401;
+};
+
+export type deleteDatabaseSyncResponse403 = {
+  data: ErrorResponse;
+  status: 403;
+};
+
+export type deleteDatabaseSyncResponse404 = {
+  data: ErrorResponse;
+  status: 404;
+};
+
+export type deleteDatabaseSyncResponse500 = {
+  data: ErrorResponse;
+  status: 500;
+};
+
+export type deleteDatabaseSyncResponseSuccess =
+  deleteDatabaseSyncResponse204 & {
+    headers: Headers;
+  };
+export type deleteDatabaseSyncResponseError = (
+  | deleteDatabaseSyncResponse401
+  | deleteDatabaseSyncResponse403
+  | deleteDatabaseSyncResponse404
+  | deleteDatabaseSyncResponse500
+) & {
+  headers: Headers;
+};
+
+export type deleteDatabaseSyncResponse =
+  | deleteDatabaseSyncResponseSuccess
+  | deleteDatabaseSyncResponseError;
+
+export const getDeleteDatabaseSyncUrl = (id: string, syncId: string) => {
+  return `/databases/${id}/syncs/${syncId}`;
+};
+
+export const deleteDatabaseSync = async (
+  id: string,
+  syncId: string,
+  options?: RequestInit
+): Promise<deleteDatabaseSyncResponse> => {
+  const res = await fetch(getDeleteDatabaseSyncUrl(id, syncId), {
+    ...options,
+    method: 'DELETE',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: deleteDatabaseSyncResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as deleteDatabaseSyncResponse;
+};
+
+/**
+ * @summary Run a sync as soon as a worker is free.
+ */
+export type runDatabaseSyncResponse202 = {
+  data: void;
+  status: 202;
+};
+
+export type runDatabaseSyncResponse401 = {
+  data: ErrorResponse;
+  status: 401;
+};
+
+export type runDatabaseSyncResponse403 = {
+  data: ErrorResponse;
+  status: 403;
+};
+
+export type runDatabaseSyncResponse404 = {
+  data: ErrorResponse;
+  status: 404;
+};
+
+export type runDatabaseSyncResponse500 = {
+  data: ErrorResponse;
+  status: 500;
+};
+
+export type runDatabaseSyncResponseSuccess = runDatabaseSyncResponse202 & {
+  headers: Headers;
+};
+export type runDatabaseSyncResponseError = (
+  | runDatabaseSyncResponse401
+  | runDatabaseSyncResponse403
+  | runDatabaseSyncResponse404
+  | runDatabaseSyncResponse500
+) & {
+  headers: Headers;
+};
+
+export type runDatabaseSyncResponse =
+  | runDatabaseSyncResponseSuccess
+  | runDatabaseSyncResponseError;
+
+export const getRunDatabaseSyncUrl = (id: string, syncId: string) => {
+  return `/databases/${id}/syncs/${syncId}/run`;
+};
+
+export const runDatabaseSync = async (
+  id: string,
+  syncId: string,
+  options?: RequestInit
+): Promise<runDatabaseSyncResponse> => {
+  const res = await fetch(getRunDatabaseSyncUrl(id, syncId), {
+    ...options,
+    method: 'POST',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: runDatabaseSyncResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as runDatabaseSyncResponse;
 };
 
 export type decisionsResponse200 = {

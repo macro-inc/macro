@@ -131,7 +131,8 @@ and cells. The core storage adapter purges its journal in the same transaction.
    otherwise gets a property of the copy's own with the same options and
    values. Relation cells naming rows that are gone are left out, and formula values
    are computed again in the copy from its own columns. Grants, the team share, forms,
-   webhooks, saved queries, column protections and the journal stay behind; the
+   webhooks, synced tables' syncs (the copied tables keep their rows but stop
+   syncing), saved queries, column protections and the journal stay behind; the
    copy's history starts empty.
 
 SQL lives outside this crate. The browser compiles statements with the
