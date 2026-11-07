@@ -6604,6 +6604,27 @@ dependencies = [
 ]
 
 [[package]]
+name = "document_session"
+version = "0.1.0"
+dependencies = [
+ "bebop",
+ "doc_sync_core",
+ "imbl",
+ "lexical_loro",
+ "lexical_model",
+ "lexical_rich_nodes",
+ "loro",
+ "proptest",
+ "rootcause",
+ "serde",
+ "serde_json",
+ "sync_protocol",
+ "thiserror 2.0.18",
+ "tracing",
+ "uuid",
+]
+
+[[package]]
 name = "document_storage_service"
 version = "0.1.0"
 dependencies = [
