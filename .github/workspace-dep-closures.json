@@ -10227,6 +10227,9 @@
       "crates/trigger_context",
       "crates/workspace-hack"
     ],
+    "lexical_model": [
+      "crates/client/lexical/lexical_model"
+    ],
     "lexical_workspace_tests": [
       "crates/client/lexical/lexical_workspace_tests"
     ],

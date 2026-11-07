@@ -11727,6 +11727,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "lexical_model"
+version = "0.1.0"
+dependencies = [
+ "bitflags 2.11.1",
+ "indexmap 2.14.0",
+ "nom 8.0.0",
+ "rustc-hash 2.1.2",
+ "serde",
+ "serde_json",
+ "strum 0.27.2",
+ "thiserror 2.0.18",
+]
+
+[[package]]
 name = "lexical_workspace_tests"
 version = "0.1.0"
 dependencies = [
