@@ -4,16 +4,12 @@
  * agent_harness_service
  * OpenAPI spec version: 0.1.0
  */
-import type { MacroUserIdStr } from './macroUserIdStr';
 import type { TriggerOriginOneOfOnefiveOrigin } from './triggerOriginOneOfOnefiveOrigin';
 
 /**
- * Macro drafts a routine from a person's words. Such a session only
-reads, answers its drafter rather than a person, and is deleted once
-the draft is back.
+ * Not known: an unclaimed warm session, a producer that predates this
+record, or a kind this build does not know.
  */
 export type TriggerOriginOneOfOnefive = {
-  /** Who asked for the draft. */
-  by: MacroUserIdStr;
   origin: TriggerOriginOneOfOnefiveOrigin;
 };

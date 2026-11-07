@@ -5,7 +5,7 @@
  * API for managing scheduled actions
  * OpenAPI spec version: 0.1.0
  */
-
+import type { CreatedItem } from './createdItem';
 import type { DraftedRoutineTrigger } from './draftedRoutineTrigger';
 import type { RoutineStep } from './routineStep';
 import type { StepProblem } from './stepProblem';
@@ -14,6 +14,9 @@ import type { StepProblem } from './stepProblem';
  * A drafted routine.
  */
 export interface DraftedRoutine {
+  /** What AI created for the routine to use, such as the database it
+writes to. These exist whether or not the routine is saved. */
+  created: CreatedItem[];
   name: string;
   /** Steps whose code still fails the type checker. */
   problems: StepProblem[];

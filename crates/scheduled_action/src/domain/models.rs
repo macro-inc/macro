@@ -197,6 +197,19 @@ pub struct RoutineCheck {
     pub routine: ActionConfiguration,
 }
 
+/// Something a routine draft's session created for the routine to use, such
+/// as the database it writes to: it exists whether or not the routine is
+/// saved.
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, Hash, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct CreatedItem {
+    /// What kind of item.
+    #[schema(inline)]
+    pub entity_type: model_entity::EntityType,
+    /// Its id.
+    pub entity_id: String,
+}
+
 /// A code step that doesn't type-check.
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, ToSchema)]
 #[serde(rename_all = "camelCase")]

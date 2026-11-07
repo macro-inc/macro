@@ -66,13 +66,6 @@ DecideReview are eager internal tools in both standard and code modes.
 
 ## Gotchas
 
-- A session whose stored origin is `routine_draft` (`SessionRole::RoutineDraft`,
-  from `SessionFacts`) runs its turns through `rig_engine/routine_draft.rs`: only
-  code mode's ExecuteCode, DescribeCodeTools and ReadCodeDocs from the
-  session's MCP servers, whatever the owner's flags, with no native tools,
-  connected apps, memory, skills or opening line, and usage and admission as
-  `Automation`. The host makes its programs dry runs from the same origin.
-
 - Owners with `auto-skills` (`domain::entity_routing`) route SDK entities on
   code-mode turns: the prompt is `routed_prompt` (no area guidance) and the
   entities `select_documentation` picks bring their `@agent` guide with their

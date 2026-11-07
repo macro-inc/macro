@@ -852,7 +852,6 @@ async fn run() -> anyhow::Result<()> {
                 ),
                 gate: owner_tool_gate.clone(),
                 endpoints: code_mode::sdk_endpoints()?,
-                origins: Arc::new(code_mode::StoredOrigins(session_repo.clone())),
             }),
             execution_store,
             execution_turns,

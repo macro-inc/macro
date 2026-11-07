@@ -1,6 +1,6 @@
 use super::*;
 use crate::domain::event_trigger::ActionTrigger;
-use crate::domain::models::{ActionConfiguration, ActionKind};
+use crate::domain::models::{ActionConfiguration, ActionKind, CreatedItem};
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
 
 fn owner() -> MacroUserIdStr<'static> {
@@ -39,22 +39,49 @@ async fn a_drafts_latest_check_by_its_owner_is_its_answer(pool: PgPool) {
     assert_eq!(drafts.handed_back(session).await.unwrap(), HandedBack::default());
 
     let stranger = MacroUserIdStr::try_from_email("stranger@example.com").unwrap();
-    assert!(!drafts.record(session, &stranger, &check("Theirs")).await.unwrap());
-    assert!(drafts.record(session, &owner(), &check("First")).await.unwrap());
-    assert!(drafts.record(session, &owner(), &check("Bug reports")).await.unwrap());
+    let database = CreatedItem {
+        entity_type: model_entity::EntityType::Database,
+        entity_id: "bug-log".into(),
+    };
+    let folder = CreatedItem {
+        entity_type: model_entity::EntityType::Project,
+        entity_id: "reports".into(),
+    };
+    assert!(
+        !drafts
+            .record(session, &stranger, &check("Theirs"), &[folder.clone()])
+            .await
+            .unwrap()
+    );
+    assert!(
+        drafts
+            .record(session, &owner(), &check("First"), &[database.clone()])
+            .await
+            .unwrap()
+    );
+    assert!(
+        drafts
+            .record(session, &owner(), &check("Bug reports"), &[database.clone(), folder.clone()])
+            .await
+            .unwrap()
+    );
     // A session that isn't a draft's keeps nothing.
     assert!(
         !drafts
-            .record(macro_uuid::generate_uuid_v7(), &owner(), &check("Other"))
+            .record(macro_uuid::generate_uuid_v7(), &owner(), &check("Other"), &[])
             .await
             .unwrap()
     );
 
+    let mut handed_back = drafts.handed_back(session).await.unwrap();
+    handed_back.created.sort_by(|a, b| a.entity_id.cmp(&b.entity_id));
     assert_eq!(
-        drafts.handed_back(session).await.unwrap(),
+        handed_back,
         HandedBack {
             check: Some(check("Bug reports")),
             checks: 2,
+            // Each item once, across checks.
+            created: vec![database, folder],
         }
     );
 

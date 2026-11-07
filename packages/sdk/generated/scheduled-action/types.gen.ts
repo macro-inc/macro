@@ -165,6 +165,18 @@ export type AiAdmissionErrorBody = {
 };
 
 /**
+ * A routine to check, as the create body takes it.
+ */
+export type CheckRoutineRequest = {
+    /**
+     * What a routine draft's session created for the routine to use, such as
+     * the database it writes to; kept with its draft for the person to see.
+     */
+    created?: Array<CreatedItem>;
+    routine: ActionConfiguration;
+};
+
+/**
  * A code step that doesn't type-check.
  */
 export type CheckedStepProblems = {
@@ -265,6 +277,22 @@ export type ConditionResult = {
 };
 
 /**
+ * Something a routine draft's session created for the routine to use, such
+ * as the database it writes to: it exists whether or not the routine is
+ * saved.
+ */
+export type CreatedItem = {
+    /**
+     * Its id.
+     */
+    entityId: string;
+    /**
+     * What kind of item.
+     */
+    entityType: 'user' | 'chat' | 'channel' | 'channel_message' | 'document' | 'project' | 'email_thread' | 'calendar_event' | 'team' | 'call' | 'foreign_entity' | 'static_file' | 'crm_company' | 'crm_contact' | 'crm_pipeline' | 'reminder' | 'skill' | 'agent_session' | 'scheduled_action' | 'initiative' | 'database' | 'database_row' | 'form' | 'external_chat';
+};
+
+/**
  * What AI drafted, or why it couldn't.
  */
 export type Draft = (DraftedRoutine & {
@@ -331,6 +359,11 @@ export type DraftRoutineRequest = {
  * A drafted routine.
  */
 export type DraftedRoutine = {
+    /**
+     * What AI created for the routine to use, such as the database it
+     * writes to. These exist whether or not the routine is saved.
+     */
+    created: Array<CreatedItem>;
     name: string;
     /**
      * Steps whose code still fails the type checker.
@@ -348,6 +381,11 @@ export type DraftedRoutine = {
  * A drafted step.
  */
 export type DraftedStep = {
+    /**
+     * What AI created for the step to use. These exist whether or not the
+     * step is saved.
+     */
+    created: Array<CreatedItem>;
     /**
      * What the type checker still finds in its code.
      */
@@ -1065,7 +1103,7 @@ export type CreateScheduledActionResponses = {
 export type CreateScheduledActionResponse = CreateScheduledActionResponses[keyof CreateScheduledActionResponses];
 
 export type CheckScheduledActionData = {
-    body: ActionConfiguration;
+    body: CheckRoutineRequest;
     path?: never;
     query?: never;
     url: '/scheduled-actions/check';

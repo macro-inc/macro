@@ -317,17 +317,16 @@ pub async fn build<Ingress: notification::domain::service::NotificationIngress>(
         },
     );
 
-    // AI drafts routines in hidden, read-only sessions of the in-process
-    // Macro agent on the free tier's model, billed as automation work. A
-    // draft's session hands its routine back by checking it; the check is
-    // kept on the draft's row, so any replica can read it.
+    // AI drafts routines in hidden sessions of the in-process Macro agent on
+    // the free tier's model, admitted and billed as the person's agent
+    // session usage. A draft's session hands its routine back by checking
+    // it; the check is kept on the draft's row, so any replica can read it.
     let hand_backs: Arc<dyn DraftHandBacks> = Arc::new(PgDraftHandBacks::new(db.clone()));
     let drafts = Arc::new(
         RoutineDrafts::new(
             Arc::clone(&code),
             Arc::clone(&sessions),
             Arc::clone(&hand_backs),
-            ai_admission,
             DraftAgent {
                 bot: bot_id::MACRO_NEW_BOT_ID,
                 model: Some(chat::domain::models::FREE_MODEL.to_owned()),

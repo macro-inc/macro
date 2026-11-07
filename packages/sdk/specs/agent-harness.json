@@ -7982,21 +7982,6 @@
           },
           {
             "type": "object",
-            "description": "Macro drafts a routine from a person's words. Such a session only\nreads, answers its drafter rather than a person, and is deleted once\nthe draft is back.",
-            "required": ["by", "origin"],
-            "properties": {
-              "by": {
-                "$ref": "#/components/schemas/MacroUserIdStr",
-                "description": "Who asked for the draft."
-              },
-              "origin": {
-                "type": "string",
-                "enum": ["routine_draft"]
-              }
-            }
-          },
-          {
-            "type": "object",
             "description": "Not known: an unclaimed warm session, a producer that predates this\nrecord, or a kind this build does not know.",
             "required": ["origin"],
             "properties": {

@@ -37,23 +37,27 @@ each run.
 - `src/domain/drafts.rs` + `src/inbound/draft_router.rs`: `POST
   /scheduled-actions/drafts`, AI drafting a routine, a step to add, or a
   change to a code step from the person's words (Draft it and the step
-  boxes in the web editor). It admits the work as automation usage and runs
-  the draft in a hidden agent session (`RoutineSessions`, origin
-  `routine_draft`, source `routine`) of the in-process Macro agent: one
-  prompt (the brief, with the code-step guide), code mode's tools only, every
-  program a dry run (see `crates/agent_session` and `crates/agent_inmem`). The
-  agent finds the items the words name itself and hands the routine back by
-  checking it with `macro.routines.check` (`POST /scheduled-actions/check`,
-  `check_action`: saving's checks, nothing saved). A check from a draft's
+  boxes in the web editor). It runs the draft in an ordinary hidden agent
+  session (`RoutineSessions`, source `routine` so it notifies nobody, origin
+  `requested`) of the in-process Macro agent, as the person, with its usual
+  tools; the session admits and bills its turns as agent session usage. One
+  prompt, the brief (`brief`, with the code-step guide): find the items the
+  words name with SDK search, create only what the routine must reference
+  (such as the database it writes to), never do the routine's own work now,
+  and hand the routine back by checking it with `macro.routines.check`
+  (`POST /scheduled-actions/check`, `check_action`: saving's checks, nothing
+  saved), naming what it created (`created`, which comes back on the draft
+  for the review to show). A check from a draft's
   session, found from the request's code-mode invocation (`RequestSessions`),
   is kept on its `scheduled_action_draft` row (`DraftHandBacks`), so the
   session and the drafter may run on different replicas. The drafter reads
   the session's turn status until it ends (bounded by `DRAFT_TIMEOUT`), turns
   the last check into the draft, then stops and deletes the session and the
   row; `RoutineDrafts::sweep` (every minute in the harness) cleans up drafts
-  older than `STALE_DRAFT`. Saving checks every id again. The
-  `routine.draft` span records the session id, checks, status reads and
-  outcome (`timeout` included), never the words; `routine.check` records
+  older than `STALE_DRAFT`, from the rows alone. Saving checks every id
+  again. The `routine.draft` span records the session id, checks, items
+  created, the session's tool calls and turns, status reads and outcome
+  (`timeout` included), never the words; `routine.check` records
   whether a check passed and kept a draft's answer. `DraftContext` still
   accepts and ignores the `workspace` older web clients send.
 - `src/domain/code_upgrade.rs`: before a run uses code checked against an

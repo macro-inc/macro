@@ -6,7 +6,8 @@ use crate::domain::drafts::InvalidDraft;
 use crate::domain::event_trigger::ActionTrigger;
 use crate::domain::models::{
     ActionConfiguration, ActionConfigurationUpdate, ActionExecutionRecord, ActionPolicyError,
-    AlreadyRunningError, InProgressExecution, ListedAction, OwnerNotUserError, RoutineCheck,
+    AlreadyRunningError, CreatedItem, InProgressExecution, ListedAction, OwnerNotUserError,
+    RoutineCheck,
     Schedule, ScheduledAction,
 };
 use crate::domain::ports::ScheduledActionService;
@@ -83,6 +84,17 @@ impl From<ListedAction> for ScheduledActionResponse {
             ..Self::from(listed.action)
         }
     }
+}
+
+/// A routine to check, as the create body takes it.
+#[derive(Debug, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct CheckRoutineRequest {
+    pub routine: ActionConfiguration,
+    /// What a routine draft's session created for the routine to use, such as
+    /// the database it writes to; kept with its draft for the person to see.
+    #[serde(default)]
+    pub created: Vec<CreatedItem>,
 }
 
 #[derive(Debug, Deserialize, ToSchema)]
@@ -254,7 +266,7 @@ pub async fn health() -> impl IntoResponse {
     path = "/scheduled-actions/check",
     tag = "scheduled actions",
     operation_id = "check_scheduled_action",
-    request_body = ActionConfiguration,
+    request_body = CheckRoutineRequest,
     responses(
         (status = 200, body = RoutineCheck),
         (status = 400, body = String),
@@ -270,21 +282,22 @@ pub async fn health() -> impl IntoResponse {
 pub async fn check_action<S, Svc, Auth>(
     State(state): State<ScheduledActionRouterState<S, Svc, Auth>>,
     CreationPrincipalExtractor { principal, .. }: CreationPrincipalExtractor<Auth>,
-    body: Result<Json<ActionConfiguration>, JsonRejection>,
+    body: Result<Json<CheckRoutineRequest>, JsonRejection>,
 ) -> Result<Json<RoutineCheck>, ScheduledActionApiError>
 where
     S: ScheduledActionService + Send + Sync + 'static,
     Svc: EntityAccessService,
     Auth: MacroAuthorizationService,
 {
-    let Json(req) = body.map_err(ScheduledActionApiError::InvalidRequest)?;
+    let Json(CheckRoutineRequest { routine, created }) =
+        body.map_err(ScheduledActionApiError::InvalidRequest)?;
     // The code-mode invocation the credential names, already validated
     // against its session at the router's boundary.
     let correlation = agent_correlation::context::current();
     Ok(Json(
         state
             .service
-            .check_action(&principal, req, correlation)
+            .check_action(&principal, routine, created, correlation)
             .await?,
     ))
 }

@@ -1,12 +1,15 @@
 //! AI drafts a routine, or one step of one, from a person's words. The draft
-//! runs in a hidden agent session as the person, with code mode only and
-//! every program a dry run: the agent finds the items the words name itself,
-//! paging and refining searches as it needs, and hands its routine back by
-//! checking it with `macro.routines.check`, which runs saving's checks and
-//! saves nothing. Each check is kept on the draft's row
+//! runs in an ordinary hidden agent session of the in-process Macro agent,
+//! as the person, with its usual tools. The brief has it find the items the
+//! words name itself (searching, paging and refining), create only what the
+//! routine must reference (such as the database it writes to), never do the
+//! routine's own work now, and hand the routine back by checking it with
+//! `macro.routines.check`, which runs saving's checks and saves nothing,
+//! naming what it created. Each check is kept on the draft's row
 //! ([`DraftHandBacks`]), so the session and this drafter may run on any
 //! replicas. The drafter waits for the session's turn to end, reads the last
-//! check, then stops and deletes the session.
+//! check, then stops and deletes the session and the row. The session's
+//! usage is agent session usage, admitted and metered as any session's.
 
 use std::sync::Arc;
 use std::time::Duration;
@@ -17,8 +20,6 @@ use agent_session::domain::routines::{
     PrepareRoutineSession, PromptRoutineSession, RoutineActionStatus, RoutineSessionAction,
     RoutineSessionError, RoutineSessions, ValidateRoutineSession,
 };
-use ai_billing::AiAdmissionService;
-use ai_usage::AiFeature;
 use anyhow::Result;
 use bot_id::BotId;
 use chrono::{SecondsFormat, Utc};
@@ -30,7 +31,7 @@ use utoipa::ToSchema;
 
 use super::code_check::MAX_TASK_CHARS;
 use super::event_trigger::{ActionTrigger, EventName};
-use super::models::RoutineCheck;
+use super::models::{CreatedItem, RoutineCheck};
 use super::ports::{DraftHandBacks, RoutineCode, RoutineDraftService};
 
 #[cfg(test)]
@@ -189,6 +190,9 @@ pub struct DraftedRoutine {
     pub steps: Vec<Value>,
     /// Steps whose code still fails the type checker.
     pub problems: Vec<StepProblem>,
+    /// What AI created for the routine to use, such as the database it
+    /// writes to. These exist whether or not the routine is saved.
+    pub created: Vec<CreatedItem>,
 }
 
 /// A drafted step.
@@ -203,6 +207,9 @@ pub struct DraftedStep {
     pub reason: String,
     /// What the type checker still finds in its code.
     pub problems: Vec<String>,
+    /// What AI created for the step to use. These exist whether or not the
+    /// step is saved.
+    pub created: Vec<CreatedItem>,
 }
 
 /// A drafted step whose code still fails the type checker.
@@ -231,26 +238,24 @@ pub struct RoutineDrafts<Code, Sessions> {
     code: Arc<Code>,
     sessions: Arc<Sessions>,
     hand_backs: Arc<dyn DraftHandBacks>,
-    admission: Arc<dyn AiAdmissionService>,
     agent: DraftAgent,
     /// Whether this host can answer trigger conditions.
     conditions_enabled: bool,
 }
 
 impl<Code, Sessions> RoutineDrafts<Code, Sessions> {
-    /// Drafting is billed to the person asking, as their automation work.
+    /// Drafts run in `agent`'s sessions through `sessions`, which admit and
+    /// bill them as the person's agent session usage.
     pub fn new(
         code: Arc<Code>,
         sessions: Arc<Sessions>,
         hand_backs: Arc<dyn DraftHandBacks>,
-        admission: Arc<dyn AiAdmissionService>,
         agent: DraftAgent,
     ) -> Self {
         Self {
             code,
             sessions,
             hand_backs,
-            admission,
             agent,
             conditions_enabled: false,
         }
@@ -284,6 +289,7 @@ impl<Code: RoutineCode, Sessions: RoutineSessions> RoutineDraftService
         routine.draft.code_available = tracing::field::Empty,
         agent.session.id = tracing::field::Empty,
         routine.draft.checks = tracing::field::Empty,
+        routine.draft.created = tracing::field::Empty,
         routine.draft.tool_calls = tracing::field::Empty,
         routine.draft.turns = tracing::field::Empty,
         routine.draft.status_reads = tracing::field::Empty,
@@ -300,7 +306,6 @@ impl<Code: RoutineCode, Sessions: RoutineSessions> RoutineDraftService
     ) -> Result<Draft> {
         validate(&request, &context)?;
         context.conditions &= self.conditions_enabled;
-        self.admission.admit(&owner, AiFeature::Automation).await?;
         let span = tracing::Span::current();
         let program = match &request {
             DraftRequest::Routine { .. } => Vec::new(),
@@ -374,6 +379,7 @@ impl<Code: RoutineCode, Sessions: RoutineSessions> RoutineDrafts<Code, Sessions>
             .inspect_err(|error| tracing::error!(error = ?error, "could not read a draft's check"))
             .unwrap_or_default();
         span.record("routine.draft.checks", handed_back.checks);
+        span.record("routine.draft.created", handed_back.created.len());
         // Counts only; a session that can't say leaves them unset.
         if let Ok(activity) = self.sessions.activity(action.clone()).await {
             span.record("routine.draft.tool_calls", activity.tool_calls);
@@ -387,7 +393,7 @@ impl<Code: RoutineCode, Sessions: RoutineSessions> RoutineDrafts<Code, Sessions>
             Err(_) => Ending::TimedOut,
         };
         Ok(match (handed_back.check, ending) {
-            (Some(check), _) => drafted(request, program, check),
+            (Some(check), _) => drafted(request, program, check, handed_back.created),
             (None, Ending::TimedOut) => failed(TIMED_OUT),
             (None, Ending::Finished | Ending::Failed) => failed(request.failed()),
         })
@@ -411,7 +417,8 @@ impl<Code: RoutineCode, Sessions: RoutineSessions> RoutineDrafts<Code, Sessions>
                 // A routine's session notifies nobody when it finishes.
                 source: SessionSource::Routine,
                 visibility: SessionVisibility::Hidden,
-                origin: trigger_context::TriggerOrigin::RoutineDraft {
+                // The person asked for the draft.
+                origin: trigger_context::TriggerOrigin::Requested {
                     by: action.owner.clone(),
                 },
             })
@@ -453,7 +460,7 @@ impl<Code: RoutineCode, Sessions: RoutineSessions> RoutineDrafts<Code, Sessions>
         if let Err(error) = self.sessions.cancel(action.clone()).await {
             tracing::warn!(error = ?error, "could not stop a routine draft's session");
         }
-        if let Err(error) = self.sessions.delete_draft(action.clone()).await {
+        if let Err(error) = self.sessions.delete(action.clone()).await {
             tracing::warn!(error = ?error, "could not delete a routine draft's session");
         }
         if let Err(error) = self.hand_backs.finish(action.session_id.as_uuid()).await {
@@ -619,16 +626,20 @@ fn brief(
     Ok(format!(
         "{task}
 
-You draft for the person {owner}, with their access. Now is {now}; their time zone is {timezone}.
+You are setting up this routine for {owner}, with their access; they review the draft before it is saved. Now is {now}; their time zone is {timezone}. Work in code mode: read the SDK methods you use with ReadCodeDocs, and do the whole job in as few ExecuteCode programs as you can.
 
-Find every channel, person, folder, label, tag, agent or other item the words name with the SDK, as they would: search for it, page through the results and refine the search until you find the item itself. Use an item's id only when exactly one item is the one they named; when none is, or several could be, leave it out (no `ids`, or an empty knob) and they will pick it before saving.
+1. Find the items the words name. For each channel, person, folder, project, label, tag, agent, database or document the words name, search for it with the SDK as they would, page through the results and refine the search until you find the item itself. Use an item only when exactly one item is the one they named. When none is, or several could be, leave it out (no `ids`, or an empty knob) and they will pick it before saving.
 
-Write the routine as `macro.routines.check` takes it: read `RoutineNamespace.check` and the types it names with ReadCodeDocs first. Triggers: `{{type: 'events', filters: [{{events, ids?}}]}}` for events, `{{type: 'cron', schedule, timezone: '{timezone}'}}` for a repeating schedule (six fields: second minute hour day month weekday), `{{type: 'once', at}}` for a single run. {conditions} Events:
+2. Create only what the routine needs to exist before it runs. When the words ask for something new that the routine then uses by id (a database it adds rows to, a folder it files into, a channel it posts in), create it now with the name the words give and use its id in the routine. Create nothing else.
+
+3. Never do the routine's own work now. It does its work each time it runs. \"Every Monday make a task\" makes no task today; \"when an email arrives, reply\" sends nothing; \"post the weekly summary\" posts nothing. Don't run, test or create the routine itself.
+
+4. Write the routine as `macro.routines.check` takes it: read `RoutineNamespace.check` and the types it names first. Triggers: `{{type: 'events', filters: [{{events, ids?}}]}}` for events, `{{type: 'cron', schedule, timezone: '{timezone}'}}` for a repeating schedule (six fields: second minute hour day month weekday), `{{type: 'once', at}}` for a single run. {conditions} Events:
 {events}
 
 {steps}
 
-Hand the routine back by checking it: `await macro.routines.check(routine)` saves nothing and returns `ok`, `problems` and the code `steps` that don't type-check. Fix what it reports and check again; your last check is the routine you hand back, so check the finished routine last. Never create, update or run a routine."
+5. Hand it back by checking it: `await macro.routines.check(routine, {{ created }})`, where `created` lists the handles of everything you created in step 2 (empty when you created nothing). The check saves nothing and returns `ok`, `problems` and the code `steps` that don't type-check. Fix what it reports and check again until `ok` is true. Your last check is the routine you hand back, so check the finished routine last, with everything you created. Then stop with one short line."
     ))
 }
 
@@ -641,7 +652,12 @@ fn routine_data(routine: &RoutineSoFar) -> String {
 }
 
 /// The draft `request` asks for, from the session's last check.
-fn drafted(request: &DraftRequest, program: &[Step], check: RoutineCheck) -> Draft {
+fn drafted(
+    request: &DraftRequest,
+    program: &[Step],
+    check: RoutineCheck,
+    created: Vec<CreatedItem>,
+) -> Draft {
     let span = tracing::Span::current();
     span.record("routine.draft.code_failing", check.steps.len());
     let steps = match check.routine.task.get("steps").and_then(Value::as_array) {
@@ -671,6 +687,7 @@ fn drafted(request: &DraftRequest, program: &[Step], check: RoutineCheck) -> Dra
                     })
                     .collect(),
                 steps,
+                created,
             })
         }
         DraftRequest::AddStep { kind, .. } => {
@@ -699,6 +716,7 @@ fn drafted(request: &DraftRequest, program: &[Step], check: RoutineCheck) -> Dra
                 step: step.clone(),
                 reason: String::new(),
                 problems: problems_at(at),
+                created,
             })
         }
         DraftRequest::ChangeStep { index, .. } => {
@@ -716,6 +734,7 @@ fn drafted(request: &DraftRequest, program: &[Step], check: RoutineCheck) -> Dra
                     step,
                     reason: String::new(),
                     problems: problems_at(*index),
+                    created,
                 }),
                 Err(_) => failed(CHANGE_FAILED),
             }

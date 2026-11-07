@@ -327,9 +327,9 @@ where
         Ok(activity(log.entries))
     }
 
-    async fn delete_draft(&self, command: RoutineSessionAction) -> Result<(), RoutineSessionError> {
+    async fn delete(&self, command: RoutineSessionAction) -> Result<(), RoutineSessionError> {
         let session = self.owned_session(&command).await?;
-        if !session.origin.drafts_routine() {
+        if session.source != crate::domain::model::SessionSource::Routine {
             return Err(RoutineSessionError::Forbidden);
         }
         self.sessions

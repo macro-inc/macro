@@ -49,9 +49,10 @@ enforced by the ordinary backend APIs.
   with `Agent` handles) and `dangerouslyOperateAsUser`, which its TSDoc
   restricts to an explicit user request; `routineBody` maps both onto the
   scheduler's `RoutineTask`. `routines.check` sends the same body to
-  `POST /scheduled-actions/check`, which runs saving's checks and saves
-  nothing; code mode's catalog lists it as a read, so dry runs (a routine
-  draft's session) can call it.
+  `POST /scheduled-actions/check` (as `{routine, created}`), which runs
+  saving's checks and saves nothing; code mode's catalog lists it as a read.
+  `created` takes handles with an `entityType` (`CreatedEntity`) and is kept
+  with a routine draft for its review.
 - `users.search(nameOrEmail)` searches existing Macro contacts with batched auth
   names and returns seeded User handles; it is not a global directory. Empty
   contact sets are 404, but authorization/service errors must propagate.

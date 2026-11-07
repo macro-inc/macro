@@ -1,7 +1,14 @@
 import { unwrap } from '../../utils';
 import type { RoutineCheck } from '../../../generated/scheduled-action/types.gen';
 import type { MacroClient } from '../../utils/client';
+import type { MacroEntityType } from '../entity';
 import { Routine, type RoutineOptions, routineBody } from './routine';
+
+/** Something created for a routine to use: any handle with an entity type, such as a `Database`. */
+export interface CreatedEntity {
+  readonly id: string;
+  readonly entityType: MacroEntityType;
+}
 
 /**
  * Scheduled and event-triggered routines.
@@ -92,6 +99,9 @@ export class RoutineNamespace {
    * would save (`ok`), what would stop it (`problems`), the code steps that
    * don't type-check (`steps`, by place among the steps) and the routine as
    * it would be stored. Check before creating, and fix what it reports.
+   * `created` names what you created for the routine to use, such as the
+   * database it writes to, so whoever reviews a drafted routine knows it
+   * exists.
    *
    * @example
    * const check = await macro.routines.check({
@@ -101,10 +111,19 @@ export class RoutineNamespace {
    * });
    * if (!check.ok) return { problems: check.problems, steps: check.steps };
    */
-  async check(options: RoutineOptions): Promise<RoutineCheck> {
+  async check(
+    options: RoutineOptions,
+    extra?: { created?: CreatedEntity[] },
+  ): Promise<RoutineCheck> {
     return unwrap(
       await this.client.scheduledAction.checkScheduledAction({
-        body: { ...routineBody(options), enabled: options.enabled ?? true },
+        body: {
+          routine: { ...routineBody(options), enabled: options.enabled ?? true },
+          created: (extra?.created ?? []).map((item) => ({
+            entityType: item.entityType,
+            entityId: item.id,
+          })),
+        },
       }),
     );
   }

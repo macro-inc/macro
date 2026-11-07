@@ -406,8 +406,6 @@ where
             bot_id,
             runtime.kind.harness_slug().unwrap_or(&runtime.harness),
             &actor,
-            // A session a message or an assignment opens never drafts.
-            ai_usage::AiFeature::AgentSession,
         )
         .await?;
 

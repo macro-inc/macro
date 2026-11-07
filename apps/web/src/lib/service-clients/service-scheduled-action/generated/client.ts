@@ -10,6 +10,7 @@ import type {
   ActionConfigurationUpdate,
   ActionExecutionRecord,
   AiAdmissionErrorBody,
+  CheckRoutineRequest,
   CodeUpgrade,
   Draft,
   DraftRoutineRequest,
@@ -263,14 +264,14 @@ export const getCheckScheduledActionUrl = () => {
 };
 
 export const checkScheduledAction = async (
-  actionConfiguration: ActionConfiguration,
+  checkRoutineRequest: CheckRoutineRequest,
   options?: RequestInit
 ): Promise<checkScheduledActionResponse> => {
   const res = await fetch(getCheckScheduledActionUrl(), {
     ...options,
     method: 'POST',
     headers: { 'Content-Type': 'application/json', ...options?.headers },
-    body: JSON.stringify(actionConfiguration),
+    body: JSON.stringify(checkRoutineRequest),
   });
 
   const body = [204, 205, 304].includes(res.status) ? null : await res.text();

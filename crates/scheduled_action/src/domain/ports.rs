@@ -167,11 +167,13 @@ pub trait ScheduledActionService: Send + Sync + 'static {
     /// What saving `input` as `principal`'s routine would find wrong, and the
     /// routine as it would be stored, without saving anything. A check made
     /// by a routine draft's session (`correlation`, the code-mode invocation
-    /// the request's credential names) is kept as that draft's answer.
+    /// the request's credential names) is kept as that draft's answer, with
+    /// the items it says it `created` for the routine.
     fn check_action(
         &self,
         principal: &CreationPrincipal,
         input: ActionConfiguration,
+        created: Vec<super::models::CreatedItem>,
         correlation: Option<Uuid>,
     ) -> impl Future<Output = Result<super::models::RoutineCheck>> + Send;
 
@@ -260,13 +262,15 @@ pub trait DraftHandBacks: Send + Sync + 'static {
         agent: bot_id::BotId,
     ) -> Result<()>;
 
-    /// Keep `check` as the routine `session`'s draft hands back, if
-    /// `session` is a draft `owner` started. Whether it was.
+    /// Keep `check` as the routine `session`'s draft hands back, and add
+    /// `created` to what it created, if `session` is a draft `owner`
+    /// started. Whether it was.
     async fn record(
         &self,
         session: Uuid,
         owner: &MacroUserIdStr<'static>,
         check: &super::models::RoutineCheck,
+        created: &[super::models::CreatedItem],
     ) -> Result<bool>;
 
     /// The draft's latest check, and how many checks it made.
@@ -286,6 +290,8 @@ pub struct HandedBack {
     pub check: Option<super::models::RoutineCheck>,
     /// How many checks it made.
     pub checks: u32,
+    /// What it said it created for the routine, across its checks.
+    pub created: Vec<super::models::CreatedItem>,
 }
 
 /// A draft left behind, for the sweep.

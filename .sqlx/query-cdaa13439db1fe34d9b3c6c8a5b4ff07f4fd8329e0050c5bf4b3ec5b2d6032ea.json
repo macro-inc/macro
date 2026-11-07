@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT checked, checks FROM scheduled_action_draft WHERE session_id = $1",
+  "query": "SELECT checked, checks, created FROM scheduled_action_draft WHERE session_id = $1",
   "describe": {
     "columns": [
       {
@@ -12,6 +12,11 @@
         "ordinal": 1,
         "name": "checks",
         "type_info": "Int4"
+      },
+      {
+        "ordinal": 2,
+        "name": "created",
+        "type_info": "Jsonb"
       }
     ],
     "parameters": {
@@ -21,8 +26,9 @@
     },
     "nullable": [
       true,
+      false,
       false
     ]
   },
-  "hash": "5cbba2174af9294517bc9313583b33ebe06445cf8e37b57eae5a19b6c02ccf7f"
+  "hash": "cdaa13439db1fe34d9b3c6c8a5b4ff07f4fd8329e0050c5bf4b3ec5b2d6032ea"
 }

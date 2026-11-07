@@ -1,0 +1,17 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            UPDATE scheduled_action_draft SET\n                checked = $3,\n                checks = checks + 1,\n                created = (\n                    SELECT COALESCE(jsonb_agg(DISTINCT item), '[]')\n                    FROM jsonb_array_elements(created || $4::jsonb) AS item\n                )\n            WHERE session_id = $1 AND owner_id = $2\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Jsonb",
+        "Jsonb"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "5d678fa219a69b5fd3adcff3d3d444c42e6a993b3a204d80071242e2916976b3"
+}

@@ -52,9 +52,10 @@ pub trait RoutineSessions: Send + Sync + 'static {
         async { Err(RoutineSessionError::OperationFailed) }
     }
 
-    /// Delete a routine draft's session once its drafter is done with it.
-    /// No other session can be deleted this way.
-    fn delete_draft(
+    /// Delete a session the scheduler opened (source `routine`), such as a
+    /// routine draft's once its drafter is done with it. No other session can
+    /// be deleted this way.
+    fn delete(
         &self,
         command: RoutineSessionAction,
     ) -> impl Future<Output = Result<(), RoutineSessionError>> + Send {

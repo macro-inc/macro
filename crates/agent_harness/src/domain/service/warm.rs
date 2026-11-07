@@ -169,12 +169,7 @@ where
             None
         };
         self.inner
-            .admit_open(
-                bot_id,
-                &harness,
-                &owner_user,
-                super::admission::billed_as(&request.origin),
-            )
+            .admit_open(bot_id, &harness, &owner_user)
             .instrument(tracing::info_span!("agent.init.admission", agent.session.id = %session_id))
             .await
             .map_err(into_session_error)?;

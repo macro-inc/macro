@@ -43,7 +43,6 @@ use crate::domain::auto_model::{AutoModelSelector, DefaultAutoModel, JevAutoMode
 use crate::domain::engine::{AgentIdentity, ReplyDelivery, TurnEngine, TurnRequest};
 use crate::domain::entity_routing::{EntityRoutingPolicy, NoEntityRouting};
 use crate::domain::skill_routing::{NoSkillRouting, SessionSkills, SkillRoutingPolicy};
-use crate::domain::engine::SessionRole;
 use crate::domain::tool_gate::{NativeToolGate, NativeToolVerdict, UngatedNativeTools};
 use crate::domain::tool_mode::{StandardTools, ToolMode, ToolModeSelector};
 use crate::inbound::ask_user::{AskUser, AskUserContext};
@@ -53,9 +52,6 @@ mod opener;
 #[cfg(test)]
 #[path = "outbound/rig_engine/test.rs"]
 mod test;
-
-#[path = "outbound/rig_engine/routine_draft.rs"]
-mod routine_draft;
 
 #[cfg(test)]
 #[path = "outbound/rig_engine/measure_prompt_cache.rs"]
@@ -375,17 +371,6 @@ impl TurnEngine for RigTurnEngine {
                     return;
                 };
                 request.model = model;
-                // A routine draft's turn has its own tools, prompt and
-                // billing, whatever the owner's flags say.
-                if request.role == SessionRole::RoutineDraft {
-                    let turn = Box::pin(routine_draft::drive_draft_turn(
-                        tool_context,
-                        request,
-                        &parts,
-                    ));
-                    forward_turn_result(turn, &parts).await;
-                    return;
-                }
                 let (selected, routes, entities_routed) = tokio::join!(
                     select_tool_mode(tool_mode.as_ref(), &request),
                     routes_skills(skill_routing.as_ref(), &request),
@@ -551,7 +536,6 @@ async fn drive_turn(
 ) -> Result<(), AgentError> {
     let TurnRequest {
         purpose,
-        role: _,
         delivery,
         session_id,
         awaiting,

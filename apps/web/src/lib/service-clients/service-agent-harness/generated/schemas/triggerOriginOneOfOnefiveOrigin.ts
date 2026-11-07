@@ -10,5 +10,5 @@ export type TriggerOriginOneOfOnefiveOrigin =
 
 // eslint-disable-next-line @typescript-eslint/no-redeclare
 export const TriggerOriginOneOfOnefiveOrigin = {
-  routine_draft: 'routine_draft',
+  unknown: 'unknown',
 } as const;

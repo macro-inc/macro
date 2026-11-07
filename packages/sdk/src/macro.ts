@@ -45,6 +45,7 @@ import type { MacroEvents } from './events/receiver';
 import { MacroClient } from './utils/client';
 
 export type { MacroOpts } from './config';
+export type { CreatedEntity } from './entities/routines/namespace';
 export { CodeExecution } from './entities/agent-sessions/code-execution';
 export type {
   DecisionRequest,

@@ -63,8 +63,6 @@ export type SessionOrigin =
       routine: Routine;
       firing: 'scheduled' | 'manual' | 'event';
     }
-  /** Macro drafted a routine from this person's words. */
-  | { kind: 'routine_draft'; by: User }
   /** Nothing recorded it: an older session, or an unclaimed warm one. */
   | { kind: 'unknown' };
 
@@ -166,9 +164,6 @@ export function sessionOrigin(
         routine: Routine.byId(client, origin.routine),
         firing: origin.firing.type,
       };
-
-    case 'routine_draft':
-      return { kind: 'routine_draft', by: User.byId(client, origin.by) };
 
     case 'unknown':
       return { kind: 'unknown' };

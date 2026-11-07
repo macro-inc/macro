@@ -4,14 +4,14 @@ use std::sync::Mutex;
 use agent_session::domain::routines::{
     PreparedRoutineSession, RoutinePendingReason, RoutinePromptAccepted, ValidatedRoutineSession,
 };
-use ai_billing::{AdmissionFuture, AiAdmissionError, DisabledAiAdmissionService};
+use ai_billing::AiAdmissionError;
 use chrono::DateTime;
 use serde_json::json;
 
 use super::*;
 use crate::domain::code_check::{self, test::Checker};
 use macro_uuid::Uuid;
-use crate::domain::models::{ActionConfiguration, ActionKind};
+use crate::domain::models::{ActionConfiguration, ActionKind, CreatedItem};
 use crate::domain::ports::{HandedBack, StaleDraft};
 
 const OWNER: &str = "macro|owner@example.com";
@@ -43,6 +43,7 @@ impl DraftHandBacks for Rows {
         session: Uuid,
         owner: &MacroUserIdStr<'static>,
         check: &RoutineCheck,
+        created: &[CreatedItem],
     ) -> Result<bool> {
         let mut drafts = self.drafts.lock().unwrap();
         let Some((started_by, _, handed_back, _)) = drafts.get_mut(&session) else {
@@ -53,6 +54,11 @@ impl DraftHandBacks for Rows {
         }
         handed_back.check = Some(check.clone());
         handed_back.checks += 1;
+        for item in created {
+            if !handed_back.created.contains(item) {
+                handed_back.created.push(item.clone());
+            }
+        }
         Ok(true)
     }
 
@@ -89,8 +95,8 @@ impl DraftHandBacks for Rows {
 }
 
 /// What the draft's session does with its prompt: the routines it checks,
-/// in order, written from the prompt.
-type Turn = Box<dyn Fn(&str) -> Vec<ActionConfiguration> + Send + Sync>;
+/// in order, written from the prompt, each with what it says it created.
+type Turn = Box<dyn Fn(&str) -> Vec<(ActionConfiguration, Vec<CreatedItem>)> + Send + Sync>;
 
 /// The routine sessions a draft opens: preparing and prompting are
 /// recorded, and the prompt's turn checks its routines into `rows` as the
@@ -148,13 +154,14 @@ impl RoutineSessions for Sessions {
         command: PromptRoutineSession,
     ) -> Result<RoutinePromptAccepted, RoutineSessionError> {
         self.prompts.lock().unwrap().push(command.prompt.clone());
-        for routine in (self.turn)(&command.prompt) {
+        for (routine, created) in (self.turn)(&command.prompt) {
             let check = checked(self.code.as_ref(), routine).await;
             self.rows
                 .record(
                     command.action.session_id.as_uuid(),
                     &command.action.owner,
                     &check,
+                    &created,
                 )
                 .await
                 .unwrap();
@@ -181,7 +188,7 @@ impl RoutineSessions for Sessions {
         Ok(())
     }
 
-    async fn delete_draft(&self, command: RoutineSessionAction) -> Result<(), RoutineSessionError> {
+    async fn delete(&self, command: RoutineSessionAction) -> Result<(), RoutineSessionError> {
         self.deleted.lock().unwrap().push(command.session_id);
         Ok(())
     }
@@ -209,14 +216,6 @@ async fn checked(code: &Checker, routine: ActionConfiguration) -> RoutineCheck {
     }
 }
 
-struct Refused;
-
-impl AiAdmissionService for Refused {
-    fn admit<'a>(&'a self, _: &'a MacroUserIdStr<'_>, _: AiFeature) -> AdmissionFuture<'a> {
-        Box::pin(async { Err(AiAdmissionError::Unavailable) })
-    }
-}
-
 fn agent() -> DraftAgent {
     DraftAgent {
         bot: bot_id::MACRO_NEW_BOT_ID,
@@ -229,7 +228,6 @@ fn drafts(rows: &Arc<Rows>, sessions: &Arc<Sessions>) -> RoutineDrafts<Checker, 
         Arc::new(Checker::default()),
         Arc::clone(sessions),
         Arc::clone(rows) as Arc<dyn DraftHandBacks>,
-        Arc::new(DisabledAiAdmissionService),
         agent(),
     )
     .with_conditions_enabled(true)
@@ -270,6 +268,11 @@ fn configuration(name: &str, trigger: Value, steps: Value) -> ActionConfiguratio
         run_visibility: Default::default(),
         description: String::new(),
     }
+}
+
+/// A check that created nothing.
+fn plain(routine: ActionConfiguration) -> (ActionConfiguration, Vec<CreatedItem>) {
+    (routine, Vec::new())
 }
 
 fn message_posted(ids: &[Uuid]) -> Value {
@@ -326,17 +329,17 @@ async fn a_draft_runs_in_a_hidden_read_only_session_and_hands_back_its_last_chec
         Box::new(|_| {
             vec![
                 // Its first check finds the code doesn't type-check...
-                configuration(
+                plain(configuration(
                     "Bug tasks",
                     message_posted(&[]),
                     json!([code_step("Make a task", "bad")]),
-                ),
+                )),
                 // ...so it fixes the code and checks the finished routine.
-                configuration(
+                plain(configuration(
                     " Bug tasks ",
                     message_posted(&[]),
                     json!([code_step("Make a task", "good")]),
-                ),
+                )),
             ]
         }),
     ));
@@ -358,7 +361,7 @@ async fn a_draft_runs_in_a_hidden_read_only_session_and_hands_back_its_last_chec
     assert_eq!(prepared.source, SessionSource::Routine);
     assert_eq!(
         prepared.origin,
-        trigger_context::TriggerOrigin::RoutineDraft { by: owner() }
+        trigger_context::TriggerOrigin::Requested { by: owner() }
     );
     assert_eq!(prepared.selection.bot_id, bot_id::MACRO_NEW_BOT_ID);
     assert_eq!(
@@ -369,7 +372,9 @@ async fn a_draft_runs_in_a_hidden_read_only_session_and_hands_back_its_last_chec
     let prompt = sessions.prompts.lock().unwrap()[0].clone();
     assert!(prompt.contains(BUG_REPORTS), "{prompt}");
     assert!(prompt.contains("macro.routines.check"), "{prompt}");
-    assert!(prompt.contains("Never create"), "{prompt}");
+    assert!(prompt.contains("Never do the routine's own work now"), "{prompt}");
+    assert!(prompt.contains("Create only what the routine needs"), "{prompt}");
+    assert!(drafted.created.is_empty());
     // The session and its row are gone once the draft is back.
     let session = prepared.session_id;
     assert_eq!(*sessions.deleted.lock().unwrap(), [session]);
@@ -398,11 +403,11 @@ async fn a_large_workspace_drafts_the_channel_the_description_names() {
         &rows,
         Box::new(move |_| {
             let (id, _) = found.find("bug-reports");
-            vec![configuration(
+            vec![plain(configuration(
                 "Tasks from bug reports",
                 message_posted(&[id.unwrap()]),
                 json!([code_step("Make a task", "good")]),
-            )]
+            ))]
         }),
     ));
     let drafts = drafts(&rows, &sessions);
@@ -458,11 +463,11 @@ async fn a_channel_past_searchs_first_page_is_still_found() {
         &rows,
         Box::new(move |_| {
             let (id, _) = channels.find("bug-reports");
-            vec![configuration(
+            vec![plain(configuration(
                 "Tasks from bug reports",
                 message_posted(&[id.unwrap()]),
                 json!([code_step("Make a task", "good")]),
-            )]
+            ))]
         }),
     ));
 
@@ -478,11 +483,11 @@ async fn code_still_failing_at_the_last_check_comes_back_on_its_step() {
     let sessions = Arc::new(Sessions::new(
         &rows,
         Box::new(|_| {
-            vec![configuration(
+            vec![plain(configuration(
                 "Research and label",
                 message_posted(&[]),
                 json!([agent_step(), code_step("Label", "bad")]),
-            )]
+            ))]
         }),
     ));
 
@@ -530,11 +535,11 @@ async fn a_check_handed_back_before_the_time_runs_out_is_kept() {
     let mut sessions = Sessions::new(
         &rows,
         Box::new(|_| {
-            vec![configuration(
+            vec![plain(configuration(
                 "Bug tasks",
                 message_posted(&[]),
                 json!([code_step("Make a task", "good")]),
-            )]
+            ))]
         }),
     );
     sessions.hangs = true;
@@ -543,27 +548,6 @@ async fn a_check_handed_back_before_the_time_runs_out_is_kept() {
     let drafted = drafted_routine(draft(&drafts(&rows, &sessions), routine(BUG_REPORTS)).await);
 
     assert_eq!(drafted.name, "Bug tasks");
-}
-
-#[tokio::test]
-async fn a_refused_admission_is_an_error_and_starts_no_session() {
-    let rows = Arc::new(Rows::default());
-    let sessions = Arc::new(Sessions::new(&rows, Box::new(|_| Vec::new())));
-    let drafts = RoutineDrafts::new(
-        Arc::new(Checker::default()),
-        Arc::clone(&sessions),
-        Arc::clone(&rows) as Arc<dyn DraftHandBacks>,
-        Arc::new(Refused),
-        agent(),
-    );
-
-    let error = drafts
-        .draft(owner(), routine("label mail"), context())
-        .await
-        .unwrap_err();
-
-    assert!(error.downcast_ref::<AiAdmissionError>().is_some());
-    assert!(sessions.prepared.lock().unwrap().is_empty());
 }
 
 #[tokio::test]
@@ -601,11 +585,11 @@ async fn adds_the_step_the_session_checked_at_the_end() {
         &rows,
         Box::new(|prompt| {
             assert!(prompt.contains("Add ONE step at the end"), "{prompt}");
-            vec![configuration(
+            vec![plain(configuration(
                 "Bug tasks",
                 message_posted(&[]),
                 json!([code_step("Make a task", "good"), code_step("Post it", "bad")]),
-            )]
+            ))]
         }),
     ));
 
@@ -656,11 +640,11 @@ async fn a_session_that_adds_the_wrong_kind_of_step_fails_the_draft() {
     let sessions = Arc::new(Sessions::new(
         &rows,
         Box::new(|_| {
-            vec![configuration(
+            vec![plain(configuration(
                 "Bug tasks",
                 message_posted(&[]),
                 json!([code_step("Make a task", "good"), agent_step()]),
-            )]
+            ))]
         }),
     ));
 
@@ -680,11 +664,11 @@ async fn changes_a_code_step_in_place_keeping_its_output_name() {
     let sessions = Arc::new(Sessions::new(
         &rows,
         Box::new(|_| {
-            vec![configuration(
+            vec![plain(configuration(
                 "Bug tasks",
                 message_posted(&[]),
                 json!([{ "type": "code", "id": "renamed", "title": "Make two tasks", "summary": "", "source": "good again" }]),
-            )]
+            ))]
         }),
     ));
     let request = DraftRequest::ChangeStep {
@@ -751,4 +735,90 @@ async fn the_sweep_deletes_drafts_a_stopped_process_left_behind() {
         [AgentSessionId::new_from_uuid(old)]
     );
     assert!(rows.drafts.lock().unwrap().contains_key(&new));
+}
+
+/// A routine that writes to a database the words ask for: the session makes
+/// the database, uses its id, and says it made it, so the review can show it.
+#[tokio::test]
+async fn a_draft_that_needs_a_new_database_creates_it_references_it_and_says_so() {
+    let database = macro_uuid::generate_uuid_v7().to_string();
+    let made = database.clone();
+    let rows = Arc::new(Rows::default());
+    let sessions = Arc::new(Sessions::new(
+        &rows,
+        Box::new(move |_| {
+            let created = vec![CreatedItem {
+                entity_type: model_entity::EntityType::Database,
+                entity_id: made.clone(),
+            }];
+            let source = format!(
+                "export async function main({{ macro, trigger }}) {{ await macro.databases.byId('{made}').addRow({{ title: trigger.subject }}); }}"
+            );
+            vec![
+                (
+                    configuration(
+                        "Log bug reports",
+                        message_posted(&[]),
+                        json!([code_step("Add a row", "bad")]),
+                    ),
+                    created.clone(),
+                ),
+                (
+                    configuration(
+                        "Log bug reports",
+                        message_posted(&[]),
+                        json!([code_step("Add a row", &source)]),
+                    ),
+                    created,
+                ),
+            ]
+        }),
+    ));
+
+    let drafted = drafted_routine(
+        draft(
+            &drafts(&rows, &sessions),
+            routine("log every message in bug-reports to a new database called Bug log"),
+        )
+        .await,
+    );
+
+    assert_eq!(
+        drafted.created,
+        [CreatedItem {
+            entity_type: model_entity::EntityType::Database,
+            entity_id: database.clone(),
+        }]
+    );
+    assert!(
+        drafted.steps[0]["source"]
+            .as_str()
+            .unwrap()
+            .contains(&database)
+    );
+}
+
+/// The routine's own work happens when it runs: a weekly task is drafted,
+/// not made. The brief says so, and nothing comes back as created.
+#[tokio::test]
+async fn a_weekly_task_draft_creates_no_task() {
+    let rows = Arc::new(Rows::default());
+    let sessions = Arc::new(Sessions::new(
+        &rows,
+        Box::new(|prompt| {
+            assert!(prompt.contains("makes no task today"), "{prompt}");
+            vec![plain(configuration(
+                "Monday task",
+                json!({ "type": "cron", "schedule": "0 0 9 * * MON", "timezone": "America/New_York" }),
+                json!([code_step("Make the task", "good")]),
+            ))]
+        }),
+    ));
+
+    let drafted = drafted_routine(
+        draft(&drafts(&rows, &sessions), routine("make a task every Monday")).await,
+    );
+
+    assert!(drafted.created.is_empty());
+    assert_eq!(drafted.steps[0]["title"], "Make the task");
 }

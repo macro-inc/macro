@@ -77,7 +77,7 @@ async fn a_check_says_what_saving_would_refuse_and_saves_nothing() {
     );
 
     let check = svc
-        .check_action(&user_principal(), config, None)
+        .check_action(&user_principal(), config, Vec::new(), None)
         .await
         .unwrap();
 
@@ -107,7 +107,7 @@ async fn a_clean_check_returns_the_routine_as_saving_would_store_it() {
     );
 
     let check = svc
-        .check_action(&user_principal(), config, None)
+        .check_action(&user_principal(), config, Vec::new(), None)
         .await
         .unwrap();
 
@@ -130,6 +130,7 @@ impl DraftHandBacks for PanickingHandBacks {
         _: Uuid,
         _: &MacroUserIdStr<'static>,
         _: &crate::domain::models::RoutineCheck,
+        _: &[crate::domain::models::CreatedItem],
     ) -> Result<bool> {
         unreachable!("a check without an invocation is no draft's")
     }
@@ -168,16 +169,16 @@ async fn only_a_draft_sessions_own_check_is_kept_as_its_answer(pool: PgPool) {
     let stranger = CreationPrincipal::User(
         MacroUserIdStr::try_from("macro|stranger@macro.com".to_owned()).unwrap(),
     );
-    svc.check_action(&stranger, config.clone(), Some(correlation))
+    svc.check_action(&stranger, config.clone(), Vec::new(), Some(correlation))
         .await
         .unwrap();
     // ...nor can a check that isn't from a session.
-    svc.check_action(&user_principal(), config.clone(), None)
+    svc.check_action(&user_principal(), config.clone(), Vec::new(), None)
         .await
         .unwrap();
     assert_eq!(hand_backs.handed_back(session).await.unwrap().checks, 0);
 
-    svc.check_action(&user_principal(), config, Some(correlation))
+    svc.check_action(&user_principal(), config, Vec::new(), Some(correlation))
         .await
         .unwrap();
     let handed_back = hand_backs.handed_back(session).await.unwrap();
@@ -231,6 +232,10 @@ impl<Check: ScheduledActionService> RoutineSessions for SessionOnAnotherReplica<
                     name: "Bug tasks".into(),
                     ..config
                 },
+                vec![crate::domain::models::CreatedItem {
+                    entity_type: model_entity::EntityType::Database,
+                    entity_id: "bug-log".into(),
+                }],
                 Some(correlation),
             )
             .await
@@ -252,7 +257,7 @@ impl<Check: ScheduledActionService> RoutineSessions for SessionOnAnotherReplica<
         Ok(())
     }
 
-    async fn delete_draft(&self, command: RoutineSessionAction) -> Result<(), RoutineSessionError> {
+    async fn delete(&self, command: RoutineSessionAction) -> Result<(), RoutineSessionError> {
         self.deleted.lock().unwrap().push(command.session_id);
         Ok(())
     }
@@ -279,7 +284,6 @@ async fn a_check_made_on_one_replica_answers_a_draft_waiting_on_another(pool: Pg
         Arc::new(Checker::default()),
         Arc::clone(&sessions),
         Arc::new(PgDraftHandBacks::new(pool.clone())) as Arc<dyn DraftHandBacks>,
-        Arc::new(ai_billing::DisabledAiAdmissionService),
         DraftAgent {
             bot: bot_id::MACRO_NEW_BOT_ID,
             model: None,
@@ -308,6 +312,7 @@ async fn a_check_made_on_one_replica_answers_a_draft_waiting_on_another(pool: Pg
     };
     assert_eq!(routine.name, "Bug tasks");
     assert_eq!(routine.steps[0]["id"], "make_a_task");
+    assert_eq!(routine.created.len(), 1, "what the session made crosses too");
     assert_eq!(sessions.deleted.lock().unwrap().len(), 1);
     let left = sqlx::query_scalar!(r#"SELECT COUNT(*) AS "count!" FROM scheduled_action_draft"#)
         .fetch_one(&pool)

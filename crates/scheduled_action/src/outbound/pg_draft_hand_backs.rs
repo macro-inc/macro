@@ -6,7 +6,7 @@ use macro_user_id::user_id::MacroUserIdStr;
 use macro_uuid::Uuid;
 use sqlx::PgPool;
 
-use crate::domain::models::RoutineCheck;
+use crate::domain::models::{CreatedItem, RoutineCheck};
 use crate::domain::ports::{DraftHandBacks, HandedBack, StaleDraft};
 
 #[cfg(test)]
@@ -47,16 +47,26 @@ impl DraftHandBacks for PgDraftHandBacks {
         session: Uuid,
         owner: &MacroUserIdStr<'static>,
         check: &RoutineCheck,
+        created: &[CreatedItem],
     ) -> Result<bool> {
         let checked = serde_json::to_value(check).context("encode a draft's check")?;
+        let created = serde_json::to_value(created).context("encode what a draft created")?;
+        // What it created adds up across checks, each item once.
         let updated = sqlx::query!(
             r#"
-            UPDATE scheduled_action_draft SET checked = $3, checks = checks + 1
+            UPDATE scheduled_action_draft SET
+                checked = $3,
+                checks = checks + 1,
+                created = (
+                    SELECT COALESCE(jsonb_agg(DISTINCT item), '[]')
+                    FROM jsonb_array_elements(created || $4::jsonb) AS item
+                )
             WHERE session_id = $1 AND owner_id = $2
             "#,
             session,
             owner.as_ref(),
             checked,
+            created,
         )
         .execute(&self.pool)
         .await
@@ -66,7 +76,7 @@ impl DraftHandBacks for PgDraftHandBacks {
 
     async fn handed_back(&self, session: Uuid) -> Result<HandedBack> {
         let row = sqlx::query!(
-            "SELECT checked, checks FROM scheduled_action_draft WHERE session_id = $1",
+            "SELECT checked, checks, created FROM scheduled_action_draft WHERE session_id = $1",
             session,
         )
         .fetch_optional(&self.pool)
@@ -81,6 +91,7 @@ impl DraftHandBacks for PgDraftHandBacks {
                 .checked
                 .and_then(|checked| serde_json::from_value(checked).ok()),
             checks: u32::try_from(row.checks).unwrap_or_default(),
+            created: serde_json::from_value(row.created).unwrap_or_default(),
         })
     }
 

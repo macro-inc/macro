@@ -171,29 +171,3 @@ async fn an_agent_and_its_lineage_read_back_as_stored(pool: PgPool) {
 
     assert_eq!(session.origin, origin);
 }
-
-#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
-async fn a_routine_draft_session_reads_back_who_asked(pool: PgPool) {
-    let repo = test_repo(&pool);
-    let bot = create_test_bot(&pool).await;
-    let session = AgentSessionRepo::create(
-        &repo,
-        CreateAgentSessionParams {
-            origin: TriggerOrigin::RoutineDraft { by: user() },
-            ..new_session(bot, None, None)
-        },
-    )
-    .await
-    .unwrap();
-
-    assert_eq!(
-        stored_kind(&pool, session.id).await.as_deref(),
-        Some("routine_draft")
-    );
-    let origin = AgentSessionRepo::get(&repo, session.id)
-        .await
-        .unwrap()
-        .origin;
-    assert_eq!(origin, TriggerOrigin::RoutineDraft { by: user() });
-    assert!(origin.drafts_routine());
-}

@@ -133,11 +133,10 @@ through `set_name` clears it, so a name a person chose is never replaced.
 
 ## Gotchas
 
-- A `routine_draft` origin marks a hidden session drafting a routine for the
-  scheduler: it may only read (its programs are dry runs, its turns get code
-  mode's tools only) and bills as automation. `RoutineSessions::delete_draft`
-  (`/internal/routine-sessions/delete-draft`) deletes such a session for its
-  owner and refuses any other.
+- The scheduler's routine-session operations (`domain/routines.rs`,
+  `/internal/routine-sessions/*`) also serve routine drafts: `delete` removes
+  a session the scheduler opened (source `routine`) for its owner and refuses
+  any other; `activity` returns content-free counts (tool calls, turns).
 
 - What opened a session is an `agent_session_source` row, referenced by
   `agent_session.source_id` and written in the transaction that writes the session

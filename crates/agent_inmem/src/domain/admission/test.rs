@@ -1,5 +1,4 @@
 use super::*;
-use ai_usage::AiFeature;
 use crate::testing::TestAdmission;
 use ai_billing::domain::{DenyReason, DisabledAiAdmissionService};
 use macro_user_id::user_id::MacroUserIdStr;
@@ -13,14 +12,14 @@ async fn turns_use_the_trusted_owner_and_agent_session_feature() {
         Err(AiAdmissionError::Unavailable),
     ] {
         let admission = TestAdmission::new(result);
-        assert_eq!(admit_turn(&admission, &owner, crate::domain::engine::SessionRole::Conversation).await, result);
+        assert_eq!(admit_turn(&admission, &owner).await, result);
         assert_eq!(
             *admission.calls.lock().unwrap(),
             vec![("macro|owner@macro.com".to_owned(), AiFeature::AgentSession)]
         );
     }
     assert_eq!(
-        admit_turn(&DisabledAiAdmissionService, &owner, crate::domain::engine::SessionRole::Conversation).await,
+        admit_turn(&DisabledAiAdmissionService, &owner).await,
         Ok(())
     );
 }
@@ -33,28 +32,9 @@ async fn unsupported_owners_are_not_substituted_with_system_identity() {
         Owner::Team(macro_uuid::generate_uuid_v7()),
     ] {
         assert_eq!(
-            admit_turn(&admission, &owner, crate::domain::engine::SessionRole::Conversation).await,
+            admit_turn(&admission, &owner).await,
             Err(AiAdmissionError::Unavailable)
         );
     }
     assert!(admission.calls.lock().unwrap().is_empty());
-}
-
-#[tokio::test]
-async fn a_routine_drafts_turns_are_admitted_as_automation() {
-    let owner = Owner::User(MacroUserIdStr::try_from_email("owner@macro.com").unwrap());
-    let admission = TestAdmission::new(Ok(()));
-    assert_eq!(
-        admit_turn(
-            &admission,
-            &owner,
-            crate::domain::engine::SessionRole::RoutineDraft
-        )
-        .await,
-        Ok(())
-    );
-    assert_eq!(
-        *admission.calls.lock().unwrap(),
-        vec![("macro|owner@macro.com".to_owned(), AiFeature::Automation)]
-    );
 }

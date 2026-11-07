@@ -166,7 +166,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/ActionConfiguration"
+                "$ref": "#/components/schemas/CheckRoutineRequest"
               }
             }
           },
@@ -1424,6 +1424,24 @@
           }
         }
       },
+      "CheckRoutineRequest": {
+        "type": "object",
+        "description": "A routine to check, as the create body takes it.",
+        "required": ["routine"],
+        "properties": {
+          "created": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CreatedItem"
+            },
+            "description": "What a routine draft's session created for the routine to use, such as\nthe database it writes to; kept with its draft for the person to see."
+          },
+          "routine": {
+            "$ref": "#/components/schemas/ActionConfiguration"
+          }
+        },
+        "additionalProperties": false
+      },
       "CheckedStepProblems": {
         "type": "object",
         "description": "A code step that doesn't type-check.",
@@ -1581,6 +1599,52 @@
           }
         ],
         "description": "Why an event-triggered run was skipped before it started."
+      },
+      "CreatedItem": {
+        "type": "object",
+        "description": "Something a routine draft's session created for the routine to use, such\nas the database it writes to: it exists whether or not the routine is\nsaved.",
+        "required": ["entityType", "entityId"],
+        "properties": {
+          "entityId": {
+            "type": "string",
+            "description": "Its id."
+          },
+          "entityType": {
+            "oneOf": [
+              {
+                "type": "string",
+                "description": "The type of an entity in Macro",
+                "enum": [
+                  "user",
+                  "chat",
+                  "channel",
+                  "channel_message",
+                  "document",
+                  "project",
+                  "email_thread",
+                  "calendar_event",
+                  "team",
+                  "call",
+                  "foreign_entity",
+                  "static_file",
+                  "crm_company",
+                  "crm_contact",
+                  "crm_pipeline",
+                  "reminder",
+                  "skill",
+                  "agent_session",
+                  "scheduled_action",
+                  "initiative",
+                  "database",
+                  "database_row",
+                  "form",
+                  "external_chat"
+                ]
+              }
+            ],
+            "description": "What kind of item."
+          }
+        }
       },
       "Draft": {
         "oneOf": [
@@ -1747,8 +1811,15 @@
       "DraftedRoutine": {
         "type": "object",
         "description": "A drafted routine.",
-        "required": ["name", "steps", "problems"],
+        "required": ["name", "steps", "problems", "created"],
         "properties": {
+          "created": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CreatedItem"
+            },
+            "description": "What AI created for the routine to use, such as the database it\nwrites to. These exist whether or not the routine is saved."
+          },
           "name": {
             "type": "string"
           },
@@ -1782,8 +1853,15 @@
       "DraftedStep": {
         "type": "object",
         "description": "A drafted step.",
-        "required": ["step", "reason", "problems"],
+        "required": ["step", "reason", "problems", "created"],
         "properties": {
+          "created": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CreatedItem"
+            },
+            "description": "What AI created for the step to use. These exist whether or not the\nstep is saved."
+          },
           "problems": {
             "type": "array",
             "items": {

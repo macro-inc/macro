@@ -25,7 +25,7 @@ const OPERATIONS: [&str; 7] = [
     "prompt",
     "status",
     "cancel",
-    "delete-draft",
+    "delete",
     "activity",
 ];
 
@@ -160,8 +160,8 @@ impl RoutineSessions for ServiceSpy {
         self.record("cancel", command)
     }
 
-    async fn delete_draft(&self, command: RoutineSessionAction) -> Result<(), RoutineSessionError> {
-        self.record("delete-draft", command)
+    async fn delete(&self, command: RoutineSessionAction) -> Result<(), RoutineSessionError> {
+        self.record("delete", command)
     }
 
     async fn activity(

@@ -22,7 +22,7 @@ use super::event_runs::ConfigurationRevision;
 use super::event_trigger::ActionTrigger;
 use super::models::{
     ActionConfiguration, ActionConfigurationUpdate, ActionExecutionRecord, ActionPolicyError,
-    CheckedStepProblems, DispatchEvent, InProgressExecution, ListedAction, MAX_DESCRIPTION_CHARS,
+    CheckedStepProblems, CreatedItem, DispatchEvent, InProgressExecution, ListedAction, MAX_DESCRIPTION_CHARS,
     OwnerNotUserError, RoutineCheck, ScheduledAction,
 };
 use super::ports::{
@@ -344,6 +344,7 @@ impl<Rpo: ScheduledActionRepo, Exe, Grants, Targets, Github, Code, Upgrades>
         owner: &MacroUserIdStr<'static>,
         correlation: Option<Uuid>,
         check: &RoutineCheck,
+        created: &[CreatedItem],
     ) {
         let (Some(drafts), Some(correlation)) = (&self.drafts, correlation) else {
             return;
@@ -352,7 +353,7 @@ impl<Rpo: ScheduledActionRepo, Exe, Grants, Targets, Github, Code, Upgrades>
             let Some(session) = drafts.sessions.session_of(correlation).await? else {
                 return Ok(false);
             };
-            drafts.hand_backs.record(session, owner, check).await
+            drafts.hand_backs.record(session, owner, check, created).await
         }
         .await;
         match recorded {
@@ -675,6 +676,7 @@ where
         &self,
         principal: &CreationPrincipal,
         input: ActionConfiguration,
+        created: Vec<CreatedItem>,
         correlation: Option<Uuid>,
     ) -> Result<RoutineCheck> {
         let owner = principal.owner();
@@ -686,7 +688,7 @@ where
         span.record("routine.check.ok", check.ok);
         span.record("routine.check.problems", check.problems.len());
         span.record("routine.check.failing_steps", check.steps.len());
-        self.hand_back(owner_user, correlation, &check).await;
+        self.hand_back(owner_user, correlation, &check, &created).await;
         Ok(check)
     }
 

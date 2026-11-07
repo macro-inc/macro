@@ -745,19 +745,18 @@ async fn an_external_agent_cannot_take_routine_apps() {
 }
 
 #[tokio::test]
-async fn only_a_routine_drafts_own_session_can_be_deleted() {
+async fn only_a_session_the_scheduler_opened_can_be_deleted() {
     let fx = Fixture::new(true);
-    // An ordinary routine run's session stays.
+    // A session the owner opened stays.
+    assert_ne!(fx.session.source, SessionSource::Routine);
     assert_eq!(
-        fx.service.delete_draft(fx.action()).await.unwrap_err(),
+        fx.service.delete(fx.action()).await.unwrap_err(),
         RoutineSessionError::Forbidden
     );
     let mut draft = test_agent_session(AgentSessionId::new());
     draft.owner_id = fx.session.owner_id.clone();
     draft.bot_id = fx.session.bot_id;
-    draft.origin = trigger_context::TriggerOrigin::RoutineDraft {
-        by: fx.session.owner_user().unwrap().clone(),
-    };
+    draft.source = SessionSource::Routine;
     fx.repo.insert_session(draft.clone());
     let action = RoutineSessionAction {
         session_id: draft.id,
@@ -765,7 +764,7 @@ async fn only_a_routine_drafts_own_session_can_be_deleted() {
     };
     assert_eq!(
         fx.service
-            .delete_draft(RoutineSessionAction {
+            .delete(RoutineSessionAction {
                 owner: other_owner(),
                 ..action.clone()
             })
@@ -774,7 +773,7 @@ async fn only_a_routine_drafts_own_session_can_be_deleted() {
         RoutineSessionError::Forbidden
     );
 
-    fx.service.delete_draft(action.clone()).await.unwrap();
+    fx.service.delete(action.clone()).await.unwrap();
 
     assert!(
         crate::domain::ports::AgentSessionRepo::get(&fx.repo, draft.id)

@@ -24,7 +24,7 @@ enum Operation {
     Prompt,
     Status,
     Cancel,
-    DeleteDraft,
+    Delete,
     Activity,
 }
 
@@ -36,14 +36,14 @@ impl Operation {
             Self::Prompt => "internal/routine-sessions/prompt",
             Self::Status => "internal/routine-sessions/status",
             Self::Cancel => "internal/routine-sessions/cancel",
-            Self::DeleteDraft => "internal/routine-sessions/delete-draft",
+            Self::Delete => "internal/routine-sessions/delete",
             Self::Activity => "internal/routine-sessions/activity",
         }
     }
 
     fn timeout(self) -> Duration {
         match self {
-            Self::Status | Self::Cancel | Self::DeleteDraft | Self::Activity => SNAPSHOT_TIMEOUT,
+            Self::Status | Self::Cancel | Self::Delete | Self::Activity => SNAPSHOT_TIMEOUT,
             _ => REQUEST_TIMEOUT,
         }
     }
@@ -219,8 +219,8 @@ impl RoutineSessions for AgentSessionClient {
         Ok(())
     }
 
-    async fn delete_draft(&self, command: RoutineSessionAction) -> Result<(), RoutineSessionError> {
-        self.send(Operation::DeleteDraft, &command).await?;
+    async fn delete(&self, command: RoutineSessionAction) -> Result<(), RoutineSessionError> {
+        self.send(Operation::Delete, &command).await?;
         Ok(())
     }
 

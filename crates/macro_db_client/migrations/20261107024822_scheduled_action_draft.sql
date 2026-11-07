@@ -9,6 +9,8 @@ CREATE TABLE scheduled_action_draft (
     bot_id     UUID NOT NULL,
     checked    JSONB,
     checks     INTEGER NOT NULL DEFAULT 0,
+    -- What the session said it created for the routine to use, as {entityType, entityId}.
+    created    JSONB NOT NULL DEFAULT '[]',
     created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 

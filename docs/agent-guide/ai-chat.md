@@ -860,20 +860,23 @@ only, and code steps a routine already has still show, run and change. The
 scheduler drafts on the server (`POST /scheduled-actions/drafts`, one request
 while the button shows **Drafting…**, at most two minutes): the request carries
 only the description and settings (time zone, model, decisions, code steps).
-The draft runs in a hidden agent session of the in-process Macro agent, as the
-person, on the free model, billed as automation usage. It never appears in
-Home or the Agents list, and it is deleted when the draft comes back. Its only
-tools are ExecuteCode, DescribeCodeTools and ReadCodeDocs, and every program
-it runs is a dry run, so it can read with the person's access but change
-nothing. It finds the channels, people, folders, labels, tags and agents the
-description names itself, paging and refining searches, and leaves out a name
-that matches nothing or several items, so the review shows the normal picker
-for it. It hands the routine back by checking it with `macro.routines.check`
-(`POST /scheduled-actions/check`: saving's checks, including the type check of
-its code steps together, with nothing saved), fixing what the check reports.
-The last check is the draft: a code step that still fails stays in it with its
-errors listed, and the routine can't be created until it is drafted again or
-the step is removed. Saving checks every id again. A request the gateway
+The draft runs in an ordinary hidden agent session of the in-process Macro
+agent, as the person, with its usual tools, on the free model, billed as agent
+session usage. It never appears in Home or the Agents list, notifies nobody,
+and is deleted when the draft comes back. It finds the channels, people,
+folders, labels, tags and agents the description names itself, paging and
+refining searches, and leaves out a name that matches nothing or several
+items, so the review shows the normal picker for it. It creates only what the
+routine must reference (such as a database "a new database called Bug log"
+asks for) and never does the routine's own work now ("every Monday make a
+task" makes no task). It hands the routine back by checking it with
+`macro.routines.check` (`POST /scheduled-actions/check`: saving's checks,
+including the type check of its code steps together, with nothing saved),
+naming what it created, and fixes what the check reports. The last check is
+the draft: the review lists what was created (it stays if the routine isn't
+saved), a code step that still fails stays in it with its errors listed, and
+the routine can't be created until it is drafted again or the step is
+removed. Saving checks every id again. A request the gateway
 refuses as too large, a timeout and the AI usage limit each show their own
 message in the dialog instead of "Couldn’t draft that routine".
 
