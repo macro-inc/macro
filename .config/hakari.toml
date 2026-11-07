@@ -91,6 +91,9 @@ workspace-members = [
     # soup-filter-cache-adapter -> cache-wasm) and must stay wasm-safe.
     "model_owner",
     "bot_id",
+    # The entity a message belongs to; lexical_client and messages share it,
+    # and it must not pull workspace-hack into leaf type builds.
+    "message_parent",
     "macro_uuid",
     "non_empty",
     "cowlike",
