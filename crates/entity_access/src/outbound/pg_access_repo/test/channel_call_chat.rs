@@ -5,7 +5,7 @@ use crate::domain::{
 
 #[sqlx::test(
     migrator = "MACRO_DB_MIGRATIONS",
-    fixtures(path = "../../../../../call/fixtures", scripts("call_repo"))
+    fixtures(path = "../../../../../comms/call/fixtures", scripts("call_repo"))
 )]
 async fn channel_call_chat_uses_current_channel_grants_without_direct_participant_grants(
     pool: PgPool,

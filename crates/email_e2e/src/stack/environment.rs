@@ -26,7 +26,7 @@ const MACRO_API_TOKEN_PUBLIC_KEY: &str = include_str!(
 /// An RSA key for signing attachment links, which the CDN stand-in does not
 /// check. A test fixture, not a secret.
 const CDN_SIGNING_KEY: &str =
-    include_str!("../../../call/src/outbound/s3_recording_storage/test_private_key.pem");
+    include_str!("../../../comms/call/src/outbound/s3_recording_storage/test_private_key.pem");
 
 /// The suite's own names for the shared servers. Each falls back to the name
 /// the rest of the workspace's tests use, which the development shell sets.

@@ -46,7 +46,7 @@ import {
   UnknownMentionNode,
 } from './unknownFallback';
 
-// NOTE: If you are changing this file, you may need to update `crates/mention_utils` as well. Please notify @hutch should you update this file.
+// NOTE: If you are changing this file, you may need to update `crates/comms/mention_utils` as well. Please notify @hutch should you update this file.
 
 // Internal User Mentions
 export const I_USER_MENTION: TextMatchTransformer = {

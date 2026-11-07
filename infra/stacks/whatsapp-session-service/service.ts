@@ -19,7 +19,7 @@ const BASE_NAME = pulumi.getProject();
 const REPO_ROOT = '../../..';
 
 const SESSION_KMS_ACTIONS = ['kms:GenerateDataKey', 'kms:Decrypt'];
-// Matches `ENCRYPTION_PURPOSE` in crates/whatsapp_store_pg/src/kms.rs. The key
+// Matches `ENCRYPTION_PURPOSE` in crates/whatsapp/whatsapp_store_pg/src/kms.rs. The key
 // refuses any call that does not carry it, so this key cannot be used as a
 // general-purpose encryption oracle even by its own role.
 const SESSION_KMS_PURPOSE = 'whatsapp-session';
