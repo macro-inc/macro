@@ -40,7 +40,11 @@ impl Transaction<'_> {
                 self.append(paragraph, &[text.key()])?;
                 self.splice(key, offset, 0, &[paragraph.key()])?;
             } else {
-                self.splice(key, offset, 0, &[text.key()])?;
+                if let Some(child) = placement {
+                    self.insert_before(child, text, true)?;
+                } else {
+                    self.splice(key, offset, 0, &[text.key()])?;
+                }
             }
             let next = Point::text(text, Utf16Offset::ZERO);
             let shifted = self.range_at(slot)?;
