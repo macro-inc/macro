@@ -5,7 +5,12 @@ pub(crate) fn apply(tx: &mut Transaction<'_>) {
     if tx.editor.mode() != EditorMode::ViewAttached {
         return;
     }
-    for key in tx.dirty_elements.keys().copied().collect::<Vec<_>>() {
+    let keys = if tx.full_reconcile {
+        tx.pending.nodes.keys().copied().collect::<Vec<_>>()
+    } else {
+        tx.dirty_elements.keys().copied().collect::<Vec<_>>()
+    };
+    for key in keys {
         if !tx.editor.state.nodes.contains_key(&key) || tx.is_root_or_shadow_root(key) {
             continue;
         }

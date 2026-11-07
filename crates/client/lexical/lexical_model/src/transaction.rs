@@ -24,6 +24,10 @@ pub struct Transaction<'editor> {
     pub(crate) dirty_leaves: IndexSet<NodeKey>,
     pub(crate) dirty_elements: IndexMap<NodeKey, DirtyIntent>,
     pub(crate) composition_key: Option<NodeKey>,
+    pub(crate) sealed: bool,
+    pub(crate) full_reconcile: bool,
+    pub(crate) selection_dirty: bool,
+    pub(crate) preceding: Option<Box<Commit>>,
     pub(crate) options: UpdateOptions,
     pub(crate) normalized: IndexSet<NodeKey>,
     pub(crate) nested: std::collections::VecDeque<(NestedUpdateFn, UpdateOptions)>,
@@ -47,6 +51,10 @@ impl<'editor> Transaction<'editor> {
             dirty_leaves: IndexSet::default(),
             dirty_elements: IndexMap::default(),
             composition_key,
+            sealed: false,
+            full_reconcile: false,
+            selection_dirty: false,
+            preceding: None,
             options,
             normalized: IndexSet::default(),
             nested: crate::pipeline::nested_queue(),
@@ -548,6 +556,8 @@ impl<'editor> Transaction<'editor> {
     }
     /// Replace the active selection.
     pub fn set_selection(&mut self, selection: Option<Selection>) -> Result<(), Error> {
+        self.guard_write()?;
+        self.selection_dirty |= selection.is_some();
         self.dirty_since_flush = true;
         self.pending.selection = selection;
         Ok(())

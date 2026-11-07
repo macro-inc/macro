@@ -157,7 +157,7 @@ fn flush_queue_options_and_commit_tag_carry() -> Result<(), Error> {
         skip_transforms: true,
         tags: TagSet::from_tags([UpdateTag::HistoryPush]),
     });
-    tx.queue_update(queued, UpdateOptions::default());
+    tx.queue_update(queued, UpdateOptions::default())?;
     assert!(tx.options().skip_transforms);
     tx.flush_with(FlushMode::NormalizeOnly)?;
     assert!(tx.has_tag(&UpdateTag::Paste));
@@ -268,5 +268,93 @@ fn view_cache_changes_do_not_appear_as_mutations() -> Result<(), Error> {
     );
     assert_eq!(second.prev.view().text_content(text), "a");
     assert_eq!(second.next.view().text_content(text), "b");
+    Ok(())
+}
+
+#[test]
+fn restore_compares_descendants_even_when_parent_records_are_shared() -> Result<(), Error> {
+    let mut editor = Editor::builder(EditorMode::Headless)
+        .build()
+        .expect("builder");
+    let (text, _) = editor.update(|tx| {
+        let p = tx.create(Paragraph::default())?;
+        let text = tx.create_text("before")?;
+        tx.append(p, &[text.key()])?;
+        tx.append(NodeKey::ROOT, &[p.key()])?;
+        Ok(text)
+    })?;
+    let saved = editor.state().clone();
+    editor.update(|tx| {
+        tx.text(text)?.set_text_content("after")?;
+        Ok(())
+    })?;
+    let restored =
+        editor.set_editor_state(saved.clone(), TagSet::from_tags([UpdateTag::Historic]))?;
+    assert!(restored.full_reconcile);
+    assert_eq!(
+        restored.mutations_of::<Text>().collect::<Vec<_>>(),
+        vec![(text.key(), Mutation::Updated)]
+    );
+    assert_eq!(editor.state().root_text_content().as_ref(), "before");
+    let mut tx = editor.transaction();
+    tx.text(text)?.set_text_content("early")?;
+    tx.set_editor_state(saved, TagSet::default())?;
+    assert_eq!(tx.text_content(text), "before");
+    assert!(matches!(
+        tx.text(text)?.set_text_content("forbidden"),
+        Err(Error::WriteAfterSetEditorState)
+    ));
+    assert!(matches!(
+        tx.set_selection(None),
+        Err(Error::WriteAfterSetEditorState)
+    ));
+    assert!(matches!(
+        tx.queue_update(queued, UpdateOptions::default()),
+        Err(Error::WriteAfterSetEditorState)
+    ));
+    let commit = tx.commit()?;
+    assert_eq!(commit.chain().count(), 2);
+    assert_eq!(
+        commit
+            .preceding
+            .as_ref()
+            .expect("early commit")
+            .next
+            .root_text_content()
+            .as_ref(),
+        "early"
+    );
+    assert_eq!(commit.next.root_text_content().as_ref(), "before");
+    Ok(())
+}
+
+#[test]
+fn no_op_explicit_selection_and_composition_changes_are_reported() -> Result<(), Error> {
+    let mut editor = Editor::builder(EditorMode::Headless)
+        .build()
+        .expect("builder");
+    let (text, _) = editor.update(|tx| {
+        let p = tx.create(Paragraph::default())?;
+        let text = tx.create_text("abc")?;
+        tx.append(p, &[text.key()])?;
+        tx.append(NodeKey::ROOT, &[p.key()])?;
+        tx.text(text)?.select(Some(Utf16Offset(1)), None)?;
+        Ok(text)
+    })?;
+    let selection = editor.state().selection().cloned();
+    let (_, commit) = editor.update(|tx| tx.set_selection(selection))?;
+    assert!(commit.selection_changed);
+    assert!(!commit.is_noop());
+    let (_, commit) = editor.update(|tx| tx.set_composition_key(Some(text.key())))?;
+    assert!(commit.composition_changed);
+    assert_eq!(commit.composition_key, Some(text.key()));
+    let before = editor.state().clone();
+    let result: Result<((), Commit), Error> = editor.try_update(UpdateOptions::default(), |tx| {
+        tx.set_composition_key(None)?;
+        Err(Error::Invariant("rollback"))
+    });
+    assert!(result.is_err());
+    assert!(editor.state().same_snapshot(&before));
+    assert_eq!(editor.transaction().composition_key(), Some(text.key()));
     Ok(())
 }

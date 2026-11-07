@@ -83,6 +83,12 @@ impl SharedKeyCounter {
             .map(|_| ())
             .map_err(|_| Error::KeySpaceExhausted)
     }
+    pub(crate) fn raise_to(&self, key: NodeKey) {
+        self.0.fetch_max(
+            (u64::from(key.generation()) << 32) | u64::from(key.index()),
+            Ordering::Relaxed,
+        );
+    }
     pub(crate) fn next(&self) -> Result<NodeKey, Error> {
         let previous = self
             .0

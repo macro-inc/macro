@@ -85,6 +85,22 @@ impl Editor {
         let value = body(&mut tx)?;
         Ok((value, tx.commit()?))
     }
+    /// Install a snapshot from this registry without transforming its contents.
+    pub fn set_editor_state(&mut self, state: EditorState, tags: TagSet) -> Result<Commit, Error> {
+        let mut tx = self.transaction();
+        tx.install_state(state, tags)?;
+        tx.commit()
+    }
+    /// Run an update using the caller's error type.
+    pub fn try_update<ValueType, Failure: From<Error>>(
+        &mut self,
+        options: UpdateOptions,
+        body: impl FnOnce(&mut Transaction<'_>) -> Result<ValueType, Failure>,
+    ) -> Result<(ValueType, Commit), Failure> {
+        let mut tx = self.transaction_with(options);
+        let value = body(&mut tx)?;
+        Ok((value, tx.commit()?))
+    }
     /// Run an atomic update and publish its state on success.
     /// s2: UPD-01, UPD-05
     pub fn update<ValueType>(
