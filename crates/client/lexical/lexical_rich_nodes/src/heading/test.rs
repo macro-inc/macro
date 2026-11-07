@@ -154,3 +154,122 @@ fn collapse_empty_heading_converts_to_paragraph() -> crate::Result<()> {
     assert!(tx.is_empty(p));
     Ok(())
 }
+// Upstream LexicalHeadingNode.test.ts: heading backspace cases, without DOM or list nodes.
+#[test]
+fn backspace_removes_previous_empty_paragraph_and_preserves_heading() -> crate::Result<()> {
+    let mut editor = register_rich_text_nodes(Editor::builder(EditorMode::Headless))
+        .build()
+        .unwrap();
+    let mut tx = editor.transaction();
+    let empty = tx.create(Paragraph {})?;
+    let h = create_heading_node(&mut tx, HeadingTagType::H2)?;
+    let text = tx.create_text("Heading")?;
+    tx.append(h, &[text.key()])?;
+    tx.append(NodeKey::ROOT, &[empty.key(), h.key()])?;
+    tx.select_start(text)?;
+    tx.delete_character(EditDirection::Backward, ModifyTarget::NoView)?;
+    assert_eq!(tx.children_keys(NodeKey::ROOT)?, vec![h.key()]);
+    assert_eq!(get_tag(&tx, h), Some(HeadingTagType::H2));
+    assert_eq!(tx.text_content(h), "Heading");
+    Ok(())
+}
+#[test]
+fn backspace_preserves_quote_after_empty_paragraph() -> crate::Result<()> {
+    let mut editor = register_rich_text_nodes(Editor::builder(EditorMode::Headless))
+        .build()
+        .unwrap();
+    let mut tx = editor.transaction();
+    let empty = tx.create(Paragraph {})?;
+    let quote = tx.create(crate::quote::QuoteNode {})?;
+    let text = tx.create_text("Quote")?;
+    tx.append(quote, &[text.key()])?;
+    tx.append(NodeKey::ROOT, &[empty.key(), quote.key()])?;
+    tx.select_start(text)?;
+    tx.delete_character(EditDirection::Backward, ModifyTarget::NoView)?;
+    assert_eq!(tx.children_keys(NodeKey::ROOT)?, vec![quote.key()]);
+    assert_eq!(tx.text_content(quote), "Quote");
+    Ok(())
+}
+#[test]
+fn backspace_removes_only_empty_paragraph_between_nonempty_siblings() -> crate::Result<()> {
+    let mut editor = register_rich_text_nodes(Editor::builder(EditorMode::Headless))
+        .build()
+        .unwrap();
+    let mut tx = editor.transaction();
+    let before = tx.create(Paragraph {})?;
+    let empty = tx.create(Paragraph {})?;
+    let h = create_heading_node(&mut tx, HeadingTagType::H1)?;
+    let after = tx.create(Paragraph {})?;
+    let a = tx.create_text("Before")?;
+    let b = tx.create_text("Heading")?;
+    let c = tx.create_text("After")?;
+    tx.append(before, &[a.key()])?;
+    tx.append(h, &[b.key()])?;
+    tx.append(after, &[c.key()])?;
+    tx.append(
+        NodeKey::ROOT,
+        &[before.key(), empty.key(), h.key(), after.key()],
+    )?;
+    tx.select_start(b)?;
+    tx.delete_character(EditDirection::Backward, ModifyTarget::NoView)?;
+    assert_eq!(
+        tx.children_keys(NodeKey::ROOT)?,
+        vec![before.key(), h.key(), after.key()]
+    );
+    assert_eq!(tx.text_content(before), "Before");
+    assert_eq!(tx.text_content(h), "Heading");
+    assert_eq!(tx.text_content(after), "After");
+    assert_eq!(get_tag(&tx, h), Some(HeadingTagType::H1));
+    Ok(())
+}
+#[test]
+fn backspace_legacy_merge_discards_heading_after_nonempty_paragraph() -> crate::Result<()> {
+    let mut editor = register_rich_text_nodes(Editor::builder(EditorMode::Headless))
+        .build()
+        .unwrap();
+    let mut tx = editor.transaction();
+    let p = tx.create(Paragraph {})?;
+    let h = create_heading_node(&mut tx, HeadingTagType::H2)?;
+    let a = tx.create_text("Before")?;
+    let b = tx.create_text("Heading")?;
+    tx.append(p, &[a.key()])?;
+    tx.append(h, &[b.key()])?;
+    tx.append(NodeKey::ROOT, &[p.key(), h.key()])?;
+    tx.select_start(b)?;
+    tx.delete_character(EditDirection::Backward, ModifyTarget::NoView)?;
+    assert_eq!(tx.children_keys(NodeKey::ROOT)?, vec![p.key()]);
+    assert_eq!(tx.text_content(p), "BeforeHeading");
+    Ok(())
+}
+#[test]
+fn collapse_preserves_heading_nested_in_quote() -> crate::Result<()> {
+    let mut editor = register_rich_text_nodes(Editor::builder(EditorMode::Headless))
+        .build()
+        .unwrap();
+    let mut tx = editor.transaction();
+    let quote = tx.create(crate::quote::QuoteNode {})?;
+    let h = create_heading_node(&mut tx, HeadingTagType::H2)?;
+    let text = tx.create_text("Heading")?;
+    tx.append(h, &[text.key()])?;
+    tx.append(quote, &[h.key()])?;
+    tx.append(NodeKey::ROOT, &[quote.key()])?;
+    assert!(tx.collapse_at_start(h, SelectionSlot::Active)?);
+    assert_eq!(tx.children_keys(quote)?, vec![h.key()]);
+    assert_eq!(tx.text_content(h), "Heading");
+    Ok(())
+}
+#[test]
+fn collapse_preserves_heading_before_nonparagraph_sibling() -> crate::Result<()> {
+    let mut editor = register_rich_text_nodes(Editor::builder(EditorMode::Headless))
+        .build()
+        .unwrap();
+    let mut tx = editor.transaction();
+    let h = create_heading_node(&mut tx, HeadingTagType::H2)?;
+    let quote = tx.create(crate::quote::QuoteNode {})?;
+    let text = tx.create_text("Heading")?;
+    tx.append(h, &[text.key()])?;
+    tx.append(NodeKey::ROOT, &[h.key(), quote.key()])?;
+    assert!(tx.collapse_at_start(h, SelectionSlot::Active)?);
+    assert_eq!(tx.children_keys(NodeKey::ROOT)?, vec![h.key(), quote.key()]);
+    Ok(())
+}
