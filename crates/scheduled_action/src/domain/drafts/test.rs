@@ -478,6 +478,12 @@ async fn a_large_workspace_drafts_the_channel_the_description_names() {
         !prompt.contains("channel-0001"),
         "the prompt carries no workspace"
     );
+    // The SDK's event filter takes item handles under `entities`; a raw
+    // `ids` key there is dropped when the SDK builds the routine.
+    assert!(
+        prompt.contains("filter's `entities`") && prompt.contains("never write an `ids` key"),
+        "{prompt}"
+    );
 }
 
 /// Search ranks loose matches before the exact name, so the channel isn't
