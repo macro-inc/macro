@@ -10,6 +10,7 @@ feature exports owned HTML; browser DOM import and layout stay in views.
 
 - `mark` wraps inline runs, splits at line breaks and retains annotations only in internal clones.
 - `code` keeps stored highlights distinct and never tokenizes; new content uses plain text.
+- Code factories resolve the default replacement class before setting language and theme.
 - `code::line`, `code::plain` and `code::language` own line navigation, LF/tab splitting and language catalogs.
 - Keep selection CSS parsing ordered and uncached; detached style inputs differ from active selected text.
 - Keep descendant filtering and nearest-root insertion canonical in utils; do not shadow their re-exports.
