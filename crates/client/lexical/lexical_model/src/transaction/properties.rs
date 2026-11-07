@@ -467,6 +467,7 @@ impl TextMut<'_, '_> {
                     break;
                 }
             }
+            range.invalidate_changed_direction();
             self.tx.pending.selection = Some(Selection::Range(range));
         }
         if let (Some(parent), Some(index)) = (parent, insertion_index) {
@@ -523,6 +524,7 @@ impl TextMut<'_, '_> {
                     };
                 }
             }
+            range.invalidate_changed_direction();
             self.tx.pending.selection = Some(Selection::Range(range));
         }
         if was_composing {
@@ -566,6 +568,7 @@ impl TextMut<'_, '_> {
                     }
                 }
             }
+            range.invalidate_changed_direction();
         }
         if self.tx.composition_key == Some(target) {
             self.tx.composition_key = Some(self.key);

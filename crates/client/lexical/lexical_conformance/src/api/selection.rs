@@ -97,7 +97,11 @@ pub(crate) fn call(
             Ok(receiver.clone())
         }
         "isCollapsed" => Ok(json!(selection.is_collapsed())),
-        "isBackward" => Ok(json!(selection.is_backward(tx.view())?)),
+        "isBackward" => Ok(json!(if selection.is_range() && r.read_state.is_none() {
+            tx.range_is_backward_at(slot)?
+        } else {
+            selection.is_backward(tx.view())?
+        })),
         "getTextContent" => Ok(json!(selection.text_content(tx.view())?)),
         "getNodes" | "extract" => {
             let previous = if method == "extract" {
@@ -192,6 +196,10 @@ pub(crate) fn call(
                 .has_format(str_arg(a, 0)?.parse().map_err(|_| fail("format"))?)
         )),
         "clone" => {
+            let mut selection = selection;
+            if let Selection::Range(range) = &mut selection {
+                range.clear_direction_cache();
+            }
             let new_id = r.selections.len();
             let kind = if selection.is_range() {
                 "range"

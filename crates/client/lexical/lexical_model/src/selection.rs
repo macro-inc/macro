@@ -57,6 +57,7 @@ impl Point {
 /// Anchor/focus selection and typing attributes.
 #[derive(Clone, Debug)]
 pub struct RangeSelection {
+    pub(crate) cached_direction: Option<(Point, Point, bool)>,
     pub(crate) dirty: bool,
     /// Anchor position.
     pub anchor: Point,
@@ -230,6 +231,7 @@ impl RangeSelection {
             format: TextFormat::empty(),
             style: Arc::from(""),
             dirty: false,
+            cached_direction: None,
         }
     }
     /// Construct a range at the start of the root.
@@ -254,7 +256,32 @@ impl RangeSelection {
     }
     /// Whether focus precedes anchor.
     pub fn is_backward(&self, view: StateRef<'_>) -> Result<bool, Error> {
+        if let Some((anchor, focus, backward)) = self.cached_direction
+            && anchor == self.anchor
+            && focus == self.focus
+        {
+            return Ok(backward);
+        }
         self.focus.is_before(view, &self.anchor)
+    }
+    /// Cached write-context direction, absent after endpoint changes.
+    pub fn cached_is_backward(&self) -> Option<bool> {
+        self.cached_direction
+            .filter(|(a, f, _)| *a == self.anchor && *f == self.focus)
+            .map(|(_, _, backward)| backward)
+    }
+    /// Clear direction when cloning a selection object or mutating a point.
+    pub fn clear_direction_cache(&mut self) {
+        self.cached_direction = None;
+    }
+
+    pub(crate) fn invalidate_changed_direction(&mut self) {
+        if self
+            .cached_direction
+            .is_some_and(|(anchor, focus, _)| anchor != self.anchor || focus != self.focus)
+        {
+            self.clear_direction_cache();
+        }
     }
     /// Selected nodes in document order.
     pub fn nodes(&self, view: StateRef<'_>) -> Result<Vec<NodeKey>, Error> {

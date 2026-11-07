@@ -99,3 +99,5 @@ snapshots can reconcile cached element defaults, as the upstream literal guard
 demonstrates. Place P14 markdown round-trip properties in lexical_markdown. Persist shrinking seeds in
 `proptest-regressions/`. Keep the decorator count in sync with record insertion
 and removal; opaque text hooks rule out the local root-text proof.
+
+Cache range direction only when upstream calls isBackward in a write context; invalidate it on endpoint changes and selection-object cloning, while preserving it through text-only trimming.
