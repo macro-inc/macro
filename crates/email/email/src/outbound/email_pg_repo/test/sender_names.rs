@@ -1,4 +1,6 @@
 use super::*;
+use entity_access_outbound::PgAccessRepository;
+use std::sync::Arc;
 
 const EXPECTED_SENDERS: [(Uuid, &str); 5] = [
     (
@@ -67,7 +69,7 @@ async fn filtered_previews_preserve_message_sender_names(
 async fn cached_mail_previews_preserve_message_sender_names(
     pool: Pool<Postgres>,
 ) -> anyhow::Result<()> {
-    let repo = EmailPgRepo::new(pool);
+    let repo = EmailPgRepo::new(pool.clone(), Arc::new(PgAccessRepository::new(pool)));
     let thread_ids = EXPECTED_SENDERS.map(|(id, _)| id);
     let rows = repo
         .thread_mail_projections_by_ids(

@@ -1,5 +1,7 @@
 use super::*;
 use crate::domain::models::UpsertEmailFilterInput;
+use entity_access_outbound::PgAccessRepository;
+use std::sync::Arc;
 
 const LINK_ID: &str = "00000000-0000-0000-0000-000000000e01";
 const THREAD_PLAIN_SIGNAL: &str = "00000000-0000-0000-0000-00000000e201";
@@ -22,7 +24,10 @@ async fn fetch_signal(pool: &Pool<Postgres>, thread_id: &str) -> anyhow::Result<
     fixtures(path = "../../../../fixtures", scripts("email_signal_flag"))
 )]
 async fn filter_upsert_and_delete_resync_signal_flags(pool: Pool<Postgres>) -> anyhow::Result<()> {
-    let repo = EmailPgRepo::new(pool.clone());
+    let repo = EmailPgRepo::new(
+        pool.clone(),
+        Arc::new(PgAccessRepository::new(pool.clone())),
+    );
     let link_id = Uuid::parse_str(LINK_ID)?;
 
     // Mute the sender: their unlabeled (signal) thread flips to noise.
@@ -52,7 +57,10 @@ async fn filter_upsert_and_delete_resync_signal_flags(pool: Pool<Postgres>) -> a
     fixtures(path = "../../../../fixtures", scripts("email_signal_flag"))
 )]
 async fn domain_filter_upsert_promotes_category_thread(pool: Pool<Postgres>) -> anyhow::Result<()> {
-    let repo = EmailPgRepo::new(pool.clone());
+    let repo = EmailPgRepo::new(
+        pool.clone(),
+        Arc::new(PgAccessRepository::new(pool.clone())),
+    );
     let link_id = Uuid::parse_str(LINK_ID)?;
 
     assert!(!fetch_signal(&pool, THREAD_PROMO_NOISE).await?);
@@ -115,7 +123,10 @@ async fn macro_notification_sender_is_never_signal(pool: Pool<Postgres>) -> anyh
     tx.commit().await?;
     assert!(!fetch_signal(&pool, THREAD_MACRO_DIGEST).await?);
 
-    let repo = EmailPgRepo::new(pool.clone());
+    let repo = EmailPgRepo::new(
+        pool.clone(),
+        Arc::new(PgAccessRepository::new(pool.clone())),
+    );
     let link_id = Uuid::parse_str(LINK_ID)?;
     repo.upsert_email_filter(
         link_id,
@@ -180,7 +191,10 @@ async fn delete_draft_message_recomputes_thread_metadata(
     assert!(before.inbox_visible);
     assert!(before.latest_inbound_message_ts.is_some());
 
-    let repo = EmailPgRepo::new(pool.clone());
+    let repo = EmailPgRepo::new(
+        pool.clone(),
+        Arc::new(PgAccessRepository::new(pool.clone())),
+    );
     repo.delete_draft_message(
         Uuid::parse_str(DRAFT_MSG)?,
         Uuid::parse_str(THREAD_DRAFT_SIGNAL)?,
@@ -215,7 +229,10 @@ async fn delete_draft_message_returns_sent_thread_out_of_inbox(
     assert!(before.inbox_visible);
     assert!(before.latest_inbound_message_ts.is_some());
 
-    let repo = EmailPgRepo::new(pool.clone());
+    let repo = EmailPgRepo::new(
+        pool.clone(),
+        Arc::new(PgAccessRepository::new(pool.clone())),
+    );
     repo.delete_draft_message(
         Uuid::parse_str(SENT_THREAD_DRAFT_MSG)?,
         Uuid::parse_str(THREAD_SENT_DONE)?,
@@ -244,7 +261,10 @@ const THREAD_SAME_DOMAIN: &str = "00000000-0000-0000-0000-00000000e205";
 async fn address_exception_beats_domain_mute_via_filter_mutations(
     pool: Pool<Postgres>,
 ) -> anyhow::Result<()> {
-    let repo = EmailPgRepo::new(pool.clone());
+    let repo = EmailPgRepo::new(
+        pool.clone(),
+        Arc::new(PgAccessRepository::new(pool.clone())),
+    );
     let link_id = Uuid::parse_str(LINK_ID)?;
 
     repo.upsert_email_filter(
@@ -283,7 +303,10 @@ async fn address_exception_beats_domain_mute_via_filter_mutations(
 async fn deleting_domain_filter_keeps_address_exception(
     pool: Pool<Postgres>,
 ) -> anyhow::Result<()> {
-    let repo = EmailPgRepo::new(pool.clone());
+    let repo = EmailPgRepo::new(
+        pool.clone(),
+        Arc::new(PgAccessRepository::new(pool.clone())),
+    );
     let link_id = Uuid::parse_str(LINK_ID)?;
 
     let domain_filter = repo

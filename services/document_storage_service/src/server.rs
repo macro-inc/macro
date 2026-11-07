@@ -88,6 +88,7 @@ use email::{
     outbound::EmailPgRepo,
 };
 use embedding::embedding_provider::openai::TextEmbedding3Small;
+use entity_access_outbound::PgAccessRepository;
 use entity_registry::OwnerGrantPolicy;
 use entity_registry_db_utils::OwnedEntityRegistrar;
 use favorites::{
@@ -427,7 +428,7 @@ async fn run_server() -> anyhow::Result<()> {
     );
 
     let email_service = EmailServiceImpl::new(
-        EmailPgRepo::new(db.clone()),
+        EmailPgRepo::new(db.clone(), Arc::new(PgAccessRepository::new(db.clone()))),
         frecency_service.clone(),
         sqs_client.clone(),
         crm_service.clone(),
@@ -456,7 +457,10 @@ async fn run_server() -> anyhow::Result<()> {
     .with_macro_event_broker(macro_event_broker.clone());
     let readonly_email_service = ReadonlyEmailPreviewAdapter(
         EmailServiceImpl::new(
-            EmailPgRepo::new(readonly_db.clone()),
+            EmailPgRepo::new(
+                readonly_db.clone(),
+                Arc::new(PgAccessRepository::new(readonly_db.clone())),
+            ),
             frecency_service.clone(),
             sqs_client.clone(),
             crm_service.clone(),

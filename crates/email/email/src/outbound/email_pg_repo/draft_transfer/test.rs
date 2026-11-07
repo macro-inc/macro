@@ -1,10 +1,12 @@
 use super::*;
 use crate::domain::{models::mailbox_operation::*, ports::EmailRepo};
 use email_api_client_core::models::EmailApiError;
+use entity_access_outbound::PgAccessRepository;
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
 use macro_user_id::user_id::MacroUserIdStr;
 use sqlx::PgPool;
 use std::collections::BTreeSet;
+use std::sync::Arc;
 
 const ACTOR: &str = "macro|transfer@example.com";
 
@@ -29,7 +31,7 @@ async fn fixture(db: &PgPool) -> (EmailPgRepo, DraftTransferRequest) {
     .unwrap();
     sqlx::query!("INSERT INTO email_messages(id,thread_id,link_id,is_draft,subject,body_html_sanitized) VALUES($1,$2,$3,true,'Keep this subject','<p>Body</p>')",draft,thread,source).execute(db).await.unwrap();
     (
-        EmailPgRepo::new(db.clone()),
+        EmailPgRepo::new(db.clone(), Arc::new(PgAccessRepository::new(db.clone()))),
         DraftTransferRequest {
             draft_generation: 0,
             id: Uuid::now_v7(),
@@ -278,7 +280,7 @@ async fn paused_outlook_writes_still_finish_gmail_moves_and_keep_outlook_origina
     let outlook_draft = Uuid::now_v7();
     sqlx::query!("INSERT INTO email_messages(id,thread_id,link_id,is_draft,subject,body_html_sanitized) VALUES($1,$2,$3,true,'Gmail draft','<p>Body</p>')",gmail_draft,gmail_thread,gmail_source).execute(&db).await.unwrap();
     sqlx::query!("INSERT INTO email_messages(id,thread_id,link_id,is_draft,subject,body_html_sanitized,provider_id,provider_version) VALUES($1,$2,$3,true,'Outlook draft','<p>Body</p>','outlook-original','v1')",outlook_draft,outlook_thread,outlook).execute(&db).await.unwrap();
-    let repo = EmailPgRepo::new(db.clone());
+    let repo = EmailPgRepo::new(db.clone(), Arc::new(PgAccessRepository::new(db.clone())));
     let gmail_move = prepare(
         &repo,
         &DraftTransferRequest {
@@ -315,7 +317,7 @@ async fn paused_outlook_writes_still_finish_gmail_moves_and_keep_outlook_origina
         .remove(&outlook_copy)
         .unwrap();
     let worker = DraftRetirementService {
-        repository: EmailPgRepo::new(db.clone()),
+        repository: EmailPgRepo::new(db.clone(), Arc::new(PgAccessRepository::new(db.clone()))),
         gateway: PausedOutlook,
         writes_enabled: false,
     };

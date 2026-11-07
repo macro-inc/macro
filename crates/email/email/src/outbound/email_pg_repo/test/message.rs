@@ -1,7 +1,9 @@
 use super::*;
 use crate::domain::models::{AttachmentDraft, RecipientType, UpsertedContacts, UpsertedRecipient};
 use chrono::Timelike;
+use entity_access_outbound::PgAccessRepository;
 use sqlx::Row;
+use std::sync::Arc;
 
 // ── senders_by_message_ids ──────────────────────────────────────────
 
@@ -10,7 +12,7 @@ use sqlx::Row;
     fixtures(path = "../../../../fixtures", scripts("email_message"))
 )]
 async fn test_senders_by_message_ids(pool: Pool<Postgres>) -> anyhow::Result<()> {
-    let repo = EmailPgRepo::new(pool);
+    let repo = EmailPgRepo::new(pool.clone(), Arc::new(PgAccessRepository::new(pool)));
 
     let msg1 = Uuid::parse_str("ee000001-0000-0000-0000-000000000001")?;
     let msg2 = Uuid::parse_str("ee000002-0000-0000-0000-000000000002")?;
@@ -41,7 +43,7 @@ async fn test_senders_by_message_ids(pool: Pool<Postgres>) -> anyhow::Result<()>
     fixtures(path = "../../../../fixtures", scripts("email_message"))
 )]
 async fn test_senders_by_message_ids_no_from_contact(pool: Pool<Postgres>) -> anyhow::Result<()> {
-    let repo = EmailPgRepo::new(pool);
+    let repo = EmailPgRepo::new(pool.clone(), Arc::new(PgAccessRepository::new(pool)));
 
     // msg3 is a draft with no from_contact_id
     let msg3 = Uuid::parse_str("ee000003-0000-0000-0000-000000000003")?;
@@ -60,7 +62,7 @@ async fn test_senders_by_message_ids_no_from_contact(pool: Pool<Postgres>) -> an
     fixtures(path = "../../../../fixtures", scripts("email_message"))
 )]
 async fn test_senders_by_message_ids_empty_input(pool: Pool<Postgres>) -> anyhow::Result<()> {
-    let repo = EmailPgRepo::new(pool);
+    let repo = EmailPgRepo::new(pool.clone(), Arc::new(PgAccessRepository::new(pool)));
 
     let senders = repo.senders_by_message_ids(&[]).await?;
     assert!(senders.is_empty());
@@ -75,7 +77,7 @@ async fn test_senders_by_message_ids_empty_input(pool: Pool<Postgres>) -> anyhow
     fixtures(path = "../../../../fixtures", scripts("email_message"))
 )]
 async fn test_recipients_by_message_ids(pool: Pool<Postgres>) -> anyhow::Result<()> {
-    let repo = EmailPgRepo::new(pool);
+    let repo = EmailPgRepo::new(pool.clone(), Arc::new(PgAccessRepository::new(pool)));
 
     let msg1 = Uuid::parse_str("ee000001-0000-0000-0000-000000000001")?;
     let recipients = repo.recipients_by_message_ids(&[msg1]).await?;
@@ -106,7 +108,7 @@ async fn test_recipients_by_message_ids(pool: Pool<Postgres>) -> anyhow::Result<
 async fn test_recipients_by_message_ids_multiple_messages(
     pool: Pool<Postgres>,
 ) -> anyhow::Result<()> {
-    let repo = EmailPgRepo::new(pool);
+    let repo = EmailPgRepo::new(pool.clone(), Arc::new(PgAccessRepository::new(pool)));
 
     let msg1 = Uuid::parse_str("ee000001-0000-0000-0000-000000000001")?;
     let msg2 = Uuid::parse_str("ee000002-0000-0000-0000-000000000002")?;
@@ -129,7 +131,7 @@ async fn test_recipients_by_message_ids_multiple_messages(
     fixtures(path = "../../../../fixtures", scripts("email_message"))
 )]
 async fn test_recipients_by_message_ids_empty_input(pool: Pool<Postgres>) -> anyhow::Result<()> {
-    let repo = EmailPgRepo::new(pool);
+    let repo = EmailPgRepo::new(pool.clone(), Arc::new(PgAccessRepository::new(pool)));
 
     let recipients = repo.recipients_by_message_ids(&[]).await?;
     assert!(recipients.is_empty());
@@ -144,7 +146,7 @@ async fn test_recipients_by_message_ids_empty_input(pool: Pool<Postgres>) -> any
     fixtures(path = "../../../../fixtures", scripts("email_message"))
 )]
 async fn test_labels_by_message_ids(pool: Pool<Postgres>) -> anyhow::Result<()> {
-    let repo = EmailPgRepo::new(pool);
+    let repo = EmailPgRepo::new(pool.clone(), Arc::new(PgAccessRepository::new(pool)));
 
     let msg1 = Uuid::parse_str("ee000001-0000-0000-0000-000000000001")?;
     let labels = repo.labels_by_message_ids(&[msg1]).await?;
@@ -164,7 +166,7 @@ async fn test_labels_by_message_ids(pool: Pool<Postgres>) -> anyhow::Result<()> 
     fixtures(path = "../../../../fixtures", scripts("email_message"))
 )]
 async fn test_labels_by_message_ids_multiple_messages(pool: Pool<Postgres>) -> anyhow::Result<()> {
-    let repo = EmailPgRepo::new(pool);
+    let repo = EmailPgRepo::new(pool.clone(), Arc::new(PgAccessRepository::new(pool)));
 
     let msg1 = Uuid::parse_str("ee000001-0000-0000-0000-000000000001")?;
     let msg2 = Uuid::parse_str("ee000002-0000-0000-0000-000000000002")?;
@@ -189,7 +191,7 @@ async fn test_labels_by_message_ids_multiple_messages(pool: Pool<Postgres>) -> a
     fixtures(path = "../../../../fixtures", scripts("email_message"))
 )]
 async fn test_labels_by_message_ids_no_labels(pool: Pool<Postgres>) -> anyhow::Result<()> {
-    let repo = EmailPgRepo::new(pool);
+    let repo = EmailPgRepo::new(pool.clone(), Arc::new(PgAccessRepository::new(pool)));
 
     // msg3 has no labels
     let msg3 = Uuid::parse_str("ee000003-0000-0000-0000-000000000003")?;
@@ -208,7 +210,7 @@ async fn test_labels_by_message_ids_no_labels(pool: Pool<Postgres>) -> anyhow::R
     fixtures(path = "../../../../fixtures", scripts("email_message"))
 )]
 async fn test_labels_by_message_ids_empty_input(pool: Pool<Postgres>) -> anyhow::Result<()> {
-    let repo = EmailPgRepo::new(pool);
+    let repo = EmailPgRepo::new(pool.clone(), Arc::new(PgAccessRepository::new(pool)));
 
     let labels = repo.labels_by_message_ids(&[]).await?;
     assert!(labels.is_empty());
@@ -223,7 +225,7 @@ async fn test_labels_by_message_ids_empty_input(pool: Pool<Postgres>) -> anyhow:
     fixtures(path = "../../../../fixtures", scripts("email_message"))
 )]
 async fn test_attachments_by_message_ids(pool: Pool<Postgres>) -> anyhow::Result<()> {
-    let repo = EmailPgRepo::new(pool);
+    let repo = EmailPgRepo::new(pool.clone(), Arc::new(PgAccessRepository::new(pool)));
 
     let msg1 = Uuid::parse_str("ee000001-0000-0000-0000-000000000001")?;
     let attachments = repo.attachments_by_message_ids(&[msg1]).await?;
@@ -258,7 +260,7 @@ async fn test_attachments_by_message_ids(pool: Pool<Postgres>) -> anyhow::Result
 async fn test_attachments_by_message_ids_no_attachments(
     pool: Pool<Postgres>,
 ) -> anyhow::Result<()> {
-    let repo = EmailPgRepo::new(pool);
+    let repo = EmailPgRepo::new(pool.clone(), Arc::new(PgAccessRepository::new(pool)));
 
     let msg2 = Uuid::parse_str("ee000002-0000-0000-0000-000000000002")?;
     let attachments = repo.attachments_by_message_ids(&[msg2]).await?;
@@ -276,7 +278,7 @@ async fn test_attachments_by_message_ids_no_attachments(
     fixtures(path = "../../../../fixtures", scripts("email_message"))
 )]
 async fn test_attachments_by_message_ids_empty_input(pool: Pool<Postgres>) -> anyhow::Result<()> {
-    let repo = EmailPgRepo::new(pool);
+    let repo = EmailPgRepo::new(pool.clone(), Arc::new(PgAccessRepository::new(pool)));
 
     let attachments = repo.attachments_by_message_ids(&[]).await?;
     assert!(attachments.is_empty());
@@ -291,7 +293,7 @@ async fn test_attachments_by_message_ids_empty_input(pool: Pool<Postgres>) -> an
     fixtures(path = "../../../../fixtures", scripts("email_message"))
 )]
 async fn test_draft_attachments_by_message_ids(pool: Pool<Postgres>) -> anyhow::Result<()> {
-    let repo = EmailPgRepo::new(pool);
+    let repo = EmailPgRepo::new(pool.clone(), Arc::new(PgAccessRepository::new(pool)));
 
     let msg3 = Uuid::parse_str("ee000003-0000-0000-0000-000000000003")?;
     let drafts = repo.draft_attachments_by_message_ids(&[msg3]).await?;
@@ -321,7 +323,7 @@ async fn test_draft_attachments_by_message_ids(pool: Pool<Postgres>) -> anyhow::
 async fn test_draft_attachments_by_message_ids_no_drafts(
     pool: Pool<Postgres>,
 ) -> anyhow::Result<()> {
-    let repo = EmailPgRepo::new(pool);
+    let repo = EmailPgRepo::new(pool.clone(), Arc::new(PgAccessRepository::new(pool)));
 
     // msg1 is not a draft, has no draft attachments
     let msg1 = Uuid::parse_str("ee000001-0000-0000-0000-000000000001")?;
@@ -339,7 +341,7 @@ async fn test_draft_attachments_by_message_ids_no_drafts(
 async fn test_draft_attachments_by_message_ids_empty_input(
     pool: Pool<Postgres>,
 ) -> anyhow::Result<()> {
-    let repo = EmailPgRepo::new(pool);
+    let repo = EmailPgRepo::new(pool.clone(), Arc::new(PgAccessRepository::new(pool)));
 
     let drafts = repo.draft_attachments_by_message_ids(&[]).await?;
     assert!(drafts.is_empty());
@@ -354,7 +356,7 @@ async fn test_draft_attachments_by_message_ids_empty_input(
     fixtures(path = "../../../../fixtures", scripts("email_message"))
 )]
 async fn test_forwarded_attachments_by_message_ids(pool: Pool<Postgres>) -> anyhow::Result<()> {
-    let repo = EmailPgRepo::new(pool);
+    let repo = EmailPgRepo::new(pool.clone(), Arc::new(PgAccessRepository::new(pool)));
 
     let msg3 = Uuid::parse_str("ee000003-0000-0000-0000-000000000003")?;
     let forwarded = repo.forwarded_attachments_by_message_ids(&[msg3]).await?;
@@ -387,7 +389,7 @@ async fn test_forwarded_attachments_by_message_ids(pool: Pool<Postgres>) -> anyh
 async fn test_forwarded_attachments_by_message_ids_empty_input(
     pool: Pool<Postgres>,
 ) -> anyhow::Result<()> {
-    let repo = EmailPgRepo::new(pool);
+    let repo = EmailPgRepo::new(pool.clone(), Arc::new(PgAccessRepository::new(pool)));
 
     let forwarded = repo.forwarded_attachments_by_message_ids(&[]).await?;
     assert!(forwarded.is_empty());
@@ -402,7 +404,7 @@ async fn test_forwarded_attachments_by_message_ids_empty_input(
     fixtures(path = "../../../../fixtures", scripts("email_message"))
 )]
 async fn test_scheduled_sends_by_message_ids(pool: Pool<Postgres>) -> anyhow::Result<()> {
-    let repo = EmailPgRepo::new(pool);
+    let repo = EmailPgRepo::new(pool.clone(), Arc::new(PgAccessRepository::new(pool)));
 
     let msg3 = Uuid::parse_str("ee000003-0000-0000-0000-000000000003")?;
     let times = repo.scheduled_sends_by_message_ids(&[msg3]).await?;
@@ -426,7 +428,7 @@ async fn test_scheduled_sends_by_message_ids(pool: Pool<Postgres>) -> anyhow::Re
 async fn test_scheduled_send_times_excludes_already_sent(
     pool: Pool<Postgres>,
 ) -> anyhow::Result<()> {
-    let repo = EmailPgRepo::new(pool);
+    let repo = EmailPgRepo::new(pool.clone(), Arc::new(PgAccessRepository::new(pool)));
 
     // msg2 has a scheduled send but sent=true
     let msg2 = Uuid::parse_str("ee000002-0000-0000-0000-000000000002")?;
@@ -447,7 +449,7 @@ async fn test_scheduled_send_times_excludes_already_sent(
 async fn test_scheduled_sends_by_message_ids_empty_input(
     pool: Pool<Postgres>,
 ) -> anyhow::Result<()> {
-    let repo = EmailPgRepo::new(pool);
+    let repo = EmailPgRepo::new(pool.clone(), Arc::new(PgAccessRepository::new(pool)));
 
     let times = repo.scheduled_sends_by_message_ids(&[]).await?;
     assert!(times.is_empty());
@@ -466,7 +468,10 @@ async fn scheduled_send_status_distinguishes_preparation_from_submission(
 ) -> anyhow::Result<()> {
     use crate::domain::models::ScheduledSendStatus;
 
-    let repo = EmailPgRepo::new(pool.clone());
+    let repo = EmailPgRepo::new(
+        pool.clone(),
+        Arc::new(PgAccessRepository::new(pool.clone())),
+    );
     let message_id = Uuid::parse_str("ee000003-0000-0000-0000-000000000003")?;
     let claim_id = Uuid::new_v4();
     let cases = [
@@ -855,7 +860,10 @@ async fn test_upsert_recipients_empty_deletes_all(pool: Pool<Postgres>) -> anyho
 async fn test_delete_scheduled_messages_batch_returns_only_pending(
     pool: Pool<Postgres>,
 ) -> anyhow::Result<()> {
-    let repo = EmailPgRepo::new(pool.clone());
+    let repo = EmailPgRepo::new(
+        pool.clone(),
+        Arc::new(PgAccessRepository::new(pool.clone())),
+    );
     let link_id = Uuid::parse_str("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa")?;
     // msg3 has a pending scheduled send; msg2's scheduled send already went
     // out; msg1 was never scheduled.
@@ -890,7 +898,7 @@ async fn test_delete_scheduled_messages_batch_returns_only_pending(
 async fn test_delete_scheduled_messages_batch_empty_input(
     pool: Pool<Postgres>,
 ) -> anyhow::Result<()> {
-    let repo = EmailPgRepo::new(pool);
+    let repo = EmailPgRepo::new(pool.clone(), Arc::new(PgAccessRepository::new(pool)));
     let deleted = repo
         .delete_scheduled_messages_batch(&[], Uuid::new_v4())
         .await?;
@@ -923,7 +931,7 @@ async fn insert_draft_attachment_records_the_attachment_on_the_inboxs_draft(
     pool: Pool<Postgres>,
 ) -> anyhow::Result<()> {
     use crate::domain::ports::DraftAttachmentRepo;
-    let repo = EmailPgRepo::new(pool);
+    let repo = EmailPgRepo::new(pool.clone(), Arc::new(PgAccessRepository::new(pool)));
     let link = Uuid::parse_str("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa")?;
     let draft = Uuid::parse_str("ee000003-0000-0000-0000-000000000003")?;
     let id = Uuid::parse_str("dd000009-0000-0000-0000-000000000009")?;
@@ -955,7 +963,7 @@ async fn insert_draft_attachment_keeps_an_inline_part_inline(
     // An invitation's calendar body is staged inline with no Content-ID;
     // delivery reads the flag back to send it as the message's calendar part.
     use crate::domain::ports::DraftAttachmentRepo;
-    let repo = EmailPgRepo::new(pool);
+    let repo = EmailPgRepo::new(pool.clone(), Arc::new(PgAccessRepository::new(pool)));
     let link = Uuid::parse_str("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa")?;
     let draft = Uuid::parse_str("ee000003-0000-0000-0000-000000000003")?;
     let id = Uuid::parse_str("dd000010-0000-0000-0000-000000000010")?;
@@ -990,7 +998,7 @@ async fn insert_draft_attachment_refuses_another_inboxs_draft(
     pool: Pool<Postgres>,
 ) -> anyhow::Result<()> {
     use crate::domain::ports::DraftAttachmentRepo;
-    let repo = EmailPgRepo::new(pool);
+    let repo = EmailPgRepo::new(pool.clone(), Arc::new(PgAccessRepository::new(pool)));
     let other_link = Uuid::parse_str("bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb")?;
     let draft = Uuid::parse_str("ee000003-0000-0000-0000-000000000003")?;
     let id = Uuid::parse_str("dd000009-0000-0000-0000-000000000009")?;
@@ -1019,7 +1027,7 @@ async fn insert_draft_attachment_refuses_non_drafts_sent_and_scheduled_messages(
     pool: Pool<Postgres>,
 ) -> anyhow::Result<()> {
     use crate::domain::ports::DraftAttachmentRepo;
-    let repo = EmailPgRepo::new(pool);
+    let repo = EmailPgRepo::new(pool.clone(), Arc::new(PgAccessRepository::new(pool)));
     let link = Uuid::parse_str("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa")?;
     for message in [
         "ee000001-0000-0000-0000-000000000001", // Non-draft.

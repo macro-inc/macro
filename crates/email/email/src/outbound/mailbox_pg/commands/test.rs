@@ -1,6 +1,7 @@
 use super::*;
 use crate::domain::{models::mailbox_action::MailboxAction, ports::EmailRepo};
 use crate::outbound::mailbox_pg::test::{fixture, page, snapshot};
+use entity_access_outbound::PgAccessRepository;
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
 use macro_user_id::user_id::MacroUserIdStr;
 
@@ -40,7 +41,10 @@ async fn setup(
     .unwrap();
     (
         sync,
-        crate::outbound::EmailPgRepo::new(db.clone()),
+        crate::outbound::EmailPgRepo::new(
+            db.clone(),
+            std::sync::Arc::new(PgAccessRepository::new(db.clone())),
+        ),
         work,
         thread,
     )

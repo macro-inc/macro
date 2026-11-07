@@ -1,7 +1,9 @@
 use super::*;
 use crate::domain::models::AttachmentDraft;
+use entity_access_outbound::PgAccessRepository;
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
 use sqlx::PgPool;
+use std::sync::Arc;
 
 const ACTOR: &str = "macro|attachment-owner@example.com";
 async fn fixture(db: &PgPool) -> (EmailPgRepo, Uuid, Uuid) {
@@ -26,7 +28,11 @@ async fn fixture(db: &PgPool) -> (EmailPgRepo, Uuid, Uuid) {
     .execute(db)
     .await
     .unwrap();
-    (EmailPgRepo::new(db.clone()), link, draft)
+    (
+        EmailPgRepo::new(db.clone(), Arc::new(PgAccessRepository::new(db.clone()))),
+        link,
+        draft,
+    )
 }
 fn upload(draft: Uuid, size: i32) -> AttachmentDraft {
     let id = Uuid::now_v7();

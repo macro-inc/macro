@@ -4,6 +4,7 @@ use crate::domain::models::{
 };
 use doppleganger::{Doppleganger, Mirror};
 use either::Either;
+use entity_access::domain::ports::UserSourceIds;
 use filter_ast::Expr;
 use item_filters::ast::email::EmailLiteral;
 use macro_user_id::user_id::MacroUserIdStr;
@@ -13,9 +14,10 @@ use uuid::Uuid;
 
 use super::db_types::{AttachmentDbRow, LabelDbRow, ThreadPreviewCursorDbRow};
 
-#[tracing::instrument(err, skip(pool, query), fields(link_count = query.link_ids.len(), view = %query.view))]
+#[tracing::instrument(err, skip(pool, source_ids, query), fields(link_count = query.link_ids.len(), view = %query.view))]
 pub(super) async fn previews_for_view_cursor(
     pool: &PgPool,
+    source_ids: &dyn UserSourceIds,
     query: PreviewCursorQuery,
     user_id: MacroUserIdStr<'static>,
 ) -> Result<Vec<EmailThreadPreview>, sqlx::Error> {
@@ -31,8 +33,9 @@ pub(super) async fn previews_for_view_cursor(
 
     Ok(match (view, query) {
         (view, Either::Right(dynamic_query)) => {
-            super::dynamic::dynamic_email_thread_cursor(
+            super::dynamic::dynamic_email_thread_cursor_with_sources(
                 pool,
+                source_ids,
                 &link_ids,
                 limit,
                 &view,
@@ -61,8 +64,9 @@ pub(super) async fn previews_for_view_cursor(
             // CalendarOnly(false) is the documented no-op literal.
             let query =
                 query.map_filter(|()| Arc::new(Expr::Literal(EmailLiteral::CalendarOnly(false))));
-            super::dynamic::dynamic_email_thread_cursor(
+            super::dynamic::dynamic_email_thread_cursor_with_sources(
                 pool,
+                source_ids,
                 &link_ids,
                 limit,
                 &view,

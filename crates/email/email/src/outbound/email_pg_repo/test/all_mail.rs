@@ -1,4 +1,6 @@
 use super::*;
+use entity_access_outbound::PgAccessRepository;
+use std::sync::Arc;
 
 #[sqlx::test(
     migrator = "MACRO_DB_MIGRATIONS",
@@ -10,7 +12,7 @@ use super::*;
 async fn all_mail_excludes_spam_and_trash_before_pagination(
     pool: Pool<Postgres>,
 ) -> anyhow::Result<()> {
-    let repo = EmailPgRepo::new(pool);
+    let repo = EmailPgRepo::new(pool.clone(), Arc::new(PgAccessRepository::new(pool)));
     let viewer = MacroUserIdStr::parse_from_str("macro|mail@example.com")?;
     for (link, mixed, archived) in [
         (
@@ -87,7 +89,7 @@ async fn all_mail_excludes_spam_and_trash_before_pagination(
 async fn all_mail_cache_and_draft_baselines_exclude_spam_and_trash(
     pool: Pool<Postgres>,
 ) -> anyhow::Result<()> {
-    let repo = EmailPgRepo::new(pool);
+    let repo = EmailPgRepo::new(pool.clone(), Arc::new(PgAccessRepository::new(pool)));
     let viewer = MacroUserIdStr::parse_from_str("macro|mail@example.com")?;
     let mixed = [
         uuid::uuid!("0b000000-0000-0000-0000-000000000102"),
@@ -154,7 +156,10 @@ async fn all_mail_keeps_provider_drafts_without_received_or_sent_dates(
     .fetch_one(&pool)
     .await?;
     assert_eq!(timestamp, Some(created_at));
-    let repo = EmailPgRepo::new(pool.clone());
+    let repo = EmailPgRepo::new(
+        pool.clone(),
+        Arc::new(PgAccessRepository::new(pool.clone())),
+    );
     let viewer = MacroUserIdStr::parse_from_str("macro|mail@example.com")?;
     let projections = repo
         .thread_mail_projections_by_ids(viewer.clone(), &[thread])
@@ -233,7 +238,10 @@ async fn all_mail_excludes_synced_macro_drafts_in_junk_and_trash(
     )
     .execute(&pool)
     .await?;
-    let repo = EmailPgRepo::new(pool.clone());
+    let repo = EmailPgRepo::new(
+        pool.clone(),
+        Arc::new(PgAccessRepository::new(pool.clone())),
+    );
     let viewer = MacroUserIdStr::parse_from_str("macro|mail@example.com")?;
     for mailbox_state in [
         serde_json::json!({"in_junk": true}),

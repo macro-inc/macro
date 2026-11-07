@@ -770,7 +770,10 @@ async fn run_server() -> anyhow::Result<()> {
     let server_result = api::setup_and_serve(
         ApiContext {
             inbox_connections: Arc::new(email::domain::inbox_entitlement::InboxConnectionService(
-                email::outbound::EmailPgRepo::new(db.clone()),
+                email::outbound::EmailPgRepo::new(
+                    db.clone(),
+                    Arc::new(PgAccessRepository::new(db.clone())),
+                ),
             )),
             db,
             github_link_service: Arc::new(github_link_service_impl),

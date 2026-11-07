@@ -8,7 +8,9 @@ use super::world::{
     INBOX, MESSAGES, STARRED, THREADS, UNREAD, WORK, World, on_worker_stacks, owner,
 };
 use email_thread_id::EmailThreadId;
+use entity_access_outbound::PgAccessRepository;
 use sqlx::PgPool;
+use std::sync::Arc;
 
 const T1: usize = 0;
 const T2: usize = 1;
@@ -589,7 +591,10 @@ async fn crossing_bulk_writes_each_send_where_they_are_newest_and_fall_back_on_r
 
     let archive = Uuid::from_u128(0xc1);
     let unarchive = Uuid::from_u128(0xc2);
-    let repo = email::outbound::EmailPgRepo::new(sim.world.db.clone());
+    let repo = email::outbound::EmailPgRepo::new(
+        sim.world.db.clone(),
+        Arc::new(PgAccessRepository::new(sim.world.db.clone())),
+    );
     for (thread, add, write_id) in [
         (T1, false, archive),
         (T2, true, unarchive),

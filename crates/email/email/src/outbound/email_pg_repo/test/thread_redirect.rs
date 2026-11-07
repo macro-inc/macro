@@ -3,6 +3,8 @@ use entity_access::domain::models::{
     AccessLevel, Entity, EntityAccessAuth, EntityAccessReceipt, EntityPermission, EntityType,
     ViewAccessLevel,
 };
+use entity_access_outbound::PgAccessRepository;
+use std::sync::Arc;
 
 fn source() -> Uuid {
     uuid::uuid!("33333333-3333-3333-3333-333333333333")
@@ -80,7 +82,7 @@ async fn thread_redirect_requires_independent_inbox_access(
         assert!(fetched.messages.is_empty());
     }
     assert_eq!(
-        EmailPgRepo::new(pool)
+        EmailPgRepo::new(pool.clone(), Arc::new(PgAccessRepository::new(pool)))
             .redirected_thread_id(source(), &[])
             .await?,
         None

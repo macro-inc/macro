@@ -1,6 +1,8 @@
 use super::*;
 use email_api_client_core::models::FolderRole;
+use entity_access_outbound::PgAccessRepository;
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
+use std::sync::Arc;
 
 pub(super) async fn fixture(db: &PgPool) -> (PgMailboxSync, Uuid) {
     let link = macro_uuid::generate_uuid_v7();
@@ -463,7 +465,10 @@ async fn mailbox_previews_distinguish_categories_trash_and_imported_drafts(db: P
         .await
         .unwrap()
         .unwrap();
-    let repo = crate::outbound::EmailPgRepo::new(db.clone());
+    let repo = crate::outbound::EmailPgRepo::new(
+        db.clone(),
+        Arc::new(PgAccessRepository::new(db.clone())),
+    );
     let state = email_api_client_core::models::MailboxState {
         in_inbox: true,
         ..Default::default()

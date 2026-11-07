@@ -1,5 +1,7 @@
 use super::*;
+use entity_access_outbound::PgAccessRepository;
 use macro_user_id::user_id::MacroUserIdStr;
+use std::sync::Arc;
 
 #[sqlx::test(
     migrator = "MACRO_DB_MIGRATIONS",
@@ -11,7 +13,10 @@ use macro_user_id::user_id::MacroUserIdStr;
 async fn draft_aggregate_signal_matches_canonical_policy(
     pool: Pool<Postgres>,
 ) -> anyhow::Result<()> {
-    let repo = EmailPgRepo::new(pool.clone());
+    let repo = EmailPgRepo::new(
+        pool.clone(),
+        Arc::new(PgAccessRepository::new(pool.clone())),
+    );
     let viewer = MacroUserIdStr::parse_from_str("macro|sigflag_email@example.com")?;
     let link_id = uuid::uuid!("00000000-0000-0000-0000-000000000e01");
     let notification_thread = uuid::uuid!("00000000-0000-0000-0000-00000000e207");
@@ -71,7 +76,7 @@ async fn draft_aggregate_calendar_matches_inline_invitation_policy(
         email_db_client::threads::update::sync_thread_calendar_flag(&mut connection, id).await?;
     }
     drop(connection);
-    let repo = EmailPgRepo::new(pool);
+    let repo = EmailPgRepo::new(pool.clone(), Arc::new(PgAccessRepository::new(pool)));
     let projections = repo.thread_mail_projections_by_ids(viewer, &ids).await?;
     for projection in projections {
         let state = projection.draft_state.as_ref().unwrap();
@@ -115,7 +120,10 @@ async fn canonical_tab_previews_and_share_facts(pool: Pool<Postgres>) -> anyhow:
     let team = uuid::uuid!("20000103-0000-0000-0000-000000000103");
     let active = uuid::uuid!("20000008-0000-0000-0000-000000000008");
     let left = uuid::uuid!("20000009-0000-0000-0000-000000000009");
-    let repo = EmailPgRepo::new(pool.clone());
+    let repo = EmailPgRepo::new(
+        pool.clone(),
+        Arc::new(PgAccessRepository::new(pool.clone())),
+    );
     let rows = repo
         .thread_mail_projections_by_ids(viewer.clone(), &[thread, direct, team, active, left])
         .await?;

@@ -2,12 +2,17 @@ use super::*;
 use email_db_client::messages::{
     get::fetch_messages_metadata, insert::insert_message, scheduled::get::get_scheduled_message,
 };
+use entity_access_outbound::PgAccessRepository;
+use std::sync::Arc;
 
 async fn echo_then_trash(
     pool: &Pool<Postgres>,
     legacy: bool,
 ) -> anyhow::Result<(EmailPgRepo, SendAttemptId)> {
-    let repo = EmailPgRepo::new(pool.clone());
+    let repo = EmailPgRepo::new(
+        pool.clone(),
+        Arc::new(PgAccessRepository::new(pool.clone())),
+    );
     let thread = prepared().message.thread_db_id;
     let mut echo = fetch_messages_metadata(&mut *pool.acquire().await?, thread)
         .await?

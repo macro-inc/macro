@@ -5,7 +5,9 @@ use email::outbound::EmailPgRepo;
 use entity_access_management::{
     domain::service::EntityAccessManagementServiceImpl, outbound::PgRepository,
 };
+use entity_access_outbound::PgAccessRepository;
 use frecency::{domain::services::FrecencyQueryServiceImpl, outbound::postgres::FrecencyPgStorage};
+use std::sync::Arc;
 
 type Email = EmailServiceImpl<
     EmailPgRepo,
@@ -54,7 +56,10 @@ async fn outlook(pool: PgPool) -> EmailFollowupService<PgRemindersRepo, Email, F
     EmailFollowupService {
         repo: PgRemindersRepo::new(pool.clone()),
         mailbox: EmailServiceImpl::new(
-            EmailPgRepo::new(pool.clone()),
+            EmailPgRepo::new(
+                pool.clone(),
+                Arc::new(PgAccessRepository::new(pool.clone())),
+            ),
             FrecencyQueryServiceImpl::new(FrecencyPgStorage::new(pool.clone())),
             NoOpEnqueuer,
             NoOpCrmService,

@@ -1,4 +1,6 @@
 use super::*;
+use entity_access_outbound::PgAccessRepository;
+use std::sync::Arc;
 
 async fn assert_compacted(pool: &Pool<Postgres>, attempt: SendAttemptId) -> anyhow::Result<()> {
     let row = sqlx::query!(
@@ -24,7 +26,10 @@ async fn assert_compacted(pool: &Pool<Postgres>, attempt: SendAttemptId) -> anyh
 async fn cancellation_and_delivery_clear_content_without_losing_replay_identity(
     pool: Pool<Postgres>,
 ) -> anyhow::Result<()> {
-    let repo = EmailPgRepo::new(pool.clone());
+    let repo = EmailPgRepo::new(
+        pool.clone(),
+        Arc::new(PgAccessRepository::new(pool.clone())),
+    );
     let cancelled = SendAttemptId(macro_uuid::generate_uuid_v7());
     repo.admit_send(&actor(), link(), cancelled, prepared())
         .await?;
@@ -80,7 +85,10 @@ async fn cancellation_and_delivery_clear_content_without_losing_replay_identity(
 async fn deleting_an_active_message_retains_delivery_content_and_job(
     pool: Pool<Postgres>,
 ) -> anyhow::Result<()> {
-    let repo = EmailPgRepo::new(pool.clone());
+    let repo = EmailPgRepo::new(
+        pool.clone(),
+        Arc::new(PgAccessRepository::new(pool.clone())),
+    );
     let attempt = SendAttemptId(macro_uuid::generate_uuid_v7());
     repo.admit_send(&actor(), link(), attempt, prepared())
         .await?;

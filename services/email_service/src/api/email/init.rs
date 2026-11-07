@@ -15,6 +15,7 @@ use email::domain::models::UserProvider;
 use email::domain::ports::EmailRepo;
 use email::outbound::EmailPgRepo;
 use email_api_client_core::models::{EmailApiError, TokenFreshness};
+use entity_access_outbound::PgAccessRepository;
 use macro_authorization::{MacroAuthorizationExtractor, UserOrInternal};
 use macro_db_client::in_progress_user_link::InProgressUserLink;
 use macro_user_id::email::EmailStr;
@@ -25,6 +26,7 @@ use models_email::email::service::backfill::{
 };
 use models_email::service::link;
 use models_email::service::link::Link;
+use std::sync::Arc;
 use strum_macros::AsRefStr;
 use thiserror::Error;
 use utoipa::ToSchema;
@@ -323,7 +325,10 @@ async fn init_user(
     let mut completed_google_grant: Option<CompletedGoogleGrant> = None;
     tracing::info!(user_id = %user_context.user_id, ?link_id, "Init called");
 
-    let pg_repo = EmailPgRepo::new(ctx.db.clone());
+    let pg_repo = EmailPgRepo::new(
+        ctx.db.clone(),
+        Arc::new(PgAccessRepository::new(ctx.db.clone())),
+    );
 
     let (link, _email_address) = if let Some(link_id) = link_id {
         let in_progress =

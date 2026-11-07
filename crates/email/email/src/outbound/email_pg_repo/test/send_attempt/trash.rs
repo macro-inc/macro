@@ -2,9 +2,14 @@ use super::*;
 use email_db_client::messages::scheduled::delivery::{
     begin_submission, claim_delivery, pause_delivery,
 };
+use entity_access_outbound::PgAccessRepository;
+use std::sync::Arc;
 
 async fn preserve_attempt(pool: Pool<Postgres>, unconfirmed: bool) -> anyhow::Result<()> {
-    let repo = EmailPgRepo::new(pool.clone());
+    let repo = EmailPgRepo::new(
+        pool.clone(),
+        Arc::new(PgAccessRepository::new(pool.clone())),
+    );
     let cached = repo
         .get_simple_message(message(), &[link()])
         .await?
@@ -84,7 +89,10 @@ async fn trash_preserves_unconfirmed_attempt(pool: Pool<Postgres>) -> anyhow::Re
     fixtures(path = "../../../../../fixtures", scripts("email_draft"))
 )]
 async fn trash_rechecks_draft_state_after_admission(pool: Pool<Postgres>) -> anyhow::Result<()> {
-    let repo = EmailPgRepo::new(pool.clone());
+    let repo = EmailPgRepo::new(
+        pool.clone(),
+        Arc::new(PgAccessRepository::new(pool.clone())),
+    );
     let cached = repo
         .get_simple_message(message(), &[link()])
         .await?

@@ -762,3 +762,17 @@ pub trait AccessiblePipelines: Clone + Send + Sync + 'static {
         user_id: &MacroUserId<Lowercase<'_>>,
     ) -> impl Future<Output = Result<Vec<(Uuid, AccessLevel)>, AccessError>> + Send;
 }
+
+/// Reads the ids a user's entity access derives from: the user, their teams
+/// and the channels they take part in. Queries that widen to everything a
+/// user can reach (project-scoped email, search) filter on these.
+///
+/// Object-safe, so adapters that need it hold an `Arc<dyn UserSourceIds>`
+/// and the composition root picks the implementation.
+pub trait UserSourceIds: Send + Sync + 'static {
+    /// The source ids for `user_id`.
+    fn user_source_ids<'a>(
+        &'a self,
+        user_id: &'a MacroUserIdStr<'a>,
+    ) -> futures::future::BoxFuture<'a, Result<Vec<String>, rootcause::Report>>;
+}

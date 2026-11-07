@@ -1,4 +1,6 @@
 use super::*;
+use entity_access_outbound::PgAccessRepository;
+use std::sync::Arc;
 
 // ── previews_for_view_cursor: sent routing ──────────────────────────
 
@@ -14,7 +16,7 @@ async fn test_sent_view_without_filter_routes_to_dynamic_multi_inbox(
 ) -> anyhow::Result<()> {
     // The sent tab sends no filter tree; the routing must still take the
     // dynamic path and cover every linked inbox without a sender filter.
-    let repo = EmailPgRepo::new(pool);
+    let repo = EmailPgRepo::new(pool.clone(), Arc::new(PgAccessRepository::new(pool)));
     let query = crate::domain::models::PreviewCursorQuery {
         view: PreviewView::StandardLabel(PreviewViewStandardLabel::Sent),
         link_ids: vec![
@@ -53,7 +55,7 @@ async fn test_sent_view_without_filter_routes_to_dynamic_multi_inbox(
     fixtures(path = "../../../../fixtures", scripts("email_message"))
 )]
 async fn test_attachments_by_thread_ids_single_thread(pool: Pool<Postgres>) -> anyhow::Result<()> {
-    let repo = EmailPgRepo::new(pool);
+    let repo = EmailPgRepo::new(pool.clone(), Arc::new(PgAccessRepository::new(pool)));
 
     let thread1 = Uuid::parse_str("11111111-1111-1111-1111-111111111111")?;
     let attachments = repo.attachments_by_thread_ids(&[thread1]).await?;
@@ -82,7 +84,7 @@ async fn test_attachments_by_thread_ids_single_thread(pool: Pool<Postgres>) -> a
 async fn test_attachments_by_thread_ids_multiple_threads(
     pool: Pool<Postgres>,
 ) -> anyhow::Result<()> {
-    let repo = EmailPgRepo::new(pool);
+    let repo = EmailPgRepo::new(pool.clone(), Arc::new(PgAccessRepository::new(pool)));
 
     let thread1 = Uuid::parse_str("11111111-1111-1111-1111-111111111111")?;
     let thread3 = Uuid::parse_str("33333333-3333-3333-3333-333333333333")?;
@@ -102,7 +104,7 @@ async fn test_attachments_by_thread_ids_multiple_threads(
     fixtures(path = "../../../../fixtures", scripts("email_message"))
 )]
 async fn test_attachments_by_thread_ids_no_attachments(pool: Pool<Postgres>) -> anyhow::Result<()> {
-    let repo = EmailPgRepo::new(pool);
+    let repo = EmailPgRepo::new(pool.clone(), Arc::new(PgAccessRepository::new(pool)));
 
     // Thread 2 only has msg3 (a draft) which has no provider attachments
     let thread2 = Uuid::parse_str("22222222-2222-2222-2222-222222222222")?;
@@ -226,7 +228,7 @@ async fn test_attachments_by_thread_ids_reads_attachments_by_message_id(
     fixtures(path = "../../../../fixtures", scripts("email_message"))
 )]
 async fn test_attachments_by_thread_ids_empty_input(pool: Pool<Postgres>) -> anyhow::Result<()> {
-    let repo = EmailPgRepo::new(pool);
+    let repo = EmailPgRepo::new(pool.clone(), Arc::new(PgAccessRepository::new(pool)));
 
     let attachments = repo.attachments_by_thread_ids(&[]).await?;
     assert!(attachments.is_empty());
@@ -241,7 +243,7 @@ async fn test_attachments_by_thread_ids_empty_input(pool: Pool<Postgres>) -> any
     fixtures(path = "../../../../fixtures", scripts("email_message"))
 )]
 async fn test_contacts_by_thread_ids(pool: Pool<Postgres>) -> anyhow::Result<()> {
-    let repo = EmailPgRepo::new(pool);
+    let repo = EmailPgRepo::new(pool.clone(), Arc::new(PgAccessRepository::new(pool)));
 
     let thread1 = Uuid::parse_str("11111111-1111-1111-1111-111111111111")?;
     let contacts = repo.contacts_by_thread_ids(&[thread1]).await?;
@@ -275,7 +277,7 @@ async fn test_contacts_by_thread_ids(pool: Pool<Postgres>) -> anyhow::Result<()>
     fixtures(path = "../../../../fixtures", scripts("email_message"))
 )]
 async fn test_contacts_by_thread_ids_no_from_contact(pool: Pool<Postgres>) -> anyhow::Result<()> {
-    let repo = EmailPgRepo::new(pool);
+    let repo = EmailPgRepo::new(pool.clone(), Arc::new(PgAccessRepository::new(pool)));
 
     // Thread 2 only has msg3 which has no from_contact_id
     let thread2 = Uuid::parse_str("22222222-2222-2222-2222-222222222222")?;
@@ -294,7 +296,7 @@ async fn test_contacts_by_thread_ids_no_from_contact(pool: Pool<Postgres>) -> an
     fixtures(path = "../../../../fixtures", scripts("email_message"))
 )]
 async fn test_contacts_by_thread_ids_multiple_threads(pool: Pool<Postgres>) -> anyhow::Result<()> {
-    let repo = EmailPgRepo::new(pool);
+    let repo = EmailPgRepo::new(pool.clone(), Arc::new(PgAccessRepository::new(pool)));
 
     let thread1 = Uuid::parse_str("11111111-1111-1111-1111-111111111111")?;
     let thread3 = Uuid::parse_str("33333333-3333-3333-3333-333333333333")?;
@@ -327,7 +329,7 @@ async fn test_contacts_by_thread_ids_multiple_threads(pool: Pool<Postgres>) -> a
     fixtures(path = "../../../../fixtures", scripts("email_message"))
 )]
 async fn test_contacts_by_thread_ids_empty_input(pool: Pool<Postgres>) -> anyhow::Result<()> {
-    let repo = EmailPgRepo::new(pool);
+    let repo = EmailPgRepo::new(pool.clone(), Arc::new(PgAccessRepository::new(pool)));
 
     let contacts = repo.contacts_by_thread_ids(&[]).await?;
     assert!(contacts.is_empty());

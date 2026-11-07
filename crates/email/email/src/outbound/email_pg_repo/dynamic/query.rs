@@ -3,7 +3,7 @@ use super::resolve::{ResolvedFilters, can_short_circuit, resolve_filters};
 use crate::domain::models::{PreviewView, PreviewViewStandardLabel};
 use crate::outbound::email_pg_repo::db_types::*;
 use chrono::{DateTime, Utc};
-use entity_access_outbound::get_user_source_ids;
+use entity_access::domain::ports::UserSourceIds;
 use filter_ast::Expr;
 use item_filters::SharedEmailFilter;
 use item_filters::ast::email::EmailLiteral;
@@ -957,9 +957,14 @@ fn extract_project_filter(ast: &Expr<EmailLiteral>) -> Vec<String> {
 /// };
 /// let results = dynamic_email_thread_cursor(&pool, &query).await?;
 /// ```
-#[tracing::instrument(skip(pool), err)]
-pub(crate) async fn dynamic_email_thread_cursor(
+#[expect(
+    clippy::too_many_arguments,
+    reason = "the query's parts plus the access-source port it reads through"
+)]
+#[tracing::instrument(skip(pool, source_ids), err)]
+pub(crate) async fn dynamic_email_thread_cursor_with_sources(
     pool: &PgPool,
+    source_ids: &dyn UserSourceIds,
     link_ids: &[Uuid],
     limit: u32,
     view: &PreviewView,
@@ -985,10 +990,14 @@ pub(crate) async fn dynamic_email_thread_cursor(
         None
     } else {
         let user = MacroUserIdStr::parse_from_str(user_id).ok();
-        match get_user_source_ids(pool, user.as_deref()).await {
+        let resolved = match &user {
+            Some(user) => source_ids.user_source_ids(user).await,
+            None => Ok(Vec::new()),
+        };
+        match resolved {
             Ok(source_ids) => Some(ProjectScope {
                 project_ids,
-                source_ids: source_ids.0,
+                source_ids,
             }),
             Err(e) => {
                 tracing::error!(error=?e, "unable to fetch source ids for project-scoped email query");
@@ -1064,4 +1073,31 @@ pub(crate) async fn dynamic_email_thread_cursor(
         })
         .fetch_all(pool)
         .await
+}
+
+/// [`dynamic_email_thread_cursor_with_sources`] with the real Postgres source
+/// lookup, for the repository tests.
+#[cfg(test)]
+#[allow(clippy::too_many_arguments)]
+pub(crate) async fn dynamic_email_thread_cursor(
+    pool: &PgPool,
+    link_ids: &[Uuid],
+    limit: u32,
+    view: &PreviewView,
+    query: Query<Uuid, SimpleSortMethod, Arc<Expr<EmailLiteral>>>,
+    user_id: &str,
+    team_id: Option<Uuid>,
+) -> Result<Vec<ThreadPreviewCursorDbRow>, sqlx::Error> {
+    let source_ids = entity_access_outbound::PgAccessRepository::new(pool.clone());
+    dynamic_email_thread_cursor_with_sources(
+        pool,
+        &source_ids,
+        link_ids,
+        limit,
+        view,
+        query,
+        user_id,
+        team_id,
+    )
+    .await
 }

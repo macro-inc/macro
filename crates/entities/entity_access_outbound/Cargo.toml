@@ -25,6 +25,7 @@ cached = { workspace = true }
 clap = { workspace = true, optional = true }
 database_env_vars = { workspace = true, optional = true }
 entity_access = { workspace = true, features = ["ports", "sqlx"] }
+futures = { workspace = true }
 macro_entrypoint = { workspace = true, optional = true }
 macro_user_id = { workspace = true }
 model_entity = { workspace = true }

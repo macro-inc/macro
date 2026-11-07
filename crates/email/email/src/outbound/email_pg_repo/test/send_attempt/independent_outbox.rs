@@ -3,6 +3,8 @@ use crate::domain::draft_attachments::{
     AttachmentChange, AttachmentError, DraftAttachmentRepository, RemovalKind,
 };
 use crate::domain::scheduled::{EmailSchedulingRepo, ScheduleChange};
+use entity_access_outbound::PgAccessRepository;
+use std::sync::Arc;
 
 #[sqlx::test(
     migrator = "MACRO_DB_MIGRATIONS",
@@ -11,7 +13,10 @@ use crate::domain::scheduled::{EmailSchedulingRepo, ScheduleChange};
 async fn cancelled_send_fences_old_saves_deletes_attachments_and_schedules(
     pool: Pool<Postgres>,
 ) -> anyhow::Result<()> {
-    let repo = EmailPgRepo::new(pool.clone());
+    let repo = EmailPgRepo::new(
+        pool.clone(),
+        Arc::new(PgAccessRepository::new(pool.clone())),
+    );
     let attempt = SendAttemptId(macro_uuid::generate_uuid_v7());
     repo.admit_send(&actor(), link(), attempt, prepared())
         .await?;
@@ -113,7 +118,7 @@ async fn cancelled_send_fences_old_saves_deletes_attachments_and_schedules(
 async fn send_later_deadline_is_part_of_immutable_approval(
     pool: Pool<Postgres>,
 ) -> anyhow::Result<()> {
-    let repo = EmailPgRepo::new(pool);
+    let repo = EmailPgRepo::new(pool.clone(), Arc::new(PgAccessRepository::new(pool)));
     let attempt = SendAttemptId(macro_uuid::generate_uuid_v7());
     let deadline = Utc::now() + chrono::Duration::days(2);
     let mut input = prepared();
@@ -146,7 +151,7 @@ async fn send_later_deadline_is_part_of_immutable_approval(
 async fn pending_sends_are_scoped_to_actor_inbox_and_cursor(
     pool: Pool<Postgres>,
 ) -> anyhow::Result<()> {
-    let repo = EmailPgRepo::new(pool);
+    let repo = EmailPgRepo::new(pool.clone(), Arc::new(PgAccessRepository::new(pool)));
     let attempt = SendAttemptId(macro_uuid::generate_uuid_v7());
     repo.admit_send(&actor(), link(), attempt, prepared())
         .await?;
@@ -193,7 +198,10 @@ async fn outlook_ambiguous_submission_cannot_be_cancelled_or_reapproved(
     )
     .execute(&pool)
     .await?;
-    let repo = EmailPgRepo::new(pool.clone());
+    let repo = EmailPgRepo::new(
+        pool.clone(),
+        Arc::new(PgAccessRepository::new(pool.clone())),
+    );
     let attempt = SendAttemptId(macro_uuid::generate_uuid_v7());
     repo.admit_send(&actor(), link(), attempt, prepared())
         .await?;
@@ -235,7 +243,10 @@ async fn outlook_cancel_revokes_the_prepared_provider_revision(
     )
     .execute(&pool)
     .await?;
-    let repo = EmailPgRepo::new(pool.clone());
+    let repo = EmailPgRepo::new(
+        pool.clone(),
+        Arc::new(PgAccessRepository::new(pool.clone())),
+    );
     let attempt = SendAttemptId(macro_uuid::generate_uuid_v7());
     repo.admit_send(&actor(), link(), attempt, prepared())
         .await?;

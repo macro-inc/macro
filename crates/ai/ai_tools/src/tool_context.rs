@@ -1362,7 +1362,13 @@ pub fn build_properties_tool_context(
 }
 
 /// Type alias for the email tool context
-pub type ToolEmailToolContext = EmailToolContext<ToolUserEmailService>;
+pub type ToolEmailToolContext = EmailToolContext<
+    ToolUserEmailService,
+    email::domain::ports::NoOpGmailTokenProvider,
+    entity_access::domain::service::EntityAccessServiceImpl<
+        entity_access_outbound::PgAccessRepository,
+    >,
+>;
 
 /// Type alias for the call service implementation used by AI tools.
 /// Wired with NoOp RTC/connection/notification clients and no recording

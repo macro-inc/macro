@@ -11,9 +11,11 @@ use crate::domain::{
         DraftAttachmentRepo, EmailRepo, EmailUserRepo, LinkEmailSettings, RecipientsByMessageId,
     },
 };
+use entity_access::domain::ports::UserSourceIds;
 use macro_user_id::user_id::MacroUserIdStr;
 use sqlx::PgPool;
 use std::collections::HashMap;
+use std::sync::Arc;
 use uuid::Uuid;
 
 #[cfg(feature = "mailbox")]
@@ -51,11 +53,14 @@ mod test;
 #[derive(Clone)]
 pub struct EmailPgRepo {
     pool: PgPool,
+    /// Resolves the caller's entity-access sources for project-scoped
+    /// previews; the composition root supplies the implementation.
+    source_ids: Arc<dyn UserSourceIds>,
 }
 
 impl EmailPgRepo {
-    pub fn new(pool: PgPool) -> Self {
-        EmailPgRepo { pool }
+    pub fn new(pool: PgPool, source_ids: Arc<dyn UserSourceIds>) -> Self {
+        EmailPgRepo { pool, source_ids }
     }
 
     pub async fn link_by_fusionauth_email_provider(
@@ -177,7 +182,7 @@ impl EmailRepo for EmailPgRepo {
         query: PreviewCursorQuery,
         user_id: MacroUserIdStr<'static>,
     ) -> Result<Vec<EmailThreadPreview>, Self::Err> {
-        preview::previews_for_view_cursor(&self.pool, query, user_id).await
+        preview::previews_for_view_cursor(&self.pool, &*self.source_ids, query, user_id).await
     }
 
     async fn attachments_by_thread_ids(

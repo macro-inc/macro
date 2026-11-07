@@ -1,8 +1,10 @@
 use super::*;
 use crate::domain::{models::EmailErr, ports::NoOpEnqueuer, service::EmailServiceImpl};
 use crm::domain::service::NoOpCrmService;
+use entity_access_outbound::PgAccessRepository;
 use frecency::{domain::services::FrecencyQueryServiceImpl, outbound::postgres::FrecencyPgStorage};
 use macro_event_broker::NoopMacroEventBroker;
+use std::sync::Arc;
 
 pub(super) fn service(
     pool: Pool<Postgres>,
@@ -14,7 +16,10 @@ pub(super) fn service(
     (),
 > {
     EmailServiceImpl {
-        email_repo: EmailPgRepo::new(pool.clone()),
+        email_repo: EmailPgRepo::new(
+            pool.clone(),
+            Arc::new(PgAccessRepository::new(pool.clone())),
+        ),
         frecency_service: FrecencyQueryServiceImpl::new(FrecencyPgStorage::new(pool)),
         enqueuer: NoOpEnqueuer,
         crm_service: NoOpCrmService,
