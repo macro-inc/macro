@@ -3,7 +3,7 @@
 ## What it is
 
 Portable model halves of Lexical v0.45.0 rich-text, plain-text, hashtag, overflow
-text-entity, list behavior and table nodes, span maps, physical grids and editing operations, selection hooks, integrity transforms and observer actions. DOM events, clipboard access and layout stay in views.
+text-entity, list behavior and table nodes, span maps, physical grids and editing operations, selection hooks, integrity transforms, observer actions and model handlers. DOM events, clipboard access and layout stay in views.
 
 ## Boundaries
 
@@ -11,6 +11,7 @@ text-entity, list behavior and table nodes, span maps, physical grids and editin
 - Keep this client crate excluded from workspace-hack.
 - Keep block-only registration separate from opt-in transforms and plugins.
 - Keep physical grid coordinates separate from span coordinates; the physical column count comes from the last row.
+- Keep DOM geometry behind TableView and apply returned observer effects in the host.
 - Table span reads retain map-time writable identity; frozen cells use captured fields, live cells read current fields.
 - Use selection slots in hooks; detached selections must not read the active range.
 - List handlers read through ListNode/ListItemNode ancestry so application subclasses inherit restructuring and intrinsic transforms.

@@ -77,10 +77,15 @@ mod transforms_test;
 #[cfg(test)]
 mod grid_test;
 
-#[cfg(test)]
-mod observer_test;
 /// Insert, select-all, triple-click and clipboard model commands.
 pub mod commands;
+#[cfg(test)]
+mod observer_test;
 pub use commands::*;
+/// Keyboard and selection-change handlers with explicit host facts and observer effects.
+pub mod handlers;
+pub use handlers::*;
 #[cfg(test)]
 mod commands_test;
+#[cfg(test)]
+mod handlers_test;
