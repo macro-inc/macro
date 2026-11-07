@@ -203,9 +203,12 @@ pub struct WorkerCommentGate {
 impl CommentGate for WorkerCommentGate {
     type Error = worker::Error;
     async fn is_comment_only_change(&self, change: &RootChange) -> worker::Result<bool> {
-        crate::lexical_service::LexicalServiceClient::new(&self.env)
+        let started = web_time::Instant::now();
+        let result = crate::lexical_service::LexicalServiceClient::new(&self.env)
             .is_comment_only_change(change)
-            .await
+            .await;
+        tracing::Span::current().record("ms", started.elapsed().as_millis() as i64);
+        result
     }
 }
 

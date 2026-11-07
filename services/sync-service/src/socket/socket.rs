@@ -1,10 +1,8 @@
-use std::collections::HashMap;
-
 use bebop::Record;
 use worker::{Result, WebSocket};
 
 use crate::error::ResultExt;
-use sync_protocol::framing::{self, Reassembler};
+use sync_protocol::framing;
 
 /// A single peer websocket, but abstracted so that we can wrap our own transport layer.
 pub(crate) struct Socket {
@@ -25,11 +23,6 @@ impl Socket {
         Self { ws }
     }
 
-    /// The underlying peer websocket.
-    pub(crate) fn websocket(&self) -> &WebSocket {
-        &self.ws
-    }
-
     /// Serialize and send one message to this peer, split into wire frames so it
     /// stays under the durable object's max outbound websocket message size.
     pub(crate) fn send<'m, T: Record<'m>>(&self, msg: T) -> Result<()> {
@@ -42,27 +35,5 @@ impl Socket {
                 .context("failed to send frame")?;
         }
         Ok(())
-    }
-
-    /// Feeds one inbound frame for the connection identified by `ws_id`. Returns
-    /// the complete message once its final frame arrives, otherwise `None` while
-    /// earlier frames are still buffering.
-    pub(crate) fn receive(
-        inbound: &mut HashMap<sync_server_core::domain::socket::WebSocketId, Reassembler>,
-        ws_id: &str,
-        frame: &[u8],
-    ) -> Result<Option<Vec<u8>>> {
-        let message = inbound
-            .entry(
-                sync_server_core::domain::socket::WebSocketId::from_tags(&[ws_id.to_string()])
-                    .map_err(|error| worker::Error::from(error.to_string()))?,
-            )
-            .or_default()
-            .push(frame)
-            .map_err(|error| worker::Error::from(error.to_string()))?;
-        if message.is_some() {
-            inbound.remove(ws_id);
-        }
-        Ok(message)
     }
 }

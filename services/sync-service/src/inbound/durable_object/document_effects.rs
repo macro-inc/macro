@@ -4,7 +4,7 @@ use macro_sync_service_jwt::session::SessionKind;
 use tracing::{error, warn};
 use worker::Env;
 
-use super::{SyncSession, bump_alarm, surface_api::session_kind_from_storage_key, take_editors};
+use super::{SyncSession, surface_api::session_kind_from_storage_key, take_editors};
 use crate::{
     domain::document::{
         DocumentAttribution, DocumentError, DocumentUpdateEffects, DocumentUpdatePort,
@@ -83,7 +83,9 @@ impl DocumentUpdateEffects for WorkerDocumentEffects<'_, '_> {
     }
 
     async fn keep_alive(&mut self) -> Result<(), DocumentError> {
-        bump_alarm(&self.session.state)
+        self.session
+            .room
+            .bump_alarm()
             .await
             .map_err(notification_error)
     }

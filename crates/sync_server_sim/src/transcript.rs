@@ -81,6 +81,8 @@ impl ServerInput {
 }
 /// One recorded input and its clock/room context.
 pub struct RecordedInput {
+    /// Runtime callback identity; clocks may be equal across distinct inputs.
+    pub callback: u64,
     /// Durable Object identity in the recording.
     pub room: String,
     /// Time at callback entry.
@@ -201,6 +203,9 @@ impl Transcript {
                 return Err(ReplayError::Invalid("invalid monotonic time".into()));
             }
             inputs.push(RecordedInput {
+                callback: value["callback"]
+                    .as_u64()
+                    .ok_or_else(|| ReplayError::Invalid("missing callback identity".into()))?,
                 room: required(value, "room")?.into(),
                 now: SimNow {
                     unix_ms,

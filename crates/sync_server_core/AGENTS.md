@@ -40,5 +40,6 @@ the Durable Object adapter and native simulation.
 hidden accessors temporarily support Worker handler bodies during extraction;
 keep runtime handles and locks in the adapter. Presence retains the pinned Loro
 store until C9a. Connection, close, lazy metadata restore, grant validation and
-heartbeat policy live in `src/domain/room/connection.rs`; runtime socket handles
+heartbeat policy live in `src/domain/room/connection.rs`; inbound binary
+frame dispatch, comment-gate policy and message telemetry live in `frame.rs`; runtime socket handles
 remain callback arguments. Local rootcause reports retain non-Send port errors.

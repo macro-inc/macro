@@ -118,3 +118,6 @@ pub use error::{PortName, RoomError};
 
 #[cfg(test)]
 mod test;
+
+mod frame;
+pub use frame::InboundFrame;

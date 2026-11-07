@@ -1,5 +1,5 @@
 //! Read-only Loro views for the Worker adapter; mutable state belongs to Room.
-use loro::{ExportMode, Frontiers, LoroDoc, VersionVector};
+use loro::{ExportMode, Frontiers, LoroDoc};
 use std::cell::Cell;
 use std::time::Duration;
 use sync_server_core::domain::{
@@ -61,9 +61,7 @@ impl DocumentState {
     pub fn should_save(&self) -> bool {
         self.inner.should_save()
     }
-    pub fn root_change(&self, updates: &[&[u8]]) -> Result<Option<RootChange>> {
-        into_worker(self.inner.root_change(updates))
-    }
+
     pub fn export_snapshot(&self, mode: Option<ExportMode>) -> Result<Vec<u8>> {
         into_worker(self.inner.export_snapshot(mode))
     }
@@ -72,8 +70,5 @@ impl DocumentState {
     }
     pub fn version_id(&self) -> String {
         self.inner.version_id()
-    }
-    pub fn export_updates_since(&self, vv: &VersionVector) -> Result<Vec<u8>> {
-        into_worker(self.inner.export_updates_since(vv))
     }
 }

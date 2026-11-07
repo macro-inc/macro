@@ -39,6 +39,26 @@ pub enum RoomError {
     /// Loro rejected document content.
     #[error(transparent)]
     Loro(#[from] StateError),
+    /// The inbound frame was malformed.
+    #[error(transparent)]
+    Framing(#[from] sync_protocol::framing::FramingError),
+    /// The Bebop payload could not be decoded.
+    #[error("failed to deserialize message, message length {length} : {error:?}")]
+    Decode {
+        /// Input payload length.
+        length: usize,
+        /// Codec error.
+        error: bebop::DeserializeError,
+    },
+    /// The message discriminator is unknown.
+    #[error("unknown message type")]
+    UnknownMessage,
+    /// A version vector was malformed.
+    #[error("failed to decode version vector : {0:?}")]
+    VersionVector(loro::LoroError),
+    /// Document policy rejected an update or attribution.
+    #[error(transparent)]
+    Document(#[from] crate::domain::document::DocumentError),
     /// An outbound runtime capability failed.
     #[error("{report}")]
     Port {
