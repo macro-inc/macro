@@ -1,9 +1,9 @@
 use crate::{MatchType, SearchHighlight, SearchOn};
 use chrono::{DateTime, Utc};
 use item_filters::EmailFilters;
-use models_soup::SoupProperty;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
+use soup_property::SoupProperty;
 use utoipa::ToSchema;
 
 /// A email message match for a given thread id
