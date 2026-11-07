@@ -48,3 +48,5 @@ pub mod mark;
 pub mod offset;
 
 pub mod clipboard;
+/// Table nodes, span maps, operations and model interaction handlers.
+pub mod table;

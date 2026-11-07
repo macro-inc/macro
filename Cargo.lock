@@ -11817,6 +11817,7 @@ dependencies = [
 name = "lexical_rich_nodes"
 version = "0.1.0"
 dependencies = [
+ "bitflags 2.11.1",
  "indexmap 2.14.0",
  "lexical_model",
  "nom 8.0.0",

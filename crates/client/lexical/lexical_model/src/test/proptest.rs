@@ -1,5 +1,5 @@
 //! S4 §4. Generated scripts supplement the explicit upstream behavior tests.
-use super::performance::Opaque;
+use super::{Inline, performance::Opaque};
 use crate::*;
 use proptest::prelude::*;
 use std::collections::{BTreeMap, HashSet};
@@ -23,14 +23,14 @@ fn arb_state() -> impl Strategy<Value = Vec<Tree>> {
             .prop_map(|(s, f, style, mode, state)| Tree::Text(s, f, style, mode, state)),
         Just(Tree::Break),
         Just(Tree::Tab),
-        Just(Tree::Decorator),
     ];
-    prop::collection::vec(
-        leaf.prop_recursive(3, 48, 6, |inner| {
-            prop::collection::vec(inner, 0..6).prop_map(Tree::Element)
-        }),
-        1..6,
-    )
+    // Paragraph contents are inline. Block decorators belong directly under root;
+    // arbitrary nested paragraphs can have no leaf-block ancestor for insertion,
+    // which upstream rejects too (see the literal malformed-tree regression).
+    let inline = leaf.prop_recursive(3, 48, 6, |inner| {
+        prop::collection::vec(inner, 0..6).prop_map(Tree::Element)
+    });
+    prop::collection::vec(prop_oneof![inline, Just(Tree::Decorator)], 1..6)
 }
 
 fn arb_command() -> impl Strategy<Value = Command> {
@@ -73,7 +73,7 @@ fn append_tree(tx: &mut Transaction<'_>, parent: NodeKey, tree: &Tree) -> Result
         Tree::Break => tx.create(LineBreak::default())?.key(),
         Tree::Tab => tx.create(Tab::default())?.key(),
         Tree::Element(children) => {
-            let key = tx.create(Paragraph::default())?.key();
+            let key = tx.create(Inline::default())?.key();
             for child in children {
                 append_tree(tx, key, child)?;
             }
@@ -84,6 +84,19 @@ fn append_tree(tx: &mut Transaction<'_>, parent: NodeKey, tree: &Tree) -> Result
 }
 
 fn apply(tx: &mut Transaction<'_>, command: &Command) -> Result<(), Error> {
+    // These primitives require a range, just as the host command handlers do.
+    // Deleting beside a block decorator can intentionally install NodeSelection.
+    // Do not call a range-only primitive with that different selection variant.
+    if matches!(
+        command,
+        Command::InsertParagraph
+            | Command::FormatText(_)
+            | Command::DeleteCharacter { .. }
+            | Command::RemoveText
+    ) && !matches!(tx.selection(), Some(Selection::Range(_)))
+    {
+        return Ok(());
+    }
     match command {
         Command::InsertText(text) => tx.insert_text(text),
         Command::InsertParagraph => tx.insert_paragraph().map(|_| ()),
@@ -181,6 +194,11 @@ fn check_state(state: &EditorState) {
                     assert!(offsets.contains(&offset.0));
                 }
             }
+        }
+    }
+    if let Some(Selection::Node(nodes)) = state.selection() {
+        for key in nodes.keys() {
+            assert!(visited.contains(&key));
         }
     }
 }
@@ -391,14 +409,19 @@ fn run_script(
     };
     let mut editor = Editor::builder(mode)
         .node::<Opaque>()
+        .node::<Inline>()
         .build()
         .expect("registry");
     let (_, initial) = editor
         .update(|tx| {
             for tree in trees {
-                let p = tx.create(Paragraph::default())?;
-                tx.append(NodeKey::ROOT, &[p.key()])?;
-                append_tree(tx, p.key(), tree)?;
+                if matches!(tree, Tree::Decorator) {
+                    append_tree(tx, NodeKey::ROOT, tree)?;
+                } else {
+                    let p = tx.create(Paragraph::default())?;
+                    tx.append(NodeKey::ROOT, &[p.key()])?;
+                    append_tree(tx, p.key(), tree)?;
+                }
             }
             tx.set_selection(Some(Selection::Range(RangeSelection::at_root())))
         })
@@ -450,7 +473,7 @@ fn run_script(
             }
         };
         assert_eq!(previous.to_json().expect("old export"), json);
-        let ((), commit) = result.expect("generated command with valid active range");
+        let ((), commit) = result.expect("generated command with valid preconditions");
         check_state(editor.state());
         if attached {
             for key in commit
@@ -579,4 +602,41 @@ proptest! {
         assert!(matches!(result, Err(Error::InfiniteTransforms)));
         assert!(previous.same_snapshot(editor.state()));
     }
+}
+
+#[test]
+fn range_only_generated_commands_respect_decorator_node_selection() -> Result<(), Error> {
+    let mut editor = Editor::builder(EditorMode::Headless)
+        .node::<Opaque>()
+        .build()
+        .expect("registry");
+    let (decorator, _) = editor.update(|tx| {
+        let d = tx.create(Opaque {})?;
+        tx.append(NodeKey::ROOT, &[d.key()])?;
+        tx.set_selection(Some(Selection::Range(RangeSelection::at_root())))?;
+        Ok(d)
+    })?;
+    editor.update(|tx| {
+        apply(tx, &Command::InsertParagraph)?;
+        apply(
+            tx,
+            &Command::DeleteCharacter {
+                direction: EditDirection::Forward,
+                target: ModifyTarget::NoView,
+            },
+        )
+    })?;
+    let previous = editor.state().clone();
+    check_state(&previous);
+    let mut tx = editor.transaction();
+    assert!(matches!(tx.selection(),Some(Selection::Node(s)) if s.has(decorator.key())));
+    assert!(matches!(tx.remove_text(), Err(Error::NoRangeSelection)));
+    apply(&mut tx, &Command::RemoveText)?;
+    assert_eq!(tx.selection(), previous.selection());
+    assert_eq!(tx.children_keys(NodeKey::ROOT)?, vec![decorator.key()]);
+    assert!(tx.is_attached(decorator));
+    apply(&mut tx, &Command::SelectAll(None))?;
+    assert!(matches!(tx.selection(), Some(Selection::Range(_))));
+    tx.commit()?;
+    Ok(())
 }

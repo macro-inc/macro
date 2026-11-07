@@ -5,6 +5,7 @@ edition = "2024"
 publish = false
 
 [dependencies]
+bitflags = { workspace = true }
 lexical_model = { workspace = true }
 regress = { workspace = true }
 serde = { workspace = true, features = ["derive"] }

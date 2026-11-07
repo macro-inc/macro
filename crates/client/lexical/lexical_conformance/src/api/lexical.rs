@@ -122,6 +122,35 @@ pub(crate) fn call(r: &mut Replayer, tx: &mut Transaction<'_>, op: &Value) -> Re
             Ok(Value::Null)
         }
 
+        "@lexical/table.$createTableNode" => {
+            let key = tx
+                .create(lexical_rich_nodes::table::TableNode::default())?
+                .key();
+            r.node(tx.view(), key)
+        }
+        "@lexical/table.$createTableRowNode" => {
+            let height = a
+                .first()
+                .and_then(Value::as_f64)
+                .map(lexical_rich_nodes::table::JsNumber);
+            let key = tx
+                .create(lexical_rich_nodes::table::TableRowNode { height })?
+                .key();
+            r.node(tx.view(), key)
+        }
+        "@lexical/table.$createTableCellNode" => {
+            use lexical_rich_nodes::table::{JsNumber, TableCellHeaderState, TableCellNode};
+            let header = u8::try_from(u32_arg(a, 0, 0)?).map_err(|_| fail("header state"))?;
+            let width = a.get(2).and_then(Value::as_f64).map(JsNumber);
+            let key = tx
+                .create(TableCellNode::new(
+                    TableCellHeaderState::from_bits_retain(header),
+                    u32_arg(a, 1, 1)?,
+                    width,
+                ))?
+                .key();
+            r.node(tx.view(), key)
+        }
         "@lexical/list.$createListNode" => {
             let kind = match a.first().and_then(Value::as_str).unwrap_or("number") {
                 "number" | "ol" => lexical_rich_nodes::list::ListType::Number,

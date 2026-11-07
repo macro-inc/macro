@@ -169,8 +169,11 @@ pub enum Error {
     #[error("unregistered node type {0}")]
     UnregisteredNodeOnCreate(&'static str),
     /// Model invariant.
-    #[error("model invariant: {0}")]
+    #[error("{0}")]
     Invariant(&'static str),
+    /// An invariant diagnostic containing runtime context.
+    #[error("{0}")]
+    InvariantMessage(String),
     /// Node payload must serialize as an object.
     #[error("node payload must serialize as an object")]
     NodePayloadNotObject,
@@ -311,6 +314,13 @@ pub enum BuildError {
 }
 
 impl Error {
+    /// Preserve static or formatted upstream invariant diagnostics without leaking memory.
+    pub fn invariant(message: impl Into<std::borrow::Cow<'static, str>>) -> Self {
+        match message.into() {
+            std::borrow::Cow::Borrowed(message) => Self::Invariant(message),
+            std::borrow::Cow::Owned(message) => Self::InvariantMessage(message),
+        }
+    }
     /// Stable variant name for cross-boundary error classification.
     pub fn kind(&self) -> &'static str {
         match self {
@@ -361,7 +371,7 @@ impl Error {
             Self::NoDefault(..) => "NoDefault",
             Self::UnregisteredNodeType(..) => "UnregisteredNodeType",
             Self::UnregisteredNodeOnCreate(..) => "UnregisteredNodeOnCreate",
-            Self::Invariant(..) => "Invariant",
+            Self::Invariant(..) | Self::InvariantMessage(..) => "Invariant",
             Self::NodePayloadNotObject => "NodePayloadNotObject",
             Self::BaseKindMismatch => "BaseKindMismatch",
             Self::RemoveRoot => "RemoveRoot",
