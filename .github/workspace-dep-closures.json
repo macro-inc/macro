@@ -10230,6 +10230,10 @@
     "lexical_model": [
       "crates/client/lexical/lexical_model"
     ],
+    "lexical_rich_nodes": [
+      "crates/client/lexical/lexical_model",
+      "crates/client/lexical/lexical_rich_nodes"
+    ],
     "lexical_workspace_tests": [
       "crates/client/lexical/lexical_workspace_tests"
     ],
