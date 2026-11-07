@@ -12,7 +12,7 @@ fn flake(state: &Path, params: &Value, field: &str) -> Result<PathBuf> {
     );
     let directory = state.join("builds").join(format!("{name}-{revision}"));
     std::fs::create_dir_all(&directory)?;
-    // A pure flake lets Nix cache evaluation across stops/restores. The JSON
+    // A pure flake keeps source and instance parameters explicit. The JSON
     // contains references and revision hashes, never credential values.
     let root = serde_json::to_string(&format!(
         "git+file://{}",
@@ -34,26 +34,76 @@ fn flake(state: &Path, params: &Value, field: &str) -> Result<PathBuf> {
     Ok(directory)
 }
 
+fn source_fingerprint(root: &Path) -> Result<String> {
+    let mut digest = Sha256::new();
+    for args in [
+        vec!["rev-parse", "HEAD"],
+        vec!["diff", "HEAD", "--binary", "--no-ext-diff", "--no-textconv"],
+    ] {
+        let result = Command::new("git").current_dir(root).args(args).output()?;
+        ensure!(
+            result.status.success(),
+            "cannot fingerprint tracked sources"
+        );
+        digest.update(result.stdout.len().to_le_bytes());
+        digest.update(result.stdout);
+    }
+    let version = Command::new("nix").arg("--version").output()?;
+    ensure!(version.status.success(), "cannot identify Nix version");
+    digest.update(version.stdout);
+    Ok(format!("{:x}", digest.finalize()))
+}
+
 pub(super) fn build(state: &Path, params: &Value, field: &str) -> Result<PathBuf> {
     let directory = flake(state, params, field)?;
-    let root = format!("git+file://{}", super::super::repo_root().display());
-    let target = format!("path:{}#default", directory.display());
-    let result = Command::new("nix")
-        .current_dir(super::super::repo_root())
-        .stderr(std::process::Stdio::inherit())
-        .args([
-            "build",
-            "--no-link",
-            "--print-out-paths",
+    let root = super::super::repo_root();
+    let fingerprint = source_fingerprint(&root)?;
+    // Keep cache metadata outside the flake source: embedding a store path in
+    // that source would retain previous outputs and change its own fingerprint.
+    let cache = directory.with_extension("json");
+    let cached = std::fs::read(&cache)
+        .ok()
+        .and_then(|bytes| serde_json::from_slice::<Value>(&bytes).ok())
+        .filter(|value| value["source"] == fingerprint)
+        .and_then(|value| value["output"].as_str().map(PathBuf::from))
+        .filter(|path| path.parent() == Some(Path::new("/nix/store")) && path.exists());
+    let mut command = Command::new("nix");
+    command.current_dir(&root).stderr(Stdio::inherit()).args([
+        "build",
+        "--no-link",
+        "--print-out-paths",
+    ]);
+    if let Some(output) = &cached {
+        // Nix validates/realizes the existing output without evaluating the
+        // complete manifest graph again. Collected outputs take the flake path.
+        command.arg(output);
+    } else {
+        command.args([
             "--no-write-lock-file",
             "--override-input",
             "macro",
-            &root,
-            &target,
-        ])
-        .output()?;
+            &format!("git+file://{}", root.display()),
+            &format!("path:{}#default", directory.display()),
+        ]);
+    }
+    let result = command.output()?;
     ensure!(result.status.success(), "Nix instance build failed");
-    Ok(PathBuf::from(String::from_utf8(result.stdout)?.trim()))
+    let output = PathBuf::from(String::from_utf8(result.stdout)?.trim());
+    ensure!(
+        output.parent() == Some(Path::new("/nix/store")) && output.exists(),
+        "Nix did not return an existing store output"
+    );
+    // Never associate a concurrently changed checkout with this snapshot.
+    if cached.is_none() && source_fingerprint(&root)? == fingerprint {
+        std::fs::write(
+            cache,
+            serde_json::to_vec(&json!({
+                "source": fingerprint,
+                "output": output,
+            }))?,
+        )?;
+    }
+    Ok(output)
 }
 
 pub(super) fn push(state: &Path, params: &Value, names: Option<&[String]>) -> Result<()> {

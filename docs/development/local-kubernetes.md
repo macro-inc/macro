@@ -40,8 +40,10 @@ kubeconfig and an explicit context.
 The host controller creates the namespace and runtime Secrets, applies the
 Nix-rendered resources with server-side apply and ApplySet pruning, and waits.
 There are no host port-forwards or service initialization scripts in the runner.
-Stable instance flakes in private state let Nix cache evaluations for repeat
-starts; source and configuration changes invalidate those evaluations.
+Private instance flakes render the declarations. A realized-output cache keys
+repeat starts by commit, tracked diff, instance parameters and Nix version.
+Nix validates the cached store output; source or configuration changes render
+the declarations again. Cache metadata contains no credentials.
 
 Postgres migrations, Kafka topics and OpenSearch indices run as Jobs. Init
 containers wait for dependencies. LocalStack's ready.d script provisions the
