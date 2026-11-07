@@ -1,5 +1,10 @@
 import { Telemetry } from '@macro-inc/observability';
 import { type CacheRevision, parseCacheRevision } from '../protocol';
+import type {
+  ContactReconcile,
+  ContactSnapshot,
+  ContactSnapshotRequest,
+} from './generated';
 import {
   isPeopleContextUpdate,
   isPeopleReferenceRequest,
@@ -20,9 +25,19 @@ import {
   parsePeopleSearchResult,
   parsePeopleSqlResult,
 } from './protocol';
+import {
+  CONTACT_SYNC_UNSUPPORTED,
+  isContactReconcile,
+  isContactSnapshotRequest,
+  parseContactSnapshot,
+} from './sync-protocol';
 
 type Unsupported = { kind: 'unsupported' };
 export interface PeopleCache {
+  snapshot(
+    request: ContactSnapshotRequest
+  ): Promise<ContactSnapshot | Unsupported>;
+  reconcile(request: ContactReconcile): Promise<CacheRevision>;
   readSql(request: PeopleSqlRequest): Promise<PeopleSqlResult>;
   resolveReferences(
     request: PeopleReferenceRequest
@@ -32,6 +47,11 @@ export interface PeopleCache {
   search(request: PeopleSearch): Promise<PeopleSearchResult | Unsupported>;
 }
 export interface PeopleTransport {
+  snapshot(
+    request: ContactSnapshotRequest,
+    traceparent?: string
+  ): Promise<unknown>;
+  reconcile(request: ContactReconcile, traceparent?: string): Promise<unknown>;
   readSql(request: PeopleSqlRequest, traceparent?: string): Promise<unknown>;
   resolveReferences(
     request: PeopleReferenceRequest,
@@ -53,6 +73,51 @@ function unsupported(value: unknown): value is Unsupported {
 /** Both hosts validate the same generated wire contract; telemetry never includes people/query text. */
 export function createPeopleCache(transport: PeopleTransport): PeopleCache {
   return {
+    async snapshot(request) {
+      if (!isContactSnapshotRequest(request))
+        throw new Error('Invalid contact snapshot request');
+      return Telemetry.span('contacts.cache.snapshot', async (span) => {
+        span.setAttr(
+          'cache.storage_generation',
+          request.scope.storageGeneration
+        );
+        try {
+          const value = await transport.snapshot(request, span.traceparent());
+          const result = unsupported(value)
+            ? { kind: 'unsupported' as const }
+            : parseContactSnapshot(value);
+          if ('ids' in result) {
+            if (result.ids.length > (request.scan?.limit ?? 0))
+              throw new Error('Invalid contact snapshot window');
+            span.setAttr('contacts.batch_count', result.ids.length);
+          }
+          return result;
+        } catch (error) {
+          span.error('Contact snapshot failed');
+          throw error;
+        }
+      });
+    },
+    async reconcile(request) {
+      if (!isContactReconcile(request))
+        throw new Error('Invalid contact reconciliation');
+      return Telemetry.span('contacts.cache.reconcile', async (span) => {
+        span.setAttr(
+          'cache.storage_generation',
+          request.scope.storageGeneration
+        );
+        span.setAttr('contacts.requested_count', request.requested.length);
+        span.setAttr('contacts.present_count', request.present.length);
+        try {
+          const value = await transport.reconcile(request, span.traceparent());
+          if (unsupported(value)) throw new Error(CONTACT_SYNC_UNSUPPORTED);
+          return parseCacheRevision(value);
+        } catch (error) {
+          span.error('Contact reconciliation failed');
+          throw error;
+        }
+      });
+    },
     async readSql(request) {
       if (!isPeopleSqlRequest(request))
         throw new Error('Invalid local people SQL request');

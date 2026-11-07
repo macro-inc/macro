@@ -27,6 +27,7 @@ fn people_policy_100k() {
         };
         let mut engine = Engine::new(storage);
         let scope = HydrationScope {
+            contact_fence: None,
             identity: "macro|viewer@example.com".into(),
             storage_generation: engine.current_storage_generation().await.unwrap(),
         };

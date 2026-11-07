@@ -1,5 +1,6 @@
 import type { CacheHost } from '@graphql-cache/host/types';
 import type { PeopleCache } from '@graphql-cache/people/host';
+import { unsupportedContactSync } from '@graphql-cache/people/test-support';
 import { INITIAL_CACHE_REVISION } from '@graphql-cache/protocol';
 import type { fetchContactDirectoryPage } from '@service-storage/graphql-contacts';
 import { CombinedError } from '@urql/core';
@@ -85,6 +86,7 @@ it('reads context-ranked windows with pinned continuations and no unbounded mate
   const cache = {
     ...base,
     people: {
+      ...unsupportedContactSync,
       readSql: vi
         .fn<PeopleCache['readSql']>()
         .mockResolvedValue({ kind: 'unsupported' }),
@@ -156,6 +158,7 @@ it('uses bounded server fallback when the native policy predates recipient exclu
   const cache = {
     ...host(),
     people: {
+      ...unsupportedContactSync,
       readSql: vi
         .fn<PeopleCache['readSql']>()
         .mockResolvedValue({ kind: 'unsupported' }),

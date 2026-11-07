@@ -1198,10 +1198,24 @@ Contact synchronization shares Soup's authenticated leader and rollout gate.
 Fetch-only transport returns one 500-row page for explicit scoped admission:
 the core checks the captured generation and expected/response identities under
 the same engine lock as the write, without switching accounts. Coordinator
-protocol 16 forwards that scope; native hosts refuse guarded writes on older
-engines. Checkpoints advance only after persistence and a generation recheck.
+protocol 17 forwards that scope and contact admission fence; native hosts refuse
+guarded writes on older engines. Capture admission before fetching. Checkpoints
+advance only after persistence and a generation recheck.
 Invalidations coalesce on a 15-minute cadence without interrupting active scans;
-hourly passes refresh names. Scan omissions never delete records.
+hourly passes refresh names. Scan omissions never delete records. The same lane
+then scans at most 500 raw cached contact records per keyset window and verifies
+scoped IDs through the existing exact lookup. Only validated requested-ID omissions
+permit removal. Checkpoint v2 tracks hydration/verification and completes only
+after the verification pass; failures/interruption resume at the last committed
+cursor. No directory-sized seen set or extra synchronization endpoint is used.
+
+Contact admission is fenced by the existing single-owner engine, including
+identical positive responses and no-removal verification. This prevents late
+hydration resurrecting removals and late absence deleting newer observations.
+Unfenced network/optimistic contact writes reject; context-only stubs remain
+non-membership. Deletions publish committed dependency/person invalidations,
+not hydration-only hints. Deploy the canonical-ID lookup fix before client
+removal checks; older lookup omissions cannot safely prove absence.
 
 The first UI consumer is `/app/debug/data`: its contact card uses one replaceable
 50-row window, with immediately collected query history. The reader validates
@@ -1222,8 +1236,8 @@ remain separate from the bounded visible page; selection changes do not shuffle
 clicked rows or accumulate prior pages. Only replaces the whole current group,
 including selected IDs outside the page. Tasks' AI-filter catalog and CRM company
 owner/team semantics have not been changed.
-Other picker migrations, before-limit DM ranking/exclusions, and authoritative
-removal reconciliation remain in [the contacts checklist](../../../docs/design/disk-backed-contacts.md).
+Remaining ranking end-to-end validation and whole-app acceptance are tracked in
+[the contacts checklist](../../../docs/design/disk-backed-contacts.md).
 
 ### Deterministic person-policy foundation
 
@@ -1241,7 +1255,7 @@ into at most `limit + 1` unique winners, applying exclusions and DM deduplicatio
 before that limit. This joined-record path costs more than ordinary covering-only
 search; it does not change storage schema 12. `CacheHost.people` now exposes state,
 update, search, bounded reference resolution and local SQL through coordinator
-protocol 16 and dedicated native commands. Local SQL uses the existing predicate
+protocol 17 and dedicated native commands. Local SQL uses the existing predicate
 index, not another database or a directory-sized Rust/JS relation; its adapter
 returns only bounded final results. Browser SQL now consumes this capability,
 including offline; it never sends statements to a new server read endpoint.
@@ -1277,8 +1291,11 @@ new epoch. Missing inputs pause rather than publish emptiness. Source changes
 coalesce for 250 ms, with three exponential retries and reconnect wakeup; lost
 scope or unsupported hosts stop until the lifecycle changes. Context maps scale
 with existing DM peers/inboxes; full channel sources are still in memory.
-Quick Access now reads a replaceable person window rather than `useContacts()` or
-its global item index. Commands/mentions forward typed queries; CRM alias matching
+The web full-list query/hooks, shared recipient pool and manual contacts GET
+wrapper are removed. Message/native-share/websocket invalidations now issue only
+coalesced `requestContactRefresh()` hints; deployed backend and SDK APIs remain
+compatible. Quick Access reads a replaceable person window rather than a global
+contact item index. Commands/mentions forward typed queries; CRM alias matching
 uses exact lookup for only the current 50-row CRM window. Soup facets and property
 pickers preserve selections separately. General Soup assignee/creator menus and
 chips also use lazy windows; closed-chip labels resolve explicit IDs independently,
@@ -1314,8 +1331,8 @@ commit notification wakes pending queries after the page acknowledgement. Scope,
 compiler metadata and input ownership fence answers, and each observer retains one
 physical operation plus one replaceable input. The unnecessary `/databases/read`
 endpoint/client is removed. Fresh queries work offline once synchronization is
-complete; unsupported/incomplete reads stay explicit. Wider join parity, removal
-reconciliation and legacy cleanup remain open.
+complete; unsupported/incomplete reads stay explicit. Wider join parity and
+whole-app acceptance remain open.
 Calendar create/edit, event-detail guest actions and AI-draft
 composers now use bounded property windows with event-owned guest extras. Chosen
 names stay in selection metadata rather than a directory map, and person pages
@@ -1326,8 +1343,18 @@ per-label reference evidence instead of the shared pool, with ambiguous/incomple
 names unresolved and manual properties taking precedence. Other Universal Input
 modes prefer a unique full name before first-name matching; explicit addresses
 never match another person's display-name alias. Chosen display metadata stays
-separate from automatic name evidence. Whole-app memory completion and bounded
-shared name storage remain pending.
+separate from automatic name evidence.
+Shared display-name getters and participant labels now share the existing QueryClient:
+active readers pin their names, while idle entries cap at 512/512 KiB and expire after
+ten minutes. Requests are serialized in at most 500-ID batches with 500 queued IDs;
+no separate promise backlog or directory map is retained. Scope changes/disposal
+cancel transport and a 30-second abort deadline bounds requests. Name TTL is ten minutes,
+with stale labels retained during refresh and a 30-second later-access failure retry;
+reconnection wakes active failures without refetching idle history.
+Private labels and bearer-token reuse are fenced by account/session transitions;
+manual overrides and released/replaced entries reject old responses. Debug seeds
+are session-owned. This cache does not establish personal-contact membership.
+Whole-app memory/latency acceptance remains pending.
 
 ## Cached email Quick Access
 

@@ -106,6 +106,9 @@ impl<'a> PeopleRanker<'a> {
             return;
         }
         let user = user_id.as_ref();
+        if contact_key(&self.request.scope.identity, user).as_ref() != key.as_ref() {
+            return;
+        }
         let Some(email) = string(record, "email") else {
             return;
         };

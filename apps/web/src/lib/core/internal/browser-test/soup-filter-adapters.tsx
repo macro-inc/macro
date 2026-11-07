@@ -156,9 +156,3 @@ export function useInboxPicker() {
 }
 export const useGithubLinkStatusQuery = () => ({ data: undefined });
 export const useAddInboxFlow = () => async () => {};
-export function useContacts(): never {
-  throw new Error('Unexpected full-directory read');
-}
-export function useContactsQuery(): never {
-  throw new Error('Unexpected full-directory query');
-}

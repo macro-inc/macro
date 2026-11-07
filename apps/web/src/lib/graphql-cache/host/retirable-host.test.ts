@@ -5,6 +5,7 @@ import {
   type PeopleReferenceRequest,
   type PeopleSearch,
 } from '../people/protocol';
+import { unsupportedContactSync } from '../people/test-support';
 import { INITIAL_CACHE_REVISION } from '../protocol';
 import { createNoopCacheHost } from './noop-host';
 import { createRetirableCacheHost, retainCacheHost } from './retirable-host';
@@ -137,6 +138,7 @@ describe('createRetirableCacheHost', () => {
       matches: [{ complete: true, people: [] }],
     };
     const transport = {
+      ...unsupportedContactSync,
       readSql: vi.fn().mockResolvedValue({ kind: 'unsupported' }),
       resolveReferences: vi.fn().mockResolvedValue(resolved),
       context: vi.fn().mockResolvedValue({ kind: 'ready', epoch }),
@@ -194,6 +196,7 @@ describe('createRetirableCacheHost', () => {
     const host = createRetirableCacheHost({
       ...createNoopCacheHost(),
       people: createPeopleCache({
+        ...unsupportedContactSync,
         readSql: vi.fn().mockRejectedValue(error),
         resolveReferences: vi.fn().mockRejectedValue(error),
         context: vi.fn().mockRejectedValue(error),

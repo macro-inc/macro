@@ -15,6 +15,11 @@ export default defineConfig({
       name: 'soup-filter-test-adapters',
       enforce: 'pre',
       resolveId(source, importer) {
+        if (
+          importer?.endsWith('/service-auth/client.ts') &&
+          source === '@core/constant/servers'
+        )
+          return `${directory}/name-cache-services.ts`;
         if (importer?.includes('/integrations/import-linear/')) {
           if (
             [
@@ -135,7 +140,6 @@ export default defineConfig({
       ...Object.entries({
         '@service-storage/graphql-contacts': `${directory}/network.ts`,
         '@queries/auth/use-query-account': `${directory}/calendar-adapters.tsx`,
-        '@queries/contacts/contacts': `${directory}/soup-filter-adapters.tsx`,
         '@queries/contacts/use-directory': `${directory}/calendar-adapters.tsx`,
         '@core/component/UserIcon': `${directory}/calendar-adapters.tsx`,
         '@core/component/UserTooltip': `${directory}/calendar-adapters.tsx`,

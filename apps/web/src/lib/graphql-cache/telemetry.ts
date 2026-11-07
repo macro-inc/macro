@@ -517,6 +517,7 @@ export function operationCategoryForRequest(
       'people-search',
       'people-references',
       'people-sql',
+      'contact-snapshot',
       'people-context',
       'entity-filter',
       'calendar-range',
@@ -527,6 +528,7 @@ export function operationCategoryForRequest(
       'hydrate',
       'calendar-commit',
       'people-update',
+      'contact-reconcile',
       () => 'write' as const
     )
     .with(

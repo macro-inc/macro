@@ -9,6 +9,8 @@ export type IdentityBindingWire = {
 
 import type { EntityResolverWire } from './exchange/entity-resolvers';
 import type {
+  ContactReconcile,
+  ContactSnapshotRequest,
   PeopleContextUpdate,
   PeopleReferenceRequest,
   PeopleScope,
@@ -86,10 +88,7 @@ export type CacheReadPriority = 'user-visible';
 export type QueryVariableFilter = Record<string, unknown>;
 
 /** Rust engine::HydrationScope: captured before fetching a background page. */
-export type HydrationScope = {
-  storageGeneration: string;
-  identity: string;
-};
+export type HydrationScope = PeopleScope;
 
 /** Scope rejection is expected cancellation, not a storage failure. */
 export function isStaleHydrationScopeError(error: unknown): boolean {
@@ -99,6 +98,16 @@ export function isStaleHydrationScopeError(error: unknown): boolean {
 }
 
 export type PeopleRequest =
+  | {
+      kind: 'contact-snapshot';
+      request: ContactSnapshotRequest;
+      traceparent?: string;
+    }
+  | {
+      kind: 'contact-reconcile';
+      request: ContactReconcile;
+      traceparent?: string;
+    }
   | { kind: 'people-sql'; request: PeopleSqlRequest; traceparent?: string }
   | {
       kind: 'people-references';

@@ -4,6 +4,7 @@ import {
   type CachePush,
   type PeopleRequest,
   parseCacheRevision,
+  type WriteResult,
 } from '../protocol';
 import type { CacheEngine } from '../worker/wasm-module';
 import { PEOPLE_UNSUPPORTED } from './protocol';
@@ -12,7 +13,8 @@ import { PEOPLE_UNSUPPORTED } from './protocol';
 export function executePeopleRequest(
   engine: CacheEngine,
   request: PeopleRequest,
-  push: (message: CachePush) => void
+  push: (message: CachePush) => void,
+  committed: (result: WriteResult) => void
 ): Promise<unknown> {
   return Telemetry.span('contacts.cache.execute', async (span) => {
     span.setAttr('contacts.operation', request.kind);
@@ -20,6 +22,17 @@ export function executePeopleRequest(
       span.setAttr('upstream.traceparent', request.traceparent);
     try {
       return await match(request)
+        .with({ kind: 'contact-snapshot' }, async ({ request }) => {
+          if (!engine.contactSnapshot) return { kind: 'unsupported' };
+          return engine.contactSnapshot(request);
+        })
+        .with({ kind: 'contact-reconcile' }, async ({ request }) => {
+          if (!engine.contactReconcile) return { kind: 'unsupported' };
+          const result = await engine.contactReconcile(request);
+          result.revision = parseCacheRevision(result.revision);
+          committed(result);
+          return result.revision;
+        })
         .with({ kind: 'people-sql' }, async ({ request }) => {
           if (!engine.peopleReadSql) return { kind: 'unsupported' };
           return await engine.peopleReadSql(request);

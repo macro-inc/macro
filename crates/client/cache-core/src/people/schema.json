@@ -8,6 +8,199 @@
   "maxSqlRows": 500,
   "policyVersion": 4,
   "schemas": {
+    "ContactReconcile": {
+      "$defs": {
+        "HydrationScope": {
+          "additionalProperties": false,
+          "description": "Scope captured before starting a background request. Guarded hydration never\nswitches identity or restores a response into a different storage generation.",
+          "properties": {
+            "contactFence": {
+              "description": "Captured before a contact fetch. Missing fences cannot write contacts.",
+              "format": "uuid",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "identity": {
+              "description": "Expected authenticated response identity, not a record identifier.",
+              "type": "string"
+            },
+            "storageGeneration": {
+              "description": "Durable data generation observed before the network request.",
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          "required": [
+            "storageGeneration",
+            "identity"
+          ],
+          "type": "object"
+        }
+      },
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "description": "An exact, successful server lookup, never omissions from paged hydration.",
+      "properties": {
+        "fence": {
+          "description": "Contact-write fence captured with the requested IDs.",
+          "format": "uuid",
+          "type": "string"
+        },
+        "present": {
+          "description": "Members returned by that lookup; must be a subset of requested.",
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 500,
+          "type": "array"
+        },
+        "requested": {
+          "description": "Exact requested IDs, bounded before deduplication.",
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 500,
+          "type": "array"
+        },
+        "scope": {
+          "$ref": "#/$defs/HydrationScope",
+          "description": "Captured before fetching the authoritative response."
+        },
+        "viewer": {
+          "description": "Authenticated response identity; cannot differ from scope.identity.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "scope",
+        "fence",
+        "viewer",
+        "requested",
+        "present"
+      ],
+      "title": "ContactReconcile",
+      "type": "object"
+    },
+    "ContactSnapshot": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "description": "No record payloads or private names cross this boundary.",
+      "properties": {
+        "fence": {
+          "description": "Single-use write fence; engine replacement and contact writes invalidate it.",
+          "format": "uuid",
+          "type": "string"
+        },
+        "ids": {
+          "description": "Canonical identities read from viewer-scoped membership records.",
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 500,
+          "type": "array"
+        },
+        "incomplete": {
+          "description": "Malformed membership is not evidence of absence or a complete sweep.",
+          "type": "boolean"
+        },
+        "nextCursor": {
+          "description": "Last raw position when more records remain; empty pages may continue.",
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "fence",
+        "ids",
+        "incomplete"
+      ],
+      "title": "ContactSnapshot",
+      "type": "object"
+    },
+    "ContactSnapshotRequest": {
+      "$defs": {
+        "ContactScan": {
+          "additionalProperties": false,
+          "description": "Keyset enumeration of existing normalized records, not a directory snapshot.",
+          "properties": {
+            "after": {
+              "description": "Raw record-id cursor; never a membership identity.",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "limit": {
+              "description": "At most 500 records visited, including malformed/context-only records.",
+              "format": "uint",
+              "maximum": 500,
+              "minimum": 1,
+              "type": "integer"
+            }
+          },
+          "required": [
+            "limit"
+          ],
+          "type": "object"
+        },
+        "HydrationScope": {
+          "additionalProperties": false,
+          "description": "Scope captured before starting a background request. Guarded hydration never\nswitches identity or restores a response into a different storage generation.",
+          "properties": {
+            "contactFence": {
+              "description": "Captured before a contact fetch. Missing fences cannot write contacts.",
+              "format": "uuid",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "identity": {
+              "description": "Expected authenticated response identity, not a record identifier.",
+              "type": "string"
+            },
+            "storageGeneration": {
+              "description": "Durable data generation observed before the network request.",
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          "required": [
+            "storageGeneration",
+            "identity"
+          ],
+          "type": "object"
+        }
+      },
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "description": "Capture write admission, optionally enumerating one bounded cached-ID window.",
+      "properties": {
+        "scan": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ContactScan"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "None captures only the fence, without reading contacts."
+        },
+        "scope": {
+          "$ref": "#/$defs/HydrationScope",
+          "description": "Account/storage generation; this read never binds an account."
+        }
+      },
+      "required": [
+        "scope"
+      ],
+      "title": "ContactSnapshotRequest",
+      "type": "object"
+    },
     "PeopleContextState": {
       "$schema": "https://json-schema.org/draft/2020-12/schema",
       "description": "Publication state of the cache-local context snapshot.",
@@ -162,6 +355,14 @@
           "additionalProperties": false,
           "description": "Scope captured before starting a background request. Guarded hydration never\nswitches identity or restores a response into a different storage generation.",
           "properties": {
+            "contactFence": {
+              "description": "Captured before a contact fetch. Missing fences cannot write contacts.",
+              "format": "uuid",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
             "identity": {
               "description": "Expected authenticated response identity, not a record identifier.",
               "type": "string"
@@ -265,6 +466,14 @@
           "additionalProperties": false,
           "description": "Scope captured before starting a background request. Guarded hydration never\nswitches identity or restores a response into a different storage generation.",
           "properties": {
+            "contactFence": {
+              "description": "Captured before a contact fetch. Missing fences cannot write contacts.",
+              "format": "uuid",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
             "identity": {
               "description": "Expected authenticated response identity, not a record identifier.",
               "type": "string"
@@ -439,6 +648,14 @@
       "additionalProperties": false,
       "description": "Scope captured before starting a background request. Guarded hydration never\nswitches identity or restores a response into a different storage generation.",
       "properties": {
+        "contactFence": {
+          "description": "Captured before a contact fetch. Missing fences cannot write contacts.",
+          "format": "uuid",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "identity": {
           "description": "Expected authenticated response identity, not a record identifier.",
           "type": "string"
@@ -462,6 +679,14 @@
           "additionalProperties": false,
           "description": "Scope captured before starting a background request. Guarded hydration never\nswitches identity or restores a response into a different storage generation.",
           "properties": {
+            "contactFence": {
+              "description": "Captured before a contact fetch. Missing fences cannot write contacts.",
+              "format": "uuid",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
             "identity": {
               "description": "Expected authenticated response identity, not a record identifier.",
               "type": "string"
@@ -727,6 +952,14 @@
           "additionalProperties": false,
           "description": "Scope captured before starting a background request. Guarded hydration never\nswitches identity or restores a response into a different storage generation.",
           "properties": {
+            "contactFence": {
+              "description": "Captured before a contact fetch. Missing fences cannot write contacts.",
+              "format": "uuid",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
             "identity": {
               "description": "Expected authenticated response identity, not a record identifier.",
               "type": "string"

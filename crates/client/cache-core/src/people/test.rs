@@ -3,7 +3,7 @@ fn missing_contact_names_fall_back_to_the_email_local_part() {
     use super::{PeopleMode, PeopleSearch, PeopleSearchResult, ranking::PeopleRanker};
     use crate::{
         engine::HydrationScope,
-        value::{CacheValue, EntityKey, Record},
+        value::{CacheValue, Record},
     };
     use uuid::Uuid;
 
@@ -11,6 +11,7 @@ fn missing_contact_names_fall_back_to_the_email_local_part() {
         scope: HydrationScope {
             storage_generation: Uuid::from_u128(1),
             identity: "macro|viewer@example.com".into(),
+            contact_fence: None,
         },
         mode: PeopleMode::Recipient,
         query: "person".into(),
@@ -35,7 +36,7 @@ fn missing_contact_names_fall_back_to_the_email_local_part() {
         .into(),
     };
     ranker.push(
-        &EntityKey::entity("GraphqlContact", &["person@example.com"]),
+        &super::contact_key("macro|viewer@example.com", "macro|person@example.com"),
         &record,
     );
     let PeopleSearchResult::Page { people, .. } = ranker.finish().unwrap() else {

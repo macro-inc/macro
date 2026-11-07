@@ -120,6 +120,8 @@ inputs cannot select an agent, and ordinary user credentials remain unattributed
   `FusionAuthClientError` whose `upstream()` is set with that error's
   `into_response()`. Document 502/503 with `UpstreamErrorResponse` in the
   route's `utoipa::path`.
+- Name-lookup spans record batch counts, never request bodies: Macro user IDs contain email addresses.
+
 - Fail closed if team cleanup encounters an external chat: external chats require human ownership.
 
 - GitHub reconnect preserves the current link until OAuth completes. A different

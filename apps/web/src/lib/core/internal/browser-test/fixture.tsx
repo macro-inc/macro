@@ -12,11 +12,13 @@ import { ContactDirectoryInspector } from '../ContactDirectoryInspector';
 import { CalendarFilterFixture } from './calendar-fixture';
 import { CalendarGuestsFixture } from './calendar-guests-fixture';
 import { ChannelRecipientFixture } from './channel-recipient-fixture';
+import { ContactRemovalFixture } from './contact-removal-fixture';
 import { LinearImportFixture } from './linear-import-fixture';
 import {
   DriveListFilterFixture,
   NotesListFilterFixture,
 } from './list-filter-fixture';
+import { NameCacheFixture } from './name-cache-fixture';
 import { changeViewer, fetchContactDirectoryPage } from './network';
 import { OnboardingContactsFixture } from './onboarding-contacts-fixture';
 import { RecipientDirectoryFixture } from './recipient-directory-fixture';
@@ -37,12 +39,14 @@ function App() {
   const generation = '00000000-0000-4000-8000-000000000001';
   const complete = () =>
     localStorage.setItem(
-      `graphql-contacts-backfill:v1:${viewer()}`,
+      `graphql-contacts-backfill:v2:${viewer()}`,
       JSON.stringify({
         userId: viewer(),
         storageGeneration: generation,
         nextCursor: null,
         pages: 200,
+        phase: 'verify',
+        verificationIncomplete: false,
         completedAt: Date.now(),
       })
     );
@@ -120,7 +124,7 @@ function App() {
         <button onClick={switchAccount}>Switch account</button>
         <button
           onClick={() => {
-            localStorage.removeItem(`graphql-contacts-backfill:v1:${viewer()}`);
+            localStorage.removeItem(`graphql-contacts-backfill:v2:${viewer()}`);
             directory.restart();
           }}
         >
@@ -128,7 +132,7 @@ function App() {
         </button>
         <button
           onClick={() => {
-            localStorage.removeItem(`graphql-contacts-backfill:v1:${viewer()}`);
+            localStorage.removeItem(`graphql-contacts-backfill:v2:${viewer()}`);
             setOffline(true);
             directory.setSearch('rare');
           }}
@@ -147,6 +151,14 @@ render(
   () => (
     <QueryClientProvider client={client}>
       <Switch fallback={<App />}>
+        <Match
+          when={new URLSearchParams(location.search).has('contact-removal')}
+        >
+          <ContactRemovalFixture />
+        </Match>
+        <Match when={new URLSearchParams(location.search).has('name-cache')}>
+          <NameCacheFixture />
+        </Match>
         <Match when={new URLSearchParams(location.search).has('sql-people')}>
           <SqlPeopleFixture />
         </Match>

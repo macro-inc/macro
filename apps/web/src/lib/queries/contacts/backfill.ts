@@ -1,4 +1,6 @@
 import type { CacheHost } from '@graphql-cache/host/types';
+import { captureContactWriteScope } from '@graphql-cache/people/sync';
+import { CONTACT_SYNC_UNSUPPORTED } from '@graphql-cache/people/sync-protocol';
 import {
   isStaleHydrationScopeError,
   isStorageGeneration,
@@ -9,9 +11,12 @@ import * as Effect from 'effect/Effect';
 import * as Fiber from 'effect/Fiber';
 import * as Schedule from 'effect/Schedule';
 import { type Accessor, createEffect, onCleanup, untrack } from 'solid-js';
+import { useQueryAccount } from '../auth/use-query-account';
+import { ContactDirectoryScopeError } from './cache-scope';
+import { reconcileContactPage } from './reconcile';
 import { contactRefreshRevision } from './refresh';
 
-const CHECKPOINT_VERSION = 1;
+const CHECKPOINT_VERSION = 2;
 const REFRESH_INTERVAL_MS = 15 * 60_000;
 const NAME_REFRESH_MS = 60 * 60_000;
 const PAGE_DELAY_MS = 250;
@@ -21,6 +26,8 @@ export type ContactCheckpoint = {
   storageGeneration: string;
   nextCursor: string | null;
   pages: number;
+  phase: 'hydrate' | 'verify';
+  verificationIncomplete: boolean;
   completedAt: number | null;
 };
 
@@ -30,7 +37,7 @@ export type ContactSyncProgress =
 
 type BackfillHost = Pick<
   CacheHost,
-  'currentStorageGeneration' | 'search' | 'hydrateQuery' | 'disabled'
+  'currentStorageGeneration' | 'search' | 'hydrateQuery' | 'disabled' | 'people'
 >;
 
 const checkpointKey = (userId: string) =>
@@ -49,6 +56,10 @@ function isCheckpoint(value: unknown): value is ContactCheckpoint {
       (typeof value.nextCursor === 'string' &&
         value.nextCursor.length <= 1024 &&
         !value.nextCursor.includes('\0'))) &&
+    'phase' in value &&
+    (value.phase === 'hydrate' || value.phase === 'verify') &&
+    'verificationIncomplete' in value &&
+    typeof value.verificationIncomplete === 'boolean' &&
     'pages' in value &&
     typeof value.pages === 'number' &&
     Number.isSafeInteger(value.pages) &&
@@ -59,7 +70,9 @@ function isCheckpoint(value: unknown): value is ContactCheckpoint {
         Number.isFinite(value.completedAt) &&
         value.completedAt > 0 &&
         value.pages > 0 &&
-        value.nextCursor === null))
+        value.nextCursor === null &&
+        value.phase === 'verify' &&
+        !value.verificationIncomplete))
   );
 }
 
@@ -86,6 +99,8 @@ export function loadContactCheckpoint(
     storageGeneration,
     nextCursor: null,
     pages: 0,
+    phase: 'hydrate',
+    verificationIncomplete: false,
     completedAt: null,
   };
 }
@@ -147,6 +162,7 @@ export const runContactBackfill = Effect.fn('runContactBackfill')(function* (
     refresh?: boolean;
     pageDelayMs?: number;
     fetchPage?: typeof hydrateGraphqlContacts;
+    reconcilePage?: typeof reconcileContactPage;
     onProgress?: (progress: ContactSyncProgress) => void;
   } = {}
 ) {
@@ -161,6 +177,15 @@ export const runContactBackfill = Effect.fn('runContactBackfill')(function* (
   const generation = yield* Effect.tryPromise(() =>
     host.currentStorageGeneration()
   );
+  const scope = { storageGeneration: generation, identity: userId };
+  const supported = yield* Effect.tryPromise((signal) =>
+    captureContactWriteScope(host, scope, signal)
+  );
+  if (!supported) {
+    const progress = { kind: 'unsupported' } satisfies ContactSyncProgress;
+    options.onProgress?.(progress);
+    return progress;
+  }
   let checkpoint = loadContactCheckpoint(userId, generation);
   if (checkpoint.completedAt !== null) {
     const refreshAge = options.refresh ? REFRESH_INTERVAL_MS : NAME_REFRESH_MS;
@@ -176,17 +201,25 @@ export const runContactBackfill = Effect.fn('runContactBackfill')(function* (
       ...checkpoint,
       nextCursor: null,
       pages: 0,
+      phase: 'hydrate',
+      verificationIncomplete: false,
       completedAt: null,
     };
   }
+  if (checkpoint.verificationIncomplete && checkpoint.nextCursor === null)
+    checkpoint = {
+      ...checkpoint,
+      phase: 'hydrate',
+      verificationIncomplete: false,
+      pages: 0,
+    };
   saveCheckpoint(checkpoint);
   options.onProgress?.({
     kind: checkpoint.pages ? 'partial' : 'cold',
     checkpoint,
   });
   const fetchPage = options.fetchPage ?? hydrateGraphqlContacts;
-  while (true) {
-    const scope = { storageGeneration: generation, identity: userId };
+  while (checkpoint.phase === 'hydrate') {
     const page = yield* Effect.tryPromise((signal) =>
       fetchPage(host, scope, checkpoint.nextCursor, signal)
     );
@@ -203,15 +236,46 @@ export const runContactBackfill = Effect.fn('runContactBackfill')(function* (
       ...checkpoint,
       nextCursor: cursor,
       pages: checkpoint.pages + 1,
-      completedAt: cursor === null ? Date.now() : null,
+      phase: cursor === null ? 'verify' : 'hydrate',
+      completedAt: null,
     };
     saveCheckpoint(checkpoint);
     const progress = {
-      kind: cursor === null ? 'complete' : 'partial',
+      kind: 'partial',
       checkpoint,
     } satisfies ContactSyncProgress;
     options.onProgress?.(progress);
-    if (cursor === null) return progress;
+    const delay = options.pageDelayMs ?? PAGE_DELAY_MS;
+    if (delay > 0 && cursor !== null) yield* Effect.sleep(delay);
+  }
+  const reconcile = options.reconcilePage ?? reconcileContactPage;
+  while (true) {
+    const page = yield* Effect.tryPromise((signal) =>
+      reconcile(host, scope, checkpoint.nextCursor, signal)
+    );
+    if (
+      (yield* Effect.tryPromise(() => host.currentStorageGeneration())) !==
+      generation
+    )
+      return yield* Effect.fail(new Error('cache hydration scope changed'));
+    if (page.nextCursor !== null && page.nextCursor === checkpoint.nextCursor)
+      return yield* Effect.fail(
+        new Error('Contact verification did not advance')
+      );
+    const incomplete = checkpoint.verificationIncomplete || page.incomplete;
+    checkpoint = {
+      ...checkpoint,
+      nextCursor: page.nextCursor,
+      verificationIncomplete: incomplete,
+      completedAt: page.nextCursor === null && !incomplete ? Date.now() : null,
+    };
+    saveCheckpoint(checkpoint);
+    const progress = {
+      kind: checkpoint.completedAt === null ? 'partial' : 'complete',
+      checkpoint,
+    } satisfies ContactSyncProgress;
+    options.onProgress?.(progress);
+    if (page.nextCursor === null) return progress;
     const delay = options.pageDelayMs ?? PAGE_DELAY_MS;
     if (delay > 0) yield* Effect.sleep(delay);
   }
@@ -220,17 +284,21 @@ export const runContactBackfill = Effect.fn('runContactBackfill')(function* (
 /** Shares Soup's authenticated tab leadership and host-generation lifecycle.
  * Events do not interrupt scans. One maintenance tick every 15 minutes coalesces
  * invalidations; hourly full passes refresh names even without graph events.
- * Missing contacts are never deleted based on these non-snapshot scans. */
+ * Hydration omissions never delete. A second bounded pass verifies exact cached
+ * IDs, without retaining a previous/seen directory set. */
 export function useContactBackfill(
   userId: Accessor<string | undefined>,
   host: Accessor<BackfillHost | undefined>,
   generation: Accessor<number>
 ): void {
+  const account = useQueryAccount();
   createEffect(() => {
+    const owner = account();
     const id = userId();
     const cache = host();
     generation();
-    if (!id || !cache || cache.disabled) return;
+    if (!owner || owner.userId !== id || !id || !cache || cache.disabled)
+      return;
     let processedInvalidation = -1;
     const cycle = Effect.tryPromise((signal) =>
       Telemetry.span('contacts.backfill', async (span) => {
@@ -242,18 +310,26 @@ export function useContactBackfill(
               refresh: requested !== processedInvalidation,
               onProgress: (progress) => {
                 span.setAttr('contacts.sync_state', progress.kind);
-                if (progress.kind !== 'unsupported')
+                if (progress.kind !== 'unsupported') {
                   span.setAttr('contacts.pages', progress.checkpoint.pages);
+                  span.setAttr('contacts.phase', progress.checkpoint.phase);
+                }
               },
             }).pipe(
               Effect.retry({
                 times: 3,
                 schedule: Schedule.exponential('1 second'),
-                while: (error) =>
-                  !isStaleHydrationScopeError(error) &&
-                  !(
-                    'error' in error && isStaleHydrationScopeError(error.error)
-                  ),
+                while: (error) => {
+                  const cause = 'error' in error ? error.error : error;
+                  return (
+                    !isStaleHydrationScopeError(cause) &&
+                    !(cause instanceof ContactDirectoryScopeError) &&
+                    !(
+                      cause instanceof Error &&
+                      cause.message === CONTACT_SYNC_UNSUPPORTED
+                    )
+                  );
+                },
               })
             ),
             { signal }

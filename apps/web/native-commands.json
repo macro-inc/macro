@@ -17,6 +17,8 @@
     "graphql_cache_claim_next_mutation",
     "graphql_cache_clear",
     "graphql_cache_commit_optimistic_write",
+    "graphql_cache_contact_reconcile",
+    "graphql_cache_contact_snapshot",
     "graphql_cache_current_revision",
     "graphql_cache_current_storage_generation",
     "graphql_cache_defer_optimistic_write",

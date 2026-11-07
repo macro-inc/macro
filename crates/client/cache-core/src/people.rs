@@ -1,6 +1,7 @@
 //! Bounded, context-aware person ranking. Local facts never establish directory membership.
 
 pub mod sql;
+pub mod sync;
 
 use crate::{engine::HydrationScope, value::EntityKey};
 use macro_user_id::user_id::MacroUserIdStr;

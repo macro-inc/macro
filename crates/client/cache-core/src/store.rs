@@ -107,6 +107,15 @@ pub trait Storage: MaybeSend {
         visit: impl FnMut(&EntityKey<'_>, &Record) + MaybeSend,
     ) -> impl Future<Output = Result<(), Self::Error>> + MaybeSend;
 
+    /// Visit one raw contact-record page in key order. Return its last visited
+    /// position only when more records exist. Never accumulate the corpus.
+    fn scan_contact_records(
+        &self,
+        after: Option<&str>,
+        limit: usize,
+        visit: impl FnMut(&EntityKey<'_>, &Record) + MaybeSend,
+    ) -> impl Future<Output = Result<Option<String>, Self::Error>> + MaybeSend;
+
     /// Execute filtering, aggregation and limits in local storage. Unsupported
     /// implementations must refuse; collecting the directory is not a fallback.
     fn read_people_sql(
@@ -430,6 +439,41 @@ impl InMemoryStorage {
 
 impl Storage for InMemoryStorage {
     type Error = Infallible;
+
+    async fn scan_contact_records(
+        &self,
+        after: Option<&str>,
+        limit: usize,
+        mut visit: impl FnMut(&EntityKey<'_>, &Record) + MaybeSend,
+    ) -> Result<Option<String>, Self::Error> {
+        let mut selected = BTreeMap::new();
+        for (key, record) in &self.records {
+            if key.typename() != Some("GraphqlContact") {
+                continue;
+            }
+            let Some(id) = key.id() else {
+                continue;
+            };
+            if after.is_some_and(|after| id <= after) {
+                continue;
+            }
+            selected.insert(id, (key, record));
+            if selected.len() > limit + 1 {
+                selected.pop_last();
+            }
+        }
+        let more = selected.len() > limit;
+        if more {
+            selected.pop_last();
+        }
+        let next = more
+            .then(|| selected.last_key_value().map(|(id, _)| (*id).to_owned()))
+            .flatten();
+        for (_, (key, record)) in selected {
+            visit(key, record);
+        }
+        Ok(next)
+    }
 
     async fn read_people_sql(
         &self,

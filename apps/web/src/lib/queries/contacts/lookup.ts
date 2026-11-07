@@ -5,7 +5,11 @@ import {
   selectRecords,
 } from '@graphql-cache/exchange/record-selection';
 import type { CacheHost } from '@graphql-cache/host/types';
-import { isStaleHydrationScopeError } from '@graphql-cache/protocol';
+import { captureContactWriteScope } from '@graphql-cache/people/sync';
+import {
+  type HydrationScope,
+  isStaleHydrationScopeError,
+} from '@graphql-cache/protocol';
 import { Telemetry } from '@macro-inc/observability';
 import {
   ContactDirectoryByUserIdsDocument,
@@ -35,7 +39,7 @@ export type ContactLookupHost = Pick<
   | 'readQuery'
   | 'readRecordsByKeys'
 > &
-  Partial<Pick<CacheHost, 'search' | 'hydrateQuery'>>;
+  Partial<Pick<CacheHost, 'search' | 'hydrateQuery' | 'people'>>;
 export type ContactResolution = {
   users: IUser[];
   /** Canonical requested IDs not resolved. Offline absence is not non-membership. */
@@ -133,6 +137,20 @@ export async function resolveContactDirectory(
       span.setAttr('contacts.resolved_count', cached.users.length);
       return resolution(ids, cached.users, 'cache', true);
     }
+    let guarded: HydrationScope | undefined;
+    if (cached && host?.people) {
+      try {
+        guarded = await captureContactWriteScope(
+          host,
+          { identity: viewer, storageGeneration: cached.generation },
+          signal
+        );
+      } catch (error) {
+        signal.throwIfAborted();
+        if (isStaleHydrationScopeError(error))
+          throw new ContactDirectoryScopeError();
+      }
+    }
     try {
       const data = await fetchIds(ids, signal);
       signal.throwIfAborted();
@@ -149,7 +167,7 @@ export async function resolveContactDirectory(
       const users = contacts.map(contactToUser);
       span.setAttr('contacts.resolved_count', users.length);
       span.setAttr('contacts.source', 'server');
-      if (cached && host?.search && host.hydrateQuery) {
+      if (guarded && host?.search && host.hydrateQuery) {
         try {
           const capability = await host.search({
             profile: 'quick-access-v1',
@@ -164,10 +182,7 @@ export async function resolveContactDirectory(
               variables: { userIds: ids },
               data: { user: { id: viewer, contactsByUserIds: contacts } },
               identity: viewer,
-              hydrationScope: {
-                identity: viewer,
-                storageGeneration: cached.generation,
-              },
+              hydrationScope: guarded,
             });
           }
         } catch (error) {

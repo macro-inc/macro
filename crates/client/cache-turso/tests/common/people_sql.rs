@@ -1,6 +1,7 @@
 use cache_core::{
-    engine::{Engine, HydrationScope},
+    engine::{Engine, HydrationScope, NetworkWrite},
     people::sql::{Outcome, PeopleSqlInput, PeopleSqlRequest, PeopleSqlResult},
+    people::sync::ContactSnapshotRequest,
     store::Storage,
 };
 use serde_json::{Value, json};
@@ -21,25 +22,39 @@ pub fn key(viewer: &str, user: &str) -> String {
 
 /// Actual normalized hydration, with no directory-sized fixture even at 100k.
 pub async fn seed<S: Storage>(engine: &mut Engine<S>, count: usize) -> HydrationScope {
+    let mut scope = HydrationScope {
+        identity: VIEWER.into(),
+        storage_generation: engine.current_storage_generation().await.unwrap(),
+        contact_fence: None,
+    };
     for start in (0..count + 1).step_by(500) {
+        scope.contact_fence = Some(
+            engine
+                .contact_snapshot(&ContactSnapshotRequest {
+                    scope: scope.clone(),
+                    scan: None,
+                })
+                .await
+                .unwrap()
+                .fence,
+        );
         let nodes: Vec<_> = (start..(start + 500).min(count + 1)).map(|index| {
             let user = if index == 0 { VIEWER.into() } else { format!("macro|p{:06}@example.com", index - 1) };
             json!({"id": key(VIEWER, &user), "userId": user, "email": user.strip_prefix("macro|").unwrap(), "name": if index == count { "LATE_ÉCHO%".into() } else { format!("Group{}", index % 7) }})
         }).collect();
         engine
-            .hydrate_query(
-                DOCUMENT,
-                Some("ContactDirectoryBackfill"),
-                json!({"limit":500,"after":start.to_string()})
-                    .as_object()
-                    .unwrap(),
-                &json!({"user":{"id":VIEWER,"contacts":{"nodes":nodes,"nextCursor":null}}}),
-                Some(VIEWER),
-            )
+            .hydrate_query_in_scope(NetworkWrite {
+                query: DOCUMENT,
+                operation_name: Some("ContactDirectoryBackfill"),
+                variables: json!({"limit":500,"after":start.to_string()}).as_object().unwrap(),
+                data: &json!({"user":{"id":VIEWER,"contacts":{"nodes":nodes,"nextCursor":null}}}),
+                identity: Some(VIEWER),
+            }, &scope, vec![])
             .await
             .unwrap();
     }
     HydrationScope {
+        contact_fence: None,
         identity: VIEWER.into(),
         storage_generation: engine.current_storage_generation().await.unwrap(),
     }

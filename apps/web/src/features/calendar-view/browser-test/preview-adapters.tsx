@@ -188,9 +188,6 @@ const names: Record<string, string> = {
     'Rowan Field',
   'you@example.com': 'You',
 };
-export function useContacts(): never {
-  throw new Error('Unexpected full-directory read');
-}
 export const useOpenEventEmail = () => () =>
   announce('Email guests · Preview only');
 export const copyGuestEmails = () =>

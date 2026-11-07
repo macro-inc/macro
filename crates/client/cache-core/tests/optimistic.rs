@@ -96,6 +96,19 @@ impl Storage for ClaimFailingStorage {
         Ok(self.inner.read_people_sql(viewer, plan).await.unwrap())
     }
 
+    async fn scan_contact_records(
+        &self,
+        after: Option<&str>,
+        limit: usize,
+        visit: impl FnMut(&EntityKey<'_>, &Record) + maybe_send::MaybeSend,
+    ) -> Result<Option<String>, Self::Error> {
+        Ok(self
+            .inner
+            .scan_contact_records(after, limit, visit)
+            .await
+            .unwrap())
+    }
+
     async fn visit_contact_records(
         &self,
         query: &cache_core::search::SearchQuery,

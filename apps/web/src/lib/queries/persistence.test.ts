@@ -435,6 +435,23 @@ describe('setupQueryPersistence', () => {
     queryClient.clear();
   });
 
+  it('does not persist shared or editable name values, including legacy unscoped keys', () => {
+    const scopes = createQueryPersistenceScopes('test');
+    const keys = [
+      authKeys.userName(
+        'macro|viewer@example.com',
+        1,
+        2,
+        'macro|person@example.com'
+      ).queryKey,
+      authKeys.userNameSelf('macro|viewer@example.com', 1).queryKey,
+      ['auth', 'userName', 'macro|person@example.com'],
+      ['auth', 'userNameSelf'],
+    ];
+    for (const key of keys)
+      expect(scopes.some((scope) => scope.shouldPersist(key))).toBe(false);
+  });
+
   it('configures only native user-info persistence without an expiry', () => {
     const scopes = createQueryPersistenceScopes('test');
     const userInfoScope = scopes.find((scope) =>

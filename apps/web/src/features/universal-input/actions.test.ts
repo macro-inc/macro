@@ -125,11 +125,6 @@ vi.mock('@core/context/quickAccess', () => ({
     }),
   }),
 }));
-vi.mock('@core/signal/useCombinedRecipient', () => ({
-  useCombinedRecipients: () => {
-    throw new Error('Unexpected full-directory pool');
-  },
-}));
 vi.mock('@core/context/channels', () => ({
   useChannelsContext: () => ({
     channels: () => [

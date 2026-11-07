@@ -122,6 +122,12 @@ pub enum EngineError<S: std::error::Error + 'static> {
     /// The background response belongs to an obsolete account or generation.
     #[error("cache hydration scope changed")]
     StaleHydrationScope,
+    /// Contact observations predate another accepted contact write or engine.
+    #[error("contact write fence changed")]
+    StaleContactFence,
+    /// Membership may only be written after a captured, scoped network read.
+    #[error("contact writes require a scoped read fence")]
+    UnfencedContactWrite,
 }
 
 /// Result of a cache read.
@@ -376,6 +382,7 @@ pub struct Engine<S: Storage> {
     query_watches: watch_query::QueryWatches,
     storage: S,
     revision: CacheRevision,
+    contact_fence: Uuid,
     hot: LruCache<EntityKey<'static>, Record>,
     docs: LruCache<String, Document>,
     deps: DepIndex,
@@ -407,6 +414,7 @@ impl<S: Storage> Engine<S> {
             query_watches: watch_query::QueryWatches::default(),
             storage,
             revision: CacheRevision::ZERO,
+            contact_fence: Uuid::now_v7(),
             hot: LruCache::new(NonZeroUsize::new(hot_capacity).expect("capacity > 0")),
             docs: LruCache::new(NonZeroUsize::new(DOCUMENT_CACHE_CAPACITY).unwrap()),
             deps: DepIndex::new(),
@@ -645,6 +653,12 @@ impl<S: Storage> Engine<S> {
                 &identities,
             );
             identity::apply_record_lifecycle(&mut updates, &source.identity_bindings, &identities);
+            if updates
+                .keys()
+                .any(|key| key.typename() == Some("GraphqlContact"))
+            {
+                return Err(EngineError::UnfencedContactWrite);
+            }
             let patches =
                 deduplicate_patches(&self.schema, &source.link_patches).map_err(|error| {
                     EngineError::InvalidQueuedMutation {
@@ -669,6 +683,12 @@ impl<S: Storage> Engine<S> {
                 &patches,
                 strict_tail != Some(queued.id),
             )?;
+            if updates
+                .keys()
+                .any(|key| key.typename() == Some("GraphqlContact"))
+            {
+                return Err(EngineError::UnfencedContactWrite);
+            }
             let revalidations = deduplicate_revalidations(
                 source.revalidations.iter().cloned().chain(
                     source
@@ -1357,7 +1377,7 @@ impl<S: Storage> Engine<S> {
         input: NetworkWrite<'_>,
         projections: Vec<ProjectionMutation>,
     ) -> Result<WriteResult, EngineError<S::Error>> {
-        self.write_network(origin_op, registration, input, projections, true)
+        self.write_network(origin_op, registration, input, projections, true, false)
             .await
             .map(|(result, _)| result)
     }
@@ -1369,6 +1389,7 @@ impl<S: Storage> Engine<S> {
         input: NetworkWrite<'_>,
         projections: Vec<ProjectionMutation>,
         retain_pages: bool,
+        allow_contacts: bool,
     ) -> Result<(WriteResult, BTreeSet<String>), EngineError<S::Error>> {
         self.ensure_revision_can_advance()?;
         let NetworkWrite {
@@ -1397,6 +1418,13 @@ impl<S: Storage> Engine<S> {
         let normalized =
             normalize_with_dependencies(&self.schema, op, variables, data, &entity_resolvers)?;
         let mut updates = normalized.updates;
+        if !allow_contacts
+            && updates
+                .keys()
+                .any(|key| key.typename() == Some("GraphqlContact"))
+        {
+            return Err(EngineError::UnfencedContactWrite);
+        }
         if !retain_pages {
             crate::page_retention::omit_hydration_pages(&mut updates);
         }
@@ -1601,6 +1629,36 @@ impl<S: Storage> Engine<S> {
         identity: Option<&str>,
         projections: Vec<ProjectionMutation>,
     ) -> Result<HydrationWriteResult, EngineError<S::Error>> {
+        self.hydrate_query_fenced(
+            NetworkWrite {
+                query,
+                operation_name,
+                variables,
+                data,
+                identity,
+            },
+            projections,
+            None,
+        )
+        .await
+    }
+
+    async fn hydrate_query_fenced(
+        &mut self,
+        input: NetworkWrite<'_>,
+        projections: Vec<ProjectionMutation>,
+        fence: Option<Uuid>,
+    ) -> Result<HydrationWriteResult, EngineError<S::Error>> {
+        if fence.is_some_and(|fence| fence != self.contact_fence) {
+            return Err(EngineError::StaleContactFence);
+        }
+        let NetworkWrite {
+            query,
+            operation_name,
+            variables,
+            data,
+            identity,
+        } = input;
         let projected = {
             let doc = Self::document(&mut self.docs, query)?;
             let op = doc.operation(operation_name)?;
@@ -1627,8 +1685,12 @@ impl<S: Storage> Engine<S> {
                 },
                 projections,
                 false,
+                fence.is_some(),
             )
             .await?;
+        if fence.is_some() {
+            self.contact_fence = Uuid::now_v7();
+        }
         Ok(HydrationWriteResult {
             write_result,
             search_changed_buckets,
@@ -2558,6 +2620,12 @@ impl<S: Storage> Engine<S> {
                 )));
             }
         };
+        if updates
+            .keys()
+            .any(|key| key.typename() == Some("GraphqlContact"))
+        {
+            return Err(EngineError::UnfencedContactWrite);
+        }
         // Recipes and revalidation variables may contain unresolved local IDs.
         // On a binding error, commit only authoritative data and valid aliases.
         let (mut recipes, mut revalidations) = if identity_errors.is_empty() {
@@ -2612,6 +2680,12 @@ impl<S: Storage> Engine<S> {
             apply_link_patches(&self.schema, &mut effective, &mut updates, &recipes, true)?;
         revalidations
             .retain(|query| !query.only_on_link_failure || recipes.is_empty() || !links_applied);
+        if updates
+            .keys()
+            .any(|key| key.typename() == Some("GraphqlContact"))
+        {
+            return Err(EngineError::UnfencedContactWrite);
+        }
         let (durable_changed, entries) = stage_updates(&bases, updates);
         let reconciliation = self
             .stage_shadow_reconciliation(transaction, &projections, &identities)
@@ -2979,6 +3053,9 @@ impl<S: Storage> Engine<S> {
     ) -> BTreeSet<OpId> {
         let mut affected = BTreeSet::new();
         for key in keys {
+            if key.typename() == Some("GraphqlContact") {
+                self.contact_fence = Uuid::now_v7();
+            }
             self.hot.pop(key);
             affected.extend(self.deps.ops_for_keys([key]));
         }
@@ -3002,6 +3079,12 @@ impl<S: Storage> Engine<S> {
             .delete_batch(keys)
             .await
             .map_err(EngineError::Storage)?;
+        if keys
+            .iter()
+            .any(|key| key.typename() == Some("GraphqlContact"))
+        {
+            self.contact_fence = Uuid::now_v7();
+        }
         for key in keys {
             self.hot.pop(key);
         }
@@ -3014,6 +3097,7 @@ impl<S: Storage> Engine<S> {
     pub async fn clear(&mut self) -> Result<CacheRevision, EngineError<S::Error>> {
         self.ensure_revision_can_advance()?;
         self.storage.clear().await.map_err(EngineError::Storage)?;
+        self.contact_fence = Uuid::now_v7();
         self.hot.clear();
         self.live_queries = live_query::LiveQueries::default();
         self.window_observations = window_observation::WindowObservations::default();
@@ -3073,6 +3157,9 @@ impl<S: PredicateIndexStorage> Engine<S> {
         self.ensure_revision_can_advance()?;
         let mut updates = RecordUpdates::new();
         for (key, record) in entries {
+            if key.typename() == Some("GraphqlContact") {
+                return Err(EngineError::UnfencedContactWrite);
+            }
             updates.entry(key).or_default().merge(record);
         }
         let PersistedChanges {
@@ -3159,6 +3246,12 @@ impl<S: PredicateIndexStorage> Engine<S> {
             .delete_batch_with_projection_changes(keys, projections)
             .await
             .map_err(EngineError::Storage)?;
+        if keys
+            .iter()
+            .any(|key| key.typename() == Some("GraphqlContact"))
+        {
+            self.contact_fence = Uuid::now_v7();
+        }
         for key in keys {
             self.hot.pop(key);
         }

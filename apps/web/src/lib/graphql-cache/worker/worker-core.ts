@@ -536,9 +536,14 @@ export class CacheWorkerCore {
         { kind: 'people-search' },
         { kind: 'people-references' },
         { kind: 'people-sql' },
+        { kind: 'contact-snapshot' },
+        { kind: 'contact-reconcile' },
         (request) =>
-          executePeopleRequest(this.requireEngine(), request, (message) =>
-            this.push(message)
+          executePeopleRequest(
+            this.requireEngine(),
+            request,
+            (message) => this.push(message),
+            (result) => this.fanOut(result, true)
           )
       )
       .with({ kind: 'search' }, async (request) => {

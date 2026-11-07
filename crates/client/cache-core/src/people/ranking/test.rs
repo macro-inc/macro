@@ -3,6 +3,7 @@ use super::*;
 fn request(query: &str) -> PeopleSearch {
     PeopleSearch {
         scope: crate::engine::HydrationScope {
+            contact_fence: None,
             storage_generation: Uuid::from_u128(1),
             identity: "macro|viewer@example.com".into(),
         },
@@ -28,7 +29,34 @@ fn push(ranker: &mut PeopleRanker<'_>, email: &str, name: &str) {
         ]
         .into(),
     };
-    ranker.push(&EntityKey::entity("GraphqlContact", &[email]), &record);
+    let user = MacroUserIdStr::try_from_email(email).unwrap();
+    ranker.push(
+        &contact_key(&ranker.request.scope.identity, user.as_ref()),
+        &record,
+    );
+}
+
+#[test]
+fn foreign_viewer_keys_never_rank_as_personal_membership() {
+    let request = request("");
+    let mut ranker = PeopleRanker::new(&request, Uuid::from_u128(2)).unwrap();
+    let user = "macro|person@example.com";
+    let record = Record {
+        fields: [
+            ("userId".into(), CacheValue::String(user.into())),
+            (
+                "email".into(),
+                CacheValue::String("person@example.com".into()),
+            ),
+            (
+                "name".into(),
+                CacheValue::String("Other private name".into()),
+            ),
+        ]
+        .into(),
+    };
+    ranker.push(&contact_key("macro|other@example.com", user), &record);
+    assert!(ranker.best.is_empty());
 }
 
 #[test]

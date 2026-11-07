@@ -97,6 +97,15 @@ impl Storage for OwnerOnlyStorage {
         self.0.read_people_sql(viewer, plan).await
     }
 
+    async fn scan_contact_records(
+        &self,
+        after: Option<&str>,
+        limit: usize,
+        visit: impl FnMut(&EntityKey<'_>, &Record) + maybe_send::MaybeSend,
+    ) -> Result<Option<String>, Self::Error> {
+        self.0.scan_contact_records(after, limit, visit).await
+    }
+
     async fn visit_contact_records(
         &self,
         query: &cache_core::search::SearchQuery,

@@ -345,11 +345,6 @@ vi.mock('../FormatButtons', () => ({
   FormatButtons: () => <div data-testid="format-buttons" />,
 }));
 
-const peopleMocks = vi.hoisted(() => ({
-  readContacts: vi.fn(() => {
-    throw new Error('Unexpected full-directory read');
-  }),
-}));
 const CONTACT = {
   id: 'macro|ann@macro.test',
   name: 'Ann',
@@ -357,9 +352,6 @@ const CONTACT = {
 };
 const CHANNEL_MEMBER = { user_id: 'macro|bo@macro.test' };
 
-vi.mock('@queries/contacts/contacts', () => ({
-  useContacts: peopleMocks.readContacts,
-}));
 vi.mock('@queries/channel/channel-participants', () => ({
   useChannelParticipantsQuery: (channelId: () => string) => ({
     isLoading: false,
@@ -914,14 +906,12 @@ describe('mention people', () => {
   beforeEach(() => {
     editorMocks.mentionUsers = undefined;
     editorMocks.mentionScope.mockReset();
-    peopleMocks.readContacts.mockClear();
   });
 
   it('delegates a document composer to the bounded workspace window', () => {
     render(() => <ChannelInput input={baseInput} parent={documentParent} />);
     expect(mentionIds()).toContain(CONTACT.id);
     expect(editorMocks.mentionScope()).toBeUndefined();
-    expect(peopleMocks.readContacts).not.toHaveBeenCalled();
   });
 
   it('offers a channel composer its participants, not the workspace contacts', () => {
@@ -932,7 +922,6 @@ describe('mention people', () => {
     expect(editorMocks.mentionScope()?.map((user) => user.id)).toContain(
       CHANNEL_MEMBER.user_id
     );
-    expect(peopleMocks.readContacts).not.toHaveBeenCalled();
   });
 
   it('keeps an explicitly supplied participants list', () => {

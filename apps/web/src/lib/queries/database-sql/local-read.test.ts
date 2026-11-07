@@ -3,6 +3,7 @@ import { createNoopCacheHost } from '@graphql-cache/host/noop-host';
 import type { PeopleSqlResult } from '@graphql-cache/people/generated';
 import type { PeopleCache } from '@graphql-cache/people/host';
 import { createPeopleCache } from '@graphql-cache/people/host';
+import { unsupportedContactSync } from '@graphql-cache/people/test-support';
 import { beforeEach, expect, it, vi } from 'vitest';
 import { createLocalSqlReader, type LocalSqlInput } from './local-read';
 
@@ -37,6 +38,7 @@ function fixture() {
     })),
     currentStorageGeneration: vi.fn(async () => GENERATION),
     people: createPeopleCache({
+      ...unsupportedContactSync,
       readSql: read,
       context: async () => ({ kind: 'unsupported' }),
       update: async () => '0',

@@ -1,5 +1,6 @@
 import { createNoopCacheHost } from '@graphql-cache/host/noop-host';
 import type { PeopleCache } from '@graphql-cache/people/host';
+import { unsupportedContactSync } from '@graphql-cache/people/test-support';
 import type { fetchContactReferencePage } from '@service-storage/graphql-contacts';
 import { CombinedError } from '@urql/core';
 import { beforeEach, expect, it, vi } from 'vitest';
@@ -48,6 +49,7 @@ function host() {
       data: { user: { id: VIEWER } },
     })),
     people: {
+      ...unsupportedContactSync,
       readSql: vi
         .fn<PeopleCache['readSql']>()
         .mockResolvedValue({ kind: 'unsupported' }),

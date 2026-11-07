@@ -1,3 +1,4 @@
+import { unsupportedContactSync } from '@graphql-cache/people/test-support';
 import { createSignal } from 'solid-js';
 import { createNoopCacheHost } from '../../../../lib/graphql-cache/host/noop-host';
 import type { PeopleContextState } from '../../../../lib/graphql-cache/people/generated';
@@ -40,6 +41,7 @@ export function AccountSources() {
     currentStorageGeneration: async () =>
       '00000000-0000-4000-8000-000000000001',
     people: createPeopleCache({
+      ...unsupportedContactSync,
       readSql: async () => ({ kind: 'unsupported' }),
       resolveReferences: async () => ({ kind: 'unsupported' }),
       context: async (scope) =>

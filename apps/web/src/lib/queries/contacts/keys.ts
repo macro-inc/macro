@@ -4,7 +4,6 @@ import type { ContactLookup } from './lookup';
 import type { ContactReferenceRequest } from './references';
 
 export const contactsKeys = createQueryKeys('contacts', {
-  all: null,
   references: (
     owner: string,
     userId: string,

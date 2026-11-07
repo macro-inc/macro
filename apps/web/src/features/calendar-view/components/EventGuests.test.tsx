@@ -32,12 +32,6 @@ vi.mock('@core/component/Toast/Toast', () => ({
 }));
 vi.mock('@core/mobile/isMobile', () => ({ isMobile: () => false }));
 vi.mock('./use-open-event-email', () => ({ useOpenEventEmail: () => vi.fn() }));
-vi.mock('@core/user', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@core/user')>()),
-  useContacts: () => {
-    throw new Error('Unexpected full-directory read');
-  },
-}));
 vi.mock('@queries/calendar/mutations', () => ({
   useInviteCalendarEventGuestsMutation: () => ({ mutateAsync: mocks.invite }),
   isGuestInviteRefused: (error: unknown) =>

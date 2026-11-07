@@ -6,6 +6,7 @@ import {
   isPeopleSearch,
   type PeopleSearch,
 } from './protocol';
+import { unsupportedContactSync } from './test-support';
 
 const SCOPE = {
   identity: 'macro|viewer@example.com',
@@ -93,6 +94,7 @@ describe('person transport admission', () => {
 
   it('validates before transport and rejects malformed or oversized replies without leaking them', async () => {
     const transport = {
+      ...unsupportedContactSync,
       readSql: vi.fn().mockResolvedValue({ kind: 'unsupported' }),
       resolveReferences: vi.fn(),
       context: vi

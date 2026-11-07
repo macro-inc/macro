@@ -919,6 +919,55 @@ impl TursoStorage {
 impl Storage for TursoStorage {
     type Error = TursoStorageError;
 
+    async fn scan_contact_records(
+        &self,
+        after: Option<&str>,
+        limit: usize,
+        mut visit: impl FnMut(&EntityKey<'_>, &Record) + maybe_send::MaybeSend,
+    ) -> Result<Option<String>, Self::Error> {
+        self.require_healthy()?;
+        if limit == 0 || limit > cache_core::people::MAX_PEOPLE_BATCH {
+            return Err(TursoStorageError::InvalidInput);
+        }
+        let mut last = None;
+        let mut count = 0;
+        let mut more = false;
+        let mut key_buffer = String::new();
+        let sql = if after.is_some() {
+            "SELECT id, value FROM records WHERE __typename = 'GraphqlContact' AND id > ? ORDER BY id LIMIT ?"
+        } else {
+            "SELECT id, value FROM records WHERE __typename = 'GraphqlContact' AND id >= ? ORDER BY id LIMIT ?"
+        };
+        let result = driver::query_each(
+            &self.connection(),
+            sql,
+            vec![
+                text(after.unwrap_or("")),
+                Value::from_i64(i64::try_from(limit + 1).map_err(|_| invariant())?),
+            ],
+            |row| {
+                if count == limit {
+                    more = true;
+                    return Ok(());
+                }
+                let mut values = row.get_values();
+                let (Some(Value::Text(id)), Some(Value::Blob(value)), None) =
+                    (values.next(), values.next(), values.next())
+                else {
+                    return Err(invariant());
+                };
+                let key = RecordKey::borrow_entity("GraphqlContact", id.as_str(), &mut key_buffer)?;
+                let record = decode_record(value).map_err(|_| invariant())?;
+                visit(&key, &record);
+                last = Some(id.as_str().to_owned());
+                count += 1;
+                Ok(())
+            },
+        );
+        self.latch_result(result)?;
+        Ok(if more { last } else { None })
+    }
+
     async fn read_people_sql(
         &self,
         viewer: &str,

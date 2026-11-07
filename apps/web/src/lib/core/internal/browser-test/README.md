@@ -45,12 +45,18 @@ offline/retry and late replies after filter edits, navigation or replacement log
 Mobile retains its existing manual-only UI. Saved-view action chrome and task loading
 are stand-ins; this fixture does not claim saved-view dialog or live model coverage.
 
-`/?sql-people` uses the real SQL wasm compiler, live query controller, read-only
-HTTP client and generated response validator. Playwright supplies the bounded endpoint
-responses; tests cover routing without local people reads, write refusal before RPC,
-missing endpoint failure, foreign-viewer rejection and session replacement. The local
-fixture account is reactive. This is client composition coverage, not a live DSS or
-PostgreSQL test; the native SQL suite separately exercises the real 100k database path.
+`/?sql-people` uses the real SQL wasm compiler, live query controller, worker/WASM
+cache host and OPFS with 1,001 synthetic authorized contacts. Fresh queries execute
+locally offline; unsupported capability and replacement login cannot become a remote
+SQL fallback. The fixture account is reactive; there is no read-only HTTP endpoint.
+
+`/?contact-removal` runs the existing two-phase backfill and exact-verification
+adapter over the real worker/WASM/OPFS cache. Only authority data is synthetic,
+with bounded pages from 601 contacts. Desktop/phone tests hold verification after
+hydration omissions (no deletion), cancel/resume verification, remove proven-absent
+members, reject delayed old hydration, and re-add through fresh observations.
+These fixtures are composition coverage, not live backend authorization, connected
+tracing, whole-app 100k memory acceptance or physical-device tests.
 
 `/?linear-import` mounts the real importer, CSV conversion, batched reference reader
 and single-user property picker. It reuses the virtual 100k property window fixture;
@@ -116,6 +122,12 @@ host and Turso/WASM/OPFS, with 1,001 synthetically hydrated contacts. Desktop/ph
 tests run fresh queries offline, reject writes/missing local capability, and fence
 replacement sessions while a native reply is held. Neither SQL server endpoint is
 used. Storage tests separately exercise 100k contacts plus self and persisted reopen.
+
+`/?name-cache` uses the production display-name getters, participant adapter,
+QueryClient cache and auth client against synthetic name responses. Desktop/phone
+cases keep active labels during 100k unowned reads, enforce idle/request budgets,
+and reject delayed account-return results, old overrides and authorization failures.
+It measures retained entry/queue bounds, not a full-app heap or native CallKit UI.
 
 This is synthetic UI/storage coverage, not whole-app memory acceptance, physical
 mobile hardware or a live-backend trace. Further Turso/OPFS coverage lives in

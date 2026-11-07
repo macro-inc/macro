@@ -1,4 +1,6 @@
 import type { CacheHost } from '@graphql-cache/host/types';
+import { captureContactWriteScope } from '@graphql-cache/people/sync';
+import { CONTACT_SYNC_UNSUPPORTED } from '@graphql-cache/people/sync-protocol';
 import type { HydrationScope } from '@graphql-cache/protocol';
 import { Telemetry } from '@macro-inc/observability';
 import { print } from 'graphql';
@@ -92,7 +94,7 @@ export async function fetchContactReferencePage(
  * checks account/generation again under its lock; returning a cursor proves the
  * page was persisted, never merely downloaded. No urql history retains nodes. */
 export async function hydrateGraphqlContacts(
-  host: Pick<CacheHost, 'hydrateQuery' | 'disabled'>,
+  host: Pick<CacheHost, 'hydrateQuery' | 'disabled' | 'people'>,
   scope: HydrationScope,
   after: string | null,
   signal: AbortSignal
@@ -101,6 +103,8 @@ export async function hydrateGraphqlContacts(
     signal.throwIfAborted();
     if (host.disabled)
       throw new Error('Contact hydration requires an active cache');
+    const guarded = await captureContactWriteScope(host, scope, signal);
+    if (!guarded) throw new Error(CONTACT_SYNC_UNSUPPORTED);
     const variables: ContactDirectoryBackfillQueryVariables = {
       limit: PAGE_SIZE,
       after,
@@ -118,6 +122,8 @@ export async function hydrateGraphqlContacts(
     if (result.error) throw result.error;
     if (!result.data) throw new Error('Contact hydration returned no data');
     const data = result.data;
+    if (data.user.contacts.nodes.length > PAGE_SIZE)
+      throw new Error('Contact hydration exceeds its batch bound');
     span.setAttr('contacts.page_count', data.user.contacts.nodes.length);
     const hydrated = await span.span('contacts.persist_page', () =>
       host.hydrateQuery({
@@ -126,7 +132,7 @@ export async function hydrateGraphqlContacts(
         variables,
         data,
         identity: data.user.id,
-        hydrationScope: scope,
+        hydrationScope: guarded,
       })
     );
     signal.throwIfAborted();

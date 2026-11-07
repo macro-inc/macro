@@ -78,7 +78,7 @@ unreferenced replicas. These additive tables do not change agent-session claims.
 ## Gotchas
 
 - `user::get_user_name::get_user_names_with_email` and contact relational reads share `public.user_name_for_viewer(viewer_id, target_id)`; keep profile-over-viewer-address-book precedence in that SQL function, not copied joins. It returns at most one row with first/last/display names, grants no contact membership, and runs as SECURITY INVOKER over schema-qualified tables. Strip only the leading `macro|` marker from an identity. Deploy migration `20261104180444` before readers call the function; keep IDs/names off tracing spans.
-- `contacts_connections` has a `(user2, user1)` index for reverse keyset paging; the existing unique `(user1, user2)` index covers forward paging. Bounded directory reads belong to `crates/contacts`, not this client.
+- `contacts_connections` keeps its raw forward/reverse paging indexes. Migrations `20261105044718` and `20261105044750` add `(raw viewer, lower(peer COLLATE "C"))` point-lookup indexes with a strict peer `macro|` prefix predicate. They preserve stored rows, edge constraints and cursor order; bounded directory reads belong to `crates/contacts`. Apply both before new readers, with a short session `lock_timeout` (for SQLx CLI, e.g. `PGOPTIONS='-c lock_timeout=5s'`). An interrupted concurrent build must be inspected/repaired before retrying; these migrations do not hide an existing invalid index with `IF NOT EXISTS`.
 
 - Migrations deploy before service code: never drop a column/table in the
   same PR that removes its last usage (see `docs/development/database.md`).

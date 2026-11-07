@@ -3,6 +3,7 @@ import { contactRecordKey } from '@queries/contacts/contact-key';
 import { createRetirableCacheHost } from '../../host/retirable-host';
 import { createWorkerCacheHost } from '../../host/worker-host';
 import type { PeopleReferenceRequest } from '../../people/protocol';
+import { captureContactWriteScope } from '../../people/sync';
 import { isStaleHydrationScopeError } from '../../protocol';
 
 const output = document.querySelector<HTMLPreElement>('#result');
@@ -19,6 +20,12 @@ try {
   };
   const people = host.people;
   if (!people) throw new Error('Missing person capability through app wrapper');
+  const guarded = await captureContactWriteScope(
+    host,
+    scope,
+    new AbortController().signal
+  );
+  if (!guarded) throw new Error('Missing contact admission');
   await host.hydrateQuery({
     query:
       '{ user { id contacts(limit: 2) { nodes { __typename id userId name email } nextCursor } } }',
@@ -40,7 +47,7 @@ try {
       },
     },
     identity: viewer,
-    hydrationScope: scope,
+    hydrationScope: guarded,
   });
   const before = await host.currentRevision();
   const request: PeopleReferenceRequest = {

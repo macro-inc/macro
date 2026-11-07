@@ -3,6 +3,8 @@ use crate::domain::{ports::ContactsPageService, service::ContactsDomainService};
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
 use sqlx::PgPool;
 
+mod case_lookup;
+
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn pages_include_self_once_and_only_the_viewers_neighbors(pool: PgPool) {
     sqlx::query!(
