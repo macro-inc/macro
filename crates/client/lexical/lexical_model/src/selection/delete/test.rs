@@ -490,3 +490,22 @@ fn collapsed_root_removal_keeps_its_element_coordinate() -> Result<(), Error> {
     );
     Ok(())
 }
+
+#[test]
+fn equivalent_container_boundaries_do_not_remove_the_first_line_break() -> Result<(), Error> {
+    let mut editor = Editor::builder(EditorMode::Headless).build().unwrap();
+    editor.update(|tx| {
+        let p = tx.create(Paragraph::default())?;
+        let line = tx.create(LineBreak::default())?;
+        tx.append(p, &[line.key()])?;
+        tx.append(NodeKey::ROOT, &[p.key()])?;
+        tx.set_selection(Some(Selection::Range(RangeSelection::new(
+            Point::element(p, ChildIndex(0)),
+            Point::element(NodeKey::ROOT, ChildIndex(0)),
+        ))))?;
+        tx.remove_text()?;
+        assert_eq!(tx.children_keys(p)?, vec![line.key()]);
+        Ok(())
+    })?;
+    Ok(())
+}

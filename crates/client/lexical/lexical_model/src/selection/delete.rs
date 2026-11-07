@@ -37,6 +37,9 @@ impl Transaction<'_> {
         }
         // Caret conversion descends noncollapsed element boundaries before removal.
         normalize_range_selection(self.view(), &mut range)?;
+        if range.is_collapsed() {
+            return self.collapsed_selection_at(slot, range.anchor, range.format, range.style);
+        }
         let backward = range.is_backward(self.view())?;
         let (start, end) = if backward {
             (range.focus, range.anchor)
