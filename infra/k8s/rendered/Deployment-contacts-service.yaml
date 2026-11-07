@@ -68,8 +68,8 @@ spec:
             - /bin/sh
             - -ec
             - |
-              until kubectl get job kafka-topics-3499b6de8b >/dev/null 2>&1; do sleep 0.2; done
-              kubectl wait --for=condition=complete job/kafka-topics-3499b6de8b --timeout=600s
+              until kubectl get job kafka-topics-93d44f0073 >/dev/null 2>&1; do sleep 0.2; done
+              kubectl wait --for=condition=complete job/kafka-topics-93d44f0073 --timeout=600s
 
               until kubectl get job migrate-ac72207dc7 >/dev/null 2>&1; do sleep 0.2; done
               kubectl wait --for=condition=complete job/migrate-ac72207dc7 --timeout=600s
