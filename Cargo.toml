@@ -7,6 +7,7 @@ members = [
   "crates/client/lexical/lexical_model",
   "crates/client/lexical/lexical_conformance",
   "crates/client/lexical/lexical_rich_nodes",
+  "crates/client/lexical/lexical_markdown",
   "crates/client/lexical/lexical_workspace_tests",
   "crates/access_requests",
   "crates/agent_api_keys",
@@ -224,6 +225,7 @@ ignored = [ "quick-xml", "rand_chacha", "smallvec"]
 [workspace.dependencies]
 lexical_model = { path = "crates/client/lexical/lexical_model" }
 lexical_rich_nodes = { path = "crates/client/lexical/lexical_rich_nodes" }
+lexical_markdown = { path = "crates/client/lexical/lexical_markdown" }
 # Shared dependencies for the portable Lexical model and its conformance suites.
 imbl = { version = "=7.0.2", default-features = false }
 rustc-hash = { version = "2.1.2", default-features = false }
