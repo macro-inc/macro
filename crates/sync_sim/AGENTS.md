@@ -51,6 +51,8 @@ clients and real `sync_server_core::Room` callbacks over `sync_server_sim` ports
   rolled-back delivery rows, never an entire power-loss profile.
 - Settlement reopens gracefully stopped clients to drain retained WAL; Stop itself
   still waits only for durable local writes. Crashed clients require explicit reopen.
+- Settlement thaws injected source freezes through the real migration operation and
+  its durable receipt, including after room eviction; never clear persisted gates directly.
 - H9/A4 have been fixed: never allowlist either data-loss behavior.
 - Keep excluded from hakari; no deployable artifact depends on this crate.
 

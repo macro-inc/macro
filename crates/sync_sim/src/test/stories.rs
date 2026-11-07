@@ -767,3 +767,43 @@ fn surface_revocation_is_permanent_and_leaves_document_rooms_live() {
         42
     );
 }
+
+#[test]
+fn settlement_thaws_evicted_source_and_recovers_offline_edit() {
+    let config = SimConfig::calm(233);
+    let script = [
+        Step::Open(OpenSpec::form("a", "one")),
+        Step::Run(Millis(500)),
+        Step::Server(ServerStep::FreezeSource),
+        Step::Run(Millis(200)),
+        Step::Edit {
+            client: ClientName("a".into()),
+            op: AbstractOp::FormSet {
+                field: 3,
+                value: 57,
+            },
+        },
+        Step::Run(Millis(200)),
+        Step::Server(ServerStep::Evict {
+            close_sockets: true,
+        }),
+        Step::Settle,
+        Step::Server(ServerStep::HttpFormUpdate {
+            field: 4,
+            value: 91,
+        }),
+        Step::Settle,
+    ];
+    let outcome = verify(config, &script);
+    assert_eq!(
+        outcome.finals.servers[&DocIx(0)].deep_value["fields"]["3"],
+        57
+    );
+    assert_eq!(
+        outcome.finals.servers[&DocIx(0)].deep_value["fields"]["4"],
+        91
+    );
+    assert!(outcome.server_ports.iter().any(|port| {
+        port.effect.operation == "storage.put" && port.effect.value.to_string().contains("thawed")
+    }));
+}

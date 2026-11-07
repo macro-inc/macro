@@ -685,6 +685,13 @@ impl Sim {
             store.fault(StorageFault::Heal);
         }
         self.server_step(ServerStep::Heal)?;
+        // A reversible injected source freeze heals through its durable proof;
+        // permanent surface revocation remains a lifecycle fact.
+        for doc in self.servers.keys().copied().collect::<Vec<_>>() {
+            if !self.config.surfaces.contains(&doc) {
+                self.server_input(doc, Input::ThawSource)?;
+            }
+        }
         let profiles = self.routers.keys().cloned().collect::<Vec<_>>();
         for profile in profiles {
             self.router_input(

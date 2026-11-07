@@ -390,8 +390,8 @@ impl Sim {
                 });
             }
         }
-        self.server_effects(doc, index, effects)?;
         if crashed {
+            self.server_effects(doc, index, effects)?;
             if let Some(server) = self.servers.get_mut(&doc) {
                 server.ports.recover();
                 server.evict();
@@ -423,6 +423,9 @@ impl Sim {
                 self.schedule(at, Pending::ServerDurable(doc, epoch, generation, index));
             }
         }
+        // Register this callback before delivering its outputs: a successful close
+        // can synchronously enter another callback with a newer write generation.
+        self.server_effects(doc, index, effects)?;
         self.schedule_alarm(doc);
         Ok(())
     }

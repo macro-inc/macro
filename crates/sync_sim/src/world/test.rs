@@ -205,3 +205,49 @@ fn hostile_fragment_loss_reaches_the_real_client_protocol_error_path() {
     assert!(!sim.events.iter().any(|event| matches!(&event.fact,
         Fact::Telemetry { name, .. } if name == "doc.sync.reset")));
 }
+
+#[test]
+fn settle_resumes_failed_freeze_from_durable_claim_after_eviction() {
+    use futures::FutureExt;
+    use sync_server_core::domain::{migration::SourceState, ports::RoomStorage};
+    let mut sim = Sim::new(SimConfig::calm(239));
+    sim.step(Step::Open(OpenSpec::form("a", "one"))).unwrap();
+    sim.advance(500);
+    let ports = sim.servers[&DocIx(0)].ports.clone();
+    ports.set_operation_error("snapshot.put", Some("injected export failure".into()));
+    sim.step(Step::Server(ServerStep::FreezeSource)).unwrap();
+    sim.advance(200);
+    assert!(matches!(
+        ports.source_migration().now_or_never().unwrap().unwrap(),
+        Some(SourceState::Freezing(_))
+    ));
+    ports.set_operation_error("snapshot.put", None);
+    sim.step(Step::Server(ServerStep::Evict {
+        close_sockets: true,
+    }))
+    .unwrap();
+    let outcome = sim.run(&[
+        Step::Edit {
+            client: ClientName("a".into()),
+            op: AbstractOp::FormSet {
+                field: 2,
+                value: 67,
+            },
+        },
+        Step::Settle,
+    ]);
+    assert!(
+        outcome.per_step_failures.is_empty(),
+        "{:?}",
+        outcome.per_step_failures
+    );
+    invariants::check_all(&outcome).unwrap();
+    assert_eq!(
+        outcome.finals.servers[&DocIx(0)].deep_value["fields"]["2"],
+        67
+    );
+    assert!(matches!(
+        ports.source_migration().now_or_never().unwrap().unwrap(),
+        Some(SourceState::Thawed(_))
+    ));
+}
