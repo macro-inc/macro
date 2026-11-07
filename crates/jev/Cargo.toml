@@ -7,11 +7,11 @@ version = "0.1.0"
 [features]
 default = []
 batches = ["dep:futures", "dep:tokio"]
-decisions = ["dep:ai_billing", "dep:async-trait", "dep:macro_user_id", "dep:tokio"]
+decisions = ["dep:ai_admission", "dep:async-trait", "dep:macro_user_id", "dep:tokio"]
 outbound = ["dep:macro_env_var", "dep:reqwest", "dep:tokio"]
 
 [dependencies]
-ai_billing = { path = "../ai_billing", optional = true }
+ai_admission = { path = "../types/ai_admission", optional = true }
 ai_usage = { path = "../ai_usage" }
 async-trait = { workspace = true, optional = true }
 futures = { workspace = true, optional = true }

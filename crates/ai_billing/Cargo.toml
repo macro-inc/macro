@@ -9,6 +9,7 @@ version = "0.1.0"
 pg-admission = ["roles_and_permissions/outbound", "teams/outbound"]
 
 [dependencies]
+ai_admission = { path = "../types/ai_admission" }
 ai_usage = { path = "../ai_usage" }
 anyhow = { workspace = true }
 async-stripe = { workspace = true, default-features = false, features = [
