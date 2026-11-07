@@ -155,6 +155,7 @@ members = [
   "crates/types/agent_session_id",
   "crates/types/chat_message",
   "crates/types/entity_basic_types",
+  "crates/types/soup_property",
   "crates/unfurl",
   "crates/universal_input",
   "crates/upstream_error",
@@ -797,6 +798,7 @@ sns_client = { path = "crates/sns_client" }
 soup = { path = "crates/soup" }
 soup-filter-cache-adapter = { path = "crates/soup_filter_cache_adapter" }
 soup-filter-projection = { path = "crates/soup_filter_projection", default-features = false }
+soup_property = { path = "crates/types/soup_property" }
 soup_realtime = { path = "crates/soup_realtime", default-features = false }
 sqs_client = { path = "crates/sqs_client", default-features = false }
 sqs_worker = { path = "crates/sqs_worker" }

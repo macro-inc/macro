@@ -15,6 +15,6 @@ serde_json = { workspace = true }
 strum = { workspace = true }
 utoipa = { workspace = true }
 document_sub_type = { workspace = true, default-features = true }
-models_soup = { workspace = true, features = ["schema"] }
 uuid = { workspace = true }
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
+soup_property = { workspace = true, features = ["schema"] }
