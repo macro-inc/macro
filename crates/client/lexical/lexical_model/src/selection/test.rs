@@ -498,3 +498,30 @@ fn insertion_at_a_resolved_element_start_preserves_the_text_tail() -> Result<(),
     })?;
     Ok(())
 }
+
+#[test]
+fn merging_text_resolves_both_parent_selection_endpoints() -> Result<(), Error> {
+    let mut editor = Editor::builder(EditorMode::Headless).build().unwrap();
+    let ((first, last, tab), _) = editor.update(|tx| {
+        let first = tx.create(Paragraph::default())?;
+        let last = tx.create(Paragraph::default())?;
+        let a = tx.create_text("a")?;
+        let b = tx.create_text("b")?;
+        let c = tx.create_text("c")?;
+        let tab = tx.create(Tab::default())?;
+        tx.text(a)?.set_format(TextFormat::BOLD)?;
+        tx.append(first, &[a.key(), b.key()])?;
+        tx.append(last, &[c.key(), tab.key()])?;
+        tx.append(NodeKey::ROOT, &[first.key(), last.key()])?;
+        Ok((first.key(), last.key(), tab.key()))
+    })?;
+    editor.update(|tx| {
+        tx.set_selection(Some(Selection::Range(RangeSelection::new(
+            Point::element(last, ChildIndex(2)), Point::element(first, ChildIndex(0)),
+        ))))?;
+        tx.format_text(TextFormatType::Bold, None)?;
+        Ok(())
+    })?;
+    assert_eq!(editor.state().selection().unwrap().as_range().unwrap().anchor, Point::text(tab, Utf16Offset(1)));
+    Ok(())
+}

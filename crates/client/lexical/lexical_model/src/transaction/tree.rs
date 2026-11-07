@@ -378,12 +378,13 @@ impl Transaction<'_> {
             && affected.is_some_and(|flags| flags.into_iter().all(|v| !v))
             && let Some(Selection::Range(mut range)) = self.pending.selection.clone()
         {
+            let resolve = range.anchor.key() == parent || range.focus.key() == parent;
             let mut changed = false;
             for point in [&mut range.anchor, &mut range.focus] {
                 if let Point::Element { key, offset } = *point
-                    && key == parent
+                    && resolve
                 {
-                    let children = self.children_keys(parent)?;
+                    let children = self.children_keys(key)?;
                     let at_end = offset.0 as usize >= children.len();
                     let child = if at_end {
                         children.last()
