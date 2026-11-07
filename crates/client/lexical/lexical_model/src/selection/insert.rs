@@ -655,8 +655,11 @@ impl Transaction<'_> {
                 .last()
                 .ok_or(Error::Invariant("empty node insertion"))?;
             let point = if !self.is_text(last) && !self.is_element(last) {
-                match self.next_sibling(last).filter(|key| self.is_text(*key)) {
-                    Some(next) => Point::text(next, Utf16Offset::ZERO),
+                match self
+                    .next_sibling(last)
+                    .filter(|key| self.is_text(*key) || self.is_element(*key))
+                {
+                    Some(next) => self.start_point(next)?,
                     None => self.end_point(last)?,
                 }
             } else {
