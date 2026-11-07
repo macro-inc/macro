@@ -103,11 +103,18 @@ impl Input {
                     .as_ref()
                     .map(|p| {
                         let r = tx.range_selection()?;
+                        let focus = p.point(tx.view())?;
+                        let reversed = focus.is_before(tx.view(), &r.anchor)?;
+                        let (anchor, focus) = if reversed {
+                            (focus, r.anchor)
+                        } else {
+                            (r.anchor, focus)
+                        };
                         Ok::<_, Error>(ModifyTarget::View {
-                            anchor: r.anchor,
-                            focus: p.point(tx.view())?,
+                            anchor,
+                            focus,
                             resolution_dirty: false,
-                            is_backward_in_dom: *backward,
+                            is_backward_in_dom: reversed,
                         })
                     })
                     .transpose()?
