@@ -55,6 +55,7 @@ export function NotificationStackItem(props: NotificationStackItemProps) {
       data-stack-item=""
       class={cn(
         'group/stack-item relative w-full min-w-0 flex-1',
+        // A tap leaves the item focused, which mustn't look chosen on a phone.
         props.highlighted
           ? 'bg-active mobile:bg-transparent'
           : 'not-touch:hover:bg-hover'

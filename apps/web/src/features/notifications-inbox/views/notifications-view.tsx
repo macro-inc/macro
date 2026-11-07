@@ -240,10 +240,10 @@ function ListStatus(props: { children: JSX.Element }) {
 }
 
 /**
- * The unified notifications list beside a preview of the chosen row: one card
+ * The unified notifications list beside a preview of the chosen row: one row
  * per thing that needs the viewer, newest first under Home's date dividers.
  * Several notifications about one thing show as a stack; its button, or the
- * right arrow, unfolds them below the card, and each opens at its own location.
+ * right arrow, unfolds them below the row, and each opens at its own location.
  * All and Unread switch the list, and the choice is kept between visits.
  * `j`/`k` move through rows and unfolded notifications (and follow in an open
  * preview), Enter previews, `e` marks the focused row done. Touch shows the list

@@ -73,12 +73,14 @@ export function NotificationRow(props: NotificationRowProps) {
       data-unfolded={isOpen() ? '' : undefined}
       class={cn(
         'group/notification relative w-full min-w-0 flex-1 transition-opacity',
-        // The avatar's badge cuts itself out in this color.
-        '[--inbox-row-surface:var(--color-panel)]',
-        // A tap leaves the row focused, which mustn't look chosen on a phone.
+        // The list's hover and active tints laid over the panel, opaque so the
+        // avatar's badge can cut itself out in the same color.
+        'bg-(--inbox-row-surface) [--inbox-row-surface:var(--color-panel)]',
         props.highlighted
-          ? 'bg-active mobile:bg-transparent'
-          : 'not-touch:hover:bg-hover',
+          ? '[--inbox-row-surface:color-mix(in_srgb,var(--color-panel),var(--color-content-0)_6%)]'
+          : 'not-touch:hover:[--inbox-row-surface:color-mix(in_srgb,var(--color-panel),var(--color-content-0)_3%)]',
+        // A tap leaves the row focused, which mustn't look chosen on a phone.
+        'mobile:[--inbox-row-surface:var(--color-panel)]',
         props.receded && 'opacity-40 not-touch:hover:opacity-100'
       )}
       onMouseMove={() => props.onHover()}
