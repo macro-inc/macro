@@ -1,4 +1,4 @@
-//! Literal ports of custom callbacks defined alongside upstream's111-row table.
+//! Literal ports of custom callbacks defined alongside upstream's 111-row table.
 use lexical_markdown::{builtin::*, matcher::*, *};
 use lexical_model::*;
 use lexical_rich_nodes::{code::*, link::*};
@@ -202,10 +202,10 @@ impl MultilineElementTransformer for Counter {
         for i in start_index..lines.len() {
             let nested = self.start.exec(&lines[i]);
             let end = self.end.exec(&lines[i]);
-            if let Some(nested) = nested {
-                if end.as_ref().is_none_or(|end| nested.index < end.index) {
-                    opened += 1;
-                }
+            if let Some(nested) = nested
+                && end.as_ref().is_none_or(|end| nested.index < end.index)
+            {
+                opened += 1;
             }
             if end.is_some() {
                 opened -= 1;
