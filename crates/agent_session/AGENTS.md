@@ -133,6 +133,12 @@ through `set_name` clears it, so a name a person chose is never replaced.
 
 ## Gotchas
 
+- A `routine_draft` origin marks a hidden session drafting a routine for the
+  scheduler: it may only read (its programs are dry runs, its turns get code
+  mode's tools only) and bills as automation. `RoutineSessions::delete_draft`
+  (`/internal/routine-sessions/delete-draft`) deletes such a session for its
+  owner and refuses any other.
+
 - What opened a session is an `agent_session_source` row, referenced by
   `agent_session.source_id` and written in the transaction that writes the session
   (`outbound/postgres/source.rs`). It holds references only, as

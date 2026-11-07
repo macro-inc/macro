@@ -860,21 +860,22 @@ only, and code steps a routine already has still show, run and change. The
 scheduler drafts on the server (`POST /scheduled-actions/drafts`, one request
 while the button shows **Drafting…**, at most two minutes): the request carries
 only the description and settings (time zone, model, decisions, code steps).
-The model first lists the channels, people, folders, labels, tags and agents
-the description names (at most 12), and a fixed read-only code step looks them
-up as the person, with their access, within 20 seconds; a name that matches
-nothing, or several items equally, is left out, so the review shows the
-normal picker for it. Saving checks every id. Then it reads the same code-step guide
-CreateRoutine does, plus the SDK entities relevant to the description and the
-starter routines as worked examples; the model names the SDK symbols its code
-will use and reads their full reference before writing, then the scheduler
-type-checks the routine's code steps
-together (a step that misreads an earlier step's output fails) and asks the
-model to fix errors, three times at most. A step that still fails stays in the draft with its
+The draft runs in a hidden agent session of the in-process Macro agent, as the
+person, on the free model, billed as automation usage. It never appears in
+Home or the Agents list, and it is deleted when the draft comes back. Its only
+tools are ExecuteCode, DescribeCodeTools and ReadCodeDocs, and every program
+it runs is a dry run, so it can read with the person's access but change
+nothing. It finds the channels, people, folders, labels, tags and agents the
+description names itself, paging and refining searches, and leaves out a name
+that matches nothing or several items, so the review shows the normal picker
+for it. It hands the routine back by checking it with `macro.routines.check`
+(`POST /scheduled-actions/check`: saving's checks, including the type check of
+its code steps together, with nothing saved), fixing what the check reports.
+The last check is the draft: a code step that still fails stays in it with its
 errors listed, and the routine can't be created until it is drafted again or
-the step is removed. A request the gateway refuses as too large, a timeout and
-the AI usage limit each show their own message in the dialog instead of
-"Couldn’t draft that routine".
+the step is removed. Saving checks every id again. A request the gateway
+refuses as too large, a timeout and the AI usage limit each show their own
+message in the dialog instead of "Couldn’t draft that routine".
 
 Code steps (written by AI through Draft it, CreateRoutine or the starter
 templates) open on the routine's Overview as a sentence of what they do,

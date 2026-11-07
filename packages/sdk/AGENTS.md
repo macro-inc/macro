@@ -48,7 +48,10 @@ enforced by the ordinary backend APIs.
   either the single agent task or `steps` (generated `CodeStep`s, agent steps
   with `Agent` handles) and `dangerouslyOperateAsUser`, which its TSDoc
   restricts to an explicit user request; `routineBody` maps both onto the
-  scheduler's `RoutineTask`.
+  scheduler's `RoutineTask`. `routines.check` sends the same body to
+  `POST /scheduled-actions/check`, which runs saving's checks and saves
+  nothing; code mode's catalog lists it as a read, so dry runs (a routine
+  draft's session) can call it.
 - `users.search(nameOrEmail)` searches existing Macro contacts with batched auth
   names and returns seeded User handles; it is not a global directory. Empty
   contact sets are 404, but authorization/service errors must propagate.

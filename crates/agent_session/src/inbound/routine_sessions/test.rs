@@ -19,7 +19,7 @@ use uuid::Uuid;
 
 const OWNER: &str = "macro|owner@example.com";
 const INTERNAL_KEY: &str = "routine-test-internal";
-const OPERATIONS: [&str; 5] = ["validate", "prepare", "prompt", "status", "cancel"];
+const OPERATIONS: [&str; 6] = ["validate", "prepare", "prompt", "status", "cancel", "delete-draft"];
 
 #[derive(Clone)]
 struct Credentials;
@@ -150,6 +150,10 @@ impl RoutineSessions for ServiceSpy {
 
     async fn cancel(&self, command: RoutineSessionAction) -> Result<(), RoutineSessionError> {
         self.record("cancel", command)
+    }
+
+    async fn delete_draft(&self, command: RoutineSessionAction) -> Result<(), RoutineSessionError> {
+        self.record("delete-draft", command)
     }
 }
 
