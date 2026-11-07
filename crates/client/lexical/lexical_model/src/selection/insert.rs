@@ -100,16 +100,8 @@ impl Transaction<'_> {
             }
             self.set_point_at(slot, end_role, end)?;
         }
-        if selected.len() > 1
-            && selected.iter().all(|key| {
-                self.is::<Paragraph>(*key)
-                    || self
-                        .parent(*key)
-                        .is_some_and(|parent| self.is::<Paragraph>(parent))
-            })
-        {
-            return self
-                .insert_text_across_paragraph_nodes(slot, &original, &selected, text, backward);
+        if selected.len() > 1 {
+            return self.insert_text_across_nodes(slot, &original, &selected, text, backward);
         }
         if !original.is_collapsed()
             && let [key] = selected.as_slice()
@@ -329,7 +321,7 @@ impl Transaction<'_> {
     }
     // Upstream insertText still uses its older node-based replacement algorithm,
     // whose element-end semantics differ from caret-range removeText.
-    fn insert_text_across_paragraph_nodes(
+    fn insert_text_across_nodes(
         &mut self,
         slot: SelectionSlot,
         range: &RangeSelection,
@@ -346,12 +338,18 @@ impl Transaction<'_> {
         };
         let first_data = self.view().text_data(first)?.clone();
         let first_parent = self.parent_or_err(first)?;
-        let last_parent = if self.is_element(last) {
+        let mut last_parent = if self.is_element(last) {
             last
         } else {
             self.parent_or_err(last)?
         };
-        let last_child = last;
+        let mut last_child = last;
+        if first_parent != last_parent && self.is_inline(last_parent) {
+            while self.is_inline(last_parent) {
+                last_child = last_parent;
+                last_parent = self.parent_or_err(last_parent)?;
+            }
+        }
         let mut keep = crate::collections::IndexSet::default();
         keep.extend(self.ancestors(first));
         keep.extend(self.ancestors(last));
@@ -385,7 +383,12 @@ impl Transaction<'_> {
                 }
                 keep.insert(last);
             } else {
-                self.remove(last, false)?;
+                let parent = self.parent_or_err(last)?;
+                if !self.can_be_empty(parent) && self.children_size(parent) == 1 {
+                    self.remove(parent, false)?;
+                } else {
+                    self.remove(last, false)?;
+                }
             }
         } else {
             keep.insert(last);
@@ -394,6 +397,12 @@ impl Transaction<'_> {
             .iter()
             .copied()
             .collect::<crate::collections::IndexSet<_>>();
+        let insertion_target = if self.is_inline(first_parent) && self.next_sibling(first).is_none()
+        {
+            first_parent
+        } else {
+            first
+        };
         for child in self.children_keys(last_parent)?.into_iter().rev() {
             if child == first || self.has_ancestor(first, child) {
                 break;
@@ -401,7 +410,7 @@ impl Transaction<'_> {
             if self.is_attached(child) {
                 if !selected.contains(&child) || child == last_child {
                     if first_parent != last_parent {
-                        self.insert_after(first, child, false)?;
+                        self.insert_after(insertion_target, child, false)?;
                     }
                 } else {
                     self.remove(child, false)?;
