@@ -106,6 +106,9 @@ impl Transaction<'_> {
                 !(*key == start.key() && start.offset() == data.text.utf16_len().get())
             })
             .map(|(_, data)| data.format.toggled(format, align_with));
+        if has_text && first_flags.is_none() {
+            return Ok(());
+        }
         let alignment = first_flags.or(align_with);
         let last_text = nodes.iter().rev().copied().find(|key| self.is_text(*key));
         let last_flags = last_text.and_then(|key| self.view().text(key))
