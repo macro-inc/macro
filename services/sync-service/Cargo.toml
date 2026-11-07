@@ -7,7 +7,7 @@ build = "build.rs"
 publish = false
 
 [features]
-default = ["bebop-owned-all", "do-sqlite-snapshot-storage", "search-service"]
+default = ["owned", "do-sqlite-snapshot-storage", "search-service"]
 no-network-deps = []
 # Test-only persistence fault injection; never enable in deployed workers.
 migration-test-hooks = []
@@ -17,7 +17,7 @@ do-sqlite-snapshot-storage = []
 kv-snapshot-storage = []
 r2-snapshot-storage = []
 search-service = []
-bebop-owned-all = ["sync_service_bebop_schema/bebop-owned-all"]
+owned = ["sync_protocol/owned"]
 create-default-state = []
 alarm-keep-alive = []
 openapi = ["dep:utoipa"]
@@ -47,7 +47,7 @@ tracing-web = "0.1"
 web-time.workspace = true
 time = { workspace = true, features = ['wasm-bindgen'] }
 bebop.workspace = true
-sync_service_bebop_schema = { path = "bebop-schema" }
+sync_protocol = { workspace = true }
 serde_json.workspace = true
 sha2.workspace = true
 serde.workspace = true

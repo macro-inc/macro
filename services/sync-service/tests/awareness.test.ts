@@ -3,7 +3,7 @@ import {
   FromPeer,
     FromRemote,
     RemoteAwareness,
-} from "../bebop/generated/schema";
+} from "../../../crates/sync_protocol/bebop/generated/schema";
 import { expect, test, describe, beforeAll } from "vitest";
 import { createTestUser, setupMiniflare } from "./utils";
 

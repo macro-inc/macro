@@ -6,7 +6,7 @@ import jwt from 'jsonwebtoken';
 import { LoroDoc } from 'loro-crdt';
 import type { Miniflare } from 'miniflare';
 import { afterAll, afterEach, beforeAll, expect, it } from 'vitest';
-import { FromPeer, FromRemote, InitializeFromSnapshotRequest } from '../bebop/generated/schema';
+import { FromPeer, FromRemote, InitializeFromSnapshotRequest } from '../../../crates/sync_protocol/bebop/generated/schema';
 import { createTestWebSocket, setupMiniflare } from './utils';
 
 type Editor = { actor: string; on_behalf_of: string | null };

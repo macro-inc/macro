@@ -2,7 +2,7 @@ import jwt from 'jsonwebtoken';
 import { LoroDoc } from 'loro-crdt';
 import { createFetchMock, type Miniflare } from 'miniflare';
 import { afterEach, beforeEach, expect, test, vi } from 'vitest';
-import { FromPeer, FromRemote } from '../bebop/generated/schema';
+import { FromPeer, FromRemote } from '../../../crates/sync_protocol/bebop/generated/schema';
 import { abortObjectBetweenMessages, createTestUser, createTestWebSocket, getTokenForDocument, setupMiniflare } from './utils';
 
 vi.setConfig({ testTimeout: 15_000 });

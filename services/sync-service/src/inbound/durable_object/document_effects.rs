@@ -65,7 +65,7 @@ fn notification_error(error: impl std::fmt::Debug) -> DocumentError {
 impl DocumentUpdateEffects for WorkerDocumentEffects<'_> {
     fn broadcast(&self, update: &[u8]) -> Result<(), DocumentError> {
         for socket in self.session.get_sockets() {
-            if let Err(error) = socket.send(crate::generated::schema::FromRemote::RemoteUpdate {
+            if let Err(error) = socket.send(sync_protocol::FromRemote::RemoteUpdate {
                 update: bebop::SliceWrapper::Raw(update),
             }) {
                 warn!(error = ?error, "failed to broadcast document update; continuing");

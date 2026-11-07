@@ -2,7 +2,7 @@ import { Miniflare } from "miniflare";
 import { LoroDoc } from "loro-crdt";
 import { expect, test, describe, beforeEach, afterEach } from "vitest";
 import { createTestUser, getTokenForDocument, setupMiniflare } from "./utils";
-import { InitializeFromSnapshotRequest } from "../bebop/generated/schema";
+import { InitializeFromSnapshotRequest } from "../../../crates/sync_protocol/bebop/generated/schema";
 
 type User = Awaited<ReturnType<typeof createTestUser>>;
 let mf: Miniflare;

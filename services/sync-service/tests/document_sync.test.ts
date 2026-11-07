@@ -1,7 +1,7 @@
 import { recordedAlarms } from "./transcript";
 import { Miniflare } from "miniflare";
 import { LoroDoc } from "loro-crdt";
-import { FromRemote, FromPeer } from "../bebop/generated/schema";
+import { FromRemote, FromPeer } from "../../../crates/sync_protocol/bebop/generated/schema";
 import { expect, test, describe, beforeAll, assert } from "vitest";
 import {
   connectToDocumentForTesting,

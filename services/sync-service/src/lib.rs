@@ -7,7 +7,6 @@ mod constants;
 mod domain;
 use inbound::durable_object;
 mod error;
-mod generated;
 pub mod keepalive;
 mod metrics;
 mod mutex;

@@ -1,4 +1,8 @@
+//! Shared Bebop wire types for document collaboration and sync routing.
+#![deny(missing_docs)]
+
 #[rustfmt::skip]
+#[expect(missing_docs, reason = "The pinned Bebop generator does not document every wire field")]
 mod generated;
 pub use generated::*;
 

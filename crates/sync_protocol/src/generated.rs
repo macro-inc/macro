@@ -906,7 +906,7 @@ impl<'raw> ::bebop::SubRecord<'raw> for FromRouter<'raw> {
 
 impl<'raw> ::bebop::Record<'raw> for FromRouter<'raw> {}
 
-#[cfg(feature = "bebop-owned-all")]
+#[cfg(feature = "owned")]
 pub mod owned {
     #![allow(warnings)]
 

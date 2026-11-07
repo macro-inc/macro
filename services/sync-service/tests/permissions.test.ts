@@ -6,7 +6,7 @@ import {
   getTokenForDocument,
   setupMiniflare,
 } from "./utils";
-import { FromPeer, FromRemote } from "../bebop/generated/schema";
+import { FromPeer, FromRemote } from "../../../crates/sync_protocol/bebop/generated/schema";
 
 let mf: Miniflare;
 

@@ -1,7 +1,7 @@
 use super::*;
 use bebop::{Record, SliceWrapper};
 use futures::{SinkExt, StreamExt};
-use sync_service_bebop_schema::{FromRouter, ToRouter};
+use sync_protocol::{FromRouter, ToRouter};
 use tokio::net::TcpListener;
 use tokio_tungstenite::{accept_async, connect_async, tungstenite::Message as WsMessage};
 

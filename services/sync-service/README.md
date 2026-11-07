@@ -4,8 +4,8 @@ Service responsible for syncing collaborative documents between multiple users.
 ## Project Structure
 ```bash
 .
-├── bebop/ # bebop schema and ts generator for tests & qa
-├── build.rs # build script for worker, to generate bebop rust bindings
+├── ../../crates/sync_protocol/ # shared schema and wire codecs
+├── build.rs # build metadata for the worker
 ├── justfile # justfile for running commands
 ├── src/ # rust worker-rs worker
 ├── tests/ # e2e tests using miniflare and vitest
@@ -90,13 +90,12 @@ validate comment-only writes after provisioning or rotating a key. Rejected
 validation spans include `document.id` and `op.id` for correlation with clients.
 
 ## Bebop
-The bebop schema is defined in `./bebop/schema.bop`.
+The Bebop schema is defined in `../../crates/sync_protocol/bebop/schema.bop`.
 
 #### Generating typescript bindings locally
 The typescript bindings are primarily used for testing and QA environemnt.
 ```bash
-\cd bebop
-../../../node_modules/.bin/bebopc build
+node ../../crates/sync_protocol/bebop/generate.mjs
 ```
 
 Use the repository-pinned generator. Copy `schema.bop` to
@@ -106,11 +105,9 @@ the web bindings from the same schema. The package's `generate-sync-schema`
 command fetches the deployed schema and is unsuitable for an unreleased change.
 
 #### Generating rust bindings locally
-Rust bindings get automatically generated when building the worker.
-The behavior for this is defined in `./build.rs`.
-```bash
-worker-build --profile sync-service-release
-```
+The same command regenerates the checked-in Rust bindings in `sync_protocol`.
+It maps the pinned generator's owned-code feature guard to the crate's `owned`
+feature; it does not change serialization. `worker-build` consumes those bindings.
 
 #### Generating bindings elsewhere
 The sync_service exposes an endpoint `/schema` which returns the bebop schema.
@@ -118,12 +115,12 @@ A consuming client can fetch this schema during build time and generate the corr
 
 ## Features
 
-By default `bebop-owned-all`, `do-sqlite-snapshot-storage` and `search-service` are enabled. `just worker-build`
+By default `owned`, `do-sqlite-snapshot-storage` and `search-service` are enabled. `just worker-build`
 adds `create-default-state`; `alarm-keep-alive` is opt-in.
 
 - `transcript`: Test-only ordered callback, port, clock, and wire capture through
   the `sync_transcript` tracing target. Never enable it in a deployed worker.
-- `bebop-owned-all`: Enables all bebop owned types
+- `owned`: Enables all bebop owned types
 - `create-default-state`: As of writing this there is no mechanism to initialize a document's state 
 from existing state on the client. If a client fetches a document for the first time the worker will create
 some default state for it. In the future, this feature should be disabled, and we should be inheriting default state

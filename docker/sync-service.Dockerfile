@@ -41,7 +41,7 @@ COPY . .
 RUN cd services/sync-service && npm ci
 
 # Copy bebop schema and generate typescript bindings
-RUN cd services/sync-service/bebop && npx bebopc build
+RUN node crates/sync_protocol/bebop/generate.mjs
 
 # Build the actual application. The workspace context changes whenever a
 # dependent Rust crate changes; preserve Cargo's target cache across those

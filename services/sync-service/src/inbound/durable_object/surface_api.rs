@@ -3,13 +3,13 @@
 use bebop::Record;
 use macro_sync_service_jwt::session::{SessionIdentity, SessionKind};
 use serde::{Deserialize, Serialize};
+use sync_protocol::InitializeFromSnapshotRequest;
 use worker::{Date, Method, Request, Response, Result, WebSocket};
 
 use super::{SyncSession, WebSocketMetadata, Wsm, response, status_codes};
 use crate::{
     auth::WriteAccess,
     error::ResultExt,
-    generated::schema::InitializeFromSnapshotRequest,
     state::DocumentState,
     storage::{get_snapshot_storage, snapshot::SnapshotStorage},
 };

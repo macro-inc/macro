@@ -2,7 +2,7 @@
 
 The inventory IDs refer to S6 revision R1, sections 1 and 5.2. Each link is a representative scenario, not a claim that every branch has a native coverage measurement. Native replay and its coverage floor start at C8.
 
-`cargo test -p sync_service_bebop_schema` checks every inventory and quirk row has a nonempty recorded fixture. Keep the paths current when moving code or tests. Fixtures contain local test data and local JWTs signed with the test key; no hosted environment is used.
+`cargo test -p sync_protocol` checks every inventory and quirk row has a nonempty recorded fixture. Keep the paths current when moving code or tests. Fixtures contain local test data and local JWTs signed with the test key; no hosted environment is used.
 
 Raw JSONL preserves clock values, socket UUIDs, frame bytes and structured-clone storage. `kv_bytes` additionally applies DurableKv’s Uint8Array conversion. The normalizer checks callback-local port/output order, independent per-socket delivery order, clock count/kinds, alarm delays and exact bytes except decoded awareness timestamps. Test client entropy is seeded; worker clocks and UUIDs are not substituted.
 
