@@ -1,6 +1,7 @@
 use crate::*;
 
 /// Host-supplied configuration for one document session.
+#[derive(Clone, Debug)]
 pub struct SyncConfig {
     /// Document or collaborative-surface transport key.
     pub doc: SyncDocId,
@@ -42,6 +43,7 @@ pub struct SyncConfig {
 }
 
 /// How a session reaches the sync service.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum TransportKind {
     /// One socket to `{SYNC_SERVICE_HOSTS.ws}/document/{doc}/connect?token=…`.
     Direct,
@@ -53,6 +55,7 @@ pub enum TransportKind {
 }
 
 /// Whether durable storage effects are emitted.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Persistence {
     /// Storage effects are emitted: IndexedDB or Turso.
     Durable,
@@ -61,7 +64,7 @@ pub enum Persistence {
 }
 
 /// Effective document capabilities at the session boundary.
-#[derive(Clone, Copy, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Access {
     /// Document edits and comment marks are permitted.
     Edit,
@@ -72,6 +75,7 @@ pub enum Access {
 }
 
 /// Monotonic deadlines for outstanding operations.
+#[derive(Clone, Copy, Debug)]
 pub struct Timeouts {
     /// Initial synchronization timeout.
     pub initial_sync: Millis, // 10_000
@@ -88,6 +92,7 @@ pub struct Timeouts {
 }
 
 /// Ping cadence and missed-pong budget.
+#[derive(Clone, Copy, Debug)]
 pub struct HeartbeatPolicy {
     /// Interval between scheduled pings.
     pub interval: Millis,
@@ -98,6 +103,7 @@ pub struct HeartbeatPolicy {
 } // 10_000, 5_000, 2
 
 /// Delay before retry n (1-based) = base * 2^min(n, max_exponent). 500 ms … 8 s.
+#[derive(Clone, Copy, Debug)]
 pub struct BackoffPolicy {
     /// Base delay before exponential backoff.
     pub base: Millis,
@@ -108,6 +114,7 @@ pub struct BackoffPolicy {
 } // 250, 5, 20
 
 /// Bounded retry policy for convergence.
+#[derive(Clone, Copy, Debug)]
 pub struct ConvergePolicy {
     /// Maximum convergence attempts.
     pub max_attempts: u8,
@@ -116,6 +123,7 @@ pub struct ConvergePolicy {
 } // 3, 2_000
 
 /// Batching, retention, and retry policy for local changes.
+#[derive(Clone, Copy, Debug)]
 pub struct WalPolicy {
     /// Local changes are exported and appended at most once per window. This is the knob
     /// that keeps typing at one wasm call per keystroke.
@@ -127,6 +135,7 @@ pub struct WalPolicy {
 }
 
 /// Expiry and refresh settings for ephemeral presence.
+#[derive(Clone, Debug)]
 pub struct PresencePolicy {
     /// A duration compared against **wall** time (`UnixMillis`), because peers stamp entries
     /// with their own wall clock and the receiver drops `now.wall - timestamp > timeout`.
@@ -145,6 +154,7 @@ pub struct PresencePolicy {
 /// Bounds the reset loop that today repeats on every bad import. New behaviour. Counts
 /// **started** resets (I-3 step 0), successful or not.
 /// Counts only `Loro`/`Projection` failures; an `Outdated` rebase (I-2') never charges it.
+#[derive(Clone, Copy, Debug)]
 pub struct ResetBudget {
     /// Maximum resets in the rolling window.
     pub max: u8,

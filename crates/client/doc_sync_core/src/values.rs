@@ -110,3 +110,9 @@ impl std::fmt::Debug for SyncToken {
         f.write_str("SyncToken(<redacted>)")
     }
 }
+
+impl Millis {
+    pub(crate) fn after(self, duration: Millis) -> Self {
+        Self(self.0.saturating_add(duration.0))
+    }
+}

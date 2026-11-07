@@ -9,6 +9,7 @@ loro.workspace = true
 macro_user_id.workspace = true
 strum.workspace = true
 sync_protocol.workspace = true
+bebop.workspace = true
 sync_doc_id.workspace = true
 uuid_value = { workspace = true, features = ["serde"] }
 serde.workspace = true

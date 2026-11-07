@@ -4,6 +4,10 @@ use crate::*;
 pub enum SyncInput {
     /// Begin loading local state and connecting. Idempotent.
     Start,
+    /// Acknowledge that the winning seed has initialized the host surface.
+    Ready,
+    /// Report a failed local projection while retaining the old document for recovery.
+    ImportFailed(ImportFailure),
     /// Graceful stop: run the W-1 append, clear local presence, push it, close. Terminal.
     /// Replies `Reply::Stopped` only after that append's `Done` (W-1 terminal rule).
     Stop(RequestId),
@@ -96,6 +100,7 @@ pub enum TokenEvent {
     },
 }
 /// Write capabilities fixed by the server for a connection.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum WriteAccess {
     /// All document writes are permitted.
     Full,
@@ -106,6 +111,7 @@ pub enum WriteAccess {
 }
 
 /// Network and lifecycle notifications from the host.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum HostSignal {
     /// `window` `online` or `visibilitychange → visible` (source.ts). Reconnect only if down.
     /// Every host signal carries a fresh `Now.wall` (wasm `host(signal, now, wall)`), which
@@ -126,6 +132,7 @@ pub enum HostSignal {
 /// guarded-source.ts and authorization.ts, as values instead of callbacks. `can_comment` gates
 /// `PublishComment` (§2.5); `can_write` gates pushes and the effective access (W-6):
 /// `can_write: false, can_comment: true` downgrades to `CommentOnly`, otherwise to `Read`.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct AuthorizationState {
     /// Whether this is still the active signed-in account.
     pub current: bool,
@@ -153,6 +160,8 @@ pub enum ChatterMessage {
 pub enum RouteEvent {
     /// A routed subscription became active.
     Subscribed {
+        /// Write capability fixed by the route's token.
+        access: WriteAccess,
         /// Connection generation; stale events are ignored.
         conn: ConnId,
     },
