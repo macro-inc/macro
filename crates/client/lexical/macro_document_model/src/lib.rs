@@ -20,7 +20,6 @@ pub mod markdown;
 /// Ordered Macro markdown transformers and conversion helpers.
 pub mod transformers;
 
-
 /// URL validation and source link recognition modes.
 pub mod links;
 /// Mention projections for previews, search, and embeddings.
@@ -31,6 +30,7 @@ pub mod xml;
 
 /// Durable node identity and depth-first mapping helpers.
 pub mod node_ids;
+
 /// Typed authored message references and parsed markdown extraction.
 pub mod mentions;
 
@@ -39,3 +39,6 @@ pub mod agent_reply;
 
 /// Private context envelope composition.
 pub mod agent_context;
+
+/// Notion enhanced Markdown import.
+pub mod notion;
