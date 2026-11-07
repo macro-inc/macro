@@ -45,7 +45,7 @@ fn new_pairing(code: &str, secret: &str) -> NewPairing {
     NewPairing {
         id: Uuid::new_v4(),
         code: code.to_owned(),
-        device_secret_hash: harness_token::hash_token(secret),
+        device_secret_hash: bearer_token::hash_token(secret),
         requested_name: "erics-macbook".to_owned(),
         host: Some("eric@macbook / darwin".to_owned()),
         expires_at: Utc::now() + Duration::minutes(15),
@@ -103,10 +103,7 @@ async fn pairing_walks_create_approve_claim_exactly_once(pool: PgPool) {
         .expect("facts exist");
     assert_eq!(facts.status, PairingStatus::Approved);
     assert_eq!(facts.harness_id, Some(harness.id));
-    assert_eq!(
-        facts.device_secret_hash,
-        harness_token::hash_token("secret")
-    );
+    assert_eq!(facts.device_secret_hash, bearer_token::hash_token("secret"));
 
     let token = tokens::generate_harness_token();
     let claimed = repo

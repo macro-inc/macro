@@ -7,7 +7,7 @@ use super::models::{
     CreateChannelScopedBotResponse, HarnessFacts, HarnessId, PatchAgentRequest, PatchBotRequest,
     UpdateAgentRequest,
 };
-use bot_token::HashedBotToken;
+use bearer_token::HashedBotToken;
 use entity_access::domain::models::{EntityAccessReceipt, MemberParticipantRole};
 use macro_user_id::user_id::MacroUserIdStr;
 use rootcause::Report;

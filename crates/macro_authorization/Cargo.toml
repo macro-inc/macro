@@ -19,10 +19,8 @@ postgres = ["dep:sqlx", "dep:sha2"]
 [dependencies]
 axum = { workspace = true, optional = true }
 bot_id = { workspace = true }
-bot_token = { workspace = true }
 constant_time_eq = { workspace = true }
 harness_id = { workspace = true }
-harness_token = { workspace = true }
 macro_auth = { workspace = true, optional = true }
 macro_env_var = { workspace = true, optional = true }
 macro_user_id = { workspace = true }
@@ -36,6 +34,7 @@ thiserror = { workspace = true }
 tracing = { workspace = true }
 uuid = { workspace = true }
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
+bearer_token = { workspace = true }
 
 [dev-dependencies]
 harness_id = { workspace = true, features = ["test-utils"] }

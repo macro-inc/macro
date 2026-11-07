@@ -115,7 +115,7 @@ mod tests {
         assert_eq!(parts[2].len(), TOKEN_SECRET_BYTES * 2);
         assert!(parts[2].starts_with(parts[1]));
         assert_eq!(
-            harness_token::token_prefix(&token),
+            bearer_token::token_prefix::<bearer_token::Harness>(&token),
             format!("mhns_{}", parts[1])
         );
     }

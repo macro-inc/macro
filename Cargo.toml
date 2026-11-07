@@ -183,6 +183,7 @@ members = [
   "crates/task_dedup",
   "crates/trigger_context",
   "crates/types/agent_session_id",
+  "crates/types/bearer_token",
   "crates/types/chat_message",
   "crates/types/entity_basic_types",
   "crates/types/message_parent",
@@ -621,8 +622,8 @@ attachment = { path = "crates/attachment" }
 attention_feed = { path = "crates/attention_feed" }
 auth_service_url = { path = "crates/platform/service_urls/auth_service_url" }
 authentication_service_client = { path = "crates/authentication_service_client" }
+bearer_token = { path = "crates/types/bearer_token" }
 bot_id = { path = "crates/bot_id" }
-bot_token = { path = "crates/bot_token" }
 bots = { path = "crates/bots", default-features = false }
 broadcast = { path = "crates/broadcast" }
 cache-core = { path = "crates/client/cache-core" }
@@ -735,7 +736,6 @@ graphql_soup_filter_input = { path = "crates/graphql_soup_filter_input" }
 graphql_work_feed = { path = "crates/graphql_work_feed" }
 gtm_invite = { path = "crates/gtm_invite" }
 harness_id = { path = "crates/harness_id" }
-harness_token = { path = "crates/harness_token" }
 harnesses = { path = "crates/harnesses", default-features = false }
 image_generation = { path = "crates/image_generation" }
 image_proxy_service_url = { path = "crates/platform/service_urls/image_proxy_service_url" }

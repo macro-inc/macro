@@ -227,7 +227,7 @@ async fn creating_a_pairing_returns_code_and_secret_and_persists_only_hashes() {
     assert_eq!(inserted.code, created.code);
     assert_eq!(
         inserted.device_secret_hash,
-        harness_token::hash_token(&created.device_secret)
+        bearer_token::hash_token(&created.device_secret)
     );
 }
 
@@ -423,7 +423,7 @@ async fn approval_race_reports_gone() {
 
 fn claim_facts(status: PairingStatus, secret: &str) -> PairingClaimFacts {
     PairingClaimFacts {
-        device_secret_hash: harness_token::hash_token(secret),
+        device_secret_hash: bearer_token::hash_token(secret),
         status,
         expires_at: Utc::now() + Duration::minutes(10),
         harness_id: Some(HarnessId::TEST_A),

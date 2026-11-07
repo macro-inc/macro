@@ -3388,6 +3388,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "bearer_token"
+version = "0.1.0"
+dependencies = [
+ "sha2 0.10.9",
+ "workspace-hack",
+]
+
+[[package]]
 name = "bebop"
 version = "3.2.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3664,7 +3672,7 @@ dependencies = [
 name = "bot_token"
 version = "0.1.0"
 dependencies = [
- "sha2 0.10.9",
+ "bearer_token",
  "workspace-hack",
 ]
 
@@ -3677,8 +3685,8 @@ dependencies = [
  "async-trait",
  "axum",
  "axum-extra",
+ "bearer_token",
  "bot_id",
- "bot_token",
  "channels",
  "chrono",
  "entity_access",
@@ -9983,7 +9991,7 @@ dependencies = [
 name = "harness_token"
 version = "0.1.0"
 dependencies = [
- "sha2 0.10.9",
+ "bearer_token",
  "workspace-hack",
 ]
 
@@ -9993,11 +10001,11 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "axum",
+ "bearer_token",
  "bot_id",
  "chrono",
  "constant_time_eq 0.3.1",
  "harness_id",
- "harness_token",
  "hex",
  "macro_authorization",
  "macro_db_migrator",
@@ -12196,7 +12204,7 @@ name = "local_e2e_integration_tests"
 version = "0.1.0"
 dependencies = [
  "anyhow",
- "bot_token",
+ "bearer_token",
  "futures",
  "local_e2e_test_support",
  "reqwest 0.13.4",
@@ -12539,11 +12547,10 @@ name = "macro_authorization"
 version = "0.1.0"
 dependencies = [
  "axum",
+ "bearer_token",
  "bot_id",
- "bot_token",
  "constant_time_eq 0.3.1",
  "harness_id",
- "harness_token",
  "http-body-util",
  "jsonwebtoken 10.3.0",
  "macro_auth",

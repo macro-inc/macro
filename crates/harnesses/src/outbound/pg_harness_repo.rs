@@ -4,9 +4,9 @@
 mod tests;
 
 use anyhow::Context;
+use bearer_token::HashedHarnessToken;
 use chrono::{DateTime, Utc};
 use harness_id::HarnessId;
-use harness_token::HashedHarnessToken;
 use macro_user_id::user_id::MacroUserIdStr;
 use sqlx::PgPool;
 use uuid::Uuid;
