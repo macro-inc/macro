@@ -418,7 +418,9 @@ pub async fn new_email_document_atts(
             m.subject as subject
         FROM email_attachments a
         JOIN email_messages m ON a.message_id = m.id
-        JOIN email_contacts from_contact ON m.from_contact_id = from_contact.id
+        -- A draft can have no sender; every claimed row must come back or its
+        -- claim is never released.
+        LEFT JOIN email_contacts from_contact ON m.from_contact_id = from_contact.id
         WHERE a.id IN (SELECT id FROM claimed)
         ORDER BY a.id
         "#,
@@ -517,7 +519,9 @@ pub async fn new_email_document_atts(
             m.subject as subject
         FROM email_attachments a
         JOIN email_messages m ON a.message_id = m.id
-        JOIN email_contacts from_contact ON m.from_contact_id = from_contact.id
+        -- A draft can have no sender; every claimed row must come back or its
+        -- claim is never released.
+        LEFT JOIN email_contacts from_contact ON m.from_contact_id = from_contact.id
         WHERE a.id IN (SELECT id FROM claimed)
         ORDER BY a.id
         "#,
@@ -581,7 +585,9 @@ pub async fn new_email_media_atts(
             m.subject as subject
         FROM email_attachments a
         JOIN email_messages m ON a.message_id = m.id
-        JOIN email_contacts from_contact ON m.from_contact_id = from_contact.id
+        -- A draft can have no sender; every claimed row must come back or its
+        -- claim is never released.
+        LEFT JOIN email_contacts from_contact ON m.from_contact_id = from_contact.id
         WHERE a.id IN (SELECT id FROM claimed)
         ORDER BY a.id
         "#,
@@ -631,11 +637,11 @@ pub async fn fetch_attachment_upload_metadata_by_id(
             m.internal_date_ts as "internal_date_ts!",
             m.id as message_db_id,
             m.thread_id as thread_db_id,
-            from_contact.email_address as sender_email,
+            from_contact.email_address as "sender_email?",
             m.subject as subject
         FROM email_attachments a
         JOIN email_messages m ON a.message_id = m.id
-        JOIN email_contacts from_contact ON m.from_contact_id = from_contact.id
+        LEFT JOIN email_contacts from_contact ON m.from_contact_id = from_contact.id
         JOIN email_threads t ON m.thread_id = t.id
         WHERE a.id = $1
         "#,

@@ -1299,3 +1299,42 @@ async fn cloud_reference_documents_are_never_claimed_as_files(pool: Pool<Postgre
     assert!(!attachment_is_claimed(&pool, attachment.attachment_db_id).await?);
     Ok(())
 }
+
+/// A claimed attachment that the query doesn't return is never uploaded, and
+/// its claim keeps the message's projection waiting forever.
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../../fixtures", scripts("upload_claim_tests"))
+)]
+async fn senderless_message_returns_every_attachment_it_claims(
+    pool: Pool<Postgres>,
+) -> Result<()> {
+    const _: &sqlx::migrate::Migrator = &MACRO_DB_MIGRATIONS;
+
+    let link_id = Uuid::parse_str("00000000-0000-0000-0000-000000000c01")?;
+    let document_id = Uuid::parse_str("00000000-0000-0000-0000-00000c5a0501")?;
+    let media_id = Uuid::parse_str("00000000-0000-0000-0000-00000c5a0502")?;
+
+    let documents =
+        new_email_document_atts(&pool, link_id, "claim-test-senderless-draft-msg").await?;
+    let media = new_email_media_atts(&pool, link_id, "claim-test-senderless-draft-msg").await?;
+
+    assert!(attachment_is_claimed(&pool, document_id).await?);
+    assert!(attachment_is_claimed(&pool, media_id).await?);
+    assert_eq!(
+        documents
+            .iter()
+            .map(|a| (a.attachment_db_id, a.sender_email.clone()))
+            .collect::<Vec<_>>(),
+        [(document_id, None)]
+    );
+    assert_eq!(
+        media
+            .iter()
+            .map(|a| (a.attachment_db_id, a.sender_email.clone()))
+            .collect::<Vec<_>>(),
+        [(media_id, None)]
+    );
+
+    Ok(())
+}
