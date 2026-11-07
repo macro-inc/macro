@@ -66,3 +66,7 @@ that would skip individual surrogates which JavaScript without `u` can match.
 The conformance test covers this distinction over the complete BMP input.
 
 The rich-node package includes stored code/highlight preservation, plain code editing, inline marks, selection/tree/text/offset helpers and model clipboard strings. Its replayer executes all admitted code, mark and utility fixtures without package ledger entries. The recorder index still distinguishes unavailable B-only cases and view assertions; HTML export is the later `lexical_html` layer.
+
+`lexical_markdown` provides portable markdown import/export, ordered transformer
+contracts and standard block/inline groups. The Tier A interpreter routes markdown
+conversion through this engine; the regex corpus is checked against pinned V8.

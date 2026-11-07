@@ -302,3 +302,13 @@ fn rich_command_registration_is_required_and_snapshots_stay_strict() -> Result<(
     );
     Ok(())
 }
+#[test]
+fn markdown_normalization_replays_real_calls_and_rejects_wrong_returns() -> Result<()> {
+    let mut fixture: Fixture = serde_json::from_str(include_str!(
+        "../../../../../../packages/lexical-conformance/fixtures/upstream/lexical-markdown/048a1a6629fd63fa.json"
+    ))?;
+    Replayer::default().replay(&fixture)?;
+    fixture.trace[0]["ret"] = json!("wrong");
+    assert!(Replayer::default().replay(&fixture).is_err());
+    Ok(())
+}
