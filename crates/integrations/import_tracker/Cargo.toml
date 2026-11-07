@@ -1,5 +1,5 @@
 [package]
-name = "import_jira"
+name = "import_tracker"
 version = "0.1.0"
 edition = "2024"
 publish = false
@@ -9,11 +9,13 @@ async-trait = { workspace = true }
 http = { workspace = true }
 macro_user_id = { workspace = true }
 pipedream_mcp = { workspace = true }
+rootcause = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }
+thiserror = { workspace = true }
+tokio = { workspace = true, features = ["time", "sync"] }
 tracing = { workspace = true }
-workspace-hack = { version = "0.1", path = "../workspace-hack" }
-import_tracker = { workspace = true }
+workspace-hack = { version = "0.1", path = "../../workspace-hack" }
 
 [dev-dependencies]
 anyhow = { workspace = true }
