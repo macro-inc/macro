@@ -48,7 +48,7 @@ fn main() {
     let mut trials = Vec::new();
     for (package, path, fixture) in cases {
         let name = format!("upstream::{package}::{}", fixture.source.test.join(" > "));
-        let expected = ledger.entry(&fixture).map(|e| e.failure.clone());
+        let expected = ledger.entry(&fixture).cloned();
         let strict = ledger.strict_packages.contains(&package);
         let counts = counts.clone();
         let blocked = blocked.clone();
@@ -63,12 +63,12 @@ fn main() {
                     totals.pass += 1;
                     Ok(())
                 }
-                (Err(error), Some(expected)) if error.to_string() == expected => {
+                (Err(error), Some(expected)) if expected.matches_failure(&error) => {
                     totals.ledger += 1;
                     *blocked
                         .lock()
                         .expect("coverage lock")
-                        .entry(expected)
+                        .entry(expected.failure)
                         .or_default() += 1;
                     Ok(())
                 }

@@ -199,3 +199,37 @@ fn detached_root_does_not_generate_an_attached_root_commit() -> Result<()> {
     assert!(Replayer::default().replay(&fixture).is_err());
     Ok(())
 }
+
+#[test]
+fn wrong_selection_kind_fails_before_it_can_be_installed() -> Result<()> {
+    let mut fixture: Fixture = serde_json::from_str(ORACLE)?;
+    fixture.trace[4]["calls"] = json!([{
+        "op":"call","fn":"lexical.$createRangeSelection","args":[],
+        "ret":{"$sel":1,"kind":"node"}
+    }]);
+    assert!(
+        Replayer::default()
+            .replay(&fixture)
+            .expect_err("must compare selection kind")
+            .to_string()
+            .contains("selection kind mismatch")
+    );
+    Ok(())
+}
+#[test]
+fn an_extra_commit_without_a_pending_update_fails() -> Result<()> {
+    let mut fixture: Fixture = serde_json::from_str(ORACLE)?;
+    fixture.trace.push(fixture.trace[7].clone());
+    let op = fixture.trace.last_mut().expect("extra commit");
+    op["index"] = json!(3);
+    op["updates"] = json!([]);
+    op["causes"] = json!([]);
+    assert!(
+        Replayer::default()
+            .replay(&fixture)
+            .expect_err("must not invent commits")
+            .to_string()
+            .contains("commit without a pending update")
+    );
+    Ok(())
+}

@@ -5,7 +5,7 @@ use crate::{
 };
 use serde::Deserialize;
 /// Tier A ledger, pinned to the same upstream as fixtures.
-#[derive(Deserialize)]
+#[derive(Clone, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct Ledger {
     /// Oracle version.
@@ -18,7 +18,7 @@ pub struct Ledger {
     pub entries: Vec<Entry>,
 }
 /// One exact test identity. No case-level globs or blanket error matching.
-#[derive(Deserialize)]
+#[derive(Clone, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct Entry {
     /// Source file.
@@ -39,14 +39,14 @@ pub struct Entry {
     pub failure: String,
 }
 /// Only expected failures are currently admitted; they always execute.
-#[derive(Deserialize)]
+#[derive(Clone, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum Status {
     /// Unexpected success fails the ratchet.
     Xfail,
 }
 /// Supported, narrowly scoped S4 reasons.
-#[derive(Deserialize)]
+#[derive(Clone, Deserialize)]
 #[serde(rename_all = "kebab-case")]
 pub enum Reason {
     /// A later work package or explicit n/a API.
