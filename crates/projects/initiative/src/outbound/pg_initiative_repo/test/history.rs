@@ -3,12 +3,10 @@ use crate::domain::history::InitiativeHistory;
 use activity::domain::ports::ActivityRepo;
 use activity::outbound::pg_activity_repo::PgActivityRepo;
 use activity::{Action, Activity, Actor, DomainActivity, EntityType, InitiativeTaskChange};
-use entity_access::{
-    domain::{
-        models::ViewAccessLevel, ports::EntityAccessService, service::EntityAccessServiceImpl,
-    },
-    outbound::PgAccessRepository,
+use entity_access::domain::{
+    models::ViewAccessLevel, ports::EntityAccessService, service::EntityAccessServiceImpl,
 };
+use entity_access_outbound::PgAccessRepository;
 use std::sync::Arc;
 
 /// The project-side row the properties domain records when a task's Project

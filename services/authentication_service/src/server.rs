@@ -26,7 +26,8 @@ use contacts::{domain::service::SqsContactsIngress, outbound::ingress::SqsContac
 use document_storage_service_client::DocumentStorageServiceClient;
 use document_storage_service_url::DocumentStorageServiceUrl;
 use email_service_url::EmailServiceUrl;
-use entity_access::{domain::service::EntityAccessServiceImpl, outbound::PgAccessRepository};
+use entity_access::domain::service::EntityAccessServiceImpl;
+use entity_access_outbound::PgAccessRepository;
 use entity_registry::{EntityRegistryServiceImpl, PgEntityRegistryRepository};
 use foreign_entity::{
     domain::service::ForeignEntityServiceImpl,

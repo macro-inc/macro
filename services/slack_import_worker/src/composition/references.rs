@@ -3,7 +3,8 @@
 
 use std::collections::HashMap;
 
-use entity_access::{domain::ports::AccessRepository, outbound::PgAccessRepository};
+use entity_access::domain::ports::AccessRepository;
+use entity_access_outbound::PgAccessRepository;
 use import::outbound::pg_import_repo::PgImportRepo;
 use messages::{
     domain::ports::HistoricalMessageReader, outbound::pg_message_repo::PgMessageRepository,

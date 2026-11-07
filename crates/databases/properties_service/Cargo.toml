@@ -15,6 +15,7 @@ path = "src/openapi.rs"
 [dependencies]
 axum = { workspace = true, features = ["tower-log", "ws"] }
 entity_access = { workspace = true, default-features = true }
+entity_access_outbound = { workspace = true }
 macro_authorization = { workspace = true, default-features = true }
 models_properties = { workspace = true }
 notification = { workspace = true, default-features = true }

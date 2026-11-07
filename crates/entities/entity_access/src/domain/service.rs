@@ -966,7 +966,7 @@ impl<R: AccessRepository> AccessiblePipelines for EntityAccessServiceImpl<R> {
 /// any number of them. A kind whose audience adds anyone else (email owners, CRM
 /// teams, channel members) must stay off this list; the grouped-audience
 /// equivalence test runs every kind listed here.
-pub(crate) const GRANT_AUDIENCE_KINDS: [EntityType; 9] = [
+pub const GRANT_AUDIENCE_KINDS: [EntityType; 9] = [
     EntityType::Document,
     EntityType::Chat,
     EntityType::Project,

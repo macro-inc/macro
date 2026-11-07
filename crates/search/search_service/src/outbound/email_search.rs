@@ -6,7 +6,7 @@ use email_db_client::threads::search_filters::{
     ThreadAttachmentKind, ThreadStateFilter, calendar_thread_ids, draft_thread_ids,
     sent_thread_ids, thread_ids_matching_states,
 };
-use entity_access::outbound::{
+use entity_access_outbound::{
     get_user_source_ids, project_email_threads, project_shared_email_threads, shared_email_threads,
 };
 use item_filters::ast::email::AttachmentKind;
@@ -25,7 +25,7 @@ fn limit(limit: usize) -> i64 {
     i64::try_from(limit).unwrap_or(i64::MAX)
 }
 
-fn shared_thread(thread: entity_access::outbound::SharedEmailThread) -> SharedThread {
+fn shared_thread(thread: entity_access_outbound::SharedEmailThread) -> SharedThread {
     SharedThread {
         thread_id: thread.thread_id,
         link_id: thread.link_id,

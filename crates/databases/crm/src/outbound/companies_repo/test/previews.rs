@@ -9,7 +9,8 @@ use axum::{
     body::{Body, to_bytes},
     http::{Request, StatusCode, request::Builder},
 };
-use entity_access::{domain::service::EntityAccessServiceImpl, outbound::PgAccessRepository};
+use entity_access::domain::service::EntityAccessServiceImpl;
+use entity_access_outbound::PgAccessRepository;
 use harness_id::HarnessId;
 use macro_authorization::{
     AuthorizedUserApiKey, CredentialOrigin, HARNESS_TOKEN_HEADER, HarnessAuthentication,

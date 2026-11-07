@@ -19,10 +19,8 @@ use databases::outbound::{
     gateway_event_publisher::NoOpTableEventPublisher, pg_cell_store::PgCellStore,
 };
 use databases::wiring::{PgDatabasesService, build_service};
-use entity_access::{
-    domain::{models::*, service::EntityAccessServiceImpl},
-    outbound::PgAccessRepository,
-};
+use entity_access::domain::{models::*, service::EntityAccessServiceImpl};
+use entity_access_outbound::PgAccessRepository;
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
 use macro_event_broker::NoopMacroEventBroker;
 use macro_user_id::{cowlike::CowLike, user_id::MacroUserIdStr};

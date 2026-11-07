@@ -28,6 +28,7 @@ documents = { workspace = true, features = [
   "ports",
 ] }
 entity_access = { workspace = true, default-features = true }
+entity_access_outbound = { workspace = true }
 entity_access_db_utils = { workspace = true }
 anyhow = { workspace = true }
 axum = { workspace = true, features = ["ws"] }

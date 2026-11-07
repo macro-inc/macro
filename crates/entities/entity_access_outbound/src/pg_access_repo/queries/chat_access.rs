@@ -1,0 +1,152 @@
+//! Query for chat access level.
+
+#[cfg(test)]
+mod test;
+
+use crate::pg_access_repo::queries::SourceIds;
+#[cfg(feature = "explain_binary")]
+use crate::pg_access_repo::queries::list_entity_access_grants;
+#[cfg(feature = "explain_binary")]
+use entity_access::domain::models::AccessGrant;
+use entity_access::domain::models::AccessLevel;
+#[cfg(feature = "explain_binary")]
+use model_entity::EntityType;
+use sqlx::PgPool;
+use std::str::FromStr;
+
+/// Get the highest access level a user has for a chat.
+#[tracing::instrument(err, skip(pool, source_ids))]
+pub async fn get_chat_access(
+    pool: &PgPool,
+    chat_id: &uuid::Uuid,
+    source_ids: &SourceIds,
+) -> Result<Option<AccessLevel>, sqlx::Error> {
+    // Check share permission access only
+    if source_ids.0.is_empty() {
+        let access_level = sqlx::query_scalar!(
+            r#"
+            SELECT
+                sp."linkShareAccessLevel" AS "access_level!: AccessLevel"
+            FROM "SharePermission" sp
+            JOIN "ChatPermission" cp ON cp."sharePermissionId" = sp.id
+            WHERE cp."chatId" = $1
+              AND sp."linkShare" = 'PUBLIC'
+              AND sp."linkShareAccessLevel" IS NOT NULL
+
+            "#,
+            &chat_id.to_string()
+        )
+        .fetch_optional(pool)
+        .await?;
+
+        return Ok(access_level);
+    }
+
+    let all_level_strings: Vec<Option<String>> = sqlx::query_scalar!(
+        r#"
+        SELECT access_level FROM (
+            -- Source 1: entity_access source_id match
+            SELECT
+                access_level::text FROM entity_access
+            WHERE entity_id = $1
+            AND entity_type = 'chat'
+            AND source_id = ANY($2)
+
+            UNION ALL
+            -- Source 2: chat link share permission
+            SELECT
+                sp."linkShareAccessLevel"::text AS access_level
+            FROM "SharePermission" sp
+            JOIN "ChatPermission" cp ON cp."sharePermissionId" = sp.id
+            WHERE cp."chatId" = $3
+              AND sp."linkShareAccessLevel" IS NOT NULL
+              AND (
+                  sp."linkShare" = 'PUBLIC'
+                  OR (
+                      sp."linkShare" = 'TEAM'
+                      AND EXISTS (
+                          SELECT 1
+                          FROM "Chat" c
+                          CROSS JOIN owner_team(c."userId") owner_tu
+                          WHERE c.id = $3
+                            AND owner_tu.team_id::text = ANY($2)
+                      )
+                  )
+              )
+        ) AS combined_access
+        "#,
+        chat_id,
+        &source_ids.0,
+        &chat_id.to_string()
+    )
+    .fetch_all(pool)
+    .await?;
+
+    let highest_level = all_level_strings
+        .iter()
+        .filter_map(|opt| opt.as_ref().and_then(|s| AccessLevel::from_str(s).ok()))
+        .max();
+
+    Ok(highest_level)
+}
+
+#[cfg(feature = "explain_binary")]
+#[tracing::instrument(err, skip(pool, source_ids))]
+pub async fn explain_chat_access(
+    pool: &PgPool,
+    chat_id: &uuid::Uuid,
+    source_ids: &SourceIds,
+) -> Result<Vec<AccessGrant>, sqlx::Error> {
+    let mut grants = list_entity_access_grants(pool, chat_id, EntityType::Chat, source_ids).await?;
+    let chat_id_str = chat_id.to_string();
+
+    let public_levels = sqlx::query_scalar!(
+        r#"
+        SELECT
+            sp."linkShareAccessLevel" AS "access_level!: AccessLevel"
+        FROM "SharePermission" sp
+        JOIN "ChatPermission" cp ON cp."sharePermissionId" = sp.id
+        WHERE cp."chatId" = $1
+          AND sp."linkShare" = 'PUBLIC'
+          AND sp."linkShareAccessLevel" IS NOT NULL
+        "#,
+        &chat_id_str
+    )
+    .fetch_all(pool)
+    .await?;
+    grants.extend(
+        public_levels
+            .into_iter()
+            .map(|access_level| AccessGrant::PublicLink { access_level }),
+    );
+
+    if source_ids.0.is_empty() {
+        return Ok(grants);
+    }
+
+    let team_rows = sqlx::query!(
+        r#"
+        SELECT
+            sp."linkShareAccessLevel" AS "access_level!: AccessLevel",
+            owner_tu.team_id AS "owner_team_id!"
+        FROM "SharePermission" sp
+        JOIN "ChatPermission" cp ON cp."sharePermissionId" = sp.id
+        JOIN "Chat" c ON c.id = cp."chatId"
+        JOIN owner_team(c."userId") owner_tu
+          ON owner_tu.team_id::text = ANY($2)
+        WHERE cp."chatId" = $1
+          AND sp."linkShare" = 'TEAM'
+          AND sp."linkShareAccessLevel" IS NOT NULL
+        "#,
+        &chat_id_str,
+        &source_ids.0,
+    )
+    .fetch_all(pool)
+    .await?;
+    grants.extend(team_rows.into_iter().map(|row| AccessGrant::TeamLink {
+        access_level: row.access_level,
+        owner_team_id: row.owner_team_id,
+    }));
+
+    Ok(grants)
+}

@@ -22,12 +22,10 @@ use axum::{
     http::{Request, StatusCode},
     routing::get,
 };
-use entity_access::{
-    domain::{
-        models::MemberTeamRole, ports::EntityAccessService, service::EntityAccessServiceImpl,
-    },
-    outbound::PgAccessRepository,
+use entity_access::domain::{
+    models::MemberTeamRole, ports::EntityAccessService, service::EntityAccessServiceImpl,
 };
+use entity_access_outbound::PgAccessRepository;
 use filter_ast::Expr;
 use item_filters::ast::crm_contact::CrmContactLiteral;
 use macro_authorization::{
