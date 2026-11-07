@@ -43,8 +43,11 @@ const _: () = {
     assert_send_sync::<Registry>();
     assert_send_sync::<Commit>();
     assert_send_sync::<Selection>();
+    assert_send_sync::<EditorCore>();
     assert_send_sync::<Diff>();
     assert_send_sync::<Command>();
+    assert_send_sync::<Input>();
+    assert_send_sync::<Output>();
 };
 
 mod tags;
@@ -71,3 +74,5 @@ pub use history::*;
 mod diff;
 pub use diff::*;
 
+mod core;
+pub use core::*;

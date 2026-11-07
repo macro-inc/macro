@@ -3,7 +3,7 @@
 ## What it is
 
 Portable editor model for the Lexical port. This crate owns values, registered
-node types, immutable snapshots, transactional tree editing, update processing, JSON interchange, selection editing directional caret traversal, commands, plugins and history.
+node types, immutable snapshots, transactional tree editing, update processing, JSON interchange, selection editing directional caret traversal, commands, plugins, history, structural view diffs and EditorCore.
 
 ## Start here
 
@@ -14,6 +14,8 @@ node types, immutable snapshots, transactional tree editing, update processing, 
 - `src/commit.rs` computes mutations before cache writes and atomically publishes snapshots.
 - `src/plugin.rs`, `command.rs` and `extension.rs` own dispatch, follow-up rounds and transactional extension state.
 - `src/history.rs` owns undo/redo stacks and the standalone merge tracker.
+- `src/diff/` owns the versioned flat ABI; keep all 11 opcodes in sync with the independent TS decoder test.
+- `src/core/` owns input policy, raw remote edits and host effects.
 - `src/caret/` implements directional positions, eager cursors, range removal and splitting.
 - `src/json.rs` preserves export order and JavaScript number serialization.
 
@@ -27,7 +29,9 @@ node types, immutable snapshots, transactional tree editing, update processing, 
 - Caret cursors compute successors before returning items; keep the construction-time first step.
 - Commands visit registered listeners only; external dispatch flushes between levels, inline dispatch does not.
 - Hooks share one follow-up transaction per round and stop at 99 rounds; extension state rolls back with updates.
-- History restores snapshots without rerunning transforms; view diffs remain a later layer.
+- History restores snapshots without rerunning transforms; diffs compare descendant map entries even when ancestor records are shared.
+- EditorCore is sans-IO: host time, layout, clipboard and composition facts arrive as data; effects leave as values.
+- Failed hook rounds roll back early publications too; failed main inputs retain and report their early commits.
 
 ## Checks
 
@@ -35,6 +39,7 @@ node types, immutable snapshots, transactional tree editing, update processing, 
 - `cargo test -p lexical_model --all-features -j4`
 - `cargo check -p lexical_model --all-features --target wasm32-unknown-unknown -j4`
 - `cargo clippy -p lexical_model --all-targets -j4 -- -D warnings`
+- `cargo test -p lexical_conformance --test flat_diff -j4` (requires Bun for the independent decoder)
 - `cargo tree -p lexical_model --target wasm32-unknown-unknown -i workspace-hack`
 - `cargo x deps --check`, `cargo shear`, `just check`
 
