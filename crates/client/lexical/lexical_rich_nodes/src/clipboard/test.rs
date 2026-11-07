@@ -124,3 +124,58 @@ fn rich_drop_uses_the_supplied_target_namespace() -> Result<(), Error> {
     })?;
     Ok(())
 }
+
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+struct CloneAwareText {
+    clones: u32,
+}
+impl NodeType for CloneAwareText {
+    const TYPE: &'static str = "clone-aware-text";
+    type Kind = TextKind;
+    impl_default_node!();
+    fn after_clone(&self) -> Option<Self> {
+        Some(Self {
+            clones: self.clones + 1,
+        })
+    }
+}
+impl TextNode for CloneAwareText {
+    text_node_base!();
+    fn adjust_export_json(
+        &self,
+        node: NodeView<'_>,
+        json: &mut SerializedNode,
+    ) -> Result<(), Error> {
+        json.insert(
+            "seenText".into(),
+            Value::String(node.state.text_content(node.key).into_owned()),
+        );
+        Ok(())
+    }
+}
+#[test]
+fn sliced_copy_runs_clone_and_export_hooks_on_ephemeral_text() -> Result<(), Error> {
+    let mut editor = Editor::builder(EditorMode::Headless)
+        .node::<CloneAwareText>()
+        .build()
+        .unwrap();
+    editor.update(|tx| {
+        let p = tx.create(Paragraph {})?;
+        let text = tx.create(CloneAwareText::default())?;
+        tx.text(text)?.set_text_content("abcd")?;
+        tx.append(p, &[text.key()])?;
+        tx.append(NodeKey::ROOT, &[p.key()])?;
+        let range = Selection::Range(RangeSelection::new(
+            Point::text(text, Utf16Offset(1)),
+            Point::text(text, Utf16Offset(3)),
+        ));
+        let payload = generate_json_from_selected_nodes(tx.view(), "test", Some(&range))?;
+        assert_eq!(payload.nodes[0]["text"], "bc");
+        assert_eq!(payload.nodes[0]["seenText"], "bc");
+        assert_eq!(payload.nodes[0]["clones"], 1);
+        assert_eq!(tx.get_or_err::<CloneAwareText>(text)?.clones, 0);
+        assert_eq!(tx.text_content(text), "abcd");
+        Ok(())
+    })?;
+    Ok(())
+}
