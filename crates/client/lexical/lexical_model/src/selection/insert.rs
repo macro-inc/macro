@@ -96,7 +96,7 @@ impl Transaction<'_> {
                         .is_some_and(|parent| self.is::<Paragraph>(parent))
             })
         {
-            return self.insert_text_across_paragraph_nodes(slot, &original, &selected, text);
+            return self.insert_text_across_paragraph_nodes(slot, &original, &selected, text, backward);
         }
         let first_format = selected
             .first()
@@ -302,10 +302,10 @@ impl Transaction<'_> {
         range: &RangeSelection,
         nodes: &[NodeKey],
         text: &str,
+        backward: bool,
     ) -> Result<(), Error> {
         let first = *nodes.first().ok_or(Error::NoRangeSelection)?;
         let mut last = *nodes.last().ok_or(Error::NoRangeSelection)?;
-        let backward = range.is_backward(self.view())?;
         let (start, end) = if backward {
             (range.focus, range.anchor)
         } else {
