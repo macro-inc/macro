@@ -13,7 +13,7 @@ import { fileURLToPath } from 'node:url';
 
 const COUNTER_SOURCE = fileURLToPath(
   new URL(
-    '../../../../../crates/macro_cache_client/src/create_user_rate_limit.rs',
+    '../../../../../crates/clients/macro_cache_client/src/create_user_rate_limit.rs',
     import.meta.url
   )
 );

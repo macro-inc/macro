@@ -1,0 +1,34 @@
+[package]
+edition = "2024"
+name = "fusionauth"
+publish = false
+version = "0.1.0"
+
+[dependencies]
+anyhow = { workspace = true }
+base64 = { workspace = true }
+jsonwebtoken = { workspace = true }
+google_oauth_revoke_url = { workspace = true }
+google_oauth_token_url = { workspace = true }
+microsoft_graph_url = { workspace = true }
+microsoft_login_page_url = { workspace = true }
+microsoft_login_url = { workspace = true }
+model_error_response = { workspace = true, features = ["anyhow"] }
+reqwest = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+serde_urlencoded = { workspace = true }
+strum = { workspace = true }
+thiserror = { workspace = true }
+tracing = { workspace = true }
+upstream_error = { workspace = true, features = [
+  "reqwest",
+] }
+urlencoding = { workspace = true }
+uuid = { workspace = true }
+workspace-hack = { version = "0.1", path = "../../workspace-hack" }
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["test-util", "net", "io-util", "sync"] }
+tracing-subscriber = { workspace = true }
+wiremock = { workspace = true }

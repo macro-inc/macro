@@ -186,7 +186,7 @@ uncovered endpoint.
 ## 9. Other callers (optional)
 
 - **Other Rust services:** extend the hand-written client crate
-  (`crates/document_storage_service_client`, `crates/email_service_client`, ...)
+  (`crates/clients/document_storage_service_client`, `crates/clients/email_service_client`, ...)
   and gate the route with `InternalOnly`/`UserOrInternal`.
 - **New top-level path on a gateway service:** a path outside the service's
   existing prefix isn't routed until its gateway path patterns cover it (see

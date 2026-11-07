@@ -1,0 +1,20 @@
+[package]
+edition = "2024"
+name = "static_file_service_client"
+publish = false
+version = "0.1.0"
+
+[dependencies]
+anyhow = { workspace = true }
+bytes = { workspace = true }
+macro_aws_config = { workspace = true }
+models_sfs = { workspace = true }
+reqwest = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+tracing = { workspace = true }
+workspace-hack = { version = "0.1", path = "../../workspace-hack" }
+
+[dev-dependencies]
+tokio = { workspace = true }
+static_file_service_url = { workspace = true }

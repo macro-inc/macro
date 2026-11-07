@@ -21,7 +21,7 @@ users, independent of the HTTP client.
 - Owns: the `ConnectionService` port (invalidation events, channel messages)
   and its adapter onto `connection_gateway_client`.
 - Not here: the HTTP transport and request shapes to the gateway →
-  `crates/connection_gateway_client`.
+  `crates/clients/connection_gateway_client`.
 
 ## Boundaries
 

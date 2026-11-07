@@ -136,7 +136,7 @@ nix develop -c just apps/web/test-email-e2e-full-stack email-e2e reply   # only 
   The whole tier signs up from one address, so `harness/sign-up-limit.ts`
   clears that counter in the stack's own Redis before each sign-up, and only
   in a Redis on this machine. The key is read from
-  `crates/macro_cache_client/src/create_user_rate_limit.rs`, and the run
+  `crates/clients/macro_cache_client/src/create_user_rate_limit.rs`, and the run
   stops before its first test if a sign-up leaves no such key: change the
   harness with the service when the counter moves.
 - The emulators forget everything when the stack restarts, while the

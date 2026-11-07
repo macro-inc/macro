@@ -4,7 +4,7 @@
 
 Macro computers on Firecracker: the agent on each Firecracker host. It
 restores computers from golden snapshots into jailed Firecracker processes
-and serves `crates/firecracker_host_api` over mTLS to the control plane's
+and serves `crates/clients/firecracker_host_api` over mTLS to the control plane's
 `FirecrackerFleet` (`crates/hosted_runtimes`). Incus hosts don't run it.
 
 ## How it works

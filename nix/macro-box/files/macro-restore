@@ -35,7 +35,7 @@ finish() {
 }
 
 # MMDS address, token path and headers: the contract in
-# crates/firecracker_host_api/src/mmds.rs (mmds::ADDRESS, TOKEN_PATH,
+# crates/clients/firecracker_host_api/src/mmds.rs (mmds::ADDRESS, TOKEN_PATH,
 # TOKEN_TTL_HEADER, TOKEN_HEADER, IDENTITY_POINTER); keep them in step.
 mmds=http://169.254.169.254
 token=$(curl --silent --show-error --fail --max-time 2 --retry 20 --retry-delay 0 \
