@@ -51,8 +51,7 @@ lists what this group may depend on. `cargo x deps` reports edges that break it.
 ## Folds
 
 `agent_fold`, `claude_fold` and `codex_fold` are pure, deterministic folds
-that turn agent transcripts into Macro messages; they used to live in
-`crates/folds/`. Keep filesystem tailing, process control, transport,
+that turn agent transcripts into Macro messages. Keep filesystem tailing, process control, transport,
 credentials and session ownership in their adapters.
 
 - `claude_fold`: Claude Code JSONL to ACP updates and turn facts.

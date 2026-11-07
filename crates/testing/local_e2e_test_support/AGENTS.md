@@ -20,12 +20,12 @@ tests — fixture loading, local JWTs, and local-only service URLs.
 - Owns: test-only plumbing for the local E2E harness — never used in
   production services.
 - Not here: the harness itself (`just local-e2e-rust`) or stack
-  startup/seeding — see `crates/integration_tests/local_e2e`.
+  startup/seeding — see `crates/testing/local_e2e`.
 
 ## Boundaries
 
 - Depends on: `macro_auth`.
-- Used by: `crates/integration_tests/local_e2e`, run only from ignored
+- Used by: `crates/testing/local_e2e`, run only from ignored
   integration tests.
 
 ## Recipes
