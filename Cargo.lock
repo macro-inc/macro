@@ -11753,6 +11753,7 @@ name = "lexical_conformance"
 version = "0.1.0"
 dependencies = [
  "lexical_model",
+ "lexical_rich_nodes",
  "libtest-mimic",
  "serde",
  "serde_json",

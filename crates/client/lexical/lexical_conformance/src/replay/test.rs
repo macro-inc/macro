@@ -275,3 +275,30 @@ fn caret_metadata_and_object_identity_are_observable() {
             .is_err()
     );
 }
+
+#[test]
+fn rich_command_registration_is_required_and_snapshots_stay_strict() -> Result<()> {
+    let fixture: Fixture = serde_json::from_str(include_str!(
+        "../../../../../../packages/lexical-conformance/fixtures/upstream/lexical-rich-text/18ab5b575b3c7062.json"
+    ))?;
+    Replayer::default().replay(&fixture)?;
+    let mut missing = fixture.clone();
+    missing.trace.retain(|op| op["op"] != "plugin");
+    assert!(
+        Replayer::default()
+            .replay(&missing)
+            .expect_err("missing listener cannot claim command")
+            .to_string()
+            .contains("value mismatch: true != false")
+    );
+    let mut wrong = fixture;
+    wrong.r#final["json"]["root"]["children"][0]["children"][0]["format"] = json!(0);
+    assert!(
+        Replayer::default()
+            .replay(&wrong)
+            .expect_err("must compare node formatting")
+            .to_string()
+            .contains("snapshot JSON")
+    );
+    Ok(())
+}

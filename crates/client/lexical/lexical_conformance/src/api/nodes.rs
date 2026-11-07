@@ -18,6 +18,19 @@ pub(crate) fn call(
         .map(EditorState::view)
         .unwrap_or(tx.view());
     match method {
+        "getFirstDescendant" => {
+            return view
+                .first_descendant(key)
+                .map(|key| r.node(view, key))
+                .unwrap_or(Ok(Value::Null));
+        }
+        "getTag" => {
+            return Ok(serde_json::to_value(
+                view.get::<lexical_rich_nodes::heading::HeadingNode>(key)
+                    .ok_or_else(|| fail("heading"))?
+                    .tag,
+            )?);
+        }
         "getType" => return Ok(json!(view.type_name(key)?)),
         "getKey" => return Ok(json!({"$nodeKey":key.index()})),
         "getTextContent" => return Ok(json!(view.text_content(key))),
@@ -75,6 +88,24 @@ pub(crate) fn call(
         _ => {}
     }
     match method {
+        "setTag" => {
+            let tag = serde_json::from_value(a.first().cloned().ok_or_else(|| fail("tag"))?)?;
+            lexical_rich_nodes::heading::set_tag(
+                tx,
+                tx.view()
+                    .cast::<lexical_rich_nodes::heading::HeadingNode>(key)
+                    .ok_or_else(|| fail("heading"))?,
+                tag,
+            )?;
+        }
+        "collapseAtStart" => {
+            let slot = a
+                .first()
+                .map(|v| slot_arg(r, v))
+                .transpose()?
+                .unwrap_or(SelectionSlot::Active);
+            return Ok(json!(tx.collapse_at_start(key, slot)?));
+        }
         "append" => {
             let nodes = a.iter().map(node_key).collect::<Result<Vec<_>>>()?;
             tx.append(key, &nodes)?;
