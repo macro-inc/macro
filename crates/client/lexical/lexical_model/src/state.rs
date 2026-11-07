@@ -101,3 +101,12 @@ impl Read for EditorState {
         self.view()
     }
 }
+
+impl std::fmt::Debug for EditorState {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("EditorState")
+            .field("node_count", &self.node_count())
+            .field("selection", &self.selection)
+            .finish_non_exhaustive()
+    }
+}

@@ -283,6 +283,7 @@ impl Editor {
     }
     /// Drain build-time follow-up commits once.
     pub fn take_initial_commits(&mut self) -> Vec<Commit> {
+        self.initial_diff = None;
         std::mem::take(&mut self.initial_commits)
     }
 }

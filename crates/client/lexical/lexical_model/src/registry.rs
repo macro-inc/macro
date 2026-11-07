@@ -511,6 +511,19 @@ impl EditorBuilder {
                 )));
             }
             editor.initial_commits = std::mem::take(&mut initial.following);
+            if let Some(first) = editor.initial_commits.first() {
+                let mut chain = first.clone();
+                chain
+                    .following
+                    .extend(editor.initial_commits.iter().skip(1).cloned());
+                editor.initial_diff = Some(
+                    chain
+                        .diff(&DiffOptions {
+                            include_state: true,
+                        })
+                        .map_err(|error| BuildError::InitialState(Box::new(error)))?,
+                );
+            }
         }
         Ok(editor)
     }
