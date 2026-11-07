@@ -1,0 +1,8 @@
+[package]
+name = "mention_date"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+[dependencies]
+lazy-regex.workspace = true

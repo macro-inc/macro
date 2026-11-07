@@ -5,6 +5,7 @@ edition = "2024"
 publish = false
 
 [dependencies]
+mention_date.workspace = true
 lexical_model = { workspace = true }
 lexical_rich_nodes = { workspace = true }
 lexical_node_id = { workspace = true }

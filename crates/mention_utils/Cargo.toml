@@ -5,6 +5,7 @@ publish = false
 version = "0.1.0"
 
 [dependencies]
+mention_date.workspace = true
 bot_id = { path = "../bot_id" }
 channel_sender = { path = "../channel_sender" }
 lazy-regex = { workspace = true }

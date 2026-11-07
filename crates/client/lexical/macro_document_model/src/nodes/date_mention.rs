@@ -49,3 +49,25 @@ impl SearchText for DateMentionNode {
         Some(js_optional(&self.display_format).into())
     }
 }
+
+/// Read an internal date body as a typed JSON payload or a bare ISO calendar value.
+pub fn parse_date_mention_body(body: &str) -> Option<DateMentionNode> {
+    let body = js_trim(body);
+    if body.starts_with('{') {
+        let data: Value = serde_json::from_str(body).ok()?;
+        return Some(DateMentionNode {
+            date: Maybe::Value(data.get("date")?.as_str()?.into()),
+            display_format: Maybe::Value(data.get("displayFormat")?.as_str()?.into()),
+            mention_uuid: data
+                .get("mentionUuid")
+                .and_then(Value::as_str)
+                .map(|s| Maybe::Value(s.into()))
+                .unwrap_or_default(),
+        });
+    }
+    Some(DateMentionNode {
+        date: Maybe::Value(body.into()),
+        display_format: Maybe::Value(mention_date::bare_date_label(body)?),
+        mention_uuid: Maybe::Missing,
+    })
+}

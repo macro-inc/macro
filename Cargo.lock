@@ -12625,6 +12625,7 @@ dependencies = [
  "lexical_model",
  "lexical_node_id",
  "lexical_rich_nodes",
+ "mention_date",
  "nom 8.0.0",
  "regress",
  "serde",
@@ -13143,6 +13144,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "mention_date"
+version = "0.1.0"
+dependencies = [
+ "lazy-regex",
+]
+
+[[package]]
 name = "mention_utils"
 version = "0.1.0"
 dependencies = [
@@ -13151,6 +13159,7 @@ dependencies = [
  "cool_asserts",
  "lazy-regex",
  "macro_user_id",
+ "mention_date",
  "nom 8.0.0",
  "serde",
  "serde_json",
