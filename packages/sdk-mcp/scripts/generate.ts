@@ -514,7 +514,11 @@ function convertObject(type: ts.Type, failures: string[]): Schema {
     // An optional `signal` or callback is simply never passed, and a
     // `?: never` member of a union variant can never be set.
     const present = withoutUndefined(propertyType);
-    if (optional && (isOpaque(present) || present.flags & (ts.TypeFlags.Undefined | ts.TypeFlags.Never)))
+    if (
+      optional &&
+      (isOpaque(present) ||
+        present.flags & (ts.TypeFlags.Undefined | ts.TypeFlags.Never))
+    )
       continue;
     const nested: string[] = [];
     const schema = convert(
