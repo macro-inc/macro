@@ -116,7 +116,7 @@ impl RichHandle {
         let state = self.editor.state();
         let selection = match state.selection() {
             Some(Selection::Table(t)) => {
-                json!({"type":"table","table":snapshot::path(state.view(),t.table)?,"anchor":snapshot::point(state.view(),t.anchor)?,"focus":snapshot::point(state.view(),t.focus)?})
+                json!({"type":"table","table":snapshot::path(state.view(),t.table).ok(),"anchor":json!({"path":snapshot::path(state.view(),t.anchor.key()).ok(),"offset":t.anchor.offset(),"type":t.anchor.point_type().to_string()}),"focus":json!({"path":snapshot::path(state.view(),t.focus.key()).ok(),"offset":t.focus.offset(),"type":t.focus.point_type().to_string()})})
             }
             Some(Selection::Node(n)) => {
                 json!({"type":"node","nodes":n.nodes(state.view()).iter().map(|k|snapshot::path(state.view(),*k)).collect::<Result<Vec<_>,_>>()?})
