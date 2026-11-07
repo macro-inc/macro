@@ -41,6 +41,7 @@ pub(crate) fn string(value: &Value) -> Result<&str> {
 /// Owns one fixture's identities, persistent versions and callback tapes.
 #[derive(Default)]
 pub struct Replayer {
+    pub(crate) carets: Vec<crate::api::caret::CaretValue>,
     pub(crate) handles: HashMap<String, Value>,
     pub(crate) keys: HashMap<String, NodeKey>,
     pub(crate) records: HashMap<(NodeKey, usize), (u64, u64)>,
@@ -394,7 +395,16 @@ impl Replayer {
         validate_operation(op)?;
         match string(&op["op"])? {
             "call" => {
+                let selection = tx.selection().cloned();
+                let replacements = tx.selection_replacements();
                 let result = crate::api::lexical::call(self, tx, op);
+                if replacements != tx.selection_replacements() {
+                    if let Some(id) = self.active_selection.take()
+                        && let Some(selection) = selection
+                    {
+                        self.selections[id] = tx.detach_selection(selection);
+                    }
+                }
                 if let Some(expected) = op.get("throws") {
                     match result {
                         Ok(value) => {
@@ -569,6 +579,16 @@ impl Replayer {
                             )));
                         }
                     } else {
+                        if tag == "$caret" {
+                            for field in ["type", "direction"] {
+                                if object.get(field) != actual.get(field) {
+                                    return Err(fail(format!("caret {field} mismatch")));
+                                }
+                            }
+                            if let Some(origin) = object.get("origin") {
+                                self.compare(origin, &actual["origin"])?;
+                            }
+                        }
                         if tag == "$sel" && object.get("kind") != actual.get("kind") {
                             return Err(fail("selection kind mismatch"));
                         }
