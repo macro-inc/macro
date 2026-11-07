@@ -1,5 +1,6 @@
 import '@app/index.css';
 import { EmailReminderMenu } from '@app/features/reminders/views/email-reminder-menu';
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { createSignal } from 'solid-js';
 import { render } from 'solid-js/web';
 
@@ -19,6 +20,9 @@ function Fixture() {
     </>
   );
 }
+
+// The app sets this at startup; the phone layout's `touch:` styles read it.
+document.documentElement.dataset.touchDevice = String(isTouchDevice());
 
 const root = document.getElementById('root');
 if (root) render(() => <Fixture />, root);
