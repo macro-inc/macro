@@ -41,6 +41,7 @@ lists what this group may depend on. `cargo x deps` reports edges that break it.
 | `serde_utils` |  |
 | [`stream`](stream/AGENTS.md) | Shared infrastructure — a Redis Streams abstraction (typed append/read/ack over `model_entity` payloads) for services that want an ordered, consumer-group event log … |
 | [`upstream_error`](upstream_error/AGENTS.md) | Shared classification for failures of third-party services (GitHub, FusionAuth, ...) so they reach clients as 502/503 with a message the user can act on, instead of a … |
+| [`worker_rs_otel`](worker_rs_otel/AGENTS.md) | Shared infrastructure for observability — OpenTelemetry tracing support for Cloudflare Workers built with `worker-rs` (used by `services/sync-service`). |
 
 ## Recipes
 

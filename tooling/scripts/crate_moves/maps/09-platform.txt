@@ -28,3 +28,4 @@ crates/remote_env_var crates/platform/remote_env_var
 crates/serde_utils crates/platform/serde_utils
 crates/stream crates/platform/stream
 crates/upstream_error crates/platform/upstream_error
+crates/worker_rs_otel crates/platform/worker_rs_otel

@@ -12,4 +12,4 @@ anyhow = ["dep:anyhow"]
 anyhow = { workspace = true, optional = true }
 serde = { workspace = true }
 utoipa = { workspace = true }
-workspace-hack = { version = "0.1", path = "../workspace-hack" }
+workspace-hack = { version = "0.1", path = "../../workspace-hack" }
