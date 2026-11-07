@@ -230,6 +230,7 @@ auth_service_url = { workspace = true }
 google_oauth_authorization_url = { workspace = true }
 mcp_service_url = { workspace = true }
 connection_gateway_websocket_url = { workspace = true }
+team_id = { workspace = true }
 
 [dev-dependencies]
 cool_asserts = "2"

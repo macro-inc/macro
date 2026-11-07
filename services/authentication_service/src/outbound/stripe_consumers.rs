@@ -25,6 +25,7 @@ use stripe_inbox::domain::model::{
     SubscriptionChange, SubscriptionFacts,
 };
 use stripe_inbox::domain::ports::{EventConsumers, InboxRepo, StripeReader};
+use team_id::TeamId;
 use teams::domain::model::{SeatPrices, TeamError};
 use teams::domain::team_repo::TeamService;
 
@@ -421,10 +422,11 @@ where
             }
         }
 
+        let team_id = TeamId::from_uuid(update.team_id);
         // A team that moved to another subscription ignores the old one's
         // lapse, so a late cancel or failed invoice cannot revoke seats the
         // new subscription pays for.
-        let team = match self.teams.team_subscription_id(&update.team_id).await {
+        let team = match self.teams.team_subscription_id(&team_id).await {
             Ok(bound) => TeamState::Bound(bound),
             Err(TeamError::TeamDoesNotExist) => TeamState::Missing,
             Err(error) => return Err(retry(error)),
@@ -458,19 +460,19 @@ where
         };
 
         self.teams
-            .patch_team_subscription_id(&update.team_id, &update.subscription_id)
+            .patch_team_subscription_id(&team_id, &update.subscription_id)
             .await
             .map_err(retry)?;
         if update.paying {
             // Restore stamps every member (owner included) with the team
             // subscriber role and the tier role of their own seat's plan.
             self.teams
-                .restore_permissions_for_team_members(&update.team_id, update.start)
+                .restore_permissions_for_team_members(&team_id, update.start)
                 .await
                 .map_err(retry)?;
         } else {
             self.teams
-                .revoke_permissions_for_team_members(&update.team_id)
+                .revoke_permissions_for_team_members(&team_id)
                 .await
                 .map_err(retry)?;
         }
@@ -479,7 +481,7 @@ where
             None => tracing::warn!("team subscription without owner; skipping period sync"),
         }
         self.teams
-            .patch_team_payment_status(&update.team_id, update.paying)
+            .patch_team_payment_status(&team_id, update.paying)
             .await
             .map_err(retry)?;
 
