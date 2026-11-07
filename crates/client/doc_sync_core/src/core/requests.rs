@@ -107,6 +107,8 @@ impl SyncCore {
             self.confirmed_base = doc.oplog_vv().get_frontiers();
             if convergence.rerun {
                 self.request_since(1, now, doc, out);
+            } else {
+                self.finish_comment_staging(now, doc, out);
             }
         }
     }
@@ -236,6 +238,72 @@ impl SyncCore {
         }
     }
 
+    fn comment_gate(&self) -> Option<CommentRefusal> {
+        if !self.auth.current || !(self.auth.can_comment || self.auth.can_write) {
+            Some(CommentRefusal::Unauthorized)
+        } else if self.phase != Phase::Running || !self.connection.synced() {
+            Some(CommentRefusal::CatchupFailed)
+        } else {
+            None
+        }
+    }
+
+    pub(super) fn prepare_comment(
+        &mut self,
+        request: RequestId,
+        now: Now,
+        doc: &impl SyncDoc,
+        out: &mut SyncOutput,
+    ) {
+        if let Some(reason) = self.comment_gate() {
+            out.events.push(SyncEvent::Reply {
+                request,
+                reply: Reply::Comment(CommentReply::Refused(reason)),
+            });
+            return;
+        }
+        self.staged_comments
+            .push((request, now.mono.after(self.config.timeouts.request_since)));
+        self.request_since(1, now, doc, out);
+    }
+
+    fn finish_comment_staging(&mut self, now: Now, doc: &mut impl SyncDoc, out: &mut SyncOutput) {
+        for (request, deadline) in std::mem::take(&mut self.staged_comments) {
+            let refusal = self
+                .comment_gate()
+                .or_else(|| (deadline <= now.mono).then_some(CommentRefusal::CatchupFailed));
+            if let Some(reason) = refusal {
+                out.events.push(SyncEvent::Reply {
+                    request,
+                    reply: Reply::Comment(CommentReply::Refused(reason)),
+                });
+                continue;
+            }
+            self.append_local(now, doc, out);
+            if self.local_changes_pending(doc) {
+                out.events.push(SyncEvent::Reply {
+                    request,
+                    reply: Reply::Comment(CommentReply::Refused(
+                        CommentRefusal::LocalChangesPending,
+                    )),
+                });
+            } else {
+                out.events.push(SyncEvent::CommentReady { request });
+            }
+        }
+    }
+
+    fn local_changes_pending(&self, doc: &impl SyncDoc) -> bool {
+        let peer = doc.peer_id();
+        doc.oplog_vv().get(&peer).copied().unwrap_or(0)
+            != self.wal.logged_vv.get(&peer).copied().unwrap_or(0)
+            || self
+                .wal
+                .entries
+                .iter()
+                .any(|entry| !entry.foreign && !entry.superseded && !self.is_delivered(entry.seq))
+    }
+
     pub(super) fn publish_comment(
         &mut self,
         request: RequestId,
@@ -244,13 +312,7 @@ impl SyncCore {
         doc: &mut impl SyncDoc,
         out: &mut SyncOutput,
     ) {
-        let refusal = if !self.auth.current || !(self.auth.can_comment || self.auth.can_write) {
-            Some(CommentRefusal::Unauthorized)
-        } else if !self.connection.synced() {
-            Some(CommentRefusal::CatchupFailed)
-        } else {
-            None
-        };
+        let refusal = self.comment_gate();
         if let Some(reason) = refusal {
             out.events.push(SyncEvent::Reply {
                 request,
@@ -259,13 +321,7 @@ impl SyncCore {
             return;
         }
         self.append_local(now, doc, out);
-        if doc.oplog_vv() != self.wal.logged_vv
-            || self
-                .wal
-                .entries
-                .iter()
-                .any(|e| !e.foreign && !e.superseded && !self.is_delivered(e.seq))
-        {
+        if self.local_changes_pending(doc) {
             out.events.push(SyncEvent::Reply {
                 request,
                 reply: Reply::Comment(CommentReply::Refused(CommentRefusal::LocalChangesPending)),
@@ -317,6 +373,17 @@ impl SyncCore {
                 self.end_span(span, "timeout", true, out);
             }
         }
+        self.staged_comments.retain(|(request, deadline)| {
+            if *deadline <= now.mono {
+                out.events.push(SyncEvent::Reply {
+                    request: *request,
+                    reply: Reply::Comment(CommentReply::Refused(CommentRefusal::CatchupFailed)),
+                });
+                false
+            } else {
+                true
+            }
+        });
         let mut reset_timed_out = false;
         for waiter in &mut self.snapshots {
             if !waiter.expired && waiter.deadline <= now.mono {

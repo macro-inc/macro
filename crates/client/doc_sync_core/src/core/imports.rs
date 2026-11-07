@@ -197,6 +197,12 @@ impl SyncCore {
                 });
             }
         }
+        for (request, _) in self.staged_comments.drain(..) {
+            out.events.push(SyncEvent::Reply {
+                request,
+                reply: Reply::Comment(CommentReply::Refused(CommentRefusal::CatchupFailed)),
+            });
+        }
         for comment in self.comments.drain(..) {
             out.events.push(SyncEvent::Reply {
                 request: comment.request,
@@ -437,6 +443,12 @@ impl SyncCore {
                 self.reset_requested = true;
             }
             return;
+        }
+        for (request, _) in self.staged_comments.drain(..) {
+            out.events.push(SyncEvent::Reply {
+                request,
+                reply: Reply::Comment(CommentReply::Refused(CommentRefusal::CatchupFailed)),
+            });
         }
         self.append_local(now, doc, out);
         if charged {
