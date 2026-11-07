@@ -38,7 +38,7 @@ and private rules. Selected consent does not grant CRM or database viewing.
   remain separate access paths.
 - There are **three implementations of eligibility** to keep equivalent:
   `crm_email_thread_allowed(team, thread)` for direct grants and scoped reads;
-  `crates/crm/src/outbound/companies_repo/email_privacy/interactions.sql` for
+  `crates/databases/crm/src/outbound/companies_repo/email_privacy/interactions.sql` for
   set-based ingestion; and the inlined Team reader in
   `crates/email/email/src/outbound/email_pg_repo/dynamic/query/team_scope.rs`.
   The Team reader deliberately avoids a scalar function call per mailbox thread.

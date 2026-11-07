@@ -1,4 +1,4 @@
-/** The `/databases` routes of `crates/databases`, mounted by the document storage service. */
+/** The `/databases` routes of `crates/databases/databases`, mounted by the document storage service. */
 import { SERVER_HOSTS } from '@core/constant/servers';
 import type {
   CellValue,

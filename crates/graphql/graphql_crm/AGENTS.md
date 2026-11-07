@@ -18,8 +18,8 @@ entities.
 ## Scope
 
 - Owns: the GraphQL shape over CRM pipeline entries.
-- Not here: pipeline domain logic and storage → `crates/crm` (built on
-  `crates/databases`).
+- Not here: pipeline domain logic and storage → `crates/databases/crm` (built on
+  `crates/databases/databases`).
 
 ## Boundaries
 

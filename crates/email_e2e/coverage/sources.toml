@@ -252,7 +252,7 @@ routes = [
 
 [[elsewhere]]
 service = "document_storage_service"
-file = "crates/properties/src/inbound/axum_router.rs"
+file = "crates/databases/properties/src/inbound/axum_router.rs"
 routes = [
     "POST /properties/tags",
     "PUT /properties/entities/{entity_type}/{entity_id}/{property_id}",

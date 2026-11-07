@@ -187,7 +187,7 @@ target-specific exclusion tables can keep their own foreign keys and add
 predicates alongside this one, without changing thread exceptions.
 `crm_email_domain_blocked` also honors
 legacy company `email_sync = false` exclusions. The ingestion interaction scan
-(`crates/crm/src/outbound/companies_repo/email_privacy/interactions.sql`) and the
+(`crates/databases/crm/src/outbound/companies_repo/email_privacy/interactions.sql`) and the
 Team view's read of one record's emails (`push_allowed` in
 `crates/email/email/src/outbound/email_pg_repo/dynamic/query/team_scope.rs`, with the
 contributing inboxes in `dynamic/resolve.rs`) apply the same rules set-based, once
