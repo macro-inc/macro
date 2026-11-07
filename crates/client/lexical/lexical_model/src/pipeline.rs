@@ -43,9 +43,15 @@ impl Transaction<'_> {
         self.options.tags.contains(tag)
     }
     /// Queue a nested update without executing it inline.
-    pub fn queue_update(&mut self, update: NestedUpdateFn, options: UpdateOptions) {
+    pub fn queue_update(
+        &mut self,
+        update: NestedUpdateFn,
+        options: UpdateOptions,
+    ) -> Result<(), Error> {
+        self.guard_write()?;
         self.nested.push_back((update, options));
         self.dirty_since_flush = true;
+        Ok(())
     }
     pub(crate) fn drain_updates(&mut self) -> Result<(), Error> {
         while let Some((update, options)) = self.nested.pop_front() {
@@ -67,6 +73,9 @@ impl Transaction<'_> {
     }
     /// Run queued updates, selection hooks, normalization, transforms, GC and validation.
     pub fn flush_with(&mut self, mode: FlushMode) -> Result<(), Error> {
+        if self.sealed {
+            return Ok(());
+        }
         let result = self.flush_inner(mode);
         self.transform_iterations = 0;
         if result.is_ok() {
@@ -151,6 +160,9 @@ impl Transaction<'_> {
         Ok(())
     }
     pub(crate) fn guard_write(&self) -> Result<(), Error> {
+        if self.sealed {
+            return Err(Error::WriteAfterSetEditorState);
+        }
         if self.transform_iterations > 99 {
             return Err(Error::InfiniteTransforms);
         }

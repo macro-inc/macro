@@ -69,6 +69,8 @@ pub struct Commit {
     pub composition_changed: bool,
     /// Whether all records were compared.
     pub full_reconcile: bool,
+    /// Earlier transition published by set_editor_state inside the update.
+    pub preceding: Option<Box<Commit>>,
     /// Instrumented model work.
     #[cfg(feature = "bench-counters")]
     pub work: WorkCounters,
@@ -81,6 +83,16 @@ impl Commit {
     /// Lazy, memoized root-text comparison.
     pub fn text_content_changed(&self) -> bool {
         self.prev.root_text_content() != self.next.root_text_content()
+    }
+    /// Earlier published transitions followed by this one, in chronological order.
+    pub fn chain(&self) -> impl Iterator<Item = &Commit> {
+        let mut chain = vec![self];
+        let mut preceding = self.preceding.as_deref();
+        while let Some(commit) = preceding {
+            chain.push(commit);
+            preceding = commit.preceding.as_deref();
+        }
+        chain.into_iter().rev()
     }
     /// Exact-type mutations, following the registered replacement chain.
     pub fn mutations_of<Node: NodeType>(&self) -> impl Iterator<Item = (NodeKey, Mutation)> + '_ {
@@ -112,18 +124,41 @@ impl Transaction<'_> {
         if self.dirty_since_flush {
             self.flush()?;
         }
+        self.commit_phase()
+    }
+    pub(crate) fn commit_phase(&mut self) -> Result<Commit, Error> {
+        let next_id = self
+            .editor
+            .commit_counter
+            .checked_add(1)
+            .ok_or(Error::KeySpaceExhausted)?;
         let prev = self.editor.state.clone();
-        let selection_changed = self.pending.selection != prev.selection;
+        let selection_changed = self.selection_dirty || self.pending.selection != prev.selection;
         let mut changes = Changes {
             dirty_leaves: self.dirty_leaves.clone(),
             dirty_elements: self.dirty_elements.clone(),
             mutations: IndexMap::default(),
         };
-        for key in changes
-            .dirty_leaves
-            .iter()
-            .chain(changes.dirty_elements.keys())
-        {
+        let keys: IndexSet<NodeKey> = if self.full_reconcile {
+            std::iter::once(NodeKey::ROOT)
+                .chain(
+                    self.pending
+                        .view()
+                        .descendants(NodeKey::ROOT)
+                        .map(|(key, _)| key),
+                )
+                .chain(std::iter::once(NodeKey::ROOT))
+                .chain(prev.view().descendants(NodeKey::ROOT).map(|(key, _)| key))
+                .collect()
+        } else {
+            changes
+                .dirty_leaves
+                .iter()
+                .chain(changes.dirty_elements.keys())
+                .copied()
+                .collect()
+        };
+        for key in &keys {
             #[cfg(feature = "bench-counters")]
             {
                 self.work.nodes_visited += 1;
@@ -138,21 +173,17 @@ impl Transaction<'_> {
                 changes.mutations.insert(*key, mutation);
             }
         }
-        crate::pipeline::apply_model_caches(&mut self);
+        crate::pipeline::apply_model_caches(self);
         let dirty = !changes.is_empty();
         if dirty || selection_changed {
-            self.editor.state = self.pending;
+            self.editor.state = self.pending.clone();
         }
         self.editor.carried_tags = if !dirty && selection_changed {
             self.options.tags.clone()
         } else {
             TagSet::default()
         };
-        self.editor.commit_counter = self
-            .editor
-            .commit_counter
-            .checked_add(1)
-            .ok_or(Error::KeySpaceExhausted)?;
+        self.editor.commit_counter = next_id;
         let composition_changed = self.editor.composition_key != self.composition_key;
         self.editor.composition_key = self.composition_key;
         Ok(Commit {
@@ -160,14 +191,61 @@ impl Transaction<'_> {
             prev,
             next: self.editor.state.clone(),
             changes,
-            tags: self.options.tags,
-            normalized: self.normalized,
+            tags: self.options.tags.clone(),
+            normalized: self.normalized.clone(),
             selection_changed,
             composition_key: self.composition_key,
             composition_changed,
-            full_reconcile: false,
+            full_reconcile: self.full_reconcile,
+            preceding: self.preceding.take(),
             #[cfg(feature = "bench-counters")]
-            work: self.work,
+            work: std::mem::take(&mut self.work),
         })
+    }
+}
+
+impl Transaction<'_> {
+    /// Ask consumers to reconcile every record in both snapshots.
+    pub fn request_full_reconcile(&mut self) {
+        self.full_reconcile = true;
+    }
+    pub(crate) fn install_state(&mut self, state: EditorState, tags: TagSet) -> Result<(), Error> {
+        if !Arc::ptr_eq(&state.registry, &self.pending.registry) {
+            return Err(Error::ForeignEditorState);
+        }
+        if state.is_empty_state() {
+            return Err(Error::SetEmptyEditorState);
+        }
+        self.editor.keys.raise_to(state.max_key());
+        for tag in tags.iter() {
+            self.add_tag(tag.clone());
+        }
+        self.pending = state.pending();
+        self.composition_key = None;
+        self.dirty_leaves.clear();
+        self.dirty_elements.clear();
+        self.dirty_elements
+            .insert(NodeKey::ROOT, DirtyIntent::AncestorOfDirty);
+        self.full_reconcile = true;
+        self.selection_dirty = false;
+        self.sealed = true;
+        Ok(())
+    }
+    /// Publish pending work first, then seal the transaction around the installed state.
+    pub fn set_editor_state(&mut self, state: EditorState, tags: TagSet) -> Result<(), Error> {
+        self.guard_write()?;
+        if !Arc::ptr_eq(&state.registry, &self.pending.registry) {
+            return Err(Error::ForeignEditorState);
+        }
+        if state.is_empty_state() {
+            return Err(Error::SetEmptyEditorState);
+        }
+        for tag in tags.iter() {
+            self.add_tag(tag.clone());
+        }
+        let preceding = self.commit_phase()?;
+        self.install_state(state, TagSet::default())?;
+        self.preceding = Some(Box::new(preceding));
+        Ok(())
     }
 }
