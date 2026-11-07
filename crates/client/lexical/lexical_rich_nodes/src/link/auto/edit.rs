@@ -81,26 +81,28 @@ pub(super) fn handle_bad_neighbors(
     let next = tx.next_sibling(node);
     let text = tx.text_content(node).into_owned();
     if let Some(previous) = previous.filter(|p| linked(tx, *p))
-        && tx.prev_sibling(node) == Some(previous) && tx.parent(node) == tx.parent(previous) {
-            if !starts_separator(&text, cfg) {
-                return unlink(tx, previous);
-            }
-            let email = tx.get::<LinkNode>(previous).is_some_and(is_email_uri);
-            if starts_tld(&text, email) {
-                let combined = format!("{}{text}", tx.text_content(previous));
-                if first_match(&combined, cfg).is_some_and(|m| m.text == combined) {
-                    tx.append(previous, &[node])?;
-                    handle_link_edit(tx, previous, cfg)?;
-                    changed(tx, None, Some(url(tx, previous)?));
-                }
+        && tx.prev_sibling(node) == Some(previous)
+        && tx.parent(node) == tx.parent(previous)
+    {
+        if !starts_separator(&text, cfg) {
+            return unlink(tx, previous);
+        }
+        let email = tx.get::<LinkNode>(previous).is_some_and(is_email_uri);
+        if starts_tld(&text, email) {
+            let combined = format!("{}{text}", tx.text_content(previous));
+            if first_match(&combined, cfg).is_some_and(|m| m.text == combined) {
+                tx.append(previous, &[node])?;
+                handle_link_edit(tx, previous, cfg)?;
+                changed(tx, None, Some(url(tx, previous)?));
             }
         }
+    }
     if let Some(next) = next.filter(|p| linked(tx, *p))
         && !ends_separator(&text, cfg)
-            && tx.next_sibling(node) == Some(next)
-            && tx.parent(node) == tx.parent(next)
-        {
-            unlink(tx, next)?;
-        }
+        && tx.next_sibling(node) == Some(next)
+        && tx.parent(node) == tx.parent(next)
+    {
+        unlink(tx, next)?;
+    }
     Ok(())
 }

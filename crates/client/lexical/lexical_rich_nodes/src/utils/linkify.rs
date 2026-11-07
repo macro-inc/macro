@@ -352,9 +352,10 @@ impl LinkifyIt {
         let units: Vec<_> = text.encode_utf16().collect();
         for m in self.compiled.schema.find_from_ucs2(&units, 0) {
             if let Some(group) = m.group(2)
-                && self.validate(&units, &String::from_utf16_lossy(&units[group]), m.end()) > 0 {
-                    return true;
-                }
+                && self.validate(&units, &String::from_utf16_lossy(&units[group]), m.end()) > 0
+            {
+                return true;
+            }
         }
         if self.options.fuzzy_link
             && self

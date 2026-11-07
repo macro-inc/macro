@@ -257,9 +257,10 @@ impl Plugin for AutoLinkCommands {
             && matches!(
                 command.payload(&super::TOGGLE_LINK),
                 Some(ToggleLinkPayload::Remove)
-            ) {
-                toggle_auto_link_unlinked(tx)?;
-            }
+            )
+        {
+            toggle_auto_link_unlinked(tx)?;
+        }
         Ok(Handled::No)
     }
 }

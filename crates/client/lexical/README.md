@@ -30,7 +30,9 @@ per-package pass/fail/ledger counts and blocking APIs.
 `lexical_workspace_tests` verifies the patched regex dependency and Loro snapshot
 compatibility alongside the model packages. `lexical_rich_nodes` adds rich/plain
 text command functions, heading/quote/hashtag/overflow nodes, text entities and
-selection plugins, list nodes and structural list editing. Markdown, HTML and projection packages belong here too.
+selection plugins, list nodes and structural list editing, link/autolink nodes,
+shared UTF-16 matchers and the pinned linkify-it port. Conformance replay calls
+these package APIs. Markdown, HTML and projection packages belong here too.
 
 Dependencies come from the root workspace table. The existing
 `crates/client/*` hakari prefix exclusion also covers these nested crates; do not
@@ -58,6 +60,3 @@ For legacy JavaScript regexes, use regress's `find_from_ucs2` over UTF-16 code
 units. Its `find_from_utf16` API decodes surrogate pairs regardless of flags;
 that would skip individual surrogates which JavaScript without `u` can match.
 The conformance test covers this distinction over the complete BMP input.
-
-`lexical_rich_nodes` also supplies list, link/autolink, shared UTF-16 matchers
-and the pinned linkify-it port; conformance replay calls these package APIs.
