@@ -348,20 +348,27 @@ impl<'state> StateRef<'state> {
             .or_else(|| self.last_child(key))?;
         self.first_descendant(child).or(Some(child))
     }
-    /// Is before.
+    /// Post-order within shared ancestry: descendants precede their ancestors.
     pub fn is_before(self, a: impl Into<NodeKey>, b: impl Into<NodeKey>) -> Result<bool, Error> {
         let a = a.into();
         let b = b.into();
         self.slot(a).ok_or(Error::NodeNotFound(a))?;
         self.slot(b).ok_or(Error::NodeNotFound(b))?;
-        let order: Vec<_> = std::iter::once(NodeKey::ROOT)
-            .chain(self.descendants(NodeKey::ROOT).map(|(k, _)| k))
-            .collect();
-        Ok(order
-            .iter()
-            .position(|k| *k == a)
-            .zip(order.iter().position(|k| *k == b))
-            .is_some_and(|(a, b)| a < b))
+        match self.common_ancestor(a, b) {
+            Some(CommonAncestor::Descendant { .. }) => Ok(true),
+            Some(CommonAncestor::Branch { ancestor, a, b }) => {
+                for child in self.children(ancestor) {
+                    if child == a {
+                        return Ok(true);
+                    }
+                    if child == b {
+                        return Ok(false);
+                    }
+                }
+                Err(Error::Invariant("common ancestor branch is not a child"))
+            }
+            _ => Ok(false),
+        }
     }
     /// Top level element.
     pub fn top_level_element(self, key: impl Into<NodeKey>) -> Result<Option<NodeKey>, Error> {
