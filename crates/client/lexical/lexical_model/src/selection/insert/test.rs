@@ -507,3 +507,21 @@ fn splitting_text_resolves_parent_selection_and_dirties_original_neighbors() -> 
     assert!(commit.changes.dirty_leaves.contains(&neighbor));
     Ok(())
 }
+
+#[test]
+fn inserting_line_break_before_text_selects_the_text_start() -> Result<(), Error> {
+    let mut editor = Editor::builder(EditorMode::Headless).build().unwrap();
+    editor.update(|tx| {
+        let p = tx.create(Paragraph::default())?;
+        let text = tx.create_text("ab")?;
+        tx.append(p, &[text.key()])?;
+        tx.append(NodeKey::ROOT, &[p.key()])?;
+        tx.select_points(Point::text(text, Utf16Offset(1)), Point::text(text, Utf16Offset(1)))?;
+        tx.insert_line_break(false)?;
+        let tail = tx.last_child(p).unwrap();
+        assert_eq!(tx.anchor()?, Point::text(tail, Utf16Offset::ZERO));
+        assert_eq!(tx.text_content(tail), "b");
+        Ok(())
+    })?;
+    Ok(())
+}
