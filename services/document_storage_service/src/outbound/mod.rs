@@ -2,6 +2,7 @@
 
 pub mod access_requests;
 pub mod agent_dm_authorizer;
+pub mod agent_working_branches;
 pub mod calendar_refresh;
 pub mod canvas_images;
 pub mod docx_export;

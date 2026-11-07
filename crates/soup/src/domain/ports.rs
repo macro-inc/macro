@@ -1,3 +1,6 @@
+use std::collections::HashMap;
+use std::future::Future;
+use std::pin::Pin;
 use std::sync::Arc;
 
 use crate::domain::models::grouping::{GroupByField, GroupLabels};
@@ -17,6 +20,34 @@ use models_pagination::{
 use models_properties::service::property_definition_with_options::PropertyDefinitionWithOptions;
 use models_soup::item::SoupItem;
 use serde::Serialize;
+use uuid::Uuid;
+
+/// The head branch captured for an agent session's linked pull request.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct AgentWorkingBranch {
+    /// The repository of the linked pull request when the branch was captured.
+    pub repository_url: String,
+    /// The captured head branch, never the selected starting branch.
+    pub branch: String,
+}
+
+/// Pending batched branch facts, keyed by agent session id.
+pub type AgentWorkingBranchesFuture<'a> = Pin<
+    Box<
+        dyn Future<Output = Result<HashMap<Uuid, AgentWorkingBranch>, rootcause::Report>>
+            + Send
+            + 'a,
+    >,
+>;
+
+/// Batched, persisted working-branch facts for already-authorized agent sessions.
+///
+/// Soup restricts the ids to rows on the caller's page before calling. Missing
+/// captures and detached heads have no entry.
+pub trait AgentWorkingBranches: Send + Sync + 'static {
+    /// Fetch branch facts for `sessions` in one batch.
+    fn working_branches<'a>(&'a self, sessions: &'a [Uuid]) -> AgentWorkingBranchesFuture<'a>;
+}
 
 /// Repository abstraction for loading soup items from storage.
 #[cfg_attr(

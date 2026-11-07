@@ -233,7 +233,7 @@ pub struct SoupImpl<T, U, V, C, K, Crm, F> {
     /// the interface for listing GitHub pull requests
     github_pull_request_service: F,
     /// Optional captured branch facts supplied by the owning changes domain.
-    agent_branches: Option<Arc<dyn agent_changes::domain::ports::SessionBranchReader>>,
+    agent_branches: Option<Arc<dyn crate::domain::ports::AgentWorkingBranches>>,
     favorites: Option<Arc<dyn favorites::FavoriteReader>>,
 }
 
@@ -275,7 +275,7 @@ where
     /// Attach persisted working-branch facts for agent rows.
     pub fn with_agent_branches(
         mut self,
-        reader: impl agent_changes::domain::ports::SessionBranchReader,
+        reader: impl crate::domain::ports::AgentWorkingBranches,
     ) -> Self {
         self.agent_branches = Some(Arc::new(reader));
         self
