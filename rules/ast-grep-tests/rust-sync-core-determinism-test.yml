@@ -1,0 +1,14 @@
+id: rust-sync-core-determinism
+valid:
+  - 'use std::collections::{BTreeMap, VecDeque};'
+  - 'fn deadline(now: Millis) -> Millis { now }'
+  - 'use indexmap::IndexMap;'
+invalid:
+  - 'use std::collections::HashMap;'
+  - 'use std::collections::{HashMap as Map, HashSet};'
+  - 'type Rows = std::collections::HashMap<String, u64>;'
+  - 'use std::time::Duration;'
+  - 'use std::{time::sleep};'
+  - 'fn clock() { std::time::Instant::now(); }'
+  - 'fn random_id() { uuid::Uuid::new_v4(); }'
+  - 'fn random_bytes(bytes: &mut [u8]) { getrandom::fill(bytes); }'

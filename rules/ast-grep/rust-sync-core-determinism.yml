@@ -1,0 +1,22 @@
+id: rust-sync-core-determinism
+language: rust
+severity: error
+message: Sync cores require ordered collections and host-supplied time and randomness.
+note: Use BTreeMap, IndexMap or Vec; receive clocks and peer/session identities from the host.
+files:
+  - crates/client/doc_sync_core/**
+  - crates/client/document_session/**
+rule:
+  any:
+    - kind: identifier
+      regex: '^(HashMap|HashSet|RandomState|SystemTime|Instant|thread_rng|random|rng|getrandom|new_v4|now_v7)$'
+    - kind: type_identifier
+      regex: '^(HashMap|HashSet|RandomState|SystemTime|Instant)$'
+    - kind: scoped_identifier
+      regex: '^std::time(::|$)'
+    - kind: use_declaration
+      regex: '\b(std::time|rand(::|\s)|getrandom)\b'
+    - kind: use_declaration
+      all:
+        - regex: '\bstd\s*::'
+        - regex: '\btime\s*::'
