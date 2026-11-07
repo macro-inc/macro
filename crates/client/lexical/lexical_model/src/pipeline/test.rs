@@ -668,3 +668,54 @@ fn root_cache_reconciliation_clones_the_root_after_text_changes() -> Result<(), 
     assert!(!commit.changes.mutations.contains_key(&NodeKey::ROOT));
     Ok(())
 }
+
+#[test]
+fn changed_element_text_cache_is_intentionally_dirty_after_mutation_reporting() -> Result<(), Error>
+{
+    let mut editor = Editor::builder(EditorMode::ViewAttached)
+        .build()
+        .expect("editor");
+    let mut tx = editor.transaction();
+    let p = tx.create(Paragraph {})?;
+    let text = tx.create_text("ab")?;
+    tx.append(p, &[text.key()])?;
+    tx.append(NodeKey::ROOT, &[p.key()])?;
+    tx.commit()?;
+    let mut tx = editor.transaction();
+    tx.text(text)?.set_format(TextFormat::BOLD)?;
+    let commit = tx.commit()?;
+    assert_eq!(
+        commit.next.view().element(p).expect("element").text_format,
+        TextFormat::BOLD
+    );
+    assert_eq!(
+        commit.changes.dirty_elements.get(&p.key()),
+        Some(&DirtyIntent::Intentional)
+    );
+    assert!(!commit.changes.mutations.contains_key(&p.key()));
+    Ok(())
+}
+
+#[test]
+fn splice_does_not_dirty_a_sibling_whose_links_are_unchanged() -> Result<(), Error> {
+    let mut editor = Editor::builder(EditorMode::Headless)
+        .build()
+        .expect("editor");
+    let mut tx = editor.transaction();
+    let p = tx.create(Paragraph {})?;
+    let a = tx.create_text("a")?;
+    let first = tx.create(Tab {})?;
+    let b = tx.create_text("b")?;
+    tx.append(p, &[a.key(), first.key(), b.key()])?;
+    tx.append(NodeKey::ROOT, &[p.key()])?;
+    tx.commit()?;
+    let mut tx = editor.transaction();
+    let second = tx.create(Tab {})?;
+    tx.splice(p, ChildIndex(2), 0, &[second.key()])?;
+    let commit = tx.commit()?;
+    assert!(!commit.changes.dirty_leaves.contains(&a.key()));
+    assert!(commit.changes.dirty_leaves.contains(&first.key()));
+    assert!(commit.changes.dirty_leaves.contains(&b.key()));
+    assert!(commit.changes.dirty_leaves.contains(&second.key()));
+    Ok(())
+}

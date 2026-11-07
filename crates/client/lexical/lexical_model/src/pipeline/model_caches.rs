@@ -43,6 +43,7 @@ pub(crate) fn apply(tx: &mut Transaction<'_>) {
         {
             data.text_format = format;
             data.text_style = style;
+            tx.dirty_elements.insert(key, DirtyIntent::Intentional);
         }
     }
 }

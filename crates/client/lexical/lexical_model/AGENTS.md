@@ -54,5 +54,7 @@ literal exported bytes. `selection/*/test.rs` and `selection/test.rs` port expli
 upstream selection examples, including the §18.5 `remove_text` fixture, detached-slot
 side effects, UTF-16 boundaries, formatting, block deletion and host movement.
 
+Element text-cache changes retain intentional dirty marks after mutation reporting; splice only rewrites changed sibling links.
+
 Root text-cache reconciliation clones its record after mutation reporting and retains
 the intentional root dirty mark; cache-only writes do not add mutations.
