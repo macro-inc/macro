@@ -10,6 +10,8 @@ clients and real `sync_server_core::Room` callbacks over `sync_server_sim` ports
 - `src/world.rs`: virtual event executor and script transitions.
 - `src/storage.rs`: durable profile storage and lease/adoption rules.
 - `src/network.rs`: FIFO links and injected failures.
+- `src/router.rs`: bounded server router protocol fake; `src/world/router.rs` wires
+  real client RouterCore instances to physical profile sockets and real room routes.
 - `src/invariants.rs`: queries over the immutable Outcome facts.
 
 ## Boundaries
@@ -31,6 +33,11 @@ clients and real `sync_server_core::Room` callbacks over `sync_server_sim` ports
 - GenericSurface/Loro clients are available before editor/session siblings.
   Editor projection, undo and comment-gate parity remain pending integration;
   never claim a skipped editor check establishes an editor safety property.
+- Use immutable issued token claims through delayed dials. Send RouterSubscribed
+  before upstream frames, record the connect callback before pumping queued inputs,
+  and discard stale socket generations and route epochs. Router parity uses real
+  sync_router domain stories plus its production envelope helpers/cancellation contract;
+  Tokio is a test-only dependency, never the virtual world executor.
 - All storage completion events mean durable; tab death keeps issued writes,
   process death loses pending writes, power loss additionally rolls back recent writes.
 - Settlement reopens gracefully stopped clients to drain retained WAL; Stop itself

@@ -12,6 +12,8 @@ mod network;
 pub use network::SimNetwork;
 mod storage;
 pub use storage::SimStorage;
+mod router;
+pub use router::SimRouter;
 mod server;
 pub use server::SimServer;
 mod client;

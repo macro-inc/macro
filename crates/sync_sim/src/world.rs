@@ -15,6 +15,7 @@ use sync_server_sim::transcript::ServerInput;
 
 mod inputs;
 mod outputs;
+mod router;
 mod steps;
 mod validation;
 
@@ -27,6 +28,7 @@ pub struct Sim {
     servers: BTreeMap<DocIx, SimServer>,
     profiles: BTreeMap<ProfileName, SimStorage>,
     clients: BTreeMap<ClientName, SimClient>,
+    routers: BTreeMap<ProfileName, router::Host>,
     events: Vec<Event>,
     server_ports: Vec<ServerPort>,
     failures: Vec<Failure>,
@@ -37,7 +39,7 @@ pub struct Sim {
     ack_callbacks: BTreeMap<(DocIx, String), std::collections::VecDeque<u64>>,
     prefixes: BTreeMap<(ProfileName, String, doc_sync_core::WalOwner), doc_sync_core::WalSeq>,
     budget_hit: bool,
-    tokens: BTreeMap<String, Access>,
+    tokens: BTreeMap<String, model::TokenGrant>,
     chatter_tails: BTreeMap<(SessionId, SessionId), u64>,
 }
 impl Sim {
@@ -51,6 +53,7 @@ impl Sim {
             servers: BTreeMap::new(),
             profiles: BTreeMap::new(),
             clients: BTreeMap::new(),
+            routers: BTreeMap::new(),
             events: Vec::new(),
             server_ports: Vec::new(),
             failures: Vec::new(),
@@ -64,6 +67,12 @@ impl Sim {
             tokens: BTreeMap::new(),
             chatter_tails: BTreeMap::new(),
         };
+        if sim.config.routed && sim.config.documents < 2 {
+            sim.fail(Failure::new(
+                "router_configuration",
+                "routed worlds require at least two documents",
+            ));
+        }
         for index in 0..sim.config.documents.max(1) {
             let doc = DocIx(index);
             let now = SimServer::now(sim.clock.wall(0), 0);

@@ -222,6 +222,8 @@ pub struct SimConfig {
     pub documents: u8,
     /// Rooms using isolated collaborative-surface identity and lifecycle.
     pub surfaces: BTreeSet<DocIx>,
+    /// Share one real RouterCore socket per profile for tab sessions (requires two documents).
+    pub routed: bool,
     /// Per-document seed histories; omitted documents start empty.
     pub seeds: BTreeMap<DocIx, SeedDocument>,
     /// Network conditions.
@@ -246,6 +248,7 @@ impl SimConfig {
             documents: 1,
             seeds: BTreeMap::new(),
             surfaces: BTreeSet::new(),
+            routed: false,
             net: NetProfile::calm(),
             storage: StorageProfile::fast(),
             budgets: Budgets::default(),
@@ -538,4 +541,31 @@ pub enum Step {
     },
     /// Advance wall time without changing monotonic deadlines.
     AdvanceWall(Millis),
+}
+
+#[derive(Clone)]
+pub(crate) struct TokenGrant {
+    pub access: Access,
+    pub user: String,
+    pub doc: doc_sync_core::SyncDocId,
+    pub issued_by: doc_sync_core::SessionId,
+    pub expires_at: Option<usize>,
+}
+impl TokenGrant {
+    pub fn issue(client: &crate::SimClient, wall: i64) -> Self {
+        Self {
+            access: client.spec.access,
+            user: client.user.clone(),
+            doc: client.doc_id.clone(),
+            issued_by: client.session,
+            expires_at: client.doc_id.as_str().starts_with("surface:").then(|| {
+                usize::try_from(wall.saturating_div(1000).saturating_add(3600)).unwrap_or(0)
+            }),
+        }
+    }
+    pub fn expired(&self, wall: i64) -> bool {
+        self.expires_at.is_some_and(|expiry| {
+            i64::try_from(expiry).unwrap_or(i64::MAX) <= wall.saturating_div(1000)
+        })
+    }
 }

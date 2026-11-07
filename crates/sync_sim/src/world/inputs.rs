@@ -7,6 +7,25 @@ use sync_server_sim::ports::Effect;
 impl Sim {
     pub(super) fn pending(&mut self, event: Pending) -> Result<(), Failure> {
         match event {
+            Pending::RouterWake(profile, generation) => {
+                if self
+                    .routers
+                    .get(&profile)
+                    .is_some_and(|host| host.generation == generation)
+                {
+                    self.router_input(&profile, doc_sync_core::RouterInput::Tick)?;
+                }
+            }
+            Pending::RouterConnect(profile, conn) => self.router_connect(&profile, conn)?,
+            Pending::RouterClose(profile, conn, code) => {
+                self.router_close(&profile, ConnId(conn), code)?
+            }
+            Pending::RouterToken(profile, doc, event) => {
+                self.router_input(&profile, doc_sync_core::RouterInput::Token { doc, event })?;
+            }
+            Pending::RouteConnect(profile, doc, epoch, token) => {
+                self.route_connect(&profile, doc, epoch, token)?
+            }
             Pending::Wake(name, session, generation) => {
                 if self.clients.get(&name).is_some_and(|client| {
                     client.session == session && client.generation == generation
@@ -123,14 +142,19 @@ impl Sim {
         let Some(link) = self.net.links.get(&key) else {
             return Ok(());
         };
-        let Some(client) = self.clients.get(&key.0) else {
+        let Some(client) = self.clients.get_mut(&key.0) else {
             return Ok(());
         };
         if !client.alive || client.session != key.1 || client.connection_id() != Some(ConnId(key.2))
         {
             return Ok(());
         }
-        if self.net.offline.contains(&key.0) || !link.token_valid {
+        let expired = std::mem::take(&mut client.expire_token)
+            || link
+                .claims
+                .as_ref()
+                .is_none_or(|claims| claims.expired(self.clock.wall(0)));
+        if self.net.offline.contains(&key.0) || !link.token_valid || expired {
             let at = self
                 .clock
                 .now
@@ -156,8 +180,10 @@ impl Sim {
             return Ok(());
         }
         let doc = link.doc;
-        let grant = link.grant;
-        let user = client.user.clone();
+        let claims = link
+            .claims
+            .clone()
+            .ok_or_else(|| Failure::new("token_claims", "valid direct link has no claims"))?;
         let Some(server) = self.servers.get(&doc) else {
             return Err(Failure::new("document_route", "unknown document"));
         };
@@ -177,15 +203,12 @@ impl Sim {
             return Ok(());
         };
         let input = Input::Connect {
-            grant: server.grant(user, grant, self.clock.wall(0)),
+            grant: server.grant(claims.user, claims.access, claims.expires_at),
             key: server.key.clone(),
             socket: uuid_value::Uuid::from_u128(uuid.as_u128()),
         };
         let callback = server.step(SimServer::now(self.clock.wall(0), self.clock.now), input);
-        let accepted = callback
-            .effects
-            .iter()
-            .any(|effect| effect.operation == "connections.accept");
+        let accepted = callback.accepted;
         if accepted && !callback.crashed {
             if let Some(link) = self.net.links.get_mut(&key) {
                 link.open = true;
@@ -238,6 +261,9 @@ impl Sim {
                 "Delivered"
             },
         );
+        if let Some(profile) = self.router_profile(&key) {
+            return self.router_deliver(&profile, key, direction, delivery);
+        }
         if direction == Direction::ToClient {
             if let Packet::Binary(frame) = &delivery.packet
                 && delivery.kind == FrameKind::Ack
@@ -326,7 +352,7 @@ impl Sim {
             self.schedule(at, Pending::ServerReady(doc, generation));
         }
     }
-    fn callback(&mut self, doc: DocIx, callback: Callback) -> Result<(), Failure> {
+    pub(super) fn callback(&mut self, doc: DocIx, callback: Callback) -> Result<(), Failure> {
         let Callback {
             index,
             effects,
@@ -336,6 +362,7 @@ impl Sim {
             facts,
             error,
             crashed,
+            accepted: _,
         } = callback;
         for fact in facts {
             self.emit(fact);
@@ -488,6 +515,13 @@ impl Sim {
             });
             if effect.operation == "send" || effect.operation == "send_text" {
                 let socket = effect.value["socket"].as_str().unwrap_or("");
+                if effect.operation == "send" {
+                    let frame = serde_json::from_value::<Vec<u8>>(effect.value["frame"].clone())
+                        .map_err(|error| Failure::new("server_frame", error))?;
+                    if self.router_server_frame(socket, &frame)? {
+                        continue;
+                    }
+                }
                 let key = self
                     .net
                     .links
@@ -526,6 +560,7 @@ impl Sim {
             }
         }
         for (socket, code) in closes {
+            self.router_server_close(&socket)?;
             let keys = self
                 .net
                 .links
@@ -552,6 +587,12 @@ impl Sim {
         if !link.open {
             return Ok(());
         }
+        if let Some(profile) = self.router_profile(key) {
+            return self.router_break(&profile, code);
+        }
+        let Some(link) = self.net.links.get_mut(key) else {
+            return Ok(());
+        };
         link.open = false;
         let doc = link.doc;
         let socket = link.socket.clone();

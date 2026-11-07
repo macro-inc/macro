@@ -16,6 +16,15 @@ pub(crate) enum Pending {
     ServerDurable(DocIx, u64, u64, u64),
     Alarm(DocIx, u64),
     HealDirectory(DocIx),
+    RouterWake(ProfileName, u64),
+    RouterConnect(ProfileName, u32),
+    RouterClose(ProfileName, u32, u16),
+    RouterToken(
+        ProfileName,
+        doc_sync_core::SyncDocId,
+        doc_sync_core::TokenEvent,
+    ),
+    RouteConnect(ProfileName, String, u64, String),
 }
 /// One virtual clock and stable/seeded ordered event queue.
 pub struct SimClock {

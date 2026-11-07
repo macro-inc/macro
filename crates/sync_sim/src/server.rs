@@ -46,6 +46,7 @@ pub(crate) struct Callback {
     pub facts: Vec<Fact>,
     pub error: Option<Failure>,
     pub crashed: bool,
+    pub accepted: bool,
 }
 /// One real Room and its existing synchronous simulation ports per document.
 pub struct SimServer {
@@ -166,7 +167,12 @@ impl SimServer {
             monotonic: Duration::from_millis(mono),
         }
     }
-    pub(crate) fn grant(&self, user: String, access: Access, wall: i64) -> AuthToken {
+    pub(crate) fn grant(
+        &self,
+        user: String,
+        access: Access,
+        expires_at: Option<usize>,
+    ) -> AuthToken {
         AuthToken::new(
             self.key.as_str().into(),
             match access {
@@ -178,9 +184,7 @@ impl SimServer {
             Some(user),
             None,
             None,
-            (self.key.kind() == macro_sync_service_jwt::session::SessionKind::Surface).then(|| {
-                usize::try_from(wall.saturating_div(1000).saturating_add(3600)).unwrap_or(0)
-            }),
+            expires_at,
         )
     }
     pub(crate) fn step(&mut self, now: SimNow, input: Input) -> Callback {
@@ -209,6 +213,7 @@ impl SimServer {
         let before_generation = self.ports.write_generation();
         let mut facts = Vec::new();
         let mut harness_error = None;
+        let mut accepted = false;
         let result = match input {
             Input::Runtime(input) => self.room.step(now, input),
             Input::Connect { grant, key, socket } => {
@@ -254,7 +259,10 @@ impl SimServer {
                     // connect's repeated cache hit emits no extra port effects.
                     self.room.room_mut().maybe_set_session_key(&key).await?;
                     self.ports.seed_entropy([socket]);
-                    self.room.room_mut().connect(grant, key).await?;
+                    accepted = matches!(
+                        self.room.room_mut().connect(grant, key).await?,
+                        sync_server_core::domain::room::ConnectOutcome::Accepted { .. }
+                    );
                     Ok(())
                 }
                 .now_or_never();
@@ -413,6 +421,7 @@ impl SimServer {
         if generation > before_generation && blocking {
             self.pending_durable += 1;
         }
+        accepted = accepted && !crashed && error.is_none();
         Callback {
             index,
             effects,
@@ -422,6 +431,7 @@ impl SimServer {
             facts,
             error,
             crashed,
+            accepted,
         }
     }
     pub(crate) fn evict(&mut self) {
@@ -460,7 +470,7 @@ impl SimServer {
             });
             return Ok(());
         }
-        let mut claims = self.grant("user-0".into(), Access::Edit, wall);
+        let mut claims = self.grant("user-0".into(), Access::Edit, None);
         claims.actor = Some("agent|simulation".into());
         let access = claims
             .document_access(self.key.as_str())

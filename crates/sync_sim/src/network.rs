@@ -22,7 +22,7 @@ pub(crate) struct Link {
     pub socket: Option<WebSocketId>,
     pub open: bool,
     pub doc: DocIx,
-    pub grant: Access,
+    pub claims: Option<crate::model::TokenGrant>,
     pub token_valid: bool,
     pub tails: [u64; 2],
     pub up: Reassembler,
@@ -40,6 +40,7 @@ struct DropRule {
 /// Browser-like ordered socket links, including independent generations.
 pub struct SimNetwork {
     pub(crate) links: BTreeMap<LinkKey, Link>,
+    pub(crate) router_frames: BTreeMap<(LinkKey, Direction, String), Vec<Vec<u8>>>,
     pub(crate) partitions: BTreeSet<ClientName>,
     pub(crate) offline: BTreeSet<ClientName>,
     pub(crate) profile: NetProfile,
@@ -51,6 +52,7 @@ impl SimNetwork {
     pub fn new(profile: NetProfile) -> Self {
         Self {
             links: BTreeMap::new(),
+            router_frames: BTreeMap::new(),
             partitions: BTreeSet::new(),
             offline: BTreeSet::new(),
             profile,
