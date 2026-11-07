@@ -358,12 +358,24 @@ impl Transaction<'_> {
             }
         }
         if restore_selection && affected.is_some_and(|flags| flags.into_iter().any(|v| v)) {
-            let point = if let Some(previous) = previous {
-                self.end_point(previous)?
-            } else if let Some(next) = next {
-                self.start_point(next)?
+            let point = if let Some(previous) =
+                previous.filter(|key| self.is_text(*key) || self.is_element(*key))
+            {
+                if self.is_text(previous) {
+                    Point::text(previous, self.text_content_size(previous))
+                } else {
+                    Point::element(previous, ChildIndex(self.children_size(previous)))
+                }
+            } else if previous.is_none()
+                && let Some(next) = next.filter(|key| self.is_text(*key) || self.is_element(*key))
+            {
+                if self.is_text(next) {
+                    Point::text(next, Utf16Offset::ZERO)
+                } else {
+                    Point::element(next, ChildIndex(0))
+                }
             } else {
-                Point::element(parent, ChildIndex(0))
+                Point::element(parent, position)
             };
             if let Some(Selection::Range(range)) = &mut self.pending.selection
                 && let Some(affected) = affected

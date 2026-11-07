@@ -896,3 +896,22 @@ fn multi_node_replacement_converts_segmented_first_text() -> Result<(), Error> {
     assert_eq!(tx.text_content(paragraph), "axef");
     Ok(())
 }
+
+#[test]
+fn removing_selected_block_relocates_to_sibling_element_boundary() -> Result<(), Error> {
+    let mut editor = Editor::builder(EditorMode::Headless)
+        .build()
+        .expect("editor");
+    let mut tx = editor.transaction();
+    let previous = tx.create(Paragraph::default())?;
+    let text = tx.create_text("aa")?;
+    let selected = tx.create(Paragraph::default())?;
+    tx.append(previous, &[text.key()])?;
+    tx.append(NodeKey::ROOT, &[previous.key(), selected.key()])?;
+    tx.select_start(selected)?;
+    tx.remove(selected, true)?;
+    let range = tx.selection().and_then(Selection::as_range).expect("range");
+    assert_eq!(range.anchor, Point::element(previous, ChildIndex(1)));
+    assert_eq!(range.focus, range.anchor);
+    Ok(())
+}

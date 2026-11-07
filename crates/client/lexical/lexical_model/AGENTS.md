@@ -29,6 +29,7 @@ node types, immutable snapshots, transactional tree editing, update processing, 
 - Client crate: keep it excluded from workspace-hack through `crates/client/*`.
 - TableSelection::set changes keys while preserving point offsets/kinds and dirties only changed keys, retaining any existing dirty mark.
 - Text replacement uses upstream node-based removal across every block type; caret deletion has different shadow-root semantics.
+- Node removal relocates affected points to adjacent sibling element boundaries without descending into their text.
 - Selection slots, formatting and range edits preserve upstream active-versus-detached selection side effects.
 - Movement consumes explicit host points; `NoView` runs structural rules only.
 - Optional `model-segmentation` enables Unicode movement within text nodes; visual line boundaries still require host layout.
