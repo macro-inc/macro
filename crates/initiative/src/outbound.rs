@@ -1,5 +1,8 @@
 //! Outbound (driven) adapters for initiatives.
 
+#[cfg(feature = "messages")]
+mod message_parent;
+
 #[cfg(feature = "resources")]
 pub mod resources;
 
