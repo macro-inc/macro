@@ -35,3 +35,8 @@ keys, and explicit watermark cleanup bypasses its ordinary removal guard.
 The synthetic JSON route includes legacy custom-code versions and chart null
 settings. Intrinsic hook tests cover comment continuation and session-card
 placement; these are independent of WP-27 markdown transformers.
+
+Two explicit S3 section 4.1b open-item defaults remain outside exact parity:
+`divergence-magic-chip-status` rejects unknown status enum values, and
+`divergence-reply-target-parent-keys` drops unknown keys inside reply parents.
+Both have named regression tests; the valid-node oracle has no normalization.

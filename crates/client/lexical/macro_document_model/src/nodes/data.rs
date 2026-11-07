@@ -96,8 +96,11 @@ pub enum PasteOrigin {
     Referenced,
 }
 /// Agent process lifecycle status.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(
+    Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize, strum::IntoStaticStr,
+)]
 #[serde(rename_all = "snake_case")]
+#[strum(serialize_all = "snake_case")]
 pub enum MagicChipStatus {
     /// No active turn.
     #[default]
@@ -114,13 +117,7 @@ pub enum MagicChipStatus {
 impl MagicChipStatus {
     /// Stored status spelling.
     pub fn as_str(self) -> &'static str {
-        match self {
-            Self::NoMessages => "no_messages",
-            Self::Booting => "booting",
-            Self::AcpReady => "acp_ready",
-            Self::ShuttingDown => "shutting_down",
-            Self::Disconnected => "disconnected",
-        }
+        self.into()
     }
 }
 /// Author of a prompted agent turn.

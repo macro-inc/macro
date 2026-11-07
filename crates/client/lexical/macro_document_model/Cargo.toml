@@ -17,3 +17,4 @@ indexmap = { workspace = true, features = ["serde"] }
 chrono = { workspace = true }
 nom = { workspace = true }
 urlencoding = { workspace = true }
+strum = { workspace = true }
