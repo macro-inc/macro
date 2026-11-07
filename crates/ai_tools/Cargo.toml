@@ -23,7 +23,7 @@ agent_code_mode = { workspace = true }
 dynamic_ui = { workspace = true }
 ai_billing = { workspace = true, features = ["pg-admission"] }
 collab_surface = { workspace = true, features = ["postgres"] }
-initiative = { workspace = true, features = ["postgres", "resources", "toolset"] }
+initiative = { workspace = true, features = ["messages", "postgres", "resources", "toolset"] }
 initiative_description = { workspace = true }
 activity = { workspace = true, features = ["ai_tools", "outbound"] }
 agent = { workspace = true }

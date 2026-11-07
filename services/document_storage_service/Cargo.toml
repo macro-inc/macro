@@ -179,7 +179,7 @@ http-body-util = { workspace = true }
 hyper = { workspace = true }
 hyper-util = { workspace = true }
 import = { workspace = true }
-initiative = { workspace = true, default-features = true, features = ["inbound", "postgres", "resources"] }
+initiative = { workspace = true, default-features = true, features = ["inbound", "messages", "postgres", "resources"] }
 jsonwebtoken = { workspace = true }
 lexical_client = { workspace = true }
 lexical_mention_extractor = { workspace = true }

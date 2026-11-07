@@ -11020,6 +11020,7 @@ dependencies = [
  "macro_event_broker",
  "macro_event_topics",
  "macro_user_id",
+ "messages",
  "mockall",
  "model-entity",
  "model-error-response",
