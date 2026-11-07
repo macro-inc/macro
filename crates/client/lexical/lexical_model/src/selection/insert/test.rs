@@ -797,7 +797,10 @@ fn replacing_a_selected_tab_removes_its_protected_text() -> Result<(), Error> {
         let tab = tx.create(Tab::default())?;
         tx.append(p, &[tab.key()])?;
         tx.append(NodeKey::ROOT, &[p.key()])?;
-        let mut range = RangeSelection::new(Point::text(tab, Utf16Offset(1)), Point::text(tab, Utf16Offset::ZERO));
+        let mut range = RangeSelection::new(
+            Point::text(tab, Utf16Offset(1)),
+            Point::text(tab, Utf16Offset::ZERO),
+        );
         range.format = TextFormat::BOLD;
         tx.set_selection(Some(Selection::Range(range)))?;
         tx.insert_text("text")?;

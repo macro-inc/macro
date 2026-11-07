@@ -229,7 +229,11 @@ impl Transaction<'_> {
         } else {
             let backward = range.is_backward(self.view())?;
             let nodes = range.nodes(self.view())?;
-            let (start, end) = if backward { (range.focus, range.anchor) } else { (range.anchor, range.focus) };
+            let (start, end) = if backward {
+                (range.focus, range.anchor)
+            } else {
+                (range.anchor, range.focus)
+            };
             let mut formats = None;
             for (i, key) in nodes.iter().enumerate() {
                 if let Some(text) = self.view().text(*key) {
