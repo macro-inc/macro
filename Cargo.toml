@@ -4,6 +4,7 @@ resolver = "2"
 exclude = ["vendor"]
 
 members = [
+  "crates/client/lexical/lexical_loro",
   "crates/client/lexical/lexical_model",
   "crates/client/lexical/lexical_html",
   "crates/client/lexical/lexical_conformance",
@@ -226,6 +227,7 @@ ignored = ["quick-xml", "rand_chacha"]
 [workspace.dependencies]
 phf = { version = "0.13.1", features = ["macros"] }
 lexical_html = { path = "crates/client/lexical/lexical_html" }
+lexical_loro = { path = "crates/client/lexical/lexical_loro" }
 lexical_model = { path = "crates/client/lexical/lexical_model" }
 lexical_rich_nodes = { path = "crates/client/lexical/lexical_rich_nodes" }
 # Shared dependencies for the portable Lexical model and its conformance suites.
