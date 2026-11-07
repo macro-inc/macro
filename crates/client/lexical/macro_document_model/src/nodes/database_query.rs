@@ -51,3 +51,14 @@ impl DecoratorNode for DatabaseQueryNode {
     }
 }
 impl SearchText for DatabaseQueryNode {}
+
+/// Read a JSON tag payload with the same validation and entity decoding as the source.
+pub fn parse_database_query_json(json: &str) -> Option<DatabaseQueryData> {
+    parse_database_query_data(&serde_json::from_str::<Value>(json).ok()?)
+}
+/// Validate and wrap a query payload, escaping tag-opening characters after stringify.
+pub fn database_query_markdown(data: &Value) -> crate::Result<String> {
+    let data = parse_database_query_data(data).ok_or(Error::Invariant("Invalid database query"))?;
+    let json = to_js_json_string(&serde_json::to_value(data)?).replace('<', "\\u003c");
+    Ok(format!("<m-db-query>{json}</m-db-query>"))
+}

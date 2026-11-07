@@ -36,62 +36,101 @@ pub enum EditorConfig {
     /// Web preset classes and applicable replacements.
     Preset(EditorType),
 }
+type NodeRegistration = (&'static str, fn(EditorBuilder) -> EditorBuilder);
+fn register<T: NodeType>(builder: EditorBuilder) -> EditorBuilder {
+    builder.node::<T>()
+}
+const SUPPORTED_REGISTRATIONS: &[NodeRegistration] = &[
+    (CodeNode::TYPE, register::<CodeNode>),
+    (CustomCodeNode::TYPE, register::<CustomCodeNode>),
+    (DatabaseQueryNode::TYPE, register::<DatabaseQueryNode>),
+    (HeadingNode::TYPE, register::<HeadingNode>),
+    (LinkNode::TYPE, register::<LinkNode>),
+    (AutoLinkNode::TYPE, register::<AutoLinkNode>),
+    (ListNode::TYPE, register::<ListNode>),
+    (TaskListNode::TYPE, register::<TaskListNode>),
+    (ListItemNode::TYPE, register::<ListItemNode>),
+    (QuoteNode::TYPE, register::<QuoteNode>),
+    (DocumentMentionNode::TYPE, register::<DocumentMentionNode>),
+    (DocumentCardNode::TYPE, register::<DocumentCardNode>),
+    (PasteNode::TYPE, register::<PasteNode>),
+    (UserMentionNode::TYPE, register::<UserMentionNode>),
+    (ContactMentionNode::TYPE, register::<ContactMentionNode>),
+    (DateMentionNode::TYPE, register::<DateMentionNode>),
+    (
+        PullRequestMentionNode::TYPE,
+        register::<PullRequestMentionNode>,
+    ),
+    (
+        BookingLinkMentionNode::TYPE,
+        register::<BookingLinkMentionNode>,
+    ),
+    (
+        AgentSessionMentionNode::TYPE,
+        register::<AgentSessionMentionNode>,
+    ),
+    (ReplyTargetNode::TYPE, register::<ReplyTargetNode>),
+    (GroupMentionNode::TYPE, register::<GroupMentionNode>),
+    (InlineSearchNode::TYPE, register::<InlineSearchNode>),
+    (UnlinkedTextNode::TYPE, register::<UnlinkedTextNode>),
+    (CodeHighlightNode::TYPE, register::<CodeHighlightNode>),
+    (ImageNode::TYPE, register::<ImageNode>),
+    (VideoNode::TYPE, register::<VideoNode>),
+    (TableNode::TYPE, register::<TableNode>),
+    (TableCellNode::TYPE, register::<TableCellNode>),
+    (TableRowNode::TYPE, register::<TableRowNode>),
+    (CompletionNode::TYPE, register::<CompletionNode>),
+    (MarkNode::TYPE, register::<MarkNode>),
+    (CommentNode::TYPE, register::<CommentNode>),
+    (SearchMatchNode::TYPE, register::<SearchMatchNode>),
+    (EquationNode::TYPE, register::<EquationNode>),
+    (SnapshotNode::TYPE, register::<SnapshotNode>),
+    (HorizontalRuleNode::TYPE, register::<HorizontalRuleNode>),
+    (DiffNode::TYPE, register::<DiffNode>),
+    (DiffInsertNode::TYPE, register::<DiffInsertNode>),
+    (DiffDeleteNode::TYPE, register::<DiffDeleteNode>),
+    (DiffTextNode::TYPE, register::<DiffTextNode>),
+    (HtmlRenderNode::TYPE, register::<HtmlRenderNode>),
+    (ClassedBlockNode::TYPE, register::<ClassedBlockNode>),
+    (WatermarkNode::TYPE, register::<WatermarkNode>),
+    (ThemeMentionNode::TYPE, register::<ThemeMentionNode>),
+    (TagMentionNode::TYPE, register::<TagMentionNode>),
+    (ConnectAppNode::TYPE, register::<ConnectAppNode>),
+    (
+        AccountManagerRequestNode::TYPE,
+        register::<AccountManagerRequestNode>,
+    ),
+    (UnknownMentionNode::TYPE, register::<UnknownMentionNode>),
+    (AwaitNode::TYPE, register::<AwaitNode>),
+    (MagicChipNode::TYPE, register::<MagicChipNode>),
+    (AgentActivityNode::TYPE, register::<AgentActivityNode>),
+    (AgentContextNode::TYPE, register::<AgentContextNode>),
+    (
+        CursorSystemNotificationNode::TYPE,
+        register::<CursorSystemNotificationNode>,
+    ),
+];
+/// Whether a serialized type belongs to the source supported registry.
+pub fn is_supported_node_type(name: &str) -> bool {
+    matches!(name, "root" | "paragraph" | "text" | "tab" | "linebreak")
+        || SUPPORTED_REGISTRATIONS.iter().any(|(ty, _)| *ty == name)
+}
+/// Register one named source class, retaining the caller's mode and other classes.
+pub fn register_supported_node(builder: EditorBuilder, name: &str) -> crate::Result<EditorBuilder> {
+    if matches!(name, "root" | "paragraph" | "text" | "tab" | "linebreak") {
+        return Ok(builder);
+    }
+    let (_, register) = SUPPORTED_REGISTRATIONS
+        .iter()
+        .find(|(ty, _)| *ty == name)
+        .ok_or_else(|| Error::UnknownSerializedType(name.into()))?;
+    Ok(register(builder))
+}
 /// Register every supported class in the source registry's order.
 pub fn register_supported_nodes(builder: EditorBuilder) -> EditorBuilder {
-    builder
-        .node::<CodeNode>()
-        .node::<CustomCodeNode>()
-        .node::<DatabaseQueryNode>()
-        .node::<HeadingNode>()
-        .node::<LinkNode>()
-        .node::<AutoLinkNode>()
-        .node::<ListNode>()
-        .node::<TaskListNode>()
-        .node::<ListItemNode>()
-        .node::<QuoteNode>()
-        .node::<DocumentMentionNode>()
-        .node::<DocumentCardNode>()
-        .node::<PasteNode>()
-        .node::<UserMentionNode>()
-        .node::<ContactMentionNode>()
-        .node::<DateMentionNode>()
-        .node::<PullRequestMentionNode>()
-        .node::<BookingLinkMentionNode>()
-        .node::<AgentSessionMentionNode>()
-        .node::<ReplyTargetNode>()
-        .node::<GroupMentionNode>()
-        .node::<InlineSearchNode>()
-        .node::<UnlinkedTextNode>()
-        .node::<CodeHighlightNode>()
-        .node::<ImageNode>()
-        .node::<VideoNode>()
-        .node::<TableNode>()
-        .node::<TableCellNode>()
-        .node::<TableRowNode>()
-        .node::<CompletionNode>()
-        .node::<MarkNode>()
-        .node::<CommentNode>()
-        .node::<SearchMatchNode>()
-        .node::<EquationNode>()
-        .node::<SnapshotNode>()
-        .node::<HorizontalRuleNode>()
-        .node::<DiffNode>()
-        .node::<DiffInsertNode>()
-        .node::<DiffDeleteNode>()
-        .node::<DiffTextNode>()
-        .node::<HtmlRenderNode>()
-        .node::<ClassedBlockNode>()
-        .node::<WatermarkNode>()
-        .node::<ThemeMentionNode>()
-        .node::<TagMentionNode>()
-        .node::<ConnectAppNode>()
-        .node::<AccountManagerRequestNode>()
-        .node::<UnknownMentionNode>()
-        .node::<AwaitNode>()
-        .node::<MagicChipNode>()
-        .node::<AgentActivityNode>()
-        .node::<AgentContextNode>()
-        .node::<CursorSystemNotificationNode>()
+    SUPPORTED_REGISTRATIONS
+        .iter()
+        .fold(builder, |builder, (_, register)| register(builder))
 }
 /// Export/gate registry builder; unknown types remain errors, replacements are absent.
 pub fn export_builder() -> EditorBuilder {

@@ -50,3 +50,45 @@ impl SearchText for ReplyTargetNode {
         Some(self.display_text.as_str().into())
     }
 }
+
+/// Validate reply data without discarding caller property order or future properties.
+pub fn is_reply_target_data(value: &Value) -> bool {
+    serde_json::from_value::<ReplyTargetNode>(value.clone())
+        .is_ok_and(|node| !node.parent.id.is_empty())
+}
+/// Normalize historic channelId payloads; an existing parent is never overwritten.
+pub fn read_reply_target_data(value: &Value) -> Option<Value> {
+    if is_reply_target_data(value) {
+        return Some(value.clone());
+    }
+    let mut object = value.as_object()?.clone();
+    if object.contains_key("parent") {
+        return None;
+    }
+    let channel = object.get("channelId")?.as_str()?.to_owned();
+    object.shift_remove("channelId");
+    object.insert(
+        "parent".into(),
+        serde_json::json!({"type":"channel", "id":channel}),
+    );
+    let value = Value::Object(object);
+    is_reply_target_data(&value).then_some(value)
+}
+/// Wrap caller-ordered reply data, protecting the surrounding tag from embedded markup.
+pub fn build_reply_target_markdown(data: &Value) -> String {
+    format!(
+        "<m-reply-target>{}</m-reply-target>",
+        to_js_json_string(data).replace('<', "\\u003c")
+    )
+}
+/// Remove at most one leading reply block and its surrounding JavaScript whitespace.
+pub fn strip_leading_reply_target_markdown(markdown: &str) -> String {
+    static RE: std::sync::LazyLock<regress::Regex> = std::sync::LazyLock::new(|| {
+        regress::Regex::with_flags(r"^\s*<m-reply-target>.*?</m-reply-target>\s*", "s")
+            .expect("literal reply block regex")
+    });
+    RE.find(markdown).map_or_else(
+        || markdown.to_owned(),
+        |m| markdown.get(m.end()..).unwrap_or_default().to_owned(),
+    )
+}
