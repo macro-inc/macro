@@ -412,3 +412,18 @@ fn deletion_stops_before_an_unentered_block() -> Result<(), Error> {
     assert_eq!(tx.text_content(q), "second");
     Ok(())
 }
+
+#[test]
+fn collapsed_remove_reports_selection_update_without_dirty_nodes() -> Result<(), Error> {
+    let mut editor = Editor::builder(EditorMode::Headless).build().unwrap();
+    editor.update(|tx| {
+        let p = tx.create(Paragraph::default())?;
+        tx.append(NodeKey::ROOT, &[p.key()])?;
+        tx.select_start(p)
+    })?;
+    let (_, commit) = editor.update(|tx| tx.remove_text())?;
+    assert!(commit.selection_changed);
+    assert!(commit.changes.is_empty());
+    assert!(commit.changes.mutations.is_empty());
+    Ok(())
+}
