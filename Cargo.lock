@@ -11794,6 +11794,7 @@ dependencies = [
 name = "lexical_rich_nodes"
 version = "0.1.0"
 dependencies = [
+ "bitflags 2.11.1",
  "lexical_model",
  "regress",
  "serde",

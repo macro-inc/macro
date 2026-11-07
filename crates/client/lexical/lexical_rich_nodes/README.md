@@ -91,3 +91,10 @@ The replayer now runs all eleven recorded rich-text, one hashtag and both list
 fixtures; there are no recorded plain-text fixtures. JS return objects with an
 undefined checked property retain that marker in the replayer, while model JSON
 correctly omits it from serialized snapshots.
+
+`table::nodes` ports TableNode, TableRowNode and TableCellNode payloads, shadow-root
+flags and JSON coercions. `table::map` preserves ragged rows, holes, truncated
+bottom overflow, rectangle expansion and map-time writable identity. Table row
+height null is intentionally imported as absent; negative/fractional imported
+spans are rejected by the typed payload. DOM creation and HTML conversion belong
+to the view/HTML layers.
