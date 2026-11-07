@@ -18,7 +18,6 @@ ai_tools = [
 ]
 # The meeting-link adapter that mints Macro calls through the call domain
 # service, for hosts that compose both calendars and calls.
-call-meetings = ["dep:call", "dep:macro_user_id"]
 # The reminder dispatch queue worker. Transport-agnostic: it drives the
 # domain through the dispatch ports.
 dispatch = ["dep:tokio", "dep:tokio-util"]
@@ -47,9 +46,6 @@ async-trait = { workspace = true, optional = true }
 aws-sdk-sqs = { workspace = true, optional = true }
 axum = { workspace = true, optional = true }
 email_validator = { path = "../email_validator", optional = true }
-call = { path = "../call", default-features = false, features = [
-  "ports",
-], optional = true }
 chrono = { workspace = true }
 chrono-tz = { workspace = true }
 email_utils = { path = "../email_utils" }

@@ -31,7 +31,7 @@ reminder dispatch, team availability, and provider/Postgres persistence.
 
 ## Boundaries
 
-- Depends on: `call` (feature `call-meetings`, meeting links), `macro_user_id`,
+- Depends on: `macro_user_id`,
   `notification` (feature `notify`), `model_notifications`, `aws-sdk-sqs`
   (feature `dispatch-sqs`).
 - Used by: `email`, `ai_tools`, `channel_bots`, `graphql_calendar`, `complete_graph`,
