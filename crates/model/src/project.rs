@@ -44,17 +44,7 @@ pub struct PendingProject {
     pub document_statuses: Vec<ProjectDocumentStatus>,
 }
 
-#[derive(Serialize, Deserialize, Debug, ToSchema, Clone, Eq, PartialEq, sqlx::FromRow)]
-#[serde(rename_all = "camelCase")]
-pub struct BasicProject {
-    pub id: String,
-    #[schema(value_type = String)]
-    #[sqlx(try_from = "String")]
-    pub user_id: Owner,
-    pub parent_id: Option<String>,
-    pub name: String,
-    pub deleted_at: Option<chrono::DateTime<chrono::Utc>>,
-}
+pub use entity_basic_types::BasicProject;
 
 #[derive(Serialize, Deserialize, Eq, PartialEq, Debug, Clone, ToSchema)]
 #[serde(tag = "access", rename_all = "snake_case")]

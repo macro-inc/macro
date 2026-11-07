@@ -24,7 +24,7 @@ use crate::domain::{
     },
     ports::EntityAccessService,
 };
-use model::document::DocumentBasic;
+use entity_basic_types::DocumentBasic;
 
 /// Validates that the user has at least the required access level to a document.
 ///

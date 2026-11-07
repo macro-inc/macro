@@ -96,6 +96,9 @@ workspace-members = [
     # chat_message: leaf message types, kept out of workspace-hack so the
     # crates that store chat messages need not wait for its heavy union.
     "chat_message",
+    # Leaf type crates under crates/types/: workspace-hack would make them
+    # wait for, and compile, its heavy union (rig-core, async-graphql, ...).
+    "entity_basic_types",
     "macro_uuid",
     "non_empty",
     "cowlike",

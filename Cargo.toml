@@ -154,6 +154,7 @@ members = [
   "crates/trigger_context",
   "crates/types/agent_session_id",
   "crates/types/chat_message",
+  "crates/types/entity_basic_types",
   "crates/unfurl",
   "crates/universal_input",
   "crates/upstream_error",
@@ -631,6 +632,7 @@ ensure_exists = { path = "crates/ensure_exists" }
 entity_access = { path = "crates/entity_access", default-features = false }
 entity_access_db_utils = { path = "crates/entity_access_db_utils" }
 entity_access_management = { path = "crates/entity_access_management", default-features = false }
+entity_basic_types = { path = "crates/types/entity_basic_types" }
 entity_mutation = { path = "crates/entity_mutation" }
 entity_registry = { path = "crates/entity_registry/entity_registry" }
 entity_registry_db_utils = { path = "crates/entity_registry/entity_registry_db_utils" }

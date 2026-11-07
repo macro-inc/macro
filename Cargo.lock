@@ -7803,13 +7803,13 @@ dependencies = [
  "cached",
  "clap",
  "database_env_vars",
+ "entity_basic_types",
  "futures",
  "harness_id",
  "macro_authorization",
  "macro_db_migrator",
  "macro_entrypoint",
  "macro_user_id",
- "model",
  "model-entity",
  "model-error-response",
  "model_owner",
@@ -7861,6 +7861,19 @@ dependencies = [
  "tracing",
  "uuid",
  "workspace-hack",
+]
+
+[[package]]
+name = "entity_basic_types"
+version = "0.1.0"
+dependencies = [
+ "chrono",
+ "document_sub_type",
+ "model_file_type",
+ "model_owner",
+ "serde",
+ "sqlx",
+ "utoipa",
 ]
 
 [[package]]
@@ -13227,6 +13240,7 @@ dependencies = [
  "chat_message",
  "chrono",
  "document_sub_type",
+ "entity_basic_types",
  "macro_user_id",
  "model-entity",
  "model-error-response",

@@ -35,3 +35,4 @@ utoipa = { workspace = true, features = ["axum_extras", "chrono"] }
 uuid = { workspace = true }
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
 chat_message = { workspace = true, features = ["schema"] }
+entity_basic_types = { workspace = true, features = ["schema", "sqlx"] }

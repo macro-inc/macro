@@ -6,12 +6,12 @@ use axum::{
     http::{Request, StatusCode, header},
     response::IntoResponse,
 };
+use entity_basic_types::ChatBasic;
 use macro_authorization::{
     BOT_SCOPE_HEADER, BOT_TOKEN_HEADER, BotActingUserClaims, BotAuthentication, BotScope,
     INTERNAL_API_KEY_HEADER, INTERNAL_MACRO_USER_ID_HEADER, InternalIdentityClaims,
     MacroAuthorizationError, MacroAuthorizationService, MacroAuthorizationState,
 };
-use model::chat::ChatBasic;
 use model_owner::Owner;
 use model_user::UserContext;
 use rootcause::Report;
