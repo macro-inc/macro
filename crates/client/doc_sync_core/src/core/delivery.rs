@@ -237,11 +237,15 @@ impl SyncCore {
                 }
             }
         }
+        self.mark_delivered_prefix(now, out);
+        self.delivery_confirmed(out);
+    }
+
+    fn delivery_confirmed(&mut self, out: &mut SyncOutput) {
         self.not_acked = 0;
         self.suspect_delay = Millis(5_000);
         self.waiting_for_fresh_ack = false;
         self.push_retry = None;
-        self.mark_delivered_prefix(now, out);
         if let Some(span) = self.outage_span.take() {
             self.end_span(span, "delivered", false, out);
         }
@@ -286,6 +290,19 @@ impl SyncCore {
             }
         }
         self.mark_delivered_prefix(now, out);
+        // A broadcast/catchup can prove a foreign row delivered before this
+        // socket receives its push ack. Keep only still-unconfirmed rows in
+        // flight, so retries and diagnostics cannot cross the delivered prefix.
+        if let Some(mut push) = self.push.take() {
+            push.rows.retain(|seq| !self.is_delivered(*seq));
+            if push.rows.is_empty() {
+                // Server evidence proves every row in this push persisted,
+                // completing delivery even if its redundant ack was lost.
+                self.delivery_confirmed(out);
+            } else {
+                self.push = Some(push);
+            }
+        }
     }
 
     fn mark_delivered_prefix(&mut self, now: Now, out: &mut SyncOutput) {
