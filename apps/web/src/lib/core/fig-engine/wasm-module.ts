@@ -4,7 +4,7 @@
  *
  * Build the package with:
  *   just build-fig-engine-wasm
- * which runs wasm-pack over crates/fig_engine into
+ * which runs wasm-pack over crates/engines/fig_engine into
  * src/lib/core/fig-engine/wasm/ (gitignored).
  */
 

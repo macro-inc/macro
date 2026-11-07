@@ -25,7 +25,6 @@ members = [
   "crates/agents/code_execution_core",
   "crates/agents/code_execution_outbound",
   "crates/ai_billing",
-  "crates/ai_engine",
   "crates/ai_projections",
   "crates/ai_usage",
   "crates/billing/ai_admission",
@@ -65,7 +64,6 @@ members = [
   "crates/dictation",
   "crates/documents/collab_surface",
   "crates/documents/sync_router",
-  "crates/docx_engine",
   "crates/dynamic_ui",
   "crates/email/email_api_client_core",
   "crates/email/email_api_client_outbound",
@@ -73,6 +71,11 @@ members = [
   "crates/email/google_token",
   "crates/email/reminders",
   "crates/embedding",
+  "crates/engines/ai_engine",
+  "crates/engines/docx_engine",
+  "crates/engines/fig_engine",
+  "crates/engines/pptx_engine",
+  "crates/engines/psd_engine",
   "crates/entities/access_requests",
   "crates/entities/entity_mutation",
   "crates/entities/entity_registry",
@@ -83,7 +86,6 @@ members = [
   "crates/entities/frecency_inbound",
   "crates/entities/frecency_outbound",
   "crates/entities/shared_entity_registry",
-  "crates/fig_engine",
   "crates/folds/agent_fold",
   "crates/folds/claude_fold",
   "crates/folds/codex_fold",
@@ -165,13 +167,11 @@ members = [
   "crates/platform/service_urls/sync_service_url",
   "crates/platform/service_urls/unfurl_service_url",
   "crates/platform/upstream_error",
-  "crates/pptx_engine",
   "crates/predicate_index",
   "crates/projects/initiative",
   "crates/projects/initiative_description",
   "crates/projects/task_dedup",
   "crates/prompt",
-  "crates/psd_engine",
   "crates/routine_program",
   "crates/routines",
   "crates/scheduled_action",
@@ -626,7 +626,7 @@ agent_trigger = { path = "crates/agent_trigger" }
 ai_admission = { path = "crates/billing/ai_admission" }
 ai_billing = { path = "crates/ai_billing" }
 ai_editing_worker_url = { path = "crates/platform/service_urls/ai_editing_worker_url" }
-ai_engine = { path = "crates/ai_engine" }
+ai_engine = { path = "crates/engines/ai_engine" }
 ai_projections = { path = "crates/ai_projections" }
 ai_tools = { path = "crates/ai_tools" }
 ai_toolset = { path = "crates/ai_toolset" }
@@ -700,7 +700,7 @@ document_storage_service_url = { path = "crates/platform/service_urls/document_s
 document_sub_type = { path = "crates/types/document_sub_type", default-features = false }
 documents = { path = "crates/documents/documents", default-features = false }
 documents_hex = { package = "documents", path = "crates/documents/documents" }
-docx_engine = { path = "crates/docx_engine" }
+docx_engine = { path = "crates/engines/docx_engine" }
 dynamic_ui = { path = "crates/dynamic_ui" }
 dynamodb_client = { path = "crates/aws/dynamodb_client" }
 email = { path = "crates/email/email" }
@@ -724,7 +724,7 @@ entity_registry_db_utils = { path = "crates/entities/entity_registry_db_utils" }
 external_chat = { path = "crates/comms/external_chat" }
 favorites = { path = "crates/entities/favorites" }
 feature_flags = { path = "crates/platform/feature_flags" }
-fig_engine = { path = "crates/fig_engine", default-features = false }
+fig_engine = { path = "crates/engines/fig_engine", default-features = false }
 filter_ast = { path = "crates/types/filter_ast" }
 foreign_entity = { path = "crates/entities/foreign_entity", default-features = false }
 forms = { path = "crates/databases/forms" }
@@ -858,7 +858,7 @@ onboarding = { path = "crates/accounts/onboarding" }
 opensearch_client = { path = "crates/clients/opensearch_client" }
 opensearch_query_builder = { path = "crates/clients/opensearch_query_builder" }
 pipedream_mcp = { path = "crates/pipedream_mcp" }
-pptx_engine = { path = "crates/pptx_engine", default-features = false }
+pptx_engine = { path = "crates/engines/pptx_engine", default-features = false }
 predicate-index = { path = "crates/predicate_index" }
 preview_gateway_url = { path = "crates/platform/service_urls/preview_gateway_url" }
 project_id = { path = "crates/types/project_id" }
@@ -867,7 +867,7 @@ projects_hex = { package = "projects", path = "crates/projects/projects" }
 prompt = { path = "crates/prompt" }
 properties = { path = "crates/databases/properties", default-features = false }
 properties_inbound = { path = "crates/databases/properties_inbound", default-features = false }
-psd_engine = { path = "crates/psd_engine" }
+psd_engine = { path = "crates/engines/psd_engine" }
 rate_limit = { path = "crates/platform/rate_limit" }
 readonly_pool = { path = "crates/platform/readonly_pool" }
 referral = { path = "crates/referral" }

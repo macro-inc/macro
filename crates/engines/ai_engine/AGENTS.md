@@ -50,4 +50,4 @@ natively and as WebAssembly.
 
 ## Related
 
-- Docs: `crates/ai_engine/README.md`
+- Docs: `crates/engines/ai_engine/README.md`

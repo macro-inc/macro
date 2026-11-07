@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Regenerates crates/pptx_engine/fonts from system font packages
+# Regenerates crates/engines/pptx_engine/fonts from system font packages
 # (fonts-crosextra-carlito, fonts-crosextra-caladea, fonts-liberation, fonts-dejavu-core)
 # and the Noto Arabic and Hebrew fonts (downloaded from notofonts.github.io).
 # Requires fonttools (`pip install fonttools`) and curl.

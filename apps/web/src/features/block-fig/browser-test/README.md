@@ -1,7 +1,7 @@
 # Figma viewer browser fixture
 
 This entry mounts the real `FigViewer` with the wasm engine in its workers,
-over `.fig` files from `crates/fig_engine/tests/fixtures` (or any directory
+over `.fig` files from `crates/engines/fig_engine/tests/fixtures` (or any directory
 named by `FIG_CORPUS_DIR`). It loads no authentication, document storage, or
 product routes. It verifies the viewer and engine integration, not storage or
 permissions.

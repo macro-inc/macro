@@ -2027,7 +2027,7 @@ bunx vite --config src/features/block-fig/browser-test/vite.config.ts
 # http://127.0.0.1:3019/?file=showcase.fig
 ```
 
-It opens files from `crates/fig_engine/tests/fixtures` (the synthetic
+It opens files from `crates/engines/fig_engine/tests/fixtures` (the synthetic
 `showcase.fig`, `design-system.fig` with components, a component set,
 properties, and styles, and `prototype.fig`, a clickable prototype), or from any directory named by `FIG_CORPUS_DIR`; the header
 also opens a local `.fig`. `?edit` makes the file editable and `?new` opens a

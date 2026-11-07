@@ -11,9 +11,9 @@ files themselves stay with their publishers and are not committed.
 
 ```sh
 S=/tmp/docx-corpus
-python3 crates/docx_engine/scripts/fetch_corpus.py $S/corpus
+python3 crates/engines/docx_engine/scripts/fetch_corpus.py $S/corpus
 cargo run --release -p docx_engine --features cli --bin docx_corpus -- fontconfig --out $S/fonts.conf
-python3 crates/docx_engine/scripts/render_references.py $S/refs $S/corpus/*.docx --fontconfig $S/fonts.conf --jobs 4
+python3 crates/engines/docx_engine/scripts/render_references.py $S/refs $S/corpus/*.docx --fontconfig $S/fonts.conf --jobs 4
 cargo run --release -p docx_engine --features cli --bin docx_corpus -- score --refs $S/refs --out $S/score --jobs 4 $S/corpus/*.docx
 ```
 

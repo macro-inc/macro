@@ -2,7 +2,7 @@
 """Render LibreOffice reference PNGs for .pptx files (pixel-diff baselines).
 
 Usage:
-    python3 crates/pptx_engine/scripts/render_references.py OUT_DIR deck.pptx [...] \
+    python3 crates/engines/pptx_engine/scripts/render_references.py OUT_DIR deck.pptx [...] \
         [--width 960] [--jobs N] [--force] [--keep-pdf] [--timeout 300] \
         [--fontconfig FONTS_CONF]
 

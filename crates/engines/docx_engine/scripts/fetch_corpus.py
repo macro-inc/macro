@@ -2,7 +2,7 @@
 """Download the fidelity corpus listed in tests/corpus/manifest.json.
 
 Usage:
-    python3 crates/docx_engine/scripts/fetch_corpus.py OUT_DIR [--manifest PATH]
+    python3 crates/engines/docx_engine/scripts/fetch_corpus.py OUT_DIR [--manifest PATH]
 
 Each entry's `source_url` is saved as OUT_DIR/<file>. When the entry names a
 Word-exported PDF (`word_pdf`) and its notes give the PDF's source URL, that

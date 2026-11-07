@@ -22,7 +22,7 @@ the corpus CLI) and as WebAssembly in the web app's DOCX editor worker.
 - Owns: everything Word-specific — model, layout, render, edit, collab, wasm
   bridge.
 - Not here: the shared Office foundation (ZIP/OPC, DrawingML, fonts,
-  rasterizer) → `crates/pptx_engine`.
+  rasterizer) → `crates/engines/pptx_engine`.
 
 ## Boundaries
 
