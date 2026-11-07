@@ -40,6 +40,6 @@ pub mod utils;
 
 pub mod list;
 
+pub mod link;
 /// Table nodes, span maps, operations and model interaction handlers.
 pub mod table;
-pub mod link;
