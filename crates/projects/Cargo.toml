@@ -48,6 +48,7 @@ activity = { workspace = true }
 anyhow = { workspace = true }
 chrono = { workspace = true }
 futures = { workspace = true }
+project_id = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 thiserror = { workspace = true }

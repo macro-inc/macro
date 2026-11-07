@@ -137,6 +137,7 @@ lexical_service_url = { workspace = true }
 scheduled_action_service_url = { workspace = true }
 static_file_service_url = { workspace = true }
 sync_service_url = { workspace = true }
+project_id = { workspace = true }
 
 [dev-dependencies]
 macro_db_migrator = { workspace = true }

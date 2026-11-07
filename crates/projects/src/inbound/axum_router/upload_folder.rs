@@ -16,6 +16,7 @@ use models_bulk_upload::{
     MarkProjectUploadedRequest, MarkProjectUploadedResponse, UploadExtractFolderRequest,
     UploadExtractFolderResponseData,
 };
+use project_id::ProjectId;
 
 use super::ProjectRouterState;
 use crate::domain::{models::ProjectError, ports::ProjectService};
@@ -148,7 +149,7 @@ where
 {
     let project_ids = state
         .service
-        .mark_projects_uploaded(&request.project_id)
+        .mark_projects_uploaded(&ProjectId::from(&*request.project_id))
         .await?;
     Ok(Json(MarkProjectUploadedResponse { project_ids }))
 }

@@ -188,6 +188,7 @@ members = [
   "crates/types/entity_basic_types",
   "crates/types/id_newtype",
   "crates/types/message_parent",
+  "crates/types/project_id",
   "crates/types/soup_property",
   "crates/types/team_id",
   "crates/unfurl",
@@ -837,6 +838,7 @@ pipedream_mcp = { path = "crates/pipedream_mcp" }
 pptx_engine = { path = "crates/pptx_engine", default-features = false }
 predicate-index = { path = "crates/predicate_index" }
 preview_gateway_url = { path = "crates/platform/service_urls/preview_gateway_url" }
+project_id = { path = "crates/types/project_id" }
 projects = { path = "crates/projects", default-features = false }
 projects_hex = { package = "projects", path = "crates/projects" }
 prompt = { path = "crates/prompt" }

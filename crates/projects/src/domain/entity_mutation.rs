@@ -13,6 +13,7 @@ use macro_event_broker::MacroEventBroker;
 use model::project::{BasicProject, request::PatchProjectRequestV2};
 use model_entity::{Entity, EntityType};
 use models_permissions::share_permission::UpdateSharePermissionRequestV2;
+use project_id::ProjectId;
 
 use super::{
     models::ProjectError,
@@ -77,7 +78,7 @@ async fn basic_project<S: ProjectService>(
     entity: &Entity<'static>,
 ) -> Result<BasicProject, EntityMutationErrorCode> {
     Ok(service
-        .internal_get_basic_project(&entity.entity_id)
+        .internal_get_basic_project(&ProjectId::from(&*entity.entity_id))
         .await?)
 }
 
