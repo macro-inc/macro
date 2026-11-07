@@ -248,6 +248,12 @@ pub enum Error {
 /// Invalid editor configuration.
 #[derive(Debug, thiserror::Error)]
 pub enum BuildError {
+    /// Command behavior was installed more than once.
+    #[error("plugin {name} registered twice")]
+    DuplicatePlugin {
+        /// Duplicate plugin diagnostic name.
+        name: &'static str,
+    },
     /// One state type was installed twice.
     #[error("extension state {type_name} registered twice")]
     DuplicateExtensionState {

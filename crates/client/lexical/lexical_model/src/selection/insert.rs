@@ -91,7 +91,6 @@ impl Transaction<'_> {
             let target = if let Some(adjacent) = adjacent.filter(|key| {
                 self.is_text(*key)
                     && !self.is_token_or_segmented(*key)
-                    && !self.is::<Tab>(*key)
                     && if at_start {
                         self.can_insert_text_after(*key)
                     } else {

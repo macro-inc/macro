@@ -441,6 +441,33 @@ fn mixed_block_insertion_wraps_nodes_requiring_a_parent() -> Result<(), Error> {
     assert_eq!(tx.parent(block), Some(NodeKey::ROOT));
     Ok(())
 }
+// LexicalTabNode.test.ts: typing between two protected tabs must use a plain text node.
+#[test]
+fn insert_text_between_tabs_keeps_tabs_and_typing_attributes() -> Result<(), Error> {
+    let mut editor = Editor::builder(EditorMode::Headless).build().unwrap();
+    let mut tx = editor.transaction();
+    let p = tx.create(Paragraph {})?;
+    let a = tx.create(Tab {})?;
+    let b = tx.create(Tab {})?;
+    tx.text(a)?.set_format(TextFormat::BOLD)?;
+    tx.text(b)?.set_format(TextFormat::BOLD)?;
+    tx.append(p, &[a.key(), b.key()])?;
+    tx.append(NodeKey::ROOT, &[p.key()])?;
+    tx.select_start(b)?;
+    tx.set_selection_format(TextFormat::BOLD)?;
+    tx.set_selection_style("color: blue")?;
+    tx.insert_text("x")?;
+    let children = tx.children_keys(p)?;
+    assert_eq!(children.len(), 3);
+    assert_eq!(children[0], a.key());
+    assert_eq!(children[2], b.key());
+    assert!(tx.is_simple_text(children[1]));
+    assert_eq!(tx.text_content(p), "\tx\t");
+    assert_eq!(tx.text_data(children[1])?.format, TextFormat::BOLD);
+    assert_eq!(tx.text_data(children[1])?.style.as_ref(), "color: blue");
+    assert_eq!(tx.anchor()?, Point::text(children[1], Utf16Offset(1)));
+    Ok(())
+}
 
 /// upstream: LexicalTabNode can type between two protected leaf nodes.
 #[test]

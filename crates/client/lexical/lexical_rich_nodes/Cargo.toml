@@ -1,0 +1,13 @@
+[package]
+name = "lexical_rich_nodes"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+[dependencies]
+lexical_model = { workspace = true }
+regress = { workspace = true }
+serde = { workspace = true, features = ["derive"] }
+thiserror = { workspace = true }
+
+serde_json = { workspace = true }

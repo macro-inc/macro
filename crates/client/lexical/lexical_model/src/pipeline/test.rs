@@ -668,3 +668,103 @@ fn root_cache_reconciliation_clones_the_root_after_text_changes() -> Result<(), 
     assert!(!commit.changes.mutations.contains_key(&NodeKey::ROOT));
     Ok(())
 }
+
+#[test]
+fn changed_element_text_cache_is_intentionally_dirty_after_mutation_reporting() -> Result<(), Error>
+{
+    let mut editor = Editor::builder(EditorMode::ViewAttached)
+        .build()
+        .expect("editor");
+    let mut tx = editor.transaction();
+    let p = tx.create(Paragraph {})?;
+    let text = tx.create_text("ab")?;
+    tx.append(p, &[text.key()])?;
+    tx.append(NodeKey::ROOT, &[p.key()])?;
+    tx.commit()?;
+    let mut tx = editor.transaction();
+    tx.text(text)?.set_format(TextFormat::BOLD)?;
+    let commit = tx.commit()?;
+    assert_eq!(
+        commit.next.view().element(p).expect("element").text_format,
+        TextFormat::BOLD
+    );
+    assert_eq!(
+        commit.changes.dirty_elements.get(&p.key()),
+        Some(&DirtyIntent::Intentional)
+    );
+    assert!(!commit.changes.mutations.contains_key(&p.key()));
+    Ok(())
+}
+
+#[test]
+fn splice_does_not_dirty_a_sibling_whose_links_are_unchanged() -> Result<(), Error> {
+    let mut editor = Editor::builder(EditorMode::Headless)
+        .build()
+        .expect("editor");
+    let mut tx = editor.transaction();
+    let p = tx.create(Paragraph {})?;
+    let a = tx.create_text("a")?;
+    let first = tx.create(Tab {})?;
+    let b = tx.create_text("b")?;
+    tx.append(p, &[a.key(), first.key(), b.key()])?;
+    tx.append(NodeKey::ROOT, &[p.key()])?;
+    tx.commit()?;
+    let mut tx = editor.transaction();
+    let second = tx.create(Tab {})?;
+    tx.splice(p, ChildIndex(2), 0, &[second.key()])?;
+    let commit = tx.commit()?;
+    assert!(!commit.changes.dirty_leaves.contains(&a.key()));
+    assert!(commit.changes.dirty_leaves.contains(&first.key()));
+    assert!(commit.changes.dirty_leaves.contains(&b.key()));
+    assert!(commit.changes.dirty_leaves.contains(&second.key()));
+    Ok(())
+}
+
+/// Upstream ElementNode.splice moves inserted nodes with removeFromParent,
+/// leaving source element points available for package-level remapping.
+#[test]
+fn moving_children_keeps_source_element_offsets_for_explicit_remap() -> Result<(), Error> {
+    let mut editor = Editor::builder(EditorMode::Headless)
+        .build()
+        .expect("editor");
+    let mut tx = editor.transaction();
+    let from = tx.create(Paragraph {})?;
+    let to = tx.create(Paragraph {})?;
+    let text = tx.create_text("text")?;
+    tx.append(from, &[text.key()])?;
+    tx.append(NodeKey::ROOT, &[from.key(), to.key()])?;
+    tx.element(from)?
+        .select(Some(ChildIndex(0)), Some(ChildIndex(1)))?;
+    tx.splice(to, ChildIndex(0), 0, &[text.key()])?;
+    assert_eq!(
+        tx.range_at(SelectionSlot::Active)?.focus,
+        Point::element(from.key(), ChildIndex(1))
+    );
+    tx.set_point_at(
+        SelectionSlot::Active,
+        PointRole::Anchor,
+        Point::element(to.key(), ChildIndex(0)),
+    )?;
+    tx.set_point_at(
+        SelectionSlot::Active,
+        PointRole::Focus,
+        Point::element(to.key(), ChildIndex(1)),
+    )?;
+    tx.commit()?;
+    Ok(())
+}
+
+#[test]
+fn explicit_selection_replacement_reports_an_object_identity_boundary() -> Result<(), Error> {
+    let mut editor = Editor::builder(EditorMode::Headless)
+        .build()
+        .expect("editor");
+    let mut tx = editor.transaction();
+    tx.set_selection(Some(Selection::Range(RangeSelection::at_root())))?;
+    let before = tx.selection().cloned();
+    assert_eq!(tx.selection_replacements(), 0);
+    tx.replace_selection(before.clone())?;
+    assert_eq!(tx.selection_replacements(), 1);
+    assert_eq!(tx.selection(), before.as_ref());
+    Ok(())
+}

@@ -13,6 +13,14 @@ pub enum ReplayError {
     /// Model operation failed.
     #[error(transparent)]
     Model(#[from] lexical_model::Error),
+    /// A rich-node operation failed.
+    #[error(transparent)]
+    Rich(#[from] lexical_rich_nodes::Error),
+    /// An operation requires the upstream ambient editor callback.
+    #[error(
+        "Unable to find an active editor. This method can only be used synchronously during the callback of editor.update(), editor.read(), or editor.getEditorState().read(..., {{editor}}). Detected on the page: 1 compatible editor(s) with version \"0.45.0+git\""
+    )]
+    NoActiveEditor,
     /// Invalid fixture JSON.
     #[error(transparent)]
     Json(#[from] serde_json::Error),
@@ -41,6 +49,8 @@ pub(crate) fn string(value: &Value) -> Result<&str> {
 /// Owns one fixture's identities, persistent versions and callback tapes.
 #[derive(Default)]
 pub struct Replayer {
+    pub(crate) rich_text_registered: bool,
+    pub(crate) in_callback: bool,
     pub(crate) carets: Vec<crate::api::caret::CaretValue>,
     pub(crate) handles: HashMap<String, Value>,
     pub(crate) keys: HashMap<String, NodeKey>,
@@ -64,6 +74,7 @@ pub struct Replayer {
     /// Enforce exact upstream key allocation, in addition to bijective identity.
     pub strict_keys: bool,
     pub(crate) pending_install: Option<Commit>,
+    pub(crate) pending_command: bool,
     pub(crate) microtasks: std::collections::VecDeque<Value>,
 }
 impl Replayer {
@@ -161,7 +172,12 @@ impl Replayer {
                 }
                 "update" | "commit" if self.pending_install.is_some() => {
                     if kind == "update" {
-                        if op["cause"] != "setEditorState" || op["calls"] != json!([]) {
+                        let cause = if self.pending_command {
+                            "listener-enqueued"
+                        } else {
+                            "setEditorState"
+                        };
+                        if op["cause"] != cause || op["calls"] != json!([]) {
                             return Err(fail("unexpected state-install update"));
                         }
                         self.updates.push(op["id"].clone());
@@ -172,6 +188,7 @@ impl Replayer {
                             .pending_install
                             .take()
                             .ok_or_else(|| fail("state install commit"))?;
+                        self.pending_command = false;
                         self.version += 1;
                         self.compare(&op["updates"], &json!(self.updates))?;
                         self.compare(&op["causes"], &json!(self.causes))?;
@@ -256,6 +273,25 @@ impl Replayer {
                             break;
                         }
                     }
+                    Ok(())
+                }
+                "call" if op["fn"] == "LexicalEditor.dispatchCommand" => {
+                    let ed = editor.as_mut().ok_or_else(|| fail("missing editor"))?;
+                    let mut tx = ed.transaction();
+                    self.begin_slots(&mut tx, false);
+                    self.execute(op, &mut tx)?;
+                    self.capture_slots(&tx)?;
+                    self.pending_install = Some(tx.commit()?);
+                    self.pending_command = true;
+                    Ok(())
+                }
+                "plugin" => {
+                    if op["name"] != "@lexical/rich-text.registerRichText"
+                        || op["args"] != json!([{"$ed":0}])
+                    {
+                        return Err(fail("unmapped plugin registration"));
+                    }
+                    self.rich_text_registered = true;
                     Ok(())
                 }
                 "call" | "read" | "log" => {
@@ -409,6 +445,10 @@ impl Replayer {
                         Ok(value) => {
                             Err(fail(format!("expected exception {expected}, got {value}")))
                         }
+                        Err(error @ ReplayError::NoActiveEditor) => self.compare(
+                            expected,
+                            &json!({"name":"Error", "message":error.to_string()}),
+                        ),
                         Err(ReplayError::Model(error)) => self.compare(
                             expected,
                             &json!({"name":"Error", "message":error.to_string()}),
@@ -422,7 +462,11 @@ impl Replayer {
                 }
             }
             "update" => {
-                if op["cause"] != "test" {
+                if op["cause"] != "test"
+                    && !(self.rich_text_registered
+                        && op["cause"] == "listener-enqueued"
+                        && op["calls"] == json!([]))
+                {
                     return Err(fail("unimplemented plugin cascade"));
                 }
                 self.updates.push(op["id"].clone());
@@ -515,6 +559,13 @@ impl Replayer {
         self.decode(invocation.ret.as_ref().unwrap_or(&undefined()))
     }
     pub(crate) fn execute_calls(&mut self, calls: &Value, tx: &mut Transaction<'_>) -> Result<()> {
+        let previous = self.in_callback;
+        self.in_callback = true;
+        let result = self.execute_callback_calls(calls, tx);
+        self.in_callback = previous;
+        result
+    }
+    fn execute_callback_calls(&mut self, calls: &Value, tx: &mut Transaction<'_>) -> Result<()> {
         for (i, call) in calls
             .as_array()
             .ok_or_else(|| fail("expected calls"))?

@@ -220,12 +220,6 @@ impl Transaction<'_> {
         result.extend_from_slice(nodes);
         result.extend(after);
         for key in nodes {
-            if let Some(source) = self.parent(*key)
-                && source != parent
-                && let Some(index) = self.index_within_parent(*key)
-            {
-                self.adjust_splice_selection(source, index.0, 1, 0, &[]);
-            }
             self.remove_from_parent(*key)?;
         }
         for key in &old {
@@ -259,11 +253,18 @@ impl Transaction<'_> {
     }
     fn set_children(&mut self, parent: NodeKey, children: &[NodeKey]) -> Result<(), Error> {
         for (i, key) in children.iter().enumerate() {
-            self.writable(*key)?.links = Links {
+            let links = Links {
                 parent: Some(parent),
                 prev: i.checked_sub(1).and_then(|j| children.get(j)).copied(),
                 next: children.get(i + 1).copied(),
             };
+            if self
+                .view()
+                .slot(*key)
+                .is_none_or(|node| node.links != links)
+            {
+                self.writable(*key)?.links = links;
+            }
         }
         match &mut self.writable(parent)?.base {
             BaseData::Element(data) => {
@@ -401,6 +402,11 @@ impl Transaction<'_> {
         let position = self
             .index_within_parent(anchor)
             .ok_or(Error::NoParent(anchor))?;
+        if let Some(source) = self.parent(node).filter(|source| *source != parent)
+            && let Some(index) = self.index_within_parent(node)
+        {
+            self.adjust_splice_selection(source, index.0, 1, 0, &[]);
+        }
         self.splice(parent, ChildIndex(position.0 + 1), 0, &[node])?;
         if !restore_selection {
             self.pending.selection = selection;
@@ -426,6 +432,11 @@ impl Transaction<'_> {
         let position = self
             .index_within_parent(anchor)
             .ok_or(Error::NoParent(anchor))?;
+        if let Some(source) = self.parent(node).filter(|source| *source != parent)
+            && let Some(index) = self.index_within_parent(node)
+        {
+            self.adjust_splice_selection(source, index.0, 1, 0, &[]);
+        }
         self.splice(parent, position, 0, &[node])?;
         if !restore_selection {
             self.pending.selection = selection;
@@ -462,6 +473,11 @@ impl Transaction<'_> {
         if include_children {
             let children = self.children_keys(old)?;
             self.append(new, &children)?;
+        }
+        if let Some(source) = self.parent(new).filter(|source| *source != parent)
+            && let Some(index) = self.index_within_parent(new)
+        {
+            self.adjust_splice_selection(source, index.0, 1, 0, &[]);
         }
         self.splice(parent, position, 1, &[new])?;
         if let Some(Selection::Range(previous)) = selection {

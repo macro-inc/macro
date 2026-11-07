@@ -593,6 +593,13 @@ impl<'editor> Transaction<'editor> {
         self.pending.selection = selection;
         Ok(())
     }
+    /// Install a newly allocated selection object, preserving its observable identity boundary.
+    /// Use set_selection for value installation when identity is managed by the caller.
+    pub fn replace_selection(&mut self, selection: Option<Selection>) -> Result<(), Error> {
+        self.guard_write()?;
+        self.selection_replacements += 1;
+        self.set_selection(selection)
+    }
     /// Current composition node, staged with this transaction.
     /// s2: TX-06
     pub fn composition_key(&self) -> Option<NodeKey> {

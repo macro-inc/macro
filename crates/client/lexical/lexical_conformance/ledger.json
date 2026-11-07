@@ -26,16 +26,6 @@
       "failure": "op 4: call 0: unmapped API: @lexical/code.$createCodeNode"
     },
     {
-      "file": "packages/lexical-hashtag/src/__tests__/unit/LexicalHashtagNode.test.ts",
-      "test": "LexicalHashtagNode tests > HashtagNode.exportJSON() should return and object conforming to the expected schema",
-      "status": "xfail",
-      "reason": "not-ported",
-      "reviewedBy": "coding-agent",
-      "decision": "WORKPLAN later package layers (rich nodes, markdown, lists/tables); WP-06 core subset",
-      "note": "Missing capability: @lexical/hashtag.$createHashtagNode. No model mismatch is masked; this exact unsupported diagnostic must still occur.",
-      "failure": "op 4: call 0: unmapped API: @lexical/hashtag.$createHashtagNode"
-    },
-    {
       "file": "packages/lexical-link/src/__tests__/unit/LexicalLinkNode.test.ts",
       "test": "LexicalLinkNode tests > $isLinkNode()",
       "status": "xfail",
@@ -264,26 +254,6 @@
       "decision": "WORKPLAN later package layers (rich nodes, markdown, lists/tables); WP-06 core subset",
       "note": "Missing capability: @lexical/link.formatUrl. No model mismatch is masked; this exact unsupported diagnostic must still occur.",
       "failure": "op 0 call: unmapped API: @lexical/link.formatUrl"
-    },
-    {
-      "file": "packages/lexical-list/src/__tests__/unit/LexicalListItemNode.test.ts",
-      "test": "LexicalListItemNode tests > Can serialize a node that is not attached",
-      "status": "xfail",
-      "reason": "not-ported",
-      "reviewedBy": "coding-agent",
-      "decision": "WORKPLAN later package layers (rich nodes, markdown, lists/tables); WP-06 core subset",
-      "note": "Missing capability: @lexical/list.$createListItemNode. No model mismatch is masked; this exact unsupported diagnostic must still occur.",
-      "failure": "op 4: call 0: unmapped API: @lexical/list.$createListItemNode"
-    },
-    {
-      "file": "packages/lexical-list/src/__tests__/unit/utils.test.ts",
-      "test": "Lexical List Utils tests > getListDepth should return the 1-based depth of a list with one levels",
-      "status": "xfail",
-      "reason": "not-ported",
-      "reviewedBy": "coding-agent",
-      "decision": "WORKPLAN later package layers (rich nodes, markdown, lists/tables); WP-06 core subset",
-      "note": "Missing capability: @lexical/list.$createListNode. No model mismatch is masked; this exact unsupported diagnostic must still occur.",
-      "failure": "op 4: call 1: unmapped API: @lexical/list.$createListNode"
     },
     {
       "file": "packages/lexical-mark/__tests__/unit/LexicalMarkNode.test.ts",
@@ -526,116 +496,6 @@
       "failure": "op 0 call: unmapped API: @lexical/markdown/MarkdownTransformers.normalizeMarkdown"
     },
     {
-      "file": "packages/lexical-rich-text/src/__tests__/unit/LexicalHeadingNode.test.ts",
-      "test": "Backspace at start of heading (#4359) > 'legacy merge still applies when previ\u2026'",
-      "status": "xfail",
-      "reason": "not-ported",
-      "reviewedBy": "coding-agent",
-      "decision": "WORKPLAN later package layers (rich nodes, markdown, lists/tables); WP-06 core subset",
-      "note": "Missing capability: @lexical/rich-text.$createHeadingNode. No model mismatch is masked; this exact unsupported diagnostic must still occur.",
-      "failure": "op 4: call 4: unmapped API: @lexical/rich-text.$createHeadingNode"
-    },
-    {
-      "file": "packages/lexical-rich-text/src/__tests__/unit/LexicalHeadingNode.test.ts",
-      "test": "Backspace at start of heading (#4359) > 'preserves heading when previous block\u2026'",
-      "status": "xfail",
-      "reason": "not-ported",
-      "reviewedBy": "coding-agent",
-      "decision": "WORKPLAN later package layers (rich nodes, markdown, lists/tables); WP-06 core subset",
-      "note": "Missing capability: @lexical/rich-text.$createHeadingNode. No model mismatch is masked; this exact unsupported diagnostic must still occur.",
-      "failure": "op 4: call 2: unmapped API: @lexical/rich-text.$createHeadingNode"
-    },
-    {
-      "file": "packages/lexical-rich-text/src/__tests__/unit/LexicalHeadingNode.test.ts",
-      "test": "Backspace at start of heading (#4359) > 'preserves quote when previous block i\u2026'",
-      "status": "xfail",
-      "reason": "not-ported",
-      "reviewedBy": "coding-agent",
-      "decision": "WORKPLAN later package layers (rich nodes, markdown, lists/tables); WP-06 core subset",
-      "note": "Missing capability: @lexical/rich-text.$createQuoteNode. No model mismatch is masked; this exact unsupported diagnostic must still occur.",
-      "failure": "op 4: call 2: unmapped API: @lexical/rich-text.$createQuoteNode"
-    },
-    {
-      "file": "packages/lexical-rich-text/src/__tests__/unit/LexicalHeadingNode.test.ts",
-      "test": "Backspace at start of heading (#4359) > 'removes only the empty paragraph betw\u2026'",
-      "status": "xfail",
-      "reason": "not-ported",
-      "reviewedBy": "coding-agent",
-      "decision": "WORKPLAN later package layers (rich nodes, markdown, lists/tables); WP-06 core subset",
-      "note": "Missing capability: @lexical/rich-text.$createHeadingNode. No model mismatch is masked; this exact unsupported diagnostic must still occur.",
-      "failure": "op 4: call 5: unmapped API: @lexical/rich-text.$createHeadingNode"
-    },
-    {
-      "file": "packages/lexical-rich-text/src/__tests__/unit/LexicalHeadingNode.test.ts",
-      "test": "Backspace at start of heading (#4359) > HeadingNode.collapseAtStart converts an empty heading to a paragraph",
-      "status": "xfail",
-      "reason": "not-ported",
-      "reviewedBy": "coding-agent",
-      "decision": "WORKPLAN later package layers (rich nodes, markdown, lists/tables); WP-06 core subset",
-      "note": "Missing capability: @lexical/rich-text.$createHeadingNode. No model mismatch is masked; this exact unsupported diagnostic must still occur.",
-      "failure": "op 4: call 0: unmapped API: @lexical/rich-text.$createHeadingNode"
-    },
-    {
-      "file": "packages/lexical-rich-text/src/__tests__/unit/LexicalHeadingNode.test.ts",
-      "test": "Backspace at start of heading (#4359) > HeadingNode.collapseAtStart preserves a non-empty heading",
-      "status": "xfail",
-      "reason": "not-ported",
-      "reviewedBy": "coding-agent",
-      "decision": "WORKPLAN later package layers (rich nodes, markdown, lists/tables); WP-06 core subset",
-      "note": "Missing capability: @lexical/rich-text.$createHeadingNode. No model mismatch is masked; this exact unsupported diagnostic must still occur.",
-      "failure": "op 4: call 0: unmapped API: @lexical/rich-text.$createHeadingNode"
-    },
-    {
-      "file": "packages/lexical-rich-text/src/__tests__/unit/LexicalHeadingNode.test.ts",
-      "test": "Backspace at start of heading (#4359) > preserves heading wrapped inside another ElementNode",
-      "status": "xfail",
-      "reason": "not-ported",
-      "reviewedBy": "coding-agent",
-      "decision": "WORKPLAN later package layers (rich nodes, markdown, lists/tables); WP-06 core subset",
-      "note": "Missing capability: @lexical/rich-text.$createHeadingNode. No model mismatch is masked; this exact unsupported diagnostic must still occur.",
-      "failure": "op 4: call 1: unmapped API: @lexical/rich-text.$createHeadingNode"
-    },
-    {
-      "file": "packages/lexical-rich-text/src/__tests__/unit/LexicalHeadingNode.test.ts",
-      "test": "LexicalHeadingNode tests > HeadingNode.setTag()",
-      "status": "xfail",
-      "reason": "not-ported",
-      "reviewedBy": "coding-agent",
-      "decision": "WORKPLAN later package layers (rich nodes, markdown, lists/tables); WP-06 core subset",
-      "note": "Missing capability: @lexical/rich-text.$createHeadingNode. No model mismatch is masked; this exact unsupported diagnostic must still occur.",
-      "failure": "op 4: call 1: unmapped API: @lexical/rich-text.$createHeadingNode"
-    },
-    {
-      "file": "packages/lexical-rich-text/src/__tests__/unit/LexicalQuoteNode.test.ts",
-      "test": "LexicalQuoteNode tests > QuoteNode.constructor",
-      "status": "xfail",
-      "reason": "not-ported",
-      "reviewedBy": "coding-agent",
-      "decision": "WORKPLAN later package layers (rich nodes, markdown, lists/tables); WP-06 core subset",
-      "note": "Missing capability: @lexical/rich-text.$createQuoteNode. No model mismatch is masked; this exact unsupported diagnostic must still occur.",
-      "failure": "op 4: call 0: unmapped API: @lexical/rich-text.$createQuoteNode"
-    },
-    {
-      "file": "packages/lexical-rich-text/src/__tests__/unit/LexicalTabNode.test.ts",
-      "test": "LexicalTabNode tests > INSERT_TAB_COMMAND applies selection format and style to TabNode",
-      "status": "xfail",
-      "reason": "not-ported",
-      "reviewedBy": "coding-agent",
-      "decision": "WORKPLAN WP-13 command/plugin dispatch",
-      "note": "Fixture registers a plugin whose model extension is not implemented yet.",
-      "failure": "op 4 plugin: unmapped operation: plugin"
-    },
-    {
-      "file": "packages/lexical-rich-text/src/__tests__/unit/LexicalTabNode.test.ts",
-      "test": "LexicalTabNode tests > format preserved when typing between tabs inserted in bold text",
-      "status": "xfail",
-      "reason": "not-ported",
-      "reviewedBy": "coding-agent",
-      "decision": "WORKPLAN WP-13 command/plugin dispatch",
-      "note": "Fixture registers a plugin whose model extension is not implemented yet.",
-      "failure": "op 4 plugin: unmapped operation: plugin"
-    },
-    {
       "file": "packages/lexical-table/src/__tests__/unit/LexicalTableCellNode.test.ts",
       "test": "LexicalTableCellNode tests > TableCellNode.constructor",
       "status": "xfail",
@@ -864,26 +724,6 @@
       "decision": "S1 \u00a71 NodeKey allocation is private to node creation; no standalone raw-key factory",
       "note": "Missing capability: lexical/LexicalUtils.generateRandomKey. No model mismatch is masked; this exact unsupported diagnostic must still occur.",
       "failure": "op 5 call: unmapped API: lexical/LexicalUtils.generateRandomKey"
-    },
-    {
-      "file": "packages/lexical/src/caret/__tests__/unit/LexicalCaret.test.ts",
-      "test": "LexicalCaret > $removeTextFromCaretRange > ported File e2e tests > $selectAll() with nesting and a trailing decorator",
-      "status": "xfail",
-      "reason": "not-ported",
-      "reviewedBy": "coding-agent",
-      "decision": "WORKPLAN later package layers (rich nodes, markdown, lists/tables); WP-06 core subset",
-      "note": "Missing capability: @lexical/list.$createListNode. No model mismatch is masked; this exact unsupported diagnostic must still occur.",
-      "failure": "op 4: call 5: unmapped API: @lexical/list.$createListNode"
-    },
-    {
-      "file": "packages/lexical/src/caret/__tests__/unit/LexicalCaret.test.ts",
-      "test": "LexicalCaret > $removeTextFromCaretRange > ported Headings e2e tests > Pressing return in the middle of a heading creates a new heading below",
-      "status": "xfail",
-      "reason": "not-ported",
-      "reviewedBy": "coding-agent",
-      "decision": "WORKPLAN later package layers (rich nodes, markdown, lists/tables); WP-06 core subset",
-      "note": "Missing capability: @lexical/rich-text.$createHeadingNode. No model mismatch is masked; this exact unsupported diagnostic must still occur.",
-      "failure": "op 4: call 1: unmapped API: @lexical/rich-text.$createHeadingNode"
     },
     {
       "file": "packages/lexical/src/caret/__tests__/unit/LexicalCaret.test.ts",
