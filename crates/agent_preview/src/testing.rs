@@ -1,6 +1,6 @@
 pub mod repository;
 use crate::domain::{ports::*, *};
-use agent_fold::domain::log::AgentSessionId;
+use agent_session_id::AgentSessionId;
 use async_trait::async_trait;
 use entity_access::domain::models::{
     AccessLevel, Entity, EntityAccessReceipt, EntityPermission, EntityType, RequiredPermission,

@@ -1,6 +1,6 @@
 //! In-memory port for unit tests only.
 use crate::domain::{storage::*, *};
-use agent_fold::domain::log::AgentSessionId;
+use agent_session_id::AgentSessionId;
 use async_trait::async_trait;
 use macro_user_id::user_id::MacroUserIdStr;
 use std::{
