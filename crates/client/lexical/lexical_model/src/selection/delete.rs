@@ -162,7 +162,7 @@ impl Transaction<'_> {
                     }
                     if block.is_none()
                         && self.view().is_block(*key)
-                        && (!require_entered || entered.contains(key))
+                        && (!require_entered || entered.contains(key) || self.is_empty(*key))
                     {
                         block = Some(*key);
                     }
