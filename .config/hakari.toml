@@ -103,6 +103,8 @@ workspace-members = [
     "models_databases",
     # id_newtype: the id macro models_databases builds its ids with.
     "id_newtype",
+    # Leaf id crates built with it stay light the same way.
+    "calendar_event_id",
     # natural_time: date phrases are read in the browser's date fields as well
     # as in services, so it must stay wasm-safe.
     "natural_time",

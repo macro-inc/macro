@@ -29,6 +29,7 @@ members = [
   "crates/bots",
   "crates/broadcast",
   "crates/calendar_events",
+  "crates/types/calendar_event_id",
   "crates/calendar_scheduling",
   "crates/channel_bots",
   "crates/channel_labels",
