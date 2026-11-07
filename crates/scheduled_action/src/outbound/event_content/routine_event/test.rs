@@ -22,12 +22,12 @@ use system_properties::SystemPropertyKey;
 use trigger_context::{
     CallSnapshot, CallStartedSnapshot, ChannelType, ContextMessage, ContextPerson, ContextThread,
     DiscussionContext, DiscussionSurface, EmailSnapshot, PullRequestChange, ReplyTarget,
-    RoutineEvent, TaskSnapshot, TranscriptLine,
+    RoutineEvent, TaskSnapshot, TranscriptLine, WebhookRequest,
 };
 
 use super::super::{ChannelMessage, EventContent, MAX_TRANSCRIPT_CHARS};
 use super::{call_transcript, routine_event};
-use crate::domain::event_trigger::EventReference;
+use crate::domain::event_trigger::{EventReference, WebhookDelivery};
 
 const CALL_ID: &str = "01928f3e-6a2b-7c3d-8e4f-0000000ca11e";
 
@@ -655,4 +655,36 @@ fn a_channel_reply_carries_its_thread_through_the_message() {
             },
         }
     );
+}
+
+#[test]
+fn a_webhook_delivery_carries_what_was_sent() {
+    let delivery = WebhookDelivery {
+        routine_id: macro_uuid::generate_uuid_v7(),
+        body: Some("Deploy finished".into()),
+        content_type: Some("text/plain".into()),
+    };
+    let event = EventReference::webhook(delivery.clone());
+
+    assert_eq!(
+        routine_event(&event, EventContent::Webhook(Box::new(delivery))).unwrap(),
+        RoutineEvent::Webhook {
+            request: WebhookRequest {
+                body: "Deploy finished".into(),
+                content_type: Some("text/plain".into()),
+            },
+        }
+    );
+}
+
+#[test]
+fn a_webhook_delivery_without_its_body_does_not_become_the_event() {
+    let delivery = WebhookDelivery {
+        routine_id: macro_uuid::generate_uuid_v7(),
+        body: None,
+        content_type: None,
+    };
+    let event = EventReference::webhook(delivery.clone());
+
+    assert!(routine_event(&event, EventContent::Webhook(Box::new(delivery))).is_err());
 }

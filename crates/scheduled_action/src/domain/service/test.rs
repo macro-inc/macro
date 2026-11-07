@@ -226,6 +226,10 @@ pub(crate) fn stored_owner(service: &TestService, id: Uuid) -> Option<Owner> {
         .map(|action| action.owner.clone())
 }
 
+pub(crate) fn stored_repo(service: &TestService) -> Arc<FakeRepo> {
+    Arc::clone(&service.repo)
+}
+
 pub(crate) fn stored_actions(service: &TestService) -> Vec<ScheduledAction> {
     service.repo.actions.lock().unwrap().clone()
 }

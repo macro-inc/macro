@@ -21,6 +21,13 @@ use crate::inbound::draft_router::__path_draft_routine;
 use crate::inbound::template_router::{
     __path_activate_template, __path_get_template, __path_share_template, __path_unshare_template,
 };
+#[expect(
+    unused_imports,
+    reason = "utoipa path macros require these generated symbols in scope"
+)]
+use crate::inbound::webhook_router::{
+    __path_create, __path_delete, __path_deliver, __path_get, RoutineWebhookDeliveryResponse,
+};
 
 use crate::domain::event_trigger::{
     ActionTrigger, EventFilter, EventFilters, EventName, GithubSelectorInput,
@@ -58,6 +65,10 @@ use model::response::EmptyResponse;
         crate::inbound::template_router::get_template,
         crate::inbound::template_router::unshare_template,
         crate::inbound::template_router::activate_template,
+        crate::inbound::webhook_router::create,
+        crate::inbound::webhook_router::get,
+        crate::inbound::webhook_router::delete,
+        crate::inbound::webhook_router::deliver,
     ),
     components(
         schemas(
@@ -116,6 +127,9 @@ use model::response::EmptyResponse;
             routine_program::CodeStep,
             routine_program::AgentStep,
             routine_program::Knob,
+            crate::domain::webhooks::RoutineWebhook,
+            crate::domain::webhooks::CreatedRoutineWebhook,
+            RoutineWebhookDeliveryResponse,
         ),
     ),
     tags(

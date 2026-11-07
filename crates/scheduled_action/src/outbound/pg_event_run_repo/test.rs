@@ -1206,3 +1206,44 @@ async fn a_finished_github_run_keeps_no_payload(pool: PgPool) {
     assert!(context["github"].get("payload").is_none());
     assert_eq!(context["github"]["event"], "workflow_run");
 }
+
+fn webhook_event(routine_id: Uuid) -> EventReference {
+    EventReference::webhook(
+        crate::domain::event_trigger::WebhookDelivery::new(
+            routine_id,
+            br#"{"status":"failed"}"#,
+            Some("application/json"),
+        )
+        .unwrap(),
+    )
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_webhook_run_keeps_its_body_until_it_finishes(pool: PgPool) {
+    let id = action(&pool, json!([{"events": ["webhook"]}])).await;
+    let repo = PgEventRunRepo::new(pool.clone());
+    let event = webhook_event(id);
+
+    admit(&repo, id, &event).await;
+    let pending = repo.pending_runs(page(10)).await.unwrap();
+    assert_eq!(pending.len(), 1);
+    assert_eq!(pending[0].event, event);
+
+    repo.cancel_pending(
+        pending[0].key(),
+        ConfigurationRevision::INITIAL,
+        CancellationReason::Disabled,
+    )
+    .await
+    .unwrap();
+    let context = sqlx::query_scalar!(
+        "SELECT event_context FROM scheduled_action_event_run WHERE action_id = $1",
+        id,
+    )
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert!(context["webhook"].get("body").is_none());
+    assert_eq!(context["webhook"]["routine_id"], json!(id));
+    assert_eq!(context["webhook"]["content_type"], "application/json");
+}

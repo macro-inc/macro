@@ -410,3 +410,40 @@ fn github_events_have_a_stable_wire_shape() {
         })
     );
 }
+
+#[test]
+fn webhook_events_have_a_stable_wire_shape() {
+    let webhook = RoutineEvent::Webhook {
+        request: WebhookRequest {
+            body: "{\"status\":\"failed\"}".into(),
+            content_type: Some("application/json".into()),
+        },
+    };
+    let trigger = RoutineTrigger::Events {
+        events: vec!["webhook".into()],
+        entity_ids: Vec::new(),
+        github: None,
+        payload_match: vec!["status = \"failed\"".into()],
+        condition: None,
+    };
+
+    // The same examples are in services/lexical-service/test/agent-context.test.ts.
+    assert_eq!(
+        serde_json::to_value(&webhook).unwrap(),
+        json!({
+            "event": "webhook",
+            "request": {
+                "body": "{\"status\":\"failed\"}",
+                "content_type": "application/json",
+            },
+        })
+    );
+    assert_eq!(
+        serde_json::to_value(&trigger).unwrap(),
+        json!({
+            "type": "events",
+            "events": ["webhook"],
+            "payload_match": ["status = \"failed\""],
+        })
+    );
+}

@@ -216,6 +216,12 @@ pub enum EventAccessCapability {
         owner: MacroUserIdStr<'static>,
         installation_id: u64,
     },
+    /// A delivery to the owner's routine's webhook URL. Whoever holds the URL
+    /// may run the routine; the owner chose to give it out.
+    Webhook {
+        owner: MacroUserIdStr<'static>,
+        routine_id: Uuid,
+    },
 }
 
 impl EventAccessCapability {
@@ -246,6 +252,19 @@ impl EventAccessCapability {
                     && matches!(
                         event.source(),
                         EventSource::Github(delivery) if delivery.installation_id == *installation_id
+                    )
+            }
+            (
+                Self::Webhook {
+                    owner: claimant,
+                    routine_id,
+                },
+                EventEntityType::Webhook,
+            ) => {
+                claimant == owner
+                    && matches!(
+                        event.source(),
+                        EventSource::Webhook(delivery) if delivery.routine_id == *routine_id
                     )
             }
             _ => false,
@@ -299,6 +318,7 @@ impl EventActionConfiguration {
             return Err(CancellationReason::Disabled);
         }
         if self.action_id != pending.action_id
+            || !pending.event.addressed_to(self.action_id)
             || self.revision != pending.revision
             || !self.filters.matches(&pending.event, self.activated_at)
         {

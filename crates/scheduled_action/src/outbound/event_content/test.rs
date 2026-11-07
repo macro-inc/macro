@@ -324,3 +324,38 @@ fn deleted_documents_say_so_without_content() {
     assert_eq!(value["deleted"], true);
     assert_eq!(value["content"], Value::Null);
 }
+
+fn webhook_delivery(body: Option<&str>) -> WebhookDelivery {
+    WebhookDelivery {
+        routine_id: macro_uuid::generate_uuid_v7(),
+        body: body.map(str::to_owned),
+        content_type: Some("application/json".into()),
+    }
+}
+
+#[test]
+fn a_webhook_carries_its_whole_body_and_content_type() {
+    let delivery = webhook_delivery(Some(r#"{"status":"failed"}"#));
+    let event = EventReference::webhook(delivery.clone());
+
+    assert_eq!(
+        content_json(&event, &EventContent::Webhook(Box::new(delivery))),
+        json!({
+            "webhook": {
+                "body": r#"{"status":"failed"}"#,
+                "content_type": "application/json",
+            }
+        })
+    );
+}
+
+#[test]
+fn a_webhook_without_its_body_says_so() {
+    let delivery = webhook_delivery(None);
+    let event = EventReference::webhook(delivery.clone());
+
+    assert_eq!(
+        content_json(&event, &EventContent::Webhook(Box::new(delivery)))["webhook"]["body"],
+        json!({ "unavailable": "the body is no longer available" })
+    );
+}
