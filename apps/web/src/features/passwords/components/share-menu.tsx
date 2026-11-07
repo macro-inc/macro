@@ -77,7 +77,9 @@ export function ShareMenu(props: {
         if (open) await load();
       }}
     >
-      <Dropdown.Trigger>{t('passwords.share')}</Dropdown.Trigger>
+      <Dropdown.Trigger variant="secondary">
+        {t('passwords.share')}
+      </Dropdown.Trigger>
       <Dropdown.Content>
         <form
           class="flex min-w-64 max-w-[80vw] flex-col gap-3 p-3"

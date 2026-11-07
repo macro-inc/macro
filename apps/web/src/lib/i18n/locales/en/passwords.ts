@@ -1,5 +1,11 @@
 export default {
   title: 'Passwords',
+  itemActions: 'Item actions',
+  moreActions: 'More item actions',
+  loadingUsername: 'Loading username…',
+  usernameUnavailable: 'Username unavailable',
+  noUsername: 'No username',
+  shareCount: { one: '{{count}} share', other: '{{count}} shares' },
   copyUsername: 'Copy username',
   event_create: 'Item created',
   event_update: 'Item updated',

@@ -1267,8 +1267,11 @@ of posting, multi-paragraph anchors, saved ranges, and cancellation during posti
 ### Passwords
 
 The flag-gated `/passwords` route mounts `features/passwords` with its team-scoped
-source. Keep secret values outside query caches and browser storage; reveal, copy
-and history remain explicitly gated by server reauthentication. The responsive
-vault fixture is exercised with
+source. Keep field values outside query caches and browser storage; password
+reveal/copy and history remain explicitly gated by server reauthentication.
+Load and copy usernames through their field-scoped endpoints, and derive sharing
+counts from metadata rather than fetching owner-only grants per row. Use shared
+Button variants for detail actions and reserve the measured mobile bottom inset
+in both scroll regions. The responsive vault fixture is exercised with
 `bunx playwright test --config src/features/passwords/browser-test/playwright.config.ts`.
 See the [Passwords walkthrough](../../docs/agent-guide/passwords.md).

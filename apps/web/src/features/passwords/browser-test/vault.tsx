@@ -1,10 +1,12 @@
 import '@app/index.css';
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { QueryClient, QueryClientProvider } from '@tanstack/solid-query';
 import { render } from 'solid-js/web';
 import { PasswordsProvider } from '../context/passwords-context';
 import { createFakePasswordSource } from '../tests/fake-source';
 import { VaultView } from '../views/vault-view';
 
+document.documentElement.dataset.touchDevice = String(isTouchDevice());
 const root = document.getElementById('root');
 if (!root) throw new Error('Missing fixture root');
 render(
