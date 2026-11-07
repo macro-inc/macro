@@ -10,7 +10,10 @@ impl Clock for WorkerClock {
         crate::state::monotonic()
     }
     fn unix_time(&self) -> UnixMillis {
-        UnixMillis(worker::Date::now().as_millis() as i64)
+        let now = worker::Date::now().as_millis();
+        #[cfg(feature = "transcript")]
+        crate::transcript::clock("presence", now);
+        UnixMillis(now as i64)
     }
     fn unix_time_for(&self, purpose: sync_server_core::domain::ports::WallClock) -> UnixMillis {
         let now = worker::Date::now().as_millis();

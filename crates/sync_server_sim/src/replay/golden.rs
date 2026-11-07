@@ -67,6 +67,9 @@ fn projected(records: &[&Value], key: &str) -> Result<Vec<Effect>, ReplayError> 
     for (index, record) in records.iter().enumerate() {
         let args = &record["args"];
         if let Some(kind) = record["clock"].as_str() {
+            if kind == "presence" {
+                continue;
+            }
             let kind = match kind {
                 "state_instant" => "monotonic",
                 "op_id_nanos" => "unix_nanos",
@@ -320,6 +323,48 @@ pub(super) fn replay(transcript: &Transcript) -> Result<Vec<Effect>, ReplayError
                 })
                 .collect::<Result<Vec<_>, _>>()?,
         );
+        ports.seed_enumeration(
+            records
+                .iter()
+                .filter(|r| r["port"] == "connections.list")
+                .map(|r| {
+                    r["ws_ids"]
+                        .as_array()
+                        .ok_or_else(|| invalid("missing runtime list"))?
+                        .iter()
+                        .map(socket)
+                        .collect::<Result<Vec<_>, _>>()
+                })
+                .collect::<Result<Vec<_>, _>>()?,
+        );
+        if raw["in"] == "close" && !records.iter().any(|r| r["clock"] == "presence") {
+            // C0's internal delete clock was not observable. Recover only clock
+            // inputs from tombstone timestamps; Room still computes all outputs.
+            use bebop::Record;
+            let mut tombstones = BTreeMap::new();
+            for record in records.iter().filter(|r| r["out"] == "send") {
+                let frame = decode(&record["frame_b64"])?;
+                let (_, payload) = sync_protocol::framing::strip_frame(&frame)
+                    .map_err(|e| invalid(e.to_string()))?;
+                if let sync_protocol::FromRemote::RemoteAwareness { awareness } =
+                    sync_protocol::FromRemote::deserialize(payload)
+                        .map_err(|e| invalid(e.to_string()))?
+                {
+                    for (key, (value, time)) in
+                        sync_protocol::presence::decode_timestamps(&awareness)
+                            .map_err(|e| invalid(e.to_string()))?
+                    {
+                        if value.is_none() {
+                            tombstones.insert(
+                                key.parse::<u64>().map_err(|e| invalid(e.to_string()))?,
+                                time.0,
+                            );
+                        }
+                    }
+                }
+            }
+            ports.seed_presence_clocks(tombstones.values().flat_map(|time| [*time, *time]));
+        }
         ports.seed_entropy(records.iter().filter(|r| r["out"] == "accept").map(|r| {
             r["ws_id"].as_str().expect("accepted socket")[5..]
                 .parse()
@@ -419,7 +464,10 @@ pub(super) fn replay(transcript: &Transcript) -> Result<Vec<Effect>, ReplayError
         let expected = projected(&records, &key)?;
         let actual: Vec<_> = result
             .iter()
-            .filter(|e| e.operation != "background.keep_alive")
+            .filter(|e| {
+                e.operation != "background.keep_alive"
+                    && !(e.operation == "clock" && e.value["kind"] == "presence")
+            })
             .map(|e| {
                 if e.operation == "background.publish" {
                     effect("background.schedule", Value::Null)
@@ -477,6 +525,20 @@ pub(super) fn replay(transcript: &Transcript) -> Result<Vec<Effect>, ReplayError
             }
         }
         // A close callback sees the socket listed; removal happens only afterwards.
+        ports.seed_enumeration(
+            records
+                .iter()
+                .filter(|r| r["port"] == "connections.list")
+                .map(|r| {
+                    r["ws_ids"]
+                        .as_array()
+                        .ok_or_else(|| invalid("missing runtime list"))?
+                        .iter()
+                        .map(socket)
+                        .collect::<Result<Vec<_>, _>>()
+                })
+                .collect::<Result<Vec<_>, _>>()?,
+        );
         if raw["in"] == "close" {
             ports.runtime_closes(&socket(&raw["ws_id"])?);
         }

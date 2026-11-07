@@ -400,13 +400,11 @@ pub fn equivalent_remote_frames_in_context(
     }
 }
 fn equivalent_awareness(left: &[u8], right: &[u8]) -> Result<bool, ReplayError> {
-    let a = loro::awareness::EphemeralStore::new(9_007_199_254_740_991);
-    let b = loro::awareness::EphemeralStore::new(9_007_199_254_740_991);
-    a.apply(left)
+    let a = sync_protocol::presence::decode_timestamps(left)
         .map_err(|e| ReplayError::Invalid(e.to_string()))?;
-    b.apply(right)
+    let b = sync_protocol::presence::decode_timestamps(right)
         .map_err(|e| ReplayError::Invalid(e.to_string()))?;
-    Ok(a.get_all_states() == b.get_all_states())
+    Ok(a == b)
 }
 
 /// Import both deltas into equivalent pre-message documents and compare full state.

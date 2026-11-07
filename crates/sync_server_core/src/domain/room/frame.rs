@@ -447,11 +447,18 @@ async fn process_message<P: RoomPorts>(
         FromPeer::PeerAwareness {
             awareness: awareness_update,
         } => {
-            if let Err(e) = dss.memory.awareness.apply(*awareness_update) {
+            if let Err(e) = dss
+                .memory
+                .awareness
+                .apply(*awareness_update, dss.ports.clock().unix_time())
+            {
                 tracing::warn!(error = ?e, "failed to apply awareness update; ignoring it");
                 return Ok(());
             }
-            let encodede = dss.memory.awareness.encode_all();
+            let encodede = dss
+                .memory
+                .awareness
+                .encode_all(dss.ports.clock().unix_time());
             let sockets = dss.active_sockets();
             telemetry.broadcast_targets =
                 Some(sockets.iter().filter(|socket| *socket != sender).count());

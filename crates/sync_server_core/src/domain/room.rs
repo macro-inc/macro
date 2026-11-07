@@ -9,11 +9,11 @@ use super::{
     state::DocumentState,
     types::{BlameEvent, PeerId, SessionKey},
 };
-use loro::awareness::EphemeralStore;
 use std::{
     collections::{BTreeMap, BTreeSet, HashMap},
     time::Duration,
 };
+use sync_protocol::presence::EphemeralStore;
 use sync_protocol::{framing::Reassembler, time::WallDuration};
 
 /// Runtime-independent room configuration.
