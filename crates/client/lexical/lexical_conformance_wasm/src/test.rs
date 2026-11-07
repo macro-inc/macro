@@ -91,3 +91,12 @@ fn dom_text_input_keeps_a_raw_zero_offset_after_a_formatted_sibling() {
         json!({"path":[0,1],"offset":0,"type":"text"})
     );
 }
+
+#[cfg(feature = "js-nodes")]
+#[test]
+fn empty_peer_transfer_preserves_root_state_and_metadata() {
+    let mut core = CoreHandle::create("upstream", None).unwrap();
+    let state = core.editor.parse_editor_state_str(r#"{"root":{"children":[],"direction":"rtl","format":"right","indent":2,"type":"root","version":1,"$":{"marker":"kept"}}}"#).unwrap();
+    CoreHandle::transfer_state(&mut core.view_editor, state.clone()).unwrap();
+    assert_eq!(core.view_editor.state().to_json().unwrap(), state.to_json().unwrap());
+}
