@@ -12622,6 +12622,7 @@ dependencies = [
  "chrono",
  "document_id",
  "indexmap 2.14.0",
+ "lexical_markdown",
  "lexical_model",
  "lexical_node_id",
  "lexical_rich_nodes",

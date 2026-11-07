@@ -7,6 +7,7 @@ publish = false
 [dependencies]
 mention_date.workspace = true
 lexical_model = { workspace = true }
+lexical_markdown = { workspace = true }
 lexical_rich_nodes = { workspace = true }
 lexical_node_id = { workspace = true }
 document_id = { workspace = true }

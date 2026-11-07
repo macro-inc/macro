@@ -24,7 +24,11 @@ browser hostname itself.
 from the actual TypeScript classes. The fixed corpus covers both registry
 configurations, all Macro own fields, missing/null inputs, Unicode and long
 strings, state filtering, nested contexts and the upstream node classes.
-Markdown transformers and route adapters belong to later work packages.
+The `transformers` module ports the ordered internal, external, combined and
+custom lists over `lexical_markdown`. Pass an explicit hostname through
+`MacroMarkdownOptions` for external document links. The source metadata catalog
+preserves the two RegExp-subclass matchers and each distinct list-image callback.
+Route adapters remain separate.
 
 Block decorators keep alignment in memory and omit it from JSON. Their first
 write clones through the source constructor defaults. `MediaNode` exposes the
@@ -34,7 +38,9 @@ keys, and explicit watermark cleanup bypasses its ordinary removal guard.
 
 The synthetic JSON route includes legacy custom-code versions and chart null
 settings. Intrinsic hook tests cover comment continuation and session-card
-placement; these are independent of WP-27 markdown transformers.
+placement. `bun packages/lexical-conformance/corpus/macro-markdown.ts --check`
+verifies the supplemental conversion oracle across both profiles and all three
+lists. The full recorded lexical-core source corpus remains the acceptance gate.
 
 Two explicit S3 section 4.1b open-item defaults remain outside exact parity:
 `divergence-magic-chip-status` rejects unknown status enum values, and
