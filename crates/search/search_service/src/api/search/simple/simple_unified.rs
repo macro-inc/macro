@@ -869,7 +869,7 @@ async fn search_unified_sources(
             match search_on {
                 SearchOn::Name | SearchOn::NameContent if should_include_channels => {
                     simple_channel::search_names(
-                        &ctx.db,
+                        &*ctx.channel_names,
                         &user_id,
                         &channel_filters,
                         name_search_term.clone(),

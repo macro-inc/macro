@@ -1,4 +1,5 @@
 use crate::api::search::simple::SearchError;
+use channels::domain::channel_names::ChannelNames;
 use channels::domain::models::ChannelType;
 use item_filters::ChannelFilters;
 use macro_user_id::user_id::MacroUserId;
@@ -18,9 +19,9 @@ pub(in crate::api::search) struct FilterChannelResponse {
 /// narrowed by the filters' `channel_ids` and `channel_types`. Organization
 /// channels no longer exist (`comms_channels.org_id` is always null), so an
 /// `org_id` filter matches no channel, as it does for the message index.
-#[tracing::instrument(skip(db, filters, term), fields(term_len = term.len()), err)]
+#[tracing::instrument(skip(channel_names, filters, term), fields(term_len = term.len()), err)]
 pub(in crate::api::search) async fn search_names<'a>(
-    db: &sqlx::Pool<sqlx::Postgres>,
+    channel_names: &dyn ChannelNames<Err = sqlx::Error>,
     user_id: &MacroUserId<macro_user_id::lowercased::Lowercase<'a>>,
     filters: &ChannelFilters,
     term: String,
@@ -56,7 +57,7 @@ pub(in crate::api::search) async fn search_names<'a>(
         .collect::<Result<Vec<_>, _>>()?;
 
     name_search::search_channel_names(
-        db,
+        channel_names,
         user_id,
         ChannelNameSearchScope {
             channel_ids: &channel_ids,

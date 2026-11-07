@@ -1,17 +1,15 @@
-//! Viewer-aware channel name search. Postgres finds the channels whose name,
-//! as the viewer sees it, matches (`channels_outbound::channel_name`); the
-//! page of hits is then resolved to those names and highlighted.
+//! Viewer-aware channel name search. The [`ChannelNames`] port (Postgres in
+//! `channels_outbound::channel_name::PgChannelNames`) finds the channels whose
+//! name, as the viewer sees it, matches; the page of hits is then resolved to
+//! those names and highlighted.
 
+use channels::domain::channel_names::{ChannelNameSearch, ChannelNames};
 use channels::domain::models::ChannelType;
-use channels_outbound::channel_name::{
-    ChannelNameSearch, batch_resolve_channel_names, match_channel_names,
-};
 use macro_user_id::{
     lowercased::Lowercase,
     user_id::{MacroUserId, MacroUserIdStr},
 };
 use models_search_cursor::{SearchCursorOption, SearchMethodCursor};
-use sqlx::{Pool, Postgres};
 use uuid::Uuid;
 
 use crate::{
@@ -49,7 +47,7 @@ pub struct ChannelNameSearchScope<'a> {
     err
 )]
 pub async fn search_channel_names<'a>(
-    db: &Pool<Postgres>,
+    channel_names: &dyn ChannelNames<Err = sqlx::Error>,
     macro_user_id: &MacroUserId<Lowercase<'a>>,
     scope: ChannelNameSearchScope<'_>,
     term: String,
@@ -85,9 +83,8 @@ pub async fn search_channel_names<'a>(
         .collect();
     let viewer_user_id = MacroUserIdStr(macro_user_id.clone());
 
-    let matches = match_channel_names(
-        db,
-        ChannelNameSearch {
+    let matches = channel_names
+        .match_channel_names(ChannelNameSearch {
             viewer_user_id: viewer_user_id.clone(),
             patterns: &patterns,
             regex_patterns: exact_match,
@@ -95,11 +92,12 @@ pub async fn search_channel_names<'a>(
             channel_types: scope.channel_types,
             after,
             limit: i64::from(limit) + 1,
-        },
-    )
-    .await?;
+        })
+        .await?;
     let channel_ids: Vec<Uuid> = matches.iter().map(|hit| hit.channel_id).collect();
-    let mut names = batch_resolve_channel_names(db, &channel_ids, viewer_user_id).await?;
+    let mut names = channel_names
+        .batch_resolve_channel_names(&channel_ids, viewer_user_id)
+        .await?;
 
     let results: Vec<NameSearchResult> = matches
         .into_iter()
