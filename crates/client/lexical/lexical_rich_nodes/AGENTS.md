@@ -3,14 +3,17 @@
 ## What it is
 
 Portable model halves of Lexical v0.45.0 rich-text, plain-text, hashtag, overflow
-text-entity, list and code-node behavior. DOM events, clipboard access and layout stay in views.
+text-entity, list, code, annotation, selection, tree, offset and clipboard behavior. DOM events, clipboard access and layout stay in views.
 
 ## Boundaries
 
 - `mark` wraps inline runs, splits at line breaks and retains annotations only in internal clones.
 - `code::line`, `code::plain` and `code::language` provide UTF-16 line navigation, LF/tab splitting and the ordered language catalog.
 - `code` keeps stored highlight nodes distinct, disables formatting and never tokenizes; new code content uses plain text.
-- Depends on `lexical_model` and the patched `regress`; no I/O or runtime.
+- Keep selection CSS parsing ordered and uncached; detached style arguments and active selected text are distinct upstream inputs.
+- Use `utils` cursors for mutation-safe child walks and collect DFS results before editing their snapshot.
+- `clipboard` consumes host MIME strings and serialized HTML nodes; supply the target namespace to `do_drop_in_namespace`. HTML export arrives with WP-24.
+- Depends on the portable model, ordered maps, static language tables, regex and tracing facades; no I/O or runtime.
 - Keep this client crate excluded from workspace-hack.
 - Keep block-only registration separate from opt-in transforms and plugins.
 - Use selection slots in hooks; detached selections must not read the active range.

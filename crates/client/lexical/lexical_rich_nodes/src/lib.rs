@@ -46,3 +46,4 @@ pub mod mark;
 
 pub mod offset;
 
+pub mod clipboard;
