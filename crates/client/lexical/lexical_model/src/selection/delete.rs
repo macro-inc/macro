@@ -42,9 +42,6 @@ impl Transaction<'_> {
             (range.anchor, range.focus)
         };
         let nodes = range.nodes(self.view())?;
-        let entered: crate::collections::IndexSet<NodeKey> = nodes.iter().copied().filter(|key| {
-            self.is_element(*key) && !matches!(end, Point::Element { key: end_key, offset: ChildIndex(0) } if end_key == *key)
-        }).collect();
         let original_last_block = self.selection_block(end);
         let mut candidates = vec![start];
         let mut key = start.key();
@@ -154,22 +151,19 @@ impl Transaction<'_> {
             right.extend(self.ancestors(end));
             right.reverse();
             let common = left.iter().zip(&right).take_while(|(a, b)| a == b).count();
-            let pick = |path: &[NodeKey], require_entered: bool| {
+            let pick = |path: &[NodeKey]| {
                 let mut block = None;
                 for key in &path[common..] {
                     if self.is_root_or_shadow_root(*key) {
                         return None;
                     }
-                    if block.is_none()
-                        && self.view().is_block(*key)
-                        && (!require_entered || entered.contains(key) || self.is_empty(*key))
-                    {
+                    if block.is_none() && self.view().is_block(*key) {
                         block = Some(*key);
                     }
                 }
                 block
             };
-            pick(&left, false).zip(pick(&right, true))
+            pick(&left).zip(pick(&right))
         });
         if let Some((first, last)) = targets
             && first != last
