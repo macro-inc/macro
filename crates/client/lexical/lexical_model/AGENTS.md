@@ -9,6 +9,7 @@ node types, immutable snapshots, transactional tree editing, update processing, 
 
 - `src/lib.rs` exposes the model API.
 - `src/node.rs` defines node kinds, inheritance and dispatch.
+- `src/selection/caret.rs` implements directional caret range deletion.
 - `src/transaction.rs` owns writes; never mutate a committed snapshot.
 - `src/pipeline/` implements flush order, normalization, GC and view-attached caches.
 - `src/commit.rs` computes mutations before cache writes and atomically publishes snapshots.
@@ -42,7 +43,7 @@ node types, immutable snapshots, transactional tree editing, update processing, 
 ## Tests
 
 - Cover every public function with an explicit literal behavior test before adding table-driven or generated cases; do not hide fixture construction behind a helper DSL.
-- Test pipeline order, rollback, JSON bytes and boundary cases locally; Tier A fixtures are not yet available.
+- Test pipeline order, rollback, JSON bytes and boundary cases locally; the independent Tier C lockstep lives in `packages/lexical-conformance/diff/`.
 
 The sibling test modules cover values, reads, node dispatch, tree edits and NodeState.
 `pipeline/test.rs` covers ordering and transaction boundaries; `json/test.rs` checks

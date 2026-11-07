@@ -323,7 +323,10 @@ fn deletion_keeps_the_caret_outside_a_removed_nonempty_block() -> Result<(), Err
         Point::text(right, Utf16Offset(1)),
     ))))?;
     tx.remove_text()?;
-    assert_eq!(tx.children_keys(NodeKey::ROOT)?, vec![previous.key(), next.key()]);
+    assert_eq!(
+        tx.children_keys(NodeKey::ROOT)?,
+        vec![previous.key(), next.key()]
+    );
     assert_eq!(tx.text_content(previous), "left");
     assert_eq!(tx.text_content(next), "ight");
     assert_eq!(tx.anchor()?, Point::element(NodeKey::ROOT, ChildIndex(1)));
@@ -632,7 +635,8 @@ fn root_start_of_partial_text_removal_retains_its_container_coordinate() -> Resu
         tx.append(last, &[text.key()])?;
         tx.append(NodeKey::ROOT, &[first.key(), last.key()])?;
         tx.set_selection(Some(Selection::Range(RangeSelection::new(
-            Point::text(text, Utf16Offset(1)), Point::element(NodeKey::ROOT, ChildIndex(1)),
+            Point::text(text, Utf16Offset(1)),
+            Point::element(NodeKey::ROOT, ChildIndex(1)),
         ))))?;
         tx.remove_text()?;
         assert_eq!(tx.anchor()?, Point::element(NodeKey::ROOT, ChildIndex(1)));
@@ -655,7 +659,8 @@ fn caret_deletion_keeps_the_last_entered_block_and_its_format() -> Result<(), Er
         tx.element(last)?.set_text_format(TextFormat::BOLD)?;
         tx.append(NodeKey::ROOT, &[first.key(), last.key()])?;
         tx.set_selection(Some(Selection::Range(RangeSelection::new(
-            Point::element(last, ChildIndex(1)), Point::element(NodeKey::ROOT, ChildIndex(0)),
+            Point::element(last, ChildIndex(1)),
+            Point::element(NodeKey::ROOT, ChildIndex(0)),
         ))))?;
         tx.remove_text()?;
         assert_eq!(tx.children_keys(NodeKey::ROOT)?, vec![last.key()]);
@@ -674,10 +679,14 @@ fn caret_deletion_does_not_enter_a_block_beyond_its_root_end() -> Result<(), Err
         let last = tx.create(Paragraph::default())?;
         tx.append(NodeKey::ROOT, &[first.key(), last.key()])?;
         tx.set_selection(Some(Selection::Range(RangeSelection::new(
-            Point::element(NodeKey::ROOT, ChildIndex(1)), Point::element(first, ChildIndex(0)),
+            Point::element(NodeKey::ROOT, ChildIndex(1)),
+            Point::element(first, ChildIndex(0)),
         ))))?;
         tx.remove_text()?;
-        assert_eq!(tx.children_keys(NodeKey::ROOT)?, vec![first.key(), last.key()]);
+        assert_eq!(
+            tx.children_keys(NodeKey::ROOT)?,
+            vec![first.key(), last.key()]
+        );
         assert_eq!(tx.anchor()?, Point::element(first, ChildIndex(0)));
         Ok(())
     })?;
@@ -693,7 +702,9 @@ fn collapsed_element_removal_uses_its_raw_caret_text_origin() -> Result<(), Erro
         let line = tx.create(LineBreak::default())?;
         tx.append(p, &[text.key(), line.key()])?;
         tx.append(NodeKey::ROOT, &[p.key()])?;
-        tx.set_selection(Some(Selection::Range(RangeSelection::collapsed(Point::element(p, ChildIndex(1))))))?;
+        tx.set_selection(Some(Selection::Range(RangeSelection::collapsed(
+            Point::element(p, ChildIndex(1)),
+        ))))?;
         tx.remove_text()?;
         assert_eq!(tx.anchor()?, Point::text(text, Utf16Offset(1)));
         Ok(())

@@ -111,7 +111,8 @@ impl Transaction<'_> {
         }
         let alignment = first_flags.or(align_with);
         let last_text = nodes.iter().rev().copied().find(|key| self.is_text(*key));
-        let last_flags = last_text.and_then(|key| self.view().text(key))
+        let last_flags = last_text
+            .and_then(|key| self.view().text(key))
             .map(|data| data.format.toggled(format, alignment));
         let tail_partial = last_text.is_some_and(|key| {
             end.key() == key && end.offset() < self.text_content_size(key).get()
@@ -191,11 +192,17 @@ impl Transaction<'_> {
         }
         if let Some(first) = first_target {
             let current = self.range_at(slot)?;
-            let current_start = if backward { current.focus } else { current.anchor };
-            let converted = start.point_type() == PointType::Element && current_start.point_type() == PointType::Text;
-            if converted || start.point_type() == PointType::Text
-                && first != start.key()
-                && (Some(first) != last_text || tail_partial)
+            let current_start = if backward {
+                current.focus
+            } else {
+                current.anchor
+            };
+            let converted = start.point_type() == PointType::Element
+                && current_start.point_type() == PointType::Text;
+            if converted
+                || start.point_type() == PointType::Text
+                    && first != start.key()
+                    && (Some(first) != last_text || tail_partial)
             {
                 self.set_point_at(
                     slot,
@@ -209,10 +216,22 @@ impl Transaction<'_> {
             }
         }
         let current = self.range_at(slot)?;
-        let current_end = if backward { current.anchor } else { current.focus };
+        let current_end = if backward {
+            current.anchor
+        } else {
+            current.focus
+        };
         if end.point_type() == PointType::Element && current_end.point_type() == PointType::Text {
             if let Some((last, offset)) = last_target {
-                self.set_point_at(slot, if backward { PointRole::Anchor } else { PointRole::Focus }, Point::text(last, offset))?;
+                self.set_point_at(
+                    slot,
+                    if backward {
+                        PointRole::Anchor
+                    } else {
+                        PointRole::Focus
+                    },
+                    Point::text(last, offset),
+                )?;
             }
         }
         if let Some(flags) = first_flags

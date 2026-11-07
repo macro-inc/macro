@@ -679,12 +679,17 @@ fn merging_text_resolves_parent_element_selection_points() -> Result<(), Error> 
         tx.append(p, &[first.key(), last.key()])?;
         tx.append(NodeKey::ROOT, &[p.key()])?;
         tx.set_selection(Some(Selection::Range(RangeSelection::new(
-            Point::element(p, ChildIndex(1)), Point::element(p, ChildIndex(2)),
+            Point::element(p, ChildIndex(1)),
+            Point::element(p, ChildIndex(2)),
         ))))?;
         Ok((p.key(), first.key(), last.key()))
     })?;
     editor.update(|tx| tx.text(last)?.set_format(TextFormat::empty()).map(|_| ()))?;
-    let range = editor.state().selection().and_then(Selection::as_range).unwrap();
+    let range = editor
+        .state()
+        .selection()
+        .and_then(Selection::as_range)
+        .unwrap();
     assert_eq!(range.anchor, Point::text(first, Utf16Offset(2)));
     assert_eq!(range.focus, range.anchor);
     assert_eq!(editor.state().text_content(p), "ab");

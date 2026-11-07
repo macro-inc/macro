@@ -444,7 +444,8 @@ fn formatting_rebinds_an_element_end_converted_by_splitting() -> Result<(), Erro
         tx.append(p, &[text.key(), line.key(), tab.key()])?;
         tx.append(NodeKey::ROOT, &[p.key()])?;
         tx.set_selection(Some(Selection::Range(RangeSelection::new(
-            Point::text(text, Utf16Offset(2)), Point::element(p, ChildIndex(2)),
+            Point::text(text, Utf16Offset(2)),
+            Point::element(p, ChildIndex(2)),
         ))))?;
         tx.format_text(TextFormatType::Bold, None)?;
         let formatted = tx.children_keys(p)?[1];
@@ -465,13 +466,17 @@ fn formatting_past_a_text_end_does_not_change_empty_block_flags() -> Result<(), 
         tx.element(last)?.set_text_format(TextFormat::ITALIC)?;
         tx.append(NodeKey::ROOT, &[first.key(), last.key()])?;
         tx.set_selection(Some(Selection::Range(RangeSelection::new(
-            Point::element(NodeKey::ROOT, ChildIndex(2)), Point::text(text, Utf16Offset(1)),
+            Point::element(NodeKey::ROOT, ChildIndex(2)),
+            Point::text(text, Utf16Offset(1)),
         ))))?;
         Ok(last.key())
     })?;
     let (_, commit) = editor.update(|tx| tx.format_text(TextFormatType::Capitalize, None))?;
     assert!(commit.is_noop());
-    assert_eq!(editor.state().view().element_data(last)?.text_format, TextFormat::ITALIC);
+    assert_eq!(
+        editor.state().view().element_data(last)?.text_format,
+        TextFormat::ITALIC
+    );
     Ok(())
 }
 
@@ -484,7 +489,8 @@ fn insertion_at_a_resolved_element_start_preserves_the_text_tail() -> Result<(),
         tx.append(p, &[text.key()])?;
         tx.append(NodeKey::ROOT, &[p.key()])?;
         tx.set_selection(Some(Selection::Range(RangeSelection::new(
-            Point::text(text, Utf16Offset::ZERO), Point::element(p, ChildIndex(0)),
+            Point::text(text, Utf16Offset::ZERO),
+            Point::element(p, ChildIndex(0)),
         ))))?;
         tx.insert_text("x")?;
         assert_eq!(tx.text_content(text).as_ref(), "xold");

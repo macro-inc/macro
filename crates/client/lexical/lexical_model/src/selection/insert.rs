@@ -82,12 +82,24 @@ impl Transaction<'_> {
             self.set_point_at(slot, end_role, end_point)?;
         }
         let selected = original.nodes(self.view())?;
-        if selected.len() == 1 && (if backward { original.anchor } else { original.focus }).point_type() == PointType::Element
-            && let Some(first) = selected.first().copied().filter(|key| self.is_text(*key)) {
-                let end = Point::text(first, self.text_content_size(first));
-                if backward { original.anchor = end; } else { original.focus = end; }
-                self.set_point_at(slot, end_role, end)?;
+        if selected.len() == 1
+            && (if backward {
+                original.anchor
+            } else {
+                original.focus
+            })
+            .point_type()
+                == PointType::Element
+            && let Some(first) = selected.first().copied().filter(|key| self.is_text(*key))
+        {
+            let end = Point::text(first, self.text_content_size(first));
+            if backward {
+                original.anchor = end;
+            } else {
+                original.focus = end;
             }
+            self.set_point_at(slot, end_role, end)?;
+        }
         if selected.len() > 1
             && selected.iter().all(|key| {
                 self.is::<Paragraph>(*key)
@@ -96,7 +108,8 @@ impl Transaction<'_> {
                         .is_some_and(|parent| self.is::<Paragraph>(parent))
             })
         {
-            return self.insert_text_across_paragraph_nodes(slot, &original, &selected, text, backward);
+            return self
+                .insert_text_across_paragraph_nodes(slot, &original, &selected, text, backward);
         }
         let first_format = selected
             .first()
@@ -471,7 +484,9 @@ impl Transaction<'_> {
             self.append(NodeKey::ROOT, &[p.key()])?;
             self.select_start(p)?;
             SelectionSlot::Active
-        } else { slot };
+        } else {
+            slot
+        };
         let (block, index) = self.split_selection_boundary(slot)?;
         let tail = self
             .children(block)
