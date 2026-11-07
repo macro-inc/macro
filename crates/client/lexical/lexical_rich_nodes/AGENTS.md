@@ -3,10 +3,11 @@
 ## What it is
 
 Portable model halves of Lexical v0.45.0 rich-text, plain-text, hashtag, overflow
-text-entity and list behavior. DOM events, clipboard access and layout stay in views.
+text-entity, list and code-node behavior. DOM events, clipboard access and layout stay in views.
 
 ## Boundaries
 
+- `code` keeps stored highlight nodes distinct, disables formatting and never tokenizes; new code content uses plain text.
 - Depends on `lexical_model` and the patched `regress`; no I/O or runtime.
 - Keep this client crate excluded from workspace-hack.
 - Keep block-only registration separate from opt-in transforms and plugins.
