@@ -210,6 +210,7 @@ impl Replayer {
                     self.version += 1;
                     let mut tx = ed.transaction();
                     self.begin_slots(&mut tx, true);
+                    self.pending_writes = false;
                     if kind == "commit" && self.version == 1 && self.attached {
                         tx.mark_dirty(NodeKey::ROOT)?;
                         tx.add_tag(UpdateTag::HistoryMerge);

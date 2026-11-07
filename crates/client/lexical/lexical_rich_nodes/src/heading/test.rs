@@ -286,3 +286,34 @@ fn heading_extracts_with_child_for_clone_and_html() -> crate::Result<()> {
     assert!(tx.extract_with_child(heading, text.key(), None, CopyDestination::Html));
     Ok(())
 }
+
+/// upstream: heading Backspace next to a list with an empty item uses cross-block merge.
+#[test]
+fn backspace_after_empty_list_item_merges_heading_text_into_item() -> crate::Result<()> {
+    use crate::list::{
+        item::create_list_item_node,
+        node::{ListType, create_list_node},
+        register::register_list_nodes,
+    };
+    let mut editor = register_list_nodes(register_rich_text_nodes(Editor::builder(
+        EditorMode::Headless,
+    )))
+    .build()
+    .expect("editor");
+    let mut tx = editor.transaction();
+    let list = create_list_node(&mut tx, ListType::Bullet, 1)?;
+    let item = create_list_item_node(&mut tx, None)?;
+    let heading = create_heading_node(&mut tx, HeadingTagType::H1)?;
+    let text = tx.create_text("Heading")?;
+    tx.append(list, &[item.key()])?;
+    tx.append(heading, &[text.key()])?;
+    tx.append(NodeKey::ROOT, &[list.key(), heading.key()])?;
+    tx.select_start(text)?;
+    tx.delete_character(EditDirection::Backward, ModifyTarget::NoView)?;
+    assert_eq!(tx.children_keys(NodeKey::ROOT)?, vec![list.key()]);
+    assert_eq!(tx.first_child(list), Some(item.key()));
+    assert_eq!(tx.text_content(item), "Heading");
+    tx.commit()?;
+    assert_eq!(editor.state().text_content(item), "Heading");
+    Ok(())
+}

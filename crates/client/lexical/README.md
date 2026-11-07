@@ -34,7 +34,9 @@ buffers; it does not require a wasm runtime.
 `lexical_workspace_tests` verifies the patched regex dependency and Loro snapshot
 compatibility alongside the model packages. `lexical_rich_nodes` adds rich/plain
 text command functions, heading/quote/hashtag/overflow nodes, text entities and
-selection plugins, list nodes and structural list editing. Markdown, HTML and projection packages belong here too.
+selection plugins, list nodes and structural list editing, link/autolink nodes,
+shared UTF-16 matchers and the pinned linkify-it port. Conformance replay calls
+these package APIs. Markdown, HTML and projection packages belong here too.
 
 Dependencies come from the root workspace table. The existing
 `crates/client/*` hakari prefix exclusion also covers these nested crates; do not
