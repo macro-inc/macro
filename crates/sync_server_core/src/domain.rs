@@ -14,3 +14,8 @@ pub mod models;
 pub mod permissions;
 /// Stable hibernatable socket identifiers.
 pub mod socket;
+
+/// Imported document state and explicit save timestamps.
+pub mod state;
+/// Errors returned by imported document state.
+pub mod state_error;

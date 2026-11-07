@@ -4,7 +4,7 @@ use super::*;
 
 #[test]
 fn imported_updates_report_the_lexical_nodes_they_touch() {
-    let state = DocumentState::new();
+    let mut state = DocumentState::new();
     let writer = LoroDoc::new();
     writer.set_peer_id(1).unwrap();
     let children = writer
@@ -22,7 +22,10 @@ fn imported_updates_report_the_lexical_nodes_they_touch() {
     }
     writer.commit();
     let created = state
-        .import(&writer.export(ExportMode::all_updates()).unwrap())
+        .import(
+            &writer.export(ExportMode::all_updates()).unwrap(),
+            Duration::from_millis(1),
+        )
         .unwrap();
     assert!(created.changed);
     assert_eq!(created.touched_nodes, ["body", "intro", "outro"]);
@@ -34,7 +37,10 @@ fn imported_updates_report_the_lexical_nodes_they_touch() {
         writer.commit();
     }
     let edited = state
-        .import(&writer.export(ExportMode::updates(&seen)).unwrap())
+        .import(
+            &writer.export(ExportMode::updates(&seen)).unwrap(),
+            Duration::from_millis(1),
+        )
         .unwrap();
     assert!(edited.changed);
     assert_eq!(edited.touched_nodes, ["intro", "outro"]);
@@ -53,11 +59,14 @@ fn imported_updates_report_the_lexical_nodes_they_touch() {
         .unwrap();
     writer.commit();
     let early = state
-        .import(&writer.export(ExportMode::updates(&missing)).unwrap())
+        .import(
+            &writer.export(ExportMode::updates(&missing)).unwrap(),
+            Duration::from_millis(1),
+        )
         .unwrap();
     assert!(!early.changed);
     assert!(early.touched_nodes.is_empty());
-    let unblocking = state.import(&first).unwrap();
+    let unblocking = state.import(&first, Duration::from_millis(1)).unwrap();
     assert!(unblocking.changed);
     assert_eq!(unblocking.touched_nodes, ["body", "heading"]);
 }
@@ -70,7 +79,7 @@ fn imported_updates_report_the_lexical_nodes_they_touch() {
 fn comment_marks_keep_the_text_authors_blame() {
     const AUTHOR: u64 = 1;
     const COMMENTER: u64 = 2;
-    let state = DocumentState::new();
+    let mut state = DocumentState::new();
     let client = LoroDoc::new();
     client.set_peer_id(AUTHOR).unwrap();
     let root_children = client
@@ -126,7 +135,10 @@ fn comment_marks_keep_the_text_authors_blame() {
         .unwrap();
     client.commit();
     let written = state
-        .import(&client.export(ExportMode::all_updates()).unwrap())
+        .import(
+            &client.export(ExportMode::all_updates()).unwrap(),
+            Duration::from_millis(1),
+        )
         .unwrap();
     assert_eq!(
         written.touched_nodes,
@@ -167,7 +179,10 @@ fn comment_marks_keep_the_text_authors_blame() {
         .unwrap();
     client.commit();
     let commented = state
-        .import(&client.export(ExportMode::updates(&seen)).unwrap())
+        .import(
+            &client.export(ExportMode::updates(&seen)).unwrap(),
+            Duration::from_millis(1),
+        )
         .unwrap();
     assert!(commented.changed);
     assert!(commented.touched_nodes.is_empty());
@@ -187,7 +202,10 @@ fn comment_marks_keep_the_text_authors_blame() {
     unwrapped_text.insert(0, "author wrote this").unwrap();
     client.commit();
     let uncommented = state
-        .import(&client.export(ExportMode::updates(&seen)).unwrap())
+        .import(
+            &client.export(ExportMode::updates(&seen)).unwrap(),
+            Duration::from_millis(1),
+        )
         .unwrap();
     assert!(uncommented.changed);
     assert!(uncommented.touched_nodes.is_empty());
@@ -231,7 +249,10 @@ fn comment_marks_keep_the_text_authors_blame() {
     unwrapped_text.delete(7, 10).unwrap();
     client.commit();
     let split = state
-        .import(&client.export(ExportMode::updates(&seen)).unwrap())
+        .import(
+            &client.export(ExportMode::updates(&seen)).unwrap(),
+            Duration::from_millis(1),
+        )
         .unwrap();
     assert!(split.changed);
     assert!(split.touched_nodes.is_empty());
@@ -243,7 +264,10 @@ fn comment_marks_keep_the_text_authors_blame() {
     unwrapped_text.insert(7, "wrote this").unwrap();
     client.commit();
     let merged = state
-        .import(&client.export(ExportMode::updates(&seen)).unwrap())
+        .import(
+            &client.export(ExportMode::updates(&seen)).unwrap(),
+            Duration::from_millis(1),
+        )
         .unwrap();
     assert!(merged.changed);
     assert!(merged.touched_nodes.is_empty());
@@ -254,7 +278,10 @@ fn comment_marks_keep_the_text_authors_blame() {
     unwrapped_text.insert(17, "!").unwrap();
     client.commit();
     let typed = state
-        .import(&client.export(ExportMode::updates(&seen)).unwrap())
+        .import(
+            &client.export(ExportMode::updates(&seen)).unwrap(),
+            Duration::from_millis(1),
+        )
         .unwrap();
     assert_eq!(typed.touched_nodes, ["t-author"]);
 }
@@ -427,4 +454,162 @@ fn root_change_refuses_updates_missing_their_history() {
         state.loro_doc.get_deep_value().to_json(),
         r#"{"root":{"type":"root"}}"#
     );
+}
+
+#[test]
+fn test_import_snapshot() {
+    let loro_doc = LoroDoc::new();
+    let text = loro_doc.get_text("content");
+    text.push_str("hello world").unwrap();
+    let snapshot = loro_doc.export(ExportMode::Snapshot).unwrap();
+    let state = DocumentState::try_from_snapshot(snapshot.as_slice()).unwrap();
+    let text = state.loro_doc.get_text("content");
+    assert_eq!(text.to_string(), "hello world");
+}
+
+#[test]
+fn test_import_update() {
+    let loro_doc = LoroDoc::new();
+    let text = loro_doc.get_text("content");
+    text.push_str("01").unwrap();
+
+    let initial_snapshot = loro_doc.export(ExportMode::Snapshot).unwrap();
+
+    let mut state = DocumentState::try_from_snapshot(initial_snapshot.as_slice()).unwrap();
+
+    let state_vv = loro_doc.state_vv();
+    text.push_str("234").unwrap();
+
+    let update = loro_doc
+        .export(ExportMode::Updates {
+            from: std::borrow::Cow::Borrowed(&state_vv),
+        })
+        .unwrap();
+
+    let imported = state
+        .import(update.as_slice(), Duration::from_millis(1))
+        .unwrap();
+    assert!(imported.changed);
+    assert!(
+        imported.touched_nodes.is_empty(),
+        "plain text has no Lexical IDs"
+    );
+    assert!(
+        !state
+            .import(update.as_slice(), Duration::from_millis(1))
+            .unwrap()
+            .changed
+    );
+
+    let text = state.loro_doc.get_text("content");
+    assert_eq!(text.to_string(), "01234");
+}
+
+#[test]
+fn test_should_save() {
+    let loro_doc = LoroDoc::new();
+    let text = loro_doc.get_text("content");
+    text.push_str("012").unwrap();
+
+    let initial_snapshot = loro_doc.export(ExportMode::Snapshot).unwrap();
+
+    let mut state = DocumentState::try_from_snapshot(initial_snapshot.as_slice()).unwrap();
+    assert!(!state.should_save());
+
+    let state_vv = loro_doc.state_vv();
+    text.push_str("234").unwrap();
+
+    let update = loro_doc
+        .export(ExportMode::Updates {
+            from: std::borrow::Cow::Borrowed(&state_vv),
+        })
+        .unwrap();
+
+    state
+        .import(update.as_slice(), Duration::from_millis(1))
+        .unwrap();
+
+    assert!(state.should_save());
+    // do export here
+    state.mark_exported(Duration::from_millis(2));
+    assert!(!state.should_save());
+}
+
+#[test]
+fn test_replay_pending_operations() {
+    let loro_doc = LoroDoc::new();
+    let text = loro_doc.get_text("content");
+    text.push_str("012").unwrap();
+
+    let initial_snapshot = loro_doc.export(ExportMode::Snapshot).unwrap();
+
+    let mut state = DocumentState::try_from_snapshot(initial_snapshot.as_slice()).unwrap();
+
+    let mut updates = vec![];
+
+    let version_vector = loro_doc.state_vv();
+    text.push_str("3").unwrap();
+    updates.push(
+        loro_doc
+            .export(ExportMode::Updates {
+                from: std::borrow::Cow::Borrowed(&version_vector),
+            })
+            .unwrap(),
+    );
+
+    text.push_str("4").unwrap();
+    updates.push(
+        loro_doc
+            .export(ExportMode::Updates {
+                from: std::borrow::Cow::Borrowed(&version_vector),
+            })
+            .unwrap(),
+    );
+
+    text.push_str("5").unwrap();
+    let update5 = loro_doc
+        .export(ExportMode::Updates {
+            from: std::borrow::Cow::Borrowed(&version_vector),
+        })
+        .unwrap();
+
+    updates.push(update5.clone());
+    // Test to ensure that duplicate updates don't affect the state
+    updates.push(update5.clone());
+
+    state.replay_pending_operations(&updates).unwrap();
+
+    let text = state.loro_doc.get_text("content");
+    assert_eq!(text.to_string(), "012345");
+}
+
+#[test]
+fn rejected_import_does_not_read_the_clock() {
+    let mut state = DocumentState::new();
+    let called = std::cell::Cell::new(false);
+    assert!(
+        state
+            .import_with_clock(b"invalid", || {
+                called.set(true);
+                Duration::from_millis(1)
+            })
+            .is_err()
+    );
+    assert!(!called.get());
+    assert_eq!(state.last_update, None);
+}
+
+#[test]
+fn equal_monotonic_readings_do_not_make_state_dirty() {
+    let writer = LoroDoc::new();
+    writer.get_text("content").push_str("text").unwrap();
+    let mut state = DocumentState::new();
+    state
+        .import(
+            &writer.export(ExportMode::all_updates()).unwrap(),
+            Duration::from_millis(1),
+        )
+        .unwrap();
+    state.mark_exported(Duration::from_millis(1));
+    assert!(!state.should_save());
 }

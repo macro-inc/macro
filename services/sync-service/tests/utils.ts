@@ -2,7 +2,7 @@ import { runtimeCapture, sendRecordedInput } from "./transcript";
 import { intoFrames, Reassembler } from '../../../packages/collaboration/src/websocket/platform/framing/frames';
 import { EphemeralStore, LoroDoc } from 'loro-crdt';
 import { Miniflare, type MiniflareOptions, type WebSocket } from 'miniflare';
-import { assert, expect } from 'vitest';
+import { afterAll, assert, expect } from 'vitest';
 import jwt from 'jsonwebtoken';
 import {
   FromRemote,
@@ -12,6 +12,11 @@ import fs from 'node:fs';
 import { verify } from 'node:crypto';
 
 const rawDispatches = new WeakMap<Miniflare, Miniflare['dispatchFetch']>();
+const runtimes = new Set<Miniflare>();
+
+afterAll(async () => {
+  await Promise.all([...runtimes].map(runtime => runtime.dispose()));
+}, 60_000);
 
 export function dispatchConcurrent(mf: Miniflare, ...args: Parameters<Miniflare['dispatchFetch']>) {
   return rawDispatches.get(mf)!(...args);
@@ -115,6 +120,13 @@ export async function setupMiniflare(
   };
   rawDispatches.set(mf, mf.dispatchFetch.bind(mf));
   capture?.attach(mf);
+  const dispose = mf.dispose.bind(mf);
+  let disposal: Promise<void> | undefined;
+  mf.dispose = () => {
+    disposal ??= dispose().finally(() => runtimes.delete(mf));
+    return disposal;
+  };
+  runtimes.add(mf);
 
   if (options.migrate !== false) await migrateDatabase(mf);
 

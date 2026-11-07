@@ -25,7 +25,8 @@ use worker::{Context, Env, Result, event};
 pub const GIT_DESCRIBE: &str = env!("GIT_DESCRIBE");
 
 fn inner_start() {
-    let filter = EnvFilter::new("sync_service=trace,sync_transcript=info,loro=warn");
+    let filter =
+        EnvFilter::new("sync_service=trace,sync_server_core=trace,sync_transcript=info,loro=warn");
 
     let fmt_layer = tracing_subscriber::fmt::layer()
         .json()
