@@ -10,7 +10,12 @@ import { generateCommand, type Step, stepArbitrary } from './generator';
 import { RustCore } from './loader';
 import { Upstream } from './upstream';
 
-beforeEach(() => vi.useFakeTimers());
+beforeEach(() => {
+  vi.useFakeTimers();
+  vi.spyOn(console, 'error').mockImplementation((...args) => {
+    throw new Error(`upstream console.error: ${args.join(' ')}`);
+  });
+});
 afterEach(() => {
   vi.useRealTimers();
   vi.restoreAllMocks();
@@ -63,9 +68,6 @@ const seeds = process.env.DIFF_SEED
 const length = Number(process.env.STEPS ?? 10000);
 for (const seed of seeds)
   test(`upstream text/paragraph lockstep seed ${seed}, ${length} steps`, async () => {
-    const log = vi.spyOn(console, 'error').mockImplementation((...args) => {
-      throw new Error(`upstream console.error: ${args.join(' ')}`);
-    });
     let lastCommands: Command[] = [];
     let lastExpected: Snapshot[] = [];
     let lastActual: Snapshot | null = null;
@@ -74,6 +76,7 @@ for (const seed of seeds)
       const r = new RustCore('upstream');
       const comparison = new Comparison();
       const commands: Command[] = [];
+      const coverage = new Map<Command['kind'], number>();
       const expected: Snapshot[] = [];
       let actualSnapshot: Snapshot | null = null;
       try {
@@ -86,6 +89,7 @@ for (const seed of seeds)
             run: async () => {
               const command = generateCommand(step, u.snapshot());
               commands.push(command);
+              coverage.set(command.kind, (coverage.get(command.kind) ?? 0) + 1);
               const wanted = await u.apply(command);
               expected.push(wanted);
               const actual = JSON.parse(
@@ -96,6 +100,26 @@ for (const seed of seeds)
             },
           }))
         );
+        expect(commands.length).toBe(steps.length);
+        if (steps.length >= 1000) {
+          for (const kind of [
+            'Select',
+            'SelectionFromView',
+            'TextFromView',
+            'InsertText',
+            'InsertRawText',
+            'InsertParagraph',
+            'InsertLineBreak',
+            'InsertTab',
+            'RemoveText',
+            'FormatText',
+          ] as const) {
+            expect(
+              coverage.get(kind) ?? 0,
+              `executed ${kind} coverage`
+            ).toBeGreaterThanOrEqual(steps.length * 0.005);
+          }
+        }
       } catch (error) {
         lastCommands = commands;
         lastExpected = expected;
@@ -121,7 +145,6 @@ for (const seed of seeds)
       path: process.env.DIFF_PATH,
       endOnFailure: true,
     });
-    log.mockRestore();
     if (result.failed) {
       const category = (error: unknown) =>
         [

@@ -517,11 +517,21 @@ fn merging_text_resolves_both_parent_selection_endpoints() -> Result<(), Error> 
     })?;
     editor.update(|tx| {
         tx.set_selection(Some(Selection::Range(RangeSelection::new(
-            Point::element(last, ChildIndex(2)), Point::element(first, ChildIndex(0)),
+            Point::element(last, ChildIndex(2)),
+            Point::element(first, ChildIndex(0)),
         ))))?;
         tx.format_text(TextFormatType::Bold, None)?;
         Ok(())
     })?;
-    assert_eq!(editor.state().selection().unwrap().as_range().unwrap().anchor, Point::text(tab, Utf16Offset(1)));
+    assert_eq!(
+        editor
+            .state()
+            .selection()
+            .unwrap()
+            .as_range()
+            .unwrap()
+            .anchor,
+        Point::text(tab, Utf16Offset(1))
+    );
     Ok(())
 }
