@@ -217,3 +217,66 @@ fn remove_complete_text_span_across_token_collapses_into_paragraph_s1_18_5() -> 
     })?;
     Ok(())
 }
+
+/// upstream: ElementNode.clear calls getWritable even when it has no children.
+#[test]
+fn clearing_an_empty_element_marks_it_intentionally_dirty() -> Result<(), Error> {
+    let mut editor = Editor::builder(EditorMode::Headless)
+        .build()
+        .expect("builder");
+    let (_, commit) = editor.update(|tx| {
+        tx.clear(NodeKey::ROOT)?;
+        Ok(())
+    })?;
+    assert_eq!(
+        commit.changes.dirty_elements.get(&NodeKey::ROOT),
+        Some(&DirtyIntent::Intentional)
+    );
+    assert_eq!(
+        commit.changes.mutations.get(&NodeKey::ROOT),
+        Some(&Mutation::Updated)
+    );
+    Ok(())
+}
+
+/// upstream: #6031 cross-parent move decrements element offsets in the old parent.
+#[test]
+fn moving_a_child_updates_selection_in_its_source_parent() -> Result<(), Error> {
+    let mut editor = Editor::builder(EditorMode::Headless)
+        .build()
+        .expect("builder");
+    let mut tx = editor.transaction();
+    let source = tx.create(Paragraph::default())?;
+    let target = tx.create(Paragraph::default())?;
+    let a = tx.create_text("a")?;
+    let b = tx.create_text("b")?;
+    let c = tx.create_text("c")?;
+    tx.append(source, &[a.key(), b.key(), c.key()])?;
+    tx.append(NodeKey::ROOT, &[source.key(), target.key()])?;
+    tx.element(source)?
+        .select(Some(ChildIndex(3)), Some(ChildIndex(3)))?;
+    tx.append(target, &[a.key()])?;
+    assert_eq!(tx.anchor()?, Point::element(source, ChildIndex(2)));
+    assert_eq!(tx.focus()?, Point::element(source, ChildIndex(2)));
+    Ok(())
+}
+
+/// upstream: #6031 inserting an existing sibling in the same position is a no-op.
+#[test]
+fn no_op_sibling_move_keeps_an_end_of_parent_caret_in_range() -> Result<(), Error> {
+    let mut editor = Editor::builder(EditorMode::Headless)
+        .build()
+        .expect("builder");
+    let mut tx = editor.transaction();
+    let p = tx.create(Paragraph::default())?;
+    let a = tx.create_text("a")?;
+    let b = tx.create_text("b")?;
+    tx.append(p, &[a.key(), b.key()])?;
+    tx.append(NodeKey::ROOT, &[p.key()])?;
+    tx.element(p)?
+        .select(Some(ChildIndex(2)), Some(ChildIndex(2)))?;
+    tx.insert_before(b, a, true)?;
+    assert_eq!(tx.children_keys(p)?, vec![a.key(), b.key()]);
+    assert_eq!(tx.anchor()?, Point::element(p, ChildIndex(2)));
+    Ok(())
+}
