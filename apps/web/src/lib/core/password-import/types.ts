@@ -1,5 +1,5 @@
 /**
- * The parsed export as `crates/password_import_wasm` serializes it. Items and
+ * The parsed export as `crates/accounts/password_import_wasm` serializes it. Items and
  * folders are already in the vault import batch shapes.
  */
 

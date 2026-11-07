@@ -26,7 +26,7 @@ client serves both.
 ## Scope
 
 - Owns: GraphQL types, resolvers and subscription for the inbox.
-- Not here: row rules and inbox membership → `crates/notification_inbox`;
+- Not here: row rules and inbox membership → `crates/notifications/notification_inbox`;
   notification content → `crates/graphql/graphql_notification`.
 
 ## Boundaries

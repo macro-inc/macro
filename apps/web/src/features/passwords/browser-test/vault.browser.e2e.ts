@@ -170,7 +170,7 @@ for (const viewport of VIEWPORTS) {
         .setInputFiles(
           fileURLToPath(
             new URL(
-              '../../../../../../crates/password_import/tests/fixtures/bitwarden.json',
+              '../../../../../../crates/accounts/password_import/tests/fixtures/bitwarden.json',
               import.meta.url
             )
           )

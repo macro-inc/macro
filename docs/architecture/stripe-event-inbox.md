@@ -95,7 +95,7 @@ carry customer, subscription, team and event ids, never emails.
   legacy, an unsupported API version, a bad id, a customer that belongs to
   no account): dead at once, until replayed.
 - Seat prices: the sold Premium and Max prices, plus
-  `LEGACY_PREMIUM_PRICE_IDS` (`crates/teams` `domain/model.rs`), historical
+  `LEGACY_PREMIUM_PRICE_IDS` (`crates/accounts/teams` `domain/model.rs`), historical
   prices that keep Premium entitlements, as the old webhook's fallback gave
   them. A grant on an unknown price dead-letters. Revokes (cancel, past due,
   unpaid, paused, failed payment) never fail: they remove the subscriber role

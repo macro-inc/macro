@@ -8,7 +8,7 @@ mandatory regardless of the flag.
 
 ## Model and boundaries
 
-`crates/passwords` owns items, typed fields, versions, folders, user/team grants,
+`crates/accounts/passwords` owns items, typed fields, versions, folders, user/team grants,
 favorites, last use, and activity. Its domain service owns human membership, grant and administrator policy. Inbound Axum handlers translate authenticated
 requests; PostgreSQL and OpenBao implement repository and secret-provider ports.
 The provider boundary allows future 1Password and Bitwarden implementations.

@@ -247,7 +247,7 @@
         }
         {
           name = "password_import_wasm";
-          crate = "crates/password_import_wasm";
+          crate = "crates/accounts/password_import_wasm";
           dir = "password-import";
         }
       ];
