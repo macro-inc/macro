@@ -1,6 +1,7 @@
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { defineConfig } from 'vitest/config';
+import { membranePlugin } from './resolver';
 
 const upstreamPath = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)),
@@ -9,6 +10,7 @@ const upstreamPath = path.resolve(
 const upstream = (await import(path.join(upstreamPath, 'vitest.config.mts')))
   .default;
 export default defineConfig({
+  plugins: process.env.LEXICAL_REPLAY_ONLY ? [membranePlugin()] : [],
   resolve: upstream.resolve,
   test: {
     include: process.env.LEXICAL_REPLAY_ONLY

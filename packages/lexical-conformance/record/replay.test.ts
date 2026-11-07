@@ -1,4 +1,4 @@
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import { test } from 'vitest';
 import { modules } from './membrane';
@@ -12,11 +12,21 @@ const aliases = JSON.parse(
   readFileSync(path.join(root, 'tsconfig.test.json'), 'utf8')
 ).compilerOptions.paths as Record<string, string[]>;
 async function load(name: string): Promise<Record<string, unknown>> {
-  let relative = aliases[name]?.[0];
-  if (name === 'lexical/__tests__/utils')
-    relative = 'packages/lexical/src/__tests__/utils/index.tsx';
-  else if (name.startsWith('lexical/') && !relative)
-    relative = `packages/lexical/src/${name.slice(8)}.ts`;
+  let relative: string | undefined = aliases[name]?.[0];
+  if (!relative) {
+    const parent = Object.keys(aliases)
+      .filter((alias) => name.startsWith(`${alias}/`))
+      .sort((a, b) => b.length - a.length)[0];
+    if (parent) {
+      const prefix = path.join(
+        path.dirname(aliases[parent][0]),
+        name.slice(parent.length + 1)
+      );
+      relative = ['.ts', '.tsx', '/index.ts', '/index.tsx']
+        .map((suffix) => prefix + suffix)
+        .find((candidate) => existsSync(path.join(root, candidate)));
+    }
+  }
   if (!relative) throw new Error(`Unknown fixture module: ${name}`);
   const module = await import(/* @vite-ignore */ path.join(root, relative));
   modules.set(name, module);
