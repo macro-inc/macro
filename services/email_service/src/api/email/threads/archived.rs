@@ -6,6 +6,7 @@ use axum::{
     response::{IntoResponse, Response},
 };
 use email::domain::{models::EmailErr, ports::EmailService};
+use email_thread_id::EmailThreadId;
 use macro_authorization::{MacroAuthorizationExtractor, UserOrInternal};
 use model::response::{EmptyResponse, ErrorResponse};
 use utoipa::ToSchema;
@@ -66,7 +67,7 @@ pub async fn archived_handler(
         .service()
         .set_thread_archived(
             authorization.authorization.user.macro_user_id.clone(),
-            thread_id,
+            EmailThreadId::from_uuid(thread_id),
             body.value,
         )
         .await

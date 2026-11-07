@@ -8,6 +8,7 @@ publish = false
 async-graphql = { workspace = true, features = ["dataloader"] }
 chrono = { workspace = true }
 email = { workspace = true, features = ["ports"] }
+email_thread_id = { workspace = true }
 email_utils = { workspace = true }
 entity_access = { workspace = true }
 futures = { workspace = true }

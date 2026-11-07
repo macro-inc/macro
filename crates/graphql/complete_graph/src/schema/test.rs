@@ -1,3 +1,4 @@
+use email_thread_id::EmailThreadId;
 use std::collections::HashMap;
 use std::sync::Mutex;
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
@@ -542,8 +543,9 @@ impl EmailService for CountingEmailService {
     async fn resolve_thread_read_id(
         &self,
         macro_id: MacroUserIdStr<'_>,
-        thread_id: Uuid,
+        thread_id: EmailThreadId,
     ) -> Result<Uuid, EmailErr> {
+        let thread_id = thread_id.into_uuid();
         assert_eq!(macro_id.as_ref(), VALID_USER_ID);
         if *self.thread_read_fails.lock().unwrap() {
             return Err(anyhow::anyhow!("private repository diagnostic").into());
@@ -577,9 +579,10 @@ impl EmailService for CountingEmailService {
     async fn set_thread_archived(
         &self,
         user_id: MacroUserIdStr<'static>,
-        thread_id: Uuid,
+        thread_id: EmailThreadId,
         archived: bool,
     ) -> Result<(), EmailErr> {
+        let thread_id = thread_id.into_uuid();
         *self.thread_archived.lock().unwrap() = archived;
         self.archive_mutation_calls
             .lock()
@@ -641,7 +644,7 @@ impl EmailService for CountingEmailService {
     async fn get_owned_link_for_thread(
         &self,
         _macro_id: MacroUserIdStr<'_>,
-        _thread_id: Uuid,
+        _thread_id: EmailThreadId,
     ) -> Result<Option<Link>, EmailErr> {
         Err(test_email_err())
     }
@@ -707,7 +710,7 @@ impl EmailService for CountingEmailService {
     async fn update_thread_labels(
         &self,
         _link: &Link,
-        _thread_id: Uuid,
+        _thread_id: EmailThreadId,
         _label_id: Uuid,
         _add: bool,
     ) -> Result<UpdateThreadLabelsResult, EmailErr> {
@@ -717,8 +720,9 @@ impl EmailService for CountingEmailService {
     async fn mark_thread_seen(
         &self,
         macro_id: MacroUserIdStr<'static>,
-        thread_id: Uuid,
+        thread_id: EmailThreadId,
     ) -> Result<(), EmailErr> {
+        let thread_id = thread_id.into_uuid();
         *self.thread_is_read.lock().unwrap() = true;
         self.seen_mutation_calls
             .lock()
@@ -730,8 +734,9 @@ impl EmailService for CountingEmailService {
     async fn mark_thread_unread(
         &self,
         macro_id: MacroUserIdStr<'static>,
-        thread_id: Uuid,
+        thread_id: EmailThreadId,
     ) -> Result<(), EmailErr> {
+        let thread_id = thread_id.into_uuid();
         *self.thread_is_read.lock().unwrap() = false;
         self.unread_mutation_calls
             .lock()
@@ -743,10 +748,11 @@ impl EmailService for CountingEmailService {
     async fn update_thread_labels_for_user(
         &self,
         macro_id: MacroUserIdStr<'static>,
-        thread_id: Uuid,
+        thread_id: EmailThreadId,
         label_id: Uuid,
         add: bool,
     ) -> Result<UpdateThreadLabelsResult, EmailErr> {
+        let thread_id = thread_id.into_uuid();
         self.label_mutation_calls
             .lock()
             .expect("label mutation calls lock")
