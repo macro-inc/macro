@@ -168,7 +168,10 @@ impl EditorCore {
             Err(failure) => {
                 self.history = old_history;
                 if let Some(history) = &mut self.history {
-                    for commit in &early {
+                    for commit in early
+                        .iter()
+                        .filter(|entry| !entry.changes.is_empty() || entry.selection_changed)
+                    {
                         history.record(commit, now);
                     }
                 }
@@ -184,7 +187,10 @@ impl EditorCore {
         };
         let commit = self.editor.run_after_commit(commit);
         if let Some(history) = &mut self.history {
-            for entry in commit.chain().filter(|entry| !entry.is_noop()) {
+            for entry in commit
+                .chain()
+                .filter(|entry| !entry.changes.is_empty() || entry.selection_changed)
+            {
                 if let (_, Some(availability)) = history.record(entry, now) {
                     effects.push(Effect::HistoryState(availability));
                 }

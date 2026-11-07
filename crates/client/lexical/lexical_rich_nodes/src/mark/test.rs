@@ -67,3 +67,71 @@ fn wrapping_splits_boundaries_and_line_breaks_then_unwraps() -> Result<(), Error
     })?;
     Ok(())
 }
+
+// LexicalSelection.ts: clear protected inline parents before replacement.
+#[test]
+fn replacement_across_mark_boundary_leaves_new_text_outside_mark() -> Result<(), Error> {
+    let mut editor = Editor::builder(EditorMode::Headless)
+        .node::<MarkNode>()
+        .build()
+        .unwrap();
+    let ((paragraph, mark, marked, trailing), _) = editor.update(|tx| {
+        let paragraph = tx.create(Paragraph::default())?;
+        let mark = tx.create(MarkNode {
+            ids: vec!["annotation".into()],
+        })?;
+        let marked = tx.create_text("abc")?;
+        let trailing = tx.create_text("def")?;
+        tx.append(mark, &[marked.key()])?;
+        tx.append(paragraph, &[mark.key(), trailing.key()])?;
+        tx.append(NodeKey::ROOT, &[paragraph.key()])?;
+        Ok((paragraph, mark, marked, trailing))
+    })?;
+    editor.update(|tx| {
+        tx.set_selection(Some(Selection::Range(RangeSelection::new(
+            Point::text(marked, Utf16Offset(0)),
+            Point::text(trailing, Utf16Offset(1)),
+        ))))?;
+        tx.insert_text("x")
+    })?;
+    let state = editor.state();
+    assert!(!state.is_attached(mark));
+    assert_eq!(state.children_keys(paragraph)?.len(), 1);
+    assert_eq!(state.text_content(paragraph).as_ref(), "xef");
+    let selected = state
+        .selection()
+        .and_then(Selection::as_range)
+        .expect("range");
+    assert_eq!(selected.anchor.offset(), 1);
+    assert_eq!(selected.anchor, selected.focus);
+    Ok(())
+}
+
+#[test]
+fn typing_after_link_inside_mark_escapes_both_protected_parents() -> Result<(), Error> {
+    let mut editor = Editor::builder(EditorMode::Headless)
+        .node::<MarkNode>()
+        .node::<crate::link::LinkNode>()
+        .build()
+        .unwrap();
+    let mut tx = editor.transaction();
+    let paragraph = tx.create(Paragraph::default())?;
+    let mark = tx.create(MarkNode {
+        ids: vec!["annotation".into()],
+    })?;
+    let link = crate::link::create_link_node(&mut tx, "/", Default::default())?;
+    let text = tx.create_text("a")?;
+    tx.append(link, &[text.key()])?;
+    tx.append(mark, &[link.key()])?;
+    tx.append(paragraph, &[mark.key()])?;
+    tx.append(NodeKey::ROOT, &[paragraph.key()])?;
+    tx.select_end(text)?;
+    tx.insert_text("b")?;
+    let children = tx.children_keys(paragraph)?;
+    assert_eq!(children.len(), 2);
+    assert_eq!(children[0], mark.key());
+    assert_eq!(tx.text_content(mark), "a");
+    assert!(tx.is_text(children[1]));
+    assert_eq!(tx.text_content(children[1]), "b");
+    Ok(())
+}

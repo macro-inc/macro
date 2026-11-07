@@ -11766,7 +11766,10 @@ dependencies = [
 name = "lexical_conformance_wasm"
 version = "0.1.0"
 dependencies = [
+ "lexical_markdown",
  "lexical_model",
+ "lexical_rich_nodes",
+ "regress",
  "serde",
  "serde_json",
  "thiserror 2.0.18",
@@ -11779,9 +11782,11 @@ version = "0.1.0"
 dependencies = [
  "lexical_model",
  "lexical_rich_nodes",
+ "libtest-mimic",
  "serde",
  "serde_json",
  "thiserror 2.0.18",
+ "tracing",
 ]
 
 [[package]]
@@ -11818,6 +11823,7 @@ dependencies = [
 name = "lexical_rich_nodes"
 version = "0.1.0"
 dependencies = [
+ "bitflags 2.11.1",
  "indexmap 2.14.0",
  "lexical_model",
  "nom 8.0.0",

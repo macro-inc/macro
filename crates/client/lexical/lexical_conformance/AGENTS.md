@@ -23,6 +23,7 @@ Development-only schema-2 fixture interpreter for the pinned upstream oracle.
 - Reset write bookkeeping for each replay transaction, including read-only discrete updates.
 - Route markdown conversions and normalization through lexical_markdown with decoded standard transformer identifiers; the expanded corpus reports unsupported or divergent markdown cases explicitly.
 - Apply declared D6 projection only to code child JSON and code-range positions; retain exact allocation, alias, dirty, normalized, commit and non-code comparisons. Never create syntax-highlight nodes or fabricate plugin behavior.
+- Table node fixtures use concrete table payloads; expanded-corpus gaps remain explicit.
 - Link fixtures use real link transforms and MarkNode descendants; no link ledger entries remain.
 - Unmapped APIs fail loudly. Ledger entries require an exact test identity, reason and spec decision; stale entries fail.
 - Partial recordings restore and validate the complete initial JSON, selection, key layout and next allocation counter before replay; no import transforms or synthetic commits run.

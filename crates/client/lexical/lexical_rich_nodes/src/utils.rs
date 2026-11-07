@@ -52,24 +52,101 @@ pub(crate) fn lift_to_nearest_root(
     node: NodeKey,
     remove_empty: bool,
 ) -> std::result::Result<(), lexical_model::Error> {
-    let mut caret: PointCaret = SiblingCaret::new(node, CaretDirection::Next)
-        .rewind(tx.view())?
-        .into();
-    if caret.node_at_caret(tx.view()) == Some(node)
-        || caret.flipped(tx.view()).node_at_caret(tx.view()) == Some(node)
-    {
-        tx.remove(node, true)?;
-    }
+    let caret = SiblingCaret::new(node, CaretDirection::Next).into();
     let options = SplitAtPointCaretNextOptions {
         should_split: |_, _, _| false,
         remove_empty_destination: remove_empty,
         ..Default::default()
     };
-    while let Some(next) = tx.split_at_point_caret_next(caret, options)? {
-        caret = next.into();
-    }
-    tx.caret_insert(caret, node)?;
+    insert_node_to_nearest_root_at_caret(tx, node, caret, options)?;
     Ok(())
+}
+
+/// Insert a node at the selection, splitting ancestors up to the nearest root.
+pub fn insert_node_to_nearest_root(
+    tx: &mut Transaction<'_>,
+    node: NodeKey,
+) -> Result<NodeKey, Error> {
+    let selection = tx.selection().or_else(|| tx.previous_selection()).cloned();
+    let caret = if let Some(Selection::Range(range)) = selection {
+        caret_from_point(tx.view(), &range.focus, CaretDirection::Next)?
+    } else if let Some(last) = selection
+        .as_ref()
+        .map(|s| s.nodes(tx.view()))
+        .transpose()?
+        .unwrap_or_default()
+        .last()
+    {
+        SiblingCaret::new(*last, CaretDirection::Next).into()
+    } else {
+        let paragraph = tx.create(Paragraph::default())?;
+        tx.append(NodeKey::ROOT, &[paragraph.key()])?;
+        SiblingCaret::new(paragraph.key(), CaretDirection::Next)
+            .rewind(tx.view())?
+            .into()
+    };
+    let inserted = insert_node_to_nearest_root_at_caret(tx, node, caret, Default::default())?;
+    let selected = match inserted.adjacent_child_caret(tx.view()) {
+        Some(NodeCaret::Child(child)) => normalize_caret(tx.view(), child.into())?,
+        _ => inserted.into(),
+    };
+    tx.set_selection_from_caret_range(CaretRange::collapsed(selected))?;
+    Ok(node)
+}
+
+/// Split at a point caret and insert a block (or a paragraph wrapping an inline node).
+pub fn insert_node_to_nearest_root_at_caret(
+    tx: &mut Transaction<'_>,
+    node: NodeKey,
+    caret: PointCaret,
+    options: SplitAtPointCaretNextOptions,
+) -> Result<NodeCaret, Error> {
+    let direction = caret.direction();
+    let mut insert = caret.in_direction(tx.view(), CaretDirection::Next);
+    if let PointCaret::Text(text) = insert {
+        if text.offset.0 == 0 {
+            insert = SiblingCaret::new(text.origin, CaretDirection::Previous).flipped(tx.view());
+        } else if text.offset.0 == tx.text_content_size(text.origin).0 {
+            insert = SiblingCaret::new(text.origin, CaretDirection::Next).into();
+        }
+    }
+    if insert.origin() == node {
+        let PointCaret::Sibling(sibling) = insert else {
+            return Err(Error::invariant(format!(
+                "$insertNodeToNearestRootAtCaret node {node} of type {} can not be inserted into itself",
+                tx.type_name(node)?
+            )));
+        };
+        insert = sibling.rewind(tx.view())?.into();
+    }
+    if insert.node_at_caret(tx.view()) == Some(node)
+        || insert.flipped(tx.view()).node_at_caret(tx.view()) == Some(node)
+    {
+        tx.remove(node, true)?;
+    }
+    while let Some(next) = tx.split_at_point_caret_next(insert, options)? {
+        insert = next.into();
+    }
+    if matches!(insert, PointCaret::Text(_)) {
+        return Err(Error::Invariant(
+            "$insertNodeToNearestRootAtCaret: An unattached TextNode can not be split",
+        ));
+    }
+    let block = if tx.is_inline(node) {
+        let p = tx.create(Paragraph::default())?;
+        tx.append(p, &[node])?;
+        p.key()
+    } else {
+        node
+    };
+    tx.caret_insert(insert, block)?;
+    let inserted = PointCaret::from(SiblingCaret::new(node, CaretDirection::Next))
+        .in_direction(tx.view(), direction);
+    match inserted {
+        PointCaret::Child(child) => Ok(child.into()),
+        PointCaret::Sibling(sibling) => Ok(sibling.into()),
+        _ => unreachable!(),
+    }
 }
 
 /// Pinned linkify-it domain/email/protocol recognition.

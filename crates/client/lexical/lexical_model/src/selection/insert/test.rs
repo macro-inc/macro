@@ -863,3 +863,112 @@ fn replacing_a_selected_tab_removes_its_protected_text() -> Result<(), Error> {
     })?;
     Ok(())
 }
+
+#[test]
+fn multi_node_replacement_converts_segmented_first_text() -> Result<(), Error> {
+    let mut editor = Editor::builder(EditorMode::Headless)
+        .build()
+        .expect("editor");
+    let mut tx = editor.transaction();
+    let paragraph = tx.create(Paragraph::default())?;
+    let first = tx.create_text("abc")?;
+    let last = tx.create_text("def")?;
+    tx.text(first)?
+        .set_mode(TextMode::Segmented)?
+        .set_style("color: red;")?;
+    tx.append(paragraph, &[first.key(), last.key()])?;
+    tx.append(NodeKey::ROOT, &[paragraph.key()])?;
+    let mut range = RangeSelection::new(
+        Point::text(first, Utf16Offset(1)),
+        Point::text(last, Utf16Offset(1)),
+    );
+    range.format = TextFormat::BOLD;
+    range.style = "color: blue;".into();
+    tx.set_selection(Some(Selection::Range(range)))?;
+    tx.insert_text("x")?;
+    let replacement = tx.children_keys(paragraph)?[0];
+    assert_ne!(replacement, first.key());
+    assert_eq!(tx.text_content(replacement), "ax");
+    let data = tx.view().text_data(replacement)?;
+    assert_eq!(data.mode, TextMode::Normal);
+    assert_eq!(data.format, TextFormat::BOLD);
+    assert_eq!(data.style.as_ref(), "");
+    assert_eq!(tx.text_content(paragraph), "axef");
+    Ok(())
+}
+
+#[test]
+fn removing_selected_block_relocates_to_sibling_element_boundary() -> Result<(), Error> {
+    let mut editor = Editor::builder(EditorMode::Headless)
+        .build()
+        .expect("editor");
+    let mut tx = editor.transaction();
+    let previous = tx.create(Paragraph::default())?;
+    let text = tx.create_text("aa")?;
+    let selected = tx.create(Paragraph::default())?;
+    tx.append(previous, &[text.key()])?;
+    tx.append(NodeKey::ROOT, &[previous.key(), selected.key()])?;
+    tx.select_start(selected)?;
+    tx.remove(selected, true)?;
+    let range = tx.selection().and_then(Selection::as_range).expect("range");
+    assert_eq!(range.anchor, Point::element(previous, ChildIndex(1)));
+    assert_eq!(range.focus, range.anchor);
+    Ok(())
+}
+
+#[test]
+fn sibling_selection_uses_element_select_instead_of_select_end() -> Result<(), Error> {
+    let mut editor = Editor::builder(EditorMode::Headless)
+        .build()
+        .expect("editor");
+    let mut tx = editor.transaction();
+    let previous = tx.create(Paragraph::default())?;
+    let middle = tx.create(Paragraph::default())?;
+    let next = tx.create(Paragraph::default())?;
+    let first_text = tx.create_text("aa")?;
+    let last_text = tx.create_text("bb")?;
+    tx.append(previous, &[first_text.key()])?;
+    tx.append(next, &[last_text.key()])?;
+    tx.append(NodeKey::ROOT, &[previous.key(), middle.key(), next.key()])?;
+    tx.select_previous(middle, None, None)?;
+    assert_eq!(
+        tx.selection()
+            .and_then(Selection::as_range)
+            .expect("range")
+            .anchor,
+        Point::element(previous, ChildIndex(1))
+    );
+    tx.select_next(middle, None, None)?;
+    assert_eq!(
+        tx.selection()
+            .and_then(Selection::as_range)
+            .expect("range")
+            .anchor,
+        Point::element(next, ChildIndex(0))
+    );
+    Ok(())
+}
+
+#[test]
+fn typing_at_segmented_start_keeps_the_segmented_node() -> Result<(), Error> {
+    let mut editor = Editor::builder(EditorMode::Headless)
+        .build()
+        .expect("editor");
+    let mut tx = editor.transaction();
+    let paragraph = tx.create(Paragraph::default())?;
+    let segmented = tx.create_text("abc")?;
+    tx.text(segmented)?.set_mode(TextMode::Segmented)?;
+    tx.append(paragraph, &[segmented.key()])?;
+    tx.append(NodeKey::ROOT, &[paragraph.key()])?;
+    tx.select_start(segmented)?;
+    tx.insert_text("x")?;
+    let children = tx.children_keys(paragraph)?;
+    assert_eq!(children.len(), 2);
+    assert_eq!(children[1], segmented.key());
+    assert_eq!(tx.view().text_data(segmented)?.mode, TextMode::Segmented);
+    assert_eq!(tx.text_content(children[0]), "x");
+    assert_eq!(tx.text_content(segmented), "abc");
+    Ok(())
+}
+
+mod boundary;

@@ -166,6 +166,13 @@ impl Point {
         if self.key() == other.key() {
             return Ok(self.offset() < other.offset());
         }
+        for point in [self, *other] {
+            if let Point::Text { key, offset } = point
+                && offset > view.text_content_size(key)
+            {
+                return Err(Error::Utf16OffsetOutOfRange(offset));
+            }
+        }
         let anchor = comparison_point(view, self)?;
         let focus = comparison_point(view, *other)?;
         if anchor.key() == focus.key() {
@@ -184,6 +191,7 @@ fn comparison_point(view: StateRef<'_>, point: Point) -> Result<Point, Error> {
     let mut index = offset.0 as usize;
     loop {
         let children = view.children_keys(key)?;
+        index = index.min(children.len());
         if index > 0 {
             if let Some(previous) = children.get(index - 1)
                 && let Some(text) = view.text(*previous)
@@ -343,8 +351,18 @@ impl TableSelection {
     }
     /// Replace the cell endpoints.
     pub fn set(&mut self, table: NodeKey, anchor_cell: NodeKey, focus_cell: NodeKey) {
-        *self = Self::new(table, anchor_cell, focus_cell);
-        self.dirty = true;
+        self.dirty |= self.table != table
+            || self.anchor.key() != anchor_cell
+            || self.focus.key() != focus_cell;
+        self.table = table;
+        self.anchor = match self.anchor {
+            Point::Text { offset, .. } => Point::text(anchor_cell, offset),
+            Point::Element { offset, .. } => Point::element(anchor_cell, offset),
+        };
+        self.focus = match self.focus {
+            Point::Text { offset, .. } => Point::text(focus_cell, offset),
+            Point::Element { offset, .. } => Point::element(focus_cell, offset),
+        };
     }
     /// Whether the value has changed.
     pub fn is_dirty(&self) -> bool {

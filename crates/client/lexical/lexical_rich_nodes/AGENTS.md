@@ -2,7 +2,7 @@
 
 ## What it is
 
-Portable model halves of Lexical v0.45.0 rich/plain text, lists, links/autolinks,
+Portable model halves of Lexical v0.45.0 rich/plain text, lists, links/autolinks, tables,
 code, marks, selection, tree, offset and clipboard behavior. DOM and layout stay
 in views.
 
@@ -12,11 +12,15 @@ in views.
 - `code` keeps stored highlights distinct and never tokenizes; new content uses plain text.
 - `code::line`, `code::plain` and `code::language` own line navigation, LF/tab splitting and language catalogs.
 - Keep selection CSS parsing ordered and uncached; detached style inputs differ from active selected text.
+- Keep descendant filtering and nearest-root insertion canonical in utils; do not shadow their re-exports.
 - Use mutation-safe child cursors; collect snapshot DFS results before editing.
 - `clipboard` consumes host MIME strings and HTML nodes; HTML export belongs to WP-24.
 - Depends on model, regex, URL, ordered maps, language tables and tracing facades; no I/O or runtime.
 - Keep this client crate excluded from workspace-hack.
 - Keep block-only registration separate from opt-in transforms and plugins.
+- Keep physical grid coordinates separate from span coordinates; the physical column count comes from the last row.
+- Keep DOM geometry behind TableView and apply returned observer effects in the host.
+- Table span reads retain map-time writable identity; frozen cells use captured fields, live cells read current fields.
 - Use selection slots in hooks; detached selections must not read the active range.
 - List handlers read through ListNode/ListItemNode ancestry so application subclasses inherit restructuring and intrinsic transforms.
 - Route host Enter through `list::register::handle_registered_insert_paragraph` before the rich-text fallback; it consumes registered numbering options.

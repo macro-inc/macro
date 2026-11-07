@@ -136,8 +136,10 @@ pub fn indent_content(tx: &mut Transaction<'_>) -> crate::Result<bool> {
 /// Outdent each selected block once, clamping at zero.
 pub fn outdent_content(tx: &mut Transaction<'_>) -> crate::Result<bool> {
     crate::utils::handle_indent_and_outdent(tx, |tx, key| {
-        let indent = tx.indent(key).saturating_sub(1);
-        tx.set_indent(key, indent)?;
+        let indent = tx.indent(key);
+        if indent > 0 {
+            tx.set_indent(key, indent - 1)?;
+        }
         Ok(())
     })
 }
