@@ -8,7 +8,10 @@ import {
   type MobileStorePlatform,
   markConversionFired,
   mobileStorePlatform,
+  shareTeamInvite,
   submittedEmail,
+  type TeamInviteResult,
+  teamInviteUrl,
 } from '../utils/utilMobileSignup';
 import { setPageSeo } from '../utils/utilSeo';
 import './RouteMobileSignup.css';
@@ -28,7 +31,8 @@ const STORES: Record<MobileStorePlatform, { url: string; buttonName: string }> =
 /**
  * Confirmation step of the site's mobile email capture: the visitor has been
  * emailed a link to finish signing up on a computer. iOS and Android visitors
- * are also offered the app from their store.
+ * are also offered the app from their store, and everyone can send their team
+ * a link to Macro while they're still on their phone.
  *
  * This page also owns the ad-platform conversions for the captured lead (Meta
  * Lead + CompleteRegistration, Google Ads `mobile_web_lead`) — they used to
@@ -52,6 +56,25 @@ export const RouteMobileSignupSent: Component = () => {
 
   // Hidden in the prerendered page; only the browser knows the platform.
   const [store, setStore] = createSignal<MobileStorePlatform>();
+
+  const [inviteResult, setInviteResult] = createSignal<TeamInviteResult>();
+
+  const inviteTeam = async () => {
+    const url = teamInviteUrl(window.location.origin);
+    const result = await shareTeamInvite(url);
+    setInviteResult(result);
+    analytics.track('mobile_signup_team_invite', {
+      page_location: window.location.href,
+      result,
+    });
+  };
+
+  const inviteLabel = (): string => {
+    const result = inviteResult();
+    if (result === 'shared') return 'Invite more teammates';
+    if (result === 'copied') return 'Link copied. Paste it to your team';
+    return 'Invite your team';
+  };
 
   onMount(() => {
     setStore(
@@ -130,6 +153,23 @@ export const RouteMobileSignupSent: Component = () => {
           </div>
         )}
       </Show>
+      <div class="mobile-signup-invite">
+        <p class="mobile-signup-card-subtitle">
+          Macro works best with your team. Send them a link while you're here.
+        </p>
+        <button
+          type="button"
+          class="mobile-signup-card-pill mobile-signup-card-pill-secondary"
+          onClick={inviteTeam}
+        >
+          {inviteLabel()}
+        </button>
+        <Show when={inviteResult() === 'failed'}>
+          <p class="mobile-signup-invite-url">
+            {teamInviteUrl(window.location.origin)}
+          </p>
+        </Show>
+      </div>
     </section>
   );
 };

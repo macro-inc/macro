@@ -91,6 +91,32 @@
   outline-offset: 4px;
 }
 
+/* The team invite on /mobile-signup-sent: a quieter outlined pill under the
+   page's main action. */
+.mobile-signup-invite {
+  border-top: 1px solid var(--color-edge);
+  display: grid;
+  gap: 16px;
+  justify-items: center;
+  margin-top: 36px;
+  padding-top: 20px;
+  width: 100%;
+}
+.mobile-signup-invite .mobile-signup-card-subtitle { margin: 0; }
+.mobile-signup-card .mobile-signup-card-pill-secondary {
+  background: transparent;
+  border: 1px solid var(--color-edge);
+  color: var(--color-ink);
+}
+.mobile-signup-invite-url {
+  color: var(--color-ink);
+  font-family: 'Inter Variable', 'body', sans-serif;
+  font-size: 14px;
+  margin: 0;
+  overflow-wrap: anywhere;
+  user-select: all;
+}
+
 @media (min-width: 640px) {
   .mobile-signup-card-title { font-size: 36px; }
   .mobile-signup-card-subtitle { font-size: 15px; }
