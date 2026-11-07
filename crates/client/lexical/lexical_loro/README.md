@@ -16,7 +16,8 @@ as one Loro commit with the caller's timestamp. `local` also exports transport
 updates. Imports or native undo/redo are drained with `remote`/`take_remote`.
 Apply the returned changes through EditorCore, pass `RemoteNodesCreated` to
 `bind_created`, then project normalization/plugin repairs with `FIXUP_ORIGIN`.
-The collaborative session owns Loro's undo manager, history grouping, selection
+Restore selection from the pre-import cursors after core fixups; unresolved
+cursors leave the fixed-up selection intact. The collaborative session owns Loro's undo manager, history grouping, selection
 restoration and explicit recovery via reconstruct_state + attach.
 
 `SyncPolicy` owns application exclusions, local NodeState and remote comparison
@@ -30,6 +31,36 @@ native identities during reorders; cross-parent moves create new containers.
 Remote matching reuses editor keys by durable id only after the old container
 is deleted. Cursor reads never create native containers.
 
-See AGENTS.md for checks. Literal tests cover schema kinds, text-operation parity,
-UTF-16 cursor round trips, delete/move and cross-parent restructuring, remote
-application, no-echo write-back and explicit divergence/schema errors.
+The checker compares the complete synced JSON and cached native slot identities.
+Known typed nodes cannot re-export newer clients' unknown own fields: those fields
+are preserved in Loro and the strict checker reports the mismatch. Unknown
+NodeState keys round-trip. Recovery remains an explicit caller decision.
+
+The current mirror's string-id list diff also retains unmatched old items when
+the requested list is exhausted or an id is empty. Literal tests preserve that
+quirk. The child-list implementation intentionally fixes stale move indices and
+uses native container identity when ids change or are absent (S11 Δ-1/Δ-2).
+A touched persisted transparent wrapper containing adopted children is flattened
+into fresh child containers; unrelated foreign containers remain untouched.
+Numbers follow JavaScript's JSON representation, including integral floats.
+
+Tests require Bun and installed root workspace dependencies. The independent
+runner imports the real `packages/loro-mirror` implementation and markdown
+schema. It compares deep values and all container kinds at every key and relay
+step. Four fixed seeds cover 2,048 key steps plus 2,048 relay commands; proptest
+adds generated streams with shrinking (`PROPTEST_CASES` controls the count).
+Two native peers and two mirrors run the same offline/reordered delivery schedule.
+Mixed-runtime tests check snapshots, updates, UTF-16 cursor bytes and all version
+pins/lockfiles. `loro-pair` is a generated CI workflow called by the PR gate when
+its package, schema or version inputs change.
+
+Literal tests also cover text-operation parity with native LoroText.update,
+remote creation/id repair and missing bindings, native undo/redo and FIXUP
+exclusion, policy transitions, buffered slot replacement, explicit recovery,
+all three-item permutations, id-less stored highlights and deterministic outputs.
+A half-megabyte typing test asserts bounded node visits and zero sibling scans.
+`containers_written` counts mutation batches, including one batch per fresh
+subtree; `children_scanned` and `nodes_visited` expose incremental work.
+
+See AGENTS.md for commands. Application golden snapshots/plugins and session
+history grouping are owned by WP-29/WP-49.

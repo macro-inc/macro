@@ -25,13 +25,22 @@ It preserves the persisted loro-mirror node schema and takes explicit clocks.
 
 ## Checks
 
+Install root Bun dependencies before running tests; the differential oracle must
+run the current mirror source and must never be replaced with expected values.
+
+
 - `TMPDIR=/home/wolf/tmp cargo test -p lexical_loro -j4`
 - `TMPDIR=/home/wolf/tmp PROPTEST_CASES=256 cargo test -p lexical_loro -j4`
 - `TMPDIR=/home/wolf/tmp cargo check -p lexical_loro --target wasm32-unknown-unknown -j4`
 - `TMPDIR=/home/wolf/tmp cargo clippy -p lexical_loro --all-targets -j4 -- -D warnings`
+- `cargo x workflows --check` after changing the generated `loro-pair` job.
 - `cargo x deps --check`, `cargo shear`, `just check`, `just pr-privacy`
 
 ## Gotchas
 
 Use explicit literal tests before generated differential streams. Macro golden
-snapshots and application-specific plugins belong to WP-29.
+snapshots and application-specific plugins belong to WP-29; history grouping is
+WP-49. Keep literal tests for each intentional S11 delta. Strict checks must
+report unrepresentable newer own fields while preserving them in Loro.
+Use saved event paths for unindexed filtered wrappers; reconcile final policy
+visibility before emitting updates or retaining their model bindings.
