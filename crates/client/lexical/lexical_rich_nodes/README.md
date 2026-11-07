@@ -102,3 +102,5 @@ Language and theme normalize absent/null/empty values to omitted JSON fields.
 Code line helpers preserve UTF-16 selection offsets and split only LF/tab separators; the ordered language catalog is independent of tokenization.
 
 `mark` ports ordered annotation ids, wrapping, unwrapping, boundary lookup and copy hooks; it has no DOM layer.
+
+Selection utilities port ordered CSS parsing, selected-run splitting, style queries, block replacement and legacy wrapping. Tree helpers expose snapshot-borrowing preorder iterators, mutation-safe child cursors, nested wrapper resolution, root/leaf caret insertion and snapshot restoration. Text helpers retain the upstream placeholder and character-intersection quirks.
