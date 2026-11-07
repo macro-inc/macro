@@ -32,7 +32,8 @@ impl Transaction<'_> {
         self.guard_write()?;
         let range = self.range_at(slot)?.clone();
         if range.is_collapsed() {
-            return Ok(());
+            // Caret-range removal still refreshes the active selection upstream.
+            return self.collapsed_selection_at(slot, range.anchor, range.format, range.style);
         }
         let backward = range.is_backward(self.view())?;
         let (start, end) = if backward {
