@@ -457,7 +457,7 @@ impl Transaction<'_> {
         {
             self.adjust_splice_selection(source, index.0, 1, 0, &[]);
         }
-        self.splice(parent, ChildIndex(position.0 + 1), 0, &[node])?;
+        self.default_splice(parent, ChildIndex(position.0 + 1), 0, &[node])?;
         if !restore_selection {
             self.pending.selection = selection;
         }
@@ -487,7 +487,7 @@ impl Transaction<'_> {
         {
             self.adjust_splice_selection(source, index.0, 1, 0, &[]);
         }
-        self.splice(parent, position, 0, &[node])?;
+        self.default_splice(parent, position, 0, &[node])?;
         if !restore_selection {
             self.pending.selection = selection;
         }
@@ -529,7 +529,7 @@ impl Transaction<'_> {
         {
             self.adjust_splice_selection(source, index.0, 1, 0, &[]);
         }
-        self.splice(parent, position, 1, &[new])?;
+        self.default_splice(parent, position, 1, &[new])?;
         if let Some(Selection::Range(previous)) = selection {
             let destination = self
                 .last_descendant(new)

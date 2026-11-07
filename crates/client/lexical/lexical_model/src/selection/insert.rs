@@ -35,12 +35,19 @@ impl Transaction<'_> {
             let placement = self.child_at_index(key, offset);
             if let Some(paragraph) = placement.filter(|child| self.is::<Paragraph>(*child)) {
                 self.splice(paragraph, ChildIndex(0), 0, &[text.key()])?;
-            } else if key == NodeKey::ROOT {
-                let paragraph = self.create(Paragraph::default())?;
-                self.append(paragraph, &[text.key()])?;
-                self.splice(key, offset, 0, &[paragraph.key()])?;
             } else {
-                self.splice(key, offset, 0, &[text.key()])?;
+                let target = if key == NodeKey::ROOT {
+                    let paragraph = self.create(Paragraph::default())?;
+                    self.append(paragraph, &[text.key()])?;
+                    paragraph.key()
+                } else {
+                    text.key()
+                };
+                if let Some(placement) = placement {
+                    self.insert_before(placement, target, true)?;
+                } else {
+                    self.append(key, &[target])?;
+                }
             }
             let next = Point::text(text, Utf16Offset::ZERO);
             let shifted = self.range_at(slot)?;
