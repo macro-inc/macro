@@ -200,3 +200,61 @@ fn s7_113_ai_range_fixed_presence_key_encodes_all() {
     assert!(state.borrow().values.contains_key("worker-test"));
     assert_eq!(state.borrow().all, 1);
 }
+
+#[test]
+fn default_backend_sends_real_awareness_and_expires_imported_peers() {
+    let mut h = Harness::running(TransportKind::Direct, Persistence::Memory);
+    h.core.config.presence.refresh = None;
+    h.send(SyncInput::SetPresence(Some(42.into())));
+    h.at(25, SyncInput::Tick);
+    let wire = h
+        .out
+        .io
+        .iter()
+        .find_map(|effect| {
+            let IoEffect::SocketSend { frame, .. } = effect else {
+                return None;
+            };
+            match sync_protocol::FromPeer::deserialize(&frame[1..]).unwrap() {
+                sync_protocol::FromPeer::PeerAwareness { awareness } => Some(awareness.to_vec()),
+                _ => None,
+            }
+        })
+        .unwrap();
+    let shared = sync_protocol::presence::EphemeralStore::new(10_000);
+    shared.apply(&wire, UnixMillis(25)).unwrap();
+    let loro::LoroValue::Map(value) = shared.get("1").unwrap() else {
+        panic!()
+    };
+    assert_eq!(value.get("selection"), Some(&42.into()));
+    shared.set("2", 7, UnixMillis(100));
+    h.at(100, SyncInput::Tick);
+    h.remote(sync_protocol::FromRemote::RemoteAwareness {
+        awareness: SliceWrapper::from_cooked(&shared.encode_all(UnixMillis(100))),
+    });
+    let peers = h
+        .out
+        .events
+        .iter()
+        .find_map(|event| match event {
+            SyncEvent::Presence(peers) => Some(peers),
+            _ => None,
+        })
+        .unwrap();
+    assert_eq!(peers.len(), 1);
+    assert_eq!(peers[0].key, "2");
+    h.at(10_100, SyncInput::Tick);
+    assert!(
+        !h.out
+            .events
+            .iter()
+            .any(|event| matches!(event, SyncEvent::Presence(peers) if peers.is_empty()))
+    );
+    h.at(10_101, SyncInput::Tick);
+    assert!(
+        h.out
+            .events
+            .iter()
+            .any(|event| matches!(event, SyncEvent::Presence(peers) if peers.is_empty()))
+    );
+}

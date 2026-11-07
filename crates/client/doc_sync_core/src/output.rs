@@ -301,7 +301,7 @@ pub enum AttrValue {
     Bool(bool),
 }
 /// A remote peer and its application-defined presence payload.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct PeerPresence {
     /// Presence entry key.
     pub key: String,

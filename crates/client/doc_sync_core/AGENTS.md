@@ -15,8 +15,10 @@ identities come from callers; transport and durable storage run outside this cra
 - `Connection` handles socket generations, heartbeat and backoff; `RouterCore`
   multiplexes independently authorized routes on one physical socket.
 - `PeerSupply` validates host-generated peers; never generate identities here.
-- `PresenceBackend` is the clock-injected port; the production store adapter is
-  deferred until `sync_protocol::presence` lands (WP-42).
+- `PresenceBackend` is the clock-injected port; `SyncCore` installs
+  `ProtocolPresence` over `sync_protocol::presence` by default. It retains Loro
+  wire bytes and sender timestamps, returns ordered peers and expires strictly
+  after the configured wall timeout.
 - Storage serde is for Rust-only postcard; host ABI encoding is a separate adapter.
 
 ## Checks
@@ -59,4 +61,4 @@ identities come from callers; transport and durable storage run outside this cra
 `src/core/test/` uses real Loro documents with fixed peers and explicit commit
 timestamps plus controlled storage and socket completions. Tests named
 `s7_NNN_*` map to core-owned S7 section 6 rows. Router cases are in
-`src/router/test.rs`; production presence serialization remains WP-42's work.
+`src/router/test.rs`; shared presence wire/expiry tests are in `src/presence/test.rs`.
