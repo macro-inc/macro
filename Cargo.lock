@@ -207,6 +207,7 @@ dependencies = [
  "async-trait",
  "attachment",
  "bytes",
+ "chat_message",
  "chrono",
  "futures",
  "genai_telemetry",
@@ -225,7 +226,6 @@ dependencies = [
  "serde",
  "serde_json",
  "sha2 0.10.9",
- "strum 0.27.2",
  "thiserror 2.0.18",
  "tokio",
  "tokio-util",
@@ -4544,7 +4544,6 @@ name = "chat"
 version = "0.1.0"
 dependencies = [
  "activity",
- "agent",
  "agent_correlation",
  "ai_toolset",
  "anyhow",
@@ -4552,6 +4551,7 @@ dependencies = [
  "attachment",
  "axum",
  "bot_id",
+ "chat_message",
  "chrono",
  "entity_access",
  "entity_access_db_utils",
@@ -4588,6 +4588,16 @@ dependencies = [
  "utoipa",
  "uuid",
  "workspace-hack",
+]
+
+[[package]]
+name = "chat_message"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "serde_json",
+ "strum 0.27.2",
+ "utoipa",
 ]
 
 [[package]]
@@ -12991,9 +13001,9 @@ dependencies = [
 name = "macro_db_client"
 version = "0.1.0"
 dependencies = [
- "agent",
  "anyhow",
  "cached",
+ "chat_message",
  "chrono",
  "document_sub_type",
  "entity_access",
@@ -13836,9 +13846,9 @@ dependencies = [
 name = "model"
 version = "0.1.0"
 dependencies = [
- "agent",
  "anyhow",
  "axum",
+ "chat_message",
  "chrono",
  "document_sub_type",
  "macro_user_id",

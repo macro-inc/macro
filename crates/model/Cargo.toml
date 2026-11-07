@@ -5,7 +5,6 @@ publish = false
 version = "0.1.0"
 
 [dependencies]
-agent = { workspace = true }
 anyhow = { workspace = true }
 axum = { workspace = true }
 chrono = { workspace = true }
@@ -30,3 +29,4 @@ tracing = { workspace = true }
 utoipa = { workspace = true, features = ["axum_extras", "chrono"] }
 uuid = { workspace = true }
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
+chat_message = { workspace = true, features = ["schema"] }
