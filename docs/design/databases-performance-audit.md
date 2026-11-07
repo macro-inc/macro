@@ -37,7 +37,7 @@ selects, booleans, dates, links and record references. Records were grown throug
 1k, 5k, 10k, 25k, 50k and 100k stored entries. The selective views are Bucket 99
 (1,000 matches) and Stage New plus the first Account (1,667 matches).
 
-The committed [measurement harness](apps/web/scripts/database-profile/measure.mjs)
+The committed [measurement harness](../../apps/web/scripts/database-profile/measure.mjs)
 records navigation through the first populated grid and two animation frames.
 This is a rendering opportunity, not proof of a physical paint. Polling adds up to
 100 ms uncertainty. Each cold sample starts with a fresh browser context containing
@@ -57,7 +57,7 @@ The 100k results below contain three traced cold/warm pairs for each view.
 
 Raw results, traces, SQL plans, profiles and logs stayed outside the repository,
 with the credentials. The harness writes them to the `--output` directory it is given. See the
-[profiling guide](apps/web/scripts/database-profile/README.md) for reproduction,
+[profiling guide](../../apps/web/scripts/database-profile/README.md) for reproduction,
 span definitions and safe Postgres statistics collection. Measurements use deltas
 from `pg_stat_statements`; shared statistics were not reset.
 
