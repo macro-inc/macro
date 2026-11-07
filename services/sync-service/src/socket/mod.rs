@@ -1,4 +1,3 @@
-pub(crate) mod framing;
 pub(crate) mod protocol;
 #[allow(
     clippy::module_inception,
@@ -6,4 +5,4 @@ pub(crate) mod protocol;
 )]
 mod socket;
 
-pub(crate) use socket::{InboundBuffers, Socket};
+pub(crate) use socket::Socket;

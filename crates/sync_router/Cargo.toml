@@ -10,7 +10,7 @@ bebop = { workspace = true }
 futures = { workspace = true }
 opentelemetry = { workspace = true }
 rustls = { workspace = true }
-sync_service_bebop_schema = { path = "../../services/sync-service/bebop-schema", features = ["bebop-owned-all"] }
+sync_protocol = { workspace = true, features = ["owned"] }
 thiserror = { workspace = true }
 tokio = { workspace = true, features = ["macros", "rt-multi-thread", "sync", "time"] }
 tokio-util = { workspace = true, features = ["rt"] }

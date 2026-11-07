@@ -1,47 +1,32 @@
-use loro::VersionVector;
-use std::{
-    collections::BTreeSet,
-    sync::{
-        RwLock,
-        atomic::{AtomicUsize, Ordering},
-    },
+use crate::error::ResultExt;
+use std::rc::Rc;
+use sync_server_core::domain::{
+    connection::{ConnectionMetadata, SurfaceLifecycle},
+    document::DocumentAttribution,
+    migration::{SourceState, TargetState},
+    ports::RoomStorage,
+    socket::WebSocketId,
+    types::{OperationId, PendingOperation, SessionKey},
 };
-use tracing::{error, trace, warn};
-use web_time::SystemTime;
 use worker::{
     ListOptions, Result, Storage,
     js_sys::{self, Reflect},
     wasm_bindgen::JsCast,
 };
 
-use crate::{
-    error::ResultExt,
-    state::{DocumentState, ImportedUpdate},
-};
-
-/// When saving snapshot, we also write the version vector to durable object KV
-/// When we read a snapshot from Worker KV, we check it's version vector is >= version vector in LAST_VERSION_VECTOR.
 const LAST_VERSION_VECTOR_KEY: &str = "LAST_VERSION_VECTOR";
-
-pub struct DurableKVStorage {
-    inner: Storage,
-    ids: OrederedIds,
-    applied_keys: RwLock<BTreeSet<String>>,
-}
-
-/// For a given op, if it has been applied but the snapshot has not be saved, it is considered
-/// 'pending'
+const DOCUMENT_ID_KEY: &str = "DOCUMENT_ID";
+const LIFECYCLE_KEY: &str = "SURFACE_LIFECYCLE";
+const SOURCE_KEY: &str = "SURFACE_MIGRATION_SOURCE";
+const TARGET_KEY: &str = "SURFACE_MIGRATION_TARGET";
 const PENDING_OP_PREFIX: &str = "o/";
-/// This prefix has a record of all ops. We keep all ops because we have been losing data.
-/// NB: This does not contain all historical ops, just ops since we started tracking. So it can't
-/// be used to recreate all documents.
 const ALL_OP_PREFIX: &str = "a/";
+const ATTRIBUTION_PREFIX: &str = "actor/";
 
-fn pending_op_key(id: &str) -> String {
-    format!("{PENDING_OP_PREFIX}{id}")
-}
-fn all_op_key(id: &str) -> String {
-    format!("{ALL_OP_PREFIX}{id}")
+/// Typed access to the Durable Object's existing structured-clone storage.
+#[derive(Clone)]
+pub struct DurableKVStorage {
+    inner: Rc<Storage>,
 }
 
 fn do_kv_result_to_result_opt<T>(res: Result<Option<T>>) -> Result<Option<T>> {
@@ -51,12 +36,9 @@ fn do_kv_result_to_result_opt<T>(res: Result<Option<T>>) -> Result<Option<T>> {
 impl DurableKVStorage {
     pub fn new(inner: Storage) -> Self {
         Self {
-            inner,
-            ids: OrederedIds::default(),
-            applied_keys: Default::default(),
+            inner: Rc::new(inner),
         }
     }
-
     pub(in crate::outbound::storage) async fn get_key(&self, key: &str) -> Result<Option<Vec<u8>>> {
         do_kv_result_to_result_opt(self.inner.get(key).await)
     }
@@ -95,192 +77,105 @@ impl DurableKVStorage {
     pub(crate) async fn get_pending_operations(&self) -> Result<Vec<Result<(String, Vec<u8>)>>> {
         self.list_do_kv(PENDING_OP_PREFIX).await
     }
+}
 
-    pub async fn apply_op(
-        &self,
-        document_state: &DocumentState,
-        op_update: &[u8],
-    ) -> Result<ImportedUpdate> {
-        self.apply_op_with_attribution(document_state, op_update, None)
-            .await
-    }
-
-    /// Attribution is supplied only by the verified JWT boundary, never CRDT
-    /// peer IDs or request-body fields. Metadata shares the operation-log ID.
-    pub async fn apply_op_with_attribution(
-        &self,
-        document_state: &DocumentState,
-        op_update: &[u8],
-        attribution: Option<&crate::domain::document::DocumentAttribution>,
-    ) -> Result<ImportedUpdate> {
-        let op_id = self.ids.id();
-        let op_key = pending_op_key(&op_id);
-        let imported = document_state.import(op_update)?;
-        self.inner.put(&op_key, op_update).await?;
-        self.applied_keys
-            .write()
-            .unwrap_context("applied_keys mutex poisoned")
-            .insert(op_key);
-        self.inner.put(&all_op_key(&op_id), op_update).await?;
-        if let Some(attribution) = attribution {
-            let metadata = serde_json::to_vec(attribution)
-                .context("failed to serialize signed document attribution")?;
-            self.inner.put(&format!("actor/{op_id}"), metadata).await?;
-        }
-        Ok(imported)
-    }
-
-    pub async fn apply_pending_ops(&self, snapshot: &DocumentState) -> Result<()> {
-        let pending_ops = self
-            .get_pending_operations()
-            .await
-            .context("get_pending_operations failed")?;
-        let n_pending_ops = pending_ops.len();
-        trace!(
-            pending_ops_len = n_pending_ops,
-            "Applying [{}] pending ops", n_pending_ops
-        );
-
-        let mut ers = vec![];
-        let mut ops = vec![];
-        let mut keys = vec![];
-        for res_op in pending_ops {
-            match res_op {
-                Ok((k, o)) => {
-                    keys.push(k);
-                    ops.push(o);
-                }
-                Err(e) => ers.push(e),
-            }
-        }
-
-        if !ers.is_empty() {
-            error!(errors =? ers, "got [{}] invalid things from durable ojbect KV", ers.len());
-        }
-
-        snapshot
-            .replay_pending_operations(&ops)
-            .context("failed applying pending ops")?;
-
-        self.applied_keys
-            .write()
-            .unwrap_context("applied_keys mutex poisoned")
-            .extend(keys);
-
-        Ok(())
-    }
-
-    pub async fn clear_applied_ops(&self) -> Result<()> {
-        let keys: Vec<String> = {
-            let keys = self
-                .applied_keys
-                .read()
-                .unwrap_context("applied_keys mutex poisoned");
-            if keys.is_empty() {
-                return Ok(());
-            }
-            keys.clone().into_iter().collect()
-        };
-        let n_deleted = self
+impl RoomStorage for DurableKVStorage {
+    type Error = worker::Error;
+    async fn session_key(&self) -> Result<Option<SessionKey>> {
+        Ok(self
             .inner
-            .delete_multiple(keys.clone())
+            .get::<String>(DOCUMENT_ID_KEY)
+            .await?
+            .map(SessionKey::new))
+    }
+    async fn put_session_key(&self, key: &SessionKey) -> Result<()> {
+        self.inner
+            .put(DOCUMENT_ID_KEY, key.as_str().to_owned())
             .await
-            .inspect_err(|e| warn!(keys =? keys, error=?e, "error in kv.delete_multiple()"))?;
-        if n_deleted != keys.len() {
-            error!(
-                n_deleted = n_deleted,
-                keys_len = keys.len(),
-                keys =? keys,
-                "
-We have mystery key which we can't delete.
-We must cycle through current keys and remove those we have not applied yet
-TODO
-"
-            );
-        }
-        let mut app_keys = self
-            .applied_keys
-            .write()
-            .unwrap_context("applied_keys mutex poisoned");
-        for k in keys {
-            app_keys.remove(&k);
-        }
-        Ok(())
     }
-
-    pub async fn store_version_vector(&self, vv: &VersionVector) -> Result<()> {
-        let value = vv.encode();
-        self.inner.put(LAST_VERSION_VECTOR_KEY, value).await?;
-        Ok(())
+    async fn connection(&self, id: &WebSocketId) -> Result<Option<ConnectionMetadata>> {
+        self.inner.get(id.as_str()).await
     }
-
-    /// The passed in version vector should be equal or greater than the last saved vv
-    pub async fn cmp_vv_with_last_snapshot_vv(
+    async fn put_connection(&self, id: &WebSocketId, metadata: &ConnectionMetadata) -> Result<()> {
+        self.inner.put(id.as_str(), metadata).await
+    }
+    async fn delete_connection(&self, id: &WebSocketId) -> Result<()> {
+        self.inner.delete(id.as_str()).await.map(|_| ())
+    }
+    async fn surface_lifecycle(&self) -> Result<Option<SurfaceLifecycle>> {
+        self.inner.get(LIFECYCLE_KEY).await
+    }
+    async fn put_surface_lifecycle(&self, lifecycle: SurfaceLifecycle) -> Result<()> {
+        self.inner.put(LIFECYCLE_KEY, lifecycle).await
+    }
+    async fn source_migration(&self) -> Result<Option<SourceState>> {
+        self.inner.get(SOURCE_KEY).await
+    }
+    async fn put_source_migration(&self, state: &SourceState) -> Result<()> {
+        self.inner.put(SOURCE_KEY, state).await
+    }
+    async fn target_migration(&self) -> Result<Option<TargetState>> {
+        self.inner.get(TARGET_KEY).await
+    }
+    async fn put_target_migration(&self, state: &TargetState) -> Result<()> {
+        self.inner.put(TARGET_KEY, state).await
+    }
+    async fn saved_version_vector(&self) -> Result<Option<Vec<u8>>> {
+        self.inner.get(LAST_VERSION_VECTOR_KEY).await
+    }
+    async fn put_saved_version_vector(&self, encoded: &[u8]) -> Result<()> {
+        self.inner
+            .put(LAST_VERSION_VECTOR_KEY, encoded.to_vec())
+            .await
+    }
+    async fn pending_operations(&self) -> Result<Vec<Result<PendingOperation>>> {
+        Ok(self
+            .get_pending_operations()
+            .await?
+            .into_iter()
+            .map(|entry| {
+                entry.map(|(key, update)| PendingOperation {
+                    id: OperationId::new(
+                        key.strip_prefix(PENDING_OP_PREFIX)
+                            .unwrap_or(&key)
+                            .to_owned(),
+                    ),
+                    update,
+                })
+            })
+            .collect())
+    }
+    async fn put_pending_operation(&self, id: &OperationId, update: &[u8]) -> Result<()> {
+        self.inner
+            .put(&format!("{PENDING_OP_PREFIX}{}", id.as_str()), update)
+            .await
+    }
+    async fn put_archived_operation(&self, id: &OperationId, update: &[u8]) -> Result<()> {
+        self.inner
+            .put(&format!("{ALL_OP_PREFIX}{}", id.as_str()), update)
+            .await
+    }
+    async fn put_operation_attribution(
         &self,
-        loaded_snapshot_vv: &VersionVector,
+        id: &OperationId,
+        attribution: &DocumentAttribution,
     ) -> Result<()> {
-        let Some(bytes) =
-            do_kv_result_to_result_opt(self.inner.get::<Vec<u8>>(LAST_VERSION_VECTOR_KEY).await)?
-        else {
-            warn!("No version vector was saved the last time a snapshot was saved");
-            return Ok(());
-        };
-        let last_saved_vv = VersionVector::decode(&bytes).expect("TODO we wrote a bad vv???");
-        match loaded_snapshot_vv.partial_cmp(&last_saved_vv) {
-            Some(ord) => match ord {
-                std::cmp::Ordering::Less => {
-                    error!("Loaded snapshot older than the last snapshot saved");
-                }
-                std::cmp::Ordering::Equal => {
-                    trace!("Loaded snapshot matches last snapshot saved");
-                }
-                std::cmp::Ordering::Greater => {
-                    // this could happen if saving snapshot succeeds but writing, but
-                    // store_version_vector fails.
-                    warn!("Loaded snapshot was newer than the last snapshot saved");
-                }
-            },
-            None => {
-                warn!("Loaded snapshot that diverged from the last snapshot saved");
-            }
-        }
-        Ok(())
+        let metadata = serde_json::to_vec(attribution)
+            .context("failed to serialize signed document attribution")?;
+        self.inner
+            .put(&format!("{ATTRIBUTION_PREFIX}{}", id.as_str()), metadata)
+            .await
     }
-}
-
-/// Produce ID's that are orderable lexicalgraphically in the order they were created.
-#[derive(Debug, Default)]
-pub struct OrederedIds {
-    counter: AtomicUsize,
-}
-
-impl OrederedIds {
-    const ORDERING: Ordering = Ordering::Relaxed;
-
-    pub fn id(&self) -> String {
-        let ts = SystemTime::now()
-            .duration_since(SystemTime::UNIX_EPOCH)
-            .unwrap_context("Time since unix epoch was negative...?")
-            .as_nanos();
-        let i = self.counter.fetch_add(1, Self::ORDERING);
-        format!("{ts:016x}.{i:08x}")
+    async fn delete_pending_operations(&self, ids: &[OperationId]) -> Result<usize> {
+        self.inner
+            .delete_multiple(
+                ids.iter()
+                    .map(|id| format!("{PENDING_OP_PREFIX}{}", id.as_str()))
+                    .collect::<Vec<_>>(),
+            )
+            .await
     }
-}
-
-#[cfg(test)]
-mod test {
-    use super::*;
-
-    #[test]
-    fn order_timestamps() -> std::result::Result<(), Box<dyn std::error::Error>> {
-        let x = OrederedIds::default();
-        let mut og_arr = vec![];
-        for _ in 0..10 {
-            og_arr.push(x.id());
-        }
-        let mut sorted_arr = og_arr.clone();
-        sorted_arr.sort();
-        assert_eq!(sorted_arr, og_arr);
-        Ok(())
+    async fn delete_all(&self) -> Result<()> {
+        self.inner.delete_all().await.map(|_| ())
     }
 }

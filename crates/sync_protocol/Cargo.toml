@@ -1,0 +1,14 @@
+[package]
+# Generated code (bebop) predates edition-2024 match ergonomics — `ref` binding
+# modifiers in inherited-reference patterns are a hard error there.
+edition = "2021"
+name = "sync_protocol"
+version = "0.1.0"
+publish = false
+
+[features]
+owned = []
+
+[dependencies]
+bebop.workspace = true
+thiserror.workspace = true

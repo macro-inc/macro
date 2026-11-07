@@ -1,0 +1,23 @@
+[package]
+name = "sync_server_core"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+[features]
+openapi = ["dep:utoipa"]
+
+[dependencies]
+loro.workspace = true
+sync_protocol.workspace = true
+lazy-regex.workspace = true
+macro_sync_service_jwt.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+tracing.workspace = true
+uuid-types.workspace = true
+utoipa = { workspace = true, optional = true }
+
+[dev-dependencies]
+futures.workspace = true

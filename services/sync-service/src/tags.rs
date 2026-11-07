@@ -1,24 +1,13 @@
+use sync_server_core::domain::socket::WebSocketId;
 use uuid::Uuid;
 use worker::{Error, Result};
 
-const WS_ID_TAG: &str = "ws_id";
-
 pub fn new_ws_id() -> String {
-    let id = Uuid::new_v4().to_string();
-    format!("{WS_ID_TAG}{id}")
+    WebSocketId::new(Uuid::new_v4()).to_string()
 }
 
 pub fn get_ws_id_from_tags(tags: &[String]) -> Result<String> {
-    let Some(tag) = tags.first() else {
-        return Err(Error::from(format!(
-            "websocket should only have exactly one tag! tags = {tags:?}"
-        )));
-    };
-    if tag.starts_with(WS_ID_TAG) {
-        Ok(tag.clone())
-    } else {
-        Err(Error::from(format!(
-            "WebSocket tag has an unknown prefix: whole_tag = {tag} expected prefix = {WS_ID_TAG}"
-        )))
-    }
+    WebSocketId::from_tags(tags)
+        .map(|id| id.to_string())
+        .map_err(|error| Error::from(error.to_string()))
 }

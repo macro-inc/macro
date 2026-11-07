@@ -6,8 +6,10 @@ use worker::Env;
 
 use super::{SyncSession, bump_alarm, surface_api::session_kind_from_storage_key, take_editors};
 use crate::{
-    domain::document::{DocumentAttribution, DocumentError, DocumentUpdateEffects},
-    dss_internal::{DssInternal, DssInternalClient, InteractionReason},
+    domain::document::{
+        DocumentAttribution, DocumentError, DocumentUpdateEffects, DocumentUpdatePort,
+    },
+    dss_internal::InteractionReason,
     state::DocumentState,
 };
 
@@ -23,38 +25,28 @@ pub(super) async fn report_new_doc_state(
     if session_kind_from_storage_key(session_key) != SessionKind::Document {
         return;
     }
-    if let Err(error) = DssInternalClient::new(env)
-        .publish_shallow_snapshot(session_key, snapshot)
-        .await
-    {
-        warn!(error = ?error, "failed to push snapshot to DSS");
-    }
-    #[cfg(feature = "search-service")]
-    if let Err(error) = DssInternalClient::new(env)
-        .publish_sync_content_updated(session_key, editors)
-        .await
-    {
-        warn!(error = ?error, "failed to publish document content change");
-    }
+    crate::outbound::document_publication::report_new_doc_state(
+        session_key,
+        snapshot,
+        env,
+        editors,
+    )
+    .await;
 }
 
 pub(super) async fn report_interaction(session_key: &str, env: &Env, reason: InteractionReason) {
     if session_kind_from_storage_key(session_key) != SessionKind::Document {
         return;
     }
-    if let Err(error) = DssInternalClient::new(env)
-        .publish_interaction(session_key, reason)
-        .await
-    {
-        warn!(error = ?error, "failed to push interaction to DSS");
-    }
+    crate::outbound::document_publication::report_interaction(session_key, env, reason).await;
 }
 
-pub(super) struct WorkerDocumentEffects<'a> {
-    pub session: &'a SyncSession,
+pub(super) struct WorkerDocumentEffects<'a, 'room> {
+    pub session: &'a mut SyncSession<'room>,
     pub document_state: &'a DocumentState,
     pub document_id: &'a str,
     pub attribution: Option<&'a DocumentAttribution>,
+    pub store_attribution: bool,
 }
 
 fn notification_error(error: impl std::fmt::Debug) -> DocumentError {
@@ -62,10 +54,10 @@ fn notification_error(error: impl std::fmt::Debug) -> DocumentError {
     DocumentError::Notification
 }
 
-impl DocumentUpdateEffects for WorkerDocumentEffects<'_> {
-    fn broadcast(&self, update: &[u8]) -> Result<(), DocumentError> {
+impl DocumentUpdateEffects for WorkerDocumentEffects<'_, '_> {
+    fn broadcast(&mut self, update: &[u8]) -> Result<(), DocumentError> {
         for socket in self.session.get_sockets() {
-            if let Err(error) = socket.send(crate::generated::schema::FromRemote::RemoteUpdate {
+            if let Err(error) = socket.send(sync_protocol::FromRemote::RemoteUpdate {
                 update: bebop::SliceWrapper::Raw(update),
             }) {
                 warn!(error = ?error, "failed to broadcast document update; continuing");
@@ -74,25 +66,43 @@ impl DocumentUpdateEffects for WorkerDocumentEffects<'_> {
         Ok(())
     }
 
-    fn publish_changed_document(&self) -> Result<(), DocumentError> {
+    fn publish_changed_document(&mut self) -> Result<(), DocumentError> {
         self.session.record_editor(self.attribution);
         let snapshot = self
             .document_state
             .export_shallow_snapshot()
             .map_err(notification_error)?;
-        let editors = take_editors(&self.session.pending_editors);
+        let editors = take_editors(&mut self.session.pending_editors);
         let env = self.session.env.clone();
         let document_id = self.document_id.to_owned();
-        self.session.state.wait_until(async move {
+        self.session.state.wait_until(crate::background(async move {
             report_new_doc_state(&document_id, &snapshot, &env, editors).await;
             report_interaction(&document_id, &env, InteractionReason::Edited).await;
-        });
+        }));
         Ok(())
     }
 
-    async fn keep_alive(&self) -> Result<(), DocumentError> {
+    async fn keep_alive(&mut self) -> Result<(), DocumentError> {
         bump_alarm(&self.session.state)
             .await
             .map_err(notification_error)
+    }
+}
+
+impl DocumentUpdatePort for WorkerDocumentEffects<'_, '_> {
+    fn document(&self) -> &loro::LoroDoc {
+        &self.document_state.loro_doc
+    }
+    async fn apply_and_persist(&mut self, update: &[u8]) -> Result<(), DocumentError> {
+        // Attribution is stored for signed agent actors only, as before.
+        let attribution = self.attribution.filter(|_| self.store_attribution);
+        self.session
+            .apply_update(update, attribution)
+            .await
+            .map(|_| ())
+            .map_err(|error| {
+                tracing::error!(error = ?error, "failed to persist document update");
+                DocumentError::Persistence
+            })
     }
 }

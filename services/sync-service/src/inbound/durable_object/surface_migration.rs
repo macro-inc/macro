@@ -27,15 +27,9 @@ use crate::{
 const SOURCE_KEY: &str = "SURFACE_MIGRATION_SOURCE";
 const TARGET_KEY: &str = "SURFACE_MIGRATION_TARGET";
 
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
-pub(crate) struct SnapshotProof {
-    pub operation_id: Uuid,
-    pub source_id: Option<Uuid>,
-    pub digest: String,
-    pub content_digest: String,
-    pub revision: Vec<(String, i32)>,
-    pub oplog_revision: Vec<(String, i32)>,
-}
+pub(crate) use sync_server_core::domain::migration::{
+    SnapshotProof, SourceState, TargetPhase, TargetState,
+};
 
 #[derive(Serialize, Deserialize)]
 struct SnapshotExport {
@@ -54,32 +48,6 @@ struct InitializeRequest {
     snapshot: Vec<u8>,
 }
 
-#[derive(Clone, Default, Serialize, Deserialize)]
-#[serde(tag = "phase", content = "proof", rename_all = "snake_case")]
-pub(super) enum SourceState {
-    #[default]
-    Live,
-    Freezing(Uuid),
-    Frozen(SnapshotProof),
-    Sealed(SnapshotProof),
-    Retired(SnapshotProof),
-    Thawed(SnapshotProof),
-}
-
-#[derive(Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case")]
-enum TargetPhase {
-    Claimed,
-    Verified,
-    Active,
-}
-
-#[derive(Serialize, Deserialize)]
-struct TargetState {
-    proof: SnapshotProof,
-    phase: TargetPhase,
-}
-
 fn revision(frontiers: Frontiers) -> Vec<(String, i32)> {
     let mut ids: Vec<_> = frontiers
         .iter()
@@ -93,7 +61,12 @@ fn digest(bytes: &[u8]) -> String {
     format!("{:x}", Sha256::digest(bytes))
 }
 
-impl SnapshotProof {
+trait SnapshotProofExt: Sized {
+    fn from_snapshot(operation_id: Uuid, source_id: Option<Uuid>, snapshot: &[u8]) -> Result<Self>;
+    fn verifies(&self, snapshot: &[u8]) -> Result<bool>;
+}
+
+impl SnapshotProofExt for SnapshotProof {
     fn from_snapshot(operation_id: Uuid, source_id: Option<Uuid>, snapshot: &[u8]) -> Result<Self> {
         let state = DocumentState::try_from_snapshot(snapshot)?;
         // Canonical JSON key order, independent of CRDT map iteration order.
@@ -126,9 +99,9 @@ fn persistence_boundary(req: &Request, boundary: &str) -> Result<()> {
     Ok(())
 }
 
-impl SyncSession {
-    async fn source_state(&self) -> Result<SourceState> {
-        if let Some(value) = self.source_migration.lock("source state").clone() {
+impl SyncSession<'_> {
+    async fn source_state(&mut self) -> Result<SourceState> {
+        if let Some(value) = self.source_migration.clone() {
             return Ok(value);
         }
         let value: SourceState = self
@@ -137,34 +110,34 @@ impl SyncSession {
             .get(SOURCE_KEY)
             .await?
             .unwrap_or_default();
-        *self.source_migration.lock("load source state") = Some(value.clone());
+        self.source_migration = Some(value.clone());
         Ok(value)
     }
 
-    pub(super) async fn source_blocked(&self) -> Result<bool> {
+    pub(super) async fn source_blocked(&mut self) -> Result<bool> {
         Ok(!matches!(
             self.source_state().await?,
             SourceState::Live | SourceState::Thawed(_)
         ))
     }
 
-    async fn store_source(&self, value: SourceState) -> Result<()> {
+    async fn store_source(&mut self, value: SourceState) -> Result<()> {
         // A failed write may have committed. Reload durable truth on the next
         // callback instead of retaining a potentially stale writable cache.
-        *self.source_migration.lock("invalidate source state") = None;
+        self.source_migration = None;
         self.state.storage().put(SOURCE_KEY, &value).await?;
-        *self.source_migration.lock("persist source state") = Some(value);
+        self.source_migration = Some(value);
         Ok(())
     }
 
-    fn close_migration_writers(&self) -> Result<()> {
+    fn close_migration_writers(&mut self) -> Result<()> {
         for socket in self.state.get_websockets() {
             socket.close(Some(1008), Some("session frozen or retired"))?;
         }
         Ok(())
     }
 
-    fn export_storage(&self, operation_id: Uuid) -> Result<DurableSQLStorage> {
+    fn export_storage(&mut self, operation_id: Uuid) -> Result<DurableSQLStorage> {
         // Separate, chunked local storage: never replace the original snapshot,
         // never clear its operation log, and never depend on eventual KV reads.
         DurableSQLStorage::new(
@@ -173,7 +146,7 @@ impl SyncSession {
         )
     }
 
-    async fn authoritative_snapshot(&self) -> Result<Vec<u8>> {
+    async fn authoritative_snapshot(&mut self) -> Result<Vec<u8>> {
         let storage = self.session_storage().await?;
         // Strict loading: missing snapshots must not invoke create-default-state;
         // malformed pending entries must not be silently skipped.
@@ -184,8 +157,12 @@ impl SyncSession {
             .into_iter()
             .map(|entry| entry.map(|(_, bytes)| bytes))
             .collect::<Result<_>>()?;
-        if let Some(current) = self.document_state.lock("freeze current state").as_ref() {
-            updates.push(current.export_snapshot(None)?);
+        if let Some(current) = self.document.as_ref() {
+            updates.push(
+                current
+                    .export_snapshot(None)
+                    .map_err(|error| worker::Error::from(error.to_string()))?,
+            );
         }
         let imported = state
             .loro_doc
@@ -211,7 +188,7 @@ impl SyncSession {
     }
 
     pub(in crate::inbound) async fn source_migration_handler(
-        &self,
+        &mut self,
         mut req: Request,
         id: &str,
         operation: &str,
@@ -289,7 +266,7 @@ impl SyncSession {
     }
 
     async fn freeze_source(
-        &self,
+        &mut self,
         req: &Request,
         id: &str,
         source_id: Uuid,
@@ -334,7 +311,7 @@ impl SyncSession {
         Response::from_json(&SnapshotExport { proof, snapshot })
     }
 
-    pub(super) async fn has_target_migration(&self) -> Result<bool> {
+    pub(super) async fn has_target_migration(&mut self) -> Result<bool> {
         Ok(self
             .state
             .storage()
@@ -344,7 +321,7 @@ impl SyncSession {
     }
 
     pub(super) async fn target_migration_handler(
-        &self,
+        &mut self,
         mut req: Request,
         key: &str,
         operation: &str,
@@ -408,7 +385,7 @@ impl SyncSession {
     }
 
     async fn import_surface(
-        &self,
+        &mut self,
         req: &Request,
         key: &str,
         export: SnapshotExport,
@@ -459,12 +436,12 @@ impl SyncSession {
         Response::from_json(&target.proof)
     }
 
-    async fn mark_target_ready(&self, req: &Request) -> Result<()> {
+    async fn mark_target_ready(&mut self, req: &Request) -> Result<()> {
         self.state
             .storage()
             .put(LIFECYCLE_KEY, SurfaceLifecycle::Ready)
             .await?;
-        *self.surface_lifecycle.lock("verified surface ready") = Some(SurfaceLifecycle::Ready);
+        self.surface_lifecycle = Some(SurfaceLifecycle::Ready);
         persistence_boundary(req, "target_ready")
     }
 }

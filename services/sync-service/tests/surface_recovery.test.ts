@@ -4,7 +4,7 @@ import { join } from "node:path";
 import { LoroDoc } from "loro-crdt";
 import type { Miniflare } from "miniflare";
 import { afterAll, beforeAll, expect, test } from "vitest";
-import { InitializeFromSnapshotRequest } from "../bebop/generated/schema";
+import { InitializeFromSnapshotRequest } from "../../../crates/sync_protocol/bebop/generated/schema";
 import { getTokenForSurface, setupMiniflare } from "./utils";
 
 let mf: Miniflare;
