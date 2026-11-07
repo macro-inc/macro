@@ -219,6 +219,7 @@ impl SyncCore {
             traceparent: config.traceparent.clone(),
         });
         let effective_access = config.access;
+        let presence = ProtocolPresence::new(config.presence.timeout);
         Ok(Self {
             now,
             rows_after_gap: BTreeSet::new(),
@@ -300,7 +301,7 @@ impl SyncCore {
                 save: SaveState::Saved,
                 pending_import: false,
             },
-            presence: None,
+            presence: Some(Box::new(presence)),
             local_presence: None,
             presence_dirty: false,
             presence_due: None,

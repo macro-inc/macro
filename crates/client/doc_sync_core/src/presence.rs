@@ -1,4 +1,4 @@
-//! Clock-injected presence port. Production store wiring is supplied by WP-42.
+//! Clock-injected presence port and the shared protocol store adapter.
 
 use crate::{PeerPresence, UnixMillis};
 
@@ -29,3 +29,66 @@ pub trait PresenceBackend {
     /// Return the next wall-clock expiry. The core translates it to its supplied monotonic clock.
     fn next_expiry(&self) -> Option<UnixMillis>;
 }
+
+/// Shared Loro-compatible presence serialization with caller-supplied wall time.
+/// Iteration exposed to the core is ordered by key.
+pub struct ProtocolPresence {
+    store: sync_protocol::presence::EphemeralStore,
+}
+
+impl ProtocolPresence {
+    /// Use the same inactivity timeout as the session's presence policy.
+    pub fn new(timeout: crate::WallDuration) -> Self {
+        Self {
+            store: sync_protocol::presence::EphemeralStore::new(timeout.0),
+        }
+    }
+}
+
+impl PresenceBackend for ProtocolPresence {
+    fn set(
+        &mut self,
+        key: &str,
+        value: loro::LoroValue,
+        now: UnixMillis,
+    ) -> Result<(), PresenceError> {
+        self.store.set(key, value, now);
+        Ok(())
+    }
+
+    fn apply(&mut self, bytes: &[u8], now: UnixMillis) -> Result<(), PresenceError> {
+        self.store.apply(bytes, now).map_err(|_| PresenceError)?;
+        Ok(())
+    }
+
+    fn encode(&self, key: &str, now: UnixMillis) -> Result<Vec<u8>, PresenceError> {
+        Ok(self.store.encode(key, now))
+    }
+
+    fn encode_all(&self, now: UnixMillis) -> Result<Vec<u8>, PresenceError> {
+        Ok(self.store.encode_all(now))
+    }
+
+    fn remove_outdated(&mut self, now: UnixMillis) -> bool {
+        let before = self.peers("");
+        self.store.remove_outdated(now);
+        before != self.peers("")
+    }
+
+    fn peers(&self, local_key: &str) -> Vec<PeerPresence> {
+        let ordered: std::collections::BTreeMap<_, _> =
+            self.store.get_all_states().into_iter().collect();
+        ordered
+            .into_iter()
+            .filter(|(key, value)| key != local_key && *value != loro::LoroValue::Null)
+            .map(|(key, value)| PeerPresence { key, value })
+            .collect()
+    }
+
+    fn next_expiry(&self) -> Option<UnixMillis> {
+        self.store.next_expiry()
+    }
+}
+
+#[cfg(test)]
+mod test;
