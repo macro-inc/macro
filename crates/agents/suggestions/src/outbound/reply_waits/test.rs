@@ -18,7 +18,12 @@ fn at(hour: u32) -> DateTime<Utc> {
 
 fn waits(pool: &PgPool) -> ItemReplyWaits<EmailPgRepo> {
     ItemReplyWaits {
-        email: EmailPgRepo::new(pool.clone()),
+        email: EmailPgRepo::new(
+            pool.clone(),
+            std::sync::Arc::new(entity_access_outbound::PgAccessRepository::new(
+                pool.clone(),
+            )),
+        ),
         pool: pool.clone(),
     }
 }

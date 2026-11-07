@@ -8,7 +8,7 @@ use crate::domain::models::{PreviewView, PreviewViewStandardLabel};
 use crate::outbound::email_pg_repo::db_types::*;
 use crate::outbound::email_pg_repo::{PreviewReadError, RuleDiscoveryPort};
 use chrono::{DateTime, Utc};
-use entity_access_outbound::get_user_source_ids;
+use entity_access::domain::ports::UserSourceIds;
 use filter_ast::Expr;
 use item_filters::SharedEmailFilter;
 use item_filters::ast::email::EmailLiteral;
@@ -1241,16 +1241,17 @@ fn extract_project_filter(ast: &Expr<EmailLiteral>) -> Vec<String> {
 /// Read with a discovery port supplied by the composition root.
 #[expect(
     clippy::too_many_arguments,
-    reason = "existing preview query plus its domain discovery port"
+    reason = "existing preview query plus its domain ports"
 )]
 #[tracing::instrument(
     name = "dynamic_email_thread_cursor",
-    skip(pool, view, query, user_id, discovery),
+    skip(pool, source_ids, view, query, user_id, discovery),
     fields(view = view.span_value(), sort = %query.sort_method()),
     err
 )]
 pub(crate) async fn dynamic_email_thread_cursor_with_discovery(
     pool: &PgPool,
+    source_ids: &dyn UserSourceIds,
     link_ids: &[Uuid],
     limit: u32,
     view: &PreviewView,
@@ -1261,6 +1262,7 @@ pub(crate) async fn dynamic_email_thread_cursor_with_discovery(
 ) -> Result<Vec<ThreadPreviewCursorDbRow>, PreviewReadError> {
     read_page(
         pool,
+        source_ids,
         link_ids,
         limit,
         view,
@@ -1321,6 +1323,7 @@ pub(crate) async fn dynamic_email_thread_cursor_with(
 ) -> Result<Vec<ThreadPreviewCursorDbRow>, PreviewReadError> {
     read_page(
         pool,
+        &entity_access_outbound::PgAccessRepository::new(pool.clone()),
         link_ids,
         limit,
         view,
@@ -1358,6 +1361,7 @@ pub(crate) async fn dynamic_email_thread_cursor_owned_with(
 ) -> Result<(Vec<ThreadPreviewCursorDbRow>, Option<OwnedReadStats>), PreviewReadError> {
     read_page(
         pool,
+        &entity_access_outbound::PgAccessRepository::new(pool.clone()),
         link_ids,
         limit,
         view,
@@ -1388,6 +1392,7 @@ struct Reads<'a> {
 )]
 async fn read_page(
     pool: &PgPool,
+    source_ids: &dyn UserSourceIds,
     link_ids: &[Uuid],
     limit: u32,
     view: &PreviewView,
@@ -1417,10 +1422,14 @@ async fn read_page(
         None
     } else {
         let user = MacroUserIdStr::parse_from_str(user_id).ok();
-        match get_user_source_ids(pool, user.as_deref()).await {
+        let resolved = match &user {
+            Some(user) => source_ids.user_source_ids(user).await,
+            None => Ok(Vec::new()),
+        };
+        match resolved {
             Ok(source_ids) => Some(ProjectScope {
                 project_ids,
-                source_ids: source_ids.0,
+                source_ids,
             }),
             Err(e) => {
                 tracing::error!(error=?e, "unable to fetch source ids for project-scoped email query");

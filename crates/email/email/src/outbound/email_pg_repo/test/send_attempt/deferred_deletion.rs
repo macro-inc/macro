@@ -10,7 +10,12 @@ use email_db_client::messages::delete::delete_db_message;
 async fn deletion_retains_delivery_and_reconciliation_after_submission(
     pool: Pool<Postgres>,
 ) -> anyhow::Result<()> {
-    let repo = EmailPgRepo::new(pool.clone());
+    let repo = EmailPgRepo::new(
+        pool.clone(),
+        std::sync::Arc::new(entity_access_outbound::PgAccessRepository::new(
+            pool.clone(),
+        )),
+    );
     let attempt = SendAttemptId(macro_uuid::generate_uuid_v7());
     let file = macro_uuid::generate_uuid_v7();
     sqlx::query!("INSERT INTO email_attachments(id,message_id,provider_attachment_id,filename,mime_type,size_bytes) VALUES($1,$2,'approved-file','file.txt','text/plain',4)", file, message()).execute(&pool).await?;
@@ -54,7 +59,12 @@ async fn deletion_retains_delivery_and_reconciliation_after_submission(
 async fn failed_send_keeps_recoverable_content_until_cancel(
     pool: Pool<Postgres>,
 ) -> anyhow::Result<()> {
-    let repo = EmailPgRepo::new(pool.clone());
+    let repo = EmailPgRepo::new(
+        pool.clone(),
+        std::sync::Arc::new(entity_access_outbound::PgAccessRepository::new(
+            pool.clone(),
+        )),
+    );
     let attempt = SendAttemptId(macro_uuid::generate_uuid_v7());
     repo.admit_send(&actor(), link(), attempt, prepared())
         .await?;
@@ -104,7 +114,12 @@ async fn failed_send_keeps_recoverable_content_until_cancel(
 async fn deferred_deletion_cannot_delete_a_resend_with_the_same_provider_identity(
     pool: Pool<Postgres>,
 ) -> anyhow::Result<()> {
-    let repo = EmailPgRepo::new(pool.clone());
+    let repo = EmailPgRepo::new(
+        pool.clone(),
+        std::sync::Arc::new(entity_access_outbound::PgAccessRepository::new(
+            pool.clone(),
+        )),
+    );
     let first = SendAttemptId(macro_uuid::generate_uuid_v7());
     repo.admit_send(&actor(), link(), first, prepared()).await?;
     sqlx::query!(
@@ -147,7 +162,12 @@ async fn deferred_deletion_cannot_delete_a_resend_with_the_same_provider_identit
 async fn terminal_deletion_applies_only_to_the_captured_provider_identity(
     pool: Pool<Postgres>,
 ) -> anyhow::Result<()> {
-    let repo = EmailPgRepo::new(pool.clone());
+    let repo = EmailPgRepo::new(
+        pool.clone(),
+        std::sync::Arc::new(entity_access_outbound::PgAccessRepository::new(
+            pool.clone(),
+        )),
+    );
     let attempt = SendAttemptId(macro_uuid::generate_uuid_v7());
     repo.admit_send(&actor(), link(), attempt, prepared())
         .await?;
@@ -191,7 +211,12 @@ async fn terminal_deletion_applies_only_to_the_captured_provider_identity(
 async fn confirmed_delivery_with_unchanged_provider_identity_finishes_deferred_deletion(
     pool: Pool<Postgres>,
 ) -> anyhow::Result<()> {
-    let repo = EmailPgRepo::new(pool.clone());
+    let repo = EmailPgRepo::new(
+        pool.clone(),
+        std::sync::Arc::new(entity_access_outbound::PgAccessRepository::new(
+            pool.clone(),
+        )),
+    );
     let attempt = SendAttemptId(macro_uuid::generate_uuid_v7());
     repo.admit_send(&actor(), link(), attempt, prepared())
         .await?;
@@ -238,7 +263,12 @@ async fn confirmed_delivery_with_unchanged_provider_identity_finishes_deferred_d
 async fn explicit_inbox_removal_revokes_authority_without_blocking_the_parent_cascade(
     pool: Pool<Postgres>,
 ) -> anyhow::Result<()> {
-    let repo = EmailPgRepo::new(pool.clone());
+    let repo = EmailPgRepo::new(
+        pool.clone(),
+        std::sync::Arc::new(entity_access_outbound::PgAccessRepository::new(
+            pool.clone(),
+        )),
+    );
     repo.admit_send(
         &actor(),
         link(),
@@ -276,7 +306,12 @@ async fn explicit_inbox_removal_revokes_authority_without_blocking_the_parent_ca
 async fn explicit_inbox_purge_removes_an_accepted_send_and_its_retained_deletion(
     pool: Pool<Postgres>,
 ) -> anyhow::Result<()> {
-    let repo = EmailPgRepo::new(pool.clone());
+    let repo = EmailPgRepo::new(
+        pool.clone(),
+        std::sync::Arc::new(entity_access_outbound::PgAccessRepository::new(
+            pool.clone(),
+        )),
+    );
     repo.admit_send(
         &actor(),
         link(),

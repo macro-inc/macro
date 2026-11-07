@@ -7,7 +7,12 @@ async fn echo_then_trash(
     pool: &Pool<Postgres>,
     legacy: bool,
 ) -> anyhow::Result<(EmailPgRepo, SendAttemptId)> {
-    let repo = EmailPgRepo::new(pool.clone());
+    let repo = EmailPgRepo::new(
+        pool.clone(),
+        std::sync::Arc::new(entity_access_outbound::PgAccessRepository::new(
+            pool.clone(),
+        )),
+    );
     let thread = prepared().message.thread_db_id;
     let mut echo = fetch_messages_metadata(&mut *pool.acquire().await?, thread)
         .await?

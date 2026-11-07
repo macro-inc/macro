@@ -951,6 +951,7 @@ pub async fn build<Ingress: notification::domain::service::NotificationIngress>(
             Arc::clone(&suggestion_access),
             Arc::new(EmailSuggestionDrafts(email::outbound::EmailPgRepo::new(
                 db.clone(),
+                Arc::new(entity_access_outbound::PgAccessRepository::new(db.clone())),
             ))),
             correlation_sessions,
             generations.clone(),
@@ -982,7 +983,10 @@ pub async fn build<Ingress: notification::domain::service::NotificationIngress>(
         // A reply suggestion shows who its email thread or channel message waits
         // on the person for, read when a session writes it.
         .with_reply_waits(Arc::new(ItemReplyWaits {
-            email: email::outbound::EmailPgRepo::new(db.clone()),
+            email: email::outbound::EmailPgRepo::new(
+                db.clone(),
+                std::sync::Arc::new(entity_access_outbound::PgAccessRepository::new(db.clone())),
+            ),
             pool: db.clone(),
         })),
     );
@@ -1194,7 +1198,10 @@ fn event_content(
 > {
     Ok(EventContentAdapter::new(
         email::domain::service::EmailServiceImpl::new(
-            email::outbound::EmailPgRepo::new(db.clone()),
+            email::outbound::EmailPgRepo::new(
+                db.clone(),
+                std::sync::Arc::new(entity_access_outbound::PgAccessRepository::new(db.clone())),
+            ),
             frecency::domain::services::FrecencyQueryServiceImpl::new(
                 frecency::outbound::postgres::FrecencyPgStorage::new(db.clone()),
             ),

@@ -26,7 +26,14 @@ async fn fixture(db: &PgPool) -> (EmailPgRepo, Uuid, Uuid) {
     .execute(db)
     .await
     .unwrap();
-    (EmailPgRepo::new(db.clone()), link, draft)
+    (
+        EmailPgRepo::new(
+            db.clone(),
+            std::sync::Arc::new(entity_access_outbound::PgAccessRepository::new(db.clone())),
+        ),
+        link,
+        draft,
+    )
 }
 fn upload(draft: Uuid, size: i32) -> AttachmentDraft {
     let id = Uuid::now_v7();

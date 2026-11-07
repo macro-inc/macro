@@ -107,7 +107,12 @@ fn prepared_generation(generation: i32) -> PreparedSend {
 async fn concurrent_replay_preserves_one_message_and_undo_deadline(
     pool: Pool<Postgres>,
 ) -> anyhow::Result<()> {
-    let repo = EmailPgRepo::new(pool.clone());
+    let repo = EmailPgRepo::new(
+        pool.clone(),
+        std::sync::Arc::new(entity_access_outbound::PgAccessRepository::new(
+            pool.clone(),
+        )),
+    );
     let attempt = SendAttemptId(macro_uuid::generate_uuid_v7());
     let actor = actor();
     let (first, second) = tokio::join!(
@@ -148,7 +153,12 @@ async fn concurrent_replay_preserves_one_message_and_undo_deadline(
 async fn cancellation_before_admission_is_a_durable_tombstone(
     pool: Pool<Postgres>,
 ) -> anyhow::Result<()> {
-    let repo = EmailPgRepo::new(pool.clone());
+    let repo = EmailPgRepo::new(
+        pool.clone(),
+        std::sync::Arc::new(entity_access_outbound::PgAccessRepository::new(
+            pool.clone(),
+        )),
+    );
     let attempt = SendAttemptId(macro_uuid::generate_uuid_v7());
     assert_eq!(
         repo.cancel_send(&actor(), link(), attempt).await?.status,
@@ -177,7 +187,12 @@ async fn cancellation_before_admission_is_a_durable_tombstone(
 async fn cancellation_restores_body_and_cannot_cancel_a_later_resend(
     pool: Pool<Postgres>,
 ) -> anyhow::Result<()> {
-    let repo = EmailPgRepo::new(pool.clone());
+    let repo = EmailPgRepo::new(
+        pool.clone(),
+        std::sync::Arc::new(entity_access_outbound::PgAccessRepository::new(
+            pool.clone(),
+        )),
+    );
     let first = SendAttemptId(macro_uuid::generate_uuid_v7());
     repo.admit_send(&actor(), link(), first, prepared()).await?;
     assert_eq!(
@@ -216,7 +231,12 @@ async fn cancellation_restores_body_and_cannot_cancel_a_later_resend(
     fixtures(path = "../../../../fixtures", scripts("email_draft"))
 )]
 async fn claimed_delivery_cannot_be_cancelled(pool: Pool<Postgres>) -> anyhow::Result<()> {
-    let repo = EmailPgRepo::new(pool.clone());
+    let repo = EmailPgRepo::new(
+        pool.clone(),
+        std::sync::Arc::new(entity_access_outbound::PgAccessRepository::new(
+            pool.clone(),
+        )),
+    );
     let attempt = SendAttemptId(macro_uuid::generate_uuid_v7());
     let mut input = prepared();
     input.undo_delay_secs = 0;
@@ -250,7 +270,12 @@ async fn claimed_delivery_cannot_be_cancelled(pool: Pool<Postgres>) -> anyhow::R
     fixtures(path = "../../../../fixtures", scripts("email_draft"))
 )]
 async fn attachment_mismatch_rolls_back_admission(pool: Pool<Postgres>) -> anyhow::Result<()> {
-    let repo = EmailPgRepo::new(pool.clone());
+    let repo = EmailPgRepo::new(
+        pool.clone(),
+        std::sync::Arc::new(entity_access_outbound::PgAccessRepository::new(
+            pool.clone(),
+        )),
+    );
     let attempt = SendAttemptId(macro_uuid::generate_uuid_v7());
     let mut input = prepared();
     input
@@ -305,7 +330,10 @@ fn service(
     (),
 > {
     crate::domain::service::EmailServiceImpl {
-        email_repo: EmailPgRepo::new(pool),
+        email_repo: EmailPgRepo::new(
+            pool.clone(),
+            std::sync::Arc::new(entity_access_outbound::PgAccessRepository::new(pool)),
+        ),
         frecency_service: UnusedFrecency,
         enqueuer: crate::domain::ports::NoOpEnqueuer,
         crm_service: crm::domain::service::NoOpCrmService,
@@ -400,7 +428,12 @@ mod inbox_move;
 async fn attachment_edits_cannot_change_accepted_snapshot(
     pool: Pool<Postgres>,
 ) -> anyhow::Result<()> {
-    let repo = EmailPgRepo::new(pool.clone());
+    let repo = EmailPgRepo::new(
+        pool.clone(),
+        std::sync::Arc::new(entity_access_outbound::PgAccessRepository::new(
+            pool.clone(),
+        )),
+    );
     let attempt = SendAttemptId(macro_uuid::generate_uuid_v7());
     repo.admit_send(&actor(), link(), attempt, prepared())
         .await?;
@@ -487,7 +520,12 @@ async fn omitted_restoration_fields_preserve_the_approved_body_on_cancel(
 async fn cancellation_repairs_draft_only_thread_metadata(
     pool: Pool<Postgres>,
 ) -> anyhow::Result<()> {
-    let repo = EmailPgRepo::new(pool.clone());
+    let repo = EmailPgRepo::new(
+        pool.clone(),
+        std::sync::Arc::new(entity_access_outbound::PgAccessRepository::new(
+            pool.clone(),
+        )),
+    );
     let attempt = SendAttemptId(macro_uuid::generate_uuid_v7());
     let thread_id = Uuid::parse_str("33333333-3333-3333-3333-333333333333")?;
     let message_id = Uuid::parse_str("ee000004-0000-0000-0000-000000000004")?;
@@ -524,7 +562,12 @@ async fn cancellation_repairs_draft_only_thread_metadata(
 async fn delivery_remains_terminal_after_provider_deletes_the_message(
     pool: Pool<Postgres>,
 ) -> anyhow::Result<()> {
-    let repo = EmailPgRepo::new(pool.clone());
+    let repo = EmailPgRepo::new(
+        pool.clone(),
+        std::sync::Arc::new(entity_access_outbound::PgAccessRepository::new(
+            pool.clone(),
+        )),
+    );
     let cancelled = SendAttemptId(macro_uuid::generate_uuid_v7());
     repo.admit_send(&actor(), link(), cancelled, prepared())
         .await?;
@@ -584,7 +627,12 @@ async fn delivery_remains_terminal_after_provider_deletes_the_message(
 async fn deletion_preserves_legacy_delivery_confirmation(
     pool: Pool<Postgres>,
 ) -> anyhow::Result<()> {
-    let repo = EmailPgRepo::new(pool.clone());
+    let repo = EmailPgRepo::new(
+        pool.clone(),
+        std::sync::Arc::new(entity_access_outbound::PgAccessRepository::new(
+            pool.clone(),
+        )),
+    );
     let attempt = SendAttemptId(macro_uuid::generate_uuid_v7());
     repo.admit_send(&actor(), link(), attempt, prepared())
         .await?;
@@ -619,7 +667,12 @@ async fn deletion_preserves_legacy_delivery_confirmation(
 async fn cancellation_waiting_on_delivery_cannot_cancel_a_deleted_sent_message(
     pool: Pool<Postgres>,
 ) -> anyhow::Result<()> {
-    let repo = EmailPgRepo::new(pool.clone());
+    let repo = EmailPgRepo::new(
+        pool.clone(),
+        std::sync::Arc::new(entity_access_outbound::PgAccessRepository::new(
+            pool.clone(),
+        )),
+    );
     let attempt = SendAttemptId(macro_uuid::generate_uuid_v7());
     repo.admit_send(&actor(), link(), attempt, prepared())
         .await?;
@@ -637,9 +690,12 @@ async fn cancellation_waiting_on_delivery_cannot_cancel_a_deleted_sent_message(
     .await?;
     let cancel_pool = pool.clone();
     let cancellation = tokio::spawn(async move {
-        EmailPgRepo::new(cancel_pool)
-            .cancel_send(&actor(), link(), attempt)
-            .await
+        EmailPgRepo::new(
+            cancel_pool.clone(),
+            std::sync::Arc::new(entity_access_outbound::PgAccessRepository::new(cancel_pool)),
+        )
+        .cancel_send(&actor(), link(), attempt)
+        .await
     });
     // Ensure cancellation read the old attempt and is waiting on delivery's
     // message lock before deleting the message and committing delivery.
@@ -680,7 +736,12 @@ async fn wait_for_blocked_transaction(pool: &Pool<Postgres>, blocker: i32) -> an
 async fn cancellation_waiting_on_legacy_changes_cannot_revoke_a_later_schedule(
     pool: Pool<Postgres>,
 ) -> anyhow::Result<()> {
-    let repo = EmailPgRepo::new(pool.clone());
+    let repo = EmailPgRepo::new(
+        pool.clone(),
+        std::sync::Arc::new(entity_access_outbound::PgAccessRepository::new(
+            pool.clone(),
+        )),
+    );
     let attempt = SendAttemptId(macro_uuid::generate_uuid_v7());
     repo.admit_send(&actor(), link(), attempt, prepared())
         .await?;
@@ -696,9 +757,12 @@ async fn cancellation_waiting_on_legacy_changes_cannot_revoke_a_later_schedule(
     .await?;
     let cancel_pool = pool.clone();
     let cancellation = tokio::spawn(async move {
-        EmailPgRepo::new(cancel_pool)
-            .cancel_send(&actor(), link(), attempt)
-            .await
+        EmailPgRepo::new(
+            cancel_pool.clone(),
+            std::sync::Arc::new(entity_access_outbound::PgAccessRepository::new(cancel_pool)),
+        )
+        .cancel_send(&actor(), link(), attempt)
+        .await
     });
     wait_for_blocked_transaction(&pool, blocker).await?;
     // Model legacy cancellation followed by a new schedule while attempt-based
@@ -746,7 +810,12 @@ async fn cancellation_waiting_on_legacy_changes_cannot_revoke_a_later_schedule(
 async fn failed_preparation_can_be_cancelled_and_restored(
     pool: Pool<Postgres>,
 ) -> anyhow::Result<()> {
-    let repo = EmailPgRepo::new(pool.clone());
+    let repo = EmailPgRepo::new(
+        pool.clone(),
+        std::sync::Arc::new(entity_access_outbound::PgAccessRepository::new(
+            pool.clone(),
+        )),
+    );
     let attempt = SendAttemptId(macro_uuid::generate_uuid_v7());
     repo.admit_send(&actor(), link(), attempt, prepared())
         .await?;
@@ -782,7 +851,12 @@ async fn uncertain_delivery_stays_locked_on_cancel_and_schedule_changes(
     pool: Pool<Postgres>,
 ) -> anyhow::Result<()> {
     use crate::domain::scheduled::{EmailSchedulingRepo, ScheduleChange};
-    let repo = EmailPgRepo::new(pool.clone());
+    let repo = EmailPgRepo::new(
+        pool.clone(),
+        std::sync::Arc::new(entity_access_outbound::PgAccessRepository::new(
+            pool.clone(),
+        )),
+    );
     let attempt = SendAttemptId(macro_uuid::generate_uuid_v7());
     repo.admit_send(&actor(), link(), attempt, prepared())
         .await?;
@@ -821,7 +895,12 @@ async fn uncertain_delivery_stays_locked_on_cancel_and_schedule_changes(
 async fn deleted_message_preserves_uncertain_delivery_authority(
     pool: Pool<Postgres>,
 ) -> anyhow::Result<()> {
-    let repo = EmailPgRepo::new(pool.clone());
+    let repo = EmailPgRepo::new(
+        pool.clone(),
+        std::sync::Arc::new(entity_access_outbound::PgAccessRepository::new(
+            pool.clone(),
+        )),
+    );
     let attempt = SendAttemptId(macro_uuid::generate_uuid_v7());
     repo.admit_send(&actor(), link(), attempt, prepared())
         .await?;
@@ -858,7 +937,12 @@ async fn deleted_message_preserves_uncertain_delivery_authority(
 async fn deleted_legacy_processing_message_remains_uncertain(
     pool: Pool<Postgres>,
 ) -> anyhow::Result<()> {
-    let repo = EmailPgRepo::new(pool.clone());
+    let repo = EmailPgRepo::new(
+        pool.clone(),
+        std::sync::Arc::new(entity_access_outbound::PgAccessRepository::new(
+            pool.clone(),
+        )),
+    );
     let attempt = SendAttemptId(macro_uuid::generate_uuid_v7());
     repo.admit_send(&actor(), link(), attempt, prepared())
         .await?;
@@ -885,7 +969,12 @@ async fn deleted_legacy_processing_message_remains_uncertain(
 async fn deleted_preparation_without_submission_can_be_cancelled(
     pool: Pool<Postgres>,
 ) -> anyhow::Result<()> {
-    let repo = EmailPgRepo::new(pool.clone());
+    let repo = EmailPgRepo::new(
+        pool.clone(),
+        std::sync::Arc::new(entity_access_outbound::PgAccessRepository::new(
+            pool.clone(),
+        )),
+    );
     let attempt = SendAttemptId(macro_uuid::generate_uuid_v7());
     repo.admit_send(&actor(), link(), attempt, prepared())
         .await?;
@@ -910,7 +999,12 @@ async fn deleted_preparation_without_submission_can_be_cancelled(
 async fn legacy_snapshot_without_sender_replays_the_original_attempt(
     pool: Pool<Postgres>,
 ) -> anyhow::Result<()> {
-    let repo = EmailPgRepo::new(pool.clone());
+    let repo = EmailPgRepo::new(
+        pool.clone(),
+        std::sync::Arc::new(entity_access_outbound::PgAccessRepository::new(
+            pool.clone(),
+        )),
+    );
     let attempt = SendAttemptId(macro_uuid::generate_uuid_v7());
     let admitted = repo
         .admit_send(&actor(), link(), attempt, prepared())
@@ -944,7 +1038,12 @@ async fn native_provider_attachments_are_part_of_the_approved_send(
 ) -> anyhow::Result<()> {
     let native = Uuid::parse_str("00000000-0000-0000-0000-00000000aa99")?;
     sqlx::query!("INSERT INTO email_attachments(id,message_id,provider_attachment_id,filename,mime_type,size_bytes) VALUES($1,$2,'native-file','native.txt','text/plain',4)", native, message()).execute(&pool).await?;
-    let repo = EmailPgRepo::new(pool.clone());
+    let repo = EmailPgRepo::new(
+        pool.clone(),
+        std::sync::Arc::new(entity_access_outbound::PgAccessRepository::new(
+            pool.clone(),
+        )),
+    );
     let attempt = SendAttemptId(macro_uuid::generate_uuid_v7());
     assert!(matches!(
         repo.admit_send(&actor(), link(), attempt, prepared()).await,

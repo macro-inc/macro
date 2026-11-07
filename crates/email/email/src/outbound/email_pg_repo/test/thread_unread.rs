@@ -14,7 +14,12 @@ pub(super) fn service(
     (),
 > {
     EmailServiceImpl {
-        email_repo: EmailPgRepo::new(pool.clone()),
+        email_repo: EmailPgRepo::new(
+            pool.clone(),
+            std::sync::Arc::new(entity_access_outbound::PgAccessRepository::new(
+                pool.clone(),
+            )),
+        ),
         frecency_service: FrecencyQueryServiceImpl::new(FrecencyPgStorage::new(pool)),
         enqueuer: NoOpEnqueuer,
         crm_service: NoOpCrmService,

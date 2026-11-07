@@ -21,9 +21,14 @@ async fn first_handle_adopts_an_unbound_reply(pool: Pool<Postgres>) -> anyhow::R
 
     assert_eq!(saved.draft.db_id, message());
     assert_eq!(
-        EmailPgRepo::new(pool)
-            .message_id_for_client_draft_id(handle, &[link()])
-            .await?,
+        EmailPgRepo::new(
+            pool.clone(),
+            std::sync::Arc::new(entity_access_outbound::PgAccessRepository::new(
+                pool.clone()
+            ))
+        )
+        .message_id_for_client_draft_id(handle, &[link()])
+        .await?,
         Some(message())
     );
     Ok(())
@@ -52,9 +57,14 @@ async fn different_handles_keep_separate_replies(pool: Pool<Postgres>) -> anyhow
     assert_eq!(newer.draft.replying_to_id, original.draft.replying_to_id);
     assert_eq!(newer.draft.thread_db_id, original.draft.thread_db_id);
     assert_eq!(
-        EmailPgRepo::new(pool)
-            .message_id_for_client_draft_id(original_handle, &[link()])
-            .await?,
+        EmailPgRepo::new(
+            pool.clone(),
+            std::sync::Arc::new(entity_access_outbound::PgAccessRepository::new(
+                pool.clone()
+            ))
+        )
+        .message_id_for_client_draft_id(original_handle, &[link()])
+        .await?,
         Some(message())
     );
     Ok(())
@@ -77,9 +87,14 @@ async fn same_handle_reuses_its_bound_reply(pool: Pool<Postgres>) -> anyhow::Res
     assert_eq!(saved.draft.db_id, message());
     assert_eq!(saved.draft.body_text.as_deref(), Some("Edits"));
     assert!(
-        !EmailPgRepo::new(pool)
-            .draft_bound_to_another_handle(message(), link(), handle)
-            .await?
+        !EmailPgRepo::new(
+            pool.clone(),
+            std::sync::Arc::new(entity_access_outbound::PgAccessRepository::new(
+                pool.clone()
+            ))
+        )
+        .draft_bound_to_another_handle(message(), link(), handle)
+        .await?
     );
     Ok(())
 }
@@ -96,7 +111,12 @@ async fn bound_reply_handle_still_checks_the_generation_after_undo(
     let original = service
         .save_draft_for_user_impl(actor(), Some(link()), reply_from_handle(handle, "First"))
         .await?;
-    let repo = EmailPgRepo::new(pool);
+    let repo = EmailPgRepo::new(
+        pool.clone(),
+        std::sync::Arc::new(entity_access_outbound::PgAccessRepository::new(
+            pool.clone(),
+        )),
+    );
     let attempt = SendAttemptId(macro_uuid::generate_uuid_v7());
     let mut send = prepared();
     send.message.replying_to_id = original.draft.replying_to_id;

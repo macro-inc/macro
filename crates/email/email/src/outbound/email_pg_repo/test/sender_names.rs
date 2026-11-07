@@ -67,7 +67,10 @@ async fn filtered_previews_preserve_message_sender_names(
 async fn cached_mail_previews_preserve_message_sender_names(
     pool: Pool<Postgres>,
 ) -> anyhow::Result<()> {
-    let repo = EmailPgRepo::new(pool);
+    let repo = EmailPgRepo::new(
+        pool.clone(),
+        std::sync::Arc::new(entity_access_outbound::PgAccessRepository::new(pool)),
+    );
     let thread_ids = EXPECTED_SENDERS.map(|(id, _)| id);
     let rows = repo
         .thread_mail_projections_by_ids(

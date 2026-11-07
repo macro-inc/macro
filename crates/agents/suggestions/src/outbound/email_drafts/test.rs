@@ -75,7 +75,12 @@ async fn only_an_unsent_draft_in_the_persons_own_inbox_counts(pool: PgPool) {
     let (draft, thread) = message(&pool, own, true).await;
     let (sent, _) = message(&pool, own, false).await;
     let (delegated_draft, _) = message(&pool, delegated, true).await;
-    let drafts = EmailSuggestionDrafts(EmailPgRepo::new(pool.clone()));
+    let drafts = EmailSuggestionDrafts(EmailPgRepo::new(
+        pool.clone(),
+        std::sync::Arc::new(entity_access_outbound::PgAccessRepository::new(
+            pool.clone(),
+        )),
+    ));
 
     let thread_of = |who: &'static str, id: Uuid| {
         let drafts = &drafts;
@@ -118,7 +123,12 @@ async fn a_draft_previews_the_start_of_its_text(pool: PgPool) {
     .execute(&pool)
     .await
     .unwrap();
-    let drafts = EmailSuggestionDrafts(EmailPgRepo::new(pool.clone()));
+    let drafts = EmailSuggestionDrafts(EmailPgRepo::new(
+        pool.clone(),
+        std::sync::Arc::new(entity_access_outbound::PgAccessRepository::new(
+            pool.clone(),
+        )),
+    ));
 
     let found = drafts
         .email_draft(&user(OWNER), text)

@@ -249,7 +249,10 @@ async fn gmail_reservation_counts_outlook_and_allows_only_verified_reconnect(db:
         sqlx::query!("INSERT INTO email_links(id,macro_id,fusionauth_user_id,email_address,provider) VALUES($1,$2,$3,$4,$5::text::email_user_provider_enum)",Uuid::now_v7(),owner.1.as_ref(),owner.0.to_string(),address,provider).execute(&db).await.unwrap();
     }
     let admission = email::domain::inbox_entitlement::InboxConnectionService(
-        email::outbound::EmailPgRepo::new(db.clone()),
+        email::outbound::EmailPgRepo::new(
+            db.clone(),
+            std::sync::Arc::new(entity_access_outbound::PgAccessRepository::new(db.clone())),
+        ),
     );
     let gmail =
         sqlx::query_scalar!("SELECT id FROM email_links WHERE email_address='gmail@example.com'")
@@ -375,7 +378,10 @@ async fn reconnect_resumes_organization_commands_under_the_new_grant(db: PgPool)
         },
     };
     let target = |is_read| target_for(message, "outlook-message", is_read);
-    let repo = email::outbound::EmailPgRepo::new(db.clone());
+    let repo = email::outbound::EmailPgRepo::new(
+        db.clone(),
+        std::sync::Arc::new(entity_access_outbound::PgAccessRepository::new(db.clone())),
+    );
     let retrying = repo
         .enqueue_mailbox_action(
             link,

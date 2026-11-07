@@ -4,6 +4,7 @@ use crate::domain::models::{
 };
 use doppleganger::{Doppleganger, Mirror};
 use either::Either;
+use entity_access::domain::ports::UserSourceIds;
 use filter_ast::Expr;
 use item_filters::ast::email::EmailLiteral;
 use macro_user_id::user_id::MacroUserIdStr;
@@ -14,9 +15,10 @@ use uuid::Uuid;
 use super::db_types::{AttachmentDbRow, LabelDbRow, ThreadPreviewCursorDbRow};
 use super::{PreviewReadError, RuleDiscoveryPort};
 
-#[tracing::instrument(err, skip(pool, query, user_id, discovery), fields(link_count = query.link_ids.len(), view = query.view.span_value()))]
+#[tracing::instrument(err, skip(pool, source_ids, query, user_id, discovery), fields(link_count = query.link_ids.len(), view = query.view.span_value()))]
 pub(super) async fn previews_for_view_cursor(
     pool: &PgPool,
+    source_ids: &dyn UserSourceIds,
     query: PreviewCursorQuery,
     user_id: MacroUserIdStr<'static>,
     discovery: Option<&RuleDiscoveryPort>,
@@ -35,6 +37,7 @@ pub(super) async fn previews_for_view_cursor(
         (view, Either::Right(dynamic_query)) => {
             super::dynamic::dynamic_email_thread_cursor_with_discovery(
                 pool,
+                source_ids,
                 &link_ids,
                 limit,
                 &view,
@@ -66,6 +69,7 @@ pub(super) async fn previews_for_view_cursor(
                 query.map_filter(|()| Arc::new(Expr::Literal(EmailLiteral::CalendarOnly(false))));
             super::dynamic::dynamic_email_thread_cursor_with_discovery(
                 pool,
+                source_ids,
                 &link_ids,
                 limit,
                 &view,

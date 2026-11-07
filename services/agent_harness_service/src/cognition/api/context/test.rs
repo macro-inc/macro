@@ -244,7 +244,12 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
         crm::outbound::no_op_resolver::NoOpCompanyMetadataResolver,
     );
     let email_service = EmailServiceImpl::new(
-        EmailPgRepo::new(pool.clone()),
+        EmailPgRepo::new(
+            pool.clone(),
+            std::sync::Arc::new(entity_access_outbound::PgAccessRepository::new(
+                pool.clone(),
+            )),
+        ),
         frecency_service.clone(),
         email::domain::ports::NoOpEnqueuer,
         crm_service.clone(),
@@ -395,7 +400,12 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
 
     let user_email_service = Arc::new(
         email::domain::service::EmailServiceImpl::new(
-            email::outbound::EmailPgRepo::new(pool.clone()),
+            email::outbound::EmailPgRepo::new(
+                pool.clone(),
+                std::sync::Arc::new(entity_access_outbound::PgAccessRepository::new(
+                    pool.clone(),
+                )),
+            ),
             frecency::domain::services::FrecencyQueryServiceImpl::new(
                 frecency::outbound::postgres::FrecencyPgStorage::new(pool.clone()),
             ),

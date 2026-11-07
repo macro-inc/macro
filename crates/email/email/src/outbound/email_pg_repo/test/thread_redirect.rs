@@ -80,9 +80,12 @@ async fn thread_redirect_requires_independent_inbox_access(
         assert!(fetched.messages.is_empty());
     }
     assert_eq!(
-        EmailPgRepo::new(pool)
-            .redirected_thread_id(source(), &[])
-            .await?,
+        EmailPgRepo::new(
+            pool.clone(),
+            std::sync::Arc::new(entity_access_outbound::PgAccessRepository::new(pool))
+        )
+        .redirected_thread_id(source(), &[])
+        .await?,
         None
     );
     Ok(())

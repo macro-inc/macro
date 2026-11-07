@@ -645,7 +645,13 @@ async fn general_page_keeps_the_live_sources_checked_by_discovery(
         team_id: Some(S_TEAM),
     };
     let user = macro_user_id::user_id::MacroUserIdStr::parse_from_str(S_USER)?.into_owned();
-    let normal = crate::outbound::EmailPgRepo::new(pool.clone()).with_rule_discovery(Arc::new(
+    let normal = crate::outbound::EmailPgRepo::new(
+        pool.clone(),
+        std::sync::Arc::new(entity_access_outbound::PgAccessRepository::new(
+            pool.clone(),
+        )),
+    )
+    .with_rule_discovery(Arc::new(
         crm::outbound::email_rule_discovery::PgEmailRuleDiscovery,
     ));
     let expected = normal
@@ -658,8 +664,13 @@ async fn general_page_keeps_the_live_sources_checked_by_discovery(
 
     let (reached, completed) = oneshot::channel();
     let (resume, resumed) = oneshot::channel();
-    let paused = crate::outbound::EmailPgRepo::new(pool.clone())
-        .with_rule_discovery(Arc::new(PauseDiscovery));
+    let paused = crate::outbound::EmailPgRepo::new(
+        pool.clone(),
+        std::sync::Arc::new(entity_access_outbound::PgAccessRepository::new(
+            pool.clone(),
+        )),
+    )
+    .with_rule_discovery(Arc::new(PauseDiscovery));
     let request = DISCOVERY_PAUSE.scope(
         RefCell::new(Some(ResolutionPause {
             reached,
@@ -858,8 +869,13 @@ async fn general_owner_filter_skips_unrelated_selected_discovery(
     .execute(&pool)
     .await?;
     let discovery = Arc::new(CountDiscovery::default());
-    let repo =
-        crate::outbound::EmailPgRepo::new(pool.clone()).with_rule_discovery(discovery.clone());
+    let repo = crate::outbound::EmailPgRepo::new(
+        pool.clone(),
+        std::sync::Arc::new(entity_access_outbound::PgAccessRepository::new(
+            pool.clone(),
+        )),
+    )
+    .with_rule_discovery(discovery.clone());
     let user = macro_user_id::user_id::MacroUserIdStr::parse_from_str(S_USER)?.into_owned();
     sqlx::query!(
         "INSERT INTO email_user_history (link_id, thread_id, updated_at) VALUES ($1, $2, NOW())",
@@ -907,7 +923,13 @@ async fn live_growth_returns_a_typed_limit_instead_of_a_partial_email_page(
     use crate::domain::models::{EmailErr, PreviewCursorQuery};
     use crate::domain::ports::EmailRepo;
     sqlx::query!("INSERT INTO crm_email_rule_contacts(team_id,user_id,revision,contact_id) VALUES($1,$2,1,$3)",S_TEAM,S_USER,S_CONTACT).execute(&pool).await?;
-    let repo = crate::outbound::EmailPgRepo::new(pool.clone()).with_rule_discovery(Arc::new(
+    let repo = crate::outbound::EmailPgRepo::new(
+        pool.clone(),
+        std::sync::Arc::new(entity_access_outbound::PgAccessRepository::new(
+            pool.clone(),
+        )),
+    )
+    .with_rule_discovery(Arc::new(
         crm::outbound::email_rule_discovery::PgEmailRuleDiscovery,
     ));
     let query = || PreviewCursorQuery {

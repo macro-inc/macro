@@ -51,7 +51,10 @@ async fn held_inbox(db: &PgPool, owner: &str) -> Link {
 async fn a_link_departs_when_its_removal_starts_or_its_owner_account_is_gone(db: PgPool) {
     let links = PgConnectionLinks {
         db: db.clone(),
-        lookup: email::outbound::EmailPgRepo::new(db.clone()),
+        lookup: email::outbound::EmailPgRepo::new(
+            db.clone(),
+            std::sync::Arc::new(entity_access_outbound::PgAccessRepository::new(db.clone())),
+        ),
     };
     let owner = account(&db, "owner@example.com").await;
     let inbox = held_inbox(&db, &owner).await;

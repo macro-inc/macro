@@ -28,7 +28,12 @@ async fn preserve_submission(pool: Pool<Postgres>, unconfirmed: bool) -> anyhow:
     if unconfirmed {
         pause_delivery(&pool, &claim, true, 300).await?;
     }
-    let repo = EmailPgRepo::new(pool.clone());
+    let repo = EmailPgRepo::new(
+        pool.clone(),
+        std::sync::Arc::new(entity_access_outbound::PgAccessRepository::new(
+            pool.clone(),
+        )),
+    );
     assert!(
         repo.delete_scheduled_messages_batch(&[message], link)
             .await?
@@ -64,7 +69,12 @@ async fn trash_preserves_unconfirmed_delivery(pool: Pool<Postgres>) -> anyhow::R
 async fn trash_revokes_preparation_before_submission(pool: Pool<Postgres>) -> anyhow::Result<()> {
     let (link, message) = identity();
     let claim = claim(&pool).await?;
-    let repo = EmailPgRepo::new(pool.clone());
+    let repo = EmailPgRepo::new(
+        pool.clone(),
+        std::sync::Arc::new(entity_access_outbound::PgAccessRepository::new(
+            pool.clone(),
+        )),
+    );
     assert_eq!(
         repo.delete_scheduled_messages_batch(&[message], link)
             .await?,
@@ -82,7 +92,12 @@ async fn trash_revokes_backed_off_preparation(pool: Pool<Postgres>) -> anyhow::R
     let (link, message) = identity();
     let claim = claim(&pool).await?;
     release_preparation(&pool, &claim, 300).await?;
-    let repo = EmailPgRepo::new(pool.clone());
+    let repo = EmailPgRepo::new(
+        pool.clone(),
+        std::sync::Arc::new(entity_access_outbound::PgAccessRepository::new(
+            pool.clone(),
+        )),
+    );
     assert_eq!(
         repo.delete_scheduled_messages_batch(&[message], link)
             .await?,
@@ -103,7 +118,12 @@ async fn trash_preserves_ambiguous_legacy_claim(pool: Pool<Postgres>) -> anyhow:
             .await?
             .is_some()
     );
-    let repo = EmailPgRepo::new(pool.clone());
+    let repo = EmailPgRepo::new(
+        pool.clone(),
+        std::sync::Arc::new(entity_access_outbound::PgAccessRepository::new(
+            pool.clone(),
+        )),
+    );
     assert!(
         repo.delete_scheduled_messages_batch(&[message], link)
             .await?
@@ -122,7 +142,12 @@ async fn trash_cancels_definitively_failed_delivery(pool: Pool<Postgres>) -> any
     let claim = claim(&pool).await?;
     assert!(begin_submission(&pool, &claim, 300).await?);
     pause_delivery(&pool, &claim, false, 300).await?;
-    let repo = EmailPgRepo::new(pool.clone());
+    let repo = EmailPgRepo::new(
+        pool.clone(),
+        std::sync::Arc::new(entity_access_outbound::PgAccessRepository::new(
+            pool.clone(),
+        )),
+    );
     assert_eq!(
         repo.delete_scheduled_messages_batch(&[message], link)
             .await?,
@@ -138,7 +163,12 @@ async fn trash_cancels_definitively_failed_delivery(pool: Pool<Postgres>) -> any
 async fn trash_racing_submission_has_one_winner(pool: Pool<Postgres>) -> anyhow::Result<()> {
     let (link, message) = identity();
     let claim = claim(&pool).await?;
-    let repo = EmailPgRepo::new(pool.clone());
+    let repo = EmailPgRepo::new(
+        pool.clone(),
+        std::sync::Arc::new(entity_access_outbound::PgAccessRepository::new(
+            pool.clone(),
+        )),
+    );
     let messages = [message];
     let (deleted, submitted) = tokio::join!(
         repo.delete_scheduled_messages_batch(&messages, link),

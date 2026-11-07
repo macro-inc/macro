@@ -11,6 +11,7 @@ use crate::domain::{
         DraftAttachmentRepo, EmailRepo, EmailUserRepo, LinkEmailSettings, RecipientsByMessageId,
     },
 };
+use entity_access::domain::ports::UserSourceIds;
 use macro_user_id::user_id::MacroUserIdStr;
 use sqlx::{PgConnection, PgPool};
 use std::collections::HashMap;
@@ -86,13 +87,16 @@ impl From<PreviewReadError> for EmailErr {
 pub struct EmailPgRepo {
     pool: PgPool,
     rule_discovery: Option<Arc<RuleDiscoveryPort>>,
+    /// Entity-access sources supplied by the composition root.
+    source_ids: Arc<dyn UserSourceIds>,
 }
 
 impl EmailPgRepo {
-    pub fn new(pool: PgPool) -> Self {
+    pub fn new(pool: PgPool, source_ids: Arc<dyn UserSourceIds>) -> Self {
         EmailPgRepo {
             pool,
             rule_discovery: None,
+            source_ids,
         }
     }
 
@@ -224,6 +228,7 @@ impl EmailRepo for EmailPgRepo {
     ) -> Result<Vec<EmailThreadPreview>, EmailErr> {
         preview::previews_for_view_cursor(
             &self.pool,
+            &*self.source_ids,
             query,
             user_id,
             self.rule_discovery.as_deref(),

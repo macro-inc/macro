@@ -218,6 +218,8 @@ tools — hexagonal, heavily feature-gated.
   mode, keep the all-mail probe/page SQL without selected-rule work. General
   Team fallbacks keep that same snapshot through discovery and their page too;
   reopening a transaction can read a policy that discovery never checked.
+- Construct `EmailPgRepo` with the entity-access `UserSourceIds` port;
+  inject CRM rule discovery separately for selected Team reads.
 - Selected Team reads require an injected `EmailRuleDiscoveryService` on
   `EmailPgRepo`. Discover once in the read snapshot and reuse complete contacts
   in probe/page; all-mail reads call no discovery and keep their SQL unchanged.

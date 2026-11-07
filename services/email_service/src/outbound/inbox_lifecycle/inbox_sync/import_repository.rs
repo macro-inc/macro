@@ -155,10 +155,15 @@ impl InboxSyncNotificationFacts for PgInboxSync {
         query: PreviewCursorQuery,
         owner: MacroUserIdStr<'static>,
     ) -> Result<Vec<EmailThreadPreview>, Self::Err> {
-        EmailPgRepo::new(self.0.clone())
-            .previews_for_view_cursor(query, owner)
-            .await
-            .map_err(anyhow::Error::from)
-            .map_err(Into::into)
+        EmailPgRepo::new(
+            self.0.clone(),
+            std::sync::Arc::new(entity_access_outbound::PgAccessRepository::new(
+                self.0.clone(),
+            )),
+        )
+        .previews_for_view_cursor(query, owner)
+        .await
+        .map_err(anyhow::Error::from)
+        .map_err(Into::into)
     }
 }

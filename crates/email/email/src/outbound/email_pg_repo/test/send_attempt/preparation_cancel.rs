@@ -14,9 +14,14 @@ async fn admit_and_claim(pool: &Pool<Postgres>) -> anyhow::Result<(SendAttemptId
     .await?;
     let mut input = prepared_generation(generation);
     input.undo_delay_secs = 0;
-    EmailPgRepo::new(pool.clone())
-        .admit_send(&actor(), link(), attempt, input)
-        .await?;
+    EmailPgRepo::new(
+        pool.clone(),
+        std::sync::Arc::new(entity_access_outbound::PgAccessRepository::new(
+            pool.clone(),
+        )),
+    )
+    .admit_send(&actor(), link(), attempt, input)
+    .await?;
     let claim = claim_delivery(pool, link(), message(), 300)
         .await?
         .expect("due send must be claimable");
@@ -38,7 +43,12 @@ async fn expire(pool: &Pool<Postgres>) -> anyhow::Result<()> {
 async fn active_backed_off_and_expired_preparation_can_be_cancelled(
     pool: Pool<Postgres>,
 ) -> anyhow::Result<()> {
-    let repo = EmailPgRepo::new(pool.clone());
+    let repo = EmailPgRepo::new(
+        pool.clone(),
+        std::sync::Arc::new(entity_access_outbound::PgAccessRepository::new(
+            pool.clone(),
+        )),
+    );
     for backoff in [None, Some(false), Some(true)] {
         let (attempt, claim) = admit_and_claim(&pool).await?;
         if let Some(expired) = backoff {
@@ -93,7 +103,12 @@ async fn active_backed_off_and_expired_preparation_can_be_cancelled(
 async fn schedule_cancellation_fences_managed_preparation_during_backoff(
     pool: Pool<Postgres>,
 ) -> anyhow::Result<()> {
-    let repo = EmailPgRepo::new(pool.clone());
+    let repo = EmailPgRepo::new(
+        pool.clone(),
+        std::sync::Arc::new(entity_access_outbound::PgAccessRepository::new(
+            pool.clone(),
+        )),
+    );
     for expired in [false, true] {
         let (attempt, claim) = admit_and_claim(&pool).await?;
         release_preparation(&pool, &claim, 300).await?;
@@ -137,7 +152,12 @@ async fn schedule_cancellation_fences_managed_preparation_during_backoff(
 async fn submitted_delivery_remains_locked_after_lease_expiry(
     pool: Pool<Postgres>,
 ) -> anyhow::Result<()> {
-    let repo = EmailPgRepo::new(pool.clone());
+    let repo = EmailPgRepo::new(
+        pool.clone(),
+        std::sync::Arc::new(entity_access_outbound::PgAccessRepository::new(
+            pool.clone(),
+        )),
+    );
     let (attempt, claim) = admit_and_claim(&pool).await?;
     assert!(begin_submission(&pool, &claim, 300).await?);
     expire(&pool).await?;
@@ -169,7 +189,12 @@ async fn submitted_delivery_remains_locked_after_lease_expiry(
 async fn expired_legacy_claim_cannot_be_mistaken_for_safe_preparation(
     pool: Pool<Postgres>,
 ) -> anyhow::Result<()> {
-    let repo = EmailPgRepo::new(pool.clone());
+    let repo = EmailPgRepo::new(
+        pool.clone(),
+        std::sync::Arc::new(entity_access_outbound::PgAccessRepository::new(
+            pool.clone(),
+        )),
+    );
     let attempt = SendAttemptId(macro_uuid::generate_uuid_v7());
     repo.admit_send(&actor(), link(), attempt, prepared())
         .await?;
@@ -199,7 +224,12 @@ async fn expired_legacy_claim_cannot_be_mistaken_for_safe_preparation(
 async fn cancellation_and_submission_race_has_exactly_one_winner(
     pool: Pool<Postgres>,
 ) -> anyhow::Result<()> {
-    let repo = EmailPgRepo::new(pool.clone());
+    let repo = EmailPgRepo::new(
+        pool.clone(),
+        std::sync::Arc::new(entity_access_outbound::PgAccessRepository::new(
+            pool.clone(),
+        )),
+    );
     for _ in 0..12 {
         let (attempt, claim) = admit_and_claim(&pool).await?;
         let caller = actor();

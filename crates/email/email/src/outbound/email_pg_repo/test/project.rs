@@ -25,9 +25,14 @@ async fn touch_project_updated_at_advances_stored_timestamp(
     let original_updated_at = project_updated_at(&pool, project_id).await?;
 
     tokio::time::sleep(Duration::from_millis(10)).await;
-    EmailPgRepo::new(pool.clone())
-        .touch_project_updated_at(project_id)
-        .await?;
+    EmailPgRepo::new(
+        pool.clone(),
+        std::sync::Arc::new(entity_access_outbound::PgAccessRepository::new(
+            pool.clone(),
+        )),
+    )
+    .touch_project_updated_at(project_id)
+    .await?;
 
     let updated_at = project_updated_at(&pool, project_id).await?;
     assert!(updated_at > original_updated_at);

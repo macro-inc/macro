@@ -443,7 +443,12 @@ async fn failed_archive_rolls_back_inbox_label_removal(pool: Pool<Postgres>) -> 
 async fn staged_inbox_change_marks_the_messages_it_changed_in_the_same_transaction(
     pool: Pool<Postgres>,
 ) -> anyhow::Result<()> {
-    let repo = EmailPgRepo::new(pool.clone());
+    let repo = EmailPgRepo::new(
+        pool.clone(),
+        std::sync::Arc::new(entity_access_outbound::PgAccessRepository::new(
+            pool.clone(),
+        )),
+    );
     let thread = Uuid::parse_str("11111111-1111-1111-1111-111111111111")?;
     let link = Uuid::parse_str("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa")?;
     let first = Uuid::parse_str("11111111-aaaa-aaaa-aaaa-111111111111")?;
@@ -476,7 +481,12 @@ async fn staged_inbox_change_marks_the_messages_it_changed_in_the_same_transacti
 async fn a_label_write_waits_for_the_one_already_staging_on_its_thread(
     pool: Pool<Postgres>,
 ) -> anyhow::Result<()> {
-    let repo = EmailPgRepo::new(pool.clone());
+    let repo = EmailPgRepo::new(
+        pool.clone(),
+        std::sync::Arc::new(entity_access_outbound::PgAccessRepository::new(
+            pool.clone(),
+        )),
+    );
     let thread = Uuid::parse_str("11111111-1111-1111-1111-111111111111")?;
     let link = Uuid::parse_str("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa")?;
     let first = Uuid::parse_str("11111111-aaaa-aaaa-aaaa-111111111111")?;
@@ -523,7 +533,12 @@ async fn a_label_write_waits_for_the_one_already_staging_on_its_thread(
 async fn failed_staged_inbox_change_leaves_no_pending_marker(
     pool: Pool<Postgres>,
 ) -> anyhow::Result<()> {
-    let repo = EmailPgRepo::new(pool.clone());
+    let repo = EmailPgRepo::new(
+        pool.clone(),
+        std::sync::Arc::new(entity_access_outbound::PgAccessRepository::new(
+            pool.clone(),
+        )),
+    );
     let thread = Uuid::parse_str("33333333-3333-3333-3333-333333333333")?;
     let link = Uuid::parse_str("aaaaaaaa-aaaa-aaaa-aaaa-bbbbbbbbbbbb")?;
 
@@ -548,7 +563,12 @@ async fn failed_staged_inbox_change_leaves_no_pending_marker(
 async fn failed_star_flag_rolls_back_the_label_and_its_marker(
     pool: Pool<Postgres>,
 ) -> anyhow::Result<()> {
-    let repo = EmailPgRepo::new(pool.clone());
+    let repo = EmailPgRepo::new(
+        pool.clone(),
+        std::sync::Arc::new(entity_access_outbound::PgAccessRepository::new(
+            pool.clone(),
+        )),
+    );
     let thread = Uuid::parse_str("11111111-1111-1111-1111-111111111111")?;
     let link = Uuid::parse_str("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa")?;
 
