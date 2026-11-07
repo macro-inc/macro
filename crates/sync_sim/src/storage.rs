@@ -47,10 +47,15 @@ pub struct SimStorage {
     quota: Option<u64>,
     written: u64,
     uncertain: u8,
+    retention: doc_sync_core::Millis,
 }
 impl SimStorage {
     /// Empty profile with independent storage and leases.
     pub fn new(profile: StorageProfile) -> Self {
+        Self::with_retention(profile, WalPolicy::default().ttl)
+    }
+    /// Empty profile with the host's explicit orphan retention policy.
+    pub fn with_retention(profile: StorageProfile, retention: doc_sync_core::Millis) -> Self {
         Self {
             durable: StoreImage::default(),
             pending: BTreeMap::new(),
@@ -67,11 +72,26 @@ impl SimStorage {
             quota: None,
             written: 0,
             uncertain: 0,
+            retention,
         }
     }
     /// Inspect committed state only.
     pub fn image(&self) -> &StoreImage {
         &self.durable
+    }
+    /// Conservative cache eviction, distinct from a core-requested corrupt snapshot delete.
+    /// Returns false while any undelivered WAL row still needs this document's cache.
+    pub fn evict_snapshot(&mut self, doc: &SyncDocId) -> bool {
+        if self
+            .durable
+            .entries
+            .iter()
+            .any(|((key, _, _), row)| key == doc && !row.delivered)
+        {
+            return false;
+        }
+        self.durable.snapshots.remove(doc);
+        true
     }
     /// Change adapter failure behavior; never mutate client state directly.
     pub fn fault(&mut self, fault: StorageFault) {
@@ -118,7 +138,13 @@ impl SimStorage {
         self.pending.insert(id, write);
         (id, at)
     }
-    fn load(&self, doc: &SyncDocId, owner: SessionId, user: &UserKey) -> LocalState {
+    fn load(
+        &self,
+        doc: &SyncDocId,
+        owner: SessionId,
+        user: &UserKey,
+        wall: UnixMillis,
+    ) -> LocalState {
         let mut orphaned: BTreeMap<WalOwner, Vec<StoredWalRecord>> = BTreeMap::new();
         let mut assist: BTreeMap<WalOwner, Vec<StoredWalRecord>> = BTreeMap::new();
         for ((row_doc, row_owner, _), row) in &self.durable.entries {
@@ -129,9 +155,20 @@ impl SimStorage {
                 WalOwner::Session(id) => self.leases.contains(&(doc.clone(), *id)),
                 WalOwner::Legacy => false,
             };
-            // Expired other-user rows are returned only as orphan metadata so the
-            // core may request TTL cleanup; it must never import their bytes.
-            if leased && row.record.user == *user && !row.delivered {
+            // S7 O-2 permits only expired orphan metadata from other users for TTL
+            // cleanup. Never expose their payload, unexpired rows or leased rows.
+            if row.record.user != *user {
+                let before = wall
+                    .0
+                    .saturating_sub(i64::try_from(self.retention.0).unwrap_or(i64::MAX));
+                if !leased && !row.delivered && row.record.created_at.0 < before {
+                    let mut metadata = row.clone();
+                    metadata.record.bytes.clear();
+                    orphaned.entry(*row_owner).or_default().push(metadata);
+                }
+                continue;
+            }
+            if leased && !row.delivered {
                 assist.entry(*row_owner).or_default().push(row.clone());
             } else if !leased {
                 orphaned.entry(*row_owner).or_default().push(row.clone());
@@ -159,6 +196,7 @@ impl SimStorage {
         token: u64,
         profile: &ProfileName,
         now: u64,
+        wall: UnixMillis,
     ) -> Option<Completion> {
         let write = self.pending.remove(&token)?;
         let mut facts = Vec::new();
@@ -167,7 +205,7 @@ impl SimStorage {
                 let result = if std::mem::take(&mut self.fail_load) {
                     Err(StorageFailure::Unavailable)
                 } else {
-                    Ok(self.load(doc, *owner, user))
+                    Ok(self.load(doc, *owner, user, wall))
                 };
                 StorageEvent::Loaded {
                     id: write.id,

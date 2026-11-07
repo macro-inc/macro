@@ -251,3 +251,89 @@ fn settle_resumes_failed_freeze_from_durable_claim_after_eviction() {
         Some(SourceState::Thawed(_))
     ));
 }
+
+#[test]
+fn storage_effects_require_the_real_sessions_document_lease() {
+    let mut sim = Sim::new(SimConfig::calm(241));
+    let name = ClientName("a".into());
+    sim.step(Step::Open(OpenSpec::form("a", "one"))).unwrap();
+    let client = &sim.clients[&name];
+    let session = client.session;
+    let doc = client.core_doc_id();
+    let profile = client.spec.profile.clone();
+    assert!(
+        sim.profiles[&profile]
+            .leases
+            .contains(&(doc.clone(), session))
+    );
+    assert!(!sim.profiles[&profile].pending.is_empty());
+    sim.profiles
+        .get_mut(&profile)
+        .unwrap()
+        .leases
+        .remove(&(doc.clone(), session));
+    let error = sim
+        .outputs(
+            &name,
+            session,
+            SyncOutput {
+                io: vec![IoEffect::Storage {
+                    id: doc_sync_core::StorageOpId(999),
+                    op: doc_sync_core::StorageOp::Load {
+                        doc,
+                        owner: session,
+                        user: doc_sync_core::UserKey("user-0".into()),
+                    },
+                }],
+                ..SyncOutput::default()
+            },
+        )
+        .unwrap_err();
+    assert_eq!(error.invariant, "storage_lease");
+}
+
+#[test]
+fn other_user_expiry_uses_the_requesting_clients_positive_or_negative_skew() {
+    use doc_sync_core::{StoredWalRecord, UnixMillis, UserKey, WalOwner, WalRecord, WalSeq};
+    for offset in [-2_000, 2_000] {
+        let mut config = SimConfig::calm(251);
+        config.session.wal.ttl = doc_sync_core::Millis(1_000);
+        let mut sim = Sim::new(config);
+        sim.step(Step::Open(OpenSpec::form("a", "one"))).unwrap();
+        let doc = sim.clients[&ClientName("a".into())].core_doc_id();
+        let origin = sim.clock.wall(0);
+        sim.profiles
+            .get_mut(&ProfileName("one".into()))
+            .unwrap()
+            .durable
+            .entries
+            .insert(
+                (doc, WalOwner::Legacy, WalSeq(1)),
+                StoredWalRecord {
+                    delivered: false,
+                    record: WalRecord {
+                        seq: WalSeq(1),
+                        created_at: UnixMillis(origin),
+                        user: UserKey("other-user".into()),
+                        foreign: false,
+                        quarantined: false,
+                        bytes: vec![0],
+                    },
+                },
+            );
+        let outcome = sim.run(&[
+            Step::ClockSkew {
+                client: ClientName("a".into()),
+                wall_offset_ms: offset,
+            },
+            Step::Run(Millis(500)),
+        ]);
+        assert!(
+            outcome.per_step_failures.is_empty(),
+            "{:?}",
+            outcome.per_step_failures
+        );
+        let dropped = outcome.events.iter().any(|event| matches!(&event.fact, Fact::WalExpired { seqs, .. } if seqs.contains(&WalSeq(1))));
+        assert_eq!(dropped, offset > 0, "offset={offset}");
+    }
+}

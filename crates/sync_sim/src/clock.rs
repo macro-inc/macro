@@ -7,7 +7,7 @@ use std::collections::BTreeMap;
 pub(crate) enum Pending {
     Wake(ClientName, SessionId, u64),
     Input(ClientName, SessionId, SyncInput),
-    Storage(ProfileName, u64),
+    Storage(ProfileName, u64, i64),
     Connect(ClientName, SessionId, u32),
     Close(ClientName, SessionId, u32, u16),
     Up(ClientName, SessionId, u32, crate::network::Delivery),

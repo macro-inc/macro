@@ -87,7 +87,9 @@ fn completed_prune_allows_the_old_prefix_namespace_to_disappear() {
         0,
         &mut sim.rng,
     );
-    let completion = store.complete(token, &profile, at).unwrap();
+    let completion = store
+        .complete(token, &profile, at, doc_sync_core::UnixMillis(100))
+        .unwrap();
     assert!(completion.facts.iter().any(
         |fact| matches!(fact, Fact::WalPruned { seqs, .. } if seqs == &[WalSeq(1), WalSeq(2)])
     ));
@@ -234,7 +236,9 @@ fn power_loss_exempts_only_delivery_flags_that_actually_rolled_back() {
             at,
             &mut sim.rng,
         );
-        let completion = store.complete(token, &profile, at).unwrap();
+        let completion = store
+            .complete(token, &profile, at, doc_sync_core::UnixMillis(100))
+            .unwrap();
         for fact in completion.facts {
             sim.emit(fact);
         }
@@ -304,7 +308,9 @@ fn legacy_adoption_never_exempts_another_documents_prefix_regression() {
         0,
         &mut sim.rng,
     );
-    let completion = store.complete(token, &profile, at).unwrap();
+    let completion = store
+        .complete(token, &profile, at, doc_sync_core::UnixMillis(100))
+        .unwrap();
     store
         .durable
         .entries

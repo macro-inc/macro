@@ -34,11 +34,25 @@ impl Sim {
                 }
             }
             Pending::Input(name, session, input) => self.input(&name, session, input)?,
-            Pending::Storage(profile, token) => {
+            Pending::Storage(profile, token, issued_offset) => {
+                // Match the requesting core's current clock. Retain its issued offset
+                // when a tab died/reopened before the old transaction completed.
+                let offset = self
+                    .profiles
+                    .get(&profile)
+                    .and_then(|store| store.pending.get(&token))
+                    .and_then(|write| {
+                        self.clients
+                            .get(&write.client)
+                            .filter(|client| client.session == write.session)
+                    })
+                    .map(|client| client.skew)
+                    .unwrap_or(issued_offset);
+                let wall = doc_sync_core::UnixMillis(self.clock.wall(offset));
                 let completed = self
                     .profiles
                     .get_mut(&profile)
-                    .and_then(|store| store.complete(token, &profile, self.clock.now));
+                    .and_then(|store| store.complete(token, &profile, self.clock.now, wall));
                 if let Some(completion) = completed {
                     for fact in completion.facts {
                         if let Fact::WalAdopted { map, .. } = &fact {

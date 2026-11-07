@@ -29,7 +29,7 @@ fn complete(store: &mut SimStorage, op: StorageOp, now: u64) -> Completion {
         &mut ChaCha8Rng::seed_from_u64(1),
     );
     store
-        .complete(token, &ProfileName("profile".into()), at)
+        .complete(token, &ProfileName("profile".into()), at, UnixMillis(100))
         .unwrap()
 }
 #[test]
@@ -49,7 +49,7 @@ fn append_is_durable_only_at_completion_and_uncertain_retry_is_idempotent() {
     assert!(store.image().entries.is_empty());
     assert!(matches!(
         store
-            .complete(token, &ProfileName("profile".into()), at)
+            .complete(token, &ProfileName("profile".into()), at, UnixMillis(100))
             .unwrap()
             .event,
         StorageEvent::Done {
@@ -206,7 +206,7 @@ fn process_death_cancels_pending_transactions_and_power_loss_reverts_recent_comm
     );
     assert!(
         store
-            .complete(token, &ProfileName("profile".into()), 110)
+            .complete(token, &ProfileName("profile".into()), 110, UnixMillis(110))
             .is_none()
     );
     assert_eq!(*store.image(), stable);
@@ -215,4 +215,75 @@ fn process_death_cancels_pending_transactions_and_power_loss_reverts_recent_comm
             .iter()
             .any(|fact| matches!(fact, Fact::WalWriteLost { seq: WalSeq(2), .. }))
     );
+}
+
+#[test]
+fn per_document_issue_order_survives_latency_changes_without_global_head_of_line_blocking() {
+    let mut store = SimStorage::new(StorageProfile::fast());
+    let mut rng = ChaCha8Rng::seed_from_u64(17);
+    let write = |op| PendingWrite {
+        client: ClientName("a".into()),
+        session: SessionId(uuid_value::Uuid::from_u128(1)),
+        id: StorageOpId(1),
+        op,
+    };
+    store.fault(StorageFault::Latency(
+        crate::Millis(1_000),
+        crate::Millis(1_000),
+    ));
+    let (first, first_at) = store.issue(write(append(1)), 0, &mut rng);
+    store.fault(StorageFault::Latency(crate::Millis(0), crate::Millis(0)));
+    let (second, second_at) = store.issue(write(append(2)), 0, &mut rng);
+    let mut other = append(1);
+    if let StorageOp::WalAppend { doc, .. } = &mut other {
+        *doc = SyncDocId::new("00000000-0000-7000-8000-000000000002".into()).unwrap();
+    }
+    let (_, other_at) = store.issue(write(other), 0, &mut rng);
+    assert!(first_at < second_at);
+    assert!(other_at < first_at);
+    let profile = ProfileName("profile".into());
+    store
+        .complete(first, &profile, first_at, UnixMillis(1_000))
+        .unwrap();
+    store.crash(&CrashMode::ProcessDeath, &profile, first_at);
+    assert_eq!(store.image().entries.len(), 1);
+    assert!(
+        store
+            .complete(second, &profile, second_at, UnixMillis(1_001))
+            .is_none()
+    );
+}
+#[test]
+fn write_load_and_quota_errors_never_wipe_or_cross_profile_storage() {
+    let mut store = SimStorage::new(StorageProfile::fast());
+    let other_profile = SimStorage::new(StorageProfile::fast());
+    complete(&mut store, append(1), 1);
+    let before = store.image().clone();
+    for fault in [
+        StorageFault::FailWrites,
+        StorageFault::Quota { after_bytes: 0 },
+    ] {
+        store.fault(fault);
+        assert!(matches!(
+            complete(&mut store, append(2), 2).event,
+            StorageEvent::Done { result: Err(_), .. }
+        ));
+        assert_eq!(store.image(), &before);
+        store.fault(StorageFault::Heal);
+    }
+    store.fault(StorageFault::FailLoad);
+    let load = StorageOp::Load {
+        doc: before.entries.keys().next().unwrap().0.clone(),
+        owner: SessionId(uuid_value::Uuid::from_u128(2)),
+        user: UserKey("user-0".into()),
+    };
+    assert!(matches!(
+        complete(&mut store, load, 3).event,
+        StorageEvent::Loaded {
+            result: Err(StorageFailure::Unavailable),
+            ..
+        }
+    ));
+    assert_eq!(store.image(), &before);
+    assert!(other_profile.image().entries.is_empty());
 }
