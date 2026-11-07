@@ -118,17 +118,19 @@ impl MailboxSyncRepository for PgMailboxSync {
     async fn claim_stream(&self, lease_id: Uuid) -> Result<Option<StreamLease>, MailboxError> {
         let row = sqlx::query!(r#"
             WITH candidate AS (
-                SELECT s.id, s.notified_at, s.lease_started_at FROM email_sync_streams s JOIN email_links l ON l.id = s.link_id
+                SELECT s.id, s.notified_traceparent FROM email_sync_streams s JOIN email_links l ON l.id = s.link_id
                 WHERE l.is_sync_active AND l.provider = 'OUTLOOK' AND s.generation = l.sync_generation
                     AND s.kind = 'mail_folder' AND s.next_run_at <= now()
                     AND (s.lease_until IS NULL OR s.lease_until < now())
                 ORDER BY s.next_run_at, s.id LIMIT 1 FOR UPDATE OF s SKIP LOCKED
             )
-            UPDATE email_sync_streams s SET lease_id = $1, lease_until = now() + interval '3 minutes', lease_started_at = clock_timestamp(), fence = fence + 1
+            -- The trace context is handed over once: retries get traces of
+            -- their own, so a long deferral can't grow the webhook's trace.
+            UPDATE email_sync_streams s SET lease_id = $1, lease_until = now() + interval '3 minutes', lease_started_at = clock_timestamp(), fence = fence + 1,
+                notified_traceparent = NULL
             FROM candidate c, email_links l WHERE s.id = c.id AND l.id = s.link_id
             RETURNING s.id, s.link_id, s.generation, l.grant_generation, s.scope_id,
-                s.position, s.initial_complete, s.fence,
-                CASE WHEN c.notified_at > COALESCE(c.lease_started_at, '-infinity') THEN c.notified_at END AS "notified_at?"
+                s.position, s.initial_complete, s.fence, s.notified_at, c.notified_traceparent
         "#, lease_id).fetch_optional(&self.db).await.map_err(db_error)?;
         row.map(|row| {
             Ok(StreamLease {
@@ -143,7 +145,7 @@ impl MailboxSyncRepository for PgMailboxSync {
                 initial_complete: row.initial_complete,
                 lease_id,
                 fence: row.fence,
-                notified_at: row.notified_at,
+                notification: notification(row.notified_at, row.notified_traceparent),
             })
         })
         .transpose()
@@ -175,6 +177,9 @@ impl MailboxSyncRepository for PgMailboxSync {
                 last_completed_at = CASE WHEN $5 THEN now() ELSE last_completed_at END,
                 next_run_at = CASE WHEN $5 AND (s.notified_at IS NULL OR s.notified_at <= s.lease_started_at)
                     THEN now() + interval '2 minutes' ELSE now() END,
+                -- A checkpoint that started reading after the notification has
+                -- answered it; a deferred or partial read leaves it pending.
+                notified_at = CASE WHEN $5 AND s.notified_at <= s.lease_started_at THEN NULL ELSE s.notified_at END,
                 lease_id = NULL, lease_until = NULL
             FROM email_links l WHERE s.id = $1 AND s.lease_id = $2 AND s.fence = $3
                 AND s.lease_until > now() AND s.link_id = l.id AND s.generation = l.sync_generation
@@ -195,19 +200,25 @@ impl MailboxSyncRepository for PgMailboxSync {
         }
         let queued = sqlx::query!(
             r#"
-            INSERT INTO email_message_reconciliation (link_id,generation,provider_id,is_import,notified_at)
-            SELECT $1,$2,provider_id,$4,$5 FROM unnest($3::text[]) provider_id
+            INSERT INTO email_message_reconciliation (link_id,generation,provider_id,is_import,notified_at,notified_traceparent)
+            SELECT $1,$2,provider_id,$4,$5,$6 FROM unnest($3::text[]) provider_id
             ON CONFLICT (link_id,generation,provider_id) DO UPDATE SET
                 revision = email_message_reconciliation.revision + 1,
                 is_import = email_message_reconciliation.is_import AND EXCLUDED.is_import,
                 notified_at = COALESCE(EXCLUDED.notified_at, email_message_reconciliation.notified_at),
+                notified_traceparent = CASE WHEN EXCLUDED.notified_at IS NULL
+                    THEN email_message_reconciliation.notified_traceparent ELSE EXCLUDED.notified_traceparent END,
                 available_at = now()
         "#,
             lease.mailbox.link_id,
             lease.mailbox.sync_generation,
             &ids,
             !lease.initial_complete,
-            lease.notified_at
+            lease.notification.as_ref().map(|notification| notification.received_at),
+            lease
+                .notification
+                .as_ref()
+                .and_then(|notification| notification.traceparent.as_deref())
         )
         .execute(&mut *tx)
         .await
@@ -258,17 +269,19 @@ impl MailboxSyncRepository for PgMailboxSync {
         // Without it, Postgres before 18 reads every backed-off row on each poll.
         let row = sqlx::query!(r#"
             WITH candidate AS (
-                SELECT q.link_id,q.generation,q.provider_id FROM email_message_reconciliation q
+                SELECT q.link_id,q.generation,q.provider_id,q.notified_traceparent FROM email_message_reconciliation q
                 JOIN email_links l ON l.id = q.link_id
                 WHERE q.generation = l.sync_generation AND l.is_sync_active AND l.provider = 'OUTLOOK'
                     AND q.is_import IN (false,true)
                     AND q.available_at <= now() AND (q.lease_until IS NULL OR q.lease_until < now())
                 ORDER BY q.is_import,q.available_at,q.link_id,q.provider_id LIMIT 1 FOR UPDATE OF q SKIP LOCKED
             )
-            UPDATE email_message_reconciliation q SET lease_id = $1, lease_until = now() + interval '3 minutes', attempts = attempts + 1
+            -- Only the first attempt joins the notification's trace.
+            UPDATE email_message_reconciliation q SET lease_id = $1, lease_until = now() + interval '3 minutes', attempts = attempts + 1,
+                notified_traceparent = NULL
             FROM candidate c,email_links l
             WHERE q.link_id = c.link_id AND q.generation = c.generation AND q.provider_id = c.provider_id AND l.id = q.link_id
-            RETURNING q.link_id,q.generation,l.grant_generation,q.provider_id,q.revision,q.is_import,q.attempts,q.notified_at
+            RETURNING q.link_id,q.generation,l.grant_generation,q.provider_id,q.revision,q.is_import,q.attempts,q.notified_at,c.notified_traceparent
         "#,lease_id).fetch_optional(&self.db).await.map_err(db_error)?;
         row.map(|row| {
             Ok(MessageLease {
@@ -282,7 +295,7 @@ impl MailboxSyncRepository for PgMailboxSync {
                 lease_id,
                 is_import: row.is_import,
                 attempts: row.attempts,
-                notified_at: row.notified_at,
+                notification: notification(row.notified_at, row.notified_traceparent),
             })
         })
         .transpose()
@@ -325,7 +338,8 @@ impl MailboxSyncRepository for PgMailboxSync {
             UPDATE email_message_reconciliation SET lease_id = NULL,lease_until = NULL,available_at = now(),
                 notified_at = CASE WHEN notified_at IS DISTINCT FROM $5 THEN notified_at END
             WHERE link_id = $1 AND generation = $2 AND provider_id = $3 AND lease_id = $4
-        "#,lease.mailbox.link_id,lease.mailbox.sync_generation,lease.provider_id.as_str(),lease.lease_id,lease.notified_at)
+        "#,lease.mailbox.link_id,lease.mailbox.sync_generation,lease.provider_id.as_str(),lease.lease_id,
+            lease.notification.as_ref().map(|notification| notification.received_at))
             .execute(&mut *tx).await.map_err(db_error)?;
         let import_completed = Self::settle_import(&mut tx, lease.mailbox).await?;
         tx.commit().await.map_err(db_error)?;
@@ -432,4 +446,16 @@ impl PgMailboxSync {
             folders: size.folders,
         }))
     }
+}
+
+/// The pending notification stored with sync work, if any.
+fn notification(
+    received_at: Option<chrono::DateTime<chrono::Utc>>,
+    traceparent: Option<String>,
+) -> Option<Notification> {
+    let received_at = received_at?;
+    Some(Notification {
+        received_at,
+        traceparent,
+    })
 }
