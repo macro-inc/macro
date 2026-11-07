@@ -8,8 +8,12 @@ Loro projection lives beside the editor core; session composition belongs in
 `lexical_model` provides the value types, typed node registry, immutable snapshots,
 NodeState and copy-on-write transactions. Its base kinds preserve declared parent
 projections and dispatch hooks without a browser runtime. Tree edits live on the
-transaction; user payloads never own links or framework fields. The update pipeline,
-selection editing, history and view reconciliation are separate follow-on layers.
+transaction; user payloads never own links or framework fields. Commits run ordered
+transforms, text normalization, detached-node collection and mutation reporting. View-attached
+editors synchronize text caches after mutation reporting. JSON import/export preserves
+unknown NodeState and upstream property order; `to_js_json_string` provides JavaScript
+number formatting and integer-key ordering. Selection editing, history and view diffs
+remain follow-on layers.
 
 `lexical_workspace_tests` verifies the patched regex dependency and Loro snapshot
 compatibility alongside the model package. Future rich-node,
