@@ -1,4 +1,5 @@
 use entity_access::domain::models::TeamRole;
+use project_id::ProjectId;
 use std::{
     collections::HashMap,
     sync::{Arc, Mutex},
@@ -280,7 +281,7 @@ impl ProjectService for FakeProjectService {
 
     async fn mark_projects_uploaded(
         &self,
-        _root_project_id: &str,
+        _root_project_id: &ProjectId,
     ) -> Result<Vec<String>, ProjectError> {
         Ok(vec![PROJECT_ID.to_string(), "project-child".to_string()])
     }
@@ -295,7 +296,7 @@ impl ProjectService for FakeProjectService {
 
     async fn internal_get_basic_project(
         &self,
-        _project_id: &str,
+        _project_id: &ProjectId,
     ) -> Result<BasicProject, ProjectError> {
         self.basic_project
             .lock()

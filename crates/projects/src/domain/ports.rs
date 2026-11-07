@@ -28,6 +28,7 @@ use models_bulk_upload::{
 use models_permissions::share_permission::access_level::AccessLevel;
 use models_permissions::share_permission::team_share::TeamShareFacts;
 use models_permissions::share_permission::{SharePermissionV2, TeamLinkShareDefault};
+use project_id::ProjectId;
 use s3_key::BulkUploadStagingKey;
 use uuid::Uuid;
 
@@ -530,7 +531,7 @@ pub trait ProjectService: Send + Sync + 'static {
     /// Finalize the uploaded state of a project tree.
     fn mark_projects_uploaded(
         &self,
-        root_project_id: &str,
+        root_project_id: &ProjectId,
     ) -> impl Future<Output = Result<Vec<String>, ProjectError>> + Send;
 
     /// Get project previews without applying per-project access filtering.
@@ -543,6 +544,6 @@ pub trait ProjectService: Send + Sync + 'static {
     /// Get basic project metadata without performing access checks.
     fn internal_get_basic_project(
         &self,
-        project_id: &str,
+        project_id: &ProjectId,
     ) -> impl Future<Output = Result<BasicProject, ProjectError>> + Send;
 }

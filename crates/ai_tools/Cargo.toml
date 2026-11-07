@@ -11,6 +11,7 @@ test-support = []
 feature_flags = { path = "../feature_flags" }
 import_linear = { path = "../import_linear" }
 import_jira = { path = "../import_jira" }
+project_id = { path = "../types/project_id" }
 
 macro_entrypoint = { path = "../macro_entrypoint" }
 memory = { path = "../memory" }

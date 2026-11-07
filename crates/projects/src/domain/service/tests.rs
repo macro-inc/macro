@@ -1,3 +1,4 @@
+use project_id::ProjectId;
 use std::sync::{Arc, Mutex};
 
 use bot_id::{BotId, NonSystemBotId};
@@ -2181,7 +2182,7 @@ async fn mark_projects_uploaded_publishes_root_metadata_and_returns_subtree_ids(
     let service = service_with_event_broker(repo, RecordingBulkUpload::default(), event_broker);
 
     let result = service
-        .mark_projects_uploaded(root_project_id)
+        .mark_projects_uploaded(&ProjectId::from(root_project_id))
         .await
         .unwrap();
 
@@ -2226,7 +2227,7 @@ async fn repeated_mark_projects_uploaded_returns_subtree_ids_without_publishing(
     let service = service_with_event_broker(repo, RecordingBulkUpload::default(), event_broker);
 
     let result = service
-        .mark_projects_uploaded("root-project")
+        .mark_projects_uploaded(&ProjectId::from("root-project"))
         .await
         .unwrap();
 
@@ -2243,7 +2244,9 @@ async fn mark_projects_uploaded_missing_root_publishes_no_event() {
     let published = event_broker.published();
     let service = service_with_event_broker(repo, RecordingBulkUpload::default(), event_broker);
 
-    let result = service.mark_projects_uploaded("missing-project").await;
+    let result = service
+        .mark_projects_uploaded(&ProjectId::from("missing-project"))
+        .await;
 
     assert!(matches!(result, Err(ProjectError::Internal(_))));
     assert!(published.lock().unwrap().is_empty());
@@ -2258,7 +2261,9 @@ async fn mark_projects_uploaded_repository_failure_publishes_no_event() {
     let published = event_broker.published();
     let service = service_with_event_broker(repo, RecordingBulkUpload::default(), event_broker);
 
-    let result = service.mark_projects_uploaded("root-project").await;
+    let result = service
+        .mark_projects_uploaded(&ProjectId::from("root-project"))
+        .await;
 
     assert!(matches!(result, Err(ProjectError::Internal(_))));
     assert!(published.lock().unwrap().is_empty());
@@ -2286,7 +2291,7 @@ async fn mark_projects_uploaded_publication_failure_is_non_fatal() {
     );
 
     let result = service
-        .mark_projects_uploaded("root-project")
+        .mark_projects_uploaded(&ProjectId::from("root-project"))
         .await
         .unwrap();
 

@@ -13,6 +13,7 @@ pub mod project_permission;
 pub mod revert_delete_project;
 pub mod upload_folder;
 
+use project_id::ProjectId;
 use std::sync::Arc;
 
 use axum::{
@@ -198,7 +199,10 @@ where
     Svc: EntityAccessService,
     Auth: MacroAuthorizationService,
 {
-    let project = state.service.internal_get_basic_project(&id).await?;
+    let project = state
+        .service
+        .internal_get_basic_project(&ProjectId::from(&*id))
+        .await?;
     request.extensions_mut().insert(project);
     Ok(next.run(request).await)
 }

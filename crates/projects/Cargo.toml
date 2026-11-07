@@ -48,6 +48,7 @@ activity = { path = "../activity", default-features = false }
 anyhow = { workspace = true }
 chrono = { workspace = true }
 futures = { workspace = true }
+project_id = { path = "../types/project_id" }
 serde = { workspace = true }
 serde_json = { workspace = true }
 thiserror = { workspace = true }

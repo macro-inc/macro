@@ -26,6 +26,7 @@ use models_permissions::share_permission::team_share::{
     AuthorizedTeamShareCommand, TeamShareLevel, TeamSharePolicyError, TeamShareRequest,
     authorize_team_share,
 };
+use project_id::ProjectId;
 use s3_key::BulkUploadStagingKey;
 use unicode_segmentation::UnicodeSegmentation;
 use uuid::Uuid;
@@ -846,11 +847,11 @@ where
 
     async fn mark_projects_uploaded(
         &self,
-        root_project_id: &str,
+        root_project_id: &ProjectId,
     ) -> Result<Vec<String>, ProjectError> {
         let uploaded_tree = self
             .repo
-            .mark_projects_uploaded(root_project_id)
+            .mark_projects_uploaded(root_project_id.as_str())
             .await
             .map_err(|error| internal_error(error, "unable to mark projects uploaded"))?;
 
@@ -888,10 +889,10 @@ where
 
     async fn internal_get_basic_project(
         &self,
-        project_id: &str,
+        project_id: &ProjectId,
     ) -> Result<BasicProject, ProjectError> {
         self.repo
-            .get_basic_project(project_id)
+            .get_basic_project(project_id.as_str())
             .await
             .map_err(|error| internal_error(error, "unable to get basic project"))?
             .ok_or_else(|| ProjectError::NotFound(project_id.to_string()))

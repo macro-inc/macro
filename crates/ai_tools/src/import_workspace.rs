@@ -319,7 +319,7 @@ impl import::domain::ports::WorkspaceWriter for ToolEntityCreator {
                     })?;
                 let project = self
                     .project_service
-                    .internal_get_basic_project(&folder.to_string())
+                    .internal_get_basic_project(&project_id::ProjectId::new(folder.to_string()))
                     .await
                     .map_err(|error| {
                         anyhow::anyhow!("imported folder {folder} was not read: {error:?}")
