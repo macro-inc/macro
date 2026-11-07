@@ -1,0 +1,809 @@
+{
+  "schema": 2,
+  "source": {
+    "repo": "macro",
+    "version": "0.45.0",
+    "file": "packages/lexical-core/tests/agent-announcement.test.ts",
+    "test": [
+      "composeAgentSessionAnnouncement",
+      "parses back into a reply target and a chip"
+    ],
+    "recordedWith": "lexical-conformance@a5df4931fde86372f78efe37be5b2166dd88bc6156e4610da787b770aa0f5f7e"
+  },
+  "tier": "A-rec",
+  "partial": false,
+  "covers": [],
+  "normalize": [
+    "listIndent: 2"
+  ],
+  "outcomeDiffers": [],
+  "config": {},
+  "initial": {
+    "editorState": null,
+    "selection": null
+  },
+  "trace": [
+    {
+      "op": "call",
+      "fn": "@macro-inc/lexical-core/utils/agent-announcement.composeAgentSessionAnnouncement",
+      "args": [
+        {
+          "replyTarget": {
+            "parent": {
+              "type": "channel",
+              "id": "channel-1"
+            },
+            "targetMessageId": "message-1",
+            "targetThreadId": "thread-1",
+            "displayText": "@claude fix the failing test it broke on main",
+            "senderId": "macro|user@example.com"
+          },
+          "chip": {
+            "agentSessionId": "session-1",
+            "channelId": "channel-1",
+            "promptedMessage": {
+              "turn": 0,
+              "author": "user"
+            },
+            "status": "booting"
+          }
+        }
+      ],
+      "ret": "<m-reply-target>{\"parent\":{\"type\":\"channel\",\"id\":\"channel-1\"},\"targetMessageId\":\"message-1\",\"targetThreadId\":\"thread-1\",\"displayText\":\"@claude fix the failing test it broke on main\",\"senderId\":\"macro|user@example.com\"}</m-reply-target>\n\n<m-magic-chip>{\"agentSessionId\":\"session-1\",\"channelId\":\"channel-1\",\"promptedMessage\":{\"turn\":0,\"author\":\"user\"},\"status\":\"booting\"}</m-magic-chip>"
+    },
+    {
+      "op": "entropy",
+      "src": "random",
+      "v": 0.23645552527159452
+    },
+    {
+      "op": "entropy",
+      "src": "random",
+      "v": 0.3692706737201661
+    },
+    {
+      "op": "call",
+      "fn": "@macro-inc/lexical-core/utils/markdown-state.markdownToSerializedEditorStateWithIds",
+      "args": [
+        "<m-reply-target>{\"parent\":{\"type\":\"channel\",\"id\":\"channel-1\"},\"targetMessageId\":\"message-1\",\"targetThreadId\":\"thread-1\",\"displayText\":\"@claude fix the failing test it broke on main\",\"senderId\":\"macro|user@example.com\"}</m-reply-target>\n\n<m-magic-chip>{\"agentSessionId\":\"session-1\",\"channelId\":\"channel-1\",\"promptedMessage\":{\"turn\":0,\"author\":\"user\"},\"status\":\"booting\"}</m-magic-chip>"
+      ],
+      "ret": {
+        "root": {
+          "children": [
+            {
+              "type": "reply-target",
+              "version": 2,
+              "$": {
+                "id": "-QXVzrpx"
+              },
+              "parent": {
+                "type": "channel",
+                "id": "channel-1"
+              },
+              "targetMessageId": "message-1",
+              "targetThreadId": "thread-1",
+              "displayText": "@claude fix the failing test it broke on main",
+              "senderId": "macro|user@example.com"
+            },
+            {
+              "type": "magic-chip",
+              "version": 5,
+              "$": {
+                "id": "I5kI0PCq"
+              },
+              "agentSessionId": "session-1",
+              "channelId": "channel-1",
+              "promptedMessage": {
+                "turn": 0,
+                "author": "user"
+              },
+              "status": "booting"
+            }
+          ],
+          "direction": null,
+          "format": "",
+          "indent": 0,
+          "type": "root",
+          "version": 1,
+          "$": {
+            "id": "_uDn8oR1"
+          }
+        }
+      }
+    },
+    {
+      "op": "entropy",
+      "src": "random",
+      "v": 0.5042420323006809
+    },
+    {
+      "op": "entropy",
+      "src": "random",
+      "v": 0.7048832636792213
+    },
+    {
+      "op": "entropy",
+      "src": "getRandomValues",
+      "v": [
+        12,
+        94,
+        198,
+        142,
+        4,
+        163,
+        64,
+        108
+      ]
+    },
+    {
+      "op": "entropy",
+      "src": "getRandomValues",
+      "v": [
+        151,
+        214,
+        60,
+        251,
+        220,
+        83,
+        174,
+        136
+      ]
+    },
+    {
+      "op": "entropy",
+      "src": "getRandomValues",
+      "v": [
+        55,
+        26,
+        18,
+        81,
+        33,
+        181,
+        149,
+        97
+      ]
+    },
+    {
+      "op": "call",
+      "fn": "get:root",
+      "this": {
+        "root": {
+          "children": [
+            {
+              "type": "reply-target",
+              "version": 2,
+              "$": {
+                "id": "-QXVzrpx"
+              },
+              "parent": {
+                "type": "channel",
+                "id": "channel-1"
+              },
+              "targetMessageId": "message-1",
+              "targetThreadId": "thread-1",
+              "displayText": "@claude fix the failing test it broke on main",
+              "senderId": "macro|user@example.com"
+            },
+            {
+              "type": "magic-chip",
+              "version": 5,
+              "$": {
+                "id": "I5kI0PCq"
+              },
+              "agentSessionId": "session-1",
+              "channelId": "channel-1",
+              "promptedMessage": {
+                "turn": 0,
+                "author": "user"
+              },
+              "status": "booting"
+            }
+          ],
+          "direction": null,
+          "format": "",
+          "indent": 0,
+          "type": "root",
+          "version": 1,
+          "$": {
+            "id": "_uDn8oR1"
+          }
+        }
+      },
+      "args": [],
+      "ret": {
+        "children": [
+          {
+            "type": "reply-target",
+            "version": 2,
+            "$": {
+              "id": "-QXVzrpx"
+            },
+            "parent": {
+              "type": "channel",
+              "id": "channel-1"
+            },
+            "targetMessageId": "message-1",
+            "targetThreadId": "thread-1",
+            "displayText": "@claude fix the failing test it broke on main",
+            "senderId": "macro|user@example.com"
+          },
+          {
+            "type": "magic-chip",
+            "version": 5,
+            "$": {
+              "id": "I5kI0PCq"
+            },
+            "agentSessionId": "session-1",
+            "channelId": "channel-1",
+            "promptedMessage": {
+              "turn": 0,
+              "author": "user"
+            },
+            "status": "booting"
+          }
+        ],
+        "direction": null,
+        "format": "",
+        "indent": 0,
+        "type": "root",
+        "version": 1,
+        "$": {
+          "id": "_uDn8oR1"
+        }
+      }
+    },
+    {
+      "op": "call",
+      "fn": "get:children",
+      "this": {
+        "children": [
+          {
+            "type": "reply-target",
+            "version": 2,
+            "$": {
+              "id": "-QXVzrpx"
+            },
+            "parent": {
+              "type": "channel",
+              "id": "channel-1"
+            },
+            "targetMessageId": "message-1",
+            "targetThreadId": "thread-1",
+            "displayText": "@claude fix the failing test it broke on main",
+            "senderId": "macro|user@example.com"
+          },
+          {
+            "type": "magic-chip",
+            "version": 5,
+            "$": {
+              "id": "I5kI0PCq"
+            },
+            "agentSessionId": "session-1",
+            "channelId": "channel-1",
+            "promptedMessage": {
+              "turn": 0,
+              "author": "user"
+            },
+            "status": "booting"
+          }
+        ],
+        "direction": null,
+        "format": "",
+        "indent": 0,
+        "type": "root",
+        "version": 1,
+        "$": {
+          "id": "_uDn8oR1"
+        }
+      },
+      "args": [],
+      "ret": [
+        {
+          "type": "reply-target",
+          "version": 2,
+          "$": {
+            "id": "-QXVzrpx"
+          },
+          "parent": {
+            "type": "channel",
+            "id": "channel-1"
+          },
+          "targetMessageId": "message-1",
+          "targetThreadId": "thread-1",
+          "displayText": "@claude fix the failing test it broke on main",
+          "senderId": "macro|user@example.com"
+        },
+        {
+          "type": "magic-chip",
+          "version": 5,
+          "$": {
+            "id": "I5kI0PCq"
+          },
+          "agentSessionId": "session-1",
+          "channelId": "channel-1",
+          "promptedMessage": {
+            "turn": 0,
+            "author": "user"
+          },
+          "status": "booting"
+        }
+      ]
+    },
+    {
+      "op": "call",
+      "fn": "get:type",
+      "this": {
+        "type": "reply-target",
+        "version": 2,
+        "$": {
+          "id": "-QXVzrpx"
+        },
+        "parent": {
+          "type": "channel",
+          "id": "channel-1"
+        },
+        "targetMessageId": "message-1",
+        "targetThreadId": "thread-1",
+        "displayText": "@claude fix the failing test it broke on main",
+        "senderId": "macro|user@example.com"
+      },
+      "args": [],
+      "ret": "reply-target"
+    },
+    {
+      "op": "call",
+      "fn": "get:type",
+      "this": {
+        "type": "magic-chip",
+        "version": 5,
+        "$": {
+          "id": "I5kI0PCq"
+        },
+        "agentSessionId": "session-1",
+        "channelId": "channel-1",
+        "promptedMessage": {
+          "turn": 0,
+          "author": "user"
+        },
+        "status": "booting"
+      },
+      "args": [],
+      "ret": "magic-chip"
+    },
+    {
+      "op": "call",
+      "fn": "get:root",
+      "this": {
+        "root": {
+          "children": [
+            {
+              "type": "reply-target",
+              "version": 2,
+              "$": {
+                "id": "-QXVzrpx"
+              },
+              "parent": {
+                "type": "channel",
+                "id": "channel-1"
+              },
+              "targetMessageId": "message-1",
+              "targetThreadId": "thread-1",
+              "displayText": "@claude fix the failing test it broke on main",
+              "senderId": "macro|user@example.com"
+            },
+            {
+              "type": "magic-chip",
+              "version": 5,
+              "$": {
+                "id": "I5kI0PCq"
+              },
+              "agentSessionId": "session-1",
+              "channelId": "channel-1",
+              "promptedMessage": {
+                "turn": 0,
+                "author": "user"
+              },
+              "status": "booting"
+            }
+          ],
+          "direction": null,
+          "format": "",
+          "indent": 0,
+          "type": "root",
+          "version": 1,
+          "$": {
+            "id": "_uDn8oR1"
+          }
+        }
+      },
+      "args": [],
+      "ret": {
+        "children": [
+          {
+            "type": "reply-target",
+            "version": 2,
+            "$": {
+              "id": "-QXVzrpx"
+            },
+            "parent": {
+              "type": "channel",
+              "id": "channel-1"
+            },
+            "targetMessageId": "message-1",
+            "targetThreadId": "thread-1",
+            "displayText": "@claude fix the failing test it broke on main",
+            "senderId": "macro|user@example.com"
+          },
+          {
+            "type": "magic-chip",
+            "version": 5,
+            "$": {
+              "id": "I5kI0PCq"
+            },
+            "agentSessionId": "session-1",
+            "channelId": "channel-1",
+            "promptedMessage": {
+              "turn": 0,
+              "author": "user"
+            },
+            "status": "booting"
+          }
+        ],
+        "direction": null,
+        "format": "",
+        "indent": 0,
+        "type": "root",
+        "version": 1,
+        "$": {
+          "id": "_uDn8oR1"
+        }
+      }
+    },
+    {
+      "op": "call",
+      "fn": "get:children",
+      "this": {
+        "children": [
+          {
+            "type": "reply-target",
+            "version": 2,
+            "$": {
+              "id": "-QXVzrpx"
+            },
+            "parent": {
+              "type": "channel",
+              "id": "channel-1"
+            },
+            "targetMessageId": "message-1",
+            "targetThreadId": "thread-1",
+            "displayText": "@claude fix the failing test it broke on main",
+            "senderId": "macro|user@example.com"
+          },
+          {
+            "type": "magic-chip",
+            "version": 5,
+            "$": {
+              "id": "I5kI0PCq"
+            },
+            "agentSessionId": "session-1",
+            "channelId": "channel-1",
+            "promptedMessage": {
+              "turn": 0,
+              "author": "user"
+            },
+            "status": "booting"
+          }
+        ],
+        "direction": null,
+        "format": "",
+        "indent": 0,
+        "type": "root",
+        "version": 1,
+        "$": {
+          "id": "_uDn8oR1"
+        }
+      },
+      "args": [],
+      "ret": [
+        {
+          "type": "reply-target",
+          "version": 2,
+          "$": {
+            "id": "-QXVzrpx"
+          },
+          "parent": {
+            "type": "channel",
+            "id": "channel-1"
+          },
+          "targetMessageId": "message-1",
+          "targetThreadId": "thread-1",
+          "displayText": "@claude fix the failing test it broke on main",
+          "senderId": "macro|user@example.com"
+        },
+        {
+          "type": "magic-chip",
+          "version": 5,
+          "$": {
+            "id": "I5kI0PCq"
+          },
+          "agentSessionId": "session-1",
+          "channelId": "channel-1",
+          "promptedMessage": {
+            "turn": 0,
+            "author": "user"
+          },
+          "status": "booting"
+        }
+      ]
+    },
+    {
+      "op": "call",
+      "fn": "get:0",
+      "this": [
+        {
+          "type": "reply-target",
+          "version": 2,
+          "$": {
+            "id": "-QXVzrpx"
+          },
+          "parent": {
+            "type": "channel",
+            "id": "channel-1"
+          },
+          "targetMessageId": "message-1",
+          "targetThreadId": "thread-1",
+          "displayText": "@claude fix the failing test it broke on main",
+          "senderId": "macro|user@example.com"
+        },
+        {
+          "type": "magic-chip",
+          "version": 5,
+          "$": {
+            "id": "I5kI0PCq"
+          },
+          "agentSessionId": "session-1",
+          "channelId": "channel-1",
+          "promptedMessage": {
+            "turn": 0,
+            "author": "user"
+          },
+          "status": "booting"
+        }
+      ],
+      "args": [],
+      "ret": {
+        "type": "reply-target",
+        "version": 2,
+        "$": {
+          "id": "-QXVzrpx"
+        },
+        "parent": {
+          "type": "channel",
+          "id": "channel-1"
+        },
+        "targetMessageId": "message-1",
+        "targetThreadId": "thread-1",
+        "displayText": "@claude fix the failing test it broke on main",
+        "senderId": "macro|user@example.com"
+      }
+    },
+    {
+      "op": "call",
+      "fn": "get:root",
+      "this": {
+        "root": {
+          "children": [
+            {
+              "type": "reply-target",
+              "version": 2,
+              "$": {
+                "id": "-QXVzrpx"
+              },
+              "parent": {
+                "type": "channel",
+                "id": "channel-1"
+              },
+              "targetMessageId": "message-1",
+              "targetThreadId": "thread-1",
+              "displayText": "@claude fix the failing test it broke on main",
+              "senderId": "macro|user@example.com"
+            },
+            {
+              "type": "magic-chip",
+              "version": 5,
+              "$": {
+                "id": "I5kI0PCq"
+              },
+              "agentSessionId": "session-1",
+              "channelId": "channel-1",
+              "promptedMessage": {
+                "turn": 0,
+                "author": "user"
+              },
+              "status": "booting"
+            }
+          ],
+          "direction": null,
+          "format": "",
+          "indent": 0,
+          "type": "root",
+          "version": 1,
+          "$": {
+            "id": "_uDn8oR1"
+          }
+        }
+      },
+      "args": [],
+      "ret": {
+        "children": [
+          {
+            "type": "reply-target",
+            "version": 2,
+            "$": {
+              "id": "-QXVzrpx"
+            },
+            "parent": {
+              "type": "channel",
+              "id": "channel-1"
+            },
+            "targetMessageId": "message-1",
+            "targetThreadId": "thread-1",
+            "displayText": "@claude fix the failing test it broke on main",
+            "senderId": "macro|user@example.com"
+          },
+          {
+            "type": "magic-chip",
+            "version": 5,
+            "$": {
+              "id": "I5kI0PCq"
+            },
+            "agentSessionId": "session-1",
+            "channelId": "channel-1",
+            "promptedMessage": {
+              "turn": 0,
+              "author": "user"
+            },
+            "status": "booting"
+          }
+        ],
+        "direction": null,
+        "format": "",
+        "indent": 0,
+        "type": "root",
+        "version": 1,
+        "$": {
+          "id": "_uDn8oR1"
+        }
+      }
+    },
+    {
+      "op": "call",
+      "fn": "get:children",
+      "this": {
+        "children": [
+          {
+            "type": "reply-target",
+            "version": 2,
+            "$": {
+              "id": "-QXVzrpx"
+            },
+            "parent": {
+              "type": "channel",
+              "id": "channel-1"
+            },
+            "targetMessageId": "message-1",
+            "targetThreadId": "thread-1",
+            "displayText": "@claude fix the failing test it broke on main",
+            "senderId": "macro|user@example.com"
+          },
+          {
+            "type": "magic-chip",
+            "version": 5,
+            "$": {
+              "id": "I5kI0PCq"
+            },
+            "agentSessionId": "session-1",
+            "channelId": "channel-1",
+            "promptedMessage": {
+              "turn": 0,
+              "author": "user"
+            },
+            "status": "booting"
+          }
+        ],
+        "direction": null,
+        "format": "",
+        "indent": 0,
+        "type": "root",
+        "version": 1,
+        "$": {
+          "id": "_uDn8oR1"
+        }
+      },
+      "args": [],
+      "ret": [
+        {
+          "type": "reply-target",
+          "version": 2,
+          "$": {
+            "id": "-QXVzrpx"
+          },
+          "parent": {
+            "type": "channel",
+            "id": "channel-1"
+          },
+          "targetMessageId": "message-1",
+          "targetThreadId": "thread-1",
+          "displayText": "@claude fix the failing test it broke on main",
+          "senderId": "macro|user@example.com"
+        },
+        {
+          "type": "magic-chip",
+          "version": 5,
+          "$": {
+            "id": "I5kI0PCq"
+          },
+          "agentSessionId": "session-1",
+          "channelId": "channel-1",
+          "promptedMessage": {
+            "turn": 0,
+            "author": "user"
+          },
+          "status": "booting"
+        }
+      ]
+    },
+    {
+      "op": "call",
+      "fn": "get:1",
+      "this": [
+        {
+          "type": "reply-target",
+          "version": 2,
+          "$": {
+            "id": "-QXVzrpx"
+          },
+          "parent": {
+            "type": "channel",
+            "id": "channel-1"
+          },
+          "targetMessageId": "message-1",
+          "targetThreadId": "thread-1",
+          "displayText": "@claude fix the failing test it broke on main",
+          "senderId": "macro|user@example.com"
+        },
+        {
+          "type": "magic-chip",
+          "version": 5,
+          "$": {
+            "id": "I5kI0PCq"
+          },
+          "agentSessionId": "session-1",
+          "channelId": "channel-1",
+          "promptedMessage": {
+            "turn": 0,
+            "author": "user"
+          },
+          "status": "booting"
+        }
+      ],
+      "args": [],
+      "ret": {
+        "type": "magic-chip",
+        "version": 5,
+        "$": {
+          "id": "I5kI0PCq"
+        },
+        "agentSessionId": "session-1",
+        "channelId": "channel-1",
+        "promptedMessage": {
+          "turn": 0,
+          "author": "user"
+        },
+        "status": "booting"
+      }
+    }
+  ],
+  "tapes": [],
+  "final": null
+}

@@ -1,0 +1,58 @@
+{
+  "schema": 2,
+  "source": {
+    "repo": "macro",
+    "version": "0.45.0",
+    "file": "packages/lexical-core/tests/database-query.test.ts",
+    "test": [
+      "database query chart settings",
+      "keeps column aliases and drops renderer options and executable fields"
+    ],
+    "recordedWith": "lexical-conformance@a5df4931fde86372f78efe37be5b2166dd88bc6156e4610da787b770aa0f5f7e"
+  },
+  "tier": "A-rec",
+  "partial": false,
+  "covers": [],
+  "normalize": [
+    "listIndent: 2"
+  ],
+  "outcomeDiffers": [],
+  "config": {},
+  "initial": {
+    "editorState": null,
+    "selection": null
+  },
+  "trace": [
+    {
+      "op": "call",
+      "fn": "@macro-inc/lexical-core/nodes/databaseQueryData.parseDatabaseQueryChart",
+      "args": [
+        {
+          "x": "Month",
+          "y": [
+            "Tickets"
+          ],
+          "color": "Team",
+          "stack": true,
+          "marks": [
+            {
+              "type": "barY"
+            }
+          ],
+          "marginLeft": 80,
+          "script": "alert(1)"
+        }
+      ],
+      "ret": {
+        "x": "Month",
+        "y": [
+          "Tickets"
+        ],
+        "color": "Team",
+        "stack": true
+      }
+    }
+  ],
+  "tapes": [],
+  "final": null
+}

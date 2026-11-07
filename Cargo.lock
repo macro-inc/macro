@@ -11759,6 +11759,7 @@ dependencies = [
  "serde",
  "serde_json",
  "thiserror 2.0.18",
+ "wasm-bindgen-test",
 ]
 
 [[package]]
@@ -11773,6 +11774,33 @@ dependencies = [
  "serde_json",
  "thiserror 2.0.18",
  "wasm-bindgen",
+]
+
+[[package]]
+name = "lexical_html"
+version = "0.1.0"
+dependencies = [
+ "base64 0.22.1",
+ "lexical_model",
+ "nom 8.0.0",
+ "regress",
+ "serde",
+ "thiserror 2.0.18",
+]
+
+[[package]]
+name = "lexical_loro"
+version = "0.1.0"
+dependencies = [
+ "indexmap 2.14.0",
+ "lexical_model",
+ "lexical_rich_nodes",
+ "loro",
+ "proptest",
+ "rustc-hash 2.1.2",
+ "serde_json",
+ "thiserror 2.0.18",
+ "tracing",
 ]
 
 [[package]]
@@ -11825,7 +11853,6 @@ dependencies = [
  "bitflags 2.11.1",
  "indexmap 2.14.0",
  "lexical_model",
- "nom 8.0.0",
  "phf 0.13.1",
  "regress",
  "serde",

@@ -382,6 +382,7 @@ impl TextMut<'_, '_> {
             return Ok(vec![self.key]);
         }
         let original = self.key;
+        let was_composing = self.tx.composition_key == Some(original);
         let parent = self.tx.parent(original);
         let insertion_index = self.tx.index_within_parent(original);
         let original_selection = self.tx.pending.selection.clone();
@@ -466,6 +467,7 @@ impl TextMut<'_, '_> {
                     break;
                 }
             }
+            range.invalidate_changed_direction();
             self.tx.pending.selection = Some(Selection::Range(range));
         }
         if let (Some(parent), Some(index)) = (parent, insertion_index) {
@@ -522,7 +524,11 @@ impl TextMut<'_, '_> {
                     };
                 }
             }
+            range.invalidate_changed_direction();
             self.tx.pending.selection = Some(Selection::Range(range));
+        }
+        if was_composing {
+            self.tx.composition_key = parts.last().copied();
         }
         Ok(parts)
     }
@@ -550,21 +556,19 @@ impl TextMut<'_, '_> {
             format!("{own}{other}")
         };
         let own_len = self.data().text.utf16_len();
-        let other_len = TextBuffer::new(&other).utf16_len();
         self.set_text_content(&text)?;
         if let Some(Selection::Range(range)) = &mut self.tx.pending.selection {
             for point in [&mut range.anchor, &mut range.focus] {
-                if let Point::Text { key, offset } = point {
-                    if *key == target {
-                        *key = self.key;
-                        if !before {
-                            *offset = *offset + own_len;
-                        }
-                    } else if *key == self.key && before {
-                        *offset = *offset + other_len;
+                if let Point::Text { key, offset } = point
+                    && *key == target
+                {
+                    *key = self.key;
+                    if !before {
+                        *offset = *offset + own_len;
                     }
                 }
             }
+            range.invalidate_changed_direction();
         }
         if self.tx.composition_key == Some(target) {
             self.tx.composition_key = Some(self.key);

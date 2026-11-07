@@ -1,4 +1,5 @@
 //! Read-only markdown traversal with upstream format-stack sharing.
+use crate::util::is_js_whitespace;
 use crate::{state::*, util::*, *};
 use lexical_model::*;
 #[derive(Clone)]

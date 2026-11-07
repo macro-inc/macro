@@ -1,1 +1,4 @@
 pkg/
+!coverage/
+!coverage/**
+coverage/results/

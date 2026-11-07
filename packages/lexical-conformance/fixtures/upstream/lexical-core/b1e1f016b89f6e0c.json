@@ -1,0 +1,42 @@
+{
+  "schema": 2,
+  "source": {
+    "repo": "macro",
+    "version": "0.45.0",
+    "file": "packages/lexical-core/tests/database-query.test.ts",
+    "test": [
+      "database query node",
+      "reads a title a model wrote with HTML entities as the characters they stand for"
+    ],
+    "recordedWith": "lexical-conformance@a5df4931fde86372f78efe37be5b2166dd88bc6156e4610da787b770aa0f5f7e"
+  },
+  "tier": "A-rec",
+  "partial": false,
+  "covers": [],
+  "normalize": [
+    "listIndent: 2"
+  ],
+  "outcomeDiffers": [],
+  "config": {},
+  "initial": {
+    "editorState": null,
+    "selection": null
+  },
+  "trace": [
+    {
+      "op": "call",
+      "fn": "@macro-inc/lexical-core/nodes/DatabaseQueryNode.parseDatabaseQueryJson",
+      "args": [
+        "{\"queryId\":\"q\",\"title\":\"2025 Attendees &amp; Emails\",\"prompt\":\"Q&amp;A &lt;draft&gt; &quot;final&quot; &amp;lt;\",\"displayMode\":\"table\"}"
+      ],
+      "ret": {
+        "queryId": "q",
+        "title": "2025 Attendees & Emails",
+        "prompt": "Q&A <draft> \"final\" &lt;",
+        "displayMode": "table"
+      }
+    }
+  ],
+  "tapes": [],
+  "final": null
+}

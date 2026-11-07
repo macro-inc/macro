@@ -49,7 +49,7 @@ node types, immutable snapshots, transactional tree editing, update processing, 
 - EditorCore is sans-IO: host time, layout, clipboard and composition facts arrive as data; effects leave as values.
 - Failed hook rounds roll back early publications too; failed main inputs retain and report their early commits.
 
-- Reserved `foreign-nodes` exposes a development-only peer editor for the conformance facade; JS node hosting remains a later layer.
+- Reserved `foreign-nodes` exposes development-only peer editors and fresh seeded-state restoration (explicit key layout, validated selection, next allocator key) for the conformance facade; JS node hosting remains a later layer.
 
 - Accepted text splices acquire writable records even for unchanged content; equal set_text_content remains a no-op.
 - Raw element splices preserve surviving parent offsets; sibling insertion/removal APIs adjust their own source and destination endpoints.
@@ -72,6 +72,7 @@ node types, immutable snapshots, transactional tree editing, update processing, 
 
 - Text positions are UTF-16 code units; allow interior selection offsets but reject edits that split surrogate pairs.
 - Text insertion checks the adjacent text node's insertion edge before reusing it; tabs and entity boundaries require a new plain text node.
+- Node ordering is post-order within shared ancestry, including detached subtrees.
 - Node ancestry follows the kind trait's `Parent`, never Rust layout casts.
 - Keep key allocation outside rollback, and snapshots independent on first write.
 
@@ -92,6 +93,8 @@ the intentional root dirty mark; cache-only writes do not add mutations.
 
 Generate command scripts with inline paragraph contents and block decorators at root; malformed nested paragraphs can legitimately reject insertion upstream. Check range-only command preconditions after decorator deletion enters NodeSelection, and validate selected node keys too.
 
+Generate inline paragraph contents and root-level block decorators; keep malformed nested-paragraph scripts as literal regressions instead of swallowing edit errors.
+
 Generated properties cover S4 P1–P13 for the core node subset. P5 follows S1 §8.6
 cache eligibility; P10 compares dirty records before cache writes per S1 §8.7.
 Exact history JSON identity (P11) uses headless mode: restoring view-attached
@@ -99,3 +102,5 @@ snapshots can reconcile cached element defaults, as the upstream literal guard
 demonstrates. Place P14 markdown round-trip properties in lexical_markdown. Persist shrinking seeds in
 `proptest-regressions/`. Keep the decorator count in sync with record insertion
 and removal; opaque text hooks rule out the local root-text proof.
+
+Cache range direction only when upstream calls isBackward in a write context; invalidate it on endpoint changes and selection-object cloning, while preserving it through text-only trimming.
