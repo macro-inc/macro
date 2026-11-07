@@ -85,7 +85,9 @@ impl RichHandle {
                     Ok(commit) => commit,
                     Err(error) => return self.capture(Some(error.to_string())),
                 };
-                self.history.record(&commit, now);
+                if !commit.changes.is_empty() || commit.selection_changed {
+                    self.history.record(&commit, now);
+                }
                 if matches!(
                     input,
                     Input::Core {
