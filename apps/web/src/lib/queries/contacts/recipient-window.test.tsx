@@ -30,14 +30,14 @@ it('replaces pages from a 100k directory and releases them on close without trun
       const start =
         request.query === 'last'
           ? 99_999
-          : request.cursor?.source === 'server'
+          : request.cursor?.source === 'people'
             ? Number(request.cursor.after)
             : 0;
       const length = Math.min(50, 100_000 - start);
       return {
         query: request.query,
-        source: 'server',
-        sync: 'unavailable',
+        source: 'cache',
+        sync: 'partial',
         offline: false,
         users: Array.from({ length }, (_, index) => ({
           id: `macro|person${start + index}@example.com`,
@@ -47,7 +47,8 @@ it('replaces pages from a 100k directory and releases them on close without trun
         nextCursor:
           start + length < 100_000
             ? {
-                source: 'server',
+                source: 'people',
+                generation: 'fixture',
                 after: String(start + length),
                 userId: viewer,
                 query: request.query,
@@ -128,7 +129,7 @@ it('replaces pages from a 100k directory and releases them on close without trun
 });
 
 it.each(['secondary', 'notifications'])(
-  'keeps an empty fallback continuation after filtering %s addresses',
+  'keeps an empty local continuation after filtering %s addresses',
   async (local) => {
     vi.useFakeTimers();
     const client = new QueryClient();
@@ -137,7 +138,7 @@ it.each(['secondary', 'notifications'])(
       .fn<typeof readContactDirectory>()
       .mockImplementation(async (viewer, _host, request) => ({
         query: request.query,
-        source: 'server',
+        source: 'cache',
         sync: 'unavailable',
         offline: false,
         users: [
@@ -148,7 +149,8 @@ it.each(['secondary', 'notifications'])(
           },
         ],
         nextCursor: {
-          source: 'server',
+          source: 'people',
+          generation: 'fixture',
           after: 'next',
           userId: viewer,
           query: request.query,

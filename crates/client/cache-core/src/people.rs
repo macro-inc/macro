@@ -1,5 +1,6 @@
 //! Bounded, context-aware person ranking. Local facts never establish directory membership.
 
+pub mod name_search;
 pub mod sql;
 pub mod sync;
 
@@ -13,7 +14,9 @@ pub(crate) const CONTEXT_META: &str = "__meta:contact-search-context-v1";
 /// Hard limit on context patches, excluded people, and returned people.
 pub const MAX_PEOPLE_BATCH: usize = 500;
 /// Before-limit matching, exclusion and ranking contract advertised to clients.
-pub const PEOPLE_POLICY_VERSION: u32 = 4;
+pub const PEOPLE_POLICY_VERSION: u32 = 5;
+/// Reference evidence is independent of suggestion matching and ordering.
+pub const PEOPLE_REFERENCE_POLICY_VERSION: u32 = 4;
 /// Two distinct matches suffice to disprove unique reference resolution.
 pub const MAX_REFERENCE_WITNESSES: usize = 2;
 
@@ -98,19 +101,19 @@ pub struct ContextUpdate {
 #[serde(rename_all = "camelCase")]
 #[cfg_attr(any(test, feature = "schema"), derive(schemars::JsonSchema))]
 pub enum PeopleMode {
-    /// Exact/prefix labels, then deterministic relevance/recency and DM boosts.
+    /// Name tiers, then recent-first ordering using the substituted DM timestamp.
     Command,
-    /// Exact addresses, address prefixes, word prefixes, then recipient weights.
+    /// Name tiers and recent-first ordering, with automated-address exclusions.
     Recipient,
-    /// Name/email relevance and user interaction recency for mentions.
+    /// Name tiers and user interaction recency for personal mentions.
     Mention,
-    /// Property user pickers: personal interaction, domain preference and self pinning.
+    /// Name tiers and personal recency; empty browsing pins self.
     Property,
 }
 
 /// A ranked window over the current cached directory, not a completeness claim.
-/// Continuations pin the ranking clock and context epoch; concurrent row updates
-/// have ordinary keyset semantics, not a transactional snapshot guarantee.
+/// Continuations bind membership/owner and context tokens as well as the
+/// publication epoch. Changed eligible data requires restarting the window.
 #[derive(Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 #[cfg_attr(any(test, feature = "schema"), derive(schemars::JsonSchema))]
@@ -119,17 +122,17 @@ pub struct PeopleSearch {
     pub scope: HydrationScope,
     /// Surface ranking policy.
     pub mode: PeopleMode,
-    /// Shared subsequence input, capped at 512 UTF-8 bytes.
+    /// Name/explicit-identity input, capped at 512 UTF-8 bytes.
     pub query: String,
     /// Explicit exclusions, applied before ranking (for example self).
     #[cfg_attr(any(test, feature = "schema"), schemars(with = "Vec<String>", length(max = MAX_PEOPLE_BATCH)))]
     pub excluded: Vec<MacroUserIdStr<'static>>,
-    /// Sending-account domain for recipient/mention preference.
+    /// Retained wire input for older hosts; policy 5 has no domain boost.
     pub sender_domain: Option<String>,
     /// At most 500 winners.
     #[cfg_attr(any(test, feature = "schema"), schemars(range(min = 1, max = MAX_PEOPLE_BATCH)))]
     pub limit: usize,
-    /// Injected wall clock for reproducible scoring.
+    /// Retained wire input for older hosts; recent-first order needs no clock.
     pub now_ms: i64,
     /// Opaque continuation from this same account, generation and search policy.
     pub cursor: Option<String>,
@@ -156,9 +159,9 @@ pub struct PersonHit {
     pub direct_message: Option<DirectMessageFacts>,
     /// Priority tier; larger ranks precede smaller ones.
     pub match_rank: u8,
-    /// Corpus-independent blended score within a priority tier.
+    /// Retained wire field for older hosts; zero under policy 5.
     pub score: f64,
-    /// Final recency tie-breaker.
+    /// Recent-first ordering within a matching tier; identity breaks ties.
     pub timestamp_ms: i64,
 }
 
@@ -244,8 +247,6 @@ pub(crate) fn contact_key(viewer: &str, user: &str) -> EntityKey<'static> {
     )
 }
 
-mod cursor;
-pub(crate) mod ranking;
 pub(crate) mod references;
 pub use references::{
     PeopleReferenceMatch, PeopleReferenceRequest, PeopleReferenceResult, PersonReference,

@@ -5,6 +5,7 @@ use super::*;
 pub fn schemas() -> serde_json::Value {
     serde_json::json!({
         "policyVersion": PEOPLE_POLICY_VERSION,
+        "referencePolicyVersion": PEOPLE_REFERENCE_POLICY_VERSION,
         "maxBatch": MAX_PEOPLE_BATCH,
         "maxReferenceWitnesses": MAX_REFERENCE_WITNESSES,
         "maxQueryBytes": subsequence_match::MAX_QUERY_BYTES,

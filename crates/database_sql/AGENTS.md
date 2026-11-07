@@ -60,6 +60,7 @@ uses the wasm build directly).
   it must compile to `wasm32`; native-only tooling goes behind the `cli` feature.
 - The grammar is the contract: a statement this crate rejects must never reach
   `databases`' ops API some other way.
+- Emit people identity hints only for equality on the built-in `people.id` column; email/name/virtual-row keys are not user IDs. Leave other people reads unhinted so bounded adapters refuse explicitly instead of returning misleading empty results. Ordinary database tables named people retain ordinary hints.
 
 - Preserve `Catalog.scope` through the browser wire boundary; it gives the selected
   database precedence for unqualified table names without hiding qualified joins.

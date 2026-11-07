@@ -37,7 +37,7 @@ export function ChannelRecipientFixture() {
     setExcluded(request.policy?.excluded ?? []);
     const exclude = new Set(request.policy?.excluded);
     let position =
-      request.cursor?.source === 'server' ? Number(request.cursor.after) : 0;
+      request.cursor?.source === 'people' ? Number(request.cursor.after) : 0;
     const users = [];
     if (request.query === 'late') position = 99_999;
     while (
@@ -55,15 +55,16 @@ export function ChannelRecipientFixture() {
         });
     }
     return {
-      source: 'server',
-      sync: 'unavailable',
+      source: 'cache',
+      sync: 'partial',
       offline: false,
       query: request.query,
       users,
       nextCursor:
         !request.query && position < 100_000
           ? {
-              source: 'server',
+              source: 'people',
+              generation: 'fixture',
               after: String(position),
               userId: viewer,
               query: request.query,

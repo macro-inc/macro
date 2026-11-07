@@ -10,14 +10,14 @@ Set `PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH` when using system Chromium and
 `CONTACT_BROWSER_PORT` to choose a free port (default 3096).
 
 The desktop and phone fixtures exercise the production contact reader, TanStack
-window, and inspector. Cache/network stand-ins synthesize bounded windows from a
+window, and inspector. Local-host stand-ins synthesize bounded windows from a
 100k directory without constructing a full fixture array. Tests cover replacing
-browse pages, target IDs, search, account switches, empty server-budget pages,
-offline partial data, query-history collection, and layout overflow.
+browse pages, target IDs, search, account switches, online/offline partial data,
+query-history collection, and layout overflow. No interactive server fallback remains.
 
 `/?filters` mounts the production Calendar organizer/attendee filters, bounded
 query state and exact selection resolver over stand-in transport/profile services.
-It covers selected names outside the page, unknown/custom emails, broader server
+It covers selected names outside the page, unknown/custom emails, broader source
 matches, page replacement, input focus and arrow navigation on desktop/phone.
 
 `/?calendar-guests=edit` and `/?calendar-guests=add` mount the real guest editor,
@@ -49,6 +49,18 @@ are stand-ins; this fixture does not claim saved-view dialog or live model cover
 cache host and OPFS with 1,001 synthetic authorized contacts. Fresh queries execute
 locally offline; unsupported capability and replacement login cannot become a remote
 SQL fallback. The fixture account is reactive; there is no read-only HTTP endpoint.
+`/?sql-people&joins` also uses the real compiler/controller and local people reader
+with one synthetic ordinary row. It verifies successful ID joins, explicit refusal
+of email/name/virtual-row joins without issuing identity lookups, and recovery
+back to a supported query.
+`/?sql-people&policy` composes the production context publisher, bounded directory
+windows and recipient picker with the real cache host. Offline desktop/phone cases
+verify 50-result command windows with inbox exclusions and DM dedup before limiting,
+no duplicate DM on the next page, rejection of context-only membership, recency
+updates and custom-chip preservation across asynchronous searches. `name-policy`
+also verifies reversed-word matching, no arbitrary-gap matches, complete email
+identity and zero remote suggestion reads while the cache is partial. Context inputs
+are synthetic; this does not replace connected channel/inbox authorization checks.
 
 `/?contact-removal` runs the existing two-phase backfill and exact-verification
 adapter over the real worker/WASM/OPFS cache. Only authority data is synthetic,
@@ -68,7 +80,7 @@ checks 500-label serialization, storage-generation changes and the real task cre
 helper's guarded local publication. No live imports or backend task writes are claimed.
 
 `/?onboarding-contacts` mounts the real onboarding team step and bounded teammate
-query source over synthetic membership pages. It follows five empty continuations,
+query source over synthetic local-host membership pages. It follows five empty continuations,
 stops after six eligible emails, excludes self/domain aliases, and keeps manual form
 edits when the domain source refreshes. A declined domain issues no contact query.
 Both desktop and phone are covered; auth scope and team writes are fixture adapters,

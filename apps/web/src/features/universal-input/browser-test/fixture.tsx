@@ -70,7 +70,10 @@ import {
 import { type Recipient, resolveRecipients } from '../core/recipients';
 import { createUniversalInput } from '../primitives/universal-input';
 import { UniversalComposer } from '../views/universal-composer';
-import { registerContactFixture } from './contact-directory-fixture';
+import {
+  getGraphqlSoupCacheHost,
+  registerContactFixture,
+} from './contact-directory-fixture';
 import {
   seedTaskReferences,
   TaskReferenceFixture,
@@ -357,7 +360,10 @@ export function UniversalInputFixture(
         );
     });
     const people = createPersonList({
-      scope: () => ({ userId: 'macro|viewer@example.com' }),
+      scope: () => ({
+        userId: 'macro|viewer@example.com',
+        host: getGraphqlSoupCacheHost(),
+      }),
       search: () => options?.searchTerm?.() ?? '',
       enabled: () =>
         enabled() && (!buckets.length || buckets.includes('person')),

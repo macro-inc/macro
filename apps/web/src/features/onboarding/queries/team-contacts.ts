@@ -40,7 +40,7 @@ export async function readTeamContacts(
       const page = await read(
         viewer,
         host,
-        { query: `@${target}`, limit: CONTACT_WINDOW_SIZE, cursor },
+        { query: '', limit: CONTACT_WINDOW_SIZE, cursor },
         signal
       );
       signal.throwIfAborted();
@@ -76,7 +76,7 @@ function teammateOptions(
     queryKey: onboardingContactKeys.teammates(
       owner,
       account,
-      host?.clientId ?? 'network',
+      host?.clientId ?? 'unavailable',
       epoch,
       domain,
       ownEmail

@@ -1,4 +1,6 @@
 import '@app/index.css';
+import { PEOPLE_POLICY_VERSION } from '@graphql-cache/people/generated';
+import { unsupportedContactSync } from '@graphql-cache/people/test-support';
 import { INITIAL_CACHE_REVISION } from '@graphql-cache/protocol';
 import { readContactDirectory } from '@queries/contacts/directory';
 import {
@@ -19,7 +21,7 @@ import {
   NotesListFilterFixture,
 } from './list-filter-fixture';
 import { NameCacheFixture } from './name-cache-fixture';
-import { changeViewer, fetchContactDirectoryPage } from './network';
+import { changeViewer } from './network';
 import { OnboardingContactsFixture } from './onboarding-contacts-fixture';
 import { RecipientDirectoryFixture } from './recipient-directory-fixture';
 import { RecipientRankingFixture } from './recipient-ranking-fixture';
@@ -55,33 +57,45 @@ function App() {
     clientId: 'fixture',
     currentStorageGeneration: async () => generation,
     readQuery: async () => ({ kind: 'hit', data: { user: { id: viewer() } } }),
-    search: async (request) => {
-      const start = request.cursor
-        ? Number(request.cursor.recordKey.split(':').at(-1)) + 1
-        : 0;
-      const ids = request.query
-        ? request.query.toLowerCase().includes('rare')
-          ? [99_999]
-          : []
-        : Array.from(
-            { length: Math.min(request.limit, 100_000 - start) },
-            (_, i) => start + i
-          );
-      return {
-        projectionVersion: 5,
-        documents: ids.map((id) => ({
-          profile: 'quick-access-v1',
-          bucket: 'person',
-          recordKey: `GraphqlContact:${id}`,
-          searchText: 'person',
-          timestampMs: 0,
-          sourceHash: 'fixture',
-        })),
-        nextCursor:
-          !request.query && start + ids.length < 100_000
-            ? { timestampMs: 0, recordKey: `GraphqlContact:${ids.at(-1)}` }
-            : null,
-      };
+    people: {
+      ...unsupportedContactSync,
+      readSql: async () => ({ kind: 'unsupported' }),
+      resolveReferences: async () => ({ kind: 'unsupported' }),
+      context: async () => ({ kind: 'unsupported' }),
+      update: async () => {
+        throw new Error('Fixture has no publisher');
+      },
+      search: async (request) => {
+        const start = request.cursor ? Number(request.cursor) : 0;
+        const ids = request.query
+          ? request.query.toLowerCase().includes('rare')
+            ? [99_999]
+            : []
+          : Array.from(
+              { length: Math.min(request.limit, 100_000 - start) },
+              (_, i) => start + i
+            );
+        return {
+          kind: 'page',
+          policyVersion: PEOPLE_POLICY_VERSION,
+          people: ids.map((id) => ({
+            recordKey: `GraphqlContact:${id}`,
+            userId: `macro|${viewer()}-${id}@example.com`,
+            email: `${viewer()}-${id}@example.com`,
+            name: id === 99999 ? 'Rare person' : `Person ${id}`,
+            matchRank: 0,
+            score: 0,
+            timestampMs: 0,
+            directMessage: null,
+            lastInteractionMs: null,
+          })),
+          truncated: !request.query && start + ids.length < 100_000,
+          nextCursor:
+            !request.query && start + ids.length < 100_000
+              ? String(start + ids.length)
+              : null,
+        };
+      },
     },
     readRecordsByKeys: async ({ keys }) => ({
       revision: INITIAL_CACHE_REVISION,
@@ -104,14 +118,7 @@ function App() {
   const directory = createContactDirectoryWindow(
     createMemo(() => ({ userId: viewer(), host: cache })),
     (user, host, request, signal) =>
-      readContactDirectory(
-        user,
-        host,
-        request,
-        signal,
-        fetchContactDirectoryPage,
-        !offline()
-      )
+      readContactDirectory(user, host, request, signal, !offline())
   );
   const switchAccount = () => {
     changeViewer('account-b');
@@ -128,7 +135,7 @@ function App() {
             directory.restart();
           }}
         >
-          Server mode
+          Partial cache
         </button>
         <button
           onClick={() => {

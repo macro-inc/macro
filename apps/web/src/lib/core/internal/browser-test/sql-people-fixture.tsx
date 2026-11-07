@@ -9,7 +9,16 @@ import { reconcileContactPage } from '@queries/contacts/reconcile';
 import { createDatabaseSqlQuery } from '@queries/database-sql/create-database-sql-query';
 import { readLocalSql } from '@queries/database-sql/local-read';
 import * as Effect from 'effect/Effect';
-import { createSignal, onCleanup, onMount, Show } from 'solid-js';
+import {
+  createSignal,
+  Match,
+  onCleanup,
+  onMount,
+  Show,
+  Switch,
+} from 'solid-js';
+import { CachedPeoplePolicyFixture } from './cached-people-policy-fixture';
+import { SqlPeopleJoinFixture } from './sql-people-join-fixture';
 import { account, setAccount } from './test-account';
 
 /** Real compiler, controller, worker host, WASM and OPFS. Only hydration data is synthetic. */
@@ -105,7 +114,14 @@ export function SqlPeopleFixture() {
         </output>
       }
     >
-      <SqlQuery host={host} />
+      <Switch fallback={<SqlQuery host={host} />}>
+        <Match when={new URLSearchParams(location.search).has('joins')}>
+          <SqlPeopleJoinFixture host={host} />
+        </Match>
+        <Match when={new URLSearchParams(location.search).has('policy')}>
+          <CachedPeoplePolicyFixture host={host} />
+        </Match>
+      </Switch>
     </Show>
   );
 }

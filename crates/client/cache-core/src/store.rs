@@ -107,6 +107,14 @@ pub trait Storage: MaybeSend {
         visit: impl FnMut(&EntityKey<'_>, &Record) + MaybeSend,
     ) -> impl Future<Output = Result<(), Self::Error>> + MaybeSend;
 
+    /// Execute the name-policy read into its bounded core collector. Indexed
+    /// adapters may probe then fall back to a complete matching stream; a work
+    /// budget is never completion evidence. The engine owns scope admission.
+    fn visit_name_search(
+        &self,
+        read: &mut crate::people::name_search::reader::NameSearchRead<'_>,
+    ) -> impl Future<Output = Result<(), Self::Error>> + MaybeSend;
+
     /// Visit one raw contact-record page in key order. Return its last visited
     /// position only when more records exist. Never accumulate the corpus.
     fn scan_contact_records(
@@ -439,6 +447,21 @@ impl InMemoryStorage {
 
 impl Storage for InMemoryStorage {
     type Error = Infallible;
+
+    async fn visit_name_search(
+        &self,
+        read: &mut crate::people::name_search::reader::NameSearchRead<'_>,
+    ) -> Result<(), Self::Error> {
+        for (key, record) in &self.records {
+            read.push(key, record, None);
+        }
+        if !read.prior_dm_targets().is_empty() {
+            for (key, record) in &self.records {
+                read.note_prior_alias(key, record);
+            }
+        }
+        Ok(())
+    }
 
     async fn scan_contact_records(
         &self,

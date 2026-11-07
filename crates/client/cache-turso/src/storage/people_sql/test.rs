@@ -1,4 +1,5 @@
 use super::*;
+mod name_index;
 use cache_core::engine::Engine;
 use cache_core::predicate::{PredicateIndexStorage, ProjectionMutation};
 use pollster::block_on;
@@ -77,8 +78,8 @@ fn normalized_authority_owns_membership_names_deletes_and_rebuilds() {
         .unwrap();
         assert_eq!(
             after - before,
-            2,
-            "context-only updates change the record/search hash, not SQL facts"
+            3,
+            "malformed context changes the record/search hash and invalid-context marker, not name/SQL facts"
         );
         let mut changed = record.clone();
         changed

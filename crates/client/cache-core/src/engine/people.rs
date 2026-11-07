@@ -161,6 +161,9 @@ impl<S: Storage> Engine<S> {
             self.bind_identity(&update.scope.identity).await?;
         }
         let changed = self.persist_updates(updates, vec![]).await?;
+        if changed.revision_advanced {
+            self.people_context_fence = Uuid::now_v7();
+        }
         Ok(WriteResult {
             field_changes: Some(changed.field_changes),
             identity_errors: vec![],
@@ -207,40 +210,37 @@ impl<S: Storage> Engine<S> {
         collector.finish().map_err(EngineError::from)
     }
 
-    /// Stream SQL-filtered records into one bounded heap. Secondary inboxes,
-    /// explicit exclusions, DM substitution and surface scores apply before K.
-    /// Contact records are server-owned/read-only; context stubs do not rank.
+    /// Snapshot the admission used by the core collector and reference readers.
+    /// This is local to this engine owner, not a durable directory revision.
+    pub fn people_read_version(&self) -> people::name_search::reader::PeopleReadVersion {
+        people::name_search::reader::PeopleReadVersion {
+            contacts: self.contact_fence,
+            context: self.people_context_fence,
+        }
+    }
+
+    /// Account-fenced indexed name tiers, recent-first within each tier.
+    /// Storage evaluates the bounded plan; core validates every eligible winner.
     pub async fn search_people(
         &mut self,
         request: &PeopleSearch,
     ) -> Result<PeopleSearchResult, EngineError<S::Error>> {
-        if request.limit == 0
-            || request.limit > MAX_PEOPLE_BATCH
-            || request.query.len() > subsequence_match::MAX_QUERY_BYTES
-            || request.excluded.len() > MAX_PEOPLE_BATCH
-            || request
-                .sender_domain
-                .as_ref()
-                .is_some_and(|domain| domain.len() > 255)
-        {
-            return Err(PeopleError::InvalidInput.into());
-        }
         self.people_scope(&request.scope).await?;
+        if self.current_identity().await?.as_deref() != Some(request.scope.identity.as_str()) {
+            return Err(EngineError::StaleHydrationScope);
+        }
         let ContextState::Ready { epoch } = self.people_context().await? else {
             return Ok(PeopleSearchResult::ContextPending);
         };
-        let query = SearchQuery::new(&request.query);
-        let mut ranker = people::ranking::PeopleRanker::new(request, epoch)?;
+        let mut read = people::name_search::reader::NameSearchRead::new(
+            request,
+            epoch,
+            self.people_read_version(),
+        )?;
         self.storage
-            .visit_contact_records(&query, |key, record| ranker.push(key, record))
+            .visit_name_search(&mut read)
             .await
             .map_err(EngineError::Storage)?;
-        if ranker.scan_prior_conversations() {
-            self.storage
-                .visit_contact_records(&query, |key, record| ranker.push(key, record))
-                .await
-                .map_err(EngineError::Storage)?;
-        }
-        ranker.finish().map_err(EngineError::from)
+        read.finish().map_err(EngineError::from)
     }
 }

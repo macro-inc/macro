@@ -1,5 +1,6 @@
 import { createNoopCacheHost } from '@graphql-cache/host/noop-host';
 import type { CacheChangeListener, CacheHost } from '@graphql-cache/host/types';
+import { PEOPLE_POLICY_VERSION } from '@graphql-cache/people/generated';
 import { unsupportedContactSync } from '@graphql-cache/people/test-support';
 import { parseCacheRevision } from '@graphql-cache/protocol';
 import { cleanup, render } from '@solidjs/testing-library';
@@ -116,7 +117,7 @@ it('recovers an initially unavailable offline picker after context publication',
     ready
       ? {
           kind: 'page' as const,
-          policyVersion: 4,
+          policyVersion: PEOPLE_POLICY_VERSION,
           truncated: false,
           nextCursor: null,
           people: [
@@ -180,7 +181,7 @@ it('recovers an initially unavailable offline picker after context publication',
   client.clear();
 });
 
-it('does not use hydration to retry an authorization failure or replace a server page', async () => {
+it('does not retry authorization failures, but hydration refreshes a recovered local page', async () => {
   vi.useFakeTimers();
   vi.spyOn(document, 'visibilityState', 'get').mockReturnValue('visible');
   const client = new QueryClient();
@@ -214,13 +215,15 @@ it('does not use hydration to retry an authorization failure or replace a server
   await vi.advanceTimersByTimeAsync(300);
   expect(reader).toHaveBeenCalledOnce();
   reader.mockResolvedValue({
-    source: 'server',
-    sync: 'unavailable',
+    source: 'cache',
+    sync: 'partial',
     offline: false,
     query: '',
     users: [],
     nextCursor: {
-      source: 'server',
+      source: 'people',
+      generation: 'fixture',
+      policyKey: '',
       userId: 'viewer',
       query: '',
       after: 'page-two',
@@ -229,7 +232,7 @@ it('does not use hydration to retry an authorization failure or replace a server
   await window!.retry();
   changed!(parseCacheRevision('2'), { searchChangedBuckets: ['person'] });
   await vi.advanceTimersByTimeAsync(300);
-  expect(reader).toHaveBeenCalledTimes(2);
-  expect(window!.data()?.source).toBe('server');
+  expect(reader).toHaveBeenCalledTimes(3);
+  expect(window!.data()?.source).toBe('cache');
   client.clear();
 });

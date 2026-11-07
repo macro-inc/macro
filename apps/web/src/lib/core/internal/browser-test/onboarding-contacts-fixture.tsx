@@ -13,7 +13,7 @@ import {
   holdTeamContacts,
   releaseTeamContacts,
   teamContactRequests,
-} from './onboarding-contact-network';
+} from './onboarding-contact-cache';
 
 export function OnboardingContactsFixture() {
   const params = new URLSearchParams(location.search);

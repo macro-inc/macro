@@ -29,7 +29,7 @@ export function CalendarFilterFixture() {
               signal
             ): Promise<ContactDirectoryPage> => {
               signal.throwIfAborted();
-              const second = request.cursor?.source === 'server';
+              const second = request.cursor?.source === 'people';
               let users: ContactDirectoryPage['users'] = [];
               if (!request.query)
                 users = Array.from({ length: 50 }, (_, index) => ({
@@ -56,14 +56,16 @@ export function CalendarFilterFixture() {
               return {
                 users,
                 query: request.query,
-                source: 'server',
-                sync: 'unavailable',
+                source: 'cache',
+                sync: 'partial',
                 offline: false,
                 nextCursor:
                   request.query || second
                     ? null
                     : {
-                        source: 'server',
+                        source: 'people',
+                        generation: 'fixture',
+                        policyKey: '',
                         userId: viewer,
                         query: '',
                         after: 'next',

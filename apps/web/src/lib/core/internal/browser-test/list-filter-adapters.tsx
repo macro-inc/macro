@@ -75,7 +75,7 @@ export const useContactFilterOptions: SearchableOptionSourceFactory = (
       async (viewer, _host, request, signal) => {
         signal.throwIfAborted();
         setRequests((count) => count + 1);
-        const second = request.cursor?.source === 'server';
+        const second = request.cursor?.source === 'people';
         const users = request.query
           ? [
               {
@@ -92,13 +92,20 @@ export const useContactFilterOptions: SearchableOptionSourceFactory = (
         return {
           users,
           query: request.query,
-          source: 'server',
-          sync: 'unavailable',
+          source: 'cache',
+          sync: 'partial',
           offline: false,
           nextCursor:
             second || request.query
               ? null
-              : { source: 'server', userId: viewer, query: '', after: 'next' },
+              : {
+                  source: 'people',
+                  generation: 'fixture',
+                  policyKey: '',
+                  userId: viewer,
+                  query: '',
+                  after: 'next',
+                },
         };
       },
       async (_viewer, _host, lookup, signal) => {

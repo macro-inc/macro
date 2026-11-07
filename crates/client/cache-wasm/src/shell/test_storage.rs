@@ -122,6 +122,13 @@ impl Storage for BrowserStorage {
             .await
     }
 
+    async fn visit_name_search(
+        &self,
+        read: &mut cache_core::people::name_search::reader::NameSearchRead<'_>,
+    ) -> Result<(), Self::Error> {
+        self.inner.visit_name_search(read).await
+    }
+
     async fn visit_contact_records(
         &self,
         query: &SearchQuery,

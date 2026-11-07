@@ -2,6 +2,7 @@ use super::*;
 
 mod conjunction_cost;
 mod conjunction_semantics;
+mod contact_search;
 mod engine_writes;
 mod fact_lookup_cost;
 mod filter_scope_cost;
@@ -1025,6 +1026,7 @@ fn semantically_equivalent_schema_formatting_is_accepted_on_reopen() {
             -- UNIQUE(value), CHECK(id), and COLLATE NOCASE are only comment text.
             primary key ([__typename], `id`)
         )"#,
+        super::contact_search::CREATE_INDEX,
         r#"create table 'mutation_queue' (
             'id' integer /* AUTOINCREMENT UNIQUE CHECK COLLATE */ primary key autoincrement,
             "uuid" text not null,
@@ -1300,6 +1302,9 @@ fn every_malformed_frozen_schema_constraint_requests_reset_on_reopen() {
         let storage = database.open("scope").unwrap();
         for sql in statements {
             raw_execute(&storage, sql, Vec::new());
+        }
+        if name.starts_with("records-") {
+            raw_execute(&storage, super::contact_search::CREATE_INDEX, Vec::new());
         }
         assert_eq!(
             storage.try_close().unwrap(),

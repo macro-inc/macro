@@ -30,29 +30,32 @@ first DM, with or without CRM. Existing one-to-one DMs replace person rows while
 preserving name/email matches; selecting a person opens their DM, which the
 first message creates when there isn't one yet. Verify both
 categories with a teammate who has no conversation or CRM record.
-Name search here, in Command K, and in the Chat sidebar finds a conversation by
-its participants in any order, separated by spaces or commas, with name prefixes
-allowed. A query naming exactly its participants ranks it right after exact
-names, above a larger group holding the same people. In Command K and mobile
-name search, a person's first name alone also counts as exact for their DM or
-person row.
-Name relevance uses a fixed per-item score: adding an unrelated result must not
-rescale existing scores. Search-menu exact names precede prefixes, then other
-subsequence matches; recency and surface boosts still apply within those tiers.
-Recipient menus use their own tiers: exact addresses, address prefixes, word
-prefixes, then other matches.
+Conversation search here, in Command K, and in the Chat sidebar matches participants
+in any order, separated by spaces or commas, with name prefixes allowed. Naming
+exactly its participants ranks a conversation after exact names, above a larger
+group holding the same people. Ordinary DM entity matches also treat a first name
+as exact; bounded personal-contact windows use their separate policy below.
+
+Ordinary entity relevance keeps its fixed per-item score. Personal contacts use
+exact normalized names, then every query word prefixing a name word in any order,
+then literal contains. Each tier is recent-first with stable identity ties: `jo sm`
+and `sm jo` can find John Smith; `jhn` cannot, while `ohn` can. Complete email
+addresses and Macro IDs are exact identities, never display-name aliases.
+Incomplete typed addresses use email-prefix matching.
 
 Personal-contact suggestions now use bounded windows. Paging replaces the person
 window and resets its virtual focus/scroll instead of retaining the directory.
 CRM aliases resolve against personal contacts for only their current window;
-late resolution must preserve the row's UI identity. Sender/speaker/assignee/creator
-facets search remotely while open and retain selected labels independently.
+late resolution must preserve the row's UI identity. Sender/speaker/creator facets
+search local contact windows while open and retain selected labels independently.
+Assignee facets keep their team/agent roster, including selected outsiders.
 Verify off-page selection and Only on desktop and phone. A short/empty window
 may still offer Next; it is not proof that the directory is exhausted.
 Returning to a previously paged query or exclusion policy restarts at its first
 window. An offline picker waiting for local context should recover when that
-context arrives; background hydration must not replace server continuations or
-clear authorization errors. Current-search DM metadata wins over an older stored
+context arrives. Partial caches stay local even online; Refresh schedules background
+sync rather than remote search. Hydration/context changes restart stale windows and
+must not revive earlier replies or clear authorization errors. Current-search DM metadata wins over an older stored
 person target. Resolving 500 selected people keeps all 500 and looks up self
 separately when that would otherwise overflow the batch.
 On phones, name-result icons and avatars are scaled to 150% (16px artwork

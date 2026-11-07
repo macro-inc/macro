@@ -145,11 +145,13 @@ it('snapshots continuation values instead of retaining reactive previous-page pr
     .fn<typeof readContactDirectory>()
     .mockImplementation(async (viewer, _host, request) => {
       const index =
-        request.cursor?.source === 'server' ? Number(request.cursor.after) : 0;
+        request.cursor?.source === 'people' ? Number(request.cursor.after) : 0;
       return {
         ...result(viewer, ''),
         nextCursor: {
-          source: 'server',
+          source: 'people',
+          generation: 'fixture',
+          policyKey: '',
           userId: viewer,
           query: '',
           after: String(index + 1),

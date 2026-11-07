@@ -1,12 +1,12 @@
 ## Development Commands
 
 - Use `bun` as the package manager and script runner (`bun run build`, `bunx tsc`).
-- `bun run test`: run tests
+- `bun run test`: run tests 
 - `bun run check`: check typescript changes
 - Forward `CacheHost.people` through the app's retiring host, resolving the current host on each call even for captured methods; retired reads return unsupported and context writes reject rather than acknowledge discarded publication.
 - `CacheHost.people` contracts come from cache-core models: `bun run gen-cache-people-schema --rust` regenerates Rust JSON plus Zod/types; `--check --rust` verifies both. `bun run check` verifies JSON-to-frontend generation, while cache-core tests verify Rust-to-JSON drift. Missing native person commands mean unsupported, never permission to issue an unscoped write.
-- `bun run lint`: lint with biome
-- `bun run format`: format changes with biome
+- `bun run lint`: lint with biome 
+- `bun run format`: format changes with biome 
 - `bun run knip`: to check for dead code
 - Run Linux native cache-plugin tests from the repository root with `nix develop .#tauri-linux --command cargo test --manifest-path apps/web/tauri/Cargo.toml -p graphql_cache_plugin`; the [Tauri platform shell](../../docs/development/running-locally.md) supplies the required desktop libraries.
 - Refresh `nix-support/node_modules-hashes.json` for Linux and Darwin when dependency manifests, the lockfile, or dependency patches change.
@@ -56,7 +56,9 @@ shares Soup's leader, rollout and generation lifecycle; do not add another leade
 The bounded directory window accepts external search/policy inputs. Bind continuations
 to each input transition, not just equal query strings; returning to an earlier input
 must start at page one. Person hydration wakes an initially unavailable offline
-window, never an authorization error or server continuation. Resolve self separately
+window, never an authorization error. Interactive contact suggestions stay local:
+partial sync returns partial local results; unavailable or older hosts never fall
+back to server or generic text search. Refresh schedules the existing sync lane. Resolve self separately
 when 500 explicit selections fill the lookup batch. Prefer current-search DM metadata
 over a person's stored command target, then use recent conversations as fallback.
 Contact invalidations from messages, native sharing and websocket events call
@@ -64,13 +66,15 @@ Contact invalidations from messages, native sharing and websocket events call
 runner owns the work. Full-list hooks, query keys and handwritten GET clients
 are retired; no compatibility query should be created by an invalidation.
 Ranked person
-cursors and contact reconciliation use coordinator protocol 17; native menu policy version 4 retains
-mention scoring/property boosts and excludes automated recipient addresses before
-the limit unless their full address was typed. Generate the policy floor from Rust
-with the transport schema; older policy replies are not ranked
-native windows. Cursors bind scope/policy/epoch and retain
-only a scoring position/clock, not previous result IDs. Honor continuations on
-short/empty pages and keep server fallback explicitly source-ordered.
+cursors and contact reconciliation use coordinator protocol 17; native menu policy 5
+orders exact names, all-word prefixes, then literal contains by recency and identity.
+Explicit addresses/IDs never match name aliases; empty property browsing pins self.
+Exclude automated recipient addresses before limiting unless explicitly addressed.
+Generate separate suggestion/reference policy floors from Rust; reference evidence
+stays policy 4. Preserve personal window order through command/DM merging, mentions,
+properties and recipient composition. Cursors bind scope/policy/layout and live
+membership/context tokens, not previous result IDs or a scoring clock. Contact
+changes invalidate pending replies and restart paging; honor short/empty continuations.
 Quick Access person lists are per-observer windows, never global item-cache rows.
 Forward live queries from commands, mentions and property selectors; resolve CRM
 aliases only for their current window. Reset virtual focus/scroll on window
@@ -91,7 +95,9 @@ can advance empty windows. Main email To/Cc/Bcc inputs receive the factory throu
 `EmailComposeContext.createRecipientSource`; scoped hosts opt out explicitly with
 `undefined`. Thread extras and personal hits deduplicate by canonical email while
 preserving the selected representation. Keep selection/outside dismissal synchronous;
-a delayed combobox close must not cancel a new query after refocus. Pass supplied
+a delayed combobox close must not cancel a new query after refocus. Keep nonmatching
+selected custom addresses out of visible suggestions during async search, so Enter
+cannot toggle an old chip while a new result window arrives. Pass supplied
 names to option/chip avatars instead of duplicating resolved names in the shared name cache. The internal
 recipient and email app-browser fixtures cover desktop/touch. Channel invitation
 and participant pickers use the same source with explicit roster exclusions; keep
@@ -101,8 +107,9 @@ empty continuations. Bind paging to the complete roster's reset key, including
 changes beyond that budget. Keep picker portals inside their owning dialog/drawer;
 cancel a recipient option's pointerup default so synchronous popup removal cannot
 be interpreted as an outside press that dismisses the containing drawer.
-Soup's general Assignee/Created by submenus, mobile accordion sections and
-consolidated chips use lazy contact sources too. Resolve closed-chip labels with
+Soup's Created by submenus, mobile accordion sections and consolidated chips
+use lazy contact sources. Assignee options stay team/agent-scoped and retain selected
+outsiders; do not replace an explicit roster with personal-directory suggestions. Resolve closed-chip labels with
 `useContactFilterLabels`, never by constructing a browse window or a directory map.
 Keep Unassigned outside contact lookups and restore the Owned preset when clearing
 its creator refinement. A query-driven combobox takes search edits from native input
@@ -134,14 +141,15 @@ snapshots preserve selected labels without becoming inference evidence or revivi
 on a later return to the same text. Capture submission identities before async
 work and recheck the account before dependent writes. The `task-references` and
 `input-references` browser cases cover the real adapters/composers on desktop/phone.
-Tasks filters also use lazy desktop/mobile sources; their planner extracts references
+Tasks creator filters also use lazy desktop/mobile contact sources; Assignee keeps
+its explicit team/agent roster and selected outsiders. The planner extracts references
 without a people catalog, then resolves complete per-label evidence before applying
 any constraints. Preserve semantic Me separately from fixed self and resolve saved
 summary labels from their own IDs. Inline checklist labels resolve only referenced
 task assignees, in lookup-sized batches whose owners disappear with those references;
 never populate a personal-directory map or the shared name cache for them.
-Onboarding team prefill searches only the server-approved domain, follows bounded
-continuations until six distinct non-self emails or exhaustion, and retains only
+Onboarding team prefill filters local browse windows to the server-approved domain,
+follows bounded continuations until six distinct non-self emails or exhaustion, and retains only
 that seed. No approved domain means no contact reads. Scope the source by account,
 session and cache generation; preserve the form's first settled seed through refreshes.
 Linear import resolves only current CSV assignees, serially in 500-label exact-reference
@@ -175,6 +183,9 @@ enumerate contacts or fall back to remote SQL execution. Validate result metadat
 fence account/session, storage generation, input transitions and disposal. Require
 complete synchronization before treating local results as directory-wide evidence;
 unsupported/incomplete reads stay explicit failures, not authoritative empty answers.
+Only actual people-ID join hints may enter bounded identity reads; email/name/virtual
+row keys must not masquerade as IDs. The real compiler/controller/Turso browser
+regression is `internal/browser-test/sql-people-joins.browser.e2e.ts`.
 Keep last same-owner results on ordinary failures, but clear them on account or
 authority changes. Preserve explicit post-disposal refreshes used to finish accepted
 database writes only for the original account/session.
@@ -341,20 +352,21 @@ Keep the shared uploader from restoring removed attachments or publishing after
 the composer is disposed. The Share button and shortcut use the same upload guard.
 Keep Share composers free of a paperclip button on desktop and mobile; preserve image paste and file drop.
 
-Menus that find entities by typed name (Command-K, mobile name search, @
+Non-personal entity rows in typed-name menus (Command-K, mobile name search, @
 mentions) rank with `NAME_MATCH_RANKING` in `@core/util/freshSort`: names equal
 to the query first, then names starting with it, then other matches, with tight
 matches near the start scoring higher. Each menu's recency weights and type
 boosts (Cmd+K's channel and DM boosts) order rows within those groups and never
 lift a row past a better name match. The one exception: Cmd+K then keeps Macro
 users and DMs ahead of CRM contacts across the people positions, whatever their
-match. Tune name relevance there for every menu.
+match. Personal contact rows instead preserve policy-5 source order; tune only
+ordinary entity relevance here.
 Soup's local search pool (`createSearchState`) stays lazy: it builds only when
 local search has text. Measure Quick Access ranking at scale with the
 [scale fixture](src/features/command/browser-test/README.md).
-Cmd+K and mobile name search widen the first group: a query equal to the first
-word of a DM or person name counts as exact, so a person's first name reaches
-their full-name DM. `commaSeparatedChannelMatch` (Cmd+K, mobile name search,
+Ordinary DM entity matching in Cmd+K and mobile name search treats the first
+name as exact, so it reaches a full-name DM; personal contact windows keep their
+independent policy-5 tiers. `commaSeparatedChannelMatch` (Cmd+K, mobile name search,
 Quick Access, and Soup search including the Chat sidebar) matches channels and
 DMs by terms in any order, adding to uFuzzy's in-order matches, because names
 are generated from participants and people type them in any order. It also

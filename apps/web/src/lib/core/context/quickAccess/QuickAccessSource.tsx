@@ -24,6 +24,7 @@ import {
 import { useEmailLinksContext } from '@core/context/emailLinks';
 import type { DateValue } from '@core/util/date';
 import { fireAndForget } from '@core/util/fireAndForget';
+import { preservePersonOrder } from '@core/util/ordered-window';
 import type {
   ChannelEntity,
   CrmCompanyEntity,
@@ -1377,10 +1378,13 @@ export function createQuickAccessValue(): QuickAccessContextValue {
       const combined = ranked.concat(
         local.filter((item) => !seen.has(item.id))
       );
-      return deduplicateContactItems(
-        options?.searchTerm?.().trim()
-          ? combined
-          : combined.sort(compareRecency)
+      return preservePersonOrder(
+        deduplicateContactItems(
+          options?.searchTerm?.().trim()
+            ? combined
+            : combined.sort(compareRecency)
+        ),
+        combined
       );
     });
     return {

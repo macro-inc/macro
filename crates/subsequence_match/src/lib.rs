@@ -2,6 +2,7 @@
 #![deny(missing_docs)]
 #![forbid(unsafe_code)]
 
+pub mod names;
 pub mod ranking;
 
 /// Maximum raw query size accepted by the interactive search interfaces.

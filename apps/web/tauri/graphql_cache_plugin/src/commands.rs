@@ -290,18 +290,14 @@ pub async fn graphql_cache_contact_reconcile<R: Runtime>(
     traceparent: Option<String>,
 ) -> Result<WriteResultWire, String> {
     let result = engine_handle(&state)?.contact_reconcile(request).await?;
-    emit_ops_affected(
-        &app,
-        &result.affected_ops,
-        &result.changed,
-        result.field_changes.as_ref(),
-    );
+    emit_ops_affected(&app, &result.affected_ops, result.field_changes.as_ref());
     if result.revision_advanced {
-        emit_cache_changed_with_search_changes(
+        emit_cache_changed_with_hints(
             &app,
             &result.revision,
             result.reset,
             result.search_changed_buckets.as_ref(),
+            None,
         );
     }
     Ok(result)
