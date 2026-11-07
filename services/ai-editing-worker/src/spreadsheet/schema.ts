@@ -1,10 +1,18 @@
+import type { SpreadsheetCellValue } from '@macro-inc/spreadsheet/ai-types';
 import { TABLE_COLUMN_TYPES } from '@macro-inc/spreadsheet/sheet-tables';
 import { z } from 'zod';
 
 const sheetId = z.string().min(1).max(64);
 const range = z.string().min(1).max(24);
+// Typed as ZodType: without strictNullChecks, zod infers a union as an optional key.
+const cellValue: z.ZodType<SpreadsheetCellValue> = z.union([
+  z.string().max(10_000),
+  z.number().finite(),
+  z.boolean(),
+  z.null(),
+]);
 const cell = z
-  .object({ address: z.string().min(2).max(8), value: z.string().max(10_000) })
+  .object({ address: z.string().min(2).max(8), value: cellValue })
   .strict();
 const color = z.string().regex(/^(#[0-9a-fA-F]{6})?$/);
 const borderStyle = z.enum([
