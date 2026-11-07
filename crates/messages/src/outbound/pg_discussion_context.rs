@@ -1,7 +1,7 @@
 use crate::domain::{
     delivery::{DiscussionContext, DiscussionContextReader},
     models::MessageParent,
-    ports::CrmParentReader,
+    ports::{CrmParentReader, InitiativeParentReader},
 };
 use sqlx::PgPool;
 use uuid::Uuid;
@@ -71,10 +71,8 @@ impl<I, P> ParentDiscussionContext<I, P> {
     }
 }
 
-impl<
-    I: initiative::domain::lookup::InitiativeReader,
-    P: properties::domain::service::PropertiesService,
-> ParentDiscussionContext<I, P>
+impl<I: InitiativeParentReader, P: properties::domain::service::PropertiesService>
+    ParentDiscussionContext<I, P>
 {
     async fn initiative_context(
         &self,
@@ -84,7 +82,7 @@ impl<
     ) -> Result<DiscussionContext, rootcause::Report> {
         let basic = self
             .initiatives
-            .read_basic(initiative::domain::models::InitiativeId::from_uuid(id))
+            .read_initiative_parent(id)
             .await?
             .ok_or_else(|| rootcause::report!("initiative no longer exists"))?;
         // This machine-only read selects notification candidates. Delivery separately
@@ -110,7 +108,7 @@ impl<
         };
         Ok(DiscussionContext {
             name: basic.name,
-            owner: Some(basic.owner_id.to_string()),
+            owner: Some(basic.owner_id),
             file_type: None,
             is_task: false,
             participants: self.documents.participants(parent, root).await?,
@@ -179,10 +177,8 @@ impl<
     }
 }
 
-impl<
-    I: initiative::domain::lookup::InitiativeReader,
-    P: properties::domain::service::PropertiesService,
-> DiscussionContextReader for ParentDiscussionContext<I, P>
+impl<I: InitiativeParentReader, P: properties::domain::service::PropertiesService>
+    DiscussionContextReader for ParentDiscussionContext<I, P>
 {
     async fn sender_profile_picture(
         &self,

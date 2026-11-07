@@ -10,7 +10,7 @@ path = "src/main.rs"
 
 [dependencies]
 ai_billing = { workspace = true, features = ["pg-admission"] }
-initiative = { workspace = true, features = ["postgres"] }
+initiative = { workspace = true, features = ["messages", "postgres"] }
 crm = { workspace = true, features = ["lookup"] }
 call = { workspace = true, features = ["outbound"] }
 agent_session = { workspace = true, default-features = true }

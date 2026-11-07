@@ -30,7 +30,7 @@ inbound = [
   "schema",
 ]
 json-schema = ["dep:schemars", "message_parent/json-schema"]
-outbound = ["dep:initiative", "dep:macro_uuid", "dep:sqlx", "ports"]
+outbound = ["dep:macro_uuid", "dep:sqlx", "ports"]
 ports = ["dep:async-trait", "dep:entity_access", "dep:futures", "dep:rootcause", "entity_access/ports"]
 schema = ["channel_sender/schema", "dep:utoipa", "activity/schema", "message_parent/schema"]
 test-utils = ["dep:mockall", "ports"]
@@ -48,7 +48,6 @@ channel_sender = { workspace = true }
 chrono = { workspace = true }
 connection_gateway_client = { workspace = true, optional = true }
 entity_access = { workspace = true, optional = true }
-initiative = { workspace = true, features = ["ports"], optional = true }
 macro_authorization = { workspace = true, features = [
   "axum",
 ], optional = true }

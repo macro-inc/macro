@@ -11608,6 +11608,7 @@ dependencies = [
  "macro_event_topics",
  "macro_user_id",
  "macro_uuid",
+ "messages",
  "mockall",
  "model-entity",
  "model-error-response",

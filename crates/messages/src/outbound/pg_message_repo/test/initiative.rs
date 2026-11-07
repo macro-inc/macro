@@ -1,10 +1,43 @@
 use super::*;
+use crate::domain::ports::{InitiativeParentFacts, InitiativeParentReader};
 use crate::domain::service::{MessageService, MessageView, MessageWrite};
-use ::initiative::domain::lookup::InitiativeLookup;
+use ::initiative::domain::lookup::{InitiativeLookup, InitiativeReader};
+use ::initiative::domain::models::InitiativeId;
 use ::initiative::outbound::PgInitiativeRepo;
 use entity_access::domain::models::{
     AccessLevel, Entity, EntityAccessReceipt, EntityPermission, EntityType, RequiredPermission,
 };
+
+/// The initiative domain's own impl of this port belongs to the `messages`
+/// crate it depends on, a second copy from the one under test, so tests adapt
+/// the lookup locally.
+struct Initiatives(InitiativeLookup<PgInitiativeRepo>);
+
+impl InitiativeParentReader for Initiatives {
+    fn read_initiative_parent(
+        &self,
+        id: Uuid,
+    ) -> std::pin::Pin<
+        Box<
+            dyn std::future::Future<
+                    Output = Result<Option<InitiativeParentFacts>, rootcause::Report>,
+                > + Send
+                + '_,
+        >,
+    > {
+        Box::pin(async move {
+            let basic = self
+                .0
+                .read_basic(InitiativeId::from_uuid(id))
+                .await
+                .map_err(rootcause::Report::new)?;
+            Ok(basic.map(|basic| InitiativeParentFacts {
+                name: basic.name,
+                owner_id: basic.owner_id.to_string(),
+            }))
+        })
+    }
+}
 
 async fn create_project(pool: &PgPool, id: Uuid) {
     sqlx::query!(
@@ -49,8 +82,9 @@ async fn project_discussions_use_shared_parent_lifecycle_checks(pool: PgPool) {
     setup(&pool).await;
     let id = macro_uuid::generate_uuid_v7();
     create_project(&pool, id).await;
-    let repo = PgMessageRepository::new(pool.clone())
-        .with_initiatives(InitiativeLookup::new(PgInitiativeRepo::new(pool.clone())));
+    let repo = PgMessageRepository::new(pool.clone()).with_initiatives(Initiatives(
+        InitiativeLookup::new(PgInitiativeRepo::new(pool.clone())),
+    ));
     let service = MessageService::new(repo.clone(), NoMessageEventPublisher);
     let root = service
         .post(receipt::<MessageWrite>(id), input("Project comment", None))
@@ -179,8 +213,9 @@ async fn initiative_threads_reject_cross_parent_replies_and_thread_deletion_hide
     let second = macro_uuid::generate_uuid_v7();
     create_project(&pool, first).await;
     create_project(&pool, second).await;
-    let repo = PgMessageRepository::new(pool.clone())
-        .with_initiatives(InitiativeLookup::new(PgInitiativeRepo::new(pool)));
+    let repo = PgMessageRepository::new(pool.clone()).with_initiatives(Initiatives(
+        InitiativeLookup::new(PgInitiativeRepo::new(pool)),
+    ));
     let service = MessageService::new(repo, NoMessageEventPublisher);
     let root = service
         .post(receipt(first), input("Project one", None))
