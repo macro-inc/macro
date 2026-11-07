@@ -82,7 +82,7 @@ impl Transaction<'_> {
             self.set_point_at(slot, end_role, end_point)?;
         }
         let selected = original.nodes(self.view())?;
-        if selected.len() == 1 && end_point.point_type() == PointType::Element
+        if selected.len() == 1 && (if backward { original.anchor } else { original.focus }).point_type() == PointType::Element
             && let Some(first) = selected.first().copied().filter(|key| self.is_text(*key)) {
                 let end = Point::text(first, self.text_content_size(first));
                 if backward { original.anchor = end; } else { original.focus = end; }
