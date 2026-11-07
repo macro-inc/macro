@@ -25,6 +25,23 @@ describe('calendar preferences', () => {
     expect(hidden).toEqual(['team-ooo', 'holidays']);
   });
 
+  it('keeps due-date tasks off until the viewer turns them on', async () => {
+    localStorage.setItem(
+      CALENDAR_PREFERENCES_KEY,
+      JSON.stringify({ hiddenSourceIds: [] })
+    );
+    const { useCalendarPreferences } = await import('./preferences');
+
+    const show = createRoot((dispose) => {
+      const [preferences] = useCalendarPreferences();
+      const value = preferences.showDueTasks;
+      dispose();
+      return value;
+    });
+
+    expect(show).toBe(false);
+  });
+
   it('shows the next meeting badge for saved preferences without the setting', async () => {
     localStorage.setItem(
       CALENDAR_PREFERENCES_KEY,

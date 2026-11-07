@@ -535,6 +535,18 @@
 	display: none;
 }
 
+.calendar-view .fc .calendar-event-task-completed .calendar-event-title {
+	text-decoration: line-through;
+}
+
+.calendar-view
+	.fc
+	.fc-event.calendar-event-task-completed:not(.fc-event-mirror):not(
+		:has(.calendar-event-content-selected)
+	) {
+	opacity: 0.55;
+}
+
 .calendar-view .fc .fc-event:hover {
 	z-index: 4;
 }

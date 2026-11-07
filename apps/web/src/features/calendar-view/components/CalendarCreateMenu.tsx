@@ -36,7 +36,7 @@ export function CalendarCreateMenu(props: {
             as={ViewCreateButton}
             presentation={presentation()}
             menu
-            aria-label="New event, call, or booking link"
+            aria-label="New event, task, call, or booking link"
           />
         )}
       </Show>

@@ -77,6 +77,7 @@ vi.mock('./CalendarSearch', () => ({
 }));
 vi.mock('./CalendarCreateItems', () => ({
   CalendarCreateEventItem: () => null,
+  CalendarCreateTaskItem: () => null,
   CalendarCreateCallItem: () => null,
   CalendarCreateBookingLinkItem: () => null,
 }));

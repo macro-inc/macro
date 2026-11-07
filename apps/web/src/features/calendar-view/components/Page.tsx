@@ -12,6 +12,7 @@ import {
   type CalendarOccurrenceData,
   useCalendarOccurrenceData,
 } from '@app/features/calendar/hooks/use-calendar-occurrence-data';
+import { useCalendarDueTasks } from '@app/features/calendar/hooks/use-calendar-tasks';
 import { useCalendarTimeGridHoverIndicator } from '@app/features/calendar/hooks/use-calendar-time-grid-hover-indicator';
 import { useTeamOooEvents } from '@app/features/calendar/hooks/use-team-ooo';
 import {
@@ -33,6 +34,7 @@ import {
 import { mergeCalendarOverlays } from '@app/features/calendar-team/core/merge';
 import { useOpenEventComposer } from '@app/features/calendar-view/components/use-open-event-composer';
 import { useQuickCallsFlag } from '@app/features/meetings/use-quick-calls-flag';
+import { useSplitLayout } from '@components/app/split-layout/layout';
 import { toast } from '@core/component/Toast/Toast';
 import { ScrollIndicators } from '@core/component/VerticalScrollIndicators';
 import { isMobile } from '@core/mobile/isMobile';
@@ -232,6 +234,8 @@ export function Page(props: {
   const renderedHiddenSourceIds = createDeferred(calendarView.hiddenSourceIds);
   const isRenderedSourceVisible = (sourceId: string) =>
     !renderedHiddenSourceIds().has(sourceId);
+  const renderedShowDueTasks = createDeferred(() => calendarView.showDueTasks);
+  const { openWithSplit } = useSplitLayout();
   const data = useCalendarOccurrenceData({
     range,
     sourceById: calendarView.sourceById,
@@ -247,8 +251,15 @@ export function Page(props: {
     isSourceVisible: isRenderedSourceVisible,
     refetchOnWindowFocus: isActive,
   });
+  const dueTasks = useCalendarDueTasks({
+    range,
+    shown: renderedShowDueTasks,
+  });
   const visibleEvents = createMemo(() =>
-    mergeCalendarOverlays(data.visibleEvents(), teamOoo.events())
+    mergeCalendarOverlays(
+      mergeCalendarOverlays(data.visibleEvents(), teamOoo.events()),
+      dueTasks.events()
+    )
   );
   const eventsById = createMemo(
     () => new Map(visibleEvents().map((event) => [event.id, event]))
@@ -359,7 +370,16 @@ export function Page(props: {
           eventId: isActive() ? calendarView.selectedEvent()?.id : undefined,
           onDateSelect: isMobile() ? undefined : handleSelect,
           onEventSelect: (event, element) => {
-            if (isActive()) calendarView.selectEvent(event, element);
+            if (!isActive()) return;
+            const taskId = event.taskDue?.taskId;
+            if (taskId) {
+              openWithSplit(
+                { type: 'task', id: taskId },
+                { preferNewSplit: true }
+              );
+              return;
+            }
+            calendarView.selectEvent(event, element);
           },
           onSelectedEventMount: (event, element) => {
             if (isActive()) calendarView.reanchorSelectedEvent(event, element);

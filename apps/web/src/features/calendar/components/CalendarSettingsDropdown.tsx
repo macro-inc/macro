@@ -233,6 +233,13 @@ function DesktopCalendarSettings(props: {
           >
             <span class="flex-1 truncate">Show weekends</span>
           </Dropdown.CheckboxItem>
+          <Dropdown.CheckboxItem
+            checked={calendarView.showDueTasks}
+            closeOnSelect={false}
+            onChange={calendarView.setShowDueTasks}
+          >
+            <span class="flex-1 truncate">Show tasks</span>
+          </Dropdown.CheckboxItem>
 
           <Dropdown.Sub>
             <Dropdown.SubTrigger>
@@ -460,6 +467,19 @@ function MobileCalendarSettings(props: {
                 classList={{
                   invisible: !calendarView.displaySettings.showWeekends,
                 }}
+              />
+            </MobileDrawer.Item>
+            <MobileDrawer.Item
+              role="checkbox"
+              aria-checked={calendarView.showDueTasks}
+              onClick={() =>
+                calendarView.setShowDueTasks(!calendarView.showDueTasks)
+              }
+            >
+              <span class="min-w-0 flex-1 truncate">Show tasks</span>
+              <CheckIcon
+                class="size-4 shrink-0 text-accent"
+                classList={{ invisible: !calendarView.showDueTasks }}
               />
             </MobileDrawer.Item>
           </MobileDrawer.Section>

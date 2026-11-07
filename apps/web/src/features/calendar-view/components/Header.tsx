@@ -42,6 +42,7 @@ import {
   CalendarCreateBookingLinkItem,
   CalendarCreateCallItem,
   CalendarCreateEventItem,
+  CalendarCreateTaskItem,
 } from './CalendarCreateItems';
 import { CalendarCreateMenu } from './CalendarCreateMenu';
 import { CalendarSearch } from './CalendarSearch';
@@ -164,6 +165,7 @@ export function Header(props: {
   const createItems = () => (
     <>
       <CalendarCreateEventItem />
+      <CalendarCreateTaskItem />
       <CalendarCreateCallItem />
       <CalendarCreateBookingLinkItem />
     </>
