@@ -184,6 +184,7 @@ members = [
   "crates/trigger_context",
   "crates/types/agent_session_id",
   "crates/types/bearer_token",
+  "crates/types/calendar_event_id",
   "crates/types/chat_id",
   "crates/types/chat_message",
   "crates/types/entity_basic_types",
@@ -633,6 +634,7 @@ broadcast = { path = "crates/broadcast" }
 cache-core = { path = "crates/client/cache-core" }
 cache-turso = { path = "crates/client/cache-turso" }
 cal = { path = "crates/cal" }
+calendar_event_id = { path = "crates/types/calendar_event_id" }
 calendar_events = { path = "crates/calendar_events" }
 calendar_scheduling = { path = "crates/calendar_scheduling" }
 calendar_service_url = { path = "crates/platform/service_urls/calendar_service_url" }

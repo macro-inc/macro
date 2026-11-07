@@ -73,6 +73,7 @@ utoipa = { workspace = true, optional = true }
 urlencoding = { workspace = true, optional = true }
 uuid = { workspace = true }
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
+calendar_event_id = { workspace = true }
 
 [dev-dependencies]
 wiremock = { workspace = true }

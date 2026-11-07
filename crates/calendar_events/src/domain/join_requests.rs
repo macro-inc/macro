@@ -7,6 +7,7 @@
 //! sends the invitation. Whether the sharer could do that is read from the
 //! capability model on their copy, exactly as the invite path checks it.
 
+use calendar_event_id::CalendarEventId;
 use chrono::{DateTime, Utc};
 use rootcause::Report;
 use serde::{Deserialize, Serialize};
@@ -269,8 +270,9 @@ where
     async fn request_to_join(
         &self,
         requester_id: &str,
-        event_id: Uuid,
+        event_id: CalendarEventId,
     ) -> Result<CalendarJoinRequest, CalendarJoinRequestError> {
+        let event_id = event_id.into_uuid();
         let result = self.open_request(requester_id, event_id).await;
         let span = tracing::Span::current();
         let outcome = match &result {
@@ -296,8 +298,9 @@ where
     async fn list_join_requests(
         &self,
         requester_id: &str,
-        event_id: Uuid,
+        event_id: CalendarEventId,
     ) -> Result<Vec<CalendarJoinRequest>, CalendarJoinRequestError> {
+        let event_id = event_id.into_uuid();
         // Only someone who can change the event, its owner or a delegate,
         // sees who asked to join it.
         self.repository

@@ -6,6 +6,7 @@ use crate::domain::ports::{
     CalendarJoinRequestError, CalendarJoinRequestNotifier, CalendarJoinRequestService,
     CalendarRefreshNotifier,
 };
+use calendar_event_id::CalendarEventId;
 use sqlx::postgres::PgListener;
 use std::sync::{Arc, Mutex};
 
@@ -123,7 +124,10 @@ async fn a_new_request_reaches_the_inbox_holding_the_shared_copy_once(pool: PgPo
     };
     let service = CalendarJoinRequestServiceImpl::new(repo, NoNotification, refresh.clone());
 
-    let request = service.request_to_join(member_id, event_id).await.unwrap();
+    let request = service
+        .request_to_join(member_id, CalendarEventId::from_uuid(event_id))
+        .await
+        .unwrap();
 
     assert_eq!(
         refresh.nudges.lock().unwrap().as_slice(),
@@ -131,7 +135,10 @@ async fn a_new_request_reaches_the_inbox_holding_the_shared_copy_once(pool: PgPo
     );
     for reader in [sharer_id, delegate_id] {
         assert_eq!(
-            service.list_join_requests(reader, event_id).await.unwrap(),
+            service
+                .list_join_requests(reader, CalendarEventId::from_uuid(event_id))
+                .await
+                .unwrap(),
             std::slice::from_ref(&request),
             "{reader}"
         );
@@ -140,14 +147,19 @@ async fn a_new_request_reaches_the_inbox_holding_the_shared_copy_once(pool: PgPo
     for outsider in [other_delegate_id, member_id] {
         assert!(
             matches!(
-                service.list_join_requests(outsider, event_id).await,
+                service
+                    .list_join_requests(outsider, CalendarEventId::from_uuid(event_id))
+                    .await,
                 Err(CalendarJoinRequestError::NotFound)
             ),
             "{outsider}"
         );
     }
 
-    service.request_to_join(member_id, event_id).await.unwrap();
+    service
+        .request_to_join(member_id, CalendarEventId::from_uuid(event_id))
+        .await
+        .unwrap();
     assert_eq!(refresh.nudges.lock().unwrap().len(), 1);
 }
 

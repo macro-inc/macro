@@ -3,6 +3,7 @@
 #[cfg(test)]
 mod test;
 
+use calendar_event_id::CalendarEventId;
 use std::sync::Arc;
 
 use axum::{
@@ -447,7 +448,10 @@ where
 {
     let ics = state
         .service
-        .event_ics(user.authorization.user.macro_user_id.as_ref(), event_id)
+        .event_ics(
+            user.authorization.user.macro_user_id.as_ref(),
+            CalendarEventId::from_uuid(event_id),
+        )
         .await
         .map_err(|error| {
             tracing::error!(error = ?error, "failed to export calendar event");

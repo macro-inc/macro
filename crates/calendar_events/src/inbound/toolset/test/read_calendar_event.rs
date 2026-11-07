@@ -4,6 +4,7 @@ use crate::domain::models::{
     CalendarMentionEvent, CalendarMentionPreview, CalendarMentionRequestItem,
     CalendarMentionViewerCopy, EventTime,
 };
+use calendar_event_id::CalendarEventId;
 
 /// Resolves every mention to `preview` and records what was asked for.
 struct PreviewOccurrences {
@@ -65,7 +66,7 @@ impl CalendarOccurrenceService for PreviewOccurrences {
     async fn meeting_copies(
         &self,
         _requester_id: &str,
-        _event_id: uuid::Uuid,
+        _event_id: CalendarEventId,
     ) -> Result<Vec<crate::domain::models::MeetingCopy>, rootcause::Report> {
         unreachable!("reading an event lists no copies")
     }
@@ -73,7 +74,7 @@ impl CalendarOccurrenceService for PreviewOccurrences {
     async fn event_ics(
         &self,
         _requester_id: &str,
-        _event_id: Uuid,
+        _event_id: CalendarEventId,
     ) -> Result<Option<crate::domain::ics::CalendarEventIcs>, rootcause::Report> {
         unreachable!("reading an event exports nothing")
     }
