@@ -2221,8 +2221,7 @@ export type SetGithubPullRequestStateResponse = {
 };
 
 /**
- * Setup progress, for the invite flow to show
- * (`hosted_runtimes::SetupProgress`).
+ * Setup progress, for invite and purchase flows to show.
  */
 export type SetupProgress = {
     /**
@@ -2230,19 +2229,19 @@ export type SetupProgress = {
      */
     position: number;
     /**
-     * The current step.
+     * Current setup stage.
      */
     step: SetupStep;
     /**
-     * Number of steps.
+     * Number of setup stages.
      */
     total: number;
 };
 
 /**
- * Steps a new computer goes through, in order (`hosted_runtimes::SetupStep`).
+ * Steps a new computer goes through, in order.
  */
-export type SetupStep = 'paying' | 'creating' | 'booting' | 'connecting' | 'ready';
+export type SetupStep = 'creating' | 'booting' | 'connecting' | 'ready';
 
 /**
  * A size with its resources, price and whether it can be bought now.

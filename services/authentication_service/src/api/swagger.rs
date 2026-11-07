@@ -424,8 +424,6 @@ use model::user::{
                         team_agents::domain::models::ComputerSize,
                         team_agents::domain::models::TeamAgentQuote,
                         team_agents::domain::models::BillingInterval,
-                        team_agents::domain::models::SetupProgress,
-                        team_agents::domain::models::SetupStep,
                         team_agents::domain::models::EmailMessage,
                         team_agents::domain::models::EmailMessages,
                         team_agents::domain::models::SendEmail,
@@ -451,6 +449,9 @@ use model::user::{
         )
     )]
 pub struct ApiDoc;
+
+#[cfg(test)]
+mod test;
 
 #[cfg(test)]
 mod tests {

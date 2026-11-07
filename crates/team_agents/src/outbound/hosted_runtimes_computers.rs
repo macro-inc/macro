@@ -15,8 +15,7 @@ use uuid::Uuid;
 
 use crate::domain::models::{
     BillingInterval, BrainHealth, ComputerPayment, ComputerPurchase, ComputerQuote, ComputerSize,
-    ComputerSizeSpec, ComputerStatus, ComputerStatusKind, Persona, SetupProgress, SetupStep,
-    TeamAgentError,
+    ComputerSizeSpec, ComputerStatus, ComputerStatusKind, Persona, TeamAgentError,
 };
 use crate::domain::ports::Computers;
 
@@ -306,16 +305,7 @@ fn computer_status(status: models::ComputerStatus) -> Result<ComputerStatus, Tea
             }
             models::ComputerStatusKind::Released => ComputerStatusKind::Released,
         },
-        setup: status.setup.map(|setup| SetupProgress {
-            step: match setup.step {
-                models::SetupStep::Creating => SetupStep::Creating,
-                models::SetupStep::Booting => SetupStep::Booting,
-                models::SetupStep::Connecting => SetupStep::Connecting,
-                models::SetupStep::Ready => SetupStep::Ready,
-            },
-            position: setup.position,
-            total: setup.total,
-        }),
+        setup: status.setup,
     })
 }
 

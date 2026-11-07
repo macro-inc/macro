@@ -10890,7 +10890,7 @@
       },
       "SetupProgress": {
         "type": "object",
-        "description": "Setup progress, for the invite flow to show\n(`hosted_runtimes::SetupProgress`).",
+        "description": "Setup progress, for invite and purchase flows to show.",
         "required": ["step", "position", "total"],
         "properties": {
           "position": {
@@ -10901,20 +10901,20 @@
           },
           "step": {
             "$ref": "#/components/schemas/SetupStep",
-            "description": "The current step."
+            "description": "Current setup stage."
           },
           "total": {
             "type": "integer",
             "format": "int32",
-            "description": "Number of steps.",
+            "description": "Number of setup stages.",
             "minimum": 0
           }
         }
       },
       "SetupStep": {
         "type": "string",
-        "description": "Steps a new computer goes through, in order (`hosted_runtimes::SetupStep`).",
-        "enum": ["paying", "creating", "booting", "connecting", "ready"]
+        "description": "Steps a new computer goes through, in order.",
+        "enum": ["creating", "booting", "connecting", "ready"]
       },
       "SizeOffer": {
         "type": "object",

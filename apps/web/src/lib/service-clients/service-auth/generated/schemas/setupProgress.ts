@@ -7,8 +7,7 @@
 import type { SetupStep } from './setupStep';
 
 /**
- * Setup progress, for the invite flow to show
-(`hosted_runtimes::SetupProgress`).
+ * Setup progress, for invite and purchase flows to show.
  */
 export interface SetupProgress {
   /**
@@ -16,10 +15,10 @@ export interface SetupProgress {
    * @minimum 0
    */
   position: number;
-  /** The current step. */
+  /** Current setup stage. */
   step: SetupStep;
   /**
-   * Number of steps.
+   * Number of setup stages.
    * @minimum 0
    */
   total: number;

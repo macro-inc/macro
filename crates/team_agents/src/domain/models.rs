@@ -8,6 +8,7 @@ use uuid::Uuid;
 pub use hosted_runtimes::domain::enrollment::{
     Persona, PersonaConfigKey, PersonaOsUser, PersonaService, SystemdUnitName,
 };
+pub use hosted_runtimes::domain::models::{SetupProgress, SetupStep};
 pub use stripe_price_id::StripePriceId;
 
 pub use super::mail::{MailMessageId, MailThreadId, MailboxId};
@@ -258,37 +259,6 @@ pub enum ComputerStatusKind {
     Failed,
     /// Released and destroyed.
     Released,
-}
-
-/// Steps a new computer goes through, in order (`hosted_runtimes::SetupStep`).
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-#[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
-#[serde(rename_all = "snake_case")]
-pub enum SetupStep {
-    /// The Stripe update.
-    Paying,
-    /// Creating the instance.
-    Creating,
-    /// Booting it.
-    Booting,
-    /// Waiting for macrod to connect.
-    Connecting,
-    /// Done.
-    Ready,
-}
-
-/// Setup progress, for the invite flow to show
-/// (`hosted_runtimes::SetupProgress`).
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
-#[serde(rename_all = "camelCase")]
-pub struct SetupProgress {
-    /// The current step.
-    pub step: SetupStep,
-    /// 1-based position of `step`.
-    pub position: u8,
-    /// Number of steps.
-    pub total: u8,
 }
 
 /// A computer as its team sees it; the fields of

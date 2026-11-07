@@ -441,8 +441,8 @@ impl Computers for FakeComputers {
             status: ComputerStatusKind::SettingUp,
             setup: Some(SetupProgress {
                 step: SetupStep::Creating,
-                position: 2,
-                total: 5,
+                position: 1,
+                total: 4,
             }),
         })
     }
@@ -568,9 +568,9 @@ impl Default for Setup {
                 brain: None,
                 status: ComputerStatusKind::SettingUp,
                 setup: Some(SetupProgress {
-                    step: SetupStep::Paying,
+                    step: SetupStep::Creating,
                     position: 1,
-                    total: 5,
+                    total: 4,
                 }),
             },
         }
@@ -665,9 +665,9 @@ async fn create_invites_an_agent_and_buys_its_computer_with_its_seat() {
             status: TeamAgentStatus::Provisioning,
             status_reason: None,
             setup: Some(SetupProgress {
-                step: SetupStep::Paying,
+                step: SetupStep::Creating,
                 position: 1,
-                total: 5
+                total: 4
             }),
             last_turn_at: None,
             retryable: false,
@@ -1004,8 +1004,8 @@ async fn listing_shows_setup_progress_while_the_computer_comes_up() {
             status: ComputerStatusKind::SettingUp,
             setup: Some(SetupProgress {
                 step: SetupStep::Booting,
-                position: 3,
-                total: 5,
+                position: 2,
+                total: 4,
             }),
         },
         ..Setup::default()
@@ -1022,8 +1022,8 @@ async fn listing_shows_setup_progress_while_the_computer_comes_up() {
         listed.agents[0].setup,
         Some(SetupProgress {
             step: SetupStep::Booting,
-            position: 3,
-            total: 5,
+            position: 2,
+            total: 4,
         })
     );
 }
@@ -1059,8 +1059,8 @@ async fn a_running_agent_reflects_a_later_computer_failure() {
             status: ComputerStatusKind::Ready,
             setup: Some(SetupProgress {
                 step: SetupStep::Ready,
-                position: 5,
-                total: 5,
+                position: 4,
+                total: 4,
             }),
         },
         ..Setup::default()
@@ -1131,8 +1131,8 @@ async fn delete_releases_the_computer_and_removes_the_agent_last() {
             status: ComputerStatusKind::SettingUp,
             setup: Some(SetupProgress {
                 step: SetupStep::Creating,
-                position: 2,
-                total: 5,
+                position: 1,
+                total: 4,
             }),
         },
         ..Setup::default()
@@ -1220,8 +1220,8 @@ async fn retry_reuses_the_seed_computer_and_credentials_without_purchasing() {
             // Failures must override stale setup progress.
             setup: Some(SetupProgress {
                 step: SetupStep::Booting,
-                position: 3,
-                total: 5,
+                position: 2,
+                total: 4,
             }),
         },
         ..Setup::default()
@@ -1402,9 +1402,9 @@ async fn pending_payment_clears_legacy_failure_and_waits_without_another_purchas
             brain: None,
             status: ComputerStatusKind::SettingUp,
             setup: Some(SetupProgress {
-                step: SetupStep::Paying,
+                step: SetupStep::Creating,
                 position: 1,
-                total: 5,
+                total: 4,
             }),
         },
         ..Setup::default()
@@ -1423,7 +1423,7 @@ async fn pending_payment_clears_legacy_failure_and_waits_without_another_purchas
     let pending = &listed.agents[0];
     assert_eq!(pending.status, TeamAgentStatus::Provisioning);
     assert_eq!(pending.status_reason, None);
-    assert_eq!(pending.setup.as_ref().unwrap().step, SetupStep::Paying);
+    assert_eq!(pending.setup.as_ref().unwrap().step, SetupStep::Creating);
     assert!(!pending.retryable);
     let before = journal.steps();
     assert!(matches!(
@@ -1829,8 +1829,8 @@ async fn connecting_disconnect_then_ready_health_loss_and_reconnect_never_latch_
         status: ComputerStatusKind::Ready,
         setup: Some(SetupProgress {
             step: SetupStep::Connecting,
-            position: 4,
-            total: 5,
+            position: 3,
+            total: 4,
         }),
         brain: Some(disconnected.clone()),
     };

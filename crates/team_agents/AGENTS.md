@@ -24,6 +24,9 @@ that nothing was charged; detailed provider errors stay in server logs. Purchase
 saved agent persona. Its payment outbox resolves unknown outcomes idempotently;
 the agent remains `provisioning` with pending payment and forwards the computer
 service’s creation progress.
+Reuse `hosted_runtimes::domain::models::{SetupStep, SetupProgress}` for setup
+responses: `creating`, `booting`, `connecting`, `ready`, numbered 1–4. The auth
+OpenAPI registers these canonical types once for both computer and agent responses.
 A definite `payment_failed` computer retains its agent as `failed` with reason
 `payment failed`. The response exposes durable `payment` (`pending`, `paid`,
 `unbilled`, `comped`), or null when its computer cannot be read. The agent exists and its

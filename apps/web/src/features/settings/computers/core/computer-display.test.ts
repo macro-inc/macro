@@ -1,4 +1,4 @@
-import type { ComputerStatus } from '@service-auth/computers';
+import type { ComputerStatus, SetupStep } from '@service-auth/computers';
 import { describe, expect, it } from 'vitest';
 import { canTogglePower, computerStatusLabel } from './computer-display';
 
@@ -35,18 +35,48 @@ describe('capacity waiting', () => {
   );
 });
 
-it('renders payment setup as generic setup with no payment step detail', () => {
-  const status = computerStatusLabel({
-    ...waiting,
-    status: 'setting_up',
-    setup: { step: 'paying', position: 1, total: 5 },
-  });
+it('renders absent setup as generic setup without a step detail', () => {
+  const status = computerStatusLabel({ ...waiting, status: 'setting_up' });
   expect(status).toEqual({
     label: 'Setting up',
     detail: undefined,
     tone: 'progress',
   });
-  expect([status.label, status.detail].filter(Boolean).join(' ')).not.toMatch(
-    /paying|payment/i
-  );
+  expect(status.label).not.toMatch(/paying|payment/i);
+});
+
+it.each<{ step: SetupStep; label: string; position: number }>([
+  { step: 'creating', label: 'Creating the computer', position: 1 },
+  { step: 'booting', label: 'Starting up', position: 2 },
+  { step: 'connecting', label: 'Connecting to Macro', position: 3 },
+  { step: 'ready', label: 'Ready', position: 4 },
+])('renders canonical $step progress', ({ step, label, position }) => {
+  const status = computerStatusLabel({
+    ...waiting,
+    status: 'setting_up',
+    setup: { step, position, total: 4 },
+  });
+  expect(status).toEqual({
+    label: 'Setting up',
+    detail: `${label} (step ${position} of 4)`,
+    tone: 'progress',
+  });
+  expect(`${status.label} ${status.detail}`).not.toMatch(/paying|payment/i);
+});
+
+it('keeps an unrecognized runtime step generic without exposing raw text', () => {
+  const setup: NonNullable<ComputerStatus['setup']> = {
+    step: 'creating',
+    position: 1,
+    total: 4,
+  };
+  // External responses can be newer than this client without changing its canonical type.
+  Reflect.set(setup, 'step', 'unrecognized_runtime_step');
+  expect(
+    computerStatusLabel({ ...waiting, status: 'setting_up', setup })
+  ).toEqual({
+    label: 'Setting up',
+    detail: undefined,
+    tone: 'progress',
+  });
 });

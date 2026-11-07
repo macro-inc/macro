@@ -57,13 +57,13 @@ export function formatComputerDate(value: string): string {
   });
 }
 
-function setupStepLabel(step: Exclude<SetupStep, 'paying'>): string {
+function setupStepLabel(step: SetupStep): string | undefined {
   return match(step)
     .with('creating', () => t('computers.stepCreating'))
     .with('booting', () => t('computers.stepBooting'))
     .with('connecting', () => t('computers.stepConnecting'))
     .with('ready', () => t('computers.ready'))
-    .exhaustive((unknown) => String(unknown));
+    .exhaustive(() => undefined);
 }
 
 export type StatusTone = 'success' | 'progress' | 'muted' | 'failure';
@@ -75,18 +75,22 @@ export function computerStatusLabel(computer: ComputerStatus): {
 } {
   return match(computer.status)
     .returnType<{ label: string; detail?: string; tone: StatusTone }>()
-    .with('setting_up', () => ({
-      label: t('computers.settingUp'),
-      detail:
-        computer.setup && computer.setup.step !== 'paying'
-          ? t('computers.setupProgress', {
-              step: setupStepLabel(computer.setup.step),
-              position: computer.setup.position,
-              total: computer.setup.total,
-            })
-          : undefined,
-      tone: 'progress',
-    }))
+    .with('setting_up', () => {
+      const setup = computer.setup;
+      const step = setup && setupStepLabel(setup.step);
+      return {
+        label: t('computers.settingUp'),
+        detail:
+          setup && step
+            ? t('computers.setupProgress', {
+                step,
+                position: setup.position,
+                total: setup.total,
+              })
+            : undefined,
+        tone: 'progress',
+      };
+    })
     .with('waiting_for_capacity', () => ({
       label: t('computers.waitingForCapacity'),
       detail: t('computers.waitingForCapacityHint'),
