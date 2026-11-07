@@ -4,9 +4,14 @@ name = "model"
 publish = false
 version = "0.1.0"
 
+[features]
+# `GenericResponse::send` and the `validate_api_version` middleware. Off by
+# default so crates that only use the DTOs don't compile axum through `model`.
+axum = ["dep:axum"]
+
 [dependencies]
 anyhow = { workspace = true }
-axum = { workspace = true }
+axum = { workspace = true, optional = true }
 chrono = { workspace = true }
 document_sub_type = { workspace = true, default-features = true }
 macro_user_id = { workspace = true, features = ["schema"] }
