@@ -10159,6 +10159,10 @@
       "crates/trigger_context",
       "crates/workspace-hack"
     ],
+    "lexical_conformance": [
+      "crates/client/lexical/lexical_conformance",
+      "crates/client/lexical/lexical_model"
+    ],
     "lexical_mention_extractor": [
       "crates/activity",
       "crates/agent",
