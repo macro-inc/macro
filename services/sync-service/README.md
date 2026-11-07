@@ -268,7 +268,12 @@ late callback output within the scenario. Shared runtimes include preceding
 inputs in each fixture so they can be replayed independently, including across
 persisted-runtime restarts. Explicit seed events retain test-side KV and D1 writes.
 
-Recording seeds client document IDs, Loro peer IDs and input bytes. Worker
+Recording seeds client document IDs, Loro peer IDs and input bytes, and delivers
+client HTTP/WebSocket inputs in invocation order. The explicit overlapping-fetch
+test bypasses that queue to exercise the mutation barrier. Each scenario closes
+its clients and drains scheduled alarms before its final dump, retaining complete
+room histories and global storage for independent replay.
+The long-lived document check waits for three actual alarm completions. Worker
 entropy and clocks remain real; the normalizer compares their recorded
 references, clock counts/kinds, and decoded awareness values while retaining
 other wire bytes. The raw fixtures keep the values needed by native replay.

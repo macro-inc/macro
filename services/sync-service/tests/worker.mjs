@@ -32,10 +32,10 @@ export default class TestWorker extends worker {
 
   async fetch(request) {
     const url = new URL(request.url);
-    if (url.pathname === '/__sync_test_dump') {
+    if (url.pathname === '/__sync_test_dump' || url.pathname === '/__sync_test_flush_alarm') {
       const namespace = this.env.DOCUMENT_SYNC_SESSION;
       const stub = namespace.get(namespace.idFromString(url.searchParams.get('room')));
-      return stub.fetch(`http://sync-test/__sync_test_dump?marker=${encodeURIComponent(url.searchParams.get('marker'))}`);
+      return stub.fetch(`http://sync-test${url.pathname}?marker=${encodeURIComponent(url.searchParams.get('marker'))}`);
     }
     if (url.pathname === '/__sync_test_evict') {
       const namespace = this.env.DOCUMENT_SYNC_SESSION;
@@ -104,6 +104,17 @@ export class DocumentSyncSession extends DurableObject {
 
   async fetch(request) {
     const control = new URL(request.url);
+    if (control.pathname === '/__sync_test_accept_count') return Response.json(this.accepted);
+    if (control.pathname === '/__sync_test_flush_alarm') {
+      while (this.callbacks.size) await Promise.allSettled([...this.callbacks]);
+      if (await this.state.storage.getAlarm() !== null) {
+        // Model the runtime consuming the scheduled alarm before delivery.
+        await this.state.storage.deleteAlarm();
+        await this.alarm();
+      }
+      await this.recorder()?.drain();
+      return new Response(null, { status: 204 });
+    }
     if (control.pathname === '/__sync_test_forget_id') {
       this.recorder()?.begin({ in: 'seed', binding: 'storage', method: 'delete', args: ['DOCUMENT_ID'] });
       await this.state.storage.delete('DOCUMENT_ID');
@@ -168,9 +179,11 @@ export class DocumentSyncSession extends DurableObject {
 
   async alarm() {
     const recorder = this.recorder();
-    recorder?.begin({ in: 'alarm' });
+    const callback = recorder?.begin({ in: 'alarm' });
     globalThis.__syncTranscriptCurrent = recorder;
-    return this.track(this.session.alarm());
+    const response = await this.track(this.session.alarm());
+    recorder?.record({ out: 'alarm', status: response.status, body_b64: b64(await response.clone().arrayBuffer()) }, callback);
+    return response;
   }
 
   async transcriptDump(marker) {

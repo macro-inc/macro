@@ -16,9 +16,40 @@ type Capture = {
   historyKey?: string;
   connectionCounts: Map<string, number>;
   seedIndex: number;
-  sockets: Map<WebSocket, { resolve?: () => void; path: string; query: string; ordinal: number }>;
+  queue: Promise<unknown>;
+  closed: Set<unknown>;
+  sockets: Map<WebSocket, { resolve?: () => void; path: string; query: string; ordinal: number; consume?: boolean }>;
 };
 const captures = new Map<Miniflare, Capture>();
+const socketCaptures = new WeakMap<WebSocket, Capture>();
+
+/** Give recorded inputs a fixed delivery order across sockets and HTTP. */
+export function sendRecordedInput(socket: WebSocket, send: () => void, ping: boolean) {
+  const capture = socketCaptures.get(socket);
+  if (!capture) return send();
+  capture.queue = capture.queue.then(async () => {
+    const fence = capture.sockets.get(socket);
+    if (!fence || capture.closed.has(socketId(capture, fence))) return send();
+    await new Promise<void>((resolve, reject) => {
+      const timeout = setTimeout(() => reject(new Error('Recorded input fence timed out')), 5000);
+      fence.consume = !ping;
+      fence.resolve = () => { clearTimeout(timeout); resolve(); };
+      send();
+      if (!ping) socket.send('ping');
+    });
+  });
+}
+
+/** Wait for actual alarm completions rather than racing a wall-clock sleep. */
+export async function recordedAlarms(mf: Miniflare, documentId: string, count: number) {
+  const capture = captures.get(mf)!;
+  for (let attempt = 0; attempt < 2500; attempt += 1) {
+    const room = capture.entries.find(entry => entry.in === 'fetch' && entry.room !== '@worker' && entry.path === `/document/${documentId}/connect`)?.room;
+    if (room && capture.entries.filter(entry => entry.room === room && entry.out === 'alarm').length >= count) return;
+    await new Promise(resolve => setTimeout(resolve, 10));
+  }
+  throw new Error('Recorded alarm deadline exceeded');
+}
 
 async function completed<T>(promise: Promise<T>, label: string): Promise<T> {
   let timer: ReturnType<typeof setTimeout>;
@@ -29,26 +60,41 @@ async function completed<T>(promise: Promise<T>, label: string): Promise<T> {
   } finally { clearTimeout(timer!); }
 }
 
-async function dump(mf: Miniflare, capture: Capture) {
-  // A ping/pong fence drains client messages already sent before the scenario
-  // ended. Its listener precedes application listeners, so shared test clients
-  // never see the fence's pong in their own receive queue.
+function socketId(capture: Capture, fence: { path: string; query: string; ordinal: number }) {
   const accepts = capture.entries.flatMap((entry, index) => {
     if (entry.out !== 'accept') return [];
     const input = capture.entries.slice(0, index).findLast(candidate => candidate.room === entry.room && candidate.in === 'fetch');
-    return [{ ...entry, path: input?.path, query: input?.query }];
+    return input?.path === fence.path && input?.query === fence.query ? [entry] : [];
   });
+  return accepts[fence.ordinal]?.ws_id;
+}
+
+async function dump(mf: Miniflare, capture: Capture) {
+  await capture.queue;
+  // A ping/pong fence drains client messages already sent before the scenario
+  // ended. Its listener precedes application listeners, so shared test clients
+  // never see the fence's pong in their own receive queue.
   for (const [socket, fence] of capture.sockets) {
-    const accepted = accepts.filter(entry => entry.path === fence.path && entry.query === fence.query)[fence.ordinal];
-    if (accepted && capture.entries.some(entry => entry.out === 'close' && entry.ws_id === accepted.ws_id)) continue;
+    if (capture.closed.has(socketId(capture, fence))) continue;
     if (socket.readyState !== 1) continue;
     await new Promise<void>((resolve, reject) => {
       const timeout = setTimeout(() => reject(new Error('Transcript socket fence timed out')), 5000);
+      fence.consume = true;
       fence.resolve = () => { clearTimeout(timeout); resolve(); };
       socket.send('ping');
     });
   }
+  for (const [socket, fence] of capture.sockets) {
+    const id = socketId(capture, fence);
+    if (capture.closed.has(id)) continue;
+    if (socket.readyState === 1) socket.close(1000, 'transcript scenario complete');
+    for (let attempt = 0; !capture.closed.has(id); attempt += 1) {
+      if (attempt === 1000) throw new Error(`Missing close callback for ${String(id)}`);
+      await new Promise(resolve => setTimeout(resolve, 5));
+    }
+  }
   for (const room of capture.rooms) {
+    await completed(mf.dispatchFetch(`http://sync-test/__sync_test_flush_alarm?room=${room}`), `alarm flush for ${room}`);
     const marker = `${capture.entries.length}:${room}`;
     const received = new Promise<void>(resolve => capture.waiters.set(marker, resolve));
     const response = await completed(mf.dispatchFetch(`http://sync-test/__sync_test_dump?room=${room}&marker=${encodeURIComponent(marker)}`), `dump for ${room}`);
@@ -81,7 +127,7 @@ function facade<T extends object>(target: T, overrides: Record<string, unknown>)
 /** Capture only the feature's dedicated tracing target; preserve line order. */
 export function runtimeCapture(disposeAfterTest: boolean, historyKey?: string) {
   const capture: Capture = {
-    entries: [], rooms: new Set(), written: 0, waiters: new Map(), disposeAfterTest, disposed: false, sockets: new Map(), historyKey, connectionCounts: new Map(), seedIndex: 0,
+    entries: [], rooms: new Set(), written: 0, waiters: new Map(), disposeAfterTest, disposed: false, sockets: new Map(), historyKey, connectionCounts: new Map(), seedIndex: 0, queue: Promise.resolve(), closed: new Set(),
   };
   return {
     attach(mf: Miniflare) {
@@ -118,7 +164,13 @@ export function runtimeCapture(disposeAfterTest: boolean, historyKey?: string) {
         return facade(native, { prepare: (sql: string) => statement(native.prepare(sql), sql) });
       };
       const dispatch = mf.dispatchFetch.bind(mf);
-      mf.dispatchFetch = async (...args: Parameters<typeof dispatch>) => {
+      mf.dispatchFetch = (...args: Parameters<typeof dispatch>) => {
+        const body = args[1]?.body;
+        if (body instanceof ArrayBuffer || ArrayBuffer.isView(body)) {
+          const copy = body instanceof ArrayBuffer ? new Uint8Array(body).slice() : new Uint8Array(body.buffer, body.byteOffset, body.byteLength).slice();
+          args[1] = { ...args[1], body: copy };
+        }
+        const pending = capture.queue.then(async () => {
         const response = await dispatch(...args);
         const socket = response.webSocket;
         if (socket) {
@@ -126,11 +178,12 @@ export function runtimeCapture(disposeAfterTest: boolean, historyKey?: string) {
           const key = url.pathname + url.search;
           const ordinal = capture.connectionCounts.get(key) ?? 0;
           capture.connectionCounts.set(key, ordinal + 1);
-          const fence = { path: url.pathname, query: url.search, ordinal, resolve: undefined as (() => void) | undefined };
+          const fence = { path: url.pathname, query: url.search, ordinal, consume: false, resolve: undefined as (() => void) | undefined };
           capture.sockets.set(socket, fence);
+          socketCaptures.set(socket, capture);
           socket.addEventListener('message', event => {
             if (event.data !== 'pong' || !fence.resolve) return;
-            event.stopImmediatePropagation();
+            if (fence.consume) event.stopImmediatePropagation();
             const resolve = fence.resolve;
             delete fence.resolve;
             resolve();
@@ -141,6 +194,9 @@ export function runtimeCapture(disposeAfterTest: boolean, historyKey?: string) {
           });
         }
         return response;
+        });
+        capture.queue = pending.then(() => undefined);
+        return pending;
       };
       const dispose = mf.dispose.bind(mf);
       mf.dispose = async () => {
@@ -163,6 +219,12 @@ export function runtimeCapture(disposeAfterTest: boolean, historyKey?: string) {
           if (!fields?.transcript) return;
           const entry: Entry = JSON.parse(fields.transcript);
           capture.entries.push(entry);
+          if (entry.out === 'close' || entry.in === 'close') {
+            capture.closed.add(entry.ws_id);
+            for (const fence of capture.sockets.values()) {
+              if (socketId(capture, fence) === entry.ws_id) fence.resolve?.();
+            }
+          }
           if (typeof entry.marker === 'string') capture.waiters.get(entry.marker)?.();
           if (typeof entry.room === 'string' && entry.room !== '@worker') capture.rooms.add(entry.room);
         });
@@ -179,6 +241,7 @@ if (process.env.SYNC_RECORD === '1') {
   beforeEach(() => {
     const state = { ...expect.getState() };
     onTestFinished(async () => {
+      await Promise.all([...captures.values()].map(capture => capture.queue));
       const entries: Entry[] = [];
       const changed = [...captures.values()].filter(capture => capture.entries.length !== capture.written);
       const histories = new Set(changed.flatMap(capture => capture.historyKey ? [capture.historyKey] : []));

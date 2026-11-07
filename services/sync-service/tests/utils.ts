@@ -1,4 +1,4 @@
-import { runtimeCapture } from "./transcript";
+import { runtimeCapture, sendRecordedInput } from "./transcript";
 import { intoFrames, Reassembler } from '../../../packages/collaboration/src/websocket/platform/framing/frames';
 import { EphemeralStore, LoroDoc } from 'loro-crdt';
 import { Miniflare, type MiniflareOptions, type WebSocket } from 'miniflare';
@@ -10,6 +10,12 @@ import {
 } from '../bebop/generated/schema';
 import fs from 'node:fs';
 import { verify } from 'node:crypto';
+
+const rawDispatches = new WeakMap<Miniflare, Miniflare['dispatchFetch']>();
+
+export function dispatchConcurrent(mf: Miniflare, ...args: Parameters<Miniflare['dispatchFetch']>) {
+  return rawDispatches.get(mf)!(...args);
+}
 
 const evictionOwners = new WeakMap<object, Miniflare>();
 
@@ -107,6 +113,7 @@ export async function setupMiniflare(
       },
     });
   };
+  rawDispatches.set(mf, mf.dispatchFetch.bind(mf));
   capture?.attach(mf);
 
   if (options.migrate !== false) await migrateDatabase(mf);
@@ -297,11 +304,12 @@ export function createTestWebSocket(ws: WebSocket) {
     },
 
     send(message: string | ArrayBuffer | Uint8Array): void {
-      if (typeof message === 'string') {
-        ws.send(message);
-        return;
-      }
-      for (const frame of intoFrames(new Uint8Array(message))) ws.send(frame);
+      // The generated codec reuses its backing buffer; queued inputs own bytes.
+      const payload = typeof message === 'string' ? message : new Uint8Array(message).slice();
+      sendRecordedInput(ws, () => {
+        if (typeof payload === 'string') ws.send(payload);
+        else for (const frame of intoFrames(payload)) ws.send(frame);
+      }, payload === 'ping');
     },
 
     getWebSocket() {

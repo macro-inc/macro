@@ -73,6 +73,29 @@ export function normalize(lines) {
       try { expirations.add(JSON.parse(Buffer.from(token.split('.')[1], 'base64url').toString()).exp); } catch {}
     }
   }
+  // A stored expiry must belong to this socket's grant, even when another
+  // recorded grant happens to contain the incorrect value.
+  const grants = new Map();
+  const socketExpirations = new Map();
+  for (const entry of entries) {
+    if (entry.in === 'fetch') {
+      const token = entry.query?.match(/(?:\?|&)token=([^&]+)/)?.[1];
+      if (token) {
+        try { grants.set(entry.room, JSON.parse(Buffer.from(decodeURIComponent(token).split('.')[1], 'base64url').toString()).exp); } catch {}
+      }
+    }
+    if (entry.out === 'accept') socketExpirations.set(entry.ws_id, grants.get(entry.room));
+  }
+  function checkSocketExpiry(key, value) {
+    const expected = socketExpirations.get(key);
+    if (expected !== undefined && value?.expires_at !== undefined && value.expires_at !== expected) {
+      value.expires_at = { invalid_expiry: value.expires_at };
+    }
+  }
+  for (const entry of entries) {
+    if (entry.port === 'storage.put') checkSocketExpiry(entry.args?.[0], entry.args?.[1]);
+    if (entry.out === 'dump') for (const [key, value] of entry.kv) checkSocketExpiry(key, value);
+  }
   awarenessFrames(entries);
   // Different callbacks may interleave at await points. Compare each callback's
   // ordered effects, and retain an independent per-socket wire-order check.
@@ -94,6 +117,12 @@ export function normalize(lines) {
   let currentRoom;
   const instants = new Map();
   let clockIndex = 0;
+  for (const entry of entries) {
+    if (!entry.clock) continue;
+    if (entry.clock === 'blame_ms') blameTimes.set(String(entry.value), `<clock:${clockIndex}>`);
+    clockIndex += 1;
+  }
+  clockIndex = 0;
 
   function text(value) {
     let result = value.replace(/expire_after_accept:(\d+)/g, (value, expiry) => expirations.has(Number(expiry)) ? 'expire_after_accept:<expires>' : value).replace(/http:\/\/127\.0\.0\.1:\d+/g, 'http://127.0.0.1:<port>').replace(/ws_id[0-9a-f-]{36}/g, id => {
@@ -165,7 +194,8 @@ export function normalize(lines) {
       }
     }
     if (entry.out === 'response' && entry.headers?.['content-type']?.includes('json')) {
-      entry.body_b64 = Buffer.from(text(Buffer.from(entry.body_b64, 'base64').toString())).toString('base64');
+      const body = text(Buffer.from(entry.body_b64, 'base64').toString()).replace(/(\"timestamp_ms\"\s*:\s*)(\d+)/g, (match, prefix, value) => blameTimes.has(value) ? prefix + JSON.stringify(blameTimes.get(value)) : match);
+      entry.body_b64 = Buffer.from(body).toString('base64');
     }
     const normalized = visit(entry);
     if (entry.out === 'dump') {

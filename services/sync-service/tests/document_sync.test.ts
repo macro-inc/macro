@@ -1,3 +1,4 @@
+import { recordedAlarms } from "./transcript";
 import { Miniflare } from "miniflare";
 import { LoroDoc } from "loro-crdt";
 import { FromRemote, FromPeer } from "../bebop/generated/schema";
@@ -179,7 +180,8 @@ describe("document sync tests", () => {
     expect(userA.getState()).toBe("hello world goodbye world");
     expect(userB.getState()).toBe("hello world goodbye world");
 
-    await new Promise((resolve) => setTimeout(resolve, 15000));
+    if (process.env.SYNC_RECORD === "1") await recordedAlarms(mf, doc.name, 3);
+    else await new Promise((resolve) => setTimeout(resolve, 15000));
 
     const userC = await doc.createUser();
     expect(userC.getState()).toBe("hello world goodbye world");
