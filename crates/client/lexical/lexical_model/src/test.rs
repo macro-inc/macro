@@ -695,3 +695,26 @@ fn merging_text_resolves_parent_element_selection_points() -> Result<(), Error> 
     assert_eq!(editor.state().text_content(p), "ab");
     Ok(())
 }
+
+#[cfg(feature = "foreign-nodes")]
+#[test]
+fn conformance_peer_shares_registry_and_keys_but_owns_its_snapshot() -> Result<(), Error> {
+    let mut editor = Editor::builder(EditorMode::Headless).build().unwrap();
+    let mut peer = editor.create_conformance_peer(EditorMode::ViewAttached)?;
+    assert!(peer.state().is_empty_state());
+    let (first, _) = editor.update(|tx| {
+        let p = tx.create(Paragraph::default())?;
+        tx.append(NodeKey::ROOT, &[p.key()])?;
+        Ok(p.key())
+    })?;
+    peer.set_editor_state(editor.state().clone(), TagSet::default())?;
+    let (second, _) = peer.update(|tx| {
+        let p = tx.create(Paragraph::default())?;
+        tx.append(NodeKey::ROOT, &[p.key()])?;
+        Ok(p.key())
+    })?;
+    assert_ne!(first, second);
+    assert_eq!(editor.state().view().children_size(NodeKey::ROOT), 1);
+    assert_eq!(peer.state().view().children_size(NodeKey::ROOT), 2);
+    Ok(())
+}

@@ -41,11 +41,16 @@ impl Editor {
     pub fn builder(mode: EditorMode) -> EditorBuilder {
         EditorBuilder::new(mode)
     }
-    /// Set the dev-only conformance host's current input mode.
-    /// A Tier C DOM bridge reconciles view caches only for view-derived inputs.
+    /// Create an empty dev-only peer sharing this registry and key allocator.
+    /// Tier C keeps a separate attached view, like the upstream DOM oracle.
     #[cfg(feature = "foreign-nodes")]
-    pub fn set_conformance_mode(&mut self, mode: EditorMode) {
-        self.mode = mode;
+    pub fn create_conformance_peer(&self, mode: EditorMode) -> Result<Self, Error> {
+        Self::new(
+            self.state.registry.clone(),
+            mode,
+            KeySource::Shared(self.keys.clone()),
+            self.view_host,
+        )
     }
 
     /// Current committed state.

@@ -639,8 +639,7 @@ fn editing_one_text_counts_only_its_record_clone_and_dirty_ancestors() -> Result
 }
 
 #[test]
-fn installing_a_readonly_snapshot_preserves_hidden_element_typing_attributes() -> Result<(), Error>
-{
+fn installing_a_snapshot_reconciles_existing_element_typing_attributes() -> Result<(), Error> {
     let mut editor = Editor::builder(EditorMode::ViewAttached).build().unwrap();
     let (p, _) = editor.update(|tx| {
         let p = tx.create(Paragraph::default())?;
@@ -653,7 +652,7 @@ fn installing_a_readonly_snapshot_preserves_hidden_element_typing_attributes() -
     editor.set_editor_state(editor.state().clone(), TagSet::default())?;
     assert_eq!(
         editor.state().view().element_data(p)?.text_format,
-        TextFormat::BOLD
+        TextFormat::empty()
     );
     Ok(())
 }
