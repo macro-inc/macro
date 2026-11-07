@@ -2801,7 +2801,7 @@ async fn a_document_session_preserves_its_origin_and_inherits_live_document_acce
     .unwrap();
     transaction.commit().await.unwrap();
     let access = entity_access::domain::service::EntityAccessServiceImpl::new(
-        entity_access::outbound::PgAccessRepository::new(pool.clone()),
+        entity_access_outbound::PgAccessRepository::new(pool.clone()),
     );
     use crate::domain::audience::{AuthorizedSessionAudience, SessionAudience};
     let audience = AuthorizedSessionAudience::new(

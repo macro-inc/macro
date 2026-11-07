@@ -70,13 +70,11 @@ use email::{
     domain::{ports::ReadonlyEmailPreviewAdapter, service::EmailServiceImpl},
     outbound::EmailPgRepo,
 };
-use entity_access::{
-    domain::{
-        models::{EditAccessLevel, EntityAccessAuth, EntityAccessReceipt, ViewAccessLevel},
-        service::EntityAccessServiceImpl,
-    },
-    outbound::PgAccessRepository,
+use entity_access::domain::{
+    models::{EditAccessLevel, EntityAccessAuth, EntityAccessReceipt, ViewAccessLevel},
+    service::EntityAccessServiceImpl,
 };
+use entity_access_outbound::PgAccessRepository;
 use favorites::{
     domain::{mutation_service::FavoritesMutationServiceImpl, service::FavoritesServiceImpl},
     inbound::axum_router::FavoritesRouterState,
@@ -737,7 +735,7 @@ pub(crate) type DssDatabaseStarterState =
 /// never authorizes worker targets; that capability fails closed here.
 pub(crate) struct SlackAdminAuthorizer(
     pub Arc<EntityAccessService>,
-    pub entity_access::outbound::PgAccessRepository,
+    pub entity_access_outbound::PgAccessRepository,
 );
 
 impl slack_integration::domain::ports::ImportProgressAccess for SlackAdminAuthorizer {

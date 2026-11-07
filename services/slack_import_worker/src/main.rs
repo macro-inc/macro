@@ -6,7 +6,8 @@
 mod config;
 
 use chrono::{DateTime, Utc};
-use entity_access::{domain::service::EntityAccessServiceImpl, outbound::PgAccessRepository};
+use entity_access::domain::service::EntityAccessServiceImpl;
+use entity_access_outbound::PgAccessRepository;
 use import::outbound::pg_import_repo::PgImportRepo;
 use macro_entrypoint::{MacroEntrypoint, shutdown_signal};
 use macro_queues::{SlackImportDlq, SlackImportQueue};

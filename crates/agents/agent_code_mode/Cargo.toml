@@ -50,7 +50,7 @@ jev = { workspace = true, features = ["outbound"] }
 tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
 macro_db_migrator = { workspace = true }
 agent_session = { workspace = true, features = ["test-utils", "outbound"] }
-entity_access = { workspace = true, default-features = true, features = ["outbound"] }
+entity_access = { workspace = true, default-features = true }
 
 [package.metadata.cargo-shear]
 # Named only in `#[sqlx::test(migrator = "...")]` strings.

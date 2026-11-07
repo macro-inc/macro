@@ -1,6 +1,7 @@
 use crate::config::Config;
 use axum::extract::FromRef;
-use entity_access::{domain::service::EntityAccessServiceImpl, outbound::PgAccessRepository};
+use entity_access::domain::service::EntityAccessServiceImpl;
+use entity_access_outbound::PgAccessRepository;
 use frecency::{
     domain::services::EventIngestorImpl,
     inbound::polling_aggregator::FrecencyAggregatorWorkerHandle,

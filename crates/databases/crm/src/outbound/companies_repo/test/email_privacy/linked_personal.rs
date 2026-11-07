@@ -7,10 +7,10 @@ use crate::domain::{
 };
 use crate::outbound::no_op_resolver::NoOpCompanyMetadataResolver;
 use chrono::Duration;
-use entity_access::{
-    domain::{models::EntityType, ports::EntityAccessService, service::EntityAccessServiceImpl},
-    outbound::PgAccessRepository,
+use entity_access::domain::{
+    models::EntityType, ports::EntityAccessService, service::EntityAccessServiceImpl,
 };
+use entity_access_outbound::PgAccessRepository;
 use macro_user_id::user_id::MacroUserIdStr;
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]

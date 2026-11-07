@@ -297,7 +297,7 @@ pub fn shared_message_service<E: messages::domain::ports::MessageEventPublisher>
     .with_references(
         messages::outbound::entity_access_audience::EntityAccessMessageReferences(
             entity_access::domain::service::EntityAccessServiceImpl::new(
-                entity_access::outbound::PgAccessRepository::new(pool),
+                entity_access_outbound::PgAccessRepository::new(pool),
             ),
         ),
     )
@@ -389,7 +389,7 @@ fn message_service_with_side_effects(
     dispatcher: ToolChannelEventDispatcher,
 ) -> Arc<dyn messages::domain::api::MessageServiceApi> {
     let access = entity_access::domain::service::EntityAccessServiceImpl::new(
-        entity_access::outbound::PgAccessRepository::new(pool.clone()),
+        entity_access_outbound::PgAccessRepository::new(pool.clone()),
     );
     let realtime = messages::outbound::connection_gateway::ConnectionGatewayMessages(
         clients.connection_gateway.clone(),
@@ -442,7 +442,7 @@ pub fn build_channel_tool_context_with_dispatcher(
     messages: Arc<dyn messages::domain::api::MessageServiceApi>,
 ) -> ToolChannelToolContext {
     let access = entity_access::domain::service::EntityAccessServiceImpl::new(
-        entity_access::outbound::PgAccessRepository::new(pool.clone()),
+        entity_access_outbound::PgAccessRepository::new(pool.clone()),
     );
     ChannelToolContext::new(
         messages,
@@ -593,7 +593,7 @@ pub type ToolCrmToolContext =
 pub fn build_crm_tool_context(pool: sqlx::PgPool) -> ToolCrmToolContext {
     let entity_access_service = Arc::new(
         entity_access::domain::service::EntityAccessServiceImpl::new(
-            entity_access::outbound::PgAccessRepository::new(pool.clone()),
+            entity_access_outbound::PgAccessRepository::new(pool.clone()),
         ),
     );
     // This CRM-only context does not assign tasks. Task writes use the host's
@@ -761,7 +761,7 @@ pub fn build_team_tool_context(pool: sqlx::PgPool) -> ToolTeamToolContext {
     TeamToolContext::new(
         TeamRepositoryImpl::new(pool.clone()),
         entity_access::domain::service::EntityAccessServiceImpl::new(
-            entity_access::outbound::PgAccessRepository::new(pool),
+            entity_access_outbound::PgAccessRepository::new(pool),
         ),
     )
 }
@@ -1209,7 +1209,7 @@ pub type ToolDocumentService = documents::domain::service::DocumentServiceImpl<
 
 /// Type alias for the entity access service implementation
 pub type ToolEntityAccessService = entity_access::domain::service::EntityAccessServiceImpl<
-    entity_access::outbound::PgAccessRepository,
+    entity_access_outbound::PgAccessRepository,
 >;
 
 /// Type alias for the document tool context

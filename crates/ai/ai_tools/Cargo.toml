@@ -60,6 +60,7 @@ documents = { workspace = true, default-features = true, features = ["ai_tools",
 email = { workspace = true, features = ["ai_schema", "ai_tools", "axum", "outbound", "s3", "sqs"] }
 email_service_client = { workspace = true }
 entity_access = { workspace = true, default-features = true }
+entity_access_outbound = { workspace = true }
 entity_access_management = { workspace = true, default-features = true }
 entity_registry = { workspace = true }
 entity_registry_db_utils = { workspace = true }

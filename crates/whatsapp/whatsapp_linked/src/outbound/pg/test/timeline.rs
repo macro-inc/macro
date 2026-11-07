@@ -19,7 +19,7 @@ async fn shared_viewer_without_whatsapp_reads_history_and_unread_but_cannot_send
     .unwrap();
     tx.commit().await.unwrap();
     let access_service = entity_access::domain::service::EntityAccessServiceImpl::new(
-        entity_access::outbound::PgAccessRepository::new(pool.clone()),
+        entity_access_outbound::PgAccessRepository::new(pool.clone()),
     );
     use entity_access::domain::ports::EntityAccessService;
     let receipt = access_service
@@ -347,7 +347,7 @@ async fn canonical_team_sharing_is_owner_only_and_reversible(pool: PgPool) {
     assert!(linked.chats.list(&person(CAROL)).await.unwrap().is_empty());
     use entity_access::domain::ports::EntityAccessService;
     let access = entity_access::domain::service::EntityAccessServiceImpl::new(
-        entity_access::outbound::PgAccessRepository::new(pool.clone()),
+        entity_access_outbound::PgAccessRepository::new(pool.clone()),
     );
     let carol = macro_user_id::user_id::MacroUserIdStr::try_from(CAROL.to_owned()).unwrap();
     assert_eq!(

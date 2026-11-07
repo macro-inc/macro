@@ -66,7 +66,8 @@ mockall = { workspace = true }
 
 [dev-dependencies]
 activity = { workspace = true, features = ["outbound"] }
-entity_access = { workspace = true, features = ["outbound"] }
+entity_access = { workspace = true }
+entity_access_outbound = { workspace = true }
 anyhow = { workspace = true }
 http-body-util = { workspace = true }
 macro_db_migrator = { workspace = true }

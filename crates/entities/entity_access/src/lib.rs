@@ -6,7 +6,8 @@
 //! # Architecture
 //!
 //! - **domain**: Contains domain models, ports (traits), and the service implementation
-//! - **outbound**: Contains adapters for external dependencies (PostgreSQL)
+//! - **outbound**: the PostgreSQL adapters, in the `entity_access_outbound`
+//!   crate
 //! - **inbound**: Contains adapters for incoming requests (Axum extractors)
 //!
 //! # Usage
@@ -14,8 +15,8 @@
 //! ```ignore
 //! use entity_access::{
 //!     domain::{ports::EntityAccessService, service::EntityAccessServiceImpl},
-//!     outbound::PgAccessRepository,
 //! };
+//! use entity_access_outbound::PgAccessRepository;
 //!
 //! let pool: sqlx::PgPool = /* ... */;
 //! let repo = PgAccessRepository::new(pool);
@@ -31,6 +32,3 @@ pub mod domain;
 
 #[cfg(feature = "inbound")]
 pub mod inbound;
-
-#[cfg(feature = "outbound")]
-pub mod outbound;

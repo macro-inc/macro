@@ -28,7 +28,7 @@ feature_flags = { workspace = true }
 jev = { workspace = true, features = ["outbound"] }
 lexical_client = { workspace = true }
 mention_utils = { workspace = true }
-entity_access = { workspace = true, features = ["inbound", "outbound"] }
+entity_access = { workspace = true, features = ["inbound"] }
 entity_access_db_utils = { workspace = true }
 kafka_util = { workspace = true }
 macro_event_broker = { workspace = true, default-features = true, features = ["outbound"] }
@@ -72,5 +72,6 @@ macro_tower_layers = { workspace = true }
 workspace-hack = { version = "0.1", path = "../../workspace-hack" }
 
 [dev-dependencies]
+entity_access_outbound = { workspace = true }
 bot_id = { workspace = true, features = ["test-utils"] }
 macro_db_migrator = { workspace = true }

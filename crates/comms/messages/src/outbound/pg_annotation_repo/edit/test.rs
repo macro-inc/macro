@@ -219,7 +219,7 @@ async fn edit_pdf_free_comment_anchor(
     let response = crate::domain::annotations::AnnotationService::new(
         super::super::PgAnnotationRepository(pool.clone()),
         entity_access::domain::service::EntityAccessServiceImpl::new(
-            entity_access::outbound::PgAccessRepository::new(pool.clone()),
+            entity_access_outbound::PgAccessRepository::new(pool.clone()),
         ),
         crate::domain::ports::NoMessageEventPublisher,
     )

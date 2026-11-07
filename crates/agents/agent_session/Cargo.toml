@@ -117,7 +117,8 @@ required-features = ["cli"]
 
 [dev-dependencies]
 messages = { workspace = true, features = ["outbound"] }
-entity_access = { workspace = true, default-features = true, features = ["outbound"] }
+entity_access = { workspace = true, default-features = true }
+entity_access_outbound = { workspace = true }
 agent-client-protocol = { workspace = true }
 bot_id = { workspace = true, features = ["test-utils"] }
 harness_id = { workspace = true, features = ["test-utils"] }

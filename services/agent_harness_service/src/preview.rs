@@ -55,7 +55,7 @@ pub async fn build(
         secretsmanager_client::SecretsManager::new(aws_sdk_secretsmanager::Client::new(&aws));
     let access = Arc::new(
         entity_access::domain::service::EntityAccessServiceImpl::new(
-            entity_access::outbound::PgAccessRepository::new(pool.clone()),
+            entity_access_outbound::PgAccessRepository::new(pool.clone()),
         ),
     );
     let auth = MacroAuthorizationServiceImpl::new(

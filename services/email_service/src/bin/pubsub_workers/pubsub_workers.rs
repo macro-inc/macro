@@ -466,7 +466,7 @@ async fn main() -> anyhow::Result<()> {
                 bucket: config.attachment_bucket.to_string(),
             },
             access: entity_access::domain::service::EntityAccessServiceImpl::new(
-                entity_access::outbound::PgAccessRepository::new(db.clone()),
+                entity_access_outbound::PgAccessRepository::new(db.clone()),
             ),
         },
     );

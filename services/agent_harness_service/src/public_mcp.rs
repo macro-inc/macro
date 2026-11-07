@@ -273,7 +273,7 @@ fn build_analytics(config: &Config, db: sqlx::PgPool) -> McpAnalytics {
     });
     McpAnalytics::posthog(
         client,
-        entity_access::outbound::PgAccessRepository::new(db),
+        entity_access_outbound::PgAccessRepository::new(db),
         config.environment,
     )
 }

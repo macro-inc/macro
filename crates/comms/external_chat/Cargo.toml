@@ -26,7 +26,6 @@ outbound = [
   "dep:sqlx",
   "dep:tracing-opentelemetry",
   "entity_access/ports",
-  "entity_access/outbound",
   "ports",
 ]
 # DSS HTTP routes.

@@ -91,7 +91,7 @@ pub struct EmailToolContext<
     T: EmailService,
     G: GmailTokenProvider = crate::domain::ports::NoOpGmailTokenProvider,
     E: EntityAccessService = entity_access::domain::service::EntityAccessServiceImpl<
-        entity_access::outbound::PgAccessRepository,
+        entity_access_outbound::PgAccessRepository,
     >,
 > {
     /// The email service instance.

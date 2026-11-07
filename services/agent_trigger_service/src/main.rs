@@ -29,7 +29,7 @@ use connection_gateway_url::ConnectionGatewayUrl;
 use document_storage_service_client::DocumentStorageServiceClient;
 use document_storage_service_url::DocumentStorageServiceUrl;
 use entity_access::domain::{ports::EntityAccessService, service::EntityAccessServiceImpl};
-use entity_access::outbound::PgAccessRepository;
+use entity_access_outbound::PgAccessRepository;
 use entity_registry::OwnerGrantPolicy;
 use entity_registry_db_utils::OwnedEntityRegistrar;
 use jev::domain::JevClassifier;
@@ -76,7 +76,7 @@ type Trigger = AgentTriggerService<
     Option<JevTriggerJudge<JevClassifier<SystemOneJev>>>,
     MessageThreadHistory<
         entity_access::domain::service::EntityAccessServiceImpl<
-            entity_access::outbound::PgAccessRepository,
+            entity_access_outbound::PgAccessRepository,
         >,
     >,
 >;
@@ -221,7 +221,7 @@ async fn run() -> anyhow::Result<()> {
         MessageThreadHistory::new(
             message_reader,
             entity_access::domain::service::EntityAccessServiceImpl::new(
-                entity_access::outbound::PgAccessRepository::new(pool.clone()),
+                entity_access_outbound::PgAccessRepository::new(pool.clone()),
             ),
         ),
     )
@@ -250,7 +250,7 @@ async fn run() -> anyhow::Result<()> {
         messages::outbound::pg_discussion_context::PgDiscussionContext(pool.clone()),
         messages::outbound::entity_access_audience::EntityAccessMessageAudience(
             entity_access::domain::service::EntityAccessServiceImpl::new(
-                entity_access::outbound::PgAccessRepository::new(pool.clone()),
+                entity_access_outbound::PgAccessRepository::new(pool.clone()),
             ),
         ),
         messages::outbound::connection_gateway::ConnectionGatewayMessages(Arc::new(

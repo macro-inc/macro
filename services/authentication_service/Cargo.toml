@@ -87,6 +87,7 @@ email = { workspace = true, features = ["http_client", "outbound"] }
 email_db_client = { workspace = true }
 email_validator = { workspace = true }
 entity_access = { workspace = true, default-features = true }
+entity_access_outbound = { workspace = true }
 entity_registry = { workspace = true, features = [
   "postgres",
 ] }

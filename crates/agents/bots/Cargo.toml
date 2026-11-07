@@ -72,9 +72,9 @@ bearer_token = { workspace = true }
 [dev-dependencies]
 async-trait = { workspace = true }
 entity_access = { workspace = true, features = [
-  "outbound",
   "ports",
 ] }
+entity_access_outbound = { workspace = true }
 macro_db_migrator = { workspace = true }
 rootcause = { workspace = true }
 serde_json = { workspace = true }
