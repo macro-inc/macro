@@ -1,0 +1,20 @@
+[package]
+edition = "2024"
+name = "lexical_client"
+publish = false
+version = "0.1.0"
+
+[dependencies]
+agent_fold = { workspace = true }
+anyhow = { workspace = true }
+base64 = { workspace = true }
+macro_tower_layers = { workspace = true }
+trigger_context = { workspace = true }
+reqwest = { workspace = true }
+serde = { workspace = true }
+tracing = { workspace = true }
+workspace-hack = { version = "0.1", path = "../../workspace-hack" }
+message_parent = { workspace = true }
+
+[dev-dependencies]
+serde_json = { workspace = true }

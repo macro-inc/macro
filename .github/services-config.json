@@ -197,7 +197,7 @@
         "services/search_processing_service/**",
         "crates/models_search/**",
         "crates/models_opensearch/**",
-        "crates/opensearch_client/**",
+        "crates/clients/opensearch_client/**",
         "crates/comms_db_client/**"
       ],
       "stack_path": "infra/stacks/search-processing-service/**",

@@ -314,7 +314,7 @@ NULL` either way.
 
 Two existing precedents in the repo, one generation apart:
 
-- **`mcp_servers.credentials`** (`crates/mcp_client/src/outbound/pg_server_repo.rs`)
+- **`mcp_servers.credentials`** (`crates/clients/mcp_client/src/outbound/pg_server_repo.rs`)
   — AES-256-GCM under a single process-wide `AesKey` from config. No AAD, no
   per-record key, no KMS. One key compromise reads every row, and without AAD a
   ciphertext is interchangeable between rows, so moving user A's blob into user

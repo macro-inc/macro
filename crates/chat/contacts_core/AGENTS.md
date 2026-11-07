@@ -18,7 +18,7 @@ adapters are `crates/chat/contacts_outbound`.
 
 - Owns: the contact graph and its use cases.
 - Not here: CRM companies/contacts (external organizations) → `crates/crm`;
-  connection-level presence/relay → `crates/connection_gateway_client`.
+  connection-level presence/relay → `crates/clients/connection_gateway_client`.
 
 ## Boundaries
 
