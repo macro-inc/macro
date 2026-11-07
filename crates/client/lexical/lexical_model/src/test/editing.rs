@@ -255,7 +255,9 @@ fn moving_a_child_updates_selection_in_its_source_parent() -> Result<(), Error> 
     tx.append(NodeKey::ROOT, &[source.key(), target.key()])?;
     tx.element(source)?
         .select(Some(ChildIndex(3)), Some(ChildIndex(3)))?;
-    tx.append(target, &[a.key()])?;
+    let line = tx.create(LineBreak {})?;
+    tx.append(target, &[line.key()])?;
+    tx.insert_before(line, a, true)?;
     assert_eq!(tx.anchor()?, Point::element(source, ChildIndex(2)));
     assert_eq!(tx.focus()?, Point::element(source, ChildIndex(2)));
     Ok(())

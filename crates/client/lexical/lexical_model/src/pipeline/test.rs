@@ -719,3 +719,37 @@ fn splice_does_not_dirty_a_sibling_whose_links_are_unchanged() -> Result<(), Err
     assert!(commit.changes.dirty_leaves.contains(&second.key()));
     Ok(())
 }
+
+/// Upstream ElementNode.splice moves inserted nodes with removeFromParent,
+/// leaving source element points available for package-level remapping.
+#[test]
+fn moving_children_keeps_source_element_offsets_for_explicit_remap() -> Result<(), Error> {
+    let mut editor = Editor::builder(EditorMode::Headless)
+        .build()
+        .expect("editor");
+    let mut tx = editor.transaction();
+    let from = tx.create(Paragraph {})?;
+    let to = tx.create(Paragraph {})?;
+    let text = tx.create_text("text")?;
+    tx.append(from, &[text.key()])?;
+    tx.append(NodeKey::ROOT, &[from.key(), to.key()])?;
+    tx.element(from)?
+        .select(Some(ChildIndex(0)), Some(ChildIndex(1)))?;
+    tx.splice(to, ChildIndex(0), 0, &[text.key()])?;
+    assert_eq!(
+        tx.range_at(SelectionSlot::Active)?.focus,
+        Point::element(from.key(), ChildIndex(1))
+    );
+    tx.set_point_at(
+        SelectionSlot::Active,
+        PointRole::Anchor,
+        Point::element(to.key(), ChildIndex(0)),
+    )?;
+    tx.set_point_at(
+        SelectionSlot::Active,
+        PointRole::Focus,
+        Point::element(to.key(), ChildIndex(1)),
+    )?;
+    tx.commit()?;
+    Ok(())
+}

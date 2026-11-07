@@ -220,12 +220,6 @@ impl Transaction<'_> {
         result.extend_from_slice(nodes);
         result.extend(after);
         for key in nodes {
-            if let Some(source) = self.parent(*key)
-                && source != parent
-                && let Some(index) = self.index_within_parent(*key)
-            {
-                self.adjust_splice_selection(source, index.0, 1, 0, &[]);
-            }
             self.remove_from_parent(*key)?;
         }
         for key in &old {
@@ -408,6 +402,11 @@ impl Transaction<'_> {
         let position = self
             .index_within_parent(anchor)
             .ok_or(Error::NoParent(anchor))?;
+        if let Some(source) = self.parent(node).filter(|source| *source != parent)
+            && let Some(index) = self.index_within_parent(node)
+        {
+            self.adjust_splice_selection(source, index.0, 1, 0, &[]);
+        }
         self.splice(parent, ChildIndex(position.0 + 1), 0, &[node])?;
         if !restore_selection {
             self.pending.selection = selection;
@@ -433,6 +432,11 @@ impl Transaction<'_> {
         let position = self
             .index_within_parent(anchor)
             .ok_or(Error::NoParent(anchor))?;
+        if let Some(source) = self.parent(node).filter(|source| *source != parent)
+            && let Some(index) = self.index_within_parent(node)
+        {
+            self.adjust_splice_selection(source, index.0, 1, 0, &[]);
+        }
         self.splice(parent, position, 0, &[node])?;
         if !restore_selection {
             self.pending.selection = selection;
@@ -469,6 +473,11 @@ impl Transaction<'_> {
         if include_children {
             let children = self.children_keys(old)?;
             self.append(new, &children)?;
+        }
+        if let Some(source) = self.parent(new).filter(|source| *source != parent)
+            && let Some(index) = self.index_within_parent(new)
+        {
+            self.adjust_splice_selection(source, index.0, 1, 0, &[]);
         }
         self.splice(parent, position, 1, &[new])?;
         if let Some(Selection::Range(previous)) = selection {
