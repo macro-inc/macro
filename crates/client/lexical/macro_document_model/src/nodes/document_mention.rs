@@ -64,3 +64,17 @@ impl SearchText for DocumentMentionNode {
         Some("".into())
     }
 }
+
+/// Create an authored mention, assigning its timestamp from the injected clock when absent.
+pub fn create_document_mention_node(
+    tx: &mut Transaction<'_>,
+    mut node: DocumentMentionNode,
+) -> crate::ModelResult<Id<DocumentMentionNode>> {
+    if matches!(node.created_at, Maybe::Missing | Maybe::Null) {
+        node.created_at = Maybe::Value(
+            i64::try_from(crate::now_ms(tx)?)
+                .map_err(|error| Error::invariant(error.to_string()))?,
+        );
+    }
+    tx.create(node)
+}

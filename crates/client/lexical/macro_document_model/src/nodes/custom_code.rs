@@ -19,11 +19,6 @@ impl NodeType for CustomCodeNode {
     fn flag_probe() -> Option<Self> {
         Some(Self::default())
     }
-    fn after_clone(&self) -> Option<Self> {
-        let mut node = self.clone();
-        node.code.language = Some(normalize_custom_language(self.code.language()));
-        Some(node)
-    }
     fn import(tx: &mut Transaction<'_>, json: &SerializedNode) -> crate::ModelResult<NodeKey> {
         super::wire::import_node::<Self>(tx, json)
     }
@@ -104,4 +99,38 @@ impl Default for CustomCodeNode {
     fn default() -> Self {
         Self::from(CodeNode::default())
     }
+}
+
+/// Create authored custom code using constructor language normalization.
+pub fn create_custom_code_node(
+    tx: &mut Transaction<'_>,
+    language: Option<&str>,
+) -> crate::ModelResult<Id<CustomCodeNode>> {
+    tx.create(CustomCodeNode {
+        code: CodeNode {
+            language: Some(normalize_custom_language(language)),
+            theme: None,
+        },
+        preview_enabled: false,
+    })
+}
+
+/// Replace a code block's language and text, retaining SVG preview only for SVG.
+pub fn set_custom_code(
+    tx: &mut Transaction<'_>,
+    key: Id<CustomCodeNode>,
+    language: Option<&str>,
+    code: &str,
+) -> crate::ModelResult<()> {
+    {
+        let mut node = tx.get_mut::<CustomCodeNode>(key)?;
+        node.code.language = language.map(str::to_owned);
+        if !language.is_some_and(|lang| lang.eq_ignore_ascii_case("svg")) {
+            node.preview_enabled = false;
+        }
+    }
+    let text = tx.create_text(code)?;
+    let size = tx.children_size(key);
+    tx.splice(key, ChildIndex(0), size, &[text.key()])?;
+    Ok(())
 }

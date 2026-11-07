@@ -104,3 +104,34 @@ fn inline_flags_follow_each_instance_and_subsequent_writes() -> Result<()> {
     assert!(!tx.is_inline(query));
     Ok(())
 }
+
+#[test]
+fn code_writes_preserve_the_raw_language_after_parent_clone_hooks()
+-> std::result::Result<(), lexical_model::Error> {
+    use lexical_rich_nodes::code::CodeNode;
+    use macro_document_model::nodes::CustomCodeNode;
+    let mut editor = macro_document_model::export_builder()
+        .build()
+        .expect("registry");
+    let (code, _) = editor.update(|tx| {
+        let code = tx.create(CustomCodeNode {
+            code: CodeNode {
+                language: Some("text".into()),
+                theme: Some("raw-theme".into()),
+            },
+            preview_enabled: false,
+        })?;
+        tx.append(lexical_model::NodeKey::ROOT, &[code.key()])?;
+        Ok(code)
+    })?;
+    editor.update(|tx| {
+        tx.get_mut::<CustomCodeNode>(code)?.preview_enabled = true;
+        Ok(())
+    })?;
+    let state = editor.state();
+    let data = state.view().get_or_err::<CustomCodeNode>(code)?;
+    assert_eq!(data.code.language.as_deref(), Some("text"));
+    assert_eq!(data.code.theme.as_deref(), Some("raw-theme"));
+    assert!(data.preview_enabled);
+    Ok(())
+}

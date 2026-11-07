@@ -155,7 +155,8 @@ pub fn constrain_image_dimensions(
     ))
 }
 /// Constructor inputs before MediaNode's nullish defaults.
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug, Default, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct CreateMedia {
     /// Source transport.
     pub src_type: String,

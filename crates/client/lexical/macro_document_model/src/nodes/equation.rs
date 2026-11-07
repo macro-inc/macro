@@ -42,3 +42,20 @@ impl DecoratorNode for EquationNode {
     }
 }
 impl SearchText for EquationNode {}
+
+/// Create an equation with the constructor's default empty expression and block mode.
+pub fn create_equation_node(
+    tx: &mut Transaction<'_>,
+    equation: Maybe<String>,
+    inline: Option<bool>,
+) -> crate::ModelResult<Id<EquationNode>> {
+    let equation = if equation.is_missing() {
+        Maybe::Value(String::new())
+    } else {
+        equation
+    };
+    tx.create(EquationNode {
+        equation,
+        inline: inline.unwrap_or(false),
+    })
+}
