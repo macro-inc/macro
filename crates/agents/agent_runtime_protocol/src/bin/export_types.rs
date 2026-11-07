@@ -18,7 +18,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         .register::<ToRuntimeMessage>()
         .register::<ToServerMessage>();
     let output = Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("../../services/coding-agent-worker/src/protocol/generated.ts");
+        .join("../../../services/coding-agent-worker/src/protocol/generated.ts");
 
     let generated = Typescript::default().export(&types, specta_serde::PhasesFormat)?;
     let generated = generated

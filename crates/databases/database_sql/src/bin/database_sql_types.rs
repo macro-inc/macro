@@ -48,7 +48,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let types = symmetric_omissions(types);
     let types = apart_from_the_catalog(types);
     let output = Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("../../apps/web/src/lib/core/database-sql/generated/types.ts");
+        .join("../../../apps/web/src/lib/core/database-sql/generated/types.ts");
 
     let generated = Typescript::default().export(&types, specta_serde::Format)?;
     let generated = generated
