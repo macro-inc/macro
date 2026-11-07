@@ -106,6 +106,7 @@ import type { DocumentMetadata } from './generated/schemas/documentMetadata';
 import type { DocumentPreview } from './generated/schemas/documentPreview';
 import type { DocumentResponseMetadataWithContent } from './generated/schemas/documentResponseMetadataWithContent';
 import type { DocumentTeamShareResponse } from './generated/schemas/documentTeamShareResponse';
+import type { DocumentTextContent } from './generated/schemas/documentTextContent';
 import type { EditAnchorResponse } from './generated/schemas/editAnchorResponse';
 import type { EmailFollowup } from './generated/schemas/emailFollowup';
 import type { EmailFollowupCommand } from './generated/schemas/emailFollowupCommand';
@@ -2118,6 +2119,14 @@ export const storageServiceClient = {
         }
       )
     ).map((result) => result);
+  },
+
+  /** Current Markdown of a native document, or extracted text of a file. */
+  async getDocumentTextContent({ documentId }: { documentId: string }) {
+    return dssFetch<DocumentTextContent>(
+      `/documents/${documentId}/text-content`,
+      { method: 'GET' }
+    );
   },
 
   async uploadModificationData(uploadData: unknown) {
