@@ -11,3 +11,4 @@ owned = []
 
 [dependencies]
 bebop.workspace = true
+thiserror.workspace = true

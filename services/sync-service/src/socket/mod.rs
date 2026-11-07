@@ -1,4 +1,3 @@
-pub(crate) mod framing;
 pub(crate) mod protocol;
 #[allow(
     clippy::module_inception,

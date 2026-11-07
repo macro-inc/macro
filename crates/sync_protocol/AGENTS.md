@@ -8,7 +8,9 @@ Shared, worker-free wire types for document collaboration and sync routing.
 
 - `bebop/schema.bop`: wire schema served by sync-service.
 - `bebop/generate.mjs`: pinned TypeScript/Rust code generation.
-- `src/lib.rs`: public types and message display names.
+- `src/lib.rs`: public types, heartbeat constants and message display names.
+- `src/framing.rs`: frame codec and per-connection reassembly.
+- `src/time.rs`: signed wall-clock millisecond types.
 - `src/test.rs`: cross-language byte fixtures and inventory coverage guard.
 
 ## Boundaries

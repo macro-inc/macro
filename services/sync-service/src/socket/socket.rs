@@ -3,8 +3,8 @@ use std::{collections::HashMap, sync::Arc};
 use bebop::Record;
 use worker::{Result, WebSocket};
 
-use super::framing::{self, Reassembler};
 use crate::{error::ResultExt, mutex::Mutex};
+use sync_protocol::framing::{self, Reassembler};
 
 /// Per-connection inbound reassembly buffers, keyed by websocket id. Lives on the
 /// durable object (shared via `Arc`) so partial messages persist across the
@@ -55,7 +55,11 @@ impl Socket {
     /// earlier frames are still buffering.
     pub(crate) fn receive(&self, ws_id: &str, frame: &[u8]) -> Result<Option<Vec<u8>>> {
         let mut inbound = self.inbound.lock("Socket::receive");
-        let message = inbound.entry(ws_id.to_string()).or_default().push(frame)?;
+        let message = inbound
+            .entry(ws_id.to_string())
+            .or_default()
+            .push(frame)
+            .map_err(|error| worker::Error::from(error.to_string()))?;
         if message.is_some() {
             inbound.remove(ws_id);
         }
