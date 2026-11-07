@@ -3,7 +3,7 @@ import type { ApiGroupByField } from '@service-storage/generated/schemas/apiGrou
 
 /**
  * Empty group key emitted by the backend
- * (crates/soup/src/domain/models/grouping.rs)
+ * (crates/search/soup/src/domain/models/grouping.rs)
  * for items missing a value for the grouped property.
  */
 export const NOT_SET_GROUP_KEY = '';

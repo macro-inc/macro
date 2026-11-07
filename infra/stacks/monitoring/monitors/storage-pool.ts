@@ -27,7 +27,7 @@
 // healthy state and its average covers only minutes with a wait: the monitor
 // must not alert on missing data. The dashboard also reads the `perform_unified_search`
 // span (`search.search_on`, `search.caller`) and its child spans from
-// crates/search_service, and the text of sqlx's slow-acquire warning.
+// crates/search/search_service, and the text of sqlx's slow-acquire warning.
 //
 // There is no per-task tag: tasks in one availability zone share a series, so
 // every query takes `max` (or `min` for idle) and the graphs split by zone.
