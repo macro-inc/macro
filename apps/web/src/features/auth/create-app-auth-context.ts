@@ -13,6 +13,7 @@ import {
 } from '@queries/auth/user-info';
 import { queryReadyGate } from '@queries/gate';
 import { detect } from 'detect-browser';
+import { createSignal } from 'solid-js';
 import { match } from 'ts-pattern';
 import type { AuthContext, AuthSession } from './context/auth-context';
 import {
@@ -23,16 +24,23 @@ import {
 import { useSsoLogin } from './useSsoLogin';
 
 /** Real auth service, analytics, and session refresh behind the auth contract. */
-export function createAppAuthContext(): AuthContext {
+export function createAppAuthContext(options?: {
+  requireFreshLogin?: boolean;
+}): AuthContext {
+  const [loginCompleted, setLoginCompleted] = createSignal(false);
   const analytics = useAnalytics();
   const userInfo = useUserInfoQuery();
   const { initEmailLink } = useEmailLinks();
-  const loginSso = useSsoLogin();
+  const loginSso = useSsoLogin({
+    onAuthenticated: () => setLoginCompleted(true),
+  });
   const signupSso = useSsoLogin({ signupMode: true });
   const agentSignupSso = useSsoLogin({ signupMode: true, isAgent: true });
   const sendWelcomeEmail = useSendMobileWelcomeEmail();
 
   const session = (): AuthSession => {
+    if (options?.requireFreshLogin && !loginCompleted())
+      return { t: 'signed-out' };
     const data = queryReadyGate(userInfo) ? userInfo.data : undefined;
     // A signed-out visitor's request 401s rather than answering unauthenticated.
     const authenticated = deriveIsAuthenticated({
@@ -66,6 +74,7 @@ export function createAppAuthContext(): AuthContext {
           console.error('Failed to init email link on login', error);
       }
     );
+    setLoginCompleted(true);
   };
 
   return {

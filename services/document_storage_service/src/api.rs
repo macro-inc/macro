@@ -70,9 +70,12 @@ pub(crate) async fn setup_and_serve(state: ApiContext) -> anyhow::Result<()> {
                     validate_api_version,
                 ))
                 .layer(
-                    macro_cors::cors_layer_with_headers(vec![axum::http::HeaderName::from_static(
-                        complete_graph::MAIL_CACHE_PROFILE_HEADER,
-                    )])
+                    macro_cors::cors_layer_with_headers(vec![
+                        axum::http::HeaderName::from_static("x-macro-passwords"),
+                        axum::http::HeaderName::from_static(
+                            complete_graph::MAIL_CACHE_PROFILE_HEADER,
+                        ),
+                    ])
                     .expose_headers([axum::http::header::RETRY_AFTER]),
                 )
                 .layer(CompressionLayer::new().gzip(true)),
@@ -435,6 +438,10 @@ fn api_router(state: ApiContext) -> Router {
         )
         .nest("/recents", recents::router())
         .nest("/saved_views", saved_views::router())
+        .nest(
+            "/passwords",
+            passwords::inbound::router::router(state.passwords_state.clone()),
+        )
         .with_state(state);
     let dss_router = Router::new()
         .nest("/{version}", internal_router.clone())

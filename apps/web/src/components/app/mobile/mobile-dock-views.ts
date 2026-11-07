@@ -5,6 +5,7 @@ import { getIconConfig } from '@core/component/EntityIcon';
 import {
   enableCalendarScheduling,
   enableCrm,
+  enablePasswords,
   enableTasksReviews,
   enableWhatsappLinked,
 } from '@core/constant/featureFlags';
@@ -26,6 +27,7 @@ import CalendarCheckIcon from '@icon/system/regular/calendar-check.svg';
 import ChatsCircleIcon from '@icon/system/regular/chats-circle.svg';
 import FolderSimpleIcon from '@icon/system/regular/folder-simple.svg';
 import GitPullRequestIcon from '@icon/system/regular/git-pull-request.svg';
+import LockIcon from '@icon/system/regular/lock.svg';
 import PlugIcon from '@icon/system/regular/plug.svg';
 import { createMemo } from 'solid-js';
 import type { MobileDockIcon } from './MobileDockButton';
@@ -93,6 +95,14 @@ export const MOBILE_DOCK_VIEWS: readonly MobileDockView[] = [
     iconActive: FolderSimpleFillIcon,
   },
   {
+    id: 'passwords',
+    get label() {
+      return t('passwords.title');
+    },
+    icon: LockIcon,
+    iconActive: LockIcon,
+  },
+  {
     id: 'tasks',
     get label() {
       return t('nav.tasks');
@@ -146,6 +156,7 @@ export function useMobileDockViews() {
   const crm = useFeatureFlag(enableCrm);
   const reviews = useFeatureFlag(enableTasksReviews);
   const scheduling = useFeatureFlag(enableCalendarScheduling);
+  const passwords = useFeatureFlag(enablePasswords);
   const external = useFeatureFlag(enableWhatsappLinked);
   return createMemo(() =>
     MOBILE_DOCK_VIEWS.filter(
@@ -154,6 +165,7 @@ export function useMobileDockViews() {
       .filter((view) => view.id !== 'companies' || crm().enabled)
       .filter((view) => view.id !== 'reviews' || reviews().enabled)
       .filter((view) => view.id !== 'booking-links' || scheduling().enabled)
+      .filter((view) => view.id !== 'passwords' || passwords().enabled)
       .filter((view) => view.id !== 'external' || external().enabled)
   );
 }

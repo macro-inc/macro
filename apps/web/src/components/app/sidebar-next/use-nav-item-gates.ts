@@ -6,6 +6,7 @@ import {
   ENABLE_CALLS,
   enableCalendarScheduling,
   enableCrm,
+  enablePasswords,
   enableTasksReviews,
   enableWhatsappLinked,
 } from '@core/constant/featureFlags';
@@ -25,6 +26,7 @@ export function useNavItemGates(): Accessor<NavItemGates> {
   const crm = useFeatureFlag(enableCrm);
   const reviews = useFeatureFlag(enableTasksReviews);
   const activity = useActivityFeedFlag();
+  const passwords = useFeatureFlag(enablePasswords);
   const external = useFeatureFlag(enableWhatsappLinked);
   const { prefs } = useSidebarPrefs();
 
@@ -36,6 +38,7 @@ export function useNavItemGates(): Accessor<NavItemGates> {
     showCalls: ENABLE_CALLS,
     showReviews: reviews().enabled,
     showActivity: activity(),
+    showPasswords: passwords().enabled,
     showExternal: external().enabled,
     prefs: prefs(),
   }));

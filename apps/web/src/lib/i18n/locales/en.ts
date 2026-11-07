@@ -16,6 +16,7 @@ import localRuntime from './en/local-runtime';
 import mobile from './en/mobile';
 import nav from './en/nav';
 import notificationsInbox from './en/notifications-inbox';
+import passwords from './en/passwords';
 import settingsLanguage from './en/settings-language';
 import settingsMobileApp from './en/settings-mobile-app';
 import settingsNav from './en/settings-nav';
@@ -47,6 +48,7 @@ export default {
   mobile,
   nav,
   notificationsInbox,
+  passwords,
   settingsLanguage,
   settingsMobileApp,
   settingsNav,

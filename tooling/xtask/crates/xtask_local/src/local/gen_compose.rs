@@ -23,7 +23,7 @@ use serde_yaml::value::{Tag, TaggedValue};
 
 use super::build::{BinariesDir, RUNTIME_IMAGE_TAG};
 use super::instance::{Instance, Port};
-use super::inventory::{RustService, services_for_mode};
+use super::inventory::{OPENBAO_IMAGE, OPENBAO_LOCAL_ROOT_TOKEN, RustService, services_for_mode};
 use super::{Mode, repo_root};
 
 #[cfg(test)]
@@ -341,6 +341,45 @@ fn add_local_infra(
     instance: &Instance,
     static_frontend: bool,
 ) {
+    services.insert(
+        "openbao".to_string(),
+        Some(dct::Service {
+            image: Some(OPENBAO_IMAGE.to_string()),
+            command: Some(dct::Command::Args(vec![
+                "server".to_string(),
+                "-dev".to_string(),
+                "-dev-no-store-token".to_string(),
+                "-config=/openbao/config/macro-local.hcl".to_string(),
+            ])),
+            volumes: vec![dct::Volumes::Simple(format!(
+                "{}:/openbao/config/macro-local.hcl:ro,z",
+                repo_root().join("infra/local/openbao/local.hcl").display()
+            ))],
+            environment: kv(&[
+                ("BAO_DEV_ROOT_TOKEN_ID", OPENBAO_LOCAL_ROOT_TOKEN),
+                ("BAO_DEV_LISTEN_ADDRESS", "0.0.0.0:8200"),
+                ("BAO_ADDR", "http://127.0.0.1:8200"),
+            ]),
+            ports: dct::Ports::Short(vec![format!(
+                "127.0.0.1:{}:8200",
+                instance.port(Port::OpenBao)
+            )]),
+            healthcheck: Some(dct::Healthcheck {
+                test: Some(dct::HealthcheckTest::Multiple(vec![
+                    "CMD".to_string(),
+                    "bao".to_string(),
+                    "status".to_string(),
+                ])),
+                interval: Some("5s".to_string()),
+                timeout: Some("3s".to_string()),
+                retries: 10,
+                ..Default::default()
+            }),
+            networks: net_aliases(&[("services", &["openbao"])]),
+            ..Default::default()
+        }),
+    );
+
     // This per-instance directory belongs only to FusionAuth. Private SELinux
     // relabeling keeps the kickstart readable without sharing its container label.
     let mut fusionauth = dct::Service {

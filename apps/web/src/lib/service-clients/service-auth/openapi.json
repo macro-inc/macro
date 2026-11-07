@@ -3029,6 +3029,15 @@
             "schema": {
               "type": "boolean"
             }
+          },
+          {
+            "name": "reauthenticate",
+            "in": "query",
+            "description": "Require a fresh interactive login, preserving the original destination.",
+            "required": true,
+            "schema": {
+              "type": "boolean"
+            }
           }
         ],
         "responses": {

@@ -20978,6 +20978,1000 @@
         }
       }
     },
+    "/passwords/teams": {
+      "get": {
+        "tags": ["passwords"],
+        "summary": "List current teams available to the authenticated human.",
+        "operationId": "passwords_teams",
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/PasswordTeamId"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/passwords/teams/{team}/folders": {
+      "get": {
+        "tags": ["passwords"],
+        "summary": "List the authenticated team’s folders.",
+        "operationId": "passwords_folders",
+        "parameters": [
+          {
+            "name": "team",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/PasswordFolder"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": ["passwords"],
+        "summary": "Create a folder within the authenticated team.",
+        "operationId": "passwords_create_folder",
+        "parameters": [
+          {
+            "name": "team",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "X-Macro-Passwords",
+            "in": "header",
+            "description": "Required CSRF header; send 1",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PasswordFolderBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PasswordFolder"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/passwords/teams/{team}/folders/{folder}": {
+      "put": {
+        "tags": ["passwords"],
+        "summary": "Rename a folder within the authenticated team.",
+        "operationId": "passwords_rename_folder",
+        "parameters": [
+          {
+            "name": "team",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "folder",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "X-Macro-Passwords",
+            "in": "header",
+            "description": "Required CSRF header; send 1",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PasswordFolderBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PasswordFolder"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": ["passwords"],
+        "summary": "Delete a folder within the authenticated team.",
+        "operationId": "passwords_remove_folder",
+        "parameters": [
+          {
+            "name": "team",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "folder",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "X-Macro-Passwords",
+            "in": "header",
+            "description": "Required CSRF header; send 1",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/passwords/teams/{team}/items": {
+      "get": {
+        "tags": ["passwords"],
+        "summary": "Search authorized metadata without resolving private values.",
+        "operationId": "passwords_list",
+        "parameters": [
+          {
+            "name": "team",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "search",
+            "in": "query",
+            "description": "Optional metadata search text; never a value search.",
+            "required": false,
+            "schema": {
+              "type": ["string", "null"]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/PasswordItemMetadata"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": ["passwords"],
+        "summary": "Create one item using an idempotent logical operation identifier.",
+        "operationId": "passwords_create",
+        "parameters": [
+          {
+            "name": "team",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "X-Macro-Passwords",
+            "in": "header",
+            "description": "Required CSRF header; send 1",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PasswordWriteItem"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PasswordItemMetadata"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/passwords/teams/{team}/items/{item}": {
+      "get": {
+        "tags": ["passwords"],
+        "summary": "Read authorized item metadata only.",
+        "operationId": "passwords_detail",
+        "parameters": [
+          {
+            "name": "team",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "item",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PasswordItemMetadata"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": ["passwords"],
+        "summary": "Save a new protected value version and its metadata.",
+        "operationId": "passwords_update",
+        "parameters": [
+          {
+            "name": "team",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "item",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "X-Macro-Passwords",
+            "in": "header",
+            "description": "Required CSRF header; send 1",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PasswordWriteItem"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PasswordItemMetadata"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": ["passwords"],
+        "summary": "Delete an owned item with a resumable provider fence.",
+        "operationId": "passwords_remove",
+        "parameters": [
+          {
+            "name": "team",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "item",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "X-Macro-Passwords",
+            "in": "header",
+            "description": "Required CSRF header; send 1",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": ""
+          }
+        }
+      },
+      "patch": {
+        "tags": ["passwords"],
+        "summary": "Change metadata without resolving private values.",
+        "operationId": "passwords_patch",
+        "parameters": [
+          {
+            "name": "team",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "item",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "X-Macro-Passwords",
+            "in": "header",
+            "description": "Required CSRF header; send 1",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PasswordPatchItem"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PasswordItemMetadata"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/passwords/teams/{team}/items/{item}/activity": {
+      "get": {
+        "tags": ["passwords"],
+        "summary": "List recorded activity for an authorized item.",
+        "operationId": "passwords_activity",
+        "parameters": [
+          {
+            "name": "team",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "item",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/PasswordActivity"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/passwords/teams/{team}/items/{item}/copy": {
+      "post": {
+        "tags": ["passwords"],
+        "summary": "Disclose values for an explicitly audited clipboard action.",
+        "operationId": "passwords_copy",
+        "parameters": [
+          {
+            "name": "team",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "item",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "X-Macro-Passwords",
+            "in": "header",
+            "description": "Required CSRF header; send 1",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PasswordRevealBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PasswordRevealed"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/passwords/teams/{team}/items/{item}/history": {
+      "get": {
+        "tags": ["passwords"],
+        "summary": "List protected-value version metadata.",
+        "operationId": "passwords_history",
+        "parameters": [
+          {
+            "name": "team",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "item",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/PasswordVersion"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/passwords/teams/{team}/items/{item}/reveal": {
+      "post": {
+        "tags": ["passwords"],
+        "summary": "Disclose a current or historical value after recent human authentication.",
+        "operationId": "passwords_reveal",
+        "parameters": [
+          {
+            "name": "team",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "item",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "X-Macro-Passwords",
+            "in": "header",
+            "description": "Required CSRF header; send 1",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PasswordRevealBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PasswordRevealed"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/passwords/teams/{team}/items/{item}/share": {
+      "get": {
+        "tags": ["passwords"],
+        "summary": "Read the owned item’s explicit recipient set.",
+        "operationId": "passwords_grants",
+        "parameters": [
+          {
+            "name": "team",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "item",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/PasswordGrant"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": ["passwords"],
+        "summary": "Replace the owned item’s explicit recipient set.",
+        "operationId": "passwords_share",
+        "parameters": [
+          {
+            "name": "team",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "item",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "X-Macro-Passwords",
+            "in": "header",
+            "description": "Required CSRF header; send 1",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PasswordShareBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/passwords/teams/{team}/items/{item}/totp": {
+      "put": {
+        "tags": ["passwords"],
+        "summary": "Enroll or replace a verification-code seed after recent authentication.",
+        "operationId": "passwords_set_totp",
+        "parameters": [
+          {
+            "name": "team",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "item",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "X-Macro-Passwords",
+            "in": "header",
+            "description": "Required CSRF header; send 1",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PasswordTotpBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": ""
+          }
+        }
+      },
+      "delete": {
+        "tags": ["passwords"],
+        "summary": "Remove a verification-code seed after recent authentication.",
+        "operationId": "passwords_remove_totp",
+        "parameters": [
+          {
+            "name": "team",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "item",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "X-Macro-Passwords",
+            "in": "header",
+            "description": "Required CSRF header; send 1",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/passwords/teams/{team}/items/{item}/totp/code": {
+      "post": {
+        "tags": ["passwords"],
+        "summary": "Resolve the current verification code after recent authentication.",
+        "operationId": "passwords_totp",
+        "parameters": [
+          {
+            "name": "team",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "item",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "X-Macro-Passwords",
+            "in": "header",
+            "description": "Required CSRF header; send 1",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PasswordTotpCode"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/passwords/teams/{team}/items/{item}/username": {
+      "get": {
+        "tags": ["passwords"],
+        "summary": "Read only the current account identifier with normal human view authorization.",
+        "operationId": "passwords_username",
+        "parameters": [
+          {
+            "name": "team",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "item",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PasswordUsername"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/passwords/teams/{team}/items/{item}/username/copy": {
+      "post": {
+        "tags": ["passwords"],
+        "summary": "Read only the current account identifier and record an explicit clipboard action.",
+        "operationId": "passwords_copy_username",
+        "parameters": [
+          {
+            "name": "team",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "item",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "X-Macro-Passwords",
+            "in": "header",
+            "description": "Required CSRF header; send 1",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PasswordUsername"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/pins": {
       "get": {
         "tags": ["pins::get_pins"],
@@ -46374,6 +47368,458 @@
         "type": "string",
         "description": "The role a user has within a channel.",
         "enum": ["owner", "admin", "member"]
+      },
+      "PasswordAction": {
+        "type": "string",
+        "description": "Only fixed event names enter the audit index.",
+        "enum": [
+          "create",
+          "update",
+          "delete",
+          "reveal",
+          "copy",
+          "share",
+          "totp_setup",
+          "totp_remove",
+          "totp_code"
+        ]
+      },
+      "PasswordActivity": {
+        "type": "object",
+        "description": "Bounded audit entry, correlated by opaque item/event IDs.",
+        "required": ["id", "itemId", "userId", "action", "occurredAt"],
+        "properties": {
+          "action": {
+            "$ref": "#/components/schemas/PasswordAction",
+            "description": "Fixed operation category; never derived from secret contents."
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Identity of this resource within its team."
+          },
+          "itemId": {
+            "$ref": "#/components/schemas/PasswordItemId",
+            "description": "Item associated with this activity."
+          },
+          "occurredAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Time this activity was recorded."
+          },
+          "userId": {
+            "type": "string",
+            "description": "Authenticated Macro user identity; never a provider credential."
+          }
+        }
+      },
+      "PasswordFolder": {
+        "type": "object",
+        "description": "Folder names are metadata only.",
+        "required": ["id", "teamId", "name"],
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Identity of this resource within its team."
+          },
+          "name": {
+            "type": "string",
+            "description": "Searchable display name; must not contain credential values."
+          },
+          "teamId": {
+            "$ref": "#/components/schemas/PasswordTeamId",
+            "description": "Team namespace and authorization boundary."
+          }
+        }
+      },
+      "PasswordFolderBody": {
+        "type": "object",
+        "description": "Validated folder display-name request.",
+        "required": ["name"],
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "Folder display name."
+          }
+        }
+      },
+      "PasswordGrant": {
+        "type": "object",
+        "description": "Explicit grant within a team vault.",
+        "required": ["kind", "id", "permission"],
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "Identity of this resource within its team."
+          },
+          "kind": {
+            "$ref": "#/components/schemas/PasswordGranteeKind",
+            "description": "Item template or grantee category."
+          },
+          "permission": {
+            "$ref": "#/components/schemas/PasswordPermission",
+            "description": "Maximum capability granted to the named recipient."
+          }
+        },
+        "additionalProperties": false
+      },
+      "PasswordGranteeKind": {
+        "type": "string",
+        "description": "Future principals can extend this without exposing agent controls in v1.",
+        "enum": ["user", "team"]
+      },
+      "PasswordItemId": {
+        "type": "string",
+        "format": "uuid",
+        "description": "Vault item identity, UUIDv7 for new items."
+      },
+      "PasswordItemKind": {
+        "type": "string",
+        "description": "Product template. Values use the same protected representation for every template.",
+        "enum": ["login", "card", "note", "identity", "api"]
+      },
+      "PasswordItemMetadata": {
+        "type": "object",
+        "description": "Searchable display fields, without any credential values.",
+        "required": [
+          "id",
+          "teamId",
+          "name",
+          "kind",
+          "favorite",
+          "version",
+          "hasTotp",
+          "shared",
+          "shareCount",
+          "createdAt",
+          "updatedAt"
+        ],
+        "properties": {
+          "createdAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Resource creation timestamp."
+          },
+          "favorite": {
+            "type": "boolean",
+            "description": "Whether the item is marked as a favorite."
+          },
+          "folderId": {
+            "type": ["string", "null"],
+            "format": "uuid",
+            "description": "Optional folder belonging to this same team."
+          },
+          "hasTotp": {
+            "type": "boolean",
+            "description": "Whether the item has an enrolled verification-code seed."
+          },
+          "id": {
+            "$ref": "#/components/schemas/PasswordItemId",
+            "description": "Identity of this resource within its team."
+          },
+          "kind": {
+            "$ref": "#/components/schemas/PasswordItemKind",
+            "description": "Item template or grantee category."
+          },
+          "lastUsedAt": {
+            "type": ["string", "null"],
+            "format": "date-time",
+            "description": "Most recent protected disclosure timestamp, when available."
+          },
+          "name": {
+            "type": "string",
+            "description": "Searchable display name; must not contain credential values."
+          },
+          "shareCount": {
+            "type": "integer",
+            "description": "Number of distinct explicitly shared recipients; a team grant counts once.",
+            "minimum": 0
+          },
+          "shared": {
+            "type": "boolean",
+            "description": "Whether the item currently has explicit grants."
+          },
+          "teamId": {
+            "$ref": "#/components/schemas/PasswordTeamId",
+            "description": "Team namespace and authorization boundary."
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Most recent metadata modification timestamp."
+          },
+          "url": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/PasswordLoginUrl",
+                "description": "Optional searchable website URL, without embedded credentials."
+              }
+            ]
+          },
+          "version": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Committed provider value version."
+          }
+        },
+        "additionalProperties": false
+      },
+      "PasswordLoginUrl": {
+        "type": "string",
+        "description": "A public HTTP(S) login URL; credentials and userinfo are rejected before indexing."
+      },
+      "PasswordPatchItem": {
+        "type": "object",
+        "description": "A metadata-only change never reads or writes a secret value.",
+        "required": ["name", "kind", "favorite", "expectedVersion"],
+        "properties": {
+          "expectedVersion": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Version observed by the editor; absent only for creation."
+          },
+          "favorite": {
+            "type": "boolean",
+            "description": "Whether the item is marked as a favorite."
+          },
+          "folderId": {
+            "type": ["string", "null"],
+            "format": "uuid",
+            "description": "Optional folder belonging to this same team."
+          },
+          "kind": {
+            "$ref": "#/components/schemas/PasswordItemKind",
+            "description": "Item template or grantee category."
+          },
+          "name": {
+            "type": "string",
+            "description": "Searchable display name; must not contain credential values."
+          },
+          "url": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/PasswordLoginUrl",
+                "description": "Optional searchable website URL, without embedded credentials."
+              }
+            ]
+          }
+        },
+        "additionalProperties": false
+      },
+      "PasswordPermission": {
+        "type": "string",
+        "description": "Grant capability.",
+        "enum": ["view", "edit"]
+      },
+      "PasswordRevealBody": {
+        "type": "object",
+        "description": "Explicit historical version selection for protected disclosure.",
+        "properties": {
+          "version": {
+            "type": ["integer", "null"],
+            "format": "int32",
+            "description": "Requested historic version, or the currently committed version."
+          }
+        }
+      },
+      "PasswordRevealed": {
+        "type": "object",
+        "description": "Secret response used only by explicit reveal/copy routes.",
+        "required": ["values", "version"],
+        "properties": {
+          "values": {
+            "$ref": "#/components/schemas/PasswordSecretValues",
+            "description": "Private payload; never serialize into the metadata repository."
+          },
+          "version": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Committed provider value version."
+          }
+        }
+      },
+      "PasswordSecretField": {
+        "type": "object",
+        "description": "One private custom field.",
+        "required": ["label", "value"],
+        "properties": {
+          "label": {
+            "type": "string",
+            "description": "Private field label, stored alongside its value in OpenBao."
+          },
+          "value": {
+            "$ref": "#/components/schemas/PasswordSecretString",
+            "description": "Private field content."
+          }
+        },
+        "additionalProperties": false
+      },
+      "PasswordSecretString": {
+        "type": "string",
+        "description": "Owned sensitive text. Deliberately does not implement Debug or Display."
+      },
+      "PasswordSecretValues": {
+        "type": "object",
+        "description": "Secret payload; never persisted in the metadata database or traced.",
+        "required": ["username", "password", "notes", "fields"],
+        "properties": {
+          "fields": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PasswordSecretField"
+            },
+            "description": "Additional private fields, including their labels."
+          },
+          "notes": {
+            "$ref": "#/components/schemas/PasswordSecretString",
+            "description": "Private free-form notes, stored only by the secret provider."
+          },
+          "password": {
+            "$ref": "#/components/schemas/PasswordSecretString",
+            "description": "Private credential, zeroized when the owned buffer is dropped."
+          },
+          "username": {
+            "$ref": "#/components/schemas/PasswordSecretString",
+            "description": "Account identifier; authorized humans may resolve it separately from confidential values."
+          }
+        },
+        "additionalProperties": false
+      },
+      "PasswordShareBody": {
+        "type": "object",
+        "description": "Owner-requested replacement of the explicit grant set.",
+        "required": ["grants"],
+        "properties": {
+          "grants": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PasswordGrant"
+            },
+            "description": "Complete desired recipient set; an empty list revokes sharing."
+          }
+        }
+      },
+      "PasswordTeamId": {
+        "type": "string",
+        "format": "uuid",
+        "description": "Team isolation boundary."
+      },
+      "PasswordTotpBody": {
+        "type": "object",
+        "description": "Private seed submitted only to the verification-code provider.",
+        "required": ["key"],
+        "properties": {
+          "key": {
+            "$ref": "#/components/schemas/PasswordSecretString",
+            "description": "Confidential base32 verification-code seed."
+          }
+        }
+      },
+      "PasswordTotpCode": {
+        "type": "object",
+        "description": "Current TOTP output is confidential, just like a password.",
+        "required": ["code", "period"],
+        "properties": {
+          "code": {
+            "$ref": "#/components/schemas/PasswordSecretString",
+            "description": "Current confidential verification code."
+          },
+          "period": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Verification-code period in seconds.",
+            "minimum": 0
+          }
+        }
+      },
+      "PasswordUsername": {
+        "type": "object",
+        "description": "Current account identifier, without confidential credentials or custom fields.",
+        "required": ["username", "version"],
+        "properties": {
+          "username": {
+            "$ref": "#/components/schemas/PasswordSecretString",
+            "description": "Account identifier stored only in the provider and resolved for authorized humans."
+          },
+          "version": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Committed version used to resolve this identifier."
+          }
+        }
+      },
+      "PasswordVersion": {
+        "type": "object",
+        "description": "Immutable provider version metadata, without historic values.",
+        "required": ["version", "createdAt"],
+        "properties": {
+          "createdAt": {
+            "type": "string",
+            "description": "Resource creation timestamp."
+          },
+          "version": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Committed provider value version."
+          }
+        }
+      },
+      "PasswordWriteItem": {
+        "type": "object",
+        "description": "Mutation without provider-specific representations.",
+        "required": ["operationId", "name", "kind", "favorite", "values"],
+        "properties": {
+          "expectedVersion": {
+            "type": ["integer", "null"],
+            "format": "int32",
+            "description": "Version observed by the editor; absent only for creation."
+          },
+          "favorite": {
+            "type": "boolean",
+            "description": "Whether the item is marked as a favorite."
+          },
+          "folderId": {
+            "type": ["string", "null"],
+            "format": "uuid",
+            "description": "Optional folder belonging to this same team."
+          },
+          "kind": {
+            "$ref": "#/components/schemas/PasswordItemKind",
+            "description": "Item template or grantee category."
+          },
+          "name": {
+            "type": "string",
+            "description": "Searchable display name; must not contain credential values."
+          },
+          "operationId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "UUIDv7 identifying one logical save across uncertain retries."
+          },
+          "url": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/PasswordLoginUrl",
+                "description": "Optional searchable website URL, without embedded credentials."
+              }
+            ]
+          },
+          "values": {
+            "$ref": "#/components/schemas/PasswordSecretValues",
+            "description": "Private payload; never serialize into the metadata repository."
+          }
+        },
+        "additionalProperties": false
       },
       "PatchAgentRequest": {
         "type": "object",

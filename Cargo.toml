@@ -4,6 +4,7 @@ resolver = "2"
 exclude = ["vendor"]
 
 members = [
+  "crates/passwords",
   "crates/access_requests",
   "crates/agent_api_keys",
   "crates/routines",
@@ -213,6 +214,8 @@ members = [
 ]
 
 [workspace.dependencies]
+rustify = { version = "0.7.0", default-features = false }
+vaultrs = { version = "0.8.0", default-features = false, features = ["rustls"] }
 aes = "0.8.4"
 aes-gcm = { version = "0.10.3", features = ["zeroize"] }
 anyhow = "1.0.100"

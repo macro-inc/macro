@@ -1,0 +1,29 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT revision,deleting FROM password_item_entities WHERE team_id=$1 AND id=$2 AND deleted_at IS NULL FOR UPDATE",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "revision",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 1,
+        "name": "deleting",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false
+    ]
+  },
+  "hash": "ce4b20282f7d8c8ace6e1beb7250d746437232752e57e97f33666d0d9f9b1e19"
+}

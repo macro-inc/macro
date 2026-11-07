@@ -26,6 +26,8 @@ pub struct SsoState {
 
 #[derive(Debug, serde::Deserialize)]
 pub(crate) struct LoginQueryParams {
+    #[serde(default)]
+    reauthenticate: bool,
     idp_name: Option<String>,
     idp_id: Option<String>,
     login_hint: Option<String>,
@@ -100,6 +102,7 @@ pub(crate) fn redact_original_url_for_logging(url: &Url) -> Url {
             ("is_mobile" = String, Query, description = "**OPTIONAL**. If the authentication request is from a mobile device."),
             ("referral_code" = String, Query, description = "**OPTIONAL**. If the user opened a link with a referral code."),
             ("is_agent" = bool, Query, description = "**OPTIONAL**. If the sign-in started on the agent signup page. A new account becomes an agent."),
+            ("reauthenticate" = bool, Query, description = "Require a fresh interactive login, preserving the original destination."),
         ),
         responses(
             (status = 200),
@@ -115,6 +118,7 @@ pub async fn handler(
     query: Query<LoginQueryParams>,
 ) -> Result<Response, Response> {
     let Query(LoginQueryParams {
+        reauthenticate,
         idp_name,
         idp_id,
         login_hint,
@@ -231,7 +235,26 @@ pub async fn handler(
                 .into_response()
         })?;
 
-    tracing::info!(sso_url=%sso_url, "SSO URL");
+    let sso_url = fresh_login_url(sso_url, reauthenticate).map_err(|_| {
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(ErrorResponse {
+                message: "unable to start sign-in".into(),
+            }),
+        )
+            .into_response()
+    })?;
 
     Ok(Redirect::temporary(&sso_url).into_response())
+}
+
+fn fresh_login_url(value: String, reauthenticate: bool) -> Result<String, url::ParseError> {
+    if !reauthenticate {
+        return Ok(value);
+    }
+    let mut url = Url::parse(&value)?;
+    url.query_pairs_mut()
+        .append_pair("prompt", "login")
+        .append_pair("max_age", "0");
+    Ok(url.into())
 }

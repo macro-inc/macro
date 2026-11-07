@@ -501,6 +501,12 @@ export const recentRoute = defineRoute({
   claim: () => ({ namespace: 'component', id: 'recent' }),
 });
 
+export const passwordsRoute = defineRoute({
+  id: 'view-passwords',
+  path: 'passwords',
+  claim: () => ({ namespace: 'component', id: 'passwords' }),
+});
+
 export const activityRoute = defineRoute({
   id: 'view-activity',
   path: 'activity',

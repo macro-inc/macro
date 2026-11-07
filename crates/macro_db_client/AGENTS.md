@@ -127,3 +127,9 @@ foreign keys; the broker deletes expired rows.
 - If either concurrent folder-index migration is interrupted, inspect `pg_index.indisvalid` and drop only its invalid index before retrying; `CREATE INDEX IF NOT EXISTS` would silently preserve an unusable index.
 
 - `agent_correlation` owns invocation mappings; activity and scheduled-email correlation columns remain nullable for older writers. Build the activity correlation index concurrently, outside a transaction.
+
+`password_item_entities`, `password_folders`, `password_activity`,
+`password_write_intents`, and `password_totp_enrollments` belong to `passwords`.
+They contain metadata, grants, audit correlation and lifecycle journals only; values
+and TOTP seeds remain in OpenBao. Keep completed operation and retired enrollment
+identities for retry safety and delayed cleanup, with team cascades for metadata.

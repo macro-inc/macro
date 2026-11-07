@@ -3572,6 +3572,10 @@ export type SsoLoginData = {
          * **OPTIONAL**. If the sign-in started on the agent signup page. A new account becomes an agent.
          */
         is_agent: boolean;
+        /**
+         * Require a fresh interactive login, preserving the original destination.
+         */
+        reauthenticate: boolean;
     };
     url: '/login/sso';
 };

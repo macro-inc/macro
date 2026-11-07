@@ -21,6 +21,7 @@ import {
   postAuthTarget,
   readRedirectParam,
 } from './core/post-auth-target';
+import { requiresReauthentication } from './core/reauthentication';
 import { createAppAuthContext } from './create-app-auth-context';
 import { AuthView } from './views/auth-view';
 import { MobileWebSignupView } from './views/mobile-web-signup-view';
@@ -36,7 +37,13 @@ export function Login(props: { signupMode?: boolean }) {
   const desktopSignup = () =>
     props.signupMode === true && !isMobile() && !isNativeMobilePlatform();
   return (
-    <AuthProvider value={createAppAuthContext()}>
+    <AuthProvider
+      value={createAppAuthContext({
+        requireFreshLogin: requiresReauthentication(
+          new URL(window.location.href)
+        ),
+      })}
+    >
       <AuthView
         intent={props.signupMode ? 'signup' : 'login'}
         showApple={getNativeMobilePlatform() === 'ios'}

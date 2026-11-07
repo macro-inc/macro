@@ -75,6 +75,17 @@ import { useSsoLogin } from './useSsoLogin';
 const loginUrl = 'https://localhost:3003/app/login?referral_code=invite';
 const proxyAuthHost = 'https://localhost:3003/__macro_dev/gateway/auth';
 
+it('forces SSO authentication and clears the request from its return URL', async () => {
+  window.location.href = `${loginUrl}&prompt=login&max_age=0&redirect=%2Fpasswords`;
+  await useSsoLogin()('google');
+  const request = new URL(window.location.href);
+  expect(request.searchParams.get('reauthenticate')).toBe('true');
+  const original = new URL(request.searchParams.get('original_url')!);
+  expect(original.searchParams.get('prompt')).toBeNull();
+  expect(original.searchParams.get('max_age')).toBeNull();
+  expect(original.searchParams.get('redirect')).toBe('/passwords');
+});
+
 beforeEach(() => {
   vi.resetAllMocks();
   vi.stubGlobal('window', {

@@ -896,6 +896,56 @@ async fn run_server() -> anyhow::Result<()> {
         Duration::from_millis(300),
     )
     .map_err(|error| anyhow::anyhow!("invalid feature flag configuration: {error}"))?;
+    let passwords_provider: Arc<dyn passwords::domain::ports::SecretProvider> = match (
+        config.openbao_address.value(),
+        config.passwords_jwt_issuer.value(),
+        config.passwords_jwt_signing_key.value(),
+    ) {
+        (None, None, None) => Arc::new(passwords::outbound::openbao::UnavailableProvider),
+        (Some(address), Some(issuer), Some(signing_key)) => Arc::new(
+            passwords::outbound::openbao::OpenBaoProvider::new(
+                address.to_owned(),
+                issuer.to_owned(),
+                signing_key,
+            )
+            .map_err(|_| anyhow::anyhow!("invalid Passwords OpenBao configuration"))?,
+        ),
+        _ => anyhow::bail!(
+            "Passwords requires OPENBAO_ADDRESS, PASSWORDS_JWT_ISSUER and PASSWORDS_JWT_SIGNING_KEY together"
+        ),
+    };
+    let passwords_availability: Arc<dyn passwords::domain::ports::Availability> = match config
+        .environment
+    {
+        Environment::Local => Arc::new(passwords::outbound::availability::PasswordAvailability {
+            flags: passwords::outbound::availability::LocalPasswordsFlags,
+            provider_configured: config.openbao_address.value().is_some(),
+        }),
+        _ => Arc::new(passwords::outbound::availability::PasswordAvailability {
+            flags: flags.clone(),
+            provider_configured: config.openbao_address.value().is_some(),
+        }),
+    };
+    let passwords_state = passwords::inbound::router::PasswordRouterState {
+        service: Arc::new(passwords::domain::service::PasswordService {
+            repository: Arc::new(
+                passwords::outbound::postgres::PgRepository::new(db.clone())
+                    .map_err(|_| anyhow::anyhow!("invalid Passwords database pool capacity"))?,
+            ),
+            provider: passwords_provider,
+            reauthentication: Arc::new(
+                passwords::outbound::reauthentication::SessionReauthentication {
+                    validation: jwt_validation_args.clone(),
+                },
+            ),
+            availability: passwords_availability,
+        }),
+        authorization: authorization_state.clone(),
+    };
+    consumer_tracker.spawn(crate::passwords_cleanup::run(
+        passwords_state.service.clone(),
+        consumer_cancellation_token.clone(),
+    ));
     let call_service_builder = call_service_builder.with_channel_threads(Arc::new(
         call::outbound::channel_threads::FlaggedChannelThreads::new(
             flags.clone(),
@@ -2488,6 +2538,7 @@ async fn run_server() -> anyhow::Result<()> {
         system_properties_service: system_properties_service.clone(),
         properties_service: properties_service.clone(),
         opensearch_client: Arc::new(opensearch_client),
+        passwords_state,
         authorization_state: authorization_state.clone(),
         jwt_validation_args,
         dss_auth_key,

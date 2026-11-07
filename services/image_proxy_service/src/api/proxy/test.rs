@@ -1,4 +1,26 @@
 use super::*;
+use url::Url;
+
+#[test]
+fn blocks_special_use_addresses_for_logo_fetching() {
+    for address in [
+        "100.64.0.1",
+        "192.0.0.8",
+        "198.18.0.1",
+        "224.0.0.1",
+        "240.0.0.1",
+        "192.0.2.1",
+        "2001:db8::1",
+        "2002:7f00:1::1",
+        "64:ff9b::7f00:1",
+        "192.88.99.1",
+        "3fff::1",
+        "3ffe::1",
+        "ff02::1",
+    ] {
+        assert!(is_private_ip(&address.parse().unwrap()), "{address}");
+    }
+}
 
 #[test]
 fn test_proxy_params_deserialization() {

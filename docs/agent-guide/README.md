@@ -23,6 +23,7 @@ verified live against a local stack (`just run_local`).
 | [files.md](files.md) | Files (Drive) |
 | [calls.md](calls.md) | Calls, call links, guests, and sharing |
 | [crm.md](crm.md) | Customers (CRM) |
+| [passwords.md](passwords.md) | Team vault, inline editing, sharing and recent sign-in |
 | [pull-requests.md](pull-requests.md) | Pull request review |
 | [activity.md](activity.md) | Activity |
 | [notifications.md](notifications.md) | Notifications |

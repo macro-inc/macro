@@ -1,0 +1,32 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT enrollment.team_id,enrollment.item_id,enrollment.key_id FROM password_totp_enrollments enrollment JOIN password_item_entities item ON item.team_id=enrollment.team_id AND item.id=enrollment.item_id WHERE (item.totp_key_id IS DISTINCT FROM enrollment.key_id OR item.deleting) AND (enrollment.cleanup_started_at IS NULL OR enrollment.cleanup_after<=now()) ORDER BY enrollment.cleanup_after LIMIT 100",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "team_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "item_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "key_id",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": [
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "2271d2ee99235aa8aaa36d6ac7489662b07633c3769f3cb074c8d1053b7bff67"
+}
