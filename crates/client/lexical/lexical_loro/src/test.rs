@@ -398,3 +398,59 @@ fn unknown_remote_element_and_text_roundtrip_through_projection_and_core() -> Re
         .expect("consistent unknown nodes");
     Ok(())
 }
+
+#[test]
+fn moving_a_text_into_a_new_parent_removes_the_old_owned_container() -> Result<()> {
+    let mut editor = Editor::builder(EditorMode::Headless)
+        .build()
+        .expect("editor");
+    let ((old_parent, first, moved), _) = editor.update(|tx| {
+        let p = tx.create(Paragraph::default())?;
+        let a = tx.create_text("left")?;
+        let b = tx.create_text("right")?;
+        tx.text(b)?.set_format(TextFormat::BOLD)?;
+        tx.set_state(p, &ID, "old-parent".into())?;
+        tx.set_state(a, &ID, "first-text".into())?;
+        tx.set_state(b, &ID, "moved-text".into())?;
+        tx.append(p, &[a.key(), b.key()])?;
+        tx.append(NodeKey::ROOT, &[p.key()])?;
+        Ok((p.key(), a.key(), b.key()))
+    })?;
+    let doc = new_doc(7)?;
+    let mut projection = LoroProjection::initialize(&doc, editor.state(), &PLAIN, 0)?;
+    let (new_parent, commit) = editor.update(|tx| {
+        let p = tx.create(Paragraph::default())?;
+        tx.set_state(p, &ID, "new-parent".into())?;
+        tx.append(NodeKey::ROOT, &[p.key()])?;
+        tx.append(p, &[moved])?;
+        Ok(p.key())
+    })?;
+    projection.local_commit(&doc, &[commit], LOCAL_ORIGIN, 1)?;
+    assert_eq!(
+        editor
+            .state()
+            .view()
+            .children(old_parent)
+            .collect::<Vec<_>>(),
+        vec![first]
+    );
+    assert_eq!(
+        editor
+            .state()
+            .view()
+            .children(new_parent)
+            .collect::<Vec<_>>(),
+        vec![moved]
+    );
+    projection
+        .check(&doc, editor.state())
+        .expect("moved node occurs exactly once");
+    assert_eq!(
+        reconstruct_state(&doc, &PLAIN)?.root["children"][0]["children"]
+            .as_array()
+            .expect("old children")
+            .len(),
+        1
+    );
+    Ok(())
+}
