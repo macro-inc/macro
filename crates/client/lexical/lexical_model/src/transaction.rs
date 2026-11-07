@@ -19,6 +19,7 @@ pub enum DirtyIntent {
 }
 /// Pending state, published only by commit. Allocated keys are never rewound.
 pub struct Transaction<'editor> {
+    pub(crate) events: Vec<PluginEvent>,
     pub(crate) extensions: crate::extension::ExtensionStore,
     pub(crate) editor: &'editor mut Editor,
     pub(crate) pending: EditorState,
@@ -50,6 +51,7 @@ impl<'editor> Transaction<'editor> {
             ..UpdateOptions::default()
         };
         Self {
+            events: Vec::new(),
             extensions,
             editor,
             pending,
