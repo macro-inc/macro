@@ -6,7 +6,12 @@ import {
 } from '@core/context/user-info-gate';
 import { hasLoginCookie } from '@core/util/cookies';
 import { fireAndForget } from '@core/util/fireAndForget';
-import { catchToResult, type ResultType, throwOnErr } from '@core/util/result';
+import {
+  catchToResult,
+  type ResultType,
+  thrownResultErrorHasCode,
+  throwOnErr,
+} from '@core/util/result';
 import { replaceCacheWriteSession } from '@graphql-cache/lifecycle';
 import { Telemetry } from '@macro-inc/observability';
 import { authServiceClient } from '@service-auth/client';
@@ -15,7 +20,10 @@ import { queryOptions, useQuery } from '@tanstack/solid-query';
 import { resetTeamCalendarSession } from '../calendar/team-cache';
 import { queryClient, queryPersistence } from '../client';
 import { resetGraphqlSoupDoneSession } from '../soup/graphql/done-session';
-import { resetQueryAccountSession } from './account-scope';
+import {
+  queryAccountSessionPending,
+  resetQueryAccountSession,
+} from './account-scope';
 import { authKeys } from './keys';
 import { hasCachedUserIdentity } from './user-info-cache';
 
@@ -36,6 +44,14 @@ function fetchLegacyUserPermissions() {
   return throwOnErr(() => authServiceClient.getLegacyUserPermissions());
 }
 
+function identityRefreshIsTerminal(): boolean {
+  const error = queryClient.getQueryState(authKeys.userInfo.queryKey)?.error;
+  return (
+    thrownResultErrorHasCode(error, 'UNAUTHORIZED') ||
+    thrownResultErrorHasCode(error, 'FORBIDDEN')
+  );
+}
+
 // Cached callbacks stay at module scope so they never retain the caller.
 function userInfoQueryOptions(enabled: boolean) {
   return queryOptions({
@@ -51,6 +67,13 @@ function userInfoQueryOptions(enabled: boolean) {
     // launches (e.g. woken by a notification tap) while the network is fine,
     // and a paused auth check renders as "unauthenticated" at the base path.
     networkMode: 'always',
+    refetchOnReconnect: true,
+    // Recover a failed post-login identity refresh while the account gate is
+    // pending. Terminal auth failures remain the session-expiry path.
+    refetchInterval: () =>
+      queryAccountSessionPending() && !identityRefreshIsTerminal()
+        ? 5_000
+        : false,
     enabled,
   });
 }

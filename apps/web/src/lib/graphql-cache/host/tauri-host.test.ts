@@ -1287,6 +1287,54 @@ describe('createTauriCacheHost', () => {
     }
   });
 
+  it.each([
+    'graphql_cache_people_context',
+    'graphql_cache_people_search',
+  ] as const)(
+    'rejects hung person reads after the timeout: %s',
+    async (command) => {
+      vi.useFakeTimers();
+      try {
+        const host = createTauriCacheHost({
+          scope: 'scope-1',
+          requestTimeoutMs: 50,
+        });
+        if (!host.people) throw new Error('Missing person transport');
+        const scope = {
+          identity: 'macro|viewer@example.com',
+          storageGeneration: '00000000-0000-4000-8000-000000000001',
+        };
+        invokeMock.mockImplementation((command: string) =>
+          command === 'graphql_cache_init_with_schema' ||
+          command === 'graphql_cache_inspect_mutations'
+            ? Promise.resolve(null)
+            : new Promise(() => {})
+        );
+
+        const read =
+          command === 'graphql_cache_people_context'
+            ? host.people.context(scope)
+            : host.people.search({
+                scope,
+                query: '',
+                excluded: [],
+                limit: 2,
+                mode: 'command',
+                nowMs: 0,
+              });
+        const assertion = expect(read).rejects.toThrow(
+          `graphql cache ipc timeout: ${command}`
+        );
+        await vi.dynamicImportSettled();
+        await vi.advanceTimersByTimeAsync(60);
+        await assertion;
+        host.dispose();
+      } finally {
+        vi.useRealTimers();
+      }
+    }
+  );
+
   it('does not time out an uncertain durable enqueue', async () => {
     vi.useFakeTimers();
     try {
