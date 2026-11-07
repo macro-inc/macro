@@ -439,3 +439,33 @@ fn line_boundary_continues_to_host_after_an_inline_decorator() -> Result<(), Err
     assert_eq!(tx.focus()?, Point::text(b, Utf16Offset(1)));
     Ok(())
 }
+
+#[test]
+fn forward_delete_at_segmented_end_removes_last_segment_and_restores_selection() -> Result<(), Error>
+{
+    let mut editor = Editor::builder(EditorMode::Headless)
+        .build()
+        .expect("editor");
+    let mut tx = editor.transaction();
+    let paragraph = tx.create(Paragraph::default())?;
+    let segmented = tx.create_text("a")?;
+    let tail = tx.create_text("tail")?;
+    tx.text(segmented)?.set_mode(TextMode::Segmented)?;
+    tx.append(paragraph, &[segmented.key(), tail.key()])?;
+    tx.append(NodeKey::ROOT, &[paragraph.key()])?;
+    tx.select_start(segmented)?;
+    tx.delete_character(
+        EditDirection::Forward,
+        ModifyTarget::View {
+            anchor: Point::text(segmented, Utf16Offset(0)),
+            focus: Point::text(segmented, Utf16Offset(1)),
+            resolution_dirty: false,
+            is_backward_in_dom: false,
+        },
+    )?;
+    assert_eq!(tx.children_keys(paragraph)?, vec![tail.key()]);
+    let range = tx.selection().and_then(Selection::as_range).expect("range");
+    assert_eq!(range.anchor, Point::text(tail, Utf16Offset(0)));
+    assert_eq!(range.focus, range.anchor);
+    Ok(())
+}
