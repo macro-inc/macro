@@ -3,13 +3,16 @@
 ## What it is
 
 Portable editor model for the Lexical port. This crate owns values, registered
-node types, immutable snapshots and transactional tree editing.
+node types, immutable snapshots, transactional tree editing, update processing and JSON interchange.
 
 ## Start here
 
 - `src/lib.rs` exposes the model API.
 - `src/node.rs` defines node kinds, inheritance and dispatch.
 - `src/transaction.rs` owns writes; never mutate a committed snapshot.
+- `src/pipeline/` implements flush order, normalization, GC and view-attached caches.
+- `src/commit.rs` computes mutations before cache writes and atomically publishes snapshots.
+- `src/json.rs` preserves export order and JavaScript number serialization.
 
 ## Boundaries
 
@@ -35,3 +38,8 @@ node types, immutable snapshots and transactional tree editing.
 
 - Cover every public function with an explicit literal behavior test before adding table-driven or generated cases; do not hide fixture construction behind a helper DSL.
 - Test pipeline order, rollback, JSON bytes and boundary cases locally; Tier A fixtures are not yet available.
+
+The sibling test modules cover values, reads, node dispatch, tree edits and NodeState.
+`pipeline/test.rs` covers ordering and transaction boundaries; `json/test.rs` checks
+literal exported bytes. The §18.5 full-span fixture uses `splice`; the range-editing
+`remove_text` API belongs to WP-10.

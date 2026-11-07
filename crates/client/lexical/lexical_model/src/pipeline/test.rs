@@ -609,3 +609,27 @@ fn nested_skip_transforms_applies_only_to_that_flush() -> Result<(), Error> {
     EVENTS.with(|events| assert_eq!(*events.borrow(), vec![format!("text {}", t.key())]));
     Ok(())
 }
+
+#[cfg(feature = "bench-counters")]
+#[test]
+fn editing_one_text_counts_only_its_record_clone_and_dirty_ancestors() -> Result<(), Error> {
+    let mut editor = Editor::builder(EditorMode::Headless)
+        .build()
+        .expect("builder");
+    let (text, _) = editor.update(|tx| {
+        let p = tx.create(Paragraph::default())?;
+        let text = tx.create_text("before")?;
+        tx.append(p, &[text.key()])?;
+        tx.append(NodeKey::ROOT, &[p.key()])?;
+        Ok(text)
+    })?;
+    let (_, commit) = editor.update(|tx| {
+        tx.text(text)?.set_text_content("after")?;
+        Ok(())
+    })?;
+    assert_eq!(commit.work.nodes_cloned, 1);
+    assert_eq!(commit.work.nodes_visited, 6);
+    assert!(commit.work.bytes_allocated > 0);
+    assert_eq!(commit.work.diff_ops, 0);
+    Ok(())
+}
