@@ -46,7 +46,8 @@ function Entry(props: {
 }) {
   const state: TutorialState = createTutorialState(props.tutorial.id);
   const shown = () => TUTORIALS[state.shown()] ?? props.tutorial;
-  // The shelf after a video ends: every other tutorial, in the blocks' order.
+  // The shelf after a video ends: every other video, the blocks' tutorials
+  // first, then the videos about Macro as a whole.
   const more = () =>
     TUTORIAL_IDS.flatMap((id) => {
       const tutorial = TUTORIALS[id];

@@ -90,9 +90,43 @@ export default {
   macrodSnippet:
     'Connect the coding agent you already use, then @mention it or assign it a task',
   macrodLength: '1:17',
+  routinesTitle: 'Learn how to use Routines',
+  routinesBlock: 'Routines',
+  routinesSnippet:
+    'Agents that run on a schedule or when something happens in your workspace',
+  routinesLength: '0:57',
+  skillsTitle: 'Learn how to use Skills',
+  skillsBlock: 'Skills',
+  skillsSnippet: 'Instructions your agents follow, shared with your whole team',
+  skillsLength: '0:49',
   driveTitle: 'Learn how to use Macro Drive',
   driveBlock: 'Macro Drive',
   driveSnippet:
     'Files from channels, DMs and email in one place, linked to everything else',
   driveLength: '1:29',
+  companyGraphTitle: 'Company graph',
+  companyGraphBlock: 'Company graph',
+  companyGraphSnippet:
+    'Everything is bidirectionally linked: mention it, and both sides know',
+  companyGraphLength: '0:47',
+  aiTaggingTitle: 'AI tagging',
+  aiTaggingBlock: 'AI tagging',
+  aiTaggingSnippet:
+    'Emails and tasks get tagged, so your important work is in one place',
+  aiTaggingLength: '0:39',
+  automaticPermissionsTitle: 'Automatic permissions',
+  automaticPermissionsBlock: 'Automatic permissions',
+  automaticPermissionsSnippet:
+    'Anything you @mention in a channel is shared with its members',
+  automaticPermissionsLength: '0:42',
+  workspaceEventsTitle: 'Workspace events',
+  workspaceEventsBlock: 'Workspace events',
+  workspaceEventsSnippet:
+    'One event system: agents act on email, channels, tasks and calls',
+  workspaceEventsLength: '0:49',
+  unifiedSearchTitle: 'Unified search',
+  unifiedSearchBlock: 'Unified search',
+  unifiedSearchSnippet:
+    'One search for your whole company, for you and your agents',
+  unifiedSearchLength: '0:46',
 };

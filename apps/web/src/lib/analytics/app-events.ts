@@ -282,9 +282,16 @@ export type AppEvents = {
       | 'macro-calls'
       | 'macro-agents'
       | 'macro-macrod'
+      | 'macro-routines'
+      | 'macro-skills'
       | 'macro-github'
       | 'macro-scheduling'
-      | 'macro-whatsapp';
+      | 'macro-whatsapp'
+      | 'macro-company-graph'
+      | 'macro-ai-tagging'
+      | 'macro-automatic-permissions'
+      | 'macro-workspace-events'
+      | 'macro-unified-search';
     /** `support_clicked`: the dialog's "Talk to us" link under the video. */
     action: 'opened' | 'played' | 'dismissed' | 'support_clicked';
   };

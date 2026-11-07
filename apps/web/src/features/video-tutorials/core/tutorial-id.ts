@@ -1,7 +1,8 @@
 /**
- * The blocks that have a "Learn how to use" tutorial video. The id names the
- * block, keys its assets and messages, and is sent with analytics as
- * `macro-<id>`.
+ * The videos the app can show: each block's "Learn how to use" tutorial, then
+ * the videos about how Macro works across blocks (Company graph and the rest).
+ * The id keys the video's assets and messages, is sent with analytics as
+ * `macro-<id>`, and orders the shelf of more videos.
  */
 export const TUTORIAL_IDS = [
   'mail',
@@ -18,9 +19,16 @@ export const TUTORIAL_IDS = [
   'calls',
   'agents',
   'macrod',
+  'routines',
+  'skills',
   'github',
   'scheduling',
   'whatsapp',
+  'company-graph',
+  'ai-tagging',
+  'automatic-permissions',
+  'workspace-events',
+  'unified-search',
 ] as const;
 
 export type TutorialId = (typeof TUTORIAL_IDS)[number];

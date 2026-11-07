@@ -1130,8 +1130,10 @@ Routines**): tapping a routine closes the settings sheet and opens it, and
 
 The list's top bar has **Routines** with **All** / **On** tabs (each with a
 count) on the left and **New** and search on the right; **Cmd/Ctrl+F** focuses
-search, which matches name, Trigger and Steps. When
-`enable-routine-starter-templates` is on (on in development; PostHog decides in
+search, which matches name, Trigger and Steps. Under the top bar, above
+**Templates**, the Routines `TutorialRow` (from `features/video-tutorials`)
+shows once that video is in its catalog, here and in **Settings → Routines**.
+When `enable-routine-starter-templates` is on (on in development; PostHog decides in
 deployed environments), **Templates** above the rows shows
 four template cards (icon, name, one line and its trigger → first step, such as
 **New email → Label with AI**) with **All templates** at the right, which opens

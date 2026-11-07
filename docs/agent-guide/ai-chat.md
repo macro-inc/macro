@@ -827,7 +827,9 @@ the shimmer.
   **Archive when session closes** submenus, each with **Use default (On/Off)**,
   **On**, and **Off**; the defaults live in Settings → Agents → **Auto-archive**.
 - Users without `enable-chat-v3-agents` retain the Owned / Running / Shared /
-  Automations / Skills list. With the flag enabled, touch devices use the new
+  Automations / Skills list; its empty **Skills** tab (**No skills yet**) carries the
+  Skills `TutorialPill` (from `features/video-tutorials`) once that video is in its
+  catalog. With the flag enabled, touch devices use the new
   conversation list described above. Touch conversation links open standalone
   agent sessions or legacy chats. A standalone legacy chat is `/app/chat/<uuid>`;
   doc-scoped chat is `/app/md/<doc>/chat/<chat>` (split view).

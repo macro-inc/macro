@@ -1,6 +1,10 @@
 import { t } from '@app/lib/i18n';
 import agentsVideo from './assets/agents.mp4';
 import agentsPoster from './assets/agents-poster.jpg';
+import aiTaggingVideo from './assets/ai-tagging.mp4';
+import aiTaggingPoster from './assets/ai-tagging-poster.jpg';
+import automaticPermissionsVideo from './assets/automatic-permissions.mp4';
+import automaticPermissionsPoster from './assets/automatic-permissions-poster.jpg';
 import calendarVideo from './assets/calendar.mp4';
 import calendarPoster from './assets/calendar-poster.jpg';
 import callsVideo from './assets/calls.mp4';
@@ -9,6 +13,8 @@ import canvasVideo from './assets/canvas.mp4';
 import canvasPoster from './assets/canvas-poster.jpg';
 import chatVideo from './assets/chat.mp4';
 import chatPoster from './assets/chat-poster.jpg';
+import companyGraphVideo from './assets/company-graph.mp4';
+import companyGraphPoster from './assets/company-graph-poster.jpg';
 import crmVideo from './assets/crm.mp4';
 import crmPoster from './assets/crm-poster.jpg';
 import databasesVideo from './assets/databases.mp4';
@@ -25,14 +31,22 @@ import macrodVideo from './assets/macrod.mp4';
 import macrodPoster from './assets/macrod-poster.jpg';
 import mailVideo from './assets/mail.mp4';
 import mailPoster from './assets/mail-poster.jpg';
+import routinesVideo from './assets/routines.mp4';
+import routinesPoster from './assets/routines-poster.jpg';
 import schedulingVideo from './assets/scheduling.mp4';
 import schedulingPoster from './assets/scheduling-poster.jpg';
+import skillsVideo from './assets/skills.mp4';
+import skillsPoster from './assets/skills-poster.jpg';
 import spreadsheetsVideo from './assets/spreadsheets.mp4';
 import spreadsheetsPoster from './assets/spreadsheets-poster.jpg';
 import tasksVideo from './assets/tasks.mp4';
 import tasksPoster from './assets/tasks-poster.jpg';
+import unifiedSearchVideo from './assets/unified-search.mp4';
+import unifiedSearchPoster from './assets/unified-search-poster.jpg';
 import whatsappVideo from './assets/whatsapp.mp4';
 import whatsappPoster from './assets/whatsapp-poster.jpg';
+import workspaceEventsVideo from './assets/workspace-events.mp4';
+import workspaceEventsPoster from './assets/workspace-events-poster.jpg';
 import type { TutorialId } from './core/tutorial-id';
 
 export type Tutorial = {
@@ -327,6 +341,40 @@ export const TUTORIALS: Partial<Record<TutorialId, Tutorial>> = {
     videoUrl: macrodVideo,
     posterUrl: macrodPoster,
   },
+  routines: {
+    id: 'routines',
+    get title() {
+      return t('tutorials.routinesTitle');
+    },
+    get block() {
+      return t('tutorials.routinesBlock');
+    },
+    get snippet() {
+      return t('tutorials.routinesSnippet');
+    },
+    get length() {
+      return t('tutorials.routinesLength');
+    },
+    videoUrl: routinesVideo,
+    posterUrl: routinesPoster,
+  },
+  skills: {
+    id: 'skills',
+    get title() {
+      return t('tutorials.skillsTitle');
+    },
+    get block() {
+      return t('tutorials.skillsBlock');
+    },
+    get snippet() {
+      return t('tutorials.skillsSnippet');
+    },
+    get length() {
+      return t('tutorials.skillsLength');
+    },
+    videoUrl: skillsVideo,
+    posterUrl: skillsPoster,
+  },
   drive: {
     id: 'drive',
     get title() {
@@ -343,5 +391,90 @@ export const TUTORIALS: Partial<Record<TutorialId, Tutorial>> = {
     },
     videoUrl: driveVideo,
     posterUrl: drivePoster,
+  },
+  'company-graph': {
+    id: 'company-graph',
+    get title() {
+      return t('tutorials.companyGraphTitle');
+    },
+    get block() {
+      return t('tutorials.companyGraphBlock');
+    },
+    get snippet() {
+      return t('tutorials.companyGraphSnippet');
+    },
+    get length() {
+      return t('tutorials.companyGraphLength');
+    },
+    videoUrl: companyGraphVideo,
+    posterUrl: companyGraphPoster,
+  },
+  'ai-tagging': {
+    id: 'ai-tagging',
+    get title() {
+      return t('tutorials.aiTaggingTitle');
+    },
+    get block() {
+      return t('tutorials.aiTaggingBlock');
+    },
+    get snippet() {
+      return t('tutorials.aiTaggingSnippet');
+    },
+    get length() {
+      return t('tutorials.aiTaggingLength');
+    },
+    videoUrl: aiTaggingVideo,
+    posterUrl: aiTaggingPoster,
+  },
+  'automatic-permissions': {
+    id: 'automatic-permissions',
+    get title() {
+      return t('tutorials.automaticPermissionsTitle');
+    },
+    get block() {
+      return t('tutorials.automaticPermissionsBlock');
+    },
+    get snippet() {
+      return t('tutorials.automaticPermissionsSnippet');
+    },
+    get length() {
+      return t('tutorials.automaticPermissionsLength');
+    },
+    videoUrl: automaticPermissionsVideo,
+    posterUrl: automaticPermissionsPoster,
+  },
+  'workspace-events': {
+    id: 'workspace-events',
+    get title() {
+      return t('tutorials.workspaceEventsTitle');
+    },
+    get block() {
+      return t('tutorials.workspaceEventsBlock');
+    },
+    get snippet() {
+      return t('tutorials.workspaceEventsSnippet');
+    },
+    get length() {
+      return t('tutorials.workspaceEventsLength');
+    },
+    videoUrl: workspaceEventsVideo,
+    posterUrl: workspaceEventsPoster,
+  },
+  'unified-search': {
+    id: 'unified-search',
+    get title() {
+      return t('tutorials.unifiedSearchTitle');
+    },
+    get block() {
+      return t('tutorials.unifiedSearchBlock');
+    },
+    get snippet() {
+      return t('tutorials.unifiedSearchSnippet');
+    },
+    get length() {
+      return t('tutorials.unifiedSearchLength');
+    },
+    videoUrl: unifiedSearchVideo,
+    posterUrl: unifiedSearchPoster,
   },
 };

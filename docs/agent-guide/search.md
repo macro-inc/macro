@@ -25,6 +25,9 @@ own Search history entry, including while another entry is in front. Projects re
 Categories filter entities directly,
 independently of view tabs, mailbox selections, and saved facets. Commands and
 creation shortcuts are excluded. Empty queries show recent entities.
+When the Search list view has nothing to show, its **No items to show** empty
+state carries the Unified search `TutorialPill` (from `features/video-tutorials`)
+once that video is in its catalog; **No results** for a query does not.
 Typed **All** and **People** name searches also find known teammates before their
 first DM, with or without CRM. Existing one-to-one DMs replace person rows while
 preserving name/email matches; selecting a person opens their DM, which the
