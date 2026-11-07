@@ -1,4 +1,3 @@
-use super::*;
 use crate::*;
 static FIRST: EventKey<u32> = EventKey::new("event");
 static OTHER: EventKey<u32> = EventKey::new("event");

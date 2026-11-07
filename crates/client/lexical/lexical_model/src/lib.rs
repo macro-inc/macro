@@ -76,6 +76,3 @@ pub use diff::*;
 
 mod core;
 pub use core::*;
-
-#[cfg(test)]
-mod event;
