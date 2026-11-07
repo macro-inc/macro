@@ -65,5 +65,10 @@ them instead of their generic equivalents.
 - **CS-67** Dependencies, workspace crates included, come from root
   `[workspace.dependencies]` as `x = { workspace = true }`, never a relative
   `path`; after any `Cargo.toml` change run `just hakari` (it adds a new
-  member's root entry and rewrites relative paths) and commit the result. Check the workspace list before adding a
-  crate, and don't add one that duplicates an existing choice.
+  member's root entry and rewrites relative paths) and commit the result.
+  Check the workspace list before adding a crate, and don't add one that
+  duplicates an existing choice. Heavy crates with few users (rig, rmcp,
+  redis, async-openai, async-graphql) are `[final-excludes]` in
+  `.config/hakari.toml`: their root entry lists the features every user gets,
+  and `cargo x deps` rejects a member that declares one without
+  `workspace = true`.
