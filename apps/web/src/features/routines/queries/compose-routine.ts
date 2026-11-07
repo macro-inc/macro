@@ -105,6 +105,7 @@ export function draftFromRoutine(
   });
   const base = {
     ...createEmptyDraft(defaultModel),
+    created: routine.created,
     name: routine.name,
     triggers: (routine.trigger && parseRoutineTriggers(routine.trigger)) ?? [],
     enabled: true,

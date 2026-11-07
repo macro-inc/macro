@@ -1,12 +1,13 @@
 import { fireAndForget } from '@core/util/fireAndForget';
 import { Button, ConfirmDialog, ToggleSwitch } from '@ui';
-import { createSignal, Show } from 'solid-js';
+import { type Component, createSignal, For, Show } from 'solid-js';
 import { RoutineEditor } from '../components/routine-editor';
 import type { RoutineEditorSlots } from '../context/routine-slots';
 import type {
   RoutineCreatorSource,
   RoutineDraftStorage,
 } from '../context/routine-sources';
+import type { CreatedRoutineItem } from '../core/draft';
 import { withNewDraftSteps } from '../core/routine-draft';
 import { createRoutineComposer } from '../primitives/routine-composer';
 import { routineSections } from './routine-sections';
@@ -23,6 +24,8 @@ export function RoutineNewView(props: {
   defaultModel: string;
   /** Decisions are answered by the classifier behind trigger conditions. */
   decisionsEnabled: boolean;
+  /** One item AI created while drafting, by name. */
+  CreatedItem: Component<{ item: CreatedRoutineItem }>;
   onCreated(id: string): void;
   onCancel(): void;
 }) {
@@ -92,6 +95,17 @@ export function RoutineNewView(props: {
         }
         feedback={
           <>
+            <Show when={draft().created?.length ? draft().created : undefined}>
+              {(created) => (
+                <div class="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-ink-muted">
+                  <span>Created for this routine:</span>
+                  <For each={created()}>
+                    {(item) => <props.CreatedItem item={item} />}
+                  </For>
+                  <span>They stay even if you don't create the routine.</span>
+                </div>
+              )}
+            </Show>
             <Show when={attempted() && formError()}>
               {(message) => (
                 <p role="alert" class="text-sm text-failure">

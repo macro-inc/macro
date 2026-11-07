@@ -47,6 +47,7 @@ const routine = (
   },
   steps: [labelStep],
   problems: [],
+  created: [],
   ...overrides,
 });
 
@@ -130,6 +131,15 @@ describe('composeRoutine', () => {
 });
 
 describe('a drafted routine in the editor', () => {
+  it('lists what AI created for it, which exists even if it isn’t saved', () => {
+    const created = [
+      { entityType: 'database' as const, entityId: 'bug-log-database' },
+    ];
+    const draft = draftFromRoutine(routine({ created }), 'claude');
+    if (typeof draft === 'string') throw new Error(draft);
+    expect(draft.created).toEqual(created);
+  });
+
   it('keeps a trigger limited to the items it names', () => {
     const channel = '0195f5d1-4c4b-7a3e-9b3f-2d6a1c8e9f01';
     const draft = draftFromRoutine(
