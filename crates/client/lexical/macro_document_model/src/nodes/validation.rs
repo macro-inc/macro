@@ -87,7 +87,11 @@ pub fn is_database_query_display_mode(value: &Value) -> bool {
 }
 /// Validate chart fields and normalize optional nulls, empty titles and false stack.
 pub fn parse_database_query_chart(value: &Value) -> Option<DatabaseQueryChart> {
-    let chart: DatabaseQueryChart = serde_json::from_value(value.clone()).ok()?;
+    let mut normalized = value.as_object()?.clone();
+    if normalized.get("stack").is_some_and(Value::is_null) {
+        normalized.shift_remove("stack");
+    }
+    let chart: DatabaseQueryChart = serde_json::from_value(Value::Object(normalized)).ok()?;
     if js_trim(&chart.x).is_empty()
         || chart.y.is_empty()
         || chart.y.len() > 5
@@ -153,7 +157,14 @@ pub fn parse_database_query_data(value: &Value) -> Option<DatabaseQueryData> {
             return None;
         }
     }
-    let data: DatabaseQueryData = serde_json::from_value(value.clone()).ok()?;
+    let mut normalized = object.clone();
+    if let Some(chart) = object.get("chart").filter(|v| !v.is_null()) {
+        normalized.insert(
+            "chart".into(),
+            serde_json::to_value(parse_database_query_chart(chart)?).ok()?,
+        );
+    }
+    let data: DatabaseQueryData = serde_json::from_value(Value::Object(normalized)).ok()?;
     if data.height.as_ref().is_some_and(|height| {
         height
             .as_f64()
