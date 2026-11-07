@@ -13162,7 +13162,6 @@ dependencies = [
  "bot_id",
  "channel_sender",
  "cool_asserts",
- "lazy-regex",
  "macro_user_id",
  "mention_date",
  "nom 8.0.0",
