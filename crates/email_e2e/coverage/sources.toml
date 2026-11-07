@@ -62,44 +62,44 @@ file = "services/email_service/src/bin/pubsub_workers/pubsub_workers.rs"
 name = "gmail-inbox-sync"
 aliases = ["gmail-inbox-sync-retry"]
 consumes = ["GmailInboxSyncQueue", "GmailInboxSyncRetryQueue"]
-type = "crates/models_email/src/gmail/inbox_sync.rs::InboxSyncOperation"
-envelope = "crates/models_email/src/gmail/inbox_sync.rs::InboxSyncPubsubMessage"
+type = "crates/types/models_email/src/gmail/inbox_sync.rs::InboxSyncOperation"
+envelope = "crates/types/models_email/src/gmail/inbox_sync.rs::InboxSyncPubsubMessage"
 
 [[queue]]
 name = "gmail-ops"
 aliases = ["gmail-ops-retry"]
 consumes = ["GmailOpsQueue", "GmailOpsRetryQueue"]
-type = "crates/models_email/src/gmail/gmail_ops.rs::GmailOpsOperation"
-envelope = "crates/models_email/src/gmail/gmail_ops.rs::GmailOpsPubsubMessage"
+type = "crates/types/models_email/src/gmail/gmail_ops.rs::GmailOpsOperation"
+envelope = "crates/types/models_email/src/gmail/gmail_ops.rs::GmailOpsPubsubMessage"
 
 [[queue]]
 name = "backfill"
 consumes = ["EmailBackfillQueue"]
-type = "crates/models_email/src/email/service/backfill.rs::BackfillOperation"
-envelope = "crates/models_email/src/email/service/backfill.rs::BackfillPubsubMessage"
+type = "crates/types/models_email/src/email/service/backfill.rs::BackfillOperation"
+envelope = "crates/types/models_email/src/email/service/backfill.rs::BackfillPubsubMessage"
 
 [[queue]]
 name = "crm-cleanup"
 consumes = ["EmailCrmCleanupQueue"]
-type = "crates/models_email/src/email/service/crm_cleanup.rs::CrmCleanupOperation"
-envelope = "crates/models_email/src/email/service/crm_cleanup.rs::CrmCleanupPubsubMessage"
+type = "crates/types/models_email/src/email/service/crm_cleanup.rs::CrmCleanupOperation"
+envelope = "crates/types/models_email/src/email/service/crm_cleanup.rs::CrmCleanupPubsubMessage"
 
 [[queue]]
 name = "link-manager"
 consumes = ["LinkManagerQueue"]
-type = "crates/models_email/src/email/service/pubsub.rs::LinkManagerMessage"
+type = "crates/types/models_email/src/email/service/pubsub.rs::LinkManagerMessage"
 at = ""
 
 [[queue]]
 name = "scheduled"
 consumes = ["EmailScheduledQueue"]
-type = "crates/models_email/src/email/service/pubsub.rs::ScheduledPubsubMessage"
+type = "crates/types/models_email/src/email/service/pubsub.rs::ScheduledPubsubMessage"
 at = ""
 
 [[queue]]
 name = "sfs-uploader"
 consumes = ["SfsUploaderQueue"]
-type = "crates/models_email/src/email/service/pubsub.rs::SFSUploaderMessage"
+type = "crates/types/models_email/src/email/service/pubsub.rs::SFSUploaderMessage"
 at = ""
 
 [[queue]]
@@ -125,7 +125,7 @@ type = "crates/email/src/domain/events.rs::EmailTopicEvent"
 # which is the `message` field of the request the gateway receives.
 [[gateway]]
 name = "refresh_email"
-type = "crates/models_email/src/email/api/refresh.rs::RefreshEmailEvent"
+type = "crates/types/models_email/src/email/api/refresh.rs::RefreshEmailEvent"
 
 # kind `tool`: the agent tools registered with `add_tool` / `add_user_tool`.
 [[tool]]

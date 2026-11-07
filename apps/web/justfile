@@ -491,7 +491,7 @@ ensure-database-sql-wasm:
 # Build the natural-time wasm module (English date phrases, read in the
 # browser) into src/lib/core/natural-time/wasm (gitignored).
 build-natural-time-wasm:
-    scripts/cached-wasm-build.sh natural_time {{justfile_directory()}}/src/lib/core/natural-time/wasm -- env CARGO_TARGET_DIR="{{natural_time_wasm_target}}" wasm-pack build {{justfile_directory()}}/../../crates/natural_time --target web --release --out-dir {{justfile_directory()}}/src/lib/core/natural-time/wasm
+    scripts/cached-wasm-build.sh natural_time {{justfile_directory()}}/src/lib/core/natural-time/wasm -- env CARGO_TARGET_DIR="{{natural_time_wasm_target}}" wasm-pack build {{justfile_directory()}}/../../crates/types/natural_time --target web --release --out-dir {{justfile_directory()}}/src/lib/core/natural-time/wasm
 
 # Build the password-import wasm module (1Password and Bitwarden export
 # parsing, hosted in a worker by the passwords import dialog) into
@@ -518,7 +518,7 @@ ensure-natural-time-wasm:
     #!/usr/bin/env bash
     set -euo pipefail
     WASM="{{justfile_directory()}}/src/lib/core/natural-time/wasm/natural_time_bg.wasm"
-    CRATE="{{justfile_directory()}}/../../crates/natural_time"
+    CRATE="{{justfile_directory()}}/../../crates/types/natural_time"
     if [ ! -f "$WASM" ] || [ -n "$(find "$CRATE/src" "$CRATE/Cargo.toml" -newer "$WASM" -print -quit)" ]; then
         just --justfile "{{justfile()}}" build-natural-time-wasm
     fi

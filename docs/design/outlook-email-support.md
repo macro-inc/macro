@@ -485,7 +485,7 @@ The mapper is strong evidence that Outlook should use the existing message viewe
 The less obvious coupling is below the response types:
 [thread actions](../../crates/email/src/domain/service/thread_labels.rs) resolve
 system labels and call `enqueue_gmail_ops_modify_labels_batch`;
-[message classification](../../crates/models_email/src/email/service/message.rs)
+[message classification](../../crates/types/models_email/src/email/service/message.rs)
 uses INBOX, TRASH, and SPAM; and
 [thread queries](../../crates/email/src/outbound/email_pg_repo/thread.rs) use Gmail
 category names for signal/noise decisions. Returning the same JSON shape is not
