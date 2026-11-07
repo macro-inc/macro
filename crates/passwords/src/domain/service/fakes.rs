@@ -261,6 +261,7 @@ impl Repository for FakeRepository {
         Ok(())
     }
 }
+type UsernameGate = (Arc<tokio::sync::Notify>, Arc<tokio::sync::Notify>);
 pub struct FakeProvider {
     pub stored: Mutex<HashMap<Uuid, (i32, Uuid, SecretValues)>>,
     pub reads: AtomicUsize,
@@ -269,6 +270,7 @@ pub struct FakeProvider {
     pub totp_seeds: Mutex<HashMap<Uuid, SecretString>>,
     pub fail_set: AtomicBool,
     pub revoke_on_username: Mutex<Option<Arc<FakeRepository>>>,
+    pub username_gate: Mutex<Option<UsernameGate>>,
 }
 impl FakeProvider {
     pub fn new() -> Self {
@@ -280,12 +282,18 @@ impl FakeProvider {
             totp_seeds: Mutex::new(HashMap::new()),
             fail_set: AtomicBool::new(false),
             revoke_on_username: Mutex::new(None),
+            username_gate: Mutex::new(None),
         }
     }
 }
 #[async_trait]
 impl SecretProvider for FakeProvider {
     async fn username(&self, _: TeamId, item: ItemId, version: i32) -> Result<SecretString, Error> {
+        let gate = self.username_gate.lock().expect("fixture lock").clone();
+        if let Some((started, release)) = gate {
+            started.notify_one();
+            release.notified().await;
+        }
         let username = {
             let stored = self.stored.lock().expect("fixture lock");
             let stored = stored.get(&item.0).ok_or(Error::NotFound)?;

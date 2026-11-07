@@ -166,7 +166,11 @@ impl PasswordService {
         item: ItemId,
         copy: bool,
     ) -> Result<Username, Error> {
-        let _lock = self.repository.lock(team, item).await?;
+        let _lock = if copy {
+            Some(self.repository.lock(team, item).await?)
+        } else {
+            None
+        };
         let record = self.access(actor, team, item, false).await?;
         let username = self
             .provider

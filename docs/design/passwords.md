@@ -30,9 +30,11 @@ points at missing values. Authorization must precede every provider operation.
 Selecting an item resolves its non-secret username through a separate,
 human-authorized projection. Only the username and committed version reach the
 browser; passwords, notes, and custom fields stay protected. Username copies are
-explicitly audited. Neither endpoint populates the metadata index or browser
-query cache. Sharing counts derive from distinct explicit user/team grants
-already loaded with metadata; a team grant counts as one share.
+explicitly audited. Display reads leave the mutation lease free for interactive
+actions and recheck current authorization and revisions after the provider read.
+Explicit copies retain the lease. Neither endpoint populates the metadata
+index or browser query cache. Sharing counts derive from distinct explicit
+user/team grants already loaded with metadata; a team grant counts as one share.
 
 Durable metadata-only intents correlate accepted writes with their logical
 operation IDs. Recovery that resolves a provider operation marker runs only

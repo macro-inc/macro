@@ -362,6 +362,71 @@ async fn live_metadata_routes_and_share_reject_cross_team_access(pool: sqlx::PgP
         }),
     });
     let item = record.metadata.id.0;
+    let interaction_service = PasswordService {
+        repository: repository.clone(),
+        provider: provider.clone(),
+        availability: Arc::new(Enabled),
+        reauthentication: Arc::new(crate::domain::service::test::fakes::FakeReauthentication {
+            recent: std::sync::atomic::AtomicBool::new(true),
+        }),
+    };
+    let actor = Actor {
+        user_id: record.user_id.clone(),
+        session_token: None,
+    };
+    interaction_service
+        .configure_totp(
+            &actor,
+            first,
+            record.metadata.id,
+            Some(SecretString("JBSWY3DPEHPK3PXP".into())),
+        )
+        .await
+        .expect("enrolled verification code fixture");
+    for copy in [false, true] {
+        let started = Arc::new(tokio::sync::Notify::new());
+        let release = Arc::new(tokio::sync::Notify::new());
+        *provider.username_gate.lock().expect("fixture lock") =
+            Some((started.clone(), release.clone()));
+        let path = if copy {
+            format!("/teams/{}/items/{item}/username/copy", first.0)
+        } else {
+            format!("/teams/{}/items/{item}/username", first.0)
+        };
+        let request = Request::builder()
+            .method(if copy { "POST" } else { "GET" })
+            .uri(path)
+            .header("authorization", "Bearer session")
+            .header("x-macro-passwords", "1")
+            .body(Body::empty())
+            .expect("request");
+        let pending = tokio::spawn(app.clone().oneshot(request));
+        started.notified().await;
+        let interaction = interaction_service
+            .totp(&actor, first, record.metadata.id)
+            .await;
+        if copy {
+            assert!(matches!(interaction, Err(Error::Conflict)));
+        } else {
+            assert_eq!(
+                interaction
+                    .expect("verification code succeeds while identifier GET is paused")
+                    .code
+                    .0,
+                "123456"
+            );
+        }
+        release.notify_one();
+        assert_eq!(
+            pending
+                .await
+                .expect("request task")
+                .expect("response")
+                .status(),
+            StatusCode::OK
+        );
+        *provider.username_gate.lock().expect("fixture lock") = None;
+    }
     for (method, path, expected) in [
         (
             "GET",

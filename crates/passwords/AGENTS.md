@@ -39,6 +39,7 @@ Do not add plaintext values to any metadata record, errors or tracing fields.
 - Username GET and audited username-copy POST resolve only the current committed
   identifier with normal human view authorization. Recheck access and revision after
   the provider read; never reconcile or return passwords, notes or custom fields.
+  Automatic username GETs hold no mutation lease; explicit username-copy POSTs do.
   Password reveal/copy and verification codes still require recent sign-in.
 - Derive `shareCount` from distinct grant `(kind,id)` pairs already loaded with each
   record. Count a team grant once; do not fetch grants per list row or expand members.
@@ -57,8 +58,9 @@ PEM file path), `PASSWORDS_TEST_OPENBAO_PUBLIC_KEY` (public PEM file path), and
 `BAO_TOKEN` and `DATABASE_URL` set explicitly: `cargo test -p passwords -- --ignored`.
 The test creates synthetic team namespaces with the local bootstrap script.
 
-Vault writes and disclosure hold a nonblocking team-scoped advisory lease; metadata
-reads do not hold leases or fetch values. Keep the completed metadata-only operation
+Vault writes, protected disclosure and username-copy actions hold a nonblocking
+team-scoped advisory lease. Automatic username reads use a revalidated committed
+snapshot; metadata reads hold no leases and fetch no values. Keep the metadata-only operation
 journal: it prevents operation ID reuse from creating unaudited secret versions.
 KV deletion advances CAS and destroys values while retaining provider metadata;
 this fence prevents delayed pre-delete requests from recreating credentials.
