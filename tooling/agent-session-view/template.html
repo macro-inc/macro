@@ -1,0 +1,509 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Agent Session View</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css" media="(prefers-color-scheme: light)">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css" media="(prefers-color-scheme: dark)">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/marked@12.0.2/marked.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/dompurify@3.1.6/dist/purify.min.js"></script>
+<style>
+:root {
+  --bg: #f7f7f5; --panel: #ffffff; --ink: #1d1d1b; --muted: #6b6b66; --line: #e4e3df;
+  --model: #8b5cf6; --model-soft: #ede9fe; --tool: #10b981; --tool-soft: #d1fae5;
+  --fail: #ef4444; --fail-soft: #fee2e2; --warn: #f59e0b; --warn-soft: #fef3c7;
+  --msg: #2563eb; --msg-soft: #dbeafe; --code-bg: #f3f3f0; --chip: #eef2ff;
+  --mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, sans-serif;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #111110; --panel: #1b1b19; --ink: #ececea; --muted: #9b9b95; --line: #2c2c29;
+    --model: #a78bfa; --model-soft: #2e2547; --tool: #34d399; --tool-soft: #12352b;
+    --fail: #f87171; --fail-soft: #3f1d1d; --warn: #fbbf24; --warn-soft: #3a2f12;
+    --msg: #60a5fa; --msg-soft: #1b2a45; --code-bg: #161614; --chip: #23263a;
+  }
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--ink); font: 14px/1.5 var(--sans); }
+a { color: var(--msg); }
+header { padding: 20px 24px 12px; border-bottom: 1px solid var(--line); background: var(--panel); position: sticky; top: 0; z-index: 5; }
+header h1 { margin: 0 0 4px; font-size: 19px; }
+.meta { color: var(--muted); font-size: 12.5px; display: flex; flex-wrap: wrap; gap: 4px 14px; }
+.meta code { font-family: var(--mono); font-size: 12px; }
+.stats { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+.stat { background: var(--bg); border: 1px solid var(--line); border-radius: 8px; padding: 4px 10px; font-size: 12.5px; }
+.stat b { font-size: 14px; }
+.controls { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; align-items: center; }
+.controls label { font-size: 12.5px; color: var(--muted); display: flex; gap: 4px; align-items: center; cursor: pointer; }
+.controls input[type=search] { border: 1px solid var(--line); background: var(--bg); color: var(--ink); border-radius: 6px; padding: 4px 8px; min-width: 200px; }
+.histogram { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 8px; }
+.histogram button { border: 1px solid var(--line); background: var(--bg); color: var(--ink); border-radius: 999px; padding: 1px 9px; font-size: 12px; cursor: pointer; }
+.histogram button.active { background: var(--tool-soft); border-color: var(--tool); }
+.histogram button .bad { color: var(--fail); }
+.layout { display: grid; grid-template-columns: 260px minmax(0, 1fr); gap: 0; }
+nav { border-right: 1px solid var(--line); padding: 12px 10px; position: sticky; top: var(--header-h, 160px); height: calc(100vh - var(--header-h, 160px)); overflow: auto; }
+nav a { display: block; padding: 6px 8px; border-radius: 6px; color: var(--ink); text-decoration: none; font-size: 12.5px; }
+nav a:hover { background: var(--panel); }
+nav a .n { font-weight: 600; }
+nav a .d { color: var(--muted); float: right; font-variant-numeric: tabular-nums; }
+nav a .p { display: block; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+nav a .f { color: var(--fail); }
+main { padding: 16px 24px 80px; min-width: 0; }
+.turn { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; margin-bottom: 20px; overflow: hidden; }
+.turn-head { padding: 14px 16px 10px; border-bottom: 1px solid var(--line); }
+.turn-head h2 { margin: 0; font-size: 15px; display: flex; gap: 10px; align-items: baseline; flex-wrap: wrap; }
+.turn-head h2 .when { color: var(--muted); font-weight: 400; font-size: 12.5px; }
+.prompt { margin-top: 8px; white-space: pre-wrap; word-break: break-word; background: var(--msg-soft); border-radius: 8px; padding: 10px 12px; }
+.turn-stats { color: var(--muted); font-size: 12.5px; margin-top: 8px; display: flex; flex-wrap: wrap; gap: 4px 14px; }
+.timeline { position: relative; height: 34px; margin-top: 10px; background: var(--model-soft); border-radius: 6px; overflow: hidden; cursor: pointer; }
+.timeline .seg { position: absolute; top: 0; bottom: 0; min-width: 2px; }
+.timeline .seg.tool { background: var(--tool); opacity: .85; }
+.timeline .seg.tool.failed { background: var(--fail); }
+.timeline .seg.tool.soft { background: var(--warn); }
+.timeline .seg.msg { background: var(--msg); opacity: .5; }
+.timeline.models { height: 14px; margin-top: 3px; background: transparent; border: 1px dashed var(--line); cursor: default; }
+.timeline.models .seg.call { background: var(--model); opacity: .7; border-right: 1px solid var(--bg, #fff); }
+.timeline.models .seg.call.failed { background: var(--fail); }
+table.calls { border-collapse: collapse; font-size: 12px; margin: 6px 0; }
+table.calls td, table.calls th { padding: 2px 8px; border-bottom: 1px solid var(--line); text-align: right; }
+table.calls td:nth-child(4), table.calls th:nth-child(4), table.calls td:last-child, table.calls th:last-child { text-align: left; }
+.timeline .tick { position: absolute; bottom: 0; font-size: 10px; color: var(--muted); padding-left: 2px; border-left: 1px solid var(--line); height: 12px; line-height: 12px; }
+.legend { display: flex; gap: 12px; font-size: 11.5px; color: var(--muted); margin-top: 4px; }
+.legend i { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 4px; vertical-align: -1px; }
+.items { padding: 6px 16px 14px; }
+.gap { color: var(--muted); font-size: 11.5px; margin: 8px 0 2px 2px; font-variant-numeric: tabular-nums; }
+.gap.slow { color: var(--warn); font-weight: 600; }
+details.thought { border-left: 3px solid var(--model); background: var(--model-soft); border-radius: 0 8px 8px 0; padding: 4px 10px; margin: 4px 0; }
+details.thought summary { cursor: pointer; color: var(--muted); font-size: 12.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+details.thought .body { white-space: pre-wrap; font-size: 13px; padding: 6px 0 4px; }
+.message { border-left: 3px solid var(--msg); padding: 2px 12px; margin: 6px 0; }
+.message > :first-child { margin-top: 4px; } .message > :last-child { margin-bottom: 4px; }
+.message pre { background: var(--code-bg); padding: 8px; border-radius: 6px; overflow: auto; }
+.message table { border-collapse: collapse; } .message td, .message th { border: 1px solid var(--line); padding: 3px 8px; }
+.tool { border: 1px solid var(--line); border-radius: 10px; margin: 6px 0; background: var(--panel); }
+.tool.failed { border-color: var(--fail); }
+.tool.soft { border-color: var(--warn); }
+.tool > summary { list-style: none; cursor: pointer; padding: 8px 12px; display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+.tool > summary::-webkit-details-marker { display: none; }
+.dot { width: 9px; height: 9px; border-radius: 50%; background: var(--tool); flex: none; }
+.tool.failed .dot { background: var(--fail); } .tool.soft .dot { background: var(--warn); } .tool.pending .dot { background: var(--muted); }
+.tool .num { color: var(--muted); font-size: 12px; font-variant-numeric: tabular-nums; }
+.tool .name { font-weight: 600; font-family: var(--mono); font-size: 13px; }
+.tool .args-inline { color: var(--muted); font-family: var(--mono); font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1 1 200px; min-width: 0; }
+.tool .dur { margin-left: auto; font-variant-numeric: tabular-nums; font-size: 12px; color: var(--muted); }
+.tool .dur.slow { color: var(--warn); font-weight: 600; }
+.tool .err { color: var(--fail); font-size: 12.5px; padding: 0 12px 8px 31px; font-family: var(--mono); word-break: break-word; }
+.tool .body { border-top: 1px solid var(--line); padding: 8px 12px 10px; }
+.tool h4 { margin: 8px 0 4px; font-size: 11.5px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); }
+pre.json, pre.code { margin: 0; background: var(--code-bg); border-radius: 6px; padding: 8px 10px; overflow: auto; max-height: 520px; font: 12px/1.45 var(--mono); white-space: pre-wrap; word-break: break-word; }
+pre.code { white-space: pre; }
+pre.code code.hljs { background: transparent; padding: 0; }
+.more { margin-top: 4px; font-size: 12px; }
+.more button { border: 1px solid var(--line); background: var(--bg); color: var(--ink); border-radius: 6px; padding: 2px 8px; cursor: pointer; }
+.event { color: var(--muted); font-size: 12px; margin: 6px 0; font-family: var(--mono); }
+.error-frame { color: var(--fail); background: var(--fail-soft); border-radius: 8px; padding: 6px 10px; margin: 6px 0; font-family: var(--mono); font-size: 12.5px; white-space: pre-wrap; }
+.chip { display: inline-block; background: var(--chip); border-radius: 6px; padding: 0 6px; font-size: 12.5px; }
+details.ctx { margin-top: 6px; font-size: 12px; color: var(--muted); }
+details.ctx pre { white-space: pre-wrap; }
+.end { color: var(--muted); font-size: 12.5px; padding: 6px 2px 0; }
+.hidden { display: none !important; }
+mark { background: var(--warn-soft); color: inherit; }
+@media (max-width: 860px) {
+  .layout { grid-template-columns: minmax(0, 1fr); }
+  nav { display: none; }
+  header { position: static; padding: 14px 16px 10px; }
+  main { padding: 12px 16px 60px; }
+}
+</style>
+</head>
+<body>
+<header id="top">
+  <h1 id="title"></h1>
+  <div class="meta" id="meta"></div>
+  <div class="stats" id="stats"></div>
+  <div class="histogram" id="histogram"></div>
+  <div class="controls">
+    <input type="search" id="search" placeholder="Filter steps by text…">
+    <label><input type="checkbox" id="expandThinking"> expand thinking</label>
+    <label><input type="checkbox" id="expandTools"> expand tool calls</label>
+    <label><input type="checkbox" id="onlyFailures"> failures only</label>
+    <label><input type="checkbox" id="hideThinking"> hide thinking</label>
+  </div>
+</header>
+<div class="layout">
+  <nav id="nav"></nav>
+  <main id="main"></main>
+</div>
+<script id="session-data" type="application/json">__SESSION_JSON__</script>
+<script>
+const DATA = JSON.parse(document.getElementById('session-data').textContent);
+const SLOW_MODEL_MS = 8000, SLOW_TOOL_MS = 5000, INLINE_LIMIT = 4000;
+const parseTime = s => Date.parse(String(s).replace(' ', 'T').replace(/(\.\d{3})\d+/, '$1'));
+const secs = ms => ms == null ? '–' : ms < 1000 ? `${Math.round(ms)}ms` : ms < 60000 ? `${(ms / 1000).toFixed(1)}s` : `${Math.floor(ms / 60000)}m${Math.round(ms % 60000 / 1000)}s`;
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const el = (tag, attrs = {}, html = '') => { const n = document.createElement(tag); for (const [k, v] of Object.entries(attrs)) n.setAttribute(k, v); n.innerHTML = html; return n; };
+
+function buildTurns(frames) {
+  const turns = [], tools = {};
+  let turn = null;
+  for (const frame of frames) {
+    const content = frame.content || {}, t = parseTime(frame.t);
+    if (content.method === 'session/prompt') {
+      turn = { n: turns.length + 1, start: t, end: null, last: t, prompt: content.params?.prompt || [], user: frame.user_id, items: [], stop: null };
+      turns.push(turn);
+      continue;
+    }
+    if (!turn) continue;
+    turn.last = t;
+    const update = content.params?.update, kind = update?.sessionUpdate;
+    const previous = turn.items[turn.items.length - 1];
+    if (kind === 'agent_thought_chunk' || kind === 'agent_message_chunk') {
+      const k = kind === 'agent_thought_chunk' ? 'thought' : 'message';
+      const text = update.content?.text || '';
+      if (previous && previous.kind === k) { previous.text += text; previous.end = t; }
+      else turn.items.push({ kind: k, text, start: t, end: t });
+    } else if (kind === 'tool_call') {
+      const input = { ...(update.rawInput || {}) }, source = input.source;
+      delete input.source;
+      const item = { kind: 'tool', id: update.toolCallId, title: update.title, name: (update._meta?.macro?.toolName || update.title || '?').replace(/^mcp__macro_internal__/, ''), input, source, start: t, end: null, status: update.status || 'pending', output: undefined, content: null };
+      tools[update.toolCallId] = item;
+      turn.items.push(item);
+    } else if (kind === 'tool_call_update') {
+      const item = tools[update.toolCallId];
+      if (!item) continue;
+      if (update.status) item.status = update.status;
+      if (update.rawOutput !== undefined) item.output = update.rawOutput;
+      if (update.content) item.content = update.content;
+      if (update.status === 'completed' || update.status === 'failed') item.end = t;
+    } else if (kind === 'plan') {
+      turn.items.push({ kind: 'event', text: 'plan: ' + (update.entries || []).map(e => `${e.status === 'completed' ? '✓' : '○'} ${e.content}`).join(' · '), start: t, end: t });
+    } else if (content.result?.stopReason) {
+      turn.stop = content.result.stopReason; turn.end = t;
+    } else if (content.error) {
+      turn.items.push({ kind: 'error', error: content.error, start: t, end: t });
+    } else if (content.type === 'event') {
+      turn.items.push({ kind: 'event', text: `event: ${content.event}${content.detail ? ' ' + JSON.stringify(content.detail) : ''}`, start: t, end: t });
+    }
+  }
+  for (const turn of turns) {
+    turn.end = turn.end || turn.last;
+    let n = 0;
+    for (const item of turn.items) {
+      if (item.kind !== 'tool') continue;
+      item.n = ++n;
+      if (item.end == null) item.end = item.start;
+      const span = DATA.spans?.tools?.[item.id];
+      if (span) {
+        item.start = span.start_ms; item.end = span.end_ms;
+        item.resultBytes = span.result_bytes; item.resultCut = span.result_cut;
+      }
+      const out = item.output;
+      item.softFail = item.status !== 'failed' && out && typeof out === 'object' && (out.status === 'failed' || (out.error && out.error !== null));
+      item.errorText = errorText(item);
+    }
+    turn.tools = turn.items.filter(i => i.kind === 'tool');
+    turn.failures = turn.tools.filter(i => i.status === 'failed' || i.softFail).length;
+    turn.toolMs = unionMs(turn.tools.map(i => [i.start, i.end]));
+    turn.totalMs = turn.end - turn.start;
+    turn.calls = (DATA.spans?.model_calls || []).filter(call => call.start_ms >= turn.start && call.start_ms <= turn.end);
+  }
+  return turns;
+}
+
+function errorText(item) {
+  const out = item.output;
+  if (out == null) return item.status === 'failed' ? 'failed' : '';
+  if (typeof out === 'string') return item.status === 'failed' ? out.slice(0, 400) : '';
+  const err = out.error ?? (out.status === 'failed' ? out.message : null);
+  if (!err) return '';
+  return (typeof err === 'string' ? err : JSON.stringify(err)).slice(0, 400);
+}
+
+function unionMs(intervals) {
+  intervals = intervals.filter(([a, b]) => b > a).sort((x, y) => x[0] - y[0]);
+  let total = 0, cur = null;
+  for (const [a, b] of intervals) {
+    if (cur && a <= cur[1]) cur[1] = Math.max(cur[1], b);
+    else { if (cur) total += cur[1] - cur[0]; cur = [a, b]; }
+  }
+  return cur ? total + cur[1] - cur[0] : total;
+}
+
+function promptText(prompt) {
+  return prompt.map(p => p.text ?? (p.resource?.text) ?? (p.uri ? `[${p.type}: ${p.uri}]` : `[${p.type}]`)).join('\n');
+}
+
+function splitContext(text) {
+  const contexts = [];
+  const body = text.replace(/<m-agent-context>([\s\S]*?)<\/m-agent-context>/g, (_, inner) => {
+    try { contexts.push(JSON.parse(inner).text ?? inner); } catch { contexts.push(inner); }
+    return '';
+  }).trim();
+  return { body, contexts };
+}
+
+function mentionChips(text) {
+  return text.replace(/<m-([a-z-]+)>(\{[\s\S]*?\})<\/m-\1>/g, (_, kind, json) => {
+    let label = kind.replace(/-mention$/, '');
+    try {
+      const v = JSON.parse(json);
+      label = v.label || v.displayFormat || v.documentName || v.name || v.text || v.title || v.email || v.url || v.userId || v.id || label;
+    } catch {}
+    return `<span class="chip" title="${esc(kind)}">${esc(label)}</span>`;
+  });
+}
+
+function escapedWithChips(text) {
+  const mention = /<m-([a-z-]+)>(\{[\s\S]*?\})<\/m-\1>/g;
+  let html = '', last = 0, match;
+  while ((match = mention.exec(text))) {
+    html += esc(text.slice(last, match.index)) + mentionChips(match[0]);
+    last = mention.lastIndex;
+  }
+  return html + esc(text.slice(last));
+}
+
+function markdown(text) {
+  const html = window.marked ? marked.parse(mentionChips(text)) : `<pre>${esc(text)}</pre>`;
+  return window.DOMPurify ? DOMPurify.sanitize(html) : html;
+}
+
+function oneLine(value, limit = 160) {
+  const s = typeof value === 'string' ? value : JSON.stringify(value);
+  return s.length > limit ? s.slice(0, limit) + '…' : s;
+}
+
+function jsonBlock(value) {
+  const text = typeof value === 'string' ? value : JSON.stringify(value, null, 2);
+  const wrap = el('div');
+  const pre = el('pre', { class: 'json' });
+  pre.textContent = text.length > INLINE_LIMIT ? text.slice(0, INLINE_LIMIT) : text;
+  wrap.append(pre);
+  if (text.length > INLINE_LIMIT) {
+    const more = el('div', { class: 'more' }, `<button>show all ${(text.length / 1024).toFixed(0)} KB</button>`);
+    more.querySelector('button').onclick = () => { pre.textContent = text; more.remove(); };
+    wrap.append(more);
+  }
+  return wrap;
+}
+
+function toolBody(item) {
+  const body = el('div', { class: 'body' });
+  if (Object.keys(item.input).length) { body.append(el('h4', {}, 'Arguments')); body.append(jsonBlock(item.input)); }
+  if (item.source) {
+    body.append(el('h4', {}, 'Code'));
+    const pre = el('pre', { class: 'code' }), code = el('code', { class: 'language-javascript' });
+    code.textContent = item.source;
+    pre.append(code); body.append(pre);
+    if (window.hljs) hljs.highlightElement(code);
+  }
+  const out = item.output !== undefined ? item.output : item.content;
+  body.append(el('h4', {}, `Result · ${esc(item.status)}${item.softFail ? ' (reported failure)' : ''}`));
+  body.append(out === undefined || out === null ? el('div', { class: 'event' }, 'no output recorded') : jsonBlock(out));
+  return body;
+}
+
+function renderTool(item) {
+  const ms = item.end - item.start;
+  const status = item.status === 'failed' ? 'failed' : item.softFail ? 'soft' : item.status === 'completed' ? 'ok' : 'pending';
+  const node = el('details', { class: `tool ${status}`, id: `tool-${item.id}` });
+  node.dataset.tool = item.name;
+  node.dataset.failed = status === 'failed' || status === 'soft' ? '1' : '';
+  node.append(el('summary', {}, `<span class="dot"></span><span class="num">#${item.n}</span><span class="name">${esc(item.name)}</span>` +
+    `<span class="args-inline">${esc(item.source ? item.source.replace(/\s+/g, ' ').slice(0, 160) : oneLine(item.input))}</span>` +
+    (item.resultBytes != null ? `<span class="args-inline" title="result size${item.resultCut ? '; the model read only its beginning' : ''}">${(item.resultBytes / 1000).toFixed(1)} KB${item.resultCut ? ' cut' : ''}</span>` : '') +
+    `<span class="dur ${ms > SLOW_TOOL_MS ? 'slow' : ''}">${secs(ms)}</span>`));
+  if (item.errorText) node.append(el('div', { class: 'err' }, esc(item.errorText)));
+  let rendered = false;
+  node.addEventListener('toggle', () => { if (node.open && !rendered) { node.append(toolBody(item)); rendered = true; } });
+  node.searchText = [item.name, item.title, JSON.stringify(item.input), item.source, item.errorText].join(' ').toLowerCase();
+  node.lazyText = () => JSON.stringify(item.output ?? item.content ?? '').toLowerCase();
+  return node;
+}
+
+function renderTimeline(turn) {
+  const span = Math.max(turn.totalMs, 1);
+  const bar = el('div', { class: 'timeline', title: 'purple: model · green: tool · red: failed · blue: reply' });
+  const pct = t => `${((t - turn.start) / span * 100).toFixed(3)}%`;
+  const width = (a, b) => `${Math.max((b - a) / span * 100, 0.15).toFixed(3)}%`;
+  for (const item of turn.items) {
+    if (item.kind === 'tool') {
+      const seg = el('div', { class: `seg tool ${item.status === 'failed' ? 'failed' : item.softFail ? 'soft' : ''}`, title: `#${item.n} ${item.name} · ${secs(item.end - item.start)}` });
+      seg.style.left = pct(item.start); seg.style.width = width(item.start, item.end);
+      seg.onclick = e => { e.stopPropagation(); const target = document.getElementById(`tool-${item.id}`); target.open = true; target.scrollIntoView({ behavior: 'smooth', block: 'center' }); };
+      bar.append(seg);
+    } else if (item.kind === 'message') {
+      const seg = el('div', { class: 'seg msg', title: 'reply text' });
+      seg.style.left = pct(item.start); seg.style.width = width(item.start, item.end);
+      bar.append(seg);
+    }
+  }
+  const step = [1, 2, 5, 10, 15, 30, 60, 120, 300, 600, 1800].find(s => span / 1000 / s <= 8) || 3600;
+  for (let s = step; s * 1000 < span; s += step) {
+    const tick = el('div', { class: 'tick' }, s >= 60 ? `${s / 60}m` : `${s}s`);
+    tick.style.left = `${(s * 1000 / span * 100).toFixed(3)}%`;
+    bar.append(tick);
+  }
+  return bar;
+}
+
+// One segment per model call, under the turn's timeline.
+function renderModelLane(turn) {
+  const span = Math.max(turn.totalMs, 1);
+  const lane = el('div', { class: 'timeline models', title: 'model calls (chat_streaming spans)' });
+  const pct = t => `${Math.max((t - turn.start) / span * 100, 0).toFixed(3)}%`;
+  const width = (a, b) => `${Math.max((b - a) / span * 100, 0.15).toFixed(3)}%`;
+  for (const call of turn.calls) {
+    const seg = el('div', { class: `seg call ${call.failed ? 'failed' : ''}`, title: `${call.model} · ${secs(call.end_ms - call.start_ms)} · first chunk ${secs(call.first_chunk_ms)} ${call.first_chunk_kind || ''}` });
+    seg.style.left = pct(call.start_ms); seg.style.width = width(call.start_ms, call.end_ms);
+    lane.append(seg);
+  }
+  return lane;
+}
+
+function renderModelCalls(turn) {
+  const count = n => n == null ? '' : Math.round(n).toLocaleString();
+  const details = el('details', { class: 'ctx' }, `<summary>${turn.calls.length} model calls · ${secs(turn.calls.reduce((a, c) => a + c.end_ms - c.start_ms, 0))}</summary>`);
+  const rows = turn.calls.map(call => {
+    const largest = Object.entries(call.prompt_bytes || {}).sort((a, b) => b[1] - a[1]).slice(0, 3).map(([name, bytes]) => `${esc(name)} ${(bytes / 1000).toFixed(0)} KB`).join(', ');
+    return `<tr><td>+${secs(call.start_ms - turn.start)}</td><td>${secs(call.end_ms - call.start_ms)}</td><td>${secs(call.first_chunk_ms)} ${esc(call.first_chunk_kind || '')}</td><td>${esc(call.model)}</td>` +
+      `<td>${count(call.input_tokens)}</td><td>${count(call.cache_read_tokens)}</td><td>${count(call.cache_write_tokens)}</td><td>${count(call.output_tokens)}</td><td>${largest}</td></tr>`;
+  }).join('');
+  details.append(el('table', { class: 'calls' }, `<tr><th>at</th><th>took</th><th>first chunk</th><th>model</th><th>input</th><th>cache read</th><th>cache write</th><th>output</th><th>largest prompt parts</th></tr>${rows}`));
+  return details;
+}
+
+function renderTurn(turn) {
+  const section = el('section', { class: 'turn', id: `turn-${turn.n}` });
+  const { body, contexts } = splitContext(promptText(turn.prompt));
+  const modelMs = Math.max(turn.totalMs - turn.toolMs, 0);
+  const head = el('div', { class: 'turn-head' });
+  head.append(el('h2', {}, `Turn ${turn.n} <span class="when">${new Date(turn.start).toISOString().replace('T', ' ').slice(0, 19)}Z${turn.user ? ' · ' + esc(turn.user) : ''}</span>`));
+  const prompt = el('div', { class: 'prompt' });
+  prompt.innerHTML = escapedWithChips(body);
+  head.append(prompt);
+  for (const context of contexts) {
+    const details = el('details', { class: 'ctx' }, `<summary>agent context</summary>`);
+    const pre = el('pre'); pre.textContent = context; details.append(pre); head.append(details);
+  }
+  head.append(el('div', { class: 'turn-stats' },
+    `<span><b>${secs(turn.totalMs)}</b> total</span><span>gaps ${secs(modelMs)} (${Math.round(modelMs / Math.max(turn.totalMs, 1) * 100)}%)</span>` +
+    `<span>recorded tool time ${secs(turn.toolMs)}</span><span>${turn.tools.length} tool calls</span>` +
+    `<span style="color:var(--fail)">${turn.failures ? turn.failures + ' failed' : ''}</span><span>${turn.stop ? 'stop: ' + esc(turn.stop) : 'no stop frame (still running or crashed)'}</span>`));
+  head.append(renderTimeline(turn));
+  if (turn.calls.length) head.append(renderModelLane(turn), renderModelCalls(turn));
+  head.append(el('div', { class: 'legend' }, `<span><i style="background:var(--model-soft);border:1px solid var(--model)"></i>model / unrecorded</span><span><i style="background:var(--tool)"></i>tool</span><span><i style="background:var(--warn)"></i>tool reported failure</span><span><i style="background:var(--fail)"></i>tool failed</span><span><i style="background:var(--msg);opacity:.5"></i>reply</span>`));
+  section.append(head);
+
+  const items = el('div', { class: 'items' });
+  let previousEnd = turn.start;
+  for (const item of turn.items) {
+    const gapMs = item.start - previousEnd;
+    const wrapper = el('div', { class: 'step' });
+    if (gapMs > 300) wrapper.append(el('div', { class: `gap ${gapMs > SLOW_MODEL_MS ? 'slow' : ''}`, title: 'Time between steps: model latency, and anything not recorded as a step.' }, `${secs(gapMs)} gap · +${secs(item.start - turn.start)}`));
+    if (item.kind === 'thought') {
+      const details = el('details', { class: 'thought' });
+      const first = item.text.trim().split('\n').find(Boolean) || '';
+      details.append(el('summary', {}, `<b>Thinking</b> · ${esc(first.replace(/\*\*/g, ''))} <span style="opacity:.7">· ${item.text.length.toLocaleString()} chars</span>`));
+      const textBody = el('div', { class: 'body' }); textBody.textContent = item.text.trim();
+      details.append(textBody);
+      wrapper.append(details);
+      wrapper.dataset.kind = 'thought';
+      wrapper.searchText = item.text.toLowerCase();
+    } else if (item.kind === 'message') {
+      wrapper.append(el('div', { class: 'message' }, markdown(item.text)));
+      wrapper.dataset.kind = 'message';
+      wrapper.searchText = item.text.toLowerCase();
+    } else if (item.kind === 'tool') {
+      const node = renderTool(item);
+      wrapper.append(node);
+      wrapper.dataset.kind = 'tool';
+      wrapper.dataset.tool = item.name;
+      wrapper.dataset.failed = node.dataset.failed;
+      wrapper.searchText = node.searchText;
+      wrapper.lazyText = node.lazyText;
+    } else if (item.kind === 'error') {
+      wrapper.append(el('div', { class: 'error-frame' }, esc(JSON.stringify(item.error, null, 2))));
+      wrapper.dataset.kind = 'error'; wrapper.dataset.failed = '1';
+      wrapper.searchText = JSON.stringify(item.error).toLowerCase();
+    } else {
+      wrapper.append(el('div', { class: 'event' }, esc(item.text)));
+      wrapper.dataset.kind = 'event';
+      wrapper.searchText = item.text.toLowerCase();
+    }
+    items.append(wrapper);
+    previousEnd = Math.max(previousEnd, item.end ?? item.start);
+  }
+  items.append(el('div', { class: 'end' }, `Turn ended at +${secs(turn.totalMs)}${turn.stop ? ' (' + esc(turn.stop) + ')' : ''}`));
+  section.append(items);
+  return section;
+}
+
+function render() {
+  const session = DATA.session || {};
+  const turns = buildTurns(DATA.frames || []);
+  document.title = `${session.name || 'Agent session'} · Agent Session View`;
+  document.getElementById('title').textContent = session.name || 'Untitled agent session';
+  document.getElementById('meta').innerHTML = [
+    `<code>${esc(session.id)}</code>`, session.model && `model <b>${esc(session.model)}</b>`, session.owner_id && `owner ${esc(session.owner_id)}`,
+    session.harness && `harness ${esc(session.harness)}`, session.created_at && `created ${esc(String(session.created_at).slice(0, 19))}`,
+  ].filter(Boolean).map(s => `<span>${s}</span>`).join('');
+
+  const allTools = turns.flatMap(t => t.tools);
+  const active = turns.reduce((a, t) => a + t.totalMs, 0), toolMs = turns.reduce((a, t) => a + t.toolMs, 0);
+  const failures = allTools.filter(i => i.status === 'failed' || i.softFail).length;
+  document.getElementById('stats').innerHTML = [
+    [turns.length, 'turns'], [allTools.length, 'tool calls'], [failures, 'failed'], [secs(active), 'active time'],
+    [`${Math.round((active - toolMs) / Math.max(active, 1) * 100)}%`, 'outside recorded tool time'], [(DATA.frames || []).length, 'log frames'],
+  ].map(([v, l]) => `<div class="stat"><b>${v}</b> ${l}</div>`).join('');
+
+  const counts = {};
+  for (const item of allTools) { const c = counts[item.name] ||= { n: 0, bad: 0 }; c.n++; if (item.status === 'failed' || item.softFail) c.bad++; }
+  const histogram = document.getElementById('histogram');
+  for (const [name, c] of Object.entries(counts).sort((a, b) => b[1].n - a[1].n)) {
+    const button = el('button', {}, `${esc(name)} ${c.n}${c.bad ? ` <span class="bad">✕${c.bad}</span>` : ''}`);
+    button.onclick = () => { button.classList.toggle('active'); applyFilters(); };
+    button.dataset.tool = name;
+    histogram.append(button);
+  }
+
+  const nav = document.getElementById('nav'), main = document.getElementById('main');
+  for (const turn of turns) {
+    const { body } = splitContext(promptText(turn.prompt));
+    nav.append(el('a', { href: `#turn-${turn.n}` }, `<span class="n">Turn ${turn.n}</span><span class="d">${secs(turn.totalMs)}</span>` +
+      `<span class="p">${esc(body.replace(/<m-[a-z-]+>[\s\S]*?<\/m-[a-z-]+>/g, '[…]').slice(0, 90)) || '(empty)'}</span>` +
+      `<span class="p">${turn.tools.length} tools${turn.failures ? ` · <span class="f">${turn.failures} failed</span>` : ''}</span>`));
+    main.append(renderTurn(turn));
+  }
+  if (!turns.length) main.append(el('p', {}, 'No prompts in this session log.'));
+  const header = document.getElementById('top');
+  const setHeader = () => document.documentElement.style.setProperty('--header-h', `${header.offsetHeight}px`);
+  setHeader(); window.addEventListener('resize', setHeader);
+}
+
+function applyFilters() {
+  const query = document.getElementById('search').value.trim().toLowerCase();
+  const onlyFailures = document.getElementById('onlyFailures').checked;
+  const hideThinking = document.getElementById('hideThinking').checked;
+  const tools = [...document.querySelectorAll('#histogram button.active')].map(b => b.dataset.tool);
+  for (const step of document.querySelectorAll('.step')) {
+    let show = true;
+    if (hideThinking && step.dataset.kind === 'thought') show = false;
+    if (onlyFailures && !step.dataset.failed) show = false;
+    if (tools.length && !(step.dataset.kind === 'tool' && tools.includes(step.dataset.tool))) show = false;
+    if (show && query) show = (step.searchText || '').includes(query) || (step.lazyText ? step.lazyText().includes(query) : false);
+    step.classList.toggle('hidden', !show);
+  }
+}
+
+render();
+document.getElementById('search').addEventListener('input', () => { clearTimeout(window.searchTimer); window.searchTimer = setTimeout(applyFilters, 200); });
+for (const id of ['onlyFailures', 'hideThinking']) document.getElementById(id).addEventListener('change', applyFilters);
+document.getElementById('expandThinking').addEventListener('change', e => document.querySelectorAll('details.thought').forEach(d => d.open = e.target.checked));
+document.getElementById('expandTools').addEventListener('change', e => document.querySelectorAll('details.tool').forEach(d => d.open = e.target.checked));
+</script>
+</body>
+</html>

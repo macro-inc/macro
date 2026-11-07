@@ -12,6 +12,7 @@ mod model;
 mod stream;
 /// Structured output via prompted JSON generation.
 pub mod structured_output;
+mod system_prompt;
 mod telemetry;
 mod tool_adapter;
 mod tool_media;
@@ -22,7 +23,7 @@ mod test;
 pub mod types;
 
 pub use accumulator::StreamAccumulator;
-pub use agent_loop::{AgentLoop, Session, SystemPrompt};
+pub use agent_loop::{AgentLoop, Session};
 pub use completion::{
     complete, complete_about_image, complete_with_history, complete_with_history_and_params,
 };
@@ -34,6 +35,7 @@ pub use model::{ModelSpeed, PredefinedModel, ReasoningEffort};
 pub use stream::{
     ChatCompletionStream, McpInfo, StreamPart, ToolCall, ToolCallStart, ToolResponse, Usage,
 };
+pub use system_prompt::{PromptSection, SystemPrompt};
 pub use tool_adapter::{DynToolSetAdapter, ToolsetToolAdapter, normalize_request_schema};
 pub use tool_result_limit::{ReadToolResult, ToolResultLimit};
 
