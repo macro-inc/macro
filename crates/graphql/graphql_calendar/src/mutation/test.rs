@@ -220,12 +220,12 @@ impl CalendarChangeQueryService for FakeCommitted {
     async fn event_change(
         &self,
         viewer: &str,
-        event_id: Uuid,
+        event_id: calendar_event_id::CalendarEventId,
     ) -> Result<Option<CalendarEventChange>, Report> {
         self.reads
             .lock()
             .unwrap()
-            .push((viewer.to_owned(), event_id));
+            .push((viewer.to_owned(), event_id.into_uuid()));
         if self.fail {
             return Err(rootcause::report!("replica db-3 unreachable").into());
         }

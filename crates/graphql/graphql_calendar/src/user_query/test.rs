@@ -118,7 +118,7 @@ impl CalendarOccurrenceService for FakeReads {
     async fn meeting_copies(
         &self,
         _requester_id: &str,
-        _event_id: uuid::Uuid,
+        _event_id: calendar_event_id::CalendarEventId,
     ) -> Result<Vec<calendar_events::domain::models::MeetingCopy>, Report> {
         unreachable!("no GraphQL read lists a meeting's copies")
     }
@@ -126,7 +126,7 @@ impl CalendarOccurrenceService for FakeReads {
     async fn event_ics(
         &self,
         _requester_id: &str,
-        _event_id: uuid::Uuid,
+        _event_id: calendar_event_id::CalendarEventId,
     ) -> Result<Option<calendar_events::domain::ics::CalendarEventIcs>, Report> {
         unreachable!("calendar GraphQL reads never export an event")
     }
@@ -150,7 +150,7 @@ impl CalendarChangeQueryService for FakeReads {
     async fn event_change(
         &self,
         _viewer: &str,
-        _event_id: uuid::Uuid,
+        _event_id: calendar_event_id::CalendarEventId,
     ) -> Result<Option<CalendarEventChange>, Report> {
         unreachable!("queries never read one event's committed state")
     }
