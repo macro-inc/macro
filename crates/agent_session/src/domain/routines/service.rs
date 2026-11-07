@@ -329,7 +329,11 @@ where
 
     async fn delete(&self, command: RoutineSessionAction) -> Result<(), RoutineSessionError> {
         let session = self.owned_session(&command).await?;
-        if session.source != crate::domain::model::SessionSource::Routine {
+        // A routine's run, or a draft's session: the two kinds the scheduler
+        // opens. Anything else is the person's own.
+        if session.source != crate::domain::model::SessionSource::Routine
+            && !session.is_background()
+        {
             return Err(RoutineSessionError::Forbidden);
         }
         self.sessions

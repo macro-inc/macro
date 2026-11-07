@@ -135,15 +135,21 @@ through `set_name` clears it, so a name a person chose is never replaced.
 
 - The scheduler's routine-session operations (`domain/routines.rs`,
   `/internal/routine-sessions/*`) also serve routine drafts: `delete` removes
-  a session the scheduler opened (source `routine`) for its owner and refuses
-  any other; `activity` returns content-free counts (tool calls, turns).
+  a session the scheduler opened for its owner, a routine's run (source
+  `routine`) or a draft's background session, and refuses any other;
+  `activity` returns content-free counts (tool calls, turns).
+- A background session (`AgentSession::is_background`, `SessionPurpose::Background`)
+  is work the owner asked for that runs out of sight: source `user`, origin
+  `requested` by the owner, `hidden`, opened from no message. A routine
+  draft's session is one. The harness sends no notifications about it.
 
 - What opened a session is an `agent_session_source` row, referenced by
   `agent_session.source_id` and written in the transaction that writes the session
   (`outbound/postgres/source.rs`). It holds references only, as
   `trigger_context::TriggerOrigin`. Null means unknown: a session older than this,
   an unclaimed warm session, or an older runtime. It describes a session; `source`
-  and `visibility` decide what happens to it, and a runtime's claim never sets them.
+  and `visibility` decide what happens to it (only `is_background` also reads the
+  origin), and a runtime's claim never sets them.
   Whoever can view a session reads its origin: `AgentSessionResponse`, the SDK's
   `AgentSession.origin()`, and `ReadAgentSession`.
 - Where a session is shown is `agent_session.visibility` (`listed`,

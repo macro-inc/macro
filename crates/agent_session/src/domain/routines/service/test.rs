@@ -747,44 +747,69 @@ async fn an_external_agent_cannot_take_routine_apps() {
 #[tokio::test]
 async fn only_a_session_the_scheduler_opened_can_be_deleted() {
     let fx = Fixture::new(true);
-    // A session the owner opened stays.
-    assert_ne!(fx.session.source, SessionSource::Routine);
-    assert_eq!(
-        fx.service.delete(fx.action()).await.unwrap_err(),
-        RoutineSessionError::Forbidden
-    );
-    let mut draft = test_agent_session(AgentSessionId::new());
-    draft.owner_id = fx.session.owner_id.clone();
-    draft.bot_id = fx.session.bot_id;
-    draft.source = SessionSource::Routine;
-    fx.repo.insert_session(draft.clone());
-    let action = RoutineSessionAction {
-        session_id: draft.id,
+    let owner = fx.action().owner;
+    let session = |edit: fn(&mut AgentSession)| {
+        let mut session = test_agent_session(AgentSessionId::new());
+        session.owner_id = fx.session.owner_id.clone();
+        session.bot_id = fx.session.bot_id;
+        edit(&mut session);
+        fx.repo.insert_session(session.clone());
+        session
+    };
+    let action = |session: &AgentSession| RoutineSessionAction {
+        session_id: session.id,
         ..fx.action()
     };
+    // A routine's run.
+    let run = session(|session| session.source = SessionSource::Routine);
+    // A draft's session: the person's own, hidden, opened at their request.
+    let mut draft = session(|_| {});
+    draft.source = SessionSource::User;
+    draft.visibility = SessionVisibility::Hidden;
+    draft.origin = trigger_context::TriggerOrigin::Requested { by: owner.clone() };
+    fx.repo.insert_session(draft.clone());
+    assert!(draft.is_background());
+    // A hidden session the person started from a thread is still theirs.
+    let mut thread = draft.clone();
+    thread.id = AgentSessionId::new();
+    thread.thread_id = Some(Uuid::now_v7());
+    thread.originating_message_id = thread.thread_id;
+    fx.repo.insert_session(thread.clone());
+
+    // A session the owner opened stays.
+    assert_ne!(fx.session.source, SessionSource::Routine);
+    for kept in [&fx.session, &thread] {
+        assert_eq!(
+            fx.service.delete(action(kept)).await.unwrap_err(),
+            RoutineSessionError::Forbidden
+        );
+    }
     assert_eq!(
         fx.service
             .delete(RoutineSessionAction {
                 owner: other_owner(),
-                ..action.clone()
+                ..action(&draft)
             })
             .await
             .unwrap_err(),
         RoutineSessionError::Forbidden
     );
 
-    fx.service.delete(action.clone()).await.unwrap();
-
-    assert!(
-        crate::domain::ports::AgentSessionRepo::get(&fx.repo, draft.id)
-            .await
-            .is_err()
-    );
-    assert!(
-        crate::domain::ports::AgentSessionRepo::get(&fx.repo, fx.session.id)
-            .await
-            .is_ok()
-    );
+    for deleted in [&run, &draft] {
+        fx.service.delete(action(deleted)).await.unwrap();
+        assert!(
+            crate::domain::ports::AgentSessionRepo::get(&fx.repo, deleted.id)
+                .await
+                .is_err()
+        );
+    }
+    for kept in [&fx.session, &thread] {
+        assert!(
+            crate::domain::ports::AgentSessionRepo::get(&fx.repo, kept.id)
+                .await
+                .is_ok()
+        );
+    }
 }
 
 fn log_frame(
