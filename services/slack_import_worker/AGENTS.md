@@ -24,7 +24,7 @@ references into Macro as channels. It sends no emails or notifications.
 - Owns: turning a parsed Slack archive into Macro channels/messages and
   reconciling references, as a durable, resumable process.
 - Not here: parsing the Slack export format or the import job ledger →
-  `crates/import`; Slack API/domain types → `crates/comms/slack_integration`.
+  `crates/integrations/import`; Slack API/domain types → `crates/comms/slack_integration`.
 
 ## Checks
 

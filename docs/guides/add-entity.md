@@ -327,7 +327,7 @@ appear in Home or Recent; say so in the PR.
   The web list in `apps/web/src/features/notifications/notification-event-catalog.ts`
   must match it by hand.
 - A new **agent-trigger event** shape also needs an arm in
-  `crates/webhook/src/domain/ingestion.rs`, or the SSE fan-out drops it silently.
+  `crates/integrations/webhook/src/domain/ingestion.rs`, or the SSE fan-out drops it silently.
 
 ## 11. Mentions and channel references
 

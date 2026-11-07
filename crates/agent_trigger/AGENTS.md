@@ -57,7 +57,7 @@ session that results.
   `agent_harness_service`); while it is unset only mentions and explicit
   replies reach agents. Image captions still use the fast vision model,
   since Jev reads text only.
-- A new trigger variant must also be taught to `crates/webhook` ingestion
+- A new trigger variant must also be taught to `crates/integrations/webhook` ingestion
   and the SSE fan-out, or it will be silently dropped end to end.
 - Attributed bot messages (`MessagePostedMetadata::invoking_user`) trigger
   exactly like human ones: explicit, reply-target and inferred. The agent hop

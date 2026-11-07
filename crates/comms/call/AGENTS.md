@@ -49,7 +49,7 @@ in-call chat.
 - Add a call event/activity: `src/domain/activity.rs` → `src/domain/events.rs`
   → `src/outbound/pg_call_repo.rs`.
 - Add a public call notification: `src/domain/notification_events.rs` →
-  `src/domain/service.rs` or its meeting/channel submodule → `crates/webhook`.
+  `src/domain/service.rs` or its meeting/channel submodule → `crates/integrations/webhook`.
 - Change ringing/decline behavior: `src/domain/service.rs` → `src/inbound/axum_router.rs`.
 - Add an AI tool over calls: `src/inbound/toolset.rs` (feature `ai_tools`).
 

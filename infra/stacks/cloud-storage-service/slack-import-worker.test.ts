@@ -109,7 +109,7 @@ describe('Slack import Fargate worker', () => {
       'crates/comms/slack_integration/**',
       'crates/comms/channels/**',
       'crates/comms/messages/**',
-      'crates/import/**',
+      'crates/integrations/import/**',
       'crates/platform/macro_queues/**',
       'crates/platform/service_urls/**',
     ]) {
