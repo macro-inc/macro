@@ -282,6 +282,17 @@ impl SyncCore {
             .collect();
         let mut replayed = 0u32;
         for (seq, bytes) in rows {
+            // A shallow snapshot already contains these acknowledged operations.
+            // Re-importing their collected history can return Outdated forever;
+            // checksum-verified metadata and the snapshot VV prove this is an
+            // idempotent replay, without exempting any unacknowledged row.
+            if self.is_delivered(seq)
+                && loro::LoroDoc::decode_import_blob_meta(&bytes, true)
+                    .is_ok_and(|meta| doc.oplog_vv().includes_vv(&meta.partial_end_vv))
+            {
+                replayed = replayed.saturating_add(1);
+                continue;
+            }
             match doc.import_remote(&bytes, ImportOrigin::WalReplay) {
                 Ok(imported) => {
                     replayed = replayed.saturating_add(1);

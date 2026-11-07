@@ -545,3 +545,71 @@ fn comment_fork_uses_reserved_peer_and_registers_it() {
     assert!(h.core.registered_peers.contains(&2));
     assert_eq!(h.core.add_peer_ids([2]), Err(SyncError::PeerReused));
 }
+
+#[test]
+fn blocked_rebase_does_not_rearm_an_expired_wake_during_reset() {
+    let mut h = Harness::running(TransportKind::Direct, Persistence::Memory);
+    h.at(100, SyncInput::Tick);
+    h.core.rebase_due = Some(Millis(100));
+    h.core.phase = Phase::Resetting;
+    h.core.reset = Some(ResetState::Awaiting { rebase: true });
+    h.at(100, SyncInput::Tick);
+    assert!(h.out.wake_at.is_none_or(|wake| wake > Millis(100)));
+    assert!(!h.core.rebase_rerun);
+    assert_eq!(h.core.rebase_due, Some(Millis(100)));
+}
+#[test]
+fn acknowledged_rows_covered_by_a_shallow_snapshot_replay_idempotently() {
+    let mut h = Harness::running(TransportKind::Direct, Persistence::Memory);
+    h.append();
+    h.ack();
+    let remote = h.doc.loro.fork();
+    remote.set_peer_id(9).unwrap();
+    remote.get_text("text").insert(1, "y").unwrap();
+    remote.commit_with(loro::CommitOptions::default().timestamp(0));
+    let snapshot = remote
+        .export(loro::ExportMode::shallow_snapshot(
+            &remote.state_frontiers(),
+        ))
+        .unwrap();
+    let replacement = loro::LoroDoc::new();
+    replacement.set_peer_id(99).unwrap();
+    replacement.import(&snapshot).unwrap();
+    h.doc.loro = replacement;
+    let imports = h.doc.calls.borrow().imports.len();
+    h.core.replay(now(h.time), &mut h.doc, &mut h.out);
+    assert_eq!(h.doc.calls.borrow().imports.len(), imports);
+    assert!(h.core.rebase_due.is_none());
+    assert_eq!(h.doc.loro.get_text("text").to_string(), "xy");
+}
+
+#[test]
+fn covered_unacknowledged_rows_still_use_the_replay_importer() {
+    let mut h = Harness::running(TransportKind::Direct, Persistence::Memory);
+    h.append();
+    h.doc.faults.push_back(Err(ImportFailure::Outdated));
+    let imports = h.doc.calls.borrow().imports.len();
+    h.core.replay(now(h.time), &mut h.doc, &mut h.out);
+    assert_eq!(h.doc.calls.borrow().imports.len(), imports + 1);
+    assert_eq!(h.core.rebase_due, Some(Millis(h.time)));
+    assert!(!h.core.is_delivered(h.core.wal.entries.front().unwrap().seq));
+}
+
+#[test]
+fn invalid_checksum_acknowledged_rows_still_use_the_replay_importer() {
+    let mut h = Harness::running(TransportKind::Direct, Persistence::Memory);
+    h.append();
+    h.ack();
+    let entry = h.core.wal.entries.front_mut().unwrap();
+    let seq = entry.seq;
+    let mut bytes = entry.bytes.to_vec();
+    let last = bytes.last_mut().unwrap();
+    *last ^= 0xff;
+    assert!(loro::LoroDoc::decode_import_blob_meta(&bytes, true).is_err());
+    entry.bytes = bytes.into();
+    let imports = h.doc.calls.borrow().imports.len();
+    h.core.replay(now(h.time), &mut h.doc, &mut h.out);
+    assert_eq!(h.doc.calls.borrow().imports.len(), imports + 1);
+    assert_eq!(h.core.wal.entries.front().unwrap().seq, seq);
+    assert!(h.core.is_delivered(seq));
+}

@@ -62,6 +62,7 @@ impl SyncCore {
             self.request_since(attempt, now, doc, out);
         }
         if self.rebase_due.is_some_and(|at| at <= now.mono)
+            && self.phase == Phase::Running
             && self.connection.synced()
             && self.push.is_none()
         {
@@ -290,7 +291,9 @@ impl SyncCore {
             self.snapshot_due,
             self.load_retry,
             self.seed_wait_deadline,
-            self.rebase_due,
+            self.rebase_due.filter(|_| {
+                self.phase == Phase::Running && self.connection.synced() && self.push.is_none()
+            }),
         ];
         if self.presence.is_some() {
             deadlines.extend([
