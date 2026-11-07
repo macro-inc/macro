@@ -74,11 +74,24 @@ pub fn run(stage: &Stage, target: Target) -> Result<()> {
             .join("debug")
             .join(svc.cargo_bin);
         let dest = ws.join(target.debug_dir()).join(svc.cargo_bin);
-        std::fs::copy(&built, &dest)
-            .with_context(|| format!("copying {} to {}", built.display(), dest.display()))?;
+        publish_binary(&built, &dest)?;
     }
 
     Ok(())
+}
+
+/// Preserve unchanged mtimes and replace executable inodes without writing
+/// through files that a running local container may still be executing.
+fn publish_binary(built: &Path, dest: &Path) -> Result<()> {
+    if dest.is_file() && std::fs::read(built)? == std::fs::read(dest)? {
+        return Ok(());
+    }
+    let staged = dest.with_extension(format!("next-{}", std::process::id()));
+    let result = std::fs::copy(built, &staged).and_then(|_| std::fs::rename(&staged, dest));
+    if result.is_err() {
+        let _ = std::fs::remove_file(&staged);
+    }
+    result.with_context(|| format!("publishing {} to {}", built.display(), dest.display()))
 }
 
 /// Where a `--no-default-features` service builds. Under `target/` so it is

@@ -1222,6 +1222,7 @@
       }
       // dopplerConfigBinPackages
       // deployServiceBinaryPackages
+      // localStackBinaryPackages
       // {
         deploy-service-binaries-document-storage-service = documentStorageDeployBinaries;
         deploy-service-binaries-email-service = emailServiceDeployBinaries;

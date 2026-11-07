@@ -29,6 +29,9 @@ enum Cmd {
     RuntimeImage(ForceArg),
     /// Render the per-instance compose override and print its path.
     GenCompose(InstanceArgs),
+    /// Run the parallel Nix-declared Kubernetes local stack.
+    #[command(subcommand)]
+    KubeLocal(super::kubernetes::Cmd),
     /// Print the inventoried backend path prefixes for an external Vite launcher.
     FrontendProxyRoutes,
     /// Render merged compose and assert the no-build / runtime-image invariants.
@@ -249,6 +252,7 @@ fn run(cli: Cli) -> Result<()> {
         Cmd::Zigbuild => super::zigbuild_only(),
         Cmd::RuntimeImage(a) => super::runtime_image_only(a.force),
         Cmd::GenCompose(a) => super::gen_compose_only(&a),
+        Cmd::KubeLocal(cmd) => super::kubernetes::run(cmd),
         Cmd::FrontendProxyRoutes => {
             println!("{}", super::proxy::frontend_path_prefixes().join(","));
             Ok(())

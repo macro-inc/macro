@@ -68,3 +68,80 @@ fn isolated_target_dirs_do_not_collide() {
         .collect();
     assert_eq!(dirs.len(), isolated_services().count());
 }
+
+struct PublishDir(PathBuf);
+
+impl PublishDir {
+    fn new() -> Self {
+        let nonce = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        let path =
+            std::env::temp_dir().join(format!("macro-publish-{}-{nonce}", std::process::id()));
+        std::fs::create_dir(&path).unwrap();
+        Self(path)
+    }
+}
+
+impl Drop for PublishDir {
+    fn drop(&mut self) {
+        let _ = std::fs::remove_dir_all(&self.0);
+    }
+}
+
+#[test]
+fn unchanged_binary_keeps_mtime_for_selective_reload() {
+    let dir = PublishDir::new();
+    let built = dir.0.join("built");
+    let dest = dir.0.join("dest");
+    std::fs::write(&built, b"same executable").unwrap();
+    std::fs::write(&dest, b"same executable").unwrap();
+    let old = std::time::UNIX_EPOCH + std::time::Duration::from_secs(1);
+    std::fs::File::options()
+        .write(true)
+        .open(&dest)
+        .unwrap()
+        .set_times(std::fs::FileTimes::new().set_modified(old))
+        .unwrap();
+    publish_binary(&built, &dest).unwrap();
+    assert_eq!(std::fs::metadata(&dest).unwrap().modified().unwrap(), old);
+}
+
+#[test]
+#[cfg(unix)]
+fn changed_binary_can_replace_a_running_executable() {
+    use std::io::Write;
+    use std::os::unix::fs::PermissionsExt;
+    use std::process::{Command, Stdio};
+
+    let dir = PublishDir::new();
+    let built = dir.0.join("built");
+    let dest = dir.0.join("dest");
+    std::fs::copy("/bin/sh", &dest).unwrap();
+    std::fs::copy(&dest, &built).unwrap();
+    std::fs::set_permissions(&built, std::fs::Permissions::from_mode(0o755)).unwrap();
+    std::fs::OpenOptions::new()
+        .append(true)
+        .open(&built)
+        .unwrap()
+        .write_all(b"changed binary marker")
+        .unwrap();
+    let mut child = Command::new(&dest)
+        .args(["-c", "read -r line"])
+        .stdin(Stdio::piped())
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .spawn()
+        .unwrap();
+    let result = publish_binary(&built, &dest);
+    let still_running = child.try_wait().unwrap().is_none();
+    let _ = child.kill();
+    child.wait().unwrap();
+    result.unwrap();
+    assert!(still_running);
+    assert_eq!(
+        std::fs::read(&dest).unwrap(),
+        std::fs::read(&built).unwrap()
+    );
+}

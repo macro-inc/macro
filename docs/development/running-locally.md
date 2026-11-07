@@ -563,3 +563,8 @@ MACRO_LOCAL_TIMINGS=/tmp/run-local-timings.jsonl just run_local
 ```
 
 For the default instance, omit `--instance`.
+
+## Local Kubernetes
+
+For the Nix-declared kind runtime, isolated namespaces and two HTTPS slots, see
+[local Kubernetes](local-kubernetes.md).

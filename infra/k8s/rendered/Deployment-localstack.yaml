@@ -1,0 +1,78 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app: localstack
+    app.kubernetes.io/name: localstack
+    app.kubernetes.io/part-of: macro
+    macro.com/instance: reference
+    macro.com/tier: infra
+    macro.local/managed: "true"
+  name: localstack
+  namespace: macro-kube-reference
+spec:
+  progressDeadlineSeconds: 1800
+  replicas: 1
+  revisionHistoryLimit: 0
+  selector:
+    matchLabels:
+      app: localstack
+  strategy:
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+    type: RollingUpdate
+  template:
+    metadata:
+      annotations:
+        macro.com/env-revision: reference
+      labels:
+        app: localstack
+        app.kubernetes.io/name: localstack
+        app.kubernetes.io/part-of: macro
+        macro.com/instance: reference
+        macro.com/tier: infra
+        macro.local/managed: "true"
+    spec:
+      containers:
+        - args: []
+          command: []
+          env:
+            - name: EAGER_SERVICE_LOADING
+              value: "1"
+            - name: LOCALSTACK_HOST
+              value: localstack:4566
+            - name: SERVICES
+              value: s3,sqs,dynamodb,kms,sns,ses
+          envFrom:
+            - secretRef:
+                name: macro-env
+          image: localhost:32550/macro/localstack-ready:build.dh3nwirg2pfniszsbip86fd78didpzg2
+          imagePullPolicy: IfNotPresent
+          name: localstack
+          ports:
+            - containerPort: 4566
+              protocol: TCP
+          readinessProbe:
+            exec:
+              command:
+                - /bin/sh
+                - -ec
+                - |
+                  status=$(curl -fsS localhost:4566/_localstack/init/ready)
+                  printf '%s' "$status" | grep -q '"completed": true'
+                  printf '%s' "$status" | grep -q '"state": "SUCCESSFUL"'
+            failureThreshold: 3
+            periodSeconds: 1
+            timeoutSeconds: 10
+          resources: {}
+          volumeMounts:
+            - mountPath: /tmp
+              name: tmp
+      enableServiceLinks: false
+      initContainers: []
+      securityContext: {}
+      terminationGracePeriodSeconds: 2
+      volumes:
+        - emptyDir: {}
+          name: tmp
