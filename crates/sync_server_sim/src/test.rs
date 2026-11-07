@@ -750,3 +750,22 @@ fn successful_send_enqueues_exclude_failed_attempts_and_precede_gate_release() {
             .any(|effect| effect.operation == "send")
     );
 }
+
+#[test]
+fn completed_close_evidence_excludes_failed_attempts_and_retains_wire_code() {
+    let ports = SimPorts::new();
+    ports.accept(&socket()).unwrap();
+    ports.set_operation_error("connections.close", Some("unavailable".into()));
+    assert!(
+        ports
+            .close(&socket(), CloseReason::SessionFrozenOrRetired)
+            .is_err()
+    );
+    assert!(ports.take_completed_closes().is_empty());
+    ports.set_operation_error("connections.close", None);
+    ports
+        .close(&socket(), CloseReason::SessionFrozenOrRetired)
+        .unwrap();
+    assert_eq!(ports.take_completed_closes(), [(socket(), 1008)]);
+    assert!(ports.take_completed_closes().is_empty());
+}

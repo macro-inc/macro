@@ -15,7 +15,7 @@ impl Sim {
                             .or_insert(*counter);
                     }
                 }
-                Fact::LocalCommit { spans, .. } => {
+                Fact::LocalCommit { spans, .. } | Fact::ServerCommit { spans, .. } => {
                     for span in spans {
                         created
                             .entry(span.peer)

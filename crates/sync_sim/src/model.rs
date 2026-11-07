@@ -395,6 +395,15 @@ pub enum ServerStep {
         /// Put count.
         n: u8,
     },
+    /// Freeze the document through the real source-migration use case.
+    FreezeSource,
+    /// An AI-range fork changes a GenericSurface field through the atomic HTTP use case.
+    HttpFormUpdate {
+        /// Field index, resolved modulo the configured field count.
+        field: u16,
+        /// New integer field value.
+        value: u16,
+    },
     /// Execute the real exists check.
     ExistsProbe,
     /// Damage saved snapshots and evict memory.

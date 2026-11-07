@@ -176,13 +176,11 @@ impl Sim {
         let Some(server) = self.servers.get_mut(&doc) else {
             return Ok(());
         };
-        server
-            .ports
-            .seed_entropy([uuid_value::Uuid::from_u128(uuid.as_u128())]);
-        let input = Input::Runtime(ServerInput::Connect {
+        let input = Input::Connect {
             grant: server.grant(user, grant),
             key: server.key.clone(),
-        });
+            socket: uuid_value::Uuid::from_u128(uuid.as_u128()),
+        };
         let callback = server.step(SimServer::now(self.clock.wall(0), self.clock.now), input);
         let accepted = callback
             .effects
@@ -419,6 +417,11 @@ impl Sim {
         callback: u64,
         effects: Vec<Effect>,
     ) -> Result<(), Failure> {
+        let closes = self
+            .servers
+            .get(&doc)
+            .map(|server| server.ports.take_completed_closes())
+            .unwrap_or_default();
         let queued = self
             .servers
             .get(&doc)
@@ -520,21 +523,18 @@ impl Sim {
                     };
                     self.transmit(key, Direction::ToClient, category, packet);
                 }
-            } else if effect.operation == "connections.close" {
-                let socket = effect.value["socket"].as_str().unwrap_or("");
-                let keys = self
-                    .net
-                    .links
-                    .iter()
-                    .filter(|(_, link)| {
-                        link.doc == doc
-                            && link.socket.as_ref().is_some_and(|id| id.as_str() == socket)
-                    })
-                    .map(|(key, _)| key.clone())
-                    .collect::<Vec<_>>();
-                for key in keys {
-                    self.break_link(&key, 1000)?;
-                }
+            }
+        }
+        for (socket, code) in closes {
+            let keys = self
+                .net
+                .links
+                .iter()
+                .filter(|(_, link)| link.doc == doc && link.socket.as_ref() == Some(&socket))
+                .map(|(key, _)| key.clone())
+                .collect::<Vec<_>>();
+            for key in keys {
+                self.break_link(&key, code)?;
             }
         }
         if proofs.next().is_some() {

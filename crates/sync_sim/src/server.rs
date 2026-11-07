@@ -22,7 +22,19 @@ use sync_server_sim::{
 
 pub(crate) enum Input {
     Runtime(ServerInput),
+    Connect {
+        grant: AuthToken,
+        key: SessionKey,
+        socket: uuid_value::Uuid,
+    },
     Exists,
+    FreezeSource(Vec<u8>),
+    HttpFormUpdate {
+        peer: u64,
+        field: u16,
+        value: u16,
+        fields: u16,
+    },
 }
 pub(crate) struct Callback {
     pub index: u64,
@@ -157,22 +169,75 @@ impl SimServer {
         }
         self.ports.take_completed_puts();
         let before_generation = self.ports.write_generation();
+        let mut facts = Vec::new();
+        let mut harness_error = None;
         let result = match input {
             Input::Runtime(input) => self.room.step(now, input),
+            Input::Connect { grant, key, socket } => {
+                self.ports.set_now(now);
+                let result = async {
+                    use sync_server_core::domain::room::{RequestGate, RouteClass};
+                    if self
+                        .room
+                        .room_mut()
+                        .gate_request(RouteClass::Document)
+                        .await?
+                        == RequestGate::SourceBlocked
+                    {
+                        facts.push(Fact::RequestBlocked {
+                            doc: self.doc,
+                            route: "connect".into(),
+                        });
+                        return Ok::<(), sync_server_core::domain::room::RoomError>(());
+                    }
+                    // Complete the fallible identity restore before enqueueing entropy.
+                    // connect's repeated cache hit emits no extra port effects.
+                    self.room.room_mut().maybe_set_session_key(&key).await?;
+                    self.ports.seed_entropy([socket]);
+                    self.room.room_mut().connect(grant, key).await?;
+                    Ok(())
+                }
+                .now_or_never();
+                finish_direct(&self.ports, result)
+            }
             Input::Exists => {
                 self.ports.set_now(now);
-                match self.room.room_mut().exists(&self.key).now_or_never() {
-                    Some(Ok(_)) => Ok(StepResult::Done(self.ports.take_effects())),
-                    Some(Err(e)) => Err(sync_server_sim::replay::ReplayError::Callback(
-                        e.to_string(),
-                    )),
-                    None if self.ports.crashed() => {
-                        Ok(StepResult::Crashed(self.ports.take_effects()))
-                    }
-                    None => Err(sync_server_sim::replay::ReplayError::Mismatch(
-                        "server callback stalled".into(),
-                    )),
+                finish_direct(
+                    &self.ports,
+                    self.room.room_mut().exists(&self.key).now_or_never(),
+                )
+            }
+            Input::FreezeSource(body) => {
+                self.ports.set_now(now);
+                finish_direct(
+                    &self.ports,
+                    self.room
+                        .room_mut()
+                        .source_migration(
+                            &body,
+                            sync_server_core::domain::room::FaultPlan::None,
+                            self.key.as_str(),
+                            "freeze",
+                        )
+                        .now_or_never(),
+                )
+            }
+            Input::HttpFormUpdate {
+                peer,
+                field,
+                value,
+                fields,
+            } => {
+                self.ports.set_now(now);
+                let result = self
+                    .http_form_update(peer, field, value, fields, now.unix_ms, &mut facts)
+                    .now_or_never();
+                if let Some(Err(failure)) = &result
+                    && failure.invariant != "server_callback"
+                {
+                    harness_error = Some(failure.clone());
                 }
+                finish_direct(&self.ports, result)
             }
         };
         let (effects, mut error, crashed) = match result {
@@ -184,11 +249,13 @@ impl SimServer {
                 self.ports.crashed(),
             ),
         };
+        if let Some(failure) = harness_error {
+            error = Some(failure);
+        }
         self.busy_until = now.monotonic.as_millis().try_into().unwrap_or(u64::MAX);
         self.busy_until = self
             .busy_until
             .saturating_add(u64::try_from(self.ports.busy_for().as_millis()).unwrap_or(u64::MAX));
-        let mut facts = Vec::new();
         let mut updates = Vec::new();
         let mut written = Vec::new();
         for (key, value, generation) in self.ports.take_completed_puts() {
@@ -272,6 +339,81 @@ impl SimServer {
         self.room = SimRoom::new(self.ports.clone());
         self.sniffers.clear();
     }
+    async fn http_form_update(
+        &mut self,
+        peer: u64,
+        field: u16,
+        value: u16,
+        fields: u16,
+        wall: i64,
+        facts: &mut Vec<Fact>,
+    ) -> Result<(), Failure> {
+        use sync_server_core::domain::room::{RequestGate, RouteClass};
+        if self
+            .room
+            .room_mut()
+            .gate_request(RouteClass::Document)
+            .await
+            .map_err(|error| Failure::new("server_callback", error))?
+            == RequestGate::SourceBlocked
+        {
+            facts.push(Fact::RequestBlocked {
+                doc: self.doc,
+                route: "update".into(),
+            });
+            return Ok(());
+        }
+        let mut claims = self.grant("user-0".into(), Access::Edit);
+        claims.actor = Some("agent|simulation".into());
+        let access = claims
+            .document_access(self.key.as_str())
+            .map_err(|error| Failure::new("http_access", error))?;
+        let (snapshot, revision) = self
+            .room
+            .room_mut()
+            .read_document(&self.key, &access, false)
+            .await
+            .map_err(|error| Failure::new("server_callback", error))?
+            .ok_or_else(|| Failure::new("server_callback", "HTTP document does not exist"))?;
+        let mut fork = SimDoc::new(peer)?;
+        fork.loro
+            .import(&snapshot)
+            .map_err(|error| Failure::new("http_fork", error))?;
+        let before = fork.loro.oplog_vv();
+        fork.edit(&AbstractOp::FormSet { field, value }, fields, wall)?;
+        let update = fork
+            .loro
+            .export(loro::ExportMode::updates(&before))
+            .map_err(|error| Failure::new("http_export", error))?;
+        facts.push(Fact::ServerCommit {
+            doc: self.doc,
+            peer,
+            spans: spans(&update)?,
+        });
+        if !self
+            .room
+            .room_mut()
+            .prepare_document_update(&self.key, &access)
+            .await
+            .map_err(|error| Failure::new("server_callback", error))?
+        {
+            return Err(Failure::new("server_callback", "HTTP document disappeared"));
+        }
+        let prepared = self
+            .room
+            .room_mut()
+            .update_document(&self.key, &access, claims, &revision, &update)
+            .await
+            .map_err(|error| Failure::new("server_callback", error))?;
+        let revision = loro::VersionVector::decode(&prepared.revision)
+            .map_err(|error| Failure::new("http_revision", error))?;
+        facts.push(Fact::HttpPrepared {
+            doc: self.doc,
+            applied: prepared.applied,
+            revision: vv(&revision),
+        });
+        Ok(())
+    }
     pub(crate) fn live_state(&self) -> Result<(Vv, serde_json::Value), Failure> {
         let snapshot = self
             .room
@@ -346,5 +488,20 @@ impl SimServer {
             pending_import,
             active_peers_without_ai,
         })
+    }
+}
+
+fn finish_direct<T, E: std::fmt::Display>(
+    ports: &SimPorts,
+    result: Option<Result<T, E>>,
+) -> Result<StepResult, sync_server_sim::replay::ReplayError> {
+    use sync_server_sim::replay::ReplayError;
+    if ports.crashed() {
+        return Ok(StepResult::Crashed(ports.take_effects()));
+    }
+    match result {
+        Some(Ok(_)) => Ok(StepResult::Done(ports.take_effects())),
+        Some(Err(error)) => Err(ReplayError::Callback(error.to_string())),
+        None => Err(ReplayError::Mismatch("server callback stalled".into())),
     }
 }

@@ -17,6 +17,9 @@ clients and real `sync_server_core::Room` callbacks over `sync_server_sim` ports
 - One thread, one virtual clock, one seeded ChaCha8 RNG. No ambient clocks,
   sleeps, environment reads, threads or random identity generation.
 - Run real cores; never infer server outputs from expected outcomes.
+- Apply `Room::gate_request` before legacy connect/atomic handlers. Record
+  `HttpPrepared` as core response preparation, distinct from a durable HTTP ack.
+  Forward only successful runtime close requests and preserve their actual code.
 - Keep `Hostile` message delays/duplication FIFO within each connection; run S8's
   named safety subset and observe real close causes (`ProtocolError` maps to 1000).
 - Build cached seed versions from one Loro history; install profile-local cache

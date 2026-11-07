@@ -543,3 +543,115 @@ fn hostile_whole_message_delays_and_duplicates_preserve_ack_safety() {
         );
     }
 }
+
+#[test]
+fn atomic_agent_form_update_reaches_live_clients_and_cold_storage() {
+    let outcome = verify(
+        SimConfig::calm(97),
+        &[
+            Step::Open(OpenSpec::form("a", "one")),
+            Step::Open(OpenSpec::form("b", "two")),
+            Step::Run(Millis(500)),
+            Step::Edit {
+                client: ClientName("a".into()),
+                op: AbstractOp::FormSet {
+                    field: 1,
+                    value: 42,
+                },
+            },
+            Step::Run(Millis(200)),
+            Step::Server(ServerStep::HttpFormUpdate {
+                field: 2,
+                value: 81,
+            }),
+            Step::Run(Millis(100)),
+            Step::Server(ServerStep::Evict {
+                close_sockets: false,
+            }),
+            Step::Settle,
+        ],
+    );
+    assert!(
+        outcome
+            .events
+            .iter()
+            .any(|event| matches!(event.fact, Fact::HttpPrepared { applied: true, .. }))
+    );
+    for event in &outcome.events {
+        if let Fact::ServerCommit { doc, spans, .. } = &event.fact {
+            assert!(spans.iter().all(|span| {
+                outcome.finals.servers[doc]
+                    .persisted_vv
+                    .get(&span.peer)
+                    .copied()
+                    .unwrap_or(0)
+                    >= span.end
+            }));
+        }
+    }
+    assert_eq!(
+        outcome.finals.servers[&DocIx(0)].deep_value["fields"]["2"],
+        81
+    );
+}
+
+#[test]
+fn frozen_source_gate_blocks_new_legacy_requests() {
+    let mut config = SimConfig::calm(101);
+    config.budgets.quiet = Millis(0);
+    let script = [
+        Step::Open(OpenSpec::form("a", "one")),
+        Step::Run(Millis(500)),
+        Step::Edit {
+            client: ClientName("a".into()),
+            op: AbstractOp::FormSet {
+                field: 1,
+                value: 42,
+            },
+        },
+        Step::Run(Millis(200)),
+        Step::Server(ServerStep::FreezeSource),
+        Step::Run(Millis(100)),
+        Step::Server(ServerStep::HttpFormUpdate {
+            field: 2,
+            value: 81,
+        }),
+        Step::Run(Millis(500)),
+    ];
+    let outcome = Sim::new(config.clone()).run(&script);
+    let repeated = Sim::new(config).run(&script);
+    assert_eq!(outcome.event_bytes, repeated.event_bytes);
+    assert_eq!(outcome.trace_hash, repeated.trace_hash);
+    assert!(outcome.events.iter().any(
+        |event| matches!(&event.fact, Fact::RequestBlocked { route, .. } if route == "update")
+    ));
+    assert!(
+        !outcome
+            .events
+            .iter()
+            .any(|event| matches!(event.fact, Fact::ServerCommit { .. }))
+    );
+    assert!(
+        outcome
+            .server_ports
+            .iter()
+            .any(|port| port.effect.operation == "connections.close"
+                && port.effect.value["code"] == 1008)
+    );
+    assert!(outcome.events.iter().any(
+        |event| matches!(&event.fact, Fact::RequestBlocked { route, .. } if route == "connect")
+    ));
+    invariants::per_step(&outcome).unwrap();
+    invariants::no_acked_edit_lost(&outcome).unwrap();
+    invariants::no_persisted_edit_lost(&outcome).unwrap();
+    invariants::all_docs_equal(&outcome).unwrap();
+    assert_eq!(
+        outcome.finals.servers[&DocIx(0)].deep_value["fields"]["1"],
+        42
+    );
+    assert!(
+        outcome.finals.servers[&DocIx(0)].deep_value["fields"]
+            .get("2")
+            .is_none()
+    );
+}

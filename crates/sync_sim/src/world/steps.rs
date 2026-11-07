@@ -562,6 +562,25 @@ impl Sim {
                         server.ports.set_faults(faults);
                     }
                 }
+                ServerStep::FreezeSource => {
+                    let operation = self.uuid();
+                    let body =
+                        serde_json::to_vec(&serde_json::json!({ "operation_id": operation }))
+                            .map_err(|error| Failure::new("freeze_request", error))?;
+                    self.server_input(doc, Input::FreezeSource(body))?;
+                }
+                ServerStep::HttpFormUpdate { field, value } => {
+                    let peer = self.peer(ClientKind::AiWorker);
+                    self.server_input(
+                        doc,
+                        Input::HttpFormUpdate {
+                            peer,
+                            field: *field,
+                            value: *value,
+                            fields: self.config.fields,
+                        },
+                    )?;
+                }
                 ServerStep::ExistsProbe => self.server_input(doc, Input::Exists)?,
                 ServerStep::CorruptSnapshot => {
                     if let Some(server) = self.servers.get_mut(&doc) {
