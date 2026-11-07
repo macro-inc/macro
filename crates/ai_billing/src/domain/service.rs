@@ -26,7 +26,6 @@ use macro_user_id::{cowlike::CowLike, user_id::MacroUserIdStr};
 use macro_uuid::Uuid;
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex, PoisonError};
-use teams::domain::open_seat_release::OpenSeatRelease;
 
 /// How long a payer whose subscription period read came back empty, failed,
 /// or did not contain `now` meters the fallback period before the next read.
@@ -865,25 +864,34 @@ where
     }
 }
 
-impl<E, U, R, P> OpenSeatRelease for BillingServiceImpl<E, U, R, P>
-where
-    E: EntitlementSource + Clone,
-    U: UsageReader + Clone,
-    R: BillingRepo + Clone,
-    P: PaymentGateway + Clone,
-{
-    type Err = BillingError;
+/// A team seat moving between plans, as the teams domain reports it.
+#[derive(Debug, Clone, Copy)]
+pub struct SeatPlanTransition {
+    /// Previous plan; Free when the seat had none.
+    pub from: super::models::PlanTier,
+    /// Destination plan.
+    pub to: super::models::PlanTier,
+    /// When the plan changed.
+    pub at: DateTime<Utc>,
+    /// Explicit provider interval for initial activation; otherwise billing
+    /// resolves the member's current period.
+    pub period: Option<(DateTime<Utc>, DateTime<Utc>)>,
+}
 
-    async fn change_plan(
+impl<E, U, R, P> BillingServiceImpl<E, U, R, P>
+where
+    E: EntitlementSource,
+    U: UsageReader,
+    R: BillingRepo,
+    P: PaymentGateway,
+{
+    /// Record a team seat's plan change once the provider accepted it.
+    pub async fn change_seat_plan(
         &self,
         member: &MacroUserIdStr<'_>,
-        change: teams::domain::open_seat_release::SeatPlanChange,
+        change: SeatPlanTransition,
     ) -> Result<()> {
-        let from = change
-            .from
-            .map(Into::into)
-            .unwrap_or(super::models::PlanTier::Free);
-        let to = change.to.into();
+        let SeatPlanTransition { from, to, .. } = change;
         if from == to {
             return Ok(());
         }
@@ -908,8 +916,9 @@ where
         .await
     }
 
+    /// Release the open seat `member` held on `team_id`.
     #[tracing::instrument(skip(self), err)]
-    async fn release(&self, team_id: Uuid, member: &MacroUserIdStr<'_>) -> Result<()> {
+    pub async fn release_seat(&self, team_id: Uuid, member: &MacroUserIdStr<'_>) -> Result<()> {
         self.release_at(team_id, member, Utc::now()).await
     }
 }

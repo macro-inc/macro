@@ -74,7 +74,10 @@ async fn run(cli: Cli) -> Result<(), rootcause::Report> {
         .max_connections(2)
         .connect(&DatabaseUrl::new()?)
         .await?;
-    let service = pg_credit_grant_service(pool);
+    let service = pg_credit_grant_service(
+        pool.clone(),
+        teams::outbound::team_repo::TeamRepositoryImpl::new(pool),
+    );
     let grant = CreditGrant {
         id: grant_id.unwrap_or_else(macro_uuid::generate_uuid_v7),
         amount_cents,

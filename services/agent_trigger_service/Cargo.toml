@@ -43,3 +43,4 @@ static_file = { workspace = true, default-features = true }
 tokio = { workspace = true, features = ["macros", "rt-multi-thread", "signal"] }
 tracing = { workspace = true }
 workspace-hack = { version = "0.1", path = "../../crates/workspace-hack" }
+teams = { workspace = true, features = ["ai_billing"] }

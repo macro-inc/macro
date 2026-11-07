@@ -14,6 +14,7 @@ pub mod ports;
 pub mod pricing;
 pub mod service;
 pub mod sweep;
+pub mod team_seats;
 
 pub use admission::{
     AdmissionFuture, AiAdmissionError, AiAdmissionService, BillingAdmissionService,
@@ -48,5 +49,6 @@ pub use pricing::{
     AiPricing, IncludedAllowanceCents, OverageMarkupPercent, PlanAllowances, PricingError,
     cost_cents,
 };
-pub use service::{BillingServiceImpl, RECONCILED_CLOSED_PERIODS};
+pub use service::{BillingServiceImpl, RECONCILED_CLOSED_PERIODS, SeatPlanTransition};
 pub use sweep::{RECONCILIATION_LOOKBACK, SettlementSweep, SweepReport};
+pub use team_seats::{BillingTeam, TeamSeat, TeamSeats};
