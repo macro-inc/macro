@@ -143,7 +143,13 @@ impl<
     Policy: CompPolicy,
 > ComputerService<Repo, Bill, Time, Attachment, Policy>
 {
-    async fn require_attached(&self) -> Result<(), ComputerError> {
+    /// Fleet attachment gate that HTTP-facing use cases run first.
+    ///
+    /// Callers outside this crate, including `team_agents` discovery, use this
+    /// before any repository read. Detached fleets return
+    /// [`ComputerError::FleetUnavailable`]; source failures return
+    /// [`ComputerError::Internal`].
+    pub async fn require_attached(&self) -> Result<(), ComputerError> {
         self.attachment
             .attachment(self.clock.now())
             .await

@@ -59,7 +59,11 @@ Reject invalid stored numeric capacity and retry counts rather than substituting
 
 - **Fleet availability**: Inject `FleetAttachmentSource` explicitly into
   `ComputerService::new(repo, billing, clock, attachment)`; its `Attachment`
-  generic has no default. `FleetAttachment`
+  generic has no default. Public `ComputerService::require_attached(&self)`
+  returns `Result<(), ComputerError>` and is the gate HTTP-facing use cases
+  run first; external callers such as `team_agents` discovery call it before
+  any repository read. Detached returns `ComputerError::FleetUnavailable`;
+  attachment-source failures return `ComputerError::Internal`. `FleetAttachment`
   is `Attached` or `Detached` with no default; `FleetUnavailable` displays
   "computers are not available" and maps to HTTP 503 with `{message}`.
   Gate purchase, purchase_for_team (including comps), quote, quote_for_team,

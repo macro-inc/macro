@@ -226,3 +226,29 @@ pub(crate) fn assert_no_http_work(service: &RouterService) {
     assert!(service.repo.effects.lock().unwrap().is_empty());
     assert!(service.billing.calls.lock().unwrap().is_empty());
 }
+
+#[tokio::test]
+async fn attachment_gate_checks_presence_without_repository_calls() {
+    let mut service = ComputerService::new(
+        FakeRepo::default(),
+        FakeBilling::default(),
+        FixedClock,
+        StaticFleetAttachment(FleetAttachment::Detached),
+    );
+
+    assert!(matches!(
+        service.require_attached().await,
+        Err(ComputerError::FleetUnavailable(_))
+    ));
+    assert_eq!(
+        service.repo.calls.load(std::sync::atomic::Ordering::SeqCst),
+        0
+    );
+
+    service.attachment = StaticFleetAttachment(FleetAttachment::Attached);
+    assert!(service.require_attached().await.is_ok());
+    assert_eq!(
+        service.repo.calls.load(std::sync::atomic::Ordering::SeqCst),
+        0
+    );
+}
