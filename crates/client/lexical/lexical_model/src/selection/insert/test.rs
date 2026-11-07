@@ -863,3 +863,36 @@ fn replacing_a_selected_tab_removes_its_protected_text() -> Result<(), Error> {
     })?;
     Ok(())
 }
+
+#[test]
+fn multi_node_replacement_converts_segmented_first_text() -> Result<(), Error> {
+    let mut editor = Editor::builder(EditorMode::Headless)
+        .build()
+        .expect("editor");
+    let mut tx = editor.transaction();
+    let paragraph = tx.create(Paragraph::default())?;
+    let first = tx.create_text("abc")?;
+    let last = tx.create_text("def")?;
+    tx.text(first)?
+        .set_mode(TextMode::Segmented)?
+        .set_style("color: red;")?;
+    tx.append(paragraph, &[first.key(), last.key()])?;
+    tx.append(NodeKey::ROOT, &[paragraph.key()])?;
+    let mut range = RangeSelection::new(
+        Point::text(first, Utf16Offset(1)),
+        Point::text(last, Utf16Offset(1)),
+    );
+    range.format = TextFormat::BOLD;
+    range.style = "color: blue;".into();
+    tx.set_selection(Some(Selection::Range(range)))?;
+    tx.insert_text("x")?;
+    let replacement = tx.children_keys(paragraph)?[0];
+    assert_ne!(replacement, first.key());
+    assert_eq!(tx.text_content(replacement), "ax");
+    let data = tx.view().text_data(replacement)?;
+    assert_eq!(data.mode, TextMode::Normal);
+    assert_eq!(data.format, TextFormat::BOLD);
+    assert_eq!(data.style.as_ref(), "");
+    assert_eq!(tx.text_content(paragraph), "axef");
+    Ok(())
+}
