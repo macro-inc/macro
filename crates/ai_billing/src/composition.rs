@@ -2,6 +2,7 @@
 //! Stripe: quota admission, the usage recorder that asks the
 //! authentication service to settle, and operator credit grants.
 
+use crate::domain::TeamSeats;
 use crate::{
     AiAdmissionService, AiPricing, AiUsageBilling, AiUsageEnforcement, BillingAdmissionService,
     domain::{BillingServiceImpl, ports::NoOpSettlementTrigger},
@@ -15,7 +16,6 @@ use authentication_service_client::AuthServiceClient;
 use roles_and_permissions::domain::port::UserRolesAndPermissionsService;
 use sqlx::PgPool;
 use std::sync::Arc;
-use teams::domain::team_repo::TeamRepository;
 
 #[cfg(all(test, feature = "pg-admission"))]
 mod test;
@@ -66,75 +66,57 @@ impl SettlementRoute {
 }
 
 /// Compose quota admission for hosts without an existing billing service.
-/// Adapter construction stays in this owning-domain composition root. `pricing`
-/// is the host's mandatory startup configuration.
+/// `teams` is the host's team-membership adapter (the teams domain's
+/// `TeamRepositoryImpl`). `pricing` is the host's mandatory startup
+/// configuration.
 #[cfg(feature = "pg-admission")]
-pub fn pg_admission_service(
+pub fn pg_admission_service<T: TeamSeats>(
     pool: PgPool,
+    teams: T,
     enforcement: AiUsageEnforcement,
     pricing: AiPricing,
 ) -> Arc<dyn AiAdmissionService> {
-    admission_service(
-        pool.clone(),
-        roles_and_permissions::domain::service::UserRolesAndPermissionsServiceImpl::new(
-            roles_and_permissions::outbound::pgpool::MacroDB::new(pool.clone()),
-            roles_and_permissions::outbound::pgpool::MacroDB::new(pool.clone()),
-        ),
-        teams::outbound::team_repo::TeamRepositoryImpl::new(pool),
-        enforcement,
-        pricing,
+    admission_service(pool.clone(), pg_roles(&pool), teams, enforcement, pricing)
+}
+
+/// The Postgres roles service the `pg_*` compositions read plans from.
+#[cfg(feature = "pg-admission")]
+pub type PgRoles = roles_and_permissions::domain::service::UserRolesAndPermissionsServiceImpl<
+    roles_and_permissions::outbound::pgpool::MacroDB,
+    roles_and_permissions::outbound::pgpool::MacroDB,
+>;
+
+#[cfg(feature = "pg-admission")]
+fn pg_roles(pool: &PgPool) -> PgRoles {
+    roles_and_permissions::domain::service::UserRolesAndPermissionsServiceImpl::new(
+        roles_and_permissions::outbound::pgpool::MacroDB::new(pool.clone()),
+        roles_and_permissions::outbound::pgpool::MacroDB::new(pool.clone()),
     )
 }
 
 /// Postgres-backed [`crate::domain::EntitlementSource`]: plans from roles,
-/// seats from team membership.
+/// seats from the host's team-membership adapter.
 #[cfg(feature = "pg-admission")]
-pub type PgEntitlementSource = RolesTeamsEntitlementSource<
-    roles_and_permissions::domain::service::UserRolesAndPermissionsServiceImpl<
-        roles_and_permissions::outbound::pgpool::MacroDB,
-        roles_and_permissions::outbound::pgpool::MacroDB,
-    >,
-    teams::outbound::team_repo::TeamRepositoryImpl,
->;
+pub type PgEntitlementSource<T> = RolesTeamsEntitlementSource<PgRoles, T>;
 
 /// Compose [`PgEntitlementSource`] over one database pool, for hosts that
 /// only read plans.
 #[cfg(feature = "pg-admission")]
-pub fn pg_entitlement_source(pool: PgPool) -> PgEntitlementSource {
-    RolesTeamsEntitlementSource::new(
-        roles_and_permissions::domain::service::UserRolesAndPermissionsServiceImpl::new(
-            roles_and_permissions::outbound::pgpool::MacroDB::new(pool.clone()),
-            roles_and_permissions::outbound::pgpool::MacroDB::new(pool.clone()),
-        ),
-        teams::outbound::team_repo::TeamRepositoryImpl::new(pool),
-    )
+pub fn pg_entitlement_source<T: TeamSeats>(pool: PgPool, teams: T) -> PgEntitlementSource<T> {
+    RolesTeamsEntitlementSource::new(pg_roles(&pool), teams)
 }
 
 /// Postgres-backed [`CreditGrantService`] for operator tools.
 #[cfg(feature = "pg-admission")]
-pub type PgCreditGrantService = crate::domain::CreditGrantService<
-    RolesTeamsEntitlementSource<
-        roles_and_permissions::domain::service::UserRolesAndPermissionsServiceImpl<
-            roles_and_permissions::outbound::pgpool::MacroDB,
-            roles_and_permissions::outbound::pgpool::MacroDB,
-        >,
-        teams::outbound::team_repo::TeamRepositoryImpl,
-    >,
-    crate::outbound::PgCreditGrantRepo,
->;
+pub type PgCreditGrantService<T> =
+    crate::domain::CreditGrantService<PgEntitlementSource<T>, crate::outbound::PgCreditGrantRepo>;
 
 /// Compose credit grants over one database pool. Needs no pricing or Stripe:
 /// the grant only books ledger credit, and the next settlement uses it.
 #[cfg(feature = "pg-admission")]
-pub fn pg_credit_grant_service(pool: PgPool) -> PgCreditGrantService {
+pub fn pg_credit_grant_service<T: TeamSeats>(pool: PgPool, teams: T) -> PgCreditGrantService<T> {
     crate::domain::CreditGrantService::new(
-        RolesTeamsEntitlementSource::new(
-            roles_and_permissions::domain::service::UserRolesAndPermissionsServiceImpl::new(
-                roles_and_permissions::outbound::pgpool::MacroDB::new(pool.clone()),
-                roles_and_permissions::outbound::pgpool::MacroDB::new(pool.clone()),
-            ),
-            teams::outbound::team_repo::TeamRepositoryImpl::new(pool.clone()),
-        ),
+        pg_entitlement_source(pool.clone(), teams),
         crate::outbound::PgCreditGrantRepo::new(pool),
     )
 }
@@ -154,7 +136,7 @@ pub fn admission_service<P, T>(
 ) -> Arc<dyn AiAdmissionService>
 where
     P: UserRolesAndPermissionsService,
-    T: TeamRepository,
+    T: TeamSeats,
 {
     let billing = BillingServiceImpl::new(
         RolesTeamsEntitlementSource::new(permissions, teams),
@@ -172,19 +154,17 @@ where
 /// settling wrapper that asks the authentication service to settle after
 /// counted usage lands ([`SettlingUsageRecorder`]).
 #[cfg(feature = "pg-admission")]
-pub fn pg_settling_recorder(
+pub fn pg_settling_recorder<T: TeamSeats>(
     pool: PgPool,
+    teams: T,
     enforcement: AiUsageEnforcement,
     pricing: AiPricing,
     route: SettlementRoute,
 ) -> Arc<dyn UsageRecorder> {
     settling_recorder(
         pool.clone(),
-        roles_and_permissions::domain::service::UserRolesAndPermissionsServiceImpl::new(
-            roles_and_permissions::outbound::pgpool::MacroDB::new(pool.clone()),
-            roles_and_permissions::outbound::pgpool::MacroDB::new(pool.clone()),
-        ),
-        teams::outbound::team_repo::TeamRepositoryImpl::new(pool),
+        pg_roles(&pool),
+        teams,
         enforcement,
         pricing,
         route,
@@ -212,7 +192,7 @@ pub fn settling_recorder<P, T>(
 ) -> Arc<dyn UsageRecorder>
 where
     P: UserRolesAndPermissionsService,
-    T: TeamRepository,
+    T: TeamSeats,
 {
     let usage = Arc::new(
         ai_usage::domain::service::UsageServiceImpl::new(ai_usage::outbound::PgUsageRepo::new(

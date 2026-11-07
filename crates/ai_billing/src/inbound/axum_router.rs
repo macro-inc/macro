@@ -24,7 +24,6 @@ use macro_user_id::user_id::MacroUserIdStr;
 use macro_uuid::Uuid;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
-use teams::domain::model::SeatPlan;
 use utoipa::{IntoParams, ToSchema};
 
 /// Error response body.
@@ -400,9 +399,9 @@ pub async fn get_plans_handler(State(pricing): State<AiPricing>) -> Json<PlanCat
                 tier,
                 monthly_price_cents: tier.monthly_price_cents(),
                 included_ai_cents_per_seat: tier.included_ai_cents_per_seat(pricing),
-                purchasable: SeatPlan::PURCHASABLE
-                    .into_iter()
-                    .any(|plan| PlanTier::from(plan) == tier),
+                // Every paid tier is a purchasable team seat plan; the teams
+                // adapter's tests pin that to `SeatPlan::PURCHASABLE`.
+                purchasable: tier.is_paid(),
                 auto_reload_default_monthly_limit_cents: tier
                     .default_auto_reload_monthly_limit_cents(),
             })

@@ -1,6 +1,51 @@
 use super::*;
+use crate::domain::{BillingTeam, TeamSeat};
 use crate::{AiAdmissionError, AiFeature};
 use macro_user_id::user_id::MacroUserIdStr;
+use macro_uuid::Uuid;
+use std::convert::Infallible;
+
+/// A user in no team; billing then falls back to their roles.
+#[derive(Clone)]
+struct NoTeams;
+
+impl TeamSeats for NoTeams {
+    type Err = Infallible;
+
+    async fn user_teams(&self, _user: &MacroUserIdStr<'_>) -> Result<Vec<BillingTeam>, Infallible> {
+        Ok(Vec::new())
+    }
+
+    async fn team_payment_status(&self, _team_id: &Uuid) -> Result<bool, Infallible> {
+        Ok(false)
+    }
+
+    async fn team_subscription_id(&self, _team_id: &Uuid) -> Result<Option<String>, Infallible> {
+        Ok(None)
+    }
+
+    async fn team_owner(
+        &self,
+        _team_id: &Uuid,
+    ) -> Result<Option<MacroUserIdStr<'static>>, Infallible> {
+        Ok(None)
+    }
+
+    async fn team_enterprise_status(&self, _team_id: &Uuid) -> Result<bool, Infallible> {
+        Ok(false)
+    }
+
+    async fn team_members(&self, _team_id: &Uuid) -> Result<Vec<TeamSeat>, Infallible> {
+        Ok(Vec::new())
+    }
+
+    async fn stripe_customer_id(
+        &self,
+        _user: &MacroUserIdStr<'_>,
+    ) -> Result<Option<String>, Infallible> {
+        Ok(None)
+    }
+}
 
 #[sqlx::test(migrator = "macro_db_migrator::MACRO_DB_MIGRATIONS")]
 async fn configured_recorders_preserve_analytics_and_count_only_enabled_billable_usage(
@@ -83,6 +128,7 @@ async fn configured_composition_skips_billing_only_for_disabled_or_exempt_work()
     let user = MacroUserIdStr::try_from("macro|quota@example.com".to_owned()).unwrap();
     let disabled = pg_admission_service(
         pool.clone(),
+        NoTeams,
         AiUsageEnforcement::Disabled,
         AiPricing::testing(),
     );
@@ -90,6 +136,7 @@ async fn configured_composition_skips_billing_only_for_disabled_or_exempt_work()
 
     let enabled = pg_admission_service(
         pool.clone(),
+        NoTeams,
         AiUsageEnforcement::Enabled,
         AiPricing::testing(),
     );

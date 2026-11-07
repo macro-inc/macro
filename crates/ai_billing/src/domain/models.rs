@@ -142,15 +142,6 @@ impl PlanTier {
     }
 }
 
-impl From<teams::domain::model::SeatPlan> for PlanTier {
-    fn from(plan: teams::domain::model::SeatPlan) -> Self {
-        match plan {
-            teams::domain::model::SeatPlan::Premium => PlanTier::Premium,
-            teams::domain::model::SeatPlan::Max => PlanTier::Max,
-        }
-    }
-}
-
 /// A half-open `[start, end)` window that usage is metered against.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub struct BillingPeriod {

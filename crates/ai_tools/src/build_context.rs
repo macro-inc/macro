@@ -574,8 +574,12 @@ pub async fn build_tool_service_context_from_env(
         },
     );
 
-    let admission =
-        ai_billing::composition::pg_admission_service(pool.clone(), enforcement, pricing);
+    let admission = ai_billing::composition::pg_admission_service(
+        pool.clone(),
+        teams::outbound::team_repo::TeamRepositoryImpl::new(pool.clone()),
+        enforcement,
+        pricing,
+    );
     let pipedream_client = crate::mcp_app_catalog::connector_backends_from_env()?;
     let native_servers = match maybe_env
         .mcp_credentials_key_secret_name

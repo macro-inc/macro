@@ -176,7 +176,7 @@ stream = { path = "../../crates/stream" }
 strum = { workspace = true }
 sync_service_client = { path = "../../crates/sync_service_client" }
 system_properties = { path = "../../crates/system_properties" }
-teams = { path = "../../crates/teams", default-features = false, features = ["outbound", "ports"] }
+teams = { path = "../../crates/teams", default-features = false, features = ["ai_billing", "outbound", "ports"] }
 tempfile = { workspace = true }
 thiserror = { workspace = true }
 tokio = { workspace = true, features = ["macros", "rt-multi-thread", "signal", "time"] }

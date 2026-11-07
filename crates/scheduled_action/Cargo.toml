@@ -9,7 +9,7 @@ default = []
 local_auth = ["macro_authorization/local_auth"]
 
 [dependencies]
-ai_billing = { path = "../ai_billing", features = ["pg-admission"] }
+ai_billing = { path = "../ai_billing" }
 ai_usage = { path = "../ai_usage" }
 bots = { path = "../bots", features = ["outbound"] }
 activity = { path = "../activity", default-features = false }

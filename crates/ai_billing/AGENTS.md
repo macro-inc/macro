@@ -30,7 +30,11 @@ provider cost (plus markup for overage).
 
 ## Boundaries
 
-- Depends on: `ai_usage` (usage reader port).
+- Depends on: `ai_usage` (usage reader port). Team membership arrives
+  through the `TeamSeats` port (`src/domain/team_seats.rs`), never the
+  `teams` crate: roots pass `teams::outbound::team_repo::TeamRepositoryImpl`
+  with `teams`' `ai_billing` feature, which also serves teams'
+  `OpenSeatRelease` from `BillingServiceImpl`.
 - Used by: `agent_harness_service`, `document_cognition_service`,
   `agent_trigger_service`, `document_storage_service`,
   `authentication_service`, `mcp_service`, `scheduled_action`, `ai_tools`,

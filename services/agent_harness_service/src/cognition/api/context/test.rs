@@ -175,8 +175,12 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
     let config = Config::new_empty_for_test();
     let enforcement = config.enable_ai_usage_enforcement;
     let pricing = config.ai_pricing();
-    let admission =
-        ai_billing::composition::pg_admission_service(pool.clone(), enforcement, pricing);
+    let admission = ai_billing::composition::pg_admission_service(
+        pool.clone(),
+        teams::outbound::team_repo::TeamRepositoryImpl::new(pool.clone()),
+        enforcement,
+        pricing,
+    );
     let recorder = ai_usage::pg_recorder_with_enforcement(pool.clone(), enforcement);
     use aws_sdk_sqs;
     use channels::{

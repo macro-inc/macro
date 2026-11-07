@@ -182,7 +182,7 @@ system_status = { path = "../../crates/system_status", features = [
   "inbound",
   "postgres",
 ] }
-teams = { path = "../../crates/teams" }
+teams = { path = "../../crates/teams", features = ["ai_billing"] }
 thiserror = { workspace = true }
 time = { workspace = true }
 tokio = { workspace = true, features = ["signal"] }

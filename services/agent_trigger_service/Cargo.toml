@@ -10,6 +10,7 @@ path = "src/main.rs"
 
 [dependencies]
 ai_billing = { path = "../../crates/ai_billing", features = ["pg-admission"] }
+teams = { path = "../../crates/teams", default-features = false, features = ["ai_billing"] }
 initiative = { path = "../../crates/initiative", default-features = false, features = ["postgres"] }
 crm = { path = "../../crates/crm", default-features = false, features = ["lookup"] }
 call = { path = "../../crates/call", default-features = false, features = ["outbound"] }

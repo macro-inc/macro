@@ -144,6 +144,7 @@ async fn run() -> anyhow::Result<()> {
         ai_usage::pg_recorder_with_enforcement(pool.clone(), config.enable_ai_usage_enforcement);
     let admission = ai_billing::composition::pg_admission_service(
         pool.clone(),
+        teams::outbound::team_repo::TeamRepositoryImpl::new(pool.clone()),
         config.enable_ai_usage_enforcement,
         config.ai_pricing(),
     );

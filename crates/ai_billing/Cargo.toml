@@ -6,7 +6,7 @@ version = "0.1.0"
 
 [features]
 # Host composition only; admission consumers can keep depending on domain ports.
-pg-admission = ["roles_and_permissions/outbound", "teams/outbound"]
+pg-admission = ["roles_and_permissions/outbound"]
 
 [dependencies]
 ai_usage = { path = "../ai_usage" }
@@ -32,7 +32,6 @@ serde = { workspace = true }
 serde_json = { workspace = true }
 sqlx = { workspace = true }
 strum = { workspace = true }
-teams = { path = "../teams", default-features = false, features = ["ports"] }
 thiserror = { workspace = true }
 tokio = { workspace = true }
 tracing = { workspace = true }
@@ -44,6 +43,5 @@ macro_db_migrator = { path = "../macro_db_migrator" }
 roles_and_permissions = { path = "../roles_and_permissions", default-features = false, features = [
   "outbound",
 ] }
-teams = { path = "../teams", default-features = false, features = ["outbound"] }
 tracing-subscriber = { workspace = true }
 wiremock = { workspace = true }
