@@ -29,10 +29,10 @@ inbound = [
   "ports",
   "schema",
 ]
-json-schema = ["dep:schemars"]
+json-schema = ["dep:schemars", "message_parent/json-schema"]
 outbound = ["dep:initiative", "dep:macro_uuid", "dep:sqlx", "ports"]
 ports = ["dep:async-trait", "dep:entity_access", "dep:futures", "dep:rootcause", "entity_access/ports"]
-schema = ["channel_sender/schema", "dep:utoipa", "activity/schema"]
+schema = ["channel_sender/schema", "dep:utoipa", "activity/schema", "message_parent/schema"]
 test-utils = ["dep:mockall", "ports"]
 
 [dependencies]
@@ -76,6 +76,7 @@ tracing = { workspace = true }
 utoipa = { workspace = true, optional = true }
 uuid = { workspace = true }
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
+message_parent = { workspace = true }
 
 [dev-dependencies]
 initiative = { workspace = true, features = ["postgres"] }

@@ -11763,7 +11763,7 @@ dependencies = [
  "anyhow",
  "base64 0.22.1",
  "macro_tower_layers",
- "messages",
+ "message_parent",
  "reqwest 0.13.4",
  "serde",
  "serde_json",
@@ -13033,6 +13033,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "message_parent"
+version = "0.1.0"
+dependencies = [
+ "model-entity",
+ "schemars 1.2.1",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.18",
+ "utoipa",
+ "uuid",
+]
+
+[[package]]
 name = "messages"
 version = "0.1.0"
 dependencies = [
@@ -13055,6 +13068,7 @@ dependencies = [
  "macro_event_topics",
  "macro_user_id",
  "macro_uuid",
+ "message_parent",
  "mockall",
  "model",
  "model-entity",

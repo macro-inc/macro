@@ -454,11 +454,6 @@ to = "agent_fold"
 reason = "uses agent_fold MessageId and ActivityCard; move them to a types crate"
 
 [[allow]]
-from = "lexical_client"
-to = "messages"
-reason = "uses MessageParent (plan N8: message_parent types crate)"
-
-[[allow]]
 from = "macro_cache_client"
 to = "email_validator"
 reason = "uses normalize_email; move email_validator to types or the cache client to accounts"

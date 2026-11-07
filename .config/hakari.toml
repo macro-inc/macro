@@ -99,6 +99,9 @@ workspace-members = [
     # Leaf type crates under crates/types/: workspace-hack would make them
     # wait for, and compile, its heavy union (rig-core, async-graphql, ...).
     "entity_basic_types",
+    # The entity a message belongs to; lexical_client and messages share it,
+    # and it must not pull workspace-hack into leaf type builds.
+    "message_parent",
     "macro_uuid",
     "non_empty",
     "cowlike",

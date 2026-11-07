@@ -156,6 +156,7 @@ members = [
   "crates/types/agent_session_id",
   "crates/types/chat_message",
   "crates/types/entity_basic_types",
+  "crates/types/message_parent",
   "crates/types/soup_property",
   "crates/unfurl",
   "crates/universal_input",
@@ -730,6 +731,7 @@ mcp_select = { path = "crates/mcp_select" }
 mcp_toolset = { path = "crates/mcp_toolset" }
 memory = { path = "crates/memory" }
 mention_utils = { path = "crates/mention_utils" }
+message_parent = { path = "crates/types/message_parent" }
 messages = { path = "crates/messages" }
 mobile_welcome_email_db_client = { path = "crates/mobile_welcome_email_db_client" }
 model = { path = "crates/model" }
