@@ -247,6 +247,17 @@ export type ConditionResult = {
 };
 
 /**
+ * A new URL, with the token it carries, shown only here.
+ */
+export type CreatedRoutineWebhook = {
+    /**
+     * The secret: `POST /scheduled-actions/webhooks/{token}` starts the routine.
+     */
+    token: string;
+    webhook: RoutineWebhook;
+};
+
+/**
  * What AI drafted, or why it couldn't.
  */
 export type Draft = (DraftedRoutine & {
@@ -356,10 +367,10 @@ export type EmptyResponse = {
  * An event name AND an entity ID must match within the same filter. A
  * condition further requires the event's content to answer it with yes.
  *
- * `github` comes from outside Macro and carries its payload: it stands
- * alone in its filter, takes no ids, and may require
- * exact payload values with `match`. A `github` filter narrows deliveries
- * with its `github` selector.
+ * `github` and `webhook` come from outside Macro and carry their payload:
+ * each stands alone in its filter, takes no ids, and may require exact
+ * payload values with `match` (a webhook's when its body is JSON). A
+ * `github` filter narrows deliveries with its `github` selector.
  */
 export type EventFilter = {
     /**
@@ -386,7 +397,7 @@ export type EventFilters = Array<EventFilter>;
  * Closed allowlist: unknown names, deletions and ambiguous attribution are not
  * selectors. Adding a broker variant does not automatically enable routines.
  */
-export type EventName = 'document.created' | 'document.updated' | 'document.deleted' | 'task.created' | 'task.status_changed' | 'task.priority_changed' | 'task.property_changed' | 'email.message_received' | 'channel.created' | 'channel.message_posted' | 'channel.mentioned' | 'channel.message_patched' | 'channel.message_attachment_created' | 'call.started' | 'call.ended' | 'github';
+export type EventName = 'document.created' | 'document.updated' | 'document.deleted' | 'task.created' | 'task.status_changed' | 'task.priority_changed' | 'task.property_changed' | 'email.message_received' | 'channel.created' | 'channel.message_posted' | 'channel.mentioned' | 'channel.message_patched' | 'channel.message_attachment_created' | 'call.started' | 'call.ended' | 'github' | 'webhook';
 
 /**
  * Transcript resource created by a run. Never infer this from current task configuration.
@@ -717,6 +728,28 @@ export type RoutineTrigger = {
  * Bounded schedules and one combined set of event filters.
  */
 export type RoutineTriggers = Array<RoutineTrigger>;
+
+/**
+ * The URL a routine has. Its token is never shown again after it is made.
+ */
+export type RoutineWebhook = {
+    createdAt: string;
+    routineId: string;
+    /**
+     * The token's first characters, to tell URLs apart.
+     */
+    tokenPrefix: string;
+};
+
+/**
+ * The run a delivery queued.
+ */
+export type RoutineWebhookDeliveryResponse = {
+    /**
+     * The delivery's event; the run it starts shows in the routine's history.
+     */
+    eventId: string;
+};
 
 /**
  * What the run page says about a run: what started it, when it counts as
@@ -1126,6 +1159,56 @@ export type DraftRoutineResponses = {
 
 export type DraftRoutineResponse = DraftRoutineResponses[keyof DraftRoutineResponses];
 
+export type DeliverRoutineWebhookData = {
+    /**
+     * Any UTF-8 text, at most 64 KiB; a JSON body can be matched on
+     */
+    body: string;
+    path: {
+        /**
+         * The secret the routine's webhook URL carries
+         */
+        token: string;
+    };
+    query?: never;
+    url: '/scheduled-actions/webhooks/{token}';
+};
+
+export type DeliverRoutineWebhookErrors = {
+    /**
+     * The body is not UTF-8 text
+     */
+    400: string;
+    /**
+     * No routine has this URL
+     */
+    404: string;
+    /**
+     * The routine is paused or doesn't run on webhooks
+     */
+    409: string;
+    /**
+     * The body is larger than 64 KiB
+     */
+    413: string;
+    /**
+     * Too many deliveries are waiting to run
+     */
+    429: string;
+    500: string;
+};
+
+export type DeliverRoutineWebhookError = DeliverRoutineWebhookErrors[keyof DeliverRoutineWebhookErrors];
+
+export type DeliverRoutineWebhookResponses = {
+    /**
+     * The routine will run with the body
+     */
+    202: RoutineWebhookDeliveryResponse;
+};
+
+export type DeliverRoutineWebhookResponse = DeliverRoutineWebhookResponses[keyof DeliverRoutineWebhookResponses];
+
 export type DeleteScheduledActionData = {
     body?: never;
     path: {
@@ -1446,3 +1529,91 @@ export type ActivateScheduledActionTemplateResponses = {
 };
 
 export type ActivateScheduledActionTemplateResponse = ActivateScheduledActionTemplateResponses[keyof ActivateScheduledActionTemplateResponses];
+
+export type DeleteRoutineWebhookData = {
+    body?: never;
+    path: {
+        /**
+         * ID of the routine
+         */
+        id: string;
+    };
+    query?: never;
+    url: '/scheduled-actions/{id}/webhook';
+};
+
+export type DeleteRoutineWebhookErrors = {
+    401: string;
+    404: string;
+    500: string;
+};
+
+export type DeleteRoutineWebhookError = DeleteRoutineWebhookErrors[keyof DeleteRoutineWebhookErrors];
+
+export type DeleteRoutineWebhookResponses = {
+    /**
+     * The URL no longer works
+     */
+    204: void;
+};
+
+export type DeleteRoutineWebhookResponse = DeleteRoutineWebhookResponses[keyof DeleteRoutineWebhookResponses];
+
+export type GetRoutineWebhookData = {
+    body?: never;
+    path: {
+        /**
+         * ID of the routine
+         */
+        id: string;
+    };
+    query?: never;
+    url: '/scheduled-actions/{id}/webhook';
+};
+
+export type GetRoutineWebhookErrors = {
+    401: string;
+    /**
+     * No such routine, or it has no URL
+     */
+    404: string;
+    500: string;
+};
+
+export type GetRoutineWebhookError = GetRoutineWebhookErrors[keyof GetRoutineWebhookErrors];
+
+export type GetRoutineWebhookResponses = {
+    200: RoutineWebhook;
+};
+
+export type GetRoutineWebhookResponse = GetRoutineWebhookResponses[keyof GetRoutineWebhookResponses];
+
+export type CreateRoutineWebhookData = {
+    body?: never;
+    path: {
+        /**
+         * ID of the routine
+         */
+        id: string;
+    };
+    query?: never;
+    url: '/scheduled-actions/{id}/webhook';
+};
+
+export type CreateRoutineWebhookErrors = {
+    400: string;
+    401: string;
+    404: string;
+    500: string;
+};
+
+export type CreateRoutineWebhookError = CreateRoutineWebhookErrors[keyof CreateRoutineWebhookErrors];
+
+export type CreateRoutineWebhookResponses = {
+    /**
+     * The routine's new URL token, shown only here; any old one stops working
+     */
+    201: CreatedRoutineWebhook;
+};
+
+export type CreateRoutineWebhookResponse = CreateRoutineWebhookResponses[keyof CreateRoutineWebhookResponses];
