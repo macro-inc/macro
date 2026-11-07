@@ -10,4 +10,4 @@ fn link_id(st: &impl Read, key: NodeKey) -> Result<Id<LinkNode>> {
     st.view().cast(key).ok_or(Error::NodeTypeMismatch(key))
 }
 
-
+pub mod auto;
