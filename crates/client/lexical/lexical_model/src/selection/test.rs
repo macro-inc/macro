@@ -411,3 +411,24 @@ fn active_typing_setters_and_view_range_preserve_attributes() -> Result<(), Erro
     assert!(tx.range_selection()?.has_format(TextFormatType::Underline));
     Ok(())
 }
+
+#[test]
+fn unchanged_view_range_does_not_create_a_selection_commit() -> Result<(), Error> {
+    let mut editor = Editor::builder(EditorMode::Headless).build().unwrap();
+    let (p, _) = editor.update(|tx| {
+        let p = tx.create(Paragraph::default())?;
+        tx.append(NodeKey::ROOT, &[p.key()])?;
+        tx.select_start(p)?;
+        Ok(p.key())
+    })?;
+    let (_, commit) = editor.update(|tx| {
+        tx.selection_from_view(ViewSelection::Range {
+            anchor: Point::element(p, ChildIndex(0)),
+            focus: Point::element(p, ChildIndex(0)),
+            resolution_dirty: false,
+        })?;
+        tx.selection_change_format(&SelectionChangeContext::default())
+    })?;
+    assert!(commit.is_noop());
+    Ok(())
+}

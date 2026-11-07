@@ -255,7 +255,16 @@ impl Transaction<'_> {
             }
             range.format = formats.unwrap_or_default();
         }
-        self.install_selection_at(SelectionSlot::Active, Selection::Range(range))
+        if self
+            .try_range_at(SelectionSlot::Active)
+            .is_none_or(|before| *before != range)
+        {
+            range.dirty = true;
+        }
+        // Reading an unchanged DOM range must not manufacture a selection-only commit.
+        self.pending.selection = Some(Selection::Range(range));
+        self.dirty_since_flush = true;
+        Ok(())
     }
     /// Host context is available only while command dispatch processes it.
     pub fn selection_change_context(&self) -> Option<&SelectionChangeContext> {
