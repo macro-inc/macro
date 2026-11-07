@@ -5,10 +5,13 @@ edition = "2024"
 publish = false
 
 [features]
+# Reserved for the development-only conformance host; no production consumer.
+foreign-nodes = []
 bench-counters = []
 model-segmentation = ["dep:unicode-segmentation"]
 
 [dependencies]
+smallvec = { workspace = true }
 imbl = { workspace = true }
 rustc-hash = { workspace = true }
 indexmap = { workspace = true }
@@ -20,3 +23,10 @@ strum = { workspace = true }
 nom = { workspace = true }
 ryu-js = { workspace = true }
 unicode-segmentation = { workspace = true, optional = true }
+
+[dev-dependencies]
+proptest = { workspace = true }
+
+[[bench]]
+name = "node_map"
+harness = false

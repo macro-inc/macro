@@ -41,6 +41,7 @@ describe('recorder membrane', () => {
           namespace: 'test',
           namespaceGenerated: true,
           nodes: [],
+          nodeClasses: {},
           replacements: [],
           plugins: [],
           theme: {},

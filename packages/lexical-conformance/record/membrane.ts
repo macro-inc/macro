@@ -351,6 +351,8 @@ export class Recorder {
         this.unwrap(receiver),
         args.map((arg) => this.unwrap(arg))
       );
+    if (/^@lexical\/code-shiki\.loadCode(Language|Theme)$/.test(name))
+      this.reasons.add('B-only:shiki-loader-cache-requires-async-bootstrap');
     if (this.modelProjection && name.endsWith('.$generateNodesFromDOM'))
       this.partialRequested = true;
     if (
@@ -471,7 +473,7 @@ export class Recorder {
       }
     }
     if (
-      /\.register(MarkdownShortcuts|History|RichText|PlainText|List)$/.test(
+      /\.register(MarkdownShortcuts|History|RichText|PlainText|List|CodeHighlighting|TabIndentation)$/.test(
         name
       )
     ) {
@@ -500,7 +502,32 @@ export class Recorder {
     if (rawReceiver && typeof rawReceiver === 'object')
       op.this = this.encode(rawReceiver);
     const wrappedArgs = args.map((arg) => this.argument(arg));
-    op.args = wrappedArgs.map((arg) => this.encode(arg));
+    const event = wrappedArgs[1];
+    const command = this.unwrap(args[0]);
+    const tabPayload =
+      name.endsWith('.dispatchCommand') &&
+      command &&
+      typeof command === 'object' &&
+      namedCommands.get(command) === 'KEY_TAB_COMMAND' &&
+      event &&
+      typeof event === 'object' &&
+      [...modules.values()].some(
+        (module) =>
+          typeof module.KeyboardEventMock === 'function' &&
+          module.KeyboardEventMock === event.constructor
+      );
+    op.args = wrappedArgs.map((arg, index) =>
+      index === 1 && tabPayload
+        ? {
+            $event: 'keydown',
+            key: 'Tab',
+            shiftKey: Boolean(fields(event).shiftKey),
+            altKey: Boolean(fields(event).altKey),
+            ctrlKey: Boolean(fields(event).ctrlKey),
+            metaKey: Boolean(fields(event).metaKey),
+          }
+        : this.encode(arg)
+    );
     this.calls.push(op);
     this.depth++;
     try {
@@ -625,6 +652,7 @@ export class Recorder {
         ? [...registry.values()].map((entry) => entry.klass)
         : []);
     const encodedNodes: Value[] = [];
+    const nodeClasses: Record<string, Value> = {};
     if (Array.isArray(nodes)) {
       for (const node of nodes) {
         if (
@@ -649,6 +677,7 @@ export class Recorder {
           if (!known && !defaults.includes(node.name))
             this.reasons.add('A-hand:test-defined-model-class');
           encodedNodes.push(node.getType());
+          if (known) nodeClasses[node.getType()] = { $fn: symbol };
         } else if (
           node &&
           typeof node === 'object' &&
@@ -667,6 +696,7 @@ export class Recorder {
         namespace: String(actual.namespace),
         namespaceGenerated: !config?.namespace,
         nodes: encodedNodes,
+        nodeClasses,
         replacements: Array.isArray(nodes)
           ? nodes
               .filter(
@@ -863,7 +893,9 @@ export function snapshot(editor: object): Fields {
         };
       }
       return {
-        json: Reflect.apply(state.toJSON as Function, state, []),
+        json: JSON.parse(
+          JSON.stringify(Reflect.apply(state.toJSON as Function, state, []))
+        ),
         selection: serialized,
         text: map.get('root').getTextContent(),
         nodeMapKeys: [...map.keys()],

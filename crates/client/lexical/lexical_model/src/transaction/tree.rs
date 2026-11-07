@@ -261,7 +261,9 @@ impl Transaction<'_> {
             if self
                 .view()
                 .slot(*key)
-                .is_none_or(|node| node.links != links)
+                .ok_or(Error::NodeNotFound(*key))?
+                .links
+                != links
             {
                 self.writable(*key)?.links = links;
             }
@@ -372,6 +374,42 @@ impl Transaction<'_> {
                 if affected[1] {
                     range.focus = point;
                 }
+            }
+        }
+        if restore_selection
+            && affected.is_some_and(|flags| flags.into_iter().all(|v| !v))
+            && let Some(Selection::Range(mut range)) = self.pending.selection.clone()
+        {
+            let resolve = range.anchor.key() == parent || range.focus.key() == parent;
+            let mut changed = false;
+            for point in [&mut range.anchor, &mut range.focus] {
+                if let Point::Element { key, offset } = *point
+                    && resolve
+                {
+                    let children = self.children_keys(key)?;
+                    let at_end = offset.0 as usize >= children.len();
+                    let child = if at_end {
+                        children.last()
+                    } else {
+                        children.get(offset.0 as usize)
+                    };
+                    if let Some(child) = child.copied().filter(|key| self.is_text(*key)) {
+                        *point = Point::text(
+                            child,
+                            if at_end {
+                                self.text_content_size(child)
+                            } else {
+                                Utf16Offset::ZERO
+                            },
+                        );
+                        changed = true;
+                    }
+                }
+            }
+            if changed {
+                range.dirty = true;
+                self.pending.selection = Some(Selection::Range(range));
+                self.selection_dirty = true;
             }
         }
         if !preserve_empty_parent

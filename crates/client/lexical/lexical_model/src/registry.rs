@@ -195,9 +195,10 @@ enum TransformTarget {
 type TransformRegistrations = Vec<(TransformTarget, RegisteredTransform)>;
 /// Configuration builder; the six built-in types are always registered first.
 pub struct EditorBuilder {
-    extensions: crate::extension::ExtensionStore,
-    duplicate_extension: Option<&'static str>,
-    plugins: Vec<Arc<dyn Plugin>>,
+    pub(crate) extensions: crate::extension::Extensions,
+    pub(crate) duplicate_extension: Option<&'static str>,
+    pub(crate) plugins: Vec<Arc<dyn Plugin>>,
+    pub(crate) initial_state: Option<SerializedEditorState>,
     table_selection_hooks: Option<Arc<dyn TableSelectionHooks>>,
     vtables: Vec<NodeVTable>,
     mode: EditorMode,
@@ -214,6 +215,7 @@ impl EditorBuilder {
             extensions: Default::default(),
             duplicate_extension: None,
             plugins: vec![],
+            initial_state: None,
             table_selection_hooks: None,
             vtables: vec![],
             mode,
@@ -229,18 +231,6 @@ impl EditorBuilder {
         .node::<Tab>()
         .node::<Paragraph>()
         .node::<Artificial>()
-    }
-    /// Install one typed per-editor state value for transforms and plugins.
-    pub fn extension_state<State: ExtensionState>(mut self, state: State) -> Self {
-        if !self.extensions.insert(state) {
-            self.duplicate_extension = Some(std::any::type_name::<State>());
-        }
-        self
-    }
-    /// Register immutable command behavior in builder order.
-    pub fn plugin(mut self, plugin: impl Plugin) -> Self {
-        self.plugins.push(Arc::new(plugin));
-        self
     }
     /// Supply table geometry and editing behavior.
     pub fn table_selection_hooks(mut self, hooks: impl TableSelectionHooks) -> Self {
@@ -317,7 +307,14 @@ impl EditorBuilder {
         if let Some(type_name) = self.duplicate_extension {
             return Err(BuildError::DuplicateExtensionState { type_name });
         }
-        let listeners = crate::command::CommandListeners::new(&self.plugins)?;
+        let mut plugin_names = std::collections::HashSet::new();
+        for plugin in &self.plugins {
+            if !plugin_names.insert(plugin.name()) {
+                return Err(BuildError::DuplicatePlugin {
+                    name: plugin.name(),
+                });
+            }
+        }
         let mut registry = Registry {
             table_selection_hooks: self.table_selection_hooks,
             nodes: vec![],
@@ -493,7 +490,49 @@ impl EditorBuilder {
         let mut editor = Editor::new(registry, self.mode, self.keys, self.view_host)
             .map_err(|e| BuildError::InitialState(Box::new(e)))?;
         editor.extensions = self.extensions;
-        editor.listeners = listeners;
+        (editor.listeners, editor.listener_table) = crate::plugin::listeners(&self.plugins);
+        editor.plugins = self.plugins;
+        if let Some(json) = self.initial_state {
+            let prev = editor.state.clone();
+            let parsed = editor
+                .parse_editor_state(&json)
+                .map_err(|e| BuildError::InitialState(Box::new(e)))?;
+            editor.state = parsed.clone();
+            let mut tx = editor.transaction();
+            tx.request_full_reconcile();
+            let mut initial = tx
+                .commit()
+                .map_err(|e| BuildError::InitialState(Box::new(e)))?;
+            initial.prev = prev;
+            initial
+                .changes
+                .dirty_elements
+                .insert(NodeKey::ROOT, DirtyIntent::Intentional);
+            initial.changes.mutations = std::iter::once(NodeKey::ROOT)
+                .chain(parsed.view().descendants(NodeKey::ROOT).map(|(k, _)| k))
+                .map(|k| (k, Mutation::Created))
+                .collect();
+            let mut initial = editor.run_after_commit(initial);
+            if let Some(failure) = initial.follow_up_error {
+                return Err(BuildError::InitialState(Box::new(
+                    Error::InitialFollowUpFailed(failure.error),
+                )));
+            }
+            editor.initial_commits = std::mem::take(&mut initial.following);
+            if let Some(first) = editor.initial_commits.first() {
+                let mut chain = first.clone();
+                chain
+                    .following
+                    .extend(editor.initial_commits.iter().skip(1).cloned());
+                editor.initial_diff = Some(
+                    chain
+                        .diff(&DiffOptions {
+                            include_state: true,
+                        })
+                        .map_err(|error| BuildError::InitialState(Box::new(error)))?,
+                );
+            }
+        }
         Ok(editor)
     }
 }

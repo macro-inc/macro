@@ -11761,6 +11761,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "lexical_conformance_wasm"
+version = "0.1.0"
+dependencies = [
+ "lexical_model",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.18",
+ "wasm-bindgen",
+]
+
+[[package]]
 name = "lexical_markdown"
 version = "0.1.0"
 dependencies = [
@@ -11790,10 +11801,12 @@ dependencies = [
  "imbl",
  "indexmap 2.14.0",
  "nom 8.0.0",
+ "proptest",
  "rustc-hash 2.1.2",
  "ryu-js",
  "serde",
  "serde_json",
+ "smallvec",
  "strum 0.27.2",
  "thiserror 2.0.18",
  "unicode-segmentation",
@@ -11803,11 +11816,14 @@ dependencies = [
 name = "lexical_rich_nodes"
 version = "0.1.0"
 dependencies = [
+ "indexmap 2.14.0",
  "lexical_model",
+ "phf 0.13.1",
  "regress",
  "serde",
  "serde_json",
  "thiserror 2.0.18",
+ "tracing",
  "url",
 ]
 

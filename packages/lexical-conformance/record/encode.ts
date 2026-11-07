@@ -57,6 +57,8 @@ export class Encoder {
     if (typeof object.__key === 'string') tag = '$h';
     else if ('_editorState' in object) tag = '$ed';
     else if ('_nodeMap' in object) tag = '$state';
+    else if (typeof object.next === 'function' && Symbol.iterator in object)
+      tag = '$iterator';
     else if ('anchor' in object && 'focus' in object) tag = '$sel';
     else if ('_nodes' in object) tag = '$sel';
     else if ('offset' in object && 'key' in object && 'type' in object)

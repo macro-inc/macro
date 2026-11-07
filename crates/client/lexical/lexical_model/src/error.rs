@@ -4,9 +4,39 @@ use crate::{NodeKey, Utf16Offset};
 /// A failed model operation; the editor remains unchanged when an update fails.
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
-    /// Required per-editor state was not installed.
-    #[error("unknown extension state")]
-    UnknownExtensionState,
+    /// input cannot be batched.
+    #[error("input cannot be batched")]
+    InputNotBatchable,
+    /// view selection supplied to headless editor.
+    #[error("view selection supplied to headless editor")]
+    ViewSelectionInHeadless,
+    /// remote create cannot include children.
+    #[error("remote create cannot include children")]
+    RemoteChildrenInCreate,
+    /// remote child list contains a duplicate.
+    #[error("remote child list contains a duplicate")]
+    DuplicateRemoteChild,
+    /// invalid remote text range.
+    #[error("invalid remote text range")]
+    InvalidRemoteTextRange,
+    /// Local target was not created earlier in this input.
+    #[error("unknown remote local node {0:?}")]
+    UnknownLocalNode(crate::LocalNode),
+    /// One remote local id was allocated twice.
+    #[error("duplicate remote local node {0:?}")]
+    DuplicateLocalNode(crate::LocalNode),
+    /// Initial-state follow-up failed.
+    #[error("initial follow-up failed: {0}")]
+    InitialFollowUpFailed(std::sync::Arc<Error>),
+    /// A required extension was not installed.
+    #[error("unknown extension state {type_name}")]
+    UnknownExtensionState {
+        /// Concrete state type.
+        type_name: &'static str,
+    },
+    /// Post-commit hooks did not reach a fixpoint.
+    #[error("One or more update listeners are endlessly enqueueing more updates")]
+    EndlessFollowUps,
     /// Invalid explicit caret offset.
     #[error("invalid text offset {offset:?} for size {size:?} at {key}")]
     InvalidTextOffset {
@@ -218,17 +248,17 @@ pub enum Error {
 /// Invalid editor configuration.
 #[derive(Debug, thiserror::Error)]
 pub enum BuildError {
-    /// An extension's state was installed more than once.
-    #[error("extension state {type_name} registered twice")]
-    DuplicateExtensionState {
-        /// Duplicate state's Rust type.
-        type_name: &'static str,
-    },
     /// Command behavior was installed more than once.
     #[error("plugin {name} registered twice")]
     DuplicatePlugin {
-        /// Duplicate plugin's diagnostic name.
+        /// Duplicate plugin diagnostic name.
         name: &'static str,
+    },
+    /// One state type was installed twice.
+    #[error("extension state {type_name} registered twice")]
+    DuplicateExtensionState {
+        /// Concrete state type.
+        type_name: &'static str,
     },
     /// A serialized name identifies multiple Rust types.
     #[error("node type {type_name} registered twice ({first}, {second})")]
@@ -284,7 +314,16 @@ impl Error {
     /// Stable variant name for cross-boundary error classification.
     pub fn kind(&self) -> &'static str {
         match self {
-            Self::UnknownExtensionState => "UnknownExtensionState",
+            Self::InputNotBatchable => "InputNotBatchable",
+            Self::ViewSelectionInHeadless => "ViewSelectionInHeadless",
+            Self::RemoteChildrenInCreate => "RemoteChildrenInCreate",
+            Self::DuplicateRemoteChild => "DuplicateRemoteChild",
+            Self::InvalidRemoteTextRange => "InvalidRemoteTextRange",
+            Self::UnknownLocalNode(..) => "UnknownLocalNode",
+            Self::DuplicateLocalNode(..) => "DuplicateLocalNode",
+            Self::InitialFollowUpFailed(..) => "InitialFollowUpFailed",
+            Self::UnknownExtensionState { .. } => "UnknownExtensionState",
+            Self::EndlessFollowUps => "EndlessFollowUps",
             Self::InvalidTextOffset { .. } => "InvalidTextOffset",
             Self::CaretFromPointNotText { .. } => "CaretFromPointNotText",
             Self::CaretFromPointNotElement { .. } => "CaretFromPointNotElement",
