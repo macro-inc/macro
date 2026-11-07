@@ -7,6 +7,7 @@ use email::domain::{
     models::{EmailErr, PreviewView, PreviewViewStandardLabel, UserProvider},
     ports::EmailService,
 };
+use email_thread_id::EmailThreadId;
 use entity_access::domain::models::{BotAccessScope, BotId, EntityAccessReceipt, ViewAccessLevel};
 use http_body_util::BodyExt;
 use item_filters::EntityFilters;
@@ -259,8 +260,9 @@ impl EmailService for MockEmail {
     async fn resolve_thread_read_id(
         &self,
         _macro_id: MacroUserIdStr<'_>,
-        thread_id: Uuid,
+        thread_id: EmailThreadId,
     ) -> Result<Uuid, EmailErr> {
+        let thread_id = thread_id.into_uuid();
         Ok(thread_id)
     }
 
@@ -284,7 +286,7 @@ impl EmailService for MockEmail {
     async fn set_thread_archived(
         &self,
         _user: MacroUserIdStr<'static>,
-        _id: uuid::Uuid,
+        _id: EmailThreadId,
         _archived: bool,
     ) -> Result<(), EmailErr> {
         Err(EmailErr::RepoErr(anyhow::anyhow!("Not implemented")))
@@ -293,7 +295,7 @@ impl EmailService for MockEmail {
     async fn mark_thread_unread(
         &self,
         _macro_id: MacroUserIdStr<'static>,
-        _thread_id: uuid::Uuid,
+        _thread_id: EmailThreadId,
     ) -> Result<(), EmailErr> {
         Err(EmailErr::RepoErr(anyhow::anyhow!("Not implemented")))
     }
@@ -349,7 +351,7 @@ impl EmailService for MockEmail {
     async fn get_owned_link_for_thread(
         &self,
         _macro_id: macro_user_id::user_id::MacroUserIdStr<'_>,
-        _thread_id: uuid::Uuid,
+        _thread_id: EmailThreadId,
     ) -> Result<Option<email::domain::models::Link>, email::domain::models::EmailErr> {
         Ok(None)
     }
@@ -418,7 +420,7 @@ impl EmailService for MockEmail {
     async fn update_thread_labels(
         &self,
         _link: &email::domain::models::Link,
-        _thread_id: uuid::Uuid,
+        _thread_id: EmailThreadId,
         _label_id: uuid::Uuid,
         _add: bool,
     ) -> Result<email::domain::models::UpdateThreadLabelsResult, EmailErr> {
@@ -772,8 +774,9 @@ impl EmailService for MockEmailLinkResult {
     async fn resolve_thread_read_id(
         &self,
         _macro_id: MacroUserIdStr<'_>,
-        thread_id: Uuid,
+        thread_id: EmailThreadId,
     ) -> Result<Uuid, EmailErr> {
+        let thread_id = thread_id.into_uuid();
         Ok(thread_id)
     }
 
@@ -797,7 +800,7 @@ impl EmailService for MockEmailLinkResult {
     async fn set_thread_archived(
         &self,
         _user: MacroUserIdStr<'static>,
-        _id: uuid::Uuid,
+        _id: EmailThreadId,
         _archived: bool,
     ) -> Result<(), EmailErr> {
         Err(EmailErr::RepoErr(anyhow::anyhow!("Not implemented")))
@@ -806,7 +809,7 @@ impl EmailService for MockEmailLinkResult {
     async fn mark_thread_unread(
         &self,
         _macro_id: MacroUserIdStr<'static>,
-        _thread_id: uuid::Uuid,
+        _thread_id: EmailThreadId,
     ) -> Result<(), EmailErr> {
         Err(EmailErr::RepoErr(anyhow::anyhow!("Not implemented")))
     }
@@ -852,7 +855,7 @@ impl EmailService for MockEmailLinkResult {
     async fn get_owned_link_for_thread(
         &self,
         _macro_id: macro_user_id::user_id::MacroUserIdStr<'_>,
-        _thread_id: uuid::Uuid,
+        _thread_id: EmailThreadId,
     ) -> Result<Option<email::domain::models::Link>, email::domain::models::EmailErr> {
         (self.get_link_result)()
     }
@@ -921,7 +924,7 @@ impl EmailService for MockEmailLinkResult {
     async fn update_thread_labels(
         &self,
         _link: &email::domain::models::Link,
-        _thread_id: uuid::Uuid,
+        _thread_id: EmailThreadId,
         _label_id: uuid::Uuid,
         _add: bool,
     ) -> Result<email::domain::models::UpdateThreadLabelsResult, EmailErr> {

@@ -6,6 +6,7 @@ use axum::{
     routing::{get, patch},
 };
 use axum_extra::extract::Cached;
+use email_thread_id::EmailThreadId;
 use macro_authorization::{
     MacroAuthorizationExtractor, MacroAuthorizationService, MacroAuthorizationState, UserOrInternal,
 };
@@ -148,7 +149,7 @@ pub async fn update_thread_labels_handler<T: EmailService, Auth: MacroAuthorizat
         .inner
         .update_thread_labels_for_user(
             macro_user.authorization.user.macro_user_id.clone(),
-            thread_id,
+            EmailThreadId::from_uuid(thread_id),
             body.label_id,
             body.value,
         )
@@ -195,7 +196,11 @@ pub async fn update_thread_state_handler<T: EmailService, Auth: MacroAuthorizati
     };
     state
         .inner
-        .change_thread_mailbox_state(actor.authorization.user.macro_user_id, thread, action)
+        .change_thread_mailbox_state(
+            actor.authorization.user.macro_user_id,
+            EmailThreadId::from_uuid(thread),
+            action,
+        )
         .await?;
     Ok(StatusCode::NO_CONTENT)
 }

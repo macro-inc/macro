@@ -7,6 +7,7 @@ version = "0.1.0"
 [dependencies]
 activity = { workspace = true, features = ["realtime"] }
 agent_correlation = { workspace = true, features = ["postgres"] }
+email_thread_id = { workspace = true }
 serde_json = { workspace = true }
 chrono = { workspace = true }
 anyhow = { workspace = true }
