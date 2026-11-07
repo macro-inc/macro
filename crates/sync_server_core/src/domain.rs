@@ -27,3 +27,6 @@ pub mod types;
 
 /// Operation-log durability and replay policy.
 pub mod operation_log;
+
+/// Owned room memory and capabilities.
+pub mod room;

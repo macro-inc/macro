@@ -48,8 +48,10 @@ are validated against the requested session before accepting the upgrade.
 `src/inbound/` owns routing, credential decoding and Cloudflare callbacks;
 `src/domain/` owns permission/write policy and atomic document-update logic;
 `src/outbound/` owns persistence, secrets and external clients. The Cloudflare
-callback adapter shares one isolate-local session through `Rc`, preserving the
-mutation barrier across HTTP requests, WebSocket messages, alarms and closes.
+callback adapter owns one `Room<WorkerPorts>` behind an async mutex. The same
+owned guard covers the request gate and Axum dispatch. WebSocket messages, alarms
+and closes take that room lock; the error callback only logs. Background tasks
+receive owned snapshots and editor batches before the guard is released.
 
 Socket write policy allows viewers to read, document commenters to change only
 comment marks, and editors to write full updates. Surface commenters cannot

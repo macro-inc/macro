@@ -1,6 +1,6 @@
-//! Temporary shared-state adapter while session memory moves into the core.
+//! Read-only Loro views for the Worker adapter; mutable state belongs to Room.
 use loro::{ExportMode, Frontiers, LoroDoc, VersionVector};
-use std::cell::{Cell, Ref, RefCell, RefMut};
+use std::cell::Cell;
 use std::time::Duration;
 use sync_server_core::domain::{
     state::DocumentState as CoreDocumentState, state_error::StateError,
@@ -29,65 +29,51 @@ fn into_worker<T>(result: std::result::Result<T, StateError>) -> Result<T> {
     result.map_err(|error| worker::Error::from(error.to_string()))
 }
 
+/// Read-only handle for adapter exports. Timestamp mutation belongs to Room.
 #[derive(Debug)]
 pub struct DocumentState {
-    // LoroDoc::clone shares the same document; retain the old read-only caller API
-    // while only the timestamp-owning core state needs the temporary RefCell.
     pub loro_doc: LoroDoc,
-    inner: RefCell<CoreDocumentState>,
+    inner: CoreDocumentState,
 }
-
 impl DocumentState {
-    pub(crate) fn core(&self) -> Ref<'_, CoreDocumentState> {
-        self.inner.borrow()
-    }
-    pub(crate) fn core_mut(&self) -> RefMut<'_, CoreDocumentState> {
-        self.inner.borrow_mut()
+    pub(crate) fn view(inner: &CoreDocumentState) -> Self {
+        Self::from_core(CoreDocumentState {
+            loro_doc: inner.loro_doc.clone(),
+            last_update: inner.last_update,
+            last_export: inner.last_export,
+        })
     }
     pub(crate) fn from_core(inner: CoreDocumentState) -> Self {
         Self {
             loro_doc: inner.loro_doc.clone(),
-            inner: RefCell::new(inner),
+            inner,
         }
-    }
-
-    pub fn new() -> Self {
-        Self::from_core(CoreDocumentState::new())
     }
     pub fn try_from_snapshot(snapshot: &[u8]) -> Result<Self> {
         into_worker(CoreDocumentState::try_from_snapshot(snapshot)).map(Self::from_core)
     }
     pub fn frontiers(&self) -> (Frontiers, Frontiers) {
-        self.inner.borrow().frontiers()
+        self.inner.frontiers()
     }
     pub fn get_json(&self) -> String {
-        self.inner.borrow().get_json()
+        self.inner.get_json()
     }
     pub fn should_save(&self) -> bool {
-        self.inner.borrow().should_save()
-    }
-    pub fn mark_exported(&self) {
-        self.inner.borrow_mut().mark_exported(monotonic());
-    }
-    pub fn import(&self, update: &[u8]) -> Result<ImportedUpdate> {
-        into_worker(self.inner.borrow_mut().import_with_clock(update, monotonic))
+        self.inner.should_save()
     }
     pub fn root_change(&self, updates: &[&[u8]]) -> Result<Option<RootChange>> {
-        into_worker(self.inner.borrow().root_change(updates))
+        into_worker(self.inner.root_change(updates))
     }
     pub fn export_snapshot(&self, mode: Option<ExportMode>) -> Result<Vec<u8>> {
-        into_worker(self.inner.borrow().export_snapshot(mode))
+        into_worker(self.inner.export_snapshot(mode))
     }
     pub fn export_shallow_snapshot(&self) -> Result<Vec<u8>> {
-        into_worker(self.inner.borrow().export_shallow_snapshot())
+        into_worker(self.inner.export_shallow_snapshot())
     }
     pub fn version_id(&self) -> String {
-        self.inner.borrow().version_id()
+        self.inner.version_id()
     }
     pub fn export_updates_since(&self, vv: &VersionVector) -> Result<Vec<u8>> {
-        into_worker(self.inner.borrow().export_updates_since(vv))
-    }
-    pub fn replay_pending_operations(&self, updates: &[Vec<u8>]) -> Result<()> {
-        into_worker(self.inner.borrow_mut().replay_pending_operations(updates))
+        into_worker(self.inner.export_updates_since(vv))
     }
 }

@@ -141,7 +141,10 @@ pub trait DocumentUpdatePort {
     /// The current document that preflight validation reads.
     fn document(&self) -> &LoroDoc;
     /// Import and durably store the accepted update.
-    fn apply_and_persist(&self, update: &[u8]) -> impl Future<Output = Result<(), DocumentError>>;
+    fn apply_and_persist(
+        &mut self,
+        update: &[u8],
+    ) -> impl Future<Output = Result<(), DocumentError>>;
 }
 
 /// Side effects after a durable write; the use case owns their order and whether
@@ -149,18 +152,17 @@ pub trait DocumentUpdatePort {
 /// notification transport and scheduling mechanisms.
 pub trait DocumentUpdateEffects {
     /// Send the accepted update to peers.
-    fn broadcast(&self, update: &[u8]) -> Result<(), DocumentError>;
+    fn broadcast(&mut self, update: &[u8]) -> Result<(), DocumentError>;
     /// Publish the changed document after persistence.
-    fn publish_changed_document(&self) -> Result<(), DocumentError>;
+    fn publish_changed_document(&mut self) -> Result<(), DocumentError>;
     /// Extend the runtime lifetime for pending work.
-    fn keep_alive(&self) -> impl Future<Output = Result<(), DocumentError>>;
+    fn keep_alive(&mut self) -> impl Future<Output = Result<(), DocumentError>>;
 }
 
 /// Validate and persist an atomic update, then publish its effects in order.
 pub async fn update(
     access: &DocumentAccess,
-    port: &impl DocumentUpdatePort,
-    effects: &impl DocumentUpdateEffects,
+    port: &mut (impl DocumentUpdatePort + DocumentUpdateEffects),
     expected_revision: &[u8],
     update: &[u8],
 ) -> Result<PreparedUpdate, DocumentError> {
@@ -168,11 +170,11 @@ pub async fn update(
     // Persist retries too: a prior request may have applied in memory but lost
     // its storage write or response. Duplicate Loro imports are idempotent.
     port.apply_and_persist(&prepared.update).await?;
-    effects.broadcast(&prepared.update)?;
+    port.broadcast(&prepared.update)?;
     if prepared.applied {
-        effects.publish_changed_document()?;
+        port.publish_changed_document()?;
     }
-    effects.keep_alive().await?;
+    port.keep_alive().await?;
     Ok(prepared)
 }
 

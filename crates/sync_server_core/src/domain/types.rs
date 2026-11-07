@@ -94,3 +94,21 @@ pub enum InteractionReason {
     /// The last connected peer left the document session.
     LastLeave,
 }
+
+impl std::ops::Deref for SessionKey {
+    type Target = str;
+    fn deref(&self) -> &str {
+        self.as_str()
+    }
+}
+impl std::fmt::Display for SessionKey {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        self.as_str().fmt(f)
+    }
+}
+
+impl std::borrow::Borrow<u64> for PeerId {
+    fn borrow(&self) -> &u64 {
+        &self.0
+    }
+}

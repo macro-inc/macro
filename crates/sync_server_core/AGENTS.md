@@ -11,6 +11,7 @@ the Durable Object adapter and native simulation.
 - `src/domain/permissions.rs`: verified grants and permission checks.
 - `src/domain/state.rs`: imported document state with explicit monotonic time.
 - `src/domain/ports.rs`: runtime capability contracts, with non-Send futures.
+- `src/domain/room.rs`: owned memory and configuration; adapters serialize callbacks.
 - `src/domain/operation_log.rs`: pending-write order, replay and snapshot policy.
 - `src/domain/connection.rs`: persisted metadata and explicit-time grant policy.
 - `src/domain/migration.rs`: persisted migration states.
@@ -34,3 +35,8 @@ the Durable Object adapter and native simulation.
   explicitly assigned peer. Preserve Loro's pinned version.
 - Keep this crate excluded from hakari so it remains wasm-safe.
 - Use `uuid-types` for supplied identifiers; ambient UUID generation belongs to adapters.
+
+`RoomMemory` owns the document, operation log, metadata and pending batches. Its
+hidden accessors temporarily support Worker handler bodies during extraction;
+keep runtime handles and locks in the adapter. Presence retains the pinned Loro
+store until C9a.

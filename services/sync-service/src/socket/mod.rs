@@ -5,4 +5,4 @@ pub(crate) mod protocol;
 )]
 mod socket;
 
-pub(crate) use socket::{InboundBuffers, Socket};
+pub(crate) use socket::Socket;
