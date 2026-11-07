@@ -8,6 +8,8 @@ CREATE TABLE scheduled_action_draft (
     owner_id   TEXT NOT NULL,
     bot_id     UUID NOT NULL,
     checked    JSONB,
+    -- The latest check that passed; the draft prefers it to a later failing one.
+    passed     JSONB,
     checks     INTEGER NOT NULL DEFAULT 0,
     -- What the session said it created for the routine to use, as {entityType, entityId}.
     created    JSONB NOT NULL DEFAULT '[]',

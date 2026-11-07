@@ -407,7 +407,9 @@ impl<Code: RoutineCode, Sessions: RoutineSessions> RoutineDrafts<Code, Sessions>
             Ok(Err(_)) => Ending::Failed,
             Err(_) => Ending::TimedOut,
         };
-        Ok(match (handed_back.check, ending) {
+        // The last check that passed wins over a later one that failed.
+        let check = handed_back.passed.or(handed_back.check);
+        Ok(match (check, ending) {
             (Some(check), _) => drafted(request, program, check, handed_back.created),
             (None, Ending::TimedOut) => failed(TIMED_OUT),
             (None, Ending::Finished | Ending::Checked | Ending::Failed) => failed(request.failed()),

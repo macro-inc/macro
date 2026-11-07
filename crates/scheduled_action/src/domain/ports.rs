@@ -288,6 +288,8 @@ pub trait DraftHandBacks: Send + Sync + 'static {
 pub struct HandedBack {
     /// Its latest check; `None` before its first.
     pub check: Option<super::models::RoutineCheck>,
+    /// Its latest check that passed, kept even when a later one failed.
+    pub passed: Option<super::models::RoutineCheck>,
     /// How many checks it made.
     pub checks: u32,
     /// What it said it created for the routine, across its checks.

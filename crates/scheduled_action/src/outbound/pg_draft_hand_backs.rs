@@ -56,6 +56,7 @@ impl DraftHandBacks for PgDraftHandBacks {
             r#"
             UPDATE scheduled_action_draft SET
                 checked = $3,
+                passed = CASE WHEN $5 THEN $3 ELSE passed END,
                 checks = checks + 1,
                 created = (
                     SELECT COALESCE(jsonb_agg(DISTINCT item), '[]')
@@ -67,6 +68,7 @@ impl DraftHandBacks for PgDraftHandBacks {
             owner.as_ref(),
             checked,
             created,
+            check.ok,
         )
         .execute(&self.pool)
         .await
@@ -76,7 +78,7 @@ impl DraftHandBacks for PgDraftHandBacks {
 
     async fn handed_back(&self, session: Uuid) -> Result<HandedBack> {
         let row = sqlx::query!(
-            "SELECT checked, checks, created FROM scheduled_action_draft WHERE session_id = $1",
+            "SELECT checked, passed, checks, created FROM scheduled_action_draft WHERE session_id = $1",
             session,
         )
         .fetch_optional(&self.pool)
@@ -90,6 +92,9 @@ impl DraftHandBacks for PgDraftHandBacks {
             check: row
                 .checked
                 .and_then(|checked| serde_json::from_value(checked).ok()),
+            passed: row
+                .passed
+                .and_then(|passed| serde_json::from_value(passed).ok()),
             checks: u32::try_from(row.checks).unwrap_or_default(),
             created: serde_json::from_value(row.created).unwrap_or_default(),
         })

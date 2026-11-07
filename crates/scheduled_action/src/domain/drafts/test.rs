@@ -58,6 +58,9 @@ impl DraftHandBacks for Rows {
             return Ok(false);
         }
         handed_back.check = Some(check.clone());
+        if check.ok {
+            handed_back.passed = Some(check.clone());
+        }
         handed_back.checks += 1;
         for item in created {
             if !handed_back.created.contains(item) {
@@ -936,4 +939,59 @@ async fn a_dropped_draft_request_still_cleans_up_its_session() {
     assert_eq!(*sessions.cancelled.lock().unwrap(), [session]);
     assert_eq!(*sessions.deleted.lock().unwrap(), [session]);
     assert!(rows.drafts.lock().unwrap().is_empty());
+}
+
+/// After a passing check the session may try something that fails, and may
+/// create something more. The draft keeps the passing routine and lists
+/// everything it created.
+#[tokio::test(start_paused = true)]
+async fn a_failing_check_after_a_passing_one_never_replaces_it() {
+    let rows = Arc::new(Rows::default());
+    let database = CreatedItem {
+        entity_type: model_entity::EntityType::Database,
+        entity_id: "bug-log".into(),
+    };
+    let folder = CreatedItem {
+        entity_type: model_entity::EntityType::Project,
+        entity_id: "bug-reports-folder".into(),
+    };
+    let (made_database, made_folder) = (database.clone(), folder.clone());
+    let mut sessions = Sessions::new(
+        &rows,
+        Box::new(move |_| {
+            vec![
+                (
+                    configuration(
+                        "Log bug reports",
+                        message_posted(&[]),
+                        json!([code_step("Add a row", "good")]),
+                    ),
+                    vec![made_database.clone()],
+                ),
+                (
+                    configuration(
+                        "Log and file bug reports",
+                        message_posted(&[]),
+                        json!([code_step("Add a row", "good"), code_step("File it", "bad")]),
+                    ),
+                    vec![made_folder.clone()],
+                ),
+            ]
+        }),
+    );
+    sessions.hangs = true;
+    let sessions = Arc::new(sessions);
+
+    let drafted = drafted_routine(
+        draft(
+            &drafts(&rows, &sessions),
+            routine("log bug reports in a new database"),
+        )
+        .await,
+    );
+
+    assert_eq!(drafted.name, "Log bug reports");
+    assert!(drafted.problems.is_empty());
+    assert_eq!(drafted.steps.len(), 1);
+    assert_eq!(drafted.created, [database, folder]);
 }

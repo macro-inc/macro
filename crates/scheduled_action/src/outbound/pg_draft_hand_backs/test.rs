@@ -94,6 +94,7 @@ async fn a_drafts_latest_check_by_its_owner_is_its_answer(pool: PgPool) {
         handed_back,
         HandedBack {
             check: Some(check("Bug reports")),
+            passed: Some(check("Bug reports")),
             checks: 2,
             // Each item once, across checks.
             created: vec![database, folder],
@@ -141,4 +142,31 @@ async fn the_sweep_finds_only_drafts_started_before_its_cutoff(pool: PgPool) {
             agent: bot_id::BotId::TEST_A,
         }]
     );
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_failing_check_keeps_the_last_passing_one(pool: PgPool) {
+    let drafts = PgDraftHandBacks::new(pool);
+    let session = macro_uuid::generate_uuid_v7();
+    drafts
+        .begin(session, &owner(), bot_id::BotId::TEST_A)
+        .await
+        .unwrap();
+    let failing = RoutineCheck {
+        ok: false,
+        problems: vec!["no schedule".into()],
+        ..check("Later")
+    };
+    drafts
+        .record(session, &owner(), &check("Passing"), &[])
+        .await
+        .unwrap();
+    drafts
+        .record(session, &owner(), &failing, &[])
+        .await
+        .unwrap();
+
+    let handed_back = drafts.handed_back(session).await.unwrap();
+    assert_eq!(handed_back.check, Some(failing));
+    assert_eq!(handed_back.passed, Some(check("Passing")));
 }
