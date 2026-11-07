@@ -2,6 +2,35 @@ import { expect } from 'vitest';
 import type { CommitRecord, Snapshot } from './commands';
 /** Persistent bijection: paths may move, identities may never be reused or rebound. */
 export class Comparison {
+  private uLife = { seen: new Set<string>(), retired: new Set<string>() };
+  private rLife = { seen: new Set<string>(), retired: new Set<string>() };
+  private track(snapshot: Snapshot, life: typeof this.uLife) {
+    const live = new Set(snapshot.keys.map(({ key }) => key));
+    const commit = snapshot.commit;
+    const touched = commit
+      ? [
+          ...commit.dirtyLeaves,
+          ...commit.dirtyElements.map(([key]) => key),
+          ...commit.normalized,
+          ...commit.mutations.map(([key]) => key),
+        ]
+      : [];
+    for (const key of [...live, ...touched])
+      expect(life.retired.has(key), `identity lifecycle: retired ${key}`).toBe(
+        false
+      );
+    for (const [key, mutation] of commit?.mutations ?? []) {
+      if (mutation === 'created')
+        expect(life.seen.has(key), `identity lifecycle: recreated ${key}`).toBe(
+          false
+        );
+      if (mutation === 'destroyed') life.retired.add(key);
+    }
+    // A normalized identity absent from the resulting tree was merged away.
+    for (const key of commit?.normalized ?? [])
+      if (!live.has(key)) life.retired.add(key);
+    for (const key of [...live, ...touched]) life.seen.add(key);
+  }
   private uToR = new Map<string, string>();
   private rToU = new Map<string, string>();
   private bind(u: string, r: string) {
@@ -11,6 +40,8 @@ export class Comparison {
     this.rToU.set(r, u);
   }
   compare(u: Snapshot, r: Snapshot) {
+    this.track(u, this.uLife);
+    this.track(r, this.rLife);
     expect(r.error, 'outcome').toEqual(u.error);
     expect(r.state, 'JSON structure and fields').toEqual(u.state);
     expect(r.selection, 'selection').toEqual(u.selection);
