@@ -453,3 +453,24 @@ fn formatting_rebinds_an_element_end_converted_by_splitting() -> Result<(), Erro
     })?;
     Ok(())
 }
+
+#[test]
+fn formatting_past_a_text_end_does_not_change_empty_block_flags() -> Result<(), Error> {
+    let mut editor = Editor::builder(EditorMode::Headless).build().unwrap();
+    let (last, _) = editor.update(|tx| {
+        let first = tx.create(Paragraph::default())?;
+        let last = tx.create(Paragraph::default())?;
+        let text = tx.create_text("a")?;
+        tx.append(first, &[text.key()])?;
+        tx.element(last)?.set_text_format(TextFormat::ITALIC)?;
+        tx.append(NodeKey::ROOT, &[first.key(), last.key()])?;
+        tx.set_selection(Some(Selection::Range(RangeSelection::new(
+            Point::element(NodeKey::ROOT, ChildIndex(2)), Point::text(text, Utf16Offset(1)),
+        ))))?;
+        Ok(last.key())
+    })?;
+    let (_, commit) = editor.update(|tx| tx.format_text(TextFormatType::Capitalize, None))?;
+    assert!(commit.is_noop());
+    assert_eq!(editor.state().view().element_data(last)?.text_format, TextFormat::ITALIC);
+    Ok(())
+}
