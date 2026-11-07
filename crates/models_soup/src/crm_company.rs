@@ -3,7 +3,7 @@ use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 /// A CRM domain as displayed in Soup. Mirrors the crm crate's
-/// `CrmDomain` with a stable wire shape that the FE can rely on.
+/// [`CrmDomain`] with a stable wire shape that the FE can rely on.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
 #[serde(rename_all = "camelCase")]
