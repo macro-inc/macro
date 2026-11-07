@@ -19,6 +19,7 @@ use models_bulk_upload::{
     MarkProjectUploadedRequest, MarkProjectUploadedResponse, UploadExtractFolderRequest,
     UploadExtractFolderResponseData, UploadExtractStatusResponseData,
 };
+use project_id::ProjectId;
 use serde::Deserialize;
 
 use super::ProjectRouterState;
@@ -202,7 +203,7 @@ where
 {
     let project_ids = state
         .service
-        .mark_projects_uploaded(&request.project_id)
+        .mark_projects_uploaded(&ProjectId::from(&*request.project_id))
         .await?;
     Ok(Json(MarkProjectUploadedResponse { project_ids }))
 }

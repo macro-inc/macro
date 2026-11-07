@@ -8,6 +8,7 @@ use entity_access::domain::models::{EntityAccessReceipt, EntityType, OwnerAccess
 use entity_access_management::domain::ports::EntityAccessManagementService;
 use macro_event_broker::MacroEventBroker;
 use model_owner::Owner;
+use project_id::ProjectId;
 use rootcause::{Report, prelude::*};
 use shared_entity_registry::{OwnedPurgeOutcome, PurgeOwnedEntity};
 
@@ -41,7 +42,10 @@ where
         expected_owner: &Owner,
     ) -> Result<OwnedPurgeOutcome, Report> {
         let project_id = entity_id.to_string();
-        let project = match self.internal_get_basic_project(&project_id).await {
+        let project = match self
+            .internal_get_basic_project(&ProjectId::from(&*project_id))
+            .await
+        {
             Err(ProjectError::NotFound(_)) => return Ok(OwnedPurgeOutcome::Purged),
             loaded => loaded.context("unable to look up the project")?,
         };
