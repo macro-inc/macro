@@ -5,8 +5,14 @@ UTF-16 offsets, explicit clocks and peer IDs, and no browser or server runtime.
 Loro projection lives beside the editor core; session composition belongs in
 `crates/client/document_session`, not inside the model.
 
+`lexical_model` provides the value types, typed node registry, immutable snapshots,
+NodeState and copy-on-write transactions. Its base kinds preserve declared parent
+projections and dispatch hooks without a browser runtime. Tree edits live on the
+transaction; user payloads never own links or framework fields. The update pipeline,
+selection editing, history and view reconciliation are separate follow-on layers.
+
 `lexical_workspace_tests` verifies the patched regex dependency and Loro snapshot
-compatibility before the model packages are added. Future model, rich-node,
+compatibility alongside the model package. Future rich-node,
 Markdown, HTML and projection packages belong here.
 
 Dependencies come from the root workspace table. The existing
