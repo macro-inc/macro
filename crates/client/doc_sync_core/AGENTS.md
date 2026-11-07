@@ -75,3 +75,6 @@ history cannot cause repeated rebases. Never skip an unacknowledged row this way
 
 Preserve the pending local coalesce range when adoption replay completes; replaying
 other owners never advances the local logged vector over an unappended edit.
+
+Retire server-confirmed foreign rows from an outstanding own push; preserve its
+message identity and every still-unconfirmed row until their ack or timeout.

@@ -612,3 +612,57 @@ fn adoption_inside_coalesce_window_keeps_local_edit_for_append() {
     let meta = loro::LoroDoc::decode_import_blob_meta(&record.bytes, true).unwrap();
     assert_eq!(meta.partial_end_vv.get(&peer).copied(), Some(local_end));
 }
+
+#[test]
+fn server_evidence_retires_only_the_confirmed_part_of_an_own_push() {
+    let mut h = Harness::running(TransportKind::Direct, Persistence::Memory);
+    h.core.config.chatter = true;
+    let bytes = row(1).record.bytes;
+    h.send(SyncInput::Chatter(ChatterMessage::Update(bytes.clone())));
+    h.edit();
+    h.core.foreign_writer_closed = true;
+    h.at(25, SyncInput::Tick);
+    let push = h.core.push.as_ref().unwrap();
+    let id = push.id.as_str().to_owned();
+    assert_eq!(push.rows, vec![WalSeq(1), WalSeq(2)]);
+    h.remote(sync_protocol::FromRemote::RemoteUpdate {
+        update: SliceWrapper::from_cooked(&bytes),
+    });
+    assert_eq!(h.core.wal.delivered_through, Some(WalSeq(1)));
+    assert_eq!(h.core.push.as_ref().unwrap().rows, vec![WalSeq(2)]);
+    assert_eq!(h.core.push.as_ref().unwrap().id.as_str(), id);
+    h.ack();
+    assert_eq!(h.core.wal.delivered_through, Some(WalSeq(2)));
+    assert!(h.core.push.is_none());
+}
+
+#[test]
+fn server_evidence_retires_an_entire_foreign_push_before_its_ack() {
+    let mut h = Harness::running(TransportKind::Direct, Persistence::Memory);
+    h.core.config.chatter = true;
+    let bytes = row(1).record.bytes;
+    h.send(SyncInput::Chatter(ChatterMessage::Update(bytes.clone())));
+    h.send(SyncInput::Chatter(ChatterMessage::Closing(SessionId(
+        uuid_value::Uuid::from_u128(99),
+    ))));
+    assert_eq!(h.core.push.as_ref().unwrap().rows, vec![WalSeq(1)]);
+    let id = h.core.push.as_ref().unwrap().id.as_str().to_owned();
+    h.core.not_acked = 20;
+    h.core.suspect_delay = Millis(60_000);
+    h.core.waiting_for_fresh_ack = true;
+    let span = h.core.span("wal.delivery_outage", None, &mut h.out);
+    h.core.outage_span = Some(span);
+    h.remote(sync_protocol::FromRemote::RemoteUpdate {
+        update: SliceWrapper::from_cooked(&bytes),
+    });
+    assert!(h.core.is_delivered(WalSeq(1)));
+    assert!(h.core.push.is_none());
+    assert!(h.core.push_retry.is_none());
+    assert_eq!(h.core.not_acked, 0);
+    assert_eq!(h.core.suspect_delay, Millis(5_000));
+    assert!(!h.core.waiting_for_fresh_ack);
+    assert!(h.core.outage_span.is_none());
+    h.remote(sync_protocol::FromRemote::RemoteUpdateAck { id: &id });
+    assert!(!h.core.waiting_for_fresh_ack);
+    assert_eq!(h.core.status().save, SaveState::Saved);
+}
