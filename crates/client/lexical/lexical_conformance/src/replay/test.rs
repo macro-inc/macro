@@ -467,3 +467,32 @@ fn nondiscrete_noop_keeps_metadata_across_clock_and_log_until_next_update() -> R
     Replayer::default().replay(&fixture)?;
     Ok(())
 }
+
+#[test]
+fn inline_markdown_transformer_matches_and_enforces_its_empty_callback_tape() -> Result<()> {
+    let fixture: Fixture = serde_json::from_str(include_str!(
+        "../../../../../../packages/lexical-conformance/fixtures/upstream/lexical-markdown/011b42a10e88b30c.json"
+    ))?;
+    Replayer::default().replay(&fixture)?;
+    let mut nullable = fixture.clone();
+    nullable.trace[3]["calls"][0]["args"][1]
+        .as_array_mut()
+        .expect("transformers")
+        .last_mut()
+        .expect("transformer")["importRegExp"] = Value::Null;
+    Replayer::default().replay(&nullable)?;
+    let mut wrong = fixture.clone();
+    let transformers = wrong.trace[3]["calls"][0]["args"][1]
+        .as_array_mut()
+        .expect("transformers");
+    transformers.last_mut().expect("inline transformer")["importRegExp"]["$regexp"] = json!(".+");
+    assert!(Replayer::default().replay(&wrong).is_err());
+    let mut wrong = fixture;
+    wrong.trace[3]["calls"][0]["args"][1]
+        .as_array_mut()
+        .expect("transformers")
+        .last_mut()
+        .expect("transformer")["export"] = json!({"$fn":"other.export"});
+    assert!(Replayer::default().replay(&wrong).is_err());
+    Ok(())
+}
