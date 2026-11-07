@@ -81,6 +81,17 @@ for f in files:
             # Only paths that leave the crate; others are often outputs.
             if rel.startswith("..") and not exists(manifest_dir(f), rel):
                 broken.append((f, m.group(1), "CARGO_MANIFEST_DIR"))
+        # `Path::new(env!("CARGO_MANIFEST_DIR"))` then `.parent()` and
+        # `.join("../x")` calls, possibly across lines.
+        for m in re.finditer(r'env!\("CARGO_MANIFEST_DIR"\)\)((?:\s*\.(?:parent\(\)(?:\.unwrap\(\)|\.expect\([^)]*\))?|join\("[^"]*"\)))+)', text):
+            base = manifest_dir(f)
+            parts = re.findall(r'(parent)\(\)|join\("([^"]*)"\)', m.group(1))
+            cur = base
+            for par, j in parts:
+                cur = os.path.dirname(cur) if par else os.path.normpath(os.path.join(cur, j))
+            leaves = any(par for par, _ in parts) or any(j.startswith("..") for _, j in parts)
+            if leaves and not os.path.exists(os.path.join(ROOT, cur)) and not os.path.exists(os.path.join(ROOT, os.path.dirname(cur))):
+                broken.append((f, m.group(1).strip().replace("\n", " "), "CARGO_MANIFEST_DIR chain"))
     if os.path.basename(f) in ("justfile",) or f.endswith(".just"):
         for m in JUST.finditer(text):
             rel = m.group(1)
