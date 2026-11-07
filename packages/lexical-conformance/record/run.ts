@@ -256,7 +256,13 @@ for (const [id, dev] of [...results.dev].sort(([a], [b]) =>
   index.push({
     id,
     tier,
-    reasons: [...new Set(reasons)],
+    reasons: [
+      ...new Set(
+        reasons.map((reason) =>
+          reason.replaceAll(`file://${root}/`, '').replaceAll(`${root}/`, '')
+        )
+      ),
+    ],
     file: tier === 'A-rec' ? filename : null,
     calls: apiCalls(dev.fixture.trace).length,
     apis: [...new Set(apiCalls([dev.fixture.trace, dev.fixture.tapes]))].sort(),

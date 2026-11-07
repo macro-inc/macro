@@ -652,6 +652,7 @@ export class Recorder {
         ? [...registry.values()].map((entry) => entry.klass)
         : []);
     const encodedNodes: Value[] = [];
+    const nodeClasses: Record<string, Value> = {};
     if (Array.isArray(nodes)) {
       for (const node of nodes) {
         if (
@@ -676,6 +677,7 @@ export class Recorder {
           if (!known && !defaults.includes(node.name))
             this.reasons.add('A-hand:test-defined-model-class');
           encodedNodes.push(node.getType());
+          if (known) nodeClasses[node.getType()] = { $fn: symbol };
         } else if (
           node &&
           typeof node === 'object' &&
@@ -694,6 +696,7 @@ export class Recorder {
         namespace: String(actual.namespace),
         namespaceGenerated: !config?.namespace,
         nodes: encodedNodes,
+        nodeClasses,
         replacements: Array.isArray(nodes)
           ? nodes
               .filter(
