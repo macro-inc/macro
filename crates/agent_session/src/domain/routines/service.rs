@@ -314,6 +314,19 @@ where
         Ok(())
     }
 
+    async fn activity(
+        &self,
+        command: RoutineSessionAction,
+    ) -> Result<RoutineActivity, RoutineSessionError> {
+        self.owned_session(&command).await?;
+        let log = self
+            .sessions
+            .session_log(command.session_id)
+            .await
+            .map_err(session_error)?;
+        Ok(activity(log.entries))
+    }
+
     async fn delete_draft(&self, command: RoutineSessionAction) -> Result<(), RoutineSessionError> {
         let session = self.owned_session(&command).await?;
         if !session.origin.drafts_routine() {
@@ -323,6 +336,32 @@ where
             .delete_session(command.session_id)
             .await
             .map_err(session_error)
+    }
+}
+
+/// Tool calls and turns in a session's effective history.
+fn activity(entries: Vec<crate::domain::model::StoredAgentSessionLog>) -> RoutineActivity {
+    let mut fold = LifecycleFold::new();
+    for row in entries {
+        let _ = fold.push(row.entry);
+    }
+    let messages = fold.inner().messages();
+    let count = |n: usize| u32::try_from(n).unwrap_or(u32::MAX);
+    RoutineActivity {
+        tool_calls: count(
+            messages
+                .iter()
+                .filter(|message| matches!(message.author, Author::Agent))
+                .flat_map(|message| message.parts.iter())
+                .filter(|part| matches!(part, agent_fold::domain::model::MessagePart::ToolUse { .. }))
+                .count(),
+        ),
+        turns: count(
+            messages
+                .iter()
+                .filter(|message| matches!(message.author, Author::User { .. }))
+                .count(),
+        ),
     }
 }
 

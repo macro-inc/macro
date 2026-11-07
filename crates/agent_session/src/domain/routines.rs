@@ -43,6 +43,15 @@ pub trait RoutineSessions: Send + Sync + 'static {
         command: RoutineSessionAction,
     ) -> impl Future<Output = Result<(), RoutineSessionError>> + Send;
 
+    /// How much the session did so far: content-free counts.
+    fn activity(
+        &self,
+        command: RoutineSessionAction,
+    ) -> impl Future<Output = Result<RoutineActivity, RoutineSessionError>> + Send {
+        let _ = command;
+        async { Err(RoutineSessionError::OperationFailed) }
+    }
+
     /// Delete a routine draft's session once its drafter is done with it.
     /// No other session can be deleted this way.
     fn delete_draft(

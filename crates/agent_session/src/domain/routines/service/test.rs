@@ -787,3 +787,54 @@ async fn only_a_routine_drafts_own_session_can_be_deleted() {
             .is_ok()
     );
 }
+
+fn log_frame(direction: &str, mut content: serde_json::Value) -> crate::domain::model::StoredAgentSessionLog {
+    content["type"] = serde_json::json!("acp");
+    content["jsonrpc"] = serde_json::json!("2.0");
+    crate::domain::model::StoredAgentSessionLog {
+        id: macro_uuid::generate_uuid_v7(),
+        created_at: chrono::Utc::now(),
+        entry: agent_fold::testing::parse_log(
+            &serde_json::json!({"direction": direction, "content": content}).to_string(),
+        )
+        .pop()
+        .unwrap(),
+    }
+}
+
+#[test]
+fn activity_counts_tool_calls_and_turns_without_reading_them() {
+    let action = AgentActionId::mint();
+    let tool_call = |id: &str| {
+        log_frame(
+            "to_server",
+            serde_json::json!({"method": "session/update", "params": {"sessionId": "s", "update": {
+                "sessionUpdate": "tool_call", "toolCallId": id, "title": "ExecuteCode",
+                "kind": "other", "status": "completed", "rawInput": {"source": "private"}
+            }}}),
+        )
+    };
+    let entries = vec![
+        log_frame(
+            "to_runtime",
+            serde_json::json!({"id": action, "method": "session/prompt", "params": {
+                "sessionId": "s", "prompt": [{"type": "text", "text": "draft a routine"}]
+            }}),
+        ),
+        tool_call("call-1"),
+        tool_call("call-2"),
+        tool_call("call-3"),
+        log_frame(
+            "to_server",
+            serde_json::json!({"id": action, "result": {"stopReason": "end_turn"}}),
+        ),
+    ];
+
+    assert_eq!(
+        activity(entries),
+        RoutineActivity {
+            tool_calls: 3,
+            turns: 1,
+        }
+    );
+}

@@ -374,6 +374,11 @@ impl<Code: RoutineCode, Sessions: RoutineSessions> RoutineDrafts<Code, Sessions>
             .inspect_err(|error| tracing::error!(error = ?error, "could not read a draft's check"))
             .unwrap_or_default();
         span.record("routine.draft.checks", handed_back.checks);
+        // Counts only; a session that can't say leaves them unset.
+        if let Ok(activity) = self.sessions.activity(action.clone()).await {
+            span.record("routine.draft.tool_calls", activity.tool_calls);
+            span.record("routine.draft.turns", activity.turns);
+        }
         self.clean_up(&action).await;
         let ending = match ending {
             Ok(Ok(ending)) => ending,

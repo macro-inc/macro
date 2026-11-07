@@ -4,7 +4,7 @@ use std::time::Duration;
 
 use agent_session::domain::routines::{
     PrepareRoutineSession, PreparedRoutineSession, PromptRoutineSession, RoutineActionStatus,
-    RoutinePromptAccepted, RoutineSessionAction, RoutineSessionError, RoutineSessions,
+    RoutineActivity, RoutinePromptAccepted, RoutineSessionAction, RoutineSessionError, RoutineSessions,
     ValidateRoutineSession, ValidatedRoutineSession,
 };
 use anyhow::{Context, Result};
@@ -25,6 +25,7 @@ enum Operation {
     Status,
     Cancel,
     DeleteDraft,
+    Activity,
 }
 
 impl Operation {
@@ -36,12 +37,13 @@ impl Operation {
             Self::Status => "internal/routine-sessions/status",
             Self::Cancel => "internal/routine-sessions/cancel",
             Self::DeleteDraft => "internal/routine-sessions/delete-draft",
+            Self::Activity => "internal/routine-sessions/activity",
         }
     }
 
     fn timeout(self) -> Duration {
         match self {
-            Self::Status | Self::Cancel | Self::DeleteDraft => SNAPSHOT_TIMEOUT,
+            Self::Status | Self::Cancel | Self::DeleteDraft | Self::Activity => SNAPSHOT_TIMEOUT,
             _ => REQUEST_TIMEOUT,
         }
     }
@@ -220,6 +222,13 @@ impl RoutineSessions for AgentSessionClient {
     async fn delete_draft(&self, command: RoutineSessionAction) -> Result<(), RoutineSessionError> {
         self.send(Operation::DeleteDraft, &command).await?;
         Ok(())
+    }
+
+    async fn activity(
+        &self,
+        command: RoutineSessionAction,
+    ) -> Result<RoutineActivity, RoutineSessionError> {
+        self.command(Operation::Activity, &command).await
     }
 }
 
