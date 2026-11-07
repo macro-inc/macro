@@ -5044,6 +5044,7 @@ dependencies = [
  "axum",
  "bot_id",
  "bots",
+ "calendar_event_id",
  "calendar_events",
  "chrono",
  "crm",
