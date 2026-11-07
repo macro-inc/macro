@@ -106,7 +106,7 @@ pub async fn get_user_id_from_peer_id(
     db: D1Database,
     document_id: &str,
     peer_id: &u64,
-) -> worker::Result<String> {
+) -> worker::Result<Option<String>> {
     let statement = db.prepare(
         "
             SELECT user_id
@@ -114,13 +114,10 @@ pub async fn get_user_id_from_peer_id(
             WHERE document_id = ? AND peer_id = ?;
         ",
     );
-    let Some(user_id) = statement
+    let user_id = statement
         .bind(&[document_id.into(), (*peer_id).to_string().into()])?
         .first(Some("user_id"))
-        .await?
-    else {
-        return Err(worker::Error::from("no user found for peer id"));
-    };
+        .await?;
 
     Ok(user_id)
 }

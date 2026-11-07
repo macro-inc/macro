@@ -611,6 +611,11 @@ impl RoomStorage for SimPorts {
 }
 impl SnapshotStore for SimPorts {
     type Error = SimError;
+    fn prepare(&self, key: &SessionKey) -> Result<(), SimError> {
+        self.0
+            .borrow_mut()
+            .call("snapshot.prepare", json!(key.as_str()))
+    }
     async fn has(&self, key: &SessionKey) -> Result<bool, SimError> {
         self.enter("snapshot.has", json!(key.as_str())).await?;
         Ok(self.0.borrow().data.snapshots.contains_key(key.as_str()))
@@ -720,6 +725,9 @@ impl PeerDirectory for SimPorts {
         actor: Option<&str>,
         peers: &[PeerId],
     ) -> Result<(), SimError> {
+        if peers.is_empty() {
+            return Ok(());
+        }
         self.enter("peers.map_unowned",json!({"document":document.as_str(),"user":user,"actor":actor,"peers":peers.iter().map(|p|p.0.to_string()).collect::<Vec<_>>()})).await?;
         let mut s = self.0.borrow_mut();
         for peer in peers {

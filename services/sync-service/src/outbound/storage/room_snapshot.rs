@@ -68,6 +68,18 @@ impl WorkerSnapshots {
 }
 impl SnapshotStore for WorkerSnapshots {
     type Error = worker::Error;
+    fn prepare(&self, key: &SessionKey) -> worker::Result<()> {
+        match &self.scope {
+            Scope::Fixed(_) => Ok(()),
+            Scope::Dynamic { env, state } => {
+                self.adopt(
+                    key.clone(),
+                    Rc::new(get_snapshot_storage(env, state, key.as_str().to_owned())?),
+                );
+                Ok(())
+            }
+        }
+    }
     async fn has(&self, key: &SessionKey) -> worker::Result<bool> {
         self.backend(key)?.has_snapshot().await
     }

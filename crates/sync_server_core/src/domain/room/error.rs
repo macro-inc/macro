@@ -11,6 +11,8 @@ use rootcause::{
 /// Runtime capability that failed.
 #[derive(Debug, Clone, Copy)]
 pub enum PortName {
+    /// Deferred inbound body parsing or reading.
+    RequestBody,
     /// Transactional room storage.
     Storage,
     /// Session snapshot transport.
@@ -50,6 +52,19 @@ pub enum RoomError {
         /// Codec error.
         error: bebop::DeserializeError,
     },
+    /// Initial snapshot request decoding failed.
+    #[error(
+        "Failed to deserialize InitializeFromSnapshotRequest with document_id: [{key}] : {error:?}"
+    )]
+    InitializeDecode {
+        /// Requested storage key.
+        key: String,
+        /// Codec error.
+        error: bebop::DeserializeError,
+    },
+    /// The peer has no recorded user mapping.
+    #[error("no user found for peer id")]
+    MissingPeer,
     /// The message discriminator is unknown.
     #[error("unknown message type")]
     UnknownMessage,

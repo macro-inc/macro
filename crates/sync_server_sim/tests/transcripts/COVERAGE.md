@@ -142,3 +142,11 @@ effect is checked by the core alarm tests and the real Worker recording.
 Alarm invariants, including `pending_import_not_compacted_quirk`, live in
 `sync_server_core::domain::room::test::alarm`. The room test modules now split
 connection, frame and alarm cases while sharing hand-written fake capabilities.
+
+C11 native replay adds the complete missing-document `/raw` fixture, comparing
+its status, headers, body, ordered snapshot preparation/existence effects and
+final durable state. Core fake tests cover initialization order, delayed sync,
+read failures and `exists_resets_operation_id_counter_quirk`.
+`server_doc_never_shallow` pins full-snapshot initialization, reload and alarms;
+`initialize_accepts_shallow_quirk` separately pins acceptance of shallow input.
+The latter is a preserved server-history quirk for a later behavior-changing fix.

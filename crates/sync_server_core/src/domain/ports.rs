@@ -200,6 +200,9 @@ pub enum SnapshotReadError<StorageError: std::error::Error + 'static> {
 
 /// The session snapshot (today: DO SQL with a Worker KV fallback) and the migration export slot.
 pub trait SnapshotStore {
+    /// Construct a fresh session transport (including the legacy SQL table setup).
+    /// Exists and initialize do this on every request, even when the snapshot is absent.
+    fn prepare(&self, key: &SessionKey) -> Result<(), Self::Error>;
     /// Adapter-specific failure without thread-safety requirements.
     type Error: std::error::Error + 'static;
     /// Whether a session snapshot is stored.

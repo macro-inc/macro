@@ -157,10 +157,31 @@ fn projected(records: &[&Value], key: &str) -> Result<Vec<Effect>, ReplayError> 
                         .as_str()
                         .ok_or_else(|| invalid("SQL text missing"))?;
                     if sql.starts_with("CREATE TABLE IF NOT EXISTS kv_store (") {
+                        let next = records[index + 1..]
+                            .iter()
+                            .find(|r| r["port"] == "sql.exec")
+                            .ok_or_else(|| invalid("snapshot preparation without access"))?;
+                        let identity = next["args"][1]
+                            .as_str()
+                            .ok_or_else(|| invalid("snapshot key missing"))?;
+                        result.push(effect("snapshot.prepare", json!(identity)));
                         continue;
                     }
                     if sql == "SELECT 1 FROM kv_store WHERE id = ?1 LIMIT 1" {
-                        effect("snapshot.get", args[1].clone())
+                        let next = records
+                            .get(index + 1)
+                            .ok_or_else(|| invalid("snapshot existence without result"))?;
+                        let reads = next["args"][0]
+                            == "SELECT chunk, data FROM kv_store WHERE id = ?1 ORDER BY chunk"
+                            || next["port"] == "SNAPSHOT_STORE_KV.get";
+                        effect(
+                            if reads {
+                                "snapshot.get"
+                            } else {
+                                "snapshot.has"
+                            },
+                            args[1].clone(),
+                        )
                     } else if sql == "DELETE FROM kv_store WHERE id = ?1" {
                         let insert = records
                             .get(index + 1)
@@ -200,6 +221,12 @@ fn projected(records: &[&Value], key: &str) -> Result<Vec<Effect>, ReplayError> 
                     } else {
                         return Err(ReplayError::Unsupported(format!("raw SQL: {sql}")));
                     }
+                }
+                "SNAPSHOT_STORE_KV.list" => {
+                    if args != &json!([{"limit":1,"prefix":key}]) {
+                        return Err(invalid("unexpected snapshot existence fallback"));
+                    }
+                    continue;
                 }
                 "SNAPSHOT_STORE_KV.get" => {
                     if args != &json!([format!("{key}/{key}.snapshot"), {"type":"arrayBuffer"}]) {
@@ -351,6 +378,35 @@ pub(super) fn replay(transcript: &Transcript) -> Result<Vec<Effect>, ReplayError
                 }
                 effects.shrink_to_fit();
                 effects
+            }
+            ServerInput::Http(req) if req.method == "GET" && req.path.ends_with("/raw") => {
+                ports.set_now(recorded.now);
+                let outcome = async {
+                    use sync_server_core::domain::room::{RequestGate, RouteClass};
+                    if room.room.gate_request(RouteClass::Document).await? != RequestGate::Allowed {
+                        return Err(sync_server_core::domain::room::RoomError::MissingPeer);
+                    }
+                    room.room.raw_json(&SessionKey::new(key.clone())).await
+                }
+                .now_or_never()
+                .ok_or_else(|| invalid("read blocked"))?
+                .map_err(|e| ReplayError::Callback(e.to_string()))?;
+                let (status, body) = match outcome {
+                    Some(json) => (200, json.into_bytes()),
+                    None => (404, vec![]),
+                };
+                let response = records
+                    .iter()
+                    .find(|r| r["out"] == "response")
+                    .ok_or_else(|| invalid("missing HTTP response"))?;
+                let headers = json!({"access-control-allow-credentials":"true","access-control-allow-headers":"authorization,content-type,traceparent,tracestate","access-control-allow-methods":"GET,POST,PUT,PATCH,DELETE,OPTIONS"});
+                if response["status"] != status
+                    || decode(&response["body_b64"])? != body
+                    || response["headers"] != headers
+                {
+                    return Err(ReplayError::Mismatch("raw HTTP response differs".into()));
+                }
+                ports.take_effects()
             }
             other => match room.step(recorded.now, other)? {
                 StepResult::Done(effects) => effects,
