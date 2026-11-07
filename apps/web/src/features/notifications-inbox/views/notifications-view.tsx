@@ -101,6 +101,7 @@ import {
   isInboxNotification,
   isInboxRow,
   isInboxStackItem,
+  inboxSectionEnds,
 } from '../primitives/inbox-date-headers';
 import { createInboxFilters } from '../primitives/inbox-filters';
 import { createInboxList } from '../primitives/inbox-list';
@@ -331,6 +332,7 @@ export function NotificationsView(props: NotificationsViewProps) {
   // and a stack stays open through it.
   const stacks = createDisclosureState();
   const listItems = createInboxListItems(rows, stacks.isExpanded);
+  const sectionEnds = createMemo(() => inboxSectionEnds(listItems()));
   const anyStackOpen = createMemo(() =>
     rows().some((row) => row.count > 1 && stacks.isExpanded(row.id))
   );
@@ -703,6 +705,7 @@ export function NotificationsView(props: NotificationsViewProps) {
           unfolded={stacks.isExpanded(card.row().id)}
           unseen={card.row().unseen}
           highlighted={highlighted()}
+          endsSection={sectionEnds().has(card.row().id)}
           receded={
             anyStackOpen() &&
             !stacks.isExpanded(card.row().id) &&
@@ -763,6 +766,8 @@ export function NotificationsView(props: NotificationsViewProps) {
           text={item().text}
           time={formatTimestamp(item().at)}
           last={isLast()}
+          count={entry.row().count}
+          endsSection={sectionEnds().has(entry.place.id)}
           more={
             isLast()
               ? entry.row().count - entry.row().content.notifications.length
@@ -781,6 +786,11 @@ export function NotificationsView(props: NotificationsViewProps) {
             })
           }
           onDone={() => markNotificationDone(entry.row(), entry.notification())}
+          onToggleStack={() => {
+            // Hide leaves with the item; focus returns to its stack's row.
+            list.focus.set(entry.row().id, { reason: 'pointer' });
+            stacks.toggle(entry.row().id);
+          }}
         />
       </SwipeToDone>
     );
@@ -791,14 +801,14 @@ export function NotificationsView(props: NotificationsViewProps) {
       <Match when={!filters.showsNothing() && view().t === 'loading'}>
         <ListSkeleton.Root
           label={t('notificationsInbox.loading')}
-          class="px-3 touch:pt-(--mobile-content-inset-top)"
+          class="touch:pt-(--mobile-content-inset-top)"
         >
-          <div class="flex h-7 items-center px-[13px]">
+          <div class="flex h-7 items-center px-4">
             <ListSkeleton.Bar class="h-2 w-16" />
           </div>
           <For each={[0, 1, 2, 3, 4]}>
             {() => (
-              <ListSkeleton.Row class="mb-2.5 h-[83px] gap-3 rounded-xl px-[13px] mobile:mb-3 mobile:h-[89px]">
+              <ListSkeleton.Row class="h-[81px] items-start gap-3 px-4 py-3 touch:h-[81px] mobile:h-[87px]">
                 <ListSkeleton.Bar class="size-6 shrink-0 rounded-full mobile:size-10" />
                 <div class="flex min-w-0 flex-1 flex-col gap-2">
                   <ListSkeleton.Bar class="w-1/3" />

@@ -2,7 +2,7 @@ import { cn } from '@ui';
 
 /**
  * Names when the rows below it arrived: Home's section heading, with its label
- * starting where the inbox cards' text does.
+ * in line with the rows' avatars.
  */
 export function InboxDateHeader(props: {
   id: string;
@@ -14,8 +14,8 @@ export function InboxDateHeader(props: {
       <div
         role="gridcell"
         class={cn(
-          'truncate px-[25px] pt-1 pb-2.5 text-xs font-semibold tracking-tight text-ink-extra-muted/80 mobile:pb-1.5',
-          !props.isFirst && 'pt-4 mobile:pt-3'
+          'truncate px-4 pt-1 pb-1.5 text-xs font-semibold tracking-tight text-ink-extra-muted/80',
+          !props.isFirst && 'pt-4'
         )}
       >
         {props.label}

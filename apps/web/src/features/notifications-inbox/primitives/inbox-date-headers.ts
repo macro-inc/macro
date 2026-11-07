@@ -54,6 +54,21 @@ export const isInboxStackItem = (
 export const isInboxNotification = (item: InboxListItem) =>
   item.type !== 'date_header';
 
+/**
+ * The ids of the rows and unfolded notifications that end a date section, just
+ * above the next divider or at the end of the list, which draw no separator.
+ */
+export const inboxSectionEnds = (items: readonly InboxListItem[]) => {
+  const ends = new Set<string>();
+  items.forEach((item, index) => {
+    const next = items[index + 1];
+    if (isInboxNotification(item) && (!next || !isInboxNotification(next))) {
+      ends.add(item.id);
+    }
+  });
+  return ends;
+};
+
 export const dateHeaderLabel = (header: InboxDateHeaderItem) =>
   match(header.bucket.key)
     .with('last-few-minutes', () => t('notificationsInbox.dateLastFewMinutes'))
