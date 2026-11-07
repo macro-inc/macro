@@ -14,3 +14,6 @@ pub mod inbound;
 /// Outbound layer: postgres repository.
 #[cfg(feature = "outbound")]
 pub mod outbound;
+/// Conversions into the Soup wire models.
+#[cfg(feature = "list")]
+pub mod soup;

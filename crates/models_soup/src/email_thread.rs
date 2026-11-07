@@ -1,14 +1,12 @@
 use chrono::{DateTime, Utc};
-use doppleganger::{Doppleganger, Mirror};
 use macro_user_id::user_id::MacroUserIdStr;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 /// A contact participating in an email thread as displayed in Soup.
-#[derive(Clone, Debug, Doppleganger, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
 #[cfg_attr(feature = "mock", derive(PartialEq, Eq))]
-#[dg(backward = email::domain::models::Contact)]
 #[serde(rename_all = "camelCase")]
 pub struct SoupContact {
     /// Contact id.
@@ -24,10 +22,9 @@ pub struct SoupContact {
 }
 
 /// An email label as displayed in Soup.
-#[derive(Clone, Debug, Doppleganger, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
 #[cfg_attr(feature = "mock", derive(PartialEq, Eq))]
-#[dg(backward = email::domain::models::Label)]
 #[serde(rename_all = "camelCase")]
 pub struct SoupLabel {
     /// Label id.
@@ -49,10 +46,9 @@ pub struct SoupLabel {
 }
 
 /// Gmail-style message list visibility for a label.
-#[derive(Clone, Debug, Doppleganger, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
 #[cfg_attr(feature = "mock", derive(PartialEq, Eq))]
-#[dg(backward = email::domain::models::MessageListVisibility)]
 #[serde(rename_all = "camelCase")]
 pub enum SoupMessageListVisibility {
     /// Show the label in message lists.
@@ -62,10 +58,9 @@ pub enum SoupMessageListVisibility {
 }
 
 /// Gmail-style label list visibility.
-#[derive(Clone, Debug, Doppleganger, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
 #[cfg_attr(feature = "mock", derive(PartialEq, Eq))]
-#[dg(backward = email::domain::models::LabelListVisibility)]
 #[serde(rename_all = "camelCase")]
 pub enum SoupLabelListVisibility {
     /// Always show the label in label lists.
@@ -77,10 +72,9 @@ pub enum SoupLabelListVisibility {
 }
 
 /// Whether an email label is provider-created or user-created.
-#[derive(Clone, Debug, Doppleganger, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
 #[cfg_attr(feature = "mock", derive(PartialEq, Eq))]
-#[dg(backward = email::domain::models::LabelType)]
 #[serde(rename_all = "camelCase")]
 pub enum SoupLabelType {
     /// System label created by the provider.
@@ -90,10 +84,9 @@ pub enum SoupLabelType {
 }
 
 /// An email attachment as displayed in Soup.
-#[derive(Clone, Debug, Doppleganger, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
 #[cfg_attr(feature = "mock", derive(PartialEq, Eq))]
-#[dg(backward = email::domain::models::Attachment)]
 #[serde(rename_all = "camelCase")]
 pub struct SoupAttachment {
     /// Attachment id.
@@ -115,10 +108,9 @@ pub struct SoupAttachment {
 }
 
 /// Email thread preview data as displayed in Soup.
-#[derive(Clone, Debug, Doppleganger, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
 #[cfg_attr(feature = "mock", derive(PartialEq, Eq))]
-#[dg(backward = email::domain::models::EmailThreadPreview)]
 #[serde(rename_all = "camelCase")]
 pub struct SoupEmailThreadPreview {
     /// Thread id.
@@ -179,16 +171,4 @@ pub struct SoupEnrichedEmailThreadPreview<T = ()> {
     /// Extra fields passed from above
     #[serde(flatten)]
     pub extra: T,
-}
-
-impl From<email::domain::models::EnrichedEmailThreadPreview> for SoupEnrichedEmailThreadPreview<()> {
-    fn from(preview: email::domain::models::EnrichedEmailThreadPreview) -> Self {
-        Self {
-            thread: SoupEmailThreadPreview::mirror(preview.thread),
-            attachments: Vec::<SoupAttachment>::mirror(preview.attachments),
-            participants: Vec::<SoupContact>::mirror(preview.participants),
-            labels: Vec::<SoupLabel>::mirror(preview.labels),
-            extra: (),
-        }
-    }
 }

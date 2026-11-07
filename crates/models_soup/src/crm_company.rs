@@ -1,5 +1,4 @@
 use chrono::{DateTime, Utc};
-use crm::domain::model::{CrmCompanyForSoup, CrmDomain};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
@@ -17,17 +16,6 @@ pub struct SoupCrmDomain {
     pub domain: String,
     /// When the domain record was created.
     pub created_at: DateTime<Utc>,
-}
-
-impl From<CrmDomain> for SoupCrmDomain {
-    fn from(d: CrmDomain) -> Self {
-        SoupCrmDomain {
-            id: d.id,
-            company_id: d.company_id,
-            domain: d.domain,
-            created_at: d.created_at,
-        }
-    }
 }
 
 /// A CRM company as displayed in Soup. Carries the core company
@@ -64,32 +52,4 @@ pub struct SoupCrmCompany<T = ()> {
     /// Extra fields passed from above
     #[serde(flatten)]
     pub extra: T,
-}
-
-impl From<CrmCompanyForSoup> for SoupCrmCompany<()> {
-    fn from(c: CrmCompanyForSoup) -> Self {
-        let CrmCompanyForSoup {
-            company,
-            name,
-            description,
-            viewed_at,
-        } = c;
-        SoupCrmCompany {
-            id: company.id,
-            team_id: company.team_id,
-            name,
-            description,
-            email_sync: company.email_sync,
-            hidden: company.hidden,
-            created_at: company.created_at,
-            updated_at: company.updated_at,
-            viewed_at,
-            domains: company
-                .domains
-                .into_iter()
-                .map(SoupCrmDomain::from)
-                .collect(),
-            extra: (),
-        }
-    }
 }

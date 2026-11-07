@@ -1,7 +1,6 @@
 //! Team-owned CRM contacts exposed through Soup.
 
 use chrono::{DateTime, Utc};
-use crm::domain::model::CrmContactForSoup;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
@@ -37,25 +36,4 @@ pub struct SoupCrmContact<T = ()> {
     /// Extra fields supplied by Soup.
     #[serde(flatten)]
     pub extra: T,
-}
-
-impl From<CrmContactForSoup> for SoupCrmContact<()> {
-    fn from(value: CrmContactForSoup) -> Self {
-        let contact = value.contact;
-        Self {
-            id: contact.id,
-            team_id: value.team_id,
-            company_id: contact.company_id,
-            company_name: value.company_name,
-            email: contact.email,
-            name: contact.name,
-            hidden: contact.hidden,
-            first_interaction: contact.first_interaction,
-            last_interaction: contact.last_interaction,
-            created_at: contact.created_at,
-            updated_at: contact.updated_at,
-            viewed_at: value.viewed_at,
-            extra: (),
-        }
-    }
 }
