@@ -19,7 +19,7 @@ hexagonal architecture pattern.
 
 - Owns: favoriting/ordering for any entity type, behind `ports`, `inbound`,
   `outbound`, `ai_tools` feature flags.
-- Not here: the GraphQL favorites surface → `crates/graphql_favorite`.
+- Not here: the GraphQL favorites surface → `crates/graphql/graphql_favorite`.
 
 ## Boundaries
 

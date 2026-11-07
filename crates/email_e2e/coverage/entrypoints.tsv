@@ -17,38 +17,38 @@ gateway	refresh_email:LinkRemoved	both	/event=link_removed	crates/models_email/s
 gateway	refresh_email:PhotoSynced	both	/event=photo_synced	crates/models_email/src/email/api/refresh.rs:37
 gateway	refresh_email:UpdateLabels	gmail	/event=update_labels	crates/models_email/src/email/api/refresh.rs:30
 gateway	refresh_email:UpsertMessage	both	/event=upsert_message	crates/models_email/src/email/api/refresh.rs:28
-graphql	CompleteMutationRoot.cancelEmailSend	both		crates/graphql_email/src/send.rs:169
-graphql	CompleteMutationRoot.deleteEmailDraft	both		crates/graphql_email/src/mutation.rs:952
-graphql	CompleteMutationRoot.markEmailThreadSeen	both		crates/graphql_email/src/mutation.rs:678
-graphql	CompleteMutationRoot.markEmailThreadUnread	both		crates/graphql_email/src/mutation.rs:705
-graphql	CompleteMutationRoot.resolveEmailMessageOperation	both		crates/graphql_email/src/mutation.rs:755
-graphql	CompleteMutationRoot.saveEmailDraft	both		crates/graphql_email/src/mutation.rs:907
-graphql	CompleteMutationRoot.sendEmailAttempt	both		crates/graphql_email/src/send.rs:132
-graphql	CompleteMutationRoot.sendEmailMessage	both		crates/graphql_email/src/mutation.rs:894
-graphql	CompleteMutationRoot.setEmailThreadArchived	both		crates/graphql_email/src/mutation.rs:796
-graphql	CompleteMutationRoot.setEmailThreadState	both		crates/graphql_email/src/mutation.rs:732
-graphql	CompleteMutationRoot.setEmailThreadsArchived	both		crates/graphql_email/src/mutation.rs:817
-graphql	CompleteMutationRoot.updateEmailThreadLabel	both		crates/graphql_email/src/mutation.rs:863
-graphql	GraphqlEmailLink.sendAs	both		crates/graphql_email/src/user_objects/senders.rs:18
-graphql	GraphqlSoupEmailThread.focus	both		crates/complete_graph/src/edges.rs:607
-graphql	GraphqlSoupEmailThread.hasReceivedMail	both		crates/complete_graph/src/edges.rs:588
-graphql	GraphqlSoupEmailThread.latestContentMessage	both		crates/complete_graph/src/edges.rs:706
-graphql	GraphqlSoupEmailThread.latestInboundMessageTs	both		crates/complete_graph/src/edges.rs:576
-graphql	GraphqlSoupEmailThread.latestNonSpamMessageTs	both		crates/complete_graph/src/edges.rs:628
-graphql	GraphqlSoupEmailThread.latestOutboundMessageTs	both		crates/complete_graph/src/edges.rs:616
-graphql	GraphqlSoupEmailThread.linkId	both		crates/complete_graph/src/edges.rs:570
-graphql	GraphqlSoupEmailThread.mailAllPreview	both		crates/complete_graph/src/edges.rs:651
-graphql	GraphqlSoupEmailThread.mailDraftPreview	both		crates/complete_graph/src/edges.rs:664
-graphql	GraphqlSoupEmailThread.mailDraftState	both		crates/complete_graph/src/edges.rs:639
-graphql	GraphqlSoupEmailThread.mailSentPreview	both		crates/complete_graph/src/edges.rs:677
-graphql	GraphqlSoupEmailThread.messages	both		crates/complete_graph/src/edges.rs:690
-graphql	GraphqlSoupEmailThread.reminderReturnedAt	both		crates/complete_graph/src/edges.rs:594
-graphql	GraphqlUser.emailFocus	both		crates/complete_graph/src/schema.rs:1123
-graphql	GraphqlUser.emailLabels	both		crates/graphql_email/src/user_query.rs:45
-graphql	GraphqlUser.emailLinks	both		crates/graphql_email/src/user_query.rs:62
-graphql	GraphqlUser.emailSendAttempt	both		crates/complete_graph/src/schema.rs:1084
-graphql	GraphqlUser.emailThread	both		crates/complete_graph/src/schema.rs:1095
-graphql	GraphqlUser.pendingEmailSends	both		crates/complete_graph/src/schema.rs:1073
+graphql	CompleteMutationRoot.cancelEmailSend	both		crates/graphql/graphql_email/src/send.rs:169
+graphql	CompleteMutationRoot.deleteEmailDraft	both		crates/graphql/graphql_email/src/mutation.rs:952
+graphql	CompleteMutationRoot.markEmailThreadSeen	both		crates/graphql/graphql_email/src/mutation.rs:678
+graphql	CompleteMutationRoot.markEmailThreadUnread	both		crates/graphql/graphql_email/src/mutation.rs:705
+graphql	CompleteMutationRoot.resolveEmailMessageOperation	both		crates/graphql/graphql_email/src/mutation.rs:755
+graphql	CompleteMutationRoot.saveEmailDraft	both		crates/graphql/graphql_email/src/mutation.rs:907
+graphql	CompleteMutationRoot.sendEmailAttempt	both		crates/graphql/graphql_email/src/send.rs:132
+graphql	CompleteMutationRoot.sendEmailMessage	both		crates/graphql/graphql_email/src/mutation.rs:894
+graphql	CompleteMutationRoot.setEmailThreadArchived	both		crates/graphql/graphql_email/src/mutation.rs:796
+graphql	CompleteMutationRoot.setEmailThreadState	both		crates/graphql/graphql_email/src/mutation.rs:732
+graphql	CompleteMutationRoot.setEmailThreadsArchived	both		crates/graphql/graphql_email/src/mutation.rs:817
+graphql	CompleteMutationRoot.updateEmailThreadLabel	both		crates/graphql/graphql_email/src/mutation.rs:863
+graphql	GraphqlEmailLink.sendAs	both		crates/graphql/graphql_email/src/user_objects/senders.rs:18
+graphql	GraphqlSoupEmailThread.focus	both		crates/graphql/complete_graph/src/edges.rs:607
+graphql	GraphqlSoupEmailThread.hasReceivedMail	both		crates/graphql/complete_graph/src/edges.rs:588
+graphql	GraphqlSoupEmailThread.latestContentMessage	both		crates/graphql/complete_graph/src/edges.rs:706
+graphql	GraphqlSoupEmailThread.latestInboundMessageTs	both		crates/graphql/complete_graph/src/edges.rs:576
+graphql	GraphqlSoupEmailThread.latestNonSpamMessageTs	both		crates/graphql/complete_graph/src/edges.rs:628
+graphql	GraphqlSoupEmailThread.latestOutboundMessageTs	both		crates/graphql/complete_graph/src/edges.rs:616
+graphql	GraphqlSoupEmailThread.linkId	both		crates/graphql/complete_graph/src/edges.rs:570
+graphql	GraphqlSoupEmailThread.mailAllPreview	both		crates/graphql/complete_graph/src/edges.rs:651
+graphql	GraphqlSoupEmailThread.mailDraftPreview	both		crates/graphql/complete_graph/src/edges.rs:664
+graphql	GraphqlSoupEmailThread.mailDraftState	both		crates/graphql/complete_graph/src/edges.rs:639
+graphql	GraphqlSoupEmailThread.mailSentPreview	both		crates/graphql/complete_graph/src/edges.rs:677
+graphql	GraphqlSoupEmailThread.messages	both		crates/graphql/complete_graph/src/edges.rs:690
+graphql	GraphqlSoupEmailThread.reminderReturnedAt	both		crates/graphql/complete_graph/src/edges.rs:594
+graphql	GraphqlUser.emailFocus	both		crates/graphql/complete_graph/src/schema.rs:1123
+graphql	GraphqlUser.emailLabels	both		crates/graphql/graphql_email/src/user_query.rs:45
+graphql	GraphqlUser.emailLinks	both		crates/graphql/graphql_email/src/user_query.rs:62
+graphql	GraphqlUser.emailSendAttempt	both		crates/graphql/complete_graph/src/schema.rs:1084
+graphql	GraphqlUser.emailThread	both		crates/graphql/complete_graph/src/schema.rs:1095
+graphql	GraphqlUser.pendingEmailSends	both		crates/graphql/complete_graph/src/schema.rs:1073
 http	DELETE /email/backfill/gmail	gmail		services/email_service/src/api/email/backfill.rs:12
 http	DELETE /email/drafts/scheduled/{message_id}	both		services/email_service/src/api/email/drafts/scheduled.rs:10
 http	DELETE /email/drafts/{id}	both		services/email_service/src/api/email/drafts.rs:24

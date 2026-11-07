@@ -476,9 +476,9 @@ claim about a newer deployment.
 | Backfill | Job tracking, retries, storage, downstream processing, and outbox patterns. | Enumerates Gmail threads in batches of 500, requires total thread counts, and prioritizes CATEGORY_PERSONAL. Outlook needs message/folder enumeration. |
 | Connection and delivery | Linking groundwork, local draft model, scheduled-delivery service boundaries, and shared rendering. | Active connection/reconnect UI uses Gmail; initialization assumes Google grants; the delivery adapter binds to `GmailApi`. |
 
-The evidence is in the [GraphQL message fields](../../crates/graphql_email/src/objects.rs),
-[mailbox objects](../../crates/graphql_email/src/user_objects.rs),
-[mutation boundary](../../crates/graphql_email/src/mutation.rs), and
+The evidence is in the [GraphQL message fields](../../crates/graphql/graphql_email/src/objects.rs),
+[mailbox objects](../../crates/graphql/graphql_email/src/user_objects.rs),
+[mutation boundary](../../crates/graphql/graphql_email/src/mutation.rs), and
 [GraphQL-to-viewer mapper](../../apps/web/src/lib/queries/email/graphql/mapper.ts).
 The mapper is strong evidence that Outlook should use the existing message viewer.
 
