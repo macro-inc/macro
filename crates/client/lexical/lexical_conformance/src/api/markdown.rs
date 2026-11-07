@@ -72,7 +72,7 @@ pub(crate) fn call(
                 .flatten();
             let opts = MarkdownOptions {
                 should_preserve_new_lines: args.get(2).and_then(Value::as_bool).unwrap_or(false),
-                ..Default::default()
+                ..r.markdown_options
             };
             if selection
                 .as_ref()
@@ -101,7 +101,7 @@ pub(crate) fn call(
             }
             let opts = MarkdownOptions {
                 should_preserve_new_lines: args.get(2).and_then(Value::as_bool).unwrap_or(false),
-                ..Default::default()
+                ..r.markdown_options
             };
             Ok(json!(convert_to_markdown_string(
                 &view,
@@ -117,7 +117,7 @@ pub(crate) fn call(
             let opts = MarkdownOptions {
                 should_preserve_new_lines: args.get(3).and_then(Value::as_bool).unwrap_or(false),
                 should_merge_adjacent_lines: args.get(4).and_then(Value::as_bool).unwrap_or(false),
-                ..Default::default()
+                ..r.markdown_options
             };
             let text = string(args.first().ok_or_else(|| fail("markdown source"))?)?;
             let t = registry(args.get(1))?;

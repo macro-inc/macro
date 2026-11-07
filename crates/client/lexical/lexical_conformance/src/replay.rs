@@ -3,6 +3,8 @@ use crate::{fixture::Fixture, snapshot, test_nodes};
 use lexical_model::*;
 use serde_json::{Value, json};
 use std::collections::HashMap;
+mod config;
+use config::validate_config;
 
 /// A malformed fixture, unsupported operation, or observable oracle mismatch.
 #[derive(Debug, thiserror::Error)]
@@ -53,6 +55,7 @@ pub(crate) fn string(value: &Value) -> Result<&str> {
 #[derive(Default)]
 pub struct Replayer {
     pub(crate) rich_text_registered: bool,
+    pub(crate) markdown_options: lexical_markdown::MarkdownOptions,
     pub(crate) in_callback: bool,
     pub(crate) carets: Vec<crate::api::caret::CaretValue>,
     pub(crate) handles: HashMap<String, Value>,
@@ -69,7 +72,7 @@ pub struct Replayer {
     pub(crate) tape_positions: Vec<usize>,
     pub(crate) updates: Vec<Value>,
     pub(crate) causes: Vec<Value>,
-    pub(crate) pending_editor_random: Option<f64>,
+    pub(crate) pending_editor_random: Vec<f64>,
     pub(crate) clock: f64,
     pub(crate) tick: u64,
     pub(crate) attached: bool,
@@ -91,11 +94,15 @@ impl Replayer {
         {
             return Err(fail("unsupported fixture initialization"));
         }
-        if !fixture.normalize.is_empty() {
-            return Err(fail(format!(
-                "unimplemented declared normalization: {:?}",
-                fixture.normalize
-            )));
+        for normalization in &fixture.normalize {
+            match normalization.as_str() {
+                "listIndent: 2" => self.markdown_options.list_indent = 2,
+                _ => {
+                    return Err(fail(format!(
+                        "unimplemented declared normalization: {normalization}"
+                    )));
+                }
+            }
         }
         if fixture
             .initial
@@ -104,7 +111,9 @@ impl Replayer {
         {
             return Err(fail("unsupported initial fields"));
         }
-        if fixture.source.version != "0.45.0" || fixture.source.repo != "lexical" {
+        if fixture.source.version != "0.45.0"
+            || !matches!(fixture.source.repo.as_str(), "lexical" | "macro")
+        {
             return Err(fail("unsupported upstream version/repository"));
         }
         if fixture.trace.iter().any(|op| op["op"] == "createEditor") {
@@ -145,9 +154,14 @@ impl Replayer {
                     }
                     validate_config(&op["config"])?;
                     self.attached = op["config"]["rootElement"] == true;
-                    if self.pending_editor_random.take().is_none() {
-                        return Err(fail("missing editor-id random draw"));
+                    let draws = 1 + usize::from(op["config"]["namespaceGenerated"] == true);
+                    if self.pending_editor_random.len() != draws {
+                        return Err(fail(format!(
+                            "editor random draw count: {} != {draws}",
+                            self.pending_editor_random.len()
+                        )));
                     }
+                    self.pending_editor_random.clear();
                     let nodes = op["config"]["nodes"]
                         .as_array()
                         .ok_or_else(|| fail("configured nodes"))?
@@ -322,7 +336,7 @@ impl Replayer {
         if !self.microtasks.is_empty() {
             return Err(fail("unconsumed microtask callback"));
         }
-        if self.pending_editor_random.is_some() {
+        if !self.pending_editor_random.is_empty() {
             return Err(fail("unconsumed editor entropy"));
         }
         for (position, tape) in self.tape_positions.iter().zip(&self.tapes) {
@@ -338,14 +352,14 @@ impl Replayer {
     fn host_input(&mut self, op: &Value) -> Result<()> {
         match string(&op["op"])? {
             "entropy" => {
-                if op["src"] != "random" || self.pending_editor_random.is_some() {
+                if op["src"] != "random" || self.pending_editor_random.len() >= 2 {
                     return Err(fail("unsupported entropy draw"));
                 }
                 let value = op["v"]
                     .as_f64()
                     .filter(|v| *v >= 0.0 && *v < 1.0)
                     .ok_or_else(|| fail("invalid editor random draw"))?;
-                self.pending_editor_random = Some(value);
+                self.pending_editor_random.push(value);
             }
             "clock" => {
                 if op["src"] != "perf" {
@@ -791,77 +805,6 @@ pub(crate) fn key_index(value: &Value) -> Result<NodeKey> {
 }
 pub(crate) fn node_key(value: &Value) -> Result<NodeKey> {
     key_index(&value["$node"])
-}
-
-fn validate_config(config: &Value) -> Result<()> {
-    let object = config
-        .as_object()
-        .ok_or_else(|| fail("missing editor config"))?;
-    for key in object.keys() {
-        if ![
-            "namespace",
-            "nodes",
-            "replacements",
-            "plugins",
-            "theme",
-            "editable",
-            "rootElement",
-        ]
-        .contains(&key.as_str())
-        {
-            return Err(fail(format!("unsupported config field {key}")));
-        }
-    }
-    string(&config["namespace"])?;
-    if !config["editable"].is_boolean() || !config["rootElement"].is_boolean() {
-        return Err(fail("invalid editor host config"));
-    }
-    if !config["replacements"].as_array().is_some_and(Vec::is_empty)
-        || !config["plugins"].as_array().is_some_and(Vec::is_empty)
-    {
-        return Err(fail("unimplemented configured replacement/plugin"));
-    }
-    for node in config["nodes"]
-        .as_array()
-        .ok_or_else(|| fail("missing configured nodes"))?
-    {
-        if ![
-            "root",
-            "text",
-            "linebreak",
-            "tab",
-            "paragraph",
-            "artificial",
-            "heading",
-            "list",
-            "listitem",
-            "quote",
-            "code",
-            "table",
-            "tablecell",
-            "tablerow",
-            "hashtag",
-            "code-highlight",
-            "autolink",
-            "link",
-            "overflow",
-            "test_block",
-            "test_segmented",
-            "test_exclude_from_copy_block",
-            "test_decorator",
-            "test_inline_block",
-            "test_shadow_root",
-            "test_text",
-            "mark",
-        ]
-        .contains(&string(node)?)
-        {
-            return Err(fail(format!("unimplemented configured class {node}")));
-        }
-    }
-    // Theme, namespace, editability and root attachment are host inputs. The
-    // interpreter executes no DOM path; view APIs fail rather than using a fake.
-    Ok(())
 }
 
 #[cfg(test)]

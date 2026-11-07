@@ -312,3 +312,40 @@ fn markdown_normalization_replays_real_calls_and_rejects_wrong_returns() -> Resu
     assert!(Replayer::default().replay(&fixture).is_err());
     Ok(())
 }
+
+#[test]
+fn generated_namespace_consumes_both_host_draws() -> Result<()> {
+    let fixture: Fixture = serde_json::from_str(include_str!(
+        "../../../../../../packages/lexical-conformance/fixtures/upstream/lexical-headless/5f8fd33bbfe13d33.json"
+    ))?;
+    Replayer::default().replay(&fixture)?;
+    let mut missing_draw = fixture;
+    missing_draw.trace.remove(0);
+    assert!(Replayer::default().replay(&missing_draw).is_err());
+    Ok(())
+}
+
+#[test]
+fn macro_markdown_uses_two_space_nested_list_indentation() -> Result<()> {
+    let mut r = Replayer {
+        in_callback: true,
+        markdown_options: lexical_markdown::MarkdownOptions {
+            list_indent: 2,
+            ..Default::default()
+        },
+        ..Default::default()
+    };
+    let mut editor = test_nodes::configured_builder(&["list".into(), "listitem".into()], false)
+        .build()
+        .expect("registered lists");
+    let mut tx = editor.transaction();
+    crate::api::markdown::call(
+        &mut r,
+        &mut tx,
+        "$convertFromMarkdownString",
+        &[json!("- a\n  - b")],
+    )?;
+    let markdown = crate::api::markdown::call(&mut r, &mut tx, "$convertToMarkdownString", &[])?;
+    assert_eq!(markdown, json!("- a\n  - b"));
+    Ok(())
+}
