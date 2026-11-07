@@ -11670,6 +11670,9 @@
       "crates/native_app_service",
       "crates/workspace-hack"
     ],
+    "natural_time": [
+      "crates/natural_time"
+    ],
     "non_empty": [
       "crates/non_empty"
     ],

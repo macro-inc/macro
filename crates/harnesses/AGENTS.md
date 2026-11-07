@@ -100,6 +100,8 @@ already authorized the team admin, never for an HTTP route.
 - `GET /harnesses/me` logs `harness_presence_disagreement` when the daemon sends
   `RUNTIME_CONNECTED_HEADER` and the harness reads offline
   (`infra/stacks/monitoring/monitors/harness-presence.ts` alerts on it).
+- Deleting a harness only stamps `deleted_at`; a database trigger then nulls
+  `agent_configs.harness_id` for its agents, as a hard delete's `SET NULL` would.
 
 ## Related
 

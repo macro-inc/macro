@@ -1,9 +1,10 @@
 use super::*;
 use crate::domain::{
     models::{
-        AgentChannelScope, AgentMcpServer, AgentMcpServers, BotChannelListCaller, BotChannelType,
-        CreateAgentRequest, CreateBotRequest, CreateBotTokenRequest, CreateChannelScopedBotRequest,
-        PatchAgentRequest, PatchBotRequest, UpdateAgentRequest,
+        AgentChannelScope, AgentHarnessSelection, AgentMcpServer, AgentMcpServers,
+        BotChannelListCaller, BotChannelType, CreateAgentRequest, CreateBotRequest,
+        CreateBotTokenRequest, CreateChannelScopedBotRequest, PatchAgentRequest, PatchBotRequest,
+        UpdateAgentRequest,
     },
     ports::{BotError, BotService, McpAppCatalog},
     service::BotServiceImpl,
@@ -2175,6 +2176,133 @@ async fn macrod_agents_require_a_registered_usable_harness(pool: PgPool) -> anyh
         .await;
     assert!(matches!(stranger, Err(BotError::Unauthorized)));
 
+    Ok(())
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn patching_settings_keeps_every_runtime(pool: PgPool) -> anyhow::Result<()> {
+    let service = service(&pool);
+    insert_user(&pool, USER_OWNER).await?;
+    let harness = insert_harness(&pool, Some(USER_OWNER), None).await?;
+    let in_memory = CreateAgentRequest {
+        harness: "in-memory".to_string(),
+        ..create_agent_req("in-memory-agent", AgentChannelScope::All)
+    };
+    let cursor = create_agent_req("cursor-agent", AgentChannelScope::All);
+    let macrod = macrod_agent_req("macrod-agent", Some(harness));
+
+    for create in [in_memory, cursor, macrod] {
+        let (runtime, host) = (create.harness.clone(), create.harness_id);
+        let created = service.create_agent(user_id(USER_OWNER), create).await?;
+
+        let patched = service
+            .patch_agent(
+                user_id(USER_OWNER),
+                created.bot.id,
+                PatchAgentRequest {
+                    instructions: Some("Answer in one line.".to_string()),
+                    ..PatchAgentRequest::default()
+                },
+            )
+            .await?;
+
+        assert_eq!(patched.instructions, "Answer in one line.");
+        assert_eq!(patched.harness, runtime);
+        assert_eq!(patched.harness_id, host);
+    }
+    Ok(())
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn deleting_a_harness_leaves_its_agents_unbound_and_patchable(
+    pool: PgPool,
+) -> anyhow::Result<()> {
+    let service = service(&pool);
+    let team_id = Uuid::new_v4();
+    insert_team_user(&pool, team_id, TEAM_MEMBER, "member").await?;
+    let team_harness = insert_harness(&pool, None, Some(team_id)).await?;
+    let agent = service
+        .create_agent(
+            user_id(TEAM_MEMBER),
+            macrod_agent_req("opencode", Some(team_harness)),
+        )
+        .await?;
+
+    // The harnesses service deletes a harness by stamping `deleted_at`.
+    sqlx::query!(
+        "UPDATE harnesses SET deleted_at = now() WHERE id = $1",
+        team_harness.as_uuid(),
+    )
+    .execute(&pool)
+    .await?;
+
+    let unbound = PgBotsRepo::new(pool.clone())
+        .get_agent(agent.bot.id)
+        .await?
+        .expect("agent outlives its harness");
+    assert_eq!(unbound.harness, "macrod");
+    assert_eq!(unbound.harness_id, None);
+
+    // Settings other than the runtime stay editable while it is unbound.
+    let patched = service
+        .patch_agent(
+            user_id(TEAM_MEMBER),
+            agent.bot.id,
+            PatchAgentRequest {
+                instructions: Some("Answer in one line.".to_string()),
+                ..PatchAgentRequest::default()
+            },
+        )
+        .await?;
+    assert_eq!(patched.instructions, "Answer in one line.");
+    assert_eq!(patched.harness_id, None);
+
+    // Choosing the runtime still requires a live harness.
+    let unbound_choice = service
+        .patch_agent(
+            user_id(TEAM_MEMBER),
+            agent.bot.id,
+            PatchAgentRequest {
+                harness: Some(AgentHarnessSelection {
+                    harness: "macrod".to_string(),
+                    harness_id: None,
+                }),
+                ..PatchAgentRequest::default()
+            },
+        )
+        .await;
+    assert!(matches!(unbound_choice, Err(BotError::BadRequest(_))));
+
+    let deleted_choice = service
+        .patch_agent(
+            user_id(TEAM_MEMBER),
+            agent.bot.id,
+            PatchAgentRequest {
+                harness: Some(AgentHarnessSelection {
+                    harness: "macrod".to_string(),
+                    harness_id: Some(team_harness),
+                }),
+                ..PatchAgentRequest::default()
+            },
+        )
+        .await;
+    assert!(matches!(deleted_choice, Err(BotError::BadRequest(_))));
+
+    let rebound_harness = insert_harness(&pool, None, Some(team_id)).await?;
+    let rebound = service
+        .patch_agent(
+            user_id(TEAM_MEMBER),
+            agent.bot.id,
+            PatchAgentRequest {
+                harness: Some(AgentHarnessSelection {
+                    harness: "macrod".to_string(),
+                    harness_id: Some(rebound_harness),
+                }),
+                ..PatchAgentRequest::default()
+            },
+        )
+        .await?;
+    assert_eq!(rebound.harness_id, Some(rebound_harness));
     Ok(())
 }
 

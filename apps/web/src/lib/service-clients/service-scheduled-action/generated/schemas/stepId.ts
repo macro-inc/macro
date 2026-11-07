@@ -6,4 +6,8 @@
  * OpenAPI spec version: 0.1.0
  */
 
-export type RoutineTemplateTask = { [key: string]: unknown };
+/**
+ * Names a step's output: a lowercase letter, then up to 31 lowercase
+letters, digits or underscores.
+ */
+export type StepId = string;
