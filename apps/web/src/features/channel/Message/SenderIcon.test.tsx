@@ -3,6 +3,7 @@ import { MACRO_AGENT_PRINCIPAL_ID } from '@core/constant/macroAgent';
 import { MACRO_NEW_PRINCIPAL_ID } from '@core/constant/macroNew';
 import type { MessageData } from '@core/messages/types';
 import { cleanup, render } from '@solidjs/testing-library';
+import { QueryClient, QueryClientProvider } from '@tanstack/solid-query';
 import type { JSX } from 'solid-js';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { MessageProvider } from './context';
@@ -50,9 +51,11 @@ const message = (senderId: string, sender?: MessageData['sender']) =>
 
 const renderSender = (data: MessageData) =>
   render(() => (
-    <MessageProvider value={() => data}>
-      <SenderIcon />
-    </MessageProvider>
+    <QueryClientProvider client={new QueryClient()}>
+      <MessageProvider value={() => data}>
+        <SenderIcon />
+      </MessageProvider>
+    </QueryClientProvider>
   ));
 
 describe('SenderIcon', () => {

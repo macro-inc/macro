@@ -12,7 +12,7 @@ import type {
 } from '@service-agent-fold/generated/types';
 import type { AgentSessionLogEntryDto } from '@service-agent-harness/generated/schemas';
 import { err, ok } from 'neverthrow';
-import { batch, createSignal, Show, Suspense } from 'solid-js';
+import { batch, createSignal, type JSX, Show, Suspense } from 'solid-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { AgentSessionHandle } from './create-agent-session';
 
@@ -68,6 +68,9 @@ vi.mock('@queries/agent-session/session-metadata-sync', () => ({
   subscribeAgentSessionUpdated: () => () => {},
 }));
 
+const { QueryClient, QueryClientProvider } = await import(
+  '@tanstack/solid-query'
+);
 const { cleanup, render, screen } = await import('@solidjs/testing-library');
 const { AgentSession } = await import('@core/agent-session/AgentSession');
 const { forgetRecentlyViewed } = await import(
@@ -97,11 +100,20 @@ function Pane() {
 }
 
 const mount = () =>
-  render(() => (
-    <Suspense fallback={<p>loading</p>}>
-      <Pane />
-    </Suspense>
-  ));
+  render(
+    () => (
+      <Suspense fallback={<p>loading</p>}>
+        <Pane />
+      </Suspense>
+    ),
+    { wrapper: TestQueryClientProvider }
+  );
+
+const TestQueryClientProvider = (props: { children: JSX.Element }) => (
+  <QueryClientProvider client={new QueryClient()}>
+    {props.children}
+  </QueryClientProvider>
+);
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -221,11 +233,14 @@ it('keeps view readiness pending through provisioning and the first transcript l
     });
     return <h1>{live.session()?.name ?? 'Provisioning'}</h1>;
   }
-  render(() => (
-    <TraceFlow name="view.agent">
-      <ProvisionedPane />
-    </TraceFlow>
-  ));
+  render(
+    () => (
+      <TraceFlow name="view.agent">
+        <ProvisionedPane />
+      </TraceFlow>
+    ),
+    { wrapper: TestQueryClientProvider }
+  );
   await Promise.resolve();
   expect(readiness.painted).not.toHaveBeenCalled();
   batch(() => {
@@ -248,11 +263,14 @@ it('settles view readiness when provisioning fails without a session id', async 
     });
     return null;
   }
-  render(() => (
-    <TraceFlow name="view.agent">
-      <FailedPane />
-    </TraceFlow>
-  ));
+  render(
+    () => (
+      <TraceFlow name="view.agent">
+        <FailedPane />
+      </TraceFlow>
+    ),
+    { wrapper: TestQueryClientProvider }
+  );
   await Promise.resolve();
   expect(readiness.painted).not.toHaveBeenCalled();
   setPending(false);
@@ -315,11 +333,14 @@ describe('the transcript store', () => {
       });
       return <h1>{handle.session()?.name}</h1>;
     }
-    render(() => (
-      <Suspense fallback={null}>
-        <TranscriptState />
-      </Suspense>
-    ));
+    render(
+      () => (
+        <Suspense fallback={null}>
+          <TranscriptState />
+        </Suspense>
+      ),
+      { wrapper: TestQueryClientProvider }
+    );
     await screen.findByText('A session');
     const shared = AgentSession.get(SESSION);
     if (!handle || !shared) throw new Error('session was not mounted');
