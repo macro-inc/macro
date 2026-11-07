@@ -43,6 +43,17 @@ impl ElementNode for CommentNode {
     fn as_parent_mut(&mut self) -> Option<&mut Self::Parent> {
         Some(&mut self.mark)
     }
+    fn insert_new_after(
+        tx: &mut Transaction<'_>,
+        this: Id<Self>,
+        _: SelectionSlot,
+        restore_selection: bool,
+    ) -> crate::Result<Option<NodeKey>> {
+        let data = tx.get_or_err::<Self>(this)?.clone();
+        let next = tx.create(data)?;
+        tx.insert_after(this, next, restore_selection)?;
+        Ok(Some(next.key()))
+    }
     fn json_version(&self) -> u32 {
         1
     }
