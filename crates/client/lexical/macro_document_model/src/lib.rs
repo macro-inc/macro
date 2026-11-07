@@ -20,3 +20,8 @@ pub mod markdown;
 /// Ordered Macro markdown transformers and conversion helpers.
 pub mod transformers;
 
+
+/// URL validation and source link recognition modes.
+pub mod links;
+/// Mention projections for previews, search, and embeddings.
+pub mod parsers;
