@@ -167,23 +167,22 @@ impl<'state> StateRef<'state> {
             nodes.pop();
         }
         if nodes.is_empty() && range.anchor == range.focus {
-            let point = range.anchor;
-            let key = match point {
-                Point::Text { key, .. } => key,
-                Point::Element { key, offset } => {
-                    if let Some(child) = self.child_at_index(key, offset) {
-                        self.first_descendant(child).unwrap_or(child)
-                    } else if let Some(child) = offset
-                        .0
-                        .checked_sub(1)
-                        .and_then(|index| self.child_at_index(key, ChildIndex(index)))
-                    {
-                        self.last_descendant(child).unwrap_or(child)
-                    } else {
-                        key
-                    }
-                }
+            let anchor = caret_from_point(self, &range.anchor, CaretDirection::Next)?;
+            let normalized = normalize_caret(self, anchor)?;
+            let flipped = normalize_caret(self, anchor.flipped(self))?;
+            let candidate = |caret: PointCaret| match caret {
+                PointCaret::Text(text) => Some(text.origin),
+                _ => caret.node_at_caret(self),
             };
+            let key = candidate(normalized)
+                .or_else(|| candidate(flipped))
+                .unwrap_or_else(|| {
+                    if anchor.node_at_caret(self).is_some() {
+                        normalized.origin()
+                    } else {
+                        flipped.origin()
+                    }
+                });
             nodes.push(key);
         }
         Ok(nodes)
@@ -203,7 +202,9 @@ impl<'state> StateRef<'state> {
         let offset = |point: Point| -> Result<Utf16Offset, Error> {
             Ok(match point {
                 Point::Text { key, offset } => {
-                    self.text_data(key)?.text.byte_offset(offset)?;
+                    if offset > self.text_data(key)?.text.utf16_len() {
+                        return Err(Error::Utf16OffsetOutOfRange(offset));
+                    }
                     offset
                 }
                 Point::Element { key, offset } => {

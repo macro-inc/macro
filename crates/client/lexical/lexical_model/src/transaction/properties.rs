@@ -350,8 +350,11 @@ impl TextMut<'_, '_> {
         let end = self.data().text.utf16_len();
         let anchor = anchor.unwrap_or(end);
         let focus = focus.unwrap_or(end);
-        self.data().text.byte_offset(anchor)?;
-        self.data().text.byte_offset(focus)?;
+        for offset in [anchor, focus] {
+            if offset > end {
+                return Err(Error::Utf16OffsetOutOfRange(offset));
+            }
+        }
         self.tx
             .select_points(Point::text(self.key, anchor), Point::text(self.key, focus))
     }
