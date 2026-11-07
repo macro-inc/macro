@@ -96,10 +96,10 @@ existing SHA-256 pin is checked before caching a newly fetched certificate.
 
 ## Devbox firewall and verification
 
-The devbox must admit the runtime's tailnet IP to the stack's six TCP host
+The devbox must admit the runtime's tailnet IP to the stack's seven TCP host
 ports: agent egress, harness, document storage, auth, agent git, and the computer
-gateway. Read them from the instance's `portmap.json`; do not expose the entire
-named-instance port window.
+gateway, plus the connection gateway websocket. Read them from the instance's
+`portmap.json`; do not expose the entire named-instance port window.
 On this devbox, both `ts-input` and `nixos-fw` already accept `-i tailscale0`,
 and `DOCKER-USER` has no restrictive rules, so no extra rule is needed.
 Verify without restarting anything:
@@ -112,15 +112,15 @@ sudo -n iptables -S DOCKER-USER
 ```
 
 On a devbox with a restrictive INPUT policy, insert this rule before its reject
-(use the runtime IP and the instance's six host ports):
+(use the runtime IP and the instance's seven host ports):
 
 ```sh
-sudo -n iptables -I INPUT 1 -i tailscale0 -s <runtime-tailnet-ip>/32 -d 100.116.73.13 -p tcp -m multiport --dports <egress>,<harness>,<storage>,<auth>,<agent-git>,<computer-gateway> -j ACCEPT
+sudo -n iptables -I INPUT 1 -i tailscale0 -s <runtime-tailnet-ip>/32 -d 100.116.73.13 -p tcp -m multiport --dports <egress>,<harness>,<storage>,<auth>,<agent-git>,<computer-gateway>,<connection-gateway-websocket> -j ACCEPT
 ```
 
 For Docker-published ports, also allow forwarding in `DOCKER-USER` if that chain
 rejects traffic. Match the original published destination because DNAT has
-already run (repeat for the six host ports):
+already run (repeat for the seven host ports):
 
 ```sh
 sudo -n iptables -I DOCKER-USER 1 -i tailscale0 -s <runtime-tailnet-ip>/32 -p tcp -m conntrack --ctorigdst 100.116.73.13 --ctorigdstport <host-port> -j ACCEPT
@@ -151,10 +151,12 @@ Boxes on `boxbr0` get DHCP/DNS from the bridge and outbound IPv4 internet
 masqueraded to the runtime's `tailscale0` address. All other traffic exiting
 `tailscale0` is dropped, as are the rest of 100.64.0.0/10, private ranges,
 metadata, tcp/25 and IPv6. The default port list covers the default stack and
-only the six service offsets (11, 15, 26, 27, 33, 34) in each standard named-instance
-window (20000–31999). The fixed default-stack ports are 8080, 8086, 8101, 8102,
-8111 (agent git), and 8112 (computer gateway); custom `--port-base` values need
-an explicit option update.
+only the seven service offsets (11, 12, 15, 26, 27, 33, 34) in each standard
+named-instance window (20000–31999). The fixed default-stack ports are 8080,
+8082 (connection gateway websocket), 8086, 8101, 8102, 8111 (agent git), and
+8112 (computer gateway); custom `--port-base` values need an explicit option
+update. A NixOS assertion checks that 8082 and offset 12 in every named window
+remain allowed.
 Replies are stateful; unsolicited inbound to boxes is dropped. Boxes cannot
 reach the host except DNS/DHCP on 10.210.0.1.
 Box-to-box traffic on the bridge is layer 2 and not filtered.
