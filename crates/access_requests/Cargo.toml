@@ -11,7 +11,7 @@ entity_access = { workspace = true, default-features = true }
 entity_access_db_utils = { workspace = true }
 macro_authorization = { workspace = true, default-features = true, features = ["axum"] }
 macro_user_id = { workspace = true }
-model-entity = { workspace = true }
+model_entity = { workspace = true }
 model_owner = { workspace = true }
 models_permissions = { workspace = true }
 opentelemetry = { workspace = true }

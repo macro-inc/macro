@@ -9,7 +9,7 @@ json-schema = ["dep:schemars"]
 schema = ["dep:utoipa"]
 
 [dependencies]
-model-entity = { workspace = true }
+model_entity = { workspace = true }
 schemars = { workspace = true, optional = true }
 serde = { workspace = true }
 thiserror = { workspace = true }

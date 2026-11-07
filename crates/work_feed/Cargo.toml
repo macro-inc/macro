@@ -11,7 +11,7 @@ document_sub_type = { workspace = true, default-features = true }
 filter_ast = { workspace = true }
 item_filters = { workspace = true, default-features = true }
 macro_user_id = { workspace = true }
-model-entity = { workspace = true }
+model_entity = { workspace = true }
 model_notifications = { workspace = true }
 rootcause = { workspace = true }
 serde = { workspace = true }

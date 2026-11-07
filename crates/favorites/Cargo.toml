@@ -11,7 +11,7 @@ inbound = [
   "dep:axum",
   "dep:axum-extra",
   "dep:macro_authorization",
-  "dep:model-error-response",
+  "dep:model_error_response",
   "dep:utoipa",
   "entity_access/inbound",
   "ports",
@@ -33,8 +33,8 @@ cowlike = { workspace = true }
 entity_access = { workspace = true, optional = true, features = ["ports"] }
 macro_authorization = { workspace = true, optional = true, features = ["axum"] }
 macro_user_id = { workspace = true }
-model-entity = { workspace = true }
-model-error-response = { workspace = true, optional = true }
+model_entity = { workspace = true }
+model_error_response = { workspace = true, optional = true }
 schemars = { workspace = true, optional = true }
 serde = { workspace = true }
 sqlx = { workspace = true, optional = true }

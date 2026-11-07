@@ -9,7 +9,7 @@ default = []
 inbound = [
   "dep:axum",
   "dep:macro_authorization",
-  "dep:model-error-response",
+  "dep:model_error_response",
   "dep:utoipa",
   "ports",
 ]
@@ -23,7 +23,7 @@ chrono = { workspace = true, features = ["serde"] }
 hex = { workspace = true }
 macro_authorization = { workspace = true, optional = true, features = ["axum"] }
 macro_user_id = { workspace = true }
-model-error-response = { workspace = true, optional = true }
+model_error_response = { workspace = true, optional = true }
 rand = { workspace = true }
 rootcause = { workspace = true }
 serde = { workspace = true }

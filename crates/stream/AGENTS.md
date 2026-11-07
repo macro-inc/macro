@@ -3,7 +3,7 @@
 ## What it is
 
 Shared infrastructure — a Redis Streams abstraction (typed append/read/ack
-over `model-entity` payloads) for services that want an ordered,
+over `model_entity` payloads) for services that want an ordered,
 consumer-group event log without a full Kafka dependency.
 
 ## Start here
@@ -22,7 +22,7 @@ consumer-group event log without a full Kafka dependency.
 
 ## Boundaries
 
-- Depends on: `model-entity`, `redis` (streams/aio/tokio-comp).
+- Depends on: `model_entity`, `redis` (streams/aio/tokio-comp).
 - Used by: `services/agent_harness_service`, `services/connection_gateway`.
 
 ## Checks

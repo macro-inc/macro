@@ -1,6 +1,6 @@
 [package]
 edition = "2024"
-name = "local_e2e_integration_tests"
+name = "local_e2e"
 publish = false
 version = "0.1.0"
 

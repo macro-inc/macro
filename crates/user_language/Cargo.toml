@@ -9,7 +9,7 @@ default = []
 inbound = [
   "dep:axum",
   "dep:macro_authorization",
-  "dep:model-error-response",
+  "dep:model_error_response",
   "dep:utoipa",
   "ports",
 ]
@@ -21,7 +21,7 @@ postgres = ["dep:sqlx", "model_user/sqlx", "outbound"]
 axum = { workspace = true, optional = true }
 macro_authorization = { workspace = true, optional = true, features = ["axum"] }
 macro_user_id = { workspace = true }
-model-error-response = { workspace = true, optional = true }
+model_error_response = { workspace = true, optional = true }
 model_user = { workspace = true }
 rootcause = { workspace = true }
 sqlx = { workspace = true, optional = true }

@@ -20,7 +20,7 @@ macro_aws_config = { workspace = true }
 macro_entrypoint = { workspace = true }
 macro_env_var = { workspace = true }
 model = { workspace = true }
-model-entity = { workspace = true }
+model_entity = { workspace = true }
 models_bulk_upload = { workspace = true }
 serde_json = { workspace = true }
 sha2 = { workspace = true }

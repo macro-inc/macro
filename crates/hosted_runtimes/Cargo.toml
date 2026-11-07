@@ -14,7 +14,7 @@ inbound = [
   "entity_access/ports",
   "dep:macro_authorization",
   "macro_authorization/axum",
-  "dep:model-error-response",
+  "dep:model_error_response",
   "schema",
   "bot_id/schema",
   "computer_id/schema",
@@ -53,7 +53,7 @@ harnesses = { workspace = true, optional = true, features = ["outbound"] }
 macro_authorization = { workspace = true, optional = true }
 macro_env = { workspace = true, optional = true }
 macro_user_id = { workspace = true }
-model-error-response = { workspace = true, optional = true }
+model_error_response = { workspace = true, optional = true }
 rootcause = { workspace = true }
 opentelemetry = { workspace = true, features = ["trace", "metrics"] }
 pairing_id = { workspace = true }

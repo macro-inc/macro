@@ -25,7 +25,7 @@ methods, shared by almost every list endpoint in the backend.
 ## Boundaries
 
 - Depends on: nothing domain-specific — pure pagination machinery
-  (`base64`, `ordered-float`, optional `axum`/`model-error-response`).
+  (`base64`, `ordered-float`, optional `axum`/`model_error_response`).
 - Used by: most list-returning crates — `ai_tools`, `calendar_events`, `call`,
   `channels`, `complete_graph`, `databases_sql`, `email`, `email_db_client`,
   `foreign_entity`, `github_pull_requests`, `graphql_activity`,

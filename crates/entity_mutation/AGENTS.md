@@ -28,7 +28,7 @@ entity kind generically.
 ## Boundaries
 
 - Depends on: `entity_access` (for `EntityAccessReceipt`/`RequiredPermission`),
-  `model-entity`, `models_permissions`.
+  `model_entity`, `models_permissions`.
 - Used by: `crates/channels`, `crates/email`, `crates/forms`, `crates/databases`,
   `crates/projects`, `crates/call`, `crates/chat`, `crates/documents`,
   `crates/graphql_entity_mutation`, `crates/graphql_favorite`,

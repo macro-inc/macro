@@ -11,7 +11,7 @@ inbound = [
   "dep:agent_correlation",
   "dep:axum",
   "dep:macro_authorization",
-  "dep:model-error-response",
+  "dep:model_error_response",
   "dep:utoipa",
   "entity_access/inbound",
   "ports",
@@ -51,8 +51,8 @@ macro_event_broker = { workspace = true }
 macro_event_topics = { workspace = true }
 macro_user_id = { workspace = true }
 macro_uuid = { workspace = true, optional = true }
-model-entity = { workspace = true }
-model-error-response = { workspace = true, optional = true }
+model_entity = { workspace = true }
+model_error_response = { workspace = true, optional = true }
 models_permissions = { workspace = true }
 rootcause = { workspace = true }
 messages = { workspace = true, features = ["ports"], optional = true }
