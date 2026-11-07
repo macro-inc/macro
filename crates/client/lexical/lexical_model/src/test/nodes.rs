@@ -344,6 +344,7 @@ fn selection_hooks_read_focus_after_anchor_moves_it() -> Result<(), Error> {
         tx.append(p, &[a.key(), b.key(), c.key()])?;
         tx.append(NodeKey::ROOT, &[p.key()])?;
         tx.set_selection(Some(Selection::Range(RangeSelection {
+            cached_direction: None,
             dirty: false,
             anchor: Point::text(a, Utf16Offset(0)),
             focus: Point::text(b, Utf16Offset(0)),

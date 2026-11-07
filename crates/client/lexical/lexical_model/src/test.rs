@@ -605,6 +605,7 @@ fn selection_reads_match_text_and_element_boundaries() -> Result<(), Error> {
         tx.append(second, &[b.key()])?;
         tx.append(NodeKey::ROOT, &[first.key(), second.key()])?;
         let selection = Selection::Range(RangeSelection {
+            cached_direction: None,
             dirty: false,
             anchor: Point::text(a, Utf16Offset(1)),
             focus: Point::text(b, Utf16Offset(3)),

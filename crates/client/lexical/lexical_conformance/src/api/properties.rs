@@ -25,6 +25,9 @@ pub(crate) fn get(
         let id = integer(&receiver["$selection"])?;
         return match name {
             "anchor" | "focus" => Ok(json!({"$point":{"selection":id,"role":name}})),
+            "_cachedIsBackward" => Ok(json!(
+                tx.range_at(r.selections[id as usize])?.cached_is_backward()
+            )),
             "format" => Ok(json!(tx.range_at(r.selections[id as usize])?.format.bits())),
             "style" => Ok(json!(tx.range_at(r.selections[id as usize])?.style)),
             "dirty" => Ok(json!(

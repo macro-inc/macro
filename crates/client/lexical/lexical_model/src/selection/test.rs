@@ -634,3 +634,87 @@ fn character_offsets_allow_interior_surrogate_positions_without_editing() -> Res
     })?;
     Ok(())
 }
+
+#[test]
+fn cached_write_direction_survives_text_trimming_and_point_mutation_invalidates_it()
+-> Result<(), Error> {
+    let mut editor = Editor::builder(EditorMode::Headless)
+        .build()
+        .expect("editor");
+    editor.update(|tx| {
+        let p = tx.create(Paragraph::default())?;
+        let a = tx.create_text("abc")?;
+        let b = tx.create_text("def")?;
+        tx.text(b)?.set_format(TextFormat::BOLD)?;
+        tx.append(p, &[a.key(), b.key()])?;
+        tx.append(NodeKey::ROOT, &[p.key()])?;
+        tx.select_points(
+            Point::text(a, Utf16Offset(1)),
+            Point::text(b, Utf16Offset(3)),
+        )?;
+        assert_eq!(tx.range_selection()?.cached_is_backward(), None);
+        assert!(!tx.range_is_backward_at(SelectionSlot::Active)?);
+        tx.text(b)?.set_text_content("d")?;
+        assert!(!tx.range_selection()?.is_backward(tx.view())?);
+        tx.set_point(PointRole::Focus, Point::text(b, Utf16Offset(1)))?;
+        assert_eq!(tx.range_selection()?.cached_is_backward(), None);
+        Ok(())
+    })?;
+    Ok(())
+}
+
+#[test]
+fn tab_replaces_cross_block_range_without_rechecking_trimmed_endpoint() -> Result<(), Error> {
+    let mut editor = Editor::builder(EditorMode::Headless)
+        .build()
+        .expect("editor");
+    editor.update(|tx| {
+        let first = tx.create(Paragraph::default())?;
+        let second = tx.create(Paragraph::default())?;
+        let line = tx.create(LineBreak::default())?;
+        let a = tx.create_text("abc")?;
+        let b = tx.create_text("defgh")?;
+        tx.append(first, &[line.key(), a.key()])?;
+        tx.append(second, &[b.key()])?;
+        tx.append(NodeKey::ROOT, &[first.key(), second.key()])?;
+        tx.select_points(
+            Point::element(first, ChildIndex(1)),
+            Point::text(b, Utf16Offset(4)),
+        )?;
+        let tab = tx.create(Tab::default())?;
+        tx.insert_nodes(&[tab.key()])?;
+        assert_eq!(tx.text_content(first), "\n\th");
+        assert!(!tx.is_attached(second));
+        Ok(())
+    })?;
+    Ok(())
+}
+
+#[test]
+fn internal_endpoint_mutation_cannot_restore_an_old_direction_cache() -> Result<(), Error> {
+    let mut editor = Editor::builder(EditorMode::Headless)
+        .build()
+        .expect("editor");
+    editor.update(|tx| {
+        let p = tx.create(Paragraph::default())?;
+        let a = tx.create_text("a")?;
+        let b = tx.create_text("b")?;
+        let c = tx.create_text("c")?;
+        tx.text(b)?.set_format(TextFormat::BOLD)?;
+        tx.append(p, &[a.key(), b.key(), c.key()])?;
+        tx.append(NodeKey::ROOT, &[p.key()])?;
+        tx.text(c)?.set_text_content("cde")?;
+        tx.select_points(
+            Point::text(a, Utf16Offset(0)),
+            Point::text(c, Utf16Offset(2)),
+        )?;
+        assert!(!tx.range_is_backward_at(SelectionSlot::Active)?);
+        let parts = tx.text(c)?.split_text(&[Utf16Offset(1)])?;
+        assert_eq!(tx.range_selection()?.cached_is_backward(), None);
+        tx.text(c)?.merge_with_sibling(parts[1])?;
+        assert_eq!(tx.focus()?, Point::text(c, Utf16Offset(2)));
+        assert_eq!(tx.range_selection()?.cached_is_backward(), None);
+        Ok(())
+    })?;
+    Ok(())
+}

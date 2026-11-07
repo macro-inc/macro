@@ -44,7 +44,10 @@ pub struct Transaction<'editor> {
 }
 impl<'editor> Transaction<'editor> {
     pub(crate) fn new(editor: &'editor mut Editor) -> Self {
-        let pending = editor.state.pending();
+        let mut pending = editor.state.pending();
+        if let Some(Selection::Range(range)) = &mut pending.selection {
+            range.clear_direction_cache();
+        }
         let composition_key = editor.composition_key;
         let options = UpdateOptions {
             tags: editor.carried_tags.clone(),
@@ -586,6 +589,9 @@ impl<'editor> Transaction<'editor> {
         self.guard_write()?;
         self.selection_dirty = selection.is_some();
         let selection = selection.map(|mut selection| {
+            if let Selection::Range(range) = &mut selection {
+                range.invalidate_changed_direction();
+            }
             selection.set_dirty(true);
             selection
         });

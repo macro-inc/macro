@@ -285,6 +285,7 @@ impl Transaction<'_> {
                 if let Some(Selection::Range(range)) = &mut self.pending.selection {
                     range.anchor = anchor;
                     range.focus = focus;
+                    range.invalidate_changed_direction();
                 }
             }
         }
@@ -358,6 +359,7 @@ impl Transaction<'_> {
                     };
                 }
             }
+            range.invalidate_changed_direction();
         }
     }
     /// Base removal. Detached nodes are unchanged.
@@ -382,6 +384,19 @@ impl Transaction<'_> {
             [range.anchor, range.focus]
                 .map(|point| point.key() == key || self.has_ancestor(point.key(), key))
         });
+        // $removeNode checks direction when an unaffected element endpoint
+        // belongs to the parent. Preserve that cache before later text slicing.
+        if restore_selection
+            && affected.is_some_and(|flags| flags.into_iter().all(|v| !v))
+            && self
+                .try_range_at(SelectionSlot::Active)
+                .is_some_and(|range| {
+                    !range.is_collapsed()
+                        && (range.anchor.key() == parent || range.focus.key() == parent)
+                })
+        {
+            self.range_is_backward_at(SelectionSlot::Active)?;
+        }
         self.remove_from_parent(key)?;
         if let Some(Selection::Node(selection)) = &mut self.pending.selection {
             selection.nodes.shift_remove(&key);
@@ -403,6 +418,7 @@ impl Transaction<'_> {
                     offset.0 -= 1;
                 }
             }
+            range.invalidate_changed_direction();
         }
         if restore_selection && affected.is_some_and(|flags| flags.into_iter().any(|v| v)) {
             let point = if let Some(previous) =
@@ -433,6 +449,7 @@ impl Transaction<'_> {
                 if affected[1] {
                     range.focus = point;
                 }
+                range.invalidate_changed_direction();
             }
         }
         if restore_selection
@@ -465,6 +482,7 @@ impl Transaction<'_> {
                     }
                 }
             }
+            range.invalidate_changed_direction();
             if changed {
                 range.dirty = true;
                 self.pending.selection = Some(Selection::Range(range));
@@ -576,8 +594,7 @@ impl Transaction<'_> {
         if !previous.is_collapsed() {
             // Upstream validates direction while updating element endpoints,
             // even if a text endpoint became stale during a caret-range edit.
-            self.range_at(SelectionSlot::Active)?
-                .is_backward(self.view())?;
+            self.range_is_backward_at(SelectionSlot::Active)?;
         }
         for (role, point) in [
             (PointRole::Anchor, previous.anchor),
@@ -696,6 +713,7 @@ impl Transaction<'_> {
                 if let Some(point) = focus {
                     range.focus = point;
                 }
+                range.invalidate_changed_direction();
             }
         }
         if self.composition_key == Some(old) {
@@ -842,6 +860,7 @@ impl Transaction<'_> {
             .map(|r| (r.format, r.style.clone()))
             .unwrap_or_default();
         self.set_selection(Some(Selection::Range(RangeSelection {
+            cached_direction: None,
             dirty: false,
             anchor,
             focus,
