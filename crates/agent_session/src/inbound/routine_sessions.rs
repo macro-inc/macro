@@ -22,9 +22,8 @@ use serde::Serialize;
 
 use crate::domain::routines::{
     PrepareRoutineSession, PreparedRoutineSession, PromptRoutineSession, RoutineActionStatus,
-    RoutineActivity,
-    RoutinePromptAccepted, RoutineSessionAction, RoutineSessionError, RoutineSessions,
-    ValidateRoutineSession, ValidatedRoutineSession,
+    RoutineActivity, RoutinePromptAccepted, RoutineSessionAction, RoutineSessionError,
+    RoutineSessions, ValidateRoutineSession, ValidatedRoutineSession,
 };
 
 const REQUEST_TIMEOUT: Duration = Duration::from_secs(30);

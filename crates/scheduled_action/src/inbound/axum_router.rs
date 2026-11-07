@@ -7,8 +7,7 @@ use crate::domain::event_trigger::ActionTrigger;
 use crate::domain::models::{
     ActionConfiguration, ActionConfigurationUpdate, ActionExecutionRecord, ActionPolicyError,
     AlreadyRunningError, CreatedItem, InProgressExecution, ListedAction, OwnerNotUserError,
-    RoutineCheck,
-    Schedule, ScheduledAction,
+    RoutineCheck, Schedule, ScheduledAction,
 };
 use crate::domain::ports::ScheduledActionService;
 use crate::domain::target_validation::TargetValidationError;

@@ -4,8 +4,8 @@ use std::time::Duration;
 
 use agent_session::domain::routines::{
     PrepareRoutineSession, PreparedRoutineSession, PromptRoutineSession, RoutineActionStatus,
-    RoutineActivity, RoutinePromptAccepted, RoutineSessionAction, RoutineSessionError, RoutineSessions,
-    ValidateRoutineSession, ValidatedRoutineSession,
+    RoutineActivity, RoutinePromptAccepted, RoutineSessionAction, RoutineSessionError,
+    RoutineSessions, ValidateRoutineSession, ValidatedRoutineSession,
 };
 use anyhow::{Context, Result};
 use macro_authorization::INTERNAL_API_KEY_HEADER;

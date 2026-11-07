@@ -353,7 +353,9 @@ fn activity(entries: Vec<crate::domain::model::StoredAgentSessionLog>) -> Routin
                 .iter()
                 .filter(|message| matches!(message.author, Author::Agent))
                 .flat_map(|message| message.parts.iter())
-                .filter(|part| matches!(part, agent_fold::domain::model::MessagePart::ToolUse { .. }))
+                .filter(|part| {
+                    matches!(part, agent_fold::domain::model::MessagePart::ToolUse { .. })
+                })
                 .count(),
         ),
         turns: count(

@@ -787,7 +787,10 @@ async fn only_a_session_the_scheduler_opened_can_be_deleted() {
     );
 }
 
-fn log_frame(direction: &str, mut content: serde_json::Value) -> crate::domain::model::StoredAgentSessionLog {
+fn log_frame(
+    direction: &str,
+    mut content: serde_json::Value,
+) -> crate::domain::model::StoredAgentSessionLog {
     content["type"] = serde_json::json!("acp");
     content["jsonrpc"] = serde_json::json!("2.0");
     crate::domain::model::StoredAgentSessionLog {

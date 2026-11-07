@@ -10,9 +10,9 @@ use serde_json::json;
 
 use super::*;
 use crate::domain::code_check::{self, test::Checker};
-use macro_uuid::Uuid;
 use crate::domain::models::{ActionConfiguration, ActionKind, CreatedItem};
 use crate::domain::ports::{HandedBack, StaleDraft};
+use macro_uuid::Uuid;
 
 const OWNER: &str = "macro|owner@example.com";
 const BUG_REPORTS: &str = "every time a message gets sent in bug-reports make a task";
@@ -30,7 +30,12 @@ struct Rows {
 
 #[async_trait::async_trait]
 impl DraftHandBacks for Rows {
-    async fn begin(&self, session: Uuid, owner: &MacroUserIdStr<'static>, agent: BotId) -> Result<()> {
+    async fn begin(
+        &self,
+        session: Uuid,
+        owner: &MacroUserIdStr<'static>,
+        agent: BotId,
+    ) -> Result<()> {
         self.drafts.lock().unwrap().insert(
             session,
             (owner.clone(), agent, HandedBack::default(), Utc::now()),
@@ -372,8 +377,14 @@ async fn a_draft_runs_in_a_hidden_read_only_session_and_hands_back_its_last_chec
     let prompt = sessions.prompts.lock().unwrap()[0].clone();
     assert!(prompt.contains(BUG_REPORTS), "{prompt}");
     assert!(prompt.contains("macro.routines.check"), "{prompt}");
-    assert!(prompt.contains("Never do the routine's own work now"), "{prompt}");
-    assert!(prompt.contains("Create only what the routine needs"), "{prompt}");
+    assert!(
+        prompt.contains("Never do the routine's own work now"),
+        "{prompt}"
+    );
+    assert!(
+        prompt.contains("Create only what the routine needs"),
+        "{prompt}"
+    );
     assert!(drafted.created.is_empty());
     // The session and its row are gone once the draft is back.
     let session = prepared.session_id;
@@ -390,7 +401,12 @@ async fn a_draft_runs_in_a_hidden_read_only_session_and_hands_back_its_last_chec
 async fn a_large_workspace_drafts_the_channel_the_description_names() {
     let bug_reports = macro_uuid::generate_uuid_v7();
     let mut ranked: Vec<(String, Uuid)> = (0..5_000)
-        .map(|index| (format!("channel-{index:04}"), macro_uuid::generate_uuid_v7()))
+        .map(|index| {
+            (
+                format!("channel-{index:04}"),
+                macro_uuid::generate_uuid_v7(),
+            )
+        })
         .collect();
     ranked[4_000] = ("bug-reports".to_owned(), bug_reports);
     let channels = Arc::new(Channels {
@@ -425,7 +441,12 @@ async fn a_large_workspace_drafts_the_channel_the_description_names() {
     }))
     .unwrap();
 
-    let drafted = drafted_routine(drafts.draft(owner(), routine(BUG_REPORTS), context).await.unwrap());
+    let drafted = drafted_routine(
+        drafts
+            .draft(owner(), routine(BUG_REPORTS), context)
+            .await
+            .unwrap(),
+    );
 
     let Some(ActionTrigger::Events { filters }) = drafted.trigger else {
         panic!("expected an event trigger: {:?}", drafted.trigger);
@@ -435,7 +456,10 @@ async fn a_large_workspace_drafts_the_channel_the_description_names() {
         json!([bug_reports])
     );
     let prompt = sessions.prompts.lock().unwrap()[0].clone();
-    assert!(!prompt.contains("channel-0001"), "the prompt carries no workspace");
+    assert!(
+        !prompt.contains("channel-0001"),
+        "the prompt carries no workspace"
+    );
 }
 
 /// Search ranks loose matches before the exact name, so the channel isn't
@@ -455,7 +479,10 @@ async fn a_channel_past_searchs_first_page_is_still_found() {
     .map(|name| (name.to_owned(), macro_uuid::generate_uuid_v7()))
     .collect();
     ranked.push(("bug-reports".to_owned(), bug_reports));
-    let channels = Arc::new(Channels { ranked, per_page: 5 });
+    let channels = Arc::new(Channels {
+        ranked,
+        per_page: 5,
+    });
     let (_, pages) = channels.find("bug-reports");
     assert_eq!(pages, 2, "the exact channel is outside the top five");
     let rows = Arc::new(Rows::default());
@@ -554,7 +581,9 @@ async fn a_check_handed_back_before_the_time_runs_out_is_kept() {
 async fn a_session_the_allowance_refuses_is_an_error_and_cleaned_up() {
     let rows = Arc::new(Rows::default());
     let mut sessions = Sessions::new(&rows, Box::new(|_| Vec::new()));
-    sessions.refuses = Some(RoutineSessionError::Admission(AiAdmissionError::Unavailable));
+    sessions.refuses = Some(RoutineSessionError::Admission(
+        AiAdmissionError::Unavailable,
+    ));
     let sessions = Arc::new(sessions);
 
     let error = drafts(&rows, &sessions)
@@ -588,7 +617,10 @@ async fn adds_the_step_the_session_checked_at_the_end() {
             vec![plain(configuration(
                 "Bug tasks",
                 message_posted(&[]),
-                json!([code_step("Make a task", "good"), code_step("Post it", "bad")]),
+                json!([
+                    code_step("Make a task", "good"),
+                    code_step("Post it", "bad")
+                ]),
             ))]
         }),
     ));
@@ -626,7 +658,11 @@ async fn refuses_a_step_it_cannot_add() {
     };
     assert_eq!(
         drafts
-            .draft(owner(), add("do it", Vec::new(), Some(StepKind::Code)), no_code)
+            .draft(
+                owner(),
+                add("do it", Vec::new(), Some(StepKind::Code)),
+                no_code
+            )
             .await
             .unwrap(),
         failed(NO_CODE)
@@ -651,7 +687,11 @@ async fn a_session_that_adds_the_wrong_kind_of_step_fails_the_draft() {
     assert_eq!(
         draft(
             &drafts(&rows, &sessions),
-            add("post it", vec![code_step("Make a task", "good")], Some(StepKind::Code)),
+            add(
+                "post it",
+                vec![code_step("Make a task", "good")],
+                Some(StepKind::Code)
+            ),
         )
         .await,
         failed(STEP_FAILED)
@@ -675,7 +715,9 @@ async fn changes_a_code_step_in_place_keeping_its_output_name() {
         instruction: "make two".into(),
         routine: RoutineSoFar {
             trigger: None,
-            steps: vec![json!({ "type": "code", "id": "make_a_task", "title": "Make a task", "summary": "", "source": "good" })],
+            steps: vec![
+                json!({ "type": "code", "id": "make_a_task", "title": "Make a task", "summary": "", "source": "good" }),
+            ],
         },
         index: 0,
     };
@@ -722,11 +764,17 @@ async fn refuses_requests_it_cannot_draft() {
 async fn the_sweep_deletes_drafts_a_stopped_process_left_behind() {
     let rows = Arc::new(Rows::default());
     let sessions = Arc::new(Sessions::new(&rows, Box::new(|_| Vec::new())));
-    let (old, new) = (macro_uuid::generate_uuid_v7(), macro_uuid::generate_uuid_v7());
-    rows.begin(old, &owner(), bot_id::MACRO_NEW_BOT_ID).await.unwrap();
-    rows.begin(new, &owner(), bot_id::MACRO_NEW_BOT_ID).await.unwrap();
-    rows.drafts.lock().unwrap().get_mut(&old).unwrap().3 =
-        Utc::now() - chrono::Duration::hours(1);
+    let (old, new) = (
+        macro_uuid::generate_uuid_v7(),
+        macro_uuid::generate_uuid_v7(),
+    );
+    rows.begin(old, &owner(), bot_id::MACRO_NEW_BOT_ID)
+        .await
+        .unwrap();
+    rows.begin(new, &owner(), bot_id::MACRO_NEW_BOT_ID)
+        .await
+        .unwrap();
+    rows.drafts.lock().unwrap().get_mut(&old).unwrap().3 = Utc::now() - chrono::Duration::hours(1);
 
     assert_eq!(drafts(&rows, &sessions).sweep().await.unwrap(), 1);
 
@@ -816,7 +864,11 @@ async fn a_weekly_task_draft_creates_no_task() {
     ));
 
     let drafted = drafted_routine(
-        draft(&drafts(&rows, &sessions), routine("make a task every Monday")).await,
+        draft(
+            &drafts(&rows, &sessions),
+            routine("make a task every Monday"),
+        )
+        .await,
     );
 
     assert!(drafted.created.is_empty());

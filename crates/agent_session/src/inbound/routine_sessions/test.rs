@@ -20,13 +20,7 @@ use uuid::Uuid;
 const OWNER: &str = "macro|owner@example.com";
 const INTERNAL_KEY: &str = "routine-test-internal";
 const OPERATIONS: [&str; 7] = [
-    "validate",
-    "prepare",
-    "prompt",
-    "status",
-    "cancel",
-    "delete",
-    "activity",
+    "validate", "prepare", "prompt", "status", "cancel", "delete", "activity",
 ];
 
 #[derive(Clone)]

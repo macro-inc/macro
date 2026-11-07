@@ -36,7 +36,10 @@ async fn a_drafts_latest_check_by_its_owner_is_its_answer(pool: PgPool) {
         .begin(session, &owner(), bot_id::BotId::TEST_A)
         .await
         .unwrap();
-    assert_eq!(drafts.handed_back(session).await.unwrap(), HandedBack::default());
+    assert_eq!(
+        drafts.handed_back(session).await.unwrap(),
+        HandedBack::default()
+    );
 
     let stranger = MacroUserIdStr::try_from_email("stranger@example.com").unwrap();
     let database = CreatedItem {
@@ -61,20 +64,32 @@ async fn a_drafts_latest_check_by_its_owner_is_its_answer(pool: PgPool) {
     );
     assert!(
         drafts
-            .record(session, &owner(), &check("Bug reports"), &[database.clone(), folder.clone()])
+            .record(
+                session,
+                &owner(),
+                &check("Bug reports"),
+                &[database.clone(), folder.clone()]
+            )
             .await
             .unwrap()
     );
     // A session that isn't a draft's keeps nothing.
     assert!(
         !drafts
-            .record(macro_uuid::generate_uuid_v7(), &owner(), &check("Other"), &[])
+            .record(
+                macro_uuid::generate_uuid_v7(),
+                &owner(),
+                &check("Other"),
+                &[]
+            )
             .await
             .unwrap()
     );
 
     let mut handed_back = drafts.handed_back(session).await.unwrap();
-    handed_back.created.sort_by(|a, b| a.entity_id.cmp(&b.entity_id));
+    handed_back
+        .created
+        .sort_by(|a, b| a.entity_id.cmp(&b.entity_id));
     assert_eq!(
         handed_back,
         HandedBack {
@@ -86,13 +101,19 @@ async fn a_drafts_latest_check_by_its_owner_is_its_answer(pool: PgPool) {
     );
 
     drafts.finish(session).await.unwrap();
-    assert_eq!(drafts.handed_back(session).await.unwrap(), HandedBack::default());
+    assert_eq!(
+        drafts.handed_back(session).await.unwrap(),
+        HandedBack::default()
+    );
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn the_sweep_finds_only_drafts_started_before_its_cutoff(pool: PgPool) {
     let drafts = PgDraftHandBacks::new(pool.clone());
-    let (old, new) = (macro_uuid::generate_uuid_v7(), macro_uuid::generate_uuid_v7());
+    let (old, new) = (
+        macro_uuid::generate_uuid_v7(),
+        macro_uuid::generate_uuid_v7(),
+    );
     for session in [old, new] {
         drafts
             .begin(session, &owner(), bot_id::BotId::TEST_A)

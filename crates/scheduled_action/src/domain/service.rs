@@ -22,8 +22,8 @@ use super::event_runs::ConfigurationRevision;
 use super::event_trigger::ActionTrigger;
 use super::models::{
     ActionConfiguration, ActionConfigurationUpdate, ActionExecutionRecord, ActionPolicyError,
-    CheckedStepProblems, CreatedItem, DispatchEvent, InProgressExecution, ListedAction, MAX_DESCRIPTION_CHARS,
-    OwnerNotUserError, RoutineCheck, ScheduledAction,
+    CheckedStepProblems, CreatedItem, DispatchEvent, InProgressExecution, ListedAction,
+    MAX_DESCRIPTION_CHARS, OwnerNotUserError, RoutineCheck, ScheduledAction,
 };
 use super::ports::{
     CodeUpgrades, DraftHandBacks, NoRoutineCode, RequestSessions, RoutineCode,
@@ -291,7 +291,11 @@ impl<Rpo: ScheduledActionRepo, Exe, Grants, Targets, Github, Code, Upgrades>
 
     /// What saving `input` would find wrong, by the same checks [`Self::create`]
     /// makes, and the routine as it would be stored. Nothing is saved.
-    async fn check(&self, owner: &MacroUserIdStr<'static>, input: ActionConfiguration) -> Result<RoutineCheck>
+    async fn check(
+        &self,
+        owner: &MacroUserIdStr<'static>,
+        input: ActionConfiguration,
+    ) -> Result<RoutineCheck>
     where
         Targets: TaskTargetValidator,
         Github: GithubInstallationClaims,
@@ -353,7 +357,10 @@ impl<Rpo: ScheduledActionRepo, Exe, Grants, Targets, Github, Code, Upgrades>
             let Some(session) = drafts.sessions.session_of(correlation).await? else {
                 return Ok(false);
             };
-            drafts.hand_backs.record(session, owner, check, created).await
+            drafts
+                .hand_backs
+                .record(session, owner, check, created)
+                .await
         }
         .await;
         match recorded {
@@ -688,7 +695,8 @@ where
         span.record("routine.check.ok", check.ok);
         span.record("routine.check.problems", check.problems.len());
         span.record("routine.check.failing_steps", check.steps.len());
-        self.hand_back(owner_user, correlation, &check, &created).await;
+        self.hand_back(owner_user, correlation, &check, &created)
+            .await;
         Ok(check)
     }
 

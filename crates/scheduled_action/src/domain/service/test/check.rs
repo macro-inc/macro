@@ -312,7 +312,11 @@ async fn a_check_made_on_one_replica_answers_a_draft_waiting_on_another(pool: Pg
     };
     assert_eq!(routine.name, "Bug tasks");
     assert_eq!(routine.steps[0]["id"], "make_a_task");
-    assert_eq!(routine.created.len(), 1, "what the session made crosses too");
+    assert_eq!(
+        routine.created.len(),
+        1,
+        "what the session made crosses too"
+    );
     assert_eq!(sessions.deleted.lock().unwrap().len(), 1);
     let left = sqlx::query_scalar!(r#"SELECT COUNT(*) AS "count!" FROM scheduled_action_draft"#)
         .fetch_one(&pool)
