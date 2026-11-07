@@ -664,6 +664,8 @@ channel_bots = { path = "crates/comms/channel_bots" }
 channel_labels = { path = "crates/comms/channel_labels" }
 channel_sender = { path = "crates/types/channel_sender" }
 channels = { path = "crates/comms/channels" }
+channels_inbound = { path = "crates/comms/channels_inbound", default-features = false }
+channels_outbound = { path = "crates/comms/channels_outbound" }
 chat = { path = "crates/comms/chat", default-features = false }
 chat_id = { path = "crates/types/chat_id" }
 chat_message = { path = "crates/types/chat_message" }

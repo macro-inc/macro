@@ -520,7 +520,7 @@ async fn creation_retries_repair_reservation_for_both_primary_key_and_thread_con
     let id = AgentSessionId::new();
     let source = macro_uuid::generate_uuid_v7();
     use channels::domain::agent_dm::AgentDmRepo;
-    let channel = channels::outbound::pg_channels_repo::PgChannelsRepo::new(pool.clone())
+    let channel = channels_outbound::pg_channels_repo::PgChannelsRepo::new(pool.clone())
         .ensure(sender(), bot)
         .await
         .unwrap()

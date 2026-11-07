@@ -7,18 +7,15 @@ use analytics_client::{
 use anyhow::{Context, anyhow};
 use app_service_url::AppServiceUrl;
 use bots::outbound::pg_bots_repo::PgBotsRepo;
-use channels::{
-    domain::{
-        service::ChannelServiceImpl,
-        side_effects::{ChannelSideEffectService, SpawnedChannelEventDispatcher},
-    },
-    outbound::{
-        connection_gateway_realtime::ConnectionGatewayChannelRealtimePublisher,
-        contacts_dispatcher::ContactsChannelDispatcher,
-        notification_sender::NotificationChannelSender,
-        pg_channel_reference_share_permissions::PgChannelReferenceSharePermissions,
-        pg_channels_repo::PgChannelsRepo, pg_side_effect_context::PgChannelSideEffectContext,
-    },
+use channels::domain::{
+    service::ChannelServiceImpl,
+    side_effects::{ChannelSideEffectService, SpawnedChannelEventDispatcher},
+};
+use channels_outbound::{
+    connection_gateway_realtime::ConnectionGatewayChannelRealtimePublisher,
+    contacts_dispatcher::ContactsChannelDispatcher, notification_sender::NotificationChannelSender,
+    pg_channel_reference_share_permissions::PgChannelReferenceSharePermissions,
+    pg_channels_repo::PgChannelsRepo, pg_side_effect_context::PgChannelSideEffectContext,
 };
 use connection_gateway_client::ConnectionGatewayClient;
 use connection_gateway_url::ConnectionGatewayUrl;
@@ -499,7 +496,7 @@ async fn run_server() -> anyhow::Result<()> {
                     messages::outbound::connection_gateway::ConnectionGatewayMessages(
                         connection_gateway_client.clone(),
                     ),
-                    channels::outbound::pg_agent_creations::PgAgentCreations::new(db.clone()),
+                    channels_outbound::pg_agent_creations::PgAgentCreations::new(db.clone()),
                 ),
             ),
         )

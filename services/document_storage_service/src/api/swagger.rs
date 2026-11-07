@@ -71,7 +71,7 @@ use channel_labels::domain::models::{
 use channel_labels::inbound::axum_router::{
     CreateChannelLabelRequest, RenameChannelLabelRequest, SetChannelLabelRequest,
 };
-use channels::inbound::axum_router::{
+use channels_inbound::axum_router::{
     ApiActivity, ApiAttachmentChannelReference, ApiAttachmentCommentReference,
     ApiAttachmentEntityReference, ApiAttachmentGenericReference, ApiChannelAttachment,
     ApiChannelAttachmentsPage, ApiChannelDetail, ApiChannelParticipant, ApiParticipantRole,
@@ -324,7 +324,7 @@ use utoipa::OpenApi;
         soup::inbound::axum_router::post_grouped_soup_ast_handler,
 
         // channel list (comms hex)
-        channels::inbound::list_router::get_channels_handler,
+        channels_inbound::list_router::get_channels_handler,
 
         // messages (channels and documents)
         messages::inbound::axum_router::timeline,
@@ -343,33 +343,33 @@ use utoipa::OpenApi;
         messages::inbound::axum_router::legacy,
 
         // channels
-        channels::inbound::axum_router::create_channel_handler,
-        channels::inbound::axum_router::get_or_create_dm_handler,
-        channels::inbound::axum_router::get_or_create_private_handler,
-        channels::inbound::axum_router::patch_channel_handler,
-        channels::inbound::axum_router::profile_picture::set_channel_picture_handler,
-        channels::inbound::axum_router::delete_channel_handler,
-        channels::inbound::axum_router::add_participants_handler,
-        channels::inbound::axum_router::share_with_channel_handler,
-        channels::inbound::axum_router::remove_participants_handler,
-        channels::inbound::axum_router::get_channel_join_link_handler,
-        channels::inbound::axum_router::join_channel_by_code_handler,
-        channels::inbound::axum_router::join_channel_handler,
-        channels::inbound::axum_router::leave_channel_handler,
-        channels::inbound::axum_router::get_channel_attachments_handler,
-        channels::inbound::axum_router::get_channel_handler,
-        channels::inbound::axum_router::get_channel_participants_handler,
-        channels::inbound::axum_router::get_batch_channel_preview_handler,
-        channels::inbound::axum_router::create_mention_handler,
-        channels::inbound::axum_router::delete_mention_handler,
-        channels::inbound::axum_router::get_attachment_references_handler,
-        channels::inbound::axum_router::get_activity_handler,
-        channels::inbound::axum_router::access_requests::my_access_request_handler,
-        channels::inbound::axum_router::access_requests::request_access_handler,
-        channels::inbound::axum_router::access_requests::cancel_access_request_handler,
-        channels::inbound::axum_router::access_requests::get_access_request_handler,
-        channels::inbound::axum_router::access_requests::resolve_access_request_handler,
-        channels::inbound::axum_router::post_activity_handler,
+        channels_inbound::axum_router::create_channel_handler,
+        channels_inbound::axum_router::get_or_create_dm_handler,
+        channels_inbound::axum_router::get_or_create_private_handler,
+        channels_inbound::axum_router::patch_channel_handler,
+        channels_inbound::axum_router::profile_picture::set_channel_picture_handler,
+        channels_inbound::axum_router::delete_channel_handler,
+        channels_inbound::axum_router::add_participants_handler,
+        channels_inbound::axum_router::share_with_channel_handler,
+        channels_inbound::axum_router::remove_participants_handler,
+        channels_inbound::axum_router::get_channel_join_link_handler,
+        channels_inbound::axum_router::join_channel_by_code_handler,
+        channels_inbound::axum_router::join_channel_handler,
+        channels_inbound::axum_router::leave_channel_handler,
+        channels_inbound::axum_router::get_channel_attachments_handler,
+        channels_inbound::axum_router::get_channel_handler,
+        channels_inbound::axum_router::get_channel_participants_handler,
+        channels_inbound::axum_router::get_batch_channel_preview_handler,
+        channels_inbound::axum_router::create_mention_handler,
+        channels_inbound::axum_router::delete_mention_handler,
+        channels_inbound::axum_router::get_attachment_references_handler,
+        channels_inbound::axum_router::get_activity_handler,
+        channels_inbound::axum_router::access_requests::my_access_request_handler,
+        channels_inbound::axum_router::access_requests::request_access_handler,
+        channels_inbound::axum_router::access_requests::cancel_access_request_handler,
+        channels_inbound::axum_router::access_requests::get_access_request_handler,
+        channels_inbound::axum_router::access_requests::resolve_access_request_handler,
+        channels_inbound::axum_router::post_activity_handler,
 
         // harnesses
         harnesses::inbound::axum_router::create_pairing_handler,
@@ -920,12 +920,12 @@ use utoipa::OpenApi;
             GroupedSoupPage,
 
             // Channel list (comms hex)
-            channels::inbound::list_router::ApiChannelListPage,
-            channels::inbound::list_router::ApiChannelWithLatest,
-            channels::inbound::list_router::ApiChannelListMessage,
-            channels::inbound::list_router::ApiChannelListParticipant,
-            channels::inbound::list_router::ApiChannelListType,
-            channels::inbound::list_router::ApiParticipantListRole,
+            channels_inbound::list_router::ApiChannelListPage,
+            channels_inbound::list_router::ApiChannelWithLatest,
+            channels_inbound::list_router::ApiChannelListMessage,
+            channels_inbound::list_router::ApiChannelListParticipant,
+            channels_inbound::list_router::ApiChannelListType,
+            channels_inbound::list_router::ApiParticipantListRole,
 
             // Messages (channels and documents)
             messages::domain::models::MessageParent,

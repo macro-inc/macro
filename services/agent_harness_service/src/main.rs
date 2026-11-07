@@ -116,11 +116,11 @@ use bot_id::BotId;
 use bots::outbound::pg_bots_repo::PgBotsRepo;
 use bots_directory::PgBotDirectory;
 use channels::domain::side_effects::{ChannelSideEffectService, SpawnedChannelEventDispatcher};
-use channels::outbound::connection_gateway_realtime::ConnectionGatewayChannelRealtimePublisher;
-use channels::outbound::contacts_dispatcher::ContactsChannelDispatcher;
-use channels::outbound::notification_sender::NotificationChannelSender;
-use channels::outbound::pg_channels_repo::PgChannelsRepo;
-use channels::outbound::pg_side_effect_context::PgChannelSideEffectContext;
+use channels_outbound::connection_gateway_realtime::ConnectionGatewayChannelRealtimePublisher;
+use channels_outbound::contacts_dispatcher::ContactsChannelDispatcher;
+use channels_outbound::notification_sender::NotificationChannelSender;
+use channels_outbound::pg_channels_repo::PgChannelsRepo;
+use channels_outbound::pg_side_effect_context::PgChannelSideEffectContext;
 use coding_agent::PgCodingAgentSource;
 use config::{Config, Environment};
 use connection_gateway_client::ConnectionGatewayClient;
@@ -1242,12 +1242,12 @@ async fn run() -> anyhow::Result<()> {
         channels::domain::message_delivery::ChannelMessageDelivery::new(
             PgChannelsRepo::new(pool.clone()),
             SpawnedChannelEventDispatcher::new(side_effects),
-            channels::outbound::pg_channel_reference_share_permissions::PgChannelReferenceSharePermissions::new(
+            channels_outbound::pg_channel_reference_share_permissions::PgChannelReferenceSharePermissions::new(
                 pool.clone(),
                 entity_access.clone(),
             ),
             message_realtime.clone(),
-            channels::outbound::pg_agent_creations::PgAgentCreations::new(
+            channels_outbound::pg_agent_creations::PgAgentCreations::new(
                 pool.clone(),
             ),
         ),

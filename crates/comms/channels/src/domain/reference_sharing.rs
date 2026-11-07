@@ -21,11 +21,8 @@ use model_file_type::FileType;
 ///
 /// An external chat is shared read-only by its owner's mention; someone it was
 /// only shared with cannot pass it on.
-#[cfg_attr(
-    not(feature = "outbound"),
-    allow(dead_code, reason = "only the outbound share adapter grants access")
-)]
-pub(crate) fn grant_level(
+/// Used by the share adapter in `channels_outbound`.
+pub fn grant_level(
     item_type: ReferencedShareItemType,
     file_type: Option<FileType>,
     access: Option<AccessLevel>,

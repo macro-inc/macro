@@ -108,6 +108,8 @@
         "services/slack_import_worker/**",
         "crates/comms/slack_integration/**",
         "crates/comms/channels/**",
+        "crates/comms/channels_inbound/**",
+        "crates/comms/channels_outbound/**",
         "crates/comms/messages/**",
         "crates/integrations/import/**",
         "crates/platform/macro_queues/**",

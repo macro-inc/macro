@@ -100,7 +100,8 @@ entity_registry = { workspace = true }
 entity_registry_db_utils = { workspace = true }
 macro_db_migrator = { workspace = true }
 bots = { workspace = true, features = ["test-utils"] }
-channels = { workspace = true, features = ["outbound"] }
+channels = { workspace = true }
+channels_outbound = { workspace = true }
 messages = { workspace = true, features = ["test-utils"] }
 uuid = { workspace = true }
 agent_fold = { workspace = true, default-features = true, features = ["test-utils"] }

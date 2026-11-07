@@ -404,7 +404,7 @@ fn event_content(
             messages::domain::ports::NoMessageEventPublisher,
         ),
         channels::domain::service::ChannelServiceImpl::new(
-            channels::outbound::pg_channels_repo::PgChannelsRepo::new(db.clone()),
+            channels_outbound::pg_channels_repo::PgChannelsRepo::new(db.clone()),
         ),
         documents::outbound::pg_document_repo::PgDocumentRepo::new(db.clone(), registrar.clone()),
         properties::PropertiesServiceImpl::new(

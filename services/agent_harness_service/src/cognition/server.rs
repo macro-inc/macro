@@ -19,9 +19,8 @@ use call::domain::service::{CallRecordQueryServiceImpl, CallServiceImpl};
 use call::inbound::toolset::CallToolContext;
 use call::outbound::pg_call_repo::PgCallRepo;
 use call::outbound::s3_recording_storage::S3RecordingStorage;
-use channels::{
-    domain::list_service::ChannelListServiceImpl, outbound::pg_channels_repo::PgChannelsRepo,
-};
+use channels::domain::list_service::ChannelListServiceImpl;
+use channels_outbound::pg_channels_repo::PgChannelsRepo;
 use connection_gateway_url::ConnectionGatewayUrl;
 use document_storage_service_client::DocumentStorageServiceClient;
 use document_storage_service_url::DocumentStorageServiceUrl;
@@ -417,7 +416,7 @@ pub async fn build(
             )),
             entity_access_service.clone(),
         ),
-        channel: channels::inbound::attachment::ChannelAttachmentService::new(
+        channel: channels_inbound::attachment::ChannelAttachmentService::new(
             Arc::new(PgChannelsRepo::new(db.clone())),
             entity_access_service.clone(),
         ),

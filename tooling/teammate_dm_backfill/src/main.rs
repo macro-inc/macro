@@ -1,10 +1,10 @@
 use std::collections::HashSet;
 
 use anyhow::Context;
-use channels::{
-    domain::{dm::ensure_dms_for_roster, ports::ChannelService, service::ChannelServiceImpl},
-    outbound::pg_channels_repo::PgChannelsRepo,
+use channels::domain::{
+    dm::ensure_dms_for_roster, ports::ChannelService, service::ChannelServiceImpl,
 };
+use channels_outbound::pg_channels_repo::PgChannelsRepo;
 use database_env_vars::DatabaseUrl;
 use macro_entrypoint::MacroEntrypoint;
 use macro_user_id::user_id::MacroUserIdStr;

@@ -56,21 +56,19 @@ use channel_labels::{
     domain::service::ChannelLabelsServiceImpl, inbound::axum_router::ChannelLabelsRouterState,
     outbound::pg_channel_labels_repo::PgChannelLabelsRepo,
 };
-use channels::{
-    domain::{
-        list_service::ChannelListServiceImpl,
-        service::ChannelServiceImpl,
-        side_effects::{ChannelSideEffectService, SpawnedChannelEventDispatcher},
-    },
-    inbound::{axum_router::ChannelsRouterState, list_router::ChannelListRouterState},
-    outbound::{
-        connection_gateway_realtime::ConnectionGatewayChannelRealtimePublisher,
-        contacts_dispatcher::ContactsChannelDispatcher,
-        notification_sender::{NotificationChannelSender, NotificationReaderCompletion},
-        pg_channel_reference_share_permissions::PgChannelReferenceSharePermissions,
-        pg_channels_repo::PgChannelsRepo,
-        pg_side_effect_context::PgChannelSideEffectContext,
-    },
+use channels::domain::{
+    list_service::ChannelListServiceImpl,
+    service::ChannelServiceImpl,
+    side_effects::{ChannelSideEffectService, SpawnedChannelEventDispatcher},
+};
+use channels_inbound::{axum_router::ChannelsRouterState, list_router::ChannelListRouterState};
+use channels_outbound::{
+    connection_gateway_realtime::ConnectionGatewayChannelRealtimePublisher,
+    contacts_dispatcher::ContactsChannelDispatcher,
+    notification_sender::{NotificationChannelSender, NotificationReaderCompletion},
+    pg_channel_reference_share_permissions::PgChannelReferenceSharePermissions,
+    pg_channels_repo::PgChannelsRepo,
+    pg_side_effect_context::PgChannelSideEffectContext,
 };
 use collab_surface::inbound::axum_router::CollabSurfaceRouterState;
 use connection::{
@@ -1280,12 +1278,12 @@ async fn run_server() -> anyhow::Result<()> {
             SpawnedChannelEventDispatcher::new(channel_side_effects.clone()),
         )))
         .with_comment_parent_access(Arc::new(
-            channels::outbound::entity_access_comment_parents::EntityAccessCommentParents::new(
+            channels_outbound::entity_access_comment_parents::EntityAccessCommentParents::new(
                 entity_access_service.clone(),
             ),
         ))
         .with_picture_files(
-            channels::outbound::static_file_pictures::StaticFileChannelPictures::new(
+            channels_outbound::static_file_pictures::StaticFileChannelPictures::new(
                 static_file_service_client::StaticFileServiceClient::new(
                     config.internal_api_key.to_string(),
                     StaticFileServiceUrl::new()?.to_string(),
@@ -1330,7 +1328,7 @@ async fn run_server() -> anyhow::Result<()> {
         SpawnedChannelEventDispatcher::new(channel_side_effects.clone()),
         PgChannelReferenceSharePermissions::new(db.clone(), entity_access_service.clone()),
         message_realtime,
-        channels::outbound::pg_agent_creations::PgAgentCreations::new(db.clone()),
+        channels_outbound::pg_agent_creations::PgAgentCreations::new(db.clone()),
     );
     let message_service = Arc::new(
         messages::domain::service::MessageService::new(
@@ -1391,7 +1389,7 @@ async fn run_server() -> anyhow::Result<()> {
                 }
 
                 tracing::info!("starting teammate DM consumer");
-                let result = channels::inbound::teammate_dms_consumer::run_teammate_dms_consumer(
+                let result = channels_inbound::teammate_dms_consumer::run_teammate_dms_consumer(
                     &teammate_dms_brokers,
                     channels.clone(),
                     cancellation_token.cancelled(),

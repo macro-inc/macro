@@ -38,10 +38,10 @@ pub struct EnsuredAgentDm {
 
 /// Historical persona identity displayed beside a private conversation.
 #[derive(Debug, Clone, serde::Serialize)]
-#[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
 pub struct AgentDmProfile {
     /// Persona id without the bot principal prefix.
-    #[cfg_attr(feature = "inbound", schema(value_type = String))]
+    #[cfg_attr(feature = "schema", schema(value_type = String))]
     pub bot_id: BotId,
     /// Persona display name.
     pub name: String,

@@ -15,7 +15,7 @@ use agent_trigger::outbound::{
     PgPeopleDirectory, VisionImageCaptioner,
 };
 use bots::outbound::pg_bots_repo::PgBotsRepo;
-use channels::outbound::pg_channels_repo::PgChannelsRepo;
+use channels_outbound::pg_channels_repo::PgChannelsRepo;
 use document_storage_service_client::DocumentStorageServiceClient;
 use document_storage_service_url::DocumentStorageServiceUrl;
 use entity_access::domain::{ports::EntityAccessService, service::EntityAccessServiceImpl};

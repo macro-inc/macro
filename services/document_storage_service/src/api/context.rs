@@ -33,21 +33,19 @@ use channel_labels::{
     domain::service::ChannelLabelsServiceImpl, inbound::axum_router::ChannelLabelsRouterState,
     outbound::pg_channel_labels_repo::PgChannelLabelsRepo,
 };
-use channels::{
-    domain::{
-        list_service::ChannelListServiceImpl,
-        service::ChannelServiceImpl,
-        side_effects::{ChannelSideEffectService, SpawnedChannelEventDispatcher},
-    },
-    inbound::{axum_router::ChannelsRouterState, list_router::ChannelListRouterState},
-    outbound::{
-        connection_gateway_realtime::ConnectionGatewayChannelRealtimePublisher,
-        contacts_dispatcher::ContactsChannelDispatcher,
-        notification_sender::{NotificationChannelSender, NotificationReaderCompletion},
-        pg_channel_reference_share_permissions::PgChannelReferenceSharePermissions,
-        pg_channels_repo::PgChannelsRepo,
-        pg_side_effect_context::PgChannelSideEffectContext,
-    },
+use channels::domain::{
+    list_service::ChannelListServiceImpl,
+    service::ChannelServiceImpl,
+    side_effects::{ChannelSideEffectService, SpawnedChannelEventDispatcher},
+};
+use channels_inbound::{axum_router::ChannelsRouterState, list_router::ChannelListRouterState};
+use channels_outbound::{
+    connection_gateway_realtime::ConnectionGatewayChannelRealtimePublisher,
+    contacts_dispatcher::ContactsChannelDispatcher,
+    notification_sender::{NotificationChannelSender, NotificationReaderCompletion},
+    pg_channel_reference_share_permissions::PgChannelReferenceSharePermissions,
+    pg_channels_repo::PgChannelsRepo,
+    pg_side_effect_context::PgChannelSideEffectContext,
 };
 use connection::{
     domain::service::ConnectionServiceImpl,
@@ -513,7 +511,7 @@ pub(crate) type DssChannelService = ChannelServiceImpl<
         >,
     >,
     PgChannelReferenceSharePermissions<EntityAccessService>,
-    channels::outbound::static_file_pictures::StaticFileChannelPictures,
+    channels_outbound::static_file_pictures::StaticFileChannelPictures,
 >;
 
 /// Type alias for the channels router state.

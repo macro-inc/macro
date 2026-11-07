@@ -45,10 +45,23 @@ impl DmPair {
     }
 }
 
+/// One direct message to ensure: the pair of users and who owns the DM.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub(crate) struct EnsureDm {
+pub struct EnsureDm {
     pub(crate) pair: DmPair,
     pub(crate) owner: MacroUserIdStr<'static>,
+}
+
+impl EnsureDm {
+    /// The two users the DM is between.
+    pub fn pair(&self) -> &DmPair {
+        &self.pair
+    }
+
+    /// The user who owns the DM.
+    pub fn owner(&self) -> &MacroUserIdStr<'static> {
+        &self.owner
+    }
 }
 
 /// An opaque batch of direct messages to ensure.
@@ -60,7 +73,8 @@ pub struct EnsureDms {
 impl EnsureDms {
     // Only the service consumes a batch, and that lives behind `ports`.
     #[cfg(feature = "ports")]
-    pub(crate) fn into_requests(self) -> Vec<EnsureDm> {
+    /// The batch as one request per DM to ensure.
+    pub fn into_requests(self) -> Vec<EnsureDm> {
         self.requests
     }
 }

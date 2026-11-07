@@ -26,7 +26,7 @@ async fn a_running_quiet_batch_leaves_the_next_conversation_message_queued(pool:
         Some(outbox.clone()),
     );
     let mut command = direct_command();
-    let channel = channels::outbound::pg_channels_repo::PgChannelsRepo::new(pool.clone())
+    let channel = channels_outbound::pg_channels_repo::PgChannelsRepo::new(pool.clone())
         .ensure(mention_origin(&command).sender.clone(), command.bot_id)
         .await
         .unwrap()

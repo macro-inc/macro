@@ -1,9 +1,9 @@
 //! Viewer-aware channel name search. Postgres finds the channels whose name,
-//! as the viewer sees it, matches (`channels::outbound::channel_name`); the
+//! as the viewer sees it, matches (`channels_outbound::channel_name`); the
 //! page of hits is then resolved to those names and highlighted.
 
 use channels::domain::models::ChannelType;
-use channels::outbound::channel_name::{
+use channels_outbound::channel_name::{
     ChannelNameSearch, batch_resolve_channel_names, match_channel_names,
 };
 use macro_user_id::{

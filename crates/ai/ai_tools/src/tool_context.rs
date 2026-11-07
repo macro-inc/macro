@@ -16,8 +16,8 @@ use channels::domain::ports::ChannelEventDispatcher;
 use channels::domain::service::NoopChannelEventDispatcher;
 use channels::domain::side_effects::{ChannelSideEffectService, SpawnedChannelEventDispatcher};
 use channels::domain::{list_service::ChannelListServiceImpl, service::ChannelServiceImpl};
-use channels::inbound::toolset::ChannelToolContext;
-use channels::outbound::{
+use channels_inbound::toolset::ChannelToolContext;
+use channels_outbound::{
     connection_gateway_realtime::ConnectionGatewayChannelRealtimePublisher,
     contacts_dispatcher::ContactsChannelDispatcher, notification_sender::NotificationChannelSender,
     pg_channel_reference_share_permissions::PgChannelReferenceSharePermissions,
@@ -401,12 +401,12 @@ fn message_service_with_side_effects(
             channels::domain::message_delivery::ChannelMessageDelivery::new(
                 PgChannelsRepo::new(pool.clone()),
                 dispatcher,
-                channels::outbound::pg_channel_reference_share_permissions::PgChannelReferenceSharePermissions::new(
+                channels_outbound::pg_channel_reference_share_permissions::PgChannelReferenceSharePermissions::new(
                     pool.clone(),
                     Arc::new(access.clone()),
                 ),
                 realtime.clone(),
-                channels::outbound::pg_agent_creations::PgAgentCreations::new(
+                channels_outbound::pg_agent_creations::PgAgentCreations::new(
                     pool.clone(),
                 ),
             ),
