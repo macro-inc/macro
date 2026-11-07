@@ -411,7 +411,14 @@ impl Transaction<'_> {
             let last = *nodes
                 .last()
                 .ok_or(Error::Invariant("empty node insertion"))?;
-            let point = self.end_point(last)?;
+            let point = if !self.is_text(last) && !self.is_element(last) {
+                match self.next_sibling(last).filter(|key| self.is_text(*key)) {
+                    Some(next) => Point::text(next, Utf16Offset::ZERO),
+                    None => self.end_point(last)?,
+                }
+            } else {
+                self.end_point(last)?
+            };
             let range = self.range_at(slot)?.clone();
             return self.collapsed_selection_at(
                 SelectionSlot::Active,
