@@ -21,6 +21,9 @@ impl NodeType for AgentSessionMentionNode {
     const TYPE: &'static str = "agent-session-mention";
     type Kind = DecoratorKind;
     const FLAGS_PER_INSTANCE: bool = true;
+    fn static_transform() -> Option<TransformFn<Self>> {
+        Some(agent_session_mention_transform)
+    }
     fn flag_probe() -> Option<Self> {
         Some(Self::default())
     }
@@ -64,4 +67,39 @@ impl SearchText for AgentSessionMentionNode {
                 .into(),
         )
     }
+}
+
+/// Keep expanded cards at the nearest root and collapsed chips inside paragraphs.
+pub fn agent_session_mention_transform(
+    tx: &mut Transaction<'_>,
+    id: Id<AgentSessionMentionNode>,
+) -> crate::Result<()> {
+    let Some(parent) = tx.parent(id) else {
+        return Ok(());
+    };
+    let expanded = tx.get_or_err::<AgentSessionMentionNode>(id)?.expanded;
+    if expanded && !tx.is_root_or_shadow_root(parent) {
+        let was_paragraph = tx.is::<Paragraph>(parent);
+        lexical_rich_nodes::utils::insert_node_to_nearest_root_at_caret(
+            tx,
+            id.key(),
+            SiblingCaret::new(id.key(), CaretDirection::Previous).into(),
+            None,
+        )?;
+        if was_paragraph {
+            for sibling in [tx.prev_sibling(id), tx.next_sibling(id)]
+                .into_iter()
+                .flatten()
+            {
+                if tx.is::<Paragraph>(sibling) && tx.is_empty(sibling) {
+                    tx.remove(sibling, false)?;
+                }
+            }
+        }
+    } else if !expanded && tx.is_root_or_shadow_root(parent) {
+        let paragraph = tx.create(Paragraph {})?;
+        tx.replace(id, paragraph, false)?;
+        tx.append(paragraph, &[id.key()])?;
+    }
+    Ok(())
 }

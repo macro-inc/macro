@@ -1,0 +1,80 @@
+//! Intrinsic behavior beyond serialization.
+use lexical_model::*;
+use lexical_rich_nodes::mark::MarkNode;
+use macro_document_model::{nodes::*, *};
+#[test]
+fn comment_new_after_keeps_its_subtype_and_metadata() -> Result<()> {
+    let mut editor = export_registry();
+    let mut tx = editor.transaction();
+    let p = tx.create(Paragraph {})?;
+    let comment = tx.create(CommentNode {
+        mark: MarkNode {
+            ids: vec!["m1".into()],
+        },
+        thread_id: Maybe::Value(42),
+        is_draft: true,
+    })?;
+    tx.append(p, &[comment.key()])?;
+    tx.append(NodeKey::ROOT, &[p.key()])?;
+    let next = tx
+        .insert_new_after(comment, SelectionSlot::Active, false)?
+        .unwrap();
+    assert_eq!(tx.type_name(next)?, "comment-mark");
+    assert_eq!(
+        tx.get::<CommentNode>(next).unwrap(),
+        tx.get::<CommentNode>(comment).unwrap()
+    );
+    assert_eq!(tx.next_sibling(comment), Some(next));
+    Ok(())
+}
+#[test]
+fn expanded_session_hoists_then_collapsed_session_wraps() -> Result<()> {
+    let mut editor = export_registry();
+    let (mention, _) = editor.update(|tx| {
+        let p = tx.create(Paragraph {})?;
+        let mention = tx.create(AgentSessionMentionNode {
+            id: Maybe::Value("session".into()),
+            expanded: true,
+            ..Default::default()
+        })?;
+        tx.append(p, &[mention.key()])?;
+        tx.append(NodeKey::ROOT, &[p.key()])?;
+        Ok(mention)
+    })?;
+    assert_eq!(
+        editor.state().children_keys(NodeKey::ROOT)?,
+        vec![mention.key()]
+    );
+    editor.update(|tx| {
+        tx.get_mut::<AgentSessionMentionNode>(mention)?.expanded = false;
+        Ok(())
+    })?;
+    let state = editor.state();
+    let p = state.first_child(NodeKey::ROOT).unwrap();
+    assert!(state.is::<Paragraph>(p));
+    assert_eq!(state.children_keys(p)?, vec![mention.key()]);
+    Ok(())
+}
+#[test]
+fn expanded_session_preserves_both_sides_of_split_paragraph() -> Result<()> {
+    let mut editor = export_registry();
+    editor.update(|tx| {
+        let p = tx.create(Paragraph {})?;
+        let before = tx.create_text("before")?;
+        let after = tx.create_text("after")?;
+        let mention = tx.create(AgentSessionMentionNode {
+            expanded: true,
+            ..Default::default()
+        })?;
+        tx.append(p, &[before.key(), mention.key(), after.key()])?;
+        tx.append(NodeKey::ROOT, &[p.key()])?;
+        Ok(())
+    })?;
+    let state = editor.state();
+    let children = state.children_keys(NodeKey::ROOT)?;
+    assert_eq!(children.len(), 3);
+    assert_eq!(state.text_content(children[0]), "before");
+    assert!(state.is::<AgentSessionMentionNode>(children[1]));
+    assert_eq!(state.text_content(children[2]), "after");
+    Ok(())
+}
