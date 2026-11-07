@@ -1,3 +1,5 @@
+pub use model_error_response::GenericErrorResponse;
+
 use upstream_error::{UpstreamError, UpstreamFailure};
 
 #[cfg(test)]
@@ -185,21 +187,6 @@ impl FusionAuthClientError {
         }
         tracing::error!(status=%status, body=%body, "unexpected response from fusionauth");
         Self::Generic(GenericErrorResponse { message: body })
-    }
-}
-
-/// A generic error response containing a message.
-#[derive(serde::Serialize, Debug)]
-pub struct GenericErrorResponse {
-    /// The error message.
-    pub message: String,
-}
-
-impl From<anyhow::Error> for GenericErrorResponse {
-    fn from(err: anyhow::Error) -> Self {
-        Self {
-            message: err.to_string(),
-        }
     }
 }
 

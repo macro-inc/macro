@@ -2453,6 +2453,7 @@ dependencies = [
  "anyhow",
  "chrono",
  "model",
+ "model-error-response",
  "reqwest 0.13.4",
  "serde",
  "thiserror 2.0.18",
@@ -7051,6 +7052,7 @@ dependencies = [
  "bot_id",
  "macro_tower_layers",
  "model",
+ "model-error-response",
  "model_owner",
  "models_bulk_upload",
  "models_permissions",
@@ -8977,6 +8979,7 @@ dependencies = [
  "base64 0.22.1",
  "jsonwebtoken 10.3.0",
  "macro_service_urls",
+ "model-error-response",
  "reqwest 0.13.4",
  "serde",
  "serde_json",
@@ -12898,6 +12901,7 @@ dependencies = [
  "macro_env",
  "macro_env_var",
  "macro_user_id",
+ "model-error-response",
  "remote_env_var",
  "serde",
  "serde_json",
@@ -13907,6 +13911,7 @@ dependencies = [
 name = "model-error-response"
 version = "0.1.0"
 dependencies = [
+ "anyhow",
  "serde",
  "utoipa",
  "workspace-hack",
