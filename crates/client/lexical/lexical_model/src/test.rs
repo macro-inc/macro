@@ -667,3 +667,26 @@ fn appending_sibling_leaves_unchanged_prefix_records_clean() -> Result<(), Error
     assert!(commit.changes.dirty_elements.contains_key(&last));
     Ok(())
 }
+
+#[test]
+fn merging_text_resolves_parent_element_selection_points() -> Result<(), Error> {
+    let mut editor = Editor::builder(EditorMode::Headless).build().unwrap();
+    let ((p, first, last), _) = editor.update(|tx| {
+        let p = tx.create(Paragraph::default())?;
+        let first = tx.create_text("a")?;
+        let last = tx.create_text("b")?;
+        tx.text(last)?.set_format(TextFormat::BOLD)?;
+        tx.append(p, &[first.key(), last.key()])?;
+        tx.append(NodeKey::ROOT, &[p.key()])?;
+        tx.set_selection(Some(Selection::Range(RangeSelection::new(
+            Point::element(p, ChildIndex(1)), Point::element(p, ChildIndex(2)),
+        ))))?;
+        Ok((p.key(), first.key(), last.key()))
+    })?;
+    editor.update(|tx| tx.text(last)?.set_format(TextFormat::empty()).map(|_| ()))?;
+    let range = editor.state().selection().and_then(Selection::as_range).unwrap();
+    assert_eq!(range.anchor, Point::text(first, Utf16Offset(2)));
+    assert_eq!(range.focus, range.anchor);
+    assert_eq!(editor.state().text_content(p), "ab");
+    Ok(())
+}
