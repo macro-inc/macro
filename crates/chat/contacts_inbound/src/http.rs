@@ -249,6 +249,9 @@ where
 #[derive(OpenApi)]
 #[openapi(
         info(
+            // utoipa defaults the title to the package name; keep the
+            // published one from before the crate split.
+            title = "contacts",
             terms_of_service = "https://macro.com/terms",
         ),
         paths(
