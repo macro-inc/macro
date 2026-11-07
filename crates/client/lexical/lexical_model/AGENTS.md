@@ -9,6 +9,7 @@ node types, immutable snapshots, transactional tree editing, update processing, 
 
 - `src/lib.rs` exposes the model API.
 - `src/node.rs` defines node kinds, inheritance and dispatch.
+- `src/selection/caret.rs` implements directional caret range deletion.
 - `src/transaction.rs` owns writes; never mutate a committed snapshot.
 - `src/pipeline/` implements flush order, normalization, GC and view-attached caches.
 - `src/command.rs` owns listener ordering and reentrant dispatch; `src/extension.rs` stages per-editor state separately from document snapshots.
@@ -32,13 +33,14 @@ node types, immutable snapshots, transactional tree editing, update processing, 
 - Movement consumes explicit host points; `NoView` runs structural rules only.
 - Optional `model-segmentation` enables Unicode movement within text nodes; visual line boundaries still require host layout.
 - Typed selection-change and application commands use immutable plugins and transactional extension state.
-- Stock editing-command registration, History, follow-up hooks and view diffs remain later layers.
 - Caret cursors compute successors before returning items; keep the construction-time first step.
 - Commands visit registered listeners only; external dispatch flushes between levels, inline dispatch does not.
 - Hooks share one follow-up transaction per round and stop at 99 rounds; extension state rolls back with updates.
 - History restores snapshots without rerunning transforms; diffs compare descendant map entries even when ancestor records are shared.
 - EditorCore is sans-IO: host time, layout, clipboard and composition facts arrive as data; effects leave as values.
 - Failed hook rounds roll back early publications too; failed main inputs retain and report their early commits.
+
+- Reserved `foreign-nodes` exposes a development-only peer editor for the conformance facade; JS node hosting remains a later layer.
 
 ## Checks
 
@@ -54,7 +56,7 @@ node types, immutable snapshots, transactional tree editing, update processing, 
 
 ## Gotchas
 
-- Text positions are UTF-16 code units; reject surrogate-splitting offsets.
+- Text positions are UTF-16 code units; allow interior selection offsets but reject edits that split surrogate pairs.
 - Text insertion checks the adjacent text node's insertion edge before reusing it; tabs and entity boundaries require a new plain text node.
 - Node ancestry follows the kind trait's `Parent`, never Rust layout casts.
 - Keep key allocation outside rollback, and snapshots independent on first write.
@@ -62,6 +64,7 @@ node types, immutable snapshots, transactional tree editing, update processing, 
 ## Tests
 
 - Cover every public function with an explicit literal behavior test before adding table-driven or generated cases; do not hide fixture construction behind a helper DSL.
+- The independent Tier C lockstep lives in `packages/lexical-conformance/diff/`.
 - Test pipeline order, rollback, JSON bytes and boundary cases locally; replay the admitted Tier A core subset with `cargo test -p lexical_conformance --test replay -j4`.
 
 The sibling test modules cover values, reads, node dispatch, tree edits and NodeState.

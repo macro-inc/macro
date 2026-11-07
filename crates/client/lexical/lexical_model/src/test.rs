@@ -652,3 +652,72 @@ mod state;
 mod proptest;
 
 mod performance;
+#[test]
+fn appending_sibling_leaves_unchanged_prefix_records_clean() -> Result<(), Error> {
+    let mut editor = Editor::builder(EditorMode::Headless).build().unwrap();
+    let ((first, last), _) = editor.update(|tx| {
+        let first = tx.create(Paragraph::default())?;
+        let last = tx.create(Paragraph::default())?;
+        tx.append(NodeKey::ROOT, &[first.key(), last.key()])?;
+        Ok((first.key(), last.key()))
+    })?;
+    let (_, commit) = editor.update(|tx| {
+        let next = tx.create(Paragraph::default())?;
+        tx.append(NodeKey::ROOT, &[next.key()])
+    })?;
+    assert!(!commit.changes.dirty_elements.contains_key(&first));
+    assert!(!commit.changes.mutations.contains_key(&first));
+    assert!(commit.changes.dirty_elements.contains_key(&last));
+    Ok(())
+}
+
+#[test]
+fn merging_text_resolves_parent_element_selection_points() -> Result<(), Error> {
+    let mut editor = Editor::builder(EditorMode::Headless).build().unwrap();
+    let ((p, first, last), _) = editor.update(|tx| {
+        let p = tx.create(Paragraph::default())?;
+        let first = tx.create_text("a")?;
+        let last = tx.create_text("b")?;
+        tx.text(last)?.set_format(TextFormat::BOLD)?;
+        tx.append(p, &[first.key(), last.key()])?;
+        tx.append(NodeKey::ROOT, &[p.key()])?;
+        tx.set_selection(Some(Selection::Range(RangeSelection::new(
+            Point::element(p, ChildIndex(1)),
+            Point::element(p, ChildIndex(2)),
+        ))))?;
+        Ok((p.key(), first.key(), last.key()))
+    })?;
+    editor.update(|tx| tx.text(last)?.set_format(TextFormat::empty()).map(|_| ()))?;
+    let range = editor
+        .state()
+        .selection()
+        .and_then(Selection::as_range)
+        .unwrap();
+    assert_eq!(range.anchor, Point::text(first, Utf16Offset(2)));
+    assert_eq!(range.focus, range.anchor);
+    assert_eq!(editor.state().text_content(p), "ab");
+    Ok(())
+}
+
+#[cfg(feature = "foreign-nodes")]
+#[test]
+fn conformance_peer_shares_registry_and_keys_but_owns_its_snapshot() -> Result<(), Error> {
+    let mut editor = Editor::builder(EditorMode::Headless).build().unwrap();
+    let mut peer = editor.create_conformance_peer(EditorMode::ViewAttached)?;
+    assert!(peer.state().is_empty_state());
+    let (first, _) = editor.update(|tx| {
+        let p = tx.create(Paragraph::default())?;
+        tx.append(NodeKey::ROOT, &[p.key()])?;
+        Ok(p.key())
+    })?;
+    peer.set_editor_state(editor.state().clone(), TagSet::default())?;
+    let (second, _) = peer.update(|tx| {
+        let p = tx.create(Paragraph::default())?;
+        tx.append(NodeKey::ROOT, &[p.key()])?;
+        Ok(p.key())
+    })?;
+    assert_ne!(first, second);
+    assert_eq!(editor.state().view().children_size(NodeKey::ROOT), 1);
+    assert_eq!(peer.state().view().children_size(NodeKey::ROOT), 2);
+    Ok(())
+}

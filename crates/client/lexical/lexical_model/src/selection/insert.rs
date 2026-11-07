@@ -12,8 +12,119 @@ impl Transaction<'_> {
         {
             return Ok(());
         }
-        let original = self.range_at(slot)?.clone();
+        let mut original = self.range_at(slot)?.clone();
+        let backward = original.is_backward(self.view())?;
+        let start = if backward {
+            original.focus
+        } else {
+            original.anchor
+        };
+        let end = if backward {
+            original.anchor
+        } else {
+            original.focus
+        };
+        if let Point::Element { key, offset } = start {
+            // Upstream transfers an element start to a new empty text before
+            // resolving the end boundary. Leaf insertBefore updates element
+            // offsets; direct paragraph splices leave them unchanged.
+            let text = self.create_text("")?;
+            self.text(text)?
+                .set_format(original.format)?
+                .set_style(&original.style)?;
+            let placement = self.child_at_index(key, offset);
+            if let Some(paragraph) = placement.filter(|child| self.is::<Paragraph>(*child)) {
+                self.splice(paragraph, ChildIndex(0), 0, &[text.key()])?;
+            } else if key == NodeKey::ROOT {
+                let paragraph = self.create(Paragraph::default())?;
+                self.append(paragraph, &[text.key()])?;
+                self.splice(key, offset, 0, &[paragraph.key()])?;
+            } else {
+                self.splice(key, offset, 0, &[text.key()])?;
+            }
+            let next = Point::text(text, Utf16Offset::ZERO);
+            let shifted = self.range_at(slot)?;
+            let end = if start == end {
+                next
+            } else if placement.is_some_and(|child| self.is::<Paragraph>(child)) {
+                end
+            } else if backward {
+                shifted.anchor
+            } else {
+                shifted.focus
+            };
+            if backward {
+                original.focus = next;
+                original.anchor = end;
+            } else {
+                original.anchor = next;
+                original.focus = end;
+            }
+            self.install_selection_at(slot, Selection::Range(original.clone()))?;
+        }
+        let end_role = if backward {
+            PointRole::Anchor
+        } else {
+            PointRole::Focus
+        };
+        let end_point = if backward {
+            original.anchor
+        } else {
+            original.focus
+        };
+        if end_point.point_type() == PointType::Element {
+            let end_point = super::comparison_point(self.view(), end_point)?;
+            if backward {
+                original.anchor = end_point;
+            } else {
+                original.focus = end_point;
+            }
+            self.set_point_at(slot, end_role, end_point)?;
+        }
         let selected = original.nodes(self.view())?;
+        if selected.len() == 1
+            && (if backward {
+                original.anchor
+            } else {
+                original.focus
+            })
+            .point_type()
+                == PointType::Element
+            && let Some(first) = selected.first().copied().filter(|key| self.is_text(*key))
+        {
+            let end = Point::text(first, self.text_content_size(first));
+            if backward {
+                original.anchor = end;
+            } else {
+                original.focus = end;
+            }
+            self.set_point_at(slot, end_role, end)?;
+        }
+        if selected.len() > 1
+            && selected.iter().all(|key| {
+                self.is::<Paragraph>(*key)
+                    || self
+                        .parent(*key)
+                        .is_some_and(|parent| self.is::<Paragraph>(parent))
+            })
+        {
+            return self
+                .insert_text_across_paragraph_nodes(slot, &original, &selected, text, backward);
+        }
+        if !original.is_collapsed()
+            && let [key] = selected.as_slice()
+            && self.is_token_or_tab(*key)
+        {
+            let replacement = self.create_text(text)?;
+            self.replace(*key, replacement, false)?;
+            return self.finish_text_insertion(
+                slot,
+                true,
+                Point::text(replacement, TextBuffer::new(text).utf16_len()),
+                original.format,
+                original.style,
+            );
+        }
         let first_format = selected
             .first()
             .and_then(|key| self.view().text(*key))
@@ -129,8 +240,8 @@ impl Transaction<'_> {
                 slot,
                 true,
                 Point::text(replacement, TextBuffer::new(text).utf16_len()),
-                TextFormat::empty(),
-                "".into(),
+                range.format,
+                range.style.clone(),
             );
         } else if data.is_segmented() {
             let plain = self.create_text(data.text.as_str())?;
@@ -216,6 +327,137 @@ impl Transaction<'_> {
         }
         Ok(())
     }
+    // Upstream insertText still uses its older node-based replacement algorithm,
+    // whose element-end semantics differ from caret-range removeText.
+    fn insert_text_across_paragraph_nodes(
+        &mut self,
+        slot: SelectionSlot,
+        range: &RangeSelection,
+        nodes: &[NodeKey],
+        text: &str,
+        backward: bool,
+    ) -> Result<(), Error> {
+        let first = *nodes.first().ok_or(Error::NoRangeSelection)?;
+        let mut last = *nodes.last().ok_or(Error::NoRangeSelection)?;
+        let (start, end) = if backward {
+            (range.focus, range.anchor)
+        } else {
+            (range.anchor, range.focus)
+        };
+        let first_data = self.view().text_data(first)?.clone();
+        let first_parent = self.parent_or_err(first)?;
+        let last_parent = if self.is_element(last) {
+            last
+        } else {
+            self.parent_or_err(last)?
+        };
+        let last_child = last;
+        let mut keep = crate::collections::IndexSet::default();
+        keep.extend(self.ancestors(first));
+        keep.extend(self.ancestors(last));
+        let mutate_last = if end.point_type() == PointType::Text {
+            end.offset() != 0 || self.text_content_size(last) == Utf16Offset::ZERO
+        } else {
+            self.index_within_parent(last)
+                .is_some_and(|index| index.0 < end.offset())
+        };
+        if mutate_last {
+            if self.is_text(last)
+                && !self.is_token_or_tab(last)
+                && end.offset() != self.text_content_size(last).get()
+            {
+                if self
+                    .view()
+                    .text(last)
+                    .is_some_and(|data| data.is_segmented())
+                {
+                    let content = self.text_content(last).into_owned();
+                    let replacement = self.create_text(&content)?;
+                    self.replace(last, replacement, false)?;
+                    last = replacement.key();
+                }
+                if end.point_type() == PointType::Text {
+                    self.text(last)?.splice_text(
+                        Utf16Offset::ZERO..Utf16Offset(end.offset()),
+                        "",
+                        false,
+                    )?;
+                }
+                keep.insert(last);
+            } else {
+                self.remove(last, false)?;
+            }
+        } else {
+            keep.insert(last);
+        }
+        let selected = nodes
+            .iter()
+            .copied()
+            .collect::<crate::collections::IndexSet<_>>();
+        for child in self.children_keys(last_parent)?.into_iter().rev() {
+            if child == first || self.has_ancestor(first, child) {
+                break;
+            }
+            if self.is_attached(child) {
+                if !selected.contains(&child) || child == last_child {
+                    if first_parent != last_parent {
+                        self.insert_after(first, child, false)?;
+                    }
+                } else {
+                    self.remove(child, false)?;
+                }
+            }
+        }
+        if first_parent != last_parent {
+            let mut parent = Some(last_parent);
+            let mut removed = None;
+            while let Some(key) = parent {
+                if self.is_empty(key) || self.last_child(key) == removed {
+                    keep.shift_remove(&key);
+                    removed = Some(key);
+                }
+                parent = self.parent(key);
+            }
+        }
+        if !self.is_token_or_tab(first) {
+            self.text(first)?.splice_text(
+                Utf16Offset(start.offset())..first_data.text.utf16_len(),
+                text,
+                false,
+            )?;
+            self.finish_text_insertion(
+                slot,
+                false,
+                Point::text(
+                    first,
+                    Utf16Offset(start.offset()) + TextBuffer::new(text).utf16_len(),
+                ),
+                first_data.format,
+                first_data.style,
+            )?;
+            if self.text_content_size(first) == Utf16Offset::ZERO {
+                self.remove(first, false)?;
+            }
+        } else if start.offset() == first_data.text.utf16_len().get() {
+            self.select_end(first)?;
+        } else {
+            let replacement = self.create_text(text)?;
+            self.replace(first, replacement, false)?;
+            self.finish_text_insertion(
+                slot,
+                true,
+                Point::text(replacement, TextBuffer::new(text).utf16_len()),
+                range.format,
+                range.style.clone(),
+            )?;
+        }
+        for key in nodes.iter().copied().skip(1) {
+            if !keep.contains(&key) {
+                self.remove(key, false)?;
+            }
+        }
+        Ok(())
+    }
     /// Insert literal tabs and line breaks at the active selection.
     pub fn insert_raw_text(&mut self, text: &str) -> Result<(), Error> {
         self.insert_raw_text_at(SelectionSlot::Active, text)
@@ -237,9 +479,8 @@ impl Transaction<'_> {
     }
     /// Split the containing block through its virtual paragraph hook.
     pub fn insert_paragraph_at(&mut self, slot: SelectionSlot) -> Result<Option<NodeKey>, Error> {
-        if !self.range_at(slot)?.is_collapsed() {
-            self.remove_text_at(slot)?;
-        }
+        // Root insertion is a splice at the anchor, even for a noncollapsed range.
+        // Upstream checks this before removing the selected block contents.
         let point = self.anchor_at(slot)?;
         if self.is_root_or_shadow_root(point.key()) {
             let p = self.create(Paragraph::default())?;
@@ -253,6 +494,19 @@ impl Transaction<'_> {
             )?;
             return Ok(Some(p.key()));
         }
+        if !self.range_at(slot)?.is_collapsed() {
+            self.remove_text_at(slot)?;
+        }
+        let slot = if self.anchor_at(slot)?.key() == NodeKey::ROOT {
+            // removeText can leave a root caret after the initial root shortcut.
+            // Upstream's splitNodeAtPoint fallback appends and selects a paragraph.
+            let p = self.create(Paragraph::default())?;
+            self.append(NodeKey::ROOT, &[p.key()])?;
+            self.select_start(p)?;
+            SelectionSlot::Active
+        } else {
+            slot
+        };
         let (block, index) = self.split_selection_boundary(slot)?;
         let tail = self
             .children(block)
@@ -376,7 +630,14 @@ impl Transaction<'_> {
             let last = *nodes
                 .last()
                 .ok_or(Error::Invariant("empty node insertion"))?;
-            let point = self.end_point(last)?;
+            let point = if !self.is_text(last) && !self.is_element(last) {
+                match self.next_sibling(last).filter(|key| self.is_text(*key)) {
+                    Some(next) => Point::text(next, Utf16Offset::ZERO),
+                    None => self.end_point(last)?,
+                }
+            } else {
+                self.end_point(last)?
+            };
             let range = self.range_at(slot)?.clone();
             return self.collapsed_selection_at(
                 SelectionSlot::Active,

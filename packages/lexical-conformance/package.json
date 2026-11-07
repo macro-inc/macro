@@ -30,6 +30,7 @@
     "bitf": "1.0.2",
     "diff": "9.0.0",
     "eslint": "10.3.0",
+    "fast-check": "4.5.3",
     "fast-xml-parser": "4.5.7",
     "flat": "6.0.1",
     "happy-dom": "20.9.0",

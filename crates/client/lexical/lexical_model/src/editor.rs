@@ -53,6 +53,18 @@ impl Editor {
     pub fn builder(mode: EditorMode) -> EditorBuilder {
         EditorBuilder::new(mode)
     }
+    /// Create an empty dev-only peer sharing this registry and key allocator.
+    /// Tier C keeps a separate attached view, like the upstream DOM oracle.
+    #[cfg(feature = "foreign-nodes")]
+    pub fn create_conformance_peer(&self, mode: EditorMode) -> Result<Self, Error> {
+        Self::new(
+            self.state.registry.clone(),
+            mode,
+            KeySource::Shared(self.keys.clone()),
+            self.view_host,
+        )
+    }
+
     /// Current committed state.
     pub fn state(&self) -> &EditorState {
         &self.state
