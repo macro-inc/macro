@@ -1,3 +1,4 @@
+import type { PeopleCache } from '../people/host';
 import type { IdentityBindingWire, MutationInspection } from '../protocol';
 /**
  * Transport-agnostic cache host interface consumed by the urql exchange and
@@ -153,6 +154,8 @@ export interface CacheHost {
   readRecordsByKeys(
     args: ReadRecordsByKeysArgs
   ): Promise<ReadRecordsByKeysResult>;
+  /** Context-aware contact policy; absent on disabled/older host adapters. */
+  readonly people?: PeopleCache;
   /** Searches the compact write-through materialized projection. */
   search(args: SearchCacheArgs): Promise<SearchCachePage>;
   /** Evaluates an exact initial Soup filter page over complete local projections. */

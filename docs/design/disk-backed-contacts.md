@@ -9,9 +9,17 @@ The contact debug inspector, Calendar search's organizer/attendee pickers,
 Drive creator filters and CRM Notes creator filters now use bounded windows. Explicit selected ID/email lookup reads viewer-scoped
 keys offline and authoritative bounded batches online; selected values remain
 independent of suggestions. Other product menus still retain legacy arrays.
-**Next step:** migrate Soup and CRM owner filters; handle Tasks' AI-filter people
-catalog before migrating its people controls. Quick Access/shared recipients
-still need before-limit DM ranking/exclusions.
+Channel/inbox source queries are now viewer-keyed, cached channel reads fence
+storage generation, and mutation success/rollback use their captured account.
+A replacement login clears these sources and gates them until fresh identity
+confirmation, while retaining the shell's identity. This closes a prerequisite
+for safely publishing local DM/inbox facts.
+The context publisher now shares Soup's leader/rollout/generation lifecycle,
+uses the scoped channel/activity/link queries, and emits bounded snapshot/delta writes.
+The bounded directory reader now accepts a menu policy and external query, with
+ranked cache continuations instead of a cursorless cap. UI callers are not yet switched.
+**Next step:** cut Quick Access/shared recipients over to the bounded host API. Their old full-list source remains until that wiring lands.
+Soup/CRM owner filters and Tasks' AI-filter catalog also remain.
 
 ## Goal and scope
 
@@ -123,6 +131,41 @@ and token eligibility identical on the server and in the native/WASM cache;
 ranking policy remains in the owning consumer. Exact lookup uses indexed,
 bounded point reads before resolving names.
 
+### Approved deterministic ranking change
+
+Menu scores now use a fixed per-row scale rather than normalizing against the
+whole loaded result set. Surface match tiers, recency weights and boosts remain
+explicit; order within tiers may change. Command keyword eligibility retains its
+existing matcher. Shared Rust/browser fixtures cover name quality and recipient
+tiers. This is the approved prerequisite for correct bounded ranking.
+
+The new core person-policy API stores only local DM/inbox facts on existing
+normalized keys. It fences context publication by account, storage generation
+and compare-and-set epochs; incomplete snapshots report pending. Context-only
+stubs cannot become contacts. SQL-filtered records stream into at most `limit + 1`
+unique winners, with exclusions and DM deduplication applied before the limit.
+The API is now exposed through browser/native `CacheHost.people`, with generated
+Rust/Zod contracts, coordinator protocol 13, and dedicated native commands. Missing
+capabilities return unsupported on reads and reject writes; scope/storage failures
+never downgrade to legacy hydration. Successful context writes send only person
+hydration hints. The leader publisher now sends complete snapshots before commit,
+then only changed/removed peer facts. Writes and pending IDs cap at 500; queue
+overflow or uncertain persistence starts a fresh compare-and-set epoch. Missing
+inputs never mean an empty snapshot. Three exponential retries follow a transient
+failure, with source changes/reconnection able to wake later attempts.
+Ranked continuations bind account/generation, policy and context epoch and pin the
+scoring clock. A second streamed pass on command continuations omits earlier DM
+aliases with bounded memory; a short/empty window may still continue. Incremental
+row changes retain ordinary keyset semantics. Server fallback remains ID-ordered,
+never a claimed globally ranked page. The generic single-window reader now exposes
+this policy path without appending or retaining query history.
+**Quick Access still does not use the reader**; consumer cutover remains pending.
+Publisher input maps scale with existing DM peers/inboxes, not the personal contact
+directory. The existing full channel sources remain in memory; this is not a claim
+of constant whole-app memory or of completed 100k UI verification.
+Its joined-record scan is slower than ordinary covering-only title search; do not
+claim the UI cutover or whole-app memory goal complete from these engine tests.
+
 ## Phase 2 — cache ingestion and query-driven search
 
 - [x] Hydrate one 500-row page at a time, persist it, then release its payload.
@@ -135,15 +178,17 @@ bounded point reads before resolving names.
   with Soup. `ContactDirectoryBackfill` marks nodes `@cacheOnly` and generates
   its cursor-only result. The background runner uses scoped cache admission.
 - [x] Project `GraphqlContact` names/emails into `person` through the existing
-  covering index and borrowed-row ranker (projection version 5). Public `User` /
+  covering index and borrowed-row ranker (projection version 6, including the visible email-label fallback). Public `User` /
   `GraphqlUser` profiles no longer imply contact membership. No timestamps are
   invented from relationship metadata.
 - [x] Materialize bounded `IUser` windows with target `userId` as `IUser.id`;
   the viewer-scoped `GraphqlContact.id` is a cache key, not a DM/navigation target.
   `directory.ts` maps returned names directly without populating the global name store.
-- [ ] Preserve DM recency, deduplication, and secondary-inbox exclusions. Ranking
-  facts needed to choose the top results must apply before the result limit;
-  relationship `updated_at` is not automatically equivalent to DM activity.
+- [ ] Wire DM recency, deduplication, and secondary-inbox exclusions end to end.
+  The core policy, scoped context lifecycle and before-limit tests are implemented;
+  browser/native transport and the scoped channel/inbox context publisher are
+  implemented. Consumer reader wiring remains pending.
+  Relationship `updated_at` is not equivalent to DM activity.
 - [x] Add bounded search/browse under `apps/web/src/lib/queries/contacts`, with
   pending/error, snapshot/partial/cold, and offline/source status. Cursors bind to
   source, account, query and (for cache) generation; pagination never switches sources.

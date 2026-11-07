@@ -31,6 +31,10 @@ const graphqlMocks = vi.hoisted(() => ({
 }));
 
 vi.mock('../contacts/backfill', () => ({ useContactBackfill: () => {} }));
+const contextPublisher = vi.hoisted(() => vi.fn());
+vi.mock('../contacts/use-context-publisher', () => ({
+  useContactContextPublisher: contextPublisher,
+}));
 
 const mailAccounts = vi.hoisted(() => vi.fn());
 vi.mock('../email/mail-accounts', () => ({

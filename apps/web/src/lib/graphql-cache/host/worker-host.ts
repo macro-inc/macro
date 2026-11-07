@@ -9,6 +9,7 @@ import type { MutationInspection } from '../protocol';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { match } from 'ts-pattern';
 import { deleteLegacyNormalizedCacheIdb } from '../legacy-idb-cleanup';
+import { createPeopleCache } from '../people/host';
 import {
   ADMITTED_ENQUEUE_UNCERTAIN_ERROR_CODE,
   type AffectedOperationsResult,
@@ -1347,6 +1348,14 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
   return {
     clientId,
     liveQueries: true,
+    people: createPeopleCache({
+      context: (scope, traceparent) =>
+        initializedRequest({ kind: 'people-context', scope, traceparent }),
+      update: (update, traceparent) =>
+        initializedRequest({ kind: 'people-update', update, traceparent }),
+      search: (request, traceparent) =>
+        initializedRequest({ kind: 'people-search', request, traceparent }),
+    }),
 
     async currentRevision(): Promise<CacheRevision> {
       return (await initializedRequest({

@@ -73,7 +73,7 @@ fn viewed_first_browse_order_is_applied_before_the_page_limit() {
 #[test]
 fn reopen_rebuilds_old_search_rows_once_without_replacing_durable_data() {
     block_on(async {
-        for old_version in [None, Some("1"), Some("2"), Some("3"), Some("4")] {
+        for old_version in [None, Some("1"), Some("2"), Some("3"), Some("4"), Some("5")] {
             let database =
                 TursoMemoryDatabase::new(format!("projection-upgrade-{old_version:?}.db"));
             let mut storage = database.open("scope").unwrap();

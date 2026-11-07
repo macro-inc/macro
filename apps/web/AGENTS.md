@@ -1,10 +1,11 @@
 ## Development Commands
 
 - Use `bun` as the package manager and script runner (`bun run build`, `bunx tsc`).
-- `bun run test`: run tests 
-- `bun run check`: check typescript changes 
-- `bun run lint`: lint with biome 
-- `bun run format`: format changes with biome 
+- `bun run test`: run tests
+- `bun run check`: check typescript changes
+- `CacheHost.people` contracts come from cache-core models: `bun run gen-cache-people-schema --rust` regenerates Rust JSON plus Zod/types; `--check --rust` verifies both. `bun run check` verifies JSON-to-frontend generation, while cache-core tests verify Rust-to-JSON drift. Missing native person commands mean unsupported, never permission to issue an unscoped write.
+- `bun run lint`: lint with biome
+- `bun run format`: format changes with biome
 - `bun run knip`: to check for dead code
 - Run Linux native cache-plugin tests from the repository root with `nix develop .#tauri-linux --command cargo test --manifest-path apps/web/tauri/Cargo.toml -p graphql_cache_plugin`; the [Tauri platform shell](../../docs/development/running-locally.md) supplies the required desktop libraries.
 - Refresh `nix-support/node_modules-hashes.json` for Linux and Darwin when dependency manifests, the lockfile, or dependency patches change.
@@ -22,6 +23,27 @@
 - Web asset publication and cache headers are covered by
   [web-app delivery](../../infra/stacks/web-app/README.md); its publisher tests
   are backend-free, and its Pulumi tests must not run real staging/cloud commands.
+
+## Account-scoped source queries
+
+Key channel lists/activity, cached Quick Access channels, email links and inbox
+health probes by viewer. Use `queries/auth/account-scope.ts` to fence requests
+and cache writes; mutation ownership comes from the execute-time
+`MutationFunctionContext.meta`, not a live accessor or mutable observer options.
+Login closes this source gate until a fresh auth query succeeds, without clearing
+the app shell's retained identity. Legacy unscoped channel lists are not restored.
+The settings signature browser suite also exercises real channel/link observers
+and the contact context publisher across account switches with delayed responses
+(`account-sources.browser.e2e.ts`). `queries/contacts/context-source.ts` reuses
+those keyed queries through ownership-tagged selectors; gate missing inputs rather
+than publishing an empty snapshot. `context-publisher.ts` caps pending IDs and
+write batches at 500, replaces overflowing/uncertain snapshots with a new epoch,
+and never writes directory names or membership. `useContactContextPublisher`
+shares Soup's leader, rollout and generation lifecycle; do not add another leader.
+The bounded directory window accepts external search/policy inputs. Ranked person
+cursors require coordinator protocol 13; they bind scope/policy/epoch and retain
+only a scoring position/clock, not previous result IDs. Honor continuations on
+short/empty pages and keep server fallback explicitly source-ordered.
 
 ## Verifying a change in a real browser
 
@@ -208,6 +230,7 @@ with more people than the query names stays below it.
 Commas separate query terms like spaces in the cache search
 (`cache-core/search.rs`, mirrored by `matchesTokenSubsequences`) and in the
 server's channel name search; keep the three together.
+Name scores are per-row (a fixed 0–100 scale), not normalized against the current result corpus. Rust/browser fixtures in `crates/subsequence_match/src/ranking` keep match quality and recipient tiers aligned; surface weights and boosts remain caller-owned. Command-keyword eligibility keeps its dedicated matcher.
 Name groups and match position use the row's label (`getDisplayName`), so search
 text can add emails, aliases, or command keywords before or after it. Mention
 menus rank loaded entity sources together with `MENTION_RANKING_CONFIG` in

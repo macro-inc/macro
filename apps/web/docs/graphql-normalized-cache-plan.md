@@ -1198,7 +1198,7 @@ Contact synchronization shares Soup's authenticated leader and rollout gate.
 Fetch-only transport returns one 500-row page for explicit scoped admission:
 the core checks the captured generation and expected/response identities under
 the same engine lock as the write, without switching accounts. Coordinator
-protocol 11 forwards that scope; native hosts refuse guarded writes on older
+protocol 13 forwards that scope; native hosts refuse guarded writes on older
 engines. Checkpoints advance only after persistence and a generation recheck.
 Invalidations coalesce on a 15-minute cadence without interrupting active scans;
 hourly passes refresh names. Scan omissions never delete records.
@@ -1225,9 +1225,45 @@ owner/team semantics have not been changed.
 Other picker migrations, before-limit DM ranking/exclusions, and authoritative
 removal reconciliation remain in [the contacts checklist](../../../docs/design/disk-backed-contacts.md).
 
+### Deterministic person-policy foundation
+
+`subsequence_match::ranking` and the browser name scorer use corpus-independent
+quality and the same recipient tiers, rather than scaling a row against the
+strongest result currently loaded. Surface weights and boosts remain explicit;
+command keywords retain their dedicated eligibility matcher.
+
+The core's new person-policy API stores local DM recency/command-target and
+secondary-inbox facts as private fields on existing normalized record keys. Only
+server-supplied complete contact records can rank. Context snapshots use scoped,
+compare-and-set begin/patch/commit epochs; patches cap at 500 and incomplete
+snapshots report pending, not an empty directory. Search streams matching records
+into at most `limit + 1` unique winners, applying exclusions and DM deduplication
+before that limit. This joined-record path costs more than ordinary covering-only
+search; it does not change storage schema 12. `CacheHost.people` now exposes state,
+update and search through coordinator protocol 13 and dedicated native commands.
+Ranked person continuations bind the scope, policy and publication epoch and pin
+the first window's scoring clock. A bounded-memory second pass suppresses prior
+DM aliases; short/empty pages can still continue. Ordinary incremental changes
+have keyset semantics; this is not a transactional directory snapshot.
+Rust-derived Zod contracts validate ingress and bounded replies; missing native
+commands/older WASM report unsupported reads and reject writes. Scope and storage
+errors are never swallowed. Context updates publish person hydration hints only.
+Host/worker/native spans record operation, counts and opaque correlation metadata,
+never names, addresses or search text; live trace connectivity remains unverified.
+The channel/inbox context publisher now runs under Soup's existing leader and
+rollout/generation gate. Ownership-tagged selectors reuse scoped query data without
+contact-directory reads or app suspension. A committed snapshot is followed by
+changed/removed-peer patches, at most 500 rows per write and 500 pending IDs. Changes
+to an in-flight ID survive its earlier ack; overflow and uncertain writes start a
+new epoch. Missing inputs pause rather than publish emptiness. Source changes
+coalesce for 250 ms, with three exponential retries and reconnect wakeup; lost
+scope or unsupported hosts stop until the lifecycle changes. Context maps scale
+with existing DM peers/inboxes; full channel sources are still in memory.
+Quick Access/recipient reader cutover and whole-app memory verification remain pending.
+
 ## Cached email Quick Access
 
-The disposable Quick Access projection is version 5; version 4 added task
+The disposable Quick Access projection is version 6; version 6 includes the local-part contact label fallback in matching. Version 4 added task
 projects (`GraphqlSoupInitiative`, bucket `initiative`), searched on their display
 name with viewed-first recency read from their embedded `metadata`. Email rows index the thread
 subject, latest sender name/address, and embedded `senders` names/addresses, so an

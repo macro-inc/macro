@@ -1,0 +1,9 @@
+text	email	query	rank
+Alex Smith | alex@example.com	alex@example.com	ALEX@EXAMPLE.COM	3
+Alex Smith | alex@example.com	alex@example.com	alex@	2
+Alex Smith | alex@example.com	alex@example.com	al sm	1
+Alex Smith | alex@example.com	alex@example.com	lx sm	0
+Project Planning		pro pl	1
+Éclair ᾳ		ᾳ	1
+Any address		@	1
+Alex	alex@example.com		0

@@ -2785,6 +2785,8 @@
     ],
     "cache-core": [
       "crates/client/cache-core",
+      "crates/cowlike",
+      "crates/macro_user_id",
       "crates/maybe_send",
       "crates/predicate_index",
       "crates/subsequence_match"
@@ -2793,6 +2795,8 @@
       "crates/client/cache-core",
       "crates/client/cache-turso",
       "crates/client/turso-opfs",
+      "crates/cowlike",
+      "crates/macro_user_id",
       "crates/maybe_send",
       "crates/predicate_index",
       "crates/subsequence_match"

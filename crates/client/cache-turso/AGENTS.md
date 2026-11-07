@@ -11,6 +11,7 @@ GraphQL cache — native for tests/Tauri, OPFS-backed on wasm32.
 - `src/storage.rs`: `TursoStorage` — implements `cache_core::store::Storage`
   with the frozen compound-key schema and strict-head mutation leasing.
 - `src/driver.rs`: Turso connection/transaction handling, including checked row-at-a-time query visitation.
+- `src/storage/contact_search.sql`: joins normalized contact records after the existing bound text prefilter. Decode one row at a time for before-limit policy; never add a final SQL limit or collect the corpus. Ordinary search retains its covering-only path.
 - `src/storage/search.rs`: bound subsequence SQL prefilter over the covering browse index and checked borrowed-row decoding; reuse the key buffer and let core copy only winners, never collect or limit text results first.
 - `src/key.rs`: the compound key schema (frozen — see Gotchas).
 - `src/error.rs`: `TursoStorageError` / `PhysicalResetReason`.
@@ -38,6 +39,7 @@ GraphQL cache — native for tests/Tauri, OPFS-backed on wasm32.
 
 - `cargo test -p cache-turso` (`SQLX_OFFLINE` unset).
 - `cargo test --release -p cache-turso --test contacts -- --ignored --nocapture`: hydrate 100k normalized contacts in bounded pages, reopen, search, and materialize only winners. The regular native and OPFS contact suites also check account resets and omitted viewer wrappers.
+- `cargo test -p cache-turso --test people`: context publication, stale writes, membership, exclusions, late winners, DM deduplication, and ranked continuation/clock/epoch fencing; the same scenario runs over OPFS. `--release --test people -- --ignored --nocapture` measures 100k-row policy searches.
 - `cargo test -p cache-turso --test search -- --ignored --nocapture`: explicit 100k-row search measurement.
 - The `web` wasm test target checks streamed search over real OPFS; use the [browser runner](../turso-opfs/README.md#repeatable-verification).
 - `cargo test --release -p cache-turso --lib compare_search_scan_options -- --ignored --nocapture`: isolate prepared-statement, covering-index, and borrowed-row costs on a temporary database, without changing production schema.
@@ -46,6 +48,7 @@ GraphQL cache — native for tests/Tauri, OPFS-backed on wasm32.
 
 - Email send persistence and cancellation belong to the frontend email journal, not the normalized cache or its mutation queue.
 
+- Projection 6 includes the visible local-part fallback in contact matching; storage schema remains 12. It is independent of the context-aware person-policy API.
 - Projection 5 adds viewer-scoped contacts and removes public-profile membership; retention version 2 shares the bounded viewer-page budget with contact search/lookup snapshots. Neither changes storage schema 12 or clears durable data.
 - Quick Access projection version upgrades rebuild derived rows from retained normalized records; preserve the mutation queue and storage generation (covered by `src/storage/test/search_projection.rs`). Storage schema 12 is a separate, intentionally incompatible covering-index cutover: native reset drops queued writes; browser versioning opens a fresh file. See `../README.md#streaming-text-search`.
 

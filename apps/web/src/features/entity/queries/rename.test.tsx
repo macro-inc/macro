@@ -65,8 +65,15 @@ vi.mock('@service-storage/graphql-soup', () => ({
   getGraphqlCacheHost: () => mocks.host,
 }));
 
+import { authKeys } from '@queries/auth/keys';
 import { callKeys } from '@queries/call/keys';
 import { channelKeys } from '@queries/channel/keys';
+
+vi.mock('@core/context/user', () => ({
+  useUserId: () => () => 'viewer',
+  useIsAuthenticated: () => () => true,
+}));
+
 import {
   createBulkRenameDssEntityMutation,
   createRenameDssEntityMutation,
@@ -86,6 +93,10 @@ it.each(['channel', 'call'] as const)(
   async (type) => {
     cache = new QueryClient({
       defaultOptions: { mutations: { retry: false } },
+    });
+    cache.setQueryData(authKeys.userInfo.queryKey, {
+      id: 'viewer',
+      authenticated: true,
     });
     const listeners = new Set<(settlement: MutationSettlement) => void>();
     mocks.host = {
@@ -117,7 +128,7 @@ it.each(['channel', 'call'] as const)(
     });
     const key =
       type === 'channel'
-        ? channelKeys.listChannels.queryKey
+        ? channelKeys.listChannels('viewer').queryKey
         : callKeys.record('entity').queryKey;
     const original =
       type === 'channel'
@@ -168,6 +179,10 @@ it.each(['After', 'Before', ' Before '])(
     cache = new QueryClient({
       defaultOptions: { mutations: { retry: false } },
     });
+    cache.setQueryData(authKeys.userInfo.queryKey, {
+      id: 'viewer',
+      authenticated: true,
+    });
     mocks.client = createClient({
       url: 'http://test.invalid',
       exchanges: [],
@@ -215,6 +230,10 @@ it.each([true, false])(
     vi.spyOn(console, 'error').mockImplementation(() => {});
     cache = new QueryClient({
       defaultOptions: { mutations: { retry: false } },
+    });
+    cache.setQueryData(authKeys.userInfo.queryKey, {
+      id: 'viewer',
+      authenticated: true,
     });
     mocks.graphqlEnabled.mockReturnValue(false);
     mocks.renameDatabase.mockResolvedValue(

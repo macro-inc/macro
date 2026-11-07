@@ -214,6 +214,7 @@ members = [
 ]
 
 [workspace.dependencies]
+macro_user_id = { path = "crates/macro_user_id" }
 aes = "0.8.4"
 aes-gcm = { version = "0.10.3", features = ["zeroize"] }
 anyhow = "1.0.100"

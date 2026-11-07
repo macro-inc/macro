@@ -26,5 +26,10 @@ check lazy loading, Me, persisted unavailable IDs, broader-than-substring matche
 page replacement and viewport reset, checkbox preservation, and Only without
 changing unrelated facets. They do not instantiate Tasks' full AI-filter catalog.
 
+`/?recipient-ranking` mounts the real recipient selector over small supplied
+options and stand-in identity/profile services. It verifies that exact addresses
+win over recent word matches and Enter preserves selection across searches.
+It checks the new deterministic scorer, not the pending bounded recipient-source cutover.
+
 This is UI/adapter coverage, not a WASM memory measurement or live-backend trace.
 Real Turso/OPFS hydration/search coverage lives in `crates/client/cache-turso`.

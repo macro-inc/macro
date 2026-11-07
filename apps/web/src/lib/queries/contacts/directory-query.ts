@@ -1,5 +1,6 @@
 import { debouncedDependent } from '@core/util/debounce';
 import type { CacheHost } from '@graphql-cache/host/types';
+import { MAX_PEOPLE_BATCH } from '@graphql-cache/people/generated';
 import { queryReadyGate } from '@queries/gate';
 import { subscribeToVisibleCacheChanges } from '@queries/subscribe-to-visible-cache-changes';
 import { hashKey, queryOptions, useQuery } from '@tanstack/solid-query';
@@ -18,6 +19,7 @@ import {
   type ContactDirectoryHost,
   type ContactDirectoryRequest,
   ContactDirectoryScopeError,
+  type ContactPeoplePolicy,
   readContactDirectory,
 } from './directory';
 import { contactsKeys } from './keys';
@@ -68,10 +70,15 @@ function contactWindowOptions(
 export function createContactDirectoryWindow(
   scope: Accessor<{ userId?: string; host?: ContactWindowHost }>,
   reader: typeof readContactDirectory = readContactDirectory,
-  enabled: Accessor<boolean> = () => true
+  enabled: Accessor<boolean> = () => true,
+  options: {
+    search?: Accessor<string>;
+    policy?: Accessor<ContactPeoplePolicy>;
+  } = {}
 ) {
   const owner = createUniqueId();
-  const [search, setSearch] = createSignal('');
+  const [ownSearch, setSearch] = createSignal('');
+  const search = options.search ?? ownSearch;
   const debouncedSearch = debouncedDependent(search, 200);
   const [cursor, setCursor] = createSignal<ContactDirectoryCursor>();
   const [fresh, setFresh] = createSignal(false);
@@ -85,13 +92,30 @@ export function createContactDirectoryWindow(
   const request = createMemo<ContactDirectoryRequest>(() => {
     const current = cursor();
     const query = debouncedSearch();
+    const inputPolicy = options.policy?.();
+    if (inputPolicy && inputPolicy.excluded.length > MAX_PEOPLE_BATCH)
+      throw new Error('Invalid contact policy exclusions');
+    const policy = inputPolicy
+      ? {
+          mode: inputPolicy.mode,
+          excluded: [...inputPolicy.excluded],
+          senderDomain: inputPolicy.senderDomain,
+        }
+      : undefined;
+    const policyMatches =
+      current?.source === 'cache'
+        ? !policy
+        : current?.policyKey === (policy ? hashKey([policy]) : undefined);
     return {
       query,
       cursor:
-        current?.query === query && current.userId === scope().userId
+        current?.query === query &&
+        current.userId === scope().userId &&
+        policyMatches
           ? current
           : undefined,
       fresh: fresh(),
+      ...(policy ? { policy } : {}),
     };
   });
   const query = useQuery(() =>

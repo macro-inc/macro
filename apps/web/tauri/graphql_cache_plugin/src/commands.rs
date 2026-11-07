@@ -25,6 +25,10 @@ use cache_core::entity_resolver::EntityResolver;
 use cache_core::link_patch::{OptimisticLinkPatch, QueryRevalidation};
 use cache_core::query_inspection::{CachedQueryInstance, CachedQueryVariant};
 use cache_core::search::{SearchPage, SearchRequest};
+use cache_core::{
+    engine::HydrationScope,
+    people::{ContextState, ContextUpdate, PeopleSearch, PeopleSearchResult},
+};
 use cache_turso::TursoFileDatabase;
 use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Manager, Runtime, State};
@@ -33,6 +37,17 @@ use tauri::{AppHandle, Manager, Runtime, State};
 mod test;
 
 type Variables = serde_json::Map<String, serde_json::Value>;
+
+// This is an opaque correlation field, not a trusted parent context. Never log
+// arbitrary IPC strings as trace metadata.
+fn people_trace_correlation(value: Option<&str>) -> Option<&str> {
+    value.filter(|value| {
+        value.len() == 55
+            && value
+                .bytes()
+                .all(|byte| byte.is_ascii_hexdigit() || byte == b'-')
+    })
+}
 
 fn engine_handle(state: &State<'_, CacheState>) -> Result<EngineHandle, String> {
     state
@@ -216,6 +231,39 @@ pub async fn graphql_cache_search(
     request: SearchRequest,
 ) -> Result<SearchPage, String> {
     engine_handle(&state)?.search(request).await
+}
+
+/// Read local person-context publication. A distinct command makes OTA capability explicit.
+#[tauri::command]
+#[tracing::instrument(skip_all, fields(upstream_traceparent = people_trace_correlation(traceparent.as_deref())), err)]
+pub async fn graphql_cache_people_context(
+    state: State<'_, CacheState>,
+    scope: HydrationScope,
+    traceparent: Option<String>,
+) -> Result<ContextState, String> {
+    engine_handle(&state)?.people_context(scope).await
+}
+
+/// Persist one scoped local-context batch. JS publishes hydration-only hints.
+#[tauri::command]
+#[tracing::instrument(skip_all, fields(upstream_traceparent = people_trace_correlation(traceparent.as_deref())), err)]
+pub async fn graphql_cache_people_update(
+    state: State<'_, CacheState>,
+    update: ContextUpdate,
+    traceparent: Option<String>,
+) -> Result<WriteResultWire, String> {
+    engine_handle(&state)?.people_update(update).await
+}
+
+/// Rank current-account people before the result limit.
+#[tauri::command]
+#[tracing::instrument(skip_all, fields(upstream_traceparent = people_trace_correlation(traceparent.as_deref())), err)]
+pub async fn graphql_cache_people_search(
+    state: State<'_, CacheState>,
+    request: PeopleSearch,
+    traceparent: Option<String>,
+) -> Result<PeopleSearchResult, String> {
+    engine_handle(&state)?.people_search(request).await
 }
 
 /// Evaluates Soup filters over native projections, including cached Mail pages.

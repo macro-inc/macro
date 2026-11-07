@@ -36,7 +36,7 @@ fn only_directory_contacts_prove_person_membership() {
         record.fields.insert("name".into(), CacheValue::Null);
         assert_eq!(
             project_search_documents(&key, &record)[0].search_text,
-            "person@example.com"
+            "person | person@example.com"
         );
     }
 }

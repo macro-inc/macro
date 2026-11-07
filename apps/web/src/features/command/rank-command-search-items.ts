@@ -1,6 +1,11 @@
 import { createFreshSearch, NAME_MATCH_RANKING } from '@core/util/freshSort';
+import uFuzzy from '@leeoniya/ufuzzy';
 import { match } from 'ts-pattern';
 import type { CommandMenuItem } from './useCommandItems';
+
+// Command keyword eligibility is not a database-person lookup. Keep its existing
+// matcher while entity/person rows share the native token-subsequence contract.
+const COMMAND_MATCHER = new uFuzzy({});
 
 /** The label a row shows; its search text can add emails, aliases, or command keywords. */
 function displayName(item: CommandMenuItem): string {
@@ -79,7 +84,19 @@ export function rankCommandSearchItems<T extends CommandMenuItem>(
     getTimestamp: (item) => item.timestamps,
   });
 
-  const ranked = search(items, query)
+  const commands = items.filter((item) => item.kind === 'command');
+  const commandMatches = new Set(
+    (
+      COMMAND_MATCHER.filter(
+        commands.map((item) => item.searchText),
+        query
+      ) ?? []
+    ).map((index) => commands[index].id)
+  );
+  const eligible = items.filter(
+    (item) => item.kind !== 'command' || commandMatches.has(item.id)
+  );
+  const ranked = search(eligible, query)
     .sort(
       (left, right) =>
         right.nameMatchRank - left.nameMatchRank ||

@@ -117,7 +117,8 @@ pub async fn assert_contact_search<S: Storage>(engine: &mut Engine<S>, total: us
             );
         }
         if query == last_email {
-            assert_eq!(selected.value.len(), 1);
+            // The visible local-part fallback is also searchable. Broader
+            // subsequences may qualify, but the exact address must rank first.
             assert_eq!(selected.value[0].record["email"], last_email);
             assert_eq!(selected.value[0].record["name"], Value::Null);
         } else if query == "missing" {

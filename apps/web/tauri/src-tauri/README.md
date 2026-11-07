@@ -13,6 +13,13 @@ unscoped command; never silently drop the guard for older binaries. JS checks
 projection 5 support, and a missing scoped command must reject without fallback.
 This requires a native rebuild; legacy unscoped callers remain compatible.
 
+Context-aware person search also needs a rebuild for `graphql_cache_people_context`,
+`graphql_cache_people_update`, and `graphql_cache_people_search`. OTA clients detect
+missing commands as unavailable, never as an empty directory or a successful write.
+These commands keep account/generation admission and ranking inside the shared
+engine lock. The leader context publisher is implemented; UI reader migration
+is still pending.
+
 ## Native authentication cookies
 
 The native HTTP plugin stores its cookie jar at `$APPLOCALDATA/.cookies`, which

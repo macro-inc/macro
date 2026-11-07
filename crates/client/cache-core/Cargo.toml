@@ -4,15 +4,24 @@ name = "cache-core"
 publish = false
 version = "0.1.0"
 
+[features]
+schema = ["dep:schemars"]
+
+[[example]]
+name = "people_schema"
+required-features = ["schema"]
+
 [dependencies]
 apollo-compiler = { workspace = true }
 apollo-parser = { workspace = true }
 chrono = { workspace = true }
 lru = { workspace = true }
+macro_user_id = { workspace = true }
 maybe_send = { path = "../../maybe_send" }
 miniz_oxide = { workspace = true }
 postcard = { workspace = true }
 predicate-index = { path = "../../predicate_index" }
+schemars = { workspace = true, optional = true }
 serde = { workspace = true }
 # Opaque JSON scalars must preserve floating-point values when reparsed.
 serde_json = { workspace = true, features = ["float_roundtrip"] }
@@ -25,5 +34,6 @@ uuid = { workspace = true }
 sha2 = { workspace = true }
 
 [dev-dependencies]
+schemars = { workspace = true }
 pollster = { workspace = true }
 proptest = { workspace = true }

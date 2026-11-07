@@ -1,4 +1,5 @@
 import type { CacheHost } from '@graphql-cache/host/types';
+import type { PeopleCache } from '@graphql-cache/people/host';
 import { INITIAL_CACHE_REVISION } from '@graphql-cache/protocol';
 import type { fetchContactDirectoryPage } from '@service-storage/graphql-contacts';
 import { CombinedError } from '@urql/core';
@@ -58,6 +59,121 @@ const server = () =>
 
 beforeEach(() => {
   checkpoint.mockReturnValue({ pages: 200, completedAt: 1 });
+});
+
+it('reads context-ranked windows with pinned continuations and no unbounded materialization', async () => {
+  const base = host();
+  const search = vi.fn<PeopleCache['search']>().mockResolvedValue({
+    kind: 'page',
+    people: [
+      {
+        recordKey: document.recordKey,
+        userId: contact.userId,
+        name: 'Resolved',
+        email: contact.email,
+        lastInteractionMs: 0,
+        directMessage: null,
+        matchRank: 2,
+        score: 0.7,
+        timestampMs: 0,
+      },
+    ],
+    truncated: true,
+    nextCursor: 'ranked-cursor',
+  });
+  const cache = {
+    ...base,
+    people: {
+      search,
+      context: vi.fn<PeopleCache['context']>(),
+      update: vi.fn<PeopleCache['update']>(),
+    },
+  };
+  const policy = { mode: 'command' as const, excluded: [VIEWER] };
+  const fetch = server();
+  const page = await readContactDirectory(
+    VIEWER,
+    cache,
+    { query: 'resolved', policy, limit: 7 },
+    signal(),
+    fetch
+  );
+  expect(page.users[0]).toEqual({
+    id: contact.userId,
+    email: contact.email,
+    name: 'Resolved',
+    lastInteraction: new Date(0),
+  });
+  expect(page.people?.[0].matchRank).toBe(2);
+  expect(base.search).not.toHaveBeenCalled();
+  expect(base.readRecordsByKeys).not.toHaveBeenCalled();
+  expect(fetch).not.toHaveBeenCalled();
+  await readContactDirectory(
+    VIEWER,
+    cache,
+    { query: 'resolved', policy, cursor: page.nextCursor ?? undefined },
+    signal(),
+    fetch
+  );
+  expect(search).toHaveBeenLastCalledWith(
+    expect.objectContaining({
+      cursor: 'ranked-cursor',
+      scope: { identity: VIEWER, storageGeneration: GENERATION },
+    })
+  );
+  await expect(
+    readContactDirectory(
+      VIEWER,
+      cache,
+      {
+        query: 'resolved',
+        policy: { ...policy, excluded: [] },
+        cursor: page.nextCursor ?? undefined,
+      },
+      signal(),
+      fetch
+    )
+  ).rejects.toBeInstanceOf(ContactDirectoryScopeError);
+  search.mockRejectedValue(new Error('contact search cursor changed'));
+  await expect(
+    readContactDirectory(
+      VIEWER,
+      cache,
+      { query: 'resolved', policy, cursor: page.nextCursor ?? undefined },
+      signal(),
+      fetch
+    )
+  ).rejects.toBeInstanceOf(ContactDirectoryScopeError);
+  expect(fetch).not.toHaveBeenCalled();
+});
+
+it('keeps unavailable policy fallback source-ordered and preserves empty-page continuation after exclusions', async () => {
+  const policy = { mode: 'command' as const, excluded: [contact.userId] };
+  const fetch = server().mockResolvedValue({
+    user: { id: VIEWER, contacts: { nodes: [contact], nextCursor: 'more' } },
+  });
+  const page = await readContactDirectory(
+    VIEWER,
+    host(),
+    { query: '', policy },
+    signal(),
+    fetch
+  );
+  expect(page.source).toBe('server');
+  expect(page.users).toEqual([]);
+  expect(page.people).toBeUndefined();
+  expect(page.nextCursor?.source).toBe('server');
+  await readContactDirectory(
+    VIEWER,
+    host(),
+    { query: '', policy, cursor: page.nextCursor ?? undefined },
+    signal(),
+    fetch
+  );
+  expect(fetch).toHaveBeenLastCalledWith(
+    expect.objectContaining({ after: 'more' }),
+    expect.any(AbortSignal)
+  );
 });
 
 it('searches and materializes only the bounded window, preserving the target ID and email fallback', async () => {

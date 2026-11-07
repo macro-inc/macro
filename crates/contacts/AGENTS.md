@@ -13,7 +13,7 @@ and kept in sync via the connection gateway.
 - `src/domain/models/contact.rs`: viewer/person-derived normalized identity and nullable resolved names; email fallback stays with the consuming surface. `contact/identity-fixtures.json` freezes the UUIDv5 contract shared with frontend point reads; change neither side independently.
 - `src/outbound/names.rs`: `directory-names` feature, reusing the existing user-name owner's profile-over-address-book query without duplicating SQL.
 - `src/domain/models/page.rs`: page sizes (default 100, maximum 500) and original per-row positions, distinct from canonicalized user IDs. Short/empty pages may still have continuations.
-- `src/domain/models/query.rs`: 512-byte normalized searches and at most 500 raw lookup IDs, deduplicated without reordering; empty lookup never means all contacts.
+- `src/domain/models/query.rs`: 512-byte normalized searches (including the local-part label fallback plus email) and at most 500 raw lookup IDs, deduplicated without reordering; empty lookup never means all contacts.
 - `src/outbound/repository/page.rs`: indexed paging of both graph directions and self, plus exact lookups through `lookup.sql`. Membership is bounded per input key before name reads; keep its LATERAL limit and the 100k-row plan regressions.
 - `src/domain/ports.rs`: the traits `inbound`/`outbound` implement.
 - `src/inbound/http.rs`: HTTP handlers, router, DTOs, swagger.
