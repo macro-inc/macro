@@ -82,6 +82,7 @@ use tokio_util::task::TaskTracker;
 
 mod activity_metadata;
 mod agent_name;
+mod call_meeting_links;
 mod channel_media;
 #[cfg(any(test, feature = "test-support"))]
 pub use channel_media::build_channel_media_upload_tool_context_test;
@@ -470,8 +471,7 @@ pub type ToolCalendarMutationService =
 /// Type alias for the meeting-link provider used by AI tools. Macro calls
 /// attached to events are minted through the same call service the call
 /// tools run on, owned by the requesting user.
-pub type ToolCalendarMeetingLinks =
-    calendar_events::outbound::call_meeting_links::CallServiceMeetingLinks<ToolCallService>;
+pub type ToolCalendarMeetingLinks = call_meeting_links::CallServiceMeetingLinks<ToolCallService>;
 
 /// Type alias for the calendar AI tool context.
 pub type ToolCalendarToolContext = CalendarToolContext<
@@ -525,12 +525,10 @@ pub fn build_calendar_tool_context(
         Arc::new(calendar_events::domain::service::CalendarService::new(
             calendar_events::outbound::pg::PgCalendarRepository::new(pool),
         )),
-        Arc::new(
-            calendar_events::outbound::call_meeting_links::CallServiceMeetingLinks::new(
-                call_service,
-                app_url.as_str(),
-            ),
-        ),
+        Arc::new(call_meeting_links::CallServiceMeetingLinks::new(
+            call_service,
+            app_url.as_str(),
+        )),
     )
     .with_shared_event_copies(shared_event_copies)
 }

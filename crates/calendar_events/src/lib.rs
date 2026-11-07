@@ -16,7 +16,6 @@ pub mod inbound;
     feature = "postgres",
     feature = "dispatch-sqs",
     feature = "notify",
-    feature = "mutation-client",
-    feature = "call-meetings"
+    feature = "mutation-client"
 ))]
 pub mod outbound;

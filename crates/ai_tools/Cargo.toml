@@ -39,7 +39,7 @@ axum = { workspace = true, features = ["macros"] }
 aws-sdk-sqs.workspace = true
 bots = { workspace = true, features = ["ai_tools", "outbound"] }
 calendar_scheduling = { workspace = true, features = ["ai_tools", "postgres", "calendar", "client"] }
-calendar_events = { workspace = true, features = ["ai_tools", "call-meetings", "mutation-client", "postgres"] }
+calendar_events = { workspace = true, features = ["ai_tools", "mutation-client", "postgres"] }
 call = { workspace = true, features = ["ai_tools", "outbound", "ports"] }
 chat = { workspace = true, default-features = true, features = ["ai_tools", "outbound"] }
 channels = { workspace = true, features = ["ai_tools", "outbound"] }

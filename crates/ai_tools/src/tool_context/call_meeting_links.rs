@@ -1,4 +1,4 @@
-//! Meeting-link adapter over the call domain service.
+//! Calendar's meeting-link port, served by the call domain service.
 //!
 //! Mints standalone Macro meetings owned by the requester, the same ones the
 //! calendar UI creates through `POST /call/meetings`, and renders the join
@@ -12,8 +12,8 @@ use call::domain::ports::CallService;
 use macro_user_id::user_id::MacroUserIdStr;
 use uuid::Uuid;
 
-use crate::domain::meeting_links::{MeetingLink, MeetingLinkError, MeetingLinkRequest};
-use crate::domain::ports::MeetingLinkProvider;
+use calendar_events::domain::meeting_links::{MeetingLink, MeetingLinkError, MeetingLinkRequest};
+use calendar_events::domain::ports::MeetingLinkProvider;
 
 /// Router path of the meeting setup page, relative to the app origin.
 const MEETING_JOIN_PATH: &str = "/app/meet/join/";
