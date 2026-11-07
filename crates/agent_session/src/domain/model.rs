@@ -17,6 +17,7 @@ pub use agent_fold::domain::log::{AgentSessionId, AgentSessionLog, Message};
 pub use agent_fold::domain::model::{
     Author, AuthorKind, FoldEvent, MessageId, OwnedFoldEvent, TurnId,
 };
+pub use agent_session_id::{ManagerFence, ReplicaId};
 
 /// The `_meta` key on `session/new`, `session/load` and `session/resume`
 /// whose string value is the [`AgentSessionId`] the ACP session serves.
@@ -26,39 +27,6 @@ pub const MACRO_AGENT_SESSION_META_KEY: &str = "macro.com/agentSessionId";
 /// whose string value is how the session answers permission requests
 /// (`autoAccept` or `prompt`), so a runtime can tell its agent.
 pub const MACRO_PERMISSION_POLICY_META_KEY: &str = "macro.com/permissionPolicy";
-
-/// Identity of one harness participant, minted fresh at construction.
-///
-/// A restarted process is a new replica: whatever the old identity claimed is
-/// released by its heartbeat going stale, never inherited.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub struct ReplicaId(Uuid);
-
-impl ReplicaId {
-    /// Mint a fresh replica identity.
-    #[must_use]
-    pub fn mint() -> Self {
-        Self(Uuid::new_v4())
-    }
-
-    /// The raw uuid, for persistence.
-    #[must_use]
-    pub fn as_uuid(&self) -> Uuid {
-        self.0
-    }
-
-    /// Rebuild an identity from its persisted uuid.
-    #[must_use]
-    pub fn from_uuid(id: Uuid) -> Self {
-        Self(id)
-    }
-}
-
-impl std::fmt::Display for ReplicaId {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        self.0.fmt(f)
-    }
-}
 
 /// A replica's own base URL, as peers should dial it for command forwarding.
 ///
@@ -129,14 +97,6 @@ pub enum SessionManagement {
     /// would die with it. Commands belong on a replica that is staying.
     Draining,
 }
-
-/// A session's takeover counter, bumped by every successful claim.
-///
-/// Carried by the claim holder into each live-actor write; the store rejects
-/// writes whose fence has been superseded, so a stale holder is neutralized
-/// by the same statement that would have written (a fencing token).
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
-pub struct ManagerFence(pub i64);
 
 /// Proof that this replica claimed a session's live management.
 ///

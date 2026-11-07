@@ -73,6 +73,8 @@ workspace-members = [
     # anyhow, either, nom, tracing, thiserror - is contributed by dozens of
     # other members anyway, so the deploy dependency layers are unchanged.
     "agent_fold",
+    # agent_session_id: the session and replica ids the fold's log carries.
+    "agent_session_id",
     # dynamic_ui: the view types the fold's tool details and activity cards hold.
     "dynamic_ui",
     "graphql_soup_filter_input",

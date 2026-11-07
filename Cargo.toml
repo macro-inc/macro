@@ -152,6 +152,7 @@ members = [
   "crates/system_status",
   "crates/task_dedup",
   "crates/trigger_context",
+  "crates/types/agent_session_id",
   "crates/types/chat_message",
   "crates/unfurl",
   "crates/universal_input",
@@ -554,6 +555,7 @@ agent_inmem = { path = "crates/agent_inmem" }
 agent_preview = { path = "crates/agent_preview" }
 agent_runtime_protocol = { path = "crates/agent_runtime_protocol", default-features = false }
 agent_session = { path = "crates/agent_session", default-features = false }
+agent_session_id = { path = "crates/types/agent_session_id" }
 agent_session_realtime = { path = "crates/agent_session_realtime", default-features = false }
 agent_trigger = { path = "crates/agent_trigger" }
 ai_billing = { path = "crates/ai_billing" }
