@@ -278,18 +278,8 @@ pub(crate) fn call(r: &mut Replayer, tx: &mut Transaction<'_>, op: &Value) -> Re
             })))
         }
         "LexicalEditor.dispatchCommand" => {
-            if !r.rich_text_registered {
-                return Ok(json!(false));
-            }
             let command = string(&a.first().ok_or_else(|| fail("command"))?["$cmd"])?;
-            let handled = match command {
-                "FORMAT_TEXT_COMMAND" => lexical_rich_nodes::rich_text::format_text(
-                    tx,
-                    str_arg(a, 1)?.parse().map_err(|_| fail("format"))?,
-                )?,
-                "INSERT_TAB_COMMAND" => lexical_rich_nodes::rich_text::insert_tab(tx)?,
-                _ => return Err(fail(format!("unmapped command: {command}"))),
-            };
+            let handled = super::tab::dispatch(r, tx, command, a.get(1).unwrap_or(&Value::Null))?;
             Ok(json!(handled))
         }
         "lexical/LexicalUtils.scheduleMicroTask" => {
