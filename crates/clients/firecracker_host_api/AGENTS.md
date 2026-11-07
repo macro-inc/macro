@@ -27,7 +27,7 @@ over mTLS, the answers, the exec protocol, and the MMDS document guests read.
 - Owns: wire types (`schema` feature: `utoipa::ToSchema`), error codes, the
   client. HTTP statuses are the agent's (inbound).
 - Not here: the agent (`services/firecracker_host`), fleet policy
-  (`crates/hosted_runtimes`), the guest side (`nix/macro-box`).
+  (`crates/agents/hosted_runtimes`), the guest side (`nix/macro-box`).
 
 ## Gotchas
 

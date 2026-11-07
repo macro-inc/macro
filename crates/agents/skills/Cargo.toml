@@ -1,0 +1,83 @@
+[package]
+edition = "2024"
+name = "skills"
+publish = false
+version = "0.1.0"
+
+[features]
+axum = [
+  "dep:axum",
+  "dep:macro_authorization",
+  "dep:serde",
+  "dep:utoipa",
+  "ports",
+]
+ai_tools = ["dep:ai_toolset", "dep:async-trait", "dep:schemars", "dep:serde", "ports"]
+default = ["ai_tools", "outbound", "ports"]
+outbound = [
+  "dep:cowlike",
+  "dep:documents",
+  "dep:email",
+  "dep:filter_ast",
+  "dep:item_filters",
+  "dep:lexical_client",
+  "dep:models_pagination",
+  "dep:models_search",
+  "dep:models_soup",
+  "dep:search_service_client",
+  "dep:soup",
+  "ports",
+]
+ports = []
+
+[dependencies]
+anyhow = { workspace = true }
+chrono = { workspace = true }
+cognition = { workspace = true }
+futures = { workspace = true }
+document_sub_type = { workspace = true, default-features = true }
+entity_access = { workspace = true, features = ["ports"] }
+macro_user_id = { workspace = true }
+system_skills = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+tokio = { workspace = true, features = ["macros", "time"] }
+tokio-util = { workspace = true }
+tracing = { workspace = true }
+uuid = { workspace = true }
+
+# AI toolset dependencies
+ai_toolset = { workspace = true, optional = true }
+async-trait = { workspace = true, optional = true }
+schemars = { workspace = true, optional = true }
+serde = { workspace = true, optional = true }
+
+# HTTP dependencies
+axum = { workspace = true, optional = true }
+macro_authorization = { workspace = true, features = [
+  "axum",
+], optional = true }
+utoipa = { workspace = true, features = ["chrono"], optional = true }
+
+# Outbound dependencies
+cowlike = { workspace = true, optional = true }
+documents = { workspace = true, features = ["ports"], optional = true }
+email = { workspace = true, optional = true }
+filter_ast = { workspace = true, optional = true }
+item_filters = { workspace = true, default-features = true, optional = true }
+lexical_client = { workspace = true, optional = true }
+models_pagination = { workspace = true, optional = true }
+models_search = { workspace = true, optional = true }
+models_soup = { workspace = true, optional = true }
+search_service_client = { workspace = true, optional = true }
+soup = { workspace = true, features = ["ports"], optional = true }
+
+workspace-hack = { version = "0.1", path = "../../workspace-hack" }
+
+[dev-dependencies]
+async-trait = { workspace = true }
+axum = { workspace = true }
+model_user = { workspace = true }
+rootcause = { workspace = true }
+tokio = { workspace = true, features = ["macros", "rt", "test-util"] }
+tower = { workspace = true, features = ["util"] }

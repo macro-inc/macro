@@ -84,7 +84,7 @@ the local ACP process (Claude Code, Codex, ...), and drives native
   `ANTHROPIC_AUTH_TOKEN` (its bearer) and
   `CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC=1` go to `session/new|load|resume`
   as `_meta.claudeCode.options.env`, always. It calls nothing in Claude and
-  reads no Claude files: harnessd (`crates/harnessd`) owns Claude sign-in, and the
+  reads no Claude files: harnessd (`crates/agents/harnessd`) owns Claude sign-in, and the
   image's `claude` wrapper swaps the gateway env for the computer's own
   credential when harnessd holds one. ACP trace logs contain only direction
   and byte counts.

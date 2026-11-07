@@ -67,7 +67,7 @@ function isVersionToken(token: string): boolean {
  * `o3 Pro`), is its own family.
  *
  * This is the same rule the Cursor ACP agent applies before it sends ACP
- * groups (`CursorModel::family` in `crates/cursor_cloud_agents`). It runs
+ * groups (`CursorModel::family` in `crates/agents/cursor_cloud_agents`). It runs
  * here only for harnesses that sent no groups, so those catalogs read the
  * same way rather than as one long flat list.
  */

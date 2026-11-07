@@ -9,7 +9,7 @@
  * Named compute tier for a managed sandbox.
 
 The API and database store the name. CPU, RAM, and disk live in
-`crates/agent_harness/sandbox_sizes.json`.
+`crates/agents/agent_harness/sandbox_sizes.json`.
  */
 export type SandboxSize = (typeof SandboxSize)[keyof typeof SandboxSize];
 

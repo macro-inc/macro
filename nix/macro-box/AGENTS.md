@@ -171,7 +171,7 @@ image with systemd as PID 1 (for the dev-only DockerFleet).
   client, on PATH) through the fleet. Its state, the Claude credential
   `<state>/claude/credential.json`, is `/home/.system/harnessd` with a data
   disk, else `/var/lib/harnessd` (tmpfiles, macro, 0700). See
-  `crates/harnessd/AGENTS.md`.
+  `crates/agents/harnessd/AGENTS.md`.
 - `claude` on PATH (and so macrod's `CLAUDE_CODE_EXECUTABLE`) is
   `_claude-wrapper.nix` over `files/claude-wrapper`: when the credential file
   has a token it unsets `ANTHROPIC_BASE_URL`, `ANTHROPIC_AUTH_TOKEN`,

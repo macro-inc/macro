@@ -45,7 +45,7 @@ function isVersionToken(token: string): boolean {
  * `o3 Pro`), is its own family.
  *
  * This is the same rule the Cursor ACP agent applies before it sends ACP
- * groups (`CursorModel::family` in `crates/cursor_cloud_agents`). It remains
+ * groups (`CursorModel::family` in `crates/agents/cursor_cloud_agents`). It remains
  * searchable for harnesses that sent no groups.
  */
 export function inferModelFamily(label: string): string {

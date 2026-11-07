@@ -420,7 +420,7 @@ without a model.
 
 ## Hiding the direct tools
 
-`covered_by_code_sdk` (`crates/agent_code_mode/src/domain/service.rs`) lists the
+`covered_by_code_sdk` (`crates/agents/agent_code_mode/src/domain/service.rs`) lists the
 tools a code-mode session doesn't see because the SDK covers them. Each PR adds
 its tool there once its SDK method lands: `EditDocument` with `doc.edit`,
 `EditSpreadsheet`/`ReadSpreadsheet`/`CalculateSpreadsheet`, the Word and
@@ -477,7 +477,7 @@ programs through the production runner and its exact flags:
 ### Code mode: a separate, lazily loaded chunk
 
 - `packages/code-mode-sdk` builds, at build time with the rest of the bundle
-  (`crates/code_mode_assets`), code-split modules for `lexical`, the
+  (`crates/agents/code_mode_assets`), code-split modules for `lexical`, the
   `@lexical/*` packages and `@macro-inc/sdk/lexical`, beside `sdk.mjs`.
   `crates/agents/code_execution_outbound` writes them to the run's root and maps each
   specifier in `imports.json`.

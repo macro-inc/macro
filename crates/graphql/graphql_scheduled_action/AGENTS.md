@@ -17,11 +17,11 @@ adapter for listing `ScheduledAction` records. Read-only: no mutations.
 
 - Owns: GraphQL types/query for listing scheduled actions.
 - Not here: routine scheduling, triggers, and execution →
-  `crates/scheduled_action`.
+  `crates/agents/scheduled_action`.
 
 ## Boundaries
 
-- Depends on: `scheduled_action` (the routine domain service in `crates/scheduled_action`).
+- Depends on: `scheduled_action` (the routine domain service in `crates/agents/scheduled_action`).
 - Used by: `complete_graph` (schema composition).
 
 ## Recipes

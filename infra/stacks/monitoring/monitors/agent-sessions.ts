@@ -6,7 +6,7 @@
 // The harness's spans are custom spans, which produce no trace metrics, and
 // span queries read only the indexed (sampled) spans. Span-based metrics are
 // computed from every ingested span, so the dashboard reads those. The span
-// fields are described in crates/agent_session/README.md.
+// fields are described in crates/agents/agent_session/README.md.
 import * as datadog from '@pulumi/datadog';
 import { graphGroup, prodMonitor, thresholdGraph } from '../prod-monitor';
 
@@ -173,7 +173,7 @@ function timeseries(
 export const agentSessionsDashboard = new datadog.Dashboard('agent-sessions', {
   title: 'Agent sessions: turns, cache, context',
   description:
-    'Where agent turn time and tokens go. Fields: crates/agent_session/README.md. One session in detail: the agent-session-analysis skill.',
+    'Where agent turn time and tokens go. Fields: crates/agents/agent_session/README.md. One session in detail: the agent-session-analysis skill.',
   layoutType: 'ordered',
   widgets: [
     graphGroup('Turns', [

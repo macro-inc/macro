@@ -39,7 +39,7 @@ fails isn't run.
 ## Boundaries
 
 - Depends on: `@macro-inc/sdk`, the Claude Agent SDK, TypeScript.
-- Used by: agents rendered from `../starter-agent` by `crates/agent_git`. In
+- Used by: agents rendered from `../starter-agent` by `crates/agents/agent_git`. In
   the monorepo it resolves as the workspace package `@macro-inc/muppet`; an
   agent's image places it at `node_modules/@macro-inc/muppet` (TS source, no
   build).

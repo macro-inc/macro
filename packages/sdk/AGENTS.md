@@ -67,7 +67,7 @@ enforced by the ordinary backend APIs.
   `RoutineExecution.created` holds the routines a run created. The rules an
   agent needs are in the `@agent` block on `RoutineNamespace`, which the
   routine drafter also reads; code mode follows it with the Compose Routines
-  skill (`crates/system_skills`), how a session writes one from a chat.
+  skill (`crates/agents/system_skills`), how a session writes one from a chat.
   `routines.check` sends the same body to
   `POST /scheduled-actions/check` (as `{routine, created}`), which runs
   saving's checks and saves nothing; code mode's catalog lists it as a read.
@@ -229,7 +229,7 @@ the existing gateway prefixes.
   not …") that agents route on, and may carry an `@agent` block: how that area
   of Macro works, for agents only. Both are stripped from the public
   reference, and code-mode generation fails without the routing sentence. Put
-  an area's rules there, never in `crates/prompt`; cross-namespace search
+  an area's rules there, never in `crates/agents/prompt`; cross-namespace search
   guidance lives on `SearchNamespace` in `search/namespace.ts`.
 - Code mode puts each relevant entity's index in the agent turn, at most 48
   KiB: a method's signature and the first sentence of its doc, cut at 160
@@ -259,7 +259,7 @@ the existing gateway prefixes.
 - Run `bun run generate` to regenerate SDK clients and normalize whitespace-only
   lines; do not hand-edit generated output to satisfy whitespace checks.
 - The SDK reference (`../sdk-docs`) and the code-mode bundle and documentation
-  (`crates/code_mode_assets`) are generated from this source at build time and
+  (`crates/agents/code_mode_assets`) are generated from this source at build time and
   never committed; run `bun run test` in `../sdk-docs` and `../code-mode-sdk`
   after changing public API or comments.
 - `generated/agent-fold/` is not from OpenAPI: `cargo run -p agent_fold --bin

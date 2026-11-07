@@ -2,7 +2,7 @@
   "include": [
     "./src/**/*",
     "./src/lib/core/component/Emoji/cldr-tags.json",
-    "../../crates/agent_harness/sandbox_sizes.json"
+    "../../crates/agents/agent_harness/sandbox_sizes.json"
   ],
   "exclude": [
     "./tests/**/*",
@@ -45,7 +45,7 @@
     ],
     "paths": {
       "@sandbox-sizes": [
-        "../../crates/agent_harness/sandbox_sizes.json"
+        "../../crates/agents/agent_harness/sandbox_sizes.json"
       ],
       "@graphql-cache/*": [
         "./src/lib/graphql-cache/*"

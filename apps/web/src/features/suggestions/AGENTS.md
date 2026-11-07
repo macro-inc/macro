@@ -3,7 +3,7 @@
 ## What it is
 
 The Suggestions screens: the For you page (`/app/for-you`) and Home's Today strip
-and top priorities, over the person's feed of suggestions (`crates/suggestions`). Desktop
+and top priorities, over the person's feed of suggestions (`crates/agents/suggestions`). Desktop
 only, behind `enable-suggestions`.
 
 ## How it works

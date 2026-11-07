@@ -7,7 +7,7 @@
  * never opt in.
  *
  * The server checks a command's path against the same table before sending
- * it (`crates/agent_code_mode/src/domain/ui_commands/navigable_routes.json`,
+ * it (`crates/agents/agent_code_mode/src/domain/ui_commands/navigable_routes.json`,
  * generated from here by `navigable-routes.test.tsx`), and the tab checks it
  * again against its live route table before opening anything.
  */

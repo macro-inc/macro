@@ -1,4 +1,4 @@
-//! Agent teammates' workspace repos (`crates/agent_git`): smart HTTP and the
+//! Agent teammates' workspace repos (`crates/agents/agent_git`): smart HTTP and the
 //! internal create/ensure/delete API, under the `/agent-git` gateway prefix.
 //!
 //! The bare repos live under `REPO_STORAGE_ROOT`, the EFS volume every

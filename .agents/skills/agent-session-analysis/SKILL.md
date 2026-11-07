@@ -21,7 +21,7 @@ Two sources, used together:
   true tool durations and result sizes on `execute_tool`, per model call sizes
   and cache tokens on `chat_streaming` (same traces), per turn counts on
   `agent.acp.prompt` and `agent.turn`. The fields are listed in
-  `crates/agent_session/README.md`. Spans are sampled and kept 15 days; a
+  `crates/agents/agent_session/README.md`. Spans are sampled and kept 15 days; a
   missing span proves nothing. `--datadog` merges them into the viewer.
 
 ## One session

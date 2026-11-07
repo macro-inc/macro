@@ -64,7 +64,7 @@ From `infra/`:
   Renaming a field there silently turns its monitor into missing data.
 - `monitors/computers.ts` reads the error logs `computer billing item removal
   abandoned` (authentication-service) and `computer needs an operator`
-  (agent-harness-service) that `crates/hosted_runtimes` writes; its header is
+  (agent-harness-service) that `crates/agents/hosted_runtimes` writes; its header is
   the message and field contract. Renaming either message silences its monitor.
 - `monitors/stripe-inbox.ts` reads the logs `stripe inbox cursor
   dead-lettered`, `stripe inbox dead cursors`, `stripe inbox backlog` and
@@ -72,7 +72,7 @@ From `infra/`:
   `crates/stripe_inbox` writes from authentication-service; its header is the
   message and field contract.
 - `monitors/harness-presence.ts` reads `harness_presence_disagreement` logged by
-  `crates/harnesses/src/inbound/axum_router.rs`; its header is the field contract.
+  `crates/agents/harnesses/src/inbound/axum_router.rs`; its header is the field contract.
 - `monitors/outlook-sync.ts` reads the health log, sync spans and Graph and
   token span fields email-service emits; its header is the field contract.
   It finds the Graph and token spans by `@outlook.throttle_origin` and
@@ -84,11 +84,11 @@ From `infra/`:
   `ai.provider_account_unavailable` span; its header is the field contract.
   `MONTHLY_CAPS` must match each provider's billing console.
 - `monitors/routine-suggestions.ts` reads the `routine_suggestions.*` log
-  events (`@event`) that `crates/scheduled_action` emits; its header is the
+  events (`@event`) that `crates/agents/scheduled_action` emits; its header is the
   field contract. Its failure monitor does not page while suggestions are
   behind their flag.
 - `monitors/harness-runtimes.ts` reads the `agent.runtime.reattach` span fields
-  in `crates/agent_harness/src/domain/service.rs` and matches the text of the
+  in `crates/agents/agent_harness/src/domain/service.rs` and matches the text of the
   `tokio runtime starvation detected` warning in `crates/macro_tower_layers`;
   its header is the field contract.
 - `monitors/calls.ts` matches the text of the `voip push: SNS delivery failed`
@@ -120,7 +120,7 @@ From `infra/`:
   `rolling_estimated_time_lag_max`: they divide lag by the current consumption
   rate, read years when a consumer slows, and are not event age.
 - `monitors/computer-capacity.ts` reads the `computer.capacity.*` gauges that
-  `crates/hosted_runtimes/src/domain/telemetry.rs` records; its header is the
+  `crates/agents/hosted_runtimes/src/domain/telemetry.rs` records; its header is the
   tag contract. Renaming a gauge, tag or `resource` value there silently turns
   its monitors into missing data.
 - `monitors/firecracker.ts` reads `firecracker_host.*` from the host agent,

@@ -1,9 +1,9 @@
 // Routine suggestions in agent-harness-service: the routines sessions of a
 // person's generations (at onboarding, nightly and on request, run by
-// `crates/suggestion_generation`), and what people save and dismiss from them.
+// `crates/agents/suggestion_generation`), and what people save and dismiss from them.
 //
 // Every metric below is built from INFO logs that
-// `crates/scheduled_action/src/domain/suggestions.rs` and `service.rs` emit,
+// `crates/agents/scheduled_action/src/domain/suggestions.rs` and `service.rs` emit,
 // keyed by `event`, so these fields are their contract with this file;
 // renaming one there silently empties a widget or turns the monitor into
 // missing data:
