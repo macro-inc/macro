@@ -61,6 +61,7 @@ node types, immutable snapshots, transactional tree editing, update processing, 
 
 - Text positions are UTF-16 code units; allow interior selection offsets but reject edits that split surrogate pairs.
 - Text insertion checks the adjacent text node's insertion edge before reusing it; tabs and entity boundaries require a new plain text node.
+- Node ordering is post-order within shared ancestry, including detached subtrees.
 - Node ancestry follows the kind trait's `Parent`, never Rust layout casts.
 - Keep key allocation outside rollback, and snapshots independent on first write.
 
