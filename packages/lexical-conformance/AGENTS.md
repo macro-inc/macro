@@ -11,6 +11,7 @@ The upstream source is downloaded by checksum into this worktree's `target/`.
 - `record/membrane.ts`: attribution, identity, callback tapes and commit capture.
 - `record/replay-js.ts`: independent interpreter; never executes original test bodies.
 - `record/schema.ts`: schema 2 shared with the Rust fixture reader.
+- `corpus/synthetic.ts`: fixed per-node JSON and editor registry oracle against actual Macro classes.
 - `diff/README.md`: WP-07 raw-model WASM loader and Tier C text/paragraph harness.
 - `record/initial.ts`: partial-state key layout and selection restoration.
 - `record/inventory.json`: S4 per-file expected counts; mixed files have no exact case labels.

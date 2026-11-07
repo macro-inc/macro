@@ -104,3 +104,10 @@ Schema-2 additions used by this corpus: `$regexp` carries `flags` and `lastIndex
 Partial initial states carry `keys` (preorder), `nodeMapKeys`
 (insertion order), and `nextKey` alongside JSON and selection. Downstream fixture
 readers must support these explicit fields; no allocation keys are normalized away.
+
+The same command checks the synthetic JSON node corpus and source editor
+registries before recording Tier A. Run
+`bun packages/lexical-conformance/corpus/synthetic.ts --check` from the repository
+root to verify that fixed corpus independently. It compares all 57 registered
+node classes (41 custom), both import configurations and all eight registry
+configurations, using an injected clock and deterministic nanoid dependency.
