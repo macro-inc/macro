@@ -10,6 +10,7 @@ import {
   parseGithubPrUrl,
   toGithubKey,
 } from '@app/features/block-pr/util/prKey';
+import { HeaderActionGroup } from '@components/app/HeaderActionGroup';
 import { useSplitLayout } from '@components/app/split-layout/layout';
 import { HoverCard } from '@core/component/HoverCard';
 import { PullRequestPreviewCard } from '@core/component/LexicalMarkdown/component/decorator/PullRequestMention';
@@ -17,10 +18,9 @@ import { openInNewSplitForMention } from '@core/util/openInNewSplit';
 import { useSplitNavigationHandler } from '@core/util/useSplitNavigationHandler';
 import { usePullRequestByGithubKeyQuery } from '@queries/storage/pr-mention';
 import type { ForeignEntity } from '@service-storage/generated/schemas';
-import { cn, Layer } from '@ui';
+import { ButtonGroup, cn } from '@ui';
 import { type Accessor, createMemo, type JSX, Show } from 'solid-js';
 import { match } from 'ts-pattern';
-import { ChipShell } from './AgentSessionChipShell';
 
 function metadataRecord(metadata: unknown): Record<string, unknown> {
   if (metadata && typeof metadata === 'object' && !Array.isArray(metadata)) {
@@ -70,10 +70,7 @@ function ChipFace(props: {
 
   return (
     <>
-      <GithubPullRequestStatusIcon
-        status={props.status}
-        class="size-3 shrink-0"
-      />
+      <GithubPullRequestStatusIcon status={props.status} class="shrink-0" />
       <span
         class="min-w-0 truncate tabular-nums"
         title={props.title ?? label()}
@@ -89,10 +86,12 @@ function ChipFace(props: {
 
 function GithubFallback(props: { url: string; number?: number }): JSX.Element {
   return (
-    <a
+    <ButtonGroup.Button
+      as="a"
       href={props.url}
       target="_blank"
       rel="noreferrer"
+      variant="ghost"
       data-agent-pull-request={props.url}
       title={
         props.number != null
@@ -101,10 +100,8 @@ function GithubFallback(props: { url: string; number?: number }): JSX.Element {
       }
       onClick={(event) => event.stopPropagation()}
     >
-      <ChipShell>
-        <ChipFace status="open" number={props.number} />
-      </ChipShell>
-    </a>
+      <ChipFace status="open" number={props.number} />
+    </ButtonGroup.Button>
   );
 }
 
@@ -121,10 +118,11 @@ function EntityChip(props: {
 
   return (
     <HoverCard
-      triggerClass="min-w-0 max-w-full"
+      triggerClass="flex min-w-0 max-w-full self-stretch"
       trigger={
-        <button
+        <ButtonGroup.Button
           type="button"
+          variant="ghost"
           data-agent-pull-request={props.entity.id}
           data-pr-entity-link={props.entity.id}
           title={
@@ -135,10 +133,8 @@ function EntityChip(props: {
           }
           {...navHandlers}
         >
-          <ChipShell>
-            <ChipFace status={status()} number={props.number} title={title()} />
-          </ChipShell>
-        </button>
+          <ChipFace status={status()} number={props.number} title={title()} />
+        </ButtonGroup.Button>
       }
       content={<PullRequestPreviewCard id={props.entity.id} />}
     />
@@ -173,7 +169,7 @@ export function AgentPullRequestChip(props: { url: string }): JSX.Element {
   const { reference, entity } = useLinkedPullRequest(() => props.url);
 
   return (
-    <Layer depth={2}>
+    <HeaderActionGroup label="Pull request">
       <Show
         when={entity()}
         fallback={
@@ -184,6 +180,6 @@ export function AgentPullRequestChip(props: { url: string }): JSX.Element {
           <EntityChip entity={synced()} number={reference()?.number} />
         )}
       </Show>
-    </Layer>
+    </HeaderActionGroup>
   );
 }
