@@ -208,3 +208,47 @@ async fn a_gate_refusal_is_a_deferral_not_a_failed_request() {
     assert!(!refused.contains_key("http.response.status_code"));
     assert!(!refused.contains_key("otel.status_description"));
 }
+
+#[tokio::test]
+async fn a_missing_contact_photo_is_an_answer_but_a_missing_message_is_an_error() {
+    use crate::domain::ports::MailboxAddressBookReader;
+
+    let spans = Spans::default();
+    let _subscriber =
+        tracing::subscriber::set_default(tracing_subscriber::registry().with(spans.clone()));
+    // A callsite another test thread registered while this subscriber was
+    // being installed can keep a cached "never" interest; recompute it.
+    tracing::callsite::rebuild_interest_cache();
+    let (server, api, token) = super::super::test::setup().await;
+    let api = api.for_mailbox(MAILBOX);
+    Mock::given(method("GET"))
+        .and(path("/v1.0/me/photo/$value"))
+        .respond_with(ResponseTemplate::new(404))
+        .mount(&server)
+        .await;
+    Mock::given(method("GET"))
+        .and(path("/v1.0/me/messages/AAMkGone"))
+        .respond_with(ResponseTemplate::new(404))
+        .mount(&server)
+        .await;
+
+    let photo = api.contact_photo(&token, None).await;
+    let message = api
+        .get::<Value>(
+            &token,
+            api.endpoint(&["me", "messages", "AAMkGone"]).unwrap(),
+        )
+        .await;
+
+    assert!(matches!(photo, Ok(None)));
+    assert!(matches!(message, Err(EmailApiError::NotFound)));
+    let requests = spans.named("outlook.graph_request");
+    let [photo, message] = requests.as_slice() else {
+        panic!("expected two Graph request spans, got {requests:?}");
+    };
+    assert_eq!(photo["http.response.status_code"], "404");
+    assert_eq!(photo["outlook.throttle_origin"], "none");
+    assert!(!photo.contains_key("otel.status_description"));
+    assert_eq!(message["http.response.status_code"], "404");
+    assert!(message.contains_key("otel.status_description"));
+}

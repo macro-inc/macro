@@ -28,6 +28,16 @@ impl std::fmt::Display for GraphFailure {
     }
 }
 
+/// How a request's span reads a 404 from Graph.
+#[derive(Clone, Copy)]
+enum NotFound {
+    /// The resource should exist, so a 404 is a failed request.
+    Failure,
+    /// "There is none" is an expected answer, such as a contact without a
+    /// photo, so a 404 is not a span error.
+    Answer,
+}
+
 impl From<EmailApiError> for GraphFailure {
     fn from(error: EmailApiError) -> Self {
         Self {
@@ -90,6 +100,26 @@ impl OutlookApiClientRepository {
             .map_err(|failure| failure.error)
     }
 
+    /// A GET for a resource that may not exist: `None` when Graph answers 404,
+    /// which the request's span records as an answer, not an error.
+    pub(super) async fn optional_request(
+        &self,
+        token: &AccessToken,
+        url: Url,
+    ) -> Result<Option<Response>, EmailApiError> {
+        match self
+            .send_graph_request(token, Method::GET, url, None, None, NotFound::Answer)
+            .await
+        {
+            Ok(response) => Ok(Some(response)),
+            Err(GraphFailure {
+                error: EmailApiError::NotFound,
+                ..
+            }) => Ok(None),
+            Err(failure) => Err(failure.error),
+        }
+    }
+
     /// Like `conditional_request`, for callers that branch on the Graph error code.
     pub(super) async fn graph_request(
         &self,
@@ -98,6 +128,26 @@ impl OutlookApiClientRepository {
         url: Url,
         body: Option<&Value>,
         expected_version: Option<&str>,
+    ) -> Result<Response, GraphFailure> {
+        self.send_graph_request(
+            token,
+            method,
+            url,
+            body,
+            expected_version,
+            NotFound::Failure,
+        )
+        .await
+    }
+
+    async fn send_graph_request(
+        &self,
+        token: &AccessToken,
+        method: Method,
+        url: Url,
+        body: Option<&Value>,
+        expected_version: Option<&str>,
+        not_found: NotFound,
     ) -> Result<Response, GraphFailure> {
         let path = url.path().to_owned();
         let refreshed = self
@@ -127,7 +177,10 @@ impl OutlookApiClientRepository {
             .rejected_token_refresh
             .as_ref()
             .and_then(|_| request.try_clone());
-        match self.graph_attempt(request, &method, &path, false).await {
+        match self
+            .graph_attempt(request, &method, &path, false, not_found)
+            .await
+        {
             Err(GraphFailure {
                 error: EmailApiError::AuthRequired,
                 ..
@@ -150,7 +203,7 @@ impl OutlookApiClientRepository {
                     .map_err(|_| invalid_response())?;
                     authorization.set_sensitive(true);
                     headers.insert(reqwest::header::AUTHORIZATION, authorization);
-                    self.graph_attempt(retry.headers(headers), &method, &path, true)
+                    self.graph_attempt(retry.headers(headers), &method, &path, true, not_found)
                         .await
                 } else {
                     Err(EmailApiError::AuthRequired.into())
@@ -168,6 +221,7 @@ impl OutlookApiClientRepository {
         method: &Method,
         path: &str,
         reauthorized: bool,
+        not_found: NotFound,
     ) -> Result<Response, GraphFailure> {
         let span = tracing::info_span!(
             "outlook.graph_request",
@@ -191,7 +245,7 @@ impl OutlookApiClientRepository {
             .gated_graph_request(request)
             .instrument(span.clone())
             .await;
-        record_attempt(&span, &result);
+        record_attempt(&span, &result, not_found);
         result
     }
 
@@ -345,11 +399,22 @@ impl OutlookApiClientRepository {
 ///
 /// Record where a failed attempt was throttled and mark real failures as span
 /// errors. A gate refusal sent nothing, so it is neither an error nor a WARN;
-/// the sync unit that owns the request reports the deferral.
-fn record_attempt(span: &tracing::Span, result: &Result<Response, GraphFailure>) {
-    let Err(failure) = result else {
-        span.record("outlook.throttle_origin", "none");
-        return;
+/// the sync unit that owns the request reports the deferral. A 404 the caller
+/// expects is an answer, not a failure.
+fn record_attempt(
+    span: &tracing::Span,
+    result: &Result<Response, GraphFailure>,
+    not_found: NotFound,
+) {
+    let failure = match (result, not_found) {
+        (Err(failure), NotFound::Failure) => failure,
+        (Err(failure), NotFound::Answer) if !matches!(failure.error, EmailApiError::NotFound) => {
+            failure
+        }
+        _ => {
+            span.record("outlook.throttle_origin", "none");
+            return;
+        }
     };
     // A response's Retry-After was recorded when it arrived; a gate refusal
     // has no response, so its delay is recorded here.
