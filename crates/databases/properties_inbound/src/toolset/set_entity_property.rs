@@ -1,6 +1,5 @@
 //! SetEntityProperty tool for updating property values on entities.
 
-use crate::domain::service::PropertiesService;
 use ai_toolset::{AsyncTool, RequestContext, ServiceContext, ToolCallError, ToolResult};
 use ai_toolset::{ToolAnnotated, ToolAnnotations};
 use async_trait::async_trait;
@@ -10,6 +9,7 @@ use entity_access::domain::ports::EntityAccessService;
 use models_properties::EntityType;
 use models_properties::api::requests::SetPropertyValue;
 use models_properties::shared::{DateRange, EndsBeforeStart, EntityReference};
+use properties::domain::service::PropertiesService;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;

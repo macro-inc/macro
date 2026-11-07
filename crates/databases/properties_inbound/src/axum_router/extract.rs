@@ -27,9 +27,9 @@ use macro_user_id::user_id::MacroUserIdStr;
 use models_properties::api::PropertyTargetEntityType;
 
 use super::{PropertiesRouterState, properties_err_status};
-use crate::domain::error::PropertiesErr;
-use crate::domain::model::{EditReceipt, ViewReceipt};
-use crate::domain::service::PropertiesService;
+use properties::domain::error::PropertiesErr;
+use properties::domain::model::{EditReceipt, ViewReceipt};
+use properties::domain::service::PropertiesService;
 
 /// Path parameters for entity-scoped properties routes.
 #[derive(serde::Deserialize)]

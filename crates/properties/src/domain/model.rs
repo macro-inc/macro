@@ -311,6 +311,18 @@ pub struct EntityPropertyOptionSelection {
     pub(crate) mutation: Option<EntityPropertyMutationSnapshot>,
 }
 
+impl EntityPropertyOptionSelection {
+    /// A selection whose stored row did not change, so it carries no
+    /// persistence receipt. Repository fakes outside this crate build these.
+    pub fn unchanged(property_definition_id: Uuid, option_ids: Vec<Uuid>) -> Self {
+        EntityPropertyOptionSelection {
+            property_definition_id,
+            option_ids,
+            mutation: None,
+        }
+    }
+}
+
 /// The outcome of applying one shared option delta to a single entity in a
 /// cross-entity bulk update.
 ///

@@ -149,8 +149,8 @@ use projects_hex::{
 };
 use properties::{
     NotificationServiceImpl, PermissionServiceImpl, PropertiesPgRepo, PropertiesServiceImpl,
-    inbound::axum_router::PropertiesRouterState,
 };
+use properties_inbound::axum_router::PropertiesRouterState;
 use readonly_pool::ReadOnlyPool;
 use reminders::{
     inbound::axum_router::RemindersRouterState, outbound::pg_reminders_repo::PgRemindersRepo,

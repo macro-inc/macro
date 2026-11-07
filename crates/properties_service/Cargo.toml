@@ -19,6 +19,7 @@ macro_authorization = { path = "../macro_authorization" }
 models_properties = { path = "../models_properties" }
 notification = { path = "../notification" }
 properties = { path = "../properties" }
+properties_inbound = { path = "../databases/properties_inbound" }
 serde_json = { workspace = true }
 utoipa = { workspace = true }
 workspace-hack = { version = "0.1", path = "../workspace-hack" }

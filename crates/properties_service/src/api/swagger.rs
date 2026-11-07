@@ -1,5 +1,5 @@
 use models_properties::api;
-use properties::inbound::axum_router::{
+use properties_inbound::axum_router::{
     definitions::{ListPropertiesQuery, PropertyDefinitionResponse},
     entities::{
         BulkEntityOptionUpdateResult, BulkEntityOptionUpdateStatus, BulkEntityPropertiesRequest,
@@ -22,28 +22,28 @@ use utoipa::OpenApi;
     ),
     paths(
         // Property definitions
-        properties::inbound::axum_router::definitions::list_properties,
-        properties::inbound::axum_router::definitions::get_property_definition,
-        properties::inbound::axum_router::definitions::create_property_definition,
-        properties::inbound::axum_router::definitions::delete_property_definition,
+        properties_inbound::axum_router::definitions::list_properties,
+        properties_inbound::axum_router::definitions::get_property_definition,
+        properties_inbound::axum_router::definitions::create_property_definition,
+        properties_inbound::axum_router::definitions::delete_property_definition,
         // Property options
-        properties::inbound::axum_router::options::get_property_options,
-        properties::inbound::axum_router::options::add_property_option,
-        properties::inbound::axum_router::options::update_property_option,
-        properties::inbound::axum_router::options::delete_property_option,
-        properties::inbound::axum_router::tags::list_tags,
-        properties::inbound::axum_router::tags::ensure_tag_set,
-        properties::inbound::axum_router::tags::promote_tag,
-        properties::inbound::axum_router::tags::merge_tag,
+        properties_inbound::axum_router::options::get_property_options,
+        properties_inbound::axum_router::options::add_property_option,
+        properties_inbound::axum_router::options::update_property_option,
+        properties_inbound::axum_router::options::delete_property_option,
+        properties_inbound::axum_router::tags::list_tags,
+        properties_inbound::axum_router::tags::ensure_tag_set,
+        properties_inbound::axum_router::tags::promote_tag,
+        properties_inbound::axum_router::tags::merge_tag,
         // Entity properties
-        properties::inbound::axum_router::entities::get_entity_properties,
-        properties::inbound::axum_router::entities::get_bulk_entity_properties,
-        properties::inbound::axum_router::entities::set_entity_property,
-        properties::inbound::axum_router::entities::add_entity_property_option,
-        properties::inbound::axum_router::entities::remove_entity_property_option,
-        properties::inbound::axum_router::entities::bulk_update_entity_property_options,
-        properties::inbound::axum_router::entities::bulk_update_entities_property_options,
-        properties::inbound::axum_router::entities::delete_entity_property,
+        properties_inbound::axum_router::entities::get_entity_properties,
+        properties_inbound::axum_router::entities::get_bulk_entity_properties,
+        properties_inbound::axum_router::entities::set_entity_property,
+        properties_inbound::axum_router::entities::add_entity_property_option,
+        properties_inbound::axum_router::entities::remove_entity_property_option,
+        properties_inbound::axum_router::entities::bulk_update_entity_property_options,
+        properties_inbound::axum_router::entities::bulk_update_entities_property_options,
+        properties_inbound::axum_router::entities::delete_entity_property,
     ),
     components(
         schemas(

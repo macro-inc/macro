@@ -103,6 +103,7 @@ serde_json.workspace = true
 projects = { path = "../projects", default-features = false, features = ["ai_tools", "outbound", "service"] }
 skills = { path = "../skills", default-features = false, features = ["ai_tools", "outbound"] }
 properties = { path = "../properties", features = ["ai_tools"] }
+properties_inbound = { path = "../databases/properties_inbound", default-features = false, features = ["ai_tools"] }
 soup = { path = "../soup", features = ["ai_tools", "outbound"] }
 sqs_client = { path = "../sqs_client", default-features = false, features = ["email", "gmail"] }
 teams = { path = "../teams", default-features = false, features = ["ai_tools", "outbound"] }

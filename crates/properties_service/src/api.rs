@@ -7,5 +7,5 @@ use crate::api::context::PropertiesHandlerState;
 
 /// Creates the properties router backed by the request authorization service.
 pub fn router() -> Router<PropertiesHandlerState> {
-    properties::inbound::axum_router::router()
+    properties_inbound::axum_router::router()
 }
