@@ -432,3 +432,24 @@ fn unchanged_view_range_does_not_create_a_selection_commit() -> Result<(), Error
     assert!(commit.is_noop());
     Ok(())
 }
+
+#[test]
+fn formatting_rebinds_an_element_end_converted_by_splitting() -> Result<(), Error> {
+    let mut editor = Editor::builder(EditorMode::Headless).build().unwrap();
+    editor.update(|tx| {
+        let p = tx.create(Paragraph::default())?;
+        let text = tx.create_text("abcdef")?;
+        let line = tx.create(LineBreak::default())?;
+        let tab = tx.create(Tab::default())?;
+        tx.append(p, &[text.key(), line.key(), tab.key()])?;
+        tx.append(NodeKey::ROOT, &[p.key()])?;
+        tx.set_selection(Some(Selection::Range(RangeSelection::new(
+            Point::text(text, Utf16Offset(2)), Point::element(p, ChildIndex(2)),
+        ))))?;
+        tx.format_text(TextFormatType::Bold, None)?;
+        let formatted = tx.children_keys(p)?[1];
+        assert_eq!(tx.focus()?, Point::text(formatted, Utf16Offset(4)));
+        Ok(())
+    })?;
+    Ok(())
+}

@@ -114,6 +114,7 @@ impl Transaction<'_> {
             end.key() == key && end.offset() < self.text_content_size(key).get()
         });
         let mut first_target = None;
+        let mut last_target = None;
         for node in &nodes {
             if self.is_element(*node) {
                 let current = self.view().element_data(*node)?.text_format;
@@ -153,6 +154,7 @@ impl Transaction<'_> {
                     .ok_or(Error::Invariant("formatted text slice missing"))?
             };
             first_target.get_or_insert(target);
+            last_target = Some((target, to - from));
             let flags = self
                 .view()
                 .text(target)
@@ -201,6 +203,13 @@ impl Transaction<'_> {
                     },
                     Point::text(first, Utf16Offset::ZERO),
                 )?;
+            }
+        }
+        let current = self.range_at(slot)?;
+        let current_end = if backward { current.anchor } else { current.focus };
+        if end.point_type() == PointType::Element && current_end.point_type() == PointType::Text {
+            if let Some((last, offset)) = last_target {
+                self.set_point_at(slot, if backward { PointRole::Anchor } else { PointRole::Focus }, Point::text(last, offset))?;
             }
         }
         if let Some(flags) = first_flags
