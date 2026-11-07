@@ -98,3 +98,9 @@ bottom overflow, rectangle expansion and map-time writable identity. Table row
 height null is intentionally imported as absent; negative/fractional imported
 spans are rejected by the typed payload. DOM creation and HTML conversion belong
 to the view/HTML layers.
+
+`table::ops` ports dimension creation, logical/deprecated physical row and
+column edits, merging, unmerging and simple-table column moves. Repeated span
+writes intentionally follow upstream live-cell identity. `table::grid` derives
+physical coordinates and span geometry from model snapshots; host elements and
+highlight state remain outside the model.

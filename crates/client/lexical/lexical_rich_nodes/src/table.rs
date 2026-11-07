@@ -16,3 +16,12 @@ fn cell_id(view: StateRef<'_>, key: NodeKey) -> Result<Id<TableCellNode>> {
 /// Span-aware geometry and table ancestry lookups.
 pub mod map;
 pub use map::*;
+/// Fresh physical grids and navigation decisions for view adapters.
+pub mod grid;
+pub use grid::*;
+/// Table creation, row/column edits and cell merge operations.
+pub mod ops;
+pub use ops::*;
+
+#[cfg(test)]
+mod grid_test;
