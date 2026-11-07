@@ -10,10 +10,11 @@ use std::{
 /// Cloneable per-editor state; undo affects document snapshots, not this state.
 pub trait ExtensionState: Clone + Send + Sync + 'static {}
 impl<State: Clone + Send + Sync + 'static> ExtensionState for State {}
+type SharedExtension = Arc<dyn Any + Send + Sync>;
 #[derive(Clone)]
 pub(crate) struct ExtensionEntry {
     value: Arc<dyn Any + Send + Sync>,
-    clone_value: fn(&Arc<dyn Any + Send + Sync>) -> Result<Arc<dyn Any + Send + Sync>, Error>,
+    clone_value: fn(&SharedExtension) -> Result<SharedExtension, Error>,
 }
 pub(crate) type Extensions = HashMap<TypeId, ExtensionEntry>;
 impl ExtensionEntry {
