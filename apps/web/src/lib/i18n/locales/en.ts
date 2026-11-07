@@ -19,6 +19,7 @@ import notificationsInbox from './en/notifications-inbox';
 import settingsLanguage from './en/settings-language';
 import settingsMobileApp from './en/settings-mobile-app';
 import settingsNav from './en/settings-nav';
+import settingsTeams from './en/settings-teams';
 import splitMenu from './en/split-menu';
 import tabs from './en/tabs';
 import tutorials from './en/tutorials';
@@ -50,6 +51,7 @@ export default {
   settingsLanguage,
   settingsMobileApp,
   settingsNav,
+  settingsTeams,
   splitMenu,
   tabs,
   tutorials,

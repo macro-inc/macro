@@ -361,6 +361,36 @@ export type CreateProfilePictureUploadRequest = {
 };
 
 /**
+ * A team to create.
+ */
+export type CreateSubteamRequest = {
+    /**
+     * The color of the team's mark.
+     */
+    color: SubteamColor;
+    /**
+     * What the team does, at most 200 characters.
+     */
+    description?: string;
+    /**
+     * Who may join without being added.
+     */
+    joinPolicy: SubteamJoinPolicy;
+    /**
+     * Workspace members to add besides the caller, who becomes its manager.
+     */
+    memberIds?: Array<string>;
+    /**
+     * The team's name, 1 to 40 characters.
+     */
+    name: string;
+    /**
+     * The top-level team to nest the new team in. The caller must manage it.
+     */
+    parentId?: string | null;
+};
+
+/**
  * The request body to create a new team
  */
 export type CreateTeamRequest = {
@@ -1285,6 +1315,16 @@ export type Language = 'en' | 'de' | 'fr' | 'es' | 'it' | 'nl' | 'pt-PT' | 'sv' 
  */
 export type LinkShare = 'PUBLIC' | 'TEAM';
 
+/**
+ * The teams in the caller's workspace.
+ */
+export type ListSubteamsResponse = {
+    /**
+     * Every team in the workspace with its members, ordered by name.
+     */
+    subteams: Array<Subteam>;
+};
+
 export type MacroApiTokenResponse = {
     /**
      * The newly created macro_api_token
@@ -1324,6 +1364,16 @@ export type MergeGithubPullRequestResponse = {
      * The merge commit's SHA.
      */
     sha: string;
+};
+
+/**
+ * Where to move a team.
+ */
+export type NestSubteamRequest = {
+    /**
+     * The top-level team to move it under, or null for the top level.
+     */
+    parentId?: string | null;
 };
 
 export type PasswordRequest = {
@@ -1670,6 +1720,16 @@ export type ResendFusionauthVerifyUserEmailRequest = {
 };
 
 /**
+ * The role to give a team member.
+ */
+export type SaveSubteamMemberRequest = {
+    /**
+     * The member's role in the team.
+     */
+    role: SubteamRole;
+};
+
+/**
  * The agent's saved key. Never includes the key.
  */
 export type SavedAgentApiKey = {
@@ -1850,6 +1910,73 @@ export type SubscriptionStatus = {
     renewalDate?: string | null;
     scheduledChange?: null | ScheduledSeatPlan;
 };
+
+/**
+ * A team in a workspace, with its members.
+ */
+export type Subteam = {
+    /**
+     * The color of the team's mark.
+     */
+    color: SubteamColor;
+    /**
+     * When the team was created.
+     */
+    createdAt: string;
+    /**
+     * What the team does. Empty when unset.
+     */
+    description: string;
+    /**
+     * The team's id.
+     */
+    id: string;
+    /**
+     * Who may join without being added.
+     */
+    joinPolicy: SubteamJoinPolicy;
+    /**
+     * The team's members, managers first, then by when they joined.
+     */
+    members: Array<SubteamMember>;
+    /**
+     * The team's name.
+     */
+    name: string;
+    /**
+     * The top-level team this one is nested in, if any.
+     */
+    parentId?: string | null;
+};
+
+/**
+ * The color of a team's mark.
+ */
+export type SubteamColor = 'violet' | 'blue' | 'teal' | 'cyan' | 'orange' | 'pink' | 'lime';
+
+/**
+ * Who may join a team without a manager adding them.
+ */
+export type SubteamJoinPolicy = 'open' | 'invite_only';
+
+/**
+ * Someone on a team.
+ */
+export type SubteamMember = {
+    /**
+     * The member's role in the team.
+     */
+    role: SubteamRole;
+    /**
+     * The member's user id.
+     */
+    userId: string;
+};
+
+/**
+ * A member's role in a team.
+ */
+export type SubteamRole = 'member' | 'manager';
 
 /**
  * The platform status. Only the non-operational statuses carry a message.
@@ -2128,6 +2255,22 @@ export type UpdateOverageRequest = {
      * Per-period cap on overage spend, cents. Required when enabling.
      */
     limitCents?: number;
+};
+
+/**
+ * Changes to a team's settings. Omitted fields stay as they are.
+ */
+export type UpdateSubteamRequest = {
+    color?: null | SubteamColor;
+    /**
+     * The new description, at most 200 characters.
+     */
+    description?: string | null;
+    joinPolicy?: null | SubteamJoinPolicy;
+    /**
+     * The new name, 1 to 40 characters.
+     */
+    name?: string | null;
 };
 
 /**
@@ -4394,6 +4537,194 @@ export type RemoveUserFromTeamError = RemoveUserFromTeamErrors[keyof RemoveUserF
 export type RemoveUserFromTeamResponses = {
     200: unknown;
 };
+
+export type ListSubteamsData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/team/subteams';
+};
+
+export type ListSubteamsErrors = {
+    401: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type ListSubteamsError = ListSubteamsErrors[keyof ListSubteamsErrors];
+
+export type ListSubteamsResponses = {
+    200: ListSubteamsResponse;
+};
+
+export type ListSubteamsResponse2 = ListSubteamsResponses[keyof ListSubteamsResponses];
+
+export type CreateSubteamData = {
+    body: CreateSubteamRequest;
+    path?: never;
+    query?: never;
+    url: '/team/subteams';
+};
+
+export type CreateSubteamErrors = {
+    400: ErrorResponse;
+    401: ErrorResponse;
+    403: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type CreateSubteamError = CreateSubteamErrors[keyof CreateSubteamErrors];
+
+export type CreateSubteamResponses = {
+    201: Subteam;
+};
+
+export type CreateSubteamResponse = CreateSubteamResponses[keyof CreateSubteamResponses];
+
+export type DeleteSubteamData = {
+    body?: never;
+    path: {
+        /**
+         * The team's id
+         */
+        subteam_id: string;
+    };
+    query?: never;
+    url: '/team/subteams/{subteam_id}';
+};
+
+export type DeleteSubteamErrors = {
+    401: ErrorResponse;
+    403: ErrorResponse;
+    404: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type DeleteSubteamError = DeleteSubteamErrors[keyof DeleteSubteamErrors];
+
+export type DeleteSubteamResponses = {
+    204: void;
+};
+
+export type DeleteSubteamResponse = DeleteSubteamResponses[keyof DeleteSubteamResponses];
+
+export type UpdateSubteamData = {
+    body: UpdateSubteamRequest;
+    path: {
+        /**
+         * The team's id
+         */
+        subteam_id: string;
+    };
+    query?: never;
+    url: '/team/subteams/{subteam_id}';
+};
+
+export type UpdateSubteamErrors = {
+    400: ErrorResponse;
+    401: ErrorResponse;
+    403: ErrorResponse;
+    404: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type UpdateSubteamError = UpdateSubteamErrors[keyof UpdateSubteamErrors];
+
+export type UpdateSubteamResponses = {
+    200: Subteam;
+};
+
+export type UpdateSubteamResponse = UpdateSubteamResponses[keyof UpdateSubteamResponses];
+
+export type RemoveSubteamMemberData = {
+    body?: never;
+    path: {
+        /**
+         * The team's id
+         */
+        subteam_id: string;
+        /**
+         * The member's user id
+         */
+        user_id: string;
+    };
+    query?: never;
+    url: '/team/subteams/{subteam_id}/members/{user_id}';
+};
+
+export type RemoveSubteamMemberErrors = {
+    401: ErrorResponse;
+    403: ErrorResponse;
+    404: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type RemoveSubteamMemberError = RemoveSubteamMemberErrors[keyof RemoveSubteamMemberErrors];
+
+export type RemoveSubteamMemberResponses = {
+    200: Subteam;
+};
+
+export type RemoveSubteamMemberResponse = RemoveSubteamMemberResponses[keyof RemoveSubteamMemberResponses];
+
+export type SaveSubteamMemberData = {
+    body: SaveSubteamMemberRequest;
+    path: {
+        /**
+         * The team's id
+         */
+        subteam_id: string;
+        /**
+         * The member's user id
+         */
+        user_id: string;
+    };
+    query?: never;
+    url: '/team/subteams/{subteam_id}/members/{user_id}';
+};
+
+export type SaveSubteamMemberErrors = {
+    400: ErrorResponse;
+    401: ErrorResponse;
+    403: ErrorResponse;
+    404: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type SaveSubteamMemberError = SaveSubteamMemberErrors[keyof SaveSubteamMemberErrors];
+
+export type SaveSubteamMemberResponses = {
+    200: Subteam;
+};
+
+export type SaveSubteamMemberResponse = SaveSubteamMemberResponses[keyof SaveSubteamMemberResponses];
+
+export type NestSubteamData = {
+    body: NestSubteamRequest;
+    path: {
+        /**
+         * The team's id
+         */
+        subteam_id: string;
+    };
+    query?: never;
+    url: '/team/subteams/{subteam_id}/parent';
+};
+
+export type NestSubteamErrors = {
+    400: ErrorResponse;
+    401: ErrorResponse;
+    403: ErrorResponse;
+    404: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type NestSubteamError = NestSubteamErrors[keyof NestSubteamErrors];
+
+export type NestSubteamResponses = {
+    200: Subteam;
+};
+
+export type NestSubteamResponse = NestSubteamResponses[keyof NestSubteamResponses];
 
 export type GetUserTeamsData = {
     body?: never;

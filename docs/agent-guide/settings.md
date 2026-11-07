@@ -231,6 +231,23 @@ domain. Both should appear in the team's member list and configured auto-join
 channels without an upgrade prompt. Repeat with auto-join disabled to verify a
 same-domain signup is not added automatically.
 
+### Teams
+
+**Team → Teams** lists the team's subteams (called teams in the UI, e.g.
+Engineering, with Platform nested under it). Teams nest one level, indented
+under their parent; a lock marks invite-only ones, and **Not on a team** shows
+members on none. **New team** names a team, picks its color and people; the
+creator becomes its manager and its page opens. A team's page has an editable
+name and description, color swatches, **Join** (open teams) or **Leave**,
+**Members** with **Add people** and a Manager/Member role menu, **Who can
+join** (anyone in the workspace or invite only), **Nested in** (top-level
+teams the viewer manages; disabled for a team with teams of its own), its
+nested teams, and **Delete team** (members stay; nested teams move to the
+top). Only the team's managers and workspace owners/admins see the editing
+controls; everyone else sees it read-only. Verify with two members: one
+creates a team, the other joins it, then the manager makes it invite only and
+the other member no longer sees **Join** after leaving.
+
 ### Navigation
 
 On phones, **More views → Settings** opens an inset glass sheet over the current
@@ -310,8 +327,8 @@ Left nav (feature and platform gates still apply):
 - **Team · <team name>** (just **Team** without a team): General (name, slug,
   GitHub autolink, default link sharing, Delete Team), Members (member list,
   roles and seat plans, **Invite**, pending invites, auto-join and
-  members-can-invite). Without a team only General shows, with pending
-  invitations or **Create Team**. Search finds these by `invite`, `members`,
+  members-can-invite), Teams (`/app/settings/teams`). Without a team only
+  General shows, with pending invitations or **Create Team**. Search finds these by `invite`, `members`,
   `teammates`, and similar terms; results name their group, e.g.
   **Team · Members**. The team Slack export import and the GitHub App live in
   Integrations; `/app/settings/team-connections` opens Integrations.

@@ -1,0 +1,34 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            INSERT INTO subteam_member (subteam_id, team_id, user_id, role)\n            SELECT $1, $2, member.user_id, member.role\n            FROM UNNEST($3::text[], $4::subteam_role[]) AS member(user_id, role)\n            ON CONFLICT (subteam_id, user_id) DO NOTHING\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "TextArray",
+        {
+          "Custom": {
+            "name": "subteam_role[]",
+            "kind": {
+              "Array": {
+                "Custom": {
+                  "name": "subteam_role",
+                  "kind": {
+                    "Enum": [
+                      "member",
+                      "manager"
+                    ]
+                  }
+                }
+              }
+            }
+          }
+        }
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "1d637561715847e6c753e76c319850170fd97c95fe179bb84458481629c74118"
+}

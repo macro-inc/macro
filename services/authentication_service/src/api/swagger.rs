@@ -20,11 +20,18 @@ use teams::domain::model::{
     PatchTeamRequest, PatchTeamUserRole, Team, TeamInviteDetails, TeamInviteLinkTeam,
     TeamInviteLinkToken, TeamMember, TeamPlan, TeamRole, TeamWithMembers,
 };
+use teams::domain::subteam::{
+    Subteam, SubteamColor, SubteamJoinPolicy, SubteamMember, SubteamRole,
+};
 use teams::inbound::axum_router::domain_notice::SendDomainNoticeResponse;
 use teams::inbound::axum_router::get_team_invites::TeamInvitesResponse as TeamTeamInvitesResponse;
 use teams::inbound::axum_router::get_user_invites::TeamInvitesResponse as UserTeamInvitesResponse;
 use teams::inbound::axum_router::invite_link::{
     CreatedTeamInviteLinkResponse, JoinTeamByInviteLinkResponse, TeamInviteLinkResponse,
+};
+use teams::inbound::axum_router::subteams::{
+    CreateSubteamRequest, ListSubteamsResponse, NestSubteamRequest, SaveSubteamMemberRequest,
+    UpdateSubteamRequest,
 };
 use teams::inbound::axum_router::toggle_auto_join_domain::ToggleAutoJoinDomainResponse;
 use teams::inbound::axum_router::toggle_non_admin_invites::ToggleNonAdminInvitesResponse;
@@ -208,6 +215,13 @@ use model::user::{
                 teams::inbound::axum_router::invite_link::delete_handler::<crate::api::context::TeamsServiceType, crate::api::context::EntityAccessServiceType, crate::api::context::AuthorizationService>,
                 teams::inbound::axum_router::invite_link::get_team_handler::<crate::api::context::TeamsServiceType, crate::api::context::EntityAccessServiceType, crate::api::context::AuthorizationService>,
                 teams::inbound::axum_router::invite_link::join_handler::<crate::api::context::TeamsServiceType, crate::api::context::EntityAccessServiceType, crate::api::context::AuthorizationService>,
+                teams::inbound::axum_router::subteams::list_handler::<crate::api::context::SubteamServiceType, crate::api::context::EntityAccessServiceType, crate::api::context::AuthorizationService>,
+                teams::inbound::axum_router::subteams::create_handler::<crate::api::context::SubteamServiceType, crate::api::context::EntityAccessServiceType, crate::api::context::AuthorizationService>,
+                teams::inbound::axum_router::subteams::update_handler::<crate::api::context::SubteamServiceType, crate::api::context::EntityAccessServiceType, crate::api::context::AuthorizationService>,
+                teams::inbound::axum_router::subteams::nest_handler::<crate::api::context::SubteamServiceType, crate::api::context::EntityAccessServiceType, crate::api::context::AuthorizationService>,
+                teams::inbound::axum_router::subteams::delete_handler::<crate::api::context::SubteamServiceType, crate::api::context::EntityAccessServiceType, crate::api::context::AuthorizationService>,
+                teams::inbound::axum_router::subteams::save_member_handler::<crate::api::context::SubteamServiceType, crate::api::context::EntityAccessServiceType, crate::api::context::AuthorizationService>,
+                teams::inbound::axum_router::subteams::remove_member_handler::<crate::api::context::SubteamServiceType, crate::api::context::EntityAccessServiceType, crate::api::context::AuthorizationService>,
 
                 /// /user/language
                 user_language::inbound::axum_router::get_user_language_handler::<crate::api::context::UserLanguageServiceType, crate::api::context::AuthorizationService>,
@@ -377,6 +391,16 @@ use model::user::{
                         TeamInviteLinkToken,
                         TeamTeamInvitesResponse,
                         UserTeamInvitesResponse,
+                        Subteam,
+                        SubteamColor,
+                        SubteamJoinPolicy,
+                        SubteamMember,
+                        SubteamRole,
+                        ListSubteamsResponse,
+                        CreateSubteamRequest,
+                        UpdateSubteamRequest,
+                        NestSubteamRequest,
+                        SaveSubteamMemberRequest,
 
                         // Mobile welcome email
                         mobile_welcome_email::SendMobileWelcomeEmailRequest,

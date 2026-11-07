@@ -5036,6 +5036,534 @@
         }
       }
     },
+    "/team/subteams": {
+      "get": {
+        "tags": ["teams::inbound::axum_router::subteams"],
+        "summary": "Lists the teams in the caller's workspace with their members.",
+        "operationId": "list_subteams",
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ListSubteamsResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": ["teams::inbound::axum_router::subteams"],
+        "summary": "Creates a team in the caller's workspace. The caller becomes its manager.",
+        "operationId": "create_subteam",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateSubteamRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Subteam"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/team/subteams/{subteam_id}": {
+      "delete": {
+        "tags": ["teams::inbound::axum_router::subteams"],
+        "summary": "Deletes a team. Its nested teams move to the top level. Requires managing\nthe team or being a workspace admin.",
+        "operationId": "delete_subteam",
+        "parameters": [
+          {
+            "name": "subteam_id",
+            "in": "path",
+            "description": "The team's id",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": ""
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "tags": ["teams::inbound::axum_router::subteams"],
+        "summary": "Changes a team's name, description, color, or join policy. Requires\nmanaging the team or being a workspace admin.",
+        "operationId": "update_subteam",
+        "parameters": [
+          {
+            "name": "subteam_id",
+            "in": "path",
+            "description": "The team's id",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateSubteamRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Subteam"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/team/subteams/{subteam_id}/members/{user_id}": {
+      "put": {
+        "tags": ["teams::inbound::axum_router::subteams"],
+        "summary": "Adds a workspace member to a team or changes their role. Managers may add\nanyone in the workspace; anyone may join an open team as a member.",
+        "operationId": "save_subteam_member",
+        "parameters": [
+          {
+            "name": "subteam_id",
+            "in": "path",
+            "description": "The team's id",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "user_id",
+            "in": "path",
+            "description": "The member's user id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SaveSubteamMemberRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Subteam"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": ["teams::inbound::axum_router::subteams"],
+        "summary": "Removes someone from a team. Anyone may leave; managers and workspace\nadmins may remove anyone.",
+        "operationId": "remove_subteam_member",
+        "parameters": [
+          {
+            "name": "subteam_id",
+            "in": "path",
+            "description": "The team's id",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "user_id",
+            "in": "path",
+            "description": "The member's user id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Subteam"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/team/subteams/{subteam_id}/parent": {
+      "put": {
+        "tags": ["teams::inbound::axum_router::subteams"],
+        "summary": "Moves a team under another top-level team, or to the top level. Teams nest\none level. Requires managing the team and the new parent.",
+        "operationId": "nest_subteam",
+        "parameters": [
+          {
+            "name": "subteam_id",
+            "in": "path",
+            "description": "The team's id",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NestSubteamRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Subteam"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/team/user": {
       "get": {
         "tags": ["teams::inbound::axum_router::get_user_teams"],
@@ -6953,6 +7481,41 @@
           }
         }
       },
+      "CreateSubteamRequest": {
+        "type": "object",
+        "description": "A team to create.",
+        "required": ["name", "color", "joinPolicy"],
+        "properties": {
+          "color": {
+            "$ref": "#/components/schemas/SubteamColor",
+            "description": "The color of the team's mark."
+          },
+          "description": {
+            "type": "string",
+            "description": "What the team does, at most 200 characters."
+          },
+          "joinPolicy": {
+            "$ref": "#/components/schemas/SubteamJoinPolicy",
+            "description": "Who may join without being added."
+          },
+          "memberIds": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Workspace members to add besides the caller, who becomes its manager."
+          },
+          "name": {
+            "type": "string",
+            "description": "The team's name, 1 to 40 characters."
+          },
+          "parentId": {
+            "type": ["string", "null"],
+            "format": "uuid",
+            "description": "The top-level team to nest the new team in. The caller must manage it."
+          }
+        }
+      },
       "CreateTeamRequest": {
         "type": "object",
         "description": "The request body to create a new team",
@@ -8139,6 +8702,20 @@
         "description": "Defines who can access an item through its share link.",
         "enum": ["PUBLIC", "TEAM"]
       },
+      "ListSubteamsResponse": {
+        "type": "object",
+        "description": "The teams in the caller's workspace.",
+        "required": ["subteams"],
+        "properties": {
+          "subteams": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Subteam"
+            },
+            "description": "Every team in the workspace with its members, ordered by name."
+          }
+        }
+      },
       "MacroApiTokenResponse": {
         "type": "object",
         "required": ["macro_api_token"],
@@ -8204,6 +8781,17 @@
           "sha": {
             "type": "string",
             "description": "The merge commit's SHA."
+          }
+        }
+      },
+      "NestSubteamRequest": {
+        "type": "object",
+        "description": "Where to move a team.",
+        "properties": {
+          "parentId": {
+            "type": ["string", "null"],
+            "format": "uuid",
+            "description": "The top-level team to move it under, or null for the top level."
           }
         }
       },
@@ -8659,6 +9247,17 @@
           }
         }
       },
+      "SaveSubteamMemberRequest": {
+        "type": "object",
+        "description": "The role to give a team member.",
+        "required": ["role"],
+        "properties": {
+          "role": {
+            "$ref": "#/components/schemas/SubteamRole",
+            "description": "The member's role in the team."
+          }
+        }
+      },
       "SavedAgentApiKey": {
         "type": "object",
         "description": "The agent's saved key. Never includes the key.",
@@ -8905,6 +9504,89 @@
             ]
           }
         }
+      },
+      "Subteam": {
+        "type": "object",
+        "description": "A team in a workspace, with its members.",
+        "required": [
+          "id",
+          "name",
+          "description",
+          "color",
+          "joinPolicy",
+          "createdAt",
+          "members"
+        ],
+        "properties": {
+          "color": {
+            "$ref": "#/components/schemas/SubteamColor",
+            "description": "The color of the team's mark."
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When the team was created."
+          },
+          "description": {
+            "type": "string",
+            "description": "What the team does. Empty when unset."
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The team's id."
+          },
+          "joinPolicy": {
+            "$ref": "#/components/schemas/SubteamJoinPolicy",
+            "description": "Who may join without being added."
+          },
+          "members": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SubteamMember"
+            },
+            "description": "The team's members, managers first, then by when they joined."
+          },
+          "name": {
+            "type": "string",
+            "description": "The team's name."
+          },
+          "parentId": {
+            "type": ["string", "null"],
+            "format": "uuid",
+            "description": "The top-level team this one is nested in, if any."
+          }
+        }
+      },
+      "SubteamColor": {
+        "type": "string",
+        "description": "The color of a team's mark.",
+        "enum": ["violet", "blue", "teal", "cyan", "orange", "pink", "lime"]
+      },
+      "SubteamJoinPolicy": {
+        "type": "string",
+        "description": "Who may join a team without a manager adding them.",
+        "enum": ["open", "invite_only"]
+      },
+      "SubteamMember": {
+        "type": "object",
+        "description": "Someone on a team.",
+        "required": ["userId", "role"],
+        "properties": {
+          "role": {
+            "$ref": "#/components/schemas/SubteamRole",
+            "description": "The member's role in the team."
+          },
+          "userId": {
+            "type": "string",
+            "description": "The member's user id."
+          }
+        }
+      },
+      "SubteamRole": {
+        "type": "string",
+        "description": "A member's role in a team.",
+        "enum": ["member", "manager"]
       },
       "SystemStatus": {
         "oneOf": [
@@ -9283,6 +9965,42 @@
             "type": "integer",
             "format": "int64",
             "description": "Per-period cap on overage spend, cents. Required when enabling."
+          }
+        }
+      },
+      "UpdateSubteamRequest": {
+        "type": "object",
+        "description": "Changes to a team's settings. Omitted fields stay as they are.",
+        "properties": {
+          "color": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/SubteamColor",
+                "description": "The new color."
+              }
+            ]
+          },
+          "description": {
+            "type": ["string", "null"],
+            "description": "The new description, at most 200 characters."
+          },
+          "joinPolicy": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/SubteamJoinPolicy",
+                "description": "The new join policy."
+              }
+            ]
+          },
+          "name": {
+            "type": ["string", "null"],
+            "description": "The new name, 1 to 40 characters."
           }
         }
       },

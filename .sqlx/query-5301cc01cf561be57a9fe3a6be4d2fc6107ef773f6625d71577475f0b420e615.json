@@ -1,0 +1,44 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            UPDATE subteam\n            SET\n                name = COALESCE($3, name),\n                description = COALESCE($4, description),\n                color = COALESCE($5, color),\n                join_policy = COALESCE($6, join_policy)\n            WHERE team_id = $1 AND id = $2\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Text",
+        "Text",
+        {
+          "Custom": {
+            "name": "subteam_color",
+            "kind": {
+              "Enum": [
+                "violet",
+                "blue",
+                "teal",
+                "cyan",
+                "orange",
+                "pink",
+                "lime"
+              ]
+            }
+          }
+        },
+        {
+          "Custom": {
+            "name": "subteam_join_policy",
+            "kind": {
+              "Enum": [
+                "open",
+                "invite_only"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "5301cc01cf561be57a9fe3a6be4d2fc6107ef773f6625d71577475f0b420e615"
+}

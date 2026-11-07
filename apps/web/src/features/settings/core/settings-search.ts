@@ -203,6 +203,11 @@ const SETTINGS: Setting[] = [
     keywords: 'workspace slug rename',
   },
   {
+    tab: 'Teams',
+    title: 'Teams',
+    keywords: 'groups departments subteams nested managers join',
+  },
+  {
     tab: 'Team Members',
     title: 'Invite people',
     keywords: 'invite add teammates coworkers colleagues email join team',
