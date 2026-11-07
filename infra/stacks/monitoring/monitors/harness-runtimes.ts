@@ -12,7 +12,7 @@
 //   dormant ones), `.reattach_eager`, `.reattach_lazy`, `.reattach_skipped`
 //   and `.reattach_failures` (how each was handled).
 // - The `tokio runtime starvation detected` warning from
-//   `spawn_starvation_detector` in `crates/macro_tower_layers/src/lib.rs`,
+//   `spawn_starvation_detector` in `crates/platform/macro_tower_layers/src/lib.rs`,
 //   logged when a 250 ms tick runs late.
 // - The ECS Fargate integration's `ecs.fargate.mem.rss` and
 //   `ecs.fargate.mem.limit` for the `service` container of the

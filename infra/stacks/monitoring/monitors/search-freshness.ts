@@ -4,8 +4,8 @@
 //
 // It reads the OTel metrics search-processing-service records in
 // services/search_processing_service/src/inbound/kafka_consumer/metrics.rs,
-// the offset reset counter crates/kafka_util records for every consumer, and
-// the publish counter crates/macro_event_broker records in every service that
+// the offset reset counter crates/platform/kafka_util records for every consumer, and
+// the publish counter crates/platform/macro_event_broker records in every service that
 // publishes events. Their names and tags are this file's contract; renaming
 // one there silently empties its widgets and turns its monitor into missing
 // data.

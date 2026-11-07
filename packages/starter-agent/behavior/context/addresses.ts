@@ -31,7 +31,7 @@ const connectionService: ServiceName = 'connection';
 
 /**
  * Each service the SDK knows: the `OVERRIDE_*` URL Macro's services are
- * configured with (`crates/macro_service_urls`), which enrollment writes for
+ * configured with (`crates/platform/macro_service_urls`), which enrollment writes for
  * the ones an agent needs, and the gateway's route to it otherwise.
  * `static-files` has neither (it isn't behind the gateway), so it is left to
  * the SDK.
