@@ -341,6 +341,14 @@ pub trait SequenceRepo: Send + Sync + 'static {
         &self,
         due_at: DateTime<Utc>,
     ) -> impl Future<Output = Result<u64, Self::Err>> + Send;
+    /// Steps scheduled from the inbox after `since`, sent or not. Read under
+    /// the inbox's send-slot lock, so the count can't race a new step.
+    fn steps_since(
+        &self,
+        tx: &mut Self::Tx,
+        link_id: Uuid,
+        since: DateTime<Utc>,
+    ) -> impl Future<Output = Result<u32, Self::Err>> + Send;
     /// Push an enrollment's due time back after a failed attempt to create its step.
     fn defer(
         &self,

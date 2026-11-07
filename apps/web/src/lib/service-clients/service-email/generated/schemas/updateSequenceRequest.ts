@@ -9,6 +9,7 @@ import type { UpdateSequenceRequestLinkId } from './updateSequenceRequestLinkId'
 import type { UpdateSequenceRequestName } from './updateSequenceRequestName';
 import type { UpdateSequenceRequestStatus } from './updateSequenceRequestStatus';
 import type { UpdateSequenceRequestSteps } from './updateSequenceRequestSteps';
+import type { UpdateSequenceRequestWeekdaysOnly } from './updateSequenceRequestWeekdaysOnly';
 
 /**
  * Changes to a sequence; `None` leaves a field as it is.
@@ -25,4 +26,6 @@ export interface UpdateSequenceRequest {
   steps?: UpdateSequenceRequestSteps;
   /** The version the caller last read. */
   version: number;
+  /** Whether steps skip weekends. */
+  weekdaysOnly?: UpdateSequenceRequestWeekdaysOnly;
 }

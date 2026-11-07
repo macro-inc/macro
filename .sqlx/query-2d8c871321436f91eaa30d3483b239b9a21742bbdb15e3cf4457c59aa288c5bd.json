@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT count(*) AS \"count!\" FROM email_sequence_steps h\n               JOIN email_sequence_enrollments e ON e.id = h.enrollment_id\n               WHERE e.link_id = $1 AND h.scheduled_at > $2",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "count!",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Timestamptz"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "2d8c871321436f91eaa30d3483b239b9a21742bbdb15e3cf4457c59aa288c5bd"
+}

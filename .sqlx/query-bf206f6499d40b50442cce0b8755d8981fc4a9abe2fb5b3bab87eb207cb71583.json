@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT e.id, s.user_id AS owner_id, e.team_id, s.status AS sequence_status,\n                          s.link_id AS sequence_link_id, e.link_id, e.email, e.crm_contact_id, e.contact_name,\n                          e.steps AS \"steps: Json<Vec<Step>>\", e.status, e.reason, e.next_step, e.due_at,\n                          e.attempts, e.timezone, e.send_time, e.replies_after\n                   FROM email_sequence_enrollments e JOIN email_sequences s ON s.id = e.sequence_id\n                   WHERE e.id = $1\n                   FOR UPDATE OF e",
+  "query": "SELECT e.id, s.user_id AS owner_id, e.team_id, s.status AS sequence_status,\n                          s.link_id AS sequence_link_id, e.link_id, e.email, e.crm_contact_id, e.contact_name,\n                          e.steps AS \"steps: Json<Vec<Step>>\", e.status, e.reason, e.next_step, e.due_at,\n                          e.attempts, e.timezone, e.send_time, s.weekdays_only, e.replies_after\n                   FROM email_sequence_enrollments e JOIN email_sequences s ON s.id = e.sequence_id\n                   WHERE e.id = $1\n                   FOR UPDATE OF e",
   "describe": {
     "columns": [
       {
@@ -90,6 +90,11 @@
       },
       {
         "ordinal": 17,
+        "name": "weekdays_only",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 18,
         "name": "replies_after",
         "type_info": "Timestamptz"
       }
@@ -117,8 +122,9 @@
       false,
       false,
       false,
+      false,
       true
     ]
   },
-  "hash": "0a1c19ecb0e452ee6d57727feaa5a740289dbeab1c036bb17ef5ffb07ee71fef"
+  "hash": "bf206f6499d40b50442cce0b8755d8981fc4a9abe2fb5b3bab87eb207cb71583"
 }

@@ -17,6 +17,7 @@ use super::{
     render,
     replies::{self, Enrolled, Incoming, Response, SentIdentity},
     service::{STUCK_AFTER, Sequences, in_flight, internal, recipient_contact},
+    timing,
 };
 use crate::domain::models::SequenceError;
 
@@ -30,6 +31,11 @@ const MIN_LEAD: Duration = Duration::seconds(60);
 const SPACING: Duration = Duration::seconds(30);
 /// A step is created only when its slot is this close; later ones wait.
 const MAX_LEAD: Duration = Duration::seconds(90);
+/// Most steps one inbox sends in any 24 hours, well under Gmail's daily
+/// sending limits; more wait until the earliest of them is a day old.
+pub(crate) const DAILY_LIMIT: u32 = 100;
+/// The window [`DAILY_LIMIT`] counts over.
+const DAY: Duration = Duration::hours(24);
 /// Waits before automatic retries of a step Gmail refused.
 const RETRY_DELAYS: [Duration; 3] = [
     Duration::minutes(5),
@@ -46,6 +52,10 @@ pub(super) enum Creation {
     Skipped,
     /// The inbox's next send slot isn't near yet.
     InboxFull(Uuid),
+    /// The inbox sent its [`DAILY_LIMIT`].
+    DailyLimit(Uuid),
+    /// Its slot fell on a weekend the sequence skips; it now waits for Monday.
+    Deferred,
 }
 
 /// What one sweep did.
@@ -57,6 +67,10 @@ pub struct SweepReport {
     pub created: u32,
     /// Orphaned schedules withdrawn.
     pub withdrawn: u32,
+    /// Inboxes holding due steps back at their daily limit.
+    pub limited: u32,
+    /// Steps moved off a weekend to Monday.
+    pub deferred: u32,
     /// Items that failed and will be retried.
     pub failed: u32,
 }
@@ -105,7 +119,7 @@ where
     #[tracing::instrument(
         name = "sequences.sweep",
         skip_all,
-        fields(resolved, created, withdrawn, failed)
+        fields(resolved, created, withdrawn, limited, deferred, failed)
     )]
     pub async fn sweep(&self, now: DateTime<Utc>) -> SweepReport {
         let mut report = SweepReport::default();
@@ -116,6 +130,8 @@ where
         span.record("resolved", report.resolved);
         span.record("created", report.created);
         span.record("withdrawn", report.withdrawn);
+        span.record("limited", report.limited);
+        span.record("deferred", report.deferred);
         span.record("failed", report.failed);
         report
     }
@@ -405,11 +421,7 @@ where
     }
 
     async fn create_due(&self, now: DateTime<Utc>, report: &mut SweepReport) {
-        match self
-            .repo
-            .heal_stranded(now + super::timing::LEAD_TIME)
-            .await
-        {
+        match self.repo.heal_stranded(now + timing::LEAD_TIME).await {
             Ok(0) => {}
             Ok(healed) => tracing::warn!(healed, "gave stranded enrollments a due time"),
             Err(error) => {
@@ -417,9 +429,9 @@ where
                 report.failed += 1;
             }
         }
-        // An inbox whose next send slot is too far out is skipped for the rest
-        // of the pass, so a backlog on one inbox costs one check, not one per
-        // enrollment, and doesn't hold up the others.
+        // An inbox whose next send slot is too far out, or that sent its daily
+        // limit, is skipped for the rest of the pass, so a backlog on one inbox
+        // costs one check, not one per enrollment, and doesn't hold up the others.
         let mut full_inboxes = std::collections::HashSet::new();
         let mut after = None;
         loop {
@@ -445,6 +457,11 @@ where
                     Ok(Creation::InboxFull(link_id)) => {
                         full_inboxes.insert(link_id);
                     }
+                    Ok(Creation::DailyLimit(link_id)) => {
+                        full_inboxes.insert(link_id);
+                        report.limited += 1;
+                    }
+                    Ok(Creation::Deferred) => report.deferred += 1,
                     Err(error) => {
                         tracing::warn!(enrollment_id = %due.id, error = ?error, "failed to create a sequence step");
                         report.failed += 1;
@@ -599,6 +616,31 @@ where
         if slot > now + MAX_LEAD {
             // Stays due; the next pass tries again once the slot is near.
             return Ok(Creation::InboxFull(inbox.link_id));
+        }
+        // A step held back by retries or the daily limit waits out the weekend.
+        let weekday = timing::on_weekday(slot, row.clock);
+        if weekday != slot {
+            row.due_at = Some(weekday);
+            self.repo
+                .update_enrollment(&mut tx, &row)
+                .await
+                .map_err(internal)?;
+            return self
+                .repo
+                .commit(tx)
+                .await
+                .map(|()| Creation::Deferred)
+                .map_err(internal);
+        }
+        if self
+            .repo
+            .steps_since(&mut tx, inbox.link_id, now - DAY)
+            .await
+            .map_err(internal)?
+            >= DAILY_LIMIT
+        {
+            // Stays due, like a full inbox.
+            return Ok(Creation::DailyLimit(inbox.link_id));
         }
 
         let recipient = self

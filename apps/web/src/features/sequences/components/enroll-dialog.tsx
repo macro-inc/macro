@@ -1,9 +1,9 @@
 import { t } from '@app/lib/i18n';
 import type { EnrollSkip } from '@service-email/generated/schemas';
 import { ActionDialogShell, Button, Checkbox, Dialog, Input } from '@ui';
-import { For, type JSX, Match, Show, Switch } from 'solid-js';
+import { createUniqueId, For, type JSX, Match, Show, Switch } from 'solid-js';
 import type { Person } from '../context/sequences-context';
-import { SEQUENCE_LIMITS } from '../core/sequence';
+import { DAILY_SENDS, SEQUENCE_LIMITS } from '../core/sequence';
 import { skipMessage } from './failure-message';
 
 /** People the server skipped, after the rest were enrolled. */
@@ -59,6 +59,7 @@ export function EnrollDialog(props: {
     ...props.people.filter((person) => !isSelected(person)),
   ];
   const full = () => props.selected.length >= SEQUENCE_LIMITS.contacts;
+  const limitHintId = createUniqueId();
   return (
     <Dialog
       open
@@ -130,17 +131,23 @@ export function EnrollDialog(props: {
                     </Match>
                   </Switch>
                 </div>
-                <label class="block space-y-1 text-xs font-medium">
-                  {t('sequences.startSending')}
-                  <Input
-                    type="datetime-local"
-                    value={props.start}
-                    disabled={props.busy}
-                    onInput={(event) =>
-                      props.onStart(event.currentTarget.value)
-                    }
-                  />
-                </label>
+                <div class="space-y-1">
+                  <label class="block space-y-1 text-xs font-medium">
+                    {t('sequences.startSending')}
+                    <Input
+                      type="datetime-local"
+                      value={props.start}
+                      disabled={props.busy}
+                      aria-describedby={limitHintId}
+                      onInput={(event) =>
+                        props.onStart(event.currentTarget.value)
+                      }
+                    />
+                  </label>
+                  <p id={limitHintId} class="text-xs text-ink-muted">
+                    {t('sequences.dailyLimit', { count: DAILY_SENDS })}
+                  </p>
+                </div>
                 <Checkbox
                   class="flex items-start gap-2 text-xs text-ink-muted"
                   checked={props.consent}

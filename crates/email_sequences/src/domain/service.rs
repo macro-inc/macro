@@ -43,6 +43,8 @@ pub struct SequencePatch {
     pub link_id: Option<Uuid>,
     /// New footer.
     pub footer: Option<String>,
+    /// Whether steps skip weekends.
+    pub weekdays_only: Option<bool>,
     /// New steps.
     pub steps: Option<Vec<Step>>,
 }
@@ -54,7 +56,8 @@ pub struct SequencePatch {
 pub struct EnrollRequest {
     /// CRM people.
     pub crm_contact_ids: Vec<Uuid>,
-    /// When the first step should go; also fixes the local send time.
+    /// When the first step should go; also fixes the local send time. In a
+    /// weekdays-only sequence, a weekend start goes the Monday after.
     pub start: DateTime<Utc>,
     /// IANA time zone the send time is in.
     pub timezone: String,
@@ -531,7 +534,7 @@ pub(super) fn next_due(
             row.clock,
             now,
         ),
-        None => timing::first_due(row.due_at.unwrap_or(now), now),
+        None => timing::first_due(row.due_at.unwrap_or(now), row.clock, now),
     }
 }
 
@@ -612,7 +615,7 @@ where
             return Err(SequenceError::VersionConflict);
         }
         let rerender = patch.link_id.is_some() || patch.footer.is_some() || patch.steps.is_some();
-        let edits = rerender || patch.name.is_some();
+        let edits = rerender || patch.name.is_some() || patch.weekdays_only.is_some();
         if edits && sequence.status == SequenceStatus::Active {
             return Err(SequenceError::InvalidTransition);
         }
@@ -624,6 +627,9 @@ where
         }
         if let Some(steps) = patch.steps {
             sequence.steps = clean_steps(steps);
+        }
+        if let Some(weekdays_only) = patch.weekdays_only {
+            sequence.weekdays_only = weekdays_only;
         }
         render::check_limits(&sequence.name, &sequence.footer, &sequence.steps)?;
         if let Some(link_id) = patch.link_id {
@@ -769,8 +775,8 @@ where
             .upsert_recipients(&mut tx, owner.team_id, &emails)
             .await
             .map_err(internal)?;
-        let clock = timing::send_clock(request.start, timezone);
-        let due_at = timing::first_due(request.start, now);
+        let clock = timing::send_clock(request.start, timezone, sequence.weekdays_only);
+        let due_at = timing::first_due(request.start, clock, now);
         let timezone_name = timezone.name();
         for (crm_contact_id, email, name) in accepted {
             let Some((_, recipient)) = recipients.iter().find(|(address, _)| *address == email)

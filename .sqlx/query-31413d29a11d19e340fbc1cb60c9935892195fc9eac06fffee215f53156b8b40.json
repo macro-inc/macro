@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT id, name, link_id, footer, status, steps AS \"steps: Json<Vec<Step>>\", version, created_at, updated_at\n                   FROM email_sequences WHERE id = $1 AND user_id = $2 AND team_id = $3 FOR UPDATE",
+  "query": "INSERT INTO email_sequences (id, team_id, user_id, link_id, name, footer, steps)\n               VALUES ($1, $2, $3, $4, $5, $6, $7)\n               RETURNING id, name, link_id, footer, weekdays_only, status, steps AS \"steps: Json<Vec<Step>>\", version, created_at, updated_at",
   "describe": {
     "columns": [
       {
@@ -25,26 +25,31 @@
       },
       {
         "ordinal": 4,
+        "name": "weekdays_only",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 5,
         "name": "status",
         "type_info": "Text"
       },
       {
-        "ordinal": 5,
+        "ordinal": 6,
         "name": "steps: Json<Vec<Step>>",
         "type_info": "Jsonb"
       },
       {
-        "ordinal": 6,
+        "ordinal": 7,
         "name": "version",
         "type_info": "Int4"
       },
       {
-        "ordinal": 7,
+        "ordinal": 8,
         "name": "created_at",
         "type_info": "Timestamptz"
       },
       {
-        "ordinal": 8,
+        "ordinal": 9,
         "name": "updated_at",
         "type_info": "Timestamptz"
       }
@@ -52,8 +57,12 @@
     "parameters": {
       "Left": [
         "Uuid",
+        "Uuid",
         "Text",
-        "Uuid"
+        "Uuid",
+        "Text",
+        "Text",
+        "Jsonb"
       ]
     },
     "nullable": [
@@ -65,8 +74,9 @@
       false,
       false,
       false,
+      false,
       false
     ]
   },
-  "hash": "f08170d9361d174e952aea170d6ebc63b85ac1b42eb8479c7e69a0b0be31f125"
+  "hash": "31413d29a11d19e340fbc1cb60c9935892195fc9eac06fffee215f53156b8b40"
 }

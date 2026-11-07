@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT e.id, s.user_id AS owner_id, e.team_id, s.status AS sequence_status,\n                      s.link_id AS sequence_link_id, e.link_id, e.email, e.crm_contact_id, e.contact_name,\n                      '[]'::jsonb AS \"steps!: Json<Vec<Step>>\", e.status, e.reason, e.next_step, e.due_at,\n                      e.attempts, e.timezone, e.send_time, e.replies_after\n               FROM email_sequence_enrollments e JOIN email_sequences s ON s.id = e.sequence_id\n               WHERE e.sequence_id = $1 AND e.status = ANY($2)\n               ORDER BY e.id\n               FOR UPDATE OF e",
+  "query": "SELECT e.id, s.user_id AS owner_id, e.team_id, s.status AS sequence_status,\n                          s.link_id AS sequence_link_id, e.link_id, e.email, e.crm_contact_id, e.contact_name,\n                          e.steps AS \"steps: Json<Vec<Step>>\", e.status, e.reason, e.next_step, e.due_at,\n                          e.attempts, e.timezone, e.send_time, s.weekdays_only, e.replies_after\n                   FROM email_sequence_enrollments e JOIN email_sequences s ON s.id = e.sequence_id\n                   WHERE e.id = $1\n                   FOR UPDATE OF e SKIP LOCKED",
   "describe": {
     "columns": [
       {
@@ -50,7 +50,7 @@
       },
       {
         "ordinal": 9,
-        "name": "steps!: Json<Vec<Step>>",
+        "name": "steps: Json<Vec<Step>>",
         "type_info": "Jsonb"
       },
       {
@@ -90,14 +90,18 @@
       },
       {
         "ordinal": 17,
+        "name": "weekdays_only",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 18,
         "name": "replies_after",
         "type_info": "Timestamptz"
       }
     ],
     "parameters": {
       "Left": [
-        "Uuid",
-        "TextArray"
+        "Uuid"
       ]
     },
     "nullable": [
@@ -110,16 +114,17 @@
       false,
       true,
       true,
-      null,
+      false,
       false,
       true,
       false,
       true,
+      false,
       false,
       false,
       false,
       true
     ]
   },
-  "hash": "0838b16d81548bde19bd496824d7961835fd58cd9d4fc705433ef5229651d80d"
+  "hash": "2044136e0c5e2e713995eb108827453e0f6978282ab82e48511e3a4215d03669"
 }

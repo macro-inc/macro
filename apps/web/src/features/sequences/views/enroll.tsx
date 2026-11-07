@@ -6,7 +6,7 @@ import type {
   SequenceStatus,
   SequenceSummary,
 } from '@service-email/generated/schemas';
-import { addMinutes, format, isValid, roundToNearestMinutes } from 'date-fns';
+import { format, isValid } from 'date-fns';
 import { createMemo, createSignal, Match, Switch } from 'solid-js';
 import { EnrollDialog, type EnrollOutcome } from '../components/enroll-dialog';
 import { failureMessage } from '../components/failure-message';
@@ -14,20 +14,9 @@ import { InlineFailure } from '../components/inline-failure';
 import { OptionSelect } from '../components/option-select';
 import { type Person, useSequences } from '../context/sequences-context';
 import { isRetryable } from '../core/errors';
-import { SEQUENCE_LIMITS } from '../core/sequence';
+import { defaultStart, SEQUENCE_LIMITS } from '../core/sequence';
 
 const SURFACE = 'sequences.enroll';
-
-/** The next five-minute mark, as a `datetime-local` value in local time. */
-function defaultStart() {
-  return format(
-    roundToNearestMinutes(addMinutes(new Date(), 5), {
-      nearestTo: 5,
-      roundingMethod: 'ceil',
-    }),
-    "yyyy-MM-dd'T'HH:mm"
-  );
-}
 
 function uniqueById(people: readonly Person[]) {
   const seen = new Set<string>();
@@ -105,7 +94,9 @@ export function EnrollView(props: {
     ])
   );
   const selected = () => candidates().slice(0, SEQUENCE_LIMITS.contacts);
-  const [start, setStart] = createSignal(defaultStart());
+  const [start, setStart] = createSignal(
+    format(defaultStart(new Date()), "yyyy-MM-dd'T'HH:mm")
+  );
   const [consent, setConsent] = createSignal(false);
   const [error, setError] = createSignal<string>();
   const [outcome, setOutcome] = createSignal<EnrollOutcome>();

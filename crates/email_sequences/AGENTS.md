@@ -55,6 +55,10 @@ people. The server owns all state; the browser only calls the API.
   enrollments move on.
 - An unsubscribe commits before any enrollment stops; a failed stop is healed by
   the sweep, which never sends to an unsubscribed address.
+- One inbox sends at most `DAILY_LIMIT` steps in any 24 hours, counted under
+  its send-slot lock from step history; due steps past it wait. Deleting a
+  sequence deletes its history, so its sends stop counting. A weekdays-only sequence
+  (`weekdays_only`, the default) moves weekend sends to Monday at the send time.
 - `due_at` is when the next step is planned. Only `active` enrollments of an
   `active` sequence are due, so a paused enrollment keeps it, and resuming
   before a future start keeps that start.

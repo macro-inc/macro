@@ -663,12 +663,16 @@ CRM on for the team, the section and its links behave the same way.
   first sends at the start; each later one waits days after the previous and
   can reply in the same thread; **Insert** adds `{{firstName}}`, `{{name}}` or
   `{{email}}` at the caret) and the footer; the server adds an unsubscribe
-  link. Edits save on their own (**Saving…** shows beside the status), and
+  link. **Only send on weekdays** (on by default) moves weekend sends to
+  Monday. Edits save on their own (**Saving…** shows beside the status), and
   **Activate** starts it; Delete is in the ⋯ menu. Editing needs a draft or
   paused sequence; edits reach everyone who hasn't been sent an email yet. A
   save over a copy changed elsewhere asks to **Reload**.
 - **Add people:** **Add people** searches CRM People (up to 50 at a time) and
-  takes a start time in your time zone. People can be added before activating;
+  takes a start time in your time zone, by default in a few minutes during
+  working hours (9:00 to 17:00 on weekdays) or else 9:00 the next working day.
+  Each inbox sends up to 100 sequence emails a day; more wait for the next
+  day. People can be added before activating;
   nothing sends until the sequence is active. Selected People or
   Companies rows also offer **Add to sequence** in their right-click and
   selection command menus; a company brings all its people, so filter or group
