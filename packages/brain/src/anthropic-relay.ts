@@ -5,6 +5,7 @@ import { once } from 'node:events';
 import { createServer, request as httpRequest } from 'node:http';
 import { request as httpsRequest } from 'node:https';
 import {
+  type Context,
   context,
   propagation,
   SpanStatusCode,
@@ -31,7 +32,7 @@ export async function anthropicRelay(baseUrl: string, key: string) {
     throw new Error('Anthropic upstream must be an HTTP(S) service base');
   const leases = new Map<
     string,
-    { token: string; stop: AbortController; revoke(): void }
+    { token: string; stop: AbortController; parent: Context; revoke(): void }
   >();
   const server = createServer((incoming, outgoing) => {
     const path =
@@ -55,7 +56,7 @@ export async function anthropicRelay(baseUrl: string, key: string) {
       incoming.resume();
       return;
     }
-    const parent = propagation.extract(context.active(), incoming.headers);
+    const parent = propagation.extract(lease.parent, incoming.headers);
     const span = context.with(parent, () =>
       startSpan('brain.anthropic.request', {
         'http.request.method': 'POST',
@@ -158,7 +159,7 @@ export async function anthropicRelay(baseUrl: string, key: string) {
       signal.removeEventListener('abort', revoke);
       stop.abort();
     };
-    leases.set(id, { token, stop, revoke });
+    leases.set(id, { token, stop, parent: context.active(), revoke });
     signal.addEventListener('abort', revoke, { once: true });
     return { baseUrl: `http://127.0.0.1:${address.port}/${id}`, token, revoke };
   };

@@ -1,4 +1,6 @@
 import assert from 'node:assert/strict';
+import { once } from 'node:events';
+import { createServer } from 'node:http';
 import { test } from 'node:test';
 import {
   context,
@@ -214,4 +216,57 @@ test('git subprocess config carries its active trace without persisting it', asy
     assert.deepEqual(result.code, 0);
     assert.deepEqual(result.stdout.trim().split('\n').includes(expected), true);
   });
+});
+
+test('relay requests retain the query parent without child trace headers or credential attributes', async (t) => {
+  exporter.reset();
+  const { anthropicRelay } = await import('./anthropic-relay.ts');
+  let upstreamParent: string | string[] | undefined;
+  const upstream = createServer((req, res) => {
+    upstreamParent = req.headers.traceparent;
+    req.resume();
+    res.writeHead(429).end('fixture budget exceeded');
+  });
+  upstream.listen(0, '127.0.0.1');
+  await once(upstream, 'listening');
+  t.after(() => {
+    upstream.closeAllConnections();
+    upstream.close();
+  });
+  const address = upstream.address();
+  assert(address && typeof address !== 'string');
+  const relay = await anthropicRelay(
+    `http://127.0.0.1:${address.port}`,
+    'fixture-real-key'
+  );
+  t.after(() => relay.close());
+  const lease = await withSpan('brain.call', {}, async () =>
+    relay.access(new AbortController().signal)
+  );
+  const response = await fetch(`${lease.baseUrl}/v1/messages`, {
+    method: 'POST',
+    headers: { authorization: `Bearer ${lease.token}` },
+  });
+  assert.equal(response.status, 429);
+  assert.equal(await response.text(), 'fixture budget exceeded');
+  const spans = exporter.getFinishedSpans();
+  const parent = spans.find((span) => span.name === 'brain.call');
+  const request = spans.find((span) => span.name === 'brain.anthropic.request');
+  assert(parent && request);
+  assert.equal(request.parentSpanContext?.spanId, parent.spanContext().spanId);
+  assert.equal(request.spanContext().traceId, parent.spanContext().traceId);
+  assert.equal(request.status.code, SpanStatusCode.ERROR);
+  assert.equal(
+    upstreamParent,
+    `00-${request.spanContext().traceId}-${request.spanContext().spanId}-01`
+  );
+  assert.equal(JSON.stringify(request.attributes).includes(lease.token), false);
+  assert.equal(
+    JSON.stringify(request.attributes).includes(lease.baseUrl),
+    false
+  );
+  assert.equal(
+    JSON.stringify(request.attributes).includes('fixture-real-key'),
+    false
+  );
 });
