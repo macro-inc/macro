@@ -39,6 +39,7 @@ pub struct Sim {
     ack_callbacks: BTreeMap<(DocIx, String), std::collections::VecDeque<u64>>,
     prefixes: BTreeMap<(ProfileName, String, doc_sync_core::WalOwner), doc_sync_core::WalSeq>,
     budget_hit: bool,
+    prefix_event: usize,
     tokens: BTreeMap<String, model::TokenGrant>,
     chatter_tails: BTreeMap<(SessionId, SessionId), u64>,
 }
@@ -64,6 +65,7 @@ impl Sim {
             ack_callbacks: BTreeMap::new(),
             prefixes: BTreeMap::new(),
             budget_hit: false,
+            prefix_event: 0,
             tokens: BTreeMap::new(),
             chatter_tails: BTreeMap::new(),
         };

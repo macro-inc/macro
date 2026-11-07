@@ -55,6 +55,28 @@ impl Sim {
                     ));
                 }
             }
+            if let Some((_, rows)) = client.core.push_in_flight() {
+                let diagnostics = wal
+                    .entries
+                    .iter()
+                    .map(|row| FlightRow {
+                        seq: row.seq,
+                        bytes: row.bytes.len(),
+                        eligible: !row.superseded
+                            && !client.core.is_delivered(row.seq)
+                            && row.park.is_none_or(|reason| {
+                                reason == doc_sync_core::ParkReason::NeedsRebase
+                            }),
+                        writing: matches!(row.state, doc_sync_core::EntryState::Writing(_)),
+                    })
+                    .collect::<Vec<_>>();
+                if let Err(detail) = check_flight(rows, &diagnostics, wal.delivered_through) {
+                    failures.push(Failure::new(
+                        "wal_well_formed",
+                        format!("{name:?}: {detail}"),
+                    ));
+                }
+            }
             let final_state = match client.final_state() {
                 Ok(state) => state,
                 Err(error) => {
@@ -105,25 +127,80 @@ impl Sim {
                     .or_insert_with(Vec::new)
                     .push((*seq, row.delivered));
             }
-            for (owner, rows) in groups {
-                let prefix = rows
-                    .iter()
-                    .take_while(|(_, delivered)| *delivered)
-                    .last()
-                    .map(|(seq, _)| *seq);
-                if let (Some(old), Some(new)) = (self.prefixes.get(&owner), prefix)
-                    && new < *old
+            let owners = groups
+                .keys()
+                .chain(
+                    self.prefixes
+                        .keys()
+                        .filter(|(scope, _, _)| scope == profile),
+                )
+                .cloned()
+                .collect::<BTreeSet<_>>();
+            for owner in owners {
+                let prefix = groups.get(&owner).and_then(|rows| {
+                    rows.iter()
+                        .take_while(|(_, delivered)| *delivered)
+                        .last()
+                        .map(|(seq, _)| *seq)
+                });
+                if let Some(old) = self.prefixes.get(&owner).copied()
+                    && prefix.is_none_or(|new| new < old)
                 {
-                    failures.push(Failure::new(
-                        "durable_prefix_monotone",
-                        format!("{owner:?}: delivered prefix shrank"),
-                    ));
+                    let allowed = self.events[self.prefix_event..]
+                        .iter()
+                        .any(|event| match &event.fact {
+                            Fact::WalPruned {
+                                profile,
+                                doc,
+                                owner: session,
+                                seqs,
+                            } => {
+                                *profile == owner.0
+                                    && doc.as_str() == owner.1
+                                    && doc_sync_core::WalOwner::Session(*session) == owner.2
+                                    && seqs.contains(&old)
+                            }
+                            Fact::WalDeliveryLost {
+                                profile,
+                                doc,
+                                owner: lost_owner,
+                                seqs,
+                            } => {
+                                *profile == owner.0
+                                    && doc.as_str() == owner.1
+                                    && *lost_owner == owner.2
+                                    && seqs.contains(&old)
+                            }
+                            Fact::WalAdopted {
+                                profile,
+                                doc,
+                                from,
+                                removed,
+                                ..
+                            } => {
+                                *profile == owner.0
+                                    && doc.as_str() == owner.1
+                                    && *from == owner.2
+                                    && removed.contains(&old)
+                            }
+                            _ => false,
+                        });
+                    if !allowed {
+                        failures.push(Failure::new(
+                            "durable_prefix_monotone",
+                            format!("{owner:?}: prefix {old:?} regressed to {prefix:?}"),
+                        ));
+                        continue;
+                    }
                 }
                 if let Some(prefix) = prefix {
                     self.prefixes.insert(owner, prefix);
+                } else {
+                    self.prefixes.remove(&owner);
                 }
             }
         }
+        self.prefix_event = self.events.len();
         for failure in failures {
             self.fail(failure);
         }
@@ -230,3 +307,42 @@ fn canonical_finals(finals: &Finals) -> serde_json::Value {
         serde_json::json!({ "clients": clients, "servers": finals.servers.iter().collect::<Vec<_>>(), "profiles": profiles, "presence": finals.presence.as_ref().map(|presence| presence.iter().collect::<Vec<_>>()) }),
     )
 }
+
+struct FlightRow {
+    seq: doc_sync_core::WalSeq,
+    bytes: usize,
+    eligible: bool,
+    writing: bool,
+}
+fn check_flight(
+    rows: &[doc_sync_core::WalSeq],
+    entries: &[FlightRow],
+    delivered: Option<doc_sync_core::WalSeq>,
+) -> Result<(), &'static str> {
+    if rows.is_empty() || rows.len() > 64 {
+        return Err("in-flight push is empty or exceeds64 rows");
+    }
+    if rows.windows(2).any(|pair| pair[0] >= pair[1])
+        || delivered.is_some_and(|through| rows[0] <= through)
+    {
+        return Err("in-flight rows are unordered or below the delivered prefix");
+    }
+    let last = rows[rows.len() - 1];
+    let expected = entries
+        .iter()
+        .filter(|row| row.eligible && row.seq <= last)
+        .collect::<Vec<_>>();
+    if expected.iter().map(|row| row.seq).collect::<Vec<_>>() != rows
+        || expected.iter().any(|row| row.writing)
+    {
+        return Err("in-flight range is not a contiguous pushable run");
+    }
+    // S7 W-1 / S8's large-paste story: one oversized row is sent alone.
+    if rows.len() > 1 && expected.iter().map(|row| row.bytes).sum::<usize>() > 256 * 1024 {
+        return Err("multi-row push exceeds256KiB");
+    }
+    Ok(())
+}
+
+#[cfg(test)]
+mod test;

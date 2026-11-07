@@ -14,6 +14,8 @@ identities come from callers; transport and durable storage run outside this cra
   Never infer poison from an absent ack or advance a durable prefix over parked rows.
 - `Connection` handles socket generations, heartbeat and backoff; `RouterCore`
   multiplexes independently authorized routes on one physical socket.
+- `push_in_flight` and `is_delivered` expose read-only own-WAL diagnostics, including
+  acknowledgements above a prefix blocked by parked rows; hosts never mutate them.
 - `PeerSupply` validates host-generated peers; never generate identities here.
 - `PresenceBackend` is the clock-injected port; `SyncCore` installs
   `ProtocolPresence` over `sync_protocol::presence` by default. It retains Loro

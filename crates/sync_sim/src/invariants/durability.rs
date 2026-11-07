@@ -52,6 +52,7 @@ fn aliases(
     profile: &ProfileName,
     owner: WalOwner,
     seq: WalSeq,
+    doc: DocIx,
 ) -> BTreeSet<(WalOwner, WalSeq)> {
     let mut result = [(owner, seq)].into_iter().collect::<BTreeSet<_>>();
     for event in &outcome.events {
@@ -60,8 +61,11 @@ fn aliases(
             from,
             to,
             map,
+            doc: target,
+            ..
         } = &event.fact
             && scope == profile
+            && target.as_str() == document_key(doc, &outcome.config)
         {
             for (old, new) in map {
                 if result.contains(&(*from, *old)) {
@@ -72,8 +76,13 @@ fn aliases(
     }
     result
 }
-fn expired(outcome: &Outcome, profile: &ProfileName, rows: &BTreeSet<(WalOwner, WalSeq)>) -> bool {
-    outcome.events.iter().any(|event| matches!(&event.fact, Fact::WalExpired { profile: scope, owner, seqs } if scope == profile && seqs.iter().any(|seq| rows.contains(&(*owner, *seq)))))
+fn expired(
+    outcome: &Outcome,
+    profile: &ProfileName,
+    rows: &BTreeSet<(WalOwner, WalSeq)>,
+    doc: DocIx,
+) -> bool {
+    outcome.events.iter().any(|event| matches!(&event.fact, Fact::WalExpired { profile: scope, doc: target, owner, seqs } if scope == profile && target.as_str() == document_key(doc, &outcome.config) && seqs.iter().any(|seq| rows.contains(&(*owner, *seq)))))
 }
 /// Every received acknowledgment's exact operation ranges survive a cold server load and settled peers.
 pub fn no_acked_edit_lost(outcome: &Outcome) -> Result<(), Failure> {
@@ -174,8 +183,8 @@ pub fn no_persisted_edit_lost(outcome: &Outcome) -> Result<(), Failure> {
         if !recovery {
             continue;
         }
-        let rows = aliases(outcome, profile, WalOwner::Session(*session), *seq);
-        if expired(outcome, profile, &rows) {
+        let rows = aliases(outcome, profile, WalOwner::Session(*session), *seq, doc);
+        if expired(outcome, profile, &rows, doc) {
             continue;
         }
         let spans = outcome
@@ -258,7 +267,7 @@ pub fn no_edit_lost_without_crash(outcome: &Outcome) -> Result<(), Failure> {
             if row_doc != doc {
                 continue;
             }
-            let rows = aliases(outcome, profile, WalOwner::Session(*session), *seq);
+            let rows = aliases(outcome, profile, WalOwner::Session(*session), *seq, doc);
             let parked = outcome.finals.clients.values().any(|peer| {
                 peer.profile == *profile
                     && peer.doc == doc
@@ -267,7 +276,7 @@ pub fn no_edit_lost_without_crash(outcome: &Outcome) -> Result<(), Failure> {
                             && (peer.access != Access::Edit || (corruption && reason == "Poison"))
                     })
             });
-            if parked || expired(outcome, profile, &rows) {
+            if parked || expired(outcome, profile, &rows, doc) {
                 exempt.extend(row_spans.clone());
             }
         }

@@ -337,15 +337,28 @@ impl SimStorage {
                     .and_then(|snapshot| snapshot.covers)
                     .filter(|(id, _)| id == owner)
                     .map(|(_, seq)| seq);
+                let mut removed = Vec::new();
                 self.durable
                     .entries
                     .retain(|(row_doc, row_owner, seq), row| {
-                        !(row_doc == doc
+                        let prune = row_doc == doc
                             && *row_owner == WalOwner::Session(*owner)
                             && seq <= through
                             && covers.is_some_and(|cover| *seq <= cover)
-                            && row.delivered)
+                            && row.delivered;
+                        if prune {
+                            removed.push(*seq);
+                        }
+                        !prune
                     });
+                if !removed.is_empty() {
+                    facts.push(Fact::WalPruned {
+                        profile: profile.clone(),
+                        doc: doc.clone(),
+                        owner: *owner,
+                        seqs: removed,
+                    });
+                }
             }
             StorageOp::WalAdopt {
                 doc,
@@ -371,8 +384,10 @@ impl SimStorage {
                     .cloned()
                     .collect();
                 let mut map = Vec::new();
+                let mut removed = Vec::new();
                 for key in keys {
                     if let Some(mut row) = self.durable.entries.remove(&key) {
+                        removed.push(key.2);
                         if row.delivered && key.2 <= covers {
                             continue;
                         }
@@ -391,6 +406,8 @@ impl SimStorage {
                 let count = u32::try_from(map.len()).unwrap_or(u32::MAX);
                 facts.push(Fact::WalAdopted {
                     profile: profile.clone(),
+                    doc: doc.clone(),
+                    removed,
                     from: *from,
                     to: *to,
                     map,
@@ -411,6 +428,7 @@ impl SimStorage {
                 });
                 facts.push(Fact::WalExpired {
                     profile: profile.clone(),
+                    doc: doc.clone(),
                     owner: *from,
                     seqs,
                 });
@@ -446,6 +464,13 @@ impl SimStorage {
         self.tails.clear();
         let mut facts = Vec::new();
         if let CrashMode::PowerLoss { window } = mode {
+            let delivered_before = self
+                .durable
+                .entries
+                .iter()
+                .filter(|(_, row)| row.delivered)
+                .map(|(key, _)| key.clone())
+                .collect::<Vec<_>>();
             let cutoff = now.saturating_sub(window.0);
             while self.recent.last().is_some_and(|write| write.at >= cutoff) {
                 if let Some(write) = self.recent.pop() {
@@ -459,6 +484,26 @@ impl SimStorage {
                     }
                 }
             }
+            let mut lost = BTreeMap::<_, Vec<_>>::new();
+            for key in delivered_before {
+                if !self
+                    .durable
+                    .entries
+                    .get(&key)
+                    .is_some_and(|row| row.delivered)
+                {
+                    lost.entry((key.0, key.1)).or_default().push(key.2);
+                }
+            }
+            facts.extend(
+                lost.into_iter()
+                    .map(|((doc, owner), seqs)| Fact::WalDeliveryLost {
+                        profile: profile.clone(),
+                        doc,
+                        owner,
+                        seqs,
+                    }),
+            );
         }
         facts
     }

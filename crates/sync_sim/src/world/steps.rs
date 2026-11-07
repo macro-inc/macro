@@ -94,9 +94,6 @@ impl Sim {
                         self.emit(fact);
                     }
                 }
-                if matches!(mode, CrashMode::PowerLoss { .. }) {
-                    self.prefixes.retain(|(scope, _, _), _| *scope != profile);
-                }
                 self.emit(Fact::ProfileCrashed { profile });
             }
             Step::Close { client } | Step::EditorError { client } => self.close(&client)?,

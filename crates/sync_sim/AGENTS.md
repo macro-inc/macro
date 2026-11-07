@@ -40,6 +40,10 @@ clients and real `sync_server_core::Room` callbacks over `sync_server_sim` ports
   Tokio is a test-only dependency, never the virtual world executor.
 - All storage completion events mean durable; tab death keeps issued writes,
   process death loses pending writes, power loss additionally rolls back recent writes.
+- Validate real own-push diagnostics against a contiguous eligible WAL run,64 rows
+  and256KiB (one oversized row is sent alone). Prefix checks include Some-to-None
+  regressions and absent owners; exempt only completed prune/adoption or actually
+  rolled-back delivery rows, never an entire power-loss profile.
 - Settlement reopens gracefully stopped clients to drain retained WAL; Stop itself
   still waits only for durable local writes. Crashed clients require explicit reopen.
 - H9/A4 have been fixed: never allowlist either data-loss behavior.
