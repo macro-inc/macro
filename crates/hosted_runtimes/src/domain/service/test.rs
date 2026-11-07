@@ -989,3 +989,5 @@ async fn disabled_sales_reject_purchase_before_reserving_capacity() {
 mod capacity;
 
 mod waiting;
+
+mod availability;
