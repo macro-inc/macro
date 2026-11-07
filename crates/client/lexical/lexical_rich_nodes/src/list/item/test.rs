@@ -372,3 +372,46 @@ fn wrapping_root_orphan_preserves_text_selection() -> Result<()> {
     assert!(tx.parent(item).is_some_and(|k| tx.is::<ListNode>(k)));
     Ok(())
 }
+
+#[test]
+fn inserting_list_before_item_text_merges_tail_into_inner_item() -> Result<()> {
+    let mut editor = register_list_nodes(Editor::builder(EditorMode::Headless))
+        .build()
+        .expect("editor");
+    let (text, _) = editor.update(|tx| {
+        let list = tx.create(ListNode::new(ListType::Bullet, 1))?;
+        let item = tx.create(ListItemNode::default())?;
+        let text = tx.create_text("a")?;
+        tx.append(item, &[text.key()])?;
+        tx.append(list, &[item.key()])?;
+        tx.append(NodeKey::ROOT, &[list.key()])?;
+        tx.select_start(text)?;
+        Ok(text)
+    })?;
+    editor.update(|tx| {
+        let pasted = tx.create(ListNode::new(ListType::Bullet, 1))?;
+        let item = tx.create(ListItemNode::default())?;
+        let inserted = tx.create_text("a")?;
+        tx.append(item, &[inserted.key()])?;
+        tx.append(pasted, &[item.key()])?;
+        tx.insert_nodes(&[pasted.key()])
+    })?;
+    let state = editor.state();
+    let roots = state.children_keys(NodeKey::ROOT)?;
+    assert_eq!(roots.len(), 1);
+    let list = roots[0];
+    assert!(state.is::<ListNode>(list));
+    assert_eq!(state.children_keys(list)?.len(), 1);
+    assert_eq!(state.text_content(list).as_ref(), "aa");
+    assert!(!state.is_attached(text));
+    assert_eq!(
+        state
+            .selection()
+            .and_then(Selection::as_range)
+            .expect("range")
+            .anchor
+            .offset(),
+        1
+    );
+    Ok(())
+}
