@@ -160,3 +160,5 @@ intact because patchelf issue 639 corrupts its low-address initializer. The
 install check imports Inference and creates/closes a native AudioSource after
 fixup, so a successful build proves more than dependency extraction. Node 24
 loads the addon directly without a bridge process.
+
+- Regenerate `_brain.nix` `npmDepsHash` with `prefetch-npm-deps` whenever the brain package lock changes; MCP client dependencies must ship offline with the runtime.

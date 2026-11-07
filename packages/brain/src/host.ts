@@ -24,24 +24,24 @@ const deps =
         readEnv,
         readEnv('BRAIN_TELEMETRY') === '1' ? stdioExporter : undefined
       );
-const module: {
-  default: Composition;
-} = await import(pathToFileURL(entry).href);
-if (typeof module.default !== 'function')
-  throw new Error('brain.ts must default-export a Composition');
-if (mode === 'check') {
-  await dryRun(
-    module.default,
-    workspace,
-    [],
-    true,
-    regressionRoot ?? workspace
-  );
-} else {
-  const stop = new AbortController();
-  for (const signal of ['SIGINT', 'SIGTERM'] as const)
-    process.on(signal, () => stop.abort());
-  try {
+try {
+  const module: {
+    default: Composition;
+  } = await import(pathToFileURL(entry).href);
+  if (typeof module.default !== 'function')
+    throw new Error('brain.ts must default-export a Composition');
+  if (mode === 'check') {
+    await dryRun(
+      module.default,
+      workspace,
+      [],
+      true,
+      regressionRoot ?? workspace
+    );
+  } else {
+    const stop = new AbortController();
+    for (const signal of ['SIGINT', 'SIGTERM'] as const)
+      process.on(signal, () => stop.abort());
     if (!deps) throw new Error('missing runtime adapters');
     const brain = await module.default({ ...deps, wiringRoot: dirname(entry) });
     await brain.prepare(stop.signal);
@@ -69,8 +69,9 @@ if (mode === 'check') {
       await activated.promise;
     }
     if (!stop.signal.aborted) await brain.run(stop.signal);
-  } finally {
-    await shutdownTelemetry();
-    if (process.connected) process.disconnect();
   }
+} finally {
+  await deps?.dispose?.();
+  await shutdownTelemetry();
+  if (process.connected) process.disconnect();
 }

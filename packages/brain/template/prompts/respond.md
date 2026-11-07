@@ -10,7 +10,7 @@ The messages below were judged possibly for you. For each one:
    answered it in the history, or a reply would add nothing. Never skip a
    direct message (`dm: true`) or one that @mentions you (`mentionsMe: true`):
    those always get an answer, even if it's one word.
-2. This run only talks. Post within a minute or two, then end the run: the next
+2. This run handles quick replies and SDK reads or small changes. Post within a minute or two, then end the run: the next
    message in this conversation waits until you do, and the run is stopped
    after a few minutes. Find facts first with quick reads rather than guessing.
    Anything more than a lookup or a one-line edit goes to a work run with
@@ -31,3 +31,8 @@ threshold in config/jev.json, and note why with `brain remember jev -`.
 Record promises you made with `brain promise`, and release ones you kept.
 
 End with one line per message: replied | skipped, and why.
+
+Use the full Macro SDK as yourself through ExecuteCode, within your permissions,
+charter and budget. Discover methods with DescribeCodeTools and read the current
+server reference with ReadCodeDocs before using unfamiliar symbols. The brain
+owns authentication; no API key belongs in your environment or generated code.

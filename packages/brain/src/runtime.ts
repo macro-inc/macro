@@ -2,9 +2,11 @@
 import { query } from '@anthropic-ai/claude-agent-sdk';
 import type { SpanExporter } from '@opentelemetry/sdk-trace-base';
 import { z } from 'zod';
+import { anthropicRelay } from './anthropic-relay.ts';
 import type { BrainDeps } from './brain.ts';
 import { SpeechGateway } from './calls/speech.ts';
 import { callTransport } from './calls/transport.ts';
+import { MacroCodeMode } from './code-mode.ts';
 import { loadConfig } from './config.ts';
 import { MacroHttp } from './macro.ts';
 import { openGatewaySocket, stayOnline } from './presence.ts';
@@ -24,6 +26,7 @@ export async function runtimeDeps(
     tracedFetch(fetch)
   );
   const macro = macroSdk(config.hosts, config.macroApiKey);
+  const codeMode = new MacroCodeMode(config);
   const baseEnv: Record<string, string> = {};
   for (const name of ['PATH', 'HOME', 'LANG', 'TZ']) {
     const value = env(name);
@@ -40,7 +43,12 @@ export async function runtimeDeps(
   const gatewayMessage = z.object({ type: z.string(), data: z.unknown() });
   const callMessage = z.object({ call_id: z.string() });
 
+  const relay = await anthropicRelay(
+    config.anthropicBaseUrl,
+    config.anthropicAuthToken
+  );
   return {
+    dispose: () => relay.close(),
     config: {
       workspace: config.workspace,
       healthPort: config.healthPort,
@@ -88,14 +96,13 @@ export async function runtimeDeps(
         return new Set(rings.keys());
       },
       emit: (type) => console.error(JSON.stringify({ calls: type })),
+      anthropic: relay.access,
       modelOptions: {
         pathToClaudeCodeExecutable: 'claude',
         permissionMode: 'bypassPermissions',
         allowDangerouslySkipPermissions: true,
         env: {
           ...baseEnv,
-          ANTHROPIC_BASE_URL: config.anthropicBaseUrl,
-          ANTHROPIC_AUTH_TOKEN: config.anthropicAuthToken,
           CLAUDE_CONFIG_DIR: `${config.workspace}/cache/claude`,
         },
       },
@@ -105,9 +112,9 @@ export async function runtimeDeps(
     routines: sdkRoutines(macro),
     runner: new AgentSdkRunner({
       query,
+      macroTools: (signal) => codeMode.connect(signal),
       claudeExecutable: 'claude',
-      anthropicBaseUrl: config.anthropicBaseUrl,
-      anthropicAuthToken: config.anthropicAuthToken,
+      anthropic: relay.access,
       claudeConfigDir: `${config.workspace}/cache/claude`,
       baseEnv,
     }),

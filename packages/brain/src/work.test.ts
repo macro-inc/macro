@@ -140,8 +140,11 @@ for (const failure of ['inactivity', 'rejected'] as const) {
     const { AgentSdkRunner } = await import('./runner.ts');
     const sdkRunner = new AgentSdkRunner({
       claudeExecutable: 'claude',
-      anthropicBaseUrl: 'https://gateway.example/anthropic',
-      anthropicAuthToken: 'fixture',
+      anthropic: () => ({
+        baseUrl: 'https://gateway.example/anthropic',
+        token: 'fixture',
+        revoke() {},
+      }),
       claudeConfigDir: `${root}/cache/claude`,
       baseEnv: {},
       query: () => ({

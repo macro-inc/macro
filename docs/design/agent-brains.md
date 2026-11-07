@@ -131,7 +131,7 @@ be shipped in the image. macrod's `/health` contract is unchanged.
 | `Lanes` | One durable serial queue per conversation; bursts batch; crash replays. |
 | `Pool` | Concurrency per tier (respond, heartbeat, work) and one speaking turn at a time. |
 | `Runner` | `start(turn) → { events, inject, abort, done }`; Agent SDK in-process. |
-| Tiers | `respond` (talk only, short), `heartbeat` (gated by a cheap snapshot), `work` (hand-off → Macro task + worktree, reports back, receives injected follow-ups). |
+| Tiers | `respond` (quick replies and SDK operations), `heartbeat` (gated by a cheap snapshot), `work` (hand-off → Macro task + worktree, reports back, receives injected follow-ups). |
 | `Schedules` | Macro routines targeting the agent itself. |
 | `Memory` | `remember`/`recall`/`forget` and the self-state record, files under `memory/`. |
 | `Budget` | Per-run and per-day spend caps. |
@@ -142,7 +142,15 @@ be shipped in the image. macrod's `/health` contract is unchanged.
 The bootstrap API key and repo token follow the
 [persona config contract](../../crates/team_agents/AGENTS.md). The agent's own
 API key also authorizes its dedicated Anthropic route; it is not a shared service
-credential.
+credential. The brain retains this value behind a loopback Anthropic relay;
+Claude turn and voice children receive only a random path-bound token per SDK
+query (a voice call holds one for the whole call). Tokens are revoked on query
+end, failure or abort. The listener binds `127.0.0.1` only, forwards POST messages
+and count_tokens to one fixed upstream, injects the real key there, and pipes
+SSE bytes and usage events unchanged. Revocation or downstream disconnect
+closes active upstream requests. The real Anthropic/Macro key never enters
+turn or voice child env, argv or files; normal SDK budget and cumulative voice
+usage accounting stay intact. Host teardown closes the relay after draining.
 
 ## PR A contract relied on
 
@@ -158,8 +166,8 @@ credential.
   [gateway contract](../../crates/hosted_runtimes/AGENTS.md).
 - Computer status and macrod presence, readable by team admins.
 
-The runtime contract is `prepare(signal)`, `run(signal)`, `health()` and
-`post(turn, channel, text)`. `prepare` connects and buffers events without
+The runtime contract is `prepare(signal)`, `run(signal)`, `health()`,
+`post(turn, channel, text)` and `checkFixture(fixture)`. `prepare` connects and buffers events without
 mutating workspace queues. The supervisor starts replacement intake alongside
 the old process, then stops old intake and drains its turns before activating
 replacement queue processing. Receipt IDs persist across the handoff to avoid
@@ -189,3 +197,32 @@ tracked fixtures and an independent local regression registry, so deleting a
 fixture in a proposal cannot weaken checks. Filtering config and composition
 are frozen to the checked snapshot; both use the same activation/revert path.
 Style guides, prompts and persona text stay fresh on every turn.
+
+## Full SDK access from turns
+
+The brain process is a public Macro MCP client authenticated with the agent's
+existing revocable user API key (`x-macro-user-api-key`). Each respond,
+heartbeat and work turn discovers `ExecuteCode`, `DescribeCodeTools` and
+`ReadCodeDocs`, then exposes them through the existing in-process `brain` MCP
+server. Triage remains tool-free. Tool descriptions and schemas come from
+`tools/list`; method discovery and symbol documentation come from the server,
+not a copied SDK reference. Missing tools or rejected authentication fail the
+turn explicitly. Abort cancels its requests; the connection closes at turn end.
+
+The turn can use the full SDK as the agent itself, including channels,
+documents, tasks, email, calendar and search, within its account permissions,
+charter and budget. The key stays in a private transport field in the brain
+process and never enters a turn's environment, tool arguments, prompt or
+telemetry. The required canonical `OVERRIDE_MCP_SERVICE_URL` is parsed as
+`config.hosts.mcp`, a service base. The bridge appends `/mcp` once; there is no
+gateway-derived default or fallback. Like the other canonical persona URLs it
+arrives only in transient enrollment env on create and recreate, never in the
+persisted persona or the Claude turn environment.
+
+Public MCP keeps JWT bearer authentication and additionally accepts the same
+user-key authorizer as other API-key routes, including revocation and scope
+checks. A key resolves only its owner; client actor claims do not change it.
+The backend `ai-code-mode` policy explicitly enables agent teammates using the
+team-agent repository's account facts. Ordinary users retain their existing
+per-user flag behavior. No client-provided agent marker enables code mode,
+and enabling the tool surface grants no extra account permissions.

@@ -7,6 +7,7 @@ import {
   tool,
 } from '@anthropic-ai/claude-agent-sdk';
 import { z } from 'zod';
+import type { AnthropicAccess, AnthropicLease } from '../anthropic-relay.ts';
 import type { Emit } from './events.ts';
 export const SILENT = '(silent)';
 export interface Brain {
@@ -75,6 +76,7 @@ export type CallBrainOptions = {
   briefing(): Promise<string>;
   operating: string;
   options: Options;
+  anthropic: AnthropicAccess;
   session?(
     prompt: AsyncIterable<SDKUserMessage>,
     options: Options
@@ -134,8 +136,12 @@ export function claudeBrain(opts: CallBrainOptions): Brain {
   let q: CallModelSession | null = null;
   let terminal: Error | null = null;
   let accountedCost = 0;
+  const stop = new AbortController();
+  let access: AnthropicLease | undefined;
   const terminate = (error: Error) => {
     terminal = error;
+    stop.abort();
+    access?.revoke();
     ready();
     sink?.({ kind: 'end', error });
     inbox.end();
@@ -291,37 +297,63 @@ export function claudeBrain(opts: CallBrainOptions): Brain {
   }
   return {
     async start() {
-      const brief = opts.briefing();
-      q = (opts.session ?? ((prompt, options) => query({ prompt, options })))(
-        inbox,
-        {
-          ...opts.options,
-          includePartialMessages: true,
-          settingSources: ['project'],
-          systemPrompt: {
-            type: 'preset',
-            preset: 'claude_code',
-            append: `${rules()}\n${opts.operating}`,
-          },
-          mcpServers: { call: tools },
-          stderr: (s: string) =>
-            emit('brain.stderr', { text: s.slice(0, 500) }),
-        }
-      );
-      void pump().catch((e) => {
-        emit('brain.error', { error: String(e) });
-        terminate(e instanceof Error ? e : new Error(String(e)));
-      });
-      const t0 = performance.now();
-      const warm = serial(
-        `${await brief}\n\nYou joined call ${opts.callId} in channel ${opts.channel}. Reply exactly: ready`,
-        0
-      );
-      warming = true;
-      ready(); // asks may now queue behind the warm-up (and cut it short)
-      for await (const _ of warm);
-      warming = false;
-      emit('brain.ready', { ms: Math.round(performance.now() - t0) });
+      try {
+        const brief = await opts.briefing();
+        access = opts.anthropic(stop.signal);
+        q = (opts.session ?? ((prompt, options) => query({ prompt, options })))(
+          inbox,
+          {
+            ...opts.options,
+            env: {
+              ...Object.fromEntries(
+                Object.entries(opts.options.env ?? {}).filter(
+                  ([name]) =>
+                    !name.startsWith('OVERRIDE_') &&
+                    ![
+                      'MACRO_API_KEY',
+                      'ANTHROPIC_API_KEY',
+                      'ANTHROPIC_AUTH_TOKEN',
+                    ].includes(name)
+                )
+              ),
+              ANTHROPIC_BASE_URL: access.baseUrl,
+              ANTHROPIC_AUTH_TOKEN: access.token,
+            },
+            abortController: stop,
+            includePartialMessages: true,
+            settingSources: ['project'],
+            systemPrompt: {
+              type: 'preset',
+              preset: 'claude_code',
+              append: `${rules()}\n${opts.operating}`,
+            },
+            mcpServers: { call: tools },
+            stderr: (s: string) =>
+              emit('brain.stderr', { text: s.slice(0, 500) }),
+          }
+        );
+        void pump().catch((e) => {
+          emit('brain.error', { error: String(e) });
+          terminate(e instanceof Error ? e : new Error(String(e)));
+        });
+        const t0 = performance.now();
+        const warm = serial(
+          `${brief}\n\nYou joined call ${opts.callId} in channel ${opts.channel}. Reply exactly: ready`,
+          0
+        );
+        warming = true;
+        ready(); // asks may now queue behind the warm-up (and cut it short)
+        for await (const _ of warm);
+        warming = false;
+        emit('brain.ready', { ms: Math.round(performance.now() - t0) });
+      } catch (error) {
+        terminate(
+          error instanceof Error
+            ? error
+            : new Error('call model startup failed')
+        );
+        throw error;
+      }
     },
     async *ask(turnNo, content) {
       await started;

@@ -58,6 +58,8 @@ import { type Git, GitWriter, Workspace } from './workspace.ts';
 
 export type { Wiring } from './wiring.ts';
 export type BrainDeps = {
+  /** Host-owned resources close after the composition drains, including startup failures. */
+  dispose?(): Promise<void>;
   config: Omit<Config, 'macroApiKey' | 'anthropicAuthToken' | 'executable'>;
   /** Frozen composition/config snapshot selected by the supervisor. */
   wiringRoot?: string;

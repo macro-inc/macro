@@ -65,11 +65,12 @@ impl ExecutionCredentials for RunCredentials {
 
 /// Credentials for public MCP runs: the signed-in user, with no session, and
 /// the agent the run's posts are attributed to: an agent caller (a self-hosted
-/// agent's call through egress) as itself, any other caller as the Macro bot,
-/// labelled with the MCP client's name - the same attribution the direct MCP
-/// tools give. The MCP client asks the user before each tool call, so there is
-/// no owner gate.
+/// agent's call through egress) as itself, a verified teammate API-key caller
+/// as its own user, and other callers as the Macro bot, labelled with the MCP
+/// client's name where available. Public runs use the caller's permissions
+/// without a session owner gate.
 pub struct UserRunCredentials {
+    pub teammates: Arc<dyn agent_inmem::domain::tool_mode::AgentAccounts>,
     pub signer: MacroApiTokenSigner,
     pub correlations: agent_correlation::outbound::PgCorrelationRepository,
     pub endpoints: SdkEndpoints,
@@ -83,14 +84,24 @@ impl UserExecutionCredentials for UserRunCredentials {
         caller: &ai_toolset::ToolCaller,
         session: Option<uuid::Uuid>,
     ) -> Result<RunEnvironment, CodeModeError> {
+        let teammate = if matches!(caller, ai_toolset::ToolCaller::ApiKey) {
+            self.teammates
+                .is_teammate(user)
+                .await
+                .map_err(|_| CodeModeError::Unavailable)?
+        } else {
+            false
+        };
+        // No bot claim means a teammate's writes belong to its own user account.
         let agent = match caller {
-            ai_toolset::ToolCaller::Agent(agent) => *agent,
+            ai_toolset::ToolCaller::Agent(agent) => Some(*agent),
+            ai_toolset::ToolCaller::ApiKey if teammate => None,
             ai_toolset::ToolCaller::McpClient { .. } | ai_toolset::ToolCaller::ApiKey => {
-                bot_id::MACRO_AI_BOT_ID
+                Some(bot_id::MACRO_AI_BOT_ID)
             }
         };
-        let correlation = match session {
-            Some(session) => Some(
+        let correlation = match (session, agent) {
+            (Some(session), Some(agent)) => Some(
                 self.correlations
                     .create(session, agent.as_uuid())
                     .await
@@ -99,7 +110,7 @@ impl UserExecutionCredentials for UserRunCredentials {
                         CodeModeError::Unavailable
                     })?,
             ),
-            None => None,
+            _ => None,
         };
         // Same lifetime as session runs: the 30-second deadline plus clock margin.
         let token = self
@@ -107,7 +118,7 @@ impl UserExecutionCredentials for UserRunCredentials {
             .mint_for_agent(
                 user,
                 60,
-                Some(agent.as_uuid()),
+                agent.map(|agent| agent.as_uuid()),
                 caller.via().map(str::to_owned),
                 None,
                 correlation,

@@ -8,6 +8,9 @@ relevance, and runs Claude Agent SDK turns in the agent's git workspace.
 
 ## Start here
 
+- `src/anthropic-relay.ts`: brain-owned loopback Anthropic relay. Issue path-bound random capabilities per SDK query (one for the whole voice call), revoke on completion/failure/abort, and stream only messages/count_tokens to the fixed upstream. Never pass the real gateway credential to turn or voice child env, argv or files, even when it equals the Macro key.
+- `src/code-mode.ts`: public MCP client; server-owned ExecuteCode, DescribeCodeTools and ReadCodeDocs are supplied by `runtime.ts` to every non-triage runner turn. Never move its key into turn options or a subprocess.
+
 - `src/mod.ts`: the stable public API; `template/brain.ts`: agent-owned wiring.
 - `src/supervisor.ts`: checks, main-only activation, draining and rollback.
 - `src/brain.ts`: the default event-to-turn composition.
@@ -110,3 +113,6 @@ process group and await actual exit before activating buffered replacement intak
 Probe health through correlated child IPC, clear requests on exit or timeout,
 and keep prepared/draining hosts unhealthy. Debit admitted caps before SDK start;
 refund once only on the admission day and retain charges after unknown outcomes.
+
+Public MCP discovery requires all three code-mode tools and fails explicitly if
+code mode or authentication is unavailable. Never copy server descriptions or SDK docs.

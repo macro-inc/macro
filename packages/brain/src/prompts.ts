@@ -19,6 +19,7 @@ export function talkCommands(
   tier: 'respond' | 'heartbeat' | 'work'
 ): string {
   const lines = [
+    '- Full Macro SDK: use ExecuteCode as your own account, within your permissions, charter and budget. First discover the task with DescribeCodeTools, then read its symbols with ReadCodeDocs. The server owns tool descriptions and SDK documentation; never guess methods or seek credentials.',
     `- Post top level (DMs): \`${exe} post <channel_id> -\`, text on stdin.`,
     `- Reply in a thread: \`${exe} reply <channel_id> <root_id> -\`, text on stdin.`,
     `- React instead of posting an acknowledgment: \`${exe} react <channel_id> <message_id> <emoji>\`.`,

@@ -67,7 +67,7 @@ test('loadConfig refuses missing, noninteger and out-of-range health ports', () 
   }
 });
 
-test('runtime keeps service URLs and bootstrap credentials out of turn environments', async () => {
+test('runtime keeps service URLs and bootstrap credentials out of turn environments', async (t) => {
   const env: Record<string, string> = {
     ...environment,
     PATH: '/usr/bin',
@@ -76,6 +76,7 @@ test('runtime keeps service URLs and bootstrap credentials out of turn environme
     NODE_OPTIONS: '--inspect',
   };
   const deps = await runtimeDeps((name) => env[name]);
+  t.after(() => deps.dispose?.());
   assert.equal(deps.config.hosts.mcp, 'https://tools.example/service');
   assert.deepEqual(deps.baseEnv, {
     PATH: '/usr/bin',

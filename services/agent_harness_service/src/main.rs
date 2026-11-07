@@ -761,20 +761,38 @@ async fn run() -> anyhow::Result<()> {
             .map_err(|error| anyhow::anyhow!("invalid feature flag configuration: {error}"))
         })
         .transpose()?;
-    // `ai-code-mode` decides, per user, whether agent sessions hide
-    // SDK-covered tools and whether the public MCP lists only code mode.
-    let code_mode_selector: Option<Arc<dyn agent_inmem::domain::tool_mode::ToolModeSelector>> =
-        match (&code_runner, &feature_flags) {
-            (Some(_), Some(flags)) => Some(Arc::new(
-                agent_inmem::domain::tool_mode::FlaggedToolMode::new(flags.clone()),
+    // Teammates explicitly get ai-code-mode from server account facts;
+    // ordinary users keep their current PostHog rollout (or standard tools).
+    let ordinary_mode: Arc<dyn agent_inmem::domain::tool_mode::ToolModeSelector> =
+        match &feature_flags {
+            Some(flags) => Arc::new(agent_inmem::domain::tool_mode::FlaggedToolMode::new(
+                flags.clone(),
             )),
-            _ => None,
+            None => Arc::new(agent_inmem::domain::tool_mode::StandardTools),
         };
+    let code_mode_selector: Option<Arc<dyn agent_inmem::domain::tool_mode::ToolModeSelector>> =
+        code_runner.as_ref().map(|_| {
+            let selector: Arc<dyn agent_inmem::domain::tool_mode::ToolModeSelector> =
+                Arc::new(agent_inmem::domain::tool_mode::AgentToolMode::new(
+                    public_mcp::agent_accounts::Accounts(
+                        team_agents::outbound::pg_team_agents_repo::PgTeamAgentsRepo::new(
+                            pool.clone(),
+                        ),
+                    ),
+                    ordinary_mode,
+                ));
+            selector
+        });
     let public_code_mode = match (&code_runner, &code_mode_selector) {
         (Some((_, public, _, _)), Some(selector)) => Some(public_mcp::PublicCodeMode {
             service: Arc::new(agent_code_mode::domain::UserCodeModeService::new(
                 Arc::new(public.clone()),
                 Arc::new(code_mode::UserRunCredentials {
+                    teammates: Arc::new(public_mcp::agent_accounts::Accounts(
+                        team_agents::outbound::pg_team_agents_repo::PgTeamAgentsRepo::new(
+                            pool.clone(),
+                        ),
+                    )),
                     correlations: agent_correlation::outbound::PgCorrelationRepository(
                         pool.clone(),
                     ),

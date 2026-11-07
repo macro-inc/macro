@@ -2,6 +2,7 @@ import { readdir, readFile, rm, stat } from 'node:fs/promises';
 import { join } from 'node:path';
 import type { Options } from '@anthropic-ai/claude-agent-sdk';
 import { dispose } from '@livekit/rtc-node';
+import type { AnthropicAccess } from '../anthropic-relay.ts';
 import type { MacroHttp } from '../macro.ts';
 import { withSpan } from '../telemetry.ts';
 import type { BrainCall } from '../wiring.ts';
@@ -45,6 +46,7 @@ export function callTransport(options: {
   http: MacroHttp;
   gateway: SpeechGateway;
   modelOptions: Options;
+  anthropic: AnthropicAccess;
   ringing(): ReadonlySet<string>;
   emit: Emit;
 }): CallTransport {
@@ -153,6 +155,7 @@ export function callTransport(options: {
             answer: policy.answer,
             brain: (emit, onHangUp) =>
               claudeBrain({
+                anthropic: options.anthropic,
                 callId: call.id,
                 channel: reportingChannel,
                 emit: (type, data) => {
