@@ -9,10 +9,11 @@ version = "0.1.0"
 # wasm-safe, so it takes no workspace-hack dependency (see .config/hakari.toml).
 [features]
 # JSON Schemas of the view types, for the agent tool that saves views.
-schema = ["dep:schemars"]
+schema = ["dep:schemars", "database_id/schema"]
 
 [dependencies]
 chrono = { workspace = true }
+database_id = { workspace = true }
 fractional_index = { workspace = true }
 macro_user_id = { workspace = true, features = ["schema"] }
 nom = { workspace = true }
@@ -23,7 +24,6 @@ strum = { workspace = true }
 thiserror = { workspace = true }
 utoipa = { workspace = true }
 uuid = { workspace = true }
-id_newtype = { workspace = true }
 
 [dev-dependencies]
 serde_json = { workspace = true }
