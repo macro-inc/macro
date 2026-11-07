@@ -1,5 +1,15 @@
 //! View-independent selection predicates used by command handlers.
 use lexical_model::*;
+mod blocks;
+pub use blocks::*;
+mod trim;
+pub use trim::*;
+mod css;
+pub use css::*;
+mod text;
+pub use text::*;
+mod query;
+pub use query::*;
 /// Whether character navigation reaches a decorator or enters a non-inline element.
 /// `adjusted_is_backward` already incorporates the view's writing mode and direction.
 pub fn should_override_default_character_selection(
