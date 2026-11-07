@@ -82,6 +82,20 @@ const auth = createFakeAuth(
 if (params.cleanupFailure === 'once') {
   const session = auth.context.session;
   const completeLogin = auth.context.completeLogin;
+  const verifyEmailCode = auth.context.verifyEmailCode;
+  const sendEmailCode = auth.context.sendEmailCode;
+  const consumed = new Set<string>();
+  auth.context.verifyEmailCode = async (input) => {
+    if (consumed.has(input.email)) return { t: 'invalid-code' };
+    const result = await verifyEmailCode(input);
+    if (result.t === 'verified') consumed.add(input.email);
+    return result;
+  };
+  auth.context.sendEmailCode = async (input) => {
+    const result = await sendEmailCode(input);
+    if (result.t === 'code-sent') consumed.delete(input.email);
+    return result;
+  };
   const [ready, setReady] = createSignal(false);
   let failed = false;
   auth.context.session = () => (ready() ? session() : { t: 'signed-out' });

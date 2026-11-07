@@ -291,6 +291,15 @@ mod tests {
     }
 
     #[test]
+    fn mentions_prompt_shows_static_images_inline_never_as_document_mentions() {
+        let instructions = mentions::PROMPT.instructions.as_ref();
+        assert!(instructions.contains("a document mention of its id reads \"Deleted\""));
+        assert!(instructions.contains("<m-image>{\"url\":\"{url}\""));
+        assert!(instructions.contains("`image.toMarkdown()`"));
+        assert!(instructions.contains("\"blockName\":\"canvas\""));
+    }
+
+    #[test]
     fn mentions_prompt_covers_date_and_agent_session_chips() {
         let instructions = mentions::PROMPT.instructions.as_ref();
         assert!(instructions.contains("<m-date-mention>"));
