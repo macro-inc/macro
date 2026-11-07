@@ -8,6 +8,8 @@ pub enum SyncInput {
     Ready,
     /// Report a failed local projection while retaining the old document for recovery.
     ImportFailed(ImportFailure),
+    /// A local projection resync succeeded; charge the shared recovery budget without fetching a snapshot.
+    ProjectionResynced,
     /// Graceful stop: run the W-1 append, clear local presence, push it, close. Terminal.
     /// Replies `Reply::Stopped` only after that append's `Done` (W-1 terminal rule).
     Stop(RequestId),

@@ -509,6 +509,9 @@ impl SyncCore {
                 }
             }
             SyncInput::ImportFailed(error) => self.import_failure(error, now, doc, out),
+            SyncInput::ProjectionResynced => {
+                self.charge_recovery(now, doc, out);
+            }
             SyncInput::Storage(event) => self.storage_event(event, now, doc, out),
             SyncInput::Token(event) => {
                 self.connection.token(event, now, &mut out.io);

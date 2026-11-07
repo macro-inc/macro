@@ -68,3 +68,7 @@ timestamps plus controlled storage and socket completions. Tests named
 
 Consume due own/assist retry timers once; reconnect or authorization inputs drive
 blocked pushes. Never return an already-consumed retry as the next wake.
+
+`PrepareComment` releases `CommentReady` only after a fresh catch-up and W-1
+checks. `ProjectionResynced` charges the shared recovery budget without fetching
+a network snapshot; sessions attempt local recovery before `ImportFailed`.
