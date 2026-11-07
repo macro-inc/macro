@@ -1,9 +1,12 @@
 //! PasteNode: own payload and model hooks; no browser runtime.
 use super::*;
 /// Portable PasteNode payload in upstream exportJSON field order.
-#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct PasteNode {
+    /// In-memory block alignment; upstream never serializes this property.
+    #[serde(skip, default = "DecoratorBlockData::center")]
+    pub block: DecoratorBlockData,
     /// Stored content payload.
     #[serde(default, skip_serializing_if = "Maybe::is_missing")]
     pub content: Maybe<String>,
@@ -13,6 +16,11 @@ pub struct PasteNode {
 impl NodeType for PasteNode {
     const TYPE: &'static str = "paste";
     type Kind = DecoratorKind;
+    fn after_clone(&self) -> Option<Self> {
+        let mut node = self.clone();
+        node.block = DecoratorBlockData::center();
+        Some(node)
+    }
     fn flag_probe() -> Option<Self> {
         Some(Self::default())
     }
@@ -43,5 +51,24 @@ impl DecoratorNode for PasteNode {
 impl SearchText for PasteNode {
     fn search_text(&self) -> Option<Cow<'_, str>> {
         Some(js_optional(&self.content).into())
+    }
+}
+
+impl Default for PasteNode {
+    fn default() -> Self {
+        Self {
+            block: DecoratorBlockData::center(),
+            content: Maybe::Missing,
+            origin: PasteOrigin::Pasted,
+        }
+    }
+}
+
+impl DecoratorBlock for PasteNode {
+    fn block(&self) -> &DecoratorBlockData {
+        &self.block
+    }
+    fn block_mut(&mut self) -> &mut DecoratorBlockData {
+        &mut self.block
     }
 }

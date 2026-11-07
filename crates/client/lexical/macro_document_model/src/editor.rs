@@ -202,6 +202,5 @@ fn register_preset_nodes(builder: EditorBuilder, ty: EditorType) -> EditorBuilde
     let builder = builder.node::<MagicChipNode>();
     let builder = builder.node::<AgentActivityNode>();
     let builder = builder.node::<AgentContextNode>();
-    let builder = builder.node::<CursorSystemNotificationNode>();
-    builder
+    builder.node::<CursorSystemNotificationNode>()
 }

@@ -4,6 +4,9 @@ use super::*;
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct VideoNode {
+    /// In-memory block alignment; upstream never serializes this property.
+    #[serde(skip, default = "DecoratorBlockData::center")]
+    pub block: DecoratorBlockData,
     /// Stored media payload.
     #[serde(flatten)]
     pub media: MediaData,
@@ -14,6 +17,14 @@ pub struct VideoNode {
 impl NodeType for VideoNode {
     const TYPE: &'static str = "video";
     type Kind = DecoratorKind;
+    fn after_clone(&self) -> Option<Self> {
+        let mut node = self.clone();
+        node.block = DecoratorBlockData::center();
+        if node.media.scale.0 == 0.0 || node.media.scale.0.is_nan() {
+            node.media.scale = JsNumber(1.0);
+        }
+        Some(node)
+    }
     fn flag_probe() -> Option<Self> {
         Some(Self::default())
     }
@@ -46,8 +57,18 @@ impl SearchText for VideoNode {}
 impl Default for VideoNode {
     fn default() -> Self {
         Self {
+            block: DecoratorBlockData::center(),
             media: MediaData::default(),
             controls: true,
         }
+    }
+}
+
+impl DecoratorBlock for VideoNode {
+    fn block(&self) -> &DecoratorBlockData {
+        &self.block
+    }
+    fn block_mut(&mut self) -> &mut DecoratorBlockData {
+        &mut self.block
     }
 }

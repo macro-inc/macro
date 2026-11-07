@@ -1,9 +1,12 @@
 //! HtmlRenderNode: own payload and model hooks; no browser runtime.
 use super::*;
 /// Portable HtmlRenderNode payload in upstream exportJSON field order.
-#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct HtmlRenderNode {
+    /// In-memory block alignment; upstream never serializes this property.
+    #[serde(skip, default = "DecoratorBlockData::left")]
+    pub block: DecoratorBlockData,
     /// Stored html payload.
     #[serde(default, skip_serializing_if = "Maybe::is_missing")]
     pub html: Maybe<String>,
@@ -14,6 +17,11 @@ pub struct HtmlRenderNode {
 impl NodeType for HtmlRenderNode {
     const TYPE: &'static str = "html-render";
     type Kind = DecoratorKind;
+    fn after_clone(&self) -> Option<Self> {
+        let mut node = self.clone();
+        node.block = DecoratorBlockData::left();
+        Some(node)
+    }
     fn flag_probe() -> Option<Self> {
         Some(Self::default())
     }
@@ -42,3 +50,22 @@ impl DecoratorNode for HtmlRenderNode {
     }
 }
 impl SearchText for HtmlRenderNode {}
+
+impl Default for HtmlRenderNode {
+    fn default() -> Self {
+        Self {
+            block: DecoratorBlockData::left(),
+            html: Maybe::Missing,
+            adapt_colors: Maybe::Missing,
+        }
+    }
+}
+
+impl DecoratorBlock for HtmlRenderNode {
+    fn block(&self) -> &DecoratorBlockData {
+        &self.block
+    }
+    fn block_mut(&mut self) -> &mut DecoratorBlockData {
+        &mut self.block
+    }
+}

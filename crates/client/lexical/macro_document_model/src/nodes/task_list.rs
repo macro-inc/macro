@@ -46,3 +46,33 @@ impl From<ListNode> for TaskListNode {
         Self { list }
     }
 }
+
+/// CSS mount class shared with the attached task-list view.
+pub const TASK_LIST_BAR_CLASS: &str = "mdtl-bar-mount";
+/// Persisted display settings preserve every object property, including future fields.
+pub type TaskListViewSettings = std::sync::Arc<Value>;
+/// State parser deliberately accepts arbitrary objects and rejects arrays, matching JS.
+pub static TASK_LIST_VIEW: StateKey<TaskListViewSettings> =
+    StateKey::new("taskListView", |value| {
+        std::sync::Arc::new(
+            value
+                .filter(|v| v.is_object())
+                .cloned()
+                .unwrap_or(Value::Null),
+        )
+    });
+/// Read persisted display settings without narrowing or dropping unknown fields.
+pub fn get_task_list_view_settings(
+    state: &impl Read,
+    key: NodeKey,
+) -> crate::Result<TaskListViewSettings> {
+    state.view().get_state(key, &TASK_LIST_VIEW)
+}
+/// Set persisted display settings; null clears the value.
+pub fn set_task_list_view_settings(
+    tx: &mut Transaction<'_>,
+    key: NodeKey,
+    settings: TaskListViewSettings,
+) -> crate::Result<()> {
+    tx.set_state(key, &TASK_LIST_VIEW, settings)
+}

@@ -25,3 +25,13 @@ from the actual TypeScript classes. The fixed corpus covers both registry
 configurations, all Macro own fields, missing/null inputs, Unicode and long
 strings, state filtering, nested contexts and the upstream node classes.
 Markdown transformers and route adapters belong to later work packages.
+
+Block decorators keep alignment in memory and omit it from JSON. Their first
+write clones through the source constructor defaults. `MediaNode` exposes the
+shared dimension calculation; authored constructors and imported fields retain
+their distinct nullish/falsy defaults. `TASK_LIST_VIEW` retains arbitrary object
+keys, and explicit watermark cleanup bypasses its ordinary removal guard.
+
+The synthetic JSON route includes legacy custom-code versions and chart null
+settings. Intrinsic hook tests cover comment continuation and session-card
+placement; these are independent of WP-27 markdown transformers.

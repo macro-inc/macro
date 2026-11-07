@@ -78,3 +78,29 @@ fn expanded_session_preserves_both_sides_of_split_paragraph() -> Result<()> {
     assert_eq!(state.text_content(children[2]), "after");
     Ok(())
 }
+
+#[test]
+fn inline_flags_follow_each_instance_and_subsequent_writes() -> Result<()> {
+    let mut editor = export_registry();
+    let mut tx = editor.transaction();
+    let chip = tx.create(AgentSessionMentionNode::default())?;
+    let card = tx.create(AgentSessionMentionNode {
+        expanded: true,
+        ..Default::default()
+    })?;
+    let inline = create_await_node(&mut tx, Some("a".into()), None, true)?;
+    let block = create_await_node(&mut tx, Some("b".into()), None, false)?;
+    assert!(tx.is_inline(chip));
+    assert!(!tx.is_inline(card));
+    assert!(tx.is_inline(inline));
+    assert!(!tx.is_inline(block));
+    tx.get_mut::<AgentSessionMentionNode>(chip)?.expanded = true;
+    tx.get_mut::<AwaitNode>(block)?.inline = true;
+    assert!(!tx.is_inline(chip));
+    assert!(tx.is_inline(block));
+    let query = tx.import_node(serde_json::json!({"type":"database-query","queryId":"q","prompt":"Count","displayMode":"scalar"}).as_object().unwrap())?;
+    assert!(tx.is_inline(query));
+    tx.get_mut::<DatabaseQueryNode>(query)?.data.display_mode = DatabaseQueryDisplayMode::Table;
+    assert!(!tx.is_inline(query));
+    Ok(())
+}

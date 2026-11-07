@@ -48,3 +48,35 @@ impl DecoratorNode for WatermarkNode {
     }
 }
 impl SearchText for WatermarkNode {}
+
+/// Bypass the watermark's no-op removal hook, as explicit owner cleanup does in JS.
+pub fn force_remove_watermark(
+    tx: &mut Transaction<'_>,
+    id: Id<WatermarkNode>,
+) -> crate::Result<()> {
+    tx.default_remove(id.key(), true, false)
+}
+/// Create an unattached watermark through configured replacement.
+pub fn create_watermark_node(
+    tx: &mut Transaction<'_>,
+    content: Option<String>,
+) -> crate::Result<Id<WatermarkNode>> {
+    tx.create(WatermarkNode {
+        content: Maybe::from_option(content),
+    })
+}
+/// Model half of append-to-last; an empty root or falsy content inserts nothing.
+pub fn append_watermark_node_to_last(
+    tx: &mut Transaction<'_>,
+    content: Option<String>,
+) -> crate::Result<Option<Id<WatermarkNode>>> {
+    let Some(content) = content.filter(|s| !s.is_empty()) else {
+        return Ok(None);
+    };
+    let Some(last) = tx.last_child(NodeKey::ROOT) else {
+        return Ok(None);
+    };
+    let node = create_watermark_node(tx, Some(content))?;
+    tx.insert_after(last, node, true)?;
+    Ok(Some(node))
+}
