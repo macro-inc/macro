@@ -455,6 +455,7 @@ version = "0.1.0"
 dependencies = [
  "agent-client-protocol",
  "agent_runtime_protocol",
+ "agent_session_id",
  "chrono",
  "clap",
  "dynamic_ui",
@@ -829,7 +830,7 @@ dependencies = [
 name = "agent_preview"
 version = "0.1.0"
 dependencies = [
- "agent_fold",
+ "agent_session_id",
  "ai_toolset",
  "async-trait",
  "axum",
@@ -896,6 +897,7 @@ dependencies = [
  "agent-client-protocol",
  "agent_fold",
  "agent_runtime_protocol",
+ "agent_session_id",
  "ai_billing",
  "ai_toolset",
  "ai_usage",
@@ -955,6 +957,15 @@ dependencies = [
  "utoipa",
  "uuid",
  "workspace-hack",
+]
+
+[[package]]
+name = "agent_session_id"
+version = "0.1.0"
+dependencies = [
+ "macro_uuid",
+ "serde",
+ "thiserror 2.0.18",
 ]
 
 [[package]]
@@ -4660,7 +4671,7 @@ dependencies = [
  "agent-client-protocol",
  "agent_fold",
  "agent_runtime_protocol",
- "agent_session",
+ "agent_session_id",
  "axum",
  "base64 0.22.1",
  "clap",

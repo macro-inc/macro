@@ -1,6 +1,6 @@
 //! Preview-specific shared state; the session management rows remain untouched.
 use crate::domain::{PreviewError, PreviewId, PreviewStatus, storage::*};
-use agent_fold::domain::log::AgentSessionId;
+use agent_session_id::AgentSessionId;
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
 use macro_user_id::user_id::MacroUserIdStr;

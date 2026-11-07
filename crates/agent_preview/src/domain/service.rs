@@ -2,7 +2,7 @@ use super::{
     PreviewId,
     ports::{Authority, Events, Tunnel},
 };
-use agent_fold::domain::log::AgentSessionId;
+use agent_session_id::AgentSessionId;
 use base64::{Engine, engine::general_purpose::URL_SAFE_NO_PAD};
 use entity_access::domain::models::{
     EditAccessLevel, EntityAccessReceipt, EntityType, RequiredPermission, ViewAccessLevel,
