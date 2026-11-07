@@ -17,3 +17,18 @@ upstream has no standalone overflow unit suite.
 
 The upstream algorithms and pattern data are MIT-licensed; see LICENSE-LEXICAL.
 See AGENTS.md for validation commands and module boundaries.
+
+Hashtag uses the single generic implementation in `text::entity` (also
+re-exported as `text_entity`). `TextEntityBuilderExt::text_entity` registers exact
+plain-text and entity-type transforms. Entity replacement copies format only;
+style, detail and NodeState are intentionally dropped as upstream does.
+
+`hashtag/pattern.txt` is the evaluated pattern from upstream
+`LexicalHashtagExtension.ts` at v0.45.0, with non-ASCII code units escaped as
+`\uNNNN`. It preserves `String.fromCharCode` truncation of three CJK ranges.
+The patched regress matcher runs without `u`, using `find_from_ucs2`; decoding
+surrogate pairs with `find_from_utf16` would change legacy JavaScript boundaries.
+`hashtag/test.rs` ports the upstream serialized shape and adds literal UTF-16
+matcher checks. `text/entity/test.rs` exercises transform split/extension,
+mode guards, reversal and property-copy behavior; upstream has no standalone
+text-entity unit suite.
