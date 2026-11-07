@@ -232,7 +232,7 @@ impl CalendarOccurrenceService for FakeOccurrences {
     async fn meeting_copies(
         &self,
         _requester_id: &str,
-        _event_id: Uuid,
+        _event_id: calendar_event_id::CalendarEventId,
     ) -> Result<Vec<MeetingCopy>, Report> {
         unreachable!("busy time lists no copies")
     }
@@ -240,7 +240,7 @@ impl CalendarOccurrenceService for FakeOccurrences {
     async fn event_ics(
         &self,
         _requester_id: &str,
-        _event_id: Uuid,
+        _event_id: calendar_event_id::CalendarEventId,
     ) -> Result<Option<CalendarEventIcs>, Report> {
         unreachable!("busy time exports nothing")
     }

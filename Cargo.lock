@@ -4172,6 +4172,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "calendar_event_id"
+version = "0.1.0"
+dependencies = [
+ "id_newtype",
+ "serde",
+ "serde_json",
+ "sqlx",
+ "utoipa",
+ "uuid",
+]
+
+[[package]]
 name = "calendar_events"
 version = "0.1.0"
 dependencies = [
@@ -4180,6 +4192,7 @@ dependencies = [
  "async-trait",
  "aws-sdk-sqs",
  "axum",
+ "calendar_event_id",
  "chrono",
  "chrono-tz",
  "email_utils",
@@ -4224,6 +4237,7 @@ dependencies = [
  "anyhow",
  "async-trait",
  "axum",
+ "calendar_event_id",
  "calendar_events",
  "chrono",
  "chrono-tz",
@@ -5233,6 +5247,7 @@ dependencies = [
  "axum",
  "bot_id",
  "bots",
+ "calendar_event_id",
  "calendar_events",
  "chrono",
  "contacts",
@@ -9984,6 +9999,7 @@ name = "graphql_calendar"
 version = "0.1.0"
 dependencies = [
  "async-graphql",
+ "calendar_event_id",
  "calendar_events",
  "chrono",
  "futures",

@@ -1,3 +1,4 @@
+use calendar_event_id::CalendarEventId;
 use std::{future::Future, pin::Pin, sync::Arc};
 
 use calendar_events::domain::{
@@ -215,6 +216,10 @@ where
         viewer: String,
         event_id: Uuid,
     ) -> ReadFuture<'_, Option<CalendarEventChange>> {
-        Box::pin(async move { self.committed_changes.event_change(&viewer, event_id).await })
+        Box::pin(async move {
+            self.committed_changes
+                .event_change(&viewer, CalendarEventId::from_uuid(event_id))
+                .await
+        })
     }
 }

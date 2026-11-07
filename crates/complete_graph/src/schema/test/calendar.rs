@@ -138,7 +138,7 @@ impl CalendarOccurrenceService for RecordingCalendarReads {
     async fn meeting_copies(
         &self,
         _requester_id: &str,
-        _event_id: uuid::Uuid,
+        _event_id: calendar_event_id::CalendarEventId,
     ) -> Result<Vec<calendar_events::domain::models::MeetingCopy>, Report> {
         unreachable!("no GraphQL read lists a meeting's copies")
     }
@@ -146,7 +146,7 @@ impl CalendarOccurrenceService for RecordingCalendarReads {
     async fn event_ics(
         &self,
         _requester_id: &str,
-        _event_id: uuid::Uuid,
+        _event_id: calendar_event_id::CalendarEventId,
     ) -> Result<Option<calendar_events::domain::ics::CalendarEventIcs>, Report> {
         unreachable!("not part of the calendar user fields")
     }
@@ -172,7 +172,7 @@ impl CalendarChangeQueryService for RecordingCalendarReads {
     async fn event_change(
         &self,
         _requester_id: &str,
-        _event_id: Uuid,
+        _event_id: calendar_event_id::CalendarEventId,
     ) -> Result<Option<calendar_events::domain::changes::CalendarEventChange>, Report> {
         Ok(None)
     }
