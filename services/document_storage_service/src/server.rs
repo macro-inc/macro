@@ -1321,7 +1321,7 @@ async fn run_server() -> anyhow::Result<()> {
     )
     .with_sharing(messages::outbound::pg_discussion_context::PgDiscussionContext(db.clone()));
     let annotation_service = Arc::new(messages::domain::annotations::AnnotationService::new(
-        macro_db_client::annotations::repository::PgAnnotationRepository(db.clone()),
+        messages::outbound::pg_annotation_repo::PgAnnotationRepository(db.clone()),
         (*entity_access_service).clone(),
         discussion_delivery.clone(),
     ));

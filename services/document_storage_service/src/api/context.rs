@@ -562,7 +562,7 @@ pub(crate) type DssDiscussionDelivery = messages::domain::delivery::DiscussionDe
 
 /// PDF annotation geometry edits and deletes authorized through document access.
 pub(crate) type DssAnnotationService = messages::domain::annotations::AnnotationService<
-    macro_db_client::annotations::repository::PgAnnotationRepository,
+    messages::outbound::pg_annotation_repo::PgAnnotationRepository,
     EntityAccessService,
     DssDiscussionDelivery,
 >;

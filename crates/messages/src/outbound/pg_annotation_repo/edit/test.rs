@@ -1,9 +1,16 @@
 use super::*;
-use messages::domain::ports::MessageError;
+use crate::domain::ports::MessageError;
+use macro_db_migrator::MACRO_DB_MIGRATIONS;
 use serde_json::json;
 use sqlx::{PgPool, types::Uuid};
 
-#[sqlx::test(fixtures(path = "../../../fixtures", scripts("message_annotations")))]
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(
+        path = "../../../../../macro_db_client/fixtures",
+        scripts("message_annotations")
+    )
+)]
 async fn test_edit_pdf_free_comment_anchor_success(pool: PgPool) {
     let user_id = "macro|user@user.com";
     let uuid = Uuid::try_parse("91111111-1111-1111-1111-111111111111").unwrap();
@@ -39,7 +46,13 @@ async fn test_edit_pdf_free_comment_anchor_success(pool: PgPool) {
     assert_eq!(updated_anchor.rotation, 45.0);
 }
 
-#[sqlx::test(fixtures(path = "../../../fixtures", scripts("message_annotations")))]
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(
+        path = "../../../../../macro_db_client/fixtures",
+        scripts("message_annotations")
+    )
+)]
 async fn test_edit_pdf_free_comment_anchor_not_found(pool: PgPool) {
     let user_id = "macro|user@user.com";
     let uuid = Uuid::new_v4(); // Non-existent UUID
@@ -69,7 +82,13 @@ async fn test_edit_pdf_free_comment_anchor_not_found(pool: PgPool) {
     );
 }
 
-#[sqlx::test(fixtures(path = "../../../fixtures", scripts("message_annotations")))]
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(
+        path = "../../../../../macro_db_client/fixtures",
+        scripts("message_annotations")
+    )
+)]
 async fn test_edit_pdf_free_comment_anchor_invalid_permissions(pool: PgPool) {
     let unauthorized_user = "macro|unauthorized_user@user.com";
     let uuid = Uuid::try_parse("91111111-1111-1111-1111-111111111111").unwrap();
@@ -102,7 +121,13 @@ async fn test_edit_pdf_free_comment_anchor_invalid_permissions(pool: PgPool) {
     );
 }
 
-#[sqlx::test(fixtures(path = "../../../fixtures", scripts("message_annotations")))]
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(
+        path = "../../../../../macro_db_client/fixtures",
+        scripts("message_annotations")
+    )
+)]
 async fn test_edit_pdf_free_comment_anchor_no_update_attempt(pool: PgPool) {
     let user_id = "macro|user@user.com";
     let uuid = Uuid::try_parse("91111111-1111-1111-1111-111111111111").unwrap();
@@ -135,7 +160,13 @@ async fn test_edit_pdf_free_comment_anchor_no_update_attempt(pool: PgPool) {
     );
 }
 
-#[sqlx::test(fixtures(path = "../../../fixtures", scripts("message_annotations")))]
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(
+        path = "../../../../../macro_db_client/fixtures",
+        scripts("message_annotations")
+    )
+)]
 async fn test_edit_pdf_free_comment_anchor_keeps_existing_values(pool: PgPool) {
     let user_id = "macro|user@user.com";
     let uuid = Uuid::try_parse("91111111-1111-1111-1111-111111111111").unwrap();
@@ -185,12 +216,12 @@ async fn edit_pdf_free_comment_anchor(
     user: &str,
     request: EditPdfPlaceableCommentAnchorRequest,
 ) -> std::result::Result<PdfPlaceableCommentAnchor, MessageError> {
-    let response = messages::domain::annotations::AnnotationService::new(
-        crate::annotations::repository::PgAnnotationRepository(pool.clone()),
+    let response = crate::domain::annotations::AnnotationService::new(
+        super::super::PgAnnotationRepository(pool.clone()),
         entity_access::domain::service::EntityAccessServiceImpl::new(
             entity_access::outbound::PgAccessRepository::new(pool.clone()),
         ),
-        messages::domain::ports::NoMessageEventPublisher,
+        crate::domain::ports::NoMessageEventPublisher,
     )
     .edit(
         &user.to_owned().try_into().unwrap(),

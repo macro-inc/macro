@@ -10,6 +10,9 @@ pub mod entity_access_audience;
 /// Contextual notification transport.
 #[cfg(feature = "delivery")]
 pub mod notification_sender;
+/// Postgres persistence for PDF annotation geometry.
+#[cfg(all(feature = "outbound", feature = "annotations"))]
+pub mod pg_annotation_repo;
 /// Parent and thread audience facts.
 #[cfg(feature = "delivery")]
 pub mod pg_discussion_context;

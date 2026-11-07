@@ -12993,6 +12993,7 @@ dependencies = [
  "initiative",
  "ip_extractor",
  "macro_authorization",
+ "macro_db_client",
  "macro_db_migrator",
  "macro_event_broker",
  "macro_event_topics",

@@ -78,6 +78,8 @@ uuid = { workspace = true }
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
 
 [dev-dependencies]
+entity_access = { path = "../entity_access", default-features = false, features = ["outbound"] }
+macro_db_client = { path = "../macro_db_client" }
 initiative = { path = "../initiative", default-features = false, features = ["postgres"] }
 macro_db_migrator = { path = "../macro_db_migrator" }
 models_permissions = { path = "../models_permissions" }
