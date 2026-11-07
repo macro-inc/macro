@@ -16,7 +16,7 @@ internal-auth-key-authenticated requests.
 
 - Owns: the raw HTTP contract with the static file service.
 - Not here: deciding what gets uploaded or how a static file reference is
-  modeled for a feature → `crates/static_file`, `crates/attachment`.
+  modeled for a feature → `crates/documents/static_file`, `crates/attachment`.
 
 ## Boundaries
 

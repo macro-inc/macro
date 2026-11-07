@@ -18,7 +18,7 @@ open or edit it; its id is derived from its slug.
 - Listed and read: `SYSTEM_SKILLS` puts each skill's id and name in
   `ListSkills`/`SearchSkills` (`crates/skills`) and the web app's skills menu
   (`GET /documents/system_skills`); `ReadSkill`, `ReadContent` and skill
-  attachments (`crates/documents`) return its `content` (`PROMPT` for
+  attachments (`crates/documents/documents`) return its `content` (`PROMPT` for
   Compose Routines).
 - Never routed: `auto-skills` routing picks only skill documents.
 - Carried by a guide: `agent_code_mode`'s `attached_skill` appends a skill to

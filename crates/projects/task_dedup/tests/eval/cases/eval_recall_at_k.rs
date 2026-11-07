@@ -26,7 +26,7 @@ use task_dedup::{EmbeddingMarkdown, TaskDedupConfig};
 
 #[sqlx::test(
     migrator = "MACRO_DB_MIGRATIONS",
-    fixtures(path = "../../../../../documents/fixtures", scripts("documents_test_data"))
+    fixtures(path = "../../../../../documents/documents/fixtures", scripts("documents_test_data"))
 )]
 #[ignore = "hits OpenAI; run locally with API keys"]
 async fn recall_at_k_baseline(pool: PgPool) {

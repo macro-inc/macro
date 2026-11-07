@@ -14,7 +14,7 @@ This skill walks through building a new AI tool from scratch. Before writing any
 Decide which domain crate the tool belongs in. Tools live at `crates/<crate>/src/inbound/toolset/`.
 
 Study an existing tool for patterns:
-- `crates/documents/src/inbound/toolset/` — tools: `read_content.rs`, `read_metadata.rs`, `create_document.rs`
+- `crates/documents/documents/src/inbound/toolset/` — tools: `read_content.rs`, `read_metadata.rs`, `create_document.rs`
 - `crates/email/email/src/inbound/toolset/` — tools: `send_email.rs`, `get_thread.rs`, `update_thread_labels.rs`
 - `crates/search/soup/src/inbound/toolset/` — tool: `list_entities.rs`
 - `crates/comms/call/src/inbound/toolset/` — call-related tools
@@ -25,7 +25,7 @@ Create a new file for your tool (e.g. `my_tool.rs`), add it as a `mod` in the to
 
 ## Step 2: Create the tool context
 
-If your tool needs dependencies (DB connections, service clients) that aren't already in an existing context, define a new context struct in the toolset's `mod.rs`. See `crates/documents/src/inbound/toolset/mod.rs` for the `DocumentToolContext` pattern.
+If your tool needs dependencies (DB connections, service clients) that aren't already in an existing context, define a new context struct in the toolset's `mod.rs`. See `crates/documents/documents/src/inbound/toolset/mod.rs` for the `DocumentToolContext` pattern.
 
 The context must be `Clone` and derivable from the parent `ToolServiceContext` via `FromRef`.
 
