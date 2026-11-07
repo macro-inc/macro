@@ -162,6 +162,10 @@ pub(crate) struct Snapshots {
 }
 impl SnapshotStore for Snapshots {
     type Error = io::Error;
+    fn prepare(&self, _: &SessionKey) -> io::Result<()> {
+        self.events.borrow_mut().push("prepare");
+        Ok(())
+    }
     async fn has(&self, _: &SessionKey) -> io::Result<bool> {
         Ok(self.bytes.borrow().is_some())
     }

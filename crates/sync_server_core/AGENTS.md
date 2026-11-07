@@ -12,6 +12,7 @@ the Durable Object adapter and native simulation.
 - `src/domain/state.rs`: imported document state with explicit monotonic time.
 - `src/domain/ports.rs`: runtime capability contracts, with non-Send futures.
 - `src/domain/room.rs`: owned memory and configuration; adapters serialize callbacks.
+- `src/domain/room/http.rs`: initialization, reads and source-request gate policy.
 - `src/domain/room/alarm.rs`: snapshot/compaction order, blame flushing and alarm re-arm policy.
 - `src/domain/operation_log.rs`: pending-write order, replay and snapshot policy.
 - `src/domain/connection.rs`: persisted metadata and explicit-time grant policy.

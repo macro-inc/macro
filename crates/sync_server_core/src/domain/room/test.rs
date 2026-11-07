@@ -24,6 +24,7 @@ struct Runtime {
     sent: RefCell<Vec<(crate::domain::socket::WebSocketId, Vec<u8>)>>,
     text: RefCell<Vec<String>>,
     fail_map: Cell<bool>,
+    mapped_users: RefCell<Vec<String>>,
     fail_socket: RefCell<Option<crate::domain::socket::WebSocketId>>,
     gate_calls: Cell<usize>,
     gate_verdict: RefCell<Option<io::Result<bool>>>,
@@ -128,6 +129,7 @@ impl PeerDirectory for Runtime {
         _peers: &[PeerId],
     ) -> Result<(), Self::Error> {
         self.events.borrow_mut().push("map");
+        self.mapped_users.borrow_mut().push(_user.to_owned());
         if self.fail_map.get() {
             return Err(io::Error::other("directory unavailable"));
         }
@@ -138,17 +140,17 @@ impl PeerDirectory for Runtime {
         _document: &SessionKey,
         _peer: PeerId,
     ) -> Result<Option<String>, Self::Error> {
-        panic!("unexpected peer call: user_for_peer")
+        Ok((_peer.0 == 1).then(|| "test-user".into()))
     }
     async fn peers(&self, _document: &SessionKey) -> Result<Vec<PeerWithUserId>, Self::Error> {
-        panic!("unexpected peer call: peers")
+        Ok(Vec::new())
     }
     async fn blame_for_node(
         &self,
         _document: &SessionKey,
         _node: &str,
     ) -> Result<Option<BlameRow>, Self::Error> {
-        panic!("unexpected peer call: blame_for_node")
+        Ok(None)
     }
     async fn delete_document(&self, _document: &SessionKey) -> Result<(), Self::Error> {
         panic!("unexpected peer call: delete_document")
@@ -271,3 +273,5 @@ fn update(peer: u64) -> Vec<u8> {
 mod alarm;
 mod connection;
 mod frame;
+
+mod http;

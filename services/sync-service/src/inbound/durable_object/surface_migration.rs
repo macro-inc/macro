@@ -114,13 +114,6 @@ impl SyncSession<'_> {
         Ok(value)
     }
 
-    pub(super) async fn source_blocked(&mut self) -> Result<bool> {
-        Ok(!matches!(
-            self.source_state().await?,
-            SourceState::Live | SourceState::Thawed(_)
-        ))
-    }
-
     async fn store_source(&mut self, value: SourceState) -> Result<()> {
         // A failed write may have committed. Reload durable truth on the next
         // callback instead of retaining a potentially stale writable cache.

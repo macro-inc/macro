@@ -161,12 +161,12 @@ impl PeerDirectory for WorkerPeers {
         document: &SessionKey,
         peer: PeerId,
     ) -> worker::Result<Option<String>> {
-        self.env
-            .d1(crate::constants::USER_PEER_D1_BINDING)?
-            .prepare("SELECT user_id FROM peer_user_map WHERE document_id = ? AND peer_id = ?;")
-            .bind(&[document.as_str().into(), peer.0.to_string().into()])?
-            .first(Some("user_id"))
-            .await
+        crate::d1::get_user_id_from_peer_id(
+            self.env.d1(crate::constants::USER_PEER_D1_BINDING)?,
+            document.as_str(),
+            &peer.0,
+        )
+        .await
     }
     async fn peers(&self, document: &SessionKey) -> worker::Result<Vec<PeerWithUserId>> {
         crate::d1::get_peers_for_document_id(

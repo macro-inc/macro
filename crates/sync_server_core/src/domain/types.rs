@@ -112,3 +112,6 @@ impl std::borrow::Borrow<u64> for PeerId {
         &self.0
     }
 }
+
+/// Attribution used for document writes without a user identity.
+pub const SYSTEM_AUTHOR_ID: &str = "system";

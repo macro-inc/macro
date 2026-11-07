@@ -213,6 +213,10 @@ impl<P: RoomPorts> Room<P> {
         }
         if self.memory.operation_log.is_none() {
             let key = self.session_key().await?;
+            self.ports
+                .snapshots()
+                .prepare(&key)
+                .map_err(|e| RoomError::port(PortName::Snapshots, e))?;
             self.memory.operation_log =
                 Some(OperationLog::new(key.clone(), session_kind(key.as_str())));
         }

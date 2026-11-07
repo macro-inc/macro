@@ -124,3 +124,6 @@ pub use frame::InboundFrame;
 
 mod alarm;
 pub use alarm::AlarmOutcome;
+
+mod http;
+pub use http::{InitializeOutcome, RequestGate, RouteClass, SnapshotOutcome};

@@ -63,7 +63,4 @@ impl DocumentState {
     pub fn export_shallow_snapshot(&self) -> Result<Vec<u8>> {
         into_worker(self.inner.export_shallow_snapshot())
     }
-    pub fn version_id(&self) -> String {
-        self.inner.version_id()
-    }
 }
