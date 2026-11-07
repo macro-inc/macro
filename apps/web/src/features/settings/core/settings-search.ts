@@ -170,7 +170,8 @@ const SETTINGS: Setting[] = [
     tab: 'Notifications',
     title: 'Quiet hours',
     target: 'Quiet hours',
-    keywords: 'schedule do not disturb dnd silence mute night timezone',
+    keywords:
+      'schedule do not disturb dnd silence mute night timezone weekend day',
   },
   {
     tab: 'Notifications',
