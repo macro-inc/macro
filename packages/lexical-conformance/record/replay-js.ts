@@ -24,6 +24,8 @@ export async function replay(
     fixture.initial.selection !== null
   )
     throw new Error('Unsupported fixture initialization');
+  if (fixture.trace.some((op) => op.src === 'module-init'))
+    throw new Error('B-only:module-init-entropy-requires-fresh-module-replay');
   resetKeys();
   const handles = new Map<string, unknown>();
   const versions = new WeakMap<object, number>();
@@ -55,7 +57,10 @@ export async function replay(
   };
   const entropy = new Entropy(
     undefined,
-    fixture.trace.filter((op) => op.op === 'clock' || op.op === 'entropy'),
+    fixture.trace.filter(
+      (op) =>
+        (op.op === 'clock' || op.op === 'entropy') && op.src !== 'module-init'
+    ),
     isOracleFrame
   );
   const lookup = (name: string): Function => {
@@ -309,7 +314,7 @@ export async function replay(
             compare(op.ret ?? { $undef: true }, result);
           }
         } else if (op.op === 'update' || op.op === 'read') {
-          if (op.cause === 'listener-enqueued') continue;
+          if (op.op === 'update' && op.cause !== 'test') continue;
           const receiver = op.state
             ? decode(op.state)
             : editors.get(Number(op.editor));
@@ -380,6 +385,7 @@ export async function replay(
     const hooks = fields(fields(globalThis).__lexRec);
     const previous = { ...hooks };
     Object.assign(hooks, {
+      enter: observer.enter.bind(observer),
       begin: observer.begin.bind(observer),
       commit: observer.commit.bind(observer),
       error: observer.error.bind(observer),
@@ -405,6 +411,12 @@ export async function replay(
     } finally {
       Object.assign(hooks, previous);
       for (const cleanup of cleanups.reverse()) cleanup();
+      for (const editor of editors.values()) {
+        const raw = fields(editor);
+        raw._pendingEditorState = null;
+        raw._updates = [];
+        raw._deferred = [];
+      }
       for (const root of roots) root.remove();
     }
   } finally {

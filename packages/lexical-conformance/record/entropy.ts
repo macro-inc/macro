@@ -5,6 +5,7 @@ export class Entropy {
   private restore: (() => void)[] = [];
   private state = 1;
   private clock = 1730900000000;
+  private active = false;
   constructor(
     private emit?: (op: Op) => void,
     private replay?: Op[],
@@ -12,7 +13,7 @@ export class Entropy {
   ) {}
 
   private read(src: string, generate: () => Value, outside = generate): Value {
-    if (!this.capture()) return outside();
+    if (!this.active || !this.capture()) return outside();
     if (this.replay) {
       const event = this.replay.shift();
       if (!event || event.src !== src)
@@ -30,6 +31,7 @@ export class Entropy {
   }
 
   install(): void {
+    this.active = true;
     const patch = (target: object, key: string, value: unknown) => {
       const descriptor = Object.getOwnPropertyDescriptor(target, key);
       Object.defineProperty(target, key, {
@@ -49,23 +51,33 @@ export class Entropy {
     const nativeDate = Date.now.bind(Date);
     const nativePerf = performance.now.bind(performance);
     const nativeRandom = Math.random.bind(Math);
+    const nativeUUID = crypto.randomUUID.bind(crypto);
+    const nativeValues = crypto.getRandomValues.bind(crypto);
     patch(Date, 'now', () => this.read('date', () => this.clock++, nativeDate));
     patch(performance, 'now', () =>
       this.read('perf', () => this.clock++ - 1730900000000, nativePerf)
     );
     patch(Math, 'random', () => this.read('random', random, nativeRandom));
     patch(crypto, 'randomUUID', () =>
-      this.read('uuid', () => {
-        const bytes = Array.from({ length: 16 }, () =>
-          Math.floor(random() * 256)
-        );
-        bytes[6] = (bytes[6] & 15) | 64;
-        bytes[8] = (bytes[8] & 63) | 128;
-        const hex = bytes.map((b) => b.toString(16).padStart(2, '0')).join('');
-        return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
-      })
+      this.read(
+        'uuid',
+        () => {
+          const bytes = Array.from({ length: 16 }, () =>
+            Math.floor(random() * 256)
+          );
+          bytes[6] = (bytes[6] & 15) | 64;
+          bytes[8] = (bytes[8] & 63) | 128;
+          const hex = bytes
+            .map((b) => b.toString(16).padStart(2, '0'))
+            .join('');
+          return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
+        },
+        nativeUUID
+      )
     );
     patch(crypto, 'getRandomValues', (array: ArrayBufferView) => {
+      if (!this.active || !this.capture())
+        return Reflect.apply(nativeValues, crypto, [array]);
       if (
         array instanceof Float32Array ||
         array instanceof Float64Array ||
@@ -89,7 +101,9 @@ export class Entropy {
   }
 
   dispose(validate = true): void {
+    this.active = false;
     for (const restore of this.restore.reverse()) restore();
+    this.restore = [];
     if (validate && this.replay?.length) throw new Error('unconsumed-entropy');
   }
 }

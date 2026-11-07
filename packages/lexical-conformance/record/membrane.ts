@@ -114,6 +114,20 @@ export class Recorder {
   private commits = new Map<object, number>();
   private pending = new Map<object, number[]>();
   private causes = new Map<object, Set<string>>();
+  private awaitingTest = new WeakSet<object>();
+  private cause?: string;
+
+  enter(cause: string): () => void {
+    const depth = this.depth;
+    const previous = this.cause;
+    this.depth++;
+    if (!['commit', 'microtask'].includes(cause) && previous !== 'history')
+      this.cause = cause;
+    return () => {
+      this.depth = depth;
+      this.cause = previous;
+    };
+  }
 
   private encode(value: unknown): Value {
     try {
@@ -316,14 +330,17 @@ export class Recorder {
         op.cause = 'test';
         op.opts = this.encode(args[1] ?? {});
         if (this.parent !== undefined) op.parent = this.parent;
-        if (editor)
+        if (editor) {
           this.pending.set(editor, [...(this.pending.get(editor) ?? []), id]);
+          this.awaitingTest.add(editor);
+        }
       }
       this.calls.push(op);
       const callback = args[0];
       const previousParent = this.parent;
       const wrapped = () =>
         this.scoped(calls, kind, () => {
+          if (editor) this.awaitingTest.delete(editor);
           if (kind === 'update') this.parent = id;
           try {
             return Reflect.apply(callback, undefined, []);
@@ -486,14 +503,16 @@ export class Recorder {
       throw new Error(`Unexpected update id ${id}; expected ${this.updateId}`);
     this.updateId++;
     this.pending.set(editor, [...(this.pending.get(editor) ?? []), id]);
+    this.awaitingTest.add(editor);
   }
 
-  begin(editor: object): void {
+  begin(editor: object, options?: { discrete?: boolean }): void {
     this.editor(editor);
-    const cause = this.pending.get(editor)?.length
+    const cause = this.awaitingTest.has(editor)
       ? 'test'
-      : 'listener-enqueued';
-    if (cause === 'listener-enqueued') {
+      : (this.cause ?? (options?.discrete ? 'discrete' : 'listener-enqueued'));
+    this.awaitingTest.delete(editor);
+    if (cause !== 'test') {
       const id = this.updateId++;
       this.trace.push({
         op: 'update',
@@ -503,7 +522,7 @@ export class Recorder {
         opts: {},
         calls: [],
       });
-      this.pending.set(editor, [id]);
+      this.pending.set(editor, [...(this.pending.get(editor) ?? []), id]);
     }
     const causes = this.causes.get(editor) ?? new Set();
     causes.add(cause);
@@ -526,7 +545,9 @@ export class Recorder {
       editor: this.editor(editor),
       index,
       updates: this.pending.get(editor) ?? [],
-      causes: [...(this.causes.get(editor) ?? [])],
+      causes: [
+        ...(this.causes.get(editor) ?? (this.cause ? [this.cause] : [])),
+      ],
       snapshot: {
         ...this.snapshot(editor),
         tags: [...tags],
@@ -605,7 +626,14 @@ export function snapshot(editor: object): Fields {
     () => {
       const selection = state._selection ? fields(state._selection) : null;
       let serialized: Value = null;
-      if (selection?.anchor && selection?.focus) {
+      if (selection?.tableKey) {
+        serialized = {
+          type: 'table',
+          tableKey: String(selection.tableKey),
+          anchorCellKey: String(fields(selection.anchor).key),
+          focusCellKey: String(fields(selection.focus).key),
+        };
+      } else if (selection?.anchor && selection?.focus) {
         const point = (value: unknown): Fields => {
           const p = fields(value);
           return {
@@ -647,7 +675,9 @@ export function snapshot(editor: object): Fields {
 // Installed in both record and replay environments; the pinned source contains optional hooks only.
 Object.assign(globalThis, {
   __lexRec: {
-    begin: (editor: object) => current?.begin(editor),
+    enter: (cause: string) => current?.enter(cause),
+    begin: (editor: object, options?: { discrete?: boolean }) =>
+      current?.begin(editor, options),
     commit: (
       editor: object,
       tags: Set<string>,
@@ -655,11 +685,11 @@ Object.assign(globalThis, {
       elements: Map<string, boolean>,
       normalized: Set<string>
     ) => current?.commit(editor, tags, leaves, elements, normalized),
-    tick: () =>
+    tick: (reason = 'microtask') =>
       current?.trace.push({
         op: 'tick',
         n: current.trace.filter((op) => op.op === 'tick').length,
-        reason: 'microtask',
+        reason,
       }),
     error: (editor: object, error: unknown, during: string) =>
       current?.error(editor, error, during),
