@@ -238,6 +238,30 @@ impl Transaction<'_> {
 }
 
 impl Transaction<'_> {
+    /// Restore a compatible snapshot while leaving this transaction open for further edits.
+    pub fn restore_editor_state(&mut self, state: &EditorState) -> Result<(), Error> {
+        self.guard_write()?;
+        if !Arc::ptr_eq(&state.registry, &self.pending.registry) {
+            return Err(Error::ForeignEditorState);
+        }
+        self.editor.keys.raise_to(state.max_key());
+        self.pending = state.pending();
+        for key in self.pending.nodes.keys().copied().collect::<Vec<_>>() {
+            let slot = self
+                .pending
+                .nodes
+                .get_mut(&key)
+                .ok_or(Error::NodeNotFound(key))?;
+            let replacement = slot.data.after_clone();
+            let record = Arc::make_mut(slot);
+            if let Some(data) = replacement {
+                record.data = data;
+            }
+        }
+        self.selection_dirty = true;
+        self.full_reconcile = true;
+        Ok(())
+    }
     /// Ask consumers to reconcile every record in both snapshots.
     pub fn request_full_reconcile(&mut self) {
         self.full_reconcile = true;

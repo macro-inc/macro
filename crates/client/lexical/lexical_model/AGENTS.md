@@ -36,6 +36,7 @@ node types, immutable snapshots, transactional tree editing, update processing, 
 - Caret cursors compute successors before returning items; keep the construction-time first step.
 - Commands visit registered listeners only; external dispatch flushes between levels, inline dispatch does not.
 - Hooks share one follow-up transaction per round and stop at 99 rounds; extension state rolls back with updates.
+- `Transaction::restore_editor_state` clones snapshot records, preserves composition and staged dirty sets, and permits further writes; `set_editor_state` seals instead.
 - History restores snapshots without rerunning transforms; diffs compare descendant map entries even when ancestor records are shared.
 - EditorCore is sans-IO: host time, layout, clipboard and composition facts arrive as data; effects leave as values.
 - Failed hook rounds roll back early publications too; failed main inputs retain and report their early commits.

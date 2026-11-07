@@ -1,5 +1,7 @@
 //! Text slicing and style patching over active or detached selections.
 use super::*;
+/// A computed style property update.
+pub type StyleComputer = dyn Fn(Option<&str>, PatchTarget) -> String;
 /// A style update. Computed values read the original parsed style.
 pub enum StylePatchValue {
     /// Set a literal property value.
@@ -7,7 +9,7 @@ pub enum StylePatchValue {
     /// Remove a property.
     Remove,
     /// Compute a new value from the original style and the current target.
-    Compute(Box<dyn Fn(Option<&str>, PatchTarget) -> String>),
+    Compute(Box<StyleComputer>),
 }
 /// Property updates in application order.
 pub type StylePatch = indexmap::IndexMap<String, StylePatchValue>;
