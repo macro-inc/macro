@@ -202,7 +202,9 @@ impl<'state> StateRef<'state> {
         let offset = |point: Point| -> Result<Utf16Offset, Error> {
             Ok(match point {
                 Point::Text { key, offset } => {
-                    self.text_data(key)?.text.byte_offset(offset)?;
+                    if offset > self.text_data(key)?.text.utf16_len() {
+                        return Err(Error::Utf16OffsetOutOfRange(offset));
+                    }
                     offset
                 }
                 Point::Element { key, offset } => {
