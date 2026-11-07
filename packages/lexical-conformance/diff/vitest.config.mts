@@ -24,6 +24,9 @@ export default defineConfig({
       name: 'production-oracle',
       enforce: 'pre',
       transform(code, id) {
+        // S1 D-11 keeps error-mode caret validation in release fuzzing.
+        if (id.endsWith('/caret/LexicalCaret.ts') && id.startsWith(upstream))
+          code = code.replace('    devInvariant(', '    invariant(');
         if (id.endsWith('/LexicalUpdates.ts') && id.startsWith(upstream))
           code = code.replace(
             'mutatedNodes = $reconcileRoot(',
