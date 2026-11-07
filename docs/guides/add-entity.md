@@ -63,8 +63,8 @@ until the backend is complete.
 - Fix every exhaustive match the compiler now reports. Do not add `_ =>` arms to
   make it compile; each arm is a decision about the new kind.
 - **Entity registry (decide explicitly):**
-  `crates/entity_registry/shared_entity_registry/src/lib.rs` `RegisteredEntityType`
-  plus `crates/entity_registry/entity_registry/src/domain/owner_grant_policy.rs` records one owner per
+  `crates/entities/shared_entity_registry/src/lib.rs` `RegisteredEntityType`
+  plus `crates/entities/entity_registry/src/domain/owner_grant_policy.rs` records one owner per
   resource; team deletion cleans up only registered kinds. The `TryFrom` there has
   a catch-all, and the `entity` table's CHECK constraint lists the allowed kinds,
   so an unregistered kind is rejected silently. Recent kinds did not register;
@@ -125,7 +125,7 @@ migrations, the SQLx cache, and tests.
 
 ## 4. Access and sharing
 
-The `crates/entity_access/AGENTS.md` recipe is ports, then service, then
+The `crates/entities/entity_access/AGENTS.md` recipe is ports, then service, then
 Postgres repo.
 
 - **`src/domain/ports.rs`:** `get_<kind>_access`. Add `list_<kind>_access` only if
@@ -135,7 +135,7 @@ Postgres repo.
   public grants; exclude trashed rows; require the `<kind>_entities` row to exist.
   Copy `form_access.rs` for a public audience, `pipeline_access.rs` for the
   minimum. Add `explain_<kind>_access` behind `explain_binary`, and new
-  `AccessGrant` variants in `crates/entity_access/src/domain/models/access_explanation.rs` if the kind
+  `AccessGrant` variants in `crates/entities/entity_access/src/domain/models/access_explanation.rs` if the kind
   introduces a new grant.
 - **`src/outbound/pg_access_repo.rs`:** the trait impl and the
   `get_team_entity_access` arm.
@@ -146,7 +146,7 @@ Postgres repo.
   - `get_team_scope_permission` decides bot and team receipts.
 - **`src/inbound/axum_extractors/<kind>.rs`** plus `axum_extractors.rs`: handle
   users, bots, internal callers, and anonymous public callers if supported.
-- **`crates/entity_access_db_utils/src/lib.rs`:** the channel-share matches.
+- **`crates/entities/entity_access_db_utils/src/lib.rs`:** the channel-share matches.
 - **Legacy `SharePermission` storage** is only for initiative-style kinds; new
   kinds keep grants in `entity_access` plus an audience column. If you do use it,
   `share_permission_db_utils::get_share_permission_id` ends in `bail!`, and
@@ -165,7 +165,7 @@ Postgres repo.
 
 - **`crates/macro_db_client/src/item_access/delete.rs`:** put the kind in the arm
   for kinds with `entity_access` rows.
-- **Entity mutation:** implement the `crates/entity_mutation` capability traits
+- **Entity mutation:** implement the `crates/entities/entity_mutation` capability traits
   (`RenameEntity`, `TrashEntity`, `RestoreEntity`, `DeleteEntityPermanently`, ...)
   in the domain crate, as `crates/forms/src/domain/entity_mutation.rs` does, then
   add the arms in `services/document_storage_service/src/service/entity_mutation.rs`
@@ -180,10 +180,10 @@ Postgres repo.
 - **Trash auto-purge:** `services/deleted_item_poller` purges trashed items after
   30 days only for kinds it knows; its `AGENTS.md` has the recipe. Forms,
   databases, and pipelines are not there yet, so their trash is never emptied.
-- **Favorites (optional):** `crates/favorites/src/domain/mutation_service.rs`
+- **Favorites (optional):** `crates/entities/favorites/src/domain/mutation_service.rs`
   `validate_favoritable` is exhaustive; recent kinds return unsupported. If you
   enable favorites, join your table in `list_favorites`
-  (`crates/favorites/src/outbound/pg_favorites_repo.rs`) so a favorite of a
+  (`crates/entities/favorites/src/outbound/pg_favorites_repo.rs`) so a favorite of a
   deleted entity stops listing, as documents, projects, and agent sessions do.
   Nothing reaps the `favorite` rows themselves; a delete-time cleanup is still
   worth adding when the kind is deleted in bulk.

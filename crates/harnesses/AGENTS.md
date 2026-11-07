@@ -62,7 +62,7 @@ before acting"); paired machines keep it off until their owner turns it on.
   (`MacroUserAuthentication::is_human_session`): agents can ask, never grant.
 - A resident is a bound agent with `is_coding` false. There is no move-in or
   eviction flow yet; the binding is all there is.
-- Direct grants and access requests go through `crates/access_requests`
+- Direct grants and access requests go through `crates/entities/access_requests`
   (`ShareEntityType::Harness`, whose levels are `view` and `edit`).
 - Not here: running an agent session or the ACP protocol itself →
   `crates/agent_session`, `coding_agent_worker`.
