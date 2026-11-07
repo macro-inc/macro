@@ -9,6 +9,12 @@ impl NodeType for TestElementNode {
     const TYPE: &'static str = "test_block";
     type Kind = ElementKind;
     impl_default_node!();
+    fn import(tx: &mut Transaction<'_>, json: &SerializedNode) -> Result<NodeKey, Error> {
+        // The pinned upstream test helper returns its inline class.
+        let key = tx.create(TestInlineElementNode::default())?.key();
+        tx.update_from_json(key, json)?;
+        Ok(key)
+    }
 }
 impl ElementNode for TestElementNode {
     element_node_base!();
@@ -175,3 +181,6 @@ pub(crate) fn configured_builder(nodes: &[String], attached: bool) -> EditorBuil
     }
     builder
 }
+
+#[cfg(test)]
+mod test;
