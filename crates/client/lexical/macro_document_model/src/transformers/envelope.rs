@@ -183,7 +183,14 @@ pub(super) fn spec(name: &str) -> Option<Envelope> {
         "I_REPLY_TARGET_NODE" => (
             "reply-target",
             "m-reply-target",
-            &["version", "parent", "messageId", "displayText"],
+            &[
+                "parent",
+                "channelId",
+                "targetMessageId",
+                "targetThreadId",
+                "displayText",
+                "senderId",
+            ],
             &[],
             "Unknown Reply Target",
         ),

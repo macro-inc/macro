@@ -1,8 +1,9 @@
 // Independent source conversion oracle supplementing the recorded source corpus.
+import { mock, setSystemTime } from 'bun:test';
 import { readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { fileURLToPath } from 'node:url';
-import { mock, setSystemTime } from 'bun:test';
+
 const root = fileURLToPath(new URL('../../../', import.meta.url));
 setSystemTime(new Date('2026-11-07T12:00:00.000Z'));
 Object.assign(globalThis, { window: { location: { hostname: 'localhost' } } });
@@ -42,6 +43,16 @@ const directory =
 for (const file of readdirSync(directory).sort())
   collect(JSON.parse(readFileSync(directory + file, 'utf8')));
 for (const [tag, data] of [
+  [
+    'm-reply-target',
+    {
+      parent: { type: 'channel', id: 'channel' },
+      targetMessageId: 'message',
+      targetThreadId: 'thread',
+      displayText: 'Example',
+      senderId: 'sender',
+    },
+  ],
   [
     'm-document-mention',
     {

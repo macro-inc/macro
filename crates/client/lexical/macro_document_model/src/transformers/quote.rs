@@ -218,8 +218,8 @@ pub(super) fn macro_replace(
     let key = match attempt {
         Ok(key) => key,
         Err(_) => {
-            let unknown = envelope::unknown(tx, "Unknown Email Thread")?;
             let p = tx.create(Paragraph {})?;
+            let unknown = envelope::unknown(tx, "Unknown Email Thread")?;
             tx.append(p, &[unknown])?;
             p.key()
         }
