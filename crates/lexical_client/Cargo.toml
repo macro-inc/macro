@@ -12,9 +12,18 @@ macro_tower_layers = { path = "../macro_tower_layers" }
 messages = { path = "../messages" }
 trigger_context = { path = "../trigger_context" }
 reqwest = { workspace = true }
+regex = { workspace = true }
 serde = { workspace = true }
+serde_json = { workspace = true }
+macro_config = { workspace = true }
+tokio = { workspace = true }
+thiserror = { workspace = true }
 tracing = { workspace = true }
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
 
 [dev-dependencies]
-serde_json = { workspace = true }
+tracing-subscriber = { workspace = true }
+opentelemetry = { workspace = true, features = ["trace"] }
+opentelemetry_sdk = { workspace = true, features = ["trace", "rt-tokio"] }
+opentelemetry-otlp = { workspace = true }
+tracing-opentelemetry = { workspace = true }
