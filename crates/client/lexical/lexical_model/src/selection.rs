@@ -166,6 +166,13 @@ impl Point {
         if self.key() == other.key() {
             return Ok(self.offset() < other.offset());
         }
+        for point in [self, *other] {
+            if let Point::Text { key, offset } = point
+                && offset > view.text_content_size(key)
+            {
+                return Err(Error::Utf16OffsetOutOfRange(offset));
+            }
+        }
         let anchor = comparison_point(view, self)?;
         let focus = comparison_point(view, *other)?;
         if anchor.key() == focus.key() {

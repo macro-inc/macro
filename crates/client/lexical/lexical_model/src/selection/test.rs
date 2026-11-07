@@ -590,3 +590,22 @@ fn table_selection_set_preserves_offsets_and_only_dirties_changed_keys() -> Resu
     assert!(selection.is_dirty());
     Ok(())
 }
+
+#[test]
+fn comparing_different_nodes_checks_text_caret_bounds() -> Result<(), Error> {
+    let mut editor = Editor::builder(EditorMode::Headless)
+        .build()
+        .expect("editor");
+    let mut tx = editor.transaction();
+    let paragraph = tx.create(Paragraph::default())?;
+    let text = tx.create_text("ab")?;
+    tx.append(paragraph, &[text.key()])?;
+    tx.append(NodeKey::ROOT, &[paragraph.key()])?;
+    let stale = Point::text(text, Utf16Offset(18));
+    assert!(matches!(
+        Point::element(paragraph, ChildIndex(0)).is_before(tx.view(), &stale),
+        Err(Error::Utf16OffsetOutOfRange(Utf16Offset(18)))
+    ));
+    assert!(!stale.is_before(tx.view(), &Point::text(text, Utf16Offset(0)))?);
+    Ok(())
+}

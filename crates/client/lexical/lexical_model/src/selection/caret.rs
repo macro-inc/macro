@@ -320,7 +320,16 @@ impl Transaction<'_> {
             .and_then(|(a, f)| self.caret_merge_targets(a, f, &seen))
         {
             let children = self.children_keys(last)?;
-            self.append(first, &children)?;
+            self.caret_splice(
+                ChildCaret {
+                    origin: first,
+                    direction: CaretDirection::Previous,
+                }
+                .into(),
+                0,
+                &children,
+                CaretDirection::Next,
+            )?;
             let mut parent = self.parent(last);
             self.remove(last, true)?;
             while let Some(key) = parent.filter(|key| self.is_empty(*key)) {
