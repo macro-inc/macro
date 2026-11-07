@@ -165,6 +165,10 @@ tools — hexagonal, heavily feature-gated.
 - Outlook links have no system label rows. Move a thread in or out of the inbox
   through `set_thread_inbox`, and read Outlook inbox, trash, and junk state from
   `email_message_mailbox_facts`, never from labels.
+- Each `email_message_mailbox_facts` probe rebuilds a message's facts from its
+  labels and pending state. In the dynamic preview query, give a view's facts
+  condition to `view_mailbox_fact` so it shares the presence/trash probe in
+  `build_preview_message_predicate` instead of adding a second one.
 - Read receipts (`domain/read_receipts.rs`) own pixel policy for every send
   path: strip existing Macro pixels, track only HTML bodies, never block
   delivery on a tracking failure, and count opens only for sent messages.
