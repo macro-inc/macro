@@ -7,7 +7,6 @@ version = "0.1.0"
 [dependencies]
 bot_id = { path = "../bot_id" }
 channel_sender = { path = "../channel_sender" }
-either = { workspace = true }
 lazy-regex = { workspace = true }
 macro_user_id = { path = "../macro_user_id" }
 nom = { workspace = true }

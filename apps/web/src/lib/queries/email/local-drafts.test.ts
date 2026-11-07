@@ -1,5 +1,7 @@
 import 'fake-indexeddb/auto';
 import { File as NodeFile } from 'node:buffer';
+import { createDraftPersistence } from '@app/features/email-compose/primitives/draft-persistence';
+import { createDraftSession } from '@app/features/email-compose/primitives/draft-session';
 import type { CacheHost } from '@graphql-cache/host/types';
 import type {
   ClaimedMutation,
@@ -400,6 +402,43 @@ describe('draft queue recovery', () => {
     expect(await runtime.readLocalDraft('local')).toMatchObject({
       revision: latest.revision,
       content: { subject: 'Other tab edited' },
+    });
+  });
+  it('refuses a first write from an editor that never opened the working copy', async () => {
+    const editor = () =>
+      createDraftPersistence({
+        session: createDraftSession({
+          draftId: 'server-draft',
+          threadId: 'thread',
+          persistence: 'committed',
+        }),
+        drafts: {
+          saveDraft: vi.fn(),
+          deleteDraft: vi.fn(),
+          saveLocalDraft: runtime.saveLocalDraft,
+        },
+        attachments: { upload: vi.fn() },
+        mintThreadHandle: false,
+        onAlreadySent: vi.fn(),
+      });
+    // Both open the draft before either writes, so neither has a working copy.
+    const first = editor();
+    const second = editor();
+    await first.saveLocally({
+      draft: { subject: 'First editor text' },
+      attachments: [],
+      edit: 1,
+    });
+
+    await expect(
+      second.saveLocally({
+        draft: { subject: 'Second editor text' },
+        attachments: [],
+        edit: 1,
+      })
+    ).rejects.toThrow('changed while saving');
+    expect(await runtime.readLocalDraft('server-draft')).toMatchObject({
+      content: { subject: 'First editor text' },
     });
   });
   it('rejects an older snapshot whose file copy finishes after a newer save', async () => {

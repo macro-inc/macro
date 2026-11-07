@@ -8,10 +8,8 @@ version = "0.1.0"
 chat_message = { path = "../types/chat_message", features = ["schema"] }
 anyhow = { workspace = true }
 axum = { workspace = true }
-base64 = { workspace = true }
 chrono = { workspace = true }
 document_sub_type = { path = "../document_sub_type" }
-doppleganger = { workspace = true, features = ["chrono", "uuid"] }
 macro_user_id = { path = "../macro_user_id", features = ["schema"] }
 model-entity = { path = "../model-entity" }
 model-error-response = { path = "../model-error-response" }
