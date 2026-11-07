@@ -1,5 +1,5 @@
 //! Composition of memory's durable daily work with the internal cron runner.
-use crate::domain::{ports::ComposedMemoryRepo, service::MemoryServiceImpl};
+use memory::domain::{ports::ComposedMemoryRepo, service::MemoryServiceImpl};
 use scheduled_action::domain::{lambda, models::Schedule};
 use std::sync::Arc;
 use tokio_util::{sync::CancellationToken, task::TaskTracker};

@@ -1119,7 +1119,7 @@ pub async fn build(
         event_broker_tracker.clone(),
     );
     if !matches!(config.environment, Environment::Local) {
-        memory::schedule::start(
+        super::memory_schedule::start(
             memory_service.clone(),
             &event_broker_tracker,
             cancellation.clone(),
