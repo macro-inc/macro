@@ -33,4 +33,4 @@ for tests. Wired by agent_harness_service and authentication_service.
 
 ## Related
 
-- `crates/agent_git`, `crates/team_agents`, `crates/user_api_key`.
+- `crates/agent_git`, `crates/team_agents`, `crates/accounts/user_api_key`.

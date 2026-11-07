@@ -17,7 +17,7 @@ lines it answers with. Also the one `AgentProvider` enum, which `harnesses`,
 
 - Depends on: serde, chrono, strum only. `schema` adds `utoipa::ToSchema`,
   `sqlx` adds the Postgres `agent_provider` type.
-- Used by: `crates/harnessd`, `crates/harnesses`, `crates/model_notifications`,
+- Used by: `crates/harnessd`, `crates/harnesses`, `crates/notifications/model_notifications`,
   `services/agent_harness_service`.
 
 ## Checks

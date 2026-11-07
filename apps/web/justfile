@@ -497,7 +497,7 @@ build-natural-time-wasm:
 # parsing, hosted in a worker by the passwords import dialog) into
 # src/lib/core/password-import/wasm (gitignored).
 build-password-import-wasm:
-    scripts/cached-wasm-build.sh password_import_wasm {{justfile_directory()}}/src/lib/core/password-import/wasm -- env CARGO_TARGET_DIR="{{password_import_wasm_target}}" wasm-pack build {{justfile_directory()}}/../../crates/password_import_wasm --target web --release --out-dir {{justfile_directory()}}/src/lib/core/password-import/wasm
+    scripts/cached-wasm-build.sh password_import_wasm {{justfile_directory()}}/src/lib/core/password-import/wasm -- env CARGO_TARGET_DIR="{{password_import_wasm_target}}" wasm-pack build {{justfile_directory()}}/../../crates/accounts/password_import_wasm --target web --release --out-dir {{justfile_directory()}}/src/lib/core/password-import/wasm
 
 # Dev fast path: build the password-import wasm pkg only when it is missing or
 # the adapter or parser sources are newer than the built artifact.
@@ -505,8 +505,8 @@ ensure-password-import-wasm:
     #!/usr/bin/env bash
     set -euo pipefail
     WASM="{{justfile_directory()}}/src/lib/core/password-import/wasm/password_import_wasm_bg.wasm"
-    CRATE="{{justfile_directory()}}/../../crates/password_import_wasm"
-    PARSER="{{justfile_directory()}}/../../crates/password_import"
+    CRATE="{{justfile_directory()}}/../../crates/accounts/password_import_wasm"
+    PARSER="{{justfile_directory()}}/../../crates/accounts/password_import"
     if [ ! -f "$WASM" ] || [ -n "$(find "$CRATE/src" "$CRATE/Cargo.toml" "$PARSER/src" "$PARSER/Cargo.toml" -newer "$WASM" -print -quit)" ]; then
         just --justfile "{{justfile()}}" build-password-import-wasm
     fi

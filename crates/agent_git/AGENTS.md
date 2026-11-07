@@ -38,7 +38,7 @@ standalone `bun.lock` (`tooling/scripts/starter-agent-lock.sh`).
 
 - Owns: `agent_repos`, the repo directories, repo tokens.
 - Not here: creating the agent account → `crates/team_agents`; team roles →
-  `crates/teams` (read through `TeamRepository`).
+  `crates/accounts/teams` (read through `TeamRepository`).
 
 ## Boundaries
 

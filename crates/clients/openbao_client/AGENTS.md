@@ -27,7 +27,7 @@ provide the same lifetime guarantees as application-owned zeroizing secret types
 - `cargo clippy -p openbao_client`
 - `nix develop --command crates/clients/openbao_client/regen.sh` twice with no drift.
 - `python3 -m unittest discover -s crates/clients/openbao_client/spec -p 'test_*.py'`
-- Real-provider fixtures: `crates/passwords/AGENTS.md`.
+- Real-provider fixtures: `crates/accounts/passwords/AGENTS.md`.
 
 ## Gotchas
 

@@ -88,7 +88,7 @@ agent runtime reports the same way.
 
 - Owns: agent accounts, the `team_agents` table, enrollment issuance.
 - Not here: the computer lifecycle and billing → `crates/hosted_runtimes`;
-  membership and seats → `crates/teams`; the repo server → `crates/agent_git`;
+  membership and seats → `crates/accounts/teams`; the repo server → `crates/agent_git`;
   the agent runtime → `packages/muppet` and its template `packages/starter-agent`.
 
 ## Checks

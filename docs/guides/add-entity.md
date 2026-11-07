@@ -319,7 +319,7 @@ appear in Home or Recent; say so in the PR.
   `services/lexical-service/src/endpoints/agent-context.ts` and
   `AgentContextParent` in `packages/lexical-core/utils/agent-context.ts`. CRM
   discussions missed both, and agents mentioned there got no context.
-- **Notifications:** a metadata module in `crates/model_notifications/src/metadata/`
+- **Notifications:** a metadata module in `crates/notifications/model_notifications/src/metadata/`
   with its `define_notif_event!` variant, a GraphQL event in
   `crates/graphql/graphql_notification/src/notification_event/`, the sender in
   `crates/messages/src/outbound/notification_sender.rs`, and

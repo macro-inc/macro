@@ -1,0 +1,20 @@
+[package]
+edition = "2024"
+name = "password_events"
+publish = false
+version = "0.1.0"
+
+[features]
+schema = ["dep:utoipa", "macro_user_id/schema"]
+
+[dependencies]
+macro_event_broker = { workspace = true }
+macro_event_topics = { workspace = true }
+macro_user_id = { workspace = true }
+serde = { workspace = true }
+utoipa = { workspace = true, optional = true }
+uuid = { workspace = true, features = ["serde"] }
+workspace-hack = { version = "0.1", path = "../../workspace-hack" }
+
+[dev-dependencies]
+serde_json = { workspace = true }

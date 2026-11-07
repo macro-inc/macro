@@ -22,7 +22,7 @@ them instead of their generic equivalents.
   Ports expose `type Err: std::error::Error + Send + Sync + 'static`; services
   map adapter errors with `rootcause::Report::new(e).into_dynamic()`. Binaries
   return `Result<(), rootcause::Report>`. Never add `anyhow` to a crate that
-  doesn't use it (CS-46). Model: `crates/user_api_key`.
+  doesn't use it (CS-46). Model: `crates/accounts/user_api_key`.
 - **CS-57** No panics outside tests and startup: no `.unwrap()`, `.expect()`,
   `unreachable!`, `panic!`, `todo!`, or unchecked indexing on a path a request,
   tool call, or message can reach. Return a typed error the caller can show

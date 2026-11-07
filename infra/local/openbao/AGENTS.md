@@ -20,7 +20,7 @@ stack generator owns the container, instance volumes, and generated credentials.
 
 - Owns local OpenBao lifecycle and provisioning only. Hosted dev and production
   require separately approved infrastructure and identities.
-- Product authorization and provider operations belong in `crates/passwords`.
+- Product authorization and provider operations belong in `crates/accounts/passwords`.
 
 ## Checks
 

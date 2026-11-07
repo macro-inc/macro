@@ -92,7 +92,7 @@ From `infra/`:
   `tokio runtime starvation detected` warning in `crates/platform/macro_tower_layers`;
   its header is the field contract.
 - `monitors/calls.ts` matches the text of the `voip push: SNS delivery failed`
-  log in `crates/notification/src/domain/service/voip.rs` and the
+  log in `crates/notifications/notification/src/domain/service/voip.rs` and the
   `PushEndpointUnavailable` message. Rewording either silently breaks it.
 - Keep `monitors/oauth.ts` in sync with the linked-token, native MCP OAuth,
   and Pipedream failure logs it names; preserve channel-only routing and

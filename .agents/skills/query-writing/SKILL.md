@@ -40,7 +40,7 @@ The plan must show all four, judged against [table sizes](../query-review/table-
    team, or the table.
 4. **A statement timeout covers it.** Any query whose cost depends on a
    tenant's data runs under `statement_timeout`: `SET LOCAL` in its
-   transaction (`crates/notification/src/outbound/retention.rs`,
+   transaction (`crates/notifications/notification/src/outbound/retention.rs`,
    `dynamic_email_thread_cursor` in `crates/email`) or a pool created with the
    option (`crates/github/src/outbound/pg_github_repo.rs`). Most pools set no
    default, so a slow query otherwise runs until it finishes, long after the

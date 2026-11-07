@@ -40,7 +40,7 @@ Scope:
 
 Acceptance: channel/mention/email and other enabled notification types arrive from real backend events in foreground, background, and normal process-dead states; taps route correctly; denial/revocation, rotation, read/dismiss synchronization, and account switching work. Test Doze/OEM battery behavior separately from user force-stop.
 
-Starting points: `crates/notification/src/domain/{service/ingress.rs,models/queue_message.rs,models/android.rs}`, `infra/stacks/notification-service/index.ts`, `apps/web/src/lib/tauri/PushNotification.tsx`, the pinned notifications plugin, and audit items 3–4. Depends on task 1's working app/authentication.
+Starting points: `crates/notifications/notification/src/domain/{service/ingress.rs,models/queue_message.rs,models/android.rs}`, `infra/stacks/notification-service/index.ts`, `apps/web/src/lib/tauri/PushNotification.tsx`, the pinned notifications plugin, and audit items 3–4. Depends on task 1's working app/authentication.
 
 ## 3. Complete Android input, navigation, attachments, and sharing
 
@@ -71,7 +71,7 @@ Scope:
 
 Acceptance: incoming/outgoing calls work with the app open, backgrounded, and the phone locked; audio routing, remote cancellation, reconnects, and supported video/PiP flows work on Pixel and Samsung hardware.
 
-Starting points: `apps/web/src/features/channel/Call/`, `apps/web/tauri/callkit_plugin/` as the iOS parity reference, `crates/notification/src/domain/service/voip.rs`, and audit item 7. Coordinate with task 2 for FCM and task 1 for the app shell.
+Starting points: `apps/web/src/features/channel/Call/`, `apps/web/tauri/callkit_plugin/` as the iOS parity reference, `crates/notifications/notification/src/domain/service/voip.rs`, and audit item 7. Coordinate with task 2 for FCM and task 1 for the app shell.
 
 ## 5. Make Android offline recovery and OTA updates reliable
 
@@ -87,7 +87,7 @@ Scope:
 
 Acceptance: acknowledged work survives lifecycle/network changes without duplication or cross-account leakage; an older installed Android release remains functional when a newer iOS/shared-JS release ships; failed or rejected updates recover cleanly.
 
-Starting points: `apps/web/src/lib/core/mobile/native-network-status.ts`, `apps/web/src/lib/queries/client.ts`, `apps/web/tauri/{graphql_cache_plugin,macro_bundle_updater_plugin}`, `crates/native_app_service/src/domain/service.rs`, and audit items 11–12. Depends on task 1 and coordinates with tasks 2–4 for lifecycle testing.
+Starting points: `apps/web/src/lib/core/mobile/native-network-status.ts`, `apps/web/src/lib/queries/client.ts`, `apps/web/tauri/{graphql_cache_plugin,macro_bundle_updater_plugin}`, `crates/accounts/native_app_service/src/domain/service.rs`, and audit items 11–12. Depends on task 1 and coordinates with tasks 2–4 for lifecycle testing.
 
 ## 6. Qualify and release the Android app on Google Play
 

@@ -23,7 +23,7 @@ key issuance, and account merge/link flows.
 
 - Owns: FusionAuth-backed login/session issuance, JWT minting, signup
   allowlisting, OAuth/OAuth2 account linking, GTM invite links, the platform
-  status banner API (`crates/system_status`), shared-mailbox
+  status banner API (`crates/accounts/system_status`), shared-mailbox
   relocation signup, Cursor/Codex API key endpoints, introductory trial
   eligibility and subscription checkout, and Macro computer purchase and
   billing (the `hosted_runtimes` team and internal routers, mounted with a
@@ -32,8 +32,8 @@ key issuance, and account merge/link flows.
   addresses come from `outbound/agent_addresses.rs`).
 - Not here: authorization/permission decisions on other entities →
   `crates/platform/macro_authorization`; metered AI credits → `crates/ai_billing`;
-  team lifecycle and seats → `crates/teams`; a person's interface language
-  (`/user/language`) → `crates/user_language`.
+  team lifecycle and seats → `crates/accounts/teams`; a person's interface language
+  (`/user/language`) → `crates/accounts/user_language`.
 
 ## Recipes
 
@@ -193,7 +193,7 @@ inputs cannot select an agent, and ordinary user credentials remain unattributed
 - An agent can do everything a person can, including inviting other agents. Do
   not gate general actions on `isAgent`; it changes signup and labeling.
   Passwords v1 separately requires human accounts. Only an agent can be an
-  account manager, and an agent cannot be managed (`crates/account_manager`).
+  account manager, and an agent cannot be managed (`crates/accounts/account_manager`).
 - Routes that mint credentials, link a sign-in, merge accounts, or delete the
   account use `AccountHolderOrInternal`, so an account manager's credential can't
   outlast its own revocation or lock the account's owner out, and a scoped

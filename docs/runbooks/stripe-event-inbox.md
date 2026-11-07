@@ -104,7 +104,7 @@ does not guess a tier. Revokes on such a price still apply (they remove
 Premium). The `personal_plan` dead-letter monitor pages on-call. Recover:
 
 1. Add the price id to `LEGACY_PREMIUM_PRICE_IDS` in
-   `crates/teams/src/domain/model.rs` (when it should keep Premium; another
+   `crates/accounts/teams/src/domain/model.rs` (when it should keep Premium; another
    tier is a code change to `SeatPrices`).
 2. Ship it through the normal full deploy (`deploy_all_services.yml`).
 3. Once it is live, replay the dead `personal_plan` cursors, retrying each

@@ -66,7 +66,7 @@ read it before changing behaviour.
 
 - Owns: computer rows, hosts, outbox, timers, lifecycle, size catalog.
 - Not here: harness rows and pairing → `crates/harnesses`; the subscription's
-  seat logic → `crates/teams`; macrod enrollment → `crates/coding_agent_worker`.
+  seat logic → `crates/accounts/teams`; macrod enrollment → `crates/coding_agent_worker`.
 - Sizes are this crate's own; do not reuse `agent_harness`'s `SandboxSize`.
 
 ## Boundaries
@@ -98,7 +98,7 @@ read it before changing behaviour.
   (`ComputerError::is_storage_unavailable`): passes skip the tick and effects
   keep their attempts. Never count it as an effect failure.
 - A billing removal keeps one idempotency key across retries; see
-  `removal_key` and the subscription guard in `crates/teams/AGENTS.md`.
+  `removal_key` and the subscription guard in `crates/accounts/teams/AGENTS.md`.
 - `PageOperator` is the log event `computer needs an operator` (error level);
   alerts key on it.
 - `NotifySetup` tells the buyer how first setup ended through the
