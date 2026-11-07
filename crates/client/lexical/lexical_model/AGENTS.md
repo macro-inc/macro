@@ -90,6 +90,8 @@ the intentional root dirty mark; cache-only writes do not add mutations.
 
 Generate command scripts with inline paragraph contents and block decorators at root; malformed nested paragraphs can legitimately reject insertion upstream. Check range-only command preconditions after decorator deletion enters NodeSelection, and validate selected node keys too.
 
+Generate inline paragraph contents and root-level block decorators; keep malformed nested-paragraph scripts as literal regressions instead of swallowing edit errors.
+
 Generated properties cover S4 P1–P13 for the core node subset. P5 follows S1 §8.6
 cache eligibility; P10 compares dirty records before cache writes per S1 §8.7.
 Exact history JSON identity (P11) uses headless mode: restoring view-attached
