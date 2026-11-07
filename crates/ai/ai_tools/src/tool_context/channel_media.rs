@@ -2,8 +2,8 @@
 
 /// Reserves direct uploads of channel images and videos in static-file storage.
 pub type ToolChannelMediaUploadToolContext =
-    channels::inbound::toolset::ChannelMediaUploadToolContext<
-        channels::outbound::static_file_media_uploads::StaticFileMediaUploads,
+    channels_inbound::toolset::ChannelMediaUploadToolContext<
+        channels_outbound::static_file_media_uploads::StaticFileMediaUploads,
     >;
 
 /// Reserve channel media through the static file service's internal API.
@@ -20,8 +20,8 @@ pub fn build_channel_media_upload_tool_context() -> anyhow::Result<ToolChannelMe
 fn with_client(
     client: static_file_service_client::StaticFileServiceClient,
 ) -> ToolChannelMediaUploadToolContext {
-    channels::inbound::toolset::ChannelMediaUploadToolContext::new(
-        channels::outbound::static_file_media_uploads::StaticFileMediaUploads::new(client),
+    channels_inbound::toolset::ChannelMediaUploadToolContext::new(
+        channels_outbound::static_file_media_uploads::StaticFileMediaUploads::new(client),
     )
 }
 

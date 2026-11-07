@@ -15,7 +15,7 @@ use app_service_url::AppServiceUrl;
 use bots::outbound::pg_bots_repo::PgBotsRepo;
 use calendar_service_url::CalendarServiceUrl;
 use channels::domain::list_service::ChannelListServiceImpl;
-use channels::outbound::pg_channels_repo::PgChannelsRepo;
+use channels_outbound::pg_channels_repo::PgChannelsRepo;
 use connection_gateway_client::ConnectionGatewayClient;
 use connection_gateway_url::ConnectionGatewayUrl;
 use document_storage_service_url::DocumentStorageServiceUrl;

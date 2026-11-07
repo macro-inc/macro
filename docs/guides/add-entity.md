@@ -343,7 +343,7 @@ Four vocabularies must agree:
    `reference_sharing.rs`. **`grant_level` defaults any kind to View**, so
    posting a mention shares the entity with the whole channel unless you decide
    otherwise (initiatives opt out). Add the kind to the `matches!` list in
-   `crates/comms/channels/src/outbound/pg_channel_reference_share_permissions.rs`, or it
+   `crates/comms/channels_outbound/src/pg_channel_reference_share_permissions.rs`, or it
    falls through to legacy share permissions and fails at runtime.
 
 - **Agent prompt:** add the kind to `crates/agents/prompt/src/mentions.rs` and, if it has

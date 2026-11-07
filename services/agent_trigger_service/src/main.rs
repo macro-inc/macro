@@ -22,7 +22,7 @@ use agent_trigger::outbound::{
 };
 use anyhow::Context as _;
 use bots::outbound::pg_bots_repo::PgBotsRepo;
-use channels::outbound::pg_channels_repo::PgChannelsRepo;
+use channels_outbound::pg_channels_repo::PgChannelsRepo;
 use config::Config;
 use connection_gateway_client::client::ConnectionGatewayClient;
 use connection_gateway_url::ConnectionGatewayUrl;
