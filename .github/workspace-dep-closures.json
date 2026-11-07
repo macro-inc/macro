@@ -953,6 +953,7 @@
       "crates/task_dedup",
       "crates/teams",
       "crates/trigger_context",
+      "crates/types/chat_id",
       "crates/unfurl",
       "crates/universal_input",
       "crates/upstream_error",
@@ -1146,6 +1147,7 @@
       "crates/task_dedup",
       "crates/teams",
       "crates/trigger_context",
+      "crates/types/chat_id",
       "crates/unfurl",
       "crates/upstream_error",
       "crates/user_quota",
@@ -1945,6 +1947,7 @@
       "crates/task_dedup",
       "crates/teams",
       "crates/trigger_context",
+      "crates/types/chat_id",
       "crates/unfurl",
       "crates/upstream_error",
       "crates/user_quota",
@@ -2129,6 +2132,7 @@
       "crates/task_dedup",
       "crates/teams",
       "crates/trigger_context",
+      "crates/types/chat_id",
       "crates/unfurl",
       "crates/upstream_error",
       "crates/user_quota",
@@ -2402,6 +2406,7 @@
       "crates/task_dedup",
       "crates/teams",
       "crates/trigger_context",
+      "crates/types/chat_id",
       "crates/unfurl",
       "crates/user_quota",
       "crates/workspace-hack"
@@ -3368,6 +3373,7 @@
       "crates/task_dedup",
       "crates/teams",
       "crates/trigger_context",
+      "crates/types/chat_id",
       "crates/unfurl",
       "crates/upstream_error",
       "crates/user_quota",
@@ -3540,7 +3546,11 @@
       "crates/remote_env_var",
       "crates/roles_and_permissions",
       "crates/share_permission_db_utils",
+      "crates/types/chat_id",
       "crates/workspace-hack"
+    ],
+    "chat_id": [
+      "crates/types/chat_id"
     ],
     "claude_fold": [
       "crates/agent_runtime_protocol",
@@ -4302,6 +4312,7 @@
       "crates/task_dedup",
       "crates/teams",
       "crates/trigger_context",
+      "crates/types/chat_id",
       "crates/unfurl",
       "crates/upstream_error",
       "crates/user_quota",
@@ -5179,6 +5190,7 @@
       "crates/task_dedup",
       "crates/teams",
       "crates/trigger_context",
+      "crates/types/chat_id",
       "crates/user_quota",
       "crates/workspace-hack",
       "services/deleted_item_poller"
@@ -5430,6 +5442,7 @@
       "crates/task_dedup",
       "crates/teams",
       "crates/trigger_context",
+      "crates/types/chat_id",
       "crates/unfurl",
       "crates/upstream_error",
       "crates/user_api_key",
@@ -7883,6 +7896,7 @@
       "crates/task_dedup",
       "crates/teams",
       "crates/trigger_context",
+      "crates/types/chat_id",
       "crates/unfurl",
       "crates/user_quota",
       "crates/workspace-hack"
@@ -8138,6 +8152,7 @@
       "crates/task_dedup",
       "crates/teams",
       "crates/trigger_context",
+      "crates/types/chat_id",
       "crates/unfurl",
       "crates/user_quota",
       "crates/workspace-hack"
@@ -8292,6 +8307,7 @@
       "crates/task_dedup",
       "crates/teams",
       "crates/trigger_context",
+      "crates/types/chat_id",
       "crates/unfurl",
       "crates/user_quota",
       "crates/workspace-hack"
@@ -8446,6 +8462,7 @@
       "crates/task_dedup",
       "crates/teams",
       "crates/trigger_context",
+      "crates/types/chat_id",
       "crates/unfurl",
       "crates/user_quota",
       "crates/workspace-hack"
@@ -8646,6 +8663,7 @@
       "crates/task_dedup",
       "crates/teams",
       "crates/trigger_context",
+      "crates/types/chat_id",
       "crates/unfurl",
       "crates/user_quota",
       "crates/workspace-hack"
@@ -8896,6 +8914,7 @@
       "crates/task_dedup",
       "crates/teams",
       "crates/trigger_context",
+      "crates/types/chat_id",
       "crates/unfurl",
       "crates/user_quota",
       "crates/workspace-hack"
@@ -9188,6 +9207,7 @@
       "crates/task_dedup",
       "crates/teams",
       "crates/trigger_context",
+      "crates/types/chat_id",
       "crates/unfurl",
       "crates/user_quota",
       "crates/workspace-hack"
@@ -9370,6 +9390,7 @@
       "crates/task_dedup",
       "crates/teams",
       "crates/trigger_context",
+      "crates/types/chat_id",
       "crates/unfurl",
       "crates/user_quota",
       "crates/work_feed",
@@ -11561,6 +11582,7 @@
       "crates/task_dedup",
       "crates/teams",
       "crates/trigger_context",
+      "crates/types/chat_id",
       "crates/unfurl",
       "crates/user_quota",
       "crates/workspace-hack"
@@ -12725,6 +12747,7 @@
       "crates/task_dedup",
       "crates/teams",
       "crates/trigger_context",
+      "crates/types/chat_id",
       "crates/unfurl",
       "crates/user_quota",
       "crates/workspace-hack",
@@ -14038,6 +14061,7 @@
       "crates/task_dedup",
       "crates/teams",
       "crates/trigger_context",
+      "crates/types/chat_id",
       "crates/unfurl",
       "crates/user_quota",
       "crates/workspace-hack"
@@ -15250,6 +15274,7 @@
       "crates/task_dedup",
       "crates/teams",
       "crates/trigger_context",
+      "crates/types/chat_id",
       "crates/unfurl",
       "crates/user_quota",
       "crates/work_feed",

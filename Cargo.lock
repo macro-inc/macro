@@ -603,6 +603,7 @@ dependencies = [
  "call",
  "channels",
  "chat",
+ "chat_id",
  "chrono",
  "code_execution",
  "codex_cloud_agents",
@@ -4363,6 +4364,7 @@ dependencies = [
  "attachment",
  "axum",
  "bot_id",
+ "chat_id",
  "chrono",
  "entity_access",
  "entity_access_db_utils",
@@ -4399,6 +4401,17 @@ dependencies = [
  "utoipa",
  "uuid",
  "workspace-hack",
+]
+
+[[package]]
+name = "chat_id"
+version = "0.1.0"
+dependencies = [
+ "nutype",
+ "serde",
+ "serde_json",
+ "sqlx",
+ "utoipa",
 ]
 
 [[package]]
