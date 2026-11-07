@@ -115,7 +115,8 @@ export function DatabaseTimelineView(props: DatabaseTimelineViewProps) {
   };
   return (
     <>
-      <Show when={menu()}>
+      {/* With a chart, the menu sits among its controls. */}
+      <Show when={!spanned() && menu()}>
         {(shown) => (
           <div class="flex shrink-0 items-center justify-end px-5 pt-2">
             <TimelineMenu
@@ -372,6 +373,15 @@ function TimelineChart(
             <Gantt.Controls>
               <Gantt.TodayButton />
               <Gantt.Settings />
+              <Show when={props.onViewChange}>
+                {(changeView) => (
+                  <TimelineMenu
+                    layout={props.layout}
+                    columns={props.columns}
+                    onChange={(layout) => changeView()({ layout })}
+                  />
+                )}
+              </Show>
             </Gantt.Controls>
             <Gantt.GroupDrag
               scope={`${props.rangeColumn.id}:${groupColumn()?.id ?? ''}`}
