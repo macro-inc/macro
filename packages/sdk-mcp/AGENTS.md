@@ -16,7 +16,8 @@ caller, so no tool is handwritten.
 - `src/tools.ts` turns operations into tools. `entity` grouping (default):
   `<entity>_read` / `_write` / `_delete`, one `op` discriminated union each.
   `method` grouping: one tool per operation (`document-edit`). Both are
-  snapshotted in `src/__snapshots__/`.
+  snapshotted in `src/__snapshots__/` (names, schemas and hints; not the
+  TSDoc descriptions, so doc edits don't churn them).
 - `src/call.ts` validates input with the Zod schemas `src/validate.ts` builds
   from the same catalog, mints the handles references name (an id, a Macro
   URL, or the ids a nested `byId` takes), calls the method and returns its
@@ -35,8 +36,9 @@ can reach (add a `static byId` or exclude it).
 ## Checks
 
 From this directory, after `bun install --frozen-lockfile` at the root and in
-`packages/sdk`: `bun run type-check`, `bun run test`. A changed SDK method
-changes the snapshots: review the diff, then `bunx vitest run -u`.
+`packages/sdk`: `bun run type-check`, `bun run test`. A new or changed SDK
+method signature or hint tag changes the snapshots: review the diff, then
+`bunx vitest run -u`.
 
 ## Gotchas
 

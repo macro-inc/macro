@@ -2,17 +2,31 @@ import { describe, expect, test } from 'vitest';
 import { catalog } from './generated/catalog';
 import { buildTools, type Tool, type ToolGrouping } from './tools';
 
-/** What MCP's `tools/list` sends for each tool. */
-function listed(tools: readonly Tool[]) {
-  return tools.map(
-    ({ name, title, description, inputSchema, annotations }) => ({
-      name,
-      title,
-      description,
-      annotations,
-      inputSchema,
-    })
+/** A copy of `value` without `description` strings. */
+function withoutDescriptions(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map(withoutDescriptions);
+  if (typeof value !== 'object' || value === null) return value;
+  return Object.fromEntries(
+    Object.entries(value)
+      .filter(
+        ([key, item]) => key !== 'description' || typeof item !== 'string'
+      )
+      .map(([key, item]) => [key, withoutDescriptions(item)])
   );
+}
+
+/**
+ * What MCP's `tools/list` sends for each tool: names, schemas and hints.
+ * Descriptions are the SDK's TSDoc and would make every doc edit a snapshot
+ * update, so they are left out.
+ */
+function listed(tools: readonly Tool[]) {
+  return tools.map(({ name, title, inputSchema, annotations }) => ({
+    name,
+    title,
+    annotations,
+    inputSchema: withoutDescriptions(inputSchema),
+  }));
 }
 
 describe('buildTools', () => {
