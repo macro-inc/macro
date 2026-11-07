@@ -164,6 +164,7 @@ tauri-plugin-android-auth = { path = "../android_auth_plugin" }
 tauri-plugin-android-mobile = { path = "../android_mobile_plugin" }
 tauri-plugin-android-push = { path = "../android_push_plugin" }
 tauri-plugin-call-kit = { path = "../callkit_plugin" }
+tauri-plugin-geofence = { path = "../geofence_plugin" }
 tauri-plugin-network-status = { path = "../network_status_plugin" }
 
 [target.'cfg(target_os = "ios")'.dependencies]
@@ -173,6 +174,7 @@ tracing-oslog = { version = "0.3" }
 tauri-plugin-call-kit = { path = "../callkit_plugin" }
 tauri-plugin-edit-menu = { path = "../edit_menu_plugin" }
 tauri-plugin-file-export = { path = "../file_export_plugin" }
+tauri-plugin-geofence = { path = "../geofence_plugin" }
 tauri-plugin-input-accessory = { path = "../input_accessory_plugin" }
 tauri-plugin-network-status = { path = "../network_status_plugin" }
 tauri-plugin-pasteboard = { path = "../pasteboard_plugin" }
