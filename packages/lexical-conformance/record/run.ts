@@ -13,6 +13,7 @@ import {
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { excludePrivateFixtures, privateFixtureNames } from './privacy';
+import { recordedFiles, removeRecordedFiles } from './files';
 
 const pkg = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const root = path.resolve(pkg, '../..');
@@ -314,22 +315,16 @@ for (const macroScope of [false, true]) {
 }
 const fixtures = path.join(pkg, 'fixtures');
 if (check) {
-  const walk = (dir: string): string[] =>
-    existsSync(dir)
-      ? readdirSync(dir, { withFileTypes: true }).flatMap((entry) =>
-          entry.isDirectory()
-            ? walk(path.join(dir, entry.name))
-            : [path.relative(fixtures, path.join(dir, entry.name))]
-        )
-      : [];
-  if (walk(fixtures).sort().join('\n') !== [...files.keys()].sort().join('\n'))
+  if (
+    recordedFiles(fixtures).join('\n') !== [...files.keys()].sort().join('\n')
+  )
     throw new Error('Fixture file set drift');
   for (const [name, content] of files) {
     if (readFileSync(path.join(fixtures, name), 'utf8') !== content)
       throw new Error(`Fixture drift: ${name}`);
   }
 } else {
-  rmSync(fixtures, { recursive: true, force: true });
+  removeRecordedFiles(fixtures);
   for (const [name, content] of files) {
     mkdirSync(path.dirname(path.join(fixtures, name)), { recursive: true });
     writeFileSync(path.join(fixtures, name), content);
