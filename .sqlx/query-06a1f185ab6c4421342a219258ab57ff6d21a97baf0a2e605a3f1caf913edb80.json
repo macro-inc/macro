@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE email_sequence_steps SET status = 'unknown' WHERE enrollment_id = $1 AND step = $2",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Int2"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "06a1f185ab6c4421342a219258ab57ff6d21a97baf0a2e605a3f1caf913edb80"
+}

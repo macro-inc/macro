@@ -46,6 +46,7 @@ function thread(messages: ApiMessage[]): ApiThread {
   };
 }
 
+import { selectThreadMessages } from '../core/thread-messages';
 import { createThreadSnapshot } from '../primitives/thread-snapshot';
 import { createEmailThreadSource, toEmailThread } from './thread-source';
 
@@ -124,6 +125,35 @@ it('keeps a reopened local draft through server identity adoption and rejects an
   }));
 
 describe('thread query adaptation', () => {
+  it('keeps a pending sequence step out of the thread and out of the reply slot', () => {
+    const parent = message('parent');
+    const mine = message('mine', {
+      is_draft: true,
+      replying_to_id: 'parent',
+      updated_at: '2026-09-01T10:00:00Z',
+    });
+    const step = message('step', {
+      is_draft: true,
+      replying_to_id: 'parent',
+      updated_at: '2026-09-02T10:00:00Z',
+      scheduled_send_source: 'sequence',
+      scheduled_send_status: 'pending',
+    });
+    const selected = selectThreadMessages(
+      toEmailThread(thread([parent, mine, step]))
+    );
+    expect(selected.draftMap.parent?.db_id).toBe('mine');
+    expect(selected.messages.map((item) => item.db_id)).toEqual([
+      'parent',
+      'mine',
+    ]);
+    // A failed step comes back as a draft the user can fix.
+    const failed = { ...step, scheduled_send_status: 'failed' as const };
+    expect(
+      selectThreadMessages(toEmailThread(thread([parent, failed]))).draftMap
+        .parent?.db_id
+    ).toBe('step');
+  });
   it('preserves saved invitations through the explicit cached message projection', () => {
     const invitations = [invitationFixture];
     expect(

@@ -34,6 +34,15 @@ pub fn router(state: ApiContext) -> Router<ApiContext> {
         .nest("/backfill", backfill::router(state.clone()))
         .nest("/settings", settings::router(state.clone()))
         .nest("/sync", sync::router(state.clone()))
+        .nest(
+            "/sequences",
+            email_sequences::inbound::axum_router::sequences_router(
+                email_sequences::inbound::axum_router::SequencesRouterState::new(
+                    state.sequences.clone(),
+                    state.authorization_state.clone(),
+                ),
+            ),
+        )
         // deleting all user info from the db can take a long time - prevent connection from dropping
         .layer(axum::middleware::from_fn(
             macro_middleware::connection_drop_prevention_handler,

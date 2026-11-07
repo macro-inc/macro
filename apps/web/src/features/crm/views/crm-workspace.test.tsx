@@ -375,6 +375,7 @@ it('omits pipelines and lists when those features are disabled', () => {
     'Sales Email',
     'Sales Notes',
     'Sales Calls',
+    'Sequences',
   ]);
 });
 

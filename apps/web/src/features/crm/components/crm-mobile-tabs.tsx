@@ -1,22 +1,29 @@
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { t } from '@app/lib/i18n';
 import { type PillTabItem, PillTabs } from '@components/app/mobile/PillTabs';
-import { enableCrmActivity } from '@core/constant/featureFlags';
+import {
+  enableCrmActivity,
+  enableSequences,
+} from '@core/constant/featureFlags';
 import type { JSX } from 'solid-js';
 import {
   CRM_ACTIVITY_TABS,
   CRM_RECORDS,
   pipelineTab,
+  SEQUENCES_TAB,
 } from '../core/navigation';
 
 export function CrmMobileTabs(props: {
   active: string;
   pipelines: readonly { id: string; name: string }[];
   lists: readonly { id: string; name: string }[];
+  /** The team has CRM on, which Sequences need. */
+  crmEnabled: boolean;
   leading?: JSX.Element;
   onNavigate(id: string): void;
 }) {
   const activityFlag = useFeatureFlag(enableCrmActivity);
+  const sequencesFlag = useFeatureFlag(enableSequences);
   const items = (): PillTabItem[] => [
     ...[
       ...CRM_RECORDS,
@@ -29,6 +36,9 @@ export function CrmMobileTabs(props: {
       value: pipelineTab(pipeline.id),
       label: pipeline.name,
     })),
+    ...(sequencesFlag().enabled && props.crmEnabled
+      ? [{ value: SEQUENCES_TAB, label: t('sequences.title') }]
+      : []),
     ...props.lists.map((list) => ({
       value: `list:${list.id}`,
       label: list.name,

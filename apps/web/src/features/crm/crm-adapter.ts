@@ -109,6 +109,16 @@ import { crmTaskComposerContext } from './task-composer';
 const CrmRecordTasks = lazy(async () => ({
   default: (await import('./record-tasks-adapter')).CrmRecordTasks,
 }));
+// Sequences load only where their flag mounts them.
+const SequencesNav = lazy(async () => ({
+  default: (await import('../sequences/sequences')).SequencesNav,
+}));
+const Sequences = lazy(async () => ({
+  default: (await import('../sequences/sequences')).SequencesPane,
+}));
+const ContactSequences = lazy(async () => ({
+  default: (await import('../sequences/sequences')).ContactSequences,
+}));
 
 const CrmActivityTasks = lazy(async () => ({
   default: (await import('./activity-tasks-adapter')).CrmActivityTasks,
@@ -321,6 +331,9 @@ export function createAppCrmContext(): CrmContext {
         useRecordReferencesQuery(useSoupAstItemsQuery, scope)
       ),
     RecordTasks: CrmRecordTasks,
+    SequencesNav,
+    Sequences,
+    ContactSequences,
     createPropertyCommands: useBulkSaveEntityPropertiesMutation,
     createSettingsCommands: () =>
       usePatchTeamCrmSettingsMutation({

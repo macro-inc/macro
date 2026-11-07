@@ -20,7 +20,7 @@ mod shared_thread_replies;
 mod sqs_enqueuer;
 
 #[cfg(feature = "outbound")]
-pub use email_pg_repo::EmailPgRepo;
+pub use email_pg_repo::{EmailPgRepo, PgSequenceSteps};
 #[cfg(all(feature = "outbound", feature = "mailbox"))]
 pub mod mailbox_pg;
 #[cfg(feature = "http_client")]

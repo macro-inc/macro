@@ -1,0 +1,28 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT e.id FROM email_sequence_enrollments e\n               WHERE e.link_id = $1 AND e.status = ANY($2)\n                 AND (e.email = $3 OR e.email = ANY($4)\n                      OR ($7::text IS NOT NULL AND strpos($7, e.email) > 0)\n                      OR EXISTS (SELECT 1 FROM email_sequence_steps h\n                                 WHERE h.enrollment_id = e.id\n                                   AND (h.message_id = ANY($6)\n                                        OR lower(h.delivery_message_id) = ANY($5)\n                                        OR lower(h.provider_message_id) = ANY($5))))\n               ORDER BY e.id",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "TextArray",
+        "Text",
+        "TextArray",
+        "TextArray",
+        "UuidArray",
+        "Text"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "6c5ac8ed553fd72e1384e036177d231219a724db8cc3525fc7afce0a6c0e1887"
+}

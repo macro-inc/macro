@@ -4,7 +4,7 @@ use async_graphql::{Context, ID, Object, SimpleObject, dataloader::DataLoader};
 use email::domain::models::{
     AttachmentDraft, AttachmentForwarded, ContactInfo, EmailThreadMailProjection,
     EmailThreadMetadata, Message, MessageAttachment, ParsedLabel, ParsedMessage,
-    ScheduledSendStatus,
+    ScheduledSendSource, ScheduledSendStatus,
 };
 
 use crate::loaders::{
@@ -20,6 +20,7 @@ const FULL_MESSAGE_FIELDS: &[&str] = &[
     "replyingToId",
     "scheduledSendTime",
     "scheduledSendStatus",
+    "scheduledSendSource",
     "attachments",
     "attachmentsDraft",
     "attachmentsForwarded",
@@ -91,6 +92,21 @@ impl From<ScheduledSendStatus> for GraphqlScheduledSendStatus {
             ScheduledSendStatus::Sending => Self::Sending,
             ScheduledSendStatus::Failed => Self::Failed,
             ScheduledSendStatus::Unconfirmed => Self::Unconfirmed,
+        }
+    }
+}
+
+/// What created a scheduled delivery, when it was not the user's own composer.
+#[derive(async_graphql::Enum, Copy, Clone, Eq, PartialEq)]
+pub enum GraphqlScheduledSendSource {
+    /// A step of an email sequence; not the user's own draft while pending.
+    Sequence,
+}
+
+impl From<ScheduledSendSource> for GraphqlScheduledSendSource {
+    fn from(source: ScheduledSendSource) -> Self {
+        match source {
+            ScheduledSendSource::Sequence => Self::Sequence,
         }
     }
 }
@@ -225,6 +241,13 @@ impl GraphqlSoupEmailMessage {
         &self,
     ) -> async_graphql::Result<Option<GraphqlScheduledSendStatus>> {
         Ok(self.full()?.scheduled_send_status.map(Into::into))
+    }
+
+    /// What created the unsent schedule, such as a sequence step.
+    async fn scheduled_send_source(
+        &self,
+    ) -> async_graphql::Result<Option<GraphqlScheduledSendSource>> {
+        Ok(self.full()?.scheduled_send_source.map(Into::into))
     }
 
     /// The sender of the message.

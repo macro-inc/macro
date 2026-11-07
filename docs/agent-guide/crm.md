@@ -6,7 +6,7 @@ On desktop, the local sidebar uses the same navigation primitives as Email and T
 Its **New** menu creates a **Company**, a **Contact**, or a **Pipeline** (Pipeline
 only when pipelines are enabled). The
 **Records** section lists **Companies**, **People**, **Sales Tasks**, **Sales Email**,
-**Sales Notes**, and **Sales Calls**, in that order; Pipelines and
+**Sales Notes**, and **Sales Calls**, in that order; Pipelines, Sequences and
 Lists follow. Record-detail tabs keep their unprefixed names.
 There are no built-in company views or Board/List layout. Companies and People
 are plain soup lists with the shared pagination. Existing personal/team saved
@@ -643,3 +643,47 @@ sections and reopen a record: each restarts the `crm.company` / `crm.contact`
 flow, and disabled sources must not leave it waiting once metadata is ready.
 Traces hold opaque record ids and section categories, never names or addresses.
 Metadata errors may cancel the detail flow when the outer error panel replaces it.
+
+## Sequences
+
+Sequences are multi-step emails the server sends from your own connected Gmail
+inbox (not a delegated inbox or Outlook) to CRM People. They need a team with
+Customers on and PostHog `enable-sequences` (on in dev; local override
+`VITE_ENABLE_SEQUENCES`). Off, the sidebar item, mobile tab, contact card and
+**Add to sequence** disappear, the sequence views never load, no sequence
+requests run, and sequence links return to Companies after flags load. Without
+CRM on for the team, the section and its links behave the same way.
+
+- **Where:** the **Sequences** item after Pipelines in the Customers sidebar (its
+  number counts enrollments that need attention) or the mobile view strip; the
+  list is `sN.crm.tab=sequences` and one sequence opens at
+  `/app/companies/sequence/<uuid>`. Only its owner sees it.
+- **Create and activate:** **New** creates an Untitled sequence and opens it with
+  the title focused; rename it in the header. Set **From**, the emails (the
+  first sends at the start; each later one waits days after the previous and
+  can reply in the same thread; **Insert** adds `{{firstName}}`, `{{name}}` or
+  `{{email}}` at the caret) and the footer; the server adds an unsubscribe
+  link. Edits save on their own (**Saving…** shows beside the status), and
+  **Activate** starts it; Delete is in the ⋯ menu. Editing needs a draft or
+  paused sequence; edits reach everyone who hasn't been sent an email yet. A
+  save over a copy changed elsewhere asks to **Reload**.
+- **Add people:** **Add people** searches CRM People (up to 50 at a time) and
+  takes a start time in your time zone. People can be added before activating;
+  nothing sends until the sequence is active. Selected People or
+  Companies rows also offer **Add to sequence** in their right-click and
+  selection command menus; a company brings all its people, so filter or group
+  Companies by Stage to add a pipeline stage. Past 50 people, only the first
+  50 are selected. Skipped people (no email, unsubscribed, already added) are
+  listed with why.
+- **Statuses:** a sequence is Draft, Active or Paused. A person is Active, Paused
+  (also while the sequence is a draft or paused), Needs attention, Stopped or
+  Completed, with a reason (replied, bounced,
+  unsubscribed, removed from Customers, send failed, …). Rows offer Pause,
+  Resume (**Retry** after a failed or removed email; also after a stop for a
+  reply, bounce or lost access), Stop and Unsubscribe (team-wide, confirmed
+  first); opening a row shows that person's emails and when each sent. An
+  active sequence whose inbox was disconnected says so: pause it, choose an
+  inbox, resume it, then resume its people.
+- **Contact card:** a contact's Overview lists its sequences for every teammate:
+  sequence, owner, status, last and next send, never the emails. The owner's
+  sequence name opens it.

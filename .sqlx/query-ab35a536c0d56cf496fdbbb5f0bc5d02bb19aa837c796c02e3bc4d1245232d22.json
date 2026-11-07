@@ -1,0 +1,30 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT scheduled_at, enrollment_id FROM email_sequence_steps\n               WHERE status = 'scheduled'\n                 AND ($1::timestamptz IS NULL OR (scheduled_at, enrollment_id) > ($1, $2))\n               ORDER BY scheduled_at, enrollment_id\n               LIMIT $3",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "scheduled_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 1,
+        "name": "enrollment_id",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Timestamptz",
+        "Uuid",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false,
+      false
+    ]
+  },
+  "hash": "ab35a536c0d56cf496fdbbb5f0bc5d02bb19aa837c796c02e3bc4d1245232d22"
+}

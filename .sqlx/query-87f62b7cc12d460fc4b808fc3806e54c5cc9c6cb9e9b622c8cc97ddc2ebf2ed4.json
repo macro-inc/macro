@@ -1,0 +1,65 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT s.id AS sequence_id, s.name AS sequence_name, s.user_id AS owner_id,\n                      s.status AS sequence_status, e.status, e.reason,\n                      (SELECT max(h.sent_at) FROM email_sequence_steps h WHERE h.enrollment_id = e.id) AS last_sent_at,\n                      COALESCE((SELECT h.scheduled_at FROM email_sequence_steps h\n                                WHERE h.enrollment_id = e.id AND h.status = 'scheduled'),\n                               CASE WHEN e.status = 'active' THEN e.due_at END) AS next_send_at\n               FROM email_sequence_enrollments e JOIN email_sequences s ON s.id = e.sequence_id\n               WHERE e.team_id = $1 AND e.email = $2\n               ORDER BY e.created_at DESC, e.id",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "sequence_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "sequence_name",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "owner_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "sequence_status",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "status",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 5,
+        "name": "reason",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 6,
+        "name": "last_sent_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 7,
+        "name": "next_send_at",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      true,
+      null,
+      null
+    ]
+  },
+  "hash": "87f62b7cc12d460fc4b808fc3806e54c5cc9c6cb9e9b622c8cc97ddc2ebf2ed4"
+}

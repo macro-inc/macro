@@ -317,7 +317,9 @@ pub async fn fetch_messages_with_labels(
 /// The headers a reply needs to thread under `message_id`. The parent may sit
 /// in another inbox than the reply's: another of the sender's own, or the
 /// owner's when its thread was shared with the sender. Callers pass a reply
-/// target that was authorized when its draft was saved.
+/// target that was authorized when its draft was saved. A parent Macro sent
+/// that inbox sync hasn't stored yet has no Message-ID header; its delivery
+/// minted one.
 #[tracing::instrument(skip(pool), err)]
 pub async fn get_message_threading_headers(
     pool: &PgPool,
@@ -327,11 +329,12 @@ pub async fn get_message_threading_headers(
         r#"
         SELECT 
           -- Use trim() to remove the leading/trailing angle brackets
-          trim(jsonb_path_query_first(headers_jsonb, '$[*] ? (@.name like_regex "message-id" flag "i").value') #>> '{}', '<>') as "message_id",
+          COALESCE(trim(jsonb_path_query_first(m.headers_jsonb, '$[*] ? (@.name like_regex "message-id" flag "i").value') #>> '{}', '<>'), s.delivery_message_id) as "message_id",
           -- The references header can have multiple IDs, so we just return it raw
-          jsonb_path_query_first(headers_jsonb, '$[*] ? (@.name like_regex "references" flag "i").value') #>> '{}' as "references"
-        FROM email_messages
-        WHERE id = $1
+          jsonb_path_query_first(m.headers_jsonb, '$[*] ? (@.name like_regex "references" flag "i").value') #>> '{}' as "references"
+        FROM email_messages m
+        LEFT JOIN email_scheduled_messages s ON s.message_id = m.id AND s.link_id = m.link_id
+        WHERE m.id = $1
         "#,
         message_id
     )

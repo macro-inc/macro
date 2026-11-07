@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "DELETE FROM email_sequence_steps WHERE enrollment_id = $1 AND step = $2",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Int2"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "c55f66abcd37af0d2a8f22237add56780a43bf29ef17fb0f83dd1d5345b66e8c"
+}

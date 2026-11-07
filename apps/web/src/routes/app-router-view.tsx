@@ -120,6 +120,7 @@ import {
   crmRecordRoute,
   crmRetiredDatabaseRoute,
   crmRetiredRecordDatabasesRoute,
+  crmSequenceRoute,
   debugRoutes,
   driveCallRoute,
   driveFolderDocumentRoute,
@@ -499,6 +500,7 @@ export function AppRouterView() {
             <Route definition={crmPipelineRetiredDatabaseRoute} />
             <Route definition={crmPipelineRetiredRecordDatabasesRoute} />
           </Route>
+          <Route definition={crmSequenceRoute} />
           <Route definition={crmItemRoute} />
           <Route definition={crmRecordRoute} />
           <Route definition={crmRecordItemRoute} />

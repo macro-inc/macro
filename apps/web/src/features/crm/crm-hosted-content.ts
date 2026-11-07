@@ -16,6 +16,20 @@ export function crmPipelineContent(pipelineId: string): SplitContent {
   };
 }
 
+/** Customers showing one of the viewer's sequences. */
+export function crmSequenceContent(sequenceId: string): SplitContent {
+  return {
+    type: 'component',
+    id: 'companies',
+    entryMetadata: {
+      route: paneRoute(
+        { id: 'view-companies', params: {} },
+        { id: 'companies-sequence', params: { sequenceId } }
+      ),
+    },
+  };
+}
+
 /** Customers showing a record, scrolled to `commentId` in its Discussion. */
 export function crmRecordContent(
   record: { type: 'company' | 'contact'; id: string },

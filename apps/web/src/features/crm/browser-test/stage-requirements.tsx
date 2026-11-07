@@ -97,6 +97,9 @@ const context: CrmContext = {
     contacts: () => [],
     query: { isLoading: false },
   }),
+  SequencesNav: unused,
+  Sequences: unused,
+  ContactSequences: unused,
 };
 const columns: DatabaseViewColumn[] = [
   {

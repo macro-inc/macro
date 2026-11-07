@@ -20,6 +20,7 @@ fn request() -> DraftRequest {
             message: serde_json::from_value(json!({"link_id":Uuid::now_v7(),"subject":"Reply","body_html":"<b>Hello</b>","to":[{"email":"to@example.com"}]})).unwrap(),
             from: ContactInfo {email:"from@example.com".into(),name:None,photo_url:None},
             parent_message_id:Some("<parent@example.com>".into()), references:Some(vec!["<parent@example.com>".into()]),
+            list_unsubscribe: None,
         }
     }
 }

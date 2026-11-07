@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT steps AS \"steps: Json<Vec<Step>>\" FROM email_sequence_enrollments WHERE id = $1",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "steps: Json<Vec<Step>>",
+        "type_info": "Jsonb"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "b166074bcdd2d41dd060f3721e3ed9992832035a81a774fc93a60436b6ffa6dc"
+}

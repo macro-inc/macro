@@ -1,0 +1,18 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO email_scheduled_messages\n                    (link_id, message_id, send_time, sent, processing, actor_id, agent_correlation_id, created_at, updated_at)\n                   VALUES ($1, $2, $3, false, false, $4, $5, NOW(), NOW())\n                   ON CONFLICT (link_id, message_id) DO UPDATE SET\n                    send_time = EXCLUDED.send_time, actor_id = EXCLUDED.actor_id, agent_correlation_id = EXCLUDED.agent_correlation_id, updated_at = NOW(),\n                    -- Rescheduling a pending sequence step makes it the user's own send.\n                    source = NULL\n                   WHERE NOT email_scheduled_messages.sent AND NOT email_scheduled_messages.processing",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Timestamptz",
+        "Text",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "4a6e9e190788070751ee39b3ccdf6d920ce11cdbc8962e34023bf70adf34db9a"
+}
