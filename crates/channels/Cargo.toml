@@ -96,52 +96,52 @@ schema = [
 ]
 
 [dependencies]
-agent_correlation = { path = "../agent_correlation" }
-activity = { path = "../activity", default-features = false }
+agent_correlation = { workspace = true }
+activity = { workspace = true }
 anyhow = { workspace = true }
-attachment = { path = "../attachment", optional = true }
+attachment = { workspace = true, optional = true }
 axum = { workspace = true, optional = true }
-bot_id = { path = "../bot_id" }
-channel_sender = { path = "../channel_sender" }
-entity_mutation = { path = "../entity_mutation", optional = true }
+bot_id = { workspace = true }
+channel_sender = { workspace = true }
+entity_mutation = { workspace = true, optional = true }
 chrono = { workspace = true }
-connection_gateway_client = { path = "../connection_gateway_client", optional = true }
-contacts = { path = "../contacts", default-features = false, features = [
+connection_gateway_client = { workspace = true, optional = true }
+contacts = { workspace = true, features = [
   "outbound",
 ], optional = true }
-entity_access = { path = "../entity_access", optional = true, default-features = false }
-entity_access_db_utils = { path = "../entity_access_db_utils", optional = true }
-filter_ast = { path = "../filter_ast", optional = true }
-frecency = { path = "../frecency", optional = true }
+entity_access = { workspace = true, optional = true }
+entity_access_db_utils = { workspace = true, optional = true }
+filter_ast = { workspace = true, optional = true }
+frecency = { workspace = true, optional = true }
 futures = { workspace = true, optional = true }
 indexmap = { workspace = true, optional = true }
-item_filters = { path = "../item_filters", default-features = false }
-kafka_util = { path = "../kafka_util", optional = true }
-macro_authorization = { path = "../macro_authorization", optional = true, default-features = false, features = [
+item_filters = { workspace = true }
+kafka_util = { workspace = true, optional = true }
+macro_authorization = { workspace = true, optional = true, features = [
   "axum",
 ] }
-macro_event_broker = { path = "../macro_event_broker", default-features = false }
-macro_event_topics = { path = "../macro_event_topics" }
-macro_user_id = { path = "../macro_user_id" }
-macro_uuid = { path = "../macro_uuid", optional = true }
-messages = { path = "../messages", features = ["broker"] }
-model-entity = { path = "../model-entity", optional = true }
-model-error-response = { path = "../model-error-response", optional = true }
-model_file_type = { path = "../model_file_type" }
-model_notifications = { path = "../model_notifications", optional = true }
-model_owner = { path = "../model_owner" }
-models_pagination = { path = "../models_pagination" }
-models_permissions = { path = "../models_permissions", optional = true }
-non_empty = { path = "../non_empty", optional = true }
-notification_hex = { path = "../notification", package = "notification", optional = true }
+macro_event_broker = { workspace = true }
+macro_event_topics = { workspace = true }
+macro_user_id = { workspace = true }
+macro_uuid = { workspace = true, optional = true }
+messages = { workspace = true, features = ["broker"] }
+model-entity = { workspace = true, optional = true }
+model-error-response = { workspace = true, optional = true }
+model_file_type = { workspace = true }
+model_notifications = { workspace = true, optional = true }
+model_owner = { workspace = true }
+models_pagination = { workspace = true }
+models_permissions = { workspace = true, optional = true }
+non_empty = { workspace = true, optional = true }
+notification_hex = { workspace = true, optional = true }
 rdkafka = { workspace = true, optional = true }
 recursion = { workspace = true, optional = true }
 rootcause = { workspace = true, optional = true }
 serde = { workspace = true }
 serde_json = { workspace = true, optional = true }
-share_permission_db_utils = { path = "../share_permission_db_utils", optional = true }
+share_permission_db_utils = { workspace = true, optional = true }
 sqlx = { workspace = true, optional = true }
-static_file_service_client = { path = "../static_file_service_client", optional = true }
+static_file_service_client = { workspace = true, optional = true }
 strum = { workspace = true }
 thiserror = { workspace = true }
 tokio = { workspace = true, features = ["macros", "sync", "time"], optional = true }
@@ -151,20 +151,20 @@ utoipa = { workspace = true, optional = true }
 uuid = { workspace = true }
 
 # AI Tool dependencies
-ai_toolset = { path = "../ai_toolset", optional = true }
+ai_toolset = { workspace = true, optional = true }
 async-trait = { workspace = true, optional = true }
 schemars = { workspace = true, optional = true }
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
 
 [dev-dependencies]
-bot_id = { path = "../bot_id", features = ["test-utils"] }
-messages = { path = "../messages", features = ["test-utils"] }
+bot_id = { workspace = true, features = ["test-utils"] }
+messages = { workspace = true, features = ["test-utils"] }
 http-body-util = { workspace = true }
-kafka_util = { path = "../kafka_util" }
-macro_db_migrator = { path = "../macro_db_migrator" }
-macro_env_var = { path = "../macro_env_var" }
+kafka_util = { workspace = true }
+macro_db_migrator = { workspace = true }
+macro_env_var = { workspace = true }
 # Examples need the Kafka adapter (outbound); the library itself only uses ports.
-macro_event_broker = { path = "../macro_event_broker" }
+macro_event_broker = { workspace = true, default-features = true }
 mockall = { workspace = true }
 rdkafka = { workspace = true }
 rootcause = { workspace = true }

@@ -9,15 +9,15 @@ anyhow = { workspace = true }
 aws-sdk-s3 = { workspace = true }
 aws_lambda_events = { workspace = true, features = ["s3"] }
 lambda_runtime = { workspace = true }
-macro_aws_config = { path = "../../crates/macro_aws_config", features = ["s3"] }
-macro_entrypoint = { path = "../../crates/macro_entrypoint" }
+macro_aws_config = { workspace = true, features = ["s3"] }
+macro_entrypoint = { workspace = true }
 sqlx = { workspace = true }
 tokio = { workspace = true, features = ["fs", "process", "time"] }
 tracing = { workspace = true }
 urlencoding = { workspace = true }
 uuid = { workspace = true }
 workspace-hack = { version = "0.1", path = "../../crates/workspace-hack" }
-macro_env_var = { path = "../../crates/macro_env_var" }
+macro_env_var = { workspace = true }
 
 [dev-dependencies]
-macro_db_migrator = { path = "../../crates/macro_db_migrator" }
+macro_db_migrator = { workspace = true }

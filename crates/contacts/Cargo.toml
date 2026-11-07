@@ -38,27 +38,27 @@ aws-sdk-sqs = { workspace = true, optional = true }
 axum = { workspace = true, optional = true }
 axum-extra = { workspace = true, optional = true }
 reqwest = { workspace = true, optional = true }
-macro_authorization = { path = "../macro_authorization", default-features = false, features = [
+macro_authorization = { workspace = true, features = [
   "axum",
 ], optional = true }
-connection_gateway_client = { path = "../connection_gateway_client", optional = true }
-kafka_util = { path = "../kafka_util", optional = true }
-macro_event_broker = { path = "../macro_event_broker", features = [
+connection_gateway_client = { workspace = true, optional = true }
+kafka_util = { workspace = true, optional = true }
+macro_event_broker = { workspace = true, default-features = true, features = [
   "outbound",
 ], optional = true }
-model-entity = { path = "../model-entity", optional = true }
+model-entity = { workspace = true, optional = true }
 rdkafka = { workspace = true, optional = true }
-user_events = { path = "../user_events", optional = true }
-macro_user_id = { path = "../macro_user_id" }
-macro_db_client = { path = "../macro_db_client", optional = true }
-non_empty = { path = "../non_empty", optional = true }
+user_events = { workspace = true, optional = true }
+macro_user_id = { workspace = true }
+macro_db_client = { workspace = true, default-features = true, optional = true }
+non_empty = { workspace = true, optional = true }
 rootcause = { workspace = true }
-subsequence_match = { path = "../subsequence_match" }
-rate_limit = { path = "../rate_limit", features = ["axum"], optional = true }
+subsequence_match = { workspace = true }
+rate_limit = { workspace = true, features = ["axum"], optional = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 sqlx = { workspace = true, optional = true }
-sqs_worker = { path = "../sqs_worker", optional = true }
+sqs_worker = { workspace = true, optional = true }
 tokio = { workspace = true }
 tracing = { workspace = true }
 urlencoding = { workspace = true, optional = true }
@@ -68,7 +68,7 @@ workspace-hack = { version = "0.1", path = "../workspace-hack" }
 
 [dev-dependencies]
 futures = { workspace = true }
-macro_db_migrator = { path = "../macro_db_migrator" }
+macro_db_migrator = { workspace = true }
 http-body-util = { workspace = true }
-rate_limit = { path = "../rate_limit", features = ["axum", "testing"] }
+rate_limit = { workspace = true, features = ["axum", "testing"] }
 tower = { workspace = true }

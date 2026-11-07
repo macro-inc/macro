@@ -11,14 +11,14 @@ server = ["dep:async-graphql", "dep:graphql_common", "notification_state/graphql
 [dependencies]
 async-graphql = { workspace = true, optional = true }
 chrono = { workspace = true }
-document_sub_type = { path = "../document_sub_type", default-features = false }
-filter_ast = { path = "../filter_ast" }
-graphql_common = { path = "../graphql_common", optional = true }
-item_filters = { path = "../item_filters", default-features = false }
-macro_user_id = { path = "../macro_user_id" }
-model_file_type = { path = "../model_file_type" }
-model_owner = { path = "../model_owner" }
-notification_state = { path = "../notification_state" }
+document_sub_type = { workspace = true }
+filter_ast = { workspace = true }
+graphql_common = { workspace = true, optional = true }
+item_filters = { workspace = true }
+macro_user_id = { workspace = true }
+model_file_type = { workspace = true }
+model_owner = { workspace = true }
+notification_state = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 thiserror = { workspace = true }

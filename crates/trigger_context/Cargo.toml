@@ -12,9 +12,9 @@ version = "0.1.0"
 schema = ["bot_id/schema", "dep:utoipa", "macro_user_id/schema"]
 
 [dependencies]
-bot_id = { path = "../bot_id" }
+bot_id = { workspace = true }
 chrono = { workspace = true, features = ["serde"] }
-macro_user_id = { path = "../macro_user_id" }
+macro_user_id = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 utoipa = { workspace = true, optional = true }

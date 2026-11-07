@@ -26,7 +26,7 @@ clap = { workspace = true, optional = true }
 # The PPTX engine supplies the shared Office foundation: the ZIP container,
 # OPC packaging, DrawingML colors/fills/geometry/charts, the font database,
 # image and metafile decoding, and the tiny-skia rasterizer.
-pptx_engine = { path = "../pptx_engine", default-features = false }
+pptx_engine = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 thiserror = { workspace = true }

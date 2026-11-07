@@ -6,8 +6,8 @@ version = "0.1.0"
 
 [dependencies]
 anyhow = { workspace = true }
-authentication_service_client = { path = "../authentication_service_client" }
-email_utils = { path = "../email_utils" }
+authentication_service_client = { workspace = true }
+email_utils = { workspace = true }
 redis = { workspace = true, features = ["tokio-rustls-comp"] }
 tracing = { workspace = true }
 workspace-hack = { version = "0.1", path = "../workspace-hack" }

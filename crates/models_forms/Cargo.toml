@@ -13,9 +13,9 @@ schema = ["dep:schemars", "models_databases/schema"]
 schemars = { workspace = true, optional = true }
 chrono = { workspace = true, features = ["serde"] }
 lazy-regex = { workspace = true }
-macro_uuid = { path = "../macro_uuid" }
-model-entity = { path = "../model-entity" }
-models_databases = { path = "../models_databases" }
+macro_uuid = { workspace = true }
+model-entity = { workspace = true }
+models_databases = { workspace = true }
 serde = { workspace = true }
 specta = { workspace = true, features = ["chrono", "uuid"] }
 strum = { workspace = true }

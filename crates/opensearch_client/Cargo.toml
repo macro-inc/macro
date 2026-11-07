@@ -20,10 +20,10 @@ anyhow = { workspace = true }
 chrono = { workspace = true }
 h2 = { workspace = true }
 hyper = { workspace = true }
-models_opensearch = { path = "../models_opensearch" }
-models_search_cursor = { path = "../models_search_cursor" }
+models_opensearch = { workspace = true }
+models_search_cursor = { workspace = true }
 opensearch = { version = "2.3.0", default-features = false, features = ["rustls-tls"] }
-opensearch_query_builder = { path = "../opensearch_query_builder", default-features = false }
+opensearch_query_builder = { workspace = true }
 reqwest = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }

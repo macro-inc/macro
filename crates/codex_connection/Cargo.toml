@@ -9,8 +9,8 @@ aes-gcm = { workspace = true }
 async-trait = { workspace = true }
 aws-sdk-kms = { workspace = true }
 chrono = { workspace = true }
-codex_cloud_agents = { path = "../codex_cloud_agents" }
-macro_user_id = { path = "../macro_user_id" }
+codex_cloud_agents = { workspace = true }
+macro_user_id = { workspace = true }
 rootcause = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
@@ -22,4 +22,4 @@ zeroize = { workspace = true }
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
 
 [dev-dependencies]
-macro_db_migrator = { path = "../macro_db_migrator" }
+macro_db_migrator = { workspace = true }

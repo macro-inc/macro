@@ -5,31 +5,31 @@ publish = false
 version = "0.1.0"
 
 [dependencies]
-agent_runtime_protocol = { path = "../agent_runtime_protocol", default-features = false }
-agent_session = { path = "../agent_session", default-features = false }
-ai_billing = { path = "../ai_billing" }
+agent_runtime_protocol = { workspace = true }
+agent_session = { workspace = true }
+ai_billing = { workspace = true }
 rootcause = { workspace = true }
-agent = { path = "../agent" }
-ai_toolset = { path = "../ai_toolset" }
-ai_usage = { path = "../ai_usage" }
+agent = { workspace = true }
+ai_toolset = { workspace = true }
+ai_usage = { workspace = true }
 anyhow = { workspace = true }
 async-trait = { workspace = true }
 axum = { workspace = true }
 chrono = { workspace = true }
-connection_gateway_client = { path = "../connection_gateway_client" }
+connection_gateway_client = { workspace = true }
 dateparser = { workspace = true }
 futures = { workspace = true }
-macro_authorization = { path = "../macro_authorization", default-features = false, features = [
+macro_authorization = { workspace = true, features = [
   "axum",
 ] }
-macro_user_id = { path = "../macro_user_id" }
-mcp_select = { path = "../mcp_select" }
-model-entity = { path = "../model-entity" }
-import_notion = { path = "../import_notion" }
-import_tracker = { path = "../import_tracker" }
-models_databases = { path = "../models_databases" }
-models_properties = { path = "../models_properties" }
-properties = { path = "../properties", default-features = false, features = [
+macro_user_id = { workspace = true }
+mcp_select = { workspace = true }
+model-entity = { workspace = true }
+import_notion = { workspace = true }
+import_tracker = { workspace = true }
+models_databases = { workspace = true }
+models_properties = { workspace = true }
+properties = { workspace = true, features = [
   "ports",
 ] }
 regex = { workspace = true }
@@ -48,6 +48,6 @@ uuid = { workspace = true }
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
 
 [dev-dependencies]
-macro_db_migrator = { path = "../macro_db_migrator" }
-model_user = { path = "../model_user" }
+macro_db_migrator = { workspace = true }
+model_user = { workspace = true }
 tower = { workspace = true, features = ["util"] }

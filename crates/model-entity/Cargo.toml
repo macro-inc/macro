@@ -5,7 +5,7 @@ publish = false
 version = "0.1.0"
 
 [dependencies]
-cowlike = { path = "../cowlike" }
+cowlike = { workspace = true }
 emojis = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
 schemars = { workspace = true }

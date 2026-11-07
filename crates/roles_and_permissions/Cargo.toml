@@ -11,13 +11,13 @@ ports = []
 
 [dependencies]
 anyhow = { workspace = true }
-macro_user_id = { path = "../macro_user_id" }
-non_empty = { path = "../non_empty" }
+macro_user_id = { workspace = true }
+non_empty = { workspace = true }
 sqlx = { workspace = true, optional = true }
 thiserror = { workspace = true }
 tracing = { workspace = true }
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
 
 [dev-dependencies]
-macro_db_migrator = { path = "../macro_db_migrator" }
+macro_db_migrator = { workspace = true }
 tokio = { workspace = true }

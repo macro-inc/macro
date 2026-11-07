@@ -9,7 +9,7 @@ name = "firecracker-guest-agent"
 path = "src/main.rs"
 
 [dependencies]
-firecracker_host_api = { path = "../../crates/firecracker_host_api" }
+firecracker_host_api = { workspace = true }
 tokio = { workspace = true, features = ["io-util", "macros", "process", "rt", "sync"] }
 tokio-util = { workspace = true, features = ["rt"] }
 tokio-vsock = { workspace = true }

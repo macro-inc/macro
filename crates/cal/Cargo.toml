@@ -10,12 +10,12 @@ axum = ["dep:axum", "dep:model-error-response"]
 outbound = ["dep:analytics_client"]
 
 [dependencies]
-analytics_client = { path = "../analytics_client", optional = true }
+analytics_client = { workspace = true, optional = true }
 axum = { workspace = true, optional = true }
 chrono = { workspace = true, features = ["serde"] }
 hex = { workspace = true }
 hmac = { workspace = true }
-model-error-response = { path = "../model-error-response", optional = true }
+model-error-response = { workspace = true, optional = true }
 rootcause = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }

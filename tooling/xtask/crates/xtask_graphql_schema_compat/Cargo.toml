@@ -13,4 +13,4 @@ path = "src/main.rs"
 anyhow = { workspace = true }
 apollo-compiler = { workspace = true }
 chrono = { workspace = true }
-xtask_paths = { path = "../xtask_paths" }
+xtask_paths = { workspace = true }

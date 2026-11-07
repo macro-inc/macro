@@ -28,12 +28,12 @@ client = [
 
 [dependencies]
 chrono = { workspace = true }
-computer_id = { path = "../computer_id" }
-computer_types = { path = "../computer_types" }
+computer_id = { workspace = true }
+computer_types = { workspace = true }
 futures = { workspace = true, optional = true }
-macro_tower_layers = { path = "../macro_tower_layers", optional = true }
-pairing_id = { path = "../pairing_id" }
-pinned_tls = { path = "../pinned_tls", optional = true }
+macro_tower_layers = { workspace = true, optional = true }
+pairing_id = { workspace = true }
+pinned_tls = { workspace = true, optional = true }
 reqwest = { workspace = true, optional = true }
 rustls = { workspace = true, features = ["std"], optional = true }
 serde = { workspace = true }

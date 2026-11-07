@@ -10,15 +10,15 @@ default = []
 outbound = ["dep:connection_gateway_client"]
 
 [dependencies]
-attention_feed = { path = "../attention_feed" }
+attention_feed = { workspace = true }
 chrono = { workspace = true }
-connection_gateway_client = { path = "../connection_gateway_client", optional = true }
-filter_ast = { path = "../filter_ast" }
-item_filters = { path = "../item_filters" }
-macro_user_id = { path = "../macro_user_id" }
-model-entity = { path = "../model-entity" }
-model_notifications = { path = "../model_notifications" }
-notification = { path = "../notification", default-features = false }
+connection_gateway_client = { workspace = true, optional = true }
+filter_ast = { workspace = true }
+item_filters = { workspace = true, default-features = true }
+macro_user_id = { workspace = true }
+model-entity = { workspace = true }
+model_notifications = { workspace = true }
+notification = { workspace = true }
 rootcause = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
@@ -30,5 +30,5 @@ uuid = { workspace = true }
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
 
 [dev-dependencies]
-attention_feed = { path = "../attention_feed", features = ["test-utils"] }
+attention_feed = { workspace = true, features = ["test-utils"] }
 tokio = { workspace = true, features = ["macros", "rt-multi-thread", "test-util"] }

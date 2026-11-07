@@ -23,4 +23,4 @@ toml_edit = { workspace = true }
 # Cargo.lock, so dev machines and CI always run the identical generator —
 # upgrading it is an explicit, reviewed lock change.
 hakari = { version = "0.17.9", features = ["cli-support"] }
-xtask_graph = { path = "../xtask_graph" }
+xtask_graph = { workspace = true }
