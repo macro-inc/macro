@@ -23,7 +23,7 @@ properties, and activity.
 
 - Owns: initiative CRUD, assignment, sharing, properties, and activity.
 - Not here: the GraphQL surface → `crates/graphql/graphql_initiative`; initiative
-  descriptions (collab surface) → `crates/initiative_description`.
+  descriptions (collab surface) → `crates/projects/initiative_description`.
 
 ## Boundaries
 

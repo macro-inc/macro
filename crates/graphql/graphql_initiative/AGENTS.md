@@ -21,7 +21,7 @@ inbound adapter exposing initiative queries, mutations, and loaders.
 ## Scope
 
 - Owns: GraphQL types, queries, mutations, and loaders for initiatives.
-- Not here: initiative lifecycle, assignment, and storage → `crates/initiative`;
+- Not here: initiative lifecycle, assignment, and storage → `crates/projects/initiative`;
   initiative properties → `crates/graphql/graphql_properties`.
 
 ## Boundaries

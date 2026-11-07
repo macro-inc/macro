@@ -34,7 +34,7 @@ use crate::util::seed::{EVAL_OWNER, seed_documents};
 
 #[sqlx::test(
     migrator = "MACRO_DB_MIGRATIONS",
-    fixtures(path = "../../../../documents/fixtures", scripts("documents_test_data"))
+    fixtures(path = "../../../../../documents/fixtures", scripts("documents_test_data"))
 )]
 #[ignore = "hits OpenAI and Cohere; run locally with API keys"]
 async fn similarity_rerank_floor_keeps_full_recall(pool: PgPool) {

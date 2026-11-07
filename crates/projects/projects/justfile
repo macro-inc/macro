@@ -1,6 +1,6 @@
-import '../../tooling/just/database.just'
+import '../../../tooling/just/database.just'
 
-mod sqlx '../../tooling/just/sqlx.just'
+mod sqlx '../../../tooling/just/sqlx.just'
 
 prepare_db:
     just sqlx::prepare_db {{ DATABASE_URL }}
