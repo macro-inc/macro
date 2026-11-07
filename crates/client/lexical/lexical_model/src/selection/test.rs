@@ -269,6 +269,7 @@ fn table_selection_uses_registered_geometry_and_ignores_dirty_for_equality() -> 
     let mut value = TableSelection::new(table.key(), a.key(), b.key());
     assert!(value.is_valid(tx.view()));
     let original = value;
+    value.set(table.key(), b.key(), a.key());
     value.set(table.key(), a.key(), b.key());
     assert!(value.is_dirty());
     assert_eq!(original, value);
@@ -561,5 +562,31 @@ fn view_format_intersection_does_not_treat_root_offsets_as_text_offsets() -> Res
         assert_eq!(tx.range_selection()?.format, TextFormat::empty());
         Ok(())
     })?;
+    Ok(())
+}
+
+// LexicalTableSelection.ts set(): changing keys preserves offsets and point kinds.
+#[test]
+fn table_selection_set_preserves_offsets_and_only_dirties_changed_keys() -> Result<(), Error> {
+    let mut editor = Editor::builder(EditorMode::Headless)
+        .build()
+        .expect("registry");
+    let mut tx = editor.transaction();
+    let table = tx.create(Paragraph::default())?;
+    let a = tx.create(Paragraph::default())?;
+    let b = tx.create(Paragraph::default())?;
+    let mut selection = TableSelection::new(table.key(), a.key(), b.key());
+    selection.anchor = Point::element(a, ChildIndex(3));
+    selection.focus = Point::text(b, Utf16Offset(4));
+    selection.set(table.key(), a.key(), b.key());
+    assert!(!selection.is_dirty());
+    assert_eq!(selection.anchor, Point::element(a, ChildIndex(3)));
+    assert_eq!(selection.focus, Point::text(b, Utf16Offset(4)));
+    selection.set(table.key(), b.key(), a.key());
+    assert!(selection.is_dirty());
+    assert_eq!(selection.anchor, Point::element(b, ChildIndex(3)));
+    assert_eq!(selection.focus, Point::text(a, Utf16Offset(4)));
+    selection.set(table.key(), b.key(), a.key());
+    assert!(selection.is_dirty());
     Ok(())
 }

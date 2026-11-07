@@ -6,26 +6,6 @@
   ],
   "entries": [
     {
-      "file": "packages/lexical-table/src/__tests__/unit/LexicalTableCellNode.test.ts",
-      "test": "LexicalTableCellNode tests > TableCellNode.constructor",
-      "status": "xfail",
-      "reason": "not-ported",
-      "reviewedBy": "coding-agent",
-      "decision": "WORKPLAN later package layers (rich nodes, markdown, lists/tables); WP-06 core subset",
-      "note": "Missing capability: @lexical/table.$createTableCellNode. No model mismatch is masked; this exact unsupported diagnostic must still occur.",
-      "failure": "op 4: call 0: unmapped API: @lexical/table.$createTableCellNode"
-    },
-    {
-      "file": "packages/lexical-table/src/__tests__/unit/LexicalTableRowNode.test.ts",
-      "test": "LexicalTableRowNode tests > TableRowNode.constructor",
-      "status": "xfail",
-      "reason": "not-ported",
-      "reviewedBy": "coding-agent",
-      "decision": "WORKPLAN later package layers (rich nodes, markdown, lists/tables); WP-06 core subset",
-      "note": "Missing capability: @lexical/table.$createTableRowNode. No model mismatch is masked; this exact unsupported diagnostic must still occur.",
-      "failure": "op 4: call 0: unmapped API: @lexical/table.$createTableRowNode"
-    },
-    {
       "file": "packages/lexical/src/__tests__/unit/LexicalEditorState.test.ts",
       "test": "LexicalEditorState tests > constructor",
       "status": "xfail",
@@ -174,16 +154,6 @@
       "decision": "S1 \u00a71 NodeKey allocation is private to node creation; no standalone raw-key factory",
       "note": "Missing capability: lexical/LexicalUtils.generateRandomKey. No model mismatch is masked; this exact unsupported diagnostic must still occur.",
       "failure": "op 5 call: unmapped API: lexical/LexicalUtils.generateRandomKey"
-    },
-    {
-      "file": "packages/lexical/src/caret/__tests__/unit/LexicalCaret.test.ts",
-      "test": "LexicalCaret > $removeTextFromCaretRange > ported Table e2e tests > Can delete all with range selection anchored in table",
-      "status": "xfail",
-      "reason": "not-ported",
-      "reviewedBy": "coding-agent",
-      "decision": "WORKPLAN later package layers (rich nodes, markdown, lists/tables); WP-06 core subset",
-      "note": "Missing capability: @lexical/table.$createTableNode. No model mismatch is masked; this exact unsupported diagnostic must still occur.",
-      "failure": "op 4: call 0: unmapped API: @lexical/table.$createTableNode"
     },
     {
       "file": "packages/lexical/src/nodes/__tests__/unit/LexicalLineBreakNode.test.ts",

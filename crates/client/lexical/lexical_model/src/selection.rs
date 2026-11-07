@@ -343,8 +343,18 @@ impl TableSelection {
     }
     /// Replace the cell endpoints.
     pub fn set(&mut self, table: NodeKey, anchor_cell: NodeKey, focus_cell: NodeKey) {
-        *self = Self::new(table, anchor_cell, focus_cell);
-        self.dirty = true;
+        self.dirty |= self.table != table
+            || self.anchor.key() != anchor_cell
+            || self.focus.key() != focus_cell;
+        self.table = table;
+        self.anchor = match self.anchor {
+            Point::Text { offset, .. } => Point::text(anchor_cell, offset),
+            Point::Element { offset, .. } => Point::element(anchor_cell, offset),
+        };
+        self.focus = match self.focus {
+            Point::Text { offset, .. } => Point::text(focus_cell, offset),
+            Point::Element { offset, .. } => Point::element(focus_cell, offset),
+        };
     }
     /// Whether the value has changed.
     pub fn is_dirty(&self) -> bool {

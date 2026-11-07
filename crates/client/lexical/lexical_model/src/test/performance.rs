@@ -172,3 +172,33 @@ fn upstream_restoring_snapshot_reconciles_existing_element_caches() -> Result<()
     );
     Ok(())
 }
+
+#[test]
+fn upstream_rejects_inline_insertion_without_a_leaf_block_ancestor() -> Result<(), Error> {
+    let mut editor = Editor::builder(EditorMode::Headless)
+        .node::<Opaque>()
+        .build()
+        .expect("registry");
+    editor.update(|tx| {
+        let outer = tx.create(Paragraph::default())?;
+        let inner = tx.create(Paragraph::default())?;
+        let decoration = tx.create(Opaque {})?;
+        let empty = tx.create(Paragraph::default())?;
+        tx.append(inner, &[decoration.key(), empty.key()])?;
+        tx.append(outer, &[inner.key()])?;
+        tx.append(NodeKey::ROOT, &[outer.key()])?;
+        tx.set_selection(Some(Selection::Range(RangeSelection::at_root())))
+    })?;
+    for _ in 0..2 {
+        editor.update(|tx| tx.delete_character(EditDirection::Forward, ModifyTarget::NoView))?;
+    }
+    let previous = editor.state().clone();
+    let result = editor.update(|tx| tx.insert_line_break(false));
+    assert!(matches!(
+        result,
+        Err(Error::Invariant("insertion requires a block"))
+    ));
+    assert!(editor.state().same_snapshot(&previous));
+    assert_eq!(editor.state().selection(), previous.selection());
+    Ok(())
+}
