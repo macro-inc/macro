@@ -13,6 +13,7 @@ The upstream source is downloaded by checksum into this worktree's `target/`.
 - `record/schema.ts`: schema 2 shared with the Rust fixture reader.
 - `diff/README.md`: WP-07 raw-model WASM loader and Tier C text/paragraph harness.
 - `record/initial.ts`: partial-state key layout and selection restoration.
+- `coverage/README.md`: traceability evidence, pending ratchet and CI gates.
 - `record/inventory.json`: S4 per-file expected counts; mixed files have no exact case labels.
 
 ## Boundaries
@@ -27,6 +28,9 @@ The upstream source is downloaded by checksum into this worktree's `target/`.
 - In this package: `bun install --frozen-lockfile`, `bunx tsc --noEmit`, `bun run test`.
 - From the repository: `just lexical-fixtures --check` twice, then `just check`.
 - Differential changes: `bunx tsc --noEmit -p diff/tsconfig.json` in this package; from root, `STEPS=10000 bunx vitest run --config packages/lexical-conformance/diff/vitest.config.mts`.
+
+- In this package: `bunx tsc --noEmit -p coverage/tsconfig.json`, `bunx vitest run --config coverage/vitest.config.ts`.
+- From the repository: `just lexical-coverage-seed --check`, `just lexical-coverage --check`.
 
 ## Gotchas
 
