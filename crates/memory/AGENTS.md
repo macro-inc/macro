@@ -14,8 +14,9 @@ summary. Legacy `memory` rows remain private and are not copied into shared prof
 - `src/outbound/pg_composed_memory.rs`: component storage and generation leases.
 - `src/outbound/generator.rs`: generic agent research and tool-free privacy judge.
 - `src/inbound/toolset.rs`: ReadMemory, UpdateMemory, GetUserActivity.
-- `src/schedule.rs`: tracked internal cron closure hosted by cognition in nonlocal
-  environments; retries due users every five minutes, generating completed days.
+- `services/agent_harness_service/src/cognition/memory_schedule.rs`: tracked
+  internal cron closure hosted by cognition in nonlocal environments; retries due
+  users every five minutes, generating completed days.
 - `../ai_tools/src/memory.rs`: composition root and allowlisted read-only research.
 - `../ai_tools/src/bin/memory.rs`: awaited one-user CLI (`cargo run -p ai_tools
   --bin memory`); uses the existing memory environment configuration.

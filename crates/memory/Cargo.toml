@@ -6,7 +6,6 @@ version = "0.1.0"
 
 
 [dependencies]
-scheduled_action = { path = "../scheduled_action" }
 async-trait = { workspace = true }
 schemars = { workspace = true }
 prompt = { path = "../prompt" }
@@ -33,7 +32,6 @@ serde_json = { workspace = true }
 sqlx = { workspace = true }
 thiserror = { workspace = true }
 tokio = { workspace = true }
-tokio-util = { workspace = true, features = ["rt"] }
 tracing = { workspace = true }
 utoipa = { workspace = true }
 
