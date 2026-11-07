@@ -39,6 +39,22 @@ fn shape(kind: Kind, value: &Value) -> bool {
         _ => value.is_object() || value.is_array(),
     }
 }
+pub(crate) fn normalize_numbers(value: &mut Value) {
+    match value {
+        Value::Number(number) => match to_loro(&Value::Number(number.clone())) {
+            LoroValue::I64(integer) => *number = integer.into(),
+            LoroValue::Double(float) => {
+                if let Some(float) = serde_json::Number::from_f64(float) {
+                    *number = float;
+                }
+            }
+            _ => {}
+        },
+        Value::Object(map) => map.values_mut().for_each(normalize_numbers),
+        Value::Array(array) => array.iter_mut().for_each(normalize_numbers),
+        _ => {}
+    }
+}
 pub(crate) fn to_loro(value: &Value) -> LoroValue {
     match value {
         Value::Null => LoroValue::Null,
@@ -99,32 +115,32 @@ pub(crate) fn children(map: &LoroMap) -> Result<Option<LoroMovableList>> {
     }
 }
 pub(crate) fn validate_slots(map: &LoroMap) -> Result<()> {
-    if let Some(value) = map.get("$") {
-        if !matches!(
+    if let Some(value) = map.get("$")
+        && !matches!(
             value,
             ValueOrContainer::Container(Container::Map(_))
                 | ValueOrContainer::Value(LoroValue::Map(_))
-        ) {
-            return Err(schema_error("$"));
-        }
+        )
+    {
+        return Err(schema_error("$"));
     }
-    if let Some(value) = map.get("text") {
-        if !matches!(
+    if let Some(value) = map.get("text")
+        && !matches!(
             value,
             ValueOrContainer::Container(Container::Text(_))
                 | ValueOrContainer::Value(LoroValue::String(_))
-        ) {
-            return Err(schema_error("text"));
-        }
+        )
+    {
+        return Err(schema_error("text"));
     }
-    if let Some(value) = map.get("ids") {
-        if !matches!(
+    if let Some(value) = map.get("ids")
+        && !matches!(
             value,
             ValueOrContainer::Container(Container::List(_))
                 | ValueOrContainer::Value(LoroValue::List(_))
-        ) {
-            return Err(schema_error("ids"));
-        }
+        )
+    {
+        return Err(schema_error("ids"));
     }
     children(map)?;
     Ok(())
@@ -484,29 +500,55 @@ fn diff_list(list: &LoroList, new: &[Value], ids: bool, stats: &mut ProjectionSt
     }
     Ok(())
 }
+// Compare fields owned by this editor while preserving newer-client additions.
+pub(crate) fn owned_equal(current: &Value, before: Option<&Value>, after: &Value) -> bool {
+    if let Value::Object(after) = after {
+        let Some(current) = current.as_object() else {
+            return false;
+        };
+        let before = before.and_then(Value::as_object);
+        after.iter().all(|(key, value)| {
+            current.get(key).is_some_and(|current| {
+                owned_equal(current, before.and_then(|map| map.get(key)), value)
+            })
+        }) && before.is_none_or(|before| {
+            before
+                .keys()
+                .all(|key| after.contains_key(key) || !current.contains_key(key))
+        })
+    } else {
+        current == after
+    }
+}
 pub(crate) fn has_plain_composites(map: &LoroMap, policy: &dyn SyncPolicy) -> bool {
     let mut result = false;
     map.for_each(|key, value| {
         if key == "$" {
-            if let ValueOrContainer::Container(Container::Map(state)) = &value {
-                state.for_each(|name, v| {
-                    if policy.local_state_keys().contains(&name) {
-                        return;
-                    }
-                    if matches!(
-                        v,
-                        ValueOrContainer::Value(LoroValue::Map(_) | LoroValue::List(_))
-                    ) {
-                        result = true
-                    }
-                })
+            match &value {
+                ValueOrContainer::Container(Container::Map(state)) => {
+                    state.for_each(|name, value| {
+                        if !policy.local_state_keys().contains(&name)
+                            && matches!(
+                                value,
+                                ValueOrContainer::Value(LoroValue::Map(_) | LoroValue::List(_))
+                            )
+                        {
+                            result = true;
+                        }
+                    })
+                }
+                ValueOrContainer::Value(LoroValue::Map(state)) => {
+                    result |= state
+                        .keys()
+                        .any(|key| !policy.local_state_keys().contains(&key.as_str()));
+                }
+                _ => {}
             }
-        }
-        if matches!(
+        } else if matches!(
             value,
             ValueOrContainer::Value(LoroValue::Map(_) | LoroValue::List(_))
         ) {
-            result = true
+            result = true;
         }
     });
     result

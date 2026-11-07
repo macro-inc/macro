@@ -95,9 +95,9 @@ pub struct Inconsistency {
     /// First mismatching node or slot.
     pub path: String,
     /// Editor's synced value.
-    pub editor: serde_json::Value,
+    pub editor: Box<serde_json::Value>,
     /// Persisted value.
-    pub doc: serde_json::Value,
+    pub doc: Box<serde_json::Value>,
 }
 #[cfg(test)]
 mod test;

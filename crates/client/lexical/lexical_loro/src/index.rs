@@ -253,8 +253,8 @@ impl LoroProjection {
             (editor, actual) => {
                 return Err(Inconsistency {
                     path: "root".into(),
-                    editor: editor.unwrap_or(serde_json::Value::Null),
-                    doc: actual.unwrap_or(serde_json::Value::Null),
+                    editor: editor.unwrap_or(serde_json::Value::Null).into(),
+                    doc: actual.unwrap_or(serde_json::Value::Null).into(),
                 });
             }
         }
@@ -322,10 +322,12 @@ impl LoroProjection {
                         path: key.to_string(),
                         editor: expected
                             .map(serde_json::Value::Object)
-                            .unwrap_or(serde_json::Value::Null),
+                            .unwrap_or(serde_json::Value::Null)
+                            .into(),
                         doc: actual
                             .map(serde_json::Value::Object)
-                            .unwrap_or(serde_json::Value::Null),
+                            .unwrap_or(serde_json::Value::Null)
+                            .into(),
                     });
                 }
             }

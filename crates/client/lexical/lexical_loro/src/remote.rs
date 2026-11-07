@@ -9,6 +9,7 @@ pub(crate) struct PendingBatch {
 #[derive(Clone)]
 pub(crate) struct OwnedDiff {
     target: ContainerID,
+    path: Vec<(ContainerID, loro::Index)>,
     text: Option<Vec<loro::TextDelta>>,
     children_replaced: bool,
     text_replaced: bool,
@@ -19,7 +20,7 @@ impl PendingBatch {
             let children_replaced=matches!(&event.diff,loro::event::Diff::Map(map) if map.updated.contains_key("children"));
             let text_replaced=matches!(&event.diff,loro::event::Diff::Map(map) if map.updated.contains_key("text"));
             let text=match event.diff {loro::event::Diff::Text(delta)=>Some(delta),_=>None};
-            OwnedDiff{target:event.target.clone(),text,children_replaced,text_replaced}
+            OwnedDiff{target:event.target.clone(),path:event.path.to_vec(),text,children_replaced,text_replaced}
         }).collect();
         Self { diffs }
     }
@@ -83,6 +84,21 @@ impl LoroProjection {
         for batch in &batches {
             for diff in &batch.diffs {
                 let Some((key, slot)) = self.index.owner.get(&diff.target).copied() else {
+                    // Filtered wrappers and newly inserted own-field containers
+                    // are not indexed. Their saved path still identifies the
+                    // existing list/field whose synced value can have changed.
+                    if let Some((key, slot)) = diff
+                        .path
+                        .iter()
+                        .rev()
+                        .find_map(|(id, _)| self.index.owner.get(id).copied())
+                    {
+                        if slot == Slot::Children {
+                            parents.insert(key);
+                        } else {
+                            fields.insert(key);
+                        }
+                    }
                     continue;
                 };
                 match slot {
@@ -111,6 +127,30 @@ impl LoroProjection {
                 }
             }
         }
+        let mut hidden = Vec::new();
+        for key in &fields {
+            let map = self.index.map(doc, *key)?;
+            if map.is_deleted() {
+                continue;
+            }
+            let incoming = schema::own_map(&map)?;
+            if self.policy.is_dropped_json(&incoming) || self.policy.is_transparent_json(&incoming)
+            {
+                hidden.push(*key);
+                if let Some(path) = doc.get_path_to_container(&map.id()) {
+                    for (id, _) in path.iter().rev().skip(1) {
+                        if let Some((parent, Slot::Node)) = self.index.owner.get(id) {
+                            parents.insert(*parent);
+                            break;
+                        }
+                    }
+                }
+            }
+        }
+        for key in hidden {
+            fields.swap_remove(&key);
+            text.swap_remove(&key);
+        }
         let mut building = Building {
             doc,
             state,
@@ -131,7 +171,7 @@ impl LoroProjection {
         });
         for key in parents {
             let map = self.index.map(doc, key)?;
-            if map.is_deleted() {
+            if map.is_deleted() || !self.is_projected(doc, &map)? {
                 continue;
             }
             self.build_children(&mut building, NodeTarget::Key(key), &map)?;
@@ -159,7 +199,7 @@ impl LoroProjection {
                 continue;
             }
             let map = self.index.map(doc, key)?;
-            if map.is_deleted() {
+            if map.is_deleted() || !self.is_projected(doc, &map)? {
                 continue;
             }
             let mut current = state.view().text_data(key)?.text.as_str().to_owned();
@@ -184,7 +224,7 @@ impl LoroProjection {
                 continue;
             }
             let map = self.index.map(doc, key)?;
-            if map.is_deleted() {
+            if map.is_deleted() || !self.is_projected(doc, &map)? {
                 continue;
             }
             building.stats.nodes_visited += 1;
@@ -213,10 +253,10 @@ impl LoroProjection {
                         .get(&key)
                         .map(String::as_str)
                         .unwrap_or(state.view().text_data(key)?.text.as_str());
-                    if let Some(after) = incoming.get("text").and_then(Value::as_str) {
-                        if before != after {
-                            minimal_splice(key, before, after, &mut splices)?;
-                        }
+                    if let Some(after) = incoming.get("text").and_then(Value::as_str)
+                        && before != after
+                    {
+                        minimal_splice(key, before, after, &mut splices)?;
                     }
                 }
                 for field in self.policy.keep_local_on_remote(&kind) {
@@ -247,14 +287,20 @@ impl LoroProjection {
             }
             self.index.bind(key, &map, self.policy)?;
         }
-        // Keep reused descendants; remove only identities whose old native maps really died.
+        // A policy-filtered map can remain live in Loro after its model node
+        // disappears. Retire that binding while retaining visible descendants
+        // moved through a newly transparent wrapper.
         for key in building.removed {
-            if let Some(slots) = self.index.nodes.get(&key)
-                && doc
-                    .get_container(slots.map.clone())
-                    .is_none_or(|c| c.is_deleted())
-            {
-                self.index.unbind(key);
+            if let Some(slots) = self.index.nodes.get(&key) {
+                let projected = match doc.get_container(slots.map.clone()) {
+                    Some(Container::Map(map)) if !map.is_deleted() => {
+                        self.is_projected(doc, &map)?
+                    }
+                    _ => false,
+                };
+                if !projected {
+                    self.index.unbind(key);
+                }
             }
         }
         let mut changes = building.creates;
@@ -276,6 +322,21 @@ impl LoroProjection {
             stats: building.stats,
         })
     }
+    fn is_projected(&self, doc: &LoroDoc, map: &LoroMap) -> Result<bool> {
+        let own = schema::own_map(map)?;
+        if self.policy.is_dropped_json(&own) || self.policy.is_transparent_json(&own) {
+            return Ok(false);
+        }
+        for (id, _) in doc.get_path_to_container(&map.id()).unwrap_or_default() {
+            if let Some(Container::Map(ancestor)) = doc.get_container(id)
+                && ancestor.get("type").is_some()
+                && self.policy.is_dropped_json(&schema::own_map(&ancestor)?)
+            {
+                return Ok(false);
+            }
+        }
+        Ok(true)
+    }
     fn build_children(
         &mut self,
         b: &mut Building<'_>,
@@ -285,10 +346,10 @@ impl LoroProjection {
         if !b.built.insert(map.id()) {
             return Ok(());
         }
-        if let NodeTarget::Key(key) = parent {
-            if !b.state.view().is_element(key) {
-                return Ok(());
-            }
+        if let NodeTarget::Key(key) = parent
+            && !b.state.view().is_element(key)
+        {
+            return Ok(());
         }
         // Newly created leaf nodes have no child slot. Existing elements whose
         // slot was deleted still need an empty Children change to detach old children.
@@ -486,3 +547,6 @@ fn minimal_splice(
     });
     Ok(())
 }
+
+#[cfg(test)]
+mod test;

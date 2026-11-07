@@ -252,3 +252,93 @@ fn deleting_children_slot_detaches_existing_editor_children_and_fixup_repairs_sc
     projection.check(&doc, core.state()).expect("repaired");
     Ok(())
 }
+
+#[test]
+fn importing_batches_individually_together_or_permuted_produces_identical_editor_json() -> Result<()>
+{
+    let mut initial = Editor::builder(EditorMode::Headless)
+        .build()
+        .expect("editor");
+    let (text, _) = initial.update(|tx| {
+        let p = tx.create(Paragraph::default())?;
+        let text = tx.create_text("a😀b")?;
+        tx.set_state(text, &ID, "text".into())?;
+        tx.append(p, &[text.key()])?;
+        tx.append(NodeKey::ROOT, &[p.key()])?;
+        Ok(text)
+    })?;
+    let base = new_doc(1)?;
+    let projection = LoroProjection::initialize(&base, initial.state(), &PLAIN, 0)?;
+    let peer = fork_doc(&base, 2)?;
+    let map = projection.index.map(&peer, text.key())?;
+    let Container::Text(native) = map
+        .get("text")
+        .expect("text")
+        .as_container()
+        .expect("container")
+        .clone()
+    else {
+        panic!("text")
+    };
+    let mut updates = Vec::new();
+    for (i, value) in ["a😀éb", "a中éb!", "😀finish"].into_iter().enumerate() {
+        let before = peer.oplog_vv();
+        native.update(
+            value,
+            loro::UpdateOptions {
+                timeout_ms: None,
+                use_refined_diff: true,
+            },
+        )?;
+        peer.commit_with(loro::CommitOptions::new().timestamp(i as i64 + 1));
+        updates.push(peer.export(ExportMode::updates(&before))?);
+    }
+    let mut results = Vec::new();
+    for mode in 0..4 {
+        let doc = fork_doc(&base, 3 + mode)?;
+        let mut editor = Editor::builder(EditorMode::Headless)
+            .build()
+            .expect("editor");
+        let state = editor.parse_editor_state(&initial.state().to_json()?)?;
+        editor.set_editor_state(state, TagSet::default())?;
+        let mut projection = LoroProjection::attach(&doc, editor.state(), &PLAIN)?;
+        let mut core = EditorCore::new(
+            editor,
+            CoreConfig {
+                history: None,
+                editable: true,
+                diff: DiffOptions::default(),
+                track_text_content: false,
+            },
+        );
+        if mode == 0 {
+            doc.import_batch(&updates)?;
+        } else {
+            let order = if mode == 3 {
+                vec![2, 0, 1]
+            } else {
+                vec![0, 1, 2]
+            };
+            for i in order {
+                doc.import(&updates[i])?;
+                if mode == 1 {
+                    let changes = projection.take_remote(&doc, core.state())?;
+                    assert!(
+                        !apply_remote(&mut projection, &doc, &mut core, changes, i as u64 + 1)?
+                            .changed
+                    );
+                }
+            }
+        }
+        let changes = projection.take_remote(&doc, core.state())?;
+        assert!(!apply_remote(&mut projection, &doc, &mut core, changes, 4)?.changed);
+        projection
+            .check(&doc, core.state())
+            .expect("batch consistent");
+        results.push(synced_json(core.state(), &PLAIN)?);
+    }
+    for result in &results[1..] {
+        assert_eq!(result, &results[0]);
+    }
+    Ok(())
+}
