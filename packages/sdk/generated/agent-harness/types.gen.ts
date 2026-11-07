@@ -2917,6 +2917,12 @@ export type TriggerOrigin = {
      */
     routine: string;
 } | {
+    /**
+     * Who asked for the draft.
+     */
+    by: MacroUserIdStr;
+    origin: 'routine_draft';
+} | {
     origin: 'unknown';
 };
 

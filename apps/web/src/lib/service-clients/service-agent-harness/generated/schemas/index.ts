@@ -454,6 +454,8 @@ export * from './triggerOriginOneOfOnefive';
 export * from './triggerOriginOneOfOnefiveOrigin';
 export * from './triggerOriginOneOfOneone';
 export * from './triggerOriginOneOfOneoneOrigin';
+export * from './triggerOriginOneOfOneseven';
+export * from './triggerOriginOneOfOnesevenOrigin';
 export * from './triggerOriginOneOfOnethree';
 export * from './triggerOriginOneOfOnethreeOrigin';
 export * from './triggerOriginOneOfOrigin';

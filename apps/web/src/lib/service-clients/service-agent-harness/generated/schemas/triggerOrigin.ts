@@ -9,6 +9,7 @@ import type { TriggerOriginOneOfFive } from './triggerOriginOneOfFive';
 import type { TriggerOriginOneOfNine } from './triggerOriginOneOfNine';
 import type { TriggerOriginOneOfOnefive } from './triggerOriginOneOfOnefive';
 import type { TriggerOriginOneOfOneone } from './triggerOriginOneOfOneone';
+import type { TriggerOriginOneOfOneseven } from './triggerOriginOneOfOneseven';
 import type { TriggerOriginOneOfOnethree } from './triggerOriginOneOfOnethree';
 import type { TriggerOriginOneOfSeven } from './triggerOriginOneOfSeven';
 import type { TriggerOriginOneOfThree } from './triggerOriginOneOfThree';
@@ -24,4 +25,5 @@ export type TriggerOrigin =
   | TriggerOriginOneOfNine
   | TriggerOriginOneOfOneone
   | TriggerOriginOneOfOnethree
-  | TriggerOriginOneOfOnefive;
+  | TriggerOriginOneOfOnefive
+  | TriggerOriginOneOfOneseven;

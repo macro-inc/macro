@@ -123,6 +123,7 @@ const postReads = new Set([
 const labels: Record<string, string> = {
   'cognition.decisions': 'Classify content',
   'cognition.structuredCompletion': 'Generate structured content',
+  'scheduled-action.checkScheduledAction': 'Check routine',
   'storage.postItemsSoupAst': 'Browse workspace',
   'search.unifiedSearch': 'Search workspace',
   'search.simpleUnifiedSearch': 'Search workspace',
