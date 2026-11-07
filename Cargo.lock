@@ -11752,6 +11752,7 @@ dependencies = [
 name = "lexical_conformance"
 version = "0.1.0"
 dependencies = [
+ "lexical_markdown",
  "lexical_model",
  "lexical_rich_nodes",
  "libtest-mimic",
