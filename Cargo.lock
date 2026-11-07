@@ -4661,7 +4661,7 @@ dependencies = [
  "channel_sender",
  "chrono",
  "connection_gateway_client",
- "contacts",
+ "contacts_core",
  "entity_access",
  "entity_access_db_utils",
  "entity_mutation",
@@ -5276,7 +5276,7 @@ dependencies = [
  "calendar_event_id",
  "calendar_events",
  "chrono",
- "contacts",
+ "contacts_core",
  "crm",
  "databases",
  "databases_sql",
@@ -5639,36 +5639,77 @@ dependencies = [
 name = "contacts"
 version = "0.1.0"
 dependencies = [
- "aws-sdk-sqs",
- "axum",
- "axum-extra",
- "connection_gateway_client",
- "futures",
- "http-body-util",
- "kafka_util",
- "macro_authorization",
- "macro_db_client",
- "macro_db_migrator",
- "macro_event_broker",
+ "contacts_core",
+ "contacts_inbound",
+ "contacts_outbound",
+ "workspace-hack",
+]
+
+[[package]]
+name = "contacts_core"
+version = "0.1.0"
+dependencies = [
  "macro_user_id",
- "model-entity",
- "non_empty",
- "rate_limit",
- "rdkafka",
- "reqwest 0.13.4",
  "rootcause",
  "serde",
  "serde_json",
- "sqlx",
+ "subsequence_match",
+ "tokio",
+ "tracing",
+ "uuid",
+ "workspace-hack",
+]
+
+[[package]]
+name = "contacts_inbound"
+version = "0.1.0"
+dependencies = [
+ "aws-sdk-sqs",
+ "axum",
+ "axum-extra",
+ "contacts_core",
+ "http-body-util",
+ "kafka_util",
+ "macro_authorization",
+ "macro_event_broker",
+ "macro_user_id",
+ "rate_limit",
+ "rdkafka",
+ "rootcause",
+ "serde",
+ "serde_json",
  "sqs_worker",
  "subsequence_match",
  "tokio",
  "tower 0.5.3",
  "tracing",
- "urlencoding",
  "user_events",
  "utoipa",
- "uuid",
+ "workspace-hack",
+]
+
+[[package]]
+name = "contacts_outbound"
+version = "0.1.0"
+dependencies = [
+ "aws-sdk-sqs",
+ "axum",
+ "connection_gateway_client",
+ "contacts_core",
+ "futures",
+ "macro_db_client",
+ "macro_db_migrator",
+ "macro_user_id",
+ "model-entity",
+ "non_empty",
+ "reqwest 0.13.4",
+ "rootcause",
+ "serde",
+ "serde_json",
+ "sqlx",
+ "tokio",
+ "tracing",
+ "urlencoding",
  "workspace-hack",
 ]
 
@@ -6627,7 +6668,7 @@ dependencies = [
  "base64 0.22.1",
  "bot_id",
  "chrono",
- "contacts",
+ "contacts_core",
  "database_sql",
  "databases",
  "email",
@@ -10139,7 +10180,7 @@ name = "graphql_contacts"
 version = "0.1.0"
 dependencies = [
  "async-graphql",
- "contacts",
+ "contacts_core",
  "graphql_common",
  "macro_user_id",
  "models_pagination",
@@ -21909,7 +21950,7 @@ dependencies = [
  "bot_id",
  "chrono",
  "computer_id",
- "contacts",
+ "contacts_core",
  "entity_access",
  "entity_access_db_utils",
  "generic_email_domains",

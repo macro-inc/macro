@@ -1,5 +1,5 @@
 use super::*;
-use ::contacts::domain::{
+use ::contacts_core::{
     models::{
         contact::{Contact, ContactId, ContactPage},
         page::{ContactCursor, ContactPageSize},

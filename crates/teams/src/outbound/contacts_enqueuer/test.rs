@@ -3,7 +3,7 @@ use std::{
     sync::{Arc, Mutex},
 };
 
-use contacts::domain::{models::messages::ContactConnection, ports::ContactsIngress};
+use contacts_core::{models::messages::ContactConnection, ports::ContactsIngress};
 use macro_user_id::user_id::MacroUserIdStr;
 use rootcause::Report;
 

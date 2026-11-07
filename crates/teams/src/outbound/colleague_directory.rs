@@ -1,6 +1,6 @@
 //! [`ColleagueDirectory`] adapter backed by the contacts graph.
 
-use contacts::domain::ports::ContactsRepository;
+use contacts_core::ports::ContactsRepository;
 use macro_user_id::user_id::MacroUserIdStr;
 use rootcause::Report;
 

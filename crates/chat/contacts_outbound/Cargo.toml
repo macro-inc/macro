@@ -1,0 +1,35 @@
+[package]
+edition = "2024"
+name = "contacts_outbound"
+publish = false
+version = "0.1.0"
+
+[features]
+default = []
+# The connection gateway notifier for user picture changes.
+picture-fanout = ["dep:connection_gateway_client", "dep:model-entity"]
+# Viewer-aware user-name resolution behind the directory's name port.
+directory-names = ["dep:macro_db_client", "dep:non_empty"]
+
+[dependencies]
+aws-sdk-sqs = { workspace = true }
+connection_gateway_client = { workspace = true, optional = true }
+contacts_core = { workspace = true }
+macro_db_client = { workspace = true, default-features = true, optional = true }
+macro_user_id = { workspace = true }
+model-entity = { workspace = true, optional = true }
+non_empty = { workspace = true, optional = true }
+reqwest = { workspace = true }
+rootcause = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+sqlx = { workspace = true }
+tokio = { workspace = true }
+tracing = { workspace = true }
+urlencoding = { workspace = true }
+workspace-hack = { version = "0.1", path = "../../workspace-hack" }
+
+[dev-dependencies]
+axum = { workspace = true }
+futures = { workspace = true }
+macro_db_migrator = { workspace = true }

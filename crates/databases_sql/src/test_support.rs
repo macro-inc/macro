@@ -8,8 +8,8 @@ use std::sync::{Arc, Mutex};
 
 use bot_id::BotId;
 use chrono::{DateTime, Utc};
-use contacts::domain::models::messages::ContactsNodes;
-use contacts::domain::ports::ContactsService;
+use contacts_core::models::messages::ContactsNodes;
+use contacts_core::ports::ContactsService;
 use databases::domain::models::{
     Awareness, ColumnCast, ColumnConversion, ColumnId, CreateDatabase, Database, DatabaseDetail,
     DatabaseError, DatabaseId, InferColumnType, InferColumnTypeOutcome, ListedDatabase, OpBatch,

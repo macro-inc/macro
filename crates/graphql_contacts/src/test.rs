@@ -1,6 +1,6 @@
 use super::*;
 use async_graphql::{Context, EmptyMutation, EmptySubscription, Object, Request, Schema};
-use contacts::domain::{
+use contacts_core::{
     models::{
         contact::{Contact, ContactId, ContactPage},
         page::{ContactCursor, ContactPageSize},

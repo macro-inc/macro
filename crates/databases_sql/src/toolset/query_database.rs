@@ -8,7 +8,7 @@ use ai_toolset::{
     AsyncTool, RequestContext, ServiceContext, ToolAnnotated, ToolAnnotations, ToolResult,
 };
 use async_trait::async_trait;
-use contacts::domain::ports::ContactsService;
+use contacts_core::ports::ContactsService;
 use databases::domain::models::TableVersion;
 use databases::domain::ports::DatabasesService;
 use entity_access::domain::ports::EntityAccessService;

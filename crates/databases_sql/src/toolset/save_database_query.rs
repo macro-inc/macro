@@ -9,7 +9,7 @@ use ai_toolset::{
     ToolResult,
 };
 use async_trait::async_trait;
-use contacts::domain::ports::ContactsService;
+use contacts_core::ports::ContactsService;
 use databases::domain::models::QueryDefinition;
 use databases::domain::ports::DatabasesService;
 use entity_access::domain::ports::EntityAccessService;
