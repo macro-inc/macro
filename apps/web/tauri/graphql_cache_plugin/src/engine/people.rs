@@ -9,6 +9,20 @@ use cache_core::{
 };
 
 impl EngineHandle {
+    /// Execute bounded local SQL without allowing account rebinding or remote fallback.
+    pub async fn people_read_sql(
+        &self,
+        request: cache_core::people::sql::PeopleSqlRequest,
+    ) -> Result<cache_core::people::sql::PeopleSqlResult, String> {
+        self.inner
+            .lock()
+            .await
+            .engine
+            .read_people_sql(&request)
+            .await
+            .map_err(|error| error.to_string())
+    }
+
     /// Resolve full-directory label evidence while retaining only bounded witnesses.
     pub async fn people_resolve_references(
         &self,

@@ -2,6 +2,10 @@
   "maxBatch": 500,
   "maxQueryBytes": 512,
   "maxReferenceWitnesses": 2,
+  "maxSqlBytes": 524288,
+  "maxSqlColumns": 64,
+  "maxSqlInputBytes": 262144,
+  "maxSqlRows": 500,
   "policyVersion": 4,
   "schemas": {
     "PeopleContextState": {
@@ -716,6 +720,518 @@
         }
       ],
       "title": "PeopleSearchResult"
+    },
+    "PeopleSqlRequest": {
+      "$defs": {
+        "HydrationScope": {
+          "additionalProperties": false,
+          "description": "Scope captured before starting a background request. Guarded hydration never\nswitches identity or restores a response into a different storage generation.",
+          "properties": {
+            "identity": {
+              "description": "Expected authenticated response identity, not a record identifier.",
+              "type": "string"
+            },
+            "storageGeneration": {
+              "description": "Durable data generation observed before the network request.",
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          "required": [
+            "storageGeneration",
+            "identity"
+          ],
+          "type": "object"
+        },
+        "PeopleSqlInput": {
+          "description": "A read-only SQL request or the identities needed by a bounded join.",
+          "oneOf": [
+            {
+              "additionalProperties": false,
+              "description": "A SELECT over `macro.people`; physical cache tables are not addressable.",
+              "properties": {
+                "kind": {
+                  "const": "statement",
+                  "type": "string"
+                },
+                "sql": {
+                  "description": "SQL in the shared database grammar.",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "kind",
+                "sql"
+              ],
+              "type": "object"
+            },
+            {
+              "additionalProperties": false,
+              "description": "A bounded keyed join; an empty list never means the entire directory.",
+              "properties": {
+                "ids": {
+                  "description": "Explicit user identities, not display-name aliases.",
+                  "items": {
+                    "type": "string"
+                  },
+                  "maxItems": 500,
+                  "type": "array"
+                },
+                "kind": {
+                  "const": "identities",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "kind",
+                "ids"
+              ],
+              "type": "object"
+            }
+          ]
+        }
+      },
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "additionalProperties": false,
+      "description": "The account and storage generation that own this read.",
+      "properties": {
+        "input": {
+          "$ref": "#/$defs/PeopleSqlInput",
+          "description": "Read-only statement or bounded identity request."
+        },
+        "scope": {
+          "$ref": "#/$defs/HydrationScope",
+          "description": "Admission fence checked under the host's engine lock."
+        }
+      },
+      "required": [
+        "scope",
+        "input"
+      ],
+      "title": "PeopleSqlRequest",
+      "type": "object"
+    },
+    "PeopleSqlResult": {
+      "$defs": {
+        "AlteredColumn": {
+          "description": "A column whose type an `ALTER COLUMN` changed.",
+          "properties": {
+            "column": {
+              "description": "The column's property definition before the change.",
+              "format": "uuid",
+              "type": "string"
+            },
+            "table": {
+              "description": "The table.",
+              "format": "uuid",
+              "type": "string"
+            },
+            "to": {
+              "description": "The type it became, as SQL spells it.",
+              "type": "string"
+            }
+          },
+          "required": [
+            "table",
+            "column",
+            "to"
+          ],
+          "type": "object"
+        },
+        "Cell": {
+          "description": "A cell as fetched. An absent cell is `NULL`; an absent multi-valued cell\nis the empty set.",
+          "oneOf": [
+            {
+              "description": "Text or link.",
+              "properties": {
+                "type": {
+                  "const": "text",
+                  "type": "string"
+                },
+                "value": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "type",
+                "value"
+              ],
+              "type": "object"
+            },
+            {
+              "description": "A number.",
+              "properties": {
+                "type": {
+                  "const": "number",
+                  "type": "string"
+                },
+                "value": {
+                  "format": "double",
+                  "type": "number"
+                }
+              },
+              "required": [
+                "type",
+                "value"
+              ],
+              "type": "object"
+            },
+            {
+              "description": "A checkbox.",
+              "properties": {
+                "type": {
+                  "const": "bool",
+                  "type": "string"
+                },
+                "value": {
+                  "type": "boolean"
+                }
+              },
+              "required": [
+                "type",
+                "value"
+              ],
+              "type": "object"
+            },
+            {
+              "description": "A date-time.",
+              "properties": {
+                "type": {
+                  "const": "date",
+                  "type": "string"
+                },
+                "value": {
+                  "format": "date-time",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "type",
+                "value"
+              ],
+              "type": "object"
+            },
+            {
+              "description": "A span from one date-time to another.",
+              "properties": {
+                "type": {
+                  "const": "dateRange",
+                  "type": "string"
+                },
+                "value": {
+                  "$ref": "#/$defs/DateRange"
+                }
+              },
+              "required": [
+                "type",
+                "value"
+              ],
+              "type": "object"
+            },
+            {
+              "description": "The selected option ids; one for single-select columns.",
+              "properties": {
+                "type": {
+                  "const": "options",
+                  "type": "string"
+                },
+                "value": {
+                  "items": {
+                    "format": "uuid",
+                    "type": "string"
+                  },
+                  "type": "array"
+                }
+              },
+              "required": [
+                "type",
+                "value"
+              ],
+              "type": "object"
+            },
+            {
+              "description": "The referenced entity ids; one for single-valued columns.",
+              "properties": {
+                "type": {
+                  "const": "entities",
+                  "type": "string"
+                },
+                "value": {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                }
+              },
+              "required": [
+                "type",
+                "value"
+              ],
+              "type": "object"
+            },
+            {
+              "description": "A table row's own id, the `row_id` column.",
+              "properties": {
+                "type": {
+                  "const": "row",
+                  "type": "string"
+                },
+                "value": {
+                  "format": "uuid",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "type",
+                "value"
+              ],
+              "type": "object"
+            }
+          ]
+        },
+        "DateRange": {
+          "description": "A span of time from `start` to `end`, both included. A write whose end\ncomes before its start is refused.",
+          "properties": {
+            "end": {
+              "description": "Where it ends; never before the start.",
+              "format": "date-time",
+              "type": "string"
+            },
+            "start": {
+              "description": "Where it starts.",
+              "format": "date-time",
+              "type": "string"
+            }
+          },
+          "required": [
+            "start",
+            "end"
+          ],
+          "type": "object"
+        },
+        "Outcome": {
+          "description": "What a statement produced.",
+          "properties": {
+            "alteredColumn": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/AlteredColumn"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "The column an `ALTER COLUMN` changed."
+            },
+            "changesApplied": {
+              "description": "Rows a write changed.",
+              "format": "uint32",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "columns": {
+              "description": "The result columns, in select-list order; empty for writes.",
+              "items": {
+                "$ref": "#/$defs/OutcomeColumn"
+              },
+              "type": "array"
+            },
+            "insertedRowIds": {
+              "description": "Rows an `INSERT` created, in statement order for the rows that landed.",
+              "items": {
+                "format": "uuid",
+                "type": "string"
+              },
+              "type": "array"
+            },
+            "readTables": {
+              "description": "The tables read, so a caller can watch them for changes. Built-in IDs\nare UUID-shaped constants, not RFC-versioned UUIDs.",
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            "rowIds": {
+              "description": "For a row-shaped result, the row entity id behind each result row.",
+              "items": {
+                "format": "uuid",
+                "type": "string"
+              },
+              "type": "array"
+            },
+            "rows": {
+              "description": "The result rows.",
+              "items": {
+                "items": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/$defs/Cell"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "type": "array"
+              },
+              "type": "array"
+            },
+            "truncated": {
+              "description": "Whether the read hit [`ROW_CAP`], making aggregates partial.",
+              "type": "boolean"
+            }
+          },
+          "required": [
+            "columns",
+            "rows",
+            "rowIds",
+            "readTables",
+            "truncated",
+            "insertedRowIds",
+            "changesApplied"
+          ],
+          "type": "object"
+        },
+        "OutcomeColumn": {
+          "description": "One result column.",
+          "properties": {
+            "column": {
+              "description": "The column behind the values, when there is one.",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "kind": {
+              "$ref": "#/$defs/OutcomeKind",
+              "description": "What the values are."
+            },
+            "name": {
+              "description": "The name as the statement would call it: the column's display name,\nor `SUM(amount)`.",
+              "type": "string"
+            },
+            "table": {
+              "description": "For `row_id`, the table whose rows its cells are.",
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          },
+          "required": [
+            "name",
+            "kind"
+          ],
+          "type": "object"
+        },
+        "OutcomeKind": {
+          "description": "The value kind of a result column.",
+          "oneOf": [
+            {
+              "const": "text",
+              "description": "Text or link.",
+              "type": "string"
+            },
+            {
+              "const": "number",
+              "description": "A number, including every aggregate but `MIN`/`MAX` of dates.",
+              "type": "string"
+            },
+            {
+              "const": "boolean",
+              "description": "A checkbox.",
+              "type": "string"
+            },
+            {
+              "const": "date",
+              "description": "A date-time.",
+              "type": "string"
+            },
+            {
+              "const": "dateRange",
+              "description": "A span from one date-time to another.",
+              "type": "string"
+            },
+            {
+              "const": "select",
+              "description": "Select option ids; the caller labels them from the catalog.",
+              "type": "string"
+            },
+            {
+              "const": "entity",
+              "description": "Entity ids; the caller hydrates them.",
+              "type": "string"
+            },
+            {
+              "const": "row",
+              "description": "The `row_id` column: the ids of the table's own rows.",
+              "type": "string"
+            }
+          ]
+        }
+      },
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "description": "A local answer is not a claim that directory synchronization has completed.\nCallers must check the current generation's complete backfill checkpoint.",
+      "oneOf": [
+        {
+          "description": "This storage does not execute SQL. Never replace this with a directory fold.",
+          "properties": {
+            "kind": {
+              "const": "unsupported",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind"
+          ],
+          "type": "object"
+        },
+        {
+          "description": "Some stored membership could not be projected safely.",
+          "properties": {
+            "kind": {
+              "const": "incomplete",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind"
+          ],
+          "type": "object"
+        },
+        {
+          "description": "The selected text exceeds the byte budget; narrow the query or its limit.",
+          "properties": {
+            "kind": {
+              "const": "resultTooLarge",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind"
+          ],
+          "type": "object"
+        },
+        {
+          "description": "Filtering, aggregation, ordering and limiting ran in local storage.",
+          "properties": {
+            "kind": {
+              "const": "result",
+              "type": "string"
+            },
+            "outcome": {
+              "$ref": "#/$defs/Outcome",
+              "description": "At most 500 final rows and no directory-sized intermediate relation."
+            }
+          },
+          "required": [
+            "kind",
+            "outcome"
+          ],
+          "type": "object"
+        }
+      ],
+      "title": "PeopleSqlResult"
     }
   }
 }

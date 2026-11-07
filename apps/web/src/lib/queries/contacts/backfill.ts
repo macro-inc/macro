@@ -90,12 +90,49 @@ export function loadContactCheckpoint(
   };
 }
 
+const completionListeners = new Set<(checkpoint: ContactCheckpoint) => void>();
+
+/** Completion follows the durable page acknowledgement, not its earlier cache hint. */
+export function subscribeContactCheckpoint(
+  userId: string,
+  listener: (checkpoint: ContactCheckpoint) => void
+): () => void {
+  const receive = (checkpoint: ContactCheckpoint) => {
+    if (checkpoint.userId === userId && checkpoint.completedAt !== null)
+      listener(checkpoint);
+  };
+  const storageChanged = (event: StorageEvent) => {
+    if (event.key !== checkpointKey(userId) || !event.newValue) return;
+    try {
+      const value: unknown = JSON.parse(event.newValue);
+      if (isCheckpoint(value)) receive(value);
+    } catch {
+      /* Invalid external metadata is not completion evidence. */
+    }
+  };
+  completionListeners.add(receive);
+  window.addEventListener('storage', storageChanged);
+  return () => {
+    completionListeners.delete(receive);
+    window.removeEventListener('storage', storageChanged);
+  };
+}
+
 function saveCheckpoint(checkpoint: ContactCheckpoint): void {
   try {
     localStorage.setItem(
       checkpointKey(checkpoint.userId),
       JSON.stringify(checkpoint)
     );
+    if (checkpoint.completedAt !== null) {
+      for (const listener of completionListeners) {
+        try {
+          listener(checkpoint);
+        } catch {
+          /* A notification cannot undo a committed checkpoint. */
+        }
+      }
+    }
   } catch {
     /* A failed checkpoint write must never skip unpersisted records. */
   }

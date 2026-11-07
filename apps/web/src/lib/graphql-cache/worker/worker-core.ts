@@ -535,6 +535,7 @@ export class CacheWorkerCore {
         { kind: 'people-update' },
         { kind: 'people-search' },
         { kind: 'people-references' },
+        { kind: 'people-sql' },
         (request) =>
           executePeopleRequest(this.requireEngine(), request, (message) =>
             this.push(message)

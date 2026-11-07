@@ -89,6 +89,14 @@ struct OwnerOnlyStorage(InMemoryStorage);
 impl Storage for OwnerOnlyStorage {
     type Error = std::convert::Infallible;
 
+    async fn read_people_sql(
+        &self,
+        viewer: &str,
+        plan: &cache_core::people::sql::PeopleSqlPlan,
+    ) -> Result<cache_core::people::sql::PeopleSqlResult, Self::Error> {
+        self.0.read_people_sql(viewer, plan).await
+    }
+
     async fn visit_contact_records(
         &self,
         query: &cache_core::search::SearchQuery,

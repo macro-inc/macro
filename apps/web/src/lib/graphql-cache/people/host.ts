@@ -5,6 +5,7 @@ import {
   isPeopleReferenceRequest,
   isPeopleScope,
   isPeopleSearch,
+  isPeopleSqlRequest,
   type PeopleContextState,
   type PeopleContextUpdate,
   type PeopleReferenceRequest,
@@ -12,13 +13,17 @@ import {
   type PeopleScope,
   type PeopleSearch,
   type PeopleSearchResult,
+  type PeopleSqlRequest,
+  type PeopleSqlResult,
   parsePeopleContext,
   parsePeopleReferenceResult,
   parsePeopleSearchResult,
+  parsePeopleSqlResult,
 } from './protocol';
 
 type Unsupported = { kind: 'unsupported' };
 export interface PeopleCache {
+  readSql(request: PeopleSqlRequest): Promise<PeopleSqlResult>;
   resolveReferences(
     request: PeopleReferenceRequest
   ): Promise<PeopleReferenceResult | Unsupported>;
@@ -27,6 +32,7 @@ export interface PeopleCache {
   search(request: PeopleSearch): Promise<PeopleSearchResult | Unsupported>;
 }
 export interface PeopleTransport {
+  readSql(request: PeopleSqlRequest, traceparent?: string): Promise<unknown>;
   resolveReferences(
     request: PeopleReferenceRequest,
     traceparent?: string
@@ -47,6 +53,29 @@ function unsupported(value: unknown): value is Unsupported {
 /** Both hosts validate the same generated wire contract; telemetry never includes people/query text. */
 export function createPeopleCache(transport: PeopleTransport): PeopleCache {
   return {
+    async readSql(request) {
+      if (!isPeopleSqlRequest(request))
+        throw new Error('Invalid local people SQL request');
+      return Telemetry.span('contacts.cache.sql', async (span) => {
+        span.setAttr(
+          'cache.storage_generation',
+          request.scope.storageGeneration
+        );
+        span.setAttr('contacts.sql_kind', request.input.kind);
+        try {
+          const result = parsePeopleSqlResult(
+            await transport.readSql(request, span.traceparent())
+          );
+          span.setAttr('contacts.outcome', result.kind);
+          if (result.kind === 'result')
+            span.setAttr('contacts.result_count', result.outcome.rows.length);
+          return result;
+        } catch (error) {
+          span.error('Local contact SQL failed');
+          throw error;
+        }
+      });
+    },
     async resolveReferences(request) {
       if (!isPeopleReferenceRequest(request))
         throw new Error('Invalid contact reference request');

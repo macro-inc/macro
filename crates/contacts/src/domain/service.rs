@@ -18,7 +18,6 @@ use tracing::instrument;
 
 /// Bounded name enrichment of the viewer's contact graph.
 pub mod directory;
-
 #[cfg(test)]
 mod test;
 

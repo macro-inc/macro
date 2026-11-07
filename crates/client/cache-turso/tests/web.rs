@@ -17,6 +17,79 @@ wasm_bindgen_test_configure!(run_in_dedicated_worker);
 mod contacts;
 #[path = "common/people.rs"]
 mod people;
+#[path = "common/people_sql.rs"]
+mod people_sql;
+
+#[wasm_bindgen_test(async)]
+async fn local_people_sql_executes_over_opfs() {
+    let owner = OpfsOwner::acquire("cache-people-sql.db")
+        .await
+        .unwrap()
+        .recovery_wipe()
+        .await
+        .unwrap();
+    let OpenResult::Ready(session) = owner.open().await.unwrap() else {
+        panic!("fresh storage");
+    };
+    let storage =
+        TursoStorage::from_opfs_session(session.connect().unwrap(), "local-people-sql").unwrap();
+    let mut engine = Engine::with_capacity(storage, 16);
+    let scope = people_sql::seed(&mut engine, 1_000).await;
+    let engine = people_sql::contract(engine, &scope, 1_000).await;
+    healthy_close(engine.into_storage().try_close().unwrap())
+        .preserve()
+        .unwrap()
+        .release()
+        .await
+        .unwrap();
+}
+
+#[wasm_bindgen_test(async)]
+#[ignore = "100k local SQL execution over persisted OPFS"]
+async fn local_people_sql_100k_over_opfs() {
+    let owner = OpfsOwner::acquire("cache-people-sql-100k.db")
+        .await
+        .unwrap()
+        .recovery_wipe()
+        .await
+        .unwrap();
+    let OpenResult::Ready(session) = owner.open().await.unwrap() else {
+        panic!("fresh storage");
+    };
+    let session = session.connect().unwrap();
+    let clock = session.connection().prepare("SELECT 1").unwrap();
+    let start = clock._io().current_time_monotonic();
+    let storage = TursoStorage::from_opfs_session(session, "local-people-sql").unwrap();
+    let mut engine = Engine::with_capacity(storage, 16);
+    let scope = people_sql::seed(&mut engine, 100_000).await;
+    console_log!(
+        "100k OPFS SQL hydration: {:?}",
+        clock._io().current_time_monotonic().duration_since(start)
+    );
+    let start = clock._io().current_time_monotonic();
+    let engine = people_sql::contract(engine, &scope, 100_000).await;
+    console_log!(
+        "100k OPFS SQL contract: {:?}",
+        clock._io().current_time_monotonic().duration_since(start)
+    );
+    drop(clock);
+    let owner = healthy_close(engine.into_storage().try_close().unwrap())
+        .preserve()
+        .unwrap();
+    let OpenResult::Ready(session) = owner.open().await.unwrap() else {
+        panic!("persisted storage");
+    };
+    let storage =
+        TursoStorage::from_opfs_session(session.connect().unwrap(), "local-people-sql").unwrap();
+    let engine = Engine::with_capacity(storage, 16);
+    let engine = people_sql::contract(engine, &scope, 100_000).await;
+    healthy_close(engine.into_storage().try_close().unwrap())
+        .preserve()
+        .unwrap()
+        .release()
+        .await
+        .unwrap();
+}
 
 #[wasm_bindgen_test(async)]
 async fn people_policy_filters_and_ranks_before_limiting_over_opfs() {

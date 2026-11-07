@@ -9,6 +9,20 @@ use wasm_bindgen_futures::future_to_promise;
 
 #[wasm_bindgen]
 impl CacheEngine {
+    /// Execute a read in the local Turso database under the account/generation lock.
+    #[wasm_bindgen(js_name = peopleReadSql)]
+    pub fn people_read_sql(&self, request: JsValue) -> js_sys::Promise {
+        let state = self.state.clone();
+        future_to_promise(async move {
+            let mut state = state.lock().await;
+            state.ensure_callable()?;
+            let request: cache_core::people::sql::PeopleSqlRequest =
+                serde_wasm_bindgen::from_value(request).map_err(err_js)?;
+            let result = state.engine_mut()?.read_people_sql(&request).await;
+            to_js(&state.engine_result(result)?)
+        })
+    }
+
     /// Resolve bounded label evidence without exposing the cached directory.
     #[wasm_bindgen(js_name = peopleResolveReferences)]
     pub fn people_resolve_references(&self, request: JsValue) -> js_sys::Promise {

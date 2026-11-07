@@ -93,6 +93,7 @@ describe('person transport admission', () => {
 
   it('validates before transport and rejects malformed or oversized replies without leaking them', async () => {
     const transport = {
+      readSql: vi.fn().mockResolvedValue({ kind: 'unsupported' }),
       resolveReferences: vi.fn(),
       context: vi
         .fn()

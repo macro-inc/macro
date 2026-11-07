@@ -3737,6 +3737,7 @@ dependencies = [
  "apollo-compiler",
  "apollo-parser",
  "chrono",
+ "database_sql",
  "lru 0.16.4",
  "macro_user_id",
  "maybe_send",

@@ -1349,6 +1349,8 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
     clientId,
     liveQueries: true,
     people: createPeopleCache({
+      readSql: (request, traceparent) =>
+        initializedRequest({ kind: 'people-sql', request, traceparent }),
       resolveReferences: (request, traceparent) =>
         initializedRequest({ kind: 'people-references', request, traceparent }),
       context: (scope, traceparent) =>

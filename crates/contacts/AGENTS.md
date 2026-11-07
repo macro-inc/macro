@@ -14,7 +14,7 @@ and kept in sync via the connection gateway.
 - `src/outbound/names.rs`: `directory-names` feature, reusing the existing user-name owner's profile-over-address-book query without duplicating SQL.
 - `src/domain/models/page.rs`: page sizes (default 100, maximum 500) and original per-row positions, distinct from canonicalized user IDs. Short/empty pages may still have continuations.
 - `src/domain/models/query.rs`: 512-byte normalized subsequence searches (including the local-part label fallback plus email), exact/first-name reference predicates applied before limiting and at most 500 raw lookup IDs, deduplicated without reordering; empty lookup never means all contacts.
-- `src/outbound/repository/page.rs`: indexed paging of both graph directions and self, plus exact lookups through `lookup.sql`. Membership is bounded per input key before name reads; keep its LATERAL limit and the 100k-row plan regressions.
+- `src/outbound/repository/page.rs`: indexed paging of both graph directions and self, plus exact lookups through `lookup.sql`. Match peers with `lower(... COLLATE "C")` and the strict `macro|` prefix predicate using the two scoped expression indexes; keep raw viewer equality and raw page cursors unchanged. Membership is bounded per input key before names; preserve the LATERAL limit and both custom/generic 100k-row plan regressions. Deploy migrations `20261105044718` and `20261105044750` before the lookup query.
 - `src/domain/ports.rs`: the traits `inbound`/`outbound` implement.
 - `src/inbound/http.rs`: HTTP handlers, router, DTOs, swagger.
 - `src/inbound/worker.rs`: SQS worker that ingests contact-affecting events.
@@ -49,6 +49,8 @@ and kept in sync via the connection gateway.
 
 - `cargo test -p contacts --all-features -- --test-threads=2` (`SQLX_OFFLINE` unset; `directory-names` covers name precedence/account isolation; the `outbound`/`default`
   features need a local MacroDB — see `.agents/rules/rust/guardrails.md`).
+
+- `cargo test -p contacts --all-features '::case_lookup::' -- --test-threads=2 --nocapture`: canonical point lookup matches legacy-case IDs exposed by paging, rejects invalid marker/Unicode aliases and other viewers, and seeks the new expression indexes at 100k under custom/generic plans. Directory-name tests also preserve viewer-private labels and normalized identities.
 
 ## Related
 

@@ -12,6 +12,7 @@ GraphQL cache — native for tests/Tauri, OPFS-backed on wasm32.
   with the frozen compound-key schema and strict-head mutation leasing.
 - `src/driver.rs`: Turso connection/transaction handling, including checked row-at-a-time query visitation.
 - `src/storage/contact_search.sql`: joins normalized contact records after the existing bound text prefilter. Decode one row at a time for before-limit policy; never add a final SQL limit or collect the corpus. Ordinary search retains its covering-only path.
+- `src/storage/people_sql.rs`: local relational reads over contact facts in the existing predicate index, not another database or Rust catalog. Derive facts in record transactions, delete them with records, and rebuild in bounded batches only when the profile/account stamp changes. Generic caller projections cannot override these cache-owned facts. SQL reads only needed attributes and limits final results before decoding; enforce both row and byte budgets. Pin fact joins to document/attribute primary-key seeks: the unhinted Turso plan can choose quadratic attribute scans at 100k. Do not rewrite unchanged facts for ranking-context-only updates.
 - `src/storage/search.rs`: bound subsequence SQL prefilter over the covering browse index and checked borrowed-row decoding; reuse the key buffer and let core copy only winners, never collect or limit text results first.
 - `src/key.rs`: the compound key schema (frozen — see Gotchas).
 - `src/error.rs`: `TursoStorageError` / `PhysicalResetReason`.
@@ -38,6 +39,7 @@ GraphQL cache — native for tests/Tauri, OPFS-backed on wasm32.
 ## Checks
 
 - `cargo test -p cache-turso` (`SQLX_OFFLINE` unset).
+- `cargo test -p cache-turso --test people_sql`: real local counts, late matches, Unicode LIKE, DISTINCT, grouping, virtual columns, bounded output and scope refusal. The shared contract also runs over OPFS in `tests/web.rs`. `--release --test people_sql -- --ignored --nocapture` exercises 100k records plus self and persisted reopening.
 - `cargo test --release -p cache-turso --test contacts -- --ignored --nocapture`: hydrate 100k normalized contacts in bounded pages, reopen, search, and materialize only winners. The regular native and OPFS contact suites also check account resets and omitted viewer wrappers.
 - `cargo test -p cache-turso --test people`: context publication, stale writes, membership, exclusions, late winners, DM deduplication, ranked continuation/clock/epoch fencing, and scoped bounded reference evidence without allowing context-only membership; the same scenario runs over OPFS. `--release --test people -- --ignored --nocapture` measures 100k-row policy searches.
 - `cargo test -p cache-turso --test search -- --ignored --nocapture`: explicit 100k-row search measurement.

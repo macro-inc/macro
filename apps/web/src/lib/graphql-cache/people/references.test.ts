@@ -54,6 +54,7 @@ it('requires one bounded evidence group per label and preserves scope failures',
     matches: [{ complete: true, people: [person] }],
   };
   const transport = {
+    readSql: vi.fn().mockResolvedValue({ kind: 'unsupported' }),
     resolveReferences: vi.fn().mockResolvedValue(response),
     context: vi.fn(),
     update: vi.fn(),

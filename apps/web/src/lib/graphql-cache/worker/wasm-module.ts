@@ -6,6 +6,8 @@ import type {
   PeopleScope,
   PeopleSearch,
   PeopleSearchResult,
+  PeopleSqlRequest,
+  PeopleSqlResult,
 } from '../people/generated';
 import type { IdentityBindingWire, MutationInspection } from '../protocol';
 /**
@@ -113,6 +115,7 @@ export interface CacheEngine {
   search(
     request: SearchCacheArgs & { nowMs: number }
   ): Promise<SearchCachePage>;
+  peopleReadSql?(request: PeopleSqlRequest): Promise<PeopleSqlResult>;
   peopleResolveReferences?(
     request: PeopleReferenceRequest
   ): Promise<PeopleReferenceResult>;

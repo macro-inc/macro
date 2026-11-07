@@ -148,6 +148,21 @@ reader keeps one physical read plus one replaceable pending input, samples cache
 completeness before scanning, and wakes incomplete reads only on readiness
 transitions. Source data is scoped and immediately collected, not a people pool.
 
+Execute browser `macro.people` SQL in the existing local Turso cache, including
+offline; authorized synchronization supplies records, not a server query endpoint.
+Use actual wasm compiler metadata to distinguish the built-in relation from ordinary
+tables named people. `CacheHost.people.readSql` exposes the scoped local capability;
+missing native support must not disable other person methods or trigger remote SQL.
+Serialize uninterruptible reads with one replaceable pending input. Wake incomplete
+queries on the committed contact checkpoint, not only the preceding hydration hint. Filter, aggregate and limit before materializing results; never
+enumerate contacts or fall back to remote SQL execution. Validate result metadata and
+fence account/session, storage generation, input transitions and disposal. Require
+complete synchronization before treating local results as directory-wide evidence;
+unsupported/incomplete reads stay explicit failures, not authoritative empty answers.
+Keep last same-owner results on ordinary failures, but clear them on account or
+authority changes. Preserve explicit post-disposal refreshes used to finish accepted
+database writes only for the original account/session.
+
 ## Verifying a change in a real browser
 
 `just test-functional` builds a production-like bundle of its fixtures and runs

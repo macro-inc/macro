@@ -269,6 +269,17 @@ pub async fn graphql_cache_people_search(
     engine_handle(&state)?.people_search(request).await
 }
 
+/// Execute a read in local storage; query text and people are never traced.
+#[tauri::command]
+#[tracing::instrument(skip_all, fields(upstream_traceparent = people_trace_correlation(traceparent.as_deref())))]
+pub async fn graphql_cache_people_read_sql(
+    state: State<'_, CacheState>,
+    request: cache_core::people::sql::PeopleSqlRequest,
+    traceparent: Option<String>,
+) -> Result<cache_core::people::sql::PeopleSqlResult, String> {
+    engine_handle(&state)?.people_read_sql(request).await
+}
+
 /// Resolve scoped label evidence, never a complete in-memory people catalog.
 #[tauri::command]
 #[tracing::instrument(skip_all, fields(upstream_traceparent = people_trace_correlation(traceparent.as_deref()), label_count = request.labels.len()), err)]

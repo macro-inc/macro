@@ -8,6 +8,7 @@ import { beforeEach, expect, it, vi } from 'vitest';
 import {
   loadContactCheckpoint,
   runContactBackfill,
+  subscribeContactCheckpoint,
   useContactBackfill,
 } from './backfill';
 
@@ -74,6 +75,54 @@ it('persists only successful progress, resumes failures, and accepts empty pages
     pages: 2,
     completedAt: expect.any(Number),
   });
+});
+
+it('publishes completion only after acknowledgement and persisted checkpoint, with scoped cleanup', async () => {
+  const entered = Promise.withResolvers<void>();
+  const release = Promise.withResolvers<ReturnType<typeof page>>();
+  const notified = vi.fn(() => {
+    expect(
+      loadContactCheckpoint(viewer, GENERATION).completedAt
+    ).not.toBeNull();
+  });
+  const foreign = vi.fn();
+  const stop = subscribeContactCheckpoint(viewer, notified);
+  const stopForeign = subscribeContactCheckpoint(
+    'macro|other@example.com',
+    foreign
+  );
+  const stopThrowing = subscribeContactCheckpoint(viewer, () => {
+    throw new Error('observer failed');
+  });
+  try {
+    const running = Effect.runPromise(
+      runContactBackfill(viewer, host(), {
+        pageDelayMs: 0,
+        fetchPage: async () => {
+          entered.resolve();
+          return release.promise;
+        },
+      })
+    );
+    await entered.promise;
+    expect(notified).not.toHaveBeenCalled();
+    release.resolve(page(null));
+    await running;
+    expect(notified).toHaveBeenCalledOnce();
+    expect(foreign).not.toHaveBeenCalled();
+    stop();
+    window.dispatchEvent(
+      new StorageEvent('storage', {
+        key: `graphql-contacts-backfill:v1:${viewer}`,
+        newValue: JSON.stringify(loadContactCheckpoint(viewer, GENERATION)),
+      })
+    );
+    expect(notified).toHaveBeenCalledOnce();
+  } finally {
+    stop();
+    stopForeign();
+    stopThrowing();
+  }
 });
 
 it('rejects a generation change during hydration and restarts in the replacement generation', async () => {

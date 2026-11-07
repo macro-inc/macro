@@ -88,6 +88,14 @@ impl ClaimFailingStorage {
 impl Storage for ClaimFailingStorage {
     type Error = std::io::Error;
 
+    async fn read_people_sql(
+        &self,
+        viewer: &str,
+        plan: &cache_core::people::sql::PeopleSqlPlan,
+    ) -> Result<cache_core::people::sql::PeopleSqlResult, Self::Error> {
+        Ok(self.inner.read_people_sql(viewer, plan).await.unwrap())
+    }
+
     async fn visit_contact_records(
         &self,
         query: &cache_core::search::SearchQuery,

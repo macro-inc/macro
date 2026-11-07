@@ -48,6 +48,9 @@ function host() {
       data: { user: { id: VIEWER } },
     })),
     people: {
+      readSql: vi
+        .fn<PeopleCache['readSql']>()
+        .mockResolvedValue({ kind: 'unsupported' }),
       context: vi.fn<PeopleCache['context']>(),
       update: vi.fn<PeopleCache['update']>(),
       search: vi.fn<PeopleCache['search']>(),

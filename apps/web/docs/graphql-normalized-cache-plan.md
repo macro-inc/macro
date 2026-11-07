@@ -1198,7 +1198,7 @@ Contact synchronization shares Soup's authenticated leader and rollout gate.
 Fetch-only transport returns one 500-row page for explicit scoped admission:
 the core checks the captured generation and expected/response identities under
 the same engine lock as the write, without switching accounts. Coordinator
-protocol 15 forwards that scope; native hosts refuse guarded writes on older
+protocol 16 forwards that scope; native hosts refuse guarded writes on older
 engines. Checkpoints advance only after persistence and a generation recheck.
 Invalidations coalesce on a 15-minute cadence without interrupting active scans;
 hourly passes refresh names. Scan omissions never delete records.
@@ -1240,8 +1240,12 @@ snapshots report pending, not an empty directory. Search streams matching record
 into at most `limit + 1` unique winners, applying exclusions and DM deduplication
 before that limit. This joined-record path costs more than ordinary covering-only
 search; it does not change storage schema 12. `CacheHost.people` now exposes state,
-update, search and bounded reference resolution through coordinator protocol 15
-and dedicated native commands. Reference results retain at most two witnesses per
+update, search, bounded reference resolution and local SQL through coordinator
+protocol 16 and dedicated native commands. Local SQL uses the existing predicate
+index, not another database or a directory-sized Rust/JS relation; its adapter
+returns only bounded final results. Browser SQL now consumes this capability,
+including offline; it never sends statements to a new server read endpoint.
+Reference results retain at most two witnesses per
 requested label, not a directory catalog. The reference read requires a bound viewer
 without binding one itself, and publication is required only for inbox exclusions.
 Missing reference support is independently unsupported on older hosts; scope/storage
@@ -1302,6 +1306,16 @@ domain and retains at most six non-self emails, with zero-history scoped queries
 Linear import resolves only uploaded assignee labels in serial bounded exact batches;
 manual mapping uses personal property windows and keeps explicit choices separate.
 Its retained names scale with the uploaded file, not the personal directory.
+Browser SQL compiles dependency metadata and executes direct people reads through
+`CacheHost.people.readSql` in existing local Turso. The ordinary row source accepts
+only bounded explicit people keys for joins, never a directory array. A complete
+same-generation backfill checkpoint is required before and after a read; its final
+commit notification wakes pending queries after the page acknowledgement. Scope,
+compiler metadata and input ownership fence answers, and each observer retains one
+physical operation plus one replaceable input. The unnecessary `/databases/read`
+endpoint/client is removed. Fresh queries work offline once synchronization is
+complete; unsupported/incomplete reads stay explicit. Wider join parity, removal
+reconciliation and legacy cleanup remain open.
 Calendar create/edit, event-detail guest actions and AI-draft
 composers now use bounded property windows with event-owned guest extras. Chosen
 names stay in selection metadata rather than a directory map, and person pages

@@ -77,7 +77,7 @@ unreferenced replicas. These additive tables do not change agent-session claims.
 
 ## Gotchas
 
-- `user::get_user_name::get_user_names_with_email` is shared by authentication and bounded contact-directory enrichment; preserve viewer-only address-book fallback and keep its IDs/names off tracing spans.
+- `user::get_user_name::get_user_names_with_email` and contact relational reads share `public.user_name_for_viewer(viewer_id, target_id)`; keep profile-over-viewer-address-book precedence in that SQL function, not copied joins. It returns at most one row with first/last/display names, grants no contact membership, and runs as SECURITY INVOKER over schema-qualified tables. Strip only the leading `macro|` marker from an identity. Deploy migration `20261104180444` before readers call the function; keep IDs/names off tracing spans.
 - `contacts_connections` has a `(user2, user1)` index for reverse keyset paging; the existing unique `(user1, user2)` index covers forward paging. Bounded directory reads belong to `crates/contacts`, not this client.
 
 - Migrations deploy before service code: never drop a column/table in the
