@@ -41,7 +41,8 @@ and usage metering.
 ## Boundaries
 
 - Depends on: `ai_usage` (metering), `ai_toolset` (tool adapter trait),
-  `attachment`, `genai_telemetry`, `prompt`, `rig-core`/`rig-agent`.
+  `attachment`, `genai_telemetry`, `rig-core`/`rig-agent`. Not `prompt`: it is
+  edited often and every `agent` dependent would rebuild with it.
 - Used by: `agent_inmem`, `ai_tools`, `ai_projections` (`agent` feature),
   and most AI-surface crates that run a turn (directly or via `ai_tools`).
 

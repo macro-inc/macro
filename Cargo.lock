@@ -211,7 +211,6 @@ dependencies = [
  "non_empty",
  "opentelemetry",
  "opentelemetry_sdk",
- "prompt",
  "reqwest 0.13.4",
  "rig-agent",
  "rig-core",
