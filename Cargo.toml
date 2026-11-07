@@ -184,6 +184,7 @@ members = [
   "crates/trigger_context",
   "crates/types/agent_session_id",
   "crates/types/bearer_token",
+  "crates/types/chat_id",
   "crates/types/chat_message",
   "crates/types/entity_basic_types",
   "crates/types/id_newtype",
@@ -641,6 +642,7 @@ channel_labels = { path = "crates/channel_labels" }
 channel_sender = { path = "crates/channel_sender" }
 channels = { path = "crates/channels" }
 chat = { path = "crates/chat", default-features = false }
+chat_id = { path = "crates/types/chat_id" }
 chat_message = { path = "crates/types/chat_message" }
 claude_fold = { path = "crates/folds/claude_fold" }
 code_execution = { path = "crates/code_execution" }

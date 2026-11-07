@@ -94,6 +94,8 @@ workspace-members = [
     "model_owner",
     # project_id: a leaf id type; it needs nothing from the workspace union.
     "project_id",
+    # chat_id: a leaf id type; it needs nothing from the workspace union.
+    "chat_id",
     "bot_id",
     # chat_message: leaf message types, kept out of workspace-hack so the
     # crates that store chat messages need not wait for its heavy union.

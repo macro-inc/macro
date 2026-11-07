@@ -89,6 +89,7 @@ macro_uuid = { workspace = true, optional = true }
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
 # Domain (always included)
 chat_message = { workspace = true, features = ["schema"] }
+chat_id = { workspace = true }
 
 [dev-dependencies]
 bot_id = { workspace = true, features = ["test-utils"] }

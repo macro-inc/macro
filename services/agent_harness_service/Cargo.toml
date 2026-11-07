@@ -214,6 +214,7 @@ service_url = { workspace = true }
 static_file_public_url = { workspace = true }
 static_file_service_url = { workspace = true }
 sync_service_url = { workspace = true }
+chat_id = { workspace = true }
 
 [dev-dependencies]
 agent = { workspace = true }
