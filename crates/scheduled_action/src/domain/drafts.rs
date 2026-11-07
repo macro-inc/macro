@@ -121,7 +121,7 @@ pub struct RoutineSoFar {
     #[schema(value_type = Option<Object>)]
     pub trigger: Option<Value>,
     /// Its steps, in the shape a routine's task holds them.
-    #[schema(value_type = Vec<Object>)]
+    #[schema(value_type = Vec<routine_program::Step>)]
     pub steps: Vec<Value>,
 }
 
@@ -222,7 +222,7 @@ pub struct DraftedRoutine {
     pub trigger: Option<ActionTrigger>,
     /// What it does, in the shape a routine's task holds steps, each code
     /// step named as saving names it.
-    #[schema(value_type = Vec<Object>)]
+    #[schema(value_type = Vec<routine_program::Step>)]
     pub steps: Vec<Value>,
     /// Steps whose code still fails the type checker.
     pub problems: Vec<StepProblem>,
@@ -233,7 +233,7 @@ pub struct DraftedRoutine {
 #[serde(rename_all = "camelCase")]
 pub struct DraftedStep {
     /// The step, in the shape a routine's task holds it.
-    #[schema(value_type = Object)]
+    #[schema(value_type = routine_program::Step)]
     pub step: Value,
     /// Why AI made a step it chose code or Ask AI, in a few words; empty
     /// when it gave no short reason or didn't choose.

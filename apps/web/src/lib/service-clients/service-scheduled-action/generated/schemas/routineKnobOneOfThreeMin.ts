@@ -6,4 +6,7 @@
  * OpenAPI spec version: 0.1.0
  */
 
-export type ScheduledActionTask = { [key: string]: unknown };
+/**
+ * The smallest value the owner may set.
+ */
+export type RoutineKnobOneOfThreeMin = number | null;

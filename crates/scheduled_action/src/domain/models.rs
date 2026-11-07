@@ -171,7 +171,7 @@ pub struct ActionConfiguration {
     pub name: String,
     pub trigger: ActionTrigger,
     pub kind: ActionKind,
-    #[schema(value_type = Object)]
+    #[schema(value_type = routine_program::RoutineTask)]
     pub task: Value,
     pub enabled: bool,
     /// Omitted by clients that predate the setting; runs then start unlisted.
@@ -191,7 +191,7 @@ pub struct ActionConfigurationUpdate {
     pub name: String,
     pub trigger: ActionTrigger,
     pub kind: ActionKind,
-    #[schema(value_type = Object)]
+    #[schema(value_type = routine_program::RoutineTask)]
     pub task: Value,
     /// Still sent by clients deployed before the activation endpoint.
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -323,7 +323,7 @@ pub struct ScheduledAction {
     pub configuration_revision: ConfigurationRevision,
     /// Event publication boundary; absent for cron actions.
     pub event_activated_at: Option<DateTime<Utc>>,
-    #[schema(value_type = Object)]
+    #[schema(value_type = routine_program::RoutineTask)]
     pub task: Value,
     pub claimed: Option<DateTime<Utc>>,
     /// Next cron firing, absent for event-triggered actions.

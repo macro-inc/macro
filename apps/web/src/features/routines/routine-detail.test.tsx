@@ -1,6 +1,7 @@
 import { toast } from '@core/component/Toast/Toast';
 import type {
   CodeUpgrade,
+  RoutineTask,
   ScheduledAction,
 } from '@service-scheduled-action/generated/schemas';
 import {
@@ -543,7 +544,8 @@ describe('routine execution target autosave', () => {
     const firstSaved = {
       ...cron,
       task: {
-        ...(cron.task as object),
+        user_prompt: 'Summarize updates',
+        prompt: '',
         agent: { bot_id: agentTarget.agentId },
         model: 'runtime-model',
       },
@@ -939,7 +941,7 @@ describe('routine editor triggers', () => {
     expect(screen.queryByRole('switch', { name: 'Act as me' })).toBeNull();
     cleanup();
 
-    const task = {
+    const task: RoutineTask = {
       steps: [
         {
           type: 'code',
@@ -1055,7 +1057,7 @@ describe('routine editor triggers', () => {
 });
 
 describe('routine code that needs an update', () => {
-  const code = (source: string, sdk: string) => ({
+  const code = (source: string, sdk: string): RoutineTask => ({
     steps: [{ type: 'code', title: 'File invoices', source }],
     sdk,
   });
@@ -1064,7 +1066,7 @@ describe('routine code that needs an update', () => {
     enabled: false,
     task: code('macro.tasks.create(x)', '0.2.0+old'),
   };
-  const upgrade = (task?: Record<string, unknown>): CodeUpgrade => ({
+  const upgrade = (task?: RoutineTask): CodeUpgrade => ({
     id: 'upgrade',
     fromSdk: '0.2.0+old',
     toSdk: '0.3.0+new',

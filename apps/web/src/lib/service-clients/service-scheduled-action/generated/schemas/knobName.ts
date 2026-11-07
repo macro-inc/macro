@@ -6,4 +6,8 @@
  * OpenAPI spec version: 0.1.0
  */
 
-export type ActionConfigurationUpdateTask = { [key: string]: unknown };
+/**
+ * How code reads a knob: a lowercase letter, then up to 31 letters or
+digits, e.g. `dueWithinDays`.
+ */
+export type KnobName = string;
