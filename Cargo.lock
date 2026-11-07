@@ -11771,6 +11771,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "lexical_rich_nodes"
+version = "0.1.0"
+dependencies = [
+ "lexical_model",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.18",
+]
+
+[[package]]
 name = "lexical_workspace_tests"
 version = "0.1.0"
 dependencies = [

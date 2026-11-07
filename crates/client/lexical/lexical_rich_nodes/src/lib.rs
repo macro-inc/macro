@@ -1,0 +1,25 @@
+//! Portable model halves of Lexical's rich-text packages.
+#![deny(missing_docs)]
+
+pub mod heading;
+pub mod overflow;
+pub mod quote;
+
+use lexical_model::EditorBuilder;
+
+/// Errors returned by the package's model operations.
+#[derive(Debug, thiserror::Error)]
+pub enum Error {
+    /// A core model operation failed.
+    #[error(transparent)]
+    Model(#[from] lexical_model::Error),
+}
+/// Result of a rich-node operation.
+pub type Result<T> = std::result::Result<T, Error>;
+
+/// Register the nodes supplied by `RichTextExtension`.
+pub fn register_rich_text_nodes(builder: EditorBuilder) -> EditorBuilder {
+    builder
+        .node::<heading::HeadingNode>()
+        .node::<quote::QuoteNode>()
+}
