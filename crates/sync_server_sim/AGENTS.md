@@ -46,6 +46,9 @@ Native in-memory room capabilities and the golden Worker transcript corpus.
   receipts verify SHA-256 against each side's snapshot before semantic comparison;
   translate only exact previously validated receipt/snapshot references. Never
   repair forged inputs. Keep workerd digest bytes exact.
+- `fork_durable` opens an isolated cold view; `take_completed_puts` and
+  `take_delivery_proofs` expose success/generation evidence without changing port effects.
+  Fault `"*"` counts calls through the fault-capable boundary, not diagnostic clock reads.
 - Keep this crate excluded from hakari; no ambient clock or random UUID calls.
 
 ## Native coverage floor
