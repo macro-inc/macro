@@ -130,7 +130,7 @@ const DELEGATED_LINK: Uuid = uuid::uuid!("00000000-0000-0000-0000-000000000f02")
 #[sqlx::test(
     migrator = "MACRO_DB_MIGRATIONS",
     fixtures(
-        path = "../../../../../crates/email/fixtures",
+        path = "../../../../../crates/email/email/fixtures",
         scripts("email_focus", "email_focus_linked")
     )
 )]

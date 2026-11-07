@@ -55,7 +55,10 @@ mod with_posthog_and_the_database {
 
     #[sqlx::test(
         migrator = "MACRO_DB_MIGRATIONS",
-        fixtures(path = "../../../../../crates/email/fixtures", scripts("email_focus"))
+        fixtures(
+            path = "../../../../../crates/email/email/fixtures",
+            scripts("email_focus")
+        )
     )]
     async fn only_inboxes_whose_owner_has_the_flag_are_classified(pool: Pool<Postgres>) {
         let posthog = MockServer::start().await;

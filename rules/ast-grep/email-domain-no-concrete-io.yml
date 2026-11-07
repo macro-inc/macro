@@ -7,8 +7,8 @@ note: |-
   Tests may compose real adapters. email_api_client_core contracts remain allowed.
   Tracing target strings are not Rust paths and are not matched. No production exemptions.
 files:
-  - crates/email/src/domain.rs
-  - crates/email/src/domain/**
+  - crates/email/email/src/domain.rs
+  - crates/email/email/src/domain/**
 ignores:
   - '**/test.rs'
   - '**/tests.rs'

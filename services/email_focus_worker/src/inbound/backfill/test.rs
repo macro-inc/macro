@@ -161,7 +161,10 @@ fn service(
 
 #[sqlx::test(
     migrator = "MACRO_DB_MIGRATIONS",
-    fixtures(path = "../../../../../crates/email/fixtures", scripts("email_focus"))
+    fixtures(
+        path = "../../../../../crates/email/email/fixtures",
+        scripts("email_focus")
+    )
 )]
 async fn an_enrolled_inbox_fills_with_no_mail_arriving(pool: Pool<Postgres>) {
     seed_inbox(&pool, OWNERS_LINK, "owner@acme.example", 40, 20).await;

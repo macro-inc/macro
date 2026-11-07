@@ -4,7 +4,7 @@
 // scheduled message.
 //
 // Macro writes its drafts into the mailbox only for Outlook; a Gmail inbox's
-// drafts stay in Macro (crates/email/src/outbound/mailbox_pg/drafts.rs, the
+// drafts stay in Macro (crates/email/email/src/outbound/mailbox_pg/drafts.rs, the
 // `l.provider = 'OUTLOOK'` claim).
 
 import type { Browser, Page, Request } from '@playwright/test';

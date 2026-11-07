@@ -2,7 +2,10 @@ use super::*;
 
 #[sqlx::test(
     migrator = "macro_db_migrator::MACRO_DB_MIGRATIONS",
-    fixtures(path = "../../../../email/fixtures", scripts("email_crm_selected"))
+    fixtures(
+        path = "../../../../email/email/fixtures",
+        scripts("email_crm_selected")
+    )
 )]
 async fn small_matching_stops_before_the_suffix_allowance_is_exceeded(
     pool: sqlx::PgPool,
@@ -36,7 +39,10 @@ async fn small_matching_stops_before_the_suffix_allowance_is_exceeded(
 
 #[sqlx::test(
     migrator = "macro_db_migrator::MACRO_DB_MIGRATIONS",
-    fixtures(path = "../../../../email/fixtures", scripts("email_crm_selected"))
+    fixtures(
+        path = "../../../../email/email/fixtures",
+        scripts("email_crm_selected")
+    )
 )]
 async fn batched_first_pages_preserve_values_continuations_and_byte_guards(
     pool: sqlx::PgPool,

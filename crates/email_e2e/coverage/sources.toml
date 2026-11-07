@@ -112,13 +112,13 @@ at = ""
 # the email worker binary, so it has no `consumes` to check.
 [[queue]]
 name = "reminder-dispatch"
-type = "crates/reminders/src/domain/models.rs::ReminderDispatchOperation"
-envelope = "crates/reminders/src/domain/models.rs::ReminderDispatchMessage"
+type = "crates/email/reminders/src/domain/models.rs::ReminderDispatchOperation"
+envelope = "crates/email/reminders/src/domain/models.rs::ReminderDispatchMessage"
 
 # kind `kafka`: the events published to a topic, one row per enum variant.
 [[kafka]]
 topic = "macro.email"
-type = "crates/email/src/domain/events.rs::EmailTopicEvent"
+type = "crates/email/email/src/domain/events.rs::EmailTopicEvent"
 
 # kind `gateway`: pushes to the connection gateway under message type `name`,
 # one row per enum variant. The `match` column is relative to the event JSON,
@@ -129,7 +129,7 @@ type = "crates/types/models_email/src/email/api/refresh.rs::RefreshEmailEvent"
 
 # kind `tool`: the agent tools registered with `add_tool` / `add_user_tool`.
 [[tool]]
-file = "crates/email/src/inbound/toolset.rs"
+file = "crates/email/email/src/inbound/toolset.rs"
 
 # kind `lambda`: one row per service directory, keyed by its package name.
 [[lambda]]
@@ -243,7 +243,7 @@ routes = ["POST /search"]
 
 [[elsewhere]]
 service = "document_storage_service"
-file = "crates/reminders/src/inbound/axum_router.rs"
+file = "crates/email/reminders/src/inbound/axum_router.rs"
 routes = [
     "GET /reminders/email/collection",
     "GET /reminders/email/{thread_id}",

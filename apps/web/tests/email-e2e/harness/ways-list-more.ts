@@ -37,7 +37,7 @@ export type FocusFlag = 'reply' | 'follow-up' | 'none';
  * Has the thread in Focus with this flag, as the worker that reads mail for
  * Focus would leave it: no stack runs its model. `full-stack-home.spec.ts`
  * seeds Focus the same way. The list settles the flag again on the latest
- * message (`focus_for_threads` in `crates/email/src/outbound/focus_pg.rs`):
+ * message (`focus_for_threads` in `crates/email/email/src/outbound/focus_pg.rs`):
  * Follow up shows only when the owner wrote last, Reply needed only when
  * someone else did.
  */

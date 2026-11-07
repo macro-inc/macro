@@ -3,7 +3,7 @@ use super::*;
 #[sqlx::test(
     migrator = "macro_db_migrator::MACRO_DB_MIGRATIONS",
     fixtures(
-        path = "../../../../../../email/fixtures",
+        path = "../../../../../../email/email/fixtures",
         scripts("email_crm_selected")
     )
 )]

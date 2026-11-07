@@ -101,7 +101,7 @@ fn message_to_send() -> MessageToSend {
 #[sqlx::test(
     migrator = "MACRO_DB_MIGRATIONS",
     fixtures(
-        path = "../../../../../crates/email_db_client/fixtures",
+        path = "../../../../../crates/email/email_db_client/fixtures",
         scripts("mark_message_as_sent")
     )
 )]
