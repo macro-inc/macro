@@ -262,7 +262,7 @@
       "reason": "not-ported",
       "reviewedBy": "coding-agent",
       "decision": "S1 §4 built-in factory table: $createRootNode is n/a (root always exists)",
-      "note": "Missing capability: lexical/nodes/LexicalRootNode.$createRootNode. No model mismatch is masked; this exact unsupported diagnostic must still occur.",
+      "note": "Missing capability: lexical/nodes/LexicalRootNode.$createRootNode. No model mismatch is masked; this exact unsupported diagnostic must still occur. Pinned upstream: packages/lexical/src/nodes/LexicalRootNode.ts:105.",
       "failure": "op 4 call: unmapped API: lexical/nodes/LexicalRootNode.$createRootNode"
     },
     {
@@ -272,7 +272,7 @@
       "reason": "not-ported",
       "reviewedBy": "coding-agent",
       "decision": "WORKPLAN WP-13; S1 §14 extension installation",
-      "note": "Missing capability: lexical.defineExtension. No model mismatch is masked; this exact unsupported diagnostic must still occur.",
+      "note": "Missing capability: lexical.defineExtension. No model mismatch is masked; this exact unsupported diagnostic must still occur. Pinned upstream: packages/lexical/src/extension-core/defineExtension.ts:54.",
       "failure": "op 0 call: unmapped API: lexical.defineExtension"
     },
     {
@@ -282,7 +282,7 @@
       "reason": "not-ported",
       "reviewedBy": "coding-agent",
       "decision": "WORKPLAN WP-13; S1 §14 extension installation",
-      "note": "Missing capability: lexical.defineExtension. No model mismatch is masked; this exact unsupported diagnostic must still occur.",
+      "note": "Missing capability: lexical.defineExtension. No model mismatch is masked; this exact unsupported diagnostic must still occur. Pinned upstream: packages/lexical/src/extension-core/defineExtension.ts:54.",
       "failure": "op 0 call: unmapped API: lexical.defineExtension"
     },
     {
@@ -292,7 +292,7 @@
       "reason": "not-ported",
       "reviewedBy": "coding-agent",
       "decision": "WORKPLAN WP-13; S1 §14 extension installation",
-      "note": "Missing capability: lexical.defineExtension. No model mismatch is masked; this exact unsupported diagnostic must still occur.",
+      "note": "Missing capability: lexical.defineExtension. No model mismatch is masked; this exact unsupported diagnostic must still occur. Pinned upstream: packages/lexical/src/extension-core/defineExtension.ts:54.",
       "failure": "op 0 call: unmapped API: lexical.defineExtension"
     },
     {
@@ -302,7 +302,7 @@
       "reason": "not-ported",
       "reviewedBy": "coding-agent",
       "decision": "WORKPLAN WP-13; S1 §14 extension installation",
-      "note": "Missing capability: lexical.defineExtension. No model mismatch is masked; this exact unsupported diagnostic must still occur.",
+      "note": "Missing capability: lexical.defineExtension. No model mismatch is masked; this exact unsupported diagnostic must still occur. Pinned upstream: packages/lexical/src/extension-core/defineExtension.ts:54.",
       "failure": "op 0 call: unmapped API: lexical.defineExtension"
     },
     {
@@ -312,7 +312,7 @@
       "reason": "genmap",
       "reviewedBy": "coding-agent",
       "decision": "S1 §5.1 persistent NodeMap; S4 §2.6 genmap",
-      "note": "Upstream GenMap is replaced by the persistent map; its private clone helper has no port.",
+      "note": "Upstream GenMap is replaced by the persistent map; its private clone helper has no port. Pinned upstream: packages/lexical/src/LexicalGenMap.ts:23.",
       "failure": "op 0 call: unmapped API: lexical/LexicalGenMap.cloneMap"
     },
     {
@@ -372,7 +372,7 @@
       "reason": "reconciler-internal",
       "reviewedBy": "coding-agent",
       "decision": "S1 §0 model/view boundary; S4 §2.6 reconciler-internal",
-      "note": "DOM reconciliation API is outside the sans-I/O model: unmapped API: lexical/LexicalReconciler.$getReconciledDirection",
+      "note": "DOM reconciliation API is outside the sans-I/O model: unmapped API: lexical/LexicalReconciler.$getReconciledDirection Pinned upstream: packages/lexical/src/LexicalReconciler.ts:399.",
       "failure": "op 5: call 2: unmapped API: lexical/LexicalReconciler.$getReconciledDirection"
     },
     {
@@ -392,7 +392,7 @@
       "reason": "reconciler-internal",
       "reviewedBy": "coding-agent",
       "decision": "S1 §0 model/view boundary; S4 §2.6 reconciler-internal",
-      "note": "DOM reconciliation API is outside the sans-I/O model: unmapped API: lexical/LexicalReconciler.$getReconciledDirection",
+      "note": "DOM reconciliation API is outside the sans-I/O model: unmapped API: lexical/LexicalReconciler.$getReconciledDirection Pinned upstream: packages/lexical/src/LexicalReconciler.ts:399.",
       "failure": "op 5: call 2: unmapped API: lexical/LexicalReconciler.$getReconciledDirection"
     },
     {
@@ -432,7 +432,7 @@
       "reason": "not-ported",
       "reviewedBy": "coding-agent",
       "decision": "S1 API inventory: $onUpdate n/a; code runs after commit; WORKPLAN WP-13 callbacks",
-      "note": "Missing capability: lexical.$onUpdate. No model mismatch is masked; this exact unsupported diagnostic must still occur.",
+      "note": "Missing capability: lexical.$onUpdate. No model mismatch is masked; this exact unsupported diagnostic must still occur. Pinned upstream: packages/lexical/src/LexicalUtils.ts:1531.",
       "failure": "op 4 call: unmapped API: lexical.$onUpdate"
     },
     {
@@ -452,7 +452,7 @@
       "reason": "not-ported",
       "reviewedBy": "coding-agent",
       "decision": "S1 §1 NodeKey allocation is private to node creation; no standalone raw-key factory",
-      "note": "Missing capability: lexical/LexicalUtils.generateRandomKey. No model mismatch is masked; this exact unsupported diagnostic must still occur.",
+      "note": "Missing capability: lexical/LexicalUtils.generateRandomKey. No model mismatch is masked; this exact unsupported diagnostic must still occur. Pinned upstream: packages/lexical/src/LexicalUtils.ts:123.",
       "failure": "op 4 call: unmapped API: lexical/LexicalUtils.generateRandomKey"
     },
     {
@@ -472,7 +472,7 @@
       "reason": "not-ported",
       "reviewedBy": "coding-agent",
       "decision": "S1 §1 NodeKey allocation is private to node creation; no standalone raw-key factory",
-      "note": "Missing capability: lexical/LexicalUtils.generateRandomKey. No model mismatch is masked; this exact unsupported diagnostic must still occur.",
+      "note": "Missing capability: lexical/LexicalUtils.generateRandomKey. No model mismatch is masked; this exact unsupported diagnostic must still occur. Pinned upstream: packages/lexical/src/LexicalUtils.ts:119.",
       "failure": "op 5 call: unmapped API: lexical/LexicalUtils.generateRandomKey"
     },
     {
@@ -502,7 +502,7 @@
       "reason": "reconciler-internal",
       "reviewedBy": "coding-agent",
       "decision": "S1 §0 model/view boundary; S4 §2.6 reconciler-internal",
-      "note": "DOM reconciliation API is outside the sans-I/O model: unmapped API: Node.updateDOM",
+      "note": "DOM reconciliation API is outside the sans-I/O model: unmapped API: Node.updateDOM Pinned upstream: packages/lexical/src/nodes/LexicalLineBreakNode.ts:50.",
       "failure": "op 4: call 1: unmapped API: Node.updateDOM"
     },
     {
@@ -512,7 +512,7 @@
       "reason": "not-ported",
       "reviewedBy": "coding-agent",
       "decision": "S1 §4 built-in factory table: $createRootNode is n/a (root always exists)",
-      "note": "Missing capability: lexical/nodes/LexicalRootNode.$createRootNode. No model mismatch is masked; this exact unsupported diagnostic must still occur.",
+      "note": "Missing capability: lexical/nodes/LexicalRootNode.$createRootNode. No model mismatch is masked; this exact unsupported diagnostic must still occur. Pinned upstream: packages/lexical/src/nodes/LexicalRootNode.ts:105.",
       "failure": "op 4: call 0: unmapped API: lexical/nodes/LexicalRootNode.$createRootNode"
     },
     {
@@ -532,7 +532,7 @@
       "reason": "not-ported",
       "reviewedBy": "coding-agent",
       "decision": "S1 §4 built-in factory table: $createRootNode is n/a (root always exists)",
-      "note": "Missing capability: lexical/nodes/LexicalRootNode.$createRootNode. No model mismatch is masked; this exact unsupported diagnostic must still occur.",
+      "note": "Missing capability: lexical/nodes/LexicalRootNode.$createRootNode. No model mismatch is masked; this exact unsupported diagnostic must still occur. Pinned upstream: packages/lexical/src/nodes/LexicalRootNode.ts:105.",
       "failure": "op 4: call 0: unmapped API: lexical/nodes/LexicalRootNode.$createRootNode"
     },
     {
@@ -542,7 +542,7 @@
       "reason": "not-ported",
       "reviewedBy": "coding-agent",
       "decision": "S1 §4 built-in factory table: $createRootNode is n/a (root always exists)",
-      "note": "Missing capability: lexical/nodes/LexicalRootNode.$createRootNode. No model mismatch is masked; this exact unsupported diagnostic must still occur.",
+      "note": "Missing capability: lexical/nodes/LexicalRootNode.$createRootNode. No model mismatch is masked; this exact unsupported diagnostic must still occur. Pinned upstream: packages/lexical/src/nodes/LexicalRootNode.ts:105.",
       "failure": "op 4: call 0: unmapped API: lexical/nodes/LexicalRootNode.$createRootNode"
     },
     {
@@ -552,7 +552,7 @@
       "reason": "not-ported",
       "reviewedBy": "coding-agent",
       "decision": "S1 §4 built-in factory table: $createRootNode is n/a (root always exists)",
-      "note": "Missing capability: lexical/nodes/LexicalRootNode.$createRootNode. No model mismatch is masked; this exact unsupported diagnostic must still occur.",
+      "note": "Missing capability: lexical/nodes/LexicalRootNode.$createRootNode. No model mismatch is masked; this exact unsupported diagnostic must still occur. Pinned upstream: packages/lexical/src/nodes/LexicalRootNode.ts:105.",
       "failure": "op 4: call 0: unmapped API: lexical/nodes/LexicalRootNode.$createRootNode"
     },
     {
@@ -562,7 +562,7 @@
       "reason": "not-ported",
       "reviewedBy": "coding-agent",
       "decision": "S1 §4 built-in factory table: $createRootNode is n/a (root always exists)",
-      "note": "Missing capability: lexical/nodes/LexicalRootNode.$createRootNode. No model mismatch is masked; this exact unsupported diagnostic must still occur.",
+      "note": "Missing capability: lexical/nodes/LexicalRootNode.$createRootNode. No model mismatch is masked; this exact unsupported diagnostic must still occur. Pinned upstream: packages/lexical/src/nodes/LexicalRootNode.ts:105.",
       "failure": "op 4: call 0: unmapped API: lexical/nodes/LexicalRootNode.$createRootNode"
     },
     {
@@ -572,7 +572,7 @@
       "reason": "not-ported",
       "reviewedBy": "coding-agent",
       "decision": "S1 §4 built-in factory table: $createRootNode is n/a (root always exists)",
-      "note": "Missing capability: lexical/nodes/LexicalRootNode.$createRootNode. No model mismatch is masked; this exact unsupported diagnostic must still occur.",
+      "note": "Missing capability: lexical/nodes/LexicalRootNode.$createRootNode. No model mismatch is masked; this exact unsupported diagnostic must still occur. Pinned upstream: packages/lexical/src/nodes/LexicalRootNode.ts:105.",
       "failure": "op 4: call 0: unmapped API: lexical/nodes/LexicalRootNode.$createRootNode"
     },
     {
@@ -582,7 +582,7 @@
       "reason": "not-ported",
       "reviewedBy": "coding-agent",
       "decision": "S1 §4 built-in factory table: $createRootNode is n/a (root always exists)",
-      "note": "Missing capability: lexical/nodes/LexicalRootNode.$createRootNode. No model mismatch is masked; this exact unsupported diagnostic must still occur.",
+      "note": "Missing capability: lexical/nodes/LexicalRootNode.$createRootNode. No model mismatch is masked; this exact unsupported diagnostic must still occur. Pinned upstream: packages/lexical/src/nodes/LexicalRootNode.ts:105.",
       "failure": "op 4: call 0: unmapped API: lexical/nodes/LexicalRootNode.$createRootNode"
     },
     {
@@ -592,7 +592,7 @@
       "reason": "not-ported",
       "reviewedBy": "coding-agent",
       "decision": "S1 §4 built-in factory table: $createRootNode is n/a (root always exists)",
-      "note": "Missing capability: lexical/nodes/LexicalRootNode.$createRootNode. No model mismatch is masked; this exact unsupported diagnostic must still occur.",
+      "note": "Missing capability: lexical/nodes/LexicalRootNode.$createRootNode. No model mismatch is masked; this exact unsupported diagnostic must still occur. Pinned upstream: packages/lexical/src/nodes/LexicalRootNode.ts:105.",
       "failure": "op 4: call 0: unmapped API: lexical/nodes/LexicalRootNode.$createRootNode"
     },
     {
@@ -602,7 +602,7 @@
       "reason": "not-ported",
       "reviewedBy": "coding-agent",
       "decision": "S1 §4 built-in factory table: $createRootNode is n/a (root always exists)",
-      "note": "Missing capability: lexical/nodes/LexicalRootNode.$createRootNode. No model mismatch is masked; this exact unsupported diagnostic must still occur.",
+      "note": "Missing capability: lexical/nodes/LexicalRootNode.$createRootNode. No model mismatch is masked; this exact unsupported diagnostic must still occur. Pinned upstream: packages/lexical/src/nodes/LexicalRootNode.ts:105.",
       "failure": "op 4: call 0: unmapped API: lexical/nodes/LexicalRootNode.$createRootNode"
     },
     {
