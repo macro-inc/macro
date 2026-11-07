@@ -1,5 +1,6 @@
 use super::*;
-use messages::domain::ports::{MessageChange, MessageError, MessageEvent, MessageEventPublisher};
+use crate::domain::ports::{MessageChange, MessageError, MessageEvent, MessageEventPublisher};
+use macro_db_migrator::MACRO_DB_MIGRATIONS;
 use sqlx::PgPool;
 use std::sync::{Arc, Mutex};
 
@@ -19,7 +20,13 @@ fn request() -> DeleteUnthreadedAnchorRequest {
     ))
 }
 
-#[sqlx::test(fixtures(path = "../../../fixtures", scripts("message_annotations")))]
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(
+        path = "../../../../../macro_db_client/fixtures",
+        scripts("message_annotations")
+    )
+)]
 async fn another_user_cannot_delete_annotation_or_its_discussion(pool: PgPool) {
     let events = RecordedEvents::default();
     let result =
@@ -35,7 +42,13 @@ async fn another_user_cannot_delete_annotation_or_its_discussion(pool: PgPool) {
     assert_eq!(roots, 4);
 }
 
-#[sqlx::test(fixtures(path = "../../../fixtures", scripts("message_annotations")))]
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(
+        path = "../../../../../macro_db_client/fixtures",
+        scripts("message_annotations")
+    )
+)]
 async fn deleting_threaded_annotation_uses_shared_thread_tombstones(pool: PgPool) {
     let events = RecordedEvents::default();
     let response = delete_document_anchor(&pool, "macro|user@user.com", request(), events.clone())
@@ -71,10 +84,12 @@ async fn deleting_threaded_annotation_uses_shared_thread_tombstones(pool: PgPool
     assert!(state.deleted_at.is_some());
     assert!(state.anchor.is_none());
     drop(emitted);
-    let highlights =
-        crate::annotations::get::fetch_pdf_highlight_anchors(&pool, "document-with-comments")
-            .await
-            .unwrap();
+    let highlights = macro_db_client::annotations::get::fetch_pdf_highlight_anchors(
+        &pool,
+        "document-with-comments",
+    )
+    .await
+    .unwrap();
     assert_eq!(highlights.len(), 1);
     assert_eq!(highlights[0].text, "Standalone underline");
 }
@@ -85,8 +100,8 @@ async fn delete_document_anchor(
     request: DeleteUnthreadedAnchorRequest,
     events: impl MessageEventPublisher,
 ) -> std::result::Result<DeleteUnthreadedAnchorResponse, MessageError> {
-    messages::domain::annotations::AnnotationService::new(
-        crate::annotations::repository::PgAnnotationRepository(pool.clone()),
+    crate::domain::annotations::AnnotationService::new(
+        super::super::PgAnnotationRepository(pool.clone()),
         entity_access::domain::service::EntityAccessServiceImpl::new(
             entity_access::outbound::PgAccessRepository::new(pool.clone()),
         ),
