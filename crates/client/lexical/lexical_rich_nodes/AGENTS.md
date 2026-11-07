@@ -2,8 +2,9 @@
 
 ## What it is
 
-Portable model halves of Lexical v0.45.0 rich-text, plain-text, hashtag, overflow
-text-entity, list, link and autolink behavior. DOM events, clipboard access and layout stay in views.
+Portable model halves of Lexical v0.45.0 rich-text, plain-text, hashtag, overflow,
+text-entity, list, link and autolink behavior. DOM events, clipboard access and
+layout stay in views.
 
 ## Boundaries
 

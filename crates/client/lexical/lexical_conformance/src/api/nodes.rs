@@ -18,9 +18,10 @@ pub(crate) fn call(
         .map(EditorState::view)
         .unwrap_or(tx.view());
     if view.is::<lexical_rich_nodes::link::LinkNode>(key)
-        && let Some(result) = super::rich::link_method(view, key, method, a)? {
-            return Ok(result);
-        }
+        && let Some(result) = super::rich::link_method(view, key, method, a)?
+    {
+        return Ok(result);
+    }
     match method {
         "getFirstDescendant" => {
             return view

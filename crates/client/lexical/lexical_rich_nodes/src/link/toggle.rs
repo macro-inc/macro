@@ -163,19 +163,21 @@ pub fn toggle_link(
         }
         return Ok(());
     }
-    if selection.is_collapsed() && url.is_none()
-        && let Some(node) = selection.nodes(tx.view())?.first() {
-            if let Some(link) = ancestor(tx, *node, false) {
-                let parent = tx.parent_or_err(link)?;
-                let index = tx
-                    .index_within_parent(link)
-                    .ok_or(Error::NoParent(link.key()))?;
-                let children = tx.children_keys(link)?;
-                tx.splice(parent, index, 0, &children)?;
-                tx.remove(link, false)?;
-            }
-            return Ok(());
+    if selection.is_collapsed()
+        && url.is_none()
+        && let Some(node) = selection.nodes(tx.view())?.first()
+    {
+        if let Some(link) = ancestor(tx, *node, false) {
+            let parent = tx.parent_or_err(link)?;
+            let index = tx
+                .index_within_parent(link)
+                .ok_or(Error::NoParent(link.key()))?;
+            let children = tx.children_keys(link)?;
+            tx.splice(parent, index, 0, &children)?;
+            tx.remove(link, false)?;
         }
+        return Ok(());
+    }
     let nodes = tx.extract_at(SelectionSlot::Active)?;
     let Some(url) = url else {
         let mut processed = HashSet::new();
@@ -187,9 +189,10 @@ pub fn toggle_link(
         return Ok(());
     };
     if nodes.len() == 1
-        && let Some(link) = ancestor(tx, nodes[0], true) {
-            return update(tx, link, url, &attrs, true);
-        }
+        && let Some(link) = ancestor(tx, nodes[0], true)
+    {
+        return update(tx, link, url, &attrs, true);
+    }
     tx.normalize_selection_at(SelectionSlot::Active)?;
     let range = tx.range_at(SelectionSlot::Active)?.clone();
     let backward = range.is_backward(tx.view())?;
@@ -242,15 +245,15 @@ pub fn toggle_link(
             (PointRole::Focus, focus, u32::from(!backward)),
         ] {
             if let Some(node) = node
-                && let Some(parent) = tx.parent(node) {
-                    let index =
-                        tx.index_within_parent(node).ok_or(Error::NoParent(node))?.0 + extra;
-                    tx.set_point_at(
-                        SelectionSlot::Active,
-                        role,
-                        Point::element(parent, ChildIndex(index)),
-                    )?;
-                }
+                && let Some(parent) = tx.parent(node)
+            {
+                let index = tx.index_within_parent(node).ok_or(Error::NoParent(node))?.0 + extra;
+                tx.set_point_at(
+                    SelectionSlot::Active,
+                    role,
+                    Point::element(parent, ChildIndex(index)),
+                )?;
+            }
         }
         tx.normalize_selection_at(SelectionSlot::Active)?;
         let selection = tx.selection().cloned();
