@@ -107,6 +107,12 @@ fn project_point(point: &mut Value, json: &Value, state: &EditorState) -> Result
                 let child = children
                     .get(index)
                     .ok_or_else(|| fail("code child index"))?;
+                if !matches!(
+                    child["type"].as_str(),
+                    Some("text" | "code-highlight" | "tab")
+                ) {
+                    return Err(fail("code text point kind"));
+                }
                 if offset > units(child)? {
                     return Err(fail("code text offset"));
                 }

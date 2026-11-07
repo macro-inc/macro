@@ -56,6 +56,8 @@ fn code_selection_counts_utf16_tabs_and_linebreaks_and_retains_identity_checks()
     );
     let mut wrong = json!({"type":"range","anchor":{"key":"2","path":[0,3],"offset":1,"type":"text"},"focus":{"key":"1","path":[0],"offset":4,"type":"element"}});
     assert!(project_selection(&mut wrong, &json, editor.state()).is_err());
+    let mut wrong_kind = json!({"type":"range","anchor":{"key":"4","path":[0,2],"offset":0,"type":"text"},"focus":{"key":"1","path":[0],"offset":3,"type":"element"}});
+    assert!(project_selection(&mut wrong_kind, &json, editor.state()).is_err());
     Ok(())
 }
 
