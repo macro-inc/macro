@@ -48,6 +48,9 @@ pub(crate) fn call(r: &mut Replayer, tx: &mut Transaction<'_>, op: &Value) -> Re
     if name.starts_with("@lexical/link.") {
         return super::rich::call(r, tx, name, a);
     }
+    if name.starts_with("@macro-inc/lexical-core/") {
+        return super::macro_model::call(r, tx, name, a);
+    }
     match name {
         "@lexical/utils.$insertNodeIntoLeaf" => {
             lexical_rich_nodes::utils::insert_node_into_leaf(

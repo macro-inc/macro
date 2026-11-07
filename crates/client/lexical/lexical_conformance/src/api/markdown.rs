@@ -71,6 +71,7 @@ pub(crate) fn call(
                 .transpose()?
                 .flatten();
             let opts = MarkdownOptions {
+                list_indent: r.list_indent.unwrap_or(4),
                 should_preserve_new_lines: args.get(2).and_then(Value::as_bool).unwrap_or(false),
                 ..Default::default()
             };
@@ -100,6 +101,7 @@ pub(crate) fn call(
                 return Err(ReplayError::NoActiveEditor);
             }
             let opts = MarkdownOptions {
+                list_indent: r.list_indent.unwrap_or(4),
                 should_preserve_new_lines: args.get(2).and_then(Value::as_bool).unwrap_or(false),
                 ..Default::default()
             };
@@ -115,9 +117,9 @@ pub(crate) fn call(
                 return Err(ReplayError::NoActiveEditor);
             }
             let opts = MarkdownOptions {
+                list_indent: r.list_indent.unwrap_or(4),
                 should_preserve_new_lines: args.get(3).and_then(Value::as_bool).unwrap_or(false),
                 should_merge_adjacent_lines: args.get(4).and_then(Value::as_bool).unwrap_or(false),
-                ..Default::default()
             };
             let text = string(args.first().ok_or_else(|| fail("markdown source"))?)?;
             let t = registry(args.get(1))?;

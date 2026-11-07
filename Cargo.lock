@@ -11785,6 +11785,7 @@ dependencies = [
  "lexical_model",
  "lexical_rich_nodes",
  "libtest-mimic",
+ "macro_document_model",
  "serde",
  "serde_json",
  "thiserror 2.0.18",

@@ -69,8 +69,11 @@ pub struct Replayer {
     pub(crate) tape_positions: Vec<usize>,
     pub(crate) updates: Vec<Value>,
     pub(crate) causes: Vec<Value>,
-    pub(crate) pending_editor_random: Option<f64>,
+    pub(crate) pending_editor_random: Vec<f64>,
     pub(crate) clock: f64,
+    pub(crate) list_indent: Option<u8>,
+    pub(crate) on_update: Vec<Value>,
+    pub(crate) node_clock: std::sync::Arc<std::sync::atomic::AtomicU64>,
     pub(crate) tick: u64,
     pub(crate) attached: bool,
     pub(crate) pending_writes: bool,
@@ -91,7 +94,14 @@ impl Replayer {
         {
             return Err(fail("unsupported fixture initialization"));
         }
-        if !fixture.normalize.is_empty() {
+        self.list_indent = if fixture.source.file.starts_with("packages/lexical-core/")
+            && fixture.normalize == ["listIndent: 2"]
+        {
+            Some(2)
+        } else {
+            None
+        };
+        if !fixture.normalize.is_empty() && self.list_indent.is_none() {
             return Err(fail(format!(
                 "unimplemented declared normalization: {:?}",
                 fixture.normalize
@@ -104,7 +114,11 @@ impl Replayer {
         {
             return Err(fail("unsupported initial fields"));
         }
-        if fixture.source.version != "0.45.0" || fixture.source.repo != "lexical" {
+        if fixture.source.version != "0.45.0"
+            || !(fixture.source.repo == "lexical"
+                || (fixture.source.repo == "macro"
+                    && fixture.source.file.starts_with("packages/lexical-core/")))
+        {
             return Err(fail("unsupported upstream version/repository"));
         }
         if fixture.trace.iter().any(|op| op["op"] == "createEditor") {
@@ -126,7 +140,11 @@ impl Replayer {
         self.tapes = fixture.tapes.clone();
         self.tape_positions = vec![0; fixture.tapes.len()];
         let mut editor = None;
+        let clock = self.node_clock.clone();
         let mut scratch = test_nodes::builder()
+            .extension_state(macro_document_model::NodeClock(std::sync::Arc::new(
+                move || clock.load(std::sync::atomic::Ordering::Relaxed),
+            )))
             .build()
             .map_err(|e| fail(e.to_string()))?;
         let mut i = 0;
@@ -145,19 +163,44 @@ impl Replayer {
                     }
                     validate_config(&op["config"])?;
                     self.attached = op["config"]["rootElement"] == true;
-                    if self.pending_editor_random.take().is_none() {
-                        return Err(fail("missing editor-id random draw"));
+                    let expected_draws = if op["config"]["namespaceGenerated"] == true {
+                        2
+                    } else {
+                        1
+                    };
+                    if self.pending_editor_random.len() != expected_draws {
+                        return Err(fail("editor namespace/id entropy count mismatch"));
                     }
+                    self.pending_editor_random.clear();
                     let nodes = op["config"]["nodes"]
                         .as_array()
                         .ok_or_else(|| fail("configured nodes"))?
                         .iter()
                         .map(|node| string(node).map(str::to_owned))
                         .collect::<Result<Vec<_>>>()?;
-                    let ed =
-                        test_nodes::configured_builder(&nodes, op["config"]["rootElement"] == true)
-                            .build()
-                            .map_err(|e| fail(e.to_string()))?;
+                    let mut builder = test_nodes::configured_builder(
+                        &nodes,
+                        op["config"]["headless"]
+                            .as_bool()
+                            .map_or(self.attached, |headless| !headless),
+                    )?;
+                    for replacement in op["config"]["replacements"]
+                        .as_array()
+                        .ok_or_else(|| fail("replacement array"))?
+                    {
+                        builder = match (replacement["replace"]["$klass"].as_str(), replacement["withKlass"]["$klass"].as_str()) {
+                            (Some("code"), Some("custom-code")) => builder.replace::<lexical_rich_nodes::code::CodeNode, macro_document_model::nodes::CustomCodeNode>(macro_document_model::nodes::CustomCodeNode::from),
+                            (Some("list"), Some("task-list")) => builder.replace::<lexical_rich_nodes::list::ListNode, macro_document_model::nodes::TaskListNode>(macro_document_model::nodes::TaskListNode::from),
+                            _ => return Err(fail("unimplemented configured replacement/plugin")),
+                        };
+                    }
+                    let clock = self.node_clock.clone();
+                    let ed = builder
+                        .extension_state(macro_document_model::NodeClock(std::sync::Arc::new(
+                            move || clock.load(std::sync::atomic::Ordering::Relaxed),
+                        )))
+                        .build()
+                        .map_err(|e| fail(e.to_string()))?;
                     if let Some(ret) = op.get("ret") {
                         self.compare(ret, &json!({"$editor":0}))?;
                     }
@@ -223,6 +266,7 @@ impl Replayer {
                         if pending["op"] == "commit" {
                             self.capture_slots(&tx)?;
                             let commit = tx.commit()?;
+                            self.microtasks.extend(self.on_update.drain(..));
                             self.compare(&pending["updates"], &Value::Array(self.updates.clone()))?;
                             self.compare(&pending["causes"], &Value::Array(self.causes.clone()))?;
                             if pending["index"] != self.version {
@@ -257,6 +301,7 @@ impl Replayer {
                         if pending["op"] == "update" && !self.pending_writes {
                             self.capture_slots(&tx)?;
                             let commit = tx.commit()?;
+                            self.microtasks.extend(self.on_update.drain(..));
                             if !commit.is_noop() {
                                 return Err(fail("unexpected tag-only commit"));
                             }
@@ -270,6 +315,7 @@ impl Replayer {
                         if i == fixture.trace.len() {
                             self.capture_slots(&tx)?;
                             let commit = tx.commit()?;
+                            self.microtasks.extend(self.on_update.drain(..));
                             if !commit.is_noop() {
                                 return Err(fail("unconsumed nonempty commit"));
                             }
@@ -319,10 +365,13 @@ impl Replayer {
         } else {
             self.compare(&fixture.r#final, &Value::Null)?;
         }
+        if !self.on_update.is_empty() {
+            return Err(fail("unconsumed update callbacks"));
+        }
         if !self.microtasks.is_empty() {
             return Err(fail("unconsumed microtask callback"));
         }
-        if self.pending_editor_random.is_some() {
+        if !self.pending_editor_random.is_empty() {
             return Err(fail("unconsumed editor entropy"));
         }
         for (position, tape) in self.tape_positions.iter().zip(&self.tapes) {
@@ -338,16 +387,21 @@ impl Replayer {
     fn host_input(&mut self, op: &Value) -> Result<()> {
         match string(&op["op"])? {
             "entropy" => {
-                if op["src"] != "random" || self.pending_editor_random.is_some() {
+                if op["src"] != "random" || self.pending_editor_random.len() >= 2 {
                     return Err(fail("unsupported entropy draw"));
                 }
                 let value = op["v"]
                     .as_f64()
                     .filter(|v| *v >= 0.0 && *v < 1.0)
                     .ok_or_else(|| fail("invalid editor random draw"))?;
-                self.pending_editor_random = Some(value);
+                self.pending_editor_random.push(value);
             }
             "clock" => {
+                if op["src"] == "date" {
+                    self.node_clock
+                        .store(integer(&op["t"])?, std::sync::atomic::Ordering::Relaxed);
+                    return Ok(());
+                }
                 if op["src"] != "perf" {
                     return Err(fail("unsupported clock source"));
                 }
@@ -466,6 +520,9 @@ impl Replayer {
                 }
             }
             "update" => {
+                if let Some(callback) = op["opts"].get("onUpdate") {
+                    self.on_update.push(callback.clone());
+                }
                 if op["cause"] != "test"
                     && !(self.rich_text_registered
                         && op["cause"] == "listener-enqueued"
@@ -800,6 +857,9 @@ fn validate_config(config: &Value) -> Result<()> {
     for key in object.keys() {
         if ![
             "namespace",
+            "namespaceGenerated",
+            "nodeClasses",
+            "headless",
             "nodes",
             "replacements",
             "plugins",
@@ -816,10 +876,26 @@ fn validate_config(config: &Value) -> Result<()> {
     if !config["editable"].is_boolean() || !config["rootElement"].is_boolean() {
         return Err(fail("invalid editor host config"));
     }
-    if !config["replacements"].as_array().is_some_and(Vec::is_empty)
-        || !config["plugins"].as_array().is_some_and(Vec::is_empty)
+    if !config["plugins"].as_array().is_some_and(Vec::is_empty) {
+        return Err(fail("unimplemented configured plugin"));
+    }
+    for replacement in config["replacements"]
+        .as_array()
+        .ok_or_else(|| fail("replacement array"))?
     {
-        return Err(fail("unimplemented configured replacement/plugin"));
+        let index = match (
+            replacement["replace"]["$klass"].as_str(),
+            replacement["withKlass"]["$klass"].as_str(),
+        ) {
+            (Some("code"), Some("custom-code")) => 0,
+            (Some("list"), Some("task-list")) => 1,
+            _ => return Err(fail("unimplemented configured replacement/plugin")),
+        };
+        if replacement["with"]["$fn"]
+            != format!("@macro-inc/lexical-core/node-list.NodeReplacements.{index}.with")
+        {
+            return Err(fail("unmapped replacement factory"));
+        }
     }
     for node in config["nodes"]
         .as_array()
@@ -855,6 +931,7 @@ fn validate_config(config: &Value) -> Result<()> {
             "mark",
         ]
         .contains(&string(node)?)
+            && !macro_document_model::is_supported_node_type(string(node)?)
         {
             return Err(fail(format!("unimplemented configured class {node}")));
         }
@@ -903,6 +980,10 @@ fn validate_operation(op: &Value) -> Result<()> {
                             .as_array()
                             .is_some_and(|tags| tags.iter().all(Value::is_string)) => {}
                 "discrete" | "skipTransforms" if value.is_boolean() => {}
+                "onUpdate"
+                    if value.as_object().is_some_and(|object| {
+                        object.len() == 1 && object.get("$tape").is_some_and(Value::is_u64)
+                    }) => {}
                 _ => return Err(fail(format!("unsupported update option: {key}"))),
             }
         }
