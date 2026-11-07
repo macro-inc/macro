@@ -1,0 +1,250 @@
+{
+  "schema": 2,
+  "source": {
+    "repo": "macro",
+    "version": "0.45.0",
+    "file": "packages/lexical-core/tests/reply-target-node.test.ts",
+    "test": [
+      "ReplyTargetNode",
+      "reads saved channel references without a snapshot migration"
+    ],
+    "recordedWith": "lexical-conformance@a5df4931fde86372f78efe37be5b2166dd88bc6156e4610da787b770aa0f5f7e"
+  },
+  "tier": "A-rec",
+  "partial": false,
+  "covers": [],
+  "normalize": [
+    "listIndent: 2"
+  ],
+  "outcomeDiffers": [],
+  "config": {},
+  "initial": {
+    "editorState": null,
+    "selection": null
+  },
+  "trace": [
+    {
+      "op": "call",
+      "fn": "@macro-inc/lexical-core/utils/markdown-state.markdownToSerializedEditorStateWithIds",
+      "args": [
+        "<m-reply-target>{\"channelId\":\"channel-1\",\"targetMessageId\":\"reply-1\",\"targetThreadId\":\"thread-1\",\"displayText\":\"A one-line preview\",\"senderId\":\"macro|sender@example.com\"}</m-reply-target>"
+      ],
+      "ret": {
+        "root": {
+          "children": [
+            {
+              "type": "reply-target",
+              "version": 2,
+              "$": {
+                "id": "XVzrpx_u"
+              },
+              "parent": {
+                "type": "channel",
+                "id": "channel-1"
+              },
+              "targetMessageId": "reply-1",
+              "targetThreadId": "thread-1",
+              "displayText": "A one-line preview",
+              "senderId": "macro|sender@example.com"
+            }
+          ],
+          "direction": null,
+          "format": "",
+          "indent": 0,
+          "type": "root",
+          "version": 1,
+          "$": {
+            "id": "Dn8oR1js"
+          }
+        }
+      }
+    },
+    {
+      "op": "entropy",
+      "src": "random",
+      "v": 0.23645552527159452
+    },
+    {
+      "op": "entropy",
+      "src": "random",
+      "v": 0.3692706737201661
+    },
+    {
+      "op": "entropy",
+      "src": "getRandomValues",
+      "v": [
+        129,
+        180,
+        12,
+        94,
+        198,
+        142,
+        4,
+        163
+      ]
+    },
+    {
+      "op": "entropy",
+      "src": "getRandomValues",
+      "v": [
+        64,
+        108,
+        151,
+        214,
+        60,
+        251,
+        220,
+        83
+      ]
+    },
+    {
+      "op": "call",
+      "fn": "get:root",
+      "this": {
+        "root": {
+          "children": [
+            {
+              "type": "reply-target",
+              "version": 2,
+              "$": {
+                "id": "XVzrpx_u"
+              },
+              "parent": {
+                "type": "channel",
+                "id": "channel-1"
+              },
+              "targetMessageId": "reply-1",
+              "targetThreadId": "thread-1",
+              "displayText": "A one-line preview",
+              "senderId": "macro|sender@example.com"
+            }
+          ],
+          "direction": null,
+          "format": "",
+          "indent": 0,
+          "type": "root",
+          "version": 1,
+          "$": {
+            "id": "Dn8oR1js"
+          }
+        }
+      },
+      "args": [],
+      "ret": {
+        "children": [
+          {
+            "type": "reply-target",
+            "version": 2,
+            "$": {
+              "id": "XVzrpx_u"
+            },
+            "parent": {
+              "type": "channel",
+              "id": "channel-1"
+            },
+            "targetMessageId": "reply-1",
+            "targetThreadId": "thread-1",
+            "displayText": "A one-line preview",
+            "senderId": "macro|sender@example.com"
+          }
+        ],
+        "direction": null,
+        "format": "",
+        "indent": 0,
+        "type": "root",
+        "version": 1,
+        "$": {
+          "id": "Dn8oR1js"
+        }
+      }
+    },
+    {
+      "op": "call",
+      "fn": "get:children",
+      "this": {
+        "children": [
+          {
+            "type": "reply-target",
+            "version": 2,
+            "$": {
+              "id": "XVzrpx_u"
+            },
+            "parent": {
+              "type": "channel",
+              "id": "channel-1"
+            },
+            "targetMessageId": "reply-1",
+            "targetThreadId": "thread-1",
+            "displayText": "A one-line preview",
+            "senderId": "macro|sender@example.com"
+          }
+        ],
+        "direction": null,
+        "format": "",
+        "indent": 0,
+        "type": "root",
+        "version": 1,
+        "$": {
+          "id": "Dn8oR1js"
+        }
+      },
+      "args": [],
+      "ret": [
+        {
+          "type": "reply-target",
+          "version": 2,
+          "$": {
+            "id": "XVzrpx_u"
+          },
+          "parent": {
+            "type": "channel",
+            "id": "channel-1"
+          },
+          "targetMessageId": "reply-1",
+          "targetThreadId": "thread-1",
+          "displayText": "A one-line preview",
+          "senderId": "macro|sender@example.com"
+        }
+      ]
+    },
+    {
+      "op": "call",
+      "fn": "get:0",
+      "this": [
+        {
+          "type": "reply-target",
+          "version": 2,
+          "$": {
+            "id": "XVzrpx_u"
+          },
+          "parent": {
+            "type": "channel",
+            "id": "channel-1"
+          },
+          "targetMessageId": "reply-1",
+          "targetThreadId": "thread-1",
+          "displayText": "A one-line preview",
+          "senderId": "macro|sender@example.com"
+        }
+      ],
+      "args": [],
+      "ret": {
+        "type": "reply-target",
+        "version": 2,
+        "$": {
+          "id": "XVzrpx_u"
+        },
+        "parent": {
+          "type": "channel",
+          "id": "channel-1"
+        },
+        "targetMessageId": "reply-1",
+        "targetThreadId": "thread-1",
+        "displayText": "A one-line preview",
+        "senderId": "macro|sender@example.com"
+      }
+    }
+  ],
+  "tapes": [],
+  "final": null
+}

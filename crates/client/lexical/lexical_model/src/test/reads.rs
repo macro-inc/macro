@@ -318,3 +318,35 @@ fn builtin_predicates_expose_kind_specific_defaults() -> Result<(), Error> {
     assert_eq!(view.text_content(line), "\n");
     Ok(())
 }
+
+/// Upstream LexicalNode.isBefore uses post-order, including detached shared trees.
+#[test]
+fn node_ordering_places_descendants_before_ancestors_and_orders_detached_siblings()
+-> Result<(), Error> {
+    let mut editor = Editor::builder(EditorMode::Headless)
+        .build()
+        .expect("editor");
+    let mut tx = editor.transaction();
+    let parent = tx.create(Paragraph::default())?.key();
+    let child = tx.create_text("child")?.key();
+    let later = tx.create(Paragraph::default())?.key();
+    tx.append(parent, &[child])?;
+    tx.append(NodeKey::ROOT, &[parent, later])?;
+    let detached = tx.create(Paragraph::default())?.key();
+    let left = tx.create_text("left")?.key();
+    let right = tx.create_text("right")?.key();
+    tx.append(detached, &[right, left])?;
+    let view = tx.view();
+    assert!(view.is_before(child, parent)?);
+    assert!(!view.is_before(parent, child)?);
+    assert!(view.is_before(child, NodeKey::ROOT)?);
+    assert!(!view.is_before(NodeKey::ROOT, child)?);
+    assert!(view.is_before(parent, later)?);
+    assert!(!view.is_before(later, parent)?);
+    assert!(!view.is_before(child, child)?);
+    assert!(view.is_before(right, left)?);
+    assert!(!view.is_before(left, right)?);
+    assert!(view.is_before(right, detached)?);
+    assert!(!view.is_before(child, right)?);
+    Ok(())
+}

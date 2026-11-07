@@ -78,4 +78,5 @@ mod core;
 pub use core::*;
 
 #[cfg(test)]
-mod event;
+#[path = "event/test.rs"]
+mod event_test;

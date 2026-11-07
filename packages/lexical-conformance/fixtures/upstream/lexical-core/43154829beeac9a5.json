@@ -1,0 +1,53 @@
+{
+  "schema": 2,
+  "source": {
+    "repo": "macro",
+    "version": "0.45.0",
+    "file": "packages/lexical-core/tests/auto-link.test.ts",
+    "test": [
+      "shared URL recognition",
+      "normalizes encoded URLs idempotently: https://example.com/a%2Fb?q=x%25#y"
+    ],
+    "recordedWith": "lexical-conformance@a5df4931fde86372f78efe37be5b2166dd88bc6156e4610da787b770aa0f5f7e"
+  },
+  "tier": "A-rec",
+  "partial": false,
+  "covers": [],
+  "normalize": [
+    "listIndent: 2"
+  ],
+  "outcomeDiffers": [],
+  "config": {},
+  "initial": {
+    "editorState": null,
+    "selection": null
+  },
+  "trace": [
+    {
+      "op": "call",
+      "fn": "@macro-inc/lexical-core/utils/auto-link.normalizeLinkUrl",
+      "args": [
+        "https://example.com/a%2Fb?q=x%25#y"
+      ],
+      "ret": "https://example.com/a%2Fb?q=x%25#y"
+    },
+    {
+      "op": "call",
+      "fn": "@macro-inc/lexical-core/utils/auto-link.normalizeLinkUrl",
+      "args": [
+        "https://example.com/a%2Fb?q=x%25#y"
+      ],
+      "ret": "https://example.com/a%2Fb?q=x%25#y"
+    },
+    {
+      "op": "call",
+      "fn": "@macro-inc/lexical-core/utils/auto-link.normalizeLinkUrl",
+      "args": [
+        "https://example.com/a%2Fb?q=x%25#y"
+      ],
+      "ret": "https://example.com/a%2Fb?q=x%25#y"
+    }
+  ],
+  "tapes": [],
+  "final": null
+}

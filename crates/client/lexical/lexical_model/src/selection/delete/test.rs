@@ -789,7 +789,7 @@ fn direction_cache_is_cleared_by_clone_and_point_set() -> Result<(), Error> {
         Point::element(first, ChildIndex(0)),
         Point::text(text, Utf16Offset(2)),
     ))))?;
-    tx.cache_active_selection_direction()?;
+    tx.range_is_backward_at(SelectionSlot::Active)?;
     tx.text(text)?
         .splice_text(Utf16Offset(0)..Utf16Offset(1), "", false)?;
     assert!(!tx.range_selection()?.is_backward(tx.view())?);

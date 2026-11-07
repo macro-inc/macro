@@ -1,14 +1,5 @@
 use crate::*;
 impl Transaction<'_> {
-    pub(crate) fn cache_active_selection_direction(&mut self) -> Result<(), Error> {
-        let range = self.range_at(SelectionSlot::Active)?;
-        let backward = range.is_backward(self.view())?;
-        let cached = (range.anchor, range.focus, backward);
-        if let Some(Selection::Range(range)) = &mut self.pending.selection {
-            range.cached_direction = Some(cached);
-        }
-        Ok(())
-    }
     pub(crate) fn try_selection_at(&self, slot: SelectionSlot) -> Option<&Selection> {
         self.selection_at(slot).ok().flatten()
     }
@@ -32,6 +23,15 @@ impl Transaction<'_> {
             .and_then(Selection::as_range)
             .ok_or(Error::NoRangeSelection)
     }
+    /// Compute and cache direction in a writable selection context.
+    pub fn range_is_backward_at(&mut self, slot: SelectionSlot) -> Result<bool, Error> {
+        let backward = self.range_at(slot)?.is_backward(self.view())?;
+        let Selection::Range(range) = self.selection_mut_at(slot)? else {
+            return Err(Error::NoRangeSelection);
+        };
+        range.cached_direction = Some((range.anchor, range.focus, backward));
+        Ok(backward)
+    }
     /// Borrow the active range.
     pub fn range_selection(&self) -> Result<&RangeSelection, Error> {
         self.range_at(SelectionSlot::Active)
@@ -54,8 +54,11 @@ impl Transaction<'_> {
     pub(crate) fn install_selection_at(
         &mut self,
         slot: SelectionSlot,
-        selection: Selection,
+        mut selection: Selection,
     ) -> Result<(), Error> {
+        if let Selection::Range(range) = &mut selection {
+            range.invalidate_changed_direction();
+        }
         match slot {
             SelectionSlot::Active => self.set_selection(Some(selection)),
             SelectionSlot::Detached(_) => {
@@ -126,6 +129,7 @@ impl Transaction<'_> {
         let Selection::Range(range) = selection else {
             return Err(Error::NoRangeSelection);
         };
+        range.clear_direction_cache();
         match role {
             PointRole::Anchor => range.anchor = point,
             PointRole::Focus => range.focus = point,

@@ -670,3 +670,48 @@ fn replacing_selected_tab_before_empty_inline_creates_plain_text() -> Result<(),
     tx.commit()?;
     Ok(())
 }
+
+// Original 20542059 reproduction used nested Paragraphs, unlike valid generated Inline content.
+#[test]
+fn nested_paragraph_delete_script_keeps_a_root_insertion_boundary() -> Result<(), Error> {
+    let mut editor = Editor::builder(EditorMode::Headless)
+        .node::<Opaque>()
+        .build()
+        .expect("registry");
+    editor.update(|tx| {
+        let outer = tx.create(Paragraph::default())?;
+        let inner = tx.create(Paragraph::default())?;
+        let empty = tx.create(Paragraph::default())?;
+        let decorator = tx.create(Opaque {})?;
+        tx.append(inner, &[decorator.key(), empty.key()])?;
+        tx.append(outer, &[inner.key()])?;
+        tx.append(NodeKey::ROOT, &[outer.key()])?;
+        tx.set_selection(Some(Selection::Range(RangeSelection::at_root())))
+    })?;
+    editor.update(|tx| tx.delete_character(EditDirection::Forward, ModifyTarget::NoView))?;
+    editor.update(|tx| tx.delete_character(EditDirection::Forward, ModifyTarget::NoView))?;
+    let point = Point::element(NodeKey::ROOT, ChildIndex(0));
+    assert_eq!(
+        editor
+            .state()
+            .selection()
+            .and_then(Selection::as_range)
+            .map(|r| (r.anchor, r.focus)),
+        Some((point, point))
+    );
+    editor.update(|tx| tx.insert_line_break(false))?;
+    let view = editor.state().view();
+    let children: Vec<_> = view.children(NodeKey::ROOT).collect();
+    assert_eq!(children.len(), 2);
+    let first = children[0];
+    assert!(view.is::<Paragraph>(first));
+    let line = view.first_child(first).expect("inserted linebreak");
+    assert!(view.is::<LineBreak>(line));
+    assert_eq!(view.children(first).count(), 1);
+    assert!(
+        !view
+            .descendants(NodeKey::ROOT)
+            .any(|(key, _)| view.is::<Opaque>(key))
+    );
+    Ok(())
+}

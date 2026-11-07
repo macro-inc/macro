@@ -752,3 +752,5 @@ fn identical_text_splice_still_publishes_updated_leaf() -> Result<(), Error> {
     );
     Ok(())
 }
+
+mod recorder_regressions;

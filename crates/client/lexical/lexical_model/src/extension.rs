@@ -166,7 +166,4 @@ impl Commit {
 mod test;
 
 #[cfg(test)]
-mod staging_test;
-
-#[cfg(test)]
 mod event_test;

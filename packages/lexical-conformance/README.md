@@ -104,3 +104,8 @@ Schema-2 additions used by this corpus: `$regexp` carries `flags` and `lastIndex
 Partial initial states carry `keys` (preorder), `nodeMapKeys`
 (insertion order), and `nextKey` alongside JSON and selection. Downstream fixture
 readers must support these explicit fields; no allocation keys are normalized away.
+
+Traceability and CI: see [coverage/README.md](coverage/README.md) for the generated
+specification matrix, current-run Rust evidence, and pending ratchet. Native and
+wasm replay run the complete admitted corpus; upstream JavaScript replay success
+does not imply Rust replay success.

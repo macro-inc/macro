@@ -1,4 +1,5 @@
 //! Upstream fenced-code transformer; code content stays plain and un-tokenized.
+use crate::util::js_trim;
 use crate::{matcher::*, patterns, state::*, util::*, *};
 use lexical_model::*;
 use lexical_rich_nodes::code::*;

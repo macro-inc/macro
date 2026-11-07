@@ -57,6 +57,10 @@ pub enum Reason {
     DevOnlyInvariant,
     /// Persistent map replaces the upstream GenMap implementation.
     Genmap,
+    /// Macro-specific policy/configuration is deferred to its package layer.
+    MacroPatch,
+    /// D6 leaves tokenization and syntax highlighting in JavaScript.
+    D6Highlight,
 }
 impl Ledger {
     /// Validate every entry and reject stale or duplicate identities.

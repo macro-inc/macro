@@ -276,6 +276,25 @@ impl RangeSelection {
         }
         self.focus.is_before(view, &self.anchor)
     }
+    /// Cached write-context direction, absent after endpoint changes.
+    pub fn cached_is_backward(&self) -> Option<bool> {
+        self.cached_direction
+            .filter(|(a, f, _)| *a == self.anchor && *f == self.focus)
+            .map(|(_, _, backward)| backward)
+    }
+    /// Clear direction when cloning a selection object or mutating a point.
+    pub fn clear_direction_cache(&mut self) {
+        self.cached_direction = None;
+    }
+
+    pub(crate) fn invalidate_changed_direction(&mut self) {
+        if self
+            .cached_direction
+            .is_some_and(|(anchor, focus, _)| anchor != self.anchor || focus != self.focus)
+        {
+            self.clear_direction_cache();
+        }
+    }
     /// Selected nodes in document order.
     pub fn nodes(&self, view: StateRef<'_>) -> Result<Vec<NodeKey>, Error> {
         view.selected_nodes(self)

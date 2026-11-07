@@ -115,3 +115,6 @@ pub fn parse_css_declarations(css: &str) -> IndexMap<String, String> {
 }
 #[cfg(test)]
 mod test;
+
+mod css;
+pub use css::*;
