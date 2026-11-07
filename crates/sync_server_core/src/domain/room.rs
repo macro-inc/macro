@@ -43,7 +43,7 @@ struct RoomMemory {
     session_key: Option<SessionKey>,
     /// Live imported document and its monotonic save timestamps.
     document: Option<DocumentState>,
-    /// Ordered operation IDs and the applied set, reset by H9.
+    /// Ordered operation IDs and the applied set, retained across same-key reads.
     operation_log: Option<OperationLog>,
     /// Clock-injected presence values and tombstones.
     awareness: EphemeralStore,

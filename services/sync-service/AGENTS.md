@@ -122,8 +122,8 @@ to the requested surface. These are scoped sync JWTs, not app-session tokens.
 The request gate and Axum handler share one owned room guard (CS-61). `HttpHandlers`
 borrows only Room for request decoding and response serialization; it owns no session
 memory. WebSocket/alarm/close adapters call Room directly. The error callback stays
-lock-free. Background effects receive owned snapshots and editor batches. H9 still
-replaces the operation log; A4 pending-import loss remains a named quirk.
+lock-free. Background effects receive owned snapshots and editor batches. Same-session exists/initialize retain the operation log; A4 pending-import loss
+remains a named quirk.
 
 All room policy lives under `../../crates/sync_server_core/src/domain/room/`:
 connections/frames, HTTP reads/atomic updates, alarms/deletion, surfaces/migration.

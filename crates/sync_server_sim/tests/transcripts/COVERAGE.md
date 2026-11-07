@@ -31,7 +31,7 @@ Raw JSONL preserves clock values, socket UUIDs, frame bytes and structured-clone
 | H6 | [hibernation.test/H6_restores_DOCUMENT_ID_after_eviction.jsonl](hibernation.test/H6_restores_DOCUMENT_ID_after_eviction.jsonl) |
 | H7 | [hibernation.test/H7_reconstructs_storage_with_the_original_room_identity.jsonl](hibernation.test/H7_reconstructs_storage_with_the_original_room_identity.jsonl) |
 | H8 | [hibernation.test/H8_loads_the_snapshot_and_replays_pending_operations.jsonl](hibernation.test/H8_loads_the_snapshot_and_replays_pending_operations.jsonl) |
-| H9 | [hibernation.test/H9_preserves_the_exists_reset_and_surviving_applied-key_quirk.jsonl](hibernation.test/H9_preserves_the_exists_reset_and_surviving_applied-key_quirk.jsonl) |
+| H9 | [hibernation.test/H9_keeps_applied_keys_across_exists_and_compacts_them.jsonl](hibernation.test/H9_keeps_applied_keys_across_exists_and_compacts_them.jsonl) |
 | H10 | [hibernation.test/H10_discards_an_incomplete_inbound_frame_on_eviction.jsonl](hibernation.test/H10_discards_an_incomplete_inbound_frame_on_eviction.jsonl) |
 | M1 | [surface_migration.test/freeze_drains_acknowledged_and_racing_edits_closes_writers_and_replays_pending_logs_after_restart.jsonl](surface_migration.test/freeze_drains_acknowledged_and_racing_edits_closes_writers_and_replays_pending_logs_after_restart.jsonl) |
 | M2 | [transcript_boundaries.test/M2_ping_fails_after_DOCUMENT_ID_is_removed.jsonl](transcript_boundaries.test/M2_ping_fails_after_DOCUMENT_ID_is_removed.jsonl) |
@@ -86,7 +86,7 @@ Q1–Q12 name the rows of S6 section 5.2 in order; that section does not assign 
 
 | ID | Quirk | Representative transcript |
 | --- | --- | --- |
-| Q1 | exists/initialize reset the operation log | [hibernation.test/H9_preserves_the_exists_reset_and_surviving_applied-key_quirk.jsonl](hibernation.test/H9_preserves_the_exists_reset_and_surviving_applied-key_quirk.jsonl) |
+| Q1 | Fixed: exists/initialize retain the operation log for the same key | [hibernation.test/H9_keeps_applied_keys_across_exists_and_compacts_them.jsonl](hibernation.test/H9_keeps_applied_keys_across_exists_and_compacts_them.jsonl) |
 | Q2 | load errors produce 500 | [transcript_boundaries.test/A3_and_R2_corrupt_state_gives_500_and_skips_alarm_rearming.jsonl](transcript_boundaries.test/A3_and_R2_corrupt_state_gives_500_and_skips_alarm_rearming.jsonl) |
 | Q3 | awareness broadcasts the full state | [awareness.test/awareness_sync_tests_should_include_awareness_on_connection_if_available.jsonl](awareness.test/awareness_sync_tests_should_include_awareness_on_connection_if_available.jsonl) |
 | Q4 | socket errors keep awareness | [transcript_boundaries.test/E7_websocket_errors_retain_existing_awareness.jsonl](transcript_boundaries.test/E7_websocket_errors_retain_existing_awareness.jsonl) |
@@ -146,7 +146,7 @@ connection, frame and alarm cases while sharing hand-written fake capabilities.
 C11 native replay adds the complete missing-document `/raw` fixture, comparing
 its status, headers, body, ordered snapshot preparation/existence effects and
 final durable state. Core fake tests cover initialization order, delayed sync,
-read failures and `exists_resets_operation_id_counter_quirk`.
+read failures and `same_millisecond_operations_across_exists_survive_eviction`.
 `server_doc_never_shallow` pins full-snapshot initialization, reload and alarms;
 `initialize_accepts_shallow_quirk` separately pins acceptance of shallow input.
 The latter is a preserved server-history quirk for a later behavior-changing fix.

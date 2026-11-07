@@ -65,7 +65,7 @@ pub struct OperationLog {
     applied: BTreeSet<OperationId>,
 }
 impl OperationLog {
-    /// Start a fresh log, including the legacy exists/initialize reset behavior.
+    /// Start a fresh log for a session identity.
     pub fn new(key: SessionKey, kind: SessionKind) -> Self {
         Self {
             key,
@@ -73,6 +73,11 @@ impl OperationLog {
             ids: OrderedIds::default(),
             applied: BTreeSet::new(),
         }
+    }
+
+    /// Whether this activation log belongs to the requested session.
+    pub(crate) fn is_for(&self, key: &SessionKey) -> bool {
+        self.key == *key
     }
 
     /// Import synchronously, then persist pending bytes, archive and attribution

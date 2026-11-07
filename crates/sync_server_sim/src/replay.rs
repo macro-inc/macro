@@ -19,7 +19,7 @@ pub const ENABLED: &[&str] = &[
     "hibernation.test/H2_lazily_restores_stored_websocket_metadata.jsonl",
     "hibernation.test/H5_restores_read-only_write_permissions_after_eviction.jsonl",
     "hibernation.test/H8_loads_the_snapshot_and_replays_pending_operations.jsonl",
-    "hibernation.test/H9_preserves_the_exists_reset_and_surviving_applied-key_quirk.jsonl",
+    "hibernation.test/H9_keeps_applied_keys_across_exists_and_compacts_them.jsonl",
     "hibernation.test/H10_discards_an_incomplete_inbound_frame_on_eviction.jsonl",
     "transcript_boundaries.test/A4_compaction_drops_acknowledged_pending_imports_from_the_snapshot.jsonl",
     "document_sync.test/document_sync_tests_should_receive_initial_sync_on_connect.jsonl",

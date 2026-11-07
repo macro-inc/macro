@@ -69,7 +69,7 @@ fn delayed_initial_sync_reaches_sockets_accepted_before_initialize() {
     });
 }
 #[test]
-fn exists_resets_operation_id_counter_quirk() {
+fn same_millisecond_operations_across_exists_survive_eviction() {
     block_on(async {
         let mut room = room();
         connect_access(&mut room, AccessLevel::Edit).await;
@@ -82,11 +82,7 @@ fn exists_resets_operation_id_counter_quirk() {
                 .unwrap()
         );
         room.apply_update(&second, None).await.unwrap();
-        assert_eq!(room.ports.store.pending.borrow().len(), 1);
-        assert_eq!(
-            room.ports.store.pending.borrow().values().next().unwrap(),
-            &second
-        );
+        assert_eq!(room.ports.store.pending.borrow().len(), 2);
         let mut cold = Room::new(room.ports, config());
         cold.load_document().await.unwrap();
         assert_eq!(
@@ -97,7 +93,7 @@ fn exists_resets_operation_id_counter_quirk() {
                 .loro_doc
                 .get_text("content")
                 .to_string(),
-            "edit"
+            "editedit"
         );
     });
 }

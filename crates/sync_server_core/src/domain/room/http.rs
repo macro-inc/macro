@@ -64,7 +64,7 @@ impl<P: RoomPorts> Room<P> {
             Ok(RequestGate::Allowed)
         }
     }
-    /// Check durable content and preserve H9's unconditional operation-log reset.
+    /// Check durable content while retaining the same session's operation log.
     pub async fn exists(&mut self, key: &SessionKey) -> Result<bool, RoomError> {
         self.ports
             .snapshots()
@@ -80,7 +80,14 @@ impl<P: RoomPorts> Room<P> {
             return Ok(false);
         }
         self.maybe_set_session_key(key).await?;
-        self.memory.operation_log = Some(OperationLog::new(key.clone(), key.kind()));
+        if self
+            .memory
+            .operation_log
+            .as_ref()
+            .is_none_or(|log| !log.is_for(key))
+        {
+            self.memory.operation_log = Some(OperationLog::new(key.clone(), key.kind()));
+        }
         Ok(true)
     }
     /// Initialize from an already available wire request.
@@ -146,7 +153,14 @@ impl<P: RoomPorts> Room<P> {
             .put_session_key(&key)
             .await
             .map_err(|e| RoomError::port(PortName::Storage, e))?;
-        self.memory.operation_log = Some(OperationLog::new(key.clone(), SessionKind::Document));
+        if self
+            .memory
+            .operation_log
+            .as_ref()
+            .is_none_or(|log| !log.is_for(&key))
+        {
+            self.memory.operation_log = Some(OperationLog::new(key.clone(), SessionKind::Document));
+        }
         // Do not clear a previously cached document: initialization retained it.
         if self.load_document().await.is_ok()
             && let Ok(snapshot) = self
