@@ -3,7 +3,7 @@ use super::{
 };
 use agent_session::domain::model::AgentSessionId;
 use async_trait::async_trait;
-use code_execution::domain::RunEnvironment;
+use code_execution_core::RunEnvironment;
 use macro_user_id::user_id::MacroUserIdStr;
 use tokio_util::sync::CancellationToken;
 

@@ -64,7 +64,7 @@ agent harness signs a routine dry run's token with the `dry_run` scope
 (`agent_correlation::scope`), so code written to get around the process's
 dry run is refused by every SDK host.
 
-`DenoChecker` (`src/outbound/deno/check.rs`) type-checks a TypeScript program
+`DenoChecker` (`src/deno/check.rs`) type-checks a TypeScript program
 against the SDK's generated declarations (`sdk-types.json` from `crates/code_mode_assets`)
 without running it, plus a module of `declare global` types the host supplies
 (the type of `main`'s argument). It skips checking declaration files
@@ -132,7 +132,7 @@ WebSocket and EventSource, `Deno[Deno.internal]` and `process`'s
 `getBuiltinModule` and `binding` are removed. The import map sends every Node
 built-in to a module that throws, except a short list that neither connects,
 starts processes nor loads other built-ins (`NODE_ALLOWED` in
-`src/outbound/deno.rs`); a test fails when the pinned Deno lists a built-in the
+`src/deno.rs`); a test fails when the pinned Deno lists a built-in the
 map doesn't know. Like a dry run, this is held inside the process: the
 sandbox's `--allow-net` still reaches the API origins directly.
 
@@ -153,7 +153,7 @@ The pinned runtime is required for the opt-in real Deno suite. From the reposito
 root inside Nix, with `SQLX_OFFLINE` unset:
 
 ```sh
-cargo test -p code_execution -- --include-ignored
+cargo test -p code_execution_outbound -- --include-ignored
 ```
 
 The suite covers actual SDK HTTP authentication and concurrency, prebundled

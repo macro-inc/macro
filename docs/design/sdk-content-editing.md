@@ -49,7 +49,7 @@ Every direct edit tool has the same two layers:
 | PowerPoint | No (`EditPresentation` takes ops) | `pptx_engine` natively in `crates/documents`, S3 version per edit | None: last writer wins |
 | Canvas | Yes (`EditCanvas`) | `CanvasSession` in the worker, live peer, text measured and rendered in Browser Rendering | Revision hash; unrelated concurrent edits rebased |
 
-The sandbox (`crates/code_execution`) runs a fresh `deno` process per call:
+The sandbox (`crates/agents/code_execution_outbound`) runs a fresh `deno` process per call:
 30 s, 128 MiB heap, `--deny-import --no-remote --no-npm`, and network limited
 to the hosts in `sdk_endpoints()` (DSS, auth, cognition, email and others). Neither
 sync-service nor the ai-editing-worker is on that list. The SDK bundle
@@ -479,7 +479,7 @@ programs through the production runner and its exact flags:
 - `packages/code-mode-sdk` builds, at build time with the rest of the bundle
   (`crates/code_mode_assets`), code-split modules for `lexical`, the
   `@lexical/*` packages and `@macro-inc/sdk/lexical`, beside `sdk.mjs`.
-  `crates/code_execution` writes them to the run's root and maps each
+  `crates/agents/code_execution_outbound` writes them to the run's root and maps each
   specifier in `imports.json`.
 - `sdk.mjs` keeps those specifiers external, so `doc.lexical()` imports them
   through the same import map a program's `import { $getRoot } from 'lexical'`

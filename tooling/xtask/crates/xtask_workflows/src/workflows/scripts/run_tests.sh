@@ -30,7 +30,7 @@ common=(
 if [ "${NEXTEST_RUN_DENO_TESTS:-}" = "true" ]; then
   common+=(
     --run-ignored only --test-threads 2
-    -E 'package(code_execution) or (package(agent_harness_service) and (test(authenticated_mcp_runs_javascript_and_persists_source_and_result) or test(routine_code::)))'
+    -E 'package(code_execution_core) or package(code_execution_outbound) or (package(agent_harness_service) and (test(authenticated_mcp_runs_javascript_and_persists_source_and_result) or test(routine_code::)))'
   )
 else
   common+=(--test-threads "$NEXTEST_TEST_THREADS")

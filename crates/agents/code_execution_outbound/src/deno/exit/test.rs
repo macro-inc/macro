@@ -186,7 +186,7 @@ fn stat_and_status_parse_as_procfs_writes_them() {
 #[tokio::test]
 #[ignore = "requires pinned Deno runtime"]
 async fn a_program_that_exhausts_its_heap_records_how_deno_died() {
-    use crate::domain::{
+    use code_execution_core::{
         EventKind, ExecuteRequest, ExecutionService, Limits, Outcome, RunEnvironment,
     };
     let captured = Captured::default();
@@ -240,7 +240,7 @@ async fn a_program_that_exhausts_its_heap_records_how_deno_died() {
 #[tokio::test]
 #[ignore = "requires pinned Deno runtime"]
 async fn a_program_the_deadline_stops_records_its_end() {
-    use crate::domain::{
+    use code_execution_core::{
         EventKind, ExecuteRequest, ExecutionService, Limits, Outcome, RunEnvironment,
     };
     let captured = Captured::default();

@@ -7,7 +7,7 @@ use crate::domain::models::CredentialAttribution;
 #[cfg(test)]
 mod test;
 
-/// Set by the code-mode runtime (`code_execution`'s `bootstrap.mjs`) on every
+/// Set by the code-mode runtime (`code_execution_outbound`'s `bootstrap.mjs`) on every
 /// SDK request a program makes, in agent sessions and for public MCP clients
 /// alike.
 pub const CODE_EXECUTION_HEADER: &str = "x-macro-code-execution";
