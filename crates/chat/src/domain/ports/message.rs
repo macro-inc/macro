@@ -1,4 +1,5 @@
 use attachment::FormattedParts;
+use chat_id::ChatId;
 use chat_message::ChatMessageContent;
 use macro_user_id::user_id::MacroUserIdStr;
 use model::chat::{ChatMessageWithAttachments, NewChatMessage};
@@ -84,14 +85,14 @@ pub trait MessageService: Send + Sync + 'static {
     fn create(
         &self,
         user_id: &MacroUserIdStr<'_>,
-        chat_id: &str,
+        chat_id: &ChatId,
         message: NewChatMessage,
     ) -> impl Future<Output = Result<ResolvedMessageContent>> + Send;
 
     /// Store a message without resolving attachments.
     fn store(
         &self,
-        chat_id: &str,
+        chat_id: &ChatId,
         message: NewChatMessage,
     ) -> impl Future<Output = Result<String>> + Send;
 
@@ -99,7 +100,7 @@ pub trait MessageService: Send + Sync + 'static {
     fn update(
         &self,
         user_id: &MacroUserIdStr<'_>,
-        chat_id: &str,
+        chat_id: &ChatId,
         message_id: &str,
         content: &ChatMessageContent,
     ) -> impl Future<Output = Result<()>> + Send;
@@ -116,6 +117,6 @@ pub trait MessageService: Send + Sync + 'static {
     /// Get all resolved messages for a chat, in order.
     fn get_resolved_message_chain(
         &self,
-        chat_id: &str,
+        chat_id: &ChatId,
     ) -> impl Future<Output = Result<Vec<ResolvedMessageContent>>> + Send;
 }

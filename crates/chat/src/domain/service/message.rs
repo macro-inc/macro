@@ -4,6 +4,7 @@
 mod test;
 
 use attachment::{Attachable, AttachmentService, FormattedParts};
+use chat_id::ChatId;
 use chat_message::ChatMessageContent;
 use macro_event_broker::{MacroEventBroker, NoopMacroEventBroker};
 use macro_user_id::cowlike::CowLike;
@@ -80,13 +81,14 @@ impl<R: MessageRepo, A: AttachmentService, B: MacroEventBroker> MessageServiceIm
 impl<R: MessageRepo, A: AttachmentService, B: MacroEventBroker> MessageService
     for MessageServiceImpl<R, A, B>
 {
-    #[tracing::instrument(err, skip(self, message))]
+    #[tracing::instrument(err, skip(self, message, chat_id), fields(chat_id = %chat_id))]
     async fn create(
         &self,
         user_id: &MacroUserIdStr<'_>,
-        chat_id: &str,
+        chat_id: &ChatId,
         message: NewChatMessage,
     ) -> Result<ResolvedMessageContent> {
+        let chat_id = chat_id.as_str();
         let entities: Vec<Entity<'static>> = message
             .attachments
             .as_deref()
@@ -127,8 +129,9 @@ impl<R: MessageRepo, A: AttachmentService, B: MacroEventBroker> MessageService
         })
     }
 
-    #[tracing::instrument(err, skip(self, message))]
-    async fn store(&self, chat_id: &str, message: NewChatMessage) -> Result<String> {
+    #[tracing::instrument(err, skip(self, message, chat_id), fields(chat_id = %chat_id))]
+    async fn store(&self, chat_id: &ChatId, message: NewChatMessage) -> Result<String> {
+        let chat_id = chat_id.as_str();
         let role = message.role;
         let model = message.model.clone();
         let attachment_count = message.attachments.as_deref().map(<[_]>::len).unwrap_or(0);
@@ -147,14 +150,15 @@ impl<R: MessageRepo, A: AttachmentService, B: MacroEventBroker> MessageService
         Ok(message_id)
     }
 
-    #[tracing::instrument(err, skip(self, content))]
+    #[tracing::instrument(err, skip(self, content, chat_id), fields(chat_id = %chat_id))]
     async fn update(
         &self,
         user_id: &MacroUserIdStr<'_>,
-        chat_id: &str,
+        chat_id: &ChatId,
         message_id: &str,
         content: &ChatMessageContent,
     ) -> Result<()> {
+        let chat_id = chat_id.as_str();
         let messages = self.repo.get_messages(chat_id).await?;
         let msg = messages
             .iter()
@@ -197,11 +201,12 @@ impl<R: MessageRepo, A: AttachmentService, B: MacroEventBroker> MessageService
         })
     }
 
-    #[tracing::instrument(err, skip(self))]
+    #[tracing::instrument(err, skip(self, chat_id), fields(chat_id = %chat_id))]
     async fn get_resolved_message_chain(
         &self,
-        chat_id: &str,
+        chat_id: &ChatId,
     ) -> Result<Vec<ResolvedMessageContent>> {
+        let chat_id = chat_id.as_str();
         let messages = self.repo.get_messages(chat_id).await?;
         let mut chain = Vec::new();
         for msg in &messages {
