@@ -11,6 +11,7 @@ node types, immutable snapshots, transactional tree editing, update processing, 
 - `src/node.rs` defines node kinds, inheritance and dispatch.
 - `src/transaction.rs` owns writes; never mutate a committed snapshot.
 - `src/pipeline/` implements flush order, normalization, GC and view-attached caches.
+- `src/command.rs` owns listener ordering and reentrant dispatch; `src/extension.rs` stages per-editor state separately from document snapshots.
 - `src/commit.rs` computes mutations before cache writes and atomically publishes snapshots.
 - `src/json.rs` preserves export order and JavaScript number serialization.
 
@@ -21,7 +22,8 @@ node types, immutable snapshots, transactional tree editing, update processing, 
 - Selection slots, formatting and range edits preserve upstream active-versus-detached selection side effects.
 - Movement consumes explicit host points; `NoView` runs structural rules only.
 - Optional `model-segmentation` enables Unicode movement within text nodes; visual line boundaries still require host layout.
-- View diffs and command dispatch remain later layers.
+- Typed selection-change and application commands use immutable plugins and transactional extension state.
+- Stock editing-command registration, History, follow-up hooks and view diffs remain later layers.
 
 ## Checks
 

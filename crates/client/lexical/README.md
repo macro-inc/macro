@@ -14,8 +14,11 @@ editors synchronize text caches after mutation reporting. JSON import/export pre
 unknown NodeState and upstream property order; `to_js_json_string` provides JavaScript
 number formatting and integer-key ordering. Selection values, detached slots, formatting,
 insertion and deletion share those transactions. Movement accepts host-resolved points;
-the optional `model-segmentation` feature supplies text-only Unicode movement. History
-and view diffs remain follow-on layers.
+the optional `model-segmentation` feature supplies text-only Unicode movement. Typed
+selection-change and application commands use ordered, immutable plugins. Their
+per-editor state is staged separately from document snapshots and rolls back with
+the transaction. Stock editing-command registration, History, listener-table exports,
+postcommit hooks and view diffs remain follow-on layers.
 
 `lexical_workspace_tests` verifies the patched regex dependency and Loro snapshot
 compatibility alongside the model package. Future rich-node,

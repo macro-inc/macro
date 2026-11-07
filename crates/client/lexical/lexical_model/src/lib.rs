@@ -27,6 +27,10 @@ pub use registry::*;
 pub use selection::*;
 pub use state::*;
 pub use transaction::*;
+mod extension;
+pub use extension::ExtensionState;
+mod command;
+pub use command::*;
 #[cfg(test)]
 mod test;
 

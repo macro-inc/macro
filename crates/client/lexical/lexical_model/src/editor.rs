@@ -11,6 +11,8 @@ pub enum EditorMode {
 }
 /// Owns the current immutable snapshot and a non-rollback key allocator.
 pub struct Editor {
+    pub(crate) extensions: crate::extension::ExtensionStore,
+    pub(crate) listeners: crate::command::CommandListeners,
     pub(crate) state: EditorState,
     pub(crate) keys: SharedKeyCounter,
     mode: EditorMode,
@@ -26,6 +28,8 @@ impl Editor {
         view_host: ViewHost,
     ) -> Result<Self, Error> {
         Ok(Self {
+            extensions: Default::default(),
+            listeners: Default::default(),
             state: EditorState::empty(registry)?,
             keys: match source {
                 KeySource::PerEditor => SharedKeyCounter::new(),
