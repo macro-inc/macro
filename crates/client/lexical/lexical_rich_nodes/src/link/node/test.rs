@@ -192,3 +192,47 @@ fn replacing_a_protected_tab_after_text_can_advance_the_receiver() -> Result<()>
     assert_eq!(editor.state().root_text_content().as_ref(), "ax");
     Ok(())
 }
+
+#[test]
+fn deleting_a_whole_segment_removes_its_empty_link_parent() -> Result<()> {
+    let mut editor = Editor::builder(EditorMode::Headless)
+        .node::<LinkNode>()
+        .build()
+        .expect("editor");
+    let ((segment, tail), _) = editor.update(|tx| {
+        let paragraph = tx.create(Paragraph::default())?;
+        let link = create_link_node(tx, "/", LinkAttributes::default())?;
+        let segment = tx.create_text("segment")?;
+        tx.text(segment)?.set_mode(TextMode::Segmented)?;
+        let tail = tx.create_text("tail")?;
+        tx.append(link, &[segment.key()])?;
+        tx.append(paragraph, &[link.key(), tail.key()])?;
+        tx.append(NodeKey::ROOT, &[paragraph.key()])?;
+        tx.select_end(segment)?;
+        Ok((segment, tail))
+    })?;
+    editor.update(|tx| {
+        tx.delete_character(
+            EditDirection::Backward,
+            ModifyTarget::View {
+                anchor: Point::text(segment, Utf16Offset(6)),
+                focus: Point::text(segment, Utf16Offset(7)),
+                resolution_dirty: false,
+                is_backward_in_dom: true,
+            },
+        )
+    })?;
+    assert_eq!(editor.state().root_text_content().as_ref(), "tail");
+    let paragraph = editor.state().first_child_or_err(NodeKey::ROOT)?;
+    assert_eq!(editor.state().children_keys(paragraph)?, vec![tail.key()]);
+    assert_eq!(
+        editor
+            .state()
+            .selection()
+            .and_then(Selection::as_range)
+            .expect("range")
+            .anchor,
+        Point::text(tail, Utf16Offset(0))
+    );
+    Ok(())
+}

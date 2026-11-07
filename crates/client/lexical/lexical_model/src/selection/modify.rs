@@ -310,7 +310,7 @@ impl Transaction<'_> {
                 .trim_matches(is_ecma_whitespace)
                 .to_owned();
             if next.is_empty() {
-                self.remove(key, true)?;
+                self.remove(key, false)?;
             } else {
                 let restore = if index + 2 == boundaries.len() {
                     next.encode_utf16().count() as u32
