@@ -105,10 +105,10 @@ setup_test_envs:
     echo "DATABASE_URL={{ DATABASE_URL }}" >> ./crates/entities/entity_access/.env
     echo "DATABASE_URL={{ DATABASE_URL }}" >> ./crates/integrations/github/.env
     echo "DATABASE_URL={{ DATABASE_URL }}" >> ./crates/projects/initiative/.env
-    echo "DATABASE_URL={{ DATABASE_URL }}" >> ./crates/referral/.env
+    echo "DATABASE_URL={{ DATABASE_URL }}" >> ./crates/billing/referral/.env
     echo "DATABASE_URL={{ DATABASE_URL }}" >> ./crates/comms/chat/.env
-    echo "DATABASE_URL={{ DATABASE_URL }}" >> ./crates/memory/.env
-    echo "DATABASE_URL={{ DATABASE_URL }}" >> ./crates/ai_usage/.env
+    echo "DATABASE_URL={{ DATABASE_URL }}" >> ./crates/ai/memory/.env
+    echo "DATABASE_URL={{ DATABASE_URL }}" >> ./crates/billing/ai_usage/.env
     echo "DATABASE_URL={{ DATABASE_URL }}" >> ./crates/comms/call/.env
     echo "DATABASE_URL={{ DATABASE_URL }}" >> ./crates/entities/entity_access_management/.env
     echo "DATABASE_URL={{ DATABASE_URL }}" >> ./crates/accounts/mobile_welcome_email_db_client/.env
@@ -122,8 +122,8 @@ setup_test_envs:
     echo "DATABASE_URL={{ DATABASE_URL }}" >> ./crates/bots/.env
     echo "DATABASE_URL={{ DATABASE_URL }}" >> ./services/call_recording_preview_handler/.env
     echo "DATABASE_URL={{ DATABASE_URL }}" >> ./crates/entities/share_permission_db_utils/.env
-    echo "DATABASE_URL={{ DATABASE_URL }}" >> ./crates/ai_projections/.env
-    echo "DATABASE_URL={{ DATABASE_URL }}" >> ./crates/ai_billing/.env
+    echo "DATABASE_URL={{ DATABASE_URL }}" >> ./crates/ai/ai_projections/.env
+    echo "DATABASE_URL={{ DATABASE_URL }}" >> ./crates/billing/ai_billing/.env
     echo "DATABASE_URL={{ DATABASE_URL }}" >> ./crates/integrations/webhook/.env
     echo "DATABASE_URL={{ DATABASE_URL }}" >> ./crates/calendar/calendar_events/.env
     echo "DATABASE_URL={{ DATABASE_URL }}" >> ./services/email_service/.env

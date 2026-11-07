@@ -77,7 +77,7 @@ each run.
   stays available. Activating creates the caller's own routine with `template_id`
   pointing back. Filling variables happens in the client.
 - Not here: the target being run (an agent turn, a routine's tool logic) →
-  `crates/agent_session`, `ai_tools`; Jev condition evaluation → `crates/jev`.
+  `crates/agent_session`, `ai_tools`; Jev condition evaluation → `crates/ai/jev`.
 
 ## Boundaries
 

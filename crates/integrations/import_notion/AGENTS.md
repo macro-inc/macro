@@ -22,7 +22,7 @@ model for the `import` crate to turn into Macro documents and databases.
 - Owns: reading Notion over REST (`Notion-Version: 2026-03-11`, data sources
   API).
 - Not here: import planning, writing Macro entities → `crates/integrations/import`;
-  Pipedream connections and the proxy port → `crates/pipedream_mcp`.
+  Pipedream connections and the proxy port → `crates/ai/pipedream_mcp`.
 
 ## Boundaries
 

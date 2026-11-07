@@ -16,14 +16,14 @@ internal-auth-key-authenticated requests.
 
 - Owns: the raw HTTP contract with the static file service.
 - Not here: deciding what gets uploaded or how a static file reference is
-  modeled for a feature → `crates/documents/static_file`, `crates/attachment`.
+  modeled for a feature → `crates/documents/static_file`, `crates/ai/attachment`.
 
 ## Boundaries
 
 - Depends on: `models_sfs`, `macro_aws_config`, `reqwest`.
 - Used by: `services/document_storage_service`, `services/agent_harness_service`,
   `services/email_service`, `crates/comms/channels`, `crates/cursor_cloud_agents`,
-  `crates/ai_tools`, `crates/image_generation`.
+  `crates/ai/ai_tools`, `crates/ai/image_generation`.
 
 ## Recipes
 

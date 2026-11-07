@@ -21,7 +21,7 @@ of the agent runs on it instead of Macro's allowance. See the crate doc in
 
 - Owns: `agent_api_keys`.
 - Not here: who may change an agent → `crates/bots` (`BotService`); routing a
-  turn's model calls on a key → `crates/agent` (`AgentLoop::with_provider_api_key`);
+  turn's model calls on a key → `crates/ai/agent` (`AgentLoop::with_provider_api_key`);
   deciding a turn runs on one → `crates/agent_inmem`.
 
 ## Boundaries

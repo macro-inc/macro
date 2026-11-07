@@ -29,7 +29,7 @@ places that on the calendar at the caller's local wall time, taking the part a
 ## Boundaries
 
 - Depends on: `chrono`, `nom`, `strsim` (typo distance) and `thiserror` only.
-- Used by: nothing yet; built for `crates/universal_input` extraction and the
+- Used by: nothing yet; built for `crates/ai/universal_input` extraction and the
   web app's date fields (through wasm).
 
 ## Recipes

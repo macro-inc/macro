@@ -85,7 +85,7 @@ enforced by the ordinary backend APIs.
   shows one inline. It must match lexical-core's `I_IMAGE_CONSTRAINED`
   (pinned in `lexical-core/tests/generated-image.test.ts`).
 - `src/entities/web/`: `macro.web.search()` / `macro.web.fetch()` (cognition
-  `POST /web/search`, `/web/fetch`, Tavily via `crates/web_search`), admitted and
+  `POST /web/search`, `/web/fetch`, Tavily via `crates/ai/web_search`), admitted and
   metered against the user's AI allowance; code mode hides the `WebSearch` /
   `WebFetch` tools in their favour.
 - `src/entities/bots/`: `macro.bots` manages bots (`Bot`: profile, channel
