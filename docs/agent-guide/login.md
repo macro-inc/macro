@@ -294,10 +294,13 @@ Connection status failures have an explicit retry; they must not prevent
 independent providers such as native GitHub from connecting. Verify unknown
 status never launches a duplicate OAuth flow and continuation remains possible.
 Someone already on a team when they leave the tools step (joined by invite
-link or by domain) never sees the team step: Continue goes to the plan step, or
-finishes for a licensed member, and Back from plan returns to tools. Pending
-email invites still show on the team step for acceptance, and a team created
-there shows the **You're on <team>** confirmation. Team setup retains invite
+link) never sees the team step: Continue goes to the plan step, or finishes for
+a licensed member, and Back from plan returns to tools. Signing up never adds
+anyone to a team. Pending email invites and the team whose auto-join domain
+matches the viewer's email (**<team> is open to everyone at your company**)
+show on the team step, each with **Join**; joining, or creating a team there,
+shows the **You're on <team>** confirmation. **Settings → Team** offers the
+same domain team to a viewer with no team. Team setup retains invite
 acceptance, domain suggestions, and editable invite recipients; submitting the
 form sends real invitations.
 On the create-team form, type a workspace name and edit a teammate address,
@@ -316,7 +319,7 @@ join back on restores its earlier setting. Each switch has an info button
 beside it that explains the setting in a tooltip on hover or focus, and in a
 popover on tap on touch devices; pressing it never toggles the switch. Creating the team does not leave the step: it
 switches to the **You're on <team>** confirmation, the same panel members who
-were already on a team (auto-joined or invite-accepted) see. That panel has
+were already on a team (joined through an invite link) see. That panel has
 **Copy invite link** beside **Continue**; it copies the team's
 `/app/team-invite?link=` URL, creating the link when the team has none. Members
 who may invite (admins and owners, or anyone when non-admin invites are on) can

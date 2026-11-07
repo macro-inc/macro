@@ -15,8 +15,8 @@ use crate::domain::{
     customer_repo::CustomerRepository,
     events::TeamJoinMethod,
     model::{
-        JoinTeamByInviteLinkError, JoinTeamByInviteLinkOutcome, ManageTeamInviteLinkError,
-        TeamError, TeamInviteLinkTeam, TeamInviteLinkToken, TeamRole,
+        DirectJoinOutcome, JoinTeamByInviteLinkError, ManageTeamInviteLinkError, TeamError,
+        TeamInviteLinkTeam, TeamInviteLinkToken, TeamRole,
     },
     open_seat_release::OpenSeatRelease,
     owned_entity_cleanup::OwnedEntityCleanup,
@@ -177,40 +177,17 @@ where
         &self,
         token: &TeamInviteLinkToken,
         user_id: &MacroUserIdStr<'_>,
-    ) -> Result<JoinTeamByInviteLinkOutcome, JoinTeamByInviteLinkError> {
+    ) -> Result<DirectJoinOutcome, JoinTeamByInviteLinkError> {
         let team = self.get_team_by_invite_link(token).await?;
 
-        let user_teams = self.team_repository.get_user_teams(user_id).await?;
-        if user_teams.iter().any(|t| t.id == team.team_id) {
-            return Ok(JoinTeamByInviteLinkOutcome::AlreadyMember {
-                team_id: team.team_id,
-            });
-        }
-        if !user_teams.is_empty() {
-            return Err(JoinTeamByInviteLinkError::AlreadyInAnotherTeam);
-        }
-
-        match self
-            .join_team_directly(&team.team_id, user_id, TeamJoinMethod::InviteLink)
+        let outcome = self
+            .join_team_when_teamless(&team.team_id, user_id, TeamJoinMethod::InviteLink)
             .await?
-        {
-            Some(member) => {
-                self.reward_invite_link_creator(token, &team.team_id, user_id)
-                    .await;
-                Ok(JoinTeamByInviteLinkOutcome::Joined(member))
-            }
-            // The insert found an existing membership, which a concurrent
-            // join may have created on either this team or another one.
-            None => {
-                let user_teams = self.team_repository.get_user_teams(user_id).await?;
-                if user_teams.iter().any(|t| t.id == team.team_id) {
-                    Ok(JoinTeamByInviteLinkOutcome::AlreadyMember {
-                        team_id: team.team_id,
-                    })
-                } else {
-                    Err(JoinTeamByInviteLinkError::AlreadyInAnotherTeam)
-                }
-            }
+            .ok_or(JoinTeamByInviteLinkError::AlreadyInAnotherTeam)?;
+        if matches!(outcome, DirectJoinOutcome::Joined(_)) {
+            self.reward_invite_link_creator(token, &team.team_id, user_id)
+                .await;
         }
+        Ok(outcome)
     }
 }

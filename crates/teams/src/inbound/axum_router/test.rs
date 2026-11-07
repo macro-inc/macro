@@ -36,10 +36,11 @@ use tower::ServiceExt;
 
 use crate::domain::{
     model::{
-        CreateTeamError, CustomerError, DeleteTeamError, InviteUsersToTeamError,
-        JoinTeamByInviteLinkError, JoinTeamByInviteLinkOutcome, JoinTeamDirectlyError,
-        JoinTeamError, ManageTeamInviteLinkError, PatchTeamCrmSettingsResponse, PatchTeamRequest,
-        RemoveTeamInviteError, RemoveUserFromTeamError, RestorePermissionsForTeamMembersError,
+        CreateTeamError, CustomerError, DeleteTeamError, DirectJoinOutcome, DomainTeam,
+        InviteUsersToTeamError, JoinTeamByDomainError, JoinTeamByInviteLinkError,
+        JoinTeamDirectlyError, JoinTeamError, ManageTeamInviteLinkError,
+        PatchTeamCrmSettingsResponse, PatchTeamRequest, RemoveTeamInviteError,
+        RemoveUserFromTeamError, RestorePermissionsForTeamMembersError,
         RevokePermissionsForTeamMembersError, SeatPlan, SetTeamMemberPlanError, Team, TeamError,
         TeamInvite, TeamInviteDetails, TeamInviteLinkTeam, TeamInviteLinkToken, TeamMember,
         TeamWithMembers, ToggleAutoJoinDomainError,
@@ -111,6 +112,26 @@ async fn invite_link_errors_map_to_their_statuses() {
         assert_eq!(error.status(), status);
     }
     assert_customer_error_is_obfuscated(JoinTeamByInviteLinkError::JoinError(
+        JoinTeamDirectlyError::JoinTeamError(JoinTeamError::CustomerError(customer_error())),
+    ))
+    .await;
+}
+
+#[tokio::test]
+async fn domain_join_errors_map_to_their_statuses() {
+    for (error, status) in [
+        (
+            JoinTeamByDomainError::NoDomainTeam.into_response(),
+            StatusCode::NOT_FOUND,
+        ),
+        (
+            JoinTeamByDomainError::AlreadyInAnotherTeam.into_response(),
+            StatusCode::CONFLICT,
+        ),
+    ] {
+        assert_eq!(error.status(), status);
+    }
+    assert_customer_error_is_obfuscated(JoinTeamByDomainError::JoinError(
         JoinTeamDirectlyError::JoinTeamError(JoinTeamError::CustomerError(customer_error())),
     ))
     .await;
@@ -517,11 +538,18 @@ impl TeamService for FakeTeamService {
         panic!("unexpected remove_user_from_all_teams call")
     }
 
-    async fn try_join_team_by_domain(
+    async fn get_team_by_domain(
         &self,
         _user_id: &MacroUserIdStr<'_>,
-    ) -> Result<Option<TeamMember<'static>>, JoinTeamDirectlyError> {
-        panic!("unexpected try_join_team_by_domain call")
+    ) -> Result<Option<DomainTeam>, TeamError> {
+        panic!("unexpected get_team_by_domain call")
+    }
+
+    async fn join_team_by_domain(
+        &self,
+        _user_id: &MacroUserIdStr<'_>,
+    ) -> Result<DirectJoinOutcome, JoinTeamByDomainError> {
+        panic!("unexpected join_team_by_domain call")
     }
 }
 
@@ -558,7 +586,7 @@ impl TeamInviteLinkService for FakeTeamService {
         &self,
         _token: &TeamInviteLinkToken,
         _user_id: &MacroUserIdStr<'_>,
-    ) -> Result<JoinTeamByInviteLinkOutcome, JoinTeamByInviteLinkError> {
+    ) -> Result<DirectJoinOutcome, JoinTeamByInviteLinkError> {
         panic!("unexpected join_team_by_invite_link call")
     }
 }

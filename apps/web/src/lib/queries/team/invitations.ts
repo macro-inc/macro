@@ -1,4 +1,5 @@
 import { toast } from '@core/component/Toast/Toast';
+import { useIsAuthenticated } from '@core/context/user';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { throwOnErr } from '@core/util/result';
 import { authServiceClient } from '@service-auth/client';
@@ -109,6 +110,45 @@ export function useRejectInvitationMutation(
               context.previousInvites
             );
           }
+        },
+      },
+      callbacks
+    ),
+  }));
+}
+
+function fetchDomainTeam() {
+  return throwOnErr(() => authServiceClient.getTeamByDomain());
+}
+
+/** The team that lets people on the user's email domain join, or null. */
+export function useDomainTeamQuery() {
+  const authenticated = useIsAuthenticated();
+  return useQuery(() => ({
+    queryKey: teamKeys.domainTeam.queryKey,
+    queryFn: fetchDomainTeam,
+    enabled: authenticated() === true,
+  }));
+}
+
+/** Joins the team that lets people on the user's email domain join. */
+export function useJoinDomainTeamMutation(
+  callbacks?: MutationCallbacks<void, Error, void>
+) {
+  return useMutation(() => ({
+    mutationFn: async () => {
+      await throwOnErr(() => authServiceClient.joinTeamByDomain());
+    },
+
+    ...withCallbacks<void, Error, void>(
+      {
+        onSuccess: () => {
+          invalidateUserTeams();
+          toast.success('Joined team');
+        },
+        onError: (error) => {
+          console.error('Failed to join team', error);
+          toast.failure('Failed to join team');
         },
       },
       callbacks

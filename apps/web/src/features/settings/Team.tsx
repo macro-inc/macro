@@ -7,6 +7,8 @@ import SpinnerIcon from '@icon/system/regular/spinner.svg';
 import UsersIcon from '@icon/system/regular/users.svg';
 import XIcon from '@icon/system/regular/x.svg';
 import {
+  useDomainTeamQuery,
+  useJoinDomainTeamMutation,
   useJoinTeamMutation,
   useRejectInvitationMutation,
   useUserInvitesQuery,
@@ -17,6 +19,7 @@ import {
   useTeamQuery,
   useUserTeamsQuery,
 } from '@queries/team/teams';
+import type { DomainTeam } from '@service-auth/generated/schemas/domainTeam';
 import type { Team as TeamSummary } from '@service-auth/generated/schemas/team';
 import type { TeamInviteDetails } from '@service-auth/generated/schemas/teamInviteDetails';
 import { Button, cn, Dialog, Panel, Tooltip } from '@ui';
@@ -252,8 +255,36 @@ function UserInviteRow(props: {
   );
 }
 
+function DomainTeamRow(props: { team: DomainTeam }) {
+  const joinMutation = useJoinDomainTeamMutation();
+  return (
+    <div class="flex items-center justify-between gap-3 px-4 py-4">
+      <div class="flex items-center gap-3 min-w-0 flex-1">
+        <div class="size-8 rounded-full bg-accent/10 flex items-center justify-center shrink-0">
+          <UsersIcon class="size-4 text-accent" />
+        </div>
+        <div class="min-w-0 flex-1 text-sm text-ink">
+          <span class="font-medium">{props.team.team_name}</span> is open to
+          everyone at your company
+        </div>
+      </div>
+      <Button
+        variant="primary"
+        class="px-2 py-1 shrink-0"
+        disabled={joinMutation.isPending}
+        onClick={() => joinMutation.mutate()}
+      >
+        <Show when={joinMutation.isPending} fallback="Join">
+          <SpinnerIcon class="size-4 animate-spin" />
+        </Show>
+      </Button>
+    </div>
+  );
+}
+
 function TeamInvites() {
   const userInvitesQuery = useUserInvitesQuery();
+  const domainTeamQuery = useDomainTeamQuery();
   const joinTeamMutation = useJoinTeamMutation();
   const rejectMutation = useRejectInvitationMutation();
 
@@ -268,12 +299,12 @@ function TeamInvites() {
 
   return (
     <SettingsPage title="Team">
-      <Show when={invites().length > 0}>
-        <SettingsSection
-          title="Invitations"
-          description="You've been invited to join a team."
-        >
+      <Show when={invites().length > 0 || domainTeamQuery.data}>
+        <SettingsSection title="Invitations" description="Teams you can join.">
           <SettingsCard>
+            <Show when={domainTeamQuery.data} keyed>
+              {(team) => <DomainTeamRow team={team} />}
+            </Show>
             <For each={invites()}>
               {(invite) => (
                 <UserInviteRow
@@ -704,6 +735,7 @@ export function useTeamViewer(team: Accessor<TeamSummary>) {
 function TeamContent(props: { children: (team: TeamSummary) => JSX.Element }) {
   const userTeamsQuery = useUserTeamsQuery();
   const userInvitesQuery = useUserInvitesQuery();
+  const domainTeamQuery = useDomainTeamQuery();
 
   const team = createMemo(() => {
     const teams = userTeamsQuery.data;
@@ -711,7 +743,8 @@ function TeamContent(props: { children: (team: TeamSummary) => JSX.Element }) {
     return teams[0];
   });
 
-  const hasInvites = () => (userInvitesQuery.data?.invites?.length ?? 0) > 0;
+  const hasInvites = () =>
+    (userInvitesQuery.data?.invites?.length ?? 0) > 0 || !!domainTeamQuery.data;
 
   return (
     <Switch>
@@ -730,8 +763,8 @@ function TeamContent(props: { children: (team: TeamSummary) => JSX.Element }) {
 
 /**
  * Frame for every page in the Team settings group: renders the page for the
- * viewer's team, or their pending invitations / the create-team prompt when
- * they don't have one.
+ * viewer's team, or their pending invitations and domain team / the
+ * create-team prompt when they don't have one.
  */
 export function TeamPage(props: {
   children: (team: TeamSummary) => JSX.Element;

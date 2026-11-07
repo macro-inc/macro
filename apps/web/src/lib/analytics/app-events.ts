@@ -99,6 +99,7 @@ export type AppEvents = {
     action:
       | 'created'
       | 'joined_invite'
+      | 'joined_domain_team'
       | 'already_on_team'
       | 'invite_link_copied'
       | 'referrals_sent'

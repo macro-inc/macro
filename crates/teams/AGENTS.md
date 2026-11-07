@@ -14,7 +14,11 @@ event contract (schema, sanitization, delivery semantics).
   (default link share, interface language) are fields on `PatchTeamRequest`.
 - `src/domain/team_service/invite_link.rs`: the team's shareable invite link
   (`TeamInviteLinkService`) — who may see, create, reset, or turn it off, and
-  joining through it via the same direct-join path as domain auto-join.
+  joining through it via the same direct-join path as domain join.
+- Domain join: a team's `auto_join_domain` makes it an offer, not an automatic
+  membership. `GET /team/domain` shows a user the team claiming their email
+  domain and `POST /team/domain/join` joins it once they accept (onboarding's
+  team step, or **Settings → Team**). Signup never adds anyone to a team.
 - `src/domain/domain_notice.rs` + `join_announcement.rs`: the one-time email a
   new work-domain team sends to the creator's same-domain contacts who are not
   on Macro yet (`POST /team/domain-notice`, at most 25 per team). Its

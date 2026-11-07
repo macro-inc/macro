@@ -2,10 +2,11 @@ import CheckIcon from '@icon/system/regular/check.svg';
 import LinkIcon from '@icon/system/regular/link.svg';
 import { Button } from '@ui';
 import { For, Show } from 'solid-js';
-import type { TeamInvite } from '../context/onboarding-context';
+import type { DomainTeam, TeamInvite } from '../context/onboarding-context';
 import { ContinueButton, SecondaryButton, SkipButton } from './controls';
 
-/** Already on a team — auto-joined by domain, or just created/joined here. */
+/** Already on a team — joined through an invite link, or just created or
+ * joined here. */
 export function OnTeamPanel(props: {
   name: string;
   /** Teammates just emailed from this step; asks for a heads-up when > 0. */
@@ -22,8 +23,8 @@ export function OnTeamPanel(props: {
           <CheckIcon class="size-5" />
         </span>
         <p class="text-sm font-medium text-ink">You're on {props.name}</p>
-        {/* Copy must stay true for auto-join, invite-accept, and the
-            optimistic mid-create flash alike. */}
+        {/* Copy must stay true for invite-link join, invite-accept,
+            domain-join, and the optimistic mid-create flash alike. */}
         <Show
           when={(props.invited ?? 0) > 0}
           fallback={
@@ -57,34 +58,58 @@ export function OnTeamPanel(props: {
   );
 }
 
-/** Pending team invites — join one and move on. */
+/** Teams the viewer may join — pending invites and their domain team. Join
+ * one and move on. */
 export function InvitesPanel(props: {
   invites: readonly TeamInvite[];
+  domainTeam: DomainTeam | null;
   joining: boolean;
   onJoin: (inviteId: string) => void;
+  onJoinDomainTeam: () => void;
   onSkip: () => void;
 }) {
   return (
     <div class="flex flex-col gap-3">
+      <Show when={props.domainTeam} keyed>
+        {(team) => (
+          <TeamOfferRow
+            label={`${team.name} is open to everyone at your company`}
+            joining={props.joining}
+            onJoin={props.onJoinDomainTeam}
+          />
+        )}
+      </Show>
       <For each={props.invites}>
         {(invite) => (
-          <div class="flex items-center gap-2.5 rounded-lg border border-edge bg-surface px-4 py-3 text-sm">
-            <span class="min-w-0 truncate text-ink">
-              {invite.invitedBy} invited you to their team
-            </span>
-            <Button
-              variant="primary"
-              size="sm"
-              class="ml-auto shrink-0"
-              disabled={props.joining}
-              onClick={() => props.onJoin(invite.id)}
-            >
-              Join
-            </Button>
-          </div>
+          <TeamOfferRow
+            label={`${invite.invitedBy} invited you to their team`}
+            joining={props.joining}
+            onJoin={() => props.onJoin(invite.id)}
+          />
         )}
       </For>
       <SkipButton disabled={props.joining} onClick={props.onSkip} />
+    </div>
+  );
+}
+
+function TeamOfferRow(props: {
+  label: string;
+  joining: boolean;
+  onJoin: () => void;
+}) {
+  return (
+    <div class="flex items-center gap-2.5 rounded-lg border border-edge bg-surface px-4 py-3 text-sm">
+      <span class="min-w-0 truncate text-ink">{props.label}</span>
+      <Button
+        variant="primary"
+        size="sm"
+        class="ml-auto shrink-0"
+        disabled={props.joining}
+        onClick={props.onJoin}
+      >
+        Join
+      </Button>
     </div>
   );
 }

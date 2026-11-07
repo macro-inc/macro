@@ -28,6 +28,8 @@ bunx vite --config src/features/onboarding/browser-test/vite.config.ts
   the fixture follows the system color scheme. Overrides survive simulated redirects.
 - `/?view=signup` shows the signed-out slides; Google sign-up continues into the flow.
 - `/?view=flow&next=/channel/x` shows the signed-in flow with a deep link.
+- `/?view=flow&step=team&domainTeam=Acme` offers the team open to the viewer's
+  email domain on the team step. It seeds a fresh fixture session only.
 - `/?view=flow&step=plan` opens that step. `step` must be a current step name.
   Progress is stored in localStorage, so a later load without the query stays
   on the saved step. Saved progress wins over `step`.
