@@ -7,21 +7,12 @@ use std::{
     },
 };
 
-use channels::domain::{
-    dm::{EnsureDms, EnsureDmsSummary},
-    models::{
-        AttachmentEntityReference, ChannelAttachmentType, ChannelParticipant, ChannelType,
-        CreateChannelRequest, CreateChannelResponse, Sender,
-    },
-    ports::{ChannelAttachmentsPage, ChannelMessagesErr, ChannelMutationErr, ChannelService},
-};
 use entity_access::domain::models::{
     AdminTeamRole, EntityAccessReceipt, EntityType, MemberTeamRole, OwnerTeamRole,
     RequiredPermission,
 };
 use macro_event_broker::{EventBrokerError, MacroEvent, MacroEventBroker};
 use macro_user_id::{email::Email, lowercased::Lowercase, user_id::MacroUserIdStr};
-use models_pagination::{CreatedAt, Query};
 use notification::domain::{
     models::{Notification, NotificationResult, request::SendNotificationRequest},
     service::{NotificationIngress, SendNotificationError},
@@ -38,6 +29,7 @@ use crate::domain::{
     events::TeamCreatedMetadata,
     open_seat_release::OpenSeatRelease,
     team_analytics::{TeamAnalytics, TeamAnalyticsEvent},
+    team_channels::TeamChannels,
     team_crm_settings_repo::NoOpTeamCrmSettingsRepository,
 };
 
@@ -1283,13 +1275,13 @@ impl CustomerRepository for MockCustomerRepository {
     }
 }
 
-// -- Recording ChannelService --
+// -- Recording TeamChannels --
 
 #[derive(Clone)]
 struct RecordedCreateChannelCall {
-    actor: Sender,
-    actor_org_id: Option<i64>,
-    request: CreateChannelRequest,
+    team_id: uuid::Uuid,
+    name: String,
+    owner: String,
 }
 
 #[derive(Clone, Default)]
@@ -1298,168 +1290,83 @@ struct RecordingChannelService {
     auto_join_calls: Arc<Mutex<Vec<(uuid::Uuid, String)>>>,
     leave_calls: Arc<Mutex<Vec<(uuid::Uuid, String)>>>,
     restore_calls: Arc<Mutex<Vec<(String, Vec<uuid::Uuid>)>>>,
-    ensure_dms_calls: Arc<Mutex<Vec<EnsureDms>>>,
-    ensure_dms_summary: EnsureDmsSummary,
     leave_channel_ids: Vec<uuid::Uuid>,
     fail_create: bool,
     fail_auto_join: bool,
     fail_leave: bool,
     fail_restore: bool,
-    fail_ensure_dms: bool,
 }
 
-impl ChannelService for RecordingChannelService {
-    async fn set_channel_picture(
-        &self,
-        _access: channels::domain::ports::ChannelPictureAccess,
-        _picture_id: Option<uuid::Uuid>,
-    ) -> Result<(), channels::domain::ports::ChannelMutationErr> {
-        unimplemented!("picture mutation is not used by this fixture")
-    }
+#[derive(Debug, thiserror::Error)]
+#[error("{0}")]
+struct ChannelFailure(&'static str);
 
-    fn get_channel_attachments(
-        &self,
-        _channel_id: uuid::Uuid,
-        _query: Query<uuid::Uuid, CreatedAt, ()>,
-        _limit: u16,
-        _attachment_type: Option<ChannelAttachmentType>,
-    ) -> impl Future<Output = Result<ChannelAttachmentsPage, ChannelMessagesErr>> + Send {
-        async move { unimplemented!("not needed for team service tests") }
-    }
+impl TeamChannels for RecordingChannelService {
+    type Err = ChannelFailure;
 
-    fn get_channel_participants(
+    async fn create_team_channel(
         &self,
-        _channel_id: uuid::Uuid,
-    ) -> impl Future<Output = Result<Vec<ChannelParticipant>, ChannelMessagesErr>> + Send {
-        async move { unimplemented!("not needed for team service tests") }
-    }
-
-    fn get_attachment_references(
-        &self,
-        _entity_type: String,
-        _entity_id: String,
-        _user_id: String,
-    ) -> impl Future<Output = Result<Vec<AttachmentEntityReference>, ChannelMessagesErr>> + Send
-    {
-        async move { unimplemented!("not needed for team service tests") }
-    }
-
-    async fn get_user_display_names(
-        &self,
-        _user_ids: Vec<MacroUserIdStr<'static>>,
-    ) -> Result<std::collections::HashMap<MacroUserIdStr<'static>, String>, ChannelMessagesErr>
-    {
-        Ok(std::collections::HashMap::new())
-    }
-
-    fn create_channel(
-        &self,
-        actor: Sender,
-        actor_org_id: Option<i64>,
-        request: CreateChannelRequest,
-    ) -> impl Future<Output = Result<CreateChannelResponse, ChannelMutationErr>> + Send {
+        team_id: uuid::Uuid,
+        name: String,
+        owner: MacroUserIdStr<'static>,
+    ) -> Result<(), ChannelFailure> {
         self.create_calls
             .lock()
             .unwrap()
             .push(RecordedCreateChannelCall {
-                actor,
-                actor_org_id,
-                request,
+                team_id,
+                name,
+                owner: owner.as_ref().to_string(),
             });
-        let fail = self.fail_create;
-        async move {
-            if fail {
-                Err(ChannelMutationErr::Repo(anyhow::anyhow!(
-                    "create channel failed"
-                )))
-            } else {
-                Ok(CreateChannelResponse {
-                    id: uuid::Uuid::from_u128(3000).to_string(),
-                })
-            }
+        if self.fail_create {
+            return Err(ChannelFailure("create channel failed"));
         }
+        Ok(())
     }
 
-    fn auto_join_by_team_id(
+    async fn join_team_channels(
         &self,
         team_id: &uuid::Uuid,
         user_id: &MacroUserIdStr<'_>,
-    ) -> impl Future<Output = Result<(), ChannelMutationErr>> + Send {
+    ) -> Result<(), ChannelFailure> {
         self.auto_join_calls
             .lock()
             .unwrap()
             .push((*team_id, user_id.as_ref().to_string()));
-        let fail = self.fail_auto_join;
-        async move {
-            if fail {
-                Err(ChannelMutationErr::Repo(anyhow::anyhow!(
-                    "auto-join channels failed"
-                )))
-            } else {
-                Ok(())
-            }
+        if self.fail_auto_join {
+            return Err(ChannelFailure("auto-join channels failed"));
         }
+        Ok(())
     }
 
-    fn leave_by_team_id(
+    async fn leave_team_channels(
         &self,
         team_id: &uuid::Uuid,
         user_id: &MacroUserIdStr<'_>,
-    ) -> impl Future<Output = Result<Vec<uuid::Uuid>, ChannelMutationErr>> + Send {
+    ) -> Result<Vec<uuid::Uuid>, ChannelFailure> {
         self.leave_calls
             .lock()
             .unwrap()
             .push((*team_id, user_id.as_ref().to_string()));
-        let channel_ids = self.leave_channel_ids.clone();
-        let fail = self.fail_leave;
-        async move {
-            if fail {
-                Err(ChannelMutationErr::Repo(anyhow::anyhow!(
-                    "leave channels failed"
-                )))
-            } else {
-                Ok(channel_ids)
-            }
+        if self.fail_leave {
+            return Err(ChannelFailure("leave channels failed"));
         }
+        Ok(self.leave_channel_ids.clone())
     }
 
-    fn restore_by_channel_ids(
+    async fn restore_channel_memberships(
         &self,
         user_id: &MacroUserIdStr<'_>,
         channel_ids: &[uuid::Uuid],
-    ) -> impl Future<Output = Result<(), ChannelMutationErr>> + Send {
+    ) -> Result<(), ChannelFailure> {
         self.restore_calls
             .lock()
             .unwrap()
             .push((user_id.as_ref().to_string(), channel_ids.to_vec()));
-        let fail = self.fail_restore;
-        async move {
-            if fail {
-                Err(ChannelMutationErr::Repo(anyhow::anyhow!(
-                    "restore channels failed"
-                )))
-            } else {
-                Ok(())
-            }
+        if self.fail_restore {
+            return Err(ChannelFailure("restore channels failed"));
         }
-    }
-
-    fn ensure_dms(
-        &self,
-        command: EnsureDms,
-    ) -> impl Future<Output = Result<EnsureDmsSummary, ChannelMutationErr>> + Send {
-        self.ensure_dms_calls.lock().unwrap().push(command);
-        let summary = self.ensure_dms_summary;
-        let fail = self.fail_ensure_dms;
-        async move {
-            if fail {
-                Err(ChannelMutationErr::Repo(anyhow::anyhow!(
-                    "ensure direct messages failed"
-                )))
-            } else {
-                Ok(summary)
-            }
-        }
+        Ok(())
     }
 }
 
@@ -2927,7 +2834,6 @@ async fn create_team_creates_default_team_channel() {
     team_repository.created_team = team;
     let channel_service = RecordingChannelService::default();
     let create_calls = channel_service.create_calls.clone();
-    let ensure_dms_calls = channel_service.ensure_dms_calls.clone();
     let service = TeamServiceImpl::new(
         team_repository,
         MockCustomerRepository::default(),
@@ -2946,20 +2852,9 @@ async fn create_team_creates_default_team_channel() {
     let create_calls = create_calls.lock().unwrap();
     assert_eq!(create_calls.len(), 1);
     let call = &create_calls[0];
-    assert_eq!(
-        call.actor,
-        Sender::new_from_user(owner.clone().into_owned())
-    );
-    assert_eq!(call.actor_org_id, None);
-    assert_eq!(call.request.name.as_deref(), Some("Persisted Team Name"));
-    assert_eq!(call.request.channel_type, ChannelType::Team);
-    assert_eq!(call.request.team_id, Some(team_id));
-    assert!(call.request.auto_join_team);
-    assert_eq!(
-        call.request.participants,
-        HashSet::from([owner.into_owned()])
-    );
-    assert!(ensure_dms_calls.lock().unwrap().is_empty());
+    assert_eq!(call.team_id, team_id);
+    assert_eq!(call.name, "Persisted Team Name");
+    assert_eq!(call.owner, owner.as_ref());
 }
 
 #[tokio::test]
@@ -5802,7 +5697,6 @@ async fn test_remove_user_from_team_decrements_customer_seat_count() {
 
     let channels_repo = RecordingChannelService::default();
     let remove_channel_calls = channels_repo.leave_calls.clone();
-    let ensure_dms_calls = channels_repo.ensure_dms_calls.clone();
     let roles_service = MockUserRolesAndPermissionsService::default();
     let remove_role_calls = roles_service.remove_calls.clone();
 
@@ -5835,7 +5729,6 @@ async fn test_remove_user_from_team_decrements_customer_seat_count() {
         vec![(team_id, member_id.as_ref().to_string())]
     );
     assert_eq!(remove_role_calls.lock().unwrap().len(), 1);
-    assert!(ensure_dms_calls.lock().unwrap().is_empty());
 }
 
 #[tokio::test]
@@ -5865,7 +5758,6 @@ async fn remove_user_from_team_releases_open_seat_before_returning() {
 
     let channels_repo = RecordingChannelService::default();
     let remove_channel_calls = channels_repo.leave_calls.clone();
-    let ensure_dms_calls = channels_repo.ensure_dms_calls.clone();
     let roles_service = MockUserRolesAndPermissionsService::default();
     let event_broker = RecordingEventBroker::default();
     let open_seat_release = RecordingOpenSeatRelease {
@@ -5927,7 +5819,6 @@ async fn remove_user_from_team_releases_open_seat_before_returning() {
         )]
     );
     assert!(roles_service.upsert_calls.lock().unwrap().is_empty());
-    assert!(ensure_dms_calls.lock().unwrap().is_empty());
 }
 
 #[tokio::test]
@@ -8299,7 +8190,6 @@ async fn invite_join_does_not_create_teammate_dms_inline() {
 
     service.join_team(&invite_id, &joiner).await.unwrap();
 
-    assert!(channels.ensure_dms_calls.lock().unwrap().is_empty());
     let events = event_broker.events();
     assert_eq!(events.len(), 1);
     assert_eq!(
@@ -8348,7 +8238,6 @@ async fn domain_join_does_not_create_teammate_dms_inline() {
         .unwrap()
         .unwrap();
 
-    assert!(channels.ensure_dms_calls.lock().unwrap().is_empty());
     let events = event_broker.events();
     assert_eq!(events.len(), 1);
     assert_eq!(

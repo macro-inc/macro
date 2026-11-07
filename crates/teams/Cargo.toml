@@ -4,11 +4,6 @@ name = "teams"
 publish = false
 version = "0.1.0"
 
-[[bin]]
-name = "backfill_teammate_dms"
-path = "src/bin/backfill_teammate_dms.rs"
-required-features = ["backfill_binary"]
-
 [features]
 # Serves the AI billing domain's TeamSeats port from TeamRepositoryImpl and
 # teams' OpenSeatRelease port from the billing service. Composition roots
@@ -29,13 +24,6 @@ axum = [
   "entity_access/axum",
   "entity_access/inbound",
   "entity_access/ports",
-]
-backfill_binary = [
-  "channels/outbound",
-  "dep:database_env_vars",
-  "dep:macro_entrypoint",
-  "outbound",
-  "ports",
 ]
 default = ["ai_tools", "axum", "inbound", "outbound", "ports"]
 inbound = ["axum", "ports"]
@@ -70,13 +58,10 @@ async-stripe = { workspace = true, default-features = false, features = [
 async-trait = { workspace = true, optional = true }
 bot_id = { workspace = true }
 chrono = { workspace = true }
-channels = { workspace = true, features = ["ports"] }
 contacts = { workspace = true, optional = true }
-database_env_vars = { workspace = true, optional = true }
 macro_authorization = { workspace = true, optional = true, features = [
   "axum",
 ] }
-macro_entrypoint = { workspace = true, optional = true }
 macro_event_broker = { workspace = true }
 macro_event_topics = { workspace = true }
 macro_user_id = { workspace = true }
@@ -130,6 +115,5 @@ roles_and_permissions = { workspace = true, features = [
 ] }
 wiremock = { workspace = true }
 macro_db_migrator = { workspace = true }
-models_pagination = { workspace = true }
 tokio = { workspace = true }
 tower = { workspace = true }

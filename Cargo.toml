@@ -221,6 +221,7 @@ members = [
   "tooling/native_app_server",
   "tooling/notification_sandbox",
   "tooling/seed_cli",
+  "tooling/teammate_dm_backfill",
   "tooling/xtask",
   "tooling/xtask/crates/*",
 ]

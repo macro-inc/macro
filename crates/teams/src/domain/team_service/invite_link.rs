@@ -1,7 +1,7 @@
 //! A team's shareable invite link: the policy for who may see and change it,
 //! and joining through it.
 
-use channels::domain::ports::ChannelService;
+use crate::domain::team_channels::TeamChannels;
 use entity_access::domain::models::{AdminTeamRole, EntityAccessReceipt, MemberTeamRole};
 use macro_event_broker::MacroEventBroker;
 use macro_user_id::user_id::MacroUserIdStr;
@@ -39,7 +39,7 @@ impl<TR, CR, CS, URPS, NI, CE, TCRMS, TA, CNE, EB, OSR, OEC>
 where
     TR: TeamRepository,
     CR: CustomerRepository,
-    CS: ChannelService + Clone,
+    CS: TeamChannels,
     URPS: UserRolesAndPermissionsService,
     NI: NotificationIngress,
     CE: CrmEnqueuer,
@@ -106,7 +106,7 @@ impl<TR, CR, CS, URPS, NI, CE, TCRMS, TA, CNE, EB, OSR, OEC> TeamInviteLinkServi
 where
     TR: TeamRepository,
     CR: CustomerRepository,
-    CS: ChannelService + Clone,
+    CS: TeamChannels,
     URPS: UserRolesAndPermissionsService,
     NI: NotificationIngress,
     CE: CrmEnqueuer,

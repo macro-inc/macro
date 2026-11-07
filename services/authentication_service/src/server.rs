@@ -678,7 +678,7 @@ async fn run_server() -> anyhow::Result<()> {
     let teams_service_impl = TeamServiceImpl::new_with_analytics(
         teams_repo_impl.clone(),
         customer_repo_impl,
-        channel_service.clone(),
+        crate::outbound::team_channels::ChannelServiceTeamChannels(channel_service.clone()),
         user_roles_and_permissions_service.clone(),
         notification_ingress_service.clone(),
         crm_enqueuer,
