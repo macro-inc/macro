@@ -21,8 +21,9 @@ the transaction. Stock editing-command registration, History, listener-table exp
 postcommit hooks and view diffs remain follow-on layers.
 
 `lexical_workspace_tests` verifies the patched regex dependency and Loro snapshot
-compatibility alongside the model package. Future rich-node,
-Markdown, HTML and projection packages belong here.
+compatibility alongside the model packages. `lexical_rich_nodes` adds rich/plain
+text command functions, heading/quote/hashtag/overflow nodes, text entities and
+selection plugins. Markdown, HTML and projection packages belong here too.
 
 Dependencies come from the root workspace table. The existing
 `crates/client/*` hakari prefix exclusion also covers these nested crates; do not

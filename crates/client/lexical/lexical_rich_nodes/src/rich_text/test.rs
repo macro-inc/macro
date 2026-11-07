@@ -831,3 +831,28 @@ fn enter_on_inline_decorator_node_selection_is_unhandled() -> crate::Result<()> 
     assert_eq!(tx.children_keys(p)?, vec![d.key()]);
     Ok(())
 }
+#[test]
+fn boundary_escape_clears_style_even_if_typing_format_was_already_unset() -> crate::Result<()> {
+    let mut editor = Editor::builder(EditorMode::Headless).build().unwrap();
+    let mut tx = editor.transaction();
+    let p = tx.create(Paragraph {})?;
+    let t = tx.create_text("hello")?;
+    tx.text(t)?.set_format(TextFormat::CODE)?;
+    tx.append(p, &[t.key()])?;
+    tx.append(NodeKey::ROOT, &[p.key()])?;
+    tx.select_end(t)?;
+    tx.set_selection_format(TextFormat::empty())?;
+    tx.set_selection_style("color: red")?;
+    let cfg = EscapeFormatTriggerConfig(vec![(
+        TextFormatType::Code,
+        Some(TriggerConfig {
+            click: Some(true),
+            only_at_boundary: Some(true),
+            ..TriggerConfig::default()
+        }),
+    )]);
+    assert!(!click(&mut tx, &cfg)?);
+    assert_eq!(tx.range_selection()?.format, TextFormat::empty());
+    assert_eq!(tx.range_selection()?.style.as_ref(), "");
+    Ok(())
+}
