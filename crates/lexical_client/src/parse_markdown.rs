@@ -3,7 +3,7 @@ mod test;
 
 use super::LexicalClient;
 use crate::types::{CognitionResponseData, CognitionV2ResponseData};
-use messages::domain::models::MessageParent;
+use message_parent::MessageParent;
 use trigger_context::TriggerContext;
 
 use crate::types::MarkdownParseResult;
