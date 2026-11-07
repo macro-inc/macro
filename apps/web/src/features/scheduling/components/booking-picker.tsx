@@ -35,6 +35,8 @@ export function BookingPicker(props: {
   onReceipt: (receipt: BookingReceipt) => void;
   /** Shows real availability but never books: an author's preview. */
   preview?: boolean;
+  /** Prefills the attendee's details, e.g. for a signed-in guest. */
+  guest?: { email?: string };
 }) {
   const flow = createBookingFlow(props.source, props.profile.id);
   // An in-flight or uncertain request stays on its own event until resolved,
@@ -49,7 +51,7 @@ export function BookingPicker(props: {
     Intl.DateTimeFormat().resolvedOptions().timeZone
   );
   const [name, setName] = createSignal('');
-  const [email, setEmail] = createSignal('');
+  const [email, setEmail] = createSignal(props.guest?.email ?? '');
   const [answers, setAnswers] = createSignal<Record<string, string>>({});
   createEffect(
     on(
