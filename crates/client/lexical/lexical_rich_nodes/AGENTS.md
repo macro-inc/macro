@@ -3,7 +3,7 @@
 ## What it is
 
 Portable model halves of Lexical v0.45.0 rich-text, plain-text, hashtag, overflow
-text-entity, list behavior and table nodes, span maps, physical grids and editing operations. DOM events, clipboard access and layout stay in views.
+text-entity, list behavior and table nodes, span maps, physical grids and editing operations, selection hooks, integrity transforms and observer actions. DOM events, clipboard access and layout stay in views.
 
 ## Boundaries
 

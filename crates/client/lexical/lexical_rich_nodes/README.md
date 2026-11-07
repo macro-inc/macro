@@ -104,3 +104,10 @@ column edits, merging, unmerging and simple-table column moves. Repeated span
 writes intentionally follow upstream live-cell identity. `table::grid` derives
 physical coordinates and span geometry from model snapshots; host elements and
 highlight state remain outside the model.
+
+`register_table` installs table selection hooks and integrity transforms, with
+optional cell-unmerge and background-removal policies. Table selections retain
+upstream row-major, reverse-descendant traversal and detached-range formatting.
+Observer actions return model outcomes to the view. The four application
+clear-text tests preserve one childless paragraph per cleared cell before
+normalization, including a key-allocation guard against an empty text child.
