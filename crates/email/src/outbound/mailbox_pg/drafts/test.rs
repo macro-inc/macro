@@ -9,7 +9,7 @@ use crate::{
         mailbox_pg::test::{fixture, page, snapshot},
     },
 };
-use email_api_client::domain::models::{MailboxState, SendRequest};
+use email_api_client_core::models::{MailboxState, SendRequest};
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
 
 mod delivery_status;
@@ -874,7 +874,7 @@ async fn draft_organization_waits_for_binding_and_rebases_queued_edits(db: PgPoo
     let retained=sqlx::query!("SELECT base_version,desired_content->>'subject' AS subject FROM email_mailbox_drafts WHERE message_id=$1",input.db_id).fetch_one(&db).await.unwrap();
     assert_eq!(retained.base_version.as_deref(), Some("v4"));
     assert_eq!(retained.subject.as_deref(), Some("Edited while starring"));
-    let snapshot = email_api_client::domain::models::MailboxOrganization {
+    let snapshot = email_api_client_core::models::MailboxOrganization {
         is_sent: false,
         state: MailboxState {
             is_flagged: true,

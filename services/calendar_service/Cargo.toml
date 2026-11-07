@@ -19,7 +19,8 @@ default = ["connection_gateway"]
 
 [dependencies]
 agent_correlation = { path = "../../crates/agent_correlation", features = ["http", "postgres"] }
-email_api_client = { path = "../../crates/email_api_client", features = ["outbound-outlook", "microsoft-gate"] }
+email_api_client_core = { path = "../../crates/email/email_api_client_core", features = ["ports"] }
+email_api_client_outbound = { path = "../../crates/email/email_api_client_outbound", features = ["outbound-outlook", "microsoft-gate"] }
 anyhow = { workspace = true }
 authentication_service_client = { path = "../../crates/authentication_service_client" }
 aws-sdk-secretsmanager = { workspace = true }

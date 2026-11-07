@@ -1,10 +1,10 @@
 use super::*;
 use crate::domain::mailbox::progress::MailboxProgressService;
 use crate::telemetry_capture::Telemetry;
-use email_api_client::domain::models::{
+use email_api_client_core::models::{
     EmailApiError, GateLimit, MailboxMessage, RateLimitOrigin, StreamPosition,
 };
-use email_api_client::domain::request_count;
+use email_api_client_core::request_count;
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
 use std::collections::VecDeque;
 use std::sync::Mutex;

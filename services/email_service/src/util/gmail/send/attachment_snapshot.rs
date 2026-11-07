@@ -81,9 +81,9 @@ async fn prepare_provider_attachments(
             .await
             .map_err(|error| match error {
                 email::domain::mailbox::MailboxError::Provider(
-                    email_api_client::domain::models::EmailApiError::NotFound
-                    | email_api_client::domain::models::EmailApiError::Forbidden
-                    | email_api_client::domain::models::EmailApiError::AuthRequired,
+                    email_api_client_core::models::EmailApiError::NotFound
+                    | email_api_client_core::models::EmailApiError::Forbidden
+                    | email_api_client_core::models::EmailApiError::AuthRequired,
                 ) => anyhow::Error::new(AttachmentSnapshotMismatch),
                 other => anyhow::Error::new(other),
             })

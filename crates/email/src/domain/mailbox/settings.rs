@@ -2,7 +2,7 @@
 //! Accepted work is durable; provider reads precede retries of uncertain writes.
 
 use super::*;
-use email_api_client::domain::models::{CategoryMessage, OwnedSenderRule};
+use email_api_client_core::models::{CategoryMessage, OwnedSenderRule};
 use macro_user_id::user_id::MacroUserIdStr;
 use models_email::service::{label::Label, link::UserProvider};
 

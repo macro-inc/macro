@@ -232,7 +232,7 @@ deny = [
     "document_storage_service",  # GraphQL telemetry span and log tests only (dev-dependency)
     "documents",                 # Dev logging only
     "email",                     # Dev logging only
-    "email_api_client",          # Outlook transport span tests only
+    "email_api_client_outbound", # Outlook transport span tests only
     "email_db_client",           # Purge phase span tests only
     "email_service",             # CRM backfill trace propagation tests only (dev-dependency)
     "forms",                     # Anonymous-response span and log leak tests only (dev-dependency)

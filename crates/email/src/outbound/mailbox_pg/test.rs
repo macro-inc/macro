@@ -1,5 +1,5 @@
 use super::*;
-use email_api_client::domain::models::FolderRole;
+use email_api_client_core::models::FolderRole;
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
 
 pub(super) async fn fixture(db: &PgPool) -> (PgMailboxSync, Uuid) {
@@ -226,10 +226,10 @@ async fn complete_catalog_resolves_roles_and_creates_folder_streams(db: PgPool) 
 pub(super) fn snapshot(
     link_id: Uuid,
     provider_id: &str,
-    state: email_api_client::domain::models::MailboxState,
+    state: email_api_client_core::models::MailboxState,
     version: &str,
-) -> email_api_client::domain::models::MailboxMessage {
-    use email_api_client::domain::models::{MailboxMessage, MessageWithCalendarParts};
+) -> email_api_client_core::models::MailboxMessage {
+    use email_api_client_core::models::{MailboxMessage, MessageWithCalendarParts};
     let message = serde_json::from_value(serde_json::json!({
         "db_id":macro_uuid::generate_uuid_v7(),"thread_db_id":macro_uuid::generate_uuid_v7(),"link_id":link_id,
         "provider_id":provider_id,"provider_thread_id":"conversation","subject":"Outlook message",
@@ -255,7 +255,7 @@ pub(super) fn snapshot(
 async fn ingestion_commits_content_state_and_outbox_without_treating_categories_as_folders(
     db: PgPool,
 ) {
-    use email_api_client::domain::models::{Attention, MailboxState};
+    use email_api_client_core::models::{Attention, MailboxState};
     let (repo, link) = fixture(&db).await;
     let stream = repo
         .claim_stream(macro_uuid::generate_uuid_v7())
@@ -361,7 +361,7 @@ async fn projection_ack_keeps_version_watermark_and_exposes_normalized_state(db:
         .await
         .unwrap()
         .unwrap();
-    let state = email_api_client::domain::models::MailboxState {
+    let state = email_api_client_core::models::MailboxState {
         in_inbox: true,
         ..Default::default()
     };
@@ -464,7 +464,7 @@ async fn mailbox_previews_distinguish_categories_trash_and_imported_drafts(db: P
         .unwrap()
         .unwrap();
     let repo = crate::outbound::EmailPgRepo::new(db.clone());
-    let state = email_api_client::domain::models::MailboxState {
+    let state = email_api_client_core::models::MailboxState {
         in_inbox: true,
         ..Default::default()
     };
@@ -497,7 +497,7 @@ async fn mailbox_previews_distinguish_categories_trash_and_imported_drafts(db: P
         snapshot(
             link,
             work.provider_id.as_str(),
-            email_api_client::domain::models::MailboxState {
+            email_api_client_core::models::MailboxState {
                 in_trash: true,
                 ..Default::default()
             },
@@ -523,7 +523,7 @@ async fn mailbox_previews_distinguish_categories_trash_and_imported_drafts(db: P
         snapshot(
             link,
             work.provider_id.as_str(),
-            email_api_client::domain::models::MailboxState {
+            email_api_client_core::models::MailboxState {
                 is_draft: true,
                 ..Default::default()
             },
@@ -549,7 +549,7 @@ async fn mailbox_previews_distinguish_categories_trash_and_imported_drafts(db: P
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn folder_delete_and_restore_reprojects_unchanged_message_etags(db: PgPool) {
-    use email_api_client::domain::models::MailboxState;
+    use email_api_client_core::models::MailboxState;
     let (repo, link) = fixture(&db).await;
     sqlx::query!("INSERT INTO email_sync_streams(id,link_id,generation,kind,scope_id) VALUES($1,$2,1,'folder_catalog','mail')",Uuid::new_v4(),link).execute(&db).await.unwrap();
     let mut folders = vec![
@@ -620,7 +620,7 @@ async fn folder_delete_and_restore_reprojects_unchanged_message_etags(db: PgPool
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn completed_import_rechecks_attachments_after_later_sent_correspondence(db: PgPool) {
-    use email_api_client::domain::models::MailboxState;
+    use email_api_client_core::models::MailboxState;
     use models_email::service::address::ContactInfo;
     let (repo, link) = fixture(&db).await;
     sqlx::query!("INSERT INTO email_sync_streams(id,link_id,generation,kind,scope_id,initial_complete) VALUES($1,$2,1,'folder_catalog','mail',true)",Uuid::new_v4(),link).execute(&db).await.unwrap();
@@ -698,7 +698,7 @@ async fn completed_import_rechecks_attachments_after_later_sent_correspondence(d
 async fn native_outlook_attachment_identity_survives_metadata_collisions_and_empty_snapshots(
     db: PgPool,
 ) {
-    use email_api_client::domain::models::MailboxState;
+    use email_api_client_core::models::MailboxState;
     let (repo, link) = fixture(&db).await;
     let mut retained = None;
     for (revision, ids) in [

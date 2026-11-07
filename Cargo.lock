@@ -3934,7 +3934,8 @@ dependencies = [
  "calendar_scheduling",
  "chrono",
  "connection_gateway_client",
- "email_api_client",
+ "email_api_client_core",
+ "email_api_client_outbound",
  "email_db_client",
  "email_utils",
  "futures",
@@ -7288,7 +7289,7 @@ dependencies = [
  "crm",
  "doppleganger",
  "either",
- "email_api_client",
+ "email_api_client_core",
  "email_db_client",
  "email_utils",
  "email_validator",
@@ -7361,13 +7362,29 @@ dependencies = [
 ]
 
 [[package]]
-name = "email_api_client"
+name = "email_api_client_core"
+version = "0.1.0"
+dependencies = [
+ "chrono",
+ "mail-builder",
+ "models_email",
+ "serde",
+ "thiserror 2.0.18",
+ "tokio",
+ "tracing",
+ "uuid",
+ "workspace-hack",
+]
+
+[[package]]
+name = "email_api_client_outbound"
 version = "0.1.0"
 dependencies = [
  "base64 0.22.1",
  "calendar_events",
  "chrono",
  "chrono-tz",
+ "email_api_client_core",
  "email_utils",
  "encoding_rs",
  "gmail_client",
@@ -7376,7 +7393,6 @@ dependencies = [
  "httpdate",
  "macro_db_migrator",
  "macro_event_broker",
- "mail-builder",
  "mailparse",
  "models_email",
  "redis",
@@ -7386,7 +7402,6 @@ dependencies = [
  "serde_json",
  "sha2 0.10.9",
  "sqlx",
- "thiserror 2.0.18",
  "tokio",
  "tracing",
  "tracing-subscriber",
@@ -7550,7 +7565,8 @@ dependencies = [
  "doppler-config",
  "ego-tree",
  "email",
- "email_api_client",
+ "email_api_client_core",
+ "email_api_client_outbound",
  "email_db_client",
  "email_utils",
  "entity_access",

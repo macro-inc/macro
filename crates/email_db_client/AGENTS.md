@@ -18,7 +18,7 @@ cleanup, and backfill.
 
 - Owns: the `sqlx::query!` call sites for email tables.
 - Not here: email domain/business logic → `crates/email`; provider API calls
-  → `email_api_client`. The schema lives in `crates/macro_db_client/migrations/`
+  → `email_api_client_outbound`. The schema lives in `crates/macro_db_client/migrations/`
   (shared MacroDB), not here.
 
 ## Boundaries

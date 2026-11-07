@@ -196,13 +196,16 @@ async fn main() -> anyhow::Result<()> {
             config.calendar_team_sharing_enabled,
         ),
     );
-    let outlook_provider = email_api_client::OutlookApiClientRepository::with_gate(Arc::new(
-        email_api_client::outbound::microsoft_gate::RedisMicrosoftRequestGate(redis_conn.clone()),
-    ))?
-    .with_rejected_token_refresh(Arc::new(CalendarTokenProviderAdapter::new(
-        redis_conn.clone(),
-        Arc::new(auth_service_client.clone()),
-    )));
+    let outlook_provider =
+        email_api_client_outbound::OutlookApiClientRepository::with_gate(Arc::new(
+            email_api_client_outbound::microsoft_gate::RedisMicrosoftRequestGate(
+                redis_conn.clone(),
+            ),
+        ))?
+        .with_rejected_token_refresh(Arc::new(CalendarTokenProviderAdapter::new(
+            redis_conn.clone(),
+            Arc::new(auth_service_client.clone()),
+        )));
     if config.calendar_sync_enabled && config.outlook_sync_enabled {
         let sync = calendar_events::domain::outlook::OutlookCalendarSync::new(
             PgCalendarRepository::new(db.clone()),

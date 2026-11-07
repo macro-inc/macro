@@ -1,6 +1,6 @@
 //! Durable mailbox enumeration independent from provider-specific notifications.
 
-use email_api_client::domain::models::{
+use email_api_client_core::models::{
     EmailApiError, MailFolder, MailboxChangePage, MailboxMessage, ProviderId, StreamPosition,
     StreamToken,
 };
@@ -436,7 +436,7 @@ impl<R: MailboxSyncRepository, P: MailboxGateway, I: MailboxIngest> MailboxSyncS
         let span = Span::current();
         let operation = async {
             let folders = self.repo.folders(lease.mailbox).await?;
-            let (snapshot, graph_calls) = email_api_client::domain::request_count::counted(
+            let (snapshot, graph_calls) = email_api_client_core::request_count::counted(
                 self.provider
                     .message(lease.mailbox, &lease.provider_id, &folders),
             )

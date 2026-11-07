@@ -1,7 +1,7 @@
 //! Authorized inbox health checks and provider-specific maintenance scheduling.
 
 use super::*;
-use email_api_client::domain::models::{AccessToken, TokenFreshness};
+use email_api_client_core::models::{AccessToken, TokenFreshness};
 use macro_user_id::user_id::MacroUserIdStr;
 use models_email::service::link::{Link, UserProvider};
 
