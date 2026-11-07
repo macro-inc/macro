@@ -21,12 +21,15 @@ node types, immutable snapshots, transactional tree editing, update processing, 
 - `src/test/proptest.rs` checks generated scripts against independent link, cache, JSON, mutation and view-diff invariants.
 - `benches/node_map.rs` measures isolated writes and full keystrokes at three document sizes; read `benches/README.md` before interpreting timings.
 - `src/json.rs` preserves export order and JavaScript number serialization.
+- `src/style/css.rs` is the shared ordered JavaScript CSS parser for selections and HTML export.
 
 ## Boundaries
 
 - Use Error::invariant for runtime diagnostic context; static and owned messages display verbatim and share the Invariant classification.
 - Pure Rust model; no network, database, runtime or browser dependencies.
 - Client crate: keep it excluded from workspace-hack through `crates/client/*`.
+- Direct splice/append moves preserve source element offsets for explicit package remapping; insert-before/after and replace adjust source offsets.
+- Use `replace_selection` when a package allocates a new selection object; point mutations preserve the active object identity.
 - TableSelection::set changes keys while preserving point offsets/kinds and dirties only changed keys, retaining any existing dirty mark.
 - Selection slots, formatting and range edits preserve upstream active-versus-detached selection side effects.
 - Movement consumes explicit host points; `NoView` runs structural rules only.
@@ -74,6 +77,8 @@ The sibling test modules cover values, reads, node dispatch, tree edits and Node
 literal exported bytes. `selection/*/test.rs` and `selection/test.rs` port explicit
 upstream selection examples, including the §18.5 `remove_text` fixture, detached-slot
 side effects, UTF-16 boundaries, formatting, block deletion and host movement.
+
+Element text-cache changes retain intentional dirty marks after mutation reporting; splice only rewrites changed sibling links.
 
 Root text-cache reconciliation clones its record after mutation reporting and retains
 the intentional root dirty mark; cache-only writes do not add mutations.
