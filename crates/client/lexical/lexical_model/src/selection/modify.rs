@@ -323,9 +323,22 @@ impl Transaction<'_> {
             if changed.is_collapsed()
                 && direction == EditDirection::Backward
                 && changed.anchor.offset() == 0
-                && let Some(block) = self.selection_block(changed.anchor)
             {
-                self.collapse_at_start(block, slot)?;
+                let mut node = Some(changed.anchor.key());
+                while let Some(key) = node {
+                    if self.is_element(key) {
+                        if self.collapse_at_start(key, slot)? {
+                            return Ok(());
+                        }
+                        if self.is_root_or_shadow_root(key) {
+                            break;
+                        }
+                    }
+                    if self.prev_sibling(key).is_some() {
+                        break;
+                    }
+                    node = self.parent(key);
+                }
             }
         }
         self.remove_text_at(slot)

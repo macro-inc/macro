@@ -415,3 +415,23 @@ fn inserting_list_before_item_text_merges_tail_into_inner_item() -> Result<()> {
     );
     Ok(())
 }
+
+#[test]
+fn no_view_backspace_after_line_break_does_not_collapse_list_item() -> Result<()> {
+    let mut editor = register_list_nodes(Editor::builder(EditorMode::Headless))
+        .build()
+        .expect("editor");
+    let mut tx = editor.transaction();
+    let list = tx.create(ListNode::new(ListType::Bullet, 1))?;
+    let item = tx.create(ListItemNode::default())?;
+    let line = tx.create(LineBreak::default())?;
+    let text = tx.create_text("text")?;
+    tx.append(item, &[line.key(), text.key()])?;
+    tx.append(list, &[item.key()])?;
+    tx.append(NodeKey::ROOT, &[list.key()])?;
+    tx.select_start(text)?;
+    tx.delete_character(EditDirection::Backward, ModifyTarget::NoView)?;
+    assert_eq!(tx.children_keys(NodeKey::ROOT)?, vec![list.key()]);
+    assert_eq!(tx.children_keys(item)?, vec![line.key(), text.key()]);
+    Ok(())
+}
