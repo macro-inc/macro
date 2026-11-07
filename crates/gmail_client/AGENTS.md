@@ -30,7 +30,8 @@ contacts, watch) behind a single public facade; most modules are
 
 ## Boundaries
 
-- Depends on: `models_email` (response/request types), `macro_service_urls`.
+- Depends on: `models_email` (response/request types), `gmail_api_url`,
+  `google_oauth_certs_url`, `google_people_api_url`.
 - Used by: `email_service`, `email_api_client`.
 
 ## Recipes

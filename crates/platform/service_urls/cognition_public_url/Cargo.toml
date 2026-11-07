@@ -1,0 +1,9 @@
+[package]
+edition = "2024"
+name = "cognition_public_url"
+publish = false
+version = "0.1.0"
+
+[dependencies]
+service_url = { workspace = true }
+workspace-hack = { version = "0.1", path = "../../../workspace-hack" }

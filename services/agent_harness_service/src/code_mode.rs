@@ -398,7 +398,20 @@ enum SdkHost {
 impl SdkHost {
     /// Its base URL in this environment.
     fn url(self) -> anyhow::Result<String> {
-        use macro_service_urls::*;
+        use agent_harness_service_url::AgentHarnessServiceUrl;
+        use ai_editing_worker_url::AiEditingWorkerUrl;
+        use auth_service_url::AuthServiceUrl;
+        use calendar_service_url::CalendarServiceUrl;
+        use connection_gateway_url::ConnectionGatewayUrl;
+        use contacts_service_url::ContactsServiceUrl;
+        use document_cognition_service_url::DocumentCognitionServiceUrl;
+        use document_storage_service_url::DocumentStorageServiceUrl;
+        use email_service_url::EmailServiceUrl;
+        use notification_service_url::NotificationServiceUrl;
+        use scheduled_action_service_url::ScheduledActionServiceUrl;
+        use static_file_public_url::StaticFilePublicUrl;
+        use static_file_service_url::StaticFileServiceUrl;
+        use unfurl_service_url::UnfurlServiceUrl;
         Ok(match self {
             Self::DocumentContent => {
                 DocumentStorageServiceCloudfrontDistributionUrl::new()?.to_string()
@@ -430,7 +443,7 @@ pub fn sdk_endpoints() -> anyhow::Result<SdkEndpoints> {
         .collect::<anyhow::Result<_>>()?;
     Ok(SdkEndpoints {
         hosts,
-        web_app_url: macro_service_urls::AppServiceUrl::new()?.to_string(),
+        web_app_url: app_service_url::AppServiceUrl::new()?.to_string(),
     })
 }
 

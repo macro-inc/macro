@@ -1,11 +1,11 @@
 use anyhow::Context;
 use aws_lambda_events::eventbridge::EventBridgeEvent;
 use document_storage_service_client::DocumentStorageServiceClient;
+use document_storage_service_url::DocumentStorageServiceUrl;
 use handler::handler;
 use lambda_runtime::{Error, LambdaEvent, run, service_fn, tracing};
 use macro_entrypoint::MacroEntrypoint;
 use macro_env_var::env_vars;
-use macro_service_urls::DocumentStorageServiceUrl;
 
 mod handler;
 

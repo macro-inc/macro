@@ -1,5 +1,5 @@
-use macro_service_urls::StaticFileServiceUrl;
 use static_file_service_client::StaticFileServiceClient;
+use static_file_service_url::StaticFileServiceUrl;
 use std::env;
 
 #[tokio::main]

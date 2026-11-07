@@ -1,7 +1,8 @@
 #![deny(missing_docs)]
 //! FusionAuth API client library.
 
-use macro_service_urls::{GoogleOauthRevokeUrl, GoogleOauthTokenUrl};
+use google_oauth_revoke_url::GoogleOauthRevokeUrl;
+use google_oauth_token_url::GoogleOauthTokenUrl;
 
 /// Apple identity provider login.
 pub mod apple;

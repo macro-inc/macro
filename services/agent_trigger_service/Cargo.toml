@@ -32,7 +32,6 @@ macro_config = { workspace = true }
 macro_entrypoint = { workspace = true }
 macro_env_var = { workspace = true }
 macro_event_broker = { workspace = true, default-features = true, features = ["outbound"] }
-macro_service_urls = { workspace = true }
 messages = { workspace = true, features = ["broker", "delivery", "outbound"] }
 properties = { workspace = true, features = ["outbound"] }
 rdkafka = { workspace = true }
@@ -44,3 +43,7 @@ tokio = { workspace = true, features = ["macros", "rt-multi-thread", "signal"] }
 tracing = { workspace = true }
 workspace-hack = { version = "0.1", path = "../../crates/workspace-hack" }
 teams = { workspace = true, features = ["ai_billing"] }
+connection_gateway_url = { workspace = true }
+document_storage_service_url = { workspace = true }
+lexical_service_url = { workspace = true }
+static_file_service_url = { workspace = true }

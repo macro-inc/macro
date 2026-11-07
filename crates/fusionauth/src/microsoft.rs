@@ -1,6 +1,8 @@
 use std::fmt;
 
-use macro_service_urls::{MicrosoftGraphUrl, MicrosoftLoginPageUrl, MicrosoftLoginUrl};
+use microsoft_graph_url::MicrosoftGraphUrl;
+use microsoft_login_page_url::MicrosoftLoginPageUrl;
+use microsoft_login_url::MicrosoftLoginUrl;
 
 use crate::{
     FusionAuthClient, Result,

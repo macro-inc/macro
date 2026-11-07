@@ -127,7 +127,7 @@ models_soup = { workspace = true }
 [dev-dependencies]
 tokio = { workspace = true, features = ["test-util"] }
 email_api_client = { workspace = true, features = ["outbound-outlook"] }
-macro_service_urls = { workspace = true }
+microsoft_graph_url = { workspace = true }
 outlook_emulator = { workspace = true }
 models_email = { workspace = true }
 email_db_client = { workspace = true }

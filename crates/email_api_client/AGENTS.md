@@ -37,7 +37,7 @@ Outlook (Microsoft Graph) outbound adapters.
 ## Boundaries
 
 - Depends on: `email_utils`, `models_email`, `gmail_client` (feature
-  `outbound-gmail`), `calendar_events` and `macro_service_urls` (feature
+  `outbound-gmail`), `calendar_events` and `microsoft_graph_url` (feature
   `outbound-outlook`).
 - Used by: `crates/email` (ports only), `services/email_service`,
   `services/calendar_service`.
@@ -163,7 +163,7 @@ Outlook (Microsoft Graph) outbound adapters.
   vendored tz data (`vendor/chrono-tz`) lacks: Outlook writes send local
   times computed with them, so stale rules move an event; update the tz
   data first.
-- The Graph root is `macro_service_urls::MicrosoftGraphUrl`, so
+- The Graph root is `microsoft_graph_url::MicrosoftGraphUrl`, so
   `OVERRIDE_MICROSOFT_GRAPH_URL` points every Outlook client in a process at
   `crates/outlook_emulator`; tests in other crates use
   `OutlookApiClientRepository::for_graph_url`. Continuation links and upload

@@ -17,7 +17,7 @@ use email_api_client::domain::models::{
 use email_api_client::domain::ports::{AlwaysAllowRateLimiter, MailboxTokenSource};
 use email_api_client::domain::service::mailbox::MailboxApiService;
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
-use macro_service_urls::MicrosoftGraphUrl;
+use microsoft_graph_url::MicrosoftGraphUrl;
 use outlook_emulator::{
     Fault, FaultError, MessageChange, NewMessage, OutlookEmulator, Route, Seed,
 };

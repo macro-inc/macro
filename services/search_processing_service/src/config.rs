@@ -1,8 +1,8 @@
 use anyhow::Context;
+use lexical_service_url::LexicalServiceUrl;
 use macro_auth::InternalApiKey;
 pub use macro_env::Environment;
 use macro_env_var::{env_vars, maybe_env_vars};
-use macro_service_urls::LexicalServiceUrl;
 
 env_vars! {
     pub struct DatabaseUrl;

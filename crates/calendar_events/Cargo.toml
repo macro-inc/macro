@@ -24,7 +24,7 @@ dispatch-sqs = ["dep:aws-sdk-sqs", "dispatch"]
 # The connection-gateway adapter for the calendar refresh ports, which every
 # host that writes calendars composes.
 gateway-refresh = ["dep:connection_gateway_client", "dep:tokio-util", "postgres"]
-google = ["dep:macro_service_urls", "dep:reqwest", "dep:urlencoding"]
+google = ["dep:google_calendar_api_url", "dep:reqwest", "dep:urlencoding"]
 # The calendar-service HTTP adapter implementing the mutation port, for hosts
 # that are not the calendar write authority.
 mutation-client = ["dep:reqwest"]
@@ -55,7 +55,7 @@ futures = { workspace = true }
 macro_authorization = { workspace = true, features = [
   "axum",
 ], optional = true }
-macro_service_urls = { workspace = true, optional = true }
+google_calendar_api_url = { workspace = true, optional = true }
 macro_user_id = { workspace = true, optional = true }
 model-entity = { workspace = true, optional = true }
 model_notifications = { workspace = true, optional = true }

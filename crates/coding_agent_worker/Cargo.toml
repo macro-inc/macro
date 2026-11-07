@@ -38,7 +38,7 @@ hosted_runtimes = { workspace = true }
 lazy-regex = { workspace = true }
 macro_event_broker = { workspace = true }
 macro_env_var = { workspace = true }
-macro_service_urls = { workspace = true }
+service_url = { workspace = true }
 macro_tower_layers = { workspace = true }
 macro_user_id = { workspace = true }
 macro_uuid = { workspace = true }

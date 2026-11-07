@@ -5,6 +5,7 @@ use analytics_client::{
     AnalyticsClient, AnalyticsClientConfig, GoogleAnalyticsConfig, MetaConfig, PostHogConfig,
 };
 use anyhow::{Context, anyhow};
+use app_service_url::AppServiceUrl;
 use bots::outbound::pg_bots_repo::PgBotsRepo;
 use channels::{
     domain::{
@@ -20,8 +21,11 @@ use channels::{
     },
 };
 use connection_gateway_client::ConnectionGatewayClient;
+use connection_gateway_url::ConnectionGatewayUrl;
 use contacts::{domain::service::SqsContactsIngress, outbound::ingress::SqsContactsQueue};
 use document_storage_service_client::DocumentStorageServiceClient;
+use document_storage_service_url::DocumentStorageServiceUrl;
+use email_service_url::EmailServiceUrl;
 use entity_access::{domain::service::EntityAccessServiceImpl, outbound::PgAccessRepository};
 use entity_registry::{EntityRegistryServiceImpl, PgEntityRegistryRepository};
 use foreign_entity::{
@@ -39,6 +43,7 @@ use github_pull_requests::{
     domain::service::GithubPullRequestServiceImpl,
     outbound::pg_github_pull_request_repo::PgGithubPullRequestRepo,
 };
+use google_oauth_authorization_url::GoogleOauthAuthorizationUrl;
 use loops_client::LoopsClient;
 use macro_auth::middleware::decode_jwt::JwtValidationArgs;
 use macro_authorization::{
@@ -46,10 +51,6 @@ use macro_authorization::{
     PgUserApiKeyAuthorizationRepo, PgUserApiKeyAuthorizer,
 };
 use macro_event_broker::{KafkaEventPublisher, MacroEventBrokerService};
-use macro_service_urls::{
-    AppServiceUrl, ConnectionGatewayUrl, DocumentStorageServiceUrl, EmailServiceUrl,
-    GoogleOauthAuthorizationUrl, StaticFilePublicUrl, StaticFileServiceUrl,
-};
 use native_app_service::{
     domain::{models::PlatformData, service::NativeAppServiceImpl},
     outbound::DefaultBundleFetcher,
@@ -64,7 +65,9 @@ use roles_and_permissions::{
 };
 use secretsmanager_client::SecretManager;
 use sqlx::postgres::PgPoolOptions;
+use static_file_public_url::StaticFilePublicUrl;
 use static_file_service_client::StaticFileServiceClient;
+use static_file_service_url::StaticFileServiceUrl;
 use teams::{
     domain::team_service::TeamServiceImpl,
     outbound::{
@@ -677,8 +680,9 @@ async fn run_server() -> anyhow::Result<()> {
     // The harness and scheduled-action services validate the fleet-wide
     // internal key, not this service's own inbound key.
     let internal_key = config.service_internal_auth_key.to_string();
-    let harness_url = macro_service_urls::AgentHarnessServiceUrl::new()?.to_string();
-    let scheduled_action_url = macro_service_urls::ScheduledActionServiceUrl::new()?.to_string();
+    let harness_url = agent_harness_service_url::AgentHarnessServiceUrl::new()?.to_string();
+    let scheduled_action_url =
+        scheduled_action_service_url::ScheduledActionServiceUrl::new()?.to_string();
     let team_owned_entity_cleanup = TeamOwnedEntityCleanupAdapter::new(
         Arc::new(
             passwords::outbound::postgres::PgRepository::new(db.clone())
@@ -756,7 +760,7 @@ async fn run_server() -> anyhow::Result<()> {
         )),
         team_agents::outbound::agent_git_repos::AgentGitRepos::new(
             agent_git::client::AgentGitClient::new(
-                macro_service_urls::AgentGitServiceUrl::new()?.to_string(),
+                agent_git_service_url::AgentGitServiceUrl::new()?.to_string(),
                 internal_key.clone(),
             )
             .map_err(|error| anyhow::anyhow!("{error:?}"))?,

@@ -3,7 +3,7 @@
 use std::collections::{BTreeMap, BTreeSet, HashSet};
 
 use chrono::{DateTime, NaiveDate, Utc};
-use macro_service_urls::GoogleCalendarApiUrl;
+use google_calendar_api_url::GoogleCalendarApiUrl;
 use reqwest::{Client, RequestBuilder, StatusCode};
 use rootcause::Report;
 use serde::{Deserialize, Serialize, de::DeserializeOwned};

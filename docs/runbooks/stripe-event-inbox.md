@@ -120,7 +120,7 @@ Premium). The `personal_plan` dead-letter monitor pages on-call. Recover:
 
    `INTERNAL_API_KEY` is the value of that key in the authentication-service
    Doppler config of the environment; the base URL is `AuthServiceUrl`
-   (`crates/macro_service_urls`), `https://dev-gateway.macro.com/auth` on dev.
+   (`crates/platform/service_urls/auth_service_url`), `https://dev-gateway.macro.com/auth` on dev.
 4. Check the dead count is gone: the `stripe inbox dead cursors` log stops
    and the monitor recovers within 30 minutes.
 

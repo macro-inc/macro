@@ -383,7 +383,7 @@ impl Config {
     ) -> anyhow::Result<authentication_service_client::AuthServiceClient> {
         Ok(authentication_service_client::AuthServiceClient::new(
             self.authentication_service_secret_key.as_ref().to_owned(),
-            macro_service_urls::AuthServiceUrl::new()?.to_string(),
+            auth_service_url::AuthServiceUrl::new()?.to_string(),
         ))
     }
 

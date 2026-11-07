@@ -32,17 +32,19 @@ mod outbound {
 
 use std::{sync::Arc, time::Duration};
 
+use agent_harness_service_url::AgentHarnessServiceUrl;
 use calendar_events::outbound::pg::PgCalendarRepository;
 use connection_gateway_client::ConnectionGatewayClient;
+use connection_gateway_url::ConnectionGatewayUrl;
 use email::{domain::focus::FocusService, outbound::FocusPgRepository};
 use feature_flags::outbound::posthog_local::PostHogLocalFeatureFlags;
 use jev::{domain::JevClassifier, outbound::SystemOneJev};
 use macro_entrypoint::{MacroEntrypoint, shutdown_signal};
-use macro_service_urls::{AgentHarnessServiceUrl, ConnectionGatewayUrl, TypesafeApiUrl};
 use memory::outbound::pg_memory_repo::PgMemoryRepo;
 use rootcause::Report;
 use sqlx::postgres::PgPoolOptions;
 use tokio_util::{sync::CancellationToken, task::TaskTracker};
+use typesafe_api_url::TypesafeApiUrl;
 
 use crate::{
     config::Config,

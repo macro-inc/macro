@@ -17,7 +17,6 @@ macro_aws_config = { workspace = true, features = ["s3"] }
 macro_config = { workspace = true }
 macro_entrypoint = { workspace = true }
 macro_queues = { workspace = true }
-macro_service_urls = { workspace = true }
 macro_user_id = { workspace = true }
 messages = { workspace = true, features = ["outbound"] }
 rootcause = { workspace = true }
@@ -28,6 +27,7 @@ tokio = { workspace = true }
 tokio-util = { workspace = true }
 uuid = { workspace = true }
 workspace-hack = { version = "0.1", path = "../../crates/workspace-hack" }
+search_processing_service_url = { workspace = true }
 
 [dev-dependencies]
 aws-sdk-s3 = { workspace = true }

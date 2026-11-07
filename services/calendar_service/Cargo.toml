@@ -50,7 +50,10 @@ macro_env = { workspace = true }
 macro_env_var = { workspace = true }
 macro_event_broker = { workspace = true, default-features = true }
 macro_queues = { workspace = true }
-macro_service_urls = { workspace = true }
+app_service_url = { workspace = true }
+auth_service_url = { workspace = true }
+connection_gateway_url = { workspace = true }
+document_storage_service_url = { workspace = true }
 models_email = { workspace = true }
 redis = { workspace = true, features = ["tokio-rustls-comp"] }
 reqwest = { workspace = true }

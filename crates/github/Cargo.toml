@@ -71,7 +71,6 @@ macro_env_var = { workspace = true }
 macro_authorization = { workspace = true, features = [
   "axum",
 ], optional = true }
-macro_service_urls = { workspace = true }
 model-entity = { workspace = true, optional = true }
 model_notifications = { workspace = true, optional = true }
 notification = { workspace = true, default-features = true, optional = true }
@@ -100,6 +99,7 @@ axum = { workspace = true, optional = true }
 model-error-response = { workspace = true, optional = true }
 utoipa = { workspace = true, optional = true }
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
+app_service_url = { workspace = true }
 
 [dev-dependencies]
 axum = { workspace = true }

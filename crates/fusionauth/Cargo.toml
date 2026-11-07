@@ -8,7 +8,11 @@ version = "0.1.0"
 anyhow = { workspace = true }
 base64 = { workspace = true }
 jsonwebtoken = { workspace = true }
-macro_service_urls = { workspace = true }
+google_oauth_revoke_url = { workspace = true }
+google_oauth_token_url = { workspace = true }
+microsoft_graph_url = { workspace = true }
+microsoft_login_page_url = { workspace = true }
+microsoft_login_url = { workspace = true }
 model-error-response = { workspace = true, features = ["anyhow"] }
 reqwest = { workspace = true }
 serde = { workspace = true }

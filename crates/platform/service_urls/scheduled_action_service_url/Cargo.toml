@@ -1,0 +1,9 @@
+[package]
+edition = "2024"
+name = "scheduled_action_service_url"
+publish = false
+version = "0.1.0"
+
+[dependencies]
+service_url = { workspace = true }
+workspace-hack = { version = "0.1", path = "../../../workspace-hack" }

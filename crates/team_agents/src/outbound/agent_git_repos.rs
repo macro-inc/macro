@@ -5,7 +5,7 @@ use std::sync::Arc;
 use agent_git::client::AgentGitClient;
 use agent_git::domain::template::PersonaSeed as RepoSeed;
 use agent_git::domain::voice::VoiceConfig;
-use macro_service_urls::AgentGitServiceUrl;
+use agent_git_service_url::AgentGitServiceUrl;
 use macro_user_id::cowlike::CowLike;
 use macro_user_id::user_id::MacroUserIdStr;
 use uuid::Uuid;

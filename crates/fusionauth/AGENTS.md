@@ -25,10 +25,11 @@ passwordless/password flows against the FusionAuth HTTP API.
 ## Boundaries
 
 - Depends on: `upstream_error` for outage classification, and
-  `macro_service_urls` for Google's OAuth token and revocation endpoints
+  `google_oauth_token_url` and `google_oauth_revoke_url` for Google's OAuth
+  token and revocation endpoints
   (overridable, so a local stack can use `crates/gmail_emulator`); otherwise a
   plain HTTP client crate.
-- Microsoft's login and Graph hosts come from `macro_service_urls`
+- Microsoft's login and Graph hosts come from their URL crates
   (`MicrosoftLoginUrl`, `MicrosoftLoginPageUrl`, `MicrosoftGraphUrl`), so a
   local stack can use `crates/outlook_emulator`. ID tokens are still only
   accepted from Microsoft's issuer, which the emulator's tokens carry.
