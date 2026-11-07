@@ -43,7 +43,7 @@ node types, immutable snapshots, transactional tree editing, update processing, 
 - EditorCore is sans-IO: host time, layout, clipboard and composition facts arrive as data; effects leave as values.
 - Failed hook rounds roll back early publications too; failed main inputs retain and report their early commits.
 
-- Reserved `foreign-nodes` exposes a development-only peer editor for the conformance facade; JS node hosting remains a later layer.
+- Reserved `foreign-nodes` exposes development-only peer editors and fresh seeded-state restoration (explicit key layout, validated selection, next allocator key) for the conformance facade; JS node hosting remains a later layer.
 
 ## Checks
 
