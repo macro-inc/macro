@@ -32,8 +32,8 @@ lifecycle_field = "lifecycle_event"
 [graphql]
 schema = "static_assets/schema.graphql"
 crates = [
-  { dir = "crates/graphql_email" },
-  { dir = "crates/complete_graph", only = "email" },
+  { dir = "crates/graphql/graphql_email" },
+  { dir = "crates/graphql/complete_graph", only = "email" },
 ]
 
 # Add `[[graphql_type]] rust = "<Rust type>", graphql = "<SDL type>"` when the

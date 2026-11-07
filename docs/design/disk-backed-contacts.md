@@ -285,7 +285,7 @@ and search projection, not a new database or bespoke contact-storage subsystem.
   for full background ingestion until phase 2 omits retained page wrappers.
 
 Read [contacts ownership](../../crates/contacts/AGENTS.md),
-[schema conventions](../../crates/complete_graph/AGENTS.md), and the
+[schema conventions](../../crates/graphql/complete_graph/AGENTS.md), and the
 [GraphQL field guide](../guides/add-graphql-field.md) before implementing.
 Keep deployed full-list APIs compatible until their clients can be retired.
 

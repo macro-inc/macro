@@ -26,7 +26,7 @@ threads, pins, recents, notifications, folders, activity.
   `/items/soup/graphql/ws` subscriptions; mounted under `ITEMS_PATH`, and
   `no_scope_reaches_graphql_where_it_is_mounted` holds `agent_correlation`'s
   `ANY_WRITE` to that mount) GraphQL API — the frontend's main read path for Home/Recent/
-  search ("Soup" items); see `crates/graphql_soup` for resolvers/loaders.
+  search ("Soup" items); see `crates/graphql/graphql_soup` for resolvers/loaders.
 - `src/server.rs`: composition root, including access-request routes and the
   tracked delivery dispatcher; `src/outbound/access_requests.rs` composes the
   notification/withdrawal/realtime ports. Policy lives in `crates/access_requests`.
@@ -90,7 +90,7 @@ threads, pins, recents, notifications, folders, activity.
 
 ## Recipes
 
-- Add a Soup GraphQL field: resolver/loader in `crates/graphql_soup` →
+- Add a Soup GraphQL field: resolver/loader in `crates/graphql/graphql_soup` →
   `src/api/graphql_soup.rs` if wiring changes.
 - Add a REST route: `src/api/<area>.rs` → `src/api.rs` (router) →
   `src/api/swagger.rs`; register query-only schemas explicitly in its components list.
@@ -141,7 +141,7 @@ threads, pins, recents, notifications, folders, activity.
   and the primary-backed Soup reader, keep the primary.
 - Ordinary Soup GraphQL reads a replica with multi-second lag; a read immediately after
   a write through the same request needs the primary-reading loader, not the
-  default one — see `crates/graphql_soup`.
+  default one — see `crates/graphql/graphql_soup`.
 - Pool limits live in `src/db_pools.rs`, per task, with the readonly pool set
   apart from the primary. Dev's readonly pool keeps 2–20 connections: three
   tasks allow 60 replica sessions, or 120 while a rolling deployment overlaps
