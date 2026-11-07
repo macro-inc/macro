@@ -7,7 +7,7 @@ use crate::domain::mailbox::progress::MailboxProgressRepository;
 use crate::domain::mailbox::*;
 use crate::outbound::mailbox_pg::PgMailboxSync;
 use crate::telemetry_capture::Telemetry;
-use email_api_client::domain::models::{
+use email_api_client_core::models::{
     Attention, EmailApiError, GateLimit, MailFolder, MailboxChangePage, MailboxMessage,
     MailboxState, ProviderId, RateLimitOrigin, RoundStart, StreamPosition, StreamToken,
 };

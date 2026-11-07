@@ -1,6 +1,6 @@
 use super::fakes::{Call, LINK, THREAD, input, label, make_service};
 use super::*;
-use email_api_client::domain::models::{EmailApiError, RateLimitOrigin};
+use email_api_client_core::models::{EmailApiError, RateLimitOrigin};
 
 fn operation() -> InboxSyncOperation {
     InboxSyncOperation::UpdateLabels(UpdateLabelsPayload {

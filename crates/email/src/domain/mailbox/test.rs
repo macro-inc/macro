@@ -1,5 +1,5 @@
 use super::*;
-use email_api_client::domain::models::RateLimitOrigin;
+use email_api_client_core::models::RateLimitOrigin;
 use std::time::Duration;
 
 #[test]

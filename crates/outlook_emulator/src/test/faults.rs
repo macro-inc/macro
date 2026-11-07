@@ -1,11 +1,9 @@
 use std::time::Duration;
 
-use email_api_client::domain::models::{
+use email_api_client_core::models::{
     EmailApiError, FolderRole, RateLimitOrigin, RoundStart, StreamPosition, SubmissionOutcome,
 };
-use email_api_client::domain::ports::{
-    FolderChangeReader, MailboxActionWriter, MailboxContentReader,
-};
+use email_api_client_core::ports::{FolderChangeReader, MailboxActionWriter, MailboxContentReader};
 
 use super::{ADA, BOB, id, message_id, start, token};
 use crate::{Fault, FaultError, Route};

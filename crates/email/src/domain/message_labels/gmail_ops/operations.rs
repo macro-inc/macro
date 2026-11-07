@@ -2,7 +2,7 @@
 
 use super::error_policy::is_delete_label_success;
 use super::{GmailMailboxOperations, GmailOpsService};
-use email_api_client::domain::models::EmailApiError;
+use email_api_client_core::models::EmailApiError;
 use models_email::gmail::gmail_ops::{
     BlockSenderPayload, DeleteLabelPayload, UnblockSenderPayload,
 };

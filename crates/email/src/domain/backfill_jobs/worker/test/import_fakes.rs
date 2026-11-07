@@ -3,7 +3,7 @@ use crate::domain::mailbox::{
     connection::ConnectionSourceError,
     inbox_sync::{InboxSyncPreparation, InboxSyncResync, MessageResyncRepository},
 };
-use email_api_client::domain::models::{
+use email_api_client_core::models::{
     CalendarPart, EmailApiError, MessageWithCalendarParts, ThreadListPage,
 };
 use futures::future::BoxFuture;

@@ -25,7 +25,7 @@
 //! notification URL the way Graph does; afterwards a change to the mailbox
 //! posts a change notification to it.
 //!
-//! The real `email_api_client` Outlook adapter talks to it through
+//! The real `email_api_client_outbound` Outlook adapter talks to it through
 //! `OutlookApiClientRepository::for_graph_url`, and a running service
 //! through the `OVERRIDE_MICROSOFT_GRAPH_URL` service URL override. Sign-in
 //! and Outlook linking reach it through `OVERRIDE_MICROSOFT_LOGIN_URL` and

@@ -1,5 +1,5 @@
 use super::*;
-use email_api_client::domain::models::{CalendarPart, EmailApiError, MessageWithCalendarParts};
+use email_api_client_core::models::{CalendarPart, EmailApiError, MessageWithCalendarParts};
 use models_email::service::{address::ContactInfo, message::SimpleMessage};
 
 fn thread(refresh: bool) -> BackfillPubsubMessage {

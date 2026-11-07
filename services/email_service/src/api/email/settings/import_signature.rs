@@ -5,7 +5,7 @@ use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
 use axum::{Extension, Json};
 use email::domain::signature_settings::SignatureImportError;
-use email_api_client::domain::models::EmailApiError;
+use email_api_client_core::models::EmailApiError;
 use model::response::ErrorResponse;
 use models_email::api;
 use models_email::service::link::Link;

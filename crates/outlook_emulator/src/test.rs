@@ -1,4 +1,4 @@
-//! The real `email_api_client` Outlook adapter against the emulator.
+//! The real `email_api_client_outbound` Outlook adapter against the emulator.
 
 mod calendar;
 mod control;
@@ -10,8 +10,8 @@ mod sign_in;
 mod subscriptions;
 mod sync;
 
-use email_api_client::OutlookApiClientRepository;
-use email_api_client::domain::models::{AccessToken, ProviderId};
+use email_api_client_core::models::{AccessToken, ProviderId};
+use email_api_client_outbound::OutlookApiClientRepository;
 use microsoft_graph_url::MicrosoftGraphUrl;
 
 use crate::{OutlookEmulator, Seed};

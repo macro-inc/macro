@@ -32,7 +32,7 @@ contacts, watch) behind a single public facade; most modules are
 
 - Depends on: `models_email` (response/request types), `gmail_api_url`,
   `google_oauth_certs_url`, `google_people_api_url`.
-- Used by: `email_service`, `email_api_client`.
+- Used by: `email_service`, `email_api_client_outbound`.
 
 ## Recipes
 

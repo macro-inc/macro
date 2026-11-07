@@ -2,7 +2,7 @@
 
 use super::fixture;
 use crate::domain::mailbox::*;
-use email_api_client::domain::models::{
+use email_api_client_core::models::{
     EmailApiError, MailFolder, MailboxChangePage, MailboxMessage, ProviderId, RoundStart,
     StreamPosition, StreamToken,
 };

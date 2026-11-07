@@ -29,13 +29,15 @@ async fn effects(
     );
     let sqs_client = sqs_client::SQS::new(sqs_sdk.clone());
     let email_api = GmailApi::new(
-        email_api_client::GmailApiClientRepository::new(gmail_client::GmailClient::new_with_urls(
-            None,
-            unused_url.to_string(),
-            unused_url.to_string(),
-            unused_url.to_string(),
-            "test".to_string(),
-        )),
+        email_api_client_outbound::GmailApiClientRepository::new(
+            gmail_client::GmailClient::new_with_urls(
+                None,
+                unused_url.to_string(),
+                unused_url.to_string(),
+                unused_url.to_string(),
+                "test".to_string(),
+            ),
+        ),
         EmailServiceTokenSource::new(
             db.clone(),
             redis,

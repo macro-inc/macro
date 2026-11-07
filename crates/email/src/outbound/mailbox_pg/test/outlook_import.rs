@@ -8,13 +8,13 @@
 use crate::domain::mailbox::live_pass::LiveImportPass;
 use crate::domain::mailbox::*;
 use crate::outbound::mailbox_pg::PgMailboxSync;
-use email_api_client::OutlookApiClientRepository;
-use email_api_client::domain::models::{
+use email_api_client_core::models::{
     AccessToken, EmailApiError, MailFolder, MailboxAccess, MailboxChangePage, MailboxMessage,
     ProviderId, RoundStart, StreamToken, TokenError, TokenFreshness,
 };
-use email_api_client::domain::ports::{AlwaysAllowRateLimiter, MailboxTokenSource};
-use email_api_client::domain::service::mailbox::MailboxApiService;
+use email_api_client_core::ports::{AlwaysAllowRateLimiter, MailboxTokenSource};
+use email_api_client_core::service::mailbox::MailboxApiService;
+use email_api_client_outbound::OutlookApiClientRepository;
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
 use microsoft_graph_url::MicrosoftGraphUrl;
 use outlook_emulator::{MessageChange, NewMessage, OutlookEmulator, Seed};

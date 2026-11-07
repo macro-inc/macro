@@ -1,6 +1,6 @@
 use super::*;
 use crate::domain::backfill_jobs::BackfillJobRepository;
-use email_api_client::domain::models::{EmailApiError, SyncCursor};
+use email_api_client_core::models::{EmailApiError, SyncCursor};
 use models_email::gmail::inbox_sync::{GmailMessagePayload, InboxSyncOperation};
 use models_email::service::backfill::{
     BackfillJob, BackfillOperation, BackfillPubsubMessage, InitPayload, JobScopedPayload,

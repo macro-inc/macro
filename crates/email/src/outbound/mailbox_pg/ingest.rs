@@ -1,6 +1,6 @@
 use super::*;
 use crate::domain::mailbox::drafts::models::DraftCheckpoint;
-use email_api_client::domain::models::MailboxMessage;
+use email_api_client_core::models::MailboxMessage;
 
 impl MailboxIngest for PgMailboxSync {
     async fn ingest(

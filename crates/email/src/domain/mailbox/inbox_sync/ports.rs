@@ -1,7 +1,7 @@
 //! Capabilities for processing one delivered Gmail inbox update.
 
 use super::super::connection::ConnectionSourceError;
-use email_api_client::domain::models::EmailApiError;
+use email_api_client_core::models::EmailApiError;
 use futures::future::BoxFuture;
 use models_email::gmail::inbox_sync::InboxSyncPubsubMessage;
 use models_email::service::pubsub::ProcessingError;

@@ -7,7 +7,7 @@ use ::crm::domain::{
     email_privacy::EmailContributionMailbox,
     model::{CrmError, DepopulateContactOutcome},
 };
-use email_api_client::domain::models::{EmailApiError, MessageWithCalendarParts};
+use email_api_client_core::models::{EmailApiError, MessageWithCalendarParts};
 use futures::future::BoxFuture;
 use macro_event_broker::{EventBrokerError, MacroEvent, MacroEventBroker};
 use macro_user_id::{email::EmailStr, user_id::MacroUserIdStr};
@@ -377,8 +377,7 @@ impl BackfillGmail for Fake {
         limit: u32,
         next: Option<&'a str>,
         labels: &'a [&'a str],
-    ) -> BoxFuture<'a, Result<email_api_client::domain::models::ThreadListPage, EmailApiError>>
-    {
+    ) -> BoxFuture<'a, Result<email_api_client_core::models::ThreadListPage, EmailApiError>> {
         Box::pin(async move {
             self.call("list_threads")
                 .map_err(|e| EmailApiError::Transient {
@@ -391,7 +390,7 @@ impl BackfillGmail for Fake {
                 labels.iter().map(|s| s.to_string()).collect(),
             ));
             s.import.pages.pop_front().unwrap_or_else(|| {
-                Ok(email_api_client::domain::models::ThreadListPage {
+                Ok(email_api_client_core::models::ThreadListPage {
                     threads: vec![],
                     next_page_token: None,
                 })
@@ -420,7 +419,7 @@ impl BackfillGmail for Fake {
         _: &'a str,
     ) -> BoxFuture<
         'a,
-        Result<Vec<email_api_client::domain::models::MessageWithCalendarParts>, EmailApiError>,
+        Result<Vec<email_api_client_core::models::MessageWithCalendarParts>, EmailApiError>,
     > {
         Box::pin(async move {
             self.call("get_thread")

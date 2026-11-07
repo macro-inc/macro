@@ -4,8 +4,8 @@
 mod test;
 
 use authentication_service_client::{AuthServiceClient, error::AuthServiceClientError};
-use email_api_client::domain::models::{AccessToken, TokenError, TokenFreshness};
-use email_api_client::domain::ports::ProviderTokenSource;
+use email_api_client_core::models::{AccessToken, TokenError, TokenFreshness};
+use email_api_client_core::ports::ProviderTokenSource;
 use models_email::email::service::cache::TokenCacheKey;
 use models_email::email::service::pubsub::LinkManagerMessage;
 use models_email::service::link::Link;

@@ -1,6 +1,6 @@
 use super::*;
 use authentication_service_client::{AuthServiceClient, error::AuthServiceClientError};
-use email_api_client::domain::models::{AccessToken, EmailApiError, TokenFreshness};
+use email_api_client_core::models::{AccessToken, EmailApiError, TokenFreshness};
 use std::sync::Arc;
 
 mod token_scopes;

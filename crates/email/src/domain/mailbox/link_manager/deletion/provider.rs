@@ -1,7 +1,7 @@
 //! Gmail teardown order and bounded retries. Microsoft grants remain lifecycle-owned.
 
 use super::ports::{LinkDeletionAuth, LinkDeletionGmail};
-use email_api_client::domain::models::EmailApiError;
+use email_api_client_core::models::EmailApiError;
 use models_email::service::{
     cache::TokenCacheKey,
     link::{Link, UserProvider},

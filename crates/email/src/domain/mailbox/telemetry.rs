@@ -3,7 +3,7 @@
 //! idle polls get none.
 
 use super::MailboxError;
-use email_api_client::domain::models::{EmailApiError, GateLimit, RateLimitOrigin};
+use email_api_client_core::models::{EmailApiError, GateLimit, RateLimitOrigin};
 use tracing::Span;
 use uuid::Uuid;
 

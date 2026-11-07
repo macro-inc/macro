@@ -1,5 +1,5 @@
-use email_api_client::domain::models::EmailApiError;
-use email_api_client::domain::ports::MailboxContactsClient;
+use email_api_client_core::models::EmailApiError;
+use email_api_client_core::ports::MailboxContactsClient;
 use uuid::Uuid;
 
 use super::*;

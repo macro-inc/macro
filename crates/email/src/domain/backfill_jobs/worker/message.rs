@@ -5,7 +5,7 @@ use crate::domain::mailbox::connection::ConnectionSourceError;
 use crate::domain::mailbox::inbox_sync::{
     CrmContactRecipient, enqueue_crm_contacts as enqueue_normalized_contacts, resync_snapshot,
 };
-use email_api_client::domain::models::CalendarPart;
+use email_api_client_core::models::CalendarPart;
 use models_email::service::{
     backfill::*,
     link,

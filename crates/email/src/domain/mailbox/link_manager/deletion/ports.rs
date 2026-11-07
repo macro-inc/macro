@@ -2,7 +2,7 @@
 
 use super::super::purge::{LinkPurgeRepository, LinkPurgeService, PurgePacing, PurgeSummary};
 use crm::domain::{model::CrmError, service::CrmService};
-use email_api_client::domain::models::EmailApiError;
+use email_api_client_core::models::EmailApiError;
 use models_email::service::{cache::TokenCacheKey, link::Link};
 use std::error::Error;
 use uuid::Uuid;

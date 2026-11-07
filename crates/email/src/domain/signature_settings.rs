@@ -1,6 +1,6 @@
 //! Signature selection, sanitization, and atomic settings-patch policy.
 
-use email_api_client::domain::models::{AccessToken, EmailApiError};
+use email_api_client_core::models::{AccessToken, EmailApiError};
 use gmail_images::{
     GmailSignatureImages, PublicSignatureImages, SignatureImageReader, SignatureImageSource,
 };

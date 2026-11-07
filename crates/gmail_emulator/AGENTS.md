@@ -4,7 +4,7 @@
 
 Test support for the Email and Calendar features: a stateful fake of the
 Google APIs our email, calendar and sign-in code call. The real
-`gmail_client`, `email_api_client`, `email_service` and its workers, the
+`gmail_client`, `email_api_client_outbound`, `email_service` and its workers, the
 Google Calendar adapter of `calendar_events`, `calendar_service`,
 FusionAuth's Google identity providers and the authentication service's Gmail
 link run against it, in a `cargo test`, as a standalone process or as part of

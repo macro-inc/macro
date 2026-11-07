@@ -1,7 +1,7 @@
 use super::*;
 use crate::domain::mailbox::commands::*;
 use crate::domain::models::mailbox_action::{MailboxAction, PendingMailboxState};
-use email_api_client::domain::models::MailboxOrganization;
+use email_api_client_core::models::MailboxOrganization;
 
 impl PgMailboxSync {
     async fn lock_command(

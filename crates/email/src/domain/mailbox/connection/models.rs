@@ -2,7 +2,7 @@
 
 use super::super::initialization::InitializationError;
 use calendar_events::domain::models::{CalendarGrantIntent, GoogleScopeSet};
-use email_api_client::domain::models::EmailApiError;
+use email_api_client_core::models::EmailApiError;
 use macro_user_id::user_id::MacroUserIdStr;
 use uuid::Uuid;
 

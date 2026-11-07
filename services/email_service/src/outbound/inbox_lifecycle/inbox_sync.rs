@@ -14,7 +14,7 @@ use crate::outbound::email_api::GmailApi;
 use crate::outbound::message_labels::gmail_ops::PgGmailOps;
 use crate::outbound::persistence_error::InboxPersistenceError;
 use email::domain::mailbox::inbox_sync::*;
-use email_api_client::domain::models::EmailApiError;
+use email_api_client_core::models::EmailApiError;
 use futures::future::BoxFuture;
 use macro_event_broker::{EventBrokerError, MacroEvent, MacroEventBroker};
 use models_email::api::refresh::RefreshEmailEvent;
@@ -130,8 +130,8 @@ impl InboxSyncImportGmail for GmailInboxSync {
     fn changes<'a>(
         &'a self,
         link: Uuid,
-        cursor: &'a email_api_client::domain::models::SyncCursor,
-    ) -> BoxFuture<'a, Result<email_api_client::domain::models::ChangeBatch, EmailApiError>> {
+        cursor: &'a email_api_client_core::models::SyncCursor,
+    ) -> BoxFuture<'a, Result<email_api_client_core::models::ChangeBatch, EmailApiError>> {
         Box::pin(self.0.list_changes(link, cursor))
     }
     fn message<'a>(
@@ -140,7 +140,7 @@ impl InboxSyncImportGmail for GmailInboxSync {
         provider: &'a str,
     ) -> BoxFuture<
         'a,
-        Result<Option<email_api_client::domain::models::MessageWithCalendarParts>, EmailApiError>,
+        Result<Option<email_api_client_core::models::MessageWithCalendarParts>, EmailApiError>,
     > {
         Box::pin(self.0.get_message(link, provider))
     }
@@ -150,7 +150,7 @@ impl InboxSyncImportGmail for GmailInboxSync {
         provider: &'a str,
     ) -> BoxFuture<
         'a,
-        Result<Vec<email_api_client::domain::models::MessageWithCalendarParts>, EmailApiError>,
+        Result<Vec<email_api_client_core::models::MessageWithCalendarParts>, EmailApiError>,
     > {
         Box::pin(self.0.get_thread(link, provider))
     }

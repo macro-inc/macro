@@ -19,7 +19,8 @@ default = ["connection_gateway"]
 
 [dependencies]
 agent_correlation = { workspace = true, features = ["http", "postgres"] }
-email_api_client = { workspace = true, features = ["outbound-outlook", "microsoft-gate"] }
+email_api_client_core = { workspace = true, features = ["ports"] }
+email_api_client_outbound = { workspace = true, features = ["outbound-outlook", "microsoft-gate"] }
 anyhow = { workspace = true }
 authentication_service_client = { workspace = true }
 aws-sdk-secretsmanager = { workspace = true }

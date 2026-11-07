@@ -1,4 +1,4 @@
-//! The real `gmail_client` and `email_api_client` Gmail adapter running
+//! The real `gmail_client` and `email_api_client_outbound` Gmail adapter running
 //! against the emulator.
 
 mod auth;
@@ -11,8 +11,8 @@ mod people;
 mod push;
 mod sign_in;
 
-use email_api_client::GmailApiClientRepository;
-use email_api_client::domain::models::AccessToken;
+use email_api_client_core::models::AccessToken;
+use email_api_client_outbound::GmailApiClientRepository;
 use gmail_client::GmailClient;
 
 use crate::{DEFAULT_PUSH_AUDIENCE, GmailEmulator, NewMessage, Seed, SeedMailbox};
@@ -32,7 +32,7 @@ fn client(emulator: &GmailEmulator) -> GmailClient {
     )
 }
 
-/// The production Gmail adapter of `email_api_client`, pointed at the emulator.
+/// The production Gmail adapter of `email_api_client_outbound`, pointed at the emulator.
 fn repository(emulator: &GmailEmulator) -> GmailApiClientRepository {
     GmailApiClientRepository::new(client(emulator))
 }

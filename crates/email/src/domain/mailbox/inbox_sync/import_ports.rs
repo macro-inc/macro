@@ -4,8 +4,8 @@ use crate::domain::{
     backfill_jobs::BackfillJobRepository,
     models::{EmailThreadPreview, PreviewCursorQuery},
 };
-use email_api_client::domain::models::EmailApiError;
-use email_api_client::domain::models::{
+use email_api_client_core::models::EmailApiError;
+use email_api_client_core::models::{
     CalendarPart, ChangeBatch, MessageWithCalendarParts, SyncCursor,
 };
 use futures::future::BoxFuture;

@@ -1,7 +1,7 @@
 //! Gmail history keeps its existing transport while sharing the durable journal invariant.
 
 use super::*;
-use email_api_client::domain::models::ChangeBatch;
+use email_api_client_core::models::ChangeBatch;
 use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Debug, Serialize, Deserialize)]

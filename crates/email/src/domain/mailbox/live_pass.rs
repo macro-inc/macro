@@ -9,7 +9,7 @@
 //! ends.
 
 use chrono::{DateTime, Utc};
-use email_api_client::domain::models::RoundStart;
+use email_api_client_core::models::RoundStart;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 

@@ -3,7 +3,7 @@ use super::{
     import_fakes::received_message,
     *,
 };
-use email_api_client::domain::models::{EmailApiError, MessageWithCalendarParts, RateLimitOrigin};
+use email_api_client_core::models::{EmailApiError, MessageWithCalendarParts, RateLimitOrigin};
 fn operation() -> InboxSyncOperation {
     InboxSyncOperation::UpsertMessage(UpsertMessagePayload {
         provider_message_id: "message-1".into(),

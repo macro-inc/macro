@@ -9,7 +9,7 @@ use super::{
     ports::{EmailRepo, EmailUserRepo},
 };
 use chrono::{DateTime, Utc};
-use email_api_client::domain::models::EmailApiError;
+use email_api_client_core::models::EmailApiError;
 use macro_user_id::user_id::MacroUserIdStr;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
@@ -370,7 +370,7 @@ impl<G: super::mailbox::drafts::ports::DraftGateway> DraftRetirementGateway for 
         &self,
         plan: &DraftTransferPlan,
     ) -> Result<Option<RetiredDraftFacts>, EmailApiError> {
-        let id = email_api_client::domain::models::ProviderId::new(
+        let id = email_api_client_core::models::ProviderId::new(
             plan.source_provider_id
                 .clone()
                 .ok_or(EmailApiError::NotFound)?,
@@ -383,7 +383,7 @@ impl<G: super::mailbox::drafts::ports::DraftGateway> DraftRetirementGateway for 
         })
     }
     async fn retire(&self, plan: &DraftTransferPlan, version: &str) -> Result<(), EmailApiError> {
-        let id = email_api_client::domain::models::ProviderId::new(
+        let id = email_api_client_core::models::ProviderId::new(
             plan.source_provider_id
                 .clone()
                 .ok_or(EmailApiError::NotFound)?,

@@ -1,5 +1,5 @@
 use super::*;
-use email_api_client::domain::models::{EmailApiError, MessageWithCalendarParts, RateLimitOrigin};
+use email_api_client_core::models::{EmailApiError, MessageWithCalendarParts, RateLimitOrigin};
 use models_email::service::address::ContactInfo;
 
 #[tokio::test]

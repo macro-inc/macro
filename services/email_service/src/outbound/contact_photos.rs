@@ -1,5 +1,5 @@
 use email::domain::mailbox::{MailboxError, MailboxKey, contacts::ContactPhotoStorage};
-use email_api_client::domain::models::ContactPhoto;
+use email_api_client_core::models::ContactPhoto;
 use static_file_service_client::StaticFileServiceClient;
 
 pub struct ContactPhotoStore {

@@ -209,7 +209,7 @@ async fn paused_imports_leave_import_rows_and_keep_live_changes_flowing(db: PgPo
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn a_restart_rechecks_the_mail_its_folders_already_hold(db: PgPool) {
-    use email_api_client::domain::models::MailboxState;
+    use email_api_client_core::models::MailboxState;
     let repo = PgMailboxSync::new(db.clone());
     let mailbox = imported_link(&db).await;
     for message in ["inbox-message", "archive-message"] {

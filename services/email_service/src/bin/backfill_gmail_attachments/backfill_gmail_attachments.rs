@@ -40,7 +40,7 @@ async fn main() -> anyhow::Result<()> {
         config.dss_url.clone(),
     );
     let email_api_repository =
-        email_api_client::GmailApiClientRepository::from_subscription_topic("unused");
+        email_api_client_outbound::GmailApiClientRepository::from_subscription_topic("unused");
 
     let macro_ids: Vec<String> = config
         .macro_ids

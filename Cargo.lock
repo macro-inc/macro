@@ -4280,7 +4280,8 @@ dependencies = [
  "connection_gateway_client",
  "connection_gateway_url",
  "document_storage_service_url",
- "email_api_client",
+ "email_api_client_core",
+ "email_api_client_outbound",
  "email_db_client",
  "email_utils",
  "google_token",
@@ -7844,7 +7845,8 @@ dependencies = [
  "crm",
  "doppleganger",
  "either",
- "email_api_client",
+ "email_api_client_core",
+ "email_api_client_outbound",
  "email_db_client",
  "email_utils",
  "email_validator",
@@ -7924,13 +7926,29 @@ dependencies = [
 ]
 
 [[package]]
-name = "email_api_client"
+name = "email_api_client_core"
+version = "0.1.0"
+dependencies = [
+ "chrono",
+ "mail-builder",
+ "models_email",
+ "serde",
+ "thiserror 2.0.18",
+ "tokio",
+ "tracing",
+ "uuid",
+ "workspace-hack",
+]
+
+[[package]]
+name = "email_api_client_outbound"
 version = "0.1.0"
 dependencies = [
  "base64 0.22.1",
  "calendar_events",
  "chrono",
  "chrono-tz",
+ "email_api_client_core",
  "email_utils",
  "encoding_rs",
  "gmail_client",
@@ -7939,7 +7957,6 @@ dependencies = [
  "httpdate",
  "macro_db_migrator",
  "macro_event_broker",
- "mail-builder",
  "mailparse",
  "microsoft_graph_url",
  "models_email",
@@ -7951,7 +7968,6 @@ dependencies = [
  "serde_path_to_error",
  "sha2 0.10.9",
  "sqlx",
- "thiserror 2.0.18",
  "tokio",
  "tracing",
  "tracing-subscriber",
@@ -8170,7 +8186,8 @@ dependencies = [
  "doppler-config",
  "ego-tree",
  "email",
- "email_api_client",
+ "email_api_client_core",
+ "email_api_client_outbound",
  "email_db_client",
  "email_service_url",
  "email_utils",
@@ -9850,7 +9867,8 @@ dependencies = [
  "chrono",
  "chrono-tz",
  "clap",
- "email_api_client",
+ "email_api_client_core",
+ "email_api_client_outbound",
  "fusionauth",
  "gmail_client",
  "jsonwebtoken 10.3.0",
@@ -15998,7 +16016,8 @@ dependencies = [
  "chrono",
  "chrono-tz",
  "clap",
- "email_api_client",
+ "email_api_client_core",
+ "email_api_client_outbound",
  "fusionauth",
  "jsonwebtoken 10.3.0",
  "macro_entrypoint",

@@ -1,7 +1,7 @@
 use super::*;
 use crate::domain::mailbox::watches::*;
 use chrono::{DateTime, Utc};
-use email_api_client::domain::models::MailboxSubscription;
+use email_api_client_core::models::MailboxSubscription;
 
 #[cfg(test)]
 mod test;

@@ -203,16 +203,17 @@ async fn main() -> anyhow::Result<()> {
             config.calendar_team_sharing_enabled,
         ),
     );
-    let outlook_provider = email_api_client::OutlookApiClientRepository::with_gate(Arc::new(
-        email_api_client::outbound::microsoft_gate::RedisMicrosoftRequestGate::new(
+    let outlook_provider =
+        email_api_client_outbound::OutlookApiClientRepository::with_gate(Arc::new(
+            email_api_client_outbound::microsoft_gate::RedisMicrosoftRequestGate::new(
+                redis_conn.clone(),
+                email_api_client_outbound::microsoft_gate::RequestBudget::Live,
+            ),
+        ))?
+        .with_rejected_token_refresh(Arc::new(CalendarTokenProviderAdapter::new(
             redis_conn.clone(),
-            email_api_client::outbound::microsoft_gate::RequestBudget::Live,
-        ),
-    ))?
-    .with_rejected_token_refresh(Arc::new(CalendarTokenProviderAdapter::new(
-        redis_conn.clone(),
-        Arc::new(auth_service_client.clone()),
-    )));
+            Arc::new(auth_service_client.clone()),
+        )));
     let outlook_loops = config.outlook_loops();
     tracing::info!(
         outlook_sync = outlook_loops.sync,

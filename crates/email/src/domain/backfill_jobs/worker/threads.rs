@@ -3,7 +3,7 @@ use super::message::{enqueue_crm_contacts, save_invitations};
 use super::metadata::map_db_error;
 use super::*;
 use crate::domain::mailbox::inbox_sync::InboxSyncPreparation;
-use email_api_client::domain::models::{CalendarPart, MessageWithCalendarParts};
+use email_api_client_core::models::{CalendarPart, MessageWithCalendarParts};
 use models_email::service::{backfill::*, link, message::Message, pubsub::ProcessingError};
 /// This step is invoked by ListThreads for each thread being backfilled.
 /// Reads the whole thread from the provider at once and writes the thread with

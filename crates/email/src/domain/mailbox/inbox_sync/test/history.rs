@@ -3,7 +3,7 @@ use super::{
     import_fakes::job,
     *,
 };
-use email_api_client::domain::models::{EmailApiError, RateLimitOrigin};
+use email_api_client_core::models::{EmailApiError, RateLimitOrigin};
 fn names(calls: &[Call]) -> Vec<&'static str> {
     calls
         .iter()

@@ -3,7 +3,7 @@
 
 use email::domain::mailbox::{MailboxError, MailboxKey};
 use email::domain::recent_inbox::{RecentInboxMailbox, RecentInboxMailboxes, RecentInboxReader};
-use email_api_client::domain::{
+use email_api_client_core::{
     models::{EmailApiError, MailboxAccess},
     ports::{
         MailboxContentReader, MailboxTokenSource, ProviderRateLimiter, ScopedMailboxRepository,

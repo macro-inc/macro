@@ -3,7 +3,7 @@
 use super::super::initialization::{InitializationError, InitializeMailbox};
 use super::{ConnectionError, ConnectionRequest, GoogleConnectionAttempt, SharedInboxPromotion};
 use calendar_events::domain::models::{AppliedGoogleGrant, CalendarGrantIntent};
-use email_api_client::domain::models::{AccessToken, EmailApiError};
+use email_api_client_core::models::{AccessToken, EmailApiError};
 use macro_user_id::user_id::MacroUserIdStr;
 use models_email::service::link::Link;
 use uuid::Uuid;

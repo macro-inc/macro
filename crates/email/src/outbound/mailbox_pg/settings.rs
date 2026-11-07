@@ -1,6 +1,6 @@
 use super::*;
 use crate::domain::mailbox::settings::*;
-use email_api_client::domain::models::EmailApiError;
+use email_api_client_core::models::EmailApiError;
 use macro_user_id::user_id::MacroUserIdStr;
 use models_email::service::{label::Label, link::UserProvider};
 

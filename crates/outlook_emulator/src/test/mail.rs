@@ -1,5 +1,5 @@
-use email_api_client::domain::models::{EmailApiError, FolderRole, MessageAction};
-use email_api_client::domain::ports::{
+use email_api_client_core::models::{EmailApiError, FolderRole, MessageAction};
+use email_api_client_core::ports::{
     MailboxActionWriter, MailboxAddressBookReader, MailboxContentReader, MailboxLabelClient,
     MailboxSettingsClient,
 };
@@ -225,7 +225,7 @@ async fn contacts_sync_from_the_default_folder_and_report_removals() {
             "grace@example.com".to_string()
         ]
     );
-    let email_api_client::domain::models::StreamPosition::Checkpoint(checkpoint) = first.position
+    let email_api_client_core::models::StreamPosition::Checkpoint(checkpoint) = first.position
     else {
         panic!("contacts delta ends with a checkpoint");
     };

@@ -11,7 +11,7 @@ use crm::domain::{
     email_privacy::EmailContributionMailbox,
     model::{CrmError, DepopulateContactOutcome},
 };
-use email_api_client::domain::models::{EmailApiError, MessageWithCalendarParts};
+use email_api_client_core::models::{EmailApiError, MessageWithCalendarParts};
 use futures::future::BoxFuture;
 use macro_event_broker::MacroEventBroker;
 use macro_user_id::user_id::MacroUserIdStr;
@@ -126,7 +126,7 @@ pub trait BackfillGmail: Send + Sync + 'static {
         limit: u32,
         next: Option<&'a str>,
         labels: &'a [&'a str],
-    ) -> BoxFuture<'a, Result<email_api_client::domain::models::ThreadListPage, EmailApiError>>;
+    ) -> BoxFuture<'a, Result<email_api_client_core::models::ThreadListPage, EmailApiError>>;
     /// List recent sent message identifiers.
     fn list_messages<'a>(
         &'a self,

@@ -1,6 +1,6 @@
 use super::*;
 use crate::domain::mailbox::live_pass::StreamKind;
-use email_api_client::domain::models::EmailApiError;
+use email_api_client_core::models::EmailApiError;
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
 use sha2::{Digest, Sha256};
 
@@ -168,12 +168,12 @@ impl MailboxWatchGateway for Gateway {
     async fn watches(
         &self,
         _: MailboxKey,
-    ) -> Result<Vec<email_api_client::domain::models::MailboxWatchDetails>, EmailApiError> {
+    ) -> Result<Vec<email_api_client_core::models::MailboxWatchDetails>, EmailApiError> {
         let created = self.created.lock().unwrap();
         Ok(created
             .iter()
             .map(
-                |(subscription, url)| email_api_client::domain::models::MailboxWatchDetails {
+                |(subscription, url)| email_api_client_core::models::MailboxWatchDetails {
                     subscription: subscription.clone(),
                     notification_url: url.clone(),
                     lifecycle_url: Some(url.clone()),

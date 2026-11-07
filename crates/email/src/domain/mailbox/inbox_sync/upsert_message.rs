@@ -2,7 +2,7 @@ use super::*;
 use crate::domain::events::{
     EmailEventOrigin, MessageDraftSyncedMetadata, MessageReceivedMetadata, MessageSentMetadata,
 };
-use email_api_client::domain::models::{EmailApiError, MessageWithCalendarParts};
+use email_api_client_core::models::{EmailApiError, MessageWithCalendarParts};
 use email_utils::dedupe_emails;
 use macro_user_id::user_id::MacroUserIdStr;
 use models_email::db::address::EmailRecipientType;

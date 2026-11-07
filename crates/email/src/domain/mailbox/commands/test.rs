@@ -1,5 +1,5 @@
 use super::*;
-use email_api_client::domain::models::MailboxState;
+use email_api_client_core::models::MailboxState;
 
 #[test]
 fn restoring_junk_chooses_drafts_for_drafts_and_inbox_for_received_mail() {

@@ -28,7 +28,8 @@ mod config;
 
 use email::domain::mailbox::reimport::{FolderReimportService, LinkOutcome};
 use email::outbound::mailbox_pg::PgMailboxSync;
-use email_api_client::{OutlookApiClientRepository, domain::ports::FolderChangeReader};
+use email_api_client_core::ports::FolderChangeReader;
+use email_api_client_outbound::OutlookApiClientRepository;
 use macro_entrypoint::MacroEntrypoint;
 use rootcause::prelude::{Report, ResultExt as _};
 use sqlx::postgres::{PgConnectOptions, PgPoolOptions};
