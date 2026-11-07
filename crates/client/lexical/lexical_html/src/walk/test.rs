@@ -104,3 +104,95 @@ fn registry_overrides_fragments_and_after_callbacks_preserve_output_order() -> c
     ));
     Ok(())
 }
+
+#[derive(Clone, Debug, Default, PartialEq, serde::Serialize, serde::Deserialize)]
+struct CloneAware {
+    cloned: bool,
+}
+impl NodeType for CloneAware {
+    const TYPE: &'static str = "clone-aware";
+    type Kind = TextKind;
+    lexical_model::impl_default_node!();
+    fn after_clone(&self) -> Option<Self> {
+        Some(Self { cloned: true })
+    }
+}
+impl TextNode for CloneAware {
+    lexical_model::text_node_base!();
+}
+impl ExportDom for CloneAware {
+    fn export_dom<'a>(
+        &'a self,
+        ctx: &ExportCtx<'a>,
+        key: NodeKey,
+    ) -> crate::Result<DomExportOutput<'a>> {
+        let other = ctx.state.next_sibling(key).unwrap();
+        Ok(DomExportOutput::node(HtmlNode::Text(format!(
+            "{}:{}:{}",
+            self.cloned,
+            ctx.text(key),
+            ctx.text(other)
+        ))))
+    }
+}
+#[test]
+fn selected_custom_text_exports_a_clone_and_reads_other_nodes_unsliced() -> crate::Result<()> {
+    let mut editor = Editor::builder(EditorMode::Headless)
+        .node::<CloneAware>()
+        .build()
+        .unwrap();
+    let (key, _) = editor.update(|tx| {
+        let paragraph = tx.create(Paragraph {})?;
+        let custom = tx.create(CloneAware::default())?;
+        tx.text(custom)?.set_text_content("abc")?;
+        let other = tx.create_text("other")?;
+        tx.append(paragraph, &[custom.key(), other.key()])?;
+        tx.append(NodeKey::ROOT, &[paragraph.key()])?;
+        Ok(custom.key())
+    })?;
+    let selection = Selection::Range(RangeSelection::new(
+        Point::text(key, Utf16Offset(1)),
+        Point::text(key, Utf16Offset(2)),
+    ));
+    let exporter = HtmlExporter::new(
+        register_core(ExportRegistry::builder())
+            .node::<CloneAware>()
+            .build(),
+        EditorTheme::default(),
+    );
+    assert_eq!(
+        exporter.generate_html_from_nodes(editor.state(), Some(&selection))?,
+        "true:b:other"
+    );
+    assert!(!editor.state().view().get::<CloneAware>(key).unwrap().cloned);
+    assert_eq!(editor.state().text_content(key), "abc");
+    Ok(())
+}
+#[test]
+fn fragment_after_runs_on_detached_fragment_and_propagates_errors() -> crate::Result<()> {
+    fn callback<'a>(_: &ExportCtx<'a>, _: NodeKey) -> crate::Result<DomExportOutput<'a>> {
+        let mut out =
+            DomExportOutput::node(HtmlNode::Fragment(vec![HtmlNode::Text("kept".into())]));
+        out.after = Some(Box::new(|_, detached, index| {
+            assert_eq!(detached[index], HtmlNode::Fragment(Vec::new()));
+            Err(crate::Error::InvalidExport("fragment callback"))
+        }));
+        Ok(out)
+    }
+    let mut editor = Editor::builder(EditorMode::Headless).build().unwrap();
+    editor.update(|tx| {
+        let p = tx.create(Paragraph {})?;
+        tx.append(NodeKey::ROOT, &[p.key()])
+    })?;
+    let exporter = HtmlExporter::new(
+        register_core(ExportRegistry::builder())
+            .override_export("paragraph", callback)
+            .build(),
+        EditorTheme::default(),
+    );
+    assert!(matches!(
+        exporter.generate_html_from_nodes(editor.state(), None),
+        Err(crate::Error::InvalidExport("fragment callback"))
+    ));
+    Ok(())
+}

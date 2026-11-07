@@ -131,6 +131,11 @@ impl<'state> NodeRef<'state> {
     }
 }
 impl<'state> StateRef<'state> {
+    /// Borrow the immutable snapshot behind this view, including pending node data.
+    pub fn snapshot(self) -> &'state EditorState {
+        self.state
+    }
+
     pub(crate) fn slot(self, key: NodeKey) -> Option<&'state NodeSlot> {
         self.state.nodes.get(&key).map(AsRef::as_ref)
     }
@@ -859,6 +864,11 @@ impl<'state> StateRef<'state> {
         if self.text_data(key)?.text.as_str() == text {
             return self.export_json(key);
         }
+        self.with_text_slice(key, text)?.view().export_json(key)
+    }
+    /// Copy one text record for export, invoking its clone hook before replacing text.
+    /// The resulting snapshot retains node identities and cannot mutate this view.
+    pub fn with_text_slice(self, key: NodeKey, text: &str) -> Result<EditorState, Error> {
         let mut record = self.node_or_err(key)?.to_owned();
         let BaseData::Text(data) = &mut record.slot.base else {
             return Err(Error::NodeTypeMismatch(key));
@@ -866,12 +876,7 @@ impl<'state> StateRef<'state> {
         data.text = TextBuffer::new(text);
         let mut snapshot = self.state.clone();
         snapshot.nodes.insert(key, std::sync::Arc::new(record.slot));
-        StateRef {
-            state: &snapshot,
-            previous_selection: self.previous_selection,
-            composition_key: self.composition_key,
-        }
-        .export_json(key)
+        Ok(snapshot)
     }
     /// Export node.
     pub fn export_node(self, key: impl Into<NodeKey>) -> Result<SerializedNode, Error> {

@@ -76,7 +76,6 @@ impl<C: DomRenderConfig> HtmlExporter<C> {
             state,
             theme: &self.theme,
             selection,
-            text_override: None,
         };
         let mut output = Vec::new();
         for key in state.children_keys(NodeKey::ROOT)? {
