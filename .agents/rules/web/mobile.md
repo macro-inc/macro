@@ -40,7 +40,8 @@ read their code, and follow that pattern rather than inventing a new one.
   selecting or dragging starts only after a long press; dedicated reorder
   handles instead drag after a small movement with no hold delay and reserve
   scrolling for the rest of the row. Horizontal swipes ignore the left edge
-  (iOS back swipe).
+  (iOS back swipe). A channel message list also goes back on a rightward swipe
+  anywhere in the list; message rows only swipe left, to reply.
 - Keep navigation, filter pills, and create-menu taps silent; keep haptics for
   long press and use `hapticImpact('light')` for valid message/AI sends. Navigation
   acts on click so held or cancelled touches do nothing. `glass` and `island`

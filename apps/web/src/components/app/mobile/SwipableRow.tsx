@@ -1,4 +1,7 @@
-import { SWIPE_EDGE_THRESHOLD } from '@components/app/split-layout/mobile/createMobileSplitMotion';
+import {
+  SWIPE_DIRECTION_SLOP_PX,
+  SWIPE_EDGE_THRESHOLD,
+} from '@components/app/split-layout/mobile/createMobileSplitMotion';
 import { hapticImpact } from '@core/mobile/haptics';
 import { cn } from '@ui';
 import {
@@ -16,7 +19,6 @@ import {
 } from 'solid-js';
 
 const SWIPE_ACTIVATION_DISTANCE = 75; // Threshold, in pixels, of dx past which releasing touch will activate swipe gesture;
-const DIRECTIONALITY_THRESHOLD = 5; // Threshold, in pixels, of either dx or dy, past which a gesture is considered "horizontal" or "vertical". Note: it is not obvious that these should both be the same value... we may want to experiment more.
 const AUTO_ACTIVATION_PERCENTAGE = 0.75; // Percentage of container width past which the swipe gesture auto activates.
 
 const TRANSLATE_AFTER_TRIGGERED_SPEED = 100; // ms;
@@ -362,10 +364,17 @@ export function SwipableRowProvider(
     // Determine direction on first significant movement
     if (
       touchState.isSwipeGesture === null &&
-      (Math.abs(dx) > DIRECTIONALITY_THRESHOLD ||
-        Math.abs(dy) > DIRECTIONALITY_THRESHOLD)
+      (Math.abs(dx) > SWIPE_DIRECTION_SLOP_PX ||
+        Math.abs(dy) > SWIPE_DIRECTION_SLOP_PX)
     ) {
-      touchState.isSwipeGesture = Math.abs(dx) > Math.abs(dy);
+      const horizontal = Math.abs(dx) > Math.abs(dy);
+      // A rightward drag with no row action is swipe-back. Leave it for the
+      // split gesture: don't rubber-band the row or cancel the touch.
+      if (horizontal && dx > 0 && !touchState.allowRight) {
+        touchState.isSwipeGesture = false;
+      } else {
+        touchState.isSwipeGesture = horizontal;
+      }
     }
 
     if (touchState.isSwipeGesture) {
@@ -375,10 +384,11 @@ export function SwipableRowProvider(
 
       const { allowRight, allowLeft } = touchState;
 
-      // Constrain dx based on available callbacks
+      // Constrain dx based on available callbacks. Right has no rubber-band:
+      // that direction navigates back instead of hinting at a missing action.
       let constrainedDx = dx;
       if (dx > 0 && !allowRight) {
-        constrainedDx = dx * 0.1;
+        constrainedDx = 0;
       } else if (dx < 0 && !allowLeft) {
         constrainedDx = dx * 0.1;
       }

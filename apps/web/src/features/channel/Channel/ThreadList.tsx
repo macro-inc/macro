@@ -704,6 +704,7 @@ export function ThreadList(props: ThreadListProps) {
       <div
         ref={scrollRef}
         data-channel-scroll
+        data-swipe-back-scroll
         class="scrollbar-hidden px-2"
         {...scrollIntent.handlers}
         onScroll={scheduleScrollState}

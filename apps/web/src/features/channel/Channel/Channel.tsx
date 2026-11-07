@@ -881,6 +881,7 @@ export function Channel(props: ChannelProps) {
                     }}
                     tabIndex={-1}
                     data-channel-message-list
+                    data-swipe-back-region
                   >
                     <Show when={findBar.isOpen()}>
                       <FindBar

@@ -247,6 +247,10 @@ Selections across adjacent quotes stay quoted; ranges containing unquoted blocks
 retain normal paste behavior.
 Keep pasted paragraphs quoted through the shared clipboard insertion command.
 
+A rightward swipe anywhere in a channel's message list (not the composer) goes
+back, while a leftward swipe on a message still replies:
+`bunx playwright test --config src/components/app/split-layout/mobile/browser-test/playwright.config.ts`.
+
 A frontend dev server runs against the **dev** backend, so this needs no local stack, Docker, Rust build, or `sudo`:
 
 ```sh
