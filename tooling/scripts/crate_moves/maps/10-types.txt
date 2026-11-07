@@ -39,3 +39,5 @@ crates/trigger_context crates/types/trigger_context
 crates/user_quota crates/types/user_quota
 crates/natural_time crates/types/natural_time
 crates/computer_types crates/types/computer_types
+crates/model_entity crates/types/model_entity
+crates/model_error_response crates/types/model_error_response

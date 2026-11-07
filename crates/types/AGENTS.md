@@ -36,6 +36,8 @@ lists what this group may depend on. `cargo x deps` reports edges that break it.
 | `maybe_send` |  |
 | [`message_parent`](message_parent/AGENTS.md) |  |
 | [`model`](model/AGENTS.md) | Shared infrastructure underlying Documents, chat, and authentication. |
+| [`model_entity`](model_entity/AGENTS.md) | Shared entity identity and presentation vocabulary, without persistence or authorization policy. |
+| `model_error_response` |  |
 | `model_file_type` |  |
 | [`model_owner`](model_owner/AGENTS.md) | Shared infrastructure used by nearly every domain crate with typed ownership. |
 | `model_user` |  |
