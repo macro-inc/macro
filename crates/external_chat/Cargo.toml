@@ -49,7 +49,7 @@ entity_access_db_utils = { workspace = true, optional = true }
 image = { workspace = true, optional = true }
 macro_authorization = { workspace = true, features = ["axum"], optional = true }
 macro_user_id = { workspace = true, optional = true }
-model-entity = { workspace = true }
+model_entity = { workspace = true }
 models_permissions = { workspace = true }
 nom = { workspace = true, optional = true }
 opentelemetry = { workspace = true, features = ["trace"], optional = true }

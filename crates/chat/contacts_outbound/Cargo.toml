@@ -7,7 +7,7 @@ version = "0.1.0"
 [features]
 default = []
 # The connection gateway notifier for user picture changes.
-picture-fanout = ["dep:connection_gateway_client", "dep:model-entity"]
+picture-fanout = ["dep:connection_gateway_client", "dep:model_entity"]
 # Viewer-aware user-name resolution behind the directory's name port.
 directory-names = ["dep:macro_db_client", "dep:non_empty"]
 
@@ -17,7 +17,7 @@ connection_gateway_client = { workspace = true, optional = true }
 contacts_core = { workspace = true }
 macro_db_client = { workspace = true, default-features = true, optional = true }
 macro_user_id = { workspace = true }
-model-entity = { workspace = true, optional = true }
+model_entity = { workspace = true, optional = true }
 non_empty = { workspace = true, optional = true }
 reqwest = { workspace = true }
 rootcause = { workspace = true }

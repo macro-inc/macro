@@ -51,7 +51,7 @@ remove it in a later migration after rollback compatibility is retired.
 ## Boundaries
 
 - Depends on: `entity_access_db_utils`, `entity_registry_db_utils`,
-  `models_permissions`, `models_entity_access_management`, `model`, `model-entity`.
+  `models_permissions`, `models_entity_access_management`, `model`, `model_entity`.
 - Used by: most Rust services and several domain crates (e.g. `documents`,
   `ai_tools`, `authentication_service`, `email_service`); a query here is
   widely shared — check callers before changing a function's signature.

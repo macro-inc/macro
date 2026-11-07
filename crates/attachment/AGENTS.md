@@ -26,7 +26,7 @@ dependency on any domain crate.
 
 ## Boundaries
 
-- Depends on: `macro_user_id`, `model-entity`, `non_empty`.
+- Depends on: `macro_user_id`, `model_entity`, `non_empty`.
 - Used by: `channels`, `email`, `ai_tools`, `agent`, `agent_inmem`, `static_file`,
   `chat`, `documents`, `image_generation` — each implementing `AttachmentService`.
 

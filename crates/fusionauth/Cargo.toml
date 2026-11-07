@@ -13,7 +13,7 @@ google_oauth_token_url = { workspace = true }
 microsoft_graph_url = { workspace = true }
 microsoft_login_page_url = { workspace = true }
 microsoft_login_url = { workspace = true }
-model-error-response = { workspace = true, features = ["anyhow"] }
+model_error_response = { workspace = true, features = ["anyhow"] }
 reqwest = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }

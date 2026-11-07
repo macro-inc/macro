@@ -215,7 +215,7 @@ mcp_client = { workspace = true }
 macro_uuid = { workspace = true }
 mockall = { workspace = true }
 model = { workspace = true, features = ["axum"] }
-model-entity = { workspace = true }
+model_entity = { workspace = true }
 model_notifications = { workspace = true }
 model_owner = { workspace = true }
 models_email = { workspace = true }
@@ -252,7 +252,6 @@ reqwest = { workspace = true }
 rootcause = { workspace = true }
 sha2 = { workspace = true }
 s3_key = { workspace = true }
-model_entity = { workspace = true }
 saved_views = { workspace = true }
 scheduled_action = { workspace = true }
 schemars = { workspace = true }

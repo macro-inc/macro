@@ -32,7 +32,7 @@ invites, and the colleague-joined email.
 ## Boundaries
 
 - Depends on: `notification` (for `Notification`, `NotificationExtEmail`
-  types), `macro_env`, `macro_user_id`, `model-entity`.
+  types), `macro_env`, `macro_user_id`, `model_entity`.
 - Used by: `model_notifications`, `call`, `referral`.
 
 ## Recipes

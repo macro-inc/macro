@@ -30,7 +30,7 @@ by policy.
 ## Boundaries
 
 - Depends on: `macro_auth` (outbound JWT validation), `bot_id`, `bearer_token`,
-  `harness_id`, `model_user`, `model-error-response`.
+  `harness_id`, `model_user`, `model_error_response`.
 - Used by: essentially every
   authenticated HTTP surface (`agent_session`, `agent_harness`, `ai_tools`,
   `bots`, `calendar_events`, `channels`, `chat`, `documents`, ...).

@@ -14,7 +14,7 @@ axum = [
   "dep:axum",
   "dep:entity_basic_types",
   "dep:macro_authorization",
-  "dep:model-error-response",
+  "dep:model_error_response",
 ]
 default = ["axum", "inbound", "outbound", "ports"]
 explain_binary = [
@@ -43,7 +43,7 @@ uuid = { workspace = true }
 bot_id = { workspace = true }
 rootcause = { workspace = true }
 macro_user_id = { workspace = true }
-model-entity = { workspace = true }
+model_entity = { workspace = true }
 models_entity_access_management = { workspace = true, default-features = true }
 models_permissions = { workspace = true }
 
@@ -57,7 +57,7 @@ tokio = { workspace = true, optional = true }
 # Axum dependencies (for inbound)
 axum = { workspace = true, optional = true }
 macro_authorization = { workspace = true, optional = true, features = ["axum"] }
-model-error-response = { workspace = true, optional = true }
+model_error_response = { workspace = true, optional = true }
 model_owner = { workspace = true }
 
 # OpenAPI schema (optional)

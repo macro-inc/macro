@@ -9,7 +9,7 @@ default = []
 inbound = [
   "dep:axum",
   "dep:macro_authorization",
-  "dep:model-error-response",
+  "dep:model_error_response",
   "dep:utoipa",
   "hosted_runtimes/schema",
   "entity_access/axum",
@@ -18,7 +18,7 @@ inbound = [
 outbound = [
   "agent_git/client",
   "dep:agent_git_service_url",
-  "dep:model-entity",
+  "dep:model_entity",
   "dep:model_notifications",
   "dep:notification",
   "dep:sqlx",
@@ -38,8 +38,8 @@ hosted_runtimes = { workspace = true, features = ["ports"] }
 macro_authorization = { workspace = true, optional = true, features = ["axum"] }
 agent_git_service_url = { workspace = true, optional = true }
 macro_user_id = { workspace = true }
-model-entity = { workspace = true, optional = true }
-model-error-response = { workspace = true, optional = true }
+model_entity = { workspace = true, optional = true }
+model_error_response = { workspace = true, optional = true }
 model_notifications = { workspace = true, optional = true }
 notification = { workspace = true, optional = true }
 rootcause = { workspace = true }

@@ -88,7 +88,7 @@ bun tooling/icons/generate-entity-icons.ts --check
 bun test tooling/icons/generate-entity-icons.test.ts
 bun run --cwd apps/web check
 bun run --cwd apps/web test src/features/entity-appearance
-cargo test -p model-entity
+cargo test -p model_entity
 just check
 ```
 

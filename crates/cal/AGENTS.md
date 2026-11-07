@@ -23,7 +23,7 @@ in the workspace yet.
 
 ## Boundaries
 
-- Depends on: `analytics_client` (feature `outbound`), `axum`/`utoipa`/`model-error-response`
+- Depends on: `analytics_client` (feature `outbound`), `axum`/`utoipa`/`model_error_response`
   (feature `axum`).
 - Used by: `services/document_storage_service`, its composition root.
 

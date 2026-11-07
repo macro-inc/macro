@@ -23,7 +23,7 @@ levels, and the computed `UserItemAccess` a caller has to an entity.
 
 ## Boundaries
 
-- Depends on: `agent_attribution`, `macro_user_id`, `model-entity`,
+- Depends on: `agent_attribution`, `macro_user_id`, `model_entity`,
   `model_file_type`, `model_owner`.
 - Used by: `agent_session`, `ai_tools`, `authentication_service`, `call`,
   `channels`, `chat`, `collab_surface`, `databases`, `document_cognition_service`,

@@ -9,7 +9,7 @@ default = []
 inbound = [
   "dep:axum",
   "dep:macro_authorization",
-  "dep:model-error-response",
+  "dep:model_error_response",
   "dep:utoipa",
 ]
 outbound = [
@@ -28,7 +28,7 @@ entity_access = { workspace = true, optional = true, features = ["ports"] }
 macro_authorization = { workspace = true, optional = true, features = ["axum"] }
 macro_user_id = { workspace = true }
 messages = { workspace = true, optional = true, features = ["ports"] }
-model-error-response = { workspace = true, optional = true }
+model_error_response = { workspace = true, optional = true }
 rootcause = { workspace = true }
 serde = { workspace = true }
 sqlx = { workspace = true, optional = true }

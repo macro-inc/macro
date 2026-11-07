@@ -27,7 +27,7 @@ reuse `models_databases` cells, gate rules reuse its filters, unchanged.
 
 ## Boundaries
 
-- Depends on: `macro_uuid`, `model-entity` (shared appearance), and
+- Depends on: `macro_uuid`, `model_entity` (shared appearance), and
   `models_databases` (feature `schema` forwards to `models_databases/schema`).
 - Used by: `forms`.
 

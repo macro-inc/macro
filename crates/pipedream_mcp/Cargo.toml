@@ -19,7 +19,7 @@ macro_authorization = { workspace = true, features = [
 ] }
 macro_user_id = { workspace = true }
 mcp_toolset = { workspace = true }
-model-error-response = { workspace = true }
+model_error_response = { workspace = true }
 reqwest.workspace = true
 url.workspace = true
 rmcp = { workspace = true, features = ["client", "transport-streamable-http-client-reqwest"] }

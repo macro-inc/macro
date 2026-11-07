@@ -36,7 +36,7 @@ axum = [
   "dep:axum",
   "dep:axum-extra",
   "dep:macro_authorization",
-  "dep:model-error-response",
+  "dep:model_error_response",
   "dep:utoipa",
   "models_pagination/axum",
 ]
@@ -94,9 +94,9 @@ macro_event_topics = { workspace = true }
 entity_mutation = { workspace = true }
 macro_user_id = { workspace = true }
 macro_uuid = { workspace = true }
-model-entity = { workspace = true }
+model_entity = { workspace = true }
 non_empty = { workspace = true, optional = true }
-model-error-response = { workspace = true, optional = true }
+model_error_response = { workspace = true, optional = true }
 models_pagination = { workspace = true }
 models_email = { workspace = true, optional = true }
 sqs_client = { workspace = true, features = ["email"], optional = true }

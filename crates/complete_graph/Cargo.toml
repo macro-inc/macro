@@ -50,7 +50,7 @@ macro_authorization = { workspace = true, default-features = true, features = [
   "outbound",
 ] }
 macro_user_id = { workspace = true }
-model-entity = { workspace = true }
+model_entity = { workspace = true }
 model_notifications = { workspace = true }
 notification = { workspace = true, default-features = true }
 predicate-index = { workspace = true }
@@ -63,7 +63,6 @@ tracing = { workspace = true }
 uuid = { workspace = true }
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
 
-model_entity = { workspace = true }
 saved_views = { workspace = true }
 
 [dev-dependencies]
