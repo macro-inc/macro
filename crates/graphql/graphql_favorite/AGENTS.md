@@ -18,7 +18,7 @@ the DataLoader-backed current-viewer favorite edge.
 
 - Owns: GraphQL types/resolvers for favorites and the favorite edge other
   object types embed.
-- Not here: favorite storage and ordering logic → `crates/favorites`.
+- Not here: favorite storage and ordering logic → `crates/entities/favorites`.
 
 ## Boundaries
 

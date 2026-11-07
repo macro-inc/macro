@@ -148,7 +148,7 @@ async fn test_batch_team_link_denies_other_team_user(
 }
 
 #[sqlx::test(fixtures(
-    path = "../../../../entity_access/fixtures",
+    path = "../../../../entities/entity_access/fixtures",
     scripts("typed_owner_team")
 ))]
 async fn typed_owner_team_links_match_batch_access(pool: sqlx::PgPool) -> anyhow::Result<()> {
