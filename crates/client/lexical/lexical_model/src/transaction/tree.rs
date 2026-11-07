@@ -385,6 +385,17 @@ impl Transaction<'_> {
                 .map(|point| point.key() == key || self.has_ancestor(point.key(), key))
         });
         self.remove_from_parent(key)?;
+        if restore_selection
+            && affected.is_some_and(|flags| flags.into_iter().all(|v| !v))
+            && self
+                .try_range_at(SelectionSlot::Active)
+                .is_some_and(|range| {
+                    !range.is_collapsed()
+                        && (range.anchor.key() == parent || range.focus.key() == parent)
+                })
+        {
+            self.cache_active_selection_direction()?;
+        }
         if let Some(Selection::Node(selection)) = &mut self.pending.selection {
             selection.nodes.shift_remove(&key);
         }
@@ -612,8 +623,7 @@ impl Transaction<'_> {
         if !previous.is_collapsed() {
             // Upstream validates direction while updating element endpoints,
             // even if a text endpoint became stale during a caret-range edit.
-            self.range_at(SelectionSlot::Active)?
-                .is_backward(self.view())?;
+            self.cache_active_selection_direction()?;
         }
         for (role, point) in [
             (PointRole::Anchor, previous.anchor),
@@ -877,6 +887,7 @@ impl Transaction<'_> {
             .map(|r| (r.format, r.style.clone()))
             .unwrap_or_default();
         self.set_selection(Some(Selection::Range(RangeSelection {
+            cached_direction: None,
             dirty: false,
             anchor,
             focus,

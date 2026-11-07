@@ -1,5 +1,14 @@
 use crate::*;
 impl Transaction<'_> {
+    pub(crate) fn cache_active_selection_direction(&mut self) -> Result<(), Error> {
+        let range = self.range_at(SelectionSlot::Active)?;
+        let backward = range.is_backward(self.view())?;
+        let cached = (range.anchor, range.focus, backward);
+        if let Some(Selection::Range(range)) = &mut self.pending.selection {
+            range.cached_direction = Some(cached);
+        }
+        Ok(())
+    }
     pub(crate) fn try_selection_at(&self, slot: SelectionSlot) -> Option<&Selection> {
         self.selection_at(slot).ok().flatten()
     }
@@ -121,6 +130,7 @@ impl Transaction<'_> {
             PointRole::Anchor => range.anchor = point,
             PointRole::Focus => range.focus = point,
         }
+        range.cached_direction = None;
         range.dirty = true;
         if slot == SelectionSlot::Active {
             self.selection_dirty = true;

@@ -743,3 +743,68 @@ fn cross_block_merge_rejects_stale_text_caret_atomically() -> Result<(), Error> 
     assert_eq!(editor.state().to_json()?, before);
     Ok(())
 }
+
+#[test]
+fn paragraph_insertion_reuses_direction_before_partial_text_removal() -> Result<(), Error> {
+    let mut editor = Editor::builder(EditorMode::Headless)
+        .build()
+        .expect("editor");
+    editor.update(|tx| {
+        let first = tx.create(Paragraph::default())?;
+        let last = tx.create(Paragraph::default())?;
+        let tab = tx.create(Tab::default())?;
+        let text = tx.create_text("👧ب")?;
+        let line = tx.create(LineBreak::default())?;
+        tx.append(first, &[tab.key()])?;
+        tx.append(last, &[text.key(), line.key()])?;
+        tx.append(NodeKey::ROOT, &[first.key(), last.key()])?;
+        tx.set_selection(Some(Selection::Range(RangeSelection::new(
+            Point::element(first, ChildIndex(0)),
+            Point::text(text, Utf16Offset(2)),
+        ))))?;
+        tx.insert_paragraph()?;
+        assert_eq!(tx.text_content(text), "ب");
+        assert_eq!(tx.children_size(NodeKey::ROOT), 2);
+        assert_eq!(
+            tx.range_selection()?.anchor,
+            Point::text(text, Utf16Offset(0))
+        );
+        Ok(())
+    })?;
+    Ok(())
+}
+
+#[test]
+fn direction_cache_is_cleared_by_clone_and_point_set() -> Result<(), Error> {
+    let mut editor = Editor::builder(EditorMode::Headless)
+        .build()
+        .expect("editor");
+    let mut tx = editor.transaction();
+    let first = tx.create(Paragraph::default())?;
+    let last = tx.create(Paragraph::default())?;
+    let text = tx.create_text("ab")?;
+    tx.append(last, &[text.key()])?;
+    tx.append(NodeKey::ROOT, &[first.key(), last.key()])?;
+    tx.set_selection(Some(Selection::Range(RangeSelection::new(
+        Point::element(first, ChildIndex(0)),
+        Point::text(text, Utf16Offset(2)),
+    ))))?;
+    tx.cache_active_selection_direction()?;
+    tx.text(text)?
+        .splice_text(Utf16Offset(0)..Utf16Offset(1), "", false)?;
+    assert!(!tx.range_selection()?.is_backward(tx.view())?);
+    assert!(matches!(
+        tx.range_selection()?.clone().is_backward(tx.view()),
+        Err(Error::Utf16OffsetOutOfRange(Utf16Offset(2)))
+    ));
+    tx.set_point_at(
+        SelectionSlot::Active,
+        PointRole::Focus,
+        Point::text(text, Utf16Offset(2)),
+    )?;
+    assert!(matches!(
+        tx.range_selection()?.is_backward(tx.view()),
+        Err(Error::Utf16OffsetOutOfRange(Utf16Offset(2)))
+    ));
+    Ok(())
+}
