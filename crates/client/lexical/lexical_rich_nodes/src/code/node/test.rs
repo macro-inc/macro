@@ -52,3 +52,56 @@ fn collapsing_code_preserves_children_in_a_paragraph() -> Result<(), Error> {
     })?;
     Ok(())
 }
+
+#[test]
+fn enter_copies_plain_indentation_and_exits_after_two_empty_lines() -> Result<(), Error> {
+    let mut editor = crate::code::register_code_nodes(Editor::builder(EditorMode::Headless))
+        .build()
+        .unwrap();
+    editor.update(|tx| {
+        let code = tx.create(CodeNode::default())?;
+        let text = tx.create_text("  abc")?;
+        tx.append(code, &[text.key()])?;
+        tx.append(NodeKey::ROOT, &[code.key()])?;
+        tx.select_end(text)?;
+        assert_eq!(
+            tx.insert_new_after(code, SelectionSlot::Active, true)?,
+            None
+        );
+        assert_eq!(tx.text_content(code), "  abc\n  ");
+        assert_eq!(tx.anchor()?.offset(), 2);
+        assert_eq!(tx.type_name(tx.anchor()?.key())?, "text");
+        let first = tx.create(LineBreak {})?;
+        let second = tx.create(LineBreak {})?;
+        tx.append(code, &[first.key(), second.key()])?;
+        let point = Point::element(code, ChildIndex(tx.children_size(code)));
+        tx.set_selection(Some(Selection::Range(RangeSelection::new(point, point))))?;
+        let paragraph = tx
+            .insert_new_after(code, SelectionSlot::Active, true)?
+            .unwrap();
+        assert!(tx.is::<Paragraph>(paragraph));
+        assert_eq!(tx.text_content(code), "  abc\n  ");
+        assert_eq!(tx.anchor()?, Point::element(paragraph, ChildIndex(0)));
+        Ok(())
+    })?;
+    Ok(())
+}
+#[test]
+fn empty_code_enter_keeps_an_element_point() -> Result<(), Error> {
+    let mut editor = crate::code::register_code_nodes(Editor::builder(EditorMode::Headless))
+        .build()
+        .unwrap();
+    editor.update(|tx| {
+        let code = tx.create(CodeNode::default())?;
+        tx.append(NodeKey::ROOT, &[code.key()])?;
+        tx.select_start(code)?;
+        assert_eq!(
+            tx.insert_new_after(code, SelectionSlot::Active, true)?,
+            None
+        );
+        assert_eq!(tx.text_content(code), "\n");
+        assert_eq!(tx.anchor()?, Point::element(code, ChildIndex(1)));
+        Ok(())
+    })?;
+    Ok(())
+}
