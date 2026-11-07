@@ -3,7 +3,9 @@ use crate::constants::MACRO_INTERNAL_USER_ID_HEADER_KEY;
 use super::DocumentStorageServiceClient;
 use anyhow::Result;
 use model::document::list::ListDocumentsWithAccessResponse;
-use model::document::response::{CreateDocumentRequest, CreateDocumentResponse};
+use model::document::response::{
+    CreateDocumentRequest, CreateDocumentResponse, EMAIL_ATTACHMENT_NOT_FOUND_CODE,
+};
 use model::document::{
     DocumentBasic, FileType,
     response::{GetDocumentResponse, LocationResponseData, LocationResponseV3},
@@ -15,6 +17,9 @@ use model::document_storage_service_internal::{
 use models_permissions::share_permission::access_level::AccessLevel;
 use reqwest::StatusCode;
 use serde::{Deserialize, Serialize};
+
+#[cfg(test)]
+mod test;
 
 #[derive(Serialize, Deserialize)]
 pub struct GetDocumentTextResponse {
@@ -470,7 +475,7 @@ impl DocumentStorageServiceClient {
         &self,
         req: CreateDocumentRequest,
         user_id: &str,
-    ) -> Result<CreateDocumentResponse> {
+    ) -> Result<CreateDocumentResponse, CreateDocumentInternalError> {
         let url = format!("{}/internal/documents", self.url);
 
         let res = self
@@ -479,22 +484,48 @@ impl DocumentStorageServiceClient {
             .json(&req)
             .header(MACRO_INTERNAL_USER_ID_HEADER_KEY, user_id)
             .send()
-            .await?;
+            .await
+            .map_err(anyhow::Error::from)?;
 
         let status_code = res.status();
 
         if !status_code.is_success() {
             let body = res.text().await.unwrap_or("no body".to_string());
+            if status_code == StatusCode::NOT_FOUND
+                && serde_json::from_str::<ErrorCodeBody>(&body)
+                    .is_ok_and(|body| body.code == EMAIL_ATTACHMENT_NOT_FOUND_CODE)
+            {
+                return Err(CreateDocumentInternalError::EmailAttachmentNotFound);
+            }
             tracing::error!(
                 body=%body,
                 status=%status_code,
                 document_name=%req.document_name,
                 "external API error when creating document"
             );
-            anyhow::bail!("HTTP {}: {}", status_code, body);
+            return Err(anyhow::anyhow!("HTTP {}: {}", status_code, body).into());
         }
 
-        let response_data = res.json::<CreateDocumentResponse>().await?;
+        let response_data = res
+            .json::<CreateDocumentResponse>()
+            .await
+            .map_err(anyhow::Error::from)?;
         Ok(response_data)
     }
+}
+
+/// Why [`DocumentStorageServiceClient::create_document_internal`] failed.
+#[derive(thiserror::Error, Debug)]
+pub enum CreateDocumentInternalError {
+    /// The request's `email_attachment_id` no longer exists, so there is
+    /// nothing to import. Retrying cannot succeed.
+    #[error("email attachment not found")]
+    EmailAttachmentNotFound,
+    #[error(transparent)]
+    Other(#[from] anyhow::Error),
+}
+
+#[derive(Deserialize)]
+struct ErrorCodeBody {
+    code: String,
 }

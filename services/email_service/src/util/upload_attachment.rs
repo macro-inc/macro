@@ -2,6 +2,7 @@ use crate::outbound::email_api::GmailApi;
 use base64::Engine;
 use base64::engine::general_purpose::STANDARD;
 use document_storage_service_client::DocumentStorageServiceClient;
+use document_storage_service_client::document::CreateDocumentInternalError;
 use email_api_client::domain::models::EmailApiError;
 use macro_user_id::lowercased::Lowercase;
 use macro_user_id::user_id::{MacroUserId, MacroUserIdStr};
@@ -52,6 +53,11 @@ pub enum UploadAttachmentError {
 
     #[error("Failed to create document record in DSS: {0}")]
     DssCreateFailed(String),
+
+    /// The attachment row was deleted before DSS could link it, e.g. a
+    /// superseded draft revision. There is nothing left to import.
+    #[error("Attachment was deleted before it could be imported")]
+    AttachmentDeleted,
 
     #[error("DSS response did not include a presigned URL")]
     PresignedUrlMissing,
@@ -317,7 +323,12 @@ async fn create_dss_document_record(
     dss_client
         .create_document_internal(request, link.macro_id.0.as_ref())
         .await
-        .map_err(|e| UploadAttachmentError::DssCreateFailed(e.to_string()))
+        .map_err(|e| match e {
+            CreateDocumentInternalError::EmailAttachmentNotFound => {
+                UploadAttachmentError::AttachmentDeleted
+            }
+            e => UploadAttachmentError::DssCreateFailed(e.to_string()),
+        })
 }
 
 /// Uploads the provided data to the presigned URL from the DSS response.
