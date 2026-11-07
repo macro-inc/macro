@@ -71,11 +71,42 @@ impl LoroProjection {
             }
         }
         let mut dirty = OrderedMap::default();
+        let mut structure = OrderedSet::default();
         for (key, mutation) in candidates {
+            let links_changed = prev.parent(key) != next.parent(key)
+                || prev.prev_sibling(key) != next.prev_sibling(key)
+                || prev.next_sibling(key) != next.next_sibling(key);
+            let visibility_changed = prev.contains(key)
+                && next.contains(key)
+                && (self.policy.is_dropped(prev, key) != self.policy.is_dropped(next, key)
+                    || self.policy.is_transparent(prev, key)
+                        != self.policy.is_transparent(next, key));
+            if links_changed || visibility_changed {
+                for (view, parent) in [(prev, prev.parent(key)), (next, next.parent(key))] {
+                    if let Some(parent) = parent
+                        && let Some(owner) = synced_owner(view, parent, self.policy)
+                    {
+                        if next.is_attached(owner) {
+                            structure.insert(owner);
+                            dirty.insert(owner, Mutation::Updated);
+                        }
+                    }
+                }
+            }
+            if next.is_element(key)
+                && (prev.first_child(key) != next.first_child(key)
+                    || prev.last_child(key) != next.last_child(key)
+                    || prev.children_size(key) != next.children_size(key))
+            {
+                structure.insert(key);
+            }
             if !next.is_attached(key) {
                 continue;
             }
             if let Some(owner) = synced_owner(next, key, self.policy) {
+                if owner != key {
+                    structure.insert(owner);
+                }
                 dirty.insert(
                     owner,
                     if owner == key {
@@ -95,6 +126,7 @@ impl LoroProjection {
                         if next.is_attached(p) {
                             if let Some(owner) = synced_owner(next, p, self.policy) {
                                 dirty.insert(owner, Mutation::Updated);
+                                structure.insert(owner);
                             }
                             break;
                         }
@@ -108,10 +140,9 @@ impl LoroProjection {
         let mut handled = OrderedSet::default();
         let mut written = OrderedSet::default();
         // Parents are processed before descendants even if mutation publication order differs.
-        let mut structural = dirty
-            .keys()
-            .copied()
-            .filter(|k| next.is_element(*k))
+        let mut structural = structure
+            .into_iter()
+            .filter(|key| next.is_element(*key))
             .collect::<Vec<_>>();
         structural.sort_by_key(|key| next.ancestors(*key).count());
         for key in structural {
@@ -125,6 +156,7 @@ impl LoroProjection {
                 Vec::new()
             };
             let b = synced_children(next, key, self.policy);
+            stats.children_scanned += a.len() + b.len();
             // Compare against Loro too for remote transform write-back; prev may describe remote pre-apply state.
             if a != b || origin == FIXUP_ORIGIN {
                 let map = self.index.map(doc, key)?;
@@ -135,9 +167,10 @@ impl LoroProjection {
                         map.insert_container("children", LoroMovableList::new())?
                     }
                 };
-                if self.diff_children(doc, next, &list, &b, &mut handled, &mut stats)? {
+                if self.diff_children(next, &list, &b, &mut handled, &mut stats)? {
                     written.insert(key);
                 }
+                self.index.bind(key, &map, self.policy)?;
             }
         }
         for (key, mutation) in dirty {
@@ -149,16 +182,20 @@ impl LoroProjection {
             }
             stats.nodes_visited += 1;
             let map = self.index.map(doc, key)?;
-            let before = if origin == FIXUP_ORIGIN {
-                let mut json = schema::own_map(&map)?;
-                mask_local(&mut json, self.policy);
-                json
-            } else if prev.contains(key) {
+            let mut before = if prev.contains(key) {
                 own(prev, key, self.policy)?
             } else {
                 SerializedNode::new()
             };
+            if origin == FIXUP_ORIGIN {
+                if let Some(text) = map.get("text") {
+                    before.insert("text".into(), schema::read_value(&text)?);
+                }
+            }
             let new = own(next, key, self.policy)?;
+            if before == new {
+                continue;
+            }
             let old_type = map
                 .get("type")
                 .as_ref()
@@ -172,7 +209,7 @@ impl LoroProjection {
             if count != stats.containers_written {
                 written.insert(key);
             }
-            self.index.bind(key, &map)?;
+            self.index.bind(key, &map, self.policy)?;
         }
         // Containerize only ancestors whose cached flag says a plain composite remains.
         let mut visited = OrderedSet::default();
@@ -197,7 +234,7 @@ impl LoroProjection {
                     let mut own = schema::own_map(&map)?;
                     mask_local(&mut own, self.policy);
                     schema::diff_map(&map, &own, &own, schema::MapSchema::Node, &mut stats)?;
-                    self.index.bind(key, &map)?;
+                    self.index.bind(key, &map, self.policy)?;
                 }
             }
         }
@@ -213,7 +250,6 @@ impl LoroProjection {
     }
     fn diff_children(
         &mut self,
-        doc: &LoroDoc,
         view: StateRef<'_>,
         list: &LoroMovableList,
         new: &[NodeKey],
@@ -225,6 +261,13 @@ impl LoroProjection {
             let map = schema::map_at(list.get(i), "children item")?;
             old.push(self.index.owner.get(&map.id()).map(|(k, _)| *k));
         }
+        stats.children_scanned += old.len();
+        let positions = old
+            .iter()
+            .enumerate()
+            .filter_map(|(i, key)| key.map(|key| (key, i)))
+            .collect::<FxHashMap<_, _>>();
+        let wanted = new.iter().copied().collect::<OrderedSet<_>>();
         let original = old.clone();
         let mut live = old.clone();
         for i in (0..live.len()).rev() {
@@ -232,7 +275,7 @@ impl LoroProjection {
                 .get(i)
                 .copied()
                 .flatten()
-                .is_some_and(|k| !new.contains(&k))
+                .is_some_and(|k| !wanted.contains(&k))
             {
                 let removed = schema::map_at(list.get(i), "removed child")?;
                 list.delete(i, 1)?;
@@ -244,13 +287,14 @@ impl LoroProjection {
         let common = new
             .iter()
             .copied()
-            .filter(|k| old.contains(&Some(*k)))
+            .filter(|k| positions.contains_key(k))
             .collect::<Vec<_>>();
         let sequence = common
             .iter()
             .map(|k| {
-                old.iter()
-                    .position(|v| v == &Some(*k))
+                positions
+                    .get(k)
+                    .copied()
                     .ok_or_else(|| diverged("common child vanished"))
             })
             .collect::<Result<Vec<_>>>()?;
@@ -282,13 +326,13 @@ impl LoroProjection {
             }
         }
         for (i, key) in new.iter().enumerate() {
-            if old.contains(&Some(*key)) {
+            if positions.contains_key(key) {
                 continue;
             }
             let map = list.insert_container(i, loro::LoroMap::new())?;
             let json = synced_node(view, *key, self.policy)?;
             schema::initialize_map(&map, &json, schema::MapSchema::Node)?;
-            self.index.bind_tree(doc, view, *key, &map, self.policy)?;
+            self.index.bind_tree(view, *key, &map, self.policy)?;
             handled.insert(*key);
             for (child, _) in view.descendants(*key) {
                 handled.insert(child);

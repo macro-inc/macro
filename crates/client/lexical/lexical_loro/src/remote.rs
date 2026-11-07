@@ -11,13 +11,17 @@ pub(crate) struct OwnedDiff {
     target: ContainerID,
     text: Option<Vec<loro::TextDelta>>,
     children_replaced: bool,
+    text_replaced: bool,
 }
 impl PendingBatch {
     pub fn from_event(event: loro::event::DiffEvent<'_>) -> Self {
-        Self{diffs:event.events.into_iter().map(|event|{
-        let children_replaced=matches!(&event.diff,loro::event::Diff::Map(map) if map.updated.contains_key("children"));
-        OwnedDiff{target:event.target.clone(),text:match event.diff{loro::event::Diff::Text(delta)=>Some(delta),_=>None},children_replaced}
-    }).collect()}
+        let diffs=event.events.into_iter().map(|event| {
+            let children_replaced=matches!(&event.diff,loro::event::Diff::Map(map) if map.updated.contains_key("children"));
+            let text_replaced=matches!(&event.diff,loro::event::Diff::Map(map) if map.updated.contains_key("text"));
+            let text=match event.diff {loro::event::Diff::Text(delta)=>Some(delta),_=>None};
+            OwnedDiff{target:event.target.clone(),text,children_replaced,text_replaced}
+        }).collect();
+        Self { diffs }
     }
 }
 /// Raw remote changes and their native creation identities, retained until binding succeeds.
@@ -74,6 +78,7 @@ impl LoroProjection {
         let count = batches.len();
         let mut parents = OrderedSet::default();
         let mut fields = OrderedSet::default();
+        let mut replaced_text = OrderedSet::default();
         let mut text: OrderedMap<NodeKey, Vec<Vec<loro::TextDelta>>> = OrderedMap::default();
         for batch in &batches {
             for diff in &batch.diffs {
@@ -93,6 +98,9 @@ impl LoroProjection {
                     }
                     Slot::Node => {
                         fields.insert(key);
+                        if diff.text_replaced {
+                            replaced_text.insert(key);
+                        }
                         if diff.children_replaced {
                             parents.insert(key);
                         }
@@ -144,7 +152,10 @@ impl LoroProjection {
                 .unwrap_or_default()
         });
         for (key, batches) in ordered_text {
-            if building.reused.contains(&key) || !state.view().is_text(key) {
+            if replaced_text.contains(&key)
+                || building.reused.contains(&key)
+                || !state.view().is_text(key)
+            {
                 continue;
             }
             let map = self.index.map(doc, key)?;
@@ -234,7 +245,7 @@ impl LoroProjection {
                     json: incoming,
                 });
             }
-            self.index.bind(key, &map)?;
+            self.index.bind(key, &map, self.policy)?;
         }
         // Keep reused descendants; remove only identities whose old native maps really died.
         for key in building.removed {
@@ -279,9 +290,11 @@ impl LoroProjection {
                 return Ok(());
             }
         }
-        let Some(_) = schema::children(map)? else {
+        // Newly created leaf nodes have no child slot. Existing elements whose
+        // slot was deleted still need an empty Children change to detach old children.
+        if matches!(parent, NodeTarget::Local(_)) && schema::children(map)?.is_none() {
             return Ok(());
-        };
+        }
         let index = b.lists.len();
         b.lists.push((parent, Vec::new()));
         let mut result = Vec::new();
@@ -330,7 +343,7 @@ impl LoroProjection {
                         .is_none_or(|c| c.is_deleted())
             });
         if let Some(key) = reuse {
-            self.index.bind(key, map)?;
+            self.index.bind(key, map, self.policy)?;
             b.reused.insert(key);
             b.fields.insert(key);
             b.stats.nodes_visited += 1;
@@ -374,7 +387,7 @@ impl LoroProjection {
             pairs.push((*key, map));
         }
         for (key, map) in pairs {
-            self.index.bind(key, &map)?;
+            self.index.bind(key, &map, self.policy)?;
         }
         Ok(())
     }

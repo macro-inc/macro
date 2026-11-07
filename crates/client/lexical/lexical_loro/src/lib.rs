@@ -56,7 +56,9 @@ fn diverged(detail: impl Into<String>) -> ProjectionError {
 pub struct ProjectionStats {
     /// Editor nodes examined by incremental projection.
     pub nodes_visited: usize,
-    /// Native containers written.
+    /// Child slots inspected by structural reconciliation.
+    pub children_scanned: usize,
+    /// Native mutation batches; a fresh subtree initialization counts as one batch.
     pub containers_written: usize,
     /// Text insertion/deletion operations.
     pub text_splices: usize,

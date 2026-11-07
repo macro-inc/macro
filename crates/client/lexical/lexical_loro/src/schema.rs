@@ -48,7 +48,13 @@ pub(crate) fn to_loro(value: &Value) -> LoroValue {
             if let Some(i) = n.as_i64() {
                 LoroValue::I64(i)
             } else {
-                LoroValue::Double(n.as_f64().unwrap_or_default())
+                let number = n.as_f64().unwrap_or_default();
+                if number.fract() == 0.0 && number >= i64::MIN as f64 && number < -(i64::MIN as f64)
+                {
+                    LoroValue::I64(number as i64)
+                } else {
+                    LoroValue::Double(number)
+                }
             }
         }
         Value::Array(a) => LoroValue::List(a.iter().map(to_loro).collect::<Vec<_>>().into()),
@@ -92,18 +98,72 @@ pub(crate) fn children(map: &LoroMap) -> Result<Option<LoroMovableList>> {
         _ => Err(schema_error("children")),
     }
 }
+pub(crate) fn validate_slots(map: &LoroMap) -> Result<()> {
+    if let Some(value) = map.get("$") {
+        if !matches!(
+            value,
+            ValueOrContainer::Container(Container::Map(_))
+                | ValueOrContainer::Value(LoroValue::Map(_))
+        ) {
+            return Err(schema_error("$"));
+        }
+    }
+    if let Some(value) = map.get("text") {
+        if !matches!(
+            value,
+            ValueOrContainer::Container(Container::Text(_))
+                | ValueOrContainer::Value(LoroValue::String(_))
+        ) {
+            return Err(schema_error("text"));
+        }
+    }
+    if let Some(value) = map.get("ids") {
+        if !matches!(
+            value,
+            ValueOrContainer::Container(Container::List(_))
+                | ValueOrContainer::Value(LoroValue::List(_))
+        ) {
+            return Err(schema_error("ids"));
+        }
+    }
+    children(map)?;
+    Ok(())
+}
+pub(crate) fn slot_id(map: &LoroMap, key: &str) -> Option<ContainerID> {
+    match map.get(key) {
+        Some(ValueOrContainer::Container(c)) => Some(c.id()),
+        _ => None,
+    }
+}
 pub(crate) fn own_map(map: &LoroMap) -> Result<SerializedNode> {
+    validate_slots(map)?;
     let mut result = SerializedNode::new();
     let mut error = None;
     map.for_each(|key, value| {
         if key != "children" {
             match read_value(&value) {
-                Ok(v) => {
-                    result.insert(key.to_string(), v);
+                Ok(value) => {
+                    result.insert(key.to_owned(), value);
                 }
-                Err(e) => error = Some(e),
+                Err(err) => {
+                    error = Some(err);
+                }
             }
         }
+    });
+    if let Some(error) = error {
+        return Err(error);
+    }
+    Ok(result)
+}
+pub(crate) fn open_map(map: &LoroMap) -> Result<SerializedNode> {
+    let mut result = SerializedNode::new();
+    let mut error = None;
+    map.for_each(|key, value| match read_value(&value) {
+        Ok(v) => {
+            result.insert(key.to_string(), v);
+        }
+        Err(e) => error = Some(e),
     });
     if let Some(error) = error {
         return Err(error);
@@ -339,47 +399,43 @@ fn diff_list(list: &LoroList, new: &[Value], ids: bool, stats: &mut ProjectionSt
                     .and_then(|v| read_value(&v))
             })
             .collect::<Result<Vec<_>>>()?;
+        // Port diffListWithIdSelector's live-index loop, including its null-id
+        // guard for exhausted/empty strings. Do not infer positional identity.
         let mut offset = 0isize;
         let mut next = 0usize;
-        for (i, old_item) in old.iter().enumerate() {
+        let mut i = 0usize;
+        while i < old.len() {
+            let old_item = &old[i];
             let item = new.get(next);
             if item == Some(old_item) {
                 next += 1;
+                i += 1;
+                continue;
+            }
+            let old_id = old_item.as_str().filter(|s| !s.is_empty());
+            let new_id = item.and_then(Value::as_str).filter(|s| !s.is_empty());
+            if old_id.is_none() || new_id.is_none() {
+                i += 1;
                 continue;
             }
             let index = (i as isize + offset) as usize;
-            if item.and_then(Value::as_str).is_some_and(|s| !s.is_empty())
-                && !old.iter().any(|v| Some(v) == item)
-            {
-                insert_list_item(list, index, item.ok_or_else(|| schema_error("ids item"))?)?;
+            if new_id.is_some_and(|id| !old.iter().any(|v| v.as_str() == Some(id))) {
+                list.insert(
+                    index,
+                    to_loro(item.ok_or_else(|| schema_error("ids item"))?),
+                )?;
                 offset += 1;
-                next += 1; // repeat this original item after inserted runs
-                while let Some(value) = new.get(next) {
-                    if value == old_item {
-                        next += 1;
-                        break;
-                    }
-                    if old.contains(value) {
-                        list.delete((i as isize + offset) as usize, 1)?;
-                        offset -= 1;
-                        break;
-                    }
-                    insert_list_item(list, (i as isize + offset) as usize, value)?;
-                    offset += 1;
-                    next += 1;
-                }
-                if next == new.len() && new.last() != Some(old_item) {
-                    list.delete((i as isize + offset) as usize, 1)?;
-                    offset -= 1;
-                }
+                next += 1;
             } else {
                 list.delete(index, 1)?;
                 offset -= 1;
+                i += 1;
             }
             stats.containers_written += 1;
         }
         for value in new.iter().skip(next) {
-            list.insert(list.len(), to_loro(value))?;
+            list.insert((i as isize + offset) as usize, to_loro(value))?;
+            offset += 1;
             stats.containers_written += 1;
         }
         return Ok(());
@@ -389,9 +445,19 @@ fn diff_list(list: &LoroList, new: &[Value], ids: bool, stats: &mut ProjectionSt
         let old = list.get(i).ok_or_else(|| schema_error("list item"))?;
         match old {
             ValueOrContainer::Container(Container::Map(m)) => {
-                let old = own_map(&m)?;
-                let next = value.as_object().ok_or_else(|| schema_error("map item"))?;
-                diff_map(&m, &old, next, MapSchema::Open, stats)?;
+                let old = open_map(&m)?;
+                // JavaScript treats arrays as object-like when an existing map
+                // item is visited, so their indices become map keys.
+                let next = match value {
+                    Value::Object(map) => map.clone(),
+                    Value::Array(values) => values
+                        .iter()
+                        .enumerate()
+                        .map(|(i, value)| (i.to_string(), value.clone()))
+                        .collect(),
+                    _ => return Err(schema_error("map item")),
+                };
+                diff_map(&m, &old, &next, MapSchema::Open, stats)?;
             }
             ValueOrContainer::Container(Container::List(l)) => diff_list(
                 &l,
@@ -418,12 +484,15 @@ fn diff_list(list: &LoroList, new: &[Value], ids: bool, stats: &mut ProjectionSt
     }
     Ok(())
 }
-pub(crate) fn has_plain_composites(map: &LoroMap) -> bool {
+pub(crate) fn has_plain_composites(map: &LoroMap, policy: &dyn SyncPolicy) -> bool {
     let mut result = false;
     map.for_each(|key, value| {
         if key == "$" {
             if let ValueOrContainer::Container(Container::Map(state)) = &value {
-                state.for_each(|_, v| {
+                state.for_each(|name, v| {
+                    if policy.local_state_keys().contains(&name) {
+                        return;
+                    }
                     if matches!(
                         v,
                         ValueOrContainer::Value(LoroValue::Map(_) | LoroValue::List(_))
