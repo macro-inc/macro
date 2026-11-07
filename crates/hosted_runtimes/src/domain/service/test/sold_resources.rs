@@ -13,6 +13,7 @@ async fn catalog_changes_only_apply_to_new_purchases() {
         },
         FakeBilling::default(),
         FixedClock,
+        StaticFleetAttachment(FleetAttachment::Attached),
     );
     let first = service
         .purchase(PurchaseRequest {
@@ -97,6 +98,7 @@ async fn price_rotation_does_not_cancel_an_existing_paid_computer() {
             ..FakeBilling::default()
         },
         FixedClock,
+        StaticFleetAttachment(FleetAttachment::Attached),
     );
     let old = service
         .purchase(PurchaseRequest {
@@ -208,6 +210,7 @@ fn catalog_accessors_return_the_composed_catalog_without_billing() {
             ..FakeBilling::default()
         },
         FixedClock,
+        StaticFleetAttachment(FleetAttachment::Attached),
     )
     .with_catalog(vec![entry.clone()]);
 

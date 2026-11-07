@@ -21,6 +21,33 @@ use crate::domain::persona_credentials::{
 };
 use crate::domain::size::ComputerSize;
 
+/// Supplies advisory fleet operator presence at the caller's time.
+pub trait FleetAttachmentSource: Send + Sync + 'static {
+    /// Adapter failure type.
+    type Err: std::error::Error + Send + Sync + 'static;
+
+    /// Read whether any operator is attached.
+    fn attachment(
+        &self,
+        now: DateTime<Utc>,
+    ) -> impl Future<Output = Result<crate::domain::models::FleetAttachment, Self::Err>> + Send;
+}
+
+/// Explicit attachment for callers with static operator knowledge and tests.
+#[derive(Debug, Clone, Copy)]
+pub struct StaticFleetAttachment(pub crate::domain::models::FleetAttachment);
+
+impl FleetAttachmentSource for StaticFleetAttachment {
+    type Err = std::convert::Infallible;
+
+    async fn attachment(
+        &self,
+        _now: DateTime<Utc>,
+    ) -> Result<crate::domain::models::FleetAttachment, Self::Err> {
+        Ok(self.0)
+    }
+}
+
 /// Classifies a fleet failure that requires replacing a lost guest.
 pub trait FleetError: std::error::Error + Send + Sync + 'static {
     /// True only when the addressed instance no longer exists.
@@ -219,6 +246,13 @@ pub trait ComputerRepo: Send + Sync + 'static {
         &self,
         registration: HostRegistration,
     ) -> impl Future<Output = Result<Host, Self::Err>> + Send;
+
+    /// Refresh operator presence without changing host capacity or startup timers.
+    fn heartbeat_host(
+        &self,
+        host: HostId,
+        now: DateTime<Utc>,
+    ) -> impl Future<Output = Result<(), Self::Err>> + Send;
 
     /// Sizes that no host can sell; personas require unreserved awake units too.
     fn sold_out_sizes(

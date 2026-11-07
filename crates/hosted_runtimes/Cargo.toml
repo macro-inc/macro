@@ -53,9 +53,11 @@ workspace-hack = { version = "0.1", path = "../workspace-hack" }
 [dev-dependencies]
 clap = { workspace = true }
 macro_db_migrator = { path = "../macro_db_migrator" }
+model_user = { path = "../model_user" }
 proptest = { workspace = true }
 tempfile = { workspace = true }
 tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
+tower = { workspace = true }
 
 [[example]]
 name = "incus_fleet_smoke"

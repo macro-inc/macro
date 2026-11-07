@@ -46,6 +46,9 @@ pub struct FakeError;
 #[derive(Default)]
 pub struct FakeRepo {
     pub sold_units: u32,
+    pub reservations: Mutex<usize>,
+    pub notify_writes: Mutex<usize>,
+    pub heartbeats: Mutex<Vec<(HostId, DateTime<Utc>)>>,
     pub awake_units: Mutex<Option<u32>>,
     pub timers: Mutex<Vec<DueTimer>>,
     pub fail_next_apply: AtomicBool,
@@ -111,6 +114,7 @@ impl ComputerRepo for FakeRepo {
         computer: NewComputer,
         now: DateTime<Utc>,
     ) -> Result<Computer, ReserveError<FakeError>> {
+        *self.reservations.lock().unwrap() += 1;
         let mut computers = self.computers.lock().unwrap();
         let sold: u32 = computers
             .values()
@@ -461,6 +465,11 @@ impl ComputerRepo for FakeRepo {
         })
     }
 
+    async fn heartbeat_host(&self, host: HostId, now: DateTime<Utc>) -> Result<(), FakeError> {
+        self.heartbeats.lock().unwrap().push((host, now));
+        Ok(())
+    }
+
     async fn sold_out_sizes(
         &self,
         catalog: &[crate::domain::size::CatalogEntry],
@@ -494,6 +503,7 @@ impl ComputerRepo for FakeRepo {
         _user_id: MacroUserIdStr<'static>,
         _size: ComputerSize,
     ) -> Result<(), FakeError> {
+        *self.notify_writes.lock().unwrap() += 1;
         Ok(())
     }
 

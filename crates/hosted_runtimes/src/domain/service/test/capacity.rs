@@ -9,6 +9,7 @@ async fn persona_purchase_rejects_full_awake_reservations_before_billing() {
         },
         FakeBilling::default(),
         FixedClock,
+        StaticFleetAttachment(FleetAttachment::Attached),
     )
     .with_rollout(rollout::enabled_rollout());
     service
@@ -60,6 +61,7 @@ proptest::proptest! {
             let service = ComputerService::new(
                 FakeRepo { sold_units: 9, ..FakeRepo::default() },
                 FakeBilling::default(), FixedClock,
+                StaticFleetAttachment(FleetAttachment::Attached),
             );
             service.repo.register_host(crate::domain::models::HostRegistration {
                 name: "capacity-test".to_owned(), memory_gb: 24, reserve_gb: 0, oversell_factor: 3,

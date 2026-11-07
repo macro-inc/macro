@@ -27,6 +27,7 @@ async fn capacity_wait_is_visible_before_and_after_first_enrollment() {
             },
             FakeBilling::default(),
             FixedClock,
+            StaticFleetAttachment(FleetAttachment::Attached),
         );
         let id = service
             .purchase(PurchaseRequest {

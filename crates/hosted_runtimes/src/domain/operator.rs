@@ -455,6 +455,10 @@ where
     #[tracing::instrument(skip(self), err)]
     pub async fn reconcile(&self) -> Result<(), ComputerError> {
         let host = self.host_id().await?;
+        self.repo
+            .heartbeat_host(host, self.clock.now())
+            .await
+            .map_err(internal)?;
         let instances: HashMap<ComputerId, FleetInstance> = self
             .fleet
             .instances()

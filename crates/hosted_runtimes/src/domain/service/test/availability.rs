@@ -57,7 +57,11 @@ async fn maintenance_can_read_and_release_with_detached_fleet() {
     struct RecordingAttachment(AtomicUsize);
     impl crate::domain::ports::FleetAttachmentSource for RecordingAttachment {
         type Err = std::convert::Infallible;
-        async fn attachment(&self, _now: DateTime<Utc>) -> Result<FleetAttachment, Self::Err> {
+        async fn attachment(
+            &self,
+            observed_now: DateTime<Utc>,
+        ) -> Result<FleetAttachment, Self::Err> {
+            assert_eq!(observed_now, now());
             self.0.fetch_add(1, Ordering::SeqCst);
             Ok(FleetAttachment::Detached)
         }
@@ -102,6 +106,13 @@ async fn maintenance_can_read_and_release_with_detached_fleet() {
     assert_eq!(roster.status.id, id);
     assert_eq!(roster.availability, FleetAttachment::Detached);
     let calls = service.attachment.0.load(Ordering::SeqCst);
+    assert!(matches!(
+        service
+            .maintenance()
+            .request_release(Uuid::now_v7(), id)
+            .await,
+        Err(ComputerError::NotFound)
+    ));
     let released = service
         .maintenance()
         .request_release(TEAM, id)
@@ -121,6 +132,7 @@ async fn maintenance_can_read_and_release_with_detached_fleet() {
             .iter()
             .any(|(event_id, event)| *event_id == id && matches!(event, Event::ReleaseNow))
     );
+    assert!(service.billing.calls.lock().unwrap().is_empty());
     let effects = service.repo.effects.lock().unwrap();
     assert!(
         effects
@@ -135,6 +147,82 @@ async fn maintenance_can_read_and_release_with_detached_fleet() {
     assert!(
         effects
             .iter()
-            .any(|pending| matches!(pending.effect, Effect::RevokeHarness { .. }))
+            .any(|pending| matches!(pending.effect, Effect::RevokeHarness))
     );
+}
+
+/// Comp policy for exercising the registered HTTP routes.
+pub(crate) struct RouterCompPolicy(pub bool);
+
+impl CompPolicy for RouterCompPolicy {
+    type Err = std::convert::Infallible;
+    async fn comp_reason(&self, _team_id: Uuid) -> Result<Option<String>, Self::Err> {
+        Ok(self.0.then(|| "complimentary team".to_owned()))
+    }
+}
+
+pub(crate) type RouterService = ComputerService<
+    FakeRepo,
+    FakeBilling,
+    FixedClock,
+    crate::domain::ports::StaticFleetAttachment,
+    RouterCompPolicy,
+>;
+
+pub(crate) async fn detached_router_service(
+    comped: bool,
+    rollout_enabled: bool,
+) -> (std::sync::Arc<RouterService>, ComputerId) {
+    let repo = FakeRepo {
+        sold_units: 9,
+        ..FakeRepo::default()
+    };
+    let id = ComputerId::new_from_uuid(Uuid::now_v7());
+    let entry = crate::domain::size::current_catalog().remove(0);
+    repo.reserve(
+        NewComputer {
+            id,
+            team_id: TEAM,
+            name: ComputerName::try_new("Build box").unwrap(),
+            billing: PurchaseBilling::Stripe,
+            extra_items: vec![],
+            size: entry.size,
+            resources: entry.resources,
+            catalog_entry: entry.id,
+            price_id: Some(crate::domain::models::StripePriceId::parse("price_standard").unwrap()),
+            persona: None,
+            created_by: MacroUserIdStr::try_from("macro|admin@example.com".to_owned()).unwrap(),
+        },
+        now(),
+    )
+    .await
+    .unwrap();
+    repo.apply(id, Event::PaymentConfirmed, now())
+        .await
+        .unwrap();
+    repo.events.lock().unwrap().clear();
+    repo.effects.lock().unwrap().clear();
+    let mut service = ComputerService::new(
+        repo,
+        FakeBilling::default(),
+        FixedClock,
+        crate::domain::ports::StaticFleetAttachment(
+            crate::domain::models::FleetAttachment::Detached,
+        ),
+    )
+    .with_comp_policy(RouterCompPolicy(comped));
+    if rollout_enabled {
+        service = service.with_rollout(rollout::enabled_rollout());
+    }
+    (std::sync::Arc::new(service), id)
+}
+
+pub(crate) fn assert_no_http_work(service: &RouterService) {
+    assert_eq!(service.repo.computers.lock().unwrap().len(), 1);
+    assert_eq!(*service.repo.reservations.lock().unwrap(), 1);
+    assert_eq!(*service.billing.sales_checks.lock().unwrap(), 0);
+    assert_eq!(*service.repo.notify_writes.lock().unwrap(), 0);
+    assert!(service.repo.events.lock().unwrap().is_empty());
+    assert!(service.repo.effects.lock().unwrap().is_empty());
+    assert!(service.billing.calls.lock().unwrap().is_empty());
 }
