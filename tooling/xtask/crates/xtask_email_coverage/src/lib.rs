@@ -2,7 +2,7 @@
 //! Lists every backend email entry point from the source code.
 //!
 //! The list is the denominator of the email end-to-end coverage measurement:
-//! the harness in `crates/email_e2e` records which entry points ran, and a
+//! the harness in `crates/testing/email_e2e` records which entry points ran, and a
 //! report joins the two. It is generated, so it cannot go stale:
 //! [`generate`] reads the routers, resolvers, message types and tool
 //! registrations themselves, guided by `sources.toml` ([`Sources`]), and
@@ -25,4 +25,4 @@ pub use sources::{
 };
 
 /// Repository-relative path of the generated, checked-in list.
-pub const ENTRYPOINTS_PATH: &str = "crates/email_e2e/coverage/entrypoints.tsv";
+pub const ENTRYPOINTS_PATH: &str = "crates/testing/email_e2e/coverage/entrypoints.tsv";

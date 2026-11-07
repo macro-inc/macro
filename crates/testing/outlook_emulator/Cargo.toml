@@ -1,9 +1,9 @@
 [package]
 edition = "2024"
-name = "gmail_emulator"
+name = "outlook_emulator"
 publish = false
 version = "0.1.0"
-description = "Test support: a stateful fake of the Google APIs Macro's email, calendar and sign-in code call (Gmail REST, Calendar REST with push channels, People, OAuth, signed Pub/Sub push), in process or as a standalone binary."
+description = "Test support: a stateful fake of the Microsoft Graph mail and calendar APIs and the Microsoft identity platform Macro's email, calendar and sign-in code call (messages, folders, delta, drafts, attachments, subscriptions with change notifications, throttling; calendars, events, series, calendarView delta; sign-in page, tokens, ID tokens and their keys), in process or as a standalone binary."
 
 [dependencies]
 askama = { workspace = true }
@@ -19,7 +19,6 @@ mail-builder = { workspace = true }
 mailparse = { workspace = true }
 nom = { workspace = true }
 reqwest = { workspace = true }
-rrule = { workspace = true }
 rsa = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
@@ -32,14 +31,13 @@ tokio = { workspace = true, features = ["macros", "net", "rt-multi-thread", "sig
 tokio-util = { workspace = true, features = ["rt"] }
 tracing = { workspace = true }
 url = { workspace = true }
-workspace-hack = { version = "0.1", path = "../workspace-hack" }
+uuid = { workspace = true }
+workspace-hack = { version = "0.1", path = "../../workspace-hack" }
 
 [dev-dependencies]
-calendar_events = { workspace = true, features = ["google"] }
+calendar_events = { workspace = true }
 email_api_client_core = { workspace = true, features = ["ports"] }
-email_api_client_outbound = { workspace = true, features = ["outbound-gmail"] }
+email_api_client_outbound = { workspace = true, features = ["outbound-outlook"] }
 fusionauth = { workspace = true }
-gmail_client = { workspace = true }
+microsoft_graph_url = { workspace = true }
 models_email = { workspace = true }
-tracing-subscriber = { workspace = true }
-uuid = { workspace = true }

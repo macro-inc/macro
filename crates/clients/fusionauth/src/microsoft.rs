@@ -66,7 +66,7 @@ impl FusionAuthClient {
     /// Sets where Microsoft is reached, in place of the typed service URLs:
     /// the login host for this service's calls, the login host for the
     /// browser's pages, and the Graph API root. For tests that run against
-    /// `crates/outlook_emulator`. Call it after
+    /// `crates/testing/outlook_emulator`. Call it after
     /// [`Self::with_microsoft_credentials`].
     pub fn with_microsoft_urls(
         mut self,

@@ -345,8 +345,8 @@ shared with the web app's suite) and backend entry points second.
 ## Scope
 
 - Owns: the harness and the email and calendar scenarios.
-- Not here: the fakes of Google and Microsoft → `crates/gmail_emulator`,
-  `crates/outlook_emulator`. Tests of one crate's logic → that crate.
+- Not here: the fakes of Google and Microsoft → `crates/testing/gmail_emulator`,
+  `crates/testing/outlook_emulator`. Tests of one crate's logic → that crate.
 - The web app against this stack: `apps/web/tests/email-e2e` (its README).
   `src/stack_server.rs` and the `email_e2e_stacks` binary serve stacks over
   HTTP for it, one per browser test; add a route there when a browser test
@@ -460,5 +460,5 @@ shared with the web app's suite) and backend entry points second.
 
 ## Related
 
-- Docs: `crates/gmail_emulator/AGENTS.md`, `crates/outlook_emulator/AGENTS.md`,
+- Docs: `crates/testing/gmail_emulator/AGENTS.md`, `crates/testing/outlook_emulator/AGENTS.md`,
   `services/email_service/AGENTS.md`

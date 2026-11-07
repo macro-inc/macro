@@ -72,7 +72,7 @@ impl GoogleCalendarClient<UnmeteredGate> {
     }
 
     /// Construct an unmetered client for a given Google Calendar API base,
-    /// such as `crates/gmail_emulator`'s in a test.
+    /// such as `crates/testing/gmail_emulator`'s in a test.
     pub fn new_with_url(client: Client, api_base: String) -> Self {
         Self {
             client,

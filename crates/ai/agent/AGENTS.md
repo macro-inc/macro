@@ -14,7 +14,7 @@ and usage metering.
 - `src/model/`: provider adapters (`anthropic.rs`, `openai.rs`, `gemini.rs`)
   behind `model/router.rs` (the Gemini client's host is
   `macro_service_urls`' `GoogleGenerativeAiApiUrl`, so a local stack can
-  point it at `crates/model_emulator`), plus `predefined_model.rs`/`speed.rs` (the
+  point it at `crates/testing/model_emulator`), plus `predefined_model.rs`/`speed.rs` (the
   product-facing model/speed vocabulary) and `metering.rs` (usage recording
   hook into `ai_usage`).
 - `AgentLoop::with_streamed_tool_calls` opts hosts into early tool-call

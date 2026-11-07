@@ -12,7 +12,7 @@ use super::ledger::{self, Ledger};
 use super::{GMAIL, JUNIT_NAME, KNOWN_BUG, Model, OUTLOOK, Status, evidence};
 
 /// Where the scenarios are.
-const SCENARIOS_DIR: &str = "crates/email_e2e/tests";
+const SCENARIOS_DIR: &str = "crates/testing/email_e2e/tests";
 
 /// What the reason of an `#[ignore]` starts with on a scenario kept for a
 /// known bug; the bug's id follows.

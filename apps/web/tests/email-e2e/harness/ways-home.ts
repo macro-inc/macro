@@ -96,7 +96,7 @@ const MICROSOFT_SCOPES = [
  * The service answers token requests for an inbox by its link id, which only
  * `/email/init` mints; the emulator learns it from that answer before the
  * browser gets it, as the stack's own linking does after the same call
- * (`start_link` in `crates/email_e2e/src/user.rs`).
+ * (`start_link` in `crates/testing/email_e2e/src/user.rs`).
  */
 async function standInForMicrosoft(
   page: Page,

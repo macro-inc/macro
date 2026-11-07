@@ -20,11 +20,11 @@ use tokio_util::task::TaskTracker;
 
 /// The local development certificate authority, which the Outlook emulator
 /// is told to trust.
-pub(crate) const AUTHORITY: &str = include_str!("../../../infra/local/certs/ca.pem");
+pub(crate) const AUTHORITY: &str = include_str!("../../../../infra/local/certs/ca.pem");
 /// A certificate of that authority for `localhost`. Not a secret: see
 /// `infra/local/certs/README.md`.
-const CERTIFICATE: &str = include_str!("../../../infra/local/certs/localhost.pem");
-const KEY: &str = include_str!("../../../infra/local/certs/localhost-key.pem");
+const CERTIFICATE: &str = include_str!("../../../../infra/local/certs/localhost.pem");
+const KEY: &str = include_str!("../../../../infra/local/certs/localhost-key.pem");
 
 /// The running listener.
 pub(crate) struct TlsFront {

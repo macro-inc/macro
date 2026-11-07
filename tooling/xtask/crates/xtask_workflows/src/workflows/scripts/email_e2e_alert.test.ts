@@ -391,12 +391,12 @@ describe('findings', () => {
       ],
     },
     broken: [
-      'crates/email_e2e/coverage/proofs.tsv: the scenario `search gmail_a_quoted_query_finds_the_exact_phrase` is not in the results',
+      'crates/testing/email_e2e/coverage/proofs.tsv: the scenario `search gmail_a_quoted_query_finds_the_exact_phrase` is not in the results',
     ],
     gaps: [
       'scenario `attachment_documents gmail_attachment_of_a_replaced_draft_is_not_found` failed',
       'scenario `sync_ingestion outlook_draft_without_a_sender_gets_its_attachment_stored` failed',
-      'scenario `outlook outlook_reply_keeps_its_thread`, kept for a known bug, passes: remove its `#[ignore]` so it gates, and the `bug` line of its function in crates/email_e2e/coverage/functions.toml',
+      'scenario `outlook outlook_reply_keeps_its_thread`, kept for a known bug, passes: remove its `#[ignore]` so it gates, and the `bug` line of its function in crates/testing/email_e2e/coverage/functions.toml',
       'function F-021 (Pick up a draft created or changed at the provider) is not proved on gmail: scenarios perform it and none is said to check it',
     ],
   };

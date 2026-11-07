@@ -1,6 +1,6 @@
 # Email browser suite
 
-The built web app in headless Chromium against the `crates/email_e2e` stack:
+The built web app in headless Chromium against the `crates/testing/email_e2e` stack:
 the real `email_service`, `pubsub_workers` and `document_storage_service`
 (GraphQL), with the Gmail and Outlook emulators as the providers. Each test
 gets its own stack, user and linked inbox, so tests run in parallel and share
@@ -19,7 +19,7 @@ just email-e2e-browser reply           # arguments go to Playwright
 just apps/web/test-email-e2e-browser   # only the run, when everything is built
 ```
 
-It needs what `just email-e2e` needs (`crates/email_e2e/AGENTS.md`: Postgres,
+It needs what `just email-e2e` needs (`crates/testing/email_e2e/AGENTS.md`: Postgres,
 Redis, an ElasticMQ and a Kafka broker in `EMAIL_E2E_*`), the repository's
 `bun install`, and Chromium (`bunx playwright install chromium`, or
 `PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH`). `EMAIL_E2E_BROWSER_WORKERS` sets how
@@ -29,7 +29,7 @@ Postgres connections and one Redis database each).
 
 ## How it works
 
-- `global-setup.ts` starts `email_e2e_stacks` (`crates/email_e2e/src/stack_server.rs`),
+- `global-setup.ts` starts `email_e2e_stacks` (`crates/testing/email_e2e/src/stack_server.rs`),
   which starts and stops stacks over HTTP; `harness/stack.ts` is its client.
   It keeps a stack for every two workers started ahead (`EMAIL_E2E_STACK_POOL`; `0`
   starts each when asked): a test is handed a started stack, which no other
@@ -163,7 +163,7 @@ nix develop -c just apps/web/test-email-e2e-full-stack email-e2e reply   # only 
   is finished (`backfilled` in `full-stack-notifications.spec.ts`).
   `askAs(user, path)` asks a service as another signed-in user.
 - The assistant never calls a model there. The stack runs a stand-in for
-  the model (`crates/model_emulator`) that answers from scripts:
+  the model (`crates/testing/model_emulator`) that answers from scripts:
   `harness/model.ts` adds one (`scriptModel`: the model's turns, each text
   or tool calls), and the conversation whose message carries
   `scriptMarker(name)` is answered from it. The stand-in is shared, so a

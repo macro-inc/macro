@@ -203,14 +203,14 @@ inbox.
 
 A stack whose environment names no real Google OAuth client (`--no-doppler`
 without Google keys in `--env-file`) starts the Gmail emulator
-(`crates/gmail_emulator`) as the `gmail_emulator` service. FusionAuth's `google`
+(`crates/testing/gmail_emulator`) as the `gmail_emulator` service. FusionAuth's `google`
 and `google_gmail` identity providers and the services' Google URLs
 (`OVERRIDE_GMAIL_API_URL`, `OVERRIDE_GOOGLE_OAUTH_TOKEN_URL` and the rest, in
 `xtask_local`'s `google_emulator.rs`) point at it. Nothing talks to Google.
 
 - **Continue with Google** opens the emulator's page in place of Google's. Pick
   one of the seeded users (`ada@example.com`, `bob@example.com`,
-  `carol@example.com`, from `crates/gmail_emulator/seed.example.yaml`). A first
+  `carol@example.com`, from `crates/testing/gmail_emulator/seed.example.yaml`). A first
   sign-in creates the Macro account and connects that user's mailbox.
 - **Connect another account** in Email, and the email steps of onboarding, open
   the same page; pick another seeded user to add their mailbox.
@@ -242,7 +242,7 @@ With real Google keys the emulator does not start and Google is used as before.
 
 A stack whose environment names no real Microsoft OAuth client
 (`MICROSOFT_CLIENT_ID` absent from Doppler and `--env-file`) starts the Outlook
-emulator (`crates/outlook_emulator`) as the `outlook_emulator` service.
+emulator (`crates/testing/outlook_emulator`) as the `outlook_emulator` service.
 FusionAuth's `microsoft` identity provider and the services' Microsoft URLs
 (`OVERRIDE_MICROSOFT_GRAPH_URL`, `OVERRIDE_MICROSOFT_LOGIN_URL`,
 `OVERRIDE_MICROSOFT_LOGIN_PAGE_URL`, with the emulator's OAuth client and the
@@ -253,7 +253,7 @@ The authentication service runs without a PostHog key there, so
 
 - **Continue with Microsoft** opens the emulator's page in place of Microsoft's.
   Pick one of the seeded users (`ada@example.com`, `bob@example.com`,
-  `carol@example.com`, from `crates/outlook_emulator/seed.example.yaml`). A first
+  `carol@example.com`, from `crates/testing/outlook_emulator/seed.example.yaml`). A first
   sign-in creates the Macro account.
 - **Connect Outlook**, in onboarding and in Email, opens the same page; pick a
   seeded user to connect their mailbox. Sign-in and the mailbox are separate
@@ -290,7 +290,7 @@ no `microsoft` identity provider for a real client.
 A stack whose environment names no real Gemini key
 (`GOOGLE_GENERATIVE_AI_API_KEY` absent from Doppler, `--env-file` and the
 environment the stack is started from) starts
-the model emulator (`crates/model_emulator`) as the `model_emulator` service,
+the model emulator (`crates/testing/model_emulator`) as the `model_emulator` service,
 and `OVERRIDE_GOOGLE_GENERATIVE_AI_API_URL` points the agent harness's Gemini
 client at it (`xtask_local`'s `model_emulator.rs`). A new local user is on
 the free plan, whose model is Gemini Flash, so the assistant's turns are answered by the

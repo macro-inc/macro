@@ -1,4 +1,4 @@
-//! The Gmail emulator (`crates/gmail_emulator`) as part of a local stack.
+//! The Gmail emulator (`crates/testing/gmail_emulator`) as part of a local stack.
 //!
 //! A stack with no real Google OAuth client cannot reach Google: sign-in with
 //! Google and Gmail linking would dead-end at a consent screen for a client
@@ -24,7 +24,7 @@ const CONTAINER_PORT: u16 = 8080;
 /// The seed inside the container.
 const SEED_MOUNT: &str = "/etc/gmail-emulator/seed.yaml";
 /// The users and mailboxes a stack starts with.
-const SEED_FILE: &str = "crates/gmail_emulator/seed.example.yaml";
+const SEED_FILE: &str = "crates/testing/gmail_emulator/seed.example.yaml";
 /// The OAuth client the services and FusionAuth present. It matches the
 /// placeholders `BootStubEnv` gives the services; the emulator accepts any.
 const CLIENT_ID: &str = "local-google-client";

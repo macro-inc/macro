@@ -139,7 +139,7 @@ impl FusionAuthClient {
 
     /// Sets the Google OAuth token and revocation endpoints, in place of
     /// the ones `GoogleOauthTokenUrl` and `GoogleOauthRevokeUrl` name. For
-    /// tests that run against `crates/gmail_emulator`.
+    /// tests that run against `crates/testing/gmail_emulator`.
     pub fn with_google_oauth_urls(mut self, token_url: String, revoke_url: String) -> Self {
         self.google_token_url = token_url;
         self.google_revoke_url = revoke_url;

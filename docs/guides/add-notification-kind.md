@@ -288,4 +288,4 @@ Then trigger the event on a local stack ([running locally](../development/runnin
 and confirm the row in the inbox, its click target, the live update in a second
 tab, and the settings toggle. The `live-debug` skill shows the ingress and egress
 spans; local-e2e notification tests live in
-`crates/integration_tests/local_e2e/tests/channel_mutations.rs`.
+`crates/testing/local_e2e/tests/channel_mutations.rs`.

@@ -92,16 +92,16 @@ last pass.
    that will not be fixed now: keep the test, asserting the right behaviour,
    and mark it as a known bug, so it stops gating. A Rust scenario gets
    `#[ignore = "known bug: <class id>"]`
-   ([`crates/email_e2e/AGENTS.md`](../../crates/email_e2e/AGENTS.md)); a
+   ([`crates/testing/email_e2e/AGENTS.md`](../../crates/testing/email_e2e/AGENTS.md)); a
    browser test gets `{ tag: '@known-bug' }` and a line in
    `ledger/waivers.tsv`
    ([README](../../apps/web/tests/email-e2e/README.md)). A bug that shows
    only in some runs is also tagged `@sometimes` (browser) or named under
-   `[[intermittent_bug]]` in `crates/email_e2e/coverage/waivers.toml` (Rust).
+   `[[intermittent_bug]]` in `crates/testing/email_e2e/coverage/waivers.toml` (Rust).
 4. Kept for a known bug and now passing: the bug is fixed, and the alert
    comes from the known-bug report, not from a gating test. Remove the
    `#[ignore]` and the `bug` line of its function in
-   `crates/email_e2e/coverage/functions.toml`, or the `@known-bug` tag and
+   `crates/testing/email_e2e/coverage/functions.toml`, or the `@known-bug` tag and
    its waiver line, so the test gates again.
 5. "This commit passed in an earlier run" means the failure may be flaky:
    re-run the failed jobs, and treat a test that passes only on a retry as a

@@ -8,17 +8,17 @@
   GraphQL resolvers, queue messages, Kafka events, gateway pushes, agent
   tools, lambdas, provider API methods, background loops, and the
   hand-listed routes of other services that scenarios record) to
-  `crates/email_e2e/coverage/entrypoints.tsv`, read from the source code so
+  `crates/testing/email_e2e/coverage/entrypoints.tsv`, read from the source code so
   the list cannot go stale.
-- `report` joins the records the `crates/email_e2e` scenarios leave
+- `report` joins the records the `crates/testing/email_e2e` scenarios leave
   (`evidence.json`) and nextest's `junit.xml` with the ledger, and says
   which functions of email are proved, claimed or only performed on Gmail
-  and on Outlook and which entry points are reached. `crates/email_e2e/AGENTS.md` (Coverage) explains
+  and on Outlook and which entry points are reached. `crates/testing/email_e2e/AGENTS.md` (Coverage) explains
   the ledger files.
 
 ## Start here
 
-- `crates/email_e2e/coverage/sources.toml`: where each kind is looked for, and
+- `crates/testing/email_e2e/coverage/sources.toml`: where each kind is looked for, and
   the few facts that are not in code (`src/sources.rs` is its schema).
 - `src/list.rs`: one module per kind under `src/list/`; provider defaults and
   `[[applies]]` overrides.
@@ -46,7 +46,7 @@
 - `cargo x email-coverage list --check` (passes when the checked-in list is current)
 - After changing an email route, resolver, message type or tool:
   `cargo x email-coverage list`, commit the file, and give the new entry
-  point a function in `crates/email_e2e/coverage/functions.toml`.
+  point a function in `crates/testing/email_e2e/coverage/functions.toml`.
 - `just email-e2e-coverage` after a local `just email-e2e`; add `--enforce`
   to see what CI fails on.
 
@@ -106,7 +106,7 @@
   so a job that has no such scenario left must stop being passed (the list
   is in `email_e2e_coverage.sh`). Without the flag nothing is judged.
 - A `bug` in `functions.toml` must be the id of an
-  `#[ignore = "known bug: <id>"]` in `crates/email_e2e/tests`, and every
+  `#[ignore = "known bug: <id>"]` in `crates/testing/email_e2e/tests`, and every
   `#[ignore]` there must have such a reason: the report fails otherwise,
   with or without `--enforce`. A `bug` line left behind would keep its
   function out of the gaps for good.

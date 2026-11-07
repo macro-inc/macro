@@ -42,7 +42,7 @@ gateway `/calendar` prefix.
 - `cargo test -p calendar_service` (`SQLX_OFFLINE` unset).
 - `curl http://localhost:8088/health` after `just run_local`.
 
-- Run it without a Google account: `crates/gmail_emulator` serves the
+- Run it without a Google account: `crates/testing/gmail_emulator` serves the
   Calendar API and pushes to `/notifications`; its `AGENTS.md` lists the
   overrides. A local stack with no Google client sets them by itself.
 

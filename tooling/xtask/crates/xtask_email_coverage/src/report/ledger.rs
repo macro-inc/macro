@@ -16,13 +16,13 @@ use crate::Kind;
 /// The functions of email, shared with the web app's suite.
 pub(crate) const FUNCTIONS_PATH: &str = "apps/web/tests/email-e2e/ledger/functions.tsv";
 /// How the backend carries each function out.
-pub(crate) const MAP_PATH: &str = "crates/email_e2e/coverage/functions.toml";
+pub(crate) const MAP_PATH: &str = "crates/testing/email_e2e/coverage/functions.toml";
 /// The scenarios that check a function's result.
-pub(crate) const CHECKS_PATH: &str = "crates/email_e2e/coverage/checks.tsv";
+pub(crate) const CHECKS_PATH: &str = "crates/testing/email_e2e/coverage/checks.tsv";
 /// The breaks in product code that made a scenario fail.
-pub(crate) const PROOFS_PATH: &str = "crates/email_e2e/coverage/proofs.tsv";
+pub(crate) const PROOFS_PATH: &str = "crates/testing/email_e2e/coverage/proofs.tsv";
 /// What is left uncovered on purpose, and what is counted elsewhere.
-pub(crate) const WAIVERS_PATH: &str = "crates/email_e2e/coverage/waivers.toml";
+pub(crate) const WAIVERS_PATH: &str = "crates/testing/email_e2e/coverage/waivers.toml";
 
 const FUNCTIONS_HEADER: &str = "id\tarea\tfunction\tgmail\toutlook\tui\tresult_checked_at";
 const CHECKS_HEADER: &str = "function\tscenario";

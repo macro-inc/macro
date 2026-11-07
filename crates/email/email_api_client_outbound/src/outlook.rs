@@ -67,7 +67,7 @@ impl OutlookApiClientRepository {
     }
     /// Build a Graph adapter with redirects and automatic retries disabled.
     /// It calls Microsoft's public cloud unless `OVERRIDE_MICROSOFT_GRAPH_URL`
-    /// names another root, such as `crates/outlook_emulator`'s.
+    /// names another root, such as `crates/testing/outlook_emulator`'s.
     pub fn new() -> Result<Self, EmailApiError> {
         let url = MicrosoftGraphUrl::new().map_err(|error| EmailApiError::Permanent {
             message: error.to_string(),

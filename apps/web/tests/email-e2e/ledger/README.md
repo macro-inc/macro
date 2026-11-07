@@ -218,7 +218,7 @@ break in the service code instead: the same kind of guard on the process
 environment variable `EMAIL_E2E_BREAK`, in a build of the services kept
 outside the tree and named by `EMAIL_E2E_BIN_DIR`. The stack starts the
 services with a cleared environment, so the uncommitted patch also forwards
-that one variable in `crates/email_e2e/src/process.rs`.
+that one variable in `crates/testing/email_e2e/src/process.rs`.
 
 ## Changing the manifest
 

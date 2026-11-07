@@ -35,7 +35,7 @@ clean:
 build:
     SQLX_OFFLINE=true cargo build
 
-# The end-to-end email suite (crates/email_e2e/AGENTS.md): the real
+# The end-to-end email suite (crates/testing/email_e2e/AGENTS.md): the real
 # email_service, its workers and calendar_service against the provider emulators. Needs
 # EMAIL_E2E_SQS_URL (ElasticMQ) and EMAIL_E2E_KAFKA_BROKERS besides Postgres
 # and Redis, and for building document_storage_service either the
@@ -49,7 +49,7 @@ email-e2e *args:
 # which still fail, and which now pass and should start gating.
 email-e2e-known-bugs *args:
     SQLX_OFFLINE=true cargo build -p email_service --bin email_service --bin pubsub_workers -p email_scheduled_handler --bin email_scheduled_handler -p user_link_cleanup_handler --bin user_link_cleanup_handler -p email_sfs_delete_handler --bin email_sfs_delete_handler -p email_suppression_handler --bin email_suppression_handler -p email_refresh_handler --bin email_refresh_handler -p calendar_service --bin calendar_service -p document_storage_service --bin document_storage_service -p email_focus_worker --bin email_focus_worker -p search_processing_service --bin search_processing_service --features search_processing_service/no_pdf
-    SQLX_OFFLINE=true crates/email_e2e/scripts/known_bugs.sh {{ args }}
+    SQLX_OFFLINE=true crates/testing/email_e2e/scripts/known_bugs.sh {{ args }}
 
 # What the last `just email-e2e` run covers: the functions of email and the
 # backend entry points, from the records its scenarios left. Writes

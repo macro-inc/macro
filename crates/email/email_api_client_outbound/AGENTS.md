@@ -116,7 +116,7 @@ admission gate every Graph request passes.
   data first.
 - The Graph root is `microsoft_graph_url::MicrosoftGraphUrl`, so
   `OVERRIDE_MICROSOFT_GRAPH_URL` points every Outlook client in a process at
-  `crates/outlook_emulator`; tests in other crates use
+  `crates/testing/outlook_emulator`; tests in other crates use
   `OutlookApiClientRepository::for_graph_url`. Continuation links and upload
   URLs are only followed on the root's origin (or Microsoft's upload hosts),
   so an emulator must serve them itself.
