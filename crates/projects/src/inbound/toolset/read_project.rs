@@ -8,6 +8,7 @@ use entity_access::domain::ports::EntityAccessService;
 use entity_mutation::{DuplicateEntity, MoveEntity};
 use model::item::Item;
 use model_entity::EntityType;
+use project_id::ProjectId;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
@@ -135,7 +136,7 @@ where
         // SAFETY: This is allowed because the user has view access from the receipt above.
         let project = service_context
             .service
-            .internal_get_basic_project(&project_id)
+            .internal_get_basic_project(&ProjectId::from(&*project_id))
             .await
             .map_err(|e| ToolCallError {
                 description: "unable to get the project".to_string(),

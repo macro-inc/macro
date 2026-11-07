@@ -1438,6 +1438,7 @@ dependencies = [
  "models_soup",
  "notification",
  "pipedream_mcp",
+ "project_id",
  "projects",
  "prompt",
  "properties",
@@ -17111,6 +17112,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "project_id"
+version = "0.1.0"
+dependencies = [
+ "nutype",
+ "serde",
+ "serde_json",
+ "sqlx",
+ "utoipa",
+]
+
+[[package]]
 name = "projects"
 version = "0.1.0"
 dependencies = [
@@ -17154,6 +17166,7 @@ dependencies = [
  "model_user",
  "models_bulk_upload",
  "models_permissions",
+ "project_id",
  "rdkafka",
  "rootcause",
  "s3_key",

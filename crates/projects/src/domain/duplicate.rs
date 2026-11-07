@@ -12,6 +12,7 @@
 #[cfg(test)]
 mod test;
 
+use project_id::ProjectId;
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -250,7 +251,7 @@ where
     ) -> Result<Vec<EntityMutationEffect>, EntityMutationErrorCode> {
         let source = self
             .projects
-            .internal_get_basic_project(&entity.entity_id)
+            .internal_get_basic_project(&ProjectId::from(&*entity.entity_id))
             .await?;
         if source.deleted_at.is_some() {
             return Err(EntityMutationErrorCode::invalid(rootcause::report!(
