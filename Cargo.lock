@@ -1168,6 +1168,7 @@ dependencies = [
  "sqlx",
  "static_file",
  "system_properties",
+ "teams",
  "tokio",
  "tracing",
  "workspace-hack",
@@ -1233,7 +1234,6 @@ dependencies = [
  "serde_json",
  "sqlx",
  "strum 0.27.2",
- "teams",
  "thiserror 2.0.18",
  "tokio",
  "tracing",
@@ -1254,6 +1254,7 @@ dependencies = [
  "macro_uuid",
  "rootcause",
  "sqlx",
+ "teams",
  "tokio",
  "tracing",
  "workspace-hack",
@@ -21223,6 +21224,7 @@ dependencies = [
 name = "teams"
 version = "0.1.0"
 dependencies = [
+ "ai_billing",
  "ai_toolset",
  "analytics_client",
  "anyhow",

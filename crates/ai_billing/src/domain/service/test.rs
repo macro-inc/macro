@@ -14,7 +14,6 @@ use macro_user_id::cowlike::CowLike;
 use macro_uuid::Uuid;
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
-use teams::domain::open_seat_release::OpenSeatRelease;
 
 fn user(email: &str) -> MacroUserIdStr<'static> {
     MacroUserIdStr::try_from(format!("macro|{email}")).unwrap()
@@ -2679,7 +2678,7 @@ async fn release_targets_the_payer_open_period() {
     )
     .with_billing(AiUsageBilling::Enabled);
 
-    svc.release(team_id, &member).await.unwrap();
+    svc.release_seat(team_id, &member).await.unwrap();
 
     assert_eq!(
         repo.releases(),
@@ -2715,7 +2714,7 @@ async fn release_missing_team_leaves_allowances_unchanged() {
     )
     .with_billing(AiUsageBilling::Enabled);
 
-    svc.release(Uuid::from_u128(8), &member).await.unwrap();
+    svc.release_seat(Uuid::from_u128(8), &member).await.unwrap();
 
     assert!(repo.releases().is_empty());
     assert_eq!(
@@ -2754,7 +2753,7 @@ async fn release_refuses_to_remove_the_payer() {
     )
     .with_billing(AiUsageBilling::Enabled);
 
-    svc.release(team_id, &owner).await.unwrap();
+    svc.release_seat(team_id, &owner).await.unwrap();
 
     assert!(repo.releases().is_empty());
     assert_eq!(

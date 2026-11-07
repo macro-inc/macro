@@ -188,9 +188,10 @@ pub fn personal_plan_change(
             PlanTier::Free
         } else {
             let price = previous_item?.price.as_ref()?;
-            prices.plan_for_price(price.as_str())?.into()
+            teams::outbound::billing_seats::plan_tier(prices.plan_for_price(price.as_str())?)
         };
-        let to: PlanTier = prices.plan_for_price(item.price.as_str())?.into();
+        let to =
+            teams::outbound::billing_seats::plan_tier(prices.plan_for_price(item.price.as_str())?);
         let period = item.period?;
         let previous_period_start = previous_item
             .and_then(|previous| previous.period_start)

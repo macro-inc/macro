@@ -182,7 +182,9 @@ impl RequestSessions for CorrelationSessions {
 }
 
 /// Paid plans, as AI billing sees them: a paid seat or an enterprise team.
-struct EntitlementPlans(ai_billing::composition::PgEntitlementSource);
+struct EntitlementPlans(
+    ai_billing::composition::PgEntitlementSource<teams::outbound::team_repo::TeamRepositoryImpl>,
+);
 
 #[async_trait::async_trait]
 impl suggestion_generation::domain::ports::Plans for EntitlementPlans {
@@ -507,6 +509,7 @@ pub async fn build<Ingress: notification::domain::service::NotificationIngress>(
     let inbox_delegates = Arc::new(PgInboxDelegates::new(db.clone()));
     let ai_admission = ai_billing::composition::pg_admission_service(
         db.clone(),
+        teams::outbound::team_repo::TeamRepositoryImpl::new(db.clone()),
         config.enable_ai_usage_enforcement,
         config.ai_pricing(),
     );
@@ -531,6 +534,7 @@ pub async fn build<Ingress: notification::domain::service::NotificationIngress>(
                 provider,
                 ai_billing::composition::pg_settling_recorder(
                     db.clone(),
+                    teams::outbound::team_repo::TeamRepositoryImpl::new(db.clone()),
                     config.enable_ai_usage_enforcement,
                     config.ai_pricing(),
                     config.settlement_route()?,
@@ -759,6 +763,7 @@ pub async fn build<Ingress: notification::domain::service::NotificationIngress>(
                 admission: Arc::clone(&ai_admission),
                 recorder: ai_billing::composition::pg_settling_recorder(
                     db.clone(),
+                    teams::outbound::team_repo::TeamRepositoryImpl::new(db.clone()),
                     config.enable_ai_usage_enforcement,
                     config.ai_pricing(),
                     config.settlement_route()?,
@@ -805,7 +810,10 @@ pub async fn build<Ingress: notification::domain::service::NotificationIngress>(
     // mail through email_service, which reads it from the provider.
     let generations = Arc::new(PgGenerationRepo::new(db.clone()));
     let plans: Arc<dyn suggestion_generation::domain::ports::Plans> = Arc::new(EntitlementPlans(
-        ai_billing::composition::pg_entitlement_source(db.clone()),
+        ai_billing::composition::pg_entitlement_source(
+            db.clone(),
+            teams::outbound::team_repo::TeamRepositoryImpl::new(db.clone()),
+        ),
     ));
     let suggestions = Arc::new(RoutineSuggestionService::new(
         Arc::clone(&service),

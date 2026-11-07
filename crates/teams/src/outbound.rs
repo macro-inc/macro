@@ -1,3 +1,5 @@
+#[cfg(feature = "ai_billing")]
+pub mod billing_seats;
 pub mod colleague_directory;
 pub mod contacts_enqueuer;
 pub mod crm_enqueuer;
