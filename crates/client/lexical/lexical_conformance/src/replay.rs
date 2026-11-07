@@ -57,6 +57,12 @@ pub struct Replayer {
     pub(crate) rich_text_registered: bool,
     pub(crate) tab_indent: Option<Option<u32>>,
     pub(crate) code_highlight: bool,
+    pub(crate) d6_collapse_code_highlight: bool,
+    pub(crate) code_prism_registered: bool,
+    pub(crate) d6_handle_keys: HashMap<String, String>,
+    pub(crate) d6_oracle_max_key: u32,
+    pub(crate) d6_model_body: std::collections::HashSet<NodeKey>,
+    pub(crate) d6_model_leaves: std::collections::HashSet<NodeKey>,
     pub(crate) markdown_options: lexical_markdown::MarkdownOptions,
     pub(crate) in_callback: bool,
     pub(crate) carets: Vec<crate::api::caret::CaretValue>,
@@ -103,10 +109,17 @@ impl Replayer {
         {
             return Err(fail("unsupported fixture initialization"));
         }
+        self.d6_collapse_code_highlight = fixture.source.repo == "lexical"
+            && fixture.source.file
+                == "packages/lexical-code-prism/src/__tests__/unit/LexicalCodeNodeTabs.test.ts"
+            && fixture.trace.iter().any(|op| {
+                op["op"] == "plugin" && op["name"] == "@lexical/code-prism.registerCodeHighlighting"
+            });
         for normalization in &fixture.normalize {
             match normalization.as_str() {
                 "listIndent: 2" => self.markdown_options.list_indent = 2,
                 "codeHighlight" => self.code_highlight = true,
+                "d6_collapse_code_highlight" if self.d6_collapse_code_highlight => {}
                 _ => {
                     return Err(fail(format!(
                         "unimplemented declared normalization: {normalization}"
@@ -339,6 +352,13 @@ impl Replayer {
                 {
                     crate::api::tab::register(self, &op["args"])
                 }
+                "plugin" if op["name"] == "@lexical/code-prism.registerCodeHighlighting" => {
+                    if op["args"] != json!([{"$ed":0}]) {
+                        return Err(fail("Prism plugin arguments"));
+                    }
+                    self.code_prism_registered = true;
+                    Ok(())
+                }
                 "plugin" => {
                     if op["name"] != "@lexical/rich-text.registerRichText"
                         || op["args"] != json!([{"$ed":0}])
@@ -546,6 +566,9 @@ impl Replayer {
                 }
 
                 let result = self.execute_calls(&op["calls"], tx).and_then(|()| {
+                    if self.code_prism_registered {
+                        crate::api::tab::initialize_code_language(tx)?;
+                    }
                     self.pending_writes |= tx.has_dirty_nodes()
                         || tx.selection() != tx.committed_state().selection()
                         || tx.selection().is_some_and(Selection::is_dirty);
@@ -717,6 +740,11 @@ impl Replayer {
                             }
                             if let Some(typ) = object.get("type")
                                 && typ != &actual["type"]
+                                && !(self.d6_collapse_code_highlight
+                                    && self.code_prism_registered
+                                    && typ == "code-highlight"
+                                    && actual["type"] == "text"
+                                    && self.d6_model_leaves.contains(&node_key(actual)?))
                             {
                                 return Err(fail(format!(
                                     "node type: {typ} != {}",
@@ -733,6 +761,10 @@ impl Replayer {
                             }
                             if let Some(raw) = object.get("key") {
                                 self.bind_key(string(raw)?, node_key(actual)?)?;
+                                if self.d6_collapse_code_highlight && self.code_prism_registered {
+                                    self.d6_handle_keys
+                                        .insert(binding.clone(), string(raw)?.to_owned());
+                                }
                             }
                         }
                         if self

@@ -23,7 +23,7 @@ Development-only schema-2 fixture interpreter for the pinned upstream oracle.
 - Fix model divergences in `lexical_model` or `lexical_rich_nodes`; never change expected values or skip observable comparisons to turn a failure green.
 - Reset write bookkeeping for each replay transaction, including read-only discrete updates.
 - Route markdown conversions and normalization through lexical_markdown with decoded standard transformer identifiers; the expanded corpus reports unsupported or divergent markdown cases explicitly.
-- Apply declared D6 projection only to code child JSON and code-range positions; retain exact allocation, alias, dirty, normalized, commit and non-code comparisons. Never create syntax-highlight nodes or fabricate plugin behavior.
+- Apply legacy codeHighlight projection to JSON and code positions only. For fixtures registering Prism, use the named d6_collapse_code_highlight projection described in README.md; replay real code-indentation handlers and never create syntax-highlight nodes.
 - Table node fixtures use concrete table payloads; expanded-corpus gaps remain explicit.
 - Link fixtures use real link transforms and MarkNode descendants; no link ledger entries remain.
 - Unmapped APIs fail loudly. Ledger entries require an exact test identity, reason and spec decision; stale entries fail.

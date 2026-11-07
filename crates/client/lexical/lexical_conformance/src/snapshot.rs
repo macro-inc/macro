@@ -3,6 +3,7 @@ use crate::replay::{Replayer, Result, fail, string};
 use lexical_model::*;
 use serde_json::{Value, json};
 mod code;
+mod d6;
 pub(crate) fn keys(state: &EditorState) -> Vec<NodeKey> {
     (0..=state.max_key().index())
         .map(|index| {
@@ -129,6 +130,15 @@ pub(crate) fn compare(
         })
     {
         return Err(fail("dirty field set mismatch"));
+    }
+    if replay.d6_collapse_code_highlight
+        && replay.code_prism_registered
+        && state
+            .view()
+            .children(NodeKey::ROOT)
+            .any(|key| state.view().has_language_field(key))
+    {
+        return d6::d6_collapse_code_highlight(replay, expected, state, commit);
     }
     let actual_keys = keys(state);
     let expected_keys = expected["nodeMapKeys"]

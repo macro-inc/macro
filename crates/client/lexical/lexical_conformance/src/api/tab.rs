@@ -25,6 +25,17 @@ pub(crate) fn dispatch(
     command: &str,
     payload: &Value,
 ) -> Result<bool> {
+    use lexical_rich_nodes::code::indent::{self, CodeIndentOptions, TabAction};
+    if command == "KEY_TAB_COMMAND" && r.code_prism_registered {
+        if let Some(action) = indent::handle_key_tab(tx.view(), payload["shiftKey"] == true)? {
+            let command = match action {
+                TabAction::InsertTab => "INSERT_TAB_COMMAND",
+                TabAction::Indent => "INDENT_CONTENT_COMMAND",
+                TabAction::Outdent => "OUTDENT_CONTENT_COMMAND",
+            };
+            return dispatch(r, tx, command, &Value::Null);
+        }
+    }
     if command == "KEY_TAB_COMMAND" && r.tab_indent.is_some() {
         let Some(range) = tx.selection().and_then(Selection::as_range) else {
             return Ok(false);
@@ -49,10 +60,29 @@ pub(crate) fn dispatch(
         {
             return Ok(true);
         }
+        if r.code_prism_registered
+            && indent::handle_multiline_indent(tx, TabAction::Indent, CodeIndentOptions::default())?
+        {
+            return Ok(true);
+        }
         if r.rich_text_registered {
             return Ok(lexical_rich_nodes::rich_text::indent_content(tx)?);
         }
         return Ok(false);
+    }
+    if r.code_prism_registered {
+        let handled = match command {
+            "INSERT_TAB_COMMAND" => indent::insert_tab_in_code(tx)?,
+            "OUTDENT_CONTENT_COMMAND" => indent::handle_multiline_indent(
+                tx,
+                TabAction::Outdent,
+                CodeIndentOptions::default(),
+            )?,
+            _ => false,
+        };
+        if handled {
+            return Ok(true);
+        }
     }
     if !r.rich_text_registered {
         return Ok(false);
@@ -70,3 +100,21 @@ pub(crate) fn dispatch(
 
 #[cfg(test)]
 mod test;
+
+pub(crate) fn initialize_code_language(tx: &mut Transaction<'_>) -> Result<()> {
+    use lexical_rich_nodes::code::CodeNode;
+    let keys: Vec<_> = tx
+        .children(NodeKey::ROOT)
+        .filter(|key| tx.is::<CodeNode>(*key))
+        .collect();
+    for key in keys {
+        if tx
+            .get::<CodeNode>(key)
+            .is_some_and(|code| code.language().is_none())
+        {
+            tx.get_mut::<CodeNode>(key)?
+                .set_language(Some("javascript"));
+        }
+    }
+    Ok(())
+}
