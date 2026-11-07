@@ -3,8 +3,8 @@
 Prompt text is in no log or span, so it is rebuilt from source: the commit
 that served the turn is found, checked out (detached, under the cache
 directory), and `asv_reconstruct.rs` is built there as an example of
-`ai_tools`, so every string comes from that commit's own rendering code. Each
-part is then checked against the span: the bytes and the SHA-256 prefix the
+the target checkout's tools package, so every string comes from that commit's
+own rendering code. Each part is then checked against the span: the bytes and the SHA-256 prefix the
 harness records per prompt section. A part that matches is "verified"; one
 that does not is a "mismatch" and is shown as one; one with nothing to check
 against is "unverified".
@@ -27,14 +27,13 @@ import os
 import pathlib
 import re
 import shlex
-import shutil
+import tomllib
 import subprocess
 
 HERE = pathlib.Path(__file__).resolve().parent
 REPO = HERE.parents[1]
 CACHE = pathlib.Path.home() / ".cache" / "agent-session-view"
 EXAMPLE = HERE / "asv_reconstruct.rs"
-EXAMPLE_PATH = "crates/ai_tools/examples/asv_reconstruct.rs"
 PROD_DEPLOY = "Deploy Production Release"
 NOT_STARTED = {"queued", "pending", "waiting", "requested"}
 # `select_documentation` records its bytes before closing the block.
@@ -201,6 +200,85 @@ def closest_main(turn_started, reason):
     return {"sha": sha, "exact": False, "reason": reason}
 
 
+def reconstruction_packages(path):
+    """Resolve the tools and prompt libraries from the target workspace only."""
+    path = path.resolve()
+    def load(manifest):
+        try:
+            with manifest.open("rb") as source:
+                return tomllib.load(source)
+        except (OSError, tomllib.TOMLDecodeError) as error:
+            raise ReconstructionFailed(f"cannot read target manifest {manifest}: {error}") from error
+
+    workspace = load(path / "Cargo.toml").get("workspace")
+    if not isinstance(workspace, dict) or not isinstance(workspace.get("members"), list):
+        raise ReconstructionFailed("target manifest requires explicit workspace members")
+    manifests = set()
+    excluded = {item.resolve() for pattern in workspace.get("exclude", []) for item in path.glob(pattern)}
+    for pattern in workspace["members"]:
+        for member in path.glob(pattern):
+            if member.resolve() not in excluded and (member / "Cargo.toml").is_file():
+                manifests.add(member / "Cargo.toml")
+    found = {"tools": [], "prompt": []}
+    pending = list(manifests)
+    visited = set()
+    while pending:
+        manifest = pending.pop().resolve()
+        if manifest in visited or manifest.parent in excluded:
+            continue
+        visited.add(manifest)
+        metadata = load(manifest)
+        # Cargo also includes in-workspace path dependencies as implicit members.
+        tables = [metadata, *metadata.get("target", {}).values()]
+        for table in tables:
+            for section in ("dependencies", "dev-dependencies", "build-dependencies"):
+                for key, dependency in table.get(section, {}).items():
+                    if not isinstance(dependency, dict):
+                        continue
+                    base = manifest.parent
+                    if dependency.get("workspace"):
+                        dependency = workspace.get("dependencies", {}).get(key)
+                        if dependency is None:
+                            raise ReconstructionFailed(f"missing target workspace dependency {key} in {manifest}")
+                        base = path
+                    if not isinstance(dependency, dict) or "path" not in dependency:
+                        continue
+                    directory = (base / dependency["path"]).resolve()
+                    if directory.is_relative_to(path.resolve()) and directory not in excluded:
+                        child = directory / "Cargo.toml"
+                        if not child.is_file():
+                            raise ReconstructionFailed(f"missing target path dependency manifest {child}")
+                        pending.append(child)
+        name = metadata.get("package", {}).get("name")
+        role = "tools" if name in ("ai_tools", "agent_tools") else "prompt" if name in ("prompt", "agent_prompts") else None
+        if role is None:
+            continue
+        library = metadata.get("lib", {}).get("name", name.replace("-", "_"))
+        if not re.fullmatch(r"[A-Za-z_][A-Za-z_0-9]*", library):
+            raise ReconstructionFailed(f"invalid target library name in {manifest}")
+        found[role].append({"package": name, "directory": manifest.parent, "library": library})
+    for role, candidates in found.items():
+        if len(candidates) != 1:
+            raise ReconstructionFailed(f"target checkout requires exactly one {role} package; found {len(candidates)}")
+    return {role: candidates[0] for role, candidates in found.items()}
+
+
+def prepare_example(path, packages):
+    """Bind the copied template to this target's declared Rust libraries."""
+    destination = packages["tools"]["directory"] / "examples" / "asv_reconstruct.rs"
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    aliases = "".join(
+        f"extern crate {packages[role]['library']} as reconstruction_{role};\n"
+        for role in ("tools", "prompt")
+    )
+    text = EXAMPLE.read_text()
+    marker = "// TARGET_CHECKOUT_LIBRARY_ALIASES\n"
+    if text.count(marker) != 1:
+        raise ReconstructionFailed("reconstruction template requires one target-library binding marker")
+    destination.write_text(text.replace(marker, aliases))
+    return destination
+
+
 def checkout(sha):
     """A detached checkout of `sha` holding the reconstruction example."""
     path = CACHE / "src" / sha
@@ -210,8 +288,7 @@ def checkout(sha):
             subprocess.run(["git", "-C", str(REPO), "fetch", "-q", "origin", sha], check=True)
         path.parent.mkdir(parents=True, exist_ok=True)
         subprocess.run(["git", "-C", str(REPO), "worktree", "add", "-q", "--detach", str(path), sha], check=True)
-    (path / EXAMPLE_PATH).parent.mkdir(parents=True, exist_ok=True)
-    shutil.copyfile(EXAMPLE, path / EXAMPLE_PATH)
+    prepare_example(path, reconstruction_packages(path))
     return path
 
 
@@ -223,6 +300,7 @@ def render(sha, request):
     if cached.exists():
         return json.loads(cached.read_text())
     path = checkout(sha)
+    packages = reconstruction_packages(path)
     # A wrapper such as a build-slot queue, from ASV_BUILD_WRAPPER.
     wrapper = shlex.split(os.environ.get("ASV_BUILD_WRAPPER", ""))
     # The SDK documentation is generated by the TypeScript SDK; the commit's
@@ -240,7 +318,7 @@ def render(sha, request):
         *wrapper, "env", "SQLX_OFFLINE=true", f"CARGO_TARGET_DIR={CACHE / 'target' / sha}",
         f"CODE_MODE_ASSETS_DIR={assets.stdout.strip().splitlines()[-1]}",
         "nix", "develop", str(path), "-c",
-        "cargo", "run", "-q", "-p", "ai_tools", "--example", "asv_reconstruct",
+        "cargo", "run", "-q", "-p", packages["tools"]["package"], "--example", "asv_reconstruct",
     ]
     result = subprocess.run(command, input=payload, capture_output=True, text=True, cwd=path)
     if result.returncode != 0:

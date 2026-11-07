@@ -1,0 +1,53 @@
+[package]
+name = "web_search"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+[features]
+axum = [
+  "dep:axum",
+  "dep:axum-extra",
+  "dep:macro_authorization",
+  "dep:rate_limit",
+  "dep:rootcause",
+]
+
+[dependencies]
+ai_billing = { workspace = true }
+ai_toolset = { workspace = true }
+ai_usage = { workspace = true }
+anyhow.workspace = true
+async-trait.workspace = true
+axum = { workspace = true, optional = true }
+axum-extra = { workspace = true, optional = true }
+chrono.workspace = true
+macro_authorization = { workspace = true, features = [
+  "axum",
+], optional = true }
+macro_env_var = { workspace = true }
+macro_user_id = { workspace = true }
+macro_uuid = { workspace = true }
+rate_limit = { workspace = true, features = [
+  "axum",
+], optional = true }
+reqwest.workspace = true
+rootcause = { workspace = true, optional = true }
+schemars.workspace = true
+serde.workspace = true
+thiserror.workspace = true
+tracing.workspace = true
+url.workspace = true
+utoipa.workspace = true
+workspace-hack = { version = "0.1", path = "../../workspace-hack" }
+
+[dev-dependencies]
+model_user = { workspace = true }
+rate_limit = { workspace = true, features = [
+  "axum",
+  "testing",
+] }
+serde_json.workspace = true
+tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
+tower = { workspace = true, features = ["util"] }
+wiremock.workspace = true

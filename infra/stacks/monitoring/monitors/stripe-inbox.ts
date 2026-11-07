@@ -2,8 +2,8 @@
 // or disagrees with Stripe about.
 //
 // New monitors, not adopted. Each reads a log event with a fixed message
-// that crates/stripe_inbox writes from authentication-service, so these
-// strings are their contract (see crates/stripe_inbox/AGENTS.md):
+// that crates/billing/stripe_inbox writes from authentication-service, so these
+// strings are their contract (see crates/billing/stripe_inbox/AGENTS.md):
 //
 // - `stripe inbox cursor dead-lettered` (error): a consumer gave up on an
 //   event, at once for one it can never apply (a grant on an unknown price, a

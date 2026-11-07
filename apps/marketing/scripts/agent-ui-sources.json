@@ -63,12 +63,12 @@
       "consumer": "agentDemoData.ts"
     },
     {
-      "path": "crates/memory/src/domain/service.rs",
+      "path": "crates/ai/memory/src/domain/service.rs",
       "blob": "5be103c192128b793c6d0fb9ef3cf64e7478c032",
       "consumer": "ProductAgentsPage.tsx memory copy"
     },
     {
-      "path": "crates/ai_tools/src/lib.rs",
+      "path": "crates/ai/ai_tools/src/lib.rs",
       "blob": "30d01f6aad7aea8a7e1fc356b921ede9d2a05ccf",
       "consumer": "ProductAgentsPage.tsx MCP copy"
     },
