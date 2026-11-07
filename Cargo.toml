@@ -4,6 +4,12 @@ resolver = "2"
 exclude = ["vendor"]
 
 members = [
+  "crates/client/lexical/lexical_model",
+  "crates/client/lexical/lexical_conformance",
+  "crates/client/lexical/lexical_rich_nodes",
+  "crates/client/lexical/lexical_markdown",
+  "crates/client/lexical/lexical_conformance_wasm",
+  "crates/client/lexical/lexical_workspace_tests",
   "crates/access_requests",
   "crates/agent_api_keys",
   "crates/routines",
@@ -212,7 +218,27 @@ members = [
   "tooling/xtask/crates/*",
 ]
 
+# WP-00 reserves these dependencies for the following Lexical work packages.
+# Remove each exception when its first consumer lands (model, replay, XML, HTML).
+[workspace.metadata.cargo-shear]
+ignored = ["quick-xml", "rand_chacha"]
+
 [workspace.dependencies]
+phf = { version = "0.13.1", features = ["macros"] }
+lexical_model = { path = "crates/client/lexical/lexical_model" }
+lexical_rich_nodes = { path = "crates/client/lexical/lexical_rich_nodes" }
+lexical_markdown = { path = "crates/client/lexical/lexical_markdown" }
+# Shared dependencies for the portable Lexical model and its conformance suites.
+imbl = { version = "=7.0.2", default-features = false }
+rustc-hash = { version = "2.1.2", default-features = false }
+smallvec = { version = "1.15.1", default-features = false, features = ["const_generics"] }
+bitflags = { version = "2.11.1", default-features = false }
+regress = { version = "=0.12.0", default-features = false, features = ["std", "backend-pikevm", "utf16"] }
+quick-xml = { version = "0.41.0", default-features = false }
+insta = { version = "1.48.0", default-features = false }
+libtest-mimic = { version = "0.8.2", default-features = false }
+rand_chacha = { version = "0.9.0", default-features = false }
+ryu-js = { version = "1.0.2", default-features = false }
 aes = "0.8.4"
 aes-gcm = { version = "0.10.3", features = ["zeroize"] }
 anyhow = "1.0.100"
@@ -340,7 +366,7 @@ livekit-protocol = "0.7.2"
 log = "0.4.26"
 logos = "0.16"
 lol_html = "2.4.0"
-loro = "1.16.2"
+loro = "=1.17.1"
 lru = "0.16"
 md-5 = "0.10.6"
 miniz_oxide = { version = "0.8", features = ["with-alloc"] }
@@ -530,6 +556,8 @@ html-escape = "0.2"
 subtle = "2.6.1"
 
 [patch.crates-io]
+# Legacy ECMAScript case folding; see vendor/regress/README-MACRO.md.
+regress = { path = "vendor/regress" }
 # Only replaces tungstenite 0.27 (GraphQL subscriptions); 0.28/0.29 stay upstream.
 tungstenite = { git = "https://github.com/signalapp/tungstenite-rs", rev = "a1837ccfe96b6895a57352d7f0112e4557516c27" }
 # Writes a checkout-independent embed folder; see vendor/utoipa-swagger-ui/README-MACRO.md.
