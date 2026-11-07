@@ -1752,9 +1752,11 @@ async fn run_server() -> anyhow::Result<()> {
                 PgGithubPullRequestRepo::new(db.clone()),
             ),
         )
-        .with_agent_branches(agent_changes::outbound::postgres::PgChangesetRepo::new(
-            db.clone(),
-        )),
+        .with_agent_branches(
+            crate::outbound::agent_working_branches::ChangesetWorkingBranches(
+                agent_changes::outbound::postgres::PgChangesetRepo::new(db.clone()),
+            ),
+        ),
     );
 
     // SQL predicates and follow-up reads use the primary, matching the catalog
@@ -1803,9 +1805,11 @@ async fn run_server() -> anyhow::Result<()> {
             ),
         )
         .with_favorites(favorites_service.clone())
-        .with_agent_branches(agent_changes::outbound::postgres::PgChangesetRepo::new(
-            readonly_db.clone(),
-        )),
+        .with_agent_branches(
+            crate::outbound::agent_working_branches::ChangesetWorkingBranches(
+                agent_changes::outbound::postgres::PgChangesetRepo::new(readonly_db.clone()),
+            ),
+        ),
     );
 
     let websocket_notification_consumer_service =

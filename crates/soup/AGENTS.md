@@ -36,7 +36,9 @@ rows, initiatives, ...) and get back a single unified, paginated result.
 
 - Depends on: `entity_access`, `properties`, `crm`, `item_filters`,
   `filter_ast`, `favorites`, `frecency`, `channels`, `email`, `call`,
-  `github_pull_requests`, `foreign_entity`, `activity`, `agent_changes`.
+  `github_pull_requests`, `foreign_entity`, `activity`. Agent working
+  branches come through the `AgentWorkingBranches` port, which DSS serves
+  from `agent_changes`.
 - Used by: `ai_tools`, `attention_feed`, `complete_graph`, `databases_sql`,
   `graphql_initiative`, `graphql_soup`, `graphql_work_feed`, `memory`, `skills`,
   `soup_filter_projection`.
