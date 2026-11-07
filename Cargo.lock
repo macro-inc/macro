@@ -11784,6 +11784,22 @@ dependencies = [
 ]
 
 [[package]]
+name = "lexical_loro"
+version = "0.1.0"
+dependencies = [
+ "indexmap 2.14.0",
+ "lexical_model",
+ "lexical_rich_nodes",
+ "loro",
+ "proptest",
+ "rustc-hash 2.1.2",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.18",
+ "tracing",
+]
+
+[[package]]
 name = "lexical_mention_extractor"
 version = "0.1.0"
 dependencies = [
