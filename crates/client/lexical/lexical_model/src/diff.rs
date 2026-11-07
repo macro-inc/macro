@@ -327,8 +327,31 @@ impl Commit {
         }
         let mut parents = IndexSet::default();
         for key in &changed {
-            if next.is_element(*key) {
+            // Element property writes and ancestor dirty marks do not change
+            // child order. Moved/reordered children below add both parents even
+            // when first/last/size happen to remain equal.
+            let a = prev.slot(*key);
+            let b = next.slot(*key);
+            if next.is_element(*key)
+                && match (a.map(|s| &s.base), b.map(|s| &s.base)) {
+                    (Some(BaseData::Element(a)), Some(BaseData::Element(b))) => {
+                        a.first != b.first || a.last != b.last || a.size != b.size
+                    }
+                    _ => true,
+                }
+            {
                 parents.insert(*key);
+            }
+            let links_changed = match (a, b) {
+                (Some(a), Some(b)) => {
+                    a.links.parent != b.links.parent
+                        || a.links.prev != b.links.prev
+                        || a.links.next != b.links.next
+                }
+                _ => true,
+            };
+            if !links_changed {
+                continue;
             }
             if let Some(parent) = prev.parent(*key)
                 && next.is_element(parent)

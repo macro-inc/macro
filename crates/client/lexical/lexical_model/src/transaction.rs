@@ -233,7 +233,7 @@ impl<'editor> Transaction<'editor> {
                 .ok_or(Error::Invariant("missing replacement"))?
                 .replace(slot.data.as_any())?;
             // The original allocation is burned, exactly as $applyNodeReplacement does.
-            self.pending.nodes.remove(&original.key());
+            self.pending.remove_record(original.key());
             self.dirty_leaves.shift_remove(&original.key());
             self.dirty_elements.shift_remove(&original.key());
             let base = (self.pending.registry.vtable(replacement).initial_base)(data.as_any())?;
@@ -287,6 +287,9 @@ impl<'editor> Transaction<'editor> {
         }
         self.guard_write()?;
         let key = self.editor.keys.next()?;
+        if matches!(base, BaseData::Decorator) {
+            self.pending.opaque_text_count += 1;
+        }
         self.pending.nodes.insert(
             key,
             Arc::new(NodeSlot {

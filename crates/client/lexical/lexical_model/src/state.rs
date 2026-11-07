@@ -21,6 +21,9 @@ pub struct EditorState {
     pub(crate) selection: Option<Selection>,
     pub(crate) root_text: Arc<OnceLock<Arc<str>>>,
     pub(crate) max_key: NodeKey,
+    // Opaque text hooks can inspect arbitrary model state. Their presence rules
+    // out proving root-text equality from the changed text record alone.
+    pub(crate) opaque_text_count: usize,
 }
 impl EditorState {
     pub(crate) fn empty(registry: Arc<Registry>) -> Result<Self, Error> {
@@ -45,12 +48,20 @@ impl EditorState {
             selection: None,
             root_text: Arc::new(OnceLock::new()),
             max_key: NodeKey::ROOT,
+            opaque_text_count: 0,
         })
     }
     pub(crate) fn pending(&self) -> Self {
         Self {
             root_text: Arc::new(OnceLock::new()),
             ..self.clone()
+        }
+    }
+    pub(crate) fn remove_record(&mut self, key: NodeKey) {
+        if let Some(slot) = self.nodes.remove(&key)
+            && matches!(slot.base, BaseData::Decorator)
+        {
+            self.opaque_text_count -= 1;
         }
     }
     /// Borrow this snapshot.

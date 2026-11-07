@@ -648,3 +648,5 @@ mod nodes;
 mod editing;
 
 mod state;
+
+mod performance;
