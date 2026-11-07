@@ -205,6 +205,7 @@ members = [
   "crates/types/chat_message",
   "crates/types/cowlike",
   "crates/types/entity_basic_types",
+  "crates/types/form_id",
   "crates/types/harness_id",
   "crates/types/harness_token",
   "crates/types/id_newtype",
@@ -735,6 +736,7 @@ feature_flags = { path = "crates/platform/feature_flags" }
 fig_engine = { path = "crates/engines/fig_engine", default-features = false }
 filter_ast = { path = "crates/types/filter_ast" }
 foreign_entity = { path = "crates/entities/foreign_entity", default-features = false }
+form_id = { path = "crates/types/form_id" }
 forms = { path = "crates/databases/forms" }
 frecency = { path = "crates/entities/frecency" }
 frecency_core = { path = "crates/entities/frecency_core" }

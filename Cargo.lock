@@ -8816,6 +8816,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "form_id"
+version = "0.1.0"
+dependencies = [
+ "id_newtype",
+ "schemars 1.2.1",
+ "serde",
+ "serde_json",
+ "specta",
+ "utoipa",
+ "uuid",
+]
+
+[[package]]
 name = "form_urlencoded"
 version = "1.2.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -13926,7 +13939,7 @@ name = "models_forms"
 version = "0.1.0"
 dependencies = [
  "chrono",
- "id_newtype",
+ "form_id",
  "lazy-regex",
  "models_databases",
  "schemars 1.2.1",

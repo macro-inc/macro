@@ -122,6 +122,7 @@ workspace-members = [
     "id_newtype",
     # Leaf id crates built with it stay light the same way.
     "team_id",
+    "form_id",
     "calendar_event_id",
     # natural_time: date phrases are read in the browser's date fields as well
     # as in services, so it must stay wasm-safe.

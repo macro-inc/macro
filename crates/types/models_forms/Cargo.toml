@@ -7,11 +7,12 @@ version = "0.1.0"
 # The wire vocabulary of Macro Forms, shared by the service, the web client
 # and the SDK. Answers and gate rules are `models_databases` types unchanged.
 [features]
-schema = ["dep:schemars", "models_databases/schema"]
+schema = ["dep:schemars", "form_id/schema", "models_databases/schema"]
 
 [dependencies]
 schemars = { workspace = true, optional = true }
 chrono = { workspace = true, features = ["serde"] }
+form_id = { workspace = true }
 lazy-regex = { workspace = true }
 models_databases = { workspace = true }
 serde = { workspace = true }
@@ -21,7 +22,6 @@ thiserror = { workspace = true }
 utoipa = { workspace = true }
 uuid = { workspace = true }
 workspace-hack = { version = "0.1", path = "../../workspace-hack" }
-id_newtype = { workspace = true }
 
 [dev-dependencies]
 serde_json = { workspace = true }
