@@ -1,8 +1,8 @@
 use chrono::{DateTime, Utc};
 use item_filters::ChatFilters;
-use models_soup::SoupProperty;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
+use soup_property::SoupProperty;
 use utoipa::ToSchema;
 
 use crate::{MatchType, SearchHighlight, SearchOn, SearchResponseItem};
