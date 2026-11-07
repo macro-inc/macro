@@ -16,7 +16,7 @@ past launches and their follow-up fixes are called out inline.
 
 | Building | Copy | Why |
 | --- | --- | --- |
-| Editor for a file type with a Rust engine | `block-psd` + `crates/psd_engine` + `apps/web/src/lib/core/psd-engine` | Newest full example: layered feature, worker-hosted wasm engine, feature flag, create flow, search parser, AI read tool, browser fixture |
+| Editor for a file type with a Rust engine | `block-psd` + `crates/engines/psd_engine` + `apps/web/src/lib/core/psd-engine` | Newest full example: layered feature, worker-hosted wasm engine, feature flag, create flow, search parser, AI read tool, browser fixture |
 | Editor that takes over a type that used to download | `block-pptx`, `block-write` | Flag-off path keeps download-only; `write` shows how a type switches blocks behind a flag |
 | Entity that is not a document (own table and API) | `block-form` | Entity type, item type, previews, sharing, Quick Access, a public route, production composition split out (`form-context-production.tsx`) |
 | Feature layering in general | `features/activity`, `block-form` | The FE-33 reference and a block that follows it end to end |
@@ -247,7 +247,7 @@ when they apply. Then, on the web:
 
 Engines are Rust crates in this repo, compiled to wasm for the browser and used
 natively by search and AI tools. The DOCX editor launched on an npm runtime and
-was moved onto `crates/docx_engine` the next day; start with a crate.
+was moved onto `crates/engines/docx_engine` the next day; start with a crate.
 
 - **Crate.** `crates/<x>_engine`, a workspace member in the root `Cargo.toml`,
   and a `[profile.<x>-engine-wasm]` (`inherits = "release"`, `lto = "fat"`,

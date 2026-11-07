@@ -13,7 +13,7 @@ const workspaceDirectory = fileURLToPath(
 );
 
 const corpusDirectory = fileURLToPath(
-  new URL('../../../../../../crates/pptx_engine/tests/corpus/', import.meta.url)
+  new URL('../../../../../../crates/engines/pptx_engine/tests/corpus/', import.meta.url)
 );
 
 export default defineConfig({

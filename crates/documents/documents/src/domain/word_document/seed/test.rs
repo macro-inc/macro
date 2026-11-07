@@ -1,7 +1,7 @@
 use super::*;
 use loro::{LoroValue, ValueOrContainer};
 
-const NDA: &[u8] = include_bytes!("../../../../../../docx_engine/tests/fixtures/mutual-nda.docx");
+const NDA: &[u8] = include_bytes!("../../../../../../engines/docx_engine/tests/fixtures/mutual-nda.docx");
 
 fn text(doc: &LoroDoc, id: &str) -> LoroText {
     let Some(ValueOrContainer::Container(block)) = doc.get_map(container::BLOCKS).get(id) else {

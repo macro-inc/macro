@@ -91,7 +91,7 @@ impl WordDocumentFiles for FakeFiles {
     }
 }
 
-const NDA: &[u8] = include_bytes!("../../../../../docx_engine/tests/fixtures/mutual-nda.docx");
+const NDA: &[u8] = include_bytes!("../../../../../engines/docx_engine/tests/fixtures/mutual-nda.docx");
 
 /// A service over a document whose live copy already exists.
 fn word_service(

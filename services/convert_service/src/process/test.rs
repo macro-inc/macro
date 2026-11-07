@@ -37,7 +37,7 @@ mod legacy_upgrade {
     }
 
     fn fonts() -> pptx_engine::font::FontDb {
-        let dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../crates/pptx_engine/fonts");
+        let dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../crates/engines/pptx_engine/fonts");
         let mut db = pptx_engine::font::FontDb::new();
         let mut files: Vec<_> = std::fs::read_dir(dir)
             .expect("pptx_engine fonts")

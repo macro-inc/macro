@@ -7,9 +7,9 @@ const DOCUMENT: &str = "019fd3b9-3c6c-7c05-89c2-a27f01218141";
 /// Components with properties, a component set, instances on a screen, and
 /// fill, text, and effect styles.
 const DESIGN_SYSTEM: &[u8] =
-    include_bytes!("../../../../../fig_engine/tests/fixtures/design-system.fig");
+    include_bytes!("../../../../../engines/fig_engine/tests/fixtures/design-system.fig");
 /// A variable collection with two modes.
-const VARIABLES: &[u8] = include_bytes!("../../../../../fig_engine/tests/fixtures/variables.fig");
+const VARIABLES: &[u8] = include_bytes!("../../../../../engines/fig_engine/tests/fixtures/variables.fig");
 
 fn receipt<T: RequiredPermission>(access_level: AccessLevel) -> EntityAccessReceipt<T> {
     EntityAccessReceipt::try_new_authenticated_user(

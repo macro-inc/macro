@@ -50,7 +50,7 @@ run and keeps the curated fields. AppVersion 12.x = PowerPoint 2007 (Mac 2008 wr
 
 ## Generated decks
 
-`python3 crates/pptx_engine/scripts/generate_corpus.py` rebuilds every deck, checks package
+`python3 crates/engines/pptx_engine/scripts/generate_corpus.py` rebuilds every deck, checks package
 integrity (each `r:id` resolves, each relationship target exists, each part has a content type),
 and refreshes the manifest. Useful flags: `--only NAME…`, `--list`, `--no-libreoffice`,
 `--no-manifest`, `--xsd-dir DIR`.
@@ -115,9 +115,9 @@ Provenance policy:
 To add a wild deck:
 
 ```sh
-unzip -l new.pptx >/dev/null && python3 crates/pptx_engine/scripts/inspect_pptx.py new.pptx
-cp new.pptx crates/pptx_engine/tests/corpus/wild/<publisher>-<year>-<topic>.pptx
-python3 crates/pptx_engine/scripts/update_manifest.py --add wild/<name>.pptx \
+unzip -l new.pptx >/dev/null && python3 crates/engines/pptx_engine/scripts/inspect_pptx.py new.pptx
+cp new.pptx crates/engines/pptx_engine/tests/corpus/wild/<publisher>-<year>-<topic>.pptx
+python3 crates/engines/pptx_engine/scripts/update_manifest.py --add wild/<name>.pptx \
   --source-url URL --provenance "Publisher, document, date; copyright status" \
   --description "What it is and which rendering features it exercises"
 ```
@@ -130,8 +130,8 @@ python3 crates/pptx_engine/scripts/update_manifest.py --add wild/<name>.pptx \
 ```sh
 cargo run --release -p pptx_engine --features cli --bin pptx_corpus -- \
   fontconfig --out /tmp/pptx-fonts.conf
-python3 crates/pptx_engine/scripts/render_references.py /tmp/pptx-refs \
-  crates/pptx_engine/tests/corpus/*/*.pptx --jobs 6 --fontconfig /tmp/pptx-fonts.conf
+python3 crates/engines/pptx_engine/scripts/render_references.py /tmp/pptx-refs \
+  crates/engines/pptx_engine/tests/corpus/*/*.pptx --jobs 6 --fontconfig /tmp/pptx-fonts.conf
 ```
 
 `--fontconfig` makes LibreOffice use the engine's bundled fonts and its font

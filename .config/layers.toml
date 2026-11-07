@@ -50,11 +50,6 @@ may_depend_on = ["types", "platform", "aws", "clients"]
 name = "engines"
 paths = [
   "crates/engines/**",
-  "crates/ai_engine",
-  "crates/docx_engine",
-  "crates/fig_engine",
-  "crates/pptx_engine",
-  "crates/psd_engine",
 ]
 may_depend_on = ["types", "engines"]
 

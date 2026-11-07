@@ -2,7 +2,7 @@
 """Render reference PNGs for .docx files (pixel-diff baselines).
 
 Usage:
-    python3 crates/docx_engine/scripts/render_references.py OUT_DIR doc.docx [...] \
+    python3 crates/engines/docx_engine/scripts/render_references.py OUT_DIR doc.docx [...] \
         [--width 816] [--jobs N] [--force] [--timeout 300] [--fontconfig FONTS_CONF]
 
 For every input document this writes:

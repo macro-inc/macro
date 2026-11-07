@@ -7,11 +7,11 @@ use std::sync::Mutex;
 
 const DOCUMENT: &str = "019fd3b9-3c6c-7c05-89c2-a27f01218140";
 const DECK: &[u8] = include_bytes!(
-    "../../../../../pptx_engine/tests/corpus/generated/tables-financial-statement.pptx"
+    "../../../../../engines/pptx_engine/tests/corpus/generated/tables-financial-statement.pptx"
 );
 /// A deck with sections and slide-number and date fields.
 const SECTIONED: &[u8] =
-    include_bytes!("../../../../../pptx_engine/tests/corpus/generated/slide-features.pptx");
+    include_bytes!("../../../../../engines/pptx_engine/tests/corpus/generated/slide-features.pptx");
 
 fn receipt<T: RequiredPermission>(access_level: AccessLevel) -> EntityAccessReceipt<T> {
     EntityAccessReceipt::try_new_authenticated_user(
@@ -472,7 +472,7 @@ async fn section_edits_report_the_new_section() {
 #[test]
 fn descriptions_mention_crops_adjustments_and_effects_only_when_present() {
     let pictures =
-        include_bytes!("../../../../../pptx_engine/tests/corpus/generated/pictures-crop-effects.pptx");
+        include_bytes!("../../../../../engines/pptx_engine/tests/corpus/generated/pictures-crop-effects.pptx");
     let text = describe(&mut Presentation::open(pictures.to_vec()).unwrap(), None).unwrap();
     assert!(text.contains("  picture: crop left 25%\n"), "{text}");
     assert!(
@@ -486,7 +486,7 @@ fn descriptions_mention_crops_adjustments_and_effects_only_when_present() {
         "{text}"
     );
     let effects = include_bytes!(
-        "../../../../../pptx_engine/tests/corpus/generated/effects-shadow-glow-reflection.pptx"
+        "../../../../../engines/pptx_engine/tests/corpus/generated/effects-shadow-glow-reflection.pptx"
     );
     let text = describe(&mut Presentation::open(effects.to_vec()).unwrap(), None).unwrap();
     assert!(text.contains("effects: glow 4 pt #FFC000\n"), "{text}");

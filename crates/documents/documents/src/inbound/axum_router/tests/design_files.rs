@@ -7,7 +7,7 @@ use crate::domain::{
 
 const FILE_ID: &str = "019fd3b9-3c6c-7c05-89c2-a27f01218142";
 const DESIGN_SYSTEM: &[u8] =
-    include_bytes!("../../../../../../fig_engine/tests/fixtures/design-system.fig");
+    include_bytes!("../../../../../../engines/fig_engine/tests/fixtures/design-system.fig");
 
 /// One stored file, whatever kind of design file it is.
 struct StoredFile(Vec<u8>);
