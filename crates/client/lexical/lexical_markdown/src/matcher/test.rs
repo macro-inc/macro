@@ -98,7 +98,10 @@ fn regex_differential_matches_pinned_v8_and_source_inventory() {
         assert_eq!(entry["inputUnits"], serde_json::json!([unit]));
         let runs = entry["runs"].as_array().expect("actual V8 input probes");
         assert_eq!(runs.len(), names.len());
-        let run_names: Vec<_> = runs.iter().map(|run| run["name"].as_str().expect("name")).collect();
+        let run_names: Vec<_> = runs
+            .iter()
+            .map(|run| run["name"].as_str().expect("name"))
+            .collect();
         assert_eq!(run_names, names);
     }
 }
