@@ -1,0 +1,28 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        UPDATE forms AS current\n        SET project_id = NULL, updated_at = now()\n        FROM forms AS previous\n        WHERE previous.id = current.id AND previous.project_id = ANY($1)\n        RETURNING current.id, previous.project_id AS \"project_id!\"\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "project_id!",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "TextArray"
+      ]
+    },
+    "nullable": [
+      false,
+      true
+    ]
+  },
+  "hash": "0c6e22e66a50f35c17343dcd3b8858fda35d9c23d14ce30e9e06407d8b562087"
+}
