@@ -8,18 +8,7 @@ use worker::{Method, Request, Response, Result};
 use super::{SyncSession, response, status_codes};
 use crate::error::ResultExt;
 
-pub(super) const LIFECYCLE_KEY: &str = "SURFACE_LIFECYCLE";
-
-pub(super) use sync_server_core::domain::connection::SurfaceLifecycle;
-
 impl SyncSession<'_> {
-    pub(super) async fn surface_lifecycle(&mut self) -> Result<SurfaceLifecycle> {
-        self.room
-            .surface_lifecycle()
-            .await
-            .map_err(super::room_error)
-    }
-
     pub(in crate::inbound) async fn surface_handler(
         &mut self,
         req: Request,
@@ -104,17 +93,13 @@ impl SyncSession<'_> {
         let bytes = req.bytes().await?;
         let body = InitializeFromSnapshotRequest::deserialize(&bytes)
             .context("invalid surface snapshot request")?;
-        #[cfg(feature = "migration-test-hooks")]
-        let stop_after_snapshot =
-            req.headers().get("x-sync-test-stop-after")?.as_deref() == Some("surface_snapshot");
-        #[cfg(not(feature = "migration-test-hooks"))]
-        let stop_after_snapshot = false;
+        let faults = super::surface_migration::fault_plan(&req)?;
         let status = self
             .room
             .initialize_surface(
                 &sync_server_core::domain::types::SessionKey::new(key.to_owned()),
                 &body.snapshot,
-                stop_after_snapshot,
+                faults,
             )
             .await
             .map_err(super::room_error)?;

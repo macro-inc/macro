@@ -35,7 +35,7 @@ updates over WebSocket.
   atomic update use cases, connection metadata and migration state.
 - `src/domain.rs`: compatibility re-exports of the shared core.
 - `../../crates/sync_server_core/src/domain/room/connection.rs`: connect/close, metadata restore and surface-grant validation policy.
-- `src/state.rs`: snapshot decoding for the remaining migration adapter; mutable state lives in the core Room.
+- `src/state.rs`: Worker monotonic clock; document state and migration proof decoding live in core; mutable state lives in the core Room.
 
 ## Scope
 
@@ -129,3 +129,5 @@ Atomic document snapshot/update orchestration lives in `../../crates/sync_server
 Session deletion order and volatile cleanup live in `../../crates/sync_server_core/src/domain/room/delete.rs`; snapshot adapters remove fallback storage before primary storage.
 
 Surface identity binding, lifecycle, seed recovery and revocation live in `../../crates/sync_server_core/src/domain/room/surface.rs`; route/method and Bebop parsing remain in the adapter.
+
+Migration receipts, strict frozen replay and activation policy live in `../../crates/sync_server_core/src/domain/room/migration.rs`. Test-only fault headers map to explicit `FaultPlan`; production always supplies `None`.

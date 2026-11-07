@@ -67,14 +67,24 @@ fn failed_surface_initialization_reloads_durable_truth_before_retry() {
         let seed = loro::LoroDoc::new()
             .export(loro::ExportMode::Snapshot)
             .unwrap();
-        assert!(room.initialize_surface(&key, &seed, true).await.is_err());
+        assert!(
+            room.initialize_surface(
+                &key,
+                &seed,
+                FaultPlan::StopAfter(FaultPoint::SurfaceSnapshot)
+            )
+            .await
+            .is_err()
+        );
         assert_eq!(room.memory.surface_lifecycle, None);
         assert_eq!(
             room.ports.snapshots.bytes.borrow().as_deref(),
             Some(seed.as_slice())
         );
         assert_eq!(
-            room.initialize_surface(&key, &seed, false).await.unwrap(),
+            room.initialize_surface(&key, &seed, FaultPlan::None)
+                .await
+                .unwrap(),
             SurfaceStatus::Ok
         );
         assert_eq!(

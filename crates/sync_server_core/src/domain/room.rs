@@ -128,6 +128,10 @@ mod atomic;
 pub use alarm::AlarmOutcome;
 
 mod http;
+mod migration;
+pub use migration::{MigrationOutcome, SnapshotExport};
+mod fault;
+pub use fault::{FaultPlan, FaultPoint};
 mod surface;
 pub use http::{InitializeOutcome, RequestGate, RouteClass, SnapshotOutcome};
 pub use surface::{SurfacePreparation, SurfaceRequest, SurfaceStatus};

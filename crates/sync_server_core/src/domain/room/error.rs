@@ -29,6 +29,23 @@ pub type LocalReport = Report<Dynamic, Mutable, Local>;
 /// Failures corresponding exclusively to the previous callback's Err paths.
 #[derive(Debug, thiserror::Error)]
 pub enum RoomError {
+    /// Test-only adapter-selected migration persistence failure.
+    #[error("injected migration persistence failure")]
+    InjectedMigrationPersistence,
+    /// Frozen imports must resolve every pending dependency.
+    #[error("migration has unresolved pending operations")]
+    MigrationPending,
+    /// Frozen content must cover the durable saved revision.
+    #[error("migration snapshot is behind saved revision")]
+    MigrationBehindSaved,
+    /// Legacy migration decoding context.
+    #[error("{context} : {error}")]
+    MigrationContext {
+        /// Operation context.
+        context: &'static str,
+        /// Original debug representation.
+        error: String,
+    },
     /// Test-only adapter-selected stop after surface persistence.
     #[error("injected surface persistence failure")]
     InjectedSurfacePersistence,
