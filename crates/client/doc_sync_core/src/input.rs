@@ -25,6 +25,8 @@ pub enum SyncInput {
     SetPresence(Option<loro::LoroValue>),
     /// Request or report delivery of outstanding changes.
     Flush(RequestId),
+    /// Catch up and verify durable local delivery before the session stages a comment fork.
+    PrepareComment(RequestId),
     /// A comment-mark update built on a forked doc. Never enters the WAL (§2.5).
     PublishComment {
         /// Host request correlation identifier.

@@ -254,6 +254,12 @@ impl Sim {
                     });
                 }
                 SyncEvent::Replaced => ready = true,
+                SyncEvent::CommentReady { .. } => {
+                    return Err(Failure::new(
+                        "comment_stage",
+                        "comment staging requires a document_session surface",
+                    ));
+                }
                 SyncEvent::Status(status) => self.emit(Fact::Status {
                     client: name.clone(),
                     status,

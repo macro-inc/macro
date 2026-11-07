@@ -10,6 +10,9 @@ identities come from callers; transport and durable storage run outside this cra
 - No I/O, clock reads, random generation, or unordered output iteration.
 - `SyncCore::handle` consumes inputs and clears/refills one output buffer; hosts
   send `Ready` after applying `Seeded` and execute storage effects in issue order.
+- `PrepareComment` requests a fresh convergence round and emits `CommentReady` only
+  after its reply imports and W-1 confirms all local rows delivered; the session then
+  stages the fork and submits `PublishComment`. A stage expires or cancels on reset/close.
 - `SyncCore` owns WAL, convergence, reset/rebase, snapshot and comment delivery.
   Never infer poison from an absent ack or advance a durable prefix over parked rows.
 - `Connection` handles socket generations, heartbeat and backoff; `RouterCore`
