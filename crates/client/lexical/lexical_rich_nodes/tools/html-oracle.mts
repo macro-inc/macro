@@ -317,6 +317,9 @@ record(
 	{},
 	{ anchor: point([0, 0, 1, 0, 0], 0), focus: point([0, 0, 1, 0, 0], 6) },
 );
+for (const start of [undefined, null, 1.5, "1", [2, null], { value: 2 }]) {
+	record(`legacy-list-start-${JSON.stringify(start)}`, [element("list", [element("listitem", [text("item")], { value: 1 })], { listType: "number", start })]);
+}
 writeFileSync(
 	"crates/client/lexical/lexical_rich_nodes/tests/corpus/html.jsonl",
 	fixtures.map((f) => JSON.stringify(f)).join("\n") + "\n",

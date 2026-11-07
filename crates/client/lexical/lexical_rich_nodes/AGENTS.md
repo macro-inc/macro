@@ -47,3 +47,5 @@ Port model assertions from upstream as explicit literal tests in sibling
 Regenerate pinned export goldens from the repository root with
 `bun crates/client/lexical/lexical_rich_nodes/tools/html-oracle.mts`;
 `cargo test -p lexical_rich_nodes --all-features --test html_oracle -j4` compares them.
+
+HTML list attributes use `start_value()` so missing, null and fractional imported starts retain JavaScript DOM coercion.

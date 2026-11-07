@@ -61,3 +61,25 @@ fn pinned_upstream_exports_are_byte_identical()
     }
     Ok(())
 }
+
+#[test]
+fn list_start_coercion_propagates_noncallable_to_string_failure()
+-> std::result::Result<(), Box<dyn std::error::Error>> {
+    let mut editor = Editor::builder(EditorMode::Headless)
+        .node::<ListNode>()
+        .node::<ListItemNode>()
+        .build()?;
+    let state = editor.parse_editor_state_str(r#"{"root":{"type":"root","children":[{"type":"list","listType":"number","start":[{"toString":null}],"children":[]}]}}"#)?;
+    let registry = lexical_rich_nodes::html::register_rich_nodes_html(register_core(
+        ExportRegistry::builder(),
+    ))
+    .build();
+    let exporter = HtmlExporter::new(registry, EditorTheme::default());
+    assert!(matches!(
+        exporter.generate_html_from_nodes(&state, None),
+        Err(lexical_html::Error::InvalidExport(
+            "Cannot convert object to primitive value"
+        ))
+    ));
+    Ok(())
+}

@@ -18,8 +18,8 @@ pub fn list_export_dom<'a>(
 ) -> lexical_html::Result<DomExportOutput<'a>> {
     let ordered = list.tag() == ListNodeTagType::Ol;
     let mut el = HtmlElement::new(if ordered { "ol" } else { "ul" });
-    if list.start() != 1 {
-        el.set_attribute("start", list.start().to_string());
+    if let Some(start) = start_attribute(list)? {
+        el.set_attribute("start", start);
     }
     if let Some(theme) = &ctx.theme.list {
         let depth = crate::list::utils::get_list_depth(
@@ -63,8 +63,8 @@ pub fn list_export_dom<'a>(
             );
         }
     }
-    if list.start() != 1 {
-        el.set_attribute("start", list.start().to_string());
+    if let Some(start) = start_attribute(list)? {
+        el.set_attribute("start", start);
     }
     if list.list_type() == ListType::Check {
         el.set_attribute("__lexicalListType", "check");
@@ -169,4 +169,41 @@ impl ExportDom for ListItemNode {
         }
         Ok(output)
     }
+}
+
+// DOM setAttribute coerces the actual imported JS value, rather than its integer API projection.
+fn start_attribute(list: &ListNode) -> lexical_html::Result<Option<String>> {
+    let start = list.start_value();
+    if start.as_ref().and_then(serde_json::Value::as_f64) == Some(1.0) {
+        return Ok(None);
+    }
+    Ok(Some(match start.as_ref() {
+        Some(value) => attribute_value(value)?,
+        None => "undefined".into(),
+    }))
+}
+fn attribute_value(value: &serde_json::Value) -> lexical_html::Result<String> {
+    Ok(match value {
+        serde_json::Value::String(value) => value.clone(),
+        serde_json::Value::Object(object) => {
+            if object.contains_key("toString") {
+                return Err(lexical_html::Error::InvalidExport(
+                    "Cannot convert object to primitive value",
+                ));
+            }
+            "[object Object]".into()
+        }
+        serde_json::Value::Array(values) => values
+            .iter()
+            .map(|value| {
+                if value.is_null() {
+                    Ok(String::new())
+                } else {
+                    attribute_value(value)
+                }
+            })
+            .collect::<lexical_html::Result<Vec<_>>>()?
+            .join(","),
+        value => lexical_model::to_js_json_string(value),
+    })
 }
