@@ -1,6 +1,6 @@
 //! Embed the shared tooling pin without runtime filesystem access.
 fn main() {
-    let manifest = std::env::var("CARGO_MANIFEST_DIR").expect("Cargo manifest directory");
+    let manifest = env!("CARGO_MANIFEST_DIR");
     let pin = std::path::Path::new(&manifest)
         .join("../../../../packages/lexical-conformance/upstream.lock");
     println!("cargo:rerun-if-changed={}", pin.display());
