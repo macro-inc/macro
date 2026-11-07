@@ -100,3 +100,5 @@ orphaned highlights become plain text and drop their attributes as upstream does
 Language and theme normalize absent/null/empty values to omitted JSON fields.
 
 Code line helpers preserve UTF-16 selection offsets and split only LF/tab separators; the ordered language catalog is independent of tokenization.
+
+`mark` ports ordered annotation ids, wrapping, unwrapping, boundary lookup and copy hooks; it has no DOM layer.
