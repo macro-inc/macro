@@ -58,4 +58,6 @@ uuid = { workspace = true }
 workspace-hack = { version = "0.1", path = "../../workspace-hack" }
 
 [dev-dependencies]
+# The Postgres ChannelNames adapter, for the org-filter test.
+channels_outbound = { workspace = true }
 tracing-subscriber = { workspace = true }
