@@ -118,6 +118,8 @@ MarkNode from WP-20 and retains its exact unsupported-API ledger entry.
 
 `utils::matcher` holds the shared Match/Matcher/RegexMatcher contract for later
 markdown reuse: UTF-16 positions, undefined captures and synthetic mutable groups.
+`exec_from` and `find_all` keep anchors on the original input and advance empty
+matches by a code unit or Unicode scalar according to the regex mode.
 `utils::linkify` ports linkify-it 5.0.2's default schemas, fuzzy URL/email/IP modes,
 custom TLD replacement/extension and triple-dash option. It implements both the
 shared Matcher and autolink LinkMatcher. Expanded regular expressions preserve
