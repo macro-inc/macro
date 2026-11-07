@@ -34,7 +34,7 @@ Every direct edit tool has the same two layers:
    100 methods that validate arguments and append plain-data `DocumentOp`s, and
    `CanvasEditor` (`src/canvas/editor.ts`) for `CanvasOp`. Spreadsheets
    (`packages/spreadsheet/src/ai-types.ts`), Word
-   (`crates/documents/src/domain/word_document/models.rs`) and PowerPoint
+   (`crates/documents/documents/src/domain/word_document/models.rs`) and PowerPoint
    (`pptx_engine::EditOp`) have no model on the server: their tools take op
    arrays, written by the calling agent.
 2. **An engine that commits the ops**, on the server:
@@ -44,7 +44,7 @@ Every direct edit tool has the same two layers:
 | Markdown, tasks | Yes (`EditDocument`) | `Doc` in ai-editing-worker, a live Loro peer of sync-service | CRDT merge; ops address durable node ids |
 | Spreadsheet | No (`EditSpreadsheet` takes ops) | `prepareSpreadsheetEdit` (`packages/spreadsheet`, IronCalc WASM) in the worker | Strict revision check; 409 on any change since the read |
 | Word | No (`EditWordDocument` takes ops) | `editWord` (`packages/collaboration/src/docx`) in the worker, live peer | CRDT merge; block ids |
-| PowerPoint | No (`EditPresentation` takes ops) | `pptx_engine` natively in `crates/documents`, S3 version per edit | None: last writer wins |
+| PowerPoint | No (`EditPresentation` takes ops) | `pptx_engine` natively in `crates/documents/documents`, S3 version per edit | None: last writer wins |
 | Canvas | Yes (`EditCanvas`) | `CanvasSession` in the worker, live peer, text measured and rendered in Browser Rendering | Revision hash; unrelated concurrent edits rebased |
 
 The sandbox (`crates/code_execution`) runs a fresh `deno` process per call:
@@ -59,7 +59,7 @@ Every edit runs on the server, through a **DSS route** that authorizes it the
 way the direct tool does and calls the **same engine**:
 
 ```
-sandbox                       DSS (crates/documents)               ai-editing worker
+sandbox                       DSS (crates/documents/documents)               ai-editing worker
 ───────────────────           ─────────────────────────            ─────────────────────
 doc.edit('…', opts)  ──POST /documents/{id}/ai-edit──▶ edit receipt,  ──▶ /edit: models write
                                                     AI admission,        ops, Doc applies them
@@ -192,7 +192,7 @@ the new revision, or the new document for `saveAs`, and `webUrl`):
 today.** `EditSpreadsheet`, `EditWordDocument` and `EditPresentation` take op
 arrays that the *calling* agent writes; the server only validates and commits
 them. So each of these PRs adds a small writer: a worker (or, for PowerPoint,
-`crates/documents`) endpoint that reads the content in the format the tool's
+`crates/documents/documents`) endpoint that reads the content in the format the tool's
 read returns, asks one model for ops in the tool's own op schema (the tool
 description is the prompt), and commits them through the existing engine with
 the same revision checks. Each commits once, so an abort before the commit
@@ -246,7 +246,7 @@ returning a `Document` subclass would be a circular import), and
 ### Structured editing for spreadsheets; later option for Word and PowerPoint
 
 Spreadsheets get the structured layer in their PR, without vendoring: the
-spreadsheet ops are already serde types in `crates/documents`, so DSS
+spreadsheet ops are already serde types in `crates/documents/documents`, so DSS
 publishes them in its OpenAPI and the SDK's generated client types them.
 `Spreadsheet.read()`, `calculate()` and `applyEdits(ops, { expectedRevision })`
 are `ReadSpreadsheet`, `CalculateSpreadsheet` and `EditSpreadsheet` over HTTP,

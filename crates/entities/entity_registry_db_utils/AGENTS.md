@@ -27,7 +27,7 @@ resource-row transaction.
 - Depends on: `entity_registry`, `entity_access_db_utils`, `model_owner`,
   `shared_entity_registry`.
 - Used by: `crates/ai_tools`, `crates/memory`, `crates/projects/projects`,
-  `crates/agent_session`, `crates/comms/chat`, `crates/documents`,
+  `crates/agent_session`, `crates/comms/chat`, `crates/documents/documents`,
   `crates/macro_db_client`, and services that create owned entities
   (`document_storage_service`, `agent_harness_service`, `scheduled_action`).
 

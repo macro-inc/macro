@@ -22,13 +22,13 @@ LLM.
 - Owns: the embed → search → rerank → judge pipeline and its Postgres/pgvector
   storage.
 - Not here: the embedding provider implementation itself → `embedding` crate;
-  task domain logic → `crates/documents`/wherever tasks are modeled.
+  task domain logic → `crates/documents/documents`/wherever tasks are modeled.
 
 ## Boundaries
 
 - Depends on: `agent`, `embedding`, `lexical_client`; `backfill`-feature-gated
   `macro_entrypoint`, `macro_aws_config`, `secretsmanager_client`.
-- Used by: `services/document_storage_service`, `crates/documents`.
+- Used by: `services/document_storage_service`, `crates/documents/documents`.
 
 ## Recipes
 

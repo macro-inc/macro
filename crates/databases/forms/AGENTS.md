@@ -24,7 +24,7 @@ service.
 - Owns: form layout, authoring, sharing/audience, drafts, and submission
   ledger. Answer storage itself is the referenced database table.
 - Not here: generic database row/column storage → `crates/databases/databases`; the
-  Loro document mechanics → `crates/collab_surface`.
+  Loro document mechanics → `crates/documents/collab_surface`.
 
 ## Boundaries
 

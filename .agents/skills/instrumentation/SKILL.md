@@ -233,7 +233,7 @@ which sync-service reads with `worker_rs_otel::traceparent_from_request`.
 **Agent editing (web or Rust → ai-editing-worker → sync-service).**
 The web client (`apps/web/src/lib/service-clients/ai-editing-worker/client.ts`)
 opens `http POST /edit` under the document's span; Rust callers
-(`crates/documents/src/outbound/editing_worker_client.rs`) inject headers from
+(`crates/documents/documents/src/outbound/editing_worker_client.rs`) inject headers from
 an instrumented method. The worker
 (`services/ai-editing-worker/src/endpoints/edit.ts`) roots an `edit.session`
 with outcome fields (`edit.mode`, `edit.ops_total`, `edit.blocked`,

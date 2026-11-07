@@ -85,7 +85,7 @@ paths = [
   "crates/email/email/**",
   "crates/calendar/**",
   "crates/databases/databases/**",
-  "crates/documents/**",
+  "crates/documents/documents/**",
   "crates/entities/**",
   "crates/search/**",
   "crates/projects/projects/**",
@@ -117,7 +117,7 @@ paths = [
   "crates/codex_connection",
   "crates/coding_agent_worker",
   "crates/cognition",
-  "crates/collab_surface",
+  "crates/documents/collab_surface",
   "crates/databases/crm",
   "crates/cursor_api_key",
   "crates/cursor_cloud_agents",
@@ -126,7 +126,7 @@ paths = [
   "crates/databases/databases",
   "crates/databases/databases_sql",
   "crates/dictation",
-  "crates/documents",
+  "crates/documents/documents",
   "crates/dynamic_ui",
   "crates/email/email",
   "crates/email/email_api_client",
@@ -147,7 +147,7 @@ paths = [
   "crates/projects/initiative_description",
   "crates/email/invite_email",
   "crates/jev",
-  "crates/lexical_mention_extractor",
+  "crates/documents/lexical_mention_extractor",
   "crates/mcp_select",
   "crates/mcp_toolset",
   "crates/memory",
@@ -163,9 +163,9 @@ paths = [
   "crates/databases/saved_views",
   "crates/scheduled_action",
   "crates/skills",
-  "crates/static_file",
-  "crates/sync_router",
-  "crates/sync_service",
+  "crates/documents/static_file",
+  "crates/documents/sync_router",
+  "crates/documents/sync_service_hex",
   "crates/databases/system_properties",
   "crates/system_skills",
   "crates/projects/task_dedup",
@@ -320,12 +320,12 @@ reason = "uses SoupProjectionHydration and SoupDocumentServerFacts; move them to
 [[allow]]
 from = "sync_router"
 to = "sync_service_bebop_schema"
-reason = "the bebop schema lives under services/sync-service; plan PR 16 moves it to crates/documents/"
+reason = "the bebop schema lives under services/sync-service; plan PR 16 moves it to crates/documents/documents/"
 
 [[allow]]
 from = "sync_service"
 to = "sync_service_bebop_schema"
-reason = "the bebop schema lives under services/sync-service; plan PR 16 moves it to crates/documents/"
+reason = "the bebop schema lives under services/sync-service; plan PR 16 moves it to crates/documents/documents/"
 
 [[allow]]
 from = "sync_service_client"
