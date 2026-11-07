@@ -1,5 +1,5 @@
 use super::NewAttachment;
-use agent::types::{ChatMessageContent, Role};
+use chat_message::{ChatMessageContent, Role};
 use chrono::{DateTime, Utc};
 use model_entity::Entity;
 use serde::{self, Deserialize, Serialize};

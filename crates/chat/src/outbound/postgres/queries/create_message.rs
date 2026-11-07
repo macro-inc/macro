@@ -1,6 +1,6 @@
 //! Insert a new chat message with optional attachments.
 
-use agent::types::Role;
+use chat_message::Role;
 use model::chat::{AttachmentType, NewChatMessage};
 use model_entity::EntityType;
 use sqlx::PgPool;

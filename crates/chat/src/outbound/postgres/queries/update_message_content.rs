@@ -1,6 +1,6 @@
 //! Query to update a chat message's content.
 
-use agent::types::ChatMessageContent;
+use chat_message::ChatMessageContent;
 use sqlx::PgPool;
 
 /// Update a message and optionally bump its chat when the message exists.

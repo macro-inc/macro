@@ -1,10 +1,10 @@
 use std::sync::Mutex;
 
-use agent::types::{AssistantMessagePart, ChatMessageContent};
 use ai_toolset::{
     AsyncTool, RequestContext, ServiceContext, ToolAnnotated, ToolAnnotations, ToolResult,
 };
 use attachment::FormattedParts;
+use chat_message::{AssistantMessagePart, ChatMessageContent};
 use entity_access_management::domain::models::EntityAccessManagementError;
 use macro_event_broker::{EventBrokerError, MacroEvent};
 use model::chat::Chat;

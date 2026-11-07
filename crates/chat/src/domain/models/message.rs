@@ -1,5 +1,5 @@
-use agent::types::ChatMessageContent;
 use attachment::FormattedParts;
+use chat_message::ChatMessageContent;
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 
