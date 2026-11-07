@@ -587,8 +587,8 @@ trialing team, which ends the trial and bills Max for a new cycle today.
 Pro downgrades start at renewal.
 **Keep Max** appears only for a confirmed pending downgrade and cancels it;
 failed scheduled-plan reads offer **Try again**, while teams without applicable
-scheduled plans show no retry notice). CRM (a `Team CRM` switch that admins use to enable or disable it;
-once enabled, a `Stages` section for the company Stage options that new pipelines
+scheduled plans show no retry notice). CRM (individual email contribution and team/personal domain exclusions;
+a `Stages` section independent of email contribution for the company Stage options that new pipelines
 also start with, with `Customize`, inline rename, reorder by drag handle or arrow
 keys (up/down buttons on touch), delete, `Add stage`, and `Reset to defaults`,
 editable by the role set as `edit_stages_role`)

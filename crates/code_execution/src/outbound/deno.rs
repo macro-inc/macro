@@ -130,7 +130,7 @@ impl DenoRunner {
         .await
         .map_err(internal)?;
         let mut destinations = std::collections::BTreeSet::new();
-        for base in job.environment.hosts.values() {
+        for base in job.environment.endpoints.hosts.values() {
             let url = url::Url::parse(base).map_err(internal)?;
             if !matches!(url.scheme(), "http" | "https")
                 || !url.username().is_empty()

@@ -125,7 +125,9 @@ async fn edits_reject_duplicate_addresses_without_merging(pool: PgPool) -> anyho
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
-async fn edits_enforce_team_visibility_and_disabled_crm(pool: PgPool) -> anyhow::Result<()> {
+async fn edits_enforce_team_visibility_without_requiring_consent(
+    pool: PgPool,
+) -> anyhow::Result<()> {
     let team = Uuid::now_v7();
     let foreign_team = Uuid::now_v7();
     seed_team(&pool, team, "macro|owner@example.com").await?;
@@ -170,16 +172,28 @@ async fn edits_enforce_team_visibility_and_disabled_crm(pool: PgPool) -> anyhow:
         service.set_contact_email(&owner, "invalid").await,
         Err(CrmError::InvalidRequest(_))
     ));
-    sqlx::query!(
-        "UPDATE team_crm_settings SET crm_enabled = FALSE WHERE team_id = $1",
-        team
-    )
-    .execute(&pool)
-    .await?;
-    assert!(matches!(
-        service.set_contact_email(&owner, "new@example.com").await,
-        Err(CrmError::CrmDisabledForTeam)
-    ));
+    // The retired flag stays false; ordinary manual edits still work without
+    // an email link or contribution consent.
+    assert!(
+        !sqlx::query_scalar!(
+            "SELECT crm_enabled FROM team_crm_settings WHERE team_id = $1",
+            team
+        )
+        .fetch_one(&pool)
+        .await?
+    );
+    let unchanged = service.set_contact_company(&owner, company).await?;
+    assert_eq!(unchanged.company_id, Some(company));
+    assert!(unchanged.hidden);
+    assert_eq!(
+        sqlx::query_scalar!(
+            "SELECT COUNT(*) FROM crm_email_consent WHERE team_id = $1",
+            team
+        )
+        .fetch_one(&pool)
+        .await?,
+        Some(0)
+    );
     Ok(())
 }
 

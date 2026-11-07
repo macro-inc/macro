@@ -30,8 +30,8 @@ function mount(
   const notices = { ...createComposeContext().notices, reportError: report };
   const root = createRoot((dispose) => {
     const session = createDraftSession(seed);
-    observeDraftIdentity(
-      {
+    observeDraftIdentity({
+      storage: {
         ...createComposeContext().drafts,
         readDraft,
         retryDraft: durableRecovery ? vi.fn() : undefined,
@@ -43,8 +43,8 @@ function mount(
       session,
       notices,
       recover,
-      alreadySent
-    );
+      onAlreadySent: alreadySent,
+    });
     return { dispose, session };
   });
   return {
@@ -80,8 +80,8 @@ describe('durable draft identity', () => {
         threadId: 'thread',
         persistence: 'queued',
       });
-      observeDraftIdentity(
-        {
+      observeDraftIdentity({
+        storage: {
           ...createComposeContext().drafts,
           get readDraft() {
             return enabled() ? read : undefined;
@@ -91,10 +91,10 @@ describe('durable draft identity', () => {
           },
         },
         session,
-        createComposeContext().notices,
-        vi.fn(),
-        vi.fn()
-      );
+        notices: createComposeContext().notices,
+        recover: vi.fn(),
+        onAlreadySent: vi.fn(),
+      });
       return { dispose, session };
     });
     try {
@@ -486,8 +486,8 @@ it('retries a failed confirmed attachment handoff once on reconnect', async () =
       threadId: 'server-thread',
       persistence: 'committed',
     });
-    observeDraftIdentity(
-      {
+    observeDraftIdentity({
+      storage: {
         ...createComposeContext().drafts,
         readDraft: async () => ({
           draft: message('server', {
@@ -502,11 +502,11 @@ it('retries a failed confirmed attachment handoff once on reconnect', async () =
         },
       },
       session,
-      createComposeContext().notices,
-      vi.fn(),
-      vi.fn(),
-      upload
-    );
+      notices: createComposeContext().notices,
+      recover: vi.fn(),
+      onAlreadySent: vi.fn(),
+      onConfirmed: upload,
+    });
     return { dispose };
   });
   try {

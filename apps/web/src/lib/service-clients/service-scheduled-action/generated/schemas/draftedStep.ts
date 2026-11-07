@@ -5,7 +5,7 @@
  * API for managing scheduled actions
  * OpenAPI spec version: 0.1.0
  */
-import type { DraftedStepStep } from './draftedStepStep';
+import type { RoutineStep } from './routineStep';
 
 /**
  * A drafted step.
@@ -17,5 +17,5 @@ export interface DraftedStep {
 when it gave no short reason or didn't choose. */
   reason: string;
   /** The step, in the shape a routine's task holds it. */
-  step: DraftedStepStep;
+  step: RoutineStep;
 }
