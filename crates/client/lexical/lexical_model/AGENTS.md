@@ -50,6 +50,7 @@ node types, immutable snapshots, transactional tree editing, update processing, 
 
 - Reserved `foreign-nodes` exposes a development-only peer editor for the conformance facade; JS node hosting remains a later layer.
 
+- Raw element splices preserve surviving parent offsets; sibling insertion/removal APIs adjust their own source and destination endpoints.
 - Structural deletion and movement traverse directional carets before consuming host layout targets; direct child blocks are not adjacent block boundaries.
 - Block insertion compares captured writability when upstream checks node object identity.
 
