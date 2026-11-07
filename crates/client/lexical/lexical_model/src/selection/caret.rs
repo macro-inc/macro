@@ -271,7 +271,8 @@ impl Transaction<'_> {
         let mut preserve = preserve_first;
         for (key, from, to) in slices {
             let data = self.view().text_data(key)?.clone();
-            if (to - from == data.text.utf16_len() && !preserve) || ((data.is_token() || self.is::<Tab>(key)) && from != to)
+            if (to - from == data.text.utf16_len() && !preserve)
+                || ((data.is_token() || self.is::<Tab>(key)) && from != to)
             {
                 self.remove(key, false)?;
             } else if from != to {

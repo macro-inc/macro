@@ -12,6 +12,7 @@ in views.
 - `code` keeps stored highlights distinct and never tokenizes; new content uses plain text.
 - `code::line`, `code::plain` and `code::language` own line navigation, LF/tab splitting and language catalogs.
 - Keep selection CSS parsing ordered and uncached; detached style inputs differ from active selected text.
+- Keep descendant filtering and nearest-root insertion canonical in utils; do not shadow their re-exports.
 - Use mutation-safe child cursors; collect snapshot DFS results before editing.
 - `clipboard` consumes host MIME strings and HTML nodes; HTML export belongs to WP-24.
 - Depends on model, regex, URL, ordered maps, language tables and tracing facades; no I/O or runtime.
