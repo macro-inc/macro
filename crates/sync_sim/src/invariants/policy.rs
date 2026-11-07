@@ -296,6 +296,9 @@ pub fn ai_peers_hidden(outcome: &Outcome) -> Result<(), Failure> {
                 ai_names.insert(client.clone());
                 ai_peers.insert(*peer);
             }
+            Fact::ServerCommit { peer, .. } => {
+                ai_peers.insert(*peer);
+            }
             Fact::PeerAssigned { client, peer, .. } if ai_names.contains(client) => {
                 ai_peers.insert(*peer);
             }

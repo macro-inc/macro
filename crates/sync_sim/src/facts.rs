@@ -73,6 +73,31 @@ pub enum Fact {
         /// Actual removed IDs.
         removed: Vec<IdSpan>,
     },
+    /// Operations created by the injected-time AI fork used for an atomic server update.
+    ServerCommit {
+        /// Destination document.
+        doc: DocIx,
+        /// AI-range writing peer supplied by the world's RNG.
+        peer: u64,
+        /// Actual newly created ranges.
+        spans: Vec<IdSpan>,
+    },
+    /// The real source-migration gate refused a legacy request before its handler.
+    RequestBlocked {
+        /// Destination document.
+        doc: DocIx,
+        /// Adapter route name.
+        route: String,
+    },
+    /// The real atomic use case prepared this response; durable gate completion is separate.
+    HttpPrepared {
+        /// Destination document.
+        doc: DocIx,
+        /// Whether the optimistic update applied.
+        applied: bool,
+        /// Decoded response revision.
+        revision: Vv,
+    },
     /// Operations in the deterministic server seed, before any client exists.
     ServerSeed {
         /// Document.

@@ -87,6 +87,7 @@ struct State {
     held: Vec<(u64, Effect)>,
     delivery_proofs: Vec<(u64, u64)>,
     queued_sends: Vec<Effect>,
+    completed_closes: Vec<(WebSocketId, u16)>,
     completed_puts: Vec<(String, Value, u64)>,
     gate: GateMode,
     effects: Vec<Effect>,
@@ -327,6 +328,10 @@ impl SimPorts {
     pub(crate) fn transport_effect(&self, effect: Effect) {
         self.0.borrow_mut().effects.push(effect);
     }
+    /// Successful close requests; failed attempts remain only in the ordinary effect log.
+    pub fn take_completed_closes(&self) -> Vec<(WebSocketId, u16)> {
+        std::mem::take(&mut self.0.borrow_mut().completed_closes)
+    }
     /// Successful send enqueues, excluding failed attempts and preserving gate order.
     pub fn take_queued_sends(&self) -> Vec<Effect> {
         std::mem::take(&mut self.0.borrow_mut().queued_sends)
@@ -551,6 +556,7 @@ impl Connections for SimPorts {
             json!({"socket":socket.as_str(),"code":CloseReason::CODE,"reason":reason.as_str()}),
         )?;
         s.closing.insert(socket.clone());
+        s.completed_closes.push((socket.clone(), CloseReason::CODE));
         // C4 capture: server-close remains in getWebSockets until runtime removal.
         Ok(())
     }
