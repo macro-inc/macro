@@ -322,7 +322,11 @@ impl SyncCore {
                 ),
             }
         }
-        self.wal.logged_vv = doc.oplog_vv();
+        // Adoption may finish inside the current peer's coalesce window.
+        // Importing another owner's rows cannot make that local edit logged.
+        if self.wal.append_due.is_none() {
+            self.wal.logged_vv = doc.oplog_vv();
+        }
         if replayed > 0 {
             self.save_snapshot(now, doc, out);
         }
