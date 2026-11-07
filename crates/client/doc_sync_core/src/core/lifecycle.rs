@@ -86,6 +86,15 @@ impl SyncCore {
             self.assist_push = None;
             self.assist_retry = Some(now.mono.after(self.config.wal.retry_unacked_after));
         }
+        // A due retry is a one-shot trigger. If transport or authorization still
+        // blocks the push, the next host/socket input drives it; keeping this
+        // expired deadline would make the executor schedule Tick forever at now.
+        if self.push_retry.is_some_and(|at| at <= now.mono) {
+            self.push_retry = None;
+        }
+        if self.assist_retry.is_some_and(|at| at <= now.mono) {
+            self.assist_retry = None;
+        }
         if self.presence_refresh.is_some_and(|at| at <= now.mono) {
             self.presence_dirty = true;
             self.presence_due = Some(now.mono);
