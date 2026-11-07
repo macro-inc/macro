@@ -111,3 +111,11 @@ registries before recording Tier A. Run
 root to verify that fixed corpus independently. It compares all 57 registered
 node classes (41 custom), both import configurations and all eight registry
 configurations, using an injected clock and deterministic nanoid dependency.
+
+The Rust interpreter routes explicitly recorded editors independently and shares
+allocation identity across them. It consumes captured clocks and cryptographic
+bytes for headless Macro helpers, retains internal dirty keys, and distinguishes
+JavaScript own undefined fields from JSON snapshots. `corpus/synthetic.ts` also
+records source class names and undefined own properties for this marshalling.
+Macro acceptance is all 452 admitted lexical-core fixtures, with no ledger entries;
+expanded upstream failures are reported separately by package.

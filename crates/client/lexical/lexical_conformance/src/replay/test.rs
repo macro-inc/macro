@@ -312,3 +312,49 @@ fn markdown_normalization_replays_real_calls_and_rejects_wrong_returns() -> Resu
     assert!(Replayer::default().replay(&fixture).is_err());
     Ok(())
 }
+
+#[test]
+fn multiple_editor_snapshots_remain_independent_and_strict() -> Result<()> {
+    let fixture: Fixture = serde_json::from_str(include_str!(
+        "../../../../../../packages/lexical-conformance/fixtures/upstream/lexical-core/708f775c22c880f5.json"
+    ))?;
+    Replayer::default().replay(&fixture)?;
+    let mut corrupt = fixture.clone();
+    let second = corrupt
+        .trace
+        .iter_mut()
+        .find(|op| op["op"] == "commit" && op["editor"] == 1)
+        .ok_or_else(|| fail("second editor commit"))?;
+    second["snapshot"]["text"] = json!("corrupted second-editor observation");
+    assert!(
+        Replayer::default()
+            .replay(&corrupt)
+            .expect_err("must compare each editor")
+            .to_string()
+            .contains("snapshot text")
+    );
+    Ok(())
+}
+
+#[test]
+fn internal_dirty_keys_must_name_real_allocations() -> Result<()> {
+    let fixture: Fixture = serde_json::from_str(include_str!(
+        "../../../../../../packages/lexical-conformance/fixtures/upstream/lexical-core/33680822960926bc.json"
+    ))?;
+    Replayer::default().replay(&fixture)?;
+    let mut corrupt = fixture;
+    let commit = corrupt
+        .trace
+        .iter_mut()
+        .find(|op| op["op"] == "commit")
+        .ok_or_else(|| fail("commit"))?;
+    commit["snapshot"]["dirty"]["leaves"][0] = json!("999999");
+    assert!(
+        Replayer::default()
+            .replay(&corrupt)
+            .expect_err("must reject a fabricated allocation")
+            .to_string()
+            .contains("unknown snapshot key")
+    );
+    Ok(())
+}
