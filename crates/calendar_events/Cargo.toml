@@ -46,6 +46,7 @@ anyhow = { workspace = true, optional = true }
 async-trait = { workspace = true, optional = true }
 aws-sdk-sqs = { workspace = true, optional = true }
 axum = { workspace = true, optional = true }
+calendar_event_id = { path = "../types/calendar_event_id" }
 email_validator = { path = "../email_validator", optional = true }
 call = { path = "../call", default-features = false, features = [
   "ports",

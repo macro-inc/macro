@@ -1,5 +1,6 @@
 //! Calendar business policy.
 
+use calendar_event_id::CalendarEventId;
 use std::collections::HashMap;
 
 use chrono::Utc;
@@ -446,16 +447,18 @@ where
     fn meeting_copies(
         &self,
         requester_id: &str,
-        event_id: Uuid,
+        event_id: CalendarEventId,
     ) -> impl Future<Output = Result<Vec<super::models::MeetingCopy>, Report>> + Send {
+        let event_id = event_id.into_uuid();
         CalendarService::meeting_copies(self, requester_id, event_id)
     }
 
     fn event_ics(
         &self,
         requester_id: &str,
-        event_id: Uuid,
+        event_id: CalendarEventId,
     ) -> impl Future<Output = Result<Option<CalendarEventIcs>, Report>> + Send {
+        let event_id = event_id.into_uuid();
         CalendarService::event_ics(self, requester_id, event_id)
     }
 }

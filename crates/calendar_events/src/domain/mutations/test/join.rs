@@ -12,6 +12,7 @@ use crate::domain::models::{
 use crate::domain::ports::{
     CalendarJoinRequestError, CalendarJoinRequestNotifier, CalendarJoinRequestService,
 };
+use calendar_event_id::CalendarEventId;
 
 const SHARER: &str = "macro|self@example.com";
 const MEMBER: &str = "macro|member@example.com";
@@ -131,19 +132,28 @@ async fn a_channel_member_asks_the_sharer_only_once() {
     let (service, notifier) = asking(repo);
     let event_id = Uuid::now_v7();
 
-    let first = service.request_to_join(MEMBER, event_id).await.unwrap();
+    let first = service
+        .request_to_join(MEMBER, CalendarEventId::from_uuid(event_id))
+        .await
+        .unwrap();
     // The calendar inbox an added copy would land on is the one invited.
     assert_eq!(first.requester_email, "self@example.com");
     assert_eq!(first.status, CalendarJoinRequestStatus::Pending);
 
-    let again = service.request_to_join(MEMBER, event_id).await.unwrap();
+    let again = service
+        .request_to_join(MEMBER, CalendarEventId::from_uuid(event_id))
+        .await
+        .unwrap();
     assert_eq!(again.id, first.id);
     assert_eq!(notifier.notified.lock().unwrap().len(), 1);
 
     // A declined request stands: asking again is refused and the sharer is
     // not asked a second time.
     requests.lock().unwrap()[0].status = CalendarJoinRequestStatus::Declined;
-    let error = service.request_to_join(MEMBER, event_id).await.unwrap_err();
+    let error = service
+        .request_to_join(MEMBER, CalendarEventId::from_uuid(event_id))
+        .await
+        .unwrap_err();
     assert!(
         matches!(error, CalendarJoinRequestError::Declined),
         "{error:?}"
@@ -163,7 +173,7 @@ async fn a_new_request_refreshes_the_lists_readers_once_it_is_stored() {
     let (service, _, refresh) = asking_with_refresh(sharer_organizes());
 
     service
-        .request_to_join(MEMBER, Uuid::now_v7())
+        .request_to_join(MEMBER, CalendarEventId::from_uuid(Uuid::now_v7()))
         .await
         .unwrap();
 
@@ -191,7 +201,9 @@ async fn only_the_first_ask_refreshes_the_list() {
         let request = pending_request(&repo, status);
         let (service, _, refresh) = asking_with_refresh(repo);
 
-        let result = service.request_to_join(MEMBER, request.event_id).await;
+        let result = service
+            .request_to_join(MEMBER, CalendarEventId::from_uuid(request.event_id))
+            .await;
 
         assert_eq!(
             result.is_err(),
@@ -230,7 +242,7 @@ async fn a_refused_ask_refreshes_nothing() {
 
         assert!(
             service
-                .request_to_join(MEMBER, Uuid::now_v7())
+                .request_to_join(MEMBER, CalendarEventId::from_uuid(Uuid::now_v7()))
                 .await
                 .is_err(),
             "{case}"
@@ -247,7 +259,7 @@ async fn a_member_without_a_calendar_is_invited_at_their_account_address() {
     });
 
     let request = service
-        .request_to_join(MEMBER, Uuid::now_v7())
+        .request_to_join(MEMBER, CalendarEventId::from_uuid(Uuid::now_v7()))
         .await
         .unwrap();
 
@@ -288,7 +300,7 @@ async fn asking_is_refused_when_the_sharer_could_not_accept() {
         let (service, notifier) = asking(repo);
 
         let error = service
-            .request_to_join(MEMBER, Uuid::now_v7())
+            .request_to_join(MEMBER, CalendarEventId::from_uuid(Uuid::now_v7()))
             .await
             .unwrap_err();
 
@@ -304,7 +316,7 @@ async fn asking_is_refused_when_the_sharer_could_not_accept() {
     let (service, _) = asking(sharer_as_guest(GuestPolicy::default()));
     assert!(
         service
-            .request_to_join(MEMBER, Uuid::now_v7())
+            .request_to_join(MEMBER, CalendarEventId::from_uuid(Uuid::now_v7()))
             .await
             .is_ok()
     );
@@ -331,7 +343,7 @@ async fn an_outlook_sharer_can_be_asked_only_as_the_organizer() {
     let (service, notifier) = asking(repo);
 
     let error = service
-        .request_to_join(MEMBER, Uuid::now_v7())
+        .request_to_join(MEMBER, CalendarEventId::from_uuid(Uuid::now_v7()))
         .await
         .unwrap_err();
 
@@ -350,7 +362,7 @@ async fn an_outlook_sharer_can_be_asked_only_as_the_organizer() {
     }));
     assert!(
         service
-            .request_to_join(MEMBER, Uuid::now_v7())
+            .request_to_join(MEMBER, CalendarEventId::from_uuid(Uuid::now_v7()))
             .await
             .is_ok()
     );
@@ -363,7 +375,9 @@ async fn asking_needs_a_channel_share_and_no_copy_of_your_own() {
         ..sharer_organizes()
     });
     assert!(matches!(
-        service.request_to_join(MEMBER, Uuid::now_v7()).await,
+        service
+            .request_to_join(MEMBER, CalendarEventId::from_uuid(Uuid::now_v7()))
+            .await,
         Err(CalendarJoinRequestError::AlreadyOnCalendar)
     ));
 
@@ -372,7 +386,9 @@ async fn asking_needs_a_channel_share_and_no_copy_of_your_own() {
         ..sharer_organizes()
     });
     assert!(matches!(
-        service.request_to_join(MEMBER, Uuid::now_v7()).await,
+        service
+            .request_to_join(MEMBER, CalendarEventId::from_uuid(Uuid::now_v7()))
+            .await,
         Err(CalendarJoinRequestError::NotFound)
     ));
 }
@@ -384,7 +400,7 @@ async fn only_someone_who_can_change_the_event_lists_its_requests() {
     let (service, _) = asking(repo);
     assert_eq!(
         service
-            .list_join_requests(SHARER, request.event_id)
+            .list_join_requests(SHARER, CalendarEventId::from_uuid(request.event_id))
             .await
             .unwrap(),
         std::slice::from_ref(&request)
@@ -400,7 +416,9 @@ async fn only_someone_who_can_change_the_event_lists_its_requests() {
         });
         assert!(
             matches!(
-                service.list_join_requests(MEMBER, request.event_id).await,
+                service
+                    .list_join_requests(MEMBER, CalendarEventId::from_uuid(request.event_id))
+                    .await,
                 Err(CalendarJoinRequestError::NotFound)
             ),
             "{case}"

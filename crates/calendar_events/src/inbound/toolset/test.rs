@@ -2,6 +2,7 @@ mod add_shared_calendar_event;
 mod copies;
 mod read_calendar_event;
 
+use calendar_event_id::CalendarEventId;
 use std::sync::Mutex;
 
 use ai_toolset::schema::generate_validated_input_schema;
@@ -357,7 +358,7 @@ impl CalendarOccurrenceService for MockOccurrences {
     async fn meeting_copies(
         &self,
         _requester_id: &str,
-        _event_id: Uuid,
+        _event_id: CalendarEventId,
     ) -> Result<Vec<MeetingCopy>, rootcause::Report> {
         Ok(self.copies.lock().unwrap().clone())
     }
@@ -365,7 +366,7 @@ impl CalendarOccurrenceService for MockOccurrences {
     async fn event_ics(
         &self,
         _requester_id: &str,
-        _event_id: Uuid,
+        _event_id: CalendarEventId,
     ) -> Result<Option<crate::domain::ics::CalendarEventIcs>, rootcause::Report> {
         unreachable!("no calendar tool exports an event")
     }

@@ -17,6 +17,7 @@ mod update_calendar_event;
 #[cfg(test)]
 mod test;
 
+use calendar_event_id::CalendarEventId;
 use std::sync::Arc;
 
 use ai_toolset::{AsyncToolCollection, ToolCallError};
@@ -447,7 +448,7 @@ async fn confirm_copy<O: CalendarOccurrenceService>(
     change: CopyChange,
 ) -> Result<(), ToolCallError> {
     let copies = occurrences
-        .meeting_copies(requester_id, event_id)
+        .meeting_copies(requester_id, CalendarEventId::from_uuid(event_id))
         .await
         .map_err(|error| ToolCallError {
             description: "Failed to check which of the user's inboxes hold this meeting. Try \

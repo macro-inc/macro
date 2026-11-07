@@ -6,6 +6,7 @@ publish = false
 
 [dependencies]
 async-graphql = { workspace = true }
+calendar_event_id = { path = "../types/calendar_event_id" }
 calendar_events = { path = "../calendar_events" }
 chrono = { workspace = true }
 futures = { workspace = true }
