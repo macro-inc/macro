@@ -35,6 +35,20 @@ impl Transaction<'_> {
             // Caret-range removal still refreshes the active selection upstream.
             return self.collapsed_selection_at(slot, range.anchor, range.format, range.style);
         }
+        if let (Point::Element { key: a, offset: ao }, Point::Element { key: f, offset: fo }) = (range.anchor, range.focus) {
+            if a == NodeKey::ROOT && f == NodeKey::ROOT {
+                let start = ao.0.min(fo.0);
+                let end = ao.0.max(fo.0);
+                let children = self.children_keys(NodeKey::ROOT)?;
+                for key in children.get(start as usize..end as usize).ok_or(Error::SpliceOutOfRange)? {
+                    let mut nodes = self.descendants(*key).collect::<Vec<_>>();
+                    nodes.reverse();
+                    for (node, _) in nodes { self.remove(node, true)?; }
+                    self.remove(*key, true)?;
+                }
+                return self.collapsed_selection_at(slot, Point::element(NodeKey::ROOT, ChildIndex(start)), range.format, range.style);
+            }
+        }
         // Caret conversion descends noncollapsed element boundaries before removal.
         normalize_range_selection(self.view(), &mut range)?;
         if range.is_collapsed() {

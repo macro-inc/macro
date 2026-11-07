@@ -555,3 +555,22 @@ fn range_removal_marks_leaves_inside_completely_selected_blocks() -> Result<(), 
     assert_eq!(commit.changes.mutations.get(&middle_text), Some(&Mutation::Destroyed));
     Ok(())
 }
+
+#[test]
+fn root_child_range_removes_the_selected_paragraph_identity() -> Result<(), Error> {
+    let mut editor = Editor::builder(EditorMode::Headless).build().unwrap();
+    let (p, _) = editor.update(|tx| {
+        let p = tx.create(Paragraph::default())?;
+        let text = tx.create_text("old")?;
+        tx.append(p, &[text.key()])?;
+        tx.append(NodeKey::ROOT, &[p.key()])?;
+        tx.set_selection(Some(Selection::Range(RangeSelection::new(
+            Point::element(NodeKey::ROOT, ChildIndex(1)), Point::element(NodeKey::ROOT, ChildIndex(0)),
+        ))))?;
+        Ok(p.key())
+    })?;
+    let (_, commit) = editor.update(|tx| tx.remove_text())?;
+    assert!(commit.next.children_keys(NodeKey::ROOT)?.is_empty());
+    assert_eq!(commit.changes.mutations.get(&p), Some(&Mutation::Destroyed));
+    Ok(())
+}
