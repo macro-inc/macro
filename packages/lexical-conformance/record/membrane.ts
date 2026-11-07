@@ -351,6 +351,8 @@ export class Recorder {
         this.unwrap(receiver),
         args.map((arg) => this.unwrap(arg))
       );
+    if (/^@lexical\/code-shiki\.loadCode(Language|Theme)$/.test(name))
+      this.reasons.add('B-only:shiki-loader-cache-requires-async-bootstrap');
     if (this.modelProjection && name.endsWith('.$generateNodesFromDOM'))
       this.partialRequested = true;
     if (
