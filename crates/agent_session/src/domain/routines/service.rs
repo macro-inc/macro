@@ -313,6 +313,17 @@ where
             .map_err(session_error)?;
         Ok(())
     }
+
+    async fn delete_draft(&self, command: RoutineSessionAction) -> Result<(), RoutineSessionError> {
+        let session = self.owned_session(&command).await?;
+        if !session.origin.drafts_routine() {
+            return Err(RoutineSessionError::Forbidden);
+        }
+        self.sessions
+            .delete_session(command.session_id)
+            .await
+            .map_err(session_error)
+    }
 }
 
 /// An agent limited to selected apps also gets the routine's. One that uses

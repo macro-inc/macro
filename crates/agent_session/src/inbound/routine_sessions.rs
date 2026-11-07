@@ -75,6 +75,7 @@ pub fn routine_sessions_router<Service: RoutineSessions, Auth: MacroAuthorizatio
             .route("/prompt", post(prompt::<Service, Auth>))
             .route("/status", post(status::<Service, Auth>))
             .route("/cancel", post(cancel::<Service, Auth>))
+            .route("/delete-draft", post(delete_draft::<Service, Auth>))
             .layer(DefaultBodyLimit::max(MAX_COMMAND_BYTES))
             .layer(middleware::from_fn(bound_request))
             .with_state(state),
@@ -201,3 +202,12 @@ async fn cancel<Service: RoutineSessions, Auth: MacroAuthorizationService>(
 
 #[cfg(test)]
 mod test;
+
+async fn delete_draft<Service: RoutineSessions, Auth: MacroAuthorizationService>(
+    State(state): State<RoutineSessionsState<Service, Auth>>,
+    _internal: MacroAuthorizationExtractor<Auth, InternalOnly>,
+    command: Result<Json<RoutineSessionAction>, JsonRejection>,
+) -> Result<StatusCode, ApiError> {
+    state.service.delete_draft(command?.0).await?;
+    Ok(StatusCode::NO_CONTENT)
+}
