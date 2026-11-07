@@ -1,10 +1,13 @@
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { enableRoutineConditions } from '@core/constant/featureFlags';
+import { isGeofenceSupported } from '@core/mobile/native-geofence';
+import { fireAndForget } from '@core/util/fireAndForget';
 import { Show, Suspense } from 'solid-js';
 import { RoutineEventCondition } from './components/routine-event-condition';
 import { RoutineGithubConnect } from './components/routine-github-connect';
 import { RoutineGithubSettings } from './components/routine-github-settings';
 import { RoutinePayloadTests } from './components/routine-payload-tests';
+import { RoutinePlaceAccess } from './components/routine-place-access';
 import { RoutineTriggers as TriggerList } from './components/routine-triggers';
 import {
   type EventTriggerDraft,
@@ -13,6 +16,7 @@ import {
   taskTriggerProperty,
   withPropertyValues,
 } from './core/routine-triggers';
+import { createGeofencePermission } from './primitives/geofence-permission';
 import { createGithubConnection } from './queries/github-link';
 import { createGithubRepositoryOptions } from './queries/github-repositories';
 import {
@@ -38,6 +42,18 @@ function RepositoryScopeLabel(props: { trigger: EventTriggerDraft }) {
     return repositories[0];
   };
   return <span title={label()}>{label()}</span>;
+}
+
+/** The phone app's location access, read from the device. */
+function PlaceAccess() {
+  const access = createGeofencePermission();
+  return (
+    <RoutinePlaceAccess
+      permission={access.permission()}
+      requesting={access.requesting()}
+      onRequest={() => fireAndForget(access.request(), 'routines-geofence')}
+    />
+  );
 }
 
 export function RoutineTriggers(props: {
@@ -67,6 +83,9 @@ export function RoutineTriggers(props: {
       triggers={props.triggers}
       onChange={props.onChange}
       layout={props.layout === 'add' ? 'add' : 'rows'}
+      renderPlaceAccess={
+        isGeofenceSupported() ? () => <PlaceAccess /> : undefined
+      }
       renderEventGroup={(group, options) => (
         <Show
           when={group !== 'GitHub' || github().linked !== false}

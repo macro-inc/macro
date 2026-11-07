@@ -27,18 +27,23 @@ import {
 import { Dynamic } from 'solid-js/web';
 import { match } from 'ts-pattern';
 import {
+  type LocationTriggerDraft,
+  placeRadiusLabel,
+} from '../core/location-trigger';
+import {
   describeTrigger,
   type EventTriggerDraft,
   eventScopeKind,
   eventTriggerDescription,
   eventTriggerLabel,
   isGlobalEvent,
-  type PayloadTestDraft,
   type RoutineEventGroup,
   type RoutineTriggerDraft,
-  routineEvents,
+  type ScheduleTriggerDraft,
   validateTriggers,
 } from '../core/routine-triggers';
+import { switchEvent } from '../core/switch-event';
+import { RoutineLocationSettings } from './routine-location-settings';
 import { RoutineScheduleSettings } from './routine-schedule-settings';
 import { menuMount } from './routine-search-menu';
 import { TRIGGER_GROUP_ICONS } from './routine-trigger-icons';
@@ -65,6 +70,8 @@ type EventSlots = {
     group: RoutineEventGroup,
     options: () => JSX.Element
   ) => JSX.Element;
+  /** This device's location access, shown in a place's settings where it applies. */
+  renderPlaceAccess?: () => JSX.Element;
 };
 
 function triggerGroup(trigger: EventTriggerDraft): RoutineEventGroup {
@@ -81,12 +88,34 @@ function triggerGroup(trigger: EventTriggerDraft): RoutineEventGroup {
 
 function TriggerIcon(props: { trigger: RoutineTriggerDraft; class: string }) {
   const icon = () =>
-    props.trigger.kind === 'event'
-      ? TRIGGER_GROUP_ICONS[triggerGroup(props.trigger)]
-      : props.trigger.frequency === 'once'
-        ? CalendarIcon
-        : TRIGGER_GROUP_ICONS.Schedule;
+    match(props.trigger)
+      .with(
+        { kind: 'event' },
+        (event) => TRIGGER_GROUP_ICONS[triggerGroup(event)]
+      )
+      .with({ kind: 'schedule', frequency: 'once' }, () => CalendarIcon)
+      .with({ kind: 'schedule' }, () => TRIGGER_GROUP_ICONS.Schedule)
+      .with({ kind: 'location' }, () => TRIGGER_GROUP_ICONS.Places)
+      .exhaustive();
   return <Dynamic component={icon()} class={props.class} />;
+}
+
+/** A chip's full text: a schedule with its zone, a place with its radius. */
+function triggerChipTitle(
+  trigger: ScheduleTriggerDraft | LocationTriggerDraft
+): string {
+  return match(trigger)
+    .with(
+      { kind: 'schedule' },
+      (schedule) =>
+        `${describeTrigger(schedule)} · ${schedule.timezone.replace(/_/g, ' ')}`
+    )
+    .with(
+      { kind: 'location' },
+      (location) =>
+        `${describeTrigger(location)} · ${placeRadiusLabel(location.radiusMeters)}`
+    )
+    .exhaustive();
 }
 
 /** Whether an event trigger watches particular items, read as "in …". */
@@ -188,11 +217,18 @@ function PanelBody(
     const value = pending();
     return value.kind === 'event' ? value : undefined;
   };
-  const title = () => {
-    const value = event();
-    if (value) return eventTriggerLabel(value);
-    return schedule()?.frequency === 'once' ? 'Once' : 'On a schedule';
+  const location = () => {
+    const value = pending();
+    return value.kind === 'location' ? value : undefined;
   };
+  const title = () =>
+    match(pending())
+      .with({ kind: 'event' }, eventTriggerLabel)
+      .with({ kind: 'schedule', frequency: 'once' }, () => 'Once')
+      .with({ kind: 'schedule' }, () => 'On a schedule')
+      .with({ kind: 'location', on: 'arrive' }, () => 'Arrive at a place')
+      .with({ kind: 'location', on: 'leave' }, () => 'Leave a place')
+      .exhaustive();
   const save = () => {
     const value = pending();
     const message = validateTriggers(
@@ -227,6 +263,15 @@ function PanelBody(
         <Show when={schedule()}>
           {(value) => (
             <RoutineScheduleSettings
+              trigger={value()}
+              onChange={(patch) => edit({ ...value(), ...patch })}
+            />
+          )}
+        </Show>
+        <Show when={location()}>
+          {(value) => (
+            <RoutineLocationSettings
+              access={props.renderPlaceAccess?.()}
               trigger={value()}
               onChange={(patch) => edit({ ...value(), ...patch })}
             />
@@ -314,6 +359,7 @@ function TriggerPanel(
       renderEventCondition={props.renderEventCondition}
       renderEventSettings={props.renderEventSettings}
       renderEventGroup={props.renderEventGroup}
+      renderPlaceAccess={props.renderPlaceAccess}
       onSave={(value) => {
         props.onSave(value);
         props.onOpenChange(false);
@@ -442,6 +488,7 @@ function AddTrigger(
             renderEventCondition={props.renderEventCondition}
             renderEventSettings={props.renderEventSettings}
             renderEventGroup={props.renderEventGroup}
+            renderPlaceAccess={props.renderPlaceAccess}
             onSave={props.onAdd}
             onBack={() => {
               setPending(undefined);
@@ -454,61 +501,6 @@ function AddTrigger(
   );
 }
 
-/** Keep what still applies when an event trigger switches to another event. */
-function switchEvent(
-  current: EventTriggerDraft,
-  next: EventTriggerDraft
-): EventTriggerDraft {
-  // Choosing the event it already has changes nothing.
-  if (eventTriggerLabel(next) === eventTriggerLabel(current)) return current;
-  const sameItems = eventScopeKind(current) === eventScopeKind(next);
-  return {
-    ...current,
-    events: next.events,
-    ids: sameItems ? current.ids : next.ids,
-    ...switchGithub(current, next),
-  };
-}
-
-const sameTest = (left: PayloadTestDraft, right: PayloadTestDraft) =>
-  left.path === right.path &&
-  left.op === right.op &&
-  left.value === right.value;
-
-/**
- * Moving between GitHub choices takes the new choice's events, actions and
- * payload tests, but keeps what the person narrowed it to: repositories, bots,
- * and the tests they added on top of the old choice.
- */
-function switchGithub(
-  current: EventTriggerDraft,
-  next: EventTriggerDraft
-): Pick<EventTriggerDraft, 'github' | 'match'> {
-  if (!current.github || !next.github)
-    return { github: next.github, match: next.match };
-  const preset = routineEvents.find(
-    (item) =>
-      item.value === 'github' && item.label === eventTriggerLabel(current)
-  )?.preset;
-  const added = (current.match ?? []).filter(
-    (test) => !preset?.match?.some((own) => sameTest(own, test))
-  );
-  const nextTests = next.match ?? [];
-  const kept = added.filter(
-    (test) => !nextTests.some((own) => own.path === test.path)
-  );
-  const match = [...nextTests, ...kept];
-  return {
-    github: {
-      ...next.github,
-      repositories: current.github.repositories,
-      includeBots: current.github.includeBots,
-    },
-    // Set even when empty: the old choice's own tests must not carry over.
-    match: match.length ? match : undefined,
-  };
-}
-
 /** The sentence's first token: the event, opening the menu to change it. */
 function EventToken(
   props: EventSlots & {
@@ -519,7 +511,7 @@ function EventToken(
 ) {
   let button: HTMLButtonElement | undefined;
   const [menuOpen, setMenuOpen] = createSignal(false);
-  // Switching to a schedule needs its settings first.
+  // Switching to a schedule or a place needs its settings first.
   const [schedule, setSchedule] = createSignal<RoutineTriggerDraft>();
   return (
     <>
@@ -565,6 +557,7 @@ function EventToken(
             renderEventCondition={props.renderEventCondition}
             renderEventSettings={props.renderEventSettings}
             renderEventGroup={props.renderEventGroup}
+            renderPlaceAccess={props.renderPlaceAccess}
             onSave={props.onSave}
           />
         )}
@@ -801,8 +794,9 @@ function TriggerSentence(
   const [open, setOpen] = createSignal(false);
   const event = () =>
     props.trigger.kind === 'event' ? props.trigger : undefined;
-  const schedule = () =>
-    props.trigger.kind === 'schedule' ? props.trigger : undefined;
+  /** Schedules and places: one chip that opens the trigger's settings. */
+  const ownTrigger = () =>
+    props.trigger.kind === 'event' ? undefined : props.trigger;
   /** An event trigger with a check, or one that can take a filter. */
   const filtered = () => {
     const value = event();
@@ -813,7 +807,7 @@ function TriggerSentence(
   return (
     <div class="flex min-w-0 flex-col gap-2.5">
       <div class="flex min-w-0 flex-wrap items-center gap-2">
-        <Show when={schedule()}>
+        <Show when={ownTrigger()}>
           {(value) => (
             <TriggerPanel
               {...props}
@@ -823,7 +817,7 @@ function TriggerSentence(
               isNew={false}
               anchor={{
                 label: `Edit ${describeTrigger(value())} trigger`,
-                title: `${describeTrigger(value())} · ${value().timezone.replace(/_/g, ' ')}`,
+                title: triggerChipTitle(value()),
                 class: badgeTriggerClasses({
                   variant: 'secondary',
                   size: 'md',
@@ -918,6 +912,7 @@ export function RoutineTriggers(
     renderEventSettings: props.renderEventSettings,
     renderEventCondition: props.renderEventCondition,
     renderEventGroup: props.renderEventGroup,
+    renderPlaceAccess: props.renderPlaceAccess,
   });
   return (
     <Switch>

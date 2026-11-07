@@ -17,7 +17,9 @@ import type {
   CodeUpgrade,
   Draft,
   DraftRoutineRequest,
+  FenceList,
   InProgressExecution,
+  RegisteredDevice,
   RoutineTemplate,
   ScheduledAction,
   ScheduledActionResponse,
@@ -153,4 +155,26 @@ export const scheduledActionClient = {
       `/scheduled-actions/${args.templateId}/template/activate`,
       { method: 'POST', body: JSON.stringify(args.body) }
     ),
+
+  /** Mint this phone's token for reporting place crossings; returned only here. */
+  registerLocationDevice: () =>
+    scheduledActionFetch<RegisteredDevice>(
+      '/scheduled-actions/location/devices',
+      { method: 'POST' }
+    ),
+
+  removeLocationDevice: (args: { deviceId: string }) =>
+    scheduledActionFetch(
+      `/scheduled-actions/location/devices/${encodeURIComponent(args.deviceId)}`,
+      { method: 'DELETE' }
+    ),
+
+  /** The places the caller's enabled routines watch. */
+  listLocationFences: () =>
+    scheduledActionFetch<FenceList>('/scheduled-actions/location/fences', {
+      method: 'GET',
+    }),
 };
+
+/** Where a phone reports crossings, with its device token rather than a session. */
+export const LOCATION_REPORT_URL = `${scheduledActionHost}/scheduled-actions/location/reports`;
