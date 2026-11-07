@@ -56,3 +56,13 @@ test('does not hide a stored expiry that differs from the input grant', () => {
   expect(normalize([input, '{"expires_at":1000}']))
     .not.toBe(normalize([input, '{"expires_at":1001}']));
 });
+
+test('does not substitute another socket grant expiry', () => {
+  const connect = (room: string, expiry: number) => JSON.stringify({ room, in: 'fetch', query: `?token=eyJhbGciOiJIUzI1NiJ9.${Buffer.from(JSON.stringify({ exp: expiry })).toString('base64url')}.signature` });
+  const record = (expiry: number) => [
+    connect('a', 1000), '{"room":"a","out":"accept","ws_id":"socket-a"}',
+    connect('b', 2000), '{"room":"b","out":"accept","ws_id":"socket-b"}',
+    JSON.stringify({ room: 'a', port: 'storage.put', args: ['socket-a', { expires_at: expiry }] }),
+  ];
+  expect(normalize(record(1000))).not.toBe(normalize(record(2000)));
+});

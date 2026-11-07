@@ -3,7 +3,7 @@ import { afterEach, beforeEach, expect, test } from 'vitest';
 import type { Miniflare } from 'miniflare';
 import { LoroDoc, LoroMap, LoroText } from 'loro-crdt';
 import { FromPeer, InitializeFromSnapshotRequest } from '../bebop/generated/schema';
-import { abortObjectBetweenMessages, createTestUser, getTokenForDocument, getTokenForSurface, setupMiniflare } from './utils';
+import { abortObjectBetweenMessages, createTestUser, dispatchConcurrent, getTokenForDocument, getTokenForSurface, setupMiniflare } from './utils';
 
 let mf: Miniflare;
 beforeEach(async () => { mf = await setupMiniflare(); });
@@ -153,7 +153,7 @@ test('M2 ping fails after DOCUMENT_ID is removed', async () => {
   const target = await stub(id);
   expect((await target.fetch('http://sync-test/__sync_test_forget_id')).status).toBe(204);
   await abortObjectBetweenMessages(target);
-  writer.send('ping');
+  writer.getWebSocket().send('ping');
   await expect(writer.connection.waitForNextMessage(100)).rejects.toThrow('Timed out');
   writer.getWebSocket().close();
 }, 15_000);
@@ -173,4 +173,30 @@ test('R10 deletion retains the mapped-writing-peer cache', async () => {
   replacement.send(FromPeer.fromPeerUpdate({ updates: [original.doc.export({ mode: 'update' })], id: 'reused-writing-peer' }).encode());
   expect((await replacement.readNextMessage()).isRemoteUpdateAck()).toBe(true);
   expect((await request(id, `peer/${original.doc.peerIdStr}`)).status).toBe(500);
+});
+
+
+test('E2 serializes overlapping fetches across a pending storage put', async () => {
+  const id = '00000000-0000-4000-8000-000000000002';
+  const doc = new LoroDoc();
+  await mf.dispatchFetch(`http://localhost/surface/${id}/initialize`, {
+    method: 'POST', headers: { 'x-internal-auth-key': 'local' },
+    body: InitializeFromSnapshotRequest.encode({ snapshot: doc.export({ mode: 'snapshot' }) }),
+  });
+  const expiry = Math.floor(Date.now() / 1000) + 2;
+  const first = dispatchConcurrent(mf, `http://localhost/surface/${id}/connect?token=${getTokenForSurface(id, 'edit', expiry)}`, {
+    headers: { Upgrade: 'websocket', 'x-sync-test-stop-after': `expire_after_accept:${expiry}` },
+  });
+  const target = await stub(`surface:${id}`);
+  await expect.poll(async () => (await target.fetch('http://sync-test/__sync_test_accept_count')).json()).toBe(1);
+  let finished = false;
+  const second = dispatchConcurrent(mf, `http://localhost/surface/${id}/snapshot`, {
+    method: 'POST',
+    headers: { authorization: `Bearer ${getTokenForSurface(id)}` },
+  }).then(response => { finished = true; return response; });
+  await new Promise(resolve => setTimeout(resolve, 20));
+  expect(finished).toBe(false);
+  expect((await first).status).toBe(403);
+  expect((await second).status).toBe(200);
+  doc.free();
 });
