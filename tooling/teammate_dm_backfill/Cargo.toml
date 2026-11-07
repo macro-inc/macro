@@ -1,0 +1,21 @@
+[package]
+edition = "2024"
+name = "teammate_dm_backfill"
+publish = false
+version = "0.1.0"
+
+[[bin]]
+name = "backfill_teammate_dms"
+path = "src/main.rs"
+
+[dependencies]
+anyhow = { workspace = true }
+channels = { workspace = true, features = ["outbound", "ports"] }
+database_env_vars = { workspace = true }
+macro_entrypoint = { workspace = true }
+macro_user_id = { workspace = true }
+sqlx = { workspace = true }
+teams = { workspace = true, features = ["outbound", "ports"] }
+tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
+tracing = { workspace = true }
+workspace-hack = { version = "0.1", path = "../../crates/workspace-hack" }

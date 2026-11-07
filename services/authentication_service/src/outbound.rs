@@ -10,6 +10,7 @@ pub mod stripe_audit;
 pub mod stripe_consumers;
 pub mod stripe_identity;
 pub mod subscription_checkout;
+pub mod team_channels;
 pub mod team_owned_entity_cleanup;
 pub mod user_deletion;
 

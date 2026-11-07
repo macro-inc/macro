@@ -127,7 +127,7 @@ pub(crate) type DomainNoticeServiceType = teams::domain::domain_notice::DomainNo
 pub(crate) type TeamsServiceType = teams::domain::team_service::TeamServiceImpl<
     teams::outbound::team_repo::TeamRepositoryImpl,
     teams::outbound::customer_repo::CustomerRepositoryImpl,
-    ChannelServiceType,
+    crate::outbound::team_channels::ChannelServiceTeamChannels<ChannelServiceType>,
     UserRolesAndPermissionsServiceImpl<MacroDB>,
     NotificationIngressType,
     teams::outbound::crm_enqueuer::SqsCrmEnqueuer,

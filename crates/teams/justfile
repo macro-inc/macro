@@ -30,7 +30,7 @@ test:
 # Ensure teammate DMs against the local MacroDB.
 backfill_teammate_dms_local:
     RUST_LOG="${RUST_LOG:-info}" ENVIRONMENT="local" DATABASE_URL="{{ DATABASE_URL }}" \
-        cargo run -p teams --features backfill_binary --bin backfill_teammate_dms
+        cargo run -p teammate_dm_backfill --bin backfill_teammate_dms
 
 # Ensure teammate DMs against the dev MacroDB.
 backfill_teammate_dms_dev:
@@ -64,4 +64,4 @@ _backfill_teammate_dms_run env rds_id secret:
     DATABASE_URL="$(../../tooling/scripts/rds_database_url.sh {{ rds_id }} {{ secret }} macrodb)"
     eval "$(aws configure export-credentials --format env)"
     RUST_LOG="${RUST_LOG:-info}" ENVIRONMENT="{{ env }}" DATABASE_URL="$DATABASE_URL" \
-        cargo run -p teams --features backfill_binary --bin backfill_teammate_dms
+        cargo run -p teammate_dm_backfill --bin backfill_teammate_dms
