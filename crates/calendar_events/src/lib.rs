@@ -17,7 +17,6 @@ pub mod inbound;
     feature = "dispatch-sqs",
     feature = "notify",
     feature = "mutation-client",
-    feature = "call-meetings",
     feature = "gateway-refresh"
 ))]
 pub mod outbound;
