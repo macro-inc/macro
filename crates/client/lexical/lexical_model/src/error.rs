@@ -169,7 +169,7 @@ pub enum Error {
     #[error("unregistered node type {0}")]
     UnregisteredNodeOnCreate(&'static str),
     /// Model invariant.
-    #[error("model invariant: {0}")]
+    #[error("{0}")]
     Invariant(&'static str),
     /// An invariant diagnostic containing runtime context.
     #[error("{0}")]
