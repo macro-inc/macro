@@ -915,3 +915,58 @@ fn removing_selected_block_relocates_to_sibling_element_boundary() -> Result<(),
     assert_eq!(range.focus, range.anchor);
     Ok(())
 }
+
+#[test]
+fn sibling_selection_uses_element_select_instead_of_select_end() -> Result<(), Error> {
+    let mut editor = Editor::builder(EditorMode::Headless)
+        .build()
+        .expect("editor");
+    let mut tx = editor.transaction();
+    let previous = tx.create(Paragraph::default())?;
+    let middle = tx.create(Paragraph::default())?;
+    let next = tx.create(Paragraph::default())?;
+    let first_text = tx.create_text("aa")?;
+    let last_text = tx.create_text("bb")?;
+    tx.append(previous, &[first_text.key()])?;
+    tx.append(next, &[last_text.key()])?;
+    tx.append(NodeKey::ROOT, &[previous.key(), middle.key(), next.key()])?;
+    tx.select_previous(middle, None, None)?;
+    assert_eq!(
+        tx.selection()
+            .and_then(Selection::as_range)
+            .expect("range")
+            .anchor,
+        Point::element(previous, ChildIndex(1))
+    );
+    tx.select_next(middle, None, None)?;
+    assert_eq!(
+        tx.selection()
+            .and_then(Selection::as_range)
+            .expect("range")
+            .anchor,
+        Point::element(next, ChildIndex(0))
+    );
+    Ok(())
+}
+
+#[test]
+fn typing_at_segmented_start_keeps_the_segmented_node() -> Result<(), Error> {
+    let mut editor = Editor::builder(EditorMode::Headless)
+        .build()
+        .expect("editor");
+    let mut tx = editor.transaction();
+    let paragraph = tx.create(Paragraph::default())?;
+    let segmented = tx.create_text("abc")?;
+    tx.text(segmented)?.set_mode(TextMode::Segmented)?;
+    tx.append(paragraph, &[segmented.key()])?;
+    tx.append(NodeKey::ROOT, &[paragraph.key()])?;
+    tx.select_start(segmented)?;
+    tx.insert_text("x")?;
+    let children = tx.children_keys(paragraph)?;
+    assert_eq!(children.len(), 2);
+    assert_eq!(children[1], segmented.key());
+    assert_eq!(tx.view().text_data(segmented)?.mode, TextMode::Segmented);
+    assert_eq!(tx.text_content(children[0]), "x");
+    assert_eq!(tx.text_content(segmented), "abc");
+    Ok(())
+}

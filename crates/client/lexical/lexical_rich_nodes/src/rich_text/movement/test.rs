@@ -313,6 +313,7 @@ impl DecoratorNode for BlockDecorator {
     }
 }
 #[test]
+// LexicalNode.selectPrevious/Next use ElementNode.select, retaining element points.
 fn vertical_arrows_move_around_adjacent_block_decorator() -> crate::Result<()> {
     let mut editor = Editor::builder(EditorMode::Headless)
         .node::<BlockDecorator>()
@@ -332,12 +333,12 @@ fn vertical_arrows_move_around_adjacent_block_decorator() -> crate::Result<()> {
     assert_eq!(arrow_up(&mut tx, false)?, ArrowOutcome::Handled);
     assert_eq!(
         tx.range_selection()?.anchor,
-        Point::text(first, Utf16Offset(5))
+        Point::element(a, ChildIndex(1))
     );
     assert_eq!(arrow_down(&mut tx, false)?, ArrowOutcome::Handled);
     assert_eq!(
         tx.range_selection()?.anchor,
-        Point::text(last, Utf16Offset(0))
+        Point::element(b, ChildIndex(0))
     );
     tx.set_selection(Some(Selection::Range(RangeSelection::new(
         Point::text(first, Utf16Offset(0)),
@@ -365,22 +366,22 @@ fn node_selection_arrows_honor_horizontal_rtl_and_vertical_direction() -> crate:
     nodes.add(d);
     tx.set_selection(Some(Selection::Node(nodes.clone())))?;
     assert_eq!(arrow_up(&mut tx, false)?, ArrowOutcome::Handled);
-    assert_eq!(tx.anchor()?, Point::text(first, Utf16Offset(5)));
+    assert_eq!(tx.anchor()?, Point::element(a, ChildIndex(1)));
     tx.set_selection(Some(Selection::Node(nodes.clone())))?;
     assert_eq!(arrow_down(&mut tx, false)?, ArrowOutcome::Handled);
-    assert_eq!(tx.anchor()?, Point::text(last, Utf16Offset(0)));
+    assert_eq!(tx.anchor()?, Point::element(b, ChildIndex(0)));
     tx.set_selection(Some(Selection::Node(nodes.clone())))?;
     assert_eq!(
         arrow_left(&mut tx, false, true, &EscapeFormatTriggerConfig::default())?,
         ArrowOutcome::Handled
     );
-    assert_eq!(tx.anchor()?, Point::text(last, Utf16Offset(0)));
+    assert_eq!(tx.anchor()?, Point::element(b, ChildIndex(0)));
     tx.set_selection(Some(Selection::Node(nodes)))?;
     assert_eq!(
         arrow_right(&mut tx, false, true, &EscapeFormatTriggerConfig::default())?,
         ArrowOutcome::Handled
     );
-    assert_eq!(tx.anchor()?, Point::text(first, Utf16Offset(5)));
+    assert_eq!(tx.anchor()?, Point::element(a, ChildIndex(1)));
     Ok(())
 }
 #[test]
