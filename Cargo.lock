@@ -11765,7 +11765,10 @@ dependencies = [
 name = "lexical_conformance_wasm"
 version = "0.1.0"
 dependencies = [
+ "lexical_markdown",
  "lexical_model",
+ "lexical_rich_nodes",
+ "regress",
  "serde",
  "serde_json",
  "thiserror 2.0.18",

@@ -62,7 +62,7 @@ impl Position {
         }
         Ok(point)
     }
-    fn point(&self, view: StateRef<'_>) -> Result<Point, Error> {
+    pub(crate) fn point(&self, view: StateRef<'_>) -> Result<Point, Error> {
         let mut key = NodeKey::ROOT;
         for i in &self.path {
             key = view
