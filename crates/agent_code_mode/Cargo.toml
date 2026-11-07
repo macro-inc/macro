@@ -16,7 +16,7 @@ anyhow = { workspace = true }
 axum = { workspace = true }
 bot_id = { path = "../bot_id" }
 calendar_events = { path = "../calendar_events", features = ["ai_tools"] }
-code_execution = { path = "../code_execution" }
+code_execution_core = { path = "../agents/code_execution_core" }
 code_mode_assets = { path = "../code_mode_assets" }
 email = { path = "../email", features = ["ai_tools", "inbound"] }
 entity_access = { path = "../entity_access", default-features = false, features = ["ports", "inbound"] }

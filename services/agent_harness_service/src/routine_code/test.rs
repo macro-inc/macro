@@ -1,4 +1,4 @@
-use code_execution::domain::{ExecutionFailure, FailureCode};
+use code_execution_core::{ExecutionFailure, FailureCode};
 use serde_json::json;
 
 use super::*;
@@ -168,8 +168,8 @@ struct Programs(std::sync::Mutex<usize>);
 impl ProgramExecutor for Programs {
     async fn execute_program(
         &self,
-        _: code_execution::domain::ExecuteRequest,
-        _: code_execution::domain::RunEnvironment,
+        _: code_execution_core::ExecuteRequest,
+        _: code_execution_core::RunEnvironment,
         _: CancellationToken,
     ) -> Outcome {
         *self.0.lock().unwrap() += 1;
@@ -188,9 +188,9 @@ impl ProgramChecker for NoChecks {
 
     async fn check_files(
         &self,
-        _: &[code_execution::domain::SourceFile],
+        _: &[code_execution_core::SourceFile],
         _: &str,
-    ) -> Result<Vec<code_execution::domain::Diagnostic>, code_execution::domain::CheckError> {
+    ) -> Result<Vec<code_execution_core::Diagnostic>, code_execution_core::CheckError> {
         Ok(Vec::new())
     }
 }
@@ -219,7 +219,7 @@ async fn a_step_waits_for_a_free_slot_before_its_credential_and_gives_up_after_f
             Arc::clone(&programs) as Arc<dyn ProgramExecutor>,
             Arc::new(NoChecks),
             RecordedTokens::default(),
-            code_execution::domain::SdkEndpoints::default(),
+            code_execution_core::SdkEndpoints::default(),
             Arc::new(ai_usage::NoOpUsageRecorder),
             None,
             Arc::new(NoTimeZones),
@@ -303,8 +303,8 @@ mod real_deno {
 
     use std::path::PathBuf;
 
-    use code_execution::domain::{ExecutionService, Limits};
-    use code_execution::outbound::deno::{DenoRunner, check::DenoChecker};
+    use code_execution_core::{ExecutionService, Limits};
+    use code_execution_outbound::deno::{DenoRunner, check::DenoChecker};
     use routine_program::RoutineProgram;
     use tokio::io::{AsyncReadExt, AsyncWriteExt};
     use tokio::net::{TcpListener, TcpStream};
@@ -340,7 +340,7 @@ mod real_deno {
         let checker = DenoChecker::new(deno, root.path().join("checks"), 1, 64 * 1024)
             .await
             .unwrap();
-        let endpoints = code_execution::domain::SdkEndpoints {
+        let endpoints = code_execution_core::SdkEndpoints {
             hosts: ["cognition", "email", "storage"]
                 .map(|name| (name.to_owned(), host.to_owned()))
                 .into(),
@@ -480,7 +480,7 @@ export async function main({ macro, trigger, steps, run }: StepContext) {
         }
         assert_eq!(
             code.sdk().unwrap(),
-            routine_program::code_version(code_execution::domain::sdk_fingerprint())
+            routine_program::code_version(code_execution_core::sdk_fingerprint())
         );
     }
 

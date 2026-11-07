@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use agent_session::domain::model::{AgentSession, AgentSessionId};
 use async_trait::async_trait;
-use code_execution::domain::{ExecuteRequest, Limits, Outcome, ProgramExecutor};
+use code_execution_core::{ExecuteRequest, Limits, Outcome, ProgramExecutor};
 use entity_access::domain::models::{EntityAccessReceipt, EntityType, ViewAccessLevel};
 use tokio::sync::Semaphore;
 use tokio_util::sync::CancellationToken;

@@ -301,7 +301,7 @@ reminder dispatch, team availability, and provider/Postgres persistence.
   `copy_choice_required`. An agent run (`macro_authorization::is_agent_run`)
   is a token with `agent_id` (in-app code mode) or a request carrying
   `x-macro-code-execution`, which
-  `code_execution`'s bootstrap sets on every code-mode program's SDK requests,
+  `code_execution_outbound`'s bootstrap sets on every code-mode program's SDK requests,
   public MCP clients' included. Code-mode agents never see the calendar tools
   (`agent_code_mode::covered_by_code_sdk`), so the routes and the SDK docs are
   what reach them; the web, which opens one copy, sends no `inbox` and is not

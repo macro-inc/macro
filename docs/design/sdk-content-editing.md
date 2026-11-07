@@ -47,7 +47,7 @@ Every direct edit tool has the same two layers:
 | PowerPoint | No (`EditPresentation` takes ops) | `pptx_engine` natively in `crates/documents`, S3 version per edit | None: last writer wins |
 | Canvas | Yes (`EditCanvas`) | `CanvasSession` in the worker, live peer, text measured and rendered in Browser Rendering | Revision hash; unrelated concurrent edits rebased |
 
-The sandbox (`crates/code_execution`) runs a fresh `deno` process per call:
+The sandbox (`crates/agents/code_execution_outbound`) runs a fresh `deno` process per call:
 30 s, 128 MiB heap, `--deny-import --no-remote --no-npm`, and network limited
 to the hosts in `sdk_endpoints()` (DSS, auth, cognition, email and others). Neither
 sync-service nor the ai-editing-worker is on that list. The SDK bundle

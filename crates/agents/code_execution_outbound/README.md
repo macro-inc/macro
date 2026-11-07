@@ -127,7 +127,7 @@ The pinned runtime is required for the opt-in real Deno suite. From the reposito
 root inside Nix, with `SQLX_OFFLINE` unset:
 
 ```sh
-cargo test -p code_execution -- --include-ignored
+cargo test -p code_execution_outbound -- --include-ignored
 ```
 
 The suite covers actual SDK HTTP authentication and concurrency, prebundled

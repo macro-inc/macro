@@ -1,5 +1,5 @@
 [package]
-name = "code_execution"
+name = "code_execution_outbound"
 version = "0.1.0"
 edition = "2024"
 publish = false
@@ -8,15 +8,15 @@ publish = false
 url = { workspace = true }
 rustix = { workspace = true }
 async-trait = { workspace = true }
-code_mode_assets = { path = "../code_mode_assets" }
+code_execution_core = { path = "../code_execution_core" }
+code_mode_assets = { path = "../../code_mode_assets" }
 futures = { workspace = true }
 rootcause = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 tempfile = { workspace = true }
-thiserror = { workspace = true }
 tokio = { workspace = true, features = ["fs", "io-util", "net", "process", "sync", "time"] }
-tokio-util = { workspace = true, features = ["codec", "rt"] }
+tokio-util = { workspace = true, features = ["codec"] }
 tracing = { workspace = true }
 uuid = { workspace = true }
-workspace-hack = { version = "0.1", path = "../workspace-hack" }
+workspace-hack = { version = "0.1", path = "../../workspace-hack" }

@@ -644,19 +644,19 @@ async fn run() -> anyhow::Result<()> {
     let code_scratch = tempfile::tempdir()?;
     let code_runner = match &config.deno_binary {
         Some(binary) => {
-            let runner = code_execution::outbound::deno::DenoRunner::new(
+            let runner = code_execution_outbound::deno::DenoRunner::new(
                 binary.into(),
                 code_scratch.path().to_owned(),
                 128,
             )
             .await
             .map_err(|error| anyhow::anyhow!("invalid Deno runtime: {error}"))?;
-            let runner: Arc<dyn code_execution::domain::CodeRunner> = Arc::new(runner);
+            let runner: Arc<dyn code_execution_core::CodeRunner> = Arc::new(runner);
             // Public MCP runs get their own admission budget so external
             // clients cannot exhaust the slots agent sessions rely on.
-            let public = code_execution::domain::ExecutionService::new(
+            let public = code_execution_core::ExecutionService::new(
                 Arc::clone(&runner),
-                code_execution::domain::Limits {
+                code_execution_core::Limits {
                     max_running: 4,
                     max_queued: 8,
                     ..Default::default()
@@ -664,9 +664,9 @@ async fn run() -> anyhow::Result<()> {
             )?;
             // Routines get their own budget too, below the host's priority and
             // with a CPU limit, so unattended code can't crowd out sessions.
-            let routines = code_execution::domain::ExecutionService::new(
+            let routines = code_execution_core::ExecutionService::new(
                 Arc::clone(&runner),
-                code_execution::domain::Limits {
+                code_execution_core::Limits {
                     max_running: ROUTINE_CODE_SLOTS,
                     max_queued: 16,
                     max_cpu: Some(std::time::Duration::from_secs(10)),
@@ -674,18 +674,18 @@ async fn run() -> anyhow::Result<()> {
                     ..Default::default()
                 },
             )?;
-            let checker = code_execution::outbound::deno::check::DenoChecker::new(
+            let checker = code_execution_outbound::deno::check::DenoChecker::new(
                 binary.into(),
                 code_scratch.path().join("checks"),
                 2,
-                code_execution::domain::Limits::default().max_source_bytes,
+                code_execution_core::Limits::default().max_source_bytes,
             )
             .await
             .map_err(|error| anyhow::anyhow!("invalid Deno type checker: {error}"))?;
             Some((
-                code_execution::domain::ExecutionService::new(
+                code_execution_core::ExecutionService::new(
                     runner,
-                    code_execution::domain::Limits::default(),
+                    code_execution_core::Limits::default(),
                 )?,
                 public,
                 routines,
@@ -699,7 +699,7 @@ async fn run() -> anyhow::Result<()> {
         Some((_, _, routines, checker)) => Some(
             routine_code::SdkRoutineCode::new(
                 Arc::new(routines.clone()),
-                Arc::clone(checker) as Arc<dyn code_execution::domain::ProgramChecker>,
+                Arc::clone(checker) as Arc<dyn code_execution_core::ProgramChecker>,
                 MacroApiTokenSigner::new(
                     pool.clone(),
                     config.macro_api_token_issuer.as_ref(),
@@ -815,7 +815,7 @@ async fn run() -> anyhow::Result<()> {
         ),
     );
     let code_executor = code_runner.as_ref().map(|(runner, _, _, _)| {
-        Arc::new(runner.clone()) as Arc<dyn code_execution::domain::ProgramExecutor>
+        Arc::new(runner.clone()) as Arc<dyn code_execution_core::ProgramExecutor>
     });
     let code_mode_enabled = code_executor.is_some();
     let execution_store: Arc<dyn agent_code_mode::domain::ExecutionStore> = Arc::new(

@@ -61,5 +61,5 @@ committed. `crates/code_mode_assets`
 builds them when it compiles: local cargo runs `scripts/generate.ts` with bun,
 and Nix builds and Rust CI use the `code-mode-assets` flake package through
 `CODE_MODE_ASSETS_DIR`. See that crate's `AGENTS.md`.
-Real Deno integration tests live in `crates/code_execution`; public SDK entity
+Real Deno integration tests live in `crates/agents/code_execution_outbound`; public SDK entity
 behavior is tested under `packages/sdk/tests`.

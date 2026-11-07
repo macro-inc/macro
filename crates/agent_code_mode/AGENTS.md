@@ -13,7 +13,7 @@ turn, so a later requester cannot inherit an earlier execution result.
 Owns session-authorized code executions, user-scoped executions for the public
 MCP, SDK documentation selection, saved execution records, and durable review
 stacks. Process isolation belongs to
-`crates/code_execution`; session presentation belongs to `crates/agent_session`.
+`crates/agents/code_execution_core` (runner in `code_execution_outbound`); session presentation belongs to `crates/agent_session`.
 
 ## Start here
 
