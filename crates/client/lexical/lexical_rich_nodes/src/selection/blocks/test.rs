@@ -58,3 +58,36 @@ fn legacy_wrap_nodes_moves_whole_parent_runs() -> Result<(), Error> {
     })?;
     Ok(())
 }
+
+#[test]
+fn replacing_nested_list_item_copies_computed_indent() -> Result<(), Error> {
+    use crate::list::*;
+    let mut editor = register_list_nodes(Editor::builder(EditorMode::Headless))
+        .build()
+        .unwrap();
+    editor.update(|tx| {
+        let list = tx.create(ListNode::new(ListType::Bullet, 1))?;
+        let wrapper = tx.create(ListItemNode::default())?;
+        let nested = tx.create(ListNode::new(ListType::Bullet, 1))?;
+        let item = tx.create(ListItemNode::default())?;
+        let text = tx.create_text("nested")?;
+        tx.append(item, &[text.key()])?;
+        tx.append(nested, &[item.key()])?;
+        tx.append(wrapper, &[nested.key()])?;
+        tx.append(list, &[wrapper.key()])?;
+        tx.append(NodeKey::ROOT, &[list.key()])?;
+        assert_eq!(tx.indent(item), 1);
+        assert_eq!(tx.element_data(item)?.indent, 0);
+        tx.select_end(text)?;
+        let selection = tx.selection().cloned();
+        set_blocks_type_default(tx, selection.as_ref(), |tx| {
+            Ok(tx.create(Paragraph::default())?.key())
+        })?;
+        let paragraph = tx.children_keys(NodeKey::ROOT)?[0];
+        assert!(tx.is::<Paragraph>(paragraph));
+        assert_eq!(tx.indent(paragraph), 1);
+        assert_eq!(tx.text_content(paragraph), "nested");
+        Ok(())
+    })?;
+    Ok(())
+}

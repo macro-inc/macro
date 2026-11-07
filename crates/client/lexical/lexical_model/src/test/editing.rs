@@ -112,7 +112,7 @@ fn base_tree_operations_and_paragraph_creation_keep_links_and_typing_style() -> 
         tx.try_range_at(SelectionSlot::Active)
             .expect("range")
             .anchor,
-        Point::text(c, Utf16Offset(1))
+        Point::element(p, ChildIndex(2))
     );
     let parent = tx.create_parent_element(a)?;
     assert!(tx.is::<Paragraph>(parent));

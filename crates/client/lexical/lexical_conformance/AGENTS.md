@@ -20,7 +20,9 @@ Development-only schema-2 fixture interpreter for the pinned upstream oracle.
 - Route rich-node constructors and handlers through `lexical_rich_nodes`; replay editor-level command transactions at the recorded enqueue/commit boundary.
 - Fix model divergences in `lexical_model` or `lexical_rich_nodes`; never change expected values or skip observable comparisons to turn a failure green.
 - Reset write bookkeeping for each replay transaction, including read-only discrete updates.
-- Link fixtures use real link transforms; the sole remaining link ledger case requires WP-20 MarkNode.
+- Route markdown conversions and normalization through lexical_markdown with decoded standard transformer identifiers; all 18 markdown fixtures pass without ledger entries.
+- Table node fixtures and the core table-caret case use concrete table payloads; all currently recorded table cases replay without ledger entries.
+- Link fixtures use real link transforms and MarkNode descendants; no link ledger entries remain.
 - Unmapped APIs fail loudly. Ledger entries require an exact test identity, reason and spec decision; stale entries fail.
 - Native loading lives in `source.rs`; the interpreter itself has no filesystem dependency.
 

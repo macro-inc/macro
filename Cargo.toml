@@ -9,6 +9,7 @@ members = [
   "crates/client/lexical/lexical_html",
   "crates/client/lexical/lexical_conformance",
   "crates/client/lexical/lexical_rich_nodes",
+  "crates/client/lexical/lexical_markdown",
   "crates/client/lexical/lexical_conformance_wasm",
   "crates/client/lexical/lexical_workspace_tests",
   "crates/sync_doc_id",
@@ -235,6 +236,7 @@ phf = { version = "0.13.1", features = ["macros"] }
 lexical_html = { path = "crates/client/lexical/lexical_html" }
 lexical_model = { path = "crates/client/lexical/lexical_model" }
 lexical_rich_nodes = { path = "crates/client/lexical/lexical_rich_nodes" }
+lexical_markdown = { path = "crates/client/lexical/lexical_markdown" }
 # Shared dependencies for the portable Lexical model and its conformance suites.
 imbl = { version = "=7.0.2", default-features = false }
 rustc-hash = { version = "2.1.2", default-features = false }

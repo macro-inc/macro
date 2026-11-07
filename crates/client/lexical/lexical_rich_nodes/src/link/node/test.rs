@@ -116,3 +116,31 @@ fn sanitize_url_rejects_unsupported_protocols_and_retains_relative_paths() {
     assert_eq!(sanitize_url("/path"), "/path");
     assert_eq!(sanitize_url("example.com"), "https://example.com");
 }
+
+#[test]
+fn line_break_before_link_selects_its_first_text() -> Result<()> {
+    let mut editor = Editor::builder(EditorMode::Headless)
+        .node::<LinkNode>()
+        .build()
+        .expect("editor");
+    let ((paragraph, text), _) = editor.update(|tx| {
+        let paragraph = tx.create(Paragraph::default())?;
+        let link = create_link_node(tx, "/", LinkAttributes::default())?;
+        let text = tx.create_text("link")?;
+        tx.append(link, &[text.key()])?;
+        tx.append(paragraph, &[link.key()])?;
+        tx.append(NodeKey::ROOT, &[paragraph.key()])?;
+        tx.select_start(paragraph)?;
+        Ok((paragraph, text))
+    })?;
+    editor.update(|tx| tx.insert_line_break(false))?;
+    let state = editor.state();
+    assert!(state.is_line_break(state.children_keys(paragraph)?[0]));
+    let range = state
+        .selection()
+        .and_then(Selection::as_range)
+        .expect("range");
+    assert_eq!(range.anchor, Point::text(text, Utf16Offset(0)));
+    assert_eq!(range.focus, range.anchor);
+    Ok(())
+}

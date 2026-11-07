@@ -35,7 +35,9 @@ buffers; it does not require a wasm runtime.
 compatibility alongside the model packages. `lexical_rich_nodes` adds rich/plain
 text command functions, heading/quote/hashtag/overflow nodes, text entities and
 selection plugins, list nodes and structural list editing, link/autolink nodes,
-shared UTF-16 matchers and the pinned linkify-it port. Conformance replay calls
+shared UTF-16 matchers, the pinned linkify-it port, and table nodes, span maps,
+restructuring, selection hooks and model interaction handlers. Table handlers take
+host layout facts and return observer effects. Conformance replay calls
 these package APIs. Markdown, HTML and projection packages belong here too.
 
 Dependencies come from the root workspace table. The existing
@@ -66,3 +68,7 @@ that would skip individual surrogates which JavaScript without `u` can match.
 The conformance test covers this distinction over the complete BMP input.
 
 The rich-node package includes stored code/highlight preservation, plain code editing, inline marks, selection/tree/text/offset helpers and model clipboard strings. Its replayer executes all admitted code, mark and utility fixtures without package ledger entries. The recorder index still distinguishes unavailable B-only cases and view assertions; `lexical_html` supplies export-only DOM construction and linkedom serialization; rich-node exporters and clipboard HTML are behind the rich package’s `html` feature.
+
+`lexical_markdown` provides portable markdown import/export, ordered transformer
+contracts, standard block/inline groups and sans-IO insertion/Enter shortcuts. The Tier A interpreter routes markdown
+conversion through this engine; the regex corpus is checked against pinned V8.

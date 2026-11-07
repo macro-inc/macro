@@ -81,6 +81,24 @@ impl Transaction<'_> {
             }
             self.set_point_at(slot, end_role, end_point)?;
         }
+        let first_point = if backward {
+            original.focus
+        } else {
+            original.anchor
+        };
+        if self
+            .view()
+            .text(first_point.key())
+            .is_some_and(|data| data.is_segmented())
+            && first_point.offset() != self.text_content_size(first_point.key()).get()
+            && !(original.is_collapsed() && first_point.offset() == 0)
+        {
+            let content = self.text_content(first_point.key()).into_owned();
+            let plain = self.create_text(&content)?;
+            self.text(plain)?.set_format(original.format)?;
+            self.replace(first_point.key(), plain, false)?;
+            original = self.range_at(slot)?.clone();
+        }
         let selected = original.nodes(self.view())?;
         if selected.len() == 1
             && (if backward {
@@ -100,16 +118,23 @@ impl Transaction<'_> {
             }
             self.set_point_at(slot, end_role, end)?;
         }
-        if selected.len() > 1
-            && selected.iter().all(|key| {
-                self.is::<Paragraph>(*key)
-                    || self
-                        .parent(*key)
-                        .is_some_and(|parent| self.is::<Paragraph>(parent))
-            })
-        {
-            return self
-                .insert_text_across_paragraph_nodes(slot, &original, &selected, text, backward);
+        if !original.is_collapsed() && !text.is_empty() {
+            let first_parent = selected.first().and_then(|key| self.parent(*key));
+            let last_parent = selected.last().and_then(|key| self.parent(*key));
+            if first_parent.into_iter().chain(last_parent).any(|parent| {
+                !self.can_insert_text_before(parent) || !self.can_insert_text_after(parent)
+            }) {
+                // Upstream clears protected inline parents first, then resolves
+                // the surviving boundary before inserting the replacement.
+                self.insert_text_at(slot, "")?;
+                let mut normalized = self.range_at(slot)?.clone();
+                self.normalize_view_boundaries(&mut normalized)?;
+                self.install_selection_at(slot, Selection::Range(normalized))?;
+                return self.insert_text_at(slot, text);
+            }
+        }
+        if selected.len() > 1 {
+            return self.insert_text_across_nodes(slot, &original, &selected, text, backward);
         }
         if !original.is_collapsed()
             && let [key] = selected.as_slice()
@@ -243,13 +268,6 @@ impl Transaction<'_> {
                 range.format,
                 range.style.clone(),
             );
-        } else if data.is_segmented() {
-            let plain = self.create_text(data.text.as_str())?;
-            self.text(plain)?
-                .set_format(range.format)?
-                .set_style(&range.style)?;
-            self.replace(key, plain, false)?;
-            key = plain.key();
         }
         let current = self.view().text_data(key)?.clone();
         let (format, style) = if original.is_collapsed() {
@@ -329,7 +347,7 @@ impl Transaction<'_> {
     }
     // Upstream insertText still uses its older node-based replacement algorithm,
     // whose element-end semantics differ from caret-range removeText.
-    fn insert_text_across_paragraph_nodes(
+    fn insert_text_across_nodes(
         &mut self,
         slot: SelectionSlot,
         range: &RangeSelection,
@@ -346,12 +364,18 @@ impl Transaction<'_> {
         };
         let first_data = self.view().text_data(first)?.clone();
         let first_parent = self.parent_or_err(first)?;
-        let last_parent = if self.is_element(last) {
+        let mut last_parent = if self.is_element(last) {
             last
         } else {
             self.parent_or_err(last)?
         };
-        let last_child = last;
+        let mut last_child = last;
+        if first_parent != last_parent && self.is_inline(last_parent) {
+            while self.is_inline(last_parent) {
+                last_child = last_parent;
+                last_parent = self.parent_or_err(last_parent)?;
+            }
+        }
         let mut keep = crate::collections::IndexSet::default();
         keep.extend(self.ancestors(first));
         keep.extend(self.ancestors(last));
@@ -385,7 +409,12 @@ impl Transaction<'_> {
                 }
                 keep.insert(last);
             } else {
-                self.remove(last, false)?;
+                let parent = self.parent_or_err(last)?;
+                if !self.can_be_empty(parent) && self.children_size(parent) == 1 {
+                    self.remove(parent, false)?;
+                } else {
+                    self.remove(last, false)?;
+                }
             }
         } else {
             keep.insert(last);
@@ -394,6 +423,12 @@ impl Transaction<'_> {
             .iter()
             .copied()
             .collect::<crate::collections::IndexSet<_>>();
+        let insertion_target = if self.is_inline(first_parent) && self.next_sibling(first).is_none()
+        {
+            first_parent
+        } else {
+            first
+        };
         for child in self.children_keys(last_parent)?.into_iter().rev() {
             if child == first || self.has_ancestor(first, child) {
                 break;
@@ -401,7 +436,7 @@ impl Transaction<'_> {
             if self.is_attached(child) {
                 if !selected.contains(&child) || child == last_child {
                     if first_parent != last_parent {
-                        self.insert_after(first, child, false)?;
+                        self.insert_after(insertion_target, child, false)?;
                     }
                 } else {
                     self.remove(child, false)?;
@@ -631,8 +666,11 @@ impl Transaction<'_> {
                 .last()
                 .ok_or(Error::Invariant("empty node insertion"))?;
             let point = if !self.is_text(last) && !self.is_element(last) {
-                match self.next_sibling(last).filter(|key| self.is_text(*key)) {
-                    Some(next) => Point::text(next, Utf16Offset::ZERO),
+                match self
+                    .next_sibling(last)
+                    .filter(|key| self.is_text(*key) || self.is_element(*key))
+                {
+                    Some(next) => self.element_select_point(next, false)?,
                     None => self.end_point(last)?,
                 }
             } else {
@@ -692,18 +730,20 @@ impl Transaction<'_> {
                 after = key;
             }
         }
+        let last_inserted_block =
+            self.find_matching_parent(select, |state, key| state.is_block(key));
         if let Some(trailing) = trailing
-            && self.is_element(after)
-            && (self.can_merge_when_empty(trailing) || self.is_block(after))
+            && let Some(last_block) = last_inserted_block.filter(|key| self.is_element(*key))
+            && (self.can_merge_when_empty(trailing) || self.is_block(last))
         {
             let children = self.children_keys(trailing)?;
-            self.append(after, &children)?;
+            self.append(last_block, &children)?;
             self.remove(trailing, false)?;
         }
         if self.is_empty(block) {
             self.remove(block, false)?;
         }
-        if after != block
+        if last_inserted_block != Some(block)
             && let Some(last) = self.last_child(block)
             && self.is_line_break(last)
         {
