@@ -543,9 +543,16 @@ fn set_cells_carries_typed_values_to_the_worker_unchanged() {
         panic!("expected set_cells");
     };
     assert!(matches!(&cells[0].value, SpreadsheetCellValue::Text(text) if text == "Item"));
-    assert!(matches!(&cells[1].value, SpreadsheetCellValue::Number(number) if number.as_i64() == Some(42)));
-    assert!(matches!(&cells[2].value, SpreadsheetCellValue::Number(number) if number.as_f64() == Some(-0.25)));
-    assert!(matches!(cells[3].value, SpreadsheetCellValue::Boolean(true)));
+    assert!(
+        matches!(&cells[1].value, SpreadsheetCellValue::Number(number) if number.as_i64() == Some(42))
+    );
+    assert!(
+        matches!(&cells[2].value, SpreadsheetCellValue::Number(number) if number.as_f64() == Some(-0.25))
+    );
+    assert!(matches!(
+        cells[3].value,
+        SpreadsheetCellValue::Boolean(true)
+    ));
     assert!(matches!(&cells[4].value, SpreadsheetCellValue::Text(text) if text == "=SUM(B1:B2)"));
     assert!(matches!(cells[5].value, SpreadsheetCellValue::Empty));
     assert_eq!(serde_json::to_value(&operation).unwrap(), json);
