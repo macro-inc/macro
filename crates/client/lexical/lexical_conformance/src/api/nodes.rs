@@ -71,6 +71,18 @@ pub(crate) fn call(
         "getKey" => return Ok(json!({"$nodeKey":key.index()})),
         "getTextContent" => return Ok(json!(view.text_content(key))),
         "getTextContentSize" => return Ok(json!(view.text_content_size(key).get())),
+        "isBefore" => {
+            return Ok(json!(view.is_before(
+                key,
+                node_key(a.first().ok_or_else(|| fail("isBefore target"))?)?
+            )?));
+        }
+        "isParentOf" => {
+            return Ok(json!(view.is_parent_of(
+                key,
+                node_key(a.first().ok_or_else(|| fail("isParentOf target"))?)?
+            )));
+        }
         "isAttached" => return Ok(json!(view.is_attached(key))),
         "getLatest" => return r.node(view, key),
         "getChildrenSize" => return Ok(json!(view.children_size(key))),
@@ -302,3 +314,6 @@ pub(crate) fn call(
     }
     r.node(tx.view(), key)
 }
+
+#[cfg(test)]
+mod test;
