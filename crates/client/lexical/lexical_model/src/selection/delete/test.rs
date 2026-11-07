@@ -298,10 +298,10 @@ impl ElementNode for NonEmptyBlock {
     }
 }
 
-// Removing all children of a nonempty element cascades its removal. The
-// surviving preceding block becomes the caret origin and merge destination.
+// Removing a nonempty element can leave the caret outside the surviving
+// blocks. The literal upstream case is in diff/caret.test.ts.
 #[test]
-fn deletion_merges_into_surviving_preceding_block() -> Result<(), Error> {
+fn deletion_keeps_the_caret_outside_a_removed_nonempty_block() -> Result<(), Error> {
     let mut editor = Editor::builder(EditorMode::Headless)
         .node::<NonEmptyBlock>()
         .build()
@@ -323,9 +323,10 @@ fn deletion_merges_into_surviving_preceding_block() -> Result<(), Error> {
         Point::text(right, Utf16Offset(1)),
     ))))?;
     tx.remove_text()?;
-    assert_eq!(tx.children_keys(NodeKey::ROOT)?, vec![previous.key()]);
-    assert_eq!(tx.text_content(previous), "leftight");
-    assert_eq!(tx.anchor()?, Point::text(left, Utf16Offset(4)));
+    assert_eq!(tx.children_keys(NodeKey::ROOT)?, vec![previous.key(), next.key()]);
+    assert_eq!(tx.text_content(previous), "left");
+    assert_eq!(tx.text_content(next), "ight");
+    assert_eq!(tx.anchor()?, Point::element(NodeKey::ROOT, ChildIndex(1)));
     Ok(())
 }
 
@@ -636,6 +637,48 @@ fn root_start_of_partial_text_removal_retains_its_container_coordinate() -> Resu
         tx.remove_text()?;
         assert_eq!(tx.anchor()?, Point::element(NodeKey::ROOT, ChildIndex(1)));
         assert_eq!(tx.text_content(last), "bc");
+        Ok(())
+    })?;
+    Ok(())
+}
+
+#[test]
+fn caret_deletion_keeps_the_last_entered_block_and_its_format() -> Result<(), Error> {
+    let mut editor = Editor::builder(EditorMode::Headless).build().unwrap();
+    editor.update(|tx| {
+        let first = tx.create(Paragraph::default())?;
+        let last = tx.create(Paragraph::default())?;
+        let a = tx.create_text("first")?;
+        let b = tx.create_text("last")?;
+        tx.append(first, &[a.key()])?;
+        tx.append(last, &[b.key()])?;
+        tx.element(last)?.set_text_format(TextFormat::BOLD)?;
+        tx.append(NodeKey::ROOT, &[first.key(), last.key()])?;
+        tx.set_selection(Some(Selection::Range(RangeSelection::new(
+            Point::element(last, ChildIndex(1)), Point::element(NodeKey::ROOT, ChildIndex(0)),
+        ))))?;
+        tx.remove_text()?;
+        assert_eq!(tx.children_keys(NodeKey::ROOT)?, vec![last.key()]);
+        assert_eq!(tx.view().element_data(last)?.text_format, TextFormat::BOLD);
+        assert_eq!(tx.anchor()?, Point::element(last, ChildIndex(0)));
+        Ok(())
+    })?;
+    Ok(())
+}
+
+#[test]
+fn caret_deletion_does_not_enter_a_block_beyond_its_root_end() -> Result<(), Error> {
+    let mut editor = Editor::builder(EditorMode::Headless).build().unwrap();
+    editor.update(|tx| {
+        let first = tx.create(Paragraph::default())?;
+        let last = tx.create(Paragraph::default())?;
+        tx.append(NodeKey::ROOT, &[first.key(), last.key()])?;
+        tx.set_selection(Some(Selection::Range(RangeSelection::new(
+            Point::element(NodeKey::ROOT, ChildIndex(1)), Point::element(first, ChildIndex(0)),
+        ))))?;
+        tx.remove_text()?;
+        assert_eq!(tx.children_keys(NodeKey::ROOT)?, vec![first.key(), last.key()]);
+        assert_eq!(tx.anchor()?, Point::element(first, ChildIndex(0)));
         Ok(())
     })?;
     Ok(())
