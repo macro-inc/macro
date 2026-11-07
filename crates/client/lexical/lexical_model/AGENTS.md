@@ -17,6 +17,8 @@ node types, immutable snapshots, transactional tree editing, update processing, 
 - `src/diff/` owns the versioned flat ABI; keep all 11 opcodes in sync with the independent TS decoder test.
 - `src/core/` owns input policy, raw remote edits and host effects.
 - `src/caret/` implements directional positions, eager cursors, range removal and splitting.
+- `src/test/proptest.rs` checks generated scripts against independent link, cache, JSON, mutation and view-diff invariants.
+- `benches/node_map.rs` measures isolated writes and full keystrokes at three document sizes; read `benches/README.md` before interpreting timings.
 - `src/json.rs` preserves export order and JavaScript number serialization.
 
 ## Boundaries
@@ -37,6 +39,8 @@ node types, immutable snapshots, transactional tree editing, update processing, 
 
 - `cargo test -p lexical_model -j4`
 - `cargo test -p lexical_model --all-features -j4`
+- `PROPTEST_CASES=256 cargo test -p lexical_model proptest -j4`
+- `cargo bench -p lexical_model --bench node_map -j4` (release performance checkpoint)
 - `cargo check -p lexical_model --all-features --target wasm32-unknown-unknown -j4`
 - `cargo clippy -p lexical_model --all-targets -j4 -- -D warnings`
 - `cargo test -p lexical_conformance --test flat_diff -j4` (requires Bun for the independent decoder)
@@ -62,3 +66,11 @@ side effects, UTF-16 boundaries, formatting, block deletion and host movement.
 
 Root text-cache reconciliation clones its record after mutation reporting and retains
 the intentional root dirty mark; cache-only writes do not add mutations.
+
+Generated properties cover S4 P1–P13 for the core node subset. P5 follows S1 §8.6
+cache eligibility; P10 compares dirty records before cache writes per S1 §8.7.
+Exact history JSON identity (P11) uses headless mode: restoring view-attached
+snapshots can reconcile cached element defaults, as the upstream literal guard
+demonstrates. P14 awaits the markdown crate. Persist shrinking seeds in
+`proptest-regressions/`. Keep the decorator count in sync with record insertion
+and removal; opaque text hooks rule out the local root-text proof.

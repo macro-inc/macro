@@ -25,3 +25,6 @@ unicode-segmentation = { workspace = true, optional = true }
 [dev-dependencies]
 proptest = { workspace = true }
 
+[[bench]]
+name = "node_map"
+harness = false
