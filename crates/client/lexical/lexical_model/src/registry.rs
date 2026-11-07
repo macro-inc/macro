@@ -307,6 +307,14 @@ impl EditorBuilder {
         if let Some(type_name) = self.duplicate_extension {
             return Err(BuildError::DuplicateExtensionState { type_name });
         }
+        let mut plugin_names = std::collections::HashSet::new();
+        for plugin in &self.plugins {
+            if !plugin_names.insert(plugin.name()) {
+                return Err(BuildError::DuplicatePlugin {
+                    name: plugin.name(),
+                });
+            }
+        }
         let mut registry = Registry {
             table_selection_hooks: self.table_selection_hooks,
             nodes: vec![],

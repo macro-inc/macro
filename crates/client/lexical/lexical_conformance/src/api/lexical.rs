@@ -5,6 +5,15 @@ use lexical_model::*;
 use serde_json::{Value, json};
 pub(crate) fn call(r: &mut Replayer, tx: &mut Transaction<'_>, op: &Value) -> Result<Value> {
     let name = string(&op["fn"])?;
+    if !r.in_callback
+        && name.starts_with("@lexical/")
+        && name
+            .rsplit('.')
+            .next()
+            .is_some_and(|name| name.starts_with("$create"))
+    {
+        return Err(ReplayError::NoActiveEditor);
+    }
     let args = r.decode(op.get("args").unwrap_or(&json!([])))?;
     let a = args.as_array().ok_or_else(|| fail("args must be array"))?;
     let receiver = op
@@ -34,6 +43,73 @@ pub(crate) fn call(r: &mut Replayer, tx: &mut Transaction<'_>, op: &Value) -> Re
         return super::nodes::call(r, tx, &receiver, short, a);
     }
     match name {
+        "@lexical/list.$createListNode" => {
+            let kind = match a.first().and_then(Value::as_str).unwrap_or("number") {
+                "number" | "ol" => lexical_rich_nodes::list::ListType::Number,
+                "bullet" | "ul" => lexical_rich_nodes::list::ListType::Bullet,
+                "check" => lexical_rich_nodes::list::ListType::Check,
+                _ => return Err(fail("list type")),
+            };
+            let start = a.get(1).and_then(Value::as_i64).unwrap_or(1);
+            let start = i32::try_from(start).map_err(|_| fail("list start"))?;
+            let key = lexical_rich_nodes::list::create_list_node(tx, kind, start)?.key();
+            r.node(tx.view(), key)
+        }
+        "@lexical/list.$createListItemNode" => {
+            let key = lexical_rich_nodes::list::create_list_item_node(
+                tx,
+                a.first().and_then(Value::as_bool),
+            )?
+            .key();
+            r.node(tx.view(), key)
+        }
+        "@lexical/list/utils.$getListDepth" => {
+            let key = node_key(a.first().ok_or_else(|| fail("list"))?)?;
+            let id = view.cast(key).ok_or_else(|| fail("list"))?;
+            Ok(json!(lexical_rich_nodes::list::utils::get_list_depth(
+                &view, id
+            )?))
+        }
+        "@lexical/rich-text.$createHeadingNode" => {
+            let tag = serde_json::from_value(a.first().cloned().unwrap_or(json!("h1")))?;
+            let key = lexical_rich_nodes::heading::create_heading_node(tx, tag)?.key();
+            r.node(tx.view(), key)
+        }
+        "@lexical/rich-text.$createQuoteNode" => {
+            let key = lexical_rich_nodes::quote::create_quote_node(tx)?.key();
+            r.node(tx.view(), key)
+        }
+        "@lexical/hashtag.$createHashtagNode" => {
+            let key = lexical_rich_nodes::hashtag::create_hashtag_node(tx, str_arg(a, 0)?)?.key();
+            r.node(tx.view(), key)
+        }
+        "@lexical/rich-text.$isHeadingNode" | "@lexical/rich-text.$isQuoteNode" => {
+            let key = a
+                .first()
+                .filter(|v| v.get("$node").is_some())
+                .map(node_key)
+                .transpose()?;
+            Ok(json!(key.is_some_and(|key| if short == "$isHeadingNode" {
+                view.is::<lexical_rich_nodes::heading::HeadingNode>(key)
+            } else {
+                view.is::<lexical_rich_nodes::quote::QuoteNode>(key)
+            })))
+        }
+        "LexicalEditor.dispatchCommand" => {
+            if !r.rich_text_registered {
+                return Ok(json!(false));
+            }
+            let command = string(&a.first().ok_or_else(|| fail("command"))?["$cmd"])?;
+            let handled = match command {
+                "FORMAT_TEXT_COMMAND" => lexical_rich_nodes::rich_text::format_text(
+                    tx,
+                    str_arg(a, 1)?.parse().map_err(|_| fail("format"))?,
+                )?,
+                "INSERT_TAB_COMMAND" => lexical_rich_nodes::rich_text::insert_tab(tx)?,
+                _ => return Err(fail(format!("unmapped command: {command}"))),
+            };
+            Ok(json!(handled))
+        }
         "lexical/LexicalUtils.scheduleMicroTask" => {
             r.microtasks
                 .push_back(a.first().ok_or_else(|| fail("callback"))?.clone());

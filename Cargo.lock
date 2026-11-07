@@ -11753,6 +11753,7 @@ name = "lexical_conformance"
 version = "0.1.0"
 dependencies = [
  "lexical_model",
+ "lexical_rich_nodes",
  "libtest-mimic",
  "serde",
  "serde_json",
@@ -11787,6 +11788,17 @@ dependencies = [
  "strum 0.27.2",
  "thiserror 2.0.18",
  "unicode-segmentation",
+]
+
+[[package]]
+name = "lexical_rich_nodes"
+version = "0.1.0"
+dependencies = [
+ "lexical_model",
+ "regress",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.18",
 ]
 
 [[package]]

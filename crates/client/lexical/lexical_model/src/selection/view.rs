@@ -190,6 +190,16 @@ impl Transaction<'_> {
         &mut self,
         context: &SelectionChangeContext,
     ) -> Result<(), Error> {
+        self.apply_selection_change_format(context)?;
+        let previous = self.selection_context.replace(context.clone());
+        let result = self.dispatch(&Command::SelectionChange);
+        self.selection_context = previous;
+        result.map(|_| ())
+    }
+    fn apply_selection_change_format(
+        &mut self,
+        context: &SelectionChangeContext,
+    ) -> Result<(), Error> {
         let Some(mut range) = self.try_range_at(SelectionSlot::Active).cloned() else {
             return Ok(());
         };

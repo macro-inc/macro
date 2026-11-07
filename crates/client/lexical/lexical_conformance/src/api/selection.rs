@@ -86,6 +86,15 @@ pub(crate) fn call(
                 .map(|key| r.node(tx.view(), key))
                 .collect()
         }
+        "deleteCharacter" => {
+            let direction = if a.first().and_then(Value::as_bool).unwrap_or(false) {
+                EditDirection::Backward
+            } else {
+                EditDirection::Forward
+            };
+            tx.delete_character_at(slot, direction, ModifyTarget::NoView)?;
+            Ok(undefined())
+        }
         "removeText" => {
             tx.remove_text_at(slot)?;
             Ok(undefined())
@@ -104,9 +113,10 @@ pub(crate) fn call(
             Ok(undefined())
         }
         "insertParagraph" => {
-            tx.insert_paragraph_at(slot)?;
+            let node = tx.insert_paragraph_at(slot)?;
             r.active_selection = None;
-            Ok(undefined())
+            node.map(|key| r.node(tx.view(), key))
+                .unwrap_or(Ok(Value::Null))
         }
         "insertLineBreak" => {
             tx.insert_line_break_at(slot, a.first().and_then(Value::as_bool).unwrap_or(false))?;
