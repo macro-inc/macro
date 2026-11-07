@@ -8,6 +8,7 @@ impl Transaction<'_> {
         key: impl Into<NodeKey>,
         original: NodeKey,
     ) -> Result<(), Error> {
+        self.guard_write()?;
         let key = key.into();
         let index = self.type_index(key).ok_or(Error::NodeNotFound(key))?;
         (self.pending.registry.vtable(index).reset_on_copy)(self, key, original)
@@ -18,6 +19,7 @@ impl Transaction<'_> {
         key: impl Into<NodeKey>,
         preserve_empty_parent: bool,
     ) -> Result<(), Error> {
+        self.guard_write()?;
         let key = key.into();
         let index = self.type_index(key).ok_or(Error::NodeNotFound(key))?;
         (self.pending.registry.vtable(index).remove)(self, key, preserve_empty_parent)
@@ -29,6 +31,7 @@ impl Transaction<'_> {
         replacement: impl Into<NodeKey>,
         include_children: bool,
     ) -> Result<NodeKey, Error> {
+        self.guard_write()?;
         let key = key.into();
         let replacement = replacement.into();
         let index = self.type_index(key).ok_or(Error::NodeNotFound(key))?;
@@ -41,6 +44,7 @@ impl Transaction<'_> {
         node: impl Into<NodeKey>,
         restore_selection: bool,
     ) -> Result<NodeKey, Error> {
+        self.guard_write()?;
         let key = key.into();
         let node = node.into();
         let index = self.type_index(key).ok_or(Error::NodeNotFound(key))?;
@@ -53,6 +57,7 @@ impl Transaction<'_> {
         node: impl Into<NodeKey>,
         restore_selection: bool,
     ) -> Result<NodeKey, Error> {
+        self.guard_write()?;
         let key = key.into();
         let node = node.into();
         let index = self.type_index(key).ok_or(Error::NodeNotFound(key))?;
@@ -60,6 +65,7 @@ impl Transaction<'_> {
     }
     /// Dispatch the registered `create_parent_element` hook.
     pub fn create_parent_element(&mut self, key: impl Into<NodeKey>) -> Result<NodeKey, Error> {
+        self.guard_write()?;
         let key = key.into();
         let index = self.type_index(key).ok_or(Error::NodeNotFound(key))?;
         (self.pending.registry.vtable(index).create_parent_element)(self, key)
@@ -72,18 +78,21 @@ impl Transaction<'_> {
         delete_count: u32,
         nodes: &[NodeKey],
     ) -> Result<(), Error> {
+        self.guard_write()?;
         let key = key.into();
         let index = self.type_index(key).ok_or(Error::NodeNotFound(key))?;
         (self.pending.registry.vtable(index).splice)(self, key, start, delete_count, nodes)
     }
     /// Dispatch the registered `append` hook.
     pub fn append(&mut self, key: impl Into<NodeKey>, nodes: &[NodeKey]) -> Result<(), Error> {
+        self.guard_write()?;
         let key = key.into();
         let index = self.type_index(key).ok_or(Error::NodeNotFound(key))?;
         (self.pending.registry.vtable(index).append)(self, key, nodes)
     }
     /// Dispatch the registered `set_indent` hook.
     pub fn set_indent(&mut self, key: impl Into<NodeKey>, indent: u32) -> Result<(), Error> {
+        self.guard_write()?;
         let key = key.into();
         let index = self.type_index(key).ok_or(Error::NodeNotFound(key))?;
         (self.pending.registry.vtable(index).set_indent)(self, key, indent)
@@ -95,6 +104,7 @@ impl Transaction<'_> {
         selection: SelectionSlot,
         restore_selection: bool,
     ) -> Result<Option<NodeKey>, Error> {
+        self.guard_write()?;
         let key = key.into();
         let index = self.type_index(key).ok_or(Error::NodeNotFound(key))?;
         (self.pending.registry.vtable(index).insert_new_after)(
@@ -110,6 +120,7 @@ impl Transaction<'_> {
         key: impl Into<NodeKey>,
         selection: SelectionSlot,
     ) -> Result<bool, Error> {
+        self.guard_write()?;
         let key = key.into();
         let index = self.type_index(key).ok_or(Error::NodeNotFound(key))?;
         (self.pending.registry.vtable(index).collapse_at_start)(self, key, selection)
@@ -126,10 +137,12 @@ impl Transaction<'_> {
     }
     /// Append through the virtual splice hook.
     pub fn default_append(&mut self, parent: NodeKey, nodes: &[NodeKey]) -> Result<(), Error> {
+        self.guard_write()?;
         self.splice(parent, ChildIndex(self.children_size(parent)), 0, nodes)
     }
     /// Unlink without selection relocation or empty-parent cleanup.
     pub fn remove_from_parent(&mut self, key: impl Into<NodeKey>) -> Result<(), Error> {
+        self.guard_write()?;
         let key = key.into();
         let links = self.view().slot(key).ok_or(Error::NodeNotFound(key))?.links;
         let Some(parent) = links.parent else {
@@ -164,6 +177,7 @@ impl Transaction<'_> {
         delete_count: u32,
         nodes: &[NodeKey],
     ) -> Result<(), Error> {
+        self.guard_write()?;
         let old = self.children_keys(parent)?;
         let start = start.0 as usize;
         let end = start
@@ -295,6 +309,7 @@ impl Transaction<'_> {
         restore_selection: bool,
         preserve_empty_parent: bool,
     ) -> Result<(), Error> {
+        self.guard_write()?;
         if key == NodeKey::ROOT {
             return Err(Error::RemoveRoot);
         }
@@ -366,6 +381,7 @@ impl Transaction<'_> {
         node: NodeKey,
         restore_selection: bool,
     ) -> Result<NodeKey, Error> {
+        self.guard_write()?;
         if anchor == NodeKey::ROOT {
             return Err(Error::InsertAfterRoot);
         }
@@ -390,6 +406,7 @@ impl Transaction<'_> {
         node: NodeKey,
         restore_selection: bool,
     ) -> Result<NodeKey, Error> {
+        self.guard_write()?;
         if anchor == NodeKey::ROOT {
             return Err(Error::InsertBeforeRoot);
         }
@@ -414,6 +431,7 @@ impl Transaction<'_> {
         new: NodeKey,
         include_children: bool,
     ) -> Result<NodeKey, Error> {
+        self.guard_write()?;
         if old == NodeKey::ROOT {
             return Err(Error::ReplaceRoot);
         }
@@ -465,6 +483,7 @@ impl Transaction<'_> {
     }
     /// Remove all children through their virtual remove hooks.
     pub fn clear(&mut self, element: impl Into<NodeKey>) -> Result<(), Error> {
+        self.guard_write()?;
         let children = self.children_keys(element)?;
         for key in children {
             self.remove(key, true)?;
@@ -478,6 +497,7 @@ impl Transaction<'_> {
         first: impl Into<NodeKey>,
         last: Option<NodeKey>,
     ) -> Result<(), Error> {
+        self.guard_write()?;
         let mut anchor = node.into();
         let first = first.into();
         let mut range = vec![first];
@@ -511,6 +531,7 @@ impl Transaction<'_> {
         element: impl Into<NodeKey>,
         offset: ChildIndex,
     ) -> Result<(Option<NodeKey>, NodeKey), Error> {
+        self.guard_write()?;
         let element = element.into();
         if self.is_root_or_shadow_root(element) {
             return Err(Error::SplitRoot);
@@ -581,11 +602,13 @@ impl Transaction<'_> {
     }
     /// Select the beginning of a node or its first descendant.
     pub fn select_start(&mut self, key: impl Into<NodeKey>) -> Result<(), Error> {
+        self.guard_write()?;
         let point = self.start_point(key.into())?;
         self.select_points(point, point)
     }
     /// Select the end of a node or its last descendant.
     pub fn select_end(&mut self, key: impl Into<NodeKey>) -> Result<(), Error> {
+        self.guard_write()?;
         let point = self.end_point(key.into())?;
         self.select_points(point, point)
     }
@@ -608,6 +631,7 @@ impl Transaction<'_> {
         anchor: Option<Utf16Offset>,
         focus: Option<Utf16Offset>,
     ) -> Result<(), Error> {
+        self.guard_write()?;
         let key = key.into();
         if let Some(previous) = self.prev_sibling(key) {
             if self.kind(previous) == Some(NodeKind::Text) {
@@ -632,6 +656,7 @@ impl Transaction<'_> {
         anchor: Option<Utf16Offset>,
         focus: Option<Utf16Offset>,
     ) -> Result<(), Error> {
+        self.guard_write()?;
         let key = key.into();
         if let Some(next) = self.next_sibling(key) {
             if self.kind(next) == Some(NodeKind::Text) {

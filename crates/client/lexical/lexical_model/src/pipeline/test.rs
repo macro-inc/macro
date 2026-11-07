@@ -358,3 +358,254 @@ fn no_op_explicit_selection_and_composition_changes_are_reported() -> Result<(),
     assert_eq!(editor.transaction().composition_key(), Some(text.key()));
     Ok(())
 }
+
+#[test]
+fn explicit_full_reconcile_and_destroyed_mutations_compare_both_snapshots() -> Result<(), Error> {
+    let mut editor = Editor::builder(EditorMode::Headless)
+        .build()
+        .expect("builder");
+    let ((p, text), _) = editor.update(|tx| {
+        let p = tx.create(Paragraph::default())?;
+        let text = tx.create_text("destroyed")?;
+        tx.append(p, &[text.key()])?;
+        tx.append(NodeKey::ROOT, &[p.key()])?;
+        Ok((p, text))
+    })?;
+    let (_, commit) = editor.update(|tx| {
+        tx.remove(p, false)?;
+        tx.request_full_reconcile();
+        Ok(())
+    })?;
+    assert!(commit.full_reconcile);
+    assert_eq!(
+        commit.mutations_of::<Text>().collect::<Vec<_>>(),
+        vec![(text.key(), Mutation::Destroyed)]
+    );
+    assert_eq!(
+        commit.mutations_of::<Paragraph>().collect::<Vec<_>>(),
+        vec![(p.key(), Mutation::Destroyed)]
+    );
+    assert!(commit.next.view().node(text).is_none());
+    Ok(())
+}
+#[test]
+fn missing_text_endpoint_fails_before_gc_and_empty_node_selection_clears() -> Result<(), Error> {
+    let mut editor = Editor::builder(EditorMode::Headless)
+        .build()
+        .expect("builder");
+    let missing = NodeKey::from_parts(KeyParts {
+        generation: 0,
+        index: 999,
+    });
+    let result = editor.update(|tx| {
+        tx.set_selection(Some(Selection::Range(RangeSelection {
+            anchor: Point::text(missing, Utf16Offset(0)),
+            focus: Point::text(missing, Utf16Offset(0)),
+            format: TextFormat::empty(),
+            style: "".into(),
+        })))
+    });
+    assert!(matches!(result,Err(Error::PointNodeNotFound(key)) if key == missing));
+    let (_, commit) =
+        editor.update(|tx| tx.set_selection(Some(Selection::Node(NodeSelection::default()))))?;
+    assert!(commit.next.selection().is_none());
+    Ok(())
+}
+#[test]
+fn repeated_flushes_revisit_full_dirty_sets_but_commit_does_not_repeat_them() -> Result<(), Error> {
+    EVENTS.with(|events| events.borrow_mut().clear());
+    let mut editor = Editor::builder(EditorMode::Headless)
+        .transform::<Root>(log::<Root>)
+        .build()
+        .expect("builder");
+    let mut tx = editor.transaction();
+    let p = tx.create(Paragraph::default())?;
+    tx.append(NodeKey::ROOT, &[p.key()])?;
+    tx.flush()?;
+    tx.flush()?;
+    tx.commit()?;
+    EVENTS.with(|events| assert_eq!(*events.borrow(), vec!["root root", "root root"]));
+    Ok(())
+}
+#[test]
+fn normalize_only_skips_registered_transforms_but_merges_text() -> Result<(), Error> {
+    let mut editor = Editor::builder(EditorMode::Headless)
+        .transform::<Text>(oscillate)
+        .build()
+        .expect("builder");
+    let (_, commit) = editor.update_with(
+        UpdateOptions {
+            skip_transforms: true,
+            ..UpdateOptions::default()
+        },
+        |tx| {
+            let p = tx.create(Paragraph::default())?;
+            let a = tx.create_text("a")?;
+            let b = tx.create_text("b")?;
+            tx.append(p, &[a.key(), b.key()])?;
+            tx.append(NodeKey::ROOT, &[p.key()])
+        },
+    )?;
+    assert_eq!(commit.next.root_text_content().as_ref(), "ab");
+    assert_eq!(commit.normalized.len(), 2);
+    Ok(())
+}
+#[test]
+fn empty_editor_state_and_foreign_registry_are_rejected() -> Result<(), Error> {
+    let mut editor = Editor::builder(EditorMode::Headless)
+        .build()
+        .expect("builder");
+    let empty = editor.state().clone();
+    assert!(matches!(
+        editor.set_editor_state(empty, TagSet::default()),
+        Err(Error::SetEmptyEditorState)
+    ));
+    let other = Editor::builder(EditorMode::Headless)
+        .build()
+        .expect("builder");
+    assert!(matches!(
+        editor.set_editor_state(other.state().clone(), TagSet::default()),
+        Err(Error::ForeignEditorState)
+    ));
+    Ok(())
+}
+
+#[test]
+fn shared_key_source_also_orders_commits_across_editors() -> Result<(), Error> {
+    let keys = SharedKeyCounter::new();
+    let mut a = Editor::builder(EditorMode::Headless)
+        .key_source(KeySource::Shared(keys.clone()))
+        .build()
+        .expect("a");
+    let mut b = Editor::builder(EditorMode::Headless)
+        .key_source(KeySource::Shared(keys))
+        .build()
+        .expect("b");
+    assert_eq!(a.transaction().commit()?.id, CommitId(1));
+    assert_eq!(b.transaction().commit()?.id, CommitId(2));
+    assert_eq!(a.transaction().commit()?.id, CommitId(3));
+    Ok(())
+}
+
+#[test]
+fn normalizing_an_unchanged_selection_keeps_the_commit_noop() -> Result<(), Error> {
+    let mut editor = Editor::builder(EditorMode::Headless)
+        .build()
+        .expect("builder");
+    editor.update(|tx| {
+        let p = tx.create(Paragraph::default())?;
+        let t = tx.create_text("text")?;
+        tx.append(p, &[t.key()])?;
+        tx.append(NodeKey::ROOT, &[p.key()])?;
+        tx.text(t)?
+            .select(Some(Utf16Offset(1)), Some(Utf16Offset(2)))
+    })?;
+    let (_, commit) = editor.update(|tx| tx.normalize_selection())?;
+    assert!(commit.is_noop());
+    assert!(!commit.selection_changed);
+    Ok(())
+}
+
+fn queue_text_from_transform(tx: &mut Transaction<'_>, _: Id<Root>) -> Result<(), Error> {
+    tx.queue_update(
+        |tx| {
+            let paragraph = tx.first_child(NodeKey::ROOT).expect("paragraph");
+            let a = tx.create_text("a")?;
+            let b = tx.create_text("b")?;
+            tx.append(paragraph, &[a.key(), b.key()])
+        },
+        UpdateOptions::default(),
+    )
+}
+#[test]
+fn writes_queued_by_transforms_are_collected_without_a_second_transform_pass() -> Result<(), Error>
+{
+    let mut editor = Editor::builder(EditorMode::Headless)
+        .transform::<Root>(queue_text_from_transform)
+        .build()
+        .expect("builder");
+    let (_, commit) = editor.update(|tx| {
+        let p = tx.create(Paragraph::default())?;
+        tx.append(NodeKey::ROOT, &[p.key()])
+    })?;
+    assert_eq!(commit.next.view().all_text_nodes(NodeKey::ROOT).count(), 2);
+    assert_eq!(commit.next.root_text_content().as_ref(), "ab");
+    assert!(commit.normalized.is_empty());
+    Ok(())
+}
+fn clear_composition(tx: &mut Transaction<'_>, node: Id<Text>) -> Result<(), Error> {
+    if tx.text_content(node) == "a" {
+        tx.set_composition_key(None)?;
+    }
+    EVENTS.with(|events| events.borrow_mut().push(tx.text_content(node).into_owned()));
+    Ok(())
+}
+#[test]
+fn transforms_keep_the_composition_key_captured_at_loop_entry() -> Result<(), Error> {
+    EVENTS.with(|events| events.borrow_mut().clear());
+    let mut editor = Editor::builder(EditorMode::Headless)
+        .transform::<Text>(clear_composition)
+        .build()
+        .expect("builder");
+    let (_, commit) = editor.update(|tx| {
+        let p = tx.create(Paragraph::default())?;
+        let a = tx.create_text("a")?;
+        let b = tx.create_text("b")?;
+        tx.text(a)?.set_mode(TextMode::Token)?;
+        tx.text(b)?.set_mode(TextMode::Token)?;
+        tx.append(p, &[a.key(), b.key()])?;
+        tx.append(NodeKey::ROOT, &[p.key()])?;
+        tx.set_composition_key(Some(b.key()))
+    })?;
+    EVENTS.with(|events| assert_eq!(*events.borrow(), vec!["a"]));
+    assert_eq!(commit.composition_key, None);
+    Ok(())
+}
+#[test]
+fn normal_mutations_use_dirty_keys_even_when_gc_deletes_clean_descendants() -> Result<(), Error> {
+    let mut editor = Editor::builder(EditorMode::Headless)
+        .build()
+        .expect("builder");
+    let ((p, text), _) = editor.update(|tx| {
+        let p = tx.create(Paragraph::default())?;
+        let text = tx.create_text("nested")?;
+        tx.append(p, &[text.key()])?;
+        tx.append(NodeKey::ROOT, &[p.key()])?;
+        Ok((p, text))
+    })?;
+    let (_, commit) = editor.update(|tx| tx.remove(p, false))?;
+    assert!(commit.next.view().node(text).is_none());
+    assert_eq!(
+        commit.mutations_of::<Paragraph>().collect::<Vec<_>>(),
+        vec![(p.key(), Mutation::Destroyed)]
+    );
+    assert!(commit.mutations_of::<Text>().next().is_none());
+    Ok(())
+}
+
+#[test]
+fn nested_skip_transforms_applies_only_to_that_flush() -> Result<(), Error> {
+    EVENTS.with(|events| events.borrow_mut().clear());
+    let mut editor = Editor::builder(EditorMode::Headless)
+        .transform::<Text>(log::<Text>)
+        .build()
+        .expect("builder");
+    let mut tx = editor.transaction();
+    let p = tx.create(Paragraph::default())?;
+    let t = tx.create_text("text")?;
+    tx.append(p, &[t.key()])?;
+    tx.append(NodeKey::ROOT, &[p.key()])?;
+    tx.queue_update(
+        |_| Ok(()),
+        UpdateOptions {
+            skip_transforms: true,
+            ..UpdateOptions::default()
+        },
+    )?;
+    tx.flush()?;
+    EVENTS.with(|events| assert!(events.borrow().is_empty()));
+    assert!(!tx.options().skip_transforms);
+    tx.flush()?;
+    EVENTS.with(|events| assert_eq!(*events.borrow(), vec![format!("text {}", t.key())]));
+    Ok(())
+}

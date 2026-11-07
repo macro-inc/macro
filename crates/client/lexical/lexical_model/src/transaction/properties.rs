@@ -38,6 +38,7 @@ impl ElementMut<'_, '_> {
     }
     /// Set format and mark the element dirty.
     pub fn set_format(&mut self, value: ElementFormat) -> Result<&mut Self, Error> {
+        self.tx.guard_write()?;
         let BaseData::Element(data) = &mut self.tx.writable(self.key)?.base else {
             return Err(Error::NotAnElement(self.key));
         };
@@ -47,6 +48,7 @@ impl ElementMut<'_, '_> {
     }
     /// Set style and mark the element dirty.
     pub fn set_style(&mut self, value: &str) -> Result<&mut Self, Error> {
+        self.tx.guard_write()?;
         let BaseData::Element(data) = &mut self.tx.writable(self.key)?.base else {
             return Err(Error::NotAnElement(self.key));
         };
@@ -56,6 +58,7 @@ impl ElementMut<'_, '_> {
     }
     /// Set direction and mark the element dirty.
     pub fn set_direction(&mut self, value: Option<TextDirection>) -> Result<&mut Self, Error> {
+        self.tx.guard_write()?;
         let BaseData::Element(data) = &mut self.tx.writable(self.key)?.base else {
             return Err(Error::NotAnElement(self.key));
         };
@@ -66,6 +69,7 @@ impl ElementMut<'_, '_> {
     }
     /// Set text format and mark the element dirty.
     pub fn set_text_format(&mut self, value: TextFormat) -> Result<&mut Self, Error> {
+        self.tx.guard_write()?;
         let BaseData::Element(data) = &mut self.tx.writable(self.key)?.base else {
             return Err(Error::NotAnElement(self.key));
         };
@@ -76,6 +80,7 @@ impl ElementMut<'_, '_> {
     }
     /// Set text style and mark the element dirty.
     pub fn set_text_style(&mut self, value: &str) -> Result<&mut Self, Error> {
+        self.tx.guard_write()?;
         let BaseData::Element(data) = &mut self.tx.writable(self.key)?.base else {
             return Err(Error::NotAnElement(self.key));
         };
@@ -90,6 +95,7 @@ impl ElementMut<'_, '_> {
         anchor: Option<ChildIndex>,
         focus: Option<ChildIndex>,
     ) -> Result<(), Error> {
+        self.tx.guard_write()?;
         let end = ChildIndex(self.data().children_size());
         let a = anchor.unwrap_or(end);
         let f = focus.unwrap_or(end);
@@ -121,6 +127,7 @@ impl TextMut<'_, '_> {
         self.tx.view().text(self.key).unwrap_or(&EMPTY)
     }
     fn data_mut(&mut self) -> Result<&mut TextData, Error> {
+        self.tx.guard_write()?;
         match &mut self.tx.writable(self.key)?.base {
             BaseData::Text(data) => Ok(data),
             _ => Err(Error::NotAText(self.key)),
@@ -129,6 +136,7 @@ impl TextMut<'_, '_> {
     /// Set content through the virtual coercion hook; equal content is a no-op.
     /// s2: TX-08
     pub fn set_text_content(&mut self, text: &str) -> Result<&mut Self, Error> {
+        self.tx.guard_write()?;
         let slot = self
             .tx
             .view()
@@ -160,6 +168,7 @@ impl TextMut<'_, '_> {
     }
     /// Set format through the node's coercion hook.
     pub fn set_format(&mut self, value: TextFormat) -> Result<&mut Self, Error> {
+        self.tx.guard_write()?;
         let slot = self
             .tx
             .view()
@@ -192,6 +201,7 @@ impl TextMut<'_, '_> {
     }
     /// Set detail through the node's coercion hook.
     pub fn set_detail(&mut self, value: TextDetail) -> Result<&mut Self, Error> {
+        self.tx.guard_write()?;
         let slot = self
             .tx
             .view()
@@ -224,6 +234,7 @@ impl TextMut<'_, '_> {
     }
     /// Set mode through the node's coercion hook.
     pub fn set_mode(&mut self, value: TextMode) -> Result<&mut Self, Error> {
+        self.tx.guard_write()?;
         let slot = self
             .tx
             .view()
@@ -250,14 +261,17 @@ impl TextMut<'_, '_> {
     }
     /// Set a single format bitmask.
     pub fn set_format_type(&mut self, format: TextFormatType) -> Result<&mut Self, Error> {
+        self.tx.guard_write()?;
         self.set_format(format.flag())
     }
     /// Toggle a format, honoring exclusions.
     pub fn toggle_format(&mut self, format: TextFormatType) -> Result<&mut Self, Error> {
+        self.tx.guard_write()?;
         self.set_format(self.data().format.toggled(format, None))
     }
     /// Set text CSS.
     pub fn set_style(&mut self, style: &str) -> Result<&mut Self, Error> {
+        self.tx.guard_write()?;
         if self.data().style.as_ref() != style
             || self.data().absent.contains(crate::node::AbsentKeys::STYLE)
         {
@@ -270,10 +284,12 @@ impl TextMut<'_, '_> {
     }
     /// Toggle direction detection.
     pub fn toggle_directionless(&mut self) -> Result<&mut Self, Error> {
+        self.tx.guard_write()?;
         self.set_detail(self.data().detail ^ TextDetail::DIRECTIONLESS)
     }
     /// Toggle merge prevention.
     pub fn toggle_unmergeable(&mut self) -> Result<&mut Self, Error> {
+        self.tx.guard_write()?;
         self.set_detail(self.data().detail ^ TextDetail::UNMERGEABLE)
     }
     /// Splice valid UTF-16 boundaries, optionally collapsing selection after inserted text.
@@ -284,6 +300,7 @@ impl TextMut<'_, '_> {
         insert: &str,
         move_selection: bool,
     ) -> Result<&mut Self, Error> {
+        self.tx.guard_write()?;
         let slot = self
             .tx
             .view()
@@ -329,6 +346,7 @@ impl TextMut<'_, '_> {
         anchor: Option<Utf16Offset>,
         focus: Option<Utf16Offset>,
     ) -> Result<(), Error> {
+        self.tx.guard_write()?;
         let end = self.data().text.utf16_len();
         let anchor = anchor.unwrap_or(end);
         let focus = focus.unwrap_or(end);
@@ -340,6 +358,7 @@ impl TextMut<'_, '_> {
     /// Split into plain text nodes, retaining text properties and state but not mode.
     /// s2: TX-05
     pub fn split_text(&mut self, offsets: &[Utf16Offset]) -> Result<Vec<NodeKey>, Error> {
+        self.tx.guard_write()?;
         let data = self.data().clone();
         if data.text.as_str().is_empty() {
             return Ok(vec![]);
@@ -421,6 +440,7 @@ impl TextMut<'_, '_> {
     }
     /// Merge adjacent text siblings into this node, preserving text order.
     pub fn merge_with_sibling(&mut self, target: impl Into<NodeKey>) -> Result<NodeKey, Error> {
+        self.tx.guard_write()?;
         let target = target.into();
         let before = self.tx.prev_sibling(self.key) == Some(target);
         let after = self.tx.next_sibling(self.key) == Some(target);

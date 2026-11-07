@@ -67,7 +67,7 @@ impl fmt::Display for NodeKey {
 }
 /// A cloneable shared allocation counter, never rolled back with a transaction.
 #[derive(Clone, Debug, Default)]
-pub struct SharedKeyCounter(Arc<AtomicU64>);
+pub struct SharedKeyCounter(Arc<AtomicU64>, Arc<AtomicU64>);
 impl SharedKeyCounter {
     /// An independent counter.
     pub fn new() -> Self {
@@ -81,6 +81,12 @@ impl SharedKeyCounter {
                 Some(u64::from(generation) << 32)
             })
             .map(|_| ())
+            .map_err(|_| Error::KeySpaceExhausted)
+    }
+    pub(crate) fn next_commit(&self) -> Result<crate::CommitId, Error> {
+        self.1
+            .fetch_update(Ordering::Relaxed, Ordering::Relaxed, |id| id.checked_add(1))
+            .map(|id| crate::CommitId(id + 1))
             .map_err(|_| Error::KeySpaceExhausted)
     }
     pub(crate) fn raise_to(&self, key: NodeKey) {

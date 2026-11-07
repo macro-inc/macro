@@ -502,13 +502,13 @@ impl<'editor> Transaction<'editor> {
                         .get("textStyle")
                         .and_then(serde_json::Value::as_str)
                         .unwrap_or_default();
+                    self.element(key)?.set_format(format)?;
                     if raw {
                         self.set_indent_base(key, indent)?;
                     } else {
                         self.set_indent(key, indent)?;
                     }
                     self.element(key)?
-                        .set_format(format)?
                         .set_direction(direction)?
                         .set_text_format(text_format)?
                         .set_text_style(text_style)?;
@@ -574,6 +574,7 @@ impl<'editor> Transaction<'editor> {
     }
     /// Set composition ownership and mark both old and new nodes dirty.
     pub fn set_composition_key(&mut self, key: Option<NodeKey>) -> Result<(), Error> {
+        self.guard_write()?;
         if let Some(key) = key {
             self.node_or_err(key)?;
         }

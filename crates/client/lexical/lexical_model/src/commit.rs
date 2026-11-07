@@ -127,11 +127,7 @@ impl Transaction<'_> {
         self.commit_phase()
     }
     pub(crate) fn commit_phase(&mut self) -> Result<Commit, Error> {
-        let next_id = self
-            .editor
-            .commit_counter
-            .checked_add(1)
-            .ok_or(Error::KeySpaceExhausted)?;
+        let next_id = self.editor.keys.next_commit()?;
         let prev = self.editor.state.clone();
         let selection_changed = self.selection_dirty || self.pending.selection != prev.selection;
         let mut changes = Changes {
@@ -149,6 +145,16 @@ impl Transaction<'_> {
                 )
                 .chain(std::iter::once(NodeKey::ROOT))
                 .chain(prev.view().descendants(NodeKey::ROOT).map(|(key, _)| key))
+                .chain({
+                    let mut keys = self.pending.nodes.keys().copied().collect::<Vec<_>>();
+                    keys.sort();
+                    keys
+                })
+                .chain({
+                    let mut keys = prev.nodes.keys().copied().collect::<Vec<_>>();
+                    keys.sort();
+                    keys
+                })
                 .collect()
         } else {
             changes
@@ -183,11 +189,10 @@ impl Transaction<'_> {
         } else {
             TagSet::default()
         };
-        self.editor.commit_counter = next_id;
         let composition_changed = self.editor.composition_key != self.composition_key;
         self.editor.composition_key = self.composition_key;
         Ok(Commit {
-            id: CommitId(self.editor.commit_counter),
+            id: next_id,
             prev,
             next: self.editor.state.clone(),
             changes,
