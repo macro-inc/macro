@@ -144,3 +144,13 @@ test('doc tags before compound or spaced cfg attributes remain test-only', () =>
       )
     ).toEqual([]);
 });
+
+test('Rust-looking doc text cannot hide a following test-gated item', () => {
+  expect(
+    tags(
+      'src/example.rs',
+      '/// s2: HIS-15\n/// fn example() {}\n#[cfg(test)]\nfn helper() {}',
+      's2'
+    )
+  ).toEqual([]);
+});

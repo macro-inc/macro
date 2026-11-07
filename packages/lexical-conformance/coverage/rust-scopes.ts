@@ -1,5 +1,5 @@
-/** Conservative source ranges: test-gated items cannot own production behavior. */
-export function testOnlyRanges(source: string): [number, number][] {
+/** Hide comments and literals without changing source offsets. */
+export function rustCode(source: string): string {
   // Preserve offsets while hiding braces and attributes in comments and literals.
   const literals =
     /\/\*|\/\/[^\n]*|r(#{0,255})"[\s\S]*?"\1|"(?:\\.|[^"\\])*"|'(?:\\.|[^'\\\n])'/g;
@@ -31,7 +31,12 @@ export function testOnlyRanges(source: string): [number, number][] {
     previous = end;
     literals.lastIndex = end;
   }
-  const code = pieces.join('') + source.slice(previous);
+  return pieces.join('') + source.slice(previous);
+}
+
+/** Conservative source ranges: test-gated items cannot own production behavior. */
+export function testOnlyRanges(source: string): [number, number][] {
+  const code = rustCode(source);
   const ranges: [number, number][] = [];
   const scopes: (number | undefined)[] = [];
   let pending: number | undefined;

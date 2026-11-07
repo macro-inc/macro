@@ -9,7 +9,7 @@ import {
   type ReplayEvidence,
   root,
 } from './evidence';
-import { testOnlyRanges } from './rust-scopes';
+import { rustCode, testOnlyRanges } from './rust-scopes';
 import { HEADER } from './seed-markdown';
 import { transformerReferences } from './transformers';
 
@@ -40,6 +40,7 @@ export function tags(
   marker: 'covers' | 's2'
 ): [string, Tag][] {
   const excluded = marker === 's2' ? testOnlyRanges(text) : [];
+  const code = marker === 's2' ? rustCode(text) : '';
   const lines = text.split('\n');
   let position = 0;
   return lines.flatMap((line, offset) => {
@@ -54,10 +55,13 @@ export function tags(
     if (marker === 's2') {
       if (!file.endsWith('.rs') || /(?:^|\/)tests?(?:\/|\.rs$)/.test(file))
         return [];
-      const item = next.match(/\b(?:fn|struct|enum|trait|impl|const|type)\b/);
+      const followingCode = code.slice(position, position + next.length);
+      const item = followingCode.match(
+        /^\s*(?:pub(?:\([^)]*\))?\s+)?(?:(?:unsafe|async|default|const|extern)\s+)*(?:fn|struct|enum|trait|impl|const|type)\b/m
+      );
       if (
         !item ||
-        /#\[\s*test\b/.test(next.slice(0, item.index)) ||
+        /#\[\s*test\b/.test(followingCode.slice(0, item.index)) ||
         excluded.some(
           ([from, to]) =>
             position + (item.index ?? 0) >= from &&
