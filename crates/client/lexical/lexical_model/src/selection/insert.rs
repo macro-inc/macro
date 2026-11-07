@@ -431,6 +431,7 @@ impl Transaction<'_> {
         text: &str,
         backward: bool,
     ) -> Result<(), Error> {
+        let identity = self.selection_replacements;
         let first = *nodes.first().ok_or(Error::NoRangeSelection)?;
         let mut last = *nodes.last().ok_or(Error::NoRangeSelection)?;
         let (start, end) = if backward {
@@ -536,6 +537,17 @@ impl Transaction<'_> {
                 text,
                 false,
             )?;
+            let (format, style) =
+                if slot == SelectionSlot::Active && self.selection_replacements != identity {
+                    // Replacement cloned the active selection. The original receiver's
+                    // attribute writes do not change that new selection object.
+                    let active = self.range_at(slot)?;
+                    (active.format, active.style.clone())
+                } else if self.text_content_size(first) == Utf16Offset::ZERO {
+                    (range.format, range.style.clone())
+                } else {
+                    (first_data.format, first_data.style)
+                };
             self.finish_text_insertion(
                 slot,
                 false,
@@ -543,16 +555,8 @@ impl Transaction<'_> {
                     first,
                     Utf16Offset(start.offset()) + TextBuffer::new(text).utf16_len(),
                 ),
-                if self.text_content_size(first) == Utf16Offset::ZERO {
-                    range.format
-                } else {
-                    first_data.format
-                },
-                if self.text_content_size(first) == Utf16Offset::ZERO {
-                    range.style.clone()
-                } else {
-                    first_data.style
-                },
+                format,
+                style,
             )?;
             if self.text_content_size(first) == Utf16Offset::ZERO {
                 self.remove(first, false)?;
