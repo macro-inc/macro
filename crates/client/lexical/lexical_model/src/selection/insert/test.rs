@@ -729,3 +729,23 @@ fn paragraph_insertion_after_root_caret_removal_uses_the_split_fallback() -> Res
     })?;
     Ok(())
 }
+
+#[test]
+fn text_insertion_keeps_endpoint_roles_chosen_before_element_transfer() -> Result<(), Error> {
+    let mut editor = Editor::builder(EditorMode::Headless).build().unwrap();
+    editor.update(|tx| {
+        let p = tx.create(Paragraph::default())?;
+        let text = tx.create_text("old")?;
+        let line = tx.create(LineBreak::default())?;
+        let tab = tx.create(Tab::default())?;
+        tx.append(p, &[text.key(), line.key(), tab.key()])?;
+        tx.append(NodeKey::ROOT, &[p.key()])?;
+        tx.set_selection(Some(Selection::Range(RangeSelection::new(
+            Point::element(p, ChildIndex(1)), Point::text(text, Utf16Offset(3)),
+        ))))?;
+        tx.insert_text("new")?;
+        assert_eq!(tx.text_content(p), "new\n\t");
+        Ok(())
+    })?;
+    Ok(())
+}
