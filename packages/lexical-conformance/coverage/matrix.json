@@ -88564,7 +88564,7 @@
     "owners": [
       {
         "file": "crates/client/lexical/lexical_model/src/transaction/properties.rs",
-        "line": 362,
+        "line": 364,
         "ignored": false,
         "test": "split_text"
       }
@@ -88590,7 +88590,7 @@
     "owners": [
       {
         "file": "crates/client/lexical/lexical_model/src/transaction.rs",
-        "line": 603,
+        "line": 609,
         "ignored": false,
         "test": "composition_key"
       }
@@ -99553,13 +99553,13 @@
     "owners": [
       {
         "file": "crates/client/lexical/lexical_model/src/transaction.rs",
-        "line": 116,
+        "line": 119,
         "ignored": false,
         "test": "mark_dirty"
       },
       {
         "file": "crates/client/lexical/lexical_model/src/transaction.rs",
-        "line": 187,
+        "line": 190,
         "ignored": false,
         "test": "get_mut"
       }
@@ -100870,7 +100870,7 @@
     "owners": [
       {
         "file": "crates/client/lexical/lexical_model/src/transaction.rs",
-        "line": 116,
+        "line": 119,
         "ignored": false,
         "test": "mark_dirty"
       }
@@ -102180,7 +102180,7 @@
     "owners": [
       {
         "file": "crates/client/lexical/lexical_model/src/transaction.rs",
-        "line": 187,
+        "line": 190,
         "ignored": false,
         "test": "get_mut"
       }
@@ -103490,7 +103490,7 @@
     "owners": [
       {
         "file": "crates/client/lexical/lexical_model/src/transaction.rs",
-        "line": 333,
+        "line": 336,
         "ignored": false,
         "test": "copy_node"
       }
@@ -103534,7 +103534,7 @@
     "owners": [
       {
         "file": "crates/client/lexical/lexical_model/src/transaction.rs",
-        "line": 333,
+        "line": 336,
         "ignored": false,
         "test": "copy_node"
       }
@@ -141268,13 +141268,13 @@
     "owners": [
       {
         "file": "crates/client/lexical/lexical_model/src/transaction.rs",
-        "line": 367,
+        "line": 370,
         "ignored": false,
         "test": "set_state"
       },
       {
         "file": "crates/client/lexical/lexical_model/src/transaction.rs",
-        "line": 383,
+        "line": 386,
         "ignored": false,
         "test": "update_state"
       }
@@ -141306,7 +141306,7 @@
       },
       {
         "file": "crates/client/lexical/lexical_model/src/transaction.rs",
-        "line": 367,
+        "line": 370,
         "ignored": false,
         "test": "set_state"
       }
