@@ -38,7 +38,9 @@ every upstream test is recordable.
 
 The repository privacy scanner also excludes fixtures containing contact values;
 their index rows use `repository-privacy-filter`. Oracle values are never redacted
-into passing fixtures, and recording does not add privacy exceptions.
+into passing fixtures, and recording does not add privacy exceptions. A test name
+that contains a flagged value is retained under a stable opaque ID. The complete
+output, including the index, is scanned before publication.
 
 The source-range manifest in `record/s2-ranges.json` is the resolved file/line
 citations from the S2 feature inventory for this upstream pin. V8 offsets are
