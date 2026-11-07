@@ -336,6 +336,14 @@ export class Recorder {
     receiver: unknown,
     args: unknown[]
   ): unknown {
+    // Helpers entered below the membrane still cannot mutate a taped callback's model.
+    if (
+      this.callbackKind === 'tape' &&
+      /getWritable|\.(set|append|remove|insert|clear|toggle|split|merge|replace|splice|delete|select|deselect|markDirty|update|dispatchCommand|format|extract|focus|blur|reset|add|modify|forwardDeletion|collapseAtStart|afterCloneFrom|createParentElementNode|register)|\$(create|set|insert|remove|delete|split|merge|toggle|apply|patch|copy|normalize|add|mark|ensure|move|update|trim|wrap|unwrap|restore|convertFrom|generateNodesFrom)/.test(
+        name
+      )
+    )
+      this.reasons.add('A-hand:mutating-callback');
     const attributed = this.depth === 0 && isTestFrame();
     if (!attributed)
       return Reflect.apply(
@@ -368,12 +376,6 @@ export class Recorder {
       this.reasons.add('view:dom-api');
     if (/register(Update|Mutation|TextContent)Listener/.test(name))
       this.reasons.add('B-only:listener');
-    if (
-      this.callbackKind === 'tape' &&
-      /getWritable|\.set|\.append|\.remove|\.insert|\$set/.test(name)
-    ) {
-      this.reasons.add('A-hand:mutating-callback');
-    }
     if (
       name.endsWith('.createEditor') ||
       name.endsWith('.createHeadlessEditor')

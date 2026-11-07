@@ -257,6 +257,30 @@ test('caught exceptions inside nested callbacks remain observable during replay'
   );
 });
 
+test('inline callbacks that clear the model require a hand port', () => {
+  const api = wrapModule(
+    {
+      run(callback: () => void) {
+        callback();
+      },
+    },
+    '@lexical/fixture-mutator'
+  );
+  const recorder = new Recorder();
+  activate(recorder);
+  const editor = headless.createHeadlessEditor();
+  editor.update(
+    () => {
+      lexical.$getRoot().append(lexical.$createParagraphNode());
+      api.run(() => {
+        lexical.$getRoot().clear();
+      });
+    },
+    { discrete: true }
+  );
+  expect(recorder.reasons.has('A-hand:mutating-callback')).toBe(true);
+});
+
 beforeEach(() => {
   resetRandomKey();
   tape = new Entropy((op) => current?.trace.push(op), undefined, isOracleFrame);
