@@ -104,3 +104,7 @@ Code line helpers preserve UTF-16 selection offsets and split only LF/tab separa
 `mark` ports ordered annotation ids, wrapping, unwrapping, boundary lookup and copy hooks; it has no DOM layer.
 
 Selection utilities port ordered CSS parsing, selected-run splitting, style queries, block replacement and legacy wrapping. Tree helpers expose snapshot-borrowing preorder iterators, mutation-safe child cursors, nested wrapper resolution, root/leaf caret insertion and snapshot restoration. Text helpers retain the upstream placeholder and character-intersection quirks.
+
+`offset` retains the deprecated upstream arena and its first-child parent-link, inclusive boundary and diff-adjustment quirks.
+
+`clipboard` exports sliced JSON without mutating snapshots, hoists excluded wrappers, imports fresh keys and routes generated nodes through the command bus. Rich paste uses lexical/HTML/plain/URI priority, catches failed importers and accepts HTML nodes supplied by the view. `do_drop_in_namespace` preserves the target editor namespace for internal payloads; `do_drop` uses the empty default namespace. The crate does not own browser clipboard access or HTML conversion. HTML export and the `html` feature belong to WP-24, which provides the absent `lexical_html` crate. Invalid clipboard warnings contain only byte lengths.
