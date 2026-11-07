@@ -26,15 +26,16 @@ pub(crate) fn dispatch(
     payload: &Value,
 ) -> Result<bool> {
     use lexical_rich_nodes::code::indent::{self, CodeIndentOptions, TabAction};
-    if command == "KEY_TAB_COMMAND" && r.code_prism_registered {
-        if let Some(action) = indent::handle_key_tab(tx.view(), payload["shiftKey"] == true)? {
-            let command = match action {
-                TabAction::InsertTab => "INSERT_TAB_COMMAND",
-                TabAction::Indent => "INDENT_CONTENT_COMMAND",
-                TabAction::Outdent => "OUTDENT_CONTENT_COMMAND",
-            };
-            return dispatch(r, tx, command, &Value::Null);
-        }
+    if command == "KEY_TAB_COMMAND"
+        && r.code_prism_registered
+        && let Some(action) = indent::handle_key_tab(tx.view(), payload["shiftKey"] == true)?
+    {
+        let command = match action {
+            TabAction::InsertTab => "INSERT_TAB_COMMAND",
+            TabAction::Indent => "INDENT_CONTENT_COMMAND",
+            TabAction::Outdent => "OUTDENT_CONTENT_COMMAND",
+        };
+        return dispatch(r, tx, command, &Value::Null);
     }
     if command == "KEY_TAB_COMMAND" && r.tab_indent.is_some() {
         let Some(range) = tx.selection().and_then(Selection::as_range) else {
