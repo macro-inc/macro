@@ -42,3 +42,5 @@ The upstream source is downloaded by checksum into this worktree's `target/`.
 - Regenerate the full corpus after changing copied Macro or Loro source.
 - Review fixtures for account identities beyond the machine privacy scanner.
 - Entropy, node keys, handles and callback tapes reset for every test.
+
+- Keep the S1 D-11 error-mode text-offset guard enabled in the release differential oracle; compare rollback state and identities exactly.
