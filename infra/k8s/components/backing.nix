@@ -253,7 +253,7 @@ in
         path.logs: /tmp/os/logs
         EOF
         export OPENSEARCH_HOME=${opensearchHome} OPENSEARCH_JAVA_HOME=${pkgs.jdk21_headless}
-        export OPENSEARCH_PATH_CONF=/tmp/os/config OPENSEARCH_JAVA_OPTS="-Xms512m -Xmx512m -XX:ActiveProcessorCount=2"
+        export OPENSEARCH_PATH_CONF=/tmp/os/config OPENSEARCH_JAVA_OPTS="-Xms512m -Xmx512m -XX:ActiveProcessorCount=8"
         # jvm.options logs GC to a path relative to the working directory.
         mkdir -p /tmp/os/logs && cd /tmp/os
         exec ${opensearchHome}/bin/opensearch
