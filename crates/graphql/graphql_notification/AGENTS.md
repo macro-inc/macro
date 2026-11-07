@@ -21,7 +21,7 @@ mutations, and the realtime subscription.
 - Owns: GraphQL types/resolvers/subscriptions for notifications and the
   notification edge.
 - Not here: notification generation, storage, and delivery → `crates/notification`,
-  `crates/notification_state`.
+  `crates/types/notification_state`.
 
 ## Boundaries
 

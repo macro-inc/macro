@@ -6,7 +6,7 @@ import {
   agentContextRequest,
 } from '../src/endpoints/agent-context';
 
-// The wire examples in crates/trigger_context/src/test.rs.
+// The wire examples in crates/types/trigger_context/src/test.rs.
 const followUpWire = {
   kind: 'follow_up',
   addressed_by: 'explicit_reply',
@@ -98,7 +98,7 @@ const callStartedRoutineWire = {
   triggers: [{ type: 'events', events: ['call.started'] }],
   firing: {
     type: 'event',
-    // The `call` is the wire example in crates/trigger_context/src/test.rs.
+    // The `call` is the wire example in crates/types/trigger_context/src/test.rs.
     event: {
       event: 'call_started',
       call: {
@@ -137,7 +137,7 @@ const callEndedRoutineWire = {
   triggers: [{ type: 'events', events: ['call.ended'] }],
   firing: {
     type: 'event',
-    // The `call` is the wire example in crates/trigger_context/src/test.rs.
+    // The `call` is the wire example in crates/types/trigger_context/src/test.rs.
     event: {
       event: 'call_ended',
       call: {

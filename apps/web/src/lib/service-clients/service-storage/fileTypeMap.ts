@@ -1,6 +1,6 @@
 // TODO: auto-generate this file
 // Copied from the Rust workspace's generated type.
-// See: crates/model/src/bin/generate_typescript_types.rs
+// See: crates/types/model/src/bin/generate_typescript_types.rs
 
 export const FileTypeMap = {
   docx: {
