@@ -6282,6 +6282,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "database_id"
+version = "0.1.0"
+dependencies = [
+ "id_newtype",
+ "schemars 1.2.1",
+ "serde",
+ "serde_json",
+ "specta",
+ "utoipa",
+ "uuid",
+]
+
+[[package]]
 name = "database_sql"
 version = "0.1.0"
 dependencies = [
@@ -13885,8 +13898,8 @@ name = "models_databases"
 version = "0.1.0"
 dependencies = [
  "chrono",
+ "database_id",
  "fractional_index",
- "id_newtype",
  "macro_user_id",
  "nom 8.0.0",
  "schemars 1.2.1",
