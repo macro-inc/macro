@@ -60,6 +60,7 @@ workspace-members = [
     "macro_sync_service_jwt",
     "sync_service",
     "sync_protocol",
+    "sync_doc_id",
     # Leaf ids used by wasm client crates; workspace-hack pulls tokio/mio into wasm32.
     "lexical_node_id",
     "document_id",

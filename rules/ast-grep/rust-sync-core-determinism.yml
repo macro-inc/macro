@@ -14,9 +14,11 @@ rule:
       regex: '^(HashMap|HashSet|RandomState|SystemTime|Instant)$'
     - kind: scoped_identifier
       regex: '^std::time(::|$)'
+    - kind: scoped_type_identifier
+      regex: '^std::time(::|$)'
     - kind: use_declaration
       regex: '\b(std::time|rand(::|\s)|getrandom)\b'
     - kind: use_declaration
       all:
         - regex: '\bstd\s*::'
-        - regex: '\btime\s*::'
+        - regex: '\btime\b'

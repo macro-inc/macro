@@ -5203,6 +5203,14 @@
       "crates/remote_env_var",
       "crates/workspace-hack"
     ],
+    "doc_sync_core": [
+      "crates/client/doc_sync_core",
+      "crates/cowlike",
+      "crates/document_id",
+      "crates/macro_user_id",
+      "crates/sync_doc_id",
+      "crates/sync_protocol"
+    ],
     "document_id": [
       "crates/document_id"
     ],
@@ -14153,6 +14161,10 @@
       "crates/model-entity",
       "crates/stream",
       "crates/workspace-hack"
+    ],
+    "sync_doc_id": [
+      "crates/document_id",
+      "crates/sync_doc_id"
     ],
     "sync_protocol": [
       "crates/sync_protocol"

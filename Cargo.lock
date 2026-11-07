@@ -6557,6 +6557,22 @@ dependencies = [
 ]
 
 [[package]]
+name = "doc_sync_core"
+version = "0.1.0"
+dependencies = [
+ "loro",
+ "macro_user_id",
+ "postcard",
+ "rootcause",
+ "serde",
+ "strum 0.27.2",
+ "sync_doc_id",
+ "sync_protocol",
+ "thiserror 2.0.18",
+ "uuid",
+]
+
+[[package]]
 name = "docker-compose-types"
 version = "0.24.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -19785,6 +19801,16 @@ dependencies = [
  "proc-macro2",
  "quote",
  "unicode-ident",
+]
+
+[[package]]
+name = "sync_doc_id"
+version = "0.1.0"
+dependencies = [
+ "document_id",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.18",
 ]
 
 [[package]]
