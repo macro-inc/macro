@@ -163,3 +163,8 @@ callbacks, the harness recovers only otherwise unobservable clock inputs from
 wire tombstone timestamps; the Room computes deletion and delivery itself.
 Runtime enumeration order is supplied as a port input and checked against the
 actual live socket membership before use. Ordered calls and deliveries stay strict.
+
+C12 retains R9 Worker fixtures and zero-diff re-recording. Room fake tests drive
+the real atomic use case: every active socket receives the update after durable
+archive, service writers map to system after broadcast, viewers fail before
+storage, and invalid deltas leave document and delivery state unchanged.

@@ -3,13 +3,8 @@ use base64::{Engine, engine::general_purpose::STANDARD};
 use futures::StreamExt;
 use serde::{Deserialize, Serialize};
 
-use super::document_effects::WorkerDocumentEffects;
 use super::*;
-use crate::{
-    constants::SYSTEM_AUTHOR_ID,
-    d1::insert_missing_user_mappings,
-    domain::document::{self, DocumentError, MAX_BINARY_BYTES, MAX_REVISION_BYTES},
-};
+use crate::domain::document::{DocumentError, MAX_BINARY_BYTES, MAX_REVISION_BYTES};
 
 const MAX_BODY_BYTES: usize = (MAX_BINARY_BYTES + MAX_REVISION_BYTES).div_ceil(3) * 4 + 1024;
 
@@ -51,6 +46,13 @@ fn error_response(error: DocumentError) -> Result<Response> {
     )
 }
 
+fn room_error_response(error: sync_server_core::domain::room::RoomError) -> Result<Response> {
+    match error {
+        sync_server_core::domain::room::RoomError::Document(error) => error_response(error),
+        other => Err(room_error(other)),
+    }
+}
+
 impl SyncSession<'_> {
     pub(in crate::inbound) async fn document_handler(
         &mut self,
@@ -63,30 +65,25 @@ impl SyncSession<'_> {
         if req.method() != if is_update { Method::Post } else { Method::Get } {
             return Ok(response(405));
         }
-        if is_update && let Err(error) = access.require_edit() {
-            return error_response(error);
-        }
-        if !self.exists(document_id).await? {
-            return Ok(response(404));
-        }
+        let key = SessionKey::new(document_id.to_owned());
         if !is_update {
-            let state = self.document_state().await?;
-            let compact = req
+            let shallow = req
                 .url()?
                 .query_pairs()
                 .any(|(key, value)| key == "shallow" && value == "true");
-            let snapshot = if compact {
-                document::shallow_snapshot(&access, &state.loro_doc)
-            } else {
-                document::snapshot(&access, &state.loro_doc)
-            };
-            return match snapshot {
-                Ok((snapshot, revision)) => Response::from_json(&SnapshotResponse {
+            return match self.room.read_document(&key, &access, shallow).await {
+                Ok(Some((snapshot, revision))) => Response::from_json(&SnapshotResponse {
                     snapshot: STANDARD.encode(snapshot),
                     revision: STANDARD.encode(revision),
                 }),
-                Err(error) => error_response(error),
+                Ok(None) => Ok(response(404)),
+                Err(error) => room_error_response(error),
             };
+        }
+        match self.room.prepare_document_update(&key, &access).await {
+            Ok(true) => {}
+            Ok(false) => return Ok(response(404)),
+            Err(error) => return room_error_response(error),
         }
         if req
             .headers()
@@ -120,55 +117,16 @@ impl SyncSession<'_> {
         ) else {
             return error_response(DocumentError::Invalid("Invalid base64 update or revision."));
         };
-        let state = self.document_state().await?;
-        self.session_storage().await?;
-        // Only agent actors are stored with the operation; humans are still editors.
-        let is_agent = claims.actor.is_some();
-        // Agents write for the user they act on behalf of; tokens without a user
-        // are service writes.
-        let author = claims
-            .user_id
-            .clone()
-            .unwrap_or_else(|| SYSTEM_AUTHOR_ID.to_owned());
-        let editor = match document::DocumentAttribution::from_session_claims(
-            claims.actor,
-            claims.user_id,
-            claims.agent_correlation_id,
-        ) {
-            Ok(editor) => editor,
-            Err(error) => return error_response(error),
-        };
-        let stored_attribution = if is_agent { editor.as_ref() } else { None };
-        let mut effects = WorkerDocumentEffects {
-            session: self,
-            document_state: &state,
-            document_id,
-            attribution: editor.as_ref(),
-            store_attribution: is_agent,
-        };
-        // The service synchronously compares + validates + imports before its
-        // first storage await, just like a websocket update in this isolate.
-        let prepared = match document::update(&access, &mut effects, &revision, &update).await {
-            Ok(prepared) => prepared,
-            Err(error) => return error_response(error),
-        };
-        // Taken from the request, so a retry of an applied update still maps them.
-        let writers = match document::writing_peers(&update) {
-            Ok(writers) => writers,
-            Err(error) => return error_response(error),
-        };
-        let db = self.env.d1(USER_PEER_D1_BINDING)?;
-        insert_missing_user_mappings(
-            &db,
-            document_id,
-            &author,
-            stored_attribution.map(|attribution| attribution.actor.as_str()),
-            &writers,
-        )
-        .await?;
-        Response::from_json(&UpdateResponse {
-            revision: STANDARD.encode(prepared.revision),
-            applied: prepared.applied,
-        })
+        match self
+            .room
+            .update_document(&key, &access, claims, &revision, &update)
+            .await
+        {
+            Ok(prepared) => Response::from_json(&UpdateResponse {
+                revision: STANDARD.encode(prepared.revision),
+                applied: prepared.applied,
+            }),
+            Err(error) => room_error_response(error),
+        }
     }
 }

@@ -123,3 +123,5 @@ The request gate and Axum handler share one owned room guard. Handler adapters
 borrow the room for the whole request; background work receives owned snapshots
 and editor batches, never a room guard. `websocket_error` only logs and stays
 lock-free. H9 still replaces the operation log and snapshot transport handle.
+
+Atomic document snapshot/update orchestration lives in `../../crates/sync_server_core/src/domain/room/atomic.rs`; HTTP method, streaming limits and JSON/base64 parsing remain in the Worker adapter.

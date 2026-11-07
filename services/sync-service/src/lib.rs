@@ -9,7 +9,6 @@ use inbound::durable_object;
 mod error;
 pub mod keepalive;
 mod metrics;
-mod socket;
 mod state;
 mod tags;
 mod timeout;
