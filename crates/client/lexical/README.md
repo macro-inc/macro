@@ -12,8 +12,10 @@ transaction; user payloads never own links or framework fields. Commits run orde
 transforms, text normalization, detached-node collection and mutation reporting. View-attached
 editors synchronize text caches after mutation reporting. JSON import/export preserves
 unknown NodeState and upstream property order; `to_js_json_string` provides JavaScript
-number formatting and integer-key ordering. Selection editing, history and view diffs
-remain follow-on layers.
+number formatting and integer-key ordering. Selection values, detached slots, formatting,
+insertion and deletion share those transactions. Movement accepts host-resolved points;
+the optional `model-segmentation` feature supplies text-only Unicode movement. History
+and view diffs remain follow-on layers.
 
 `lexical_workspace_tests` verifies the patched regex dependency and Loro snapshot
 compatibility alongside the model package. Future rich-node,
