@@ -509,3 +509,33 @@ fn room_step_preserves_synchronous_crash_effects() {
                 .is_some_and(|key| key.starts_with("ws_id"))
     }));
 }
+
+#[test]
+fn native_awareness_comparison_rejects_changed_timestamps() {
+    use bebop::SliceWrapper;
+    use sync_protocol::{FromRemote, presence::EphemeralStore, time::UnixMillis};
+    let left = EphemeralStore::new(5_000);
+    let right = EphemeralStore::new(5_000);
+    left.set("cursor", 42, UnixMillis(100));
+    right.set("cursor", 42, UnixMillis(101));
+    let left_bytes = left.encode_all(UnixMillis(101));
+    let right_bytes = right.encode_all(UnixMillis(101));
+    use bebop::Record;
+    let mut left = Vec::new();
+    FromRemote::RemoteAwareness {
+        awareness: SliceWrapper::Raw(&left_bytes),
+    }
+    .serialize(&mut left)
+    .expect("encode");
+    let mut right = Vec::new();
+    FromRemote::RemoteAwareness {
+        awareness: SliceWrapper::Raw(&right_bytes),
+    }
+    .serialize(&mut right)
+    .expect("encode");
+    let left = sync_protocol::framing::into_frames(&left, 1_000_000);
+    let right = sync_protocol::framing::into_frames(&right, 1_000_000);
+    assert_ne!(left_bytes, right_bytes);
+    // The full frame comparator exercises the same timestamp-sensitive path as replay.
+    assert!(!crate::transcript::equivalent_remote_frames(&left, &right).expect("compare"));
+}

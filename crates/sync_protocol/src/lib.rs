@@ -7,6 +7,9 @@ mod generated;
 
 /// WebSocket frame encoding and reassembly.
 pub mod framing;
+/// Clock-injected, wire-compatible ephemeral presence.
+#[cfg(feature = "presence")]
+pub mod presence;
 /// Explicit wall-clock units shared by sync clients and servers.
 pub mod time;
 

@@ -150,3 +150,16 @@ read failures and `exists_resets_operation_id_counter_quirk`.
 `server_doc_never_shallow` pins full-snapshot initialization, reload and alarms;
 `initialize_accepts_shallow_quirk` separately pins acceptance of shallow input.
 The latter is a preserved server-history quirk for a later behavior-changing fix.
+
+C9a uses Loro 1.16.2 presence bytes with an injected wall clock. Re-recording
+ignores only tagged `presence` clock rows; ordinary read order/counts stay strict.
+Native awareness comparison includes tombstones and exact timestamps. C0 did not
+record internal presence reads; absent reads use the callback's simulated clock.
+The parity test checks vendored-vs-Loro bytes at matching timestamps and expiry
+boundary tests advance explicit time. No dependency version upgrade is included.
+The complete `awareness.test/awareness_sync_tests_should_include_awareness_on_connection_if_available.jsonl`
+fixture now replays natively, including disconnect tombstones. For C0 close
+callbacks, the harness recovers only otherwise unobservable clock inputs from
+wire tombstone timestamps; the Room computes deletion and delivery itself.
+Runtime enumeration order is supplied as a port input and checked against the
+actual live socket membership before use. Ordered calls and deliveries stay strict.

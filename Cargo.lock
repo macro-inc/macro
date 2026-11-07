@@ -19769,6 +19769,11 @@ name = "sync_protocol"
 version = "0.1.0"
 dependencies = [
  "bebop",
+ "loro",
+ "loro-internal",
+ "postcard",
+ "rustc-hash 2.1.2",
+ "serde",
  "thiserror 2.0.18",
 ]
 

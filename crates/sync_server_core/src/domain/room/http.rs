@@ -156,7 +156,10 @@ impl<P: RoomPorts> Room<P> {
                 .expect("document loaded")
                 .export_shallow_snapshot()
         {
-            let awareness = self.memory.awareness.encode_all();
+            let awareness = self
+                .memory
+                .awareness
+                .encode_all(self.ports.clock().unix_time());
             for socket in self.ports.connections().all() {
                 if let Err(error) = self.send(
                     &socket,

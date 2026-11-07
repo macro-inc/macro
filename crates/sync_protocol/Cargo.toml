@@ -7,8 +7,15 @@ version = "0.1.0"
 publish = false
 
 [features]
+default = ["presence"]
+presence = ["dep:loro", "dep:loro-internal", "dep:rustc-hash", "dep:serde", "dep:postcard"]
 owned = []
 
 [dependencies]
 bebop.workspace = true
 thiserror.workspace = true
+loro = { workspace = true, optional = true }
+loro-internal = { workspace = true, optional = true }
+rustc-hash = { workspace = true, optional = true }
+serde = { workspace = true, optional = true }
+postcard = { workspace = true, optional = true }

@@ -91,10 +91,12 @@ struct State {
     faults: FaultSchedule,
     crashed: bool,
     sockets: Vec<WebSocketId>,
+    enumeration: VecDeque<Vec<WebSocketId>>,
     closing: BTreeSet<WebSocketId>,
     tags: BTreeMap<WebSocketId, Vec<String>>,
     now: SimNow,
     clocks: VecDeque<(String, u128)>,
+    presence_clocks: VecDeque<i64>,
     entropy: VecDeque<uuid_types::Uuid>,
     next_uuid: u128,
     verdicts: VecDeque<Result<bool, SimError>>,
@@ -165,6 +167,14 @@ impl SimPorts {
         let mut s = self.0.borrow_mut();
         s.now = now;
         s.busy_for = Duration::ZERO;
+    }
+    /// Queue runtime enumeration order; membership is still checked against live sockets.
+    pub fn seed_enumeration(&self, lists: impl IntoIterator<Item = Vec<WebSocketId>>) {
+        self.0.borrow_mut().enumeration = lists.into_iter().collect();
+    }
+    /// Supply previously unobservable local-delete timestamps from C0 wire data.
+    pub fn seed_presence_clocks(&self, values: impl IntoIterator<Item = i64>) {
+        self.0.borrow_mut().presence_clocks = values.into_iter().collect();
     }
     /// Queue exact clock readings, in port-call order, for native replay.
     pub fn seed_clocks(&self, values: impl IntoIterator<Item = (String, u128)>) {
@@ -311,7 +321,14 @@ impl SimPorts {
         if s.crashed {
             return fallback(&s);
         }
-        let value = match s.clocks.pop_front() {
+        // C0 did not observe Loro's internal clock. Only presence may use the
+        // callback's explicit simulated time when an older fixture has no read.
+        let seeded = if kind == "presence" && s.clocks.front().is_some_and(|(k, _)| k != kind) {
+            None
+        } else {
+            s.clocks.pop_front()
+        };
+        let value = match seeded {
             Some((expected, value)) => {
                 assert_eq!(expected, kind, "clock-read order mismatch");
                 value
@@ -332,7 +349,15 @@ impl Clock for SimPorts {
         )
     }
     fn unix_time(&self) -> UnixMillis {
-        UnixMillis(self.clock("unix_ms", |s| {
+        let presence = self.0.borrow_mut().presence_clocks.pop_front();
+        if let Some(now) = presence {
+            self.0.borrow_mut().effects.push(Effect {
+                operation: "clock".into(),
+                value: json!({"kind":"presence","value":now.to_string()}),
+            });
+            return UnixMillis(now);
+        }
+        UnixMillis(self.clock("presence", |s| {
             (s.now.unix_ms
                 + i64::try_from(s.busy_for.as_millis()).expect("simulation latency fits"))
                 as u128
@@ -382,6 +407,16 @@ impl Connections for SimPorts {
         if s.crashed {
             return sockets;
         }
+        let sockets = if let Some(ordered) = s.enumeration.pop_front() {
+            assert_eq!(
+                ordered.iter().collect::<BTreeSet<_>>(),
+                sockets.iter().collect::<BTreeSet<_>>(),
+                "runtime socket membership differs"
+            );
+            ordered
+        } else {
+            sockets
+        };
         s.effects.push(Effect {
             operation: "connections.all".into(),
             value: json!(sockets.iter().map(WebSocketId::as_str).collect::<Vec<_>>()),

@@ -11,7 +11,7 @@ openapi = ["dep:utoipa"]
 loro.workspace = true
 bebop.workspace = true
 rootcause.workspace = true
-sync_protocol.workspace = true
+sync_protocol = { workspace = true, features = ["presence"] }
 lazy-regex.workspace = true
 macro_sync_service_jwt.workspace = true
 serde.workspace = true

@@ -317,7 +317,12 @@ impl<P: RoomPorts> Room<P> {
                 &socket,
                 FromRemote::RemoteInitialSync {
                     snapshot: SliceWrapper::Raw(&snapshot),
-                    awareness: SliceWrapper::Raw(&self.memory.awareness.encode_all()),
+                    awareness: SliceWrapper::Raw(
+                        &self
+                            .memory
+                            .awareness
+                            .encode_all(self.ports.clock().unix_time()),
+                    ),
                 },
             )?;
         } else {
@@ -369,8 +374,13 @@ impl<P: RoomPorts> Room<P> {
         }
         self.validate_surface_sockets(None).await?;
         for peer in self.connection_peers(socket, true).await? {
-            self.memory.awareness.delete(&peer.to_string());
-            let awareness = self.memory.awareness.encode(&peer.to_string());
+            self.memory
+                .awareness
+                .delete(&peer.to_string(), self.ports.clock().unix_time());
+            let awareness = self
+                .memory
+                .awareness
+                .encode(&peer.to_string(), self.ports.clock().unix_time());
             for target in self.active_sockets() {
                 if &target == socket {
                     continue;

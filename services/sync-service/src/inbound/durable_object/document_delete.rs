@@ -52,7 +52,8 @@ impl SyncSession<'_> {
         self.pending_blame.clear();
         self.pending_editors.clear();
         for key in self.awareness.keys() {
-            self.awareness.delete(&key);
+            let now = sync_server_core::domain::ports::Clock::unix_time(self.room.ports().clock());
+            self.awareness.delete(&key, now);
         }
     }
 }

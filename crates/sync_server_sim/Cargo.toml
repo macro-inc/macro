@@ -10,7 +10,7 @@ bebop.workspace = true
 loro.workspace = true
 serde.workspace = true
 serde_json.workspace = true
-sync_protocol.workspace = true
+sync_protocol = { workspace = true, features = ["presence"] }
 sync_server_core.workspace = true
 thiserror.workspace = true
 uuid-types.workspace = true

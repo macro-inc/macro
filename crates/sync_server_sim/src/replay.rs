@@ -16,6 +16,7 @@ pub const ENABLED: &[&str] = &[
     "websocket.test/websocket_tests_should_respond_to_ping_with_pong.jsonl",
     "transcript_boundaries.test/M12_echoes_the_exact_request_version_vector.jsonl",
     "raw_endpoint.test/raw_endpoint_tests_should_return_404_for_non-existent_document.jsonl",
+    "awareness.test/awareness_sync_tests_should_include_awareness_on_connection_if_available.jsonl",
 ];
 
 /// Parsing, unsupported-callback and parity failures stay distinguishable.
