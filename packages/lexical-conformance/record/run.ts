@@ -11,6 +11,7 @@ import {
 } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { privateFixtureNames } from './privacy';
 
 const pkg = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const root = path.resolve(pkg, '../..');
@@ -195,6 +196,14 @@ for (const [id, dev] of [...results.dev].sort(([a], [b]) =>
     s2Hits: dev.s2Hits,
     transformersFired: dev.transformersFired,
   });
+}
+for (const name of privateFixtureNames(files)) {
+  files.delete(name);
+  const row = index.find((entry) => entry.file === name);
+  if (!row) throw new Error('Privacy scan returned an unknown fixture');
+  row.file = null;
+  row.tier = 'B-only';
+  (row.reasons as string[]).push('repository-privacy-filter');
 }
 if (!index.some((row) => row.tier === 'A-rec'))
   throw new Error('No replayable fixtures were recorded');

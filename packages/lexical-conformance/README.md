@@ -36,6 +36,10 @@ unsupported callback or plugin state also remain indexed exclusions. Passing
 regeneration checks proves the admitted corpus is stable; it does not claim that
 every upstream test is recordable.
 
+The repository privacy scanner also excludes fixtures containing contact values;
+their index rows use `repository-privacy-filter`. Oracle values are never redacted
+into passing fixtures, and recording does not add privacy exceptions.
+
 The source-range manifest in `record/s2-ranges.json` is the resolved file/line
 citations from the S2 feature inventory for this upstream pin. V8 offsets are
 mapped through the oracle's source maps before intersecting these citations;
