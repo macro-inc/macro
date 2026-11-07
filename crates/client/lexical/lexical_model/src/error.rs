@@ -4,6 +4,25 @@ use crate::{NodeKey, Utf16Offset};
 /// A failed model operation; the editor remains unchanged when an update fails.
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
+    /// unknown selection slot.
+    #[error("unknown selection slot")]
+    UnknownSelectionSlot,
+    /// no selection.
+    #[error("no selection")]
+    NoSelection,
+    /// expected range selection.
+    #[error("expected range selection")]
+    NoRangeSelection,
+    /// expected node selection.
+    #[error("expected node selection")]
+    NoNodeSelection,
+    /// point type does not match node kind.
+    #[error("point type does not match node kind")]
+    PointTypeMismatch,
+    /// layout is required for this movement.
+    #[error("layout is required for this movement")]
+    LayoutRequired,
+
     /// A document must have a root node at its top level.
     #[error("serialized editor state must contain a root node")]
     ExpectedSerializedRoot,
@@ -212,6 +231,13 @@ impl Error {
     /// Stable variant name for cross-boundary error classification.
     pub fn kind(&self) -> &'static str {
         match self {
+            Self::UnknownSelectionSlot => "UnknownSelectionSlot",
+            Self::NoSelection => "NoSelection",
+            Self::NoRangeSelection => "NoRangeSelection",
+            Self::NoNodeSelection => "NoNodeSelection",
+            Self::PointTypeMismatch => "PointTypeMismatch",
+            Self::LayoutRequired => "LayoutRequired",
+
             Self::ExpectedSerializedRoot => "ExpectedSerializedRoot",
             Self::UnknownSerializedType(..) => "UnknownSerializedType",
             Self::InfiniteTransforms => "InfiniteTransforms",

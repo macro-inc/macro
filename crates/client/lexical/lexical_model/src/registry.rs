@@ -85,6 +85,7 @@ impl<Original: NodeType, ReplacementNode: NodeType> Replacement
 /// Registry shared by all snapshots from one editor.
 /// s2: CFG-05, CFG-07
 pub struct Registry {
+    pub(crate) table_selection_hooks: Option<Arc<dyn TableSelectionHooks>>,
     pub(crate) nodes: Vec<RegisteredNode>,
     pub(crate) vtables: Vec<NodeVTable>,
     by_name: HashMap<&'static str, NodeTypeIndex>,
@@ -194,6 +195,7 @@ enum TransformTarget {
 type TransformRegistrations = Vec<(TransformTarget, RegisteredTransform)>;
 /// Configuration builder; the six built-in types are always registered first.
 pub struct EditorBuilder {
+    table_selection_hooks: Option<Arc<dyn TableSelectionHooks>>,
     vtables: Vec<NodeVTable>,
     mode: EditorMode,
     keys: KeySource,
@@ -206,6 +208,7 @@ impl EditorBuilder {
     /// Build with an explicit headless or view-attached mode.
     pub fn new(mode: EditorMode) -> Self {
         Self {
+            table_selection_hooks: None,
             vtables: vec![],
             mode,
             keys: KeySource::PerEditor,
@@ -220,6 +223,11 @@ impl EditorBuilder {
         .node::<Tab>()
         .node::<Paragraph>()
         .node::<Artificial>()
+    }
+    /// Supply table geometry and editing behavior.
+    pub fn table_selection_hooks(mut self, hooks: impl TableSelectionHooks) -> Self {
+        self.table_selection_hooks = Some(Arc::new(hooks));
+        self
     }
     /// Register a node type in builder order.
     pub fn node<Node: NodeType>(mut self) -> Self {
@@ -289,6 +297,7 @@ impl EditorBuilder {
     /// s2: CFG-08
     pub fn build(self) -> Result<Editor, BuildError> {
         let mut registry = Registry {
+            table_selection_hooks: self.table_selection_hooks,
             nodes: vec![],
             vtables: self.vtables,
             by_name: HashMap::default(),

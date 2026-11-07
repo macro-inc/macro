@@ -256,7 +256,7 @@ impl ElementNode for Paragraph {
             .element(this)
             .cloned()
             .ok_or(Error::NotAnElement(this.key()))?;
-        let range = tx.range_at(selection).cloned();
+        let range = tx.try_range_at(selection).cloned();
         let next = tx.create(Paragraph::default())?;
         let mut target = tx.element(next)?;
         target

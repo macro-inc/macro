@@ -72,12 +72,16 @@ fn base_tree_operations_and_paragraph_creation_keep_links_and_typing_style() -> 
         .set_style("color: blue")?;
     tx.select_start(a)?;
     assert_eq!(
-        tx.range_at(SelectionSlot::Active).expect("range").anchor,
+        tx.try_range_at(SelectionSlot::Active)
+            .expect("range")
+            .anchor,
         Point::text(a, Utf16Offset(0))
     );
     tx.select_end(a)?;
     assert_eq!(
-        tx.range_at(SelectionSlot::Active).expect("range").anchor,
+        tx.try_range_at(SelectionSlot::Active)
+            .expect("range")
+            .anchor,
         Point::text(a, Utf16Offset(1))
     );
     let next = tx
@@ -98,12 +102,16 @@ fn base_tree_operations_and_paragraph_creation_keep_links_and_typing_style() -> 
     );
     tx.select_next(p, None, None)?;
     assert_eq!(
-        tx.range_at(SelectionSlot::Active).expect("range").anchor,
+        tx.try_range_at(SelectionSlot::Active)
+            .expect("range")
+            .anchor,
         Point::element(next, ChildIndex(0))
     );
     tx.select_previous(next, None, None)?;
     assert_eq!(
-        tx.range_at(SelectionSlot::Active).expect("range").anchor,
+        tx.try_range_at(SelectionSlot::Active)
+            .expect("range")
+            .anchor,
         Point::text(c, Utf16Offset(1))
     );
     let parent = tx.create_parent_element(a)?;
@@ -162,7 +170,7 @@ fn split_text_moves_selection_s1_18_2() -> Result<(), Error> {
         let parts = tx.text(text)?.split_text(&[Utf16Offset(4)])?;
         assert_eq!(parts.len(), 2);
         assert_eq!(parts[0], text.key());
-        let range = tx.range_at(SelectionSlot::Active).expect("range");
+        let range = tx.try_range_at(SelectionSlot::Active).expect("range");
         assert_eq!(range.anchor, Point::text(parts[0], Utf16Offset(2)));
         assert_eq!(range.focus, Point::text(parts[1], Utf16Offset(3)));
         assert_eq!(tx.text_content(parts[0]), "Hell");
@@ -188,6 +196,7 @@ fn remove_complete_text_span_across_token_collapses_into_paragraph_s1_18_5() -> 
     })?;
     editor.update(|tx| {
         tx.set_selection(Some(Selection::Range(RangeSelection {
+            dirty: false,
             anchor: Point::text(leading, Utf16Offset(0)),
             focus: Point::text(token, tx.text_content_size(token)),
             format: TextFormat::empty(),
@@ -199,7 +208,7 @@ fn remove_complete_text_span_across_token_collapses_into_paragraph_s1_18_5() -> 
         assert!(!tx.is_attached(leading));
         assert!(!tx.is_attached(token));
         assert_eq!(tx.all_text_nodes(NodeKey::ROOT).count(), 0);
-        let Some(Selection::Range(range)) = tx.selection_at(SelectionSlot::Active) else {
+        let Some(Selection::Range(range)) = tx.try_selection_at(SelectionSlot::Active) else {
             panic!("range");
         };
         assert_eq!(range.anchor, Point::element(p, ChildIndex(0)));

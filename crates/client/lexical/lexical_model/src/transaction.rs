@@ -24,6 +24,7 @@ pub struct Transaction<'editor> {
     pub(crate) dirty_leaves: IndexSet<NodeKey>,
     pub(crate) dirty_elements: IndexMap<NodeKey, DirtyIntent>,
     pub(crate) composition_key: Option<NodeKey>,
+    pub(crate) selection_context: Option<SelectionChangeContext>,
     pub(crate) sealed: bool,
     pub(crate) full_reconcile: bool,
     pub(crate) selection_dirty: bool,
@@ -51,6 +52,7 @@ impl<'editor> Transaction<'editor> {
             dirty_leaves: IndexSet::default(),
             dirty_elements: IndexMap::default(),
             composition_key,
+            selection_context: None,
             sealed: false,
             full_reconcile: false,
             selection_dirty: false,
@@ -563,6 +565,10 @@ impl<'editor> Transaction<'editor> {
     pub fn set_selection(&mut self, selection: Option<Selection>) -> Result<(), Error> {
         self.guard_write()?;
         self.selection_dirty |= selection.is_some();
+        let selection = selection.map(|mut selection| {
+            selection.set_dirty(true);
+            selection
+        });
         self.dirty_since_flush = true;
         self.pending.selection = selection;
         Ok(())
@@ -590,20 +596,6 @@ impl<'editor> Transaction<'editor> {
     /// Immutable platform information selected at editor construction.
     pub fn view_host(&self) -> ViewHost {
         self.editor.view_host
-    }
-    /// Borrow a selection by slot.
-    pub fn selection_at(&self, slot: SelectionSlot) -> Option<&Selection> {
-        match slot {
-            SelectionSlot::Active => self.pending.selection.as_ref(),
-            SelectionSlot::Detached(id) => self.detached.get(id.0).and_then(Option::as_ref),
-        }
-    }
-    /// Borrow a range selection by slot.
-    pub fn range_at(&self, slot: SelectionSlot) -> Option<&RangeSelection> {
-        match self.selection_at(slot)? {
-            Selection::Range(range) => Some(range),
-            _ => None,
-        }
     }
     /// Store a detached selection unaffected by tree adjustments.
     pub fn detach_selection(&mut self, selection: Selection) -> SelectionSlot {

@@ -275,7 +275,7 @@ impl Transaction<'_> {
         inserted: u32,
         removed: &[NodeKey],
     ) {
-        let affected = self.range_at(SelectionSlot::Active).map(|range| {
+        let affected = self.try_range_at(SelectionSlot::Active).map(|range| {
             [range.anchor, range.focus].map(|point| {
                 removed
                     .iter()
@@ -320,7 +320,7 @@ impl Transaction<'_> {
         let position = self.index_within_parent(key).ok_or(Error::NoParent(key))?;
         let previous = self.prev_sibling(key);
         let next = self.next_sibling(key);
-        let affected = self.range_at(SelectionSlot::Active).map(|range| {
+        let affected = self.try_range_at(SelectionSlot::Active).map(|range| {
             [range.anchor, range.focus]
                 .map(|point| point.key() == key || self.has_ancestor(point.key(), key))
         });
@@ -614,10 +614,11 @@ impl Transaction<'_> {
     }
     pub(crate) fn select_points(&mut self, anchor: Point, focus: Point) -> Result<(), Error> {
         let (format, style) = self
-            .range_at(SelectionSlot::Active)
+            .try_range_at(SelectionSlot::Active)
             .map(|r| (r.format, r.style.clone()))
             .unwrap_or_default();
         self.set_selection(Some(Selection::Range(RangeSelection {
+            dirty: false,
             anchor,
             focus,
             format,

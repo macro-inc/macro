@@ -368,7 +368,7 @@ fn splice_relocates_descendant_selection_but_keeps_moved_nodes() -> Result<(), E
         let detached = tx.detach_selection(tx.selection().cloned().expect("selection"));
         tx.splice(paragraph, ChildIndex(0), 1, &[inline.key()])?;
         assert_eq!(
-            tx.range_at(SelectionSlot::Active)
+            tx.try_range_at(SelectionSlot::Active)
                 .expect("range")
                 .anchor
                 .key(),
@@ -376,14 +376,17 @@ fn splice_relocates_descendant_selection_but_keeps_moved_nodes() -> Result<(), E
         );
         tx.splice(paragraph, ChildIndex(0), 1, &[])?;
         assert_ne!(
-            tx.range_at(SelectionSlot::Active)
+            tx.try_range_at(SelectionSlot::Active)
                 .expect("range")
                 .anchor
                 .key(),
             text.key()
         );
         assert_eq!(
-            tx.range_at(detached).expect("detached range").anchor.key(),
+            tx.try_range_at(detached)
+                .expect("detached range")
+                .anchor
+                .key(),
             text.key()
         );
         Ok(())
@@ -602,6 +605,7 @@ fn selection_reads_match_text_and_element_boundaries() -> Result<(), Error> {
         tx.append(second, &[b.key()])?;
         tx.append(NodeKey::ROOT, &[first.key(), second.key()])?;
         let selection = Selection::Range(RangeSelection {
+            dirty: false,
             anchor: Point::text(a, Utf16Offset(1)),
             focus: Point::text(b, Utf16Offset(3)),
             format: TextFormat::empty(),
