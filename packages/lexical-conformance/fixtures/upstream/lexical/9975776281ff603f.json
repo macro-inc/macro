@@ -1,0 +1,1032 @@
+{
+  "schema": 2,
+  "source": {
+    "repo": "lexical",
+    "version": "0.45.0",
+    "file": "packages/lexical/src/caret/__tests__/unit/LexicalCaret.test.ts",
+    "test": [
+      "LexicalCaret",
+      "$removeTextFromCaretRange",
+      "single block",
+      "full text node biased selection",
+      "first node (previous outside inside)"
+    ],
+    "recordedWith": "lexical-conformance@a5df4931fde86372f78efe37be5b2166dd88bc6156e4610da787b770aa0f5f7e"
+  },
+  "tier": "A-rec",
+  "partial": false,
+  "covers": [],
+  "normalize": [],
+  "outcomeDiffers": [],
+  "config": {
+    "namespace": "test",
+    "namespaceGenerated": false,
+    "nodes": [
+      "heading",
+      "list",
+      "listitem",
+      "quote",
+      "code",
+      "table",
+      "tablecell",
+      "tablerow",
+      "hashtag",
+      "code-highlight",
+      "autolink",
+      "link",
+      "overflow",
+      "test_block",
+      "test_segmented",
+      "test_exclude_from_copy_block",
+      "test_decorator",
+      "test_inline_block",
+      "test_shadow_root",
+      "test_text",
+      "mark"
+    ],
+    "nodeClasses": {
+      "heading": {
+        "$fn": "@lexical/rich-text.HeadingNode"
+      },
+      "list": {
+        "$fn": "@lexical/list.ListNode"
+      },
+      "listitem": {
+        "$fn": "@lexical/list.ListItemNode"
+      },
+      "quote": {
+        "$fn": "@lexical/rich-text.QuoteNode"
+      },
+      "code": {
+        "$fn": "@lexical/code.CodeNode"
+      },
+      "table": {
+        "$fn": "@lexical/table.TableNode"
+      },
+      "tablecell": {
+        "$fn": "@lexical/table.TableCellNode"
+      },
+      "tablerow": {
+        "$fn": "@lexical/table.TableRowNode"
+      },
+      "hashtag": {
+        "$fn": "@lexical/hashtag.HashtagNode"
+      },
+      "code-highlight": {
+        "$fn": "@lexical/code.CodeHighlightNode"
+      },
+      "autolink": {
+        "$fn": "@lexical/link.AutoLinkNode"
+      },
+      "link": {
+        "$fn": "@lexical/link.LinkNode"
+      },
+      "overflow": {
+        "$fn": "@lexical/overflow.OverflowNode"
+      },
+      "mark": {
+        "$fn": "@lexical/mark.MarkNode"
+      }
+    },
+    "replacements": [],
+    "plugins": [],
+    "theme": {
+      "__lexicalClassNameCache": {}
+    },
+    "editable": true,
+    "headless": false,
+    "rootElement": true
+  },
+  "initial": {
+    "editorState": null,
+    "selection": null
+  },
+  "trace": [
+    {
+      "op": "call",
+      "fn": "lexical/LexicalUtils.resetRandomKey",
+      "args": [],
+      "ret": {
+        "$undef": true
+      }
+    },
+    {
+      "op": "entropy",
+      "src": "random",
+      "v": 0.23645552527159452
+    },
+    {
+      "op": "createEditor",
+      "id": 0,
+      "config": {
+        "namespace": "test",
+        "namespaceGenerated": false,
+        "nodes": [
+          "heading",
+          "list",
+          "listitem",
+          "quote",
+          "code",
+          "table",
+          "tablecell",
+          "tablerow",
+          "hashtag",
+          "code-highlight",
+          "autolink",
+          "link",
+          "overflow",
+          "test_block",
+          "test_segmented",
+          "test_exclude_from_copy_block",
+          "test_decorator",
+          "test_inline_block",
+          "test_shadow_root",
+          "test_text",
+          "mark"
+        ],
+        "nodeClasses": {
+          "heading": {
+            "$fn": "@lexical/rich-text.HeadingNode"
+          },
+          "list": {
+            "$fn": "@lexical/list.ListNode"
+          },
+          "listitem": {
+            "$fn": "@lexical/list.ListItemNode"
+          },
+          "quote": {
+            "$fn": "@lexical/rich-text.QuoteNode"
+          },
+          "code": {
+            "$fn": "@lexical/code.CodeNode"
+          },
+          "table": {
+            "$fn": "@lexical/table.TableNode"
+          },
+          "tablecell": {
+            "$fn": "@lexical/table.TableCellNode"
+          },
+          "tablerow": {
+            "$fn": "@lexical/table.TableRowNode"
+          },
+          "hashtag": {
+            "$fn": "@lexical/hashtag.HashtagNode"
+          },
+          "code-highlight": {
+            "$fn": "@lexical/code.CodeHighlightNode"
+          },
+          "autolink": {
+            "$fn": "@lexical/link.AutoLinkNode"
+          },
+          "link": {
+            "$fn": "@lexical/link.LinkNode"
+          },
+          "overflow": {
+            "$fn": "@lexical/overflow.OverflowNode"
+          },
+          "mark": {
+            "$fn": "@lexical/mark.MarkNode"
+          }
+        },
+        "replacements": [],
+        "plugins": [],
+        "theme": {
+          "__lexicalClassNameCache": {}
+        },
+        "editable": true,
+        "headless": false,
+        "rootElement": true
+      },
+      "ret": {
+        "$ed": 0
+      }
+    },
+    {
+      "op": "commit",
+      "editor": 0,
+      "index": 1,
+      "updates": [],
+      "causes": [],
+      "snapshot": {
+        "json": {
+          "root": {
+            "children": [],
+            "direction": null,
+            "format": "",
+            "indent": 0,
+            "type": "root",
+            "version": 1
+          }
+        },
+        "selection": null,
+        "text": "",
+        "nodeMapKeys": [
+          "root"
+        ],
+        "tags": [
+          "history-merge"
+        ],
+        "dirty": {
+          "leaves": [],
+          "elements": [
+            [
+              "root",
+              true
+            ]
+          ]
+        },
+        "normalized": []
+      }
+    },
+    {
+      "op": "update",
+      "editor": 0,
+      "calls": [
+        {
+          "op": "call",
+          "fn": "lexical.$createTextNode",
+          "args": [
+            "first"
+          ],
+          "ret": {
+            "$h": 1,
+            "key": "1",
+            "type": "text",
+            "ver": 2
+          }
+        },
+        {
+          "op": "call",
+          "fn": "TextNode.setStyle",
+          "args": [
+            "color: --color-first"
+          ],
+          "this": {
+            "$h": 1
+          },
+          "ret": {
+            "$h": 1
+          }
+        },
+        {
+          "op": "call",
+          "fn": "lexical.$createTextNode",
+          "args": [
+            "second"
+          ],
+          "ret": {
+            "$h": 2,
+            "key": "2",
+            "type": "text",
+            "ver": 2
+          }
+        },
+        {
+          "op": "call",
+          "fn": "TextNode.setStyle",
+          "args": [
+            "color: --color-second"
+          ],
+          "this": {
+            "$h": 2
+          },
+          "ret": {
+            "$h": 2
+          }
+        },
+        {
+          "op": "call",
+          "fn": "lexical.$createTextNode",
+          "args": [
+            "third"
+          ],
+          "ret": {
+            "$h": 3,
+            "key": "3",
+            "type": "text",
+            "ver": 2
+          }
+        },
+        {
+          "op": "call",
+          "fn": "TextNode.setStyle",
+          "args": [
+            "color: --color-third"
+          ],
+          "this": {
+            "$h": 3
+          },
+          "ret": {
+            "$h": 3
+          }
+        },
+        {
+          "op": "call",
+          "fn": "lexical.$getRoot",
+          "args": [],
+          "ret": {
+            "$h": 4,
+            "key": "root",
+            "type": "root",
+            "ver": 2
+          }
+        },
+        {
+          "op": "call",
+          "fn": "RootNode.clear",
+          "args": [],
+          "this": {
+            "$h": 4
+          },
+          "ret": {
+            "$h": 5,
+            "key": "root",
+            "type": "root",
+            "ver": 2
+          }
+        },
+        {
+          "op": "call",
+          "fn": "lexical.$createParagraphNode",
+          "args": [],
+          "ret": {
+            "$h": 6,
+            "key": "4",
+            "type": "paragraph",
+            "ver": 2
+          }
+        },
+        {
+          "op": "call",
+          "fn": "ParagraphNode.append",
+          "args": [
+            {
+              "$h": 1
+            },
+            {
+              "$h": 2
+            },
+            {
+              "$h": 3
+            }
+          ],
+          "this": {
+            "$h": 6
+          },
+          "ret": {
+            "$h": 6
+          }
+        },
+        {
+          "op": "call",
+          "fn": "RootNode.append",
+          "args": [
+            {
+              "$h": 6
+            }
+          ],
+          "this": {
+            "$h": 5
+          },
+          "ret": {
+            "$h": 5
+          }
+        }
+      ],
+      "id": 0,
+      "cause": "test",
+      "opts": {}
+    },
+    {
+      "op": "tick",
+      "n": 0,
+      "reason": "microtask"
+    },
+    {
+      "op": "tick",
+      "n": 1,
+      "reason": "microtask"
+    },
+    {
+      "op": "commit",
+      "editor": 0,
+      "index": 2,
+      "updates": [
+        0
+      ],
+      "causes": [
+        "test"
+      ],
+      "snapshot": {
+        "json": {
+          "root": {
+            "children": [
+              {
+                "children": [
+                  {
+                    "detail": 0,
+                    "format": 0,
+                    "mode": "normal",
+                    "style": "color: --color-first",
+                    "text": "first",
+                    "type": "text",
+                    "version": 1
+                  },
+                  {
+                    "detail": 0,
+                    "format": 0,
+                    "mode": "normal",
+                    "style": "color: --color-second",
+                    "text": "second",
+                    "type": "text",
+                    "version": 1
+                  },
+                  {
+                    "detail": 0,
+                    "format": 0,
+                    "mode": "normal",
+                    "style": "color: --color-third",
+                    "text": "third",
+                    "type": "text",
+                    "version": 1
+                  }
+                ],
+                "direction": null,
+                "format": "",
+                "indent": 0,
+                "type": "paragraph",
+                "version": 1,
+                "textFormat": 0,
+                "textStyle": "color: --color-first"
+              }
+            ],
+            "direction": null,
+            "format": "",
+            "indent": 0,
+            "type": "root",
+            "version": 1
+          }
+        },
+        "selection": null,
+        "text": "firstsecondthird",
+        "nodeMapKeys": [
+          "root",
+          "1",
+          "2",
+          "3",
+          "4"
+        ],
+        "tags": [],
+        "dirty": {
+          "leaves": [
+            1,
+            2,
+            3
+          ],
+          "elements": [
+            [
+              6,
+              true
+            ],
+            [
+              5,
+              true
+            ]
+          ]
+        },
+        "normalized": []
+      }
+    },
+    {
+      "op": "update",
+      "editor": 0,
+      "calls": [
+        {
+          "op": "call",
+          "fn": "lexical.$getRoot",
+          "args": [],
+          "ret": {
+            "$h": 5
+          }
+        },
+        {
+          "op": "call",
+          "fn": "RootNode.getAllTextNodes",
+          "args": [],
+          "this": {
+            "$h": 5
+          },
+          "ret": [
+            {
+              "$h": 1
+            },
+            {
+              "$h": 2
+            },
+            {
+              "$h": 3
+            }
+          ]
+        },
+        {
+          "op": "call",
+          "fn": "lexical.$isTextNode",
+          "args": [
+            {
+              "$h": 1
+            }
+          ],
+          "ret": true
+        },
+        {
+          "op": "call",
+          "fn": "TextNode.getTextContentSize",
+          "args": [],
+          "this": {
+            "$h": 1
+          },
+          "ret": 5
+        },
+        {
+          "op": "call",
+          "fn": "TextNode.select",
+          "args": [
+            5,
+            0
+          ],
+          "this": {
+            "$h": 1
+          },
+          "ret": {
+            "$sel": 7,
+            "kind": "range"
+          }
+        },
+        {
+          "op": "call",
+          "fn": "lexical.$getSiblingCaret",
+          "args": [
+            {
+              "$h": 1
+            },
+            "previous"
+          ],
+          "ret": {
+            "$caret": 8,
+            "type": "sibling",
+            "origin": {
+              "$h": 1
+            },
+            "direction": "previous"
+          }
+        },
+        {
+          "op": "call",
+          "fn": "get:anchor",
+          "this": {
+            "$sel": 7
+          },
+          "args": [],
+          "ret": {
+            "$pt": 9
+          }
+        },
+        {
+          "op": "call",
+          "fn": "lexical.$rewindSiblingCaret",
+          "args": [
+            {
+              "$caret": 8
+            }
+          ],
+          "ret": {
+            "$caret": 10,
+            "type": "sibling",
+            "origin": {
+              "$h": 2
+            },
+            "direction": "previous"
+          }
+        },
+        {
+          "op": "call",
+          "fn": "lexical.$setPointFromCaret",
+          "args": [
+            {
+              "$pt": 9
+            },
+            {
+              "$caret": 10
+            }
+          ],
+          "ret": {
+            "$undef": true
+          }
+        },
+        {
+          "op": "call",
+          "fn": "get:0",
+          "this": [
+            {
+              "$h": 2
+            },
+            {
+              "$h": 3
+            }
+          ],
+          "args": [],
+          "ret": {
+            "$h": 2
+          }
+        },
+        {
+          "op": "call",
+          "fn": "get:anchor",
+          "this": {
+            "$sel": 7
+          },
+          "args": [],
+          "ret": {
+            "$pt": 9
+          }
+        },
+        {
+          "op": "call",
+          "fn": "TextNode.getKey",
+          "args": [],
+          "this": {
+            "$h": 2
+          },
+          "ret": {
+            "$key": 2,
+            "raw": "2"
+          }
+        },
+        {
+          "op": "call",
+          "fn": "lexical.$caretRangeFromSelection",
+          "args": [
+            {
+              "$sel": 7
+            }
+          ],
+          "ret": {
+            "$sel": 11,
+            "kind": "range"
+          }
+        },
+        {
+          "op": "call",
+          "fn": "CaretRangeImpl.isCollapsed",
+          "args": [],
+          "this": {
+            "$sel": 11
+          },
+          "ret": false
+        },
+        {
+          "op": "call",
+          "fn": "CaretRangeImpl.iterNodeCarets",
+          "args": [
+            {
+              "$key": 5,
+              "raw": "root"
+            }
+          ],
+          "this": {
+            "$sel": 11
+          },
+          "ret": {
+            "$iterator": 12
+          }
+        },
+        {
+          "op": "call",
+          "fn": "iter",
+          "this": {
+            "$iterator": 12
+          },
+          "args": [],
+          "ret": []
+        },
+        {
+          "op": "call",
+          "fn": "CaretRangeImpl.getTextSlices",
+          "args": [],
+          "this": {
+            "$sel": 11
+          },
+          "ret": [
+            {
+              "$caret": 13,
+              "type": "slice",
+              "caret": {
+                "$caret": 14,
+                "type": "text",
+                "origin": {
+                  "$h": 2
+                },
+                "direction": "previous"
+              },
+              "distance": 0
+            },
+            {
+              "$caret": 15,
+              "type": "slice",
+              "caret": {
+                "$caret": 16,
+                "type": "text",
+                "origin": {
+                  "$h": 1
+                },
+                "direction": "previous"
+              },
+              "distance": 5
+            }
+          ]
+        },
+        {
+          "op": "call",
+          "fn": "get:distance",
+          "this": {
+            "$caret": 13
+          },
+          "args": [],
+          "ret": 0
+        },
+        {
+          "op": "call",
+          "fn": "get:distance",
+          "this": {
+            "$caret": 15
+          },
+          "args": [],
+          "ret": 5
+        },
+        {
+          "op": "call",
+          "fn": "lexical.$removeTextFromCaretRange",
+          "args": [
+            {
+              "$sel": 11
+            }
+          ],
+          "ret": {
+            "$sel": 17,
+            "kind": "range"
+          }
+        },
+        {
+          "op": "call",
+          "fn": "lexical.$setSelection",
+          "args": [
+            null
+          ],
+          "ret": {
+            "$undef": true
+          }
+        },
+        {
+          "op": "call",
+          "fn": "lexical.$getRoot",
+          "args": [],
+          "ret": {
+            "$h": 5
+          }
+        },
+        {
+          "op": "call",
+          "fn": "RootNode.getAllTextNodes",
+          "args": [],
+          "this": {
+            "$h": 5
+          },
+          "ret": [
+            {
+              "$h": 18,
+              "key": "2",
+              "type": "text",
+              "ver": 3
+            },
+            {
+              "$h": 3
+            }
+          ]
+        },
+        {
+          "op": "call",
+          "fn": "TextNode.getTextContent",
+          "args": [],
+          "this": {
+            "$h": 18
+          },
+          "ret": "second"
+        },
+        {
+          "op": "call",
+          "fn": "TextNode.getTextContent",
+          "args": [],
+          "this": {
+            "$h": 3
+          },
+          "ret": "third"
+        },
+        {
+          "op": "call",
+          "fn": "TextNode.getLatest",
+          "args": [],
+          "this": {
+            "$h": 2
+          },
+          "ret": {
+            "$h": 18
+          }
+        },
+        {
+          "op": "call",
+          "fn": "TextNode.getLatest",
+          "args": [],
+          "this": {
+            "$h": 3
+          },
+          "ret": {
+            "$h": 3
+          }
+        },
+        {
+          "op": "call",
+          "fn": "CaretRangeImpl.isCollapsed",
+          "args": [],
+          "this": {
+            "$sel": 17
+          },
+          "ret": true
+        },
+        {
+          "op": "call",
+          "fn": "get:0",
+          "this": [
+            {
+              "$h": 18
+            },
+            {
+              "$h": 3
+            }
+          ],
+          "args": [],
+          "ret": {
+            "$h": 18
+          }
+        }
+      ],
+      "id": 1,
+      "cause": "test",
+      "opts": {}
+    },
+    {
+      "op": "tick",
+      "n": 2,
+      "reason": "microtask"
+    },
+    {
+      "op": "tick",
+      "n": 3,
+      "reason": "microtask"
+    },
+    {
+      "op": "commit",
+      "editor": 0,
+      "index": 3,
+      "updates": [
+        1
+      ],
+      "causes": [
+        "test"
+      ],
+      "snapshot": {
+        "json": {
+          "root": {
+            "children": [
+              {
+                "children": [
+                  {
+                    "detail": 0,
+                    "format": 0,
+                    "mode": "normal",
+                    "style": "color: --color-second",
+                    "text": "second",
+                    "type": "text",
+                    "version": 1
+                  },
+                  {
+                    "detail": 0,
+                    "format": 0,
+                    "mode": "normal",
+                    "style": "color: --color-third",
+                    "text": "third",
+                    "type": "text",
+                    "version": 1
+                  }
+                ],
+                "direction": null,
+                "format": "",
+                "indent": 0,
+                "type": "paragraph",
+                "version": 1,
+                "textFormat": 0,
+                "textStyle": "color: --color-second"
+              }
+            ],
+            "direction": null,
+            "format": "",
+            "indent": 0,
+            "type": "root",
+            "version": 1
+          }
+        },
+        "selection": null,
+        "text": "secondthird",
+        "nodeMapKeys": [
+          "root",
+          "2",
+          "3",
+          "4"
+        ],
+        "tags": [],
+        "dirty": {
+          "leaves": [
+            1,
+            18
+          ],
+          "elements": [
+            [
+              6,
+              true
+            ],
+            [
+              5,
+              true
+            ]
+          ]
+        },
+        "normalized": []
+      }
+    },
+    {
+      "op": "tick",
+      "n": 4,
+      "reason": "await"
+    }
+  ],
+  "tapes": [],
+  "final": {
+    "json": {
+      "root": {
+        "children": [
+          {
+            "children": [
+              {
+                "detail": 0,
+                "format": 0,
+                "mode": "normal",
+                "style": "color: --color-second",
+                "text": "second",
+                "type": "text",
+                "version": 1
+              },
+              {
+                "detail": 0,
+                "format": 0,
+                "mode": "normal",
+                "style": "color: --color-third",
+                "text": "third",
+                "type": "text",
+                "version": 1
+              }
+            ],
+            "direction": null,
+            "format": "",
+            "indent": 0,
+            "type": "paragraph",
+            "version": 1,
+            "textFormat": 0,
+            "textStyle": "color: --color-second"
+          }
+        ],
+        "direction": null,
+        "format": "",
+        "indent": 0,
+        "type": "root",
+        "version": 1
+      }
+    },
+    "selection": null,
+    "text": "secondthird",
+    "nodeMapKeys": [
+      "root",
+      "2",
+      "3",
+      "4"
+    ]
+  }
+}

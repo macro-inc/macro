@@ -1,0 +1,60 @@
+{
+  "schema": 2,
+  "source": {
+    "repo": "macro",
+    "version": "0.45.0",
+    "file": "packages/lexical-core/tests/agent-chat-reply.test.ts",
+    "test": [
+      "composeAgentChatReply with segments",
+      "closes with the footer the harness wrote"
+    ],
+    "recordedWith": "lexical-conformance@a5df4931fde86372f78efe37be5b2166dd88bc6156e4610da787b770aa0f5f7e"
+  },
+  "tier": "A-rec",
+  "partial": false,
+  "covers": [],
+  "normalize": [
+    "listIndent: 2"
+  ],
+  "outcomeDiffers": [],
+  "config": {},
+  "initial": {
+    "editorState": null,
+    "selection": null
+  },
+  "trace": [
+    {
+      "op": "call",
+      "fn": "@macro-inc/lexical-core/utils/agent-chat-reply.composeAgentChatReply",
+      "args": [
+        {
+          "sessionId": "00000000-0000-0000-0000-00000000000a",
+          "link": false,
+          "body": {
+            "kind": "segments",
+            "segments": [
+              {
+                "kind": "prose",
+                "markdown": "Partial answer"
+              }
+            ],
+            "footer": "I stopped before finishing that."
+          }
+        }
+      ],
+      "ret": "Partial answer\n\n_I stopped before finishing that._"
+    },
+    {
+      "op": "entropy",
+      "src": "random",
+      "v": 0.23645552527159452
+    },
+    {
+      "op": "entropy",
+      "src": "random",
+      "v": 0.3692706737201661
+    }
+  ],
+  "tapes": [],
+  "final": null
+}
