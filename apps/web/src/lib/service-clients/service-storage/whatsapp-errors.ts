@@ -2,7 +2,7 @@ import type { ResultError } from '@core/util/result';
 import { type BaseFetchErrorCode, statusError } from '@core/util/safeFetch';
 import { z } from 'zod';
 
-/** `LinkedError::code()` in `crates/whatsapp_linked`; DSS answers `{ code, message }`. */
+/** `LinkedError::code()` in `crates/whatsapp/whatsapp_linked`; DSS answers `{ code, message }`. */
 export const whatsappErrorCodes = [
   'invalid_input',
   'cannot_add_not_in_group',

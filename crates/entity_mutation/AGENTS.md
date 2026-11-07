@@ -22,15 +22,15 @@ entity kind generically.
 
 - Owns: the shared mutation vocabulary and effect types.
 - Not here: any entity kind's actual rename/move/trash logic (lives in that
-  entity's own domain crate, e.g. `crates/documents`, `crates/chat`); the
+  entity's own domain crate, e.g. `crates/documents`, `crates/comms/chat`); the
   router dispatching to them → the DSS entity mutation service.
 
 ## Boundaries
 
 - Depends on: `entity_access` (for `EntityAccessReceipt`/`RequiredPermission`),
   `model_entity`, `models_permissions`.
-- Used by: `crates/channels`, `crates/email/email`, `crates/forms`, `crates/databases`,
-  `crates/projects`, `crates/call`, `crates/chat`, `crates/documents`,
+- Used by: `crates/comms/channels`, `crates/email/email`, `crates/forms`, `crates/databases`,
+  `crates/projects`, `crates/comms/call`, `crates/comms/chat`, `crates/documents`,
   `crates/graphql/graphql_entity_mutation`, `crates/graphql/graphql_favorite`,
   `services/document_storage_service`.
 

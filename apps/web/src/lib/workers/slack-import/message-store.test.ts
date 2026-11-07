@@ -167,7 +167,7 @@ describe('exact normalization and disk-backed dedupe', () => {
   it('normalizes the shared Rust events fixture, strips ignored payloads and skips nonmessages/deletions', async () => {
     const records = readFileSync(
       new URL(
-        '../../../../../../crates/slack_integration/tests/fixtures/message-events.ndjson',
+        '../../../../../../crates/comms/slack_integration/tests/fixtures/message-events.ndjson',
         import.meta.url
       ),
       'utf8'

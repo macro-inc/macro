@@ -23,7 +23,7 @@ connected users.
 - Owns: the reqwest-based client to the connection gateway and its
   feature-specific convenience methods.
 - Not here: the gateway service itself → `services/connection_gateway`; a
-  domain port wrapping this client → `crates/connection`.
+  domain port wrapping this client → `crates/comms/connection`.
 
 ## Boundaries
 

@@ -22,7 +22,7 @@ through `call::domain::imports`.
 ## Scope
 
 - Owns: webhook lifecycle, delivery verification and deduplication, Granola note mapping.
-- Not here: call storage and reads → `crates/call`; Pipedream accounts → `crates/pipedream_mcp`.
+- Not here: call storage and reads → `crates/comms/call`; Pipedream accounts → `crates/pipedream_mcp`.
 
 ## Boundaries
 

@@ -31,7 +31,7 @@ pub const MACRO_API_TOKEN_PRIVATE_KEY: &str =
 /// no signature, but the email service signs every link it hands out. A test
 /// fixture, not a secret.
 pub const ATTACHMENT_LINK_SIGNING_KEY: &str = include_str!(
-    "../../../../../../crates/call/src/outbound/s3_recording_storage/test_private_key.pem"
+    "../../../../../../crates/comms/call/src/outbound/s3_recording_storage/test_private_key.pem"
 );
 
 /// The populate-JWT lambda id (the unlicensed local variant).

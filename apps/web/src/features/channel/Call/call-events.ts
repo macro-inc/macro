@@ -7,7 +7,7 @@ import { match } from 'ts-pattern';
 /**
  * Single source of truth for the call events broadcast over the connection
  * gateway websocket. The wire payloads are hand-rolled `serde_json::json!`
- * literals in `crates/call/src/domain/service.rs` — there are no generated
+ * literals in `crates/comms/call/src/domain/service.rs` — there are no generated
  * types for them — so the snake_case shapes below are mirrored by hand and kept
  * private to this module. Consumers only ever see the normalized camelCase
  * events.

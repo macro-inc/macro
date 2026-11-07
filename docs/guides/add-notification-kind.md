@@ -14,7 +14,7 @@ If the notification is about an entity type that has never carried notifications
 
 | Building | Copy | Why |
 | --- | --- | --- |
-| A kind on an existing entity, sent from a domain service | `ChannelMessageReaction` (`crates/channels/src/outbound/notification_sender.rs`) | Newest end-to-end kind: push, realtime, GraphQL, inbox stacking, settings toggle |
+| A kind on an existing entity, sent from a domain service | `ChannelMessageReaction` (`crates/comms/channels/src/outbound/notification_sender.rs`) | Newest end-to-end kind: push, realtime, GraphQL, inbox stacking, settings toggle |
 | Kinds planned from domain events, with derived ids | `AgentSession*` (`crates/agent_harness/src/domain/notifications.rs`) | Pure planner function, audience rules, idempotent ids, port + ingress adapter |
 | A scheduled kind | `CalendarEventReminder` (`crates/calendar/calendar_events/src/outbound/notification_notifier.rs`) | Fired by a poller, collapse key per occurrence |
 

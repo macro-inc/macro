@@ -15,7 +15,7 @@ section below is one place, in order; past misses are called out inline.
 | Adding | Copy | Why |
 | --- | --- | --- |
 | A topic | The `macro.messages` registration: `crates/platform/macro_event_topics/src/lib.rs`, its `test.rs`, `.github/kafka-cluster-topics.json` | Three files, shipped as its own PR ahead of the producer |
-| Events on a topic | `crates/github_pull_requests/src/broker.rs` (one variant), `crates/messages/src/outbound/broker.rs` (several) | Topic enum, keyed envelope, broker-backed adapter for a domain port |
+| Events on a topic | `crates/github_pull_requests/src/broker.rs` (one variant), `crates/comms/messages/src/outbound/broker.rs` (several) | Topic enum, keyed envelope, broker-backed adapter for a domain port |
 | A durable consumer | `crates/crm/src/inbound/call_archived.rs` | Smallest grouped consumer: poison commit, bounded retry, commit after work, cancel-safe |
 | An at-least-once consumer that must not skip | `crates/webhook/src/inbound/kafka_consumer.rs` | Transient vs permanent errors; exits uncommitted so a restart redelivers |
 | A per-process fan-out (GraphQL subscription, SSE) | `crates/agent_session_realtime/src/outbound/log_topic_consumer.rs` | Ungrouped, starts at `Latest`, commits nothing |
@@ -79,7 +79,7 @@ Put the types next to the domain that owns the fact
   There is no outbox; delivery is at most once relative to the write.
 - Tests: a recording `MacroEventBroker` that captures topic, key, and
   `serde_json::to_value(event.event())`, asserting the full JSON literal
-  (`crates/messages/src/outbound/broker/test.rs`). That literal is the wire
+  (`crates/comms/messages/src/outbound/broker/test.rs`). That literal is the wire
   contract.
 
 ## 4. Wire a real broker into every composition root

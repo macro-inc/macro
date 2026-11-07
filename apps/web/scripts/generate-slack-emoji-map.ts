@@ -4,7 +4,7 @@ import EmojibasePackage from 'emojibase-data/package.json';
 import OrderedEmojiData from 'unicode-emoji-json/data-ordered-emoji.json';
 import UnicodePackage from 'unicode-emoji-json/package.json';
 
-// Pinned provenance and licenses: crates/slack_integration/data/README.md.
+// Pinned provenance and licenses: crates/comms/slack_integration/data/README.md.
 if (
   EmojibasePackage.version !== '17.0.0' ||
   UnicodePackage.version !== '0.8.0'
@@ -15,7 +15,7 @@ if (
 }
 
 const outputPath = new URL(
-  '../../../crates/slack_integration/data/emoji-shortcodes.json',
+  '../../../crates/comms/slack_integration/data/emoji-shortcodes.json',
   import.meta.url
 );
 

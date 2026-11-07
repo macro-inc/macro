@@ -9,7 +9,7 @@ profile that other people see, such as a new profile picture.
 
 - Owns: `UserTopicEvent` and its metadata, keyed by user id.
 - Not here: publishing (the authentication service), fan-out to contacts →
-  `crates/contacts`, webhook delivery → `crates/webhook`.
+  `crates/comms/contacts`, webhook delivery → `crates/webhook`.
 
 ## Boundaries
 
