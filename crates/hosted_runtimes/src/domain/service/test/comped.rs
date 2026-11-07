@@ -20,6 +20,7 @@ async fn team_policy_controls_purchases_and_comped_computers_never_call_billing(
         },
         FakeBilling::default(),
         FixedClock,
+        StaticFleetAttachment(FleetAttachment::Attached),
     )
     .with_comp_policy(TeamCompPolicy)
     .with_rollout(super::rollout::enabled_rollout());
@@ -118,6 +119,7 @@ async fn comped_reservation_recovers_without_charging_and_release_skips_billing(
         },
         FakeBilling::default(),
         FixedClock,
+        StaticFleetAttachment(FleetAttachment::Attached),
     );
     let id = ComputerId::new_from_uuid(Uuid::from_u128(18));
     service
@@ -171,6 +173,7 @@ async fn comped_quote_preserves_stripe_terms_and_requires_a_subscription() {
                 ..FakeBilling::default()
             },
             FixedClock,
+            StaticFleetAttachment(FleetAttachment::Attached),
         )
         .with_comp_policy(TeamCompPolicy)
         .with_rollout(super::rollout::enabled_rollout());
@@ -205,7 +208,12 @@ async fn comped_quote_preserves_stripe_terms_and_requires_a_subscription() {
 
 #[tokio::test]
 async fn comped_purchase_rejects_subscription_items_before_reserving() {
-    let service = ComputerService::new(FakeRepo::default(), FakeBilling::default(), FixedClock);
+    let service = ComputerService::new(
+        FakeRepo::default(),
+        FakeBilling::default(),
+        FixedClock,
+        StaticFleetAttachment(FleetAttachment::Attached),
+    );
     let result = service
         .purchase(PurchaseRequest {
             billing: PurchaseBilling::Comped {
@@ -246,6 +254,7 @@ async fn policy_failure_cannot_reserve_or_charge_a_computer() {
         },
         FakeBilling::default(),
         FixedClock,
+        StaticFleetAttachment(FleetAttachment::Attached),
     )
     .with_comp_policy(UnavailablePolicy)
     .with_rollout(super::rollout::enabled_rollout());

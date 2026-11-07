@@ -131,13 +131,17 @@ impl Operator {
 }
 
 /// Build the operator from explicit config, or `None` when this deployment
-/// runs no computers (`COMPUTERS_FLEET=disabled`).
+/// has no attached computer fleet (`COMPUTERS_FLEET` is absent).
 pub(crate) async fn operator(
     config: &Config,
-    fleet_config: ComputerFleetConfig,
+    fleet_config: Option<ComputerFleetConfig>,
     pool: &PgPool,
     harnesses: Arc<dyn HostedHarnessService>,
 ) -> anyhow::Result<Option<Arc<Operator>>> {
+    let Some(fleet_config) = fleet_config else {
+        tracing::warn!("no computer fleet attached; computer routes are unavailable");
+        return Ok(None);
+    };
     let fleet = match fleet_config {
         ComputerFleetConfig::Incus(settings) => ConfiguredFleet::Incus(
             IncusFleet::new(IncusFleetConfig {
@@ -194,7 +198,6 @@ pub(crate) async fn operator(
             )
             .context("could not build the Docker fleet")?,
         ),
-        ComputerFleetConfig::Disabled => return Ok(None),
     };
 
     let service_url_overrides = service_url_overrides()?;

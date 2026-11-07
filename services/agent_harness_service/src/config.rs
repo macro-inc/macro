@@ -149,8 +149,8 @@ pub struct Config {
     /// The environment we are in.
     #[macro_config_default(Environment::new_or_prod())]
     pub environment: Environment,
-    /// Required fleet selection; only `disabled` runs no control plane.
-    pub computers_fleet: ComputerFleetKind,
+    /// Optional physical fleet selection; absence attaches no computer fleet.
+    pub computers_fleet: Option<ComputerFleetKind>,
     /// Dedicated OAuth encryption key; absent deployments keep Codex unavailable.
     pub codex_oauth_kms_key_id: CodexOauthKmsKeyId,
     /// Comma-separated Kafka bootstrap servers.
@@ -417,31 +417,42 @@ macro_env_var::maybe_env_vars! {
 pub enum ComputerFleetKind {
     Incus,
     Docker,
-    Disabled,
 }
 
 /// Required settings for the selected fleet; unselected groups are not loaded.
 pub enum ComputerFleetConfig {
     Incus(IncusFleetSettings),
     Docker(DockerFleetSettings),
-    Disabled,
 }
 
 impl Config {
+    /// Docker fleets are local infrastructure, never a deployed fallback.
+    pub fn validate_fleet_selection(&self) -> macro_config::MacroConfigResult<()> {
+        if matches!(self.computers_fleet, Some(ComputerFleetKind::Docker))
+            && !matches!(self.environment, Environment::Local)
+        {
+            return Err(macro_config::MacroConfigError::Deserialize(
+                "COMPUTERS_FLEET=docker is only available in local environments".to_owned(),
+            ));
+        }
+        Ok(())
+    }
+
     /// Load only the required settings for the explicitly selected fleet.
-    pub fn computer_fleet(&self) -> macro_config::MacroConfigResult<ComputerFleetConfig> {
+    pub fn computer_fleet(&self) -> macro_config::MacroConfigResult<Option<ComputerFleetConfig>> {
+        self.validate_fleet_selection()?;
         match self.computers_fleet {
-            ComputerFleetKind::Incus => {
+            Some(ComputerFleetKind::Incus) => {
                 let settings: IncusFleetSettings = macro_config::load()?;
                 settings.validate()?;
-                Ok(ComputerFleetConfig::Incus(settings))
+                Ok(Some(ComputerFleetConfig::Incus(settings)))
             }
-            ComputerFleetKind::Docker => {
+            Some(ComputerFleetKind::Docker) => {
                 let settings: DockerFleetSettings = macro_config::load()?;
                 settings.validate()?;
-                Ok(ComputerFleetConfig::Docker(settings))
+                Ok(Some(ComputerFleetConfig::Docker(settings)))
             }
-            ComputerFleetKind::Disabled => Ok(ComputerFleetConfig::Disabled),
+            None => Ok(None),
         }
     }
 }

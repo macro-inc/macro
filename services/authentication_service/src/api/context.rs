@@ -142,6 +142,7 @@ pub(crate) type TeamAgentsServiceType = team_agents::domain::service::TeamAgentS
         crate::outbound::computer_billing::TeamComputerBilling<TeamsServiceType>,
         hosted_runtimes::domain::service::SystemClock,
         harnesses::outbound::pg_harness_repo::PgHarnessRepo,
+        hosted_runtimes::outbound::pg::PgComputerRepo,
         StaffCompPolicyType,
     >,
     team_agents::outbound::agent_git_repos::AgentGitRepos,
@@ -213,6 +214,7 @@ pub(crate) type ComputerServiceType = hosted_runtimes::domain::service::Computer
     hosted_runtimes::outbound::pg::PgComputerRepo,
     crate::outbound::computer_billing::TeamComputerBilling<TeamsServiceType>,
     hosted_runtimes::domain::service::SystemClock,
+    hosted_runtimes::outbound::pg::PgComputerRepo,
     StaffCompPolicyType,
 >;
 

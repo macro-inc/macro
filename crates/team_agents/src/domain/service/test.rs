@@ -69,6 +69,7 @@ struct FakeRepository {
     admin_verified_email: Option<String>,
     journal: Arc<Journal>,
     agents: Mutex<Vec<StoredAgent>>,
+    get_calls: Mutex<usize>,
 }
 
 impl FakeRepository {
@@ -114,6 +115,7 @@ impl TeamAgentRepository for FakeRepository {
     }
 
     async fn get(&self, user_id: &MacroUserIdStr<'_>) -> Result<Option<TeamAgent>, Self::Err> {
+        *self.get_calls.lock().unwrap() += 1;
         Ok(self
             .agents
             .lock()
@@ -341,11 +343,23 @@ struct FakeComputers {
     interval: BillingInterval,
     status: ComputerStatus,
     unavailable: bool,
+    attached: bool,
+    attachment_calls: Mutex<usize>,
+    catalog_calls: Mutex<usize>,
     harness_id: Mutex<Option<harness_id::HarnessId>>,
 }
 
 impl Computers for FakeComputers {
+    async fn require_attached(&self) -> Result<(), TeamAgentError> {
+        *self.attachment_calls.lock().unwrap() += 1;
+        if !self.attached {
+            return Err(hosted_runtimes::domain::models::FleetUnavailable.into());
+        }
+        Ok(())
+    }
+
     fn sizes(&self) -> Vec<crate::domain::models::ComputerSizeSpec> {
+        *self.catalog_calls.lock().unwrap() += 1;
         vec![crate::domain::models::ComputerSizeSpec {
             size: ComputerSize::Large,
             vcpus: 8,
@@ -589,6 +603,7 @@ fn build(setup: Setup) -> (Service, Arc<Journal>) {
             admin_verified_email: setup.admin_verified_email,
             journal: journal.clone(),
             agents: Mutex::new(vec![]),
+            get_calls: Mutex::new(0),
         },
         FakeMembership {
             journal: journal.clone(),
@@ -607,6 +622,9 @@ fn build(setup: Setup) -> (Service, Arc<Journal>) {
             interval: setup.computer_interval,
             status: setup.computer_status,
             unavailable: false,
+            attached: true,
+            attachment_calls: Mutex::new(0),
+            catalog_calls: Mutex::new(0),
             harness_id: Mutex::new(None),
         },
         FakeRepos {
@@ -2192,4 +2210,159 @@ async fn invalid_git_environment_preflight_touches_neither_credential_issuer() {
         journal.steps().is_empty(),
         "invalid preflight must not mint a key or create/reissue a repo"
     );
+}
+
+#[tokio::test]
+async fn detached_fleet_is_transient_and_agent_removal_still_uses_saved_payment() {
+    for payment in [ComputerPayment::Paid, ComputerPayment::Comped] {
+        let (mut service, journal) = build(Setup {
+            computer_status: ComputerStatus {
+                payment,
+                status: ComputerStatusKind::Ready,
+                setup: None,
+                brain: Some(healthy_brain()),
+            },
+            ..Setup::default()
+        });
+        let agent = service.create(receipt(TEAM_ID), request()).await.unwrap();
+        assert_eq!(agent.status, TeamAgentStatus::Running);
+        service.computers.status.status = ComputerStatusKind::Unavailable;
+        service.computers.status.brain = None;
+        let unavailable = service.me(&agent.user_id).await.unwrap();
+        assert_eq!(unavailable.status, TeamAgentStatus::Unhealthy);
+        assert_eq!(
+            unavailable.status_reason.as_deref(),
+            Some("computers are not available")
+        );
+        assert_eq!(unavailable.payment, Some(payment));
+        assert!(!unavailable.retryable);
+        let saved = service
+            .repository
+            .get(&agent.user_id)
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(saved.status, TeamAgentStatus::Running);
+        assert_eq!(saved.status_reason, None);
+        service.computers.status.status = ComputerStatusKind::Ready;
+        service.computers.status.brain = Some(healthy_brain());
+        let recovered = service.me(&agent.user_id).await.unwrap();
+        assert_eq!(recovered.status, TeamAgentStatus::Running);
+        assert_eq!(recovered.status_reason, None);
+
+        service.computers.status.status = ComputerStatusKind::Unavailable;
+        service
+            .delete(receipt(TEAM_ID), &agent.user_id)
+            .await
+            .unwrap();
+        let steps = journal.steps();
+        assert!(steps.contains(&"computer.release"));
+        assert!(steps.contains(&"repo.delete"));
+        assert!(steps.contains(&if payment == ComputerPayment::Comped {
+            "team.undo"
+        } else {
+            "team.remove"
+        }));
+    }
+}
+
+#[tokio::test]
+async fn detached_management_quote_precedes_catalog_and_prices_for_paid_and_included_teams() {
+    for included in [false, true] {
+        let (mut service, journal) = build(Setup {
+            admin_verified_email: included.then(|| "admin@staff.example.com".to_owned()),
+            ..Setup::default()
+        });
+        service.computers.attached = false;
+        assert!(matches!(
+            service
+                .quote(receipt(TEAM_ID), ComputerSize::Standard)
+                .await,
+            Err(TeamAgentError::FleetUnavailable(_))
+        ));
+        assert_eq!(*service.computers.attachment_calls.lock().unwrap(), 1);
+        assert_eq!(*service.computers.catalog_calls.lock().unwrap(), 0);
+        assert_eq!(*service.repository.get_calls.lock().unwrap(), 0);
+        assert!(journal.steps().is_empty());
+
+        service.rollout = TeamAgentRollout::new(None);
+        assert!(matches!(
+            service
+                .quote(receipt(TEAM_ID), ComputerSize::Standard)
+                .await,
+            Err(TeamAgentError::NotEnabled)
+        ));
+        assert_eq!(*service.computers.attachment_calls.lock().unwrap(), 1);
+    }
+}
+
+#[tokio::test]
+async fn detached_management_create_precedes_account_and_repo_setup_for_paid_and_included_teams() {
+    for included in [false, true] {
+        let (mut service, journal) = build(Setup {
+            admin_verified_email: included.then(|| "admin@staff.example.com".to_owned()),
+            ..Setup::default()
+        });
+        service.computers.attached = false;
+        let mut input = request();
+        input.expected_included = included;
+        assert!(matches!(
+            service.create(receipt(TEAM_ID), input.clone()).await,
+            Err(TeamAgentError::FleetUnavailable(_))
+        ));
+        assert_eq!(*service.computers.attachment_calls.lock().unwrap(), 1);
+        assert_eq!(*service.computers.catalog_calls.lock().unwrap(), 0);
+        assert!(service.repository.agents.lock().unwrap().is_empty());
+        assert!(service.computers.purchases.lock().unwrap().is_empty());
+        assert!(journal.steps().is_empty());
+
+        service.rollout = TeamAgentRollout::new(None);
+        assert!(matches!(
+            service.create(receipt(TEAM_ID), input).await,
+            Err(TeamAgentError::NotEnabled)
+        ));
+        assert_eq!(*service.computers.attachment_calls.lock().unwrap(), 1);
+    }
+}
+
+#[tokio::test]
+async fn detached_management_retry_precedes_roster_projection_for_paid_and_included_agents() {
+    for payment in [ComputerPayment::Paid, ComputerPayment::Comped] {
+        let (mut service, journal) = build(Setup {
+            computer_status: ComputerStatus {
+                payment,
+                status: ComputerStatusKind::Ready,
+                brain: Some(healthy_brain()),
+                setup: None,
+            },
+            ..Setup::default()
+        });
+        let agent = service.create(receipt(TEAM_ID), request()).await.unwrap();
+        service.computers.attached = false;
+        service.computers.status.status = ComputerStatusKind::Unavailable;
+        service.computers.status.brain = None;
+        let reads = *service.repository.get_calls.lock().unwrap();
+        let steps = journal.steps();
+        let attachment_calls = *service.computers.attachment_calls.lock().unwrap();
+        assert!(matches!(
+            service.retry(receipt(TEAM_ID), &agent.user_id).await,
+            Err(TeamAgentError::FleetUnavailable(_))
+        ));
+        assert_eq!(
+            *service.computers.attachment_calls.lock().unwrap(),
+            attachment_calls + 1
+        );
+        assert_eq!(*service.repository.get_calls.lock().unwrap(), reads);
+        assert_eq!(journal.steps(), steps);
+
+        service.rollout = TeamAgentRollout::new(None);
+        assert!(matches!(
+            service.retry(receipt(TEAM_ID), &agent.user_id).await,
+            Err(TeamAgentError::NotEnabled)
+        ));
+        assert_eq!(
+            *service.computers.attachment_calls.lock().unwrap(),
+            attachment_calls + 1
+        );
+    }
 }

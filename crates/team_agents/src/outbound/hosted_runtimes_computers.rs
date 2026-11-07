@@ -8,7 +8,7 @@ use harnesses::domain::{models::PersonaHealth, ports::HarnessRepo};
 use hosted_runtimes::domain::{
     lifecycle::PaymentOutcome,
     models,
-    ports::{Billing, BillingError, CompPolicy, ComputerRepo, NoComps},
+    ports::{Billing, BillingError, CompPolicy, ComputerRepo, FleetAttachmentSource, NoComps},
     service::{Clock, ComputerError, ComputerService},
 };
 use uuid::Uuid;
@@ -23,17 +23,26 @@ use crate::domain::ports::Computers;
 mod test;
 
 /// Buys and manages computers using the same service as the team computers API.
-pub struct HostedRuntimesComputers<Repo, Bill, Time, Harness, Policy = NoComps> {
-    service: Arc<ComputerService<Repo, Bill, Time, Policy>>,
+pub struct HostedRuntimesComputers<
+    Repo,
+    Bill,
+    Time,
+    Harness,
+    Attachment: FleetAttachmentSource,
+    Policy = NoComps,
+> {
+    service: Arc<ComputerService<Repo, Bill, Time, Attachment, Policy>>,
     repo: Repo,
     harnesses: Harness,
 }
 
-impl<Repo, Bill, Time, Harness, Policy> HostedRuntimesComputers<Repo, Bill, Time, Harness, Policy> {
+impl<Repo, Bill, Time, Harness, Attachment: FleetAttachmentSource, Policy>
+    HostedRuntimesComputers<Repo, Bill, Time, Harness, Attachment, Policy>
+{
     /// Shares the computer service and a clone of its repository.
     /// The repository supplies saved bootstrap personas for recovery.
     pub fn new(
-        service: Arc<ComputerService<Repo, Bill, Time, Policy>>,
+        service: Arc<ComputerService<Repo, Bill, Time, Attachment, Policy>>,
         repo: Repo,
         harnesses: Harness,
     ) -> Self {
@@ -45,9 +54,19 @@ impl<Repo, Bill, Time, Harness, Policy> HostedRuntimesComputers<Repo, Bill, Time
     }
 }
 
-impl<Repo: ComputerRepo, Bill: Billing, Time: Clock, Harness: HarnessRepo, Policy: CompPolicy>
-    Computers for HostedRuntimesComputers<Repo, Bill, Time, Harness, Policy>
+impl<
+    Repo: ComputerRepo,
+    Bill: Billing,
+    Time: Clock,
+    Harness: HarnessRepo,
+    Attachment: FleetAttachmentSource,
+    Policy: CompPolicy,
+> Computers for HostedRuntimesComputers<Repo, Bill, Time, Harness, Attachment, Policy>
 {
+    async fn require_attached(&self) -> Result<(), TeamAgentError> {
+        self.service.require_attached().await.map_err(error)
+    }
+
     fn sizes(&self) -> Vec<ComputerSizeSpec> {
         self.service
             .catalog()
@@ -114,10 +133,21 @@ impl<Repo: ComputerRepo, Bill: Billing, Time: Clock, Harness: HarnessRepo, Polic
     ) -> Result<ComputerStatus, TeamAgentError> {
         let status = self
             .service
-            .status(team_id, computer_id)
+            .maintenance()
+            .status_for_roster(team_id, computer_id)
             .await
             .map_err(error)?;
-        let mut status = computer_status(status)?;
+        let availability = status.availability;
+        let mut status = computer_status(status.status)?;
+        if availability == models::FleetAttachment::Detached {
+            if !matches!(
+                status.status,
+                ComputerStatusKind::Failed | ComputerStatusKind::Released
+            ) {
+                status.status = ComputerStatusKind::Unavailable;
+            }
+            return Ok(status);
+        }
         match self.brain_health(team_id, computer_id).await {
             Ok(brain) => status.brain = brain,
             Err(source) => {
@@ -191,17 +221,10 @@ impl<Repo: ComputerRepo, Bill: Billing, Time: Clock, Harness: HarnessRepo, Polic
 
     #[tracing::instrument(skip_all, fields(%team_id, %computer_id), err)]
     async fn release(&self, team_id: Uuid, computer_id: ComputerId) -> Result<(), TeamAgentError> {
-        let status = match self.service.status(team_id, computer_id).await {
-            Ok(status) => status,
-            Err(ComputerError::NotFound) => return Ok(()),
-            Err(source) => return Err(error(source)),
-        };
-        if status.status == models::ComputerStatusKind::Released {
-            return Ok(());
-        }
         match self
             .service
-            .release_now(team_id, computer_id, status.name.as_str())
+            .maintenance()
+            .request_release(team_id, computer_id)
             .await
         {
             Ok(_) | Err(ComputerError::NotFound) => Ok(()),
@@ -210,8 +233,14 @@ impl<Repo: ComputerRepo, Bill: Billing, Time: Clock, Harness: HarnessRepo, Polic
     }
 }
 
-impl<Repo: ComputerRepo, Bill, Time, Harness: HarnessRepo, Policy>
-    HostedRuntimesComputers<Repo, Bill, Time, Harness, Policy>
+impl<
+    Repo: ComputerRepo,
+    Bill,
+    Time,
+    Harness: HarnessRepo,
+    Attachment: FleetAttachmentSource,
+    Policy,
+> HostedRuntimesComputers<Repo, Bill, Time, Harness, Attachment, Policy>
 {
     #[tracing::instrument(skip_all, fields(%team_id, %computer_id), err)]
     async fn brain_health(
@@ -315,6 +344,7 @@ fn error(source: ComputerError) -> TeamAgentError {
         ComputerError::BadRequest(message) => TeamAgentError::BadRequest(message),
         ComputerError::NotFailed => TeamAgentError::RetryUnavailable(source.to_string()),
         ComputerError::Billing(BillingError::NoSubscription) => TeamAgentError::NoSubscription,
+        ComputerError::FleetUnavailable(reason) => TeamAgentError::FleetUnavailable(reason),
         ComputerError::SoldOut
         | ComputerError::Billing(BillingError::NotAvailable)
         | ComputerError::Billing(BillingError::IntervalNotSold(_) | BillingError::PaymentFailed) => {
@@ -327,8 +357,14 @@ fn error(source: ComputerError) -> TeamAgentError {
     }
 }
 
-impl<Repo: ComputerRepo, Bill: Billing, Time: Clock, Harness: HarnessRepo, Policy: CompPolicy>
-    HostedRuntimesComputers<Repo, Bill, Time, Harness, Policy>
+impl<
+    Repo: ComputerRepo,
+    Bill: Billing,
+    Time: Clock,
+    Harness: HarnessRepo,
+    Attachment: FleetAttachmentSource,
+    Policy: CompPolicy,
+> HostedRuntimesComputers<Repo, Bill, Time, Harness, Attachment, Policy>
 {
     async fn purchase_with_billing(
         &self,
@@ -410,9 +446,10 @@ impl<
     Bill: Send + Sync + 'static,
     Time: Send + Sync + 'static,
     Harness: Send + Sync + 'static,
+    Attachment: FleetAttachmentSource,
     Policy: Send + Sync + 'static,
 > crate::domain::enrollment::EnrollmentComputers
-    for HostedRuntimesComputers<Repo, Bill, Time, Harness, Policy>
+    for HostedRuntimesComputers<Repo, Bill, Time, Harness, Attachment, Policy>
 {
     async fn enrollment_computer(
         &self,

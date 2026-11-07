@@ -10,6 +10,7 @@ async fn quarantine_is_visible_only_to_its_team_and_refuses_lifecycle_commands()
         },
         FakeBilling::default(),
         FixedClock,
+        StaticFleetAttachment(FleetAttachment::Attached),
     );
     let id = service
         .purchase(PurchaseRequest {

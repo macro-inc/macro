@@ -10,7 +10,7 @@
 //! - `incus`: VMs on `runtime-dev-1`, reached directly over Tailscale.
 //!   Resolve the runtime's IPv4 address before generating compose env so
 //!   containers do not depend on MagicDNS. Guests dial the devbox tailnet directly.
-//! - `off`: no control plane; explicitly sets `COMPUTERS_FLEET=disabled`.
+//! - `off`: no attached fleet; emits no `COMPUTERS_*` settings.
 
 use std::collections::BTreeMap;
 use std::io::Write;
@@ -170,7 +170,7 @@ impl Computers {
     /// hold the stack's in-network service URLs (`LocalEnv::to_env`).
     pub fn write_env(&self, env: &mut BTreeMap<String, String>) -> Result<()> {
         let computers = match self.fleet {
-            Fleet::Off => BTreeMap::from([("COMPUTERS_FLEET".into(), "disabled".into())]),
+            Fleet::Off => BTreeMap::new(),
             Fleet::Docker => self.docker_env(env)?,
             Fleet::Incus => {
                 let network = IncusNetwork::load()?;

@@ -15,7 +15,10 @@ use hosted_runtimes::domain::{
         BillingInterval, Computer, ComputerRecord, Host, HostRegistration, NewComputer, Quote,
         SubscriptionItem,
     },
-    ports::{Billing, BillingError, ComputerRepo, DueTimer, PendingEffect, ReserveError},
+    ports::{
+        Billing, BillingError, ComputerRepo, DueTimer, PendingEffect, ReserveError,
+        StaticFleetAttachment,
+    },
     service::{Clock, ComputerService},
     size::{CatalogEntry, ComputerSize, current_catalog},
 };
@@ -57,6 +60,10 @@ impl ComputerRepo for FakeRepo {
     type Err = FakeError;
     type PaymentGuard = ();
     type EnrollmentGuard = ();
+
+    async fn heartbeat_host(&self, _host: HostId, _at: DateTime<Utc>) -> Result<(), FakeError> {
+        Ok(())
+    }
 
     async fn lock_enrollment(&self, _computer_id: ComputerId) -> Result<(), FakeError> {
         Ok(())
@@ -460,7 +467,12 @@ async fn purchase_sends_the_persona_and_seat_through_one_billing_update() {
     let billing = FakeBilling::default();
     let updates = billing.updates.clone();
     let service = HostedRuntimesComputers::new(
-        Arc::new(ComputerService::new(repo.clone(), billing, FixedClock)),
+        Arc::new(ComputerService::new(
+            repo.clone(),
+            billing,
+            FixedClock,
+            StaticFleetAttachment(hosted_runtimes::domain::models::FleetAttachment::Attached),
+        )),
         repo,
         harnesses::domain::ports::MockHarnessRepo::new(),
     );
@@ -616,6 +628,7 @@ async fn declined_purchase_reports_unavailable_and_releases_reserved_capacity() 
                 ..Default::default()
             },
             FixedClock,
+            StaticFleetAttachment(hosted_runtimes::domain::models::FleetAttachment::Attached),
         )),
         repo,
         harnesses::domain::ports::MockHarnessRepo::new(),
@@ -657,6 +670,7 @@ async fn billing_provider_failures_remain_upstream_errors() {
                 ..Default::default()
             },
             FixedClock,
+            StaticFleetAttachment(hosted_runtimes::domain::models::FleetAttachment::Attached),
         )),
         repo,
         harnesses::domain::ports::MockHarnessRepo::new(),
@@ -686,7 +700,12 @@ async fn payment_errors_recover_the_durable_computer_and_its_payment_status() {
         };
         let updates = billing.updates.clone();
         let computers = HostedRuntimesComputers::new(
-            Arc::new(ComputerService::new(repo.clone(), billing, FixedClock)),
+            Arc::new(ComputerService::new(
+                repo.clone(),
+                billing,
+                FixedClock,
+                StaticFleetAttachment(hosted_runtimes::domain::models::FleetAttachment::Attached),
+            )),
             repo.clone(),
             harnesses::domain::ports::MockHarnessRepo::new(),
         );
@@ -883,6 +902,9 @@ async fn status_reads_only_the_enrolled_persona_from_the_computers_own_harness()
                     repo.clone(),
                     FakeBilling::default(),
                     FixedClock,
+                    StaticFleetAttachment(
+                        hosted_runtimes::domain::models::FleetAttachment::Attached,
+                    ),
                 )),
                 repo,
                 harnesses,
@@ -911,6 +933,7 @@ async fn catalog_is_available_without_billing_and_quote_preserves_no_subscriptio
                 ..Default::default()
             },
             FixedClock,
+            StaticFleetAttachment(hosted_runtimes::domain::models::FleetAttachment::Attached),
         )),
         repo,
         harnesses::domain::ports::MockHarnessRepo::new(),
@@ -957,7 +980,13 @@ async fn configured_catalog_drives_sizes_quotes_and_reserved_resources() {
     let calls = billing.calls.clone();
     let adapter = HostedRuntimesComputers::new(
         Arc::new(
-            ComputerService::new(repo.clone(), billing, FixedClock).with_catalog(catalog.clone()),
+            ComputerService::new(
+                repo.clone(),
+                billing,
+                FixedClock,
+                StaticFleetAttachment(hosted_runtimes::domain::models::FleetAttachment::Attached),
+            )
+            .with_catalog(catalog.clone()),
         ),
         repo.clone(),
         harnesses::domain::ports::MockHarnessRepo::new(),
@@ -1006,7 +1035,12 @@ async fn comped_purchase_and_release_never_consult_billing() {
     let calls = billing.calls.clone();
     let saved = repo.computers.clone();
     let adapter = HostedRuntimesComputers::new(
-        Arc::new(ComputerService::new(repo.clone(), billing, FixedClock)),
+        Arc::new(ComputerService::new(
+            repo.clone(),
+            billing,
+            FixedClock,
+            StaticFleetAttachment(hosted_runtimes::domain::models::FleetAttachment::Attached),
+        )),
         repo,
         harnesses::domain::ports::MockHarnessRepo::new(),
     );
@@ -1039,4 +1073,64 @@ async fn comped_purchase_and_release_never_consult_billing() {
         .await
         .expect("release comped computer");
     assert_eq!(calls.load(std::sync::atomic::Ordering::SeqCst), 0);
+}
+
+#[tokio::test]
+async fn detached_fleet_keeps_catalog_roster_payment_and_queues_agent_release() {
+    use hosted_runtimes::domain::models::FleetAttachment;
+    let repo = FakeRepo {
+        sold_units: 4,
+        ..Default::default()
+    };
+    let billing = FakeBilling::default();
+    let attached = HostedRuntimesComputers::new(
+        Arc::new(ComputerService::new(
+            repo.clone(),
+            billing,
+            FixedClock,
+            StaticFleetAttachment(FleetAttachment::Attached),
+        )),
+        repo.clone(),
+        harnesses::domain::ports::MockHarnessRepo::new(),
+    );
+    let id = attached
+        .purchase(agent::ComputerPurchase {
+            team_id: TEAM,
+            created_by: MacroUserIdStr::parse_from_str("macro|admin@example.com")
+                .unwrap()
+                .into_owned(),
+            size: agent::ComputerSize::Standard,
+            name: Some("Agent".to_owned()),
+            persona: None,
+            extra_items: vec![],
+        })
+        .await
+        .unwrap();
+    let detached = HostedRuntimesComputers::new(
+        Arc::new(ComputerService::new(
+            repo.clone(),
+            FakeBilling::default(),
+            FixedClock,
+            StaticFleetAttachment(FleetAttachment::Detached),
+        )),
+        repo.clone(),
+        harnesses::domain::ports::MockHarnessRepo::new(),
+    );
+    assert_eq!(detached.sizes(), attached.sizes());
+    let status = detached.status(TEAM, id).await.unwrap();
+    assert_eq!(status.payment, agent::ComputerPayment::Paid);
+    assert_eq!(status.status, agent::ComputerStatusKind::Unavailable);
+    assert!(matches!(
+        detached.quote(TEAM, agent::ComputerSize::Standard).await,
+        Err(agent::TeamAgentError::FleetUnavailable(_))
+    ));
+    detached.release(TEAM, id).await.unwrap();
+    assert!(
+        repo.events
+            .lock()
+            .unwrap()
+            .iter()
+            .any(|(computer, event)| *computer == id && matches!(event, Event::ReleaseNow))
+    );
+    assert!(repo.get(id).await.unwrap().is_some());
 }

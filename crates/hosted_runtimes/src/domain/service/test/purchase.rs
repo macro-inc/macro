@@ -11,6 +11,7 @@ async fn both_stripe_purchase_entry_points_provision_before_returning() {
             },
             FakeBilling::default(),
             FixedClock,
+            StaticFleetAttachment(FleetAttachment::Attached),
         )
         .with_rollout(super::rollout::enabled_rollout());
         let request = PurchaseRequest {
@@ -94,6 +95,7 @@ async fn comped_purchase_needs_no_post_reservation_payment_write() {
         },
         FakeBilling::default(),
         FixedClock,
+        StaticFleetAttachment(FleetAttachment::Attached),
     );
     let id = service
         .purchase(PurchaseRequest {
@@ -153,6 +155,7 @@ async fn unknown_payment_is_creating_while_delayed_recovery_stays_pending() {
                 ..FakeBilling::default()
             },
             FixedClock,
+            StaticFleetAttachment(FleetAttachment::Attached),
         );
         assert!(
             service

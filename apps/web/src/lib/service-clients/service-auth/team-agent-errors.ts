@@ -58,3 +58,11 @@ export const teamAgentCreateErrorResponseHandler: ErrorResponseHandler<
   }
   return statusError(response.status);
 };
+
+/** Only computer discovery uses 503 to report an unattached fleet. */
+export const teamAgentComputerErrorResponseHandler: ErrorResponseHandler<
+  'COMPUTERS_UNAVAILABLE'
+> = async (response) =>
+  response.status === 503
+    ? { code: 'COMPUTERS_UNAVAILABLE', message: 'Computers are not available.' }
+    : statusError(response.status);

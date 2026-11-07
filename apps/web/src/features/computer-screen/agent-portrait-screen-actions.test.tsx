@@ -10,6 +10,7 @@ const mocks = vi.hoisted(() => ({
   capability: true,
   access: 'read' as Harness['access'],
   paired: true,
+  unavailable: false,
   visible: true,
   open: vi.fn(),
   interaction: vi.fn(() => ({ end: vi.fn() })),
@@ -48,11 +49,13 @@ vi.mock('@queries/team-agents', () => ({
       isPending: false,
       get data() {
         return enabled()
-          ? {
-              computerId: 'computer-1',
-              harnessId: mocks.paired ? 'runtime-1' : null,
-              isAgentComputer: true,
-            }
+          ? mocks.unavailable
+            ? null
+            : {
+                computerId: 'computer-1',
+                harnessId: mocks.paired ? 'runtime-1' : null,
+                isAgentComputer: true,
+              }
           : undefined;
       },
     };
@@ -96,6 +99,7 @@ beforeEach(() => {
   mocks.mobile = false;
   mocks.capability = true;
   mocks.paired = true;
+  mocks.unavailable = false;
   mocks.visible = true;
   mocks.access = 'read';
   mocks.local = true;
@@ -241,4 +245,12 @@ it('hides portrait screen entries for access none while preserving read and resi
   expect(mocks.request).not.toHaveBeenCalled();
   expect(mocks.settings).not.toHaveBeenCalled();
   expect(onSelect).not.toHaveBeenCalled();
+});
+
+it('hides portrait screen actions when discovery reports no fleet', () => {
+  mocks.unavailable = true;
+  render(() => <AgentPortraitScreenActions userId="macro|agent@example.com" />);
+  expect(screen.queryByRole('button', { name: 'Show screen' })).toBeNull();
+  expect(screen.queryByRole('button', { name: 'Take control' })).toBeNull();
+  expect(mocks.open).not.toHaveBeenCalled();
 });

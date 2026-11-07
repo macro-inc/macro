@@ -103,6 +103,7 @@ import type { UserNames } from './generated/schemas/userNames';
 import type { UserOrganizationResponse } from './generated/schemas/userOrganizationResponse';
 import type { UserTokensResponse } from './generated/schemas/userTokensResponse';
 import {
+  teamAgentComputerErrorResponseHandler,
   teamAgentCreateErrorResponseHandler,
   teamAgentQuoteErrorResponseHandler,
 } from './team-agent-errors';
@@ -1387,9 +1388,13 @@ export const authServiceClient = {
   },
 
   getTeamAgentComputer(userId: string) {
-    return fetchWithAuth<TeamAgentComputer>(
+    return fetchWithAuth<TeamAgentComputer, 'COMPUTERS_UNAVAILABLE'>(
       `${authHost}/team_agents/${encodeURIComponent(userId)}/computer`,
-      { method: 'GET' }
+      {
+        method: 'GET',
+        errorResponseHandler: teamAgentComputerErrorResponseHandler,
+        trace: { expectedStatusCodes: [503] },
+      }
     );
   },
   getTeamAgentVoice(userId: string) {

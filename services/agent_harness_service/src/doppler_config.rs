@@ -63,20 +63,21 @@ async fn main() -> anyhow::Result<()> {
 async fn validate_config(loader: &doppler_config::DopplerConfig) -> anyhow::Result<()> {
     let config = loader.load::<config::Config>().await?;
     config.livekit_credentials()?;
+    config.validate_fleet_selection()?;
     match config.computers_fleet {
-        config::ComputerFleetKind::Incus => {
+        Some(config::ComputerFleetKind::Incus) => {
             loader
                 .load::<config::IncusFleetSettings>()
                 .await?
                 .validate()?;
         }
-        config::ComputerFleetKind::Docker => {
+        Some(config::ComputerFleetKind::Docker) => {
             loader
                 .load::<config::DockerFleetSettings>()
                 .await?
                 .validate()?;
         }
-        config::ComputerFleetKind::Disabled => {}
+        None => {}
     }
     Ok(())
 }

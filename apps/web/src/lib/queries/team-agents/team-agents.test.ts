@@ -1,6 +1,8 @@
 import type { TeamAgent } from '@service-auth/generated/schemas';
+import { cleanup, renderHook, waitFor } from '@solidjs/testing-library';
 import { focusManager, QueryObserver } from '@tanstack/query-core';
-import { ok } from 'neverthrow';
+import { err, ok } from 'neverthrow';
+import { createComponent } from 'solid-js';
 import { describe, expect, it, vi } from 'vitest';
 
 vi.mock('@service-auth/client', () => ({
@@ -8,15 +10,20 @@ vi.mock('@service-auth/client', () => ({
     getTeamAgentSizes: vi.fn(),
     quoteTeamAgent: vi.fn(),
     listTeamAgents: vi.fn(),
+    getTeamAgentComputer: vi.fn(),
   },
 }));
 
 import { authServiceClient } from '@service-auth/client';
-import { QueryClient } from '@tanstack/solid-query';
+import { QueryClient, QueryClientProvider } from '@tanstack/solid-query';
 import {
+  teamAgentComputerAvailabilityQueryOptions,
+  teamAgentComputerQueryOptions,
   teamAgentQuoteQueryOptions,
   teamAgentSizesQueryOptions,
   teamAgentsQueryOptions,
+  useTeamAgentComputerAvailability,
+  useTeamAgentComputerMutation,
 } from './index';
 
 describe('team agents queries', () => {
@@ -148,5 +155,170 @@ it('loads the independent catalog even when quoting rejects an inactive subscrip
     }
   } finally {
     client.clear();
+  }
+});
+
+it('caches discovery 503 as absence, avoids roster prefetch and recovers after reattachment', async () => {
+  const { queryClient } = await import('../client');
+  const { teamAgentKeys } = await import('./keys');
+  vi.useFakeTimers();
+  vi.mocked(authServiceClient.getTeamAgentComputer).mockReset();
+  queryClient.clear();
+  const computer = {
+    computerId: 'computer',
+    harnessId: 'runtime',
+    isAgentComputer: true,
+  };
+  vi.mocked(authServiceClient.getTeamAgentComputer)
+    .mockResolvedValueOnce(
+      err([{ code: 'COMPUTERS_UNAVAILABLE', message: 'No fleet' }])
+    )
+    .mockResolvedValue(ok(computer));
+  const observer = new QueryObserver(
+    queryClient,
+    teamAgentComputerAvailabilityQueryOptions('agent', true)
+  );
+  const unsubscribe = observer.subscribe(() => {});
+  const { result, cleanup: unmount } = renderHook(
+    useTeamAgentComputerMutation,
+    {
+      wrapper: (props) =>
+        createComponent(QueryClientProvider, {
+          client: queryClient,
+          get children() {
+            return props.children;
+          },
+        }),
+    }
+  );
+  try {
+    expect(authServiceClient.getTeamAgentComputer).not.toHaveBeenCalled();
+    expect(await result.mutateAsync({ userId: 'agent' })).toBeNull();
+    expect(
+      queryClient.getQueryData(teamAgentKeys.computer('agent').queryKey)
+    ).toBeNull();
+    await vi.advanceTimersByTimeAsync(15000);
+    expect(observer.getCurrentResult().data).toEqual(computer);
+    expect(authServiceClient.getTeamAgentComputer).toHaveBeenCalledTimes(2);
+    await vi.advanceTimersByTimeAsync(30000);
+    expect(authServiceClient.getTeamAgentComputer).toHaveBeenCalledTimes(2);
+    observer.setOptions(
+      teamAgentComputerAvailabilityQueryOptions('agent', false)
+    );
+    queryClient.setQueryData(teamAgentKeys.computer('agent').queryKey, null);
+    await vi.advanceTimersByTimeAsync(30000);
+    expect(authServiceClient.getTeamAgentComputer).toHaveBeenCalledTimes(2);
+  } finally {
+    unmount();
+    unsubscribe();
+    queryClient.clear();
+    vi.useRealTimers();
+    cleanup();
+  }
+});
+
+it('query discovery keeps a 500 error distinct from unavailable', async () => {
+  vi.mocked(authServiceClient.getTeamAgentComputer).mockResolvedValue(
+    err([{ code: 'SERVER_ERROR', message: 'Failure' }])
+  );
+  const client = new QueryClient();
+  try {
+    await expect(
+      client.fetchQuery(teamAgentComputerQueryOptions('agent', true))
+    ).rejects.toThrow('Failure');
+    expect(
+      client.getQueryData(teamAgentComputerQueryOptions('agent', true).queryKey)
+    ).toBeUndefined();
+  } finally {
+    client.clear();
+  }
+});
+
+it('does not retain computer actions or start discovery after its row is disposed', async () => {
+  const { queryClient } = await import('../client');
+  queryClient.clear();
+  vi.mocked(authServiceClient.getTeamAgentComputer).mockClear();
+  const { result, cleanup: unmount } = renderHook(
+    () =>
+      useTeamAgentComputerAvailability(
+        () => 'agent',
+        () => true
+      ),
+    {
+      wrapper: (props) =>
+        createComponent(QueryClientProvider, {
+          client: queryClient,
+          get children() {
+            return props.children;
+          },
+        }),
+    }
+  );
+  expect(result()).toBe(true);
+  unmount();
+  expect(result()).toBe(false);
+  expect(authServiceClient.getTeamAgentComputer).not.toHaveBeenCalled();
+  queryClient.clear();
+});
+
+it('keeps a clicked unavailable result authoritative over earlier in-flight reads', async () => {
+  const { queryClient } = await import('../client');
+  const { teamAgentKeys } = await import('./keys');
+  type DiscoveryResult = Awaited<
+    ReturnType<typeof authServiceClient.getTeamAgentComputer>
+  >;
+  let finishOld: ((value: DiscoveryResult) => void) | undefined;
+  let finishClick: ((value: DiscoveryResult) => void) | undefined;
+  vi.mocked(authServiceClient.getTeamAgentComputer).mockReset();
+  queryClient.clear();
+  vi.mocked(authServiceClient.getTeamAgentComputer)
+    .mockReturnValueOnce(
+      new Promise((resolve) => {
+        finishOld = resolve;
+      })
+    )
+    .mockReturnValueOnce(
+      new Promise((resolve) => {
+        finishClick = resolve;
+      })
+    );
+  const options = teamAgentComputerQueryOptions('agent', true);
+  const oldRead = queryClient.fetchQuery(options).catch(() => undefined);
+  const { result, cleanup: unmount } = renderHook(
+    useTeamAgentComputerMutation,
+    {
+      wrapper: (props) =>
+        createComponent(QueryClientProvider, {
+          client: queryClient,
+          get children() {
+            return props.children;
+          },
+        }),
+    }
+  );
+  try {
+    const clicked = result.mutateAsync({ userId: 'agent' });
+    await waitFor(() =>
+      expect(authServiceClient.getTeamAgentComputer).toHaveBeenCalledTimes(2)
+    );
+    const duringRead = queryClient.fetchQuery(options).catch(() => undefined);
+    expect(authServiceClient.getTeamAgentComputer).toHaveBeenCalledTimes(2);
+    finishClick?.(
+      err([{ code: 'COMPUTERS_UNAVAILABLE', message: 'No fleet' }])
+    );
+    expect(await clicked).toBeNull();
+    const stale = ok({
+      computerId: 'old-computer',
+      harnessId: 'old-runtime',
+      isAgentComputer: true,
+    });
+    finishOld?.(stale);
+    await Promise.all([oldRead, duringRead]);
+    expect(
+      queryClient.getQueryData(teamAgentKeys.computer('agent').queryKey)
+    ).toBeNull();
+  } finally {
+    unmount();
+    queryClient.clear();
   }
 });

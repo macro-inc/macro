@@ -4229,12 +4229,18 @@ export type getClaudeModeResponse404 = {
   status: 404;
 };
 
+export type getClaudeModeResponse503 = {
+  data: void;
+  status: 503;
+};
+
 export type getClaudeModeResponseSuccess = getClaudeModeResponse200 & {
   headers: Headers;
 };
 export type getClaudeModeResponseError = (
   | getClaudeModeResponse403
   | getClaudeModeResponse404
+  | getClaudeModeResponse503
 ) & {
   headers: Headers;
 };
@@ -4299,6 +4305,11 @@ export type startClaudeSignInResponse422 = {
   status: 422;
 };
 
+export type startClaudeSignInResponse503 = {
+  data: void;
+  status: 503;
+};
+
 export type startClaudeSignInResponse504 = {
   data: void;
   status: 504;
@@ -4313,6 +4324,7 @@ export type startClaudeSignInResponseError = (
   | startClaudeSignInResponse404
   | startClaudeSignInResponse409
   | startClaudeSignInResponse422
+  | startClaudeSignInResponse503
   | startClaudeSignInResponse504
 ) & {
   headers: Headers;
@@ -4374,6 +4386,11 @@ export type cancelClaudeSignInResponse422 = {
   status: 422;
 };
 
+export type cancelClaudeSignInResponse503 = {
+  data: void;
+  status: 503;
+};
+
 export type cancelClaudeSignInResponse504 = {
   data: void;
   status: 504;
@@ -4388,6 +4405,7 @@ export type cancelClaudeSignInResponseError = (
   | cancelClaudeSignInResponse404
   | cancelClaudeSignInResponse409
   | cancelClaudeSignInResponse422
+  | cancelClaudeSignInResponse503
   | cancelClaudeSignInResponse504
 ) & {
   headers: Headers;
@@ -4453,6 +4471,11 @@ export type completeClaudeSignInResponse422 = {
   status: 422;
 };
 
+export type completeClaudeSignInResponse503 = {
+  data: void;
+  status: 503;
+};
+
 export type completeClaudeSignInResponse504 = {
   data: void;
   status: 504;
@@ -4468,6 +4491,7 @@ export type completeClaudeSignInResponseError = (
   | completeClaudeSignInResponse404
   | completeClaudeSignInResponse409
   | completeClaudeSignInResponse422
+  | completeClaudeSignInResponse503
   | completeClaudeSignInResponse504
 ) & {
   headers: Headers;
@@ -4533,6 +4557,11 @@ export type claudeSignOutResponse422 = {
   status: 422;
 };
 
+export type claudeSignOutResponse503 = {
+  data: void;
+  status: 503;
+};
+
 export type claudeSignOutResponse504 = {
   data: void;
   status: 504;
@@ -4546,6 +4575,7 @@ export type claudeSignOutResponseError = (
   | claudeSignOutResponse404
   | claudeSignOutResponse409
   | claudeSignOutResponse422
+  | claudeSignOutResponse503
   | claudeSignOutResponse504
 ) & {
   headers: Headers;

@@ -31,6 +31,7 @@ use futures::{SinkExt as _, StreamExt as _};
 use harness_id::HarnessId;
 use harnesses::domain::models::{ClaudeMode, HarnessPermission};
 use harnesses::domain::ports::{HarnessError, HarnessService};
+use hosted_runtimes::domain::models::{FleetAttachment, FleetUnavailable};
 use macro_authorization::{
     HarnessOnly, MacroAuthorizationExtractor, MacroAuthorizationService, MacroAuthorizationState,
     UserOrInternal,
@@ -61,6 +62,7 @@ const VIEWER_ACCESS_TIMEOUT: Duration = Duration::from_secs(3);
 pub struct ComputerScreenState<Harnesses, Auth> {
     harnesses: Arc<Harnesses>,
     rollout: hosted_runtimes::domain::rollout::ComputerRollout,
+    fleet_attachment: FleetAttachment,
     control: ComputerControl,
     redis: redis::Client,
     cleanup: TaskTracker,
@@ -72,6 +74,7 @@ impl<Harnesses, Auth> Clone for ComputerScreenState<Harnesses, Auth> {
         Self {
             harnesses: Arc::clone(&self.harnesses),
             rollout: self.rollout.clone(),
+            fleet_attachment: self.fleet_attachment,
             control: self.control.clone(),
             redis: self.redis.clone(),
             cleanup: self.cleanup.clone(),
@@ -89,12 +92,17 @@ impl<Harnesses, Auth> FromRef<ComputerScreenState<Harnesses, Auth>>
 }
 
 /// Start the command bus consumer and build the computer routes.
+#[expect(
+    clippy::too_many_arguments,
+    reason = "router composition requires explicit rollout and physical fleet attachment facts"
+)]
 pub fn router<Harnesses, Auth>(
     runtimes: Arc<RuntimeRegistry<GatewaySender>>,
     redis: redis::Client,
     harnesses: Harnesses,
     authorization_state: MacroAuthorizationState<Auth>,
     rollout: hosted_runtimes::domain::rollout::ComputerRollout,
+    fleet_attachment: FleetAttachment,
     tasks: &TaskTracker,
     shutdown: CancellationToken,
 ) -> Router
@@ -107,6 +115,7 @@ where
         harnesses: Arc::new(harnesses),
         control,
         rollout,
+        fleet_attachment,
         redis,
         cleanup: tasks.clone(),
         authorization_state,
@@ -204,7 +213,7 @@ pub struct ComputerQuery {
     params(("harness_id" = String, Path, description = "Harness ID")),
     responses(
         (status = 200, body = ClaudeSignInStarted),
-        (status = 400), (status = 403), (status = 404), (status = 409), (status = 422), (status = 504),
+        (status = 400), (status = 403), (status = 404), (status = 409), (status = 422), (status = 503), (status = 504),
     )
 )]
 pub async fn claude_sign_in_handler<Harnesses, Auth>(
@@ -244,7 +253,7 @@ where
     request_body = ClaudeSignInComplete,
     responses(
         (status = 200, body = ClaudeSignedIn),
-        (status = 400), (status = 403), (status = 404), (status = 409), (status = 422), (status = 504),
+        (status = 400), (status = 403), (status = 404), (status = 409), (status = 422), (status = 503), (status = 504),
     )
 )]
 pub async fn claude_sign_in_complete_handler<Harnesses, Auth>(
@@ -272,7 +281,7 @@ where
     operation_id = "cancel_claude_sign_in",
     path = "/harnesses/{harness_id}/claude-sign-in/cancel",
     params(("harness_id" = String, Path, description = "Harness ID")),
-    responses((status = 204), (status = 403), (status = 404), (status = 409), (status = 422), (status = 504))
+    responses((status = 204), (status = 403), (status = 404), (status = 409), (status = 422), (status = 503), (status = 504))
 )]
 pub async fn claude_sign_in_cancel_handler<Harnesses, Auth>(
     State(state): State<ComputerScreenState<Harnesses, Auth>>,
@@ -309,7 +318,7 @@ where
     params(("harness_id" = String, Path, description = "Harness ID")),
     responses(
         (status = 200, body = ClaudeModeResponse),
-        (status = 403), (status = 404), (status = 409), (status = 422), (status = 504),
+        (status = 403), (status = 404), (status = 409), (status = 422), (status = 503), (status = 504),
     )
 )]
 pub async fn claude_sign_out_handler<Harnesses, Auth>(
@@ -353,7 +362,7 @@ where
     operation_id = "get_claude_mode",
     path = "/harnesses/{harness_id}/claude-mode",
     params(("harness_id" = String, Path, description = "Harness ID")),
-    responses((status = 200, body = ClaudeModeResponse), (status = 403), (status = 404))
+    responses((status = 200, body = ClaudeModeResponse), (status = 403), (status = 404), (status = 503))
 )]
 pub async fn claude_mode_handler<Harnesses, Auth>(
     State(state): State<ComputerScreenState<Harnesses, Auth>>,
@@ -398,6 +407,9 @@ where
         .harnesses
         .authorize_harness(viewer.clone(), path.harness_id, access)
         .await?;
+    if harness.computer_id.is_some() {
+        state.fleet_attachment.require_attached()?;
+    }
     if !harness.capabilities.screen {
         return Err(ComputerRouteError::Conflict(
             "this computer has no display to stream".to_owned(),
@@ -702,6 +714,7 @@ where
                 "this runtime is not a Macro computer".to_owned(),
             ));
         }
+        self.fleet_attachment.require_attached()?;
         Ok(harness)
     }
 }
@@ -718,6 +731,9 @@ pub enum ComputerRouteError {
     /// The per-user computer rollout is off or unavailable.
     #[error("Macro computers are not enabled for this user")]
     RolloutDisabled,
+    /// Hosted computers have no fleet attached in this environment.
+    #[error(transparent)]
+    Unavailable(#[from] FleetUnavailable),
     /// No such harness.
     #[error("{0}")]
     NotFound(String),
@@ -773,6 +789,7 @@ impl IntoResponse for ComputerRouteError {
             Self::BadRequest(_) => StatusCode::BAD_REQUEST,
             Self::Forbidden | Self::RolloutDisabled => StatusCode::FORBIDDEN,
             Self::NotFound(_) => StatusCode::NOT_FOUND,
+            Self::Unavailable(_) => StatusCode::SERVICE_UNAVAILABLE,
             Self::Conflict(_) => StatusCode::CONFLICT,
             Self::Failed(_) | Self::InvalidCode | Self::SignInCancelled => {
                 StatusCode::UNPROCESSABLE_ENTITY

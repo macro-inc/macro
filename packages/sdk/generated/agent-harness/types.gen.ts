@@ -4740,6 +4740,7 @@ export type GetClaudeModeData = {
 export type GetClaudeModeErrors = {
     403: unknown;
     404: unknown;
+    503: unknown;
 };
 
 export type GetClaudeModeResponses = {
@@ -4766,6 +4767,7 @@ export type StartClaudeSignInErrors = {
     404: unknown;
     409: unknown;
     422: unknown;
+    503: unknown;
     504: unknown;
 };
 
@@ -4792,6 +4794,7 @@ export type CancelClaudeSignInErrors = {
     404: unknown;
     409: unknown;
     422: unknown;
+    503: unknown;
     504: unknown;
 };
 
@@ -4819,6 +4822,7 @@ export type CompleteClaudeSignInErrors = {
     404: unknown;
     409: unknown;
     422: unknown;
+    503: unknown;
     504: unknown;
 };
 
@@ -4845,6 +4849,7 @@ export type ClaudeSignOutErrors = {
     404: unknown;
     409: unknown;
     422: unknown;
+    503: unknown;
     504: unknown;
 };
 

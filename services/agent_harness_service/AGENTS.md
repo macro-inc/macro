@@ -46,7 +46,8 @@ Pulumi stacks; they do not host extra agent processes.
   directly between the hosted-runtime and harness services; configures the optional fleet operator, runs fleet effects,
   timers, reconciliation and idle sleep, reports macrod presence, and wakes
   sleeping computers before forwarding prompts. `COMPUTERS_FLEET` selects
-  `incus`, local-only `docker`, or explicit `disabled`; missing selection fails startup.
+  `incus` or local-only `docker`; absence means no attached fleet, emits one startup
+  warning and starts no operator. Selected groups remain strictly validated.
   Shutdown stops computer passes through the shared CancellationToken and waits
   on their TaskTracker; fleet effects drain for up to thirty seconds and release
   unfinished leases. Completion still notifies brain wake waiters. See
@@ -238,7 +239,9 @@ access. Lifecycle, runtime provider connections, billing, and memory stay owner-
 ## Configuration and lifecycle
 
 Computer fleets require `COMPUTERS_CONTROL_PLANE_ID` whenever `COMPUTERS_FLEET`
-is `incus` or `docker`. The selector is required; use `disabled` without a fleet.
+is `incus` or `docker`. Omit the selector and fleet settings when no fleet is attached;
+`disabled`, blank and unknown selections are invalid. PostHog
+`enable-macro-computers` remains the only product rollout gate.
 Read the stable identity from Doppler in deployed environments; local stacks
 explicitly set `local-<instance>`. Distinct control planes sharing a host
 must use distinct identities; replicas of one control plane share an identity.
@@ -383,3 +386,10 @@ Public MCP accepts JWT bearer or the standard revocable user API key. Compose
 facts even without PostHog configuration; ordinary users keep their existing
 flag policy. No request header may assert teammate status. Brain clients require
 all three code-mode tools and reject unavailable deployments explicitly.
+
+Hosted computer screen and account-control requests require the operator-derived
+`FleetAttachment` after the existing rollout and shared Read/Use authorization;
+no attachment answers typed 503 before command or screen-relay effects. Generic
+paired runtime screens and macrod ingress keep their existing authorization.
+Authentication checks the owning hosted host heartbeat per request, so its
+attachment observation can briefly differ from this service's operator presence.

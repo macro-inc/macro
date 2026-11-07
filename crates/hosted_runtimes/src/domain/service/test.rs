@@ -9,7 +9,8 @@ use super::*;
 use crate::domain::enrollment::{PersonaConfigKey, PersonaOsUser, PersonaService, SystemdUnitName};
 use crate::domain::fakes::{FakeRepo, FixedClock, HOST, TEAM, now};
 use crate::domain::lifecycle::{Billing as BillingState, ComputerState, PaymentOutcome, Power};
-use crate::domain::models::{BillingInterval, SubscriptionItem};
+use crate::domain::models::{BillingInterval, FleetAttachment, SubscriptionItem};
+use crate::domain::ports::StaticFleetAttachment;
 
 mod comped;
 mod purchase;
@@ -19,9 +20,10 @@ mod sold_resources;
 
 /// Records subscription updates; fails them when `decline` is set.
 #[derive(Default)]
-struct FakeBilling {
+pub(crate) struct FakeBilling {
     quote_price: Option<crate::domain::models::StripePriceId>,
     not_sold: bool,
+    sales_checks: Mutex<usize>,
     no_subscription: bool,
     yearly: bool,
     decline: bool,
@@ -40,6 +42,7 @@ struct FakeBilling {
 
 impl Billing for FakeBilling {
     fn sales_available(&self) -> bool {
+        *self.sales_checks.lock().unwrap() += 1;
         !self.not_sold
     }
 
@@ -145,6 +148,7 @@ async fn purchase_bills_the_computer_and_the_seat_in_one_update_then_provisions(
         },
         FakeBilling::default(),
         FixedClock,
+        StaticFleetAttachment(FleetAttachment::Attached),
     );
 
     let computer_id = service
@@ -236,6 +240,7 @@ async fn declined_payment_drops_the_reservation() {
             ..FakeBilling::default()
         },
         FixedClock,
+        StaticFleetAttachment(FleetAttachment::Attached),
     );
 
     let result = service
@@ -305,6 +310,7 @@ async fn sold_out_size_is_not_billed() {
         },
         FakeBilling::default(),
         FixedClock,
+        StaticFleetAttachment(FleetAttachment::Attached),
     );
 
     let result = service
@@ -332,6 +338,7 @@ async fn persona_with_a_multiline_value_is_rejected_before_anything_is_held() {
         },
         FakeBilling::default(),
         FixedClock,
+        StaticFleetAttachment(FleetAttachment::Attached),
     );
     let mut multiline = persona();
     multiline.config.insert(
@@ -364,6 +371,7 @@ async fn release_now_needs_the_name_and_removes_the_item_once() {
         },
         FakeBilling::default(),
         FixedClock,
+        StaticFleetAttachment(FleetAttachment::Attached),
     );
     let computer_id = service
         .purchase(PurchaseRequest {
@@ -417,6 +425,7 @@ async fn other_teams_cannot_see_or_change_a_computer() {
         },
         FakeBilling::default(),
         FixedClock,
+        StaticFleetAttachment(FleetAttachment::Attached),
     );
     let computer_id = service
         .purchase(PurchaseRequest {
@@ -485,7 +494,12 @@ async fn webhook_count_below_ours_cancels_the_newest_computer() {
             },
         );
     }
-    let service = ComputerService::new(repo, FakeBilling::default(), FixedClock);
+    let service = ComputerService::new(
+        repo,
+        FakeBilling::default(),
+        FixedClock,
+        StaticFleetAttachment(FleetAttachment::Attached),
+    );
 
     service
         .reconcile_billed_counts(
@@ -562,7 +576,12 @@ async fn retry_failed_computer_restarts_without_billing() {
             enrollment_generation: Default::default(),
         },
     );
-    let service = ComputerService::new(repo, FakeBilling::default(), FixedClock);
+    let service = ComputerService::new(
+        repo,
+        FakeBilling::default(),
+        FixedClock,
+        StaticFleetAttachment(FleetAttachment::Attached),
+    );
 
     let result = service.retry(TEAM, computer_id).await;
 
@@ -643,7 +662,12 @@ async fn retry_running_computer_is_rejected_without_applying_events() {
             enrollment_generation: Default::default(),
         },
     );
-    let service = ComputerService::new(repo, FakeBilling::default(), FixedClock);
+    let service = ComputerService::new(
+        repo,
+        FakeBilling::default(),
+        FixedClock,
+        StaticFleetAttachment(FleetAttachment::Attached),
+    );
 
     let result = service.retry(TEAM, computer_id).await;
 
@@ -695,7 +719,12 @@ async fn retry_another_teams_computer_is_not_found() {
             enrollment_generation: Default::default(),
         },
     );
-    let service = ComputerService::new(repo, FakeBilling::default(), FixedClock);
+    let service = ComputerService::new(
+        repo,
+        FakeBilling::default(),
+        FixedClock,
+        StaticFleetAttachment(FleetAttachment::Attached),
+    );
 
     let result = service.retry(Uuid::from_u128(2), computer_id).await;
 
@@ -715,6 +744,7 @@ async fn successful_charge_with_lost_write_is_confirmed_once_by_the_outbox() {
         },
         FakeBilling::default(),
         FixedClock,
+        StaticFleetAttachment(FleetAttachment::Attached),
     );
     let result = service
         .purchase(PurchaseRequest {
@@ -798,6 +828,7 @@ async fn provider_error_stays_pending_and_confirmation_keeps_retrying() {
             ..FakeBilling::default()
         },
         FixedClock,
+        StaticFleetAttachment(FleetAttachment::Attached),
     );
     let result = service
         .purchase(PurchaseRequest {
@@ -862,6 +893,7 @@ async fn already_confirmed_purchase_completes_confirmation_without_billing_again
         },
         FakeBilling::default(),
         FixedClock,
+        StaticFleetAttachment(FleetAttachment::Attached),
     );
     let computer_id = service
         .purchase(PurchaseRequest {
@@ -908,6 +940,7 @@ async fn confirmation_records_a_definite_refusal_without_removing_billing() {
             ..FakeBilling::default()
         },
         FixedClock,
+        StaticFleetAttachment(FleetAttachment::Attached),
     );
     let id = ComputerId::new_from_uuid(Uuid::from_u128(17));
     service
@@ -969,6 +1002,7 @@ async fn disabled_sales_reject_purchase_before_reserving_capacity() {
             ..FakeBilling::default()
         },
         FixedClock,
+        StaticFleetAttachment(FleetAttachment::Attached),
     );
     let result = service
         .purchase(PurchaseRequest {
@@ -992,3 +1026,5 @@ async fn disabled_sales_reject_purchase_before_reserving_capacity() {
 mod capacity;
 
 mod waiting;
+
+pub(crate) mod availability;

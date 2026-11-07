@@ -11,16 +11,16 @@ use crate::domain::enrollment::Persona;
 use crate::domain::ids::ComputerId;
 use crate::domain::lifecycle::{Effect, EffectWorker, Event, Phase};
 use crate::domain::models::{
-    Computer, ComputerName, ComputerRecord, ComputerStatus, NewComputer, PurchaseBilling,
-    PurchaseRequest, Quote, SizeOffer,
+    Computer, ComputerName, ComputerRecord, ComputerStatus, FleetUnavailable, NewComputer,
+    PurchaseBilling, PurchaseRequest, Quote, RosterComputerStatus, SizeOffer,
 };
 use crate::domain::ports::{
-    Billing, BillingError, CompPolicy, ComputerRepo, NoComps, ReserveError,
+    Billing, BillingError, CompPolicy, ComputerRepo, FleetAttachmentSource, NoComps, ReserveError,
 };
 use crate::domain::size::ComputerSize;
 
 #[cfg(test)]
-mod test;
+pub(crate) mod test;
 
 const DEFAULT_NAME: &str = "Macro computer";
 /// Billing effects leased per worker pass.
@@ -29,6 +29,9 @@ const BILLING_BATCH: u32 = 16;
 /// Errors from the computer service.
 #[derive(Debug, thiserror::Error)]
 pub enum ComputerError {
+    /// No fleet operator is currently attached.
+    #[error(transparent)]
+    FleetUnavailable(#[from] FleetUnavailable),
     /// No computer exists for this team and identity.
     #[error("computer not found")]
     NotFound,
@@ -85,23 +88,25 @@ impl Clock for SystemClock {
 ///
 /// Callers authorize first: team routes require an admin receipt for writes
 /// and a member receipt for reads, and pass the receipt's team id here.
-pub struct ComputerService<Repo, Bill, Time, Policy = NoComps> {
+pub struct ComputerService<Repo, Bill, Time, Attachment, Policy = NoComps> {
     rollout: crate::domain::rollout::ComputerRollout,
     comp_policy: Policy,
     catalog: Vec<crate::domain::size::CatalogEntry>,
     repo: Repo,
     billing: Bill,
     clock: Time,
+    attachment: Attachment,
 }
 
-impl<Repo, Bill, Time> ComputerService<Repo, Bill, Time>
+impl<Repo, Bill, Time, Attachment> ComputerService<Repo, Bill, Time, Attachment>
 where
     Repo: ComputerRepo,
     Bill: Billing,
     Time: Clock,
+    Attachment: FleetAttachmentSource,
 {
-    /// Compose the repository, billing provider and clock.
-    pub fn new(repo: Repo, billing: Bill, clock: Time) -> Self {
+    /// Compose the repository, billing provider, clock and attachment source.
+    pub fn new(repo: Repo, billing: Bill, clock: Time, attachment: Attachment) -> Self {
         Self {
             rollout: Default::default(),
             comp_policy: NoComps,
@@ -109,6 +114,7 @@ where
             repo,
             billing,
             clock,
+            attachment,
         }
     }
 
@@ -116,21 +122,47 @@ where
     pub fn with_comp_policy<Policy: CompPolicy>(
         self,
         comp_policy: Policy,
-    ) -> ComputerService<Repo, Bill, Time, Policy> {
+    ) -> ComputerService<Repo, Bill, Time, Attachment, Policy> {
         ComputerService {
             rollout: self.rollout,
             repo: self.repo,
             billing: self.billing,
             clock: self.clock,
+            attachment: self.attachment,
             comp_policy,
             catalog: self.catalog,
         }
     }
 }
 
-impl<Repo: ComputerRepo, Bill: Billing, Time: Clock, Policy: CompPolicy>
-    ComputerService<Repo, Bill, Time, Policy>
+impl<
+    Repo: ComputerRepo,
+    Bill: Billing,
+    Time: Clock,
+    Attachment: FleetAttachmentSource,
+    Policy: CompPolicy,
+> ComputerService<Repo, Bill, Time, Attachment, Policy>
 {
+    /// Fleet attachment gate that HTTP-facing use cases run first.
+    ///
+    /// Callers outside this crate, including `team_agents` discovery, use this
+    /// before any repository read. Detached fleets return
+    /// [`ComputerError::FleetUnavailable`]; source failures return
+    /// [`ComputerError::Internal`].
+    pub async fn require_attached(&self) -> Result<(), ComputerError> {
+        self.attachment
+            .attachment(self.clock.now())
+            .await
+            .map_err(internal)?
+            .require_attached()?;
+        Ok(())
+    }
+
+    /// Team-agent lifecycle maintenance, independent of HTTP availability gates.
+    pub fn maintenance(&self) -> ComputerMaintenance<'_> {
+        ComputerMaintenance { service: self }
+    }
+
     /// Configure the fail-closed rollout at the composition root.
     pub fn with_rollout(mut self, rollout: crate::domain::rollout::ComputerRollout) -> Self {
         self.rollout = rollout;
@@ -192,6 +224,7 @@ impl<Repo: ComputerRepo, Bill: Billing, Time: Clock, Policy: CompPolicy>
         mut request: PurchaseRequest,
     ) -> Result<ComputerId, ComputerError> {
         self.require_rollout(&request.created_by).await?;
+        self.require_attached().await?;
         request.billing = self.purchase_billing(request.team_id).await?;
         self.purchase(request).await
     }
@@ -205,6 +238,7 @@ impl<Repo: ComputerRepo, Bill: Billing, Time: Clock, Policy: CompPolicy>
         size: ComputerSize,
     ) -> Result<Quote, ComputerError> {
         self.require_rollout(user_id).await?;
+        self.require_attached().await?;
         self.quote(team_id, size, &self.purchase_billing(team_id).await?)
             .await
     }
@@ -217,6 +251,7 @@ impl<Repo: ComputerRepo, Bill: Billing, Time: Clock, Policy: CompPolicy>
         size: ComputerSize,
         billing: &PurchaseBilling,
     ) -> Result<Quote, ComputerError> {
+        self.require_attached().await?;
         self.size_spec(size)?;
         let quote = self.billing.quote(team_id, size).await;
         match billing {
@@ -237,6 +272,7 @@ impl<Repo: ComputerRepo, Bill: Billing, Time: Clock, Policy: CompPolicy>
         user_id: MacroUserIdStr<'static>,
     ) -> Result<Vec<SizeOffer>, ComputerError> {
         self.require_rollout(&user_id).await?;
+        self.require_attached().await?;
         let sold_out = self
             .repo
             .sold_out_sizes(&self.catalog, false)
@@ -280,6 +316,7 @@ impl<Repo: ComputerRepo, Bill: Billing, Time: Clock, Policy: CompPolicy>
         err
     )]
     pub async fn purchase(&self, request: PurchaseRequest) -> Result<ComputerId, ComputerError> {
+        self.require_attached().await?;
         tracing::Span::current().record(
             "billing_kind",
             if matches!(request.billing, PurchaseBilling::Comped { .. }) {
@@ -356,12 +393,14 @@ impl<Repo: ComputerRepo, Bill: Billing, Time: Clock, Policy: CompPolicy>
         team_id: Uuid,
         computer_id: ComputerId,
     ) -> Result<ComputerStatus, ComputerError> {
+        self.require_attached().await?;
         Ok(self.team_record(team_id, computer_id).await?.status())
     }
 
     /// The team's computers, oldest first.
     #[tracing::instrument(skip(self), err)]
     pub async fn list(&self, team_id: Uuid) -> Result<Vec<ComputerStatus>, ComputerError> {
+        self.require_attached().await?;
         let computers = self.repo.list_for_team(team_id).await.map_err(internal)?;
         Ok(computers.iter().map(ComputerRecord::status).collect())
     }
@@ -374,6 +413,7 @@ impl<Repo: ComputerRepo, Bill: Billing, Time: Clock, Policy: CompPolicy>
         computer_id: ComputerId,
         on: bool,
     ) -> Result<ComputerStatus, ComputerError> {
+        self.require_attached().await?;
         let event = if on { Event::PowerOn } else { Event::PowerOff };
         self.apply_for_team(team_id, computer_id, event).await
     }
@@ -385,6 +425,7 @@ impl<Repo: ComputerRepo, Bill: Billing, Time: Clock, Policy: CompPolicy>
         team_id: Uuid,
         computer_id: ComputerId,
     ) -> Result<ComputerStatus, ComputerError> {
+        self.require_attached().await?;
         let computer = self.team_computer(team_id, computer_id).await?;
         if !matches!(computer.state.phase, Phase::Failed { .. }) {
             return Err(ComputerError::NotFailed);
@@ -405,6 +446,7 @@ impl<Repo: ComputerRepo, Bill: Billing, Time: Clock, Policy: CompPolicy>
         team_id: Uuid,
         computer_id: ComputerId,
     ) -> Result<ComputerStatus, ComputerError> {
+        self.require_attached().await?;
         let computer = self.team_computer(team_id, computer_id).await?;
         let at = if computer.state.payment == crate::domain::lifecycle::PaymentOutcome::Comped {
             self.clock.now()
@@ -422,6 +464,7 @@ impl<Repo: ComputerRepo, Bill: Billing, Time: Clock, Policy: CompPolicy>
         team_id: Uuid,
         computer_id: ComputerId,
     ) -> Result<ComputerStatus, ComputerError> {
+        self.require_attached().await?;
         self.apply_for_team(team_id, computer_id, Event::UndoCancel)
             .await
     }
@@ -435,6 +478,7 @@ impl<Repo: ComputerRepo, Bill: Billing, Time: Clock, Policy: CompPolicy>
         computer_id: ComputerId,
         confirm_name: &str,
     ) -> Result<ComputerStatus, ComputerError> {
+        self.require_attached().await?;
         let computer = self.team_computer(team_id, computer_id).await?;
         if confirm_name.trim() != computer.name.as_str() {
             return Err(ComputerError::ConfirmationMismatch);
@@ -451,6 +495,7 @@ impl<Repo: ComputerRepo, Bill: Billing, Time: Clock, Policy: CompPolicy>
         user_id: MacroUserIdStr<'static>,
         size: ComputerSize,
     ) -> Result<(), ComputerError> {
+        self.require_attached().await?;
         self.repo
             .request_notify(team_id, user_id, size)
             .await
@@ -712,6 +757,85 @@ impl<Repo: ComputerRepo, Bill: Billing, Time: Clock, Policy: CompPolicy>
             .map_err(internal)?
             .ok_or(ComputerError::NotFound)?;
         Ok(computer.status())
+    }
+}
+
+/// Team-agent maintenance only; no HTTP route exposes this capability.
+pub struct ComputerMaintenance<'a> {
+    service: &'a dyn MaintenanceOperations,
+}
+
+type MaintenanceFuture<'a, T> =
+    std::pin::Pin<Box<dyn Future<Output = Result<T, ComputerError>> + Send + 'a>>;
+
+trait MaintenanceOperations: Sync {
+    fn status_for_roster(
+        &self,
+        team_id: Uuid,
+        computer_id: ComputerId,
+    ) -> MaintenanceFuture<'_, RosterComputerStatus>;
+    fn request_release(
+        &self,
+        team_id: Uuid,
+        computer_id: ComputerId,
+    ) -> MaintenanceFuture<'_, ComputerStatus>;
+}
+
+impl ComputerMaintenance<'_> {
+    /// Read durable roster status without refusing a detached fleet.
+    #[tracing::instrument(skip(self), err)]
+    pub async fn status_for_roster(
+        &self,
+        team_id: Uuid,
+        computer_id: ComputerId,
+    ) -> Result<RosterComputerStatus, ComputerError> {
+        self.service.status_for_roster(team_id, computer_id).await
+    }
+
+    /// Queue release through the lifecycle without fleet access or name confirmation.
+    #[tracing::instrument(skip(self), err)]
+    pub async fn request_release(
+        &self,
+        team_id: Uuid,
+        computer_id: ComputerId,
+    ) -> Result<ComputerStatus, ComputerError> {
+        self.service.request_release(team_id, computer_id).await
+    }
+}
+
+impl<
+    Repo: ComputerRepo,
+    Bill: Billing,
+    Time: Clock,
+    Attachment: FleetAttachmentSource,
+    Policy: CompPolicy,
+> MaintenanceOperations for ComputerService<Repo, Bill, Time, Attachment, Policy>
+{
+    fn status_for_roster(
+        &self,
+        team_id: Uuid,
+        computer_id: ComputerId,
+    ) -> MaintenanceFuture<'_, RosterComputerStatus> {
+        Box::pin(async move {
+            let availability = self
+                .attachment
+                .attachment(self.clock.now())
+                .await
+                .map_err(internal)?;
+            let status = self.team_record(team_id, computer_id).await?.status();
+            Ok(RosterComputerStatus {
+                status,
+                availability,
+            })
+        })
+    }
+
+    fn request_release(
+        &self,
+        team_id: Uuid,
+        computer_id: ComputerId,
+    ) -> MaintenanceFuture<'_, ComputerStatus> {
+        Box::pin(self.apply_for_team(team_id, computer_id, Event::ReleaseNow))
     }
 }
 

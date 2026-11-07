@@ -4,10 +4,11 @@ import { authServiceClient } from '@service-auth/client';
 import type {
   ComputerSize,
   CreateTeamAgent,
+  TeamAgentComputer,
   TeamAgents,
 } from '@service-auth/generated/schemas';
 import { queryOptions, useMutation, useQuery } from '@tanstack/solid-query';
-import type { Accessor } from 'solid-js';
+import { type Accessor, onCleanup } from 'solid-js';
 import {
   invalidateAiBillingSummary,
   invalidateSubscriptionStatus,
@@ -52,18 +53,73 @@ export function useTeamAgentSizesQuery(teamId: Accessor<string>) {
   return useQuery(() => teamAgentSizesQueryOptions(teamId()));
 }
 
-function teamAgentComputerQueryOptions(userId: string, enabled: boolean) {
+/** A successful lookup with no attached fleet is cached as explicit absence. */
+export type TeamAgentComputerDiscovery = TeamAgentComputer | null;
+
+async function loadTeamAgentComputer(
+  userId: string,
+  span: Span
+): Promise<TeamAgentComputerDiscovery> {
+  const result = await authServiceClient.getTeamAgentComputer(userId);
+  if (result.isErr()) {
+    if (
+      result.error.length === 1 &&
+      result.error[0].code === 'COMPUTERS_UNAVAILABLE'
+    )
+      return null;
+    span.error('Agent computer lookup failed');
+  }
+  const computer = await throwOnErr(() => Promise.resolve(result));
+  span.setAttr('computer.id', computer.computerId);
+  if (computer.harnessId) span.setAttr('harness.id', computer.harnessId);
+  return computer;
+}
+
+export function teamAgentComputerQueryOptions(
+  userId: string,
+  enabled: boolean,
+  parentSpan?: Span
+) {
+  const load = (span: Span) => loadTeamAgentComputer(userId, span);
   return queryOptions({
     queryKey: teamAgentKeys.computer(userId).queryKey,
     enabled: enabled && !!userId,
     queryFn: () =>
-      Telemetry.span('team-agent.computer.load', () =>
-        throwOnErr(() => authServiceClient.getTeamAgentComputer(userId))
-      ),
+      parentSpan
+        ? parentSpan.span('team-agent.computer.load', load)
+        : Telemetry.span('team-agent.computer.load', load),
     staleTime: 15000,
     retry: false,
     throwOnError: false,
   });
+}
+
+/** Observe known absence without prefetching a roster; recheck until a fleet returns. */
+export function teamAgentComputerAvailabilityQueryOptions(
+  userId: string,
+  enabled: boolean
+) {
+  return queryOptions({
+    ...teamAgentComputerQueryOptions(userId, false),
+    enabled: (query) => enabled && !!userId && query.state.data === null,
+    refetchInterval: (query) => (query.state.data === null ? 15000 : false),
+    refetchIntervalInBackground: false,
+  });
+}
+
+export function useTeamAgentComputerAvailability(
+  userId: Accessor<string>,
+  enabled: Accessor<boolean>
+) {
+  const computer = useQuery(() =>
+    teamAgentComputerAvailabilityQueryOptions(userId(), enabled())
+  );
+  let disposed = false;
+  onCleanup(() => {
+    disposed = true;
+  });
+  return () =>
+    !disposed && enabled() && (computer.isPending || computer.data !== null);
 }
 
 /** Portrait cards discover the target's computer only while an agent card is open. */
@@ -88,20 +144,16 @@ export function useTeamAgentComputerMutation() {
       userId: string;
       parentSpan?: Span;
     }) => {
-      const load = async (span: Span) => {
-        const computer = await throwOnErr(async () => {
-          const result = await authServiceClient.getTeamAgentComputer(userId);
-          if (result.isErr()) span.error('Agent computer lookup failed');
-          return result;
-        });
-        span.setAttr('computer.id', computer.computerId);
-        if (computer.harnessId) span.setAttr('harness.id', computer.harnessId);
-        return computer;
-      };
-      return parentSpan
-        ? parentSpan.span('team-agent.computer.load', load)
-        : Telemetry.span('team-agent.computer.load', load);
+      return queryClient.fetchQuery({
+        ...teamAgentComputerQueryOptions(userId, true, parentSpan),
+        staleTime: 0,
+      });
     },
+    onMutate: ({ userId }) =>
+      queryClient.cancelQueries({
+        queryKey: teamAgentKeys.computer(userId).queryKey,
+        exact: true,
+      }),
   }));
 }
 

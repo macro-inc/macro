@@ -49,6 +49,7 @@ import {
 import {
   useDeleteTeamAgentMutation,
   useRetryTeamAgentMutation,
+  useTeamAgentComputerAvailability,
   useTeamAgentsQuery,
 } from '@queries/team-agents';
 import type { PaidPlan } from '@service-auth/ai-billing-types';
@@ -719,70 +720,77 @@ export function TeamMembers(props: { team: TeamSummary }) {
                   list visibly continues. */}
               <SettingsCard class="max-h-[418px] overflow-y-auto! overscroll-contain">
                 <For each={filteredMembers()}>
-                  {(member) => (
-                    <MemberRow
-                      managedLayout={canManageAgents()}
-                      member={member}
-                      onViewComputer={
+                  {(member) => {
+                    const computerAvailable = useTeamAgentComputerAvailability(
+                      () => member.user_id,
+                      () =>
                         canViewAgentComputers() &&
                         isAgentAccount(tryMacroId(member.user_id))
-                          ? () => {
-                              if (canViewAgentComputers())
-                                screen?.openAgentComputer(member.user_id);
-                            }
-                          : undefined
-                      }
-                      isOwner={isOwner()}
-                      isCurrentUser={member.user_id === userId()}
-                      canManageRemovals={canManageMemberRemovals()}
-                      canRemove={canRemoveTeamMember(
-                        userId(),
-                        currentUserRole(),
-                        member
-                      )}
-                      showPlan={showSeatPlans()}
-                      canEditPlan={isAdminOrOwner()}
-                      planPending={planMovePending()}
-                      pendingDowngrade={
-                        teamQuery.data?.scheduled_seat_plans?.[member.user_id]
-                          ?.plan === 'premium'
-                      }
-                      onPlanChange={(plan) => {
-                        if (
-                          !props.team.id ||
-                          !isHumanAccount(tryMacroId(member.user_id))
-                        )
-                          return;
-                        setMemberPlanMutation.mutate({
-                          teamId: props.team.id,
-                          userId: member.user_id,
-                          plan,
-                        });
-                      }}
-                      onRemove={() => {
-                        if (isHumanAccount(tryMacroId(member.user_id)))
-                          setShowRemoveModal(member);
-                      }}
-                      onRoleChange={(newRole) => {
-                        if (
-                          !props.team.id ||
-                          !isHumanAccount(tryMacroId(member.user_id))
-                        )
-                          return;
-                        patchTeamMutation.mutate({
-                          teamId: props.team.id,
-                          request: {
-                            user_role_updates: [
-                              {
-                                team_user_id: member.user_id,
-                                role: newRole,
-                              },
-                            ],
-                          },
-                        });
-                      }}
-                    />
-                  )}
+                    );
+                    return (
+                      <MemberRow
+                        managedLayout={canManageAgents()}
+                        member={member}
+                        onViewComputer={
+                          computerAvailable()
+                            ? () => {
+                                if (computerAvailable())
+                                  screen?.openAgentComputer(member.user_id);
+                              }
+                            : undefined
+                        }
+                        isOwner={isOwner()}
+                        isCurrentUser={member.user_id === userId()}
+                        canManageRemovals={canManageMemberRemovals()}
+                        canRemove={canRemoveTeamMember(
+                          userId(),
+                          currentUserRole(),
+                          member
+                        )}
+                        showPlan={showSeatPlans()}
+                        canEditPlan={isAdminOrOwner()}
+                        planPending={planMovePending()}
+                        pendingDowngrade={
+                          teamQuery.data?.scheduled_seat_plans?.[member.user_id]
+                            ?.plan === 'premium'
+                        }
+                        onPlanChange={(plan) => {
+                          if (
+                            !props.team.id ||
+                            !isHumanAccount(tryMacroId(member.user_id))
+                          )
+                            return;
+                          setMemberPlanMutation.mutate({
+                            teamId: props.team.id,
+                            userId: member.user_id,
+                            plan,
+                          });
+                        }}
+                        onRemove={() => {
+                          if (isHumanAccount(tryMacroId(member.user_id)))
+                            setShowRemoveModal(member);
+                        }}
+                        onRoleChange={(newRole) => {
+                          if (
+                            !props.team.id ||
+                            !isHumanAccount(tryMacroId(member.user_id))
+                          )
+                            return;
+                          patchTeamMutation.mutate({
+                            teamId: props.team.id,
+                            request: {
+                              user_role_updates: [
+                                {
+                                  team_user_id: member.user_id,
+                                  role: newRole,
+                                },
+                              ],
+                            },
+                          });
+                        }}
+                      />
+                    );
+                  }}
                 </For>
                 <Show when={canManageAgents()}>
                   <Suspense
@@ -793,67 +801,76 @@ export function TeamMembers(props: { team: TeamSummary }) {
                     }
                   >
                     <For each={filteredAgents()}>
-                      {(agent) => (
-                        <TeamAgentRow
-                          avatar={
-                            <UserIcon
-                              id={agent.userId}
-                              isDeleted={false}
-                              size="lg"
-                            />
-                          }
-                          agent={agent}
-                          canManage={canManageAgents()}
-                          onOpenBilling={() => settings.openSettings('Billing')}
-                          onViewComputer={
-                            canViewAgentComputers()
-                              ? () => {
-                                  if (canViewAgentComputers())
-                                    screen?.openAgentComputer(agent.userId);
-                                }
-                              : undefined
-                          }
-                          retrying={retryAgent.isPending}
-                          retryError={
-                            retryAgent.isError &&
-                            retryAgent.variables?.userId === agent.userId
-                          }
-                          onVoice={
-                            canChangeVoice()
-                              ? () => {
-                                  if (canChangeVoice()) setVoiceAgent(agent);
-                                }
-                              : undefined
-                          }
-                          onRetry={
-                            canManageAgents()
-                              ? () => {
-                                  if (
-                                    !canManageAgents() ||
-                                    retryAgent.isPending ||
-                                    !canRetryTeamAgent(agent)
-                                  )
-                                    return;
-                                  retryAgent.mutate({
-                                    teamId: props.team.id,
-                                    userId: agent.userId,
-                                  });
-                                }
-                              : undefined
-                          }
-                          onRemove={
-                            canManageAgents()
-                              ? () => {
-                                  if (
-                                    canManageAgents() &&
-                                    agent.payment !== 'pending'
-                                  )
-                                    setRemoveAgent(agent);
-                                }
-                              : undefined
-                          }
-                        />
-                      )}
+                      {(agent) => {
+                        const computerAvailable =
+                          useTeamAgentComputerAvailability(
+                            () => agent.userId,
+                            canViewAgentComputers
+                          );
+                        return (
+                          <TeamAgentRow
+                            avatar={
+                              <UserIcon
+                                id={agent.userId}
+                                isDeleted={false}
+                                size="lg"
+                              />
+                            }
+                            agent={agent}
+                            canManage={canManageAgents()}
+                            onOpenBilling={() =>
+                              settings.openSettings('Billing')
+                            }
+                            onViewComputer={
+                              computerAvailable()
+                                ? () => {
+                                    if (computerAvailable())
+                                      screen?.openAgentComputer(agent.userId);
+                                  }
+                                : undefined
+                            }
+                            retrying={retryAgent.isPending}
+                            retryError={
+                              retryAgent.isError &&
+                              retryAgent.variables?.userId === agent.userId
+                            }
+                            onVoice={
+                              canChangeVoice()
+                                ? () => {
+                                    if (canChangeVoice()) setVoiceAgent(agent);
+                                  }
+                                : undefined
+                            }
+                            onRetry={
+                              canManageAgents()
+                                ? () => {
+                                    if (
+                                      !canManageAgents() ||
+                                      retryAgent.isPending ||
+                                      !canRetryTeamAgent(agent)
+                                    )
+                                      return;
+                                    retryAgent.mutate({
+                                      teamId: props.team.id,
+                                      userId: agent.userId,
+                                    });
+                                  }
+                                : undefined
+                            }
+                            onRemove={
+                              canManageAgents()
+                                ? () => {
+                                    if (
+                                      canManageAgents() &&
+                                      agent.payment !== 'pending'
+                                    )
+                                      setRemoveAgent(agent);
+                                  }
+                                : undefined
+                            }
+                          />
+                        );
+                      }}
                     </For>
                   </Suspense>
                 </Show>

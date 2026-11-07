@@ -78,6 +78,23 @@ impl PgComputerRepo {
     }
 }
 
+impl crate::domain::ports::FleetAttachmentSource for PgComputerRepo {
+    type Err = PgComputerError;
+
+    #[tracing::instrument(skip(self), err)]
+    async fn attachment(
+        &self,
+        now: DateTime<Utc>,
+    ) -> Result<crate::domain::models::FleetAttachment, Self::Err> {
+        let cutoff = now - crate::domain::models::HOST_HEARTBEAT_FRESHNESS;
+        let present = sqlx::query_scalar!(
+            r#"SELECT EXISTS(SELECT 1 FROM hosted_runtime_host WHERE updated_at > $1) AS "present!""#,
+            cutoff,
+        ).fetch_one(&self.pool).await?;
+        Ok(crate::domain::models::FleetAttachment::from_operator_present(present))
+    }
+}
+
 fn units(resources: ComputerResources) -> Result<i32, PgComputerError> {
     Ok(i32::try_from(resources.units())?)
 }
@@ -919,6 +936,22 @@ impl ComputerRepo for PgComputerRepo {
             awake_capacity_units: u32::try_from(row.awake_capacity_units)?,
             sold_capacity_units: u32::try_from(row.sold_capacity_units)?,
         })
+    }
+
+    #[tracing::instrument(skip(self), err)]
+    async fn heartbeat_host(
+        &self,
+        host: HostId,
+        now: DateTime<Utc>,
+    ) -> Result<(), PgComputerError> {
+        sqlx::query!(
+            "UPDATE hosted_runtime_host SET updated_at = $2 WHERE id = $1",
+            host.into_inner(),
+            now,
+        )
+        .execute(&self.pool)
+        .await?;
+        Ok(())
     }
 
     async fn sold_out_sizes(

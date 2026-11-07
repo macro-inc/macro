@@ -6807,6 +6807,11 @@ export type createTeamAgentResponse502 = {
   status: 502;
 };
 
+export type createTeamAgentResponse503 = {
+  data: ErrorResponse;
+  status: 503;
+};
+
 export type createTeamAgentResponseSuccess = createTeamAgentResponse201 & {
   headers: Headers;
 };
@@ -6817,6 +6822,7 @@ export type createTeamAgentResponseError = (
   | createTeamAgentResponse409
   | createTeamAgentResponse500
   | createTeamAgentResponse502
+  | createTeamAgentResponse503
 ) & {
   headers: Headers;
 };
@@ -7179,6 +7185,11 @@ export type quoteTeamAgentResponse502 = {
   status: 502;
 };
 
+export type quoteTeamAgentResponse503 = {
+  data: ErrorResponse;
+  status: 503;
+};
+
 export type quoteTeamAgentResponseSuccess = quoteTeamAgentResponse200 & {
   headers: Headers;
 };
@@ -7189,6 +7200,7 @@ export type quoteTeamAgentResponseError = (
   | quoteTeamAgentResponse409
   | quoteTeamAgentResponse500
   | quoteTeamAgentResponse502
+  | quoteTeamAgentResponse503
 ) & {
   headers: Headers;
 };
@@ -7411,6 +7423,11 @@ export type getTeamAgentComputerResponse500 = {
   status: 500;
 };
 
+export type getTeamAgentComputerResponse503 = {
+  data: ErrorResponse;
+  status: 503;
+};
+
 export type getTeamAgentComputerResponseSuccess =
   getTeamAgentComputerResponse200 & {
     headers: Headers;
@@ -7421,6 +7438,7 @@ export type getTeamAgentComputerResponseError = (
   | getTeamAgentComputerResponse403
   | getTeamAgentComputerResponse404
   | getTeamAgentComputerResponse500
+  | getTeamAgentComputerResponse503
 ) & {
   headers: Headers;
 };
@@ -7498,6 +7516,11 @@ export type retryTeamAgentResponse502 = {
   status: 502;
 };
 
+export type retryTeamAgentResponse503 = {
+  data: ErrorResponse;
+  status: 503;
+};
+
 export type retryTeamAgentResponseSuccess = retryTeamAgentResponse200 & {
   headers: Headers;
 };
@@ -7509,6 +7532,7 @@ export type retryTeamAgentResponseError = (
   | retryTeamAgentResponse409
   | retryTeamAgentResponse500
   | retryTeamAgentResponse502
+  | retryTeamAgentResponse503
 ) & {
   headers: Headers;
 };

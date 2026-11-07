@@ -171,8 +171,6 @@ pub struct Config {
     /// The environment we are in
     #[macro_config_default(Environment::new_or_prod())]
     pub environment: Environment,
-    /// Enabled fleet; requires explicit billing prices and local computer-facing overrides.
-    pub computers_fleet: Option<String>,
     /// The internal auth key used by other services
     pub service_internal_auth_key: ServiceInternalAuthKey,
     /// The github client id
@@ -222,7 +220,7 @@ pub struct Config {
     /// The stripe price id for the Max plan seat (optional, see
     /// [`StripeMaxPriceId`])
     pub stripe_max_price_id: StripeMaxPriceId,
-    /// Macro computer prices: all six or none; required with COMPUTERS_FLEET.
+    /// Macro computer prices: all six or none, independent of fleet attachment.
     pub stripe_computer_standard_monthly_price_id: StripeComputerStandardMonthlyPriceId,
     pub stripe_computer_large_monthly_price_id: StripeComputerLargeMonthlyPriceId,
     pub stripe_computer_xl_monthly_price_id: StripeComputerXlMonthlyPriceId,
@@ -262,14 +260,8 @@ impl Config {
         )
     }
 
-    /// Reject partial price groups and enabled fleets without prices.
+    /// Reject partial price groups independently of physical fleet attachment.
     pub fn validate_computer_config(&self) -> anyhow::Result<()> {
-        if let Some(fleet) = self.computers_fleet.as_deref() {
-            anyhow::ensure!(
-                matches!(fleet, "incus" | "docker" | "disabled"),
-                "COMPUTERS_FLEET must be incus, docker or disabled"
-            );
-        }
         let prices = [
             (
                 "STRIPE_COMPUTER_STANDARD_MONTHLY_PRICE_ID",
@@ -296,16 +288,11 @@ impl Config {
                 self.stripe_computer_xl_yearly_price_id.value(),
             ),
         ];
-        if self
-            .computers_fleet
-            .as_deref()
-            .is_some_and(|fleet| fleet != "disabled")
-            || prices.iter().any(|(_, value)| value.is_some())
-        {
+        if prices.iter().any(|(_, value)| value.is_some()) {
             for (name, value) in prices {
                 anyhow::ensure!(
                     nonblank_value(value).is_some(),
-                    "{name} is required when any computer price or COMPUTERS_FLEET is set"
+                    "{name} is required when any computer price is set"
                 );
             }
         }

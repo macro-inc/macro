@@ -145,3 +145,53 @@ async fn computer_discovery_uses_computer_rollout_independently_of_agent_managem
         }
     }
 }
+
+#[tokio::test]
+async fn detached_discovery_checks_rollout_then_attachment_before_any_agent_lookup() {
+    for existing_agent in [false, true] {
+        for computers_enabled in [false, true] {
+            let (service, journal) = build(Setup::default());
+            if existing_agent {
+                service.create(receipt(TEAM_ID), request()).await.unwrap();
+            }
+            let mut flags = FakeFeatureFlags::default();
+            flags.set(
+                user(ADMIN),
+                Ok(FlagSnapshot::new([(
+                    hosted_runtimes::domain::rollout::ENABLE_MACRO_COMPUTERS.to_owned(),
+                    FlagValue::Boolean(computers_enabled),
+                )])),
+            );
+            let mut service = service.with_computer_rollout(ComputerRollout::new(flags));
+            service.computers.attached = false;
+            let before_reads = *service.repository.get_calls.lock().unwrap();
+            let before_steps = journal.steps().len();
+            let before_attachment = *service.computers.attachment_calls.lock().unwrap();
+            let result = service
+                .computer(
+                    EntityAccessReceipt::<MemberTeamRole>::dangerously_assert_authenticated_user(
+                        user(ADMIN),
+                        TEAM_ID,
+                        EntityType::Team,
+                    ),
+                    &user(AGENT),
+                )
+                .await;
+            if computers_enabled {
+                assert!(matches!(result, Err(TeamAgentError::FleetUnavailable(_))));
+                assert_eq!(
+                    *service.computers.attachment_calls.lock().unwrap(),
+                    before_attachment + 1
+                );
+            } else {
+                assert!(matches!(result, Err(TeamAgentError::NotEnabled)));
+                assert_eq!(
+                    *service.computers.attachment_calls.lock().unwrap(),
+                    before_attachment
+                );
+            }
+            assert_eq!(journal.steps().len(), before_steps);
+            assert_eq!(*service.repository.get_calls.lock().unwrap(), before_reads);
+        }
+    }
+}

@@ -6,7 +6,7 @@ use crate::domain::ids::ComputerId;
 use harness_id::HarnessId;
 
 use std::collections::HashMap;
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 
 use chrono::{DateTime, TimeZone, Utc};
@@ -45,7 +45,11 @@ pub struct FakeError;
 /// One host with `sold_units` of sold capacity; every computer awake fits.
 #[derive(Default)]
 pub struct FakeRepo {
+    pub calls: AtomicUsize,
     pub sold_units: u32,
+    pub reservations: Mutex<usize>,
+    pub notify_writes: Mutex<usize>,
+    pub heartbeats: Mutex<Vec<(HostId, DateTime<Utc>)>>,
     pub awake_units: Mutex<Option<u32>>,
     pub timers: Mutex<Vec<DueTimer>>,
     pub fail_next_apply: AtomicBool,
@@ -85,6 +89,7 @@ impl ComputerRepo for FakeRepo {
         &self,
         computer_id: ComputerId,
     ) -> Result<Self::EnrollmentGuard, FakeError> {
+        self.calls.fetch_add(1, Ordering::SeqCst);
         let lock = self
             .enrollment_locks
             .lock()
@@ -96,6 +101,7 @@ impl ComputerRepo for FakeRepo {
     }
 
     async fn lock_payment(&self, computer_id: ComputerId) -> Result<Self::PaymentGuard, FakeError> {
+        self.calls.fetch_add(1, Ordering::SeqCst);
         let lock = self
             .payment_locks
             .lock()
@@ -111,6 +117,8 @@ impl ComputerRepo for FakeRepo {
         computer: NewComputer,
         now: DateTime<Utc>,
     ) -> Result<Computer, ReserveError<FakeError>> {
+        self.calls.fetch_add(1, Ordering::SeqCst);
+        *self.reservations.lock().unwrap() += 1;
         let mut computers = self.computers.lock().unwrap();
         let sold: u32 = computers
             .values()
@@ -194,6 +202,7 @@ impl ComputerRepo for FakeRepo {
         event: Event,
         now: DateTime<Utc>,
     ) -> Result<Option<Computer>, FakeError> {
+        self.calls.fetch_add(1, Ordering::SeqCst);
         if self.fail_next_apply.swap(false, Ordering::SeqCst) {
             return Err(FakeError);
         }
@@ -239,6 +248,7 @@ impl ComputerRepo for FakeRepo {
     }
 
     async fn get(&self, computer_id: ComputerId) -> Result<Option<ComputerRecord>, FakeError> {
+        self.calls.fetch_add(1, Ordering::SeqCst);
         Ok(self
             .computers
             .lock()
@@ -248,6 +258,7 @@ impl ComputerRepo for FakeRepo {
     }
 
     async fn list_for_team(&self, team_id: Uuid) -> Result<Vec<ComputerRecord>, FakeError> {
+        self.calls.fetch_add(1, Ordering::SeqCst);
         let mut computers: Vec<Computer> = self
             .computers
             .lock()
@@ -266,6 +277,7 @@ impl ComputerRepo for FakeRepo {
     }
 
     async fn find_by_harness(&self, harness_id: HarnessId) -> Result<Option<Computer>, FakeError> {
+        self.calls.fetch_add(1, Ordering::SeqCst);
         Ok(self
             .computers
             .lock()
@@ -280,6 +292,7 @@ impl ComputerRepo for FakeRepo {
         computer_id: ComputerId,
         harness_id: HarnessId,
     ) -> Result<(), FakeError> {
+        self.calls.fetch_add(1, Ordering::SeqCst);
         if let Some(computer) = self.computers.lock().unwrap().get_mut(&computer_id) {
             computer.harness_id = Some(harness_id);
         }
@@ -291,10 +304,12 @@ impl ComputerRepo for FakeRepo {
         _computer_id: ComputerId,
         _now: DateTime<Utc>,
     ) -> Result<(), FakeError> {
+        self.calls.fetch_add(1, Ordering::SeqCst);
         Ok(())
     }
 
     async fn running(&self) -> Result<Vec<ComputerRecord>, FakeError> {
+        self.calls.fetch_add(1, Ordering::SeqCst);
         Ok(self
             .computers
             .lock()
@@ -307,10 +322,12 @@ impl ComputerRepo for FakeRepo {
     }
 
     async fn coldest_frozen(&self, _host: HostId) -> Result<Option<ComputerId>, FakeError> {
+        self.calls.fetch_add(1, Ordering::SeqCst);
         Ok(None)
     }
 
     async fn instances_expected(&self, host: HostId) -> Result<Vec<ComputerRecord>, FakeError> {
+        self.calls.fetch_add(1, Ordering::SeqCst);
         Ok(self
             .computers
             .lock()
@@ -330,6 +347,7 @@ impl ComputerRepo for FakeRepo {
         now: DateTime<Utc>,
         lease_until: DateTime<Utc>,
     ) -> Result<Vec<PendingEffect>, FakeError> {
+        self.calls.fetch_add(1, Ordering::SeqCst);
         let effects = self.effects.lock().unwrap();
         let mut due = self.effect_run_after.lock().unwrap();
         let selected: Vec<PendingEffect> = effects
@@ -358,6 +376,7 @@ impl ComputerRepo for FakeRepo {
         lease_until: DateTime<Utc>,
         now: DateTime<Utc>,
     ) -> Result<(), FakeError> {
+        self.calls.fetch_add(1, Ordering::SeqCst);
         let effects = self.effects.lock().unwrap();
         let mut due = self.effect_run_after.lock().unwrap();
         for id in ids {
@@ -373,6 +392,7 @@ impl ComputerRepo for FakeRepo {
     }
 
     async fn complete_effect(&self, id: i64) -> Result<(), FakeError> {
+        self.calls.fetch_add(1, Ordering::SeqCst);
         self.effect_run_after.lock().unwrap().remove(&id);
         self.effects
             .lock()
@@ -387,6 +407,7 @@ impl ComputerRepo for FakeRepo {
         completion: Option<Event>,
         now: DateTime<Utc>,
     ) -> Result<(), FakeError> {
+        self.calls.fetch_add(1, Ordering::SeqCst);
         let computer_id = self
             .effects
             .lock()
@@ -408,6 +429,7 @@ impl ComputerRepo for FakeRepo {
         _error: String,
         retry_at: DateTime<Utc>,
     ) -> Result<(), FakeError> {
+        self.calls.fetch_add(1, Ordering::SeqCst);
         self.effect_run_after.lock().unwrap().insert(id, retry_at);
         for pending in self.effects.lock().unwrap().iter_mut() {
             if pending.id == id {
@@ -418,6 +440,7 @@ impl ComputerRepo for FakeRepo {
     }
 
     async fn due_timers(&self, now: DateTime<Utc>, limit: u32) -> Result<Vec<DueTimer>, FakeError> {
+        self.calls.fetch_add(1, Ordering::SeqCst);
         Ok(self
             .timers
             .lock()
@@ -435,6 +458,7 @@ impl ComputerRepo for FakeRepo {
         instance_status: Option<crate::domain::ports::InstanceStatus>,
         now: DateTime<Utc>,
     ) -> Result<Option<Computer>, FakeError> {
+        self.calls.fetch_add(1, Ordering::SeqCst);
         self.timers
             .lock()
             .unwrap()
@@ -448,10 +472,12 @@ impl ComputerRepo for FakeRepo {
         _host: HostId,
         _deadline: DateTime<Utc>,
     ) -> Result<(), FakeError> {
+        self.calls.fetch_add(1, Ordering::SeqCst);
         Ok(())
     }
 
     async fn register_host(&self, registration: HostRegistration) -> Result<Host, FakeError> {
+        self.calls.fetch_add(1, Ordering::SeqCst);
         *self.awake_units.lock().unwrap() = Some(registration.awake_capacity_units());
         Ok(Host {
             id: HOST,
@@ -461,11 +487,18 @@ impl ComputerRepo for FakeRepo {
         })
     }
 
+    async fn heartbeat_host(&self, host: HostId, now: DateTime<Utc>) -> Result<(), FakeError> {
+        self.calls.fetch_add(1, Ordering::SeqCst);
+        self.heartbeats.lock().unwrap().push((host, now));
+        Ok(())
+    }
+
     async fn sold_out_sizes(
         &self,
         catalog: &[crate::domain::size::CatalogEntry],
         always_on: bool,
     ) -> Result<Vec<ComputerSize>, FakeError> {
+        self.calls.fetch_add(1, Ordering::SeqCst);
         let computers = self.computers.lock().unwrap();
         let sold: u32 = computers
             .values()
@@ -494,6 +527,8 @@ impl ComputerRepo for FakeRepo {
         _user_id: MacroUserIdStr<'static>,
         _size: ComputerSize,
     ) -> Result<(), FakeError> {
+        self.calls.fetch_add(1, Ordering::SeqCst);
+        *self.notify_writes.lock().unwrap() += 1;
         Ok(())
     }
 
@@ -502,6 +537,7 @@ impl ComputerRepo for FakeRepo {
         _team_id: Uuid,
         _user_id: MacroUserIdStr<'static>,
     ) -> Result<Vec<ComputerSize>, FakeError> {
+        self.calls.fetch_add(1, Ordering::SeqCst);
         Ok(vec![])
     }
 }

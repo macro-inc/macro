@@ -468,6 +468,20 @@ where
         agent: TeamAgent,
         computer: ComputerStatus,
     ) -> Result<TeamAgent, TeamAgentError> {
+        // Attachment is a transient observation, not an agent lifecycle change.
+        // Preserve the durable state, billing outcome and last known activity.
+        if computer.status == ComputerStatusKind::Unavailable
+            && computer.payment != ComputerPayment::Unbilled
+        {
+            return Ok(TeamAgent {
+                status: TeamAgentStatus::Unhealthy,
+                status_reason: Some("computers are not available".to_string()),
+                retryable: false,
+                payment: Some(computer.payment),
+                setup: computer.setup,
+                ..agent
+            });
+        }
         let age = self.clock.now() - agent.created_at;
         let waiting_for_first_health = computer.status == ComputerStatusKind::Ready
             && matches!(
@@ -498,7 +512,9 @@ where
                 {
                     (TeamAgentStatus::Provisioning, None)
                 }
-                ComputerStatusKind::SettingUp => (TeamAgentStatus::Provisioning, None),
+                ComputerStatusKind::Unavailable | ComputerStatusKind::SettingUp => {
+                    (TeamAgentStatus::Provisioning, None)
+                }
                 ComputerStatusKind::Failed => (
                     TeamAgentStatus::Failed,
                     Some("the computer failed to start".to_string()),
@@ -664,6 +680,7 @@ where
             .cloned()
             .ok_or(TeamAgentError::Forbidden)?;
         self.ensure_enabled(&caller).await?;
+        self.computers.require_attached().await?;
         let team_id = team_id(&receipt)?;
 
         if self.is_included(team_id).await? {
@@ -727,6 +744,7 @@ where
             .cloned()
             .ok_or(TeamAgentError::Forbidden)?;
         self.ensure_enabled(&created_by).await?;
+        self.computers.require_attached().await?;
         let request = validate(request)?;
         tracing::Span::current().record("team_id", tracing::field::display(team_id(&receipt)?));
 
@@ -801,6 +819,7 @@ where
         if !self.computer_rollout.enabled(&caller).await {
             return Err(TeamAgentError::NotEnabled);
         }
+        self.computers.require_attached().await?;
         let team_id = team_id(&receipt)?;
         let agent = self
             .repository
@@ -858,6 +877,7 @@ where
         agent_user_id: &MacroUserIdStr<'_>,
     ) -> Result<TeamAgent, TeamAgentError> {
         self.ensure_management_enabled(&receipt).await?;
+        self.computers.require_attached().await?;
         let agent = self.team_agent(&receipt, agent_user_id).await?;
         let computer_id = agent.computer_id.ok_or_else(|| {
             TeamAgentError::RetryUnavailable("the agent has no saved computer to retry".to_string())

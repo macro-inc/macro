@@ -54,8 +54,8 @@ key issuance, and account merge/link flows.
 
 ## Computer billing identifiers
 
-- Treat the six `STRIPE_COMPUTER_*_PRICE_ID` values as an optional all-or-none group: none means computers are not sold here; any partial group fails startup and Doppler validation even without `COMPUTERS_FLEET`. An enabled fleet requires all six. Validate configured price syntax in both startup and the Doppler binary.
-- Store computer interval prices as `Option<stripe_price_id::StripePriceId>` and reject malformed configured IDs during configuration loading, including when the fleet is disabled. `Config::computer_prices` returns a validation result.
+- Treat the six `STRIPE_COMPUTER_*_PRICE_ID` values as an optional all-or-none group: none means computer prices are not configured; any partial group fails startup and Doppler validation independently of physical fleet attachment. Validate configured price syntax in both startup and the Doppler binary.
+- Store computer interval prices as `Option<stripe_price_id::StripePriceId>` and reject malformed configured IDs during configuration loading, including when no fleet is attached. `Config::computer_prices` returns a validation result.
 
 ## Checks
 
@@ -77,8 +77,12 @@ metered AI usage policy.
 
 Team computer purchase, quote and offers use the shared fail-closed
 `enable-macro-computers` rollout via `ComputerService::with_rollout`; compose
-it from the existing PostHog provider. Existing management, internal APIs,
-webhook reconciliation and billing workers remain ungated.
+it from the existing PostHog provider. Existing management and internal APIs keep
+their authorization policy. Every computer HTTP use case also requires a fresh
+host heartbeat through `PgComputerRepo` and returns typed 503 before reads or
+effects when detached. The five-minute freshness policy belongs to hosted runtimes;
+authentication has no fleet selector or startup availability latch. Pure catalog
+access, webhook reconciliation and billing workers remain independent of attachment.
 
 - `src/outbound/computer_billing.rs`: `TeamComputerBilling`, the
   `hosted_runtimes` `Billing` port on the team subscription (one item per
@@ -267,11 +271,11 @@ inputs cannot select an agent, and ordinary user credentials remain unattributed
 
 - The HTTP boundary validates optional signed agent correlation without changing existing authorization.
 
-Computer billing requires all six
-`STRIPE_COMPUTER_{STANDARD,LARGE,XL}_{MONTHLY,YEARLY}_PRICE_ID` values to be
-nonblank whenever `COMPUTERS_FLEET` is set. Validate this at startup and in the
-Doppler config check; unset or explicitly disabled fleets require no computer price config; partial price groups are always rejected. Prices
-have no fallback. See [required computer config](../../docs/development/running-locally.md#macro-computers).
+Computer billing accepts either all six
+`STRIPE_COMPUTER_{STANDARD,LARGE,XL}_{MONTHLY,YEARLY}_PRICE_ID` values or none.
+Validate syntax and reject partial groups at startup and in the Doppler check.
+Keep configured and recorded prices when no fleet is attached; cleanup and
+subscription reconciliation still use them. Prices have no fallback. See [required computer config](../../docs/development/running-locally.md#macro-computers).
 
 ## Persona enrollment contract
 
@@ -288,3 +292,8 @@ for each create or recreate; retain neither URLs nor bootstrap credentials in
 `hosted_runtime.persona`. Missing environment composition fails closed before
 credential replacement. The worker merges this transient environment with the
 one-time secret payload into its owner-only mode-0600 persona file.
+
+The team-agent adapter uses the non-HTTP computer maintenance surface for roster
+status and release requests. A detached fleet is a transient unavailable roster
+observation; removal records release for later fleet effects while retaining
+billing cleanup. Neither maintenance operation is exposed as a computer route.

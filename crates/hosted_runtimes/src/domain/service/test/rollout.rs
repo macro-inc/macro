@@ -29,8 +29,13 @@ fn disabled_rollout() -> ComputerRollout {
 
 #[tokio::test]
 async fn purchase_for_team_refuses_flag_off_before_reserving_or_billing() {
-    let service = ComputerService::new(FakeRepo::default(), FakeBilling::default(), FixedClock)
-        .with_rollout(disabled_rollout());
+    let service = ComputerService::new(
+        FakeRepo::default(),
+        FakeBilling::default(),
+        FixedClock,
+        StaticFleetAttachment(FleetAttachment::Attached),
+    )
+    .with_rollout(disabled_rollout());
     let result = service
         .purchase_for_team(PurchaseRequest {
             billing: PurchaseBilling::Stripe,
@@ -49,8 +54,13 @@ async fn purchase_for_team_refuses_flag_off_before_reserving_or_billing() {
 
 #[tokio::test]
 async fn team_quote_refuses_flag_off_before_billing() {
-    let service = ComputerService::new(FakeRepo::default(), FakeBilling::default(), FixedClock)
-        .with_rollout(disabled_rollout());
+    let service = ComputerService::new(
+        FakeRepo::default(),
+        FakeBilling::default(),
+        FixedClock,
+        StaticFleetAttachment(FleetAttachment::Attached),
+    )
+    .with_rollout(disabled_rollout());
     assert!(matches!(
         service
             .quote_for_team(
@@ -66,8 +76,13 @@ async fn team_quote_refuses_flag_off_before_billing() {
 
 #[tokio::test]
 async fn offers_refuse_flag_off_before_billing() {
-    let service = ComputerService::new(FakeRepo::default(), FakeBilling::default(), FixedClock)
-        .with_rollout(disabled_rollout());
+    let service = ComputerService::new(
+        FakeRepo::default(),
+        FakeBilling::default(),
+        FixedClock,
+        StaticFleetAttachment(FleetAttachment::Attached),
+    )
+    .with_rollout(disabled_rollout());
     assert!(matches!(
         service
             .offers(
@@ -81,7 +96,7 @@ async fn offers_refuse_flag_off_before_billing() {
 }
 
 async fn existing_computer_with_flag_off() -> (
-    ComputerService<FakeRepo, FakeBilling, FixedClock>,
+    ComputerService<FakeRepo, FakeBilling, FixedClock, StaticFleetAttachment>,
     ComputerId,
 ) {
     let service = ComputerService::new(
@@ -91,6 +106,7 @@ async fn existing_computer_with_flag_off() -> (
         },
         FakeBilling::default(),
         FixedClock,
+        StaticFleetAttachment(FleetAttachment::Attached),
     )
     .with_rollout(disabled_rollout());
     let id = service

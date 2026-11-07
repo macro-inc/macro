@@ -718,6 +718,7 @@ async fn run_server() -> anyhow::Result<()> {
                 computer_prices.clone(),
             ),
             hosted_runtimes::domain::service::SystemClock,
+            computer_repo.clone(),
         )
         .with_comp_policy(
             crate::outbound::staff_comp_policy::MacroStaffCompPolicy::new(
@@ -731,10 +732,9 @@ async fn run_server() -> anyhow::Result<()> {
         )
         .with_rollout(computer_rollout.clone()),
     );
-    let computer_urls = crate::outbound::computer_urls::ComputerUrls::new(matches!(
-        config.computers_fleet.as_deref(),
-        Some("incus" | "docker")
-    ))?;
+    // Startup accepts the canonical local URL defaults without a fleet. Each
+    // enrollment freshly validates guest reachability before rotating credentials.
+    let computer_urls = crate::outbound::computer_urls::ComputerUrls::new(false)?;
     let team_agents_service = Arc::new(
         team_agents::domain::service::TeamAgentServiceImpl::new(
             team_agents_repository.clone(),

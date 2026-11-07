@@ -57,6 +57,35 @@ Reject invalid stored numeric capacity and retry counts rather than substituting
 
 ## Contracts (PR B, agent brains, builds on these — keep them stable)
 
+- **Fleet availability**: Inject `FleetAttachmentSource` explicitly into
+  `ComputerService::new(repo, billing, clock, attachment)`; its `Attachment`
+  generic has no default. Public `ComputerService::require_attached(&self)`
+  returns `Result<(), ComputerError>` and is the gate HTTP-facing use cases
+  run first; external callers such as `team_agents` discovery call it before
+  any repository read. Detached returns `ComputerError::FleetUnavailable`;
+  attachment-source failures return `ComputerError::Internal`. `FleetAttachment`
+  is `Attached` or `Detached` with no default; `FleetUnavailable` displays
+  "computers are not available" and maps to HTTP 503 with `{message}`.
+  Gate purchase, purchase_for_team (including comps), quote, quote_for_team,
+  offers, list, status, set_power, retry, cancel, undo_cancel, release_now and
+  notify_me before reads, billing or writes; preserve existing rollout denial
+  first. Internal purchase/quote/status authenticate through `InternalOnly`
+  before entering the same gate. Missing rows on a detached fleet return 503.
+  Do not gate catalog(), size_spec(), reconcile_billed_counts,
+  run_billing_effects or operator methods. PostgreSQL reports attached iff any
+  host heartbeat is newer than `now - HOST_HEARTBEAT_FRESHNESS` (five minutes).
+  Registration refreshes the heartbeat; every reconcile pass calls
+  `heartbeat_host(host, now)` without changing capacity or startup timers.
+  Heartbeats are advisory: authentication_service and agent_harness_service
+  may briefly disagree; attachment is not a lease.
+- **Team agents maintenance**: Use `ComputerService::maintenance()` only from
+  the team-agent domain integration, never an HTTP route. `status_for_roster`
+  returns `RosterComputerStatus { status, availability }` even when detached.
+  `request_release(team_id, computer_id)` validates team ownership and applies
+  `Event::ReleaseNow` through the repository, queuing normal billing, destroy
+  and harness revocation effects without consulting fleet attachment or
+  requiring name confirmation. Maintenance does not bypass team ownership or
+  quarantine validation.
 - **Sold resources**: Snapshot `ComputerResources { vcpus: Vcpus, memory_gib: MemoryGib, disk_gib: DiskGib }`,
   `CatalogEntryId` and `price_id` once at purchase. Comped rows have NULL price IDs;
   Stripe retries and removal use the saved price. Use the versioned catalog only

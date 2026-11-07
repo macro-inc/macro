@@ -1,5 +1,6 @@
 use super::bus::{Frame, decode_frame};
 use super::rfb::{ClientFilter, RfbViolation};
+use hosted_runtimes::domain::models::FleetAttachment;
 
 /// What noVNC sends after connecting to Xvnc with no password: version,
 /// security type None, shared ClientInit, then pixel format and encodings.
@@ -129,35 +130,49 @@ impl macro_authorization::JwtValidator for TestIdentity {
 
 #[tokio::test]
 async fn computer_routes_require_harness_management_and_mode_reads_persisted_state() {
-    computer_route_access(true, None).await;
+    computer_route_access(true, None, FleetAttachment::Attached).await;
 }
 
 #[tokio::test]
 async fn computer_viewer_screen_refuses_flag_off() {
-    computer_route_access(false, Some("screen")).await;
+    computer_route_access(false, Some("screen"), FleetAttachment::Detached).await;
 }
 
 #[tokio::test]
 async fn computer_claude_sign_in_refuses_flag_off() {
-    computer_route_access(false, Some("claude-sign-in")).await;
+    computer_route_access(false, Some("claude-sign-in"), FleetAttachment::Detached).await;
 }
 
 #[tokio::test]
 async fn computer_claude_complete_refuses_flag_off() {
-    computer_route_access(false, Some("claude-sign-in/complete")).await;
+    computer_route_access(
+        false,
+        Some("claude-sign-in/complete"),
+        FleetAttachment::Detached,
+    )
+    .await;
 }
 
 #[tokio::test]
 async fn computer_claude_sign_out_refuses_flag_off() {
-    computer_route_access(false, Some("claude-sign-out")).await;
+    computer_route_access(false, Some("claude-sign-out"), FleetAttachment::Detached).await;
 }
 
 #[tokio::test]
 async fn computer_claude_mode_refuses_flag_off() {
-    computer_route_access(false, Some("claude-mode")).await;
+    computer_route_access(false, Some("claude-mode"), FleetAttachment::Detached).await;
 }
 
-async fn computer_route_access(enabled: bool, only_route: Option<&str>) {
+#[tokio::test]
+async fn computer_account_routes_refuse_detached_fleet_after_authorization() {
+    computer_route_access(true, None, FleetAttachment::Detached).await;
+}
+
+async fn computer_route_access(
+    enabled: bool,
+    only_route: Option<&str>,
+    fleet_attachment: FleetAttachment,
+) {
     use axum::{
         body::{Body, to_bytes},
         http::{Request, StatusCode},
@@ -237,6 +252,7 @@ async fn computer_route_access(enabled: bool, only_route: Option<&str>) {
         HarnessServiceImpl::new(repo),
         MacroAuthorizationState::new(Arc::new(authorization)),
         hosted_runtimes::domain::rollout::ComputerRollout::new(flags),
+        fleet_attachment,
         &tasks,
         shutdown.clone(),
     );
@@ -254,13 +270,15 @@ async fn computer_route_access(enabled: bool, only_route: Option<&str>) {
         .unwrap();
     assert_eq!(
         response.status(),
-        if enabled {
-            StatusCode::OK
-        } else {
+        if !enabled {
             StatusCode::FORBIDDEN
+        } else if fleet_attachment == FleetAttachment::Detached {
+            StatusCode::SERVICE_UNAVAILABLE
+        } else {
+            StatusCode::OK
         }
     );
-    if enabled {
+    if enabled && fleet_attachment == FleetAttachment::Attached {
         assert_eq!(
             serde_json::from_slice::<serde_json::Value>(
                 &to_bytes(response.into_body(), 1024).await.unwrap()
@@ -316,6 +334,33 @@ async fn computer_route_access(enabled: bool, only_route: Option<&str>) {
             .await
             .unwrap();
         assert_eq!(response.status(), StatusCode::FORBIDDEN, "{suffix}");
+        if enabled && fleet_attachment == FleetAttachment::Detached {
+            let response = client
+                .request(
+                    method.parse().unwrap(),
+                    format!("http://{address}/harnesses/{}/{suffix}", HarnessId::TEST_A),
+                )
+                .bearer_auth("owner")
+                .header("connection", "upgrade")
+                .header("upgrade", "websocket")
+                .header("sec-websocket-version", "13")
+                .header("sec-websocket-key", "AAAAAAAAAAAAAAAAAAAAAA==")
+                .header("content-type", "application/json")
+                .body(body)
+                .send()
+                .await
+                .unwrap();
+            assert_eq!(
+                response.status(),
+                StatusCode::SERVICE_UNAVAILABLE,
+                "{suffix}"
+            );
+            assert_eq!(
+                response.json::<serde_json::Value>().await.unwrap(),
+                serde_json::json!({"message": "computers are not available"}),
+                "{suffix}"
+            );
+        }
     }
     let anonymous = app
         .oneshot(
@@ -336,6 +381,20 @@ async fn computer_route_access(enabled: bool, only_route: Option<&str>) {
 /// before a screen session can touch Redis or send a command to the runtime.
 #[tokio::test]
 async fn runtime_screen_requires_view_or_use_even_without_a_hosted_computer() {
+    screen_route_access(false, FleetAttachment::Detached).await;
+}
+
+#[tokio::test]
+async fn hosted_screen_refuses_detached_fleet_after_view_or_use_authorization() {
+    screen_route_access(true, FleetAttachment::Detached).await;
+}
+
+#[tokio::test]
+async fn hosted_screen_preserves_view_or_use_with_attached_fleet() {
+    screen_route_access(true, FleetAttachment::Attached).await;
+}
+
+async fn screen_route_access(hosted: bool, fleet_attachment: FleetAttachment) {
     use harness_id::HarnessId;
     use harnesses::domain::{
         models::{ClaudeMode, Harness, HarnessAccess, HarnessOwner},
@@ -349,7 +408,7 @@ async fn runtime_screen_requires_view_or_use_even_without_a_hosted_computer() {
     use std::sync::Arc;
 
     let mut repo = MockHarnessRepo::new();
-    repo.expect_get_harness().returning(|id| {
+    repo.expect_get_harness().returning(move |id| {
         Box::pin(async move {
             if id != HarnessId::TEST_A {
                 return Ok(None);
@@ -371,7 +430,8 @@ async fn runtime_screen_requires_view_or_use_even_without_a_hosted_computer() {
                 connected: false,
                 last_connected_at: None,
                 capabilities: Default::default(),
-                computer_id: None,
+                computer_id: hosted
+                    .then(|| computer_id::ComputerId::new_from_uuid(uuid::Uuid::from_u128(1))),
                 claude_mode: ClaudeMode::MacroCredits,
             }))
         })
@@ -420,6 +480,7 @@ async fn runtime_screen_requires_view_or_use_even_without_a_hosted_computer() {
         HarnessServiceImpl::new(repo),
         MacroAuthorizationState::new(Arc::new(authorization)),
         hosted_runtimes::domain::rollout::ComputerRollout::new(flags),
+        fleet_attachment,
         &tasks,
         shutdown.clone(),
     );
@@ -433,14 +494,19 @@ async fn runtime_screen_requires_view_or_use_even_without_a_hosted_computer() {
             .unwrap();
     });
     let client = reqwest::Client::new();
+    let authorized_status = if hosted && fleet_attachment == FleetAttachment::Detached {
+        reqwest::StatusCode::SERVICE_UNAVAILABLE
+    } else {
+        reqwest::StatusCode::CONFLICT
+    };
     for (token, control, expected) in [
-        ("owner", false, reqwest::StatusCode::CONFLICT),
-        ("owner", true, reqwest::StatusCode::CONFLICT),
-        ("user", false, reqwest::StatusCode::CONFLICT),
-        ("user", true, reqwest::StatusCode::CONFLICT),
-        ("reader", false, reqwest::StatusCode::CONFLICT),
+        ("owner", false, authorized_status),
+        ("owner", true, authorized_status),
+        ("user", false, authorized_status),
+        ("user", true, authorized_status),
+        ("reader", false, authorized_status),
         ("reader", true, reqwest::StatusCode::FORBIDDEN),
-        ("resident", false, reqwest::StatusCode::CONFLICT),
+        ("resident", false, authorized_status),
         ("resident", true, reqwest::StatusCode::FORBIDDEN),
         ("other", false, reqwest::StatusCode::FORBIDDEN),
         ("other", true, reqwest::StatusCode::FORBIDDEN),
@@ -458,10 +524,16 @@ async fn runtime_screen_requires_view_or_use_even_without_a_hosted_computer() {
             .send()
             .await
             .unwrap();
-        // A display-less paired runtime passes authorization, then returns 409
-        // before any screen command/bus side effect. Requiring Manage for
-        // control or requiring a hosted computer would fail this assertion.
+        // The detached hosted fleet refuses requests before Redis/commands.
+        // A display-less generic runtime still reaches the existing 409, and
+        // shared Read/Use rights stay identical for both kinds of harness.
         assert_eq!(response.status(), expected, "{token} control={control}");
+        if expected == reqwest::StatusCode::SERVICE_UNAVAILABLE {
+            assert_eq!(
+                response.json::<serde_json::Value>().await.unwrap(),
+                serde_json::json!({"message": "computers are not available"})
+            );
+        }
     }
     shutdown.cancel();
     tasks.close();
@@ -525,7 +597,12 @@ async fn computer_invalid_code_is_a_typed_retryable_response() {
 
 #[tokio::test]
 async fn computer_claude_cancel_refuses_flag_off() {
-    computer_route_access(false, Some("claude-sign-in/cancel")).await;
+    computer_route_access(
+        false,
+        Some("claude-sign-in/cancel"),
+        FleetAttachment::Detached,
+    )
+    .await;
 }
 
 #[tokio::test]
@@ -575,6 +652,7 @@ async fn dropped_submit_reconciles(acknowledge_cancel: bool) {
         rollout: hosted_runtimes::domain::rollout::ComputerRollout::new(
             feature_flags::outbound::fake::FakeFeatureFlags::default(),
         ),
+        fleet_attachment: FleetAttachment::Attached,
         control,
         redis: redis.clone(),
         cleanup: cleanup.clone(),

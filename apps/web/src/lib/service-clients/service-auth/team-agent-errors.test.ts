@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  teamAgentComputerErrorResponseHandler,
   teamAgentCreateErrorResponseHandler,
   teamAgentQuoteErrorResponseHandler,
 } from './team-agent-errors';
@@ -75,4 +76,38 @@ it('preserves a changed billing mode without exposing unknown conflicts', async 
       )
     ).code
   ).toBe('CONFLICT');
+});
+
+describe('computer discovery availability', () => {
+  it('classifies dedicated discovery 503 without inspecting message text', async () => {
+    expect(
+      await teamAgentComputerErrorResponseHandler(
+        Response.json(
+          { message: 'computers are not available' },
+          { status: 503 }
+        )
+      )
+    ).toEqual({
+      code: 'COMPUTERS_UNAVAILABLE',
+      message: 'Computers are not available.',
+    });
+  });
+  it.each([
+    [401, 'UNAUTHORIZED'],
+    [403, 'FORBIDDEN'],
+    [404, 'NOT_FOUND'],
+    [409, 'CONFLICT'],
+    [500, 'SERVER_ERROR'],
+  ])('preserves discovery status %s as an error', async (status, code) => {
+    expect(
+      (
+        await teamAgentComputerErrorResponseHandler(
+          Response.json(
+            { message: 'computers are not available' },
+            { status: Number(status) }
+          )
+        )
+      ).code
+    ).toBe(code);
+  });
 });

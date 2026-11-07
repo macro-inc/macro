@@ -246,3 +246,23 @@ The owning repository adapter resolves and validates `AgentGitServiceUrl::new()`
 on every create/reissue before contacting the git service. Never retain its
 advertised clone base from service startup: a recreate must receive the current
 base, while the internal API address remains the git client's own concern.
+
+## Detached computer fleets
+
+Read computer roster facts through `ComputerService::maintenance().status_for_roster`.
+A detached observation preserves saved billing, lifecycle and last activity, projects
+as transient unhealthy with an unavailable reason, and never latches a stored
+failure. Keep terminal payment/computer failures unchanged. Use maintenance
+`request_release` for agent removal so billing removal can run and fleet effects
+remain queued until attachment returns. Pure size catalog access stays independent
+of attachment and prices; purchase, quote and retry still require attachment.
+
+Member computer discovery still requires a fresh fleet attachment after its
+computer rollout check and before reading the agent row. A detached fleet returns
+typed 503 without revealing whether an agent or computer exists; roster
+maintenance remains available for team administration.
+
+Quote, create and retry require the physical attachment immediately after their
+existing management rollout check, before catalog/pricing, account/repo setup or
+retry projection. Detached fleets return the same typed 503 for paid and included
+agents. Roster, display-only catalog and removal maintenance remain available.

@@ -204,11 +204,7 @@ fn off_removes_shared_computer_settings() {
     Computers::new(Mode::Local, Fleet::Off, &instance)
         .write_env(&mut env)
         .unwrap();
-    assert_eq!(env["COMPUTERS_FLEET"], "disabled");
-    assert!(
-        !env.keys()
-            .any(|key| key.starts_with("COMPUTERS_") && key != "COMPUTERS_FLEET")
-    );
+    assert!(!env.keys().any(|key| key.starts_with("COMPUTERS_")));
 }
 
 #[test]

@@ -65,7 +65,7 @@ function ConnectedAgentScreenEntry(props: AgentScreenEntryProps) {
   const resolveHarness = () => {
     if (!queryReadyGate(directory)) return;
     let id: string | undefined | null;
-    if (isAgent() && queryReadyGate(computer)) id = computer.data.harnessId;
+    if (isAgent() && queryReadyGate(computer)) id = computer.data?.harnessId;
     else if (isBot() && queryReadyGate(bots)) {
       id = bots.data.find(
         (item) => `bot|${item.bot.id}` === props.userId

@@ -3643,6 +3643,9 @@
           },
           "404": {
             "description": ""
+          },
+          "503": {
+            "description": ""
           }
         }
       }
@@ -3689,6 +3692,9 @@
           "422": {
             "description": ""
           },
+          "503": {
+            "description": ""
+          },
           "504": {
             "description": ""
           }
@@ -3725,6 +3731,9 @@
             "description": ""
           },
           "422": {
+            "description": ""
+          },
+          "503": {
             "description": ""
           },
           "504": {
@@ -3785,6 +3794,9 @@
           "422": {
             "description": ""
           },
+          "503": {
+            "description": ""
+          },
           "504": {
             "description": ""
           }
@@ -3828,6 +3840,9 @@
             "description": ""
           },
           "422": {
+            "description": ""
+          },
+          "503": {
             "description": ""
           },
           "504": {

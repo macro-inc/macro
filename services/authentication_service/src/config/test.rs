@@ -473,7 +473,7 @@ fn staff_domain_has_no_implicit_local_default() {
 }
 
 #[test]
-fn enabled_computers_require_every_price_at_startup() {
+fn configured_computer_prices_require_the_complete_group_at_startup() {
     let config: Config = serde_json::from_value(config_values()).unwrap();
     config.validate_computer_config().unwrap();
 
@@ -486,7 +486,6 @@ fn enabled_computers_require_every_price_at_startup() {
         "STRIPE_COMPUTER_XL_YEARLY_PRICE_ID",
     ];
     let mut values = config_values();
-    values["COMPUTERS_FLEET"] = serde_json::json!("incus");
     for key in keys {
         values[key] = serde_json::json!("price_test");
     }
@@ -562,9 +561,8 @@ fn partial_computer_prices_fail_without_a_fleet() {
 }
 
 #[test]
-fn disabled_computers_need_no_prices_but_reject_partial_prices() {
+fn absent_fleet_keeps_optional_computer_prices_and_rejects_partial_prices() {
     let mut values = config_values();
-    values["COMPUTERS_FLEET"] = serde_json::json!("disabled");
     let config: Config = serde_json::from_value(values.clone()).unwrap();
     config.validate_computer_config().unwrap();
 

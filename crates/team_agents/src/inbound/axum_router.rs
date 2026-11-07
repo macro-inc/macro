@@ -194,7 +194,9 @@ impl IntoResponse for TeamAgentError {
         let status = match &self {
             TeamAgentError::BadRequest(_) => StatusCode::BAD_REQUEST,
             TeamAgentError::NotAnAgent | TeamAgentError::NotFound => StatusCode::NOT_FOUND,
-            TeamAgentError::EmailUnavailable => StatusCode::SERVICE_UNAVAILABLE,
+            TeamAgentError::EmailUnavailable | TeamAgentError::FleetUnavailable(_) => {
+                StatusCode::SERVICE_UNAVAILABLE
+            }
             TeamAgentError::Forbidden | TeamAgentError::NotEnabled => StatusCode::FORBIDDEN,
             TeamAgentError::QuoteChanged
             | TeamAgentError::NoSubscription
@@ -295,6 +297,7 @@ pub struct QuoteQuery {
         (status = 401, body = ErrorResponse),
         (status = 403, body = ErrorResponse),
         (status = 409, body = TeamAgentConflict),
+        (status = 503, body = ErrorResponse),
         (status = 500, body = ErrorResponse),
         (status = 502, body = ErrorResponse),
     )
@@ -332,6 +335,7 @@ where
         (status = 401, body = ErrorResponse),
         (status = 403, body = ErrorResponse),
         (status = 409, body = TeamAgentConflict),
+        (status = 503, body = ErrorResponse),
         (status = 500, body = ErrorResponse),
         (status = 502, body = TeamAgentFailure),
     )
@@ -403,6 +407,7 @@ pub struct AgentPath {
         (status = 401, body = ErrorResponse),
         (status = 403, body = ErrorResponse),
         (status = 404, body = ErrorResponse),
+        (status = 503, body = ErrorResponse),
         (status = 500, body = ErrorResponse),
     )
 )]
@@ -440,6 +445,7 @@ where
         (status = 403, body = ErrorResponse),
         (status = 404, body = ErrorResponse),
         (status = 409, body = TeamAgentConflict),
+        (status = 503, body = ErrorResponse),
         (status = 500, body = ErrorResponse),
         (status = 502, body = ErrorResponse),
     )

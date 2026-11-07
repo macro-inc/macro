@@ -243,6 +243,8 @@ pub enum ComputerPayment {
 /// The coarse status a team sees (`hosted_runtimes::ComputerStatusKind`).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ComputerStatusKind {
+    /// No fleet is currently attached; the durable computer record is retained.
+    Unavailable,
     /// Paying, creating, booting or connecting for the first time.
     SettingUp,
     /// Up.
@@ -433,6 +435,9 @@ pub struct TeamAgentSizes {
 /// Errors from team agent operations.
 #[derive(Debug, thiserror::Error)]
 pub enum TeamAgentError {
+    /// No fleet is currently attached; distinct from price or capacity errors.
+    #[error(transparent)]
+    FleetUnavailable(#[from] hosted_runtimes::domain::models::FleetUnavailable),
     /// The request is malformed.
     #[error("{0}")]
     BadRequest(String),

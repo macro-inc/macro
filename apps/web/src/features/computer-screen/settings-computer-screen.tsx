@@ -144,6 +144,10 @@ function ConnectedSettingsComputerScreen(props: ParentProps) {
           parentSpan: interaction.span,
         });
         if (current !== request) return;
+        if (computer === null) {
+          setOpen(false);
+          return;
+        }
         setAgentComputer(computer.isAgentComputer);
         if (!computer.harnessId) setError('starting');
         else setHarnessId(computer.harnessId);

@@ -7,6 +7,7 @@ import { SettingsComputerScreen } from './settings-computer-screen';
 
 const mocks = vi.hoisted(() => ({
   lookup: vi.fn(),
+  toast: vi.fn(),
   connect: vi.fn(),
   mobile: false,
   enabled: true,
@@ -17,6 +18,9 @@ const mocks = vi.hoisted(() => ({
   directorySnapshot: (): { error: boolean; hasData: boolean } | undefined =>
     undefined,
   access: 'read' as Harness['access'],
+}));
+vi.mock('@core/component/Toast/Toast', () => ({
+  toast: { failure: mocks.toast },
 }));
 vi.mock('@app/lib/analytics/posthog', () => ({
   useFeatureFlag: (flag: { key: string }) => () =>
@@ -189,4 +193,35 @@ it('retries directory discovery when reopening after the service recovers', asyn
   fireEvent.click(screen.getByRole('button', { name: 'Open agent computer' }));
   await waitFor(() => expect(mocks.connect).toHaveBeenCalled());
   expect(mocks.refetch).toHaveBeenCalledTimes(2);
+});
+
+it('closes unavailable computer discovery quietly without a failure surface', async () => {
+  mocks.lookup.mockResolvedValue(null);
+  render(() => (
+    <SettingsComputerScreen>
+      <Open />
+    </SettingsComputerScreen>
+  ));
+  fireEvent.click(screen.getByRole('button', { name: 'Open agent computer' }));
+  await waitFor(() => expect(mocks.lookup).toHaveBeenCalledTimes(1));
+  await waitFor(() =>
+    expect(screen.queryByRole('region', { name: 'Computer screen' })).toBeNull()
+  );
+  expect(mocks.toast).not.toHaveBeenCalled();
+  expect(mocks.connect).not.toHaveBeenCalled();
+  expect(screen.queryByRole('alert')).toBeNull();
+});
+it('keeps actual discovery errors visible and toasts them', async () => {
+  mocks.lookup.mockRejectedValue(new Error('HTTP 500'));
+  render(() => (
+    <SettingsComputerScreen>
+      <Open />
+    </SettingsComputerScreen>
+  ));
+  fireEvent.click(screen.getByRole('button', { name: 'Open agent computer' }));
+  await waitFor(() =>
+    expect(mocks.toast).toHaveBeenCalledWith('Could not load computer')
+  );
+  expect(screen.getByRole('alert')).toBeTruthy();
+  expect(mocks.connect).not.toHaveBeenCalled();
 });

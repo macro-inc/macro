@@ -412,8 +412,8 @@ upgrades. Bun is still used for dependency installation and builds.
 `agent_harness_service` runs the Macro computer control plane when
 `COMPUTERS_FLEET` is `incus` or `docker`. The stack sets every `COMPUTERS_*`
 value from the fleet you pick. An enabled fleet requires explicit configuration;
-missing values fail startup with the variable name. `COMPUTERS_FLEET` is required;
-`disabled` needs no fleet settings. Local orchestration sets `disabled` when
+missing values fail startup with the variable name. With no attached fleet, omit
+`COMPUTERS_FLEET` and every `COMPUTERS_*` setting. Local orchestration emits none when
 computers are off. Enrollment copies macrod’s `OVERRIDE_*` service URLs from
 the harness process environment; xtask supplies the values for the fleet.
 
@@ -440,12 +440,19 @@ Incus additionally requires `COMPUTERS_INCUS_URL`,
 | `COMPUTERS_INCUS_STATE_CHANGE_TIMEOUT_SECS` | `60` |
 | `COMPUTERS_INCUS_SHUTDOWN_GRACE_SECS` | `60` |
 
-Authentication also reads `COMPUTERS_FLEET`. When enabled, all six
-`STRIPE_COMPUTER_{STANDARD,LARGE,XL}_{MONTHLY,YEARLY}_PRICE_ID` values must be
-nonblank. Without a fleet, omit the entire price group to disable computer
-sales; partial groups fail startup and Doppler validation. Disabled sales
-answer 503 on offers, quotes and purchases before contacting Stripe. No size
-or interval receives a fallback price. Local Doppler supplies test-mode prices.
+Authentication does not read a fleet selector. It resolves physical attachment on
+every computer HTTP request from the owning host heartbeat (fresh within five
+minutes); without attachment these routes answer typed 503 before reads, billing
+or queued effects. The operator refreshes its heartbeat at startup and every
+60-second reconcile pass. PostHog `enable-macro-computers` is the only product
+rollout gate. Absent attachment is not a feature switch.
+
+Configure all six
+`STRIPE_COMPUTER_{STANDARD,LARGE,XL}_{MONTHLY,YEARLY}_PRICE_ID` values or none;
+partial groups and malformed IDs fail startup and Doppler validation even without
+a fleet. Preserve configured prices when detaching a fleet: billing cleanup and
+reconciliation still need them. Pure catalog/spec access does not require prices
+or attachment. No size or interval receives a fallback price. Local Doppler supplies test-mode prices.
 `--no-doppler` supplies explicit
 placeholder price IDs for startup only; replace them with real test prices
 before buying a computer.

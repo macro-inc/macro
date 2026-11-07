@@ -4,6 +4,9 @@
 //! service builds in Docker for the local path, and local mode never requires
 //! Pulumi / real AWS / real SES.
 
+#[cfg(test)]
+mod test;
+
 use anyhow::{Context, Result, bail};
 use serde_json::Value;
 
@@ -181,8 +184,16 @@ fn computers_failures(
     let mut failures = Vec::new();
     match computers.fleet() {
         Fleet::Off => {
-            if env("COMPUTERS_FLEET") != Some("disabled") {
-                failures.push("computers are off but COMPUTERS_FLEET is not disabled".into());
+            if harness
+                .get("environment")
+                .and_then(Value::as_object)
+                .is_some_and(|environment| {
+                    environment.keys().any(|key| key.starts_with("COMPUTERS_"))
+                })
+            {
+                failures.push(
+                    "no fleet is selected but computer infrastructure settings remain".into(),
+                );
             }
         }
         Fleet::Docker => {

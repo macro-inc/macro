@@ -687,3 +687,49 @@ mod credentials;
 
 mod capacity;
 mod waiting;
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn fleet_attachment_tracks_host_heartbeat_freshness(pool: PgPool) {
+    use crate::domain::models::{FleetAttachment, HOST_HEARTBEAT_FRESHNESS};
+    use crate::domain::ports::FleetAttachmentSource;
+    let repo = PgComputerRepo::new(pool);
+    assert_eq!(
+        repo.attachment(now()).await.unwrap(),
+        FleetAttachment::Detached
+    );
+    let host = repo
+        .register_host(HostRegistration {
+            name: "heartbeat-test".to_owned(),
+            memory_gb: 32,
+            reserve_gb: 8,
+            oversell_factor: 2,
+        })
+        .await
+        .unwrap();
+    assert_eq!(
+        repo.attachment(Utc::now()).await.unwrap(),
+        FleetAttachment::Attached
+    );
+    repo.heartbeat_host(host.id, now()).await.unwrap();
+    assert_eq!(
+        repo.attachment(now() + HOST_HEARTBEAT_FRESHNESS - Duration::milliseconds(1))
+            .await
+            .unwrap(),
+        FleetAttachment::Attached
+    );
+    assert_eq!(
+        repo.attachment(now() + HOST_HEARTBEAT_FRESHNESS)
+            .await
+            .unwrap(),
+        FleetAttachment::Detached
+    );
+    repo.heartbeat_host(host.id, now() + HOST_HEARTBEAT_FRESHNESS)
+        .await
+        .unwrap();
+    assert_eq!(
+        repo.attachment(now() + HOST_HEARTBEAT_FRESHNESS)
+            .await
+            .unwrap(),
+        FleetAttachment::Attached
+    );
+}

@@ -5520,6 +5520,7 @@ export type CreateTeamAgentErrors = {
     409: TeamAgentConflict;
     500: ErrorResponse;
     502: TeamAgentFailure;
+    503: ErrorResponse;
 };
 
 export type CreateTeamAgentError = CreateTeamAgentErrors[keyof CreateTeamAgentErrors];
@@ -5647,6 +5648,7 @@ export type QuoteTeamAgentErrors = {
     409: TeamAgentConflict;
     500: ErrorResponse;
     502: ErrorResponse;
+    503: ErrorResponse;
 };
 
 export type QuoteTeamAgentError = QuoteTeamAgentErrors[keyof QuoteTeamAgentErrors];
@@ -5726,6 +5728,7 @@ export type GetTeamAgentComputerErrors = {
     403: ErrorResponse;
     404: ErrorResponse;
     500: ErrorResponse;
+    503: ErrorResponse;
 };
 
 export type GetTeamAgentComputerError = GetTeamAgentComputerErrors[keyof GetTeamAgentComputerErrors];
@@ -5756,6 +5759,7 @@ export type RetryTeamAgentErrors = {
     409: TeamAgentConflict;
     500: ErrorResponse;
     502: ErrorResponse;
+    503: ErrorResponse;
 };
 
 export type RetryTeamAgentError = RetryTeamAgentErrors[keyof RetryTeamAgentErrors];

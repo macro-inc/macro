@@ -171,6 +171,9 @@ pub trait Mailboxes: Send + Sync + 'static {
 
 /// Macro computers (hosted runtimes) bought on a team's subscription.
 pub trait Computers: Send + Sync + 'static {
+    /// Require a fresh physical attachment before discovering any computer identity.
+    fn require_attached(&self) -> impl Future<Output = Result<(), TeamAgentError>> + Send;
+
     /// Catalog specifications, without consulting billing.
     fn sizes(&self) -> Vec<ComputerSizeSpec>;
 

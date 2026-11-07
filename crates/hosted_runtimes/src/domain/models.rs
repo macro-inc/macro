@@ -16,6 +16,51 @@ use crate::domain::ids::ComputerId;
 use crate::domain::lifecycle::{Billing, ComputerState, HostId, PaymentOutcome, Phase, Power};
 use crate::domain::size::{CatalogEntryId, ComputerResources, ComputerSize};
 
+/// How long a host heartbeat advertises an attached operator.
+pub const HOST_HEARTBEAT_FRESHNESS: chrono::Duration = chrono::Duration::minutes(5);
+
+/// Advisory presence of a computer fleet operator.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum FleetAttachment {
+    /// At least one operator has a fresh heartbeat.
+    Attached,
+    /// No operator has a fresh heartbeat.
+    Detached,
+}
+
+impl FleetAttachment {
+    /// Convert observed operator presence to attachment.
+    pub fn from_operator_present(present: bool) -> Self {
+        if present {
+            Self::Attached
+        } else {
+            Self::Detached
+        }
+    }
+
+    /// Refuse user operations while the fleet is detached.
+    pub fn require_attached(self) -> Result<(), FleetUnavailable> {
+        match self {
+            Self::Attached => Ok(()),
+            Self::Detached => Err(FleetUnavailable),
+        }
+    }
+}
+
+/// The fleet currently has no attached operator.
+#[derive(Debug, thiserror::Error)]
+#[error("computers are not available")]
+pub struct FleetUnavailable;
+
+/// A roster computer's durable status and current operator availability.
+#[derive(Debug)]
+pub struct RosterComputerStatus {
+    /// Durable lifecycle status, even while the fleet is detached.
+    pub status: ComputerStatus,
+    /// Advisory operator presence.
+    pub availability: FleetAttachment,
+}
+
 /// Stable identity shared by replicas of one computer control plane.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(transparent)]

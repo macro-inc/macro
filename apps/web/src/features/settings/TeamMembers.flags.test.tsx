@@ -20,6 +20,7 @@ function SettingsTestProvider(props: ParentProps) {
 }
 
 const mocks = vi.hoisted(() => ({
+  unavailable: (): boolean => false,
   readComputer: () => ({ enabled: false, loading: false }),
   read: () => ({ enabled: false, loading: true }),
   enabled: (): boolean => false,
@@ -121,6 +122,9 @@ vi.mock('@queries/team/teams', () => ({
   }),
 }));
 vi.mock('@queries/team-agents', () => ({
+  useTeamAgentComputerAvailability:
+    (_user: () => string, enabled: () => boolean) => () =>
+      enabled() && !mocks.unavailable(),
   useTeamAgentsQuery: (_id: unknown, enabled: () => boolean) => {
     mocks.enabled = enabled;
     return {
@@ -173,6 +177,7 @@ const agent: TeamAgent = {
   retryable: true,
   statusReason: 'Setup failed',
 };
+const [unavailable, setUnavailable] = createSignal(false);
 const [flag, setFlag] = createSignal({ enabled: false, loading: true });
 const [computerFlag, setComputerFlag] = createSignal({
   enabled: false,
@@ -185,6 +190,8 @@ beforeEach(() => {
   vi.stubGlobal('scrollTo', vi.fn());
   setFlag({ enabled: false, loading: true });
   mocks.read = flag;
+  setUnavailable(false);
+  mocks.unavailable = unavailable;
   setComputerFlag({ enabled: false, loading: false });
   mocks.readComputer = computerFlag;
   seedMockDisplayNames([
@@ -333,4 +340,23 @@ it('keeps admin management available with computers disabled', async () => {
     await screen.findByRole('menuitem', { name: 'Change voice' })
   ).toBeTruthy();
   expect(screen.queryByRole('menuitem', { name: 'View computer' })).toBeNull();
+});
+
+it('hides known-unavailable computer actions and restores them after recovery', async () => {
+  setComputerFlag({ enabled: true, loading: false });
+  setFlag({ enabled: true, loading: false });
+  render(() => <TeamMembers team={team} />, { wrapper: SettingsTestProvider });
+  fireEvent.keyDown(screen.getByRole('button', { name: 'More' }), {
+    key: 'ArrowDown',
+  });
+  const view = await screen.findByRole('menuitem', { name: 'View computer' });
+  setUnavailable(true);
+  expect(screen.queryByRole('menuitem', { name: 'View computer' })).toBeNull();
+  fireEvent.click(view);
+  expect(mocks.openComputer).not.toHaveBeenCalled();
+  expect(mocks.enabled()).toBe(true);
+  setUnavailable(false);
+  expect(
+    await screen.findByRole('menuitem', { name: 'View computer' })
+  ).toBeTruthy();
 });

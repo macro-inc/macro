@@ -1342,7 +1342,11 @@ until enabled. Keep the data-derived Agent chip when off; use confirmed human
 identity for generic member controls so an agent cannot be managed through them.
 Gate View computer, screen panes and navigation with `enableMacroComputers`,
 independently of agent management; disabling the agent flag must not revoke
-computer UI access. Agent self-service keeps its existing gate.
+computer UI access. Treat the dedicated agent-computer discovery endpoint's
+503 as typed absence; cache that outcome to hide known-unavailable screen
+entries without a failure toast or a roster-wide discovery prefetch. Recheck
+known absence while computer UI is enabled so fleet reattachment restores the
+entry; preserve other discovery errors and their failure feedback. Agent self-service keeps its existing gate.
 
 Use the shared `Dialog` and `Panel` header/body/footer for agent invitations,
 including the standard phone sheet. `AgentPortrait` generates a fictional face

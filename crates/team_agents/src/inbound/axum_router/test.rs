@@ -58,6 +58,7 @@ fn agent() -> TeamAgent {
 #[derive(Default)]
 struct FakeService {
     admin_disabled: bool,
+    fleet_detached: bool,
     calls: Mutex<Vec<String>>,
     create_error: Mutex<Option<TeamAgentError>>,
     quote_error: Mutex<Option<TeamAgentError>>,
@@ -78,6 +79,9 @@ impl TeamAgentService for FakeService {
     ) -> Result<TeamAgentComputer, TeamAgentError> {
         if self.admin_disabled {
             return Err(TeamAgentError::NotEnabled);
+        }
+        if self.fleet_detached {
+            return Err(hosted_runtimes::domain::models::FleetUnavailable.into());
         }
         self.record(format!("computer {}", receipt.entity().entity_id));
         Ok(TeamAgentComputer {
@@ -812,4 +816,34 @@ async fn teammates_can_discover_agent_computers_without_admin_details() {
         assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
     }
     assert_eq!(service.calls.lock().unwrap().len(), 1);
+}
+
+#[tokio::test]
+async fn detached_computer_discovery_returns_typed_503_without_identity_details() {
+    for rollout_off in [false, true] {
+        let service = Arc::new(FakeService {
+            fleet_detached: true,
+            admin_disabled: rollout_off,
+            ..Default::default()
+        });
+        let response = router(service.clone(), TeamRole::Member)
+            .oneshot(
+                Request::get("/macro%7Cmissing%40example.com/computer")
+                    .header(header::AUTHORIZATION, "Bearer admin")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        if rollout_off {
+            assert_eq!(response.status(), StatusCode::FORBIDDEN);
+        } else {
+            assert_eq!(response.status(), StatusCode::SERVICE_UNAVAILABLE);
+            let body: serde_json::Value = serde_json::from_str(&body_text(response).await).unwrap();
+            assert_eq!(body["message"], "computers are not available");
+            assert!(body.get("computerId").is_none());
+            assert!(body.get("harnessId").is_none());
+        }
+        assert!(service.calls.lock().unwrap().is_empty());
+    }
 }

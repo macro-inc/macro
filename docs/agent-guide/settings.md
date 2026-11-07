@@ -1011,6 +1011,11 @@ sign-in** beside the field. Successful sign-in switches the label to your accoun
 failures appear inline. Members without management rights see the mode without
 account controls. This account is used by Claude on the shared computer.
 
+When the team's computer fleet is unavailable, known-unavailable **View computer**
+and **Show screen** entries are hidden without an error toast. They return after
+computer discovery observes the fleet again. Other lookup failures still show
+failure feedback.
+
 With **enable-macro-computers** enabled, **View computer** in a member’s agent menu,
 an agent’s settings, or a screen-capable runtime opens the existing Screen pane
 as the main Settings content at every width. Runtime cards outside Settings
