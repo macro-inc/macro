@@ -102,6 +102,9 @@ vi.mock('@core/context/channels', () => ({
 vi.mock('@queries/channel/channel-participants', () => ({
   useChannelParticipantsQuery: () => ({ isSuccess: false, data: undefined }),
 }));
+vi.mock('../ChannelComputerButton', () => ({
+  ChannelComputerButton: () => null,
+}));
 vi.mock('../ChannelSurface', () => ({
   ChannelSurface: mocks.pass,
   ChannelMessages: () => null,

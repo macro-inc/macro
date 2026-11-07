@@ -1024,6 +1024,13 @@ hovering or right-clicking on desktop, or tapping or long-pressing on a phone.
 access also get **Take control**, which opens directly in control mode. Phone
 cards offer only **Show screen** and remain watch-only.
 
+In a direct message with an agent teammate, a small **View computer** icon
+beside **Call** opens the same pane in watch mode. It uses the ordinary header
+button styling and appears only with **enable-macro-computers**, a paired
+screen-capable computer and readable access. Human DMs and group conversations
+keep their existing header. Desktop editors can choose **Take control** in the
+pane; phones keep the full-screen watch view with no control action.
+
 The header names the computer and shows a small **Watching** or **In control**
 pill; the back icon closes the screen. **Show screen** starts in **Watching** mode. Read and Resident access stay watch-only;
 User and owner access offer **Take control** on desktop. Phones remain watch-only.

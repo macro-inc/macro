@@ -10,7 +10,9 @@ const mocks = vi.hoisted(() => ({
   capability: true,
   access: 'read' as Harness['access'],
   paired: true,
+  visible: true,
   open: vi.fn(),
+  interaction: vi.fn(() => ({ end: vi.fn() })),
   request: vi.fn(),
   settings: vi.fn(),
   discovery: vi.fn(),
@@ -19,6 +21,9 @@ const mocks = vi.hoisted(() => ({
 }));
 vi.mock('@app/lib/analytics/posthog', () => ({
   useFeatureFlag: () => () => mocks.flag(),
+}));
+vi.mock('@app/observability/flow', () => ({
+  beginInteraction: mocks.interaction,
 }));
 vi.mock('@core/user', () => ({
   tryMacroId: (id: string) => id,
@@ -59,7 +64,7 @@ vi.mock('@queries/harnesses/harnesses', () => ({
     return {
       isPending: false,
       get data() {
-        return enabled()
+        return enabled() && mocks.visible
           ? [
               {
                 id: 'runtime-1',
@@ -80,6 +85,7 @@ vi.mock('./context/settings-screen-navigation', () => ({
   useOptionalSettingsScreenNavigation: () => ({ request: mocks.request }),
 }));
 
+import { AgentComputerScreenEntry } from './agent-computer-screen-entry';
 import { AgentPortraitScreenActions } from './agent-portrait-screen-actions';
 
 afterEach(cleanup);
@@ -90,10 +96,11 @@ beforeEach(() => {
   mocks.mobile = false;
   mocks.capability = true;
   mocks.paired = true;
+  mocks.visible = true;
   mocks.access = 'read';
   mocks.local = true;
 });
-it.each(['read', 'resident', 'none'] as const)(
+it.each(['read', 'resident'] as const)(
   'offers watch mode and no control for %s access',
   (access) => {
     mocks.access = access;
@@ -161,4 +168,77 @@ it('discovers a bot-bound screen without querying the managed-agent endpoint', (
   expect(mocks.discovery).toHaveBeenCalledWith(false);
   fireEvent.click(screen.getByRole('button', { name: 'Show screen' }));
   expect(mocks.open).toHaveBeenCalledWith('runtime-1', false);
+});
+
+it.each(['local', 'navigation'] as const)(
+  'rejects retained %s screen callbacks when current eligibility changes',
+  (destination) => {
+    for (const invalidation of [
+      'off',
+      'loading',
+      'deleted',
+      'unpaired',
+      'directory',
+      'capability',
+      'access',
+      'unmounted',
+    ] as const) {
+      mocks.local = destination === 'local';
+      const [flag, setFlag] = createSignal({ enabled: true, loading: false });
+      const [deleted, setDeleted] = createSignal(false);
+      mocks.flag = flag;
+      mocks.paired = true;
+      mocks.visible = true;
+      mocks.capability = true;
+      mocks.access = 'read';
+      const onSelect = vi.fn();
+      let retainedOpen: ((control: boolean) => void) | undefined;
+      const view = render(() => (
+        <AgentComputerScreenEntry
+          userId="macro|agent@example.com"
+          isDeleted={deleted()}
+          onSelect={onSelect}
+        >
+          {(_harness, open) => {
+            retainedOpen = open;
+            return <span>Screen entry</span>;
+          }}
+        </AgentComputerScreenEntry>
+      ));
+      expect(retainedOpen).toBeTypeOf('function');
+      if (invalidation === 'off') setFlag({ enabled: false, loading: false });
+      if (invalidation === 'loading') setFlag({ enabled: true, loading: true });
+      if (invalidation === 'deleted') setDeleted(true);
+      if (invalidation === 'unpaired') mocks.paired = false;
+      if (invalidation === 'directory') mocks.visible = false;
+      if (invalidation === 'capability') mocks.capability = false;
+      if (invalidation === 'access') mocks.access = 'none';
+      if (invalidation === 'unmounted') view.unmount();
+      retainedOpen!(false);
+      expect(mocks.open).not.toHaveBeenCalled();
+      expect(mocks.request).not.toHaveBeenCalled();
+      expect(mocks.settings).not.toHaveBeenCalled();
+      expect(onSelect).not.toHaveBeenCalled();
+      expect(mocks.interaction).not.toHaveBeenCalled();
+      if (invalidation !== 'unmounted') view.unmount();
+    }
+  }
+);
+
+it('hides portrait screen entries for access none while preserving read and resident watch access', () => {
+  mocks.access = 'none';
+  const onSelect = vi.fn();
+  render(() => (
+    <AgentPortraitScreenActions
+      userId="macro|agent@example.com"
+      onSelect={onSelect}
+    />
+  ));
+  expect(screen.queryByRole('button', { name: 'Show screen' })).toBeNull();
+  expect(screen.queryByRole('button', { name: 'Take control' })).toBeNull();
+  expect(mocks.interaction).not.toHaveBeenCalled();
+  expect(mocks.open).not.toHaveBeenCalled();
+  expect(mocks.request).not.toHaveBeenCalled();
+  expect(mocks.settings).not.toHaveBeenCalled();
+  expect(onSelect).not.toHaveBeenCalled();
 });

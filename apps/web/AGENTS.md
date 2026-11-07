@@ -1406,6 +1406,12 @@ Keep included rows visible, use GiB throughout, and size confirmation/release
 dialogs to content. Billing renders each computer once and uses provider amounts;
 show a differing catalog price as context without replacing a subscribed charge.
 
+Agent DM headers reuse `AgentComputerScreenEntry` and `HeaderActionButton` for
+View computer, beside Call. Require a one-to-one agent DM and readable access;
+open in watch mode and let the existing Screen pane enforce desktop editing and
+touch watch-only. Flags-off headers stay unchanged. The portrait browser suite
+also exercises DM entry in both themes on desktop and phones.
+
 ### Computer capacity
 
 Computer offers expose ordinary `soldOut` and persona `alwaysOnSoldOut`

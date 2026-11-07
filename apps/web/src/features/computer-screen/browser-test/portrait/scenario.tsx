@@ -8,7 +8,7 @@ export const [connections, setConnections] = createSignal<string[]>([]);
 export const [dmRequests, setDmRequests] = createSignal(0);
 export const harnessId = '11111111-1111-4111-8111-111111111111';
 const [access, setAccess] = createSignal<Harness['access']>(
-  params.has('edit') ? 'user' : 'read'
+  params.has('no-access') ? 'none' : params.has('edit') ? 'user' : 'read'
 );
 window.addEventListener('fixture:revoke-control', () => setAccess('read'));
 const runtime = (): Harness => ({
@@ -80,7 +80,12 @@ export function useTeamAgentComputerQuery(
 export const useTeamAgentComputerMutation = () => ({
   mutateAsync: async () => computer(),
 });
-export const useAgentsQuery = () => ({ isPending: false, data: [] });
+export const useAgentsQuery = () => ({
+  isPending: false,
+  data: params.has('bot')
+    ? [{ bot: { id: 'custom-agent' }, harness_id: harnessId }]
+    : [],
+});
 export const accessRequestsClient = {};
 export const fetchAccessRequestState = async () => ({
   mine: null,
@@ -105,3 +110,16 @@ export function useAccessRequestState() {
   };
 }
 export async function invalidateAccessRequests() {}
+
+export const useUserId = () => () => 'macro|viewer@example.com';
+export const useChannel = () => () => ({
+  agent_dm: params.has('bot') ? { bot_id: 'custom-agent' } : undefined,
+  channel_type: params.has('channel') ? 'private' : 'direct_message',
+  participants: [
+    { user_id: 'macro|viewer@example.com' },
+    { user_id: 'macro|agent@example.com' },
+    ...(params.has('group') ? [{ user_id: 'macro|person@example.com' }] : []),
+  ],
+});
+// Preserve unrelated context exports; only the fixture viewer identity is replaced.
+export * from '../../../../lib/core/context/user';

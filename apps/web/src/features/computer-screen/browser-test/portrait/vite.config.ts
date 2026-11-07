@@ -21,9 +21,15 @@ export default defineConfig({
     tailwind(),
   ],
   optimizeDeps: { esbuildOptions: { target: 'esnext' } },
+  build: { target: 'esnext' },
+  worker: { format: 'es' },
   resolve: {
     dedupe: ['solid-js'],
     alias: [
+      {
+        find: /^@core\/context\/(?:channels|user)$/,
+        replacement: `${directory}/scenario.tsx`,
+      },
       {
         find: '@app/lib/analytics/posthog',
         replacement: `${directory}/scenario.tsx`,
