@@ -244,6 +244,7 @@ pub(super) fn snapshot(
             message,
             calendar_parts: Vec::new(),
         },
+        calendar_parts_unavailable: false,
         state,
         folder_id: Some(ProviderId::new("folder").unwrap()),
         tags: vec!["TRASH".into()],
