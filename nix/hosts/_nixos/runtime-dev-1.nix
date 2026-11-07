@@ -19,6 +19,12 @@
           path == null || (lib.hasPrefix "/" path && !(lib.hasPrefix "/nix/store/" path));
         message = "The Tailscale auth key must be a host-local absolute path outside /nix/store.";
       }
+      {
+        assertion = builtins.all (port: builtins.elem port config.macro.computers.controlPlanePorts) (
+          [ 8082 ] ++ map (bucket: 20000 + bucket * 100 + 12) (lib.range 0 119)
+        );
+        message = "Computers must reach the connection gateway websocket on the default stack and every named port window.";
+      }
     ];
     services.tailscale = {
       enable = true;
@@ -39,11 +45,12 @@
     };
     macro.computers = {
       controlPlaneAddress = "100.116.73.13";
-      # Default stack plus six service offsets, including agent git and the
-      # computer gateway, in each named port window.
+      # Default stack plus seven service offsets, including the connection
+      # gateway websocket, agent git, and computer gateway, in each named window.
       # Custom --port-base values need an explicit addition here.
       controlPlanePorts = [
         8080
+        8082
         8086
         8101
         8102
@@ -54,6 +61,7 @@
         bucket:
         map (offset: 20000 + bucket * 100 + offset) [
           11
+          12
           15
           26
           27

@@ -9,7 +9,7 @@
 //!   absolute path, because the daemon resolves the bind sources it creates.
 //! - `incus`: VMs on `runtime-dev-1`, reached directly over Tailscale.
 //!   Resolve the runtime's IPv4 address before generating compose env so
-//!   containers do not depend on MagicDNS. Persona bootstrap uses reverse bridge listeners.
+//!   containers do not depend on MagicDNS. Guests dial the devbox tailnet directly.
 //! - `off`: no control plane; explicitly sets `COMPUTERS_FLEET=disabled`.
 
 use std::collections::BTreeMap;
@@ -38,11 +38,7 @@ pub const INCUS_HOST_NAME: &str = "runtime-dev-1";
 /// SHA-256 of the DER certificate `runtime-dev-1`'s Incus API serves.
 pub const INCUS_SERVER_FINGERPRINT: &str =
     "7628fcff44f2338383650c2489f38e89a59db5eb951a3de9bf0469f50387d84b";
-/// Default control-plane devbox on the development tailnet.
-pub const CONTROL_PLANE_ADDRESS: &str = "100.116.73.13";
 pub const INCUS_PORT: u16 = 8443;
-/// Persona bootstrap uses the instance-specific reverse listeners.
-const BOX_BRIDGE_ADDRESS: &str = "10.210.0.1";
 /// Label `hosted_runtimes::outbound::docker_fleet` puts on every computer.
 pub const COMPUTER_ID_LABEL: &str = "macro.computer_id";
 
@@ -73,6 +69,7 @@ const MACROD_SERVICES: &[(&str, Option<Port>)] = &[
         "OVERRIDE_SCHEDULED_ACTION_SERVICE_URL",
         Some(Port::AgentHarness),
     ),
+    ("OVERRIDE_CONNECTION_GATEWAY_URL", Some(Port::ConnGateway)),
     (
         "OVERRIDE_CONNECTION_GATEWAY_WEBSOCKET_URL",
         Some(Port::ConnGateway),
@@ -156,8 +153,8 @@ impl Computers {
             .join("enrollments")
     }
 
-    /// The reverse listeners used by persona bootstrap on the Incus bridge.
-    pub fn tunnel_ports(&self) -> Vec<u16> {
+    /// Unique service host ports the runtime may dial on the devbox tailnet.
+    pub fn service_ports(&self) -> Vec<u16> {
         MACROD_SERVICES
             .iter()
             .filter_map(|(_, port)| port.map(|port| self.instance.port(port)))
@@ -244,7 +241,7 @@ impl Computers {
                         };
                         format!(
                             "{scheme}://{}:{}{path}",
-                            BOX_BRIDGE_ADDRESS,
+                            network.control_plane,
                             self.instance.port(*port)
                         )
                     }
@@ -328,14 +325,14 @@ impl Computers {
             )),
             Fleet::Incus => {
                 let ports = self
-                    .tunnel_ports()
+                    .service_ports()
                     .iter()
                     .map(u16::to_string)
                     .collect::<Vec<_>>()
                     .join(" ");
                 stage.note(&format!(
-                    "  computers: Incus API on {INCUS_HOST_NAME} over Tailscale; persona bootstrap needs \
-                     the reverse listeners: nix/hosts/computers-tunnels.sh reverse {ports}"
+                    "  computers: Incus on {INCUS_HOST_NAME} over Tailscale; guests dial the devbox tailnet directly; \
+                     allow this stack's unique service host ports {ports} (see nix/hosts/README.md)"
                 ));
             }
         }
@@ -366,15 +363,36 @@ impl IncusNetwork {
                 String::from_utf8(output.stdout).context("tailscale returned non-UTF-8 output")?
             }
         };
-        let control_plane = macro_env_var::maybe_read_env("COMPUTERS_CONTROL_PLANE_ADDRESS")
-            .unwrap_or_else(|| CONTROL_PLANE_ADDRESS.to_owned());
+        let output = Command::new("tailscale")
+            .args(["ip", "-4"])
+            .output()
+            .context("running tailscale ip -4; the devbox must join the tailnet")?;
+        if !output.status.success() {
+            bail!(
+                "devbox is unavailable on Tailscale: {}",
+                String::from_utf8_lossy(&output.stderr).trim()
+            );
+        }
+        let control_plane =
+            String::from_utf8(output.stdout).context("tailscale returned non-UTF-8 output")?;
         Self::parse(&runtime, &control_plane)
     }
 
     fn parse(runtime: &str, control_plane: &str) -> Result<Self> {
+        let control_plane: Ipv4Addr = control_plane
+            .trim()
+            .parse()
+            .context("tailscale ip -4 must provide one devbox IPv4 address matching macro.computers.controlPlaneAddress")?;
+        let [first, second, _, _] = control_plane.octets();
+        if first != 100 || !(64..=127).contains(&second) {
+            bail!("tailscale ip -4 must provide a devbox address in 100.64.0.0/10");
+        }
         Ok(Self {
-            runtime: runtime.trim().parse().context("COMPUTERS_INCUS_ADDRESS / tailscale ip must provide one IPv4 address")?,
-            control_plane: control_plane.trim().parse().context("COMPUTERS_CONTROL_PLANE_ADDRESS must be an IPv4 address matching macro.computers.controlPlaneAddress")?,
+            runtime: runtime
+                .trim()
+                .parse()
+                .context("COMPUTERS_INCUS_ADDRESS / tailscale ip must provide one IPv4 address")?,
+            control_plane,
         })
     }
 
