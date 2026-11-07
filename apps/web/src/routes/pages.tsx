@@ -19,6 +19,7 @@ import {
   EMAIL_SIGNUP_CALLBACK_PATH,
   formRespondRoute,
   INBOX_LINK_CALLBACK_PATH,
+  projectPortalRoute,
   publicBookingRoute,
   taskSlugRoute,
 } from './routes';
@@ -107,4 +108,15 @@ export function FormRespondRoutePage() {
 export function BookingReceiptRoutePage() {
   const params = useRouteParams(bookingReceiptRoute);
   return <BookingReceiptPage id={params.id} />;
+}
+
+/** Project portal loads only when someone opens a portal link. */
+const ProjectPortalPage = lazy(async () => ({
+  default: (await import('@app/features/projects/project-portal'))
+    .ProjectPortalPage,
+}));
+
+export function ProjectPortalRoutePage() {
+  const params = useRouteParams(projectPortalRoute);
+  return <ProjectPortalPage projectId={params.projectId} />;
 }
