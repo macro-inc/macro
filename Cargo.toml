@@ -208,6 +208,7 @@ members = [
   "tooling/notification_sandbox",
   "tooling/ai_billing_cli",
   "tooling/seed_cli",
+  "tooling/teammate_dm_backfill",
   "tooling/xtask",
   "tooling/xtask/crates/*",
 ]

@@ -44,7 +44,7 @@ event contract (schema, sanitization, delivery semantics).
 
 ## Boundaries
 
-- Depends on: `entity_access`, `contacts` (feature `outbound`), `channels` (feature `backfill_binary`),
+- Depends on: `entity_access`, `contacts` (feature `outbound`), the team channel through its `TeamChannels` port (`src/domain/team_channels.rs`, served by `authentication_service`; never depend on `channels`),
   `analytics_client`, `ai_toolset` (feature `ai_tools`).
 - Used by: `services/authentication_service`, `services/document_storage_service`,
   `services/calendar_service`, `services/agent_harness_service`,
@@ -57,6 +57,7 @@ event contract (schema, sanitization, delivery semantics).
   (new event variant, if it should publish) → `src/outbound/team_repo.rs` →
   `src/inbound/axum_router.rs`.
 - Repair missed teammate DMs: `just crates/teams/backfill_teammate_dms_local`
+  (the binary is `tooling/teammate_dm_backfill`)
   (see README's "Delivery semantics" for when this is needed).
 
 ## Gotchas

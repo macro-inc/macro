@@ -11,10 +11,6 @@ use std::{
     sync::Arc,
 };
 
-use channels::domain::{
-    models::{ChannelType, CreateChannelRequest, Sender},
-    ports::{ChannelMutationErr, ChannelService},
-};
 use entity_access::domain::models::{
     AdminTeamRole, EntityAccessReceipt, MemberTeamRole, OwnerTeamRole,
 };
@@ -57,6 +53,7 @@ use crate::domain::{
     open_seat_release::{NoOpOpenSeatRelease, OpenSeatRelease, SeatPlanChange, SubscriptionStart},
     owned_entity_cleanup::{OwnedEntityCleanup, UnwiredOwnedEntityCleanup, clear_team},
     team_analytics::{NoOpTeamAnalytics, TeamAnalytics, TeamAnalyticsEvent},
+    team_channels::TeamChannels,
     team_crm_settings_repo::TeamCrmSettingsRepository,
     team_repo::{TeamMembersService, TeamRepository, TeamService},
 };
@@ -111,7 +108,7 @@ pub struct TeamServiceImpl<
 > where
     TR: TeamRepository,
     CR: CustomerRepository,
-    CS: ChannelService + Clone,
+    CS: TeamChannels,
     URPS: UserRolesAndPermissionsService,
     NI: NotificationIngress,
     CE: CrmEnqueuer,
@@ -154,8 +151,8 @@ pub struct TeamServiceImpl<
     invite_rewarder: Arc<dyn InviteRewarder>,
 }
 
-fn channel_error_to_team_error(error: ChannelMutationErr) -> TeamError {
-    TeamError::StorageLayerError(error.into())
+fn channel_error_to_team_error(error: impl std::error::Error + Send + Sync + 'static) -> TeamError {
+    TeamError::StorageLayerError(anyhow::Error::new(error))
 }
 
 impl<TR, CR, CS, URPS, NI, CE, TCRMS, TA, CNE, EB, OSR, OEC> Clone
@@ -163,7 +160,7 @@ impl<TR, CR, CS, URPS, NI, CE, TCRMS, TA, CNE, EB, OSR, OEC> Clone
 where
     TR: TeamRepository,
     CR: CustomerRepository,
-    CS: ChannelService + Clone,
+    CS: TeamChannels,
     URPS: UserRolesAndPermissionsService,
     NI: NotificationIngress,
     CE: CrmEnqueuer,
@@ -211,7 +208,7 @@ impl<TR, CR, CS, URPS, NI, CE, TCRMS>
 where
     TR: TeamRepository,
     CR: CustomerRepository,
-    CS: ChannelService + Clone,
+    CS: TeamChannels,
     URPS: UserRolesAndPermissionsService,
     NI: NotificationIngress,
     CE: CrmEnqueuer,
@@ -258,7 +255,7 @@ impl<TR, CR, CS, URPS, NI, CE, TCRMS, TA>
 where
     TR: TeamRepository,
     CR: CustomerRepository,
-    CS: ChannelService + Clone,
+    CS: TeamChannels,
     URPS: UserRolesAndPermissionsService,
     NI: NotificationIngress,
     CE: CrmEnqueuer,
@@ -303,7 +300,7 @@ impl<TR, CR, CS, URPS, NI, CE, TCRMS, TA, CNE, EB, OSR, OEC>
 where
     TR: TeamRepository,
     CR: CustomerRepository,
-    CS: ChannelService + Clone,
+    CS: TeamChannels,
     URPS: UserRolesAndPermissionsService,
     NI: NotificationIngress,
     CE: CrmEnqueuer,
@@ -467,7 +464,7 @@ where
 
         if let Err(e) = self
             .channel_service
-            .auto_join_by_team_id(&team_id, user_id)
+            .join_team_channels(&team_id, user_id)
             .await
         {
             if grants_premium {
@@ -779,7 +776,7 @@ where
         failed_step: &'static str,
     ) {
         self.channel_service
-            .restore_by_channel_ids(user_id, left_channel_ids)
+            .restore_channel_memberships(user_id, left_channel_ids)
             .await
             .inspect_err(|rollback_err| {
                 tracing::error!(
@@ -1010,7 +1007,7 @@ where
 
         let left_channel_ids = match self
             .channel_service
-            .leave_by_team_id(&team_id, user_id)
+            .leave_team_channels(&team_id, user_id)
             .await
         {
             Ok(channel_ids) => channel_ids,
@@ -1372,7 +1369,7 @@ impl<TR, CR, CS, URPS, NI, CE, TCRMS, TA, CNE, EB, OSR, OEC> TeamMembersService
 where
     TR: TeamRepository,
     CR: CustomerRepository,
-    CS: ChannelService + Clone,
+    CS: TeamChannels,
     URPS: UserRolesAndPermissionsService,
     NI: NotificationIngress,
     CE: CrmEnqueuer,
@@ -1403,7 +1400,7 @@ impl<TR, CR, CS, URPS, NI, CE, TCRMS, TA, CNE, EB, OSR, OEC> TeamService
 where
     TR: TeamRepository,
     CR: CustomerRepository,
-    CS: ChannelService + Clone,
+    CS: TeamChannels,
     URPS: UserRolesAndPermissionsService,
     NI: NotificationIngress,
     CE: CrmEnqueuer,
@@ -1454,19 +1451,9 @@ where
             .await?;
         let owner_id = user_id.clone().into_owned();
         self.channel_service
-            .create_channel(
-                Sender::new_from_user(owner_id.clone()),
-                None,
-                CreateChannelRequest {
-                    name: Some(team.name().to_owned()),
-                    channel_type: ChannelType::Team,
-                    team_id: Some(*team.id()),
-                    auto_join_team: true,
-                    participants: HashSet::from([owner_id]),
-                },
-            )
+            .create_team_channel(*team.id(), team.name().to_owned(), owner_id)
             .await
-            .map_err(|error| CreateTeamError::StorageLayerError(error.into()))?;
+            .map_err(|error| CreateTeamError::StorageLayerError(anyhow::Error::new(error)))?;
 
         if let Some(subscription_id) = subscription_id {
             self.customer_repository
@@ -2017,7 +2004,7 @@ where
 
         if let Err(e) = self
             .channel_service
-            .auto_join_by_team_id(&team_member.team_id, user_id)
+            .join_team_channels(&team_member.team_id, user_id)
             .await
         {
             if grants_premium {

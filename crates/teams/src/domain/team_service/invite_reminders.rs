@@ -3,7 +3,7 @@
 
 use std::collections::HashSet;
 
-use channels::domain::ports::ChannelService;
+use crate::domain::team_channels::TeamChannels;
 use macro_event_broker::MacroEventBroker;
 use macro_user_id::{cowlike::CowLike, user_id::MacroUserIdStr};
 use model_entity::EntityType;
@@ -75,7 +75,7 @@ impl<TR, CR, CS, URPS, NI, CE, TCRMS, TA, CNE, EB, OSR, OEC> InviteReminderSende
 where
     TR: TeamRepository,
     CR: CustomerRepository,
-    CS: ChannelService + Clone,
+    CS: TeamChannels,
     URPS: UserRolesAndPermissionsService,
     NI: NotificationIngress,
     CE: CrmEnqueuer,
@@ -122,7 +122,7 @@ impl<TR, CR, CS, URPS, NI, CE, TCRMS, TA, CNE, EB, OSR, OEC>
 where
     TR: TeamRepository,
     CR: CustomerRepository,
-    CS: ChannelService + Clone,
+    CS: TeamChannels,
     URPS: UserRolesAndPermissionsService,
     NI: NotificationIngress,
     CE: CrmEnqueuer,
