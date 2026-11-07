@@ -28,3 +28,6 @@ jobs:
       run: cargo run --manifest-path tooling/xtask/Cargo.toml -- workflows --check
     - name: verify kafka cluster topics are up to date
       run: cargo run --manifest-path tooling/xtask/Cargo.toml -- kafka-topics --check
+concurrency:
+  group: ${{ github.workflow }}-${{ github.head_ref || github.ref }}
+  cancel-in-progress: true

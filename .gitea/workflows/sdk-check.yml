@@ -41,5 +41,5 @@ jobs:
       run: bun run build && bun run check:pack
       working-directory: packages/sdk
 concurrency:
-  group: sdk-check-${{ github.event_name == 'pull_request' && github.run_id || github.ref }}
+  group: ${{ github.workflow }}-${{ github.head_ref || github.ref }}
   cancel-in-progress: true

@@ -90,9 +90,18 @@ pub fn port(yaml: &str, dropped: &[&str], paths: &[String]) -> Result<String> {
     }
     let mut on = serde_yaml::Mapping::new();
     on.insert(Value::from("pull_request"), Value::Mapping(pull_request));
-    root.as_mapping_mut()
-        .context("workflow is not a mapping")?
-        .insert(Value::from("on"), Value::Mapping(on));
+    let root_map = root.as_mapping_mut().context("workflow is not a mapping")?;
+    root_map.insert(Value::from("on"), Value::Mapping(on));
+    // A new push supersedes the branch's runs, as `PR CI`'s group does on GitHub;
+    // otherwise two runners work through every superseded commit first.
+    root_map.insert(
+        Value::from("concurrency"),
+        serde_yaml::from_str(
+            "{ group: '${{ github.workflow }}-${{ github.head_ref || github.ref }}', \
+             cancel-in-progress: true }",
+        )
+        .context("parsing the concurrency group")?,
+    );
     let jobs = root
         .get_mut("jobs")
         .and_then(Value::as_mapping_mut)
@@ -274,6 +283,7 @@ jobs:
         assert_eq!(paths[2]["with"]["token"], "");
         assert!(paths[0].get("with").is_none());
         assert!(ported["on"].get("workflow_call").is_none());
+        assert_eq!(ported["concurrency"]["cancel-in-progress"], true);
         assert_eq!(ported["on"]["pull_request"]["paths"][0], "a/**");
     }
 
