@@ -1,7 +1,8 @@
+import { runtimeCapture } from "./transcript";
 import { intoFrames, Reassembler } from '../../../packages/collaboration/src/websocket/platform/framing/frames';
 import { EphemeralStore, LoroDoc } from 'loro-crdt';
 import { Miniflare, type MiniflareOptions, type WebSocket } from 'miniflare';
-import { assert } from 'vitest';
+import { assert, expect } from 'vitest';
 import jwt from 'jsonwebtoken';
 import {
   FromRemote,
@@ -9,6 +10,8 @@ import {
 } from '../bebop/generated/schema';
 import fs from 'node:fs';
 import { verify } from 'node:crypto';
+
+const evictionOwners = new WeakMap<object, Miniflare>();
 
 export const INTERNAL_API_SECRET = 'local';
 
@@ -42,14 +45,16 @@ export async function setupMiniflare(
   } = {},
 ) {
   const persist = (name: string) => options.persistPath ? `${options.persistPath}/${name}` : false;
+  const capture = process.env.SYNC_RECORD === "1" ? runtimeCapture(Boolean(expect.getState().currentTestName) && !options.persistPath) : undefined;
   const mf = new Miniflare({
+    ...(capture ? { handleRuntimeStdio: capture.stdio } : {}),
     d1Databases: {
       USER_PEER_MAPPING: 'user-peer-mapping-database-id',
     },
-    scriptPath: "./build/worker/shim.mjs",
+    scriptPath: "./tests/worker.mjs",
     modules: true,
     modulesRules: [
-      { type: "ESModule", include: ["**/build/index.js"] },
+      { type: "ESModule", include: ["**/build/index.js", "**/*.mjs", "**/src/transcript/*.js"] },
       { type: "CompiledWasm", include: ["**/*.wasm"], fallthrough: true },
     ],
     durableObjects: {
@@ -82,8 +87,26 @@ export async function setupMiniflare(
         ? { LEXICAL_SERVICE_URL: options.lexicalServiceUrl, ...(options.lexicalServiceAuthKey === null ? {} : { LEXICAL_SERVICE_AUTH_KEY: options.lexicalServiceAuthKey ?? "lexical-key" }) }
         : {}),
     },
+    compatibilityFlags: ['unsafe_module'],
     compatibilityDate: '2025-03-05'
   });
+
+  const getNamespace = mf.getDurableObjectNamespace.bind(mf);
+  mf.getDurableObjectNamespace = async (...args: Parameters<typeof getNamespace>) => {
+    const namespace = await getNamespace(...args);
+    return new Proxy(namespace, {
+      get(target, key) {
+        if (key === 'get') return (...args: Parameters<typeof target.get>) => {
+          const stub = target.get(...args);
+          evictionOwners.set(stub, mf);
+          return stub;
+        };
+        const value = Reflect.get(target, key, target);
+        return typeof value === 'function' ? value.bind(target) : value;
+      },
+    });
+  };
+  capture?.attach(mf);
 
   if (options.migrate !== false) await migrateDatabase(mf);
 
@@ -96,7 +119,10 @@ type UserOptions = {
 };
 
 function randInt(maxNum) {
-    return Math.floor(Math.random() * maxNum)
+    const random = process.env.SYNC_RECORD === '1'
+      ? Number.parseInt(crypto.randomUUID().slice(0, 8), 16) / 0x100000000
+      : Math.random();
+    return Math.floor(random * maxNum)
 }
 function randName(length = 6) {
     let out = '';
@@ -335,4 +361,12 @@ export async function connectToDocumentForTesting(
   ws.accept();
 
   return wsWrapper;
+}
+
+/** Evict this local DO while keeping its native hibernatable sockets and storage. */
+export async function abortObjectBetweenMessages(stub: { id: { toString(): string } }) {
+  const owner = evictionOwners.get(stub);
+  if (!owner) throw new Error('Use a stub from setupMiniflare()');
+  const response = await owner.dispatchFetch(`http://sync-test/__sync_test_evict?room=${stub.id.toString()}`);
+  assert(response.status === 204);
 }

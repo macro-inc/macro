@@ -255,12 +255,25 @@ async fn bump_alarm(state: &State) -> Result<()> {
     let current_alarm = state.storage().get_alarm().await?;
 
     if let Some(current_alarm) = current_alarm
-        && current_alarm as f64 > Date::now().as_millis() as f64
+        && current_alarm as f64 > {
+            let now = Date::now().as_millis();
+            #[cfg(feature = "transcript")]
+            crate::transcript::clock("alarm_compare_ms", now);
+            now as f64
+        }
     {
         return Ok(());
     }
 
-    state.storage().set_alarm(ScheduledTime::from(5000)).await?;
+    #[cfg(feature = "transcript")]
+    let scheduled = {
+        let now = Date::now().as_millis();
+        crate::transcript::clock("alarm_set_ms", now);
+        ScheduledTime::new(worker::js_sys::Date::new(&((now + 5000) as f64).into()))
+    };
+    #[cfg(not(feature = "transcript"))]
+    let scheduled = ScheduledTime::from(5000);
+    state.storage().set_alarm(scheduled).await?;
 
     Ok(())
 }
@@ -331,11 +344,11 @@ impl SyncSession {
             return;
         }
         let env = self.env.clone();
-        self.state.wait_until(async move {
+        self.state.wait_until(crate::background(async move {
             if let Err(e) = crate::d1::insert_blame_many(&env, &pending).await {
                 warn!(error = ?e, "failed to flush pending blame");
             }
-        });
+        }));
     }
     pub(super) fn secrets(&self) -> crate::secrets::Secrets {
         crate::secrets::Secrets::from(&self.env)
@@ -436,9 +449,9 @@ impl SyncSession {
             }
             let document_id_owned = document_id.to_string();
             let env = self.env.clone();
-            self.state.wait_until(async move {
+            self.state.wait_until(crate::background(async move {
                 report_new_doc_state(&document_id_owned, &snapshot, &env, Vec::new()).await;
-            });
+            }));
         }
 
         Response::empty()
@@ -694,10 +707,10 @@ impl SyncSession {
             if is_first_join {
                 let document_id_owned = document_id.to_string();
                 let env = self.env.clone();
-                self.state.wait_until(async move {
+                self.state.wait_until(crate::background(async move {
                     report_interaction(&document_id_owned, &env, InteractionReason::FirstJoin)
                         .await;
-                });
+                }));
             }
 
             if claims.session_kind == SessionKind::Surface {
@@ -860,14 +873,32 @@ impl DurableObject for DocumentSyncSession {
     }
 
     async fn fetch(&self, req: Request) -> Result<Response> {
+        #[cfg(feature = "transcript")]
+        return crate::transcript::scope(
+            self.session.state.id().to_string(),
+            self.session.fetch(req),
+        )
+        .await;
+        #[cfg(not(feature = "transcript"))]
         self.session.fetch(req).await
     }
 
     async fn websocket_message(&self, ws: WebSocket, msg: WebSocketIncomingMessage) -> Result<()> {
+        #[cfg(feature = "transcript")]
+        return crate::transcript::scope(
+            self.session.state.id().to_string(),
+            self.session.websocket_message(ws, msg),
+        )
+        .await;
+        #[cfg(not(feature = "transcript"))]
         self.session.websocket_message(ws, msg).await
     }
 
     async fn alarm(&self) -> Result<Response> {
+        #[cfg(feature = "transcript")]
+        return crate::transcript::scope(self.session.state.id().to_string(), self.session.alarm())
+            .await;
+        #[cfg(not(feature = "transcript"))]
         self.session.alarm().await
     }
 
@@ -878,12 +909,26 @@ impl DurableObject for DocumentSyncSession {
         reason: String,
         was_clean: bool,
     ) -> Result<()> {
+        #[cfg(feature = "transcript")]
+        return crate::transcript::scope(
+            self.session.state.id().to_string(),
+            self.session.websocket_close(ws, code, reason, was_clean),
+        )
+        .await;
+        #[cfg(not(feature = "transcript"))]
         self.session
             .websocket_close(ws, code, reason, was_clean)
             .await
     }
 
     async fn websocket_error(&self, ws: WebSocket, error: Error) -> Result<()> {
+        #[cfg(feature = "transcript")]
+        return crate::transcript::scope(
+            self.session.state.id().to_string(),
+            self.session.websocket_error(ws, error),
+        )
+        .await;
+        #[cfg(not(feature = "transcript"))]
         self.session.websocket_error(ws, error).await
     }
 }

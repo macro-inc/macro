@@ -77,7 +77,10 @@ async fn prepare_surface_snapshot(storage: &impl SnapshotStorage, snapshot: &[u8
 }
 
 fn now_seconds() -> usize {
-    (Date::now().as_millis() / 1000) as usize
+    let now = Date::now().as_millis();
+    #[cfg(feature = "transcript")]
+    crate::transcript::clock("surface_expiry_ms", now);
+    (now / 1000) as usize
 }
 
 impl SyncSession {

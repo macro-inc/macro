@@ -2,6 +2,8 @@ use super::*;
 
 impl SyncSession {
     pub(super) fn new(state: State, env: Env) -> Self {
+        #[cfg(feature = "transcript")]
+        let (state, env) = crate::transcript::observe(state, env);
         Self {
             state,
             env,
@@ -213,7 +215,7 @@ impl SyncSession {
             let document_id = self.document_id().await.ok();
             let pending_editors = self.pending_editors.clone();
             let env = self.env.clone();
-            self.state.wait_until(async move {
+            self.state.wait_until(crate::background(async move {
                 if let Some(document_id) = document_id
                     && let Ok(snapshot) = doc_state.export_shallow_snapshot()
                 {
@@ -221,7 +223,7 @@ impl SyncSession {
                     report_new_doc_state(&document_id, &snapshot, &env, editors).await;
                     report_interaction(&document_id, &env, InteractionReason::Edited).await;
                 }
-            });
+            }));
         }
 
         self.flush_pending_blame();
@@ -281,10 +283,10 @@ impl SyncSession {
             {
                 let editors = take_editors(&self.pending_editors);
                 let env = self.env.clone();
-                self.state.wait_until(async move {
+                self.state.wait_until(crate::background(async move {
                     report_new_doc_state(&document_id, &snapshot, &env, editors).await;
                     report_interaction(&document_id, &env, InteractionReason::LastLeave).await;
-                });
+                }));
             }
             self.forget_websocket_metadata(&ws).await;
             Ok(())

@@ -105,7 +105,12 @@ impl DocumentState {
         *self
             .last_export
             .lock()
-            .unwrap_context("last_export mutex poisoned") = Some(Instant::now());
+            .unwrap_context("last_export mutex poisoned") = Some({
+            let instant = Instant::now();
+            #[cfg(feature = "transcript")]
+            let instant = crate::transcript::instant("state_instant", instant);
+            instant
+        });
     }
 
     /// Import an update and report whether it changed the operation log plus
@@ -120,7 +125,12 @@ impl DocumentState {
         *self
             .last_update
             .lock()
-            .unwrap_context("last_update mutex poisoned") = Some(Instant::now());
+            .unwrap_context("last_update mutex poisoned") = Some({
+            let instant = Instant::now();
+            #[cfg(feature = "transcript")]
+            let instant = crate::transcript::instant("state_instant", instant);
+            instant
+        });
 
         Ok(ImportedUpdate {
             changed: before != after,
