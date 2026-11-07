@@ -66,7 +66,7 @@ pub(super) fn add_options(
             options: labels
                 .iter()
                 .map(|label| NewOption {
-                    id: OptionId::new(),
+                    id: OptionId::generate(),
                     label: label.trim().to_owned(),
                 })
                 .collect(),
@@ -86,7 +86,7 @@ pub(super) fn add_field(
     }
     Ok(DatabaseOp::Column {
         table: overview.pipeline.pipeline.table_id,
-        column: ColumnId::new(),
+        column: ColumnId::generate(),
         change: ColumnChange::Create {
             definition: NewColumn::New {
                 name: field.name.trim().to_owned(),
@@ -95,7 +95,7 @@ pub(super) fn add_field(
                     .options
                     .iter()
                     .map(|label| NewOption {
-                        id: OptionId::new(),
+                        id: OptionId::generate(),
                         label: label.trim().to_owned(),
                     })
                     .collect(),

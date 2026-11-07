@@ -29,7 +29,7 @@ async fn table_ops_wait_for_a_concurrent_trash_and_then_find_the_database_gone(p
                 edit(guests.database_id),
                 viewer(),
                 vec![DatabaseOp::Table {
-                    table: TableId::new(),
+                    table: TableId::generate(),
                     change: TableChange::Create {
                         name: "Blocked".into()
                     }
@@ -81,7 +81,7 @@ async fn a_deleted_database_is_not_found_rather_than_a_name_conflict_or_storage_
     let store = PgCellStore::new(pool.clone(), PropertiesPgRepo::new(pool.clone()));
     for write in [
         Write::CreateTable {
-            table_id: TableId::new(),
+            table_id: TableId::generate(),
             name: "Missing".into(),
         },
         Write::RenameTable {
@@ -113,8 +113,8 @@ async fn a_deleted_database_is_not_found_rather_than_a_name_conflict_or_storage_
 async fn deleting_a_table_takes_its_rows_and_columns_but_never_the_last_table(pool: PgPool) {
     let guests = guests(&pool).await;
     let service = service(&pool);
-    let sessions = TableId::new();
-    let topic = ColumnId::new();
+    let sessions = TableId::generate();
+    let topic = ColumnId::generate();
     service
         .apply_ops(
             edit(guests.database_id),
@@ -261,7 +261,7 @@ async fn deleting_a_table_takes_its_rows_and_columns_but_never_the_last_table(po
 async fn a_table_rename_checks_its_previous_name_and_other_tables_names(pool: PgPool) {
     let guests = guests(&pool).await;
     let service = service(&pool);
-    let hosts = TableId::new();
+    let hosts = TableId::generate();
     service
         .apply_ops(
             edit(guests.database_id),
@@ -379,7 +379,7 @@ async fn a_concurrent_table_create_and_rename_cannot_take_the_same_name(pool: Pg
             edit(guests.database_id),
             viewer(),
             vec![DatabaseOp::Table {
-                table: TableId::new(),
+                table: TableId::generate(),
                 change: TableChange::Create {
                     name: "people".into()
                 }
@@ -406,7 +406,7 @@ async fn a_concurrent_table_create_and_rename_cannot_take_the_same_name(pool: Pg
             edit(guests.database_id),
             viewer(),
             vec![DatabaseOp::Table {
-                table: TableId::new(),
+                table: TableId::generate(),
                 change: TableChange::Create {
                     name: "people".into(),
                 },

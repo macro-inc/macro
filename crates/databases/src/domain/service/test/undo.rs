@@ -236,7 +236,7 @@ async fn undoing_a_row_delete_brings_the_row_back_exactly_after_julia_edits_othe
 async fn undoing_a_column_delete_restores_the_column_its_cells_and_the_view_filter() {
     let seeded = seeded().await;
     let sam = seeded.row_id;
-    let crowd = ViewId::new();
+    let crowd = ViewId::generate();
     let crowd_query = ViewQuery {
         filter: Some(FilterGroup {
             conjunction: Conjunction::And,
@@ -502,8 +502,8 @@ fn host_definition(seeded: &Seeded, column: ColumnId) -> PropertyDefinitionId {
 #[tokio::test]
 async fn undoing_a_move_into_a_persons_lane_hands_the_card_back_to_its_person() {
     let seeded = seeded().await;
-    let column = ColumnId::new();
-    let board = ViewId::new();
+    let column = ColumnId::generate();
+    let board = ViewId::generate();
     change_as(&seeded, OWNER, hosted_board(&seeded, column, board, vec![])).await;
     let alex = *row_ids(&seeded.world, seeded.table_id).last().unwrap();
     let definition = host_definition(&seeded, column);
@@ -560,8 +560,8 @@ async fn undoing_a_move_into_a_persons_lane_hands_the_card_back_to_its_person() 
 #[tokio::test]
 async fn undoing_a_move_into_a_persons_lane_is_refused_once_julia_reassigned_the_card() {
     let seeded = seeded().await;
-    let column = ColumnId::new();
-    let board = ViewId::new();
+    let column = ColumnId::generate();
+    let board = ViewId::generate();
     change_as(&seeded, OWNER, hosted_board(&seeded, column, board, vec![])).await;
     let alex = *row_ids(&seeded.world, seeded.table_id).last().unwrap();
     let moved = change_as(
@@ -607,8 +607,8 @@ async fn undoing_a_move_into_a_persons_lane_is_refused_once_julia_reassigned_the
 #[tokio::test]
 async fn undoing_a_board_change_brings_back_its_person_lanes() {
     let seeded = seeded().await;
-    let column = ColumnId::new();
-    let board = ViewId::new();
+    let column = ColumnId::generate();
+    let board = ViewId::generate();
     let lanes = vec![
         Lane {
             key: LaneKey::User("macro|sam@macro.com".try_into().unwrap()),

@@ -38,7 +38,7 @@ async fn metadata_of_a_missing_database_or_another_entity_is_not_found() {
         seeded
             .service
             .database_metadata(receipt::<ViewAccessLevel>(
-                DatabaseId::new(),
+                DatabaseId::generate(),
                 OWNER,
                 AccessLevel::View,
             ))

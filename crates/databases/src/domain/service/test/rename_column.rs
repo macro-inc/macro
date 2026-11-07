@@ -181,7 +181,7 @@ async fn rename_checks_effective_labels_and_creation_respects_renamed_labels() {
             viewer(OWNER),
             OpBatch::from(vec![DatabaseOp::Column {
                 table: table_id,
-                column: ColumnId::new(),
+                column: ColumnId::generate(),
                 change: ColumnChange::Create {
                     definition: NewColumn::New {
                         name: " TASK ".into(),
@@ -225,8 +225,8 @@ async fn rename_refuses_foreign_columns_tables_and_trashed_database() {
         })
         .await
         .unwrap();
-    let elsewhere = TableId::new();
-    let missing = ColumnId::new();
+    let elsewhere = TableId::generate();
+    let missing = ColumnId::generate();
     for (receipt_db, target_table, target_column, reason) in [
         (
             other.id,
@@ -310,7 +310,7 @@ async fn reusing_a_previous_label_keeps_the_renamed_columns_values_intact() {
         seeded.row_id,
         seeded.name_column,
     );
-    let added_id = ColumnId::new();
+    let added_id = ColumnId::generate();
     svc.apply_ops(
         edit(db),
         viewer(OWNER),

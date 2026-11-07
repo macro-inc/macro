@@ -629,7 +629,7 @@ impl FormsRepo for FakeRepo {
             None => {
                 world.ledger.push(LedgerEntry {
                     response: FormResponse {
-                        id: FormResponseId::new(),
+                        id: FormResponseId::generate(),
                         form_id: form,
                         status: ResponseStatus::Stopped,
                         stopped_at_section: Some(section),
@@ -674,7 +674,7 @@ impl FormsRepo for FakeRepo {
             return Ok(RecordedResponse::Recorded(entry.response.clone()));
         }
         let response = FormResponse {
-            id: FormResponseId::new(),
+            id: FormResponseId::generate(),
             form_id: form,
             status: ResponseStatus::Submitted,
             stopped_at_section: None,

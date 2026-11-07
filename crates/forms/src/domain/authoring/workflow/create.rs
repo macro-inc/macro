@@ -57,7 +57,7 @@ impl<
             models_forms::Audience::Members,
         )?;
         self.targets(&actor, &prepared.layout).await?;
-        let form_id = FormId::new();
+        let form_id = FormId::generate();
         let outcome = Self::result(form_id, prepared.keys.clone());
         let result = async {
             self.core

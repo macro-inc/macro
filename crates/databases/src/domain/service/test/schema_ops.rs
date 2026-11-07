@@ -44,8 +44,8 @@ async fn protected_columns_refuse_deletion_and_type_changes() {
 #[tokio::test]
 async fn one_batch_creates_a_table_a_select_column_and_rows_filling_it_by_option_id() {
     let seeded = seeded().await;
-    let (sessions, track) = (TableId::new(), ColumnId::new());
-    let (design, engineering) = (OptionId::new(), OptionId::new());
+    let (sessions, track) = (TableId::generate(), ColumnId::generate());
+    let (design, engineering) = (OptionId::generate(), OptionId::generate());
 
     let results = seeded
         .service
@@ -158,7 +158,7 @@ async fn one_batch_creates_a_table_a_select_column_and_rows_filling_it_by_option
 #[tokio::test]
 async fn a_refused_later_op_leaves_the_tables_and_columns_before_it_unwritten() {
     let seeded = seeded().await;
-    let (sessions, track) = (TableId::new(), ColumnId::new());
+    let (sessions, track) = (TableId::generate(), ColumnId::generate());
     let definitions_before = seeded.world.lock().unwrap().definitions.len();
     let published_before = seeded.world.lock().unwrap().published.len();
 
@@ -182,7 +182,7 @@ async fn a_refused_later_op_leaves_the_tables_and_columns_before_it_unwritten() 
                             name: "Track".into(),
                             kind: ColumnKind::Select { multi: false },
                             options: vec![NewOption {
-                                id: OptionId::new(),
+                                id: OptionId::generate(),
                                 label: "Design".into(),
                             }],
                             infer_type: false,
@@ -282,8 +282,8 @@ async fn a_new_column_under_an_existing_columns_id_is_refused_as_taken() {
 #[tokio::test]
 async fn an_option_id_minted_twice_in_one_batch_is_refused_as_taken() {
     let seeded = seeded().await;
-    let minted = OptionId::new();
-    let diet = ColumnId::new();
+    let minted = OptionId::generate();
+    let diet = ColumnId::generate();
 
     let error = seeded
         .service
@@ -353,7 +353,7 @@ async fn a_stale_base_version_is_a_conflict_and_writes_nothing() {
     let seeded = seeded().await;
     let current = table_version(&seeded.world, seeded.table_id);
     let published_before = seeded.world.lock().unwrap().published.len();
-    let notes = ColumnId::new();
+    let notes = ColumnId::generate();
 
     let error = seeded
         .service
@@ -462,7 +462,7 @@ async fn a_type_change_after_a_row_update_of_its_table_is_refused() {
 async fn options_added_after_a_type_change_of_their_column_land_with_it() {
     let seeded = seeded().await;
     let before = table_version(&seeded.world, seeded.table_id);
-    let vip = OptionId::new();
+    let vip = OptionId::generate();
 
     let results = seeded
         .service

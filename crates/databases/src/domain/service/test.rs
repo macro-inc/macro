@@ -254,7 +254,7 @@ async fn seeded() -> Seeded {
             .id;
         (table_id, name_column)
     };
-    let (status_column, plus_ones_column) = (ColumnId::new(), ColumnId::new());
+    let (status_column, plus_ones_column) = (ColumnId::generate(), ColumnId::generate());
     service
         .apply_ops(
             receipt::<EditAccessLevel>(database.id, OWNER, AccessLevel::Owner),
@@ -269,11 +269,11 @@ async fn seeded() -> Seeded {
                             kind: ColumnKind::Select { multi: false },
                             options: vec![
                                 NewOption {
-                                    id: OptionId::new(),
+                                    id: OptionId::generate(),
                                     label: "Going".into(),
                                 },
                                 NewOption {
-                                    id: OptionId::new(),
+                                    id: OptionId::generate(),
                                     label: "Declined".into(),
                                 },
                             ],

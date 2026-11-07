@@ -85,7 +85,7 @@ pub(super) fn managed_column(table: &TableDetail, base: &str, kind: ColumnKind) 
         match named(&name) {
             None => {
                 return ManagedColumn::New {
-                    id: ColumnId::new(),
+                    id: ColumnId::generate(),
                     name,
                 };
             }
@@ -146,8 +146,13 @@ where
         creator: Viewer,
         command: CreateFormCommand,
     ) -> Result<FormDetail, FormError> {
-        self.create_with_identity(creator, command, FormId::new(), CreationPolicy::Interactive)
-            .await
+        self.create_with_identity(
+            creator,
+            command,
+            FormId::generate(),
+            CreationPolicy::Interactive,
+        )
+        .await
     }
 
     pub(super) async fn create_with_identity(
@@ -271,7 +276,7 @@ where
             return Err(FormError::Conflict);
         }
         let submitted = ManagedColumn::New {
-            id: ColumnId::new(),
+            id: ColumnId::generate(),
             name: SUBMITTED_COLUMN.to_string(),
         };
         let respondent = match provenance {
@@ -280,7 +285,7 @@ where
             } => None,
             Provenance::OwnDatabase { .. } | Provenance::ExistingTable => {
                 Some(ManagedColumn::New {
-                    id: ColumnId::new(),
+                    id: ColumnId::generate(),
                     name: RESPONDENT_COLUMN.to_string(),
                 })
             }
@@ -326,7 +331,7 @@ where
             .map_err(database_error)?;
         let layout = FormLayout {
             sections: vec![FormSection::Questions {
-                id: FormSectionId::new(),
+                id: FormSectionId::generate(),
                 title: String::new(),
                 description: String::new(),
                 questions: vec![],
@@ -424,7 +429,7 @@ where
             .filter(|column| !managed.contains(&column.column.id))
             .filter(|column| askable.contains_key(&column.column.id))
             .map(|column| QuestionLayout {
-                id: FormQuestionId::new(),
+                id: FormQuestionId::generate(),
                 column: column.column.id,
                 help_text: String::new(),
                 required: false,
@@ -433,7 +438,7 @@ where
             .collect();
         let layout = FormLayout {
             sections: vec![FormSection::Questions {
-                id: FormSectionId::new(),
+                id: FormSectionId::generate(),
                 title: String::new(),
                 description: String::new(),
                 questions,

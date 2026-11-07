@@ -642,7 +642,7 @@ where
         span.record("tables", source.tables.len());
         span.record("rows", source.rows.values().map(Vec::len).sum::<usize>());
         let copy = Database {
-            id: DatabaseId::new(),
+            id: DatabaseId::generate(),
             name,
             owner_id: owner.to_string(),
             created_at: Utc::now(),

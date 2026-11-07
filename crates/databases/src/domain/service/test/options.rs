@@ -184,7 +184,7 @@ async fn a_colour_that_is_not_hex_is_refused() {
 #[tokio::test]
 async fn a_tag_option_keeps_a_colour() {
     let seeded = seeded().await;
-    let labels = ColumnId::new();
+    let labels = ColumnId::generate();
     seeded
         .service
         .apply_ops(
@@ -198,7 +198,7 @@ async fn a_tag_option_keeps_a_colour() {
                         name: "Labels".into(),
                         kind: ColumnKind::Tag,
                         options: vec![NewOption {
-                            id: OptionId::new(),
+                            id: OptionId::generate(),
                             label: "VIP".into(),
                         }],
                         infer_type: false,
@@ -310,7 +310,7 @@ async fn a_label_is_refused_when_empty_or_already_taken_ignoring_case() {
 #[tokio::test]
 async fn a_numeric_options_label_must_be_a_number() {
     let seeded = seeded().await;
-    let size = ColumnId::new();
+    let size = ColumnId::generate();
     seeded
         .service
         .apply_ops(
@@ -325,11 +325,11 @@ async fn a_numeric_options_label_must_be_a_number() {
                         kind: ColumnKind::SelectNumber { multi: false },
                         options: vec![
                             NewOption {
-                                id: OptionId::new(),
+                                id: OptionId::generate(),
                                 label: "1".into(),
                             },
                             NewOption {
-                                id: OptionId::new(),
+                                id: OptionId::generate(),
                                 label: "2".into(),
                             },
                         ],
@@ -490,7 +490,7 @@ async fn removing_an_option_empties_single_select_cells_and_trims_multi_select_o
     let status = seeded.status_column.property_definition_id;
     let going = option_id(&seeded.world, status, "Going");
     let declined = option_id(&seeded.world, status, "Declined");
-    let diet = ColumnId::new();
+    let diet = ColumnId::generate();
     seeded
         .service
         .apply_ops(
@@ -505,11 +505,11 @@ async fn removing_an_option_empties_single_select_cells_and_trims_multi_select_o
                         kind: ColumnKind::Select { multi: true },
                         options: vec![
                             NewOption {
-                                id: OptionId::new(),
+                                id: OptionId::generate(),
                                 label: "Vegan".into(),
                             },
                             NewOption {
-                                id: OptionId::new(),
+                                id: OptionId::generate(),
                                 label: "Halal".into(),
                             },
                         ],
@@ -714,7 +714,7 @@ async fn an_option_change_reaches_every_table_of_the_database_binding_it() {
     let seeded = seeded().await;
     let status = seeded.status_column.property_definition_id;
     let going = option_id(&seeded.world, status, "Going");
-    let rsvps = TableId::new();
+    let rsvps = TableId::generate();
     seeded
         .service
         .apply_ops(
@@ -729,7 +729,7 @@ async fn an_option_change_reaches_every_table_of_the_database_binding_it() {
                 },
                 DatabaseOp::Column {
                     table: rsvps,
-                    column: ColumnId::new(),
+                    column: ColumnId::generate(),
                     change: ColumnChange::Create {
                         definition: NewColumn::Existing {
                             property: PropertyId::from_uuid(status),
@@ -802,7 +802,7 @@ async fn shared_priority_column(seeded: &Seeded) -> Column {
         .unwrap()
         .definitions
         .insert(definition_id, priority);
-    let column = ColumnId::new();
+    let column = ColumnId::generate();
     seeded
         .service
         .apply_ops(
@@ -1068,7 +1068,7 @@ async fn an_existing_option_of_a_shared_property_is_written_without_the_right_to
 async fn adding_options_to_a_shared_property_takes_the_right_to_edit_it() {
     let seeded = seeded().await;
     let priority = shared_priority_column(&seeded).await;
-    let someday = OptionId::new();
+    let someday = OptionId::generate();
     let add = || {
         OpBatch::from(vec![DatabaseOp::Column {
             table: seeded.table_id,

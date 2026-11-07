@@ -12,8 +12,8 @@ async fn deleting_required_options_is_refused_until_the_rule_is_removed(pool: Pg
         .unwrap();
     let stage = detail.columns[1].column.id;
     let won = OptionId::from_uuid(detail.columns[1].definition.property_options[1].id);
-    let approval = ColumnId::new();
-    let approved = OptionId::new();
+    let approval = ColumnId::generate();
+    let approved = OptionId::generate();
     write(
         &s,
         &a,
@@ -258,7 +258,7 @@ async fn rejected_required_input_edits_preserve_materialized_formulas(pool: PgPo
     let stage = detail.columns[1].column.id;
     let won = OptionId::from_uuid(detail.columns[1].definition.property_options[1].id);
     let amount = detail.columns[3].column.id;
-    let doubled = ColumnId::new();
+    let doubled = ColumnId::generate();
     write(
         &s,
         &a,
@@ -389,7 +389,7 @@ async fn board_moves_share_stage_validation_and_keep_failed_moves_unchanged(pool
     .await
     .unwrap();
     let row = inserted(&write(&s, &a, &p, vec![insert(&p, company)]).await.unwrap());
-    let view = ViewId::new();
+    let view = ViewId::generate();
     let create_view: DatabaseOp = serde_json::from_value(json!({
         "kind":"view", "table":p.table_id, "view":view,
         "change":{"kind":"create", "view":{"name":"Stages", "query":{"filter":null,"sort":[]}, "layout":{"kind":"board", "groupBy":stage,"title":p.primary_column_id,"lanes":[],"cardFields":[],"hideEmptyLanes":false}}}
@@ -438,7 +438,7 @@ async fn board_moves_share_stage_validation_and_keep_failed_moves_unchanged(pool
     assert!(!saved[0].cells.contains_key(&stage));
     // A board changed to a timeline in this batch no longer supplies a lane
     // column. Storage must reject the card move without inventing a stage edit.
-    let range = ColumnId::new();
+    let range = ColumnId::generate();
     let create_range = DatabaseOp::Column {
         table: p.table_id,
         column: range,
@@ -632,7 +632,7 @@ async fn requirements_refuse_foreign_columns_and_non_stage_fields(pool: PgPool) 
         },
         StageRequirement {
             stage_column_id: stage,
-            stage_id: OptionId::new(),
+            stage_id: OptionId::generate(),
             required_column_ids: vec![detail.columns[3].column.id],
         },
     ] {
@@ -707,7 +707,7 @@ async fn stage_label_case_and_duplicate_option_requests_cannot_bypass_rules(pool
                 column: stage,
                 change: ColumnChange::AddOptions {
                     options: vec![NewOption {
-                        id: OptionId::new(),
+                        id: OptionId::generate(),
                         label: "étape".into(),
                     }],
                 },

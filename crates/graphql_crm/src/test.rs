@@ -64,7 +64,7 @@ fn column(table: TableId, name: &str, data_type: DataType) -> ColumnDetail {
     let definition = Uuid::now_v7();
     ColumnDetail {
         column: Column {
-            id: ColumnId::new(),
+            id: ColumnId::generate(),
             table_id: table,
             property_definition_id: definition,
             position: key_between(None, None).unwrap(),
@@ -118,19 +118,19 @@ impl Query {
 
 #[tokio::test]
 async fn one_read_per_record_type_answers_every_record_without_its_own_column() {
-    let table = TableId::new();
+    let table = TableId::generate();
     let primary = column(table, "Company", DataType::Entity);
     let revenue = column(table, "Revenue", DataType::Number);
     let stage = column(table, "Stage", DataType::SelectString);
     let revenue_id = revenue.column.id;
-    let row = RowId::new();
+    let row = RowId::generate();
     let pipeline = Pipeline {
         id: Uuid::now_v7(),
         team_id: Uuid::now_v7(),
         name: "Deals".into(),
         user_id: "macro|owner@macro.com".into(),
         record_type: Some(PipelineRecordType::Company),
-        database_id: DatabaseId::new(),
+        database_id: DatabaseId::generate(),
         table_id: table,
         primary_column_id: primary.column.id,
         sharing: PipelineSharing::Team,

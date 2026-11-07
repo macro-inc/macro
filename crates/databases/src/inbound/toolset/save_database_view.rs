@@ -137,7 +137,7 @@ where
             },
             None => DatabaseOp::View {
                 table: self.table_id,
-                view: ViewId::new(),
+                view: ViewId::generate(),
                 change: ViewChange::Create {
                     view: NewView {
                         name: self.name.clone(),

@@ -133,7 +133,7 @@ async fn a_board_and_its_card_places_round_trip_and_go_with_their_rows(pool: PgP
                 column: guests.status,
                 change: ColumnChange::AddOptions {
                     options: vec![NewOption {
-                        id: OptionId::new(),
+                        id: OptionId::generate(),
                         label: "Maybe".into(),
                     }],
                 },
@@ -159,7 +159,7 @@ async fn a_board_and_its_card_places_round_trip_and_go_with_their_rows(pool: PgP
             viewer(),
             vec![DatabaseOp::View {
                 table: guests.table_id,
-                view: ViewId::new(),
+                view: ViewId::generate(),
                 change: ViewChange::Create {
                     view: NewView {
                         name: "Stages".into(),
@@ -322,7 +322,7 @@ async fn removing_a_column_rewrites_the_views_that_named_it(pool: PgPool) {
             viewer(),
             vec![DatabaseOp::View {
                 table: guests.table_id,
-                view: ViewId::new(),
+                view: ViewId::generate(),
                 change: ViewChange::Create {
                     view: NewView {
                         name: "Stages".into(),
@@ -409,7 +409,7 @@ async fn a_board_stored_by_an_earlier_build_reads_with_its_card_places(pool: PgP
     .fetch_one(&pool)
     .await
     .unwrap();
-    let board = ViewId::new();
+    let board = ViewId::generate();
     sqlx::query!(
         r#"INSERT INTO database_views (id, database_id, table_id, name, position, query, layout)
            VALUES ($1, $2, $3, 'By status', '80', '{"filter": null, "sort": []}',
@@ -510,8 +510,8 @@ async fn a_card_moved_to_a_persons_lane_is_stored_under_them(pool: PgPool) {
     let [sam] = insert_statuses(&pool, &guests, &["Going"]).await[..] else {
         panic!("one guest");
     };
-    let host = ColumnId::new();
-    let board = ViewId::new();
+    let host = ColumnId::generate();
+    let board = ViewId::generate();
     service(&pool)
         .apply_ops(
             edit(guests.database_id),

@@ -393,7 +393,7 @@ fn apply_op(
                     let mut inserted = Vec::new();
                     for (row_index, cells) in rows.iter().enumerate() {
                         let values = checked(found, row_index, cells)?;
-                        let id = RowId::new();
+                        let id = RowId::generate();
                         found.rows.push((
                             id,
                             values
@@ -513,7 +513,7 @@ fn apply_grid_change(world: &mut super::World, change: GridChange) {
 
 impl DatabasesService for FakeDatabases {
     async fn create_database(&self, command: CreateDatabase) -> Result<Database, DatabaseError> {
-        let id = DatabaseId::new();
+        let id = DatabaseId::generate();
         let mut world = self.0.lock().unwrap();
         world.databases.push(FakeDatabase {
             id,
@@ -521,11 +521,11 @@ impl DatabasesService for FakeDatabases {
             owner: command.owner_id.to_string(),
             trashed: false,
             tables: vec![FakeTable {
-                id: TableId::new(),
+                id: TableId::generate(),
                 name: "Table 1".to_string(),
                 version: 1,
                 columns: vec![FakeColumn {
-                    id: ColumnId::new(),
+                    id: ColumnId::generate(),
                     name: "Name".to_string(),
                     kind: ColumnKind::Text,
                     options: vec![],
@@ -685,7 +685,7 @@ impl DatabasesService for FakeDatabases {
         if std::mem::take(&mut world.adopt_new_database_before_next_batch) {
             let table = &mut world.database_mut(database_id).tables[0];
             table.rows.push((
-                RowId::new(),
+                RowId::generate(),
                 [(
                     table.columns[0].id,
                     CellValue::Text("Human data before attachment".into()),
@@ -709,11 +709,11 @@ impl DatabasesService for FakeDatabases {
             }
             world.ledger.push(super::LedgerEntry {
                 response: crate::domain::models::FormResponse {
-                    id: crate::domain::models::FormResponseId::new(),
+                    id: crate::domain::models::FormResponseId::generate(),
                     form_id: form,
                     status: crate::domain::models::ResponseStatus::Submitted,
                     stopped_at_section: None,
-                    row: Some(RowId::new()),
+                    row: Some(RowId::generate()),
                     submitted_at: at,
                     updated_at: at,
                 },

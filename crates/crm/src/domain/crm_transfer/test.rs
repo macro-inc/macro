@@ -26,7 +26,7 @@ fn viewer() -> Viewer {
 
 fn field(name: &str, kind: FieldKind) -> PipelineField {
     PipelineField {
-        id: ColumnId::new(),
+        id: ColumnId::generate(),
         name: name.into(),
         kind,
         multiple: false,
@@ -45,9 +45,9 @@ fn overview(record_type: PipelineRecordType) -> PipelineOverview {
                 user_id: "macro|me@example.com".into(),
                 name: "Deals".into(),
                 record_type: Some(record_type),
-                database_id: DatabaseId::new(),
-                table_id: TableId::new(),
-                primary_column_id: ColumnId::new(),
+                database_id: DatabaseId::generate(),
+                table_id: TableId::generate(),
+                primary_column_id: ColumnId::generate(),
                 sharing: PipelineSharing::Team,
                 created_at: Utc.with_ymd_and_hms(2026, 10, 1, 0, 0, 0).unwrap(),
                 trashed_at: None,
@@ -57,7 +57,7 @@ fn overview(record_type: PipelineRecordType) -> PipelineOverview {
         fields: vec![
             field("Company", FieldKind::Record(record_type)),
             PipelineField {
-                options: vec![(OptionId::new(), "Lead".into())],
+                options: vec![(OptionId::generate(), "Lead".into())],
                 ..field("Stage", FieldKind::Select)
             },
             field("Owner", FieldKind::Person),
@@ -73,7 +73,7 @@ fn overview(record_type: PipelineRecordType) -> PipelineOverview {
 
 fn entry(id: Uuid) -> PipelineEntryView {
     PipelineEntryView {
-        entry_id: RowId::new(),
+        entry_id: RowId::generate(),
         record: Some(PipelineRecord {
             id,
             name: None,
@@ -579,7 +579,7 @@ async fn contact_lookup_storage_failure_stops_import_before_creating_records() {
 async fn an_export_writes_people_as_emails_and_reimports() {
     let mut workflows = Workflows::new(overview(PipelineRecordType::Company));
     workflows.exported = vec![PipelineEntryView {
-        entry_id: RowId::new(),
+        entry_id: RowId::generate(),
         record: Some(PipelineRecord {
             id: Uuid::now_v7(),
             name: Some("=Acme".into()),
@@ -618,7 +618,7 @@ async fn a_generic_pipeline_exports_its_fields_and_refuses_a_record_import() {
     let id = generic.pipeline.pipeline.id;
     let mut workflows = Workflows::new(generic);
     workflows.exported = vec![PipelineEntryView {
-        entry_id: RowId::new(),
+        entry_id: RowId::generate(),
         record: None,
         fields: vec![("Name".into(), FieldValue::Text("Launch site".into()))],
     }];

@@ -75,7 +75,7 @@ fn equivalent_numeric_options_are_rejected_before_schema_provisioning() {
 fn review_regression_preserving_human_content_keeps_authoring_limits() {
     use models_forms::{Audience, FormQuestionId, FormSectionId, QuestionLayout};
     let column = Column {
-        id: ColumnId::new(),
+        id: ColumnId::generate(),
         name: "Contact".into(),
         kind: ColumnKind::Entity {
             target: models_databases::EntityKind::User,
@@ -86,11 +86,11 @@ fn review_regression_preserving_human_content_keeps_authoring_limits() {
     let previous = FormLayout {
         sections: vec![
             FormSection::Questions {
-                id: FormSectionId::new(),
+                id: FormSectionId::generate(),
                 title: String::new(),
                 description: String::new(),
                 questions: vec![QuestionLayout {
-                    id: FormQuestionId::new(),
+                    id: FormQuestionId::generate(),
                     column: column.id,
                     help_text: String::new(),
                     required: false,
@@ -99,7 +99,7 @@ fn review_regression_preserving_human_content_keeps_authoring_limits() {
                 show_when: None,
             },
             FormSection::Gate {
-                id: FormSectionId::new(),
+                id: FormSectionId::generate(),
                 title: String::new(),
                 description: String::new(),
                 rules: FilterGroup {
@@ -124,7 +124,7 @@ fn review_regression_preserving_human_content_keeps_authoring_limits() {
     let FormSection::Questions { questions, .. } = &mut changed.sections[0] else {
         panic!("questions")
     };
-    questions[0].id = FormQuestionId::new();
+    questions[0].id = FormQuestionId::generate();
     assert_eq!(
         canonical_preserving(
             &changed,
@@ -141,7 +141,7 @@ fn review_regression_preserving_human_content_keeps_authoring_limits() {
     let FormSection::Gate { id, .. } = &mut changed.sections[1] else {
         panic!("gate")
     };
-    *id = FormSectionId::new();
+    *id = FormSectionId::generate();
     assert_eq!(
         canonical_preserving(
             &changed,
@@ -167,7 +167,7 @@ fn review_regression_preserving_human_content_keeps_authoring_limits() {
     rules.conditions = vec![condition.clone(); 190];
     let mut more = crowded.clone();
     more.sections.push(FormSection::Gate {
-        id: FormSectionId::new(),
+        id: FormSectionId::generate(),
         title: String::new(),
         description: String::new(),
         rules: FilterGroup {
@@ -276,13 +276,13 @@ fn show_when_resolves_earlier_keys_and_refuses_its_own_or_later_questions() {
 fn a_canonical_show_when_must_name_an_earlier_section_and_an_unchanged_one_is_kept() {
     use models_forms::{Audience, FormQuestionId, FormSectionId, QuestionLayout};
     let role = Column {
-        id: ColumnId::new(),
+        id: ColumnId::generate(),
         name: "Role".into(),
         kind: ColumnKind::Text,
         options: vec![],
     };
     let diet = Column {
-        id: ColumnId::new(),
+        id: ColumnId::generate(),
         name: "Diet".into(),
         kind: ColumnKind::Text,
         options: vec![],

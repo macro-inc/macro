@@ -99,8 +99,12 @@ pub(super) async fn wedding(pool: &PgPool) -> Wedding {
     let repo = PgDatabasesRepo::new(pool.clone(), PropertiesPgRepo::new(pool.clone()));
     let table_id = repo.get_database(database.id).await.unwrap().unwrap().1[0].id;
     let name = repo.columns_for_tables(&[table_id]).await.unwrap()[0].id;
-    let (rsvp, plus_ones) = (ColumnId::new(), ColumnId::new());
-    let (yes, no, maybe) = (OptionId::new(), OptionId::new(), OptionId::new());
+    let (rsvp, plus_ones) = (ColumnId::generate(), ColumnId::generate());
+    let (yes, no, maybe) = (
+        OptionId::generate(),
+        OptionId::generate(),
+        OptionId::generate(),
+    );
     service
         .apply_ops(
             edit_as(WOLF, database.id),

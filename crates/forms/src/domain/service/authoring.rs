@@ -25,14 +25,14 @@ where
         // An anonymous form's new table gets no Respondent column.
         let new_columns = |anonymous: bool| {
             let mut columns = vec![Column {
-                id: models_databases::ColumnId::new(),
+                id: models_databases::ColumnId::generate(),
                 name: create::SUBMITTED_COLUMN.into(),
                 kind: managed::submitted_kind(),
                 options: vec![],
             }];
             if !anonymous {
                 columns.push(Column {
-                    id: models_databases::ColumnId::new(),
+                    id: models_databases::ColumnId::generate(),
                     name: create::RESPONDENT_COLUMN.into(),
                     kind: managed::respondent_kind(),
                     options: vec![],

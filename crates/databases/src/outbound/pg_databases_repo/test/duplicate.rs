@@ -65,10 +65,10 @@ async fn a_duplicate_copies_tables_columns_rows_relations_and_boards(pool: PgPoo
     insert_named_user(&pool, DUPLICATOR).await;
     let service = service(&pool);
     let (sessions, title, relation, board) = (
-        TableId::new(),
-        ColumnId::new(),
-        ColumnId::new(),
-        ViewId::new(),
+        TableId::generate(),
+        ColumnId::generate(),
+        ColumnId::generate(),
+        ViewId::generate(),
     );
     service
         .apply_ops(
@@ -304,15 +304,15 @@ async fn a_refused_duplicate_leaves_no_database_behind(pool: PgPool) {
     let guests = guests(&pool).await;
     insert_named_user(&pool, DUPLICATOR).await;
     let copy = Database {
-        id: DatabaseId::new(),
+        id: DatabaseId::generate(),
         name: "Offsite copy".into(),
         owner_id: DUPLICATOR.into(),
         created_at: chrono::Utc::now(),
         trashed_at: None,
         project_id: None,
     };
-    let table = TableId::new();
-    let missing = RowId::new();
+    let table = TableId::generate();
+    let missing = RowId::generate();
 
     let outcome = cells(&pool)
         .duplicate_database(

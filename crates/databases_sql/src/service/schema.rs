@@ -85,7 +85,7 @@ fn create_column(
 ) -> Result<DatabaseOp, SqlError> {
     Ok(DatabaseOp::Column {
         table,
-        column: ColumnId::new(),
+        column: ColumnId::generate(),
         change: ColumnChange::Create {
             definition: NewColumn::New {
                 name: definition.name.0.clone(),
@@ -94,7 +94,7 @@ fn create_column(
                     .options
                     .iter()
                     .map(|label| NewOption {
-                        id: OptionId::new(),
+                        id: OptionId::generate(),
                         label: label.clone(),
                     })
                     .collect(),
@@ -207,7 +207,7 @@ impl<
             } => {
                 let catalog = catalog.await?;
                 let database = database(&catalog, name.database.as_ref(), request.scope)?;
-                let table = TableId::new();
+                let table = TableId::generate();
                 ops.push(DatabaseOp::Table {
                     table,
                     change: TableChange::Create {
@@ -310,7 +310,7 @@ impl<
                             options: labels
                                 .into_iter()
                                 .map(|label| NewOption {
-                                    id: OptionId::new(),
+                                    id: OptionId::generate(),
                                     label,
                                 })
                                 .collect(),

@@ -593,7 +593,7 @@ async fn custom_columns_use_core_validation_and_preserve_values(pool: PgPool) {
     let (s, _, a, team, company) = fixture(&pool).await;
     let p = create(&s, team, PipelineRecordType::Company).await;
     let row = inserted(&write(&s, &a, &p, vec![insert(&p, company)]).await.unwrap());
-    let column = ColumnId::new();
+    let column = ColumnId::generate();
     let op = |value| serde_json::from_value::<DatabaseOp>(value).unwrap();
     write(&s, &a, &p, vec![op(json!({
         "kind": "column", "table": p.table_id, "column": column,
@@ -639,7 +639,7 @@ async fn custom_columns_use_core_validation_and_preserve_values(pool: PgPool) {
     );
     // A consumer cannot bind another resource's property definition to bypass access.
     assert!(matches!(write(&s, &a, &p, vec![op(json!({
-        "kind": "column", "table": p.table_id, "column": ColumnId::new(),
+        "kind": "column", "table": p.table_id, "column": ColumnId::generate(),
         "change": {"kind": "create", "definition": {"source": "existing", "property": table.columns[0].column.property_definition_id}}
     }))]).await, Err(PipelineError::Database(DatabaseError::InvalidOp(_)))));
 }

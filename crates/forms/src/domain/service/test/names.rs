@@ -270,7 +270,7 @@ async fn renaming_takes_a_receipt_for_the_form_itself() {
 async fn renaming_the_database_renames_its_form_wherever_the_form_is_read() {
     let world = world();
     let (form, database) = create_standalone(&world).await;
-    let table = TableId::new();
+    let table = TableId::generate();
     world
         .lock()
         .unwrap()
@@ -281,7 +281,7 @@ async fn renaming_the_database_renames_its_form_wherever_the_form_is_read() {
             name: "Guests".into(),
             version: 1,
             columns: vec![FakeColumn {
-                id: ColumnId::new(),
+                id: ColumnId::generate(),
                 name: "Name".into(),
                 kind: ColumnKind::Text,
                 options: vec![],
