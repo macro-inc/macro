@@ -141,7 +141,7 @@ pub fn insert_table_row_at_node(
             .get(boundary, column)
             .ok_or(Error::Invariant("Table map contains a hole"))?;
         if if after {
-            v.end_row(tx.view()) <= boundary
+            v.end_row(tx.view()) <= i64::from(boundary)
         } else {
             v.start_row == boundary
         } {
@@ -216,7 +216,7 @@ pub fn insert_table_column_at_node(
         let mut append = false;
         if boundary < 0 {
             prepend = true;
-        } else if i64::from(value.end_column(tx.view())) <= boundary {
+        } else if value.end_column(tx.view()) <= boundary {
             let mut anchor = value;
             let mut previous = boundary;
             while anchor.start_row != i as u32 && anchor.row_span(tx.view()) > 1 {
