@@ -462,16 +462,35 @@ impl Transaction<'_> {
         }
         self.splice(parent, position, 1, &[new])?;
         if let Some(Selection::Range(previous)) = selection {
-            let map = |point: Point| match point {
-                Point::Text { key, offset } if key == old => Point::Text {
-                    key: new,
-                    offset: offset.min(self.text_content_size(new)),
-                },
-                Point::Element { key, offset } if key == old => Point::Element {
-                    key: new,
-                    offset: ChildIndex((previous_size + offset.0).min(self.children_size(new))),
-                },
-                other => other,
+            let destination = self
+                .last_descendant(new)
+                .filter(|key| self.is_element(*key) || self.is_text(*key))
+                .unwrap_or(new);
+            let map = |point: Point| {
+                if !include_children && point.key() == old {
+                    if self.is_text(destination) {
+                        Point::text(
+                            destination,
+                            Utf16Offset(point.offset()).min(self.text_content_size(destination)),
+                        )
+                    } else {
+                        Point::element(destination, ChildIndex(point.offset()))
+                    }
+                } else {
+                    match point {
+                        Point::Text { key, offset } if key == old => Point::Text {
+                            key: new,
+                            offset: offset.min(self.text_content_size(new)),
+                        },
+                        Point::Element { key, offset } if key == old => Point::Element {
+                            key: new,
+                            offset: ChildIndex(
+                                (previous_size + offset.0).min(self.children_size(new)),
+                            ),
+                        },
+                        other => other,
+                    }
+                }
             };
             let anchor = (previous.anchor.key() == old).then(|| map(previous.anchor));
             let focus = (previous.focus.key() == old).then(|| map(previous.focus));

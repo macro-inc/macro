@@ -637,3 +637,34 @@ fn editing_one_text_counts_only_its_record_clone_and_dirty_ancestors() -> Result
     assert_eq!(commit.work.diff_ops, 0);
     Ok(())
 }
+
+/// upstream: reconciliation updates root cached text through getWritable,
+/// after mutation reporting, and retains the intentional root dirty mark.
+#[test]
+fn root_cache_reconciliation_clones_the_root_after_text_changes() -> Result<(), Error> {
+    let mut editor = Editor::builder(EditorMode::ViewAttached)
+        .build()
+        .expect("builder");
+    let (text, _) = editor.update(|tx| {
+        let p = tx.create(Paragraph::default())?;
+        let text = tx.create_text("before")?;
+        tx.append(p, &[text.key()])?;
+        tx.append(NodeKey::ROOT, &[p.key()])?;
+        Ok(text)
+    })?;
+    let (_, commit) = editor.update(|tx| {
+        tx.text(text)?.set_text_content("after")?;
+        Ok(())
+    })?;
+    assert_eq!(commit.next.root_text_content().as_ref(), "after");
+    assert_eq!(
+        commit.changes.dirty_elements.get(&NodeKey::ROOT),
+        Some(&DirtyIntent::Intentional)
+    );
+    assert!(!std::ptr::eq(
+        commit.prev.view().node(NodeKey::ROOT).expect("root").base(),
+        commit.next.view().node(NodeKey::ROOT).expect("root").base()
+    ));
+    assert!(!commit.changes.mutations.contains_key(&NodeKey::ROOT));
+    Ok(())
+}

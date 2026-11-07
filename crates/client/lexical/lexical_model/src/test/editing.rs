@@ -280,3 +280,29 @@ fn no_op_sibling_move_keeps_an_end_of_parent_caret_in_range() -> Result<(), Erro
     assert_eq!(tx.anchor()?, Point::element(p, ChildIndex(2)));
     Ok(())
 }
+
+/// upstream: replace without includeChildren selects the last descendant,
+/// preserving the original offset (the helper name does not imply end offset).
+#[test]
+fn replacing_an_element_preserves_offset_in_the_last_text_descendant() -> Result<(), Error> {
+    let mut editor = Editor::builder(EditorMode::Headless)
+        .build()
+        .expect("builder");
+    let mut tx = editor.transaction();
+    assert!(!tx.has_dirty_nodes());
+    let old = tx.create(Paragraph::default())?;
+    let first = tx.create(LineBreak::default())?;
+    let last = tx.create(LineBreak::default())?;
+    tx.append(old, &[first.key(), last.key()])?;
+    tx.append(NodeKey::ROOT, &[old.key()])?;
+    tx.element(old)?
+        .select(Some(ChildIndex(1)), Some(ChildIndex(1)))?;
+    let new = tx.create(Paragraph::default())?;
+    let prefix = tx.create_text("prefix")?;
+    tx.append(new, &[prefix.key()])?;
+    tx.replace(old, new, false)?;
+    assert_eq!(tx.anchor()?, Point::text(prefix, Utf16Offset(1)));
+    assert_eq!(tx.focus()?, Point::text(prefix, Utf16Offset(1)));
+    assert!(tx.has_dirty_nodes());
+    Ok(())
+}
