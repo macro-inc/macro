@@ -5,6 +5,8 @@ edition = "2024"
 publish = false
 
 [dependencies]
+base64.workspace = true
+url.workspace = true
 thiserror.workspace = true
 mention_date.workspace = true
 lexical_model = { workspace = true }

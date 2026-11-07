@@ -298,9 +298,11 @@ fn export_unlinked_text(cx: &mut ExportCx<'_>, node: NodeKey, external: bool) ->
     if external {
         return Ok(escape_unlinked(&cx.export_format(node, &text)?));
     }
-    if let Some(m) = auto_link::AutoLinkMatcher::new(false)?.exec(&text) {
+    if let Some(link) =
+        crate::links::find_next_auto_link_match(&text, crate::links::AutoLinkMode::CommonTlds)
+    {
         let format = cx.state().text(node).map(|t| t.format.bits()).unwrap_or(0);
-        let data = json!({"url":m.get(1),"text":text,"title":"","unlinked":true,"format":format});
+        let data = json!({"url":link.url,"text":text,"title":"","unlinked":true,"format":format});
         return Ok(format!(
             "<m-link>{}</m-link>",
             to_js_json_string(&data).replace('<', "\\u003c")

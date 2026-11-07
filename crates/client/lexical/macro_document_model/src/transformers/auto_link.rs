@@ -1,31 +1,14 @@
 //! RegExp-subclass URL matching with the shared linkify-it implementation.
+use crate::links::{AutoLinkMode, find_auto_link_matches};
 use lexical_markdown::{Result, matcher::*};
 use lexical_model::Utf16Offset;
-use lexical_rich_nodes::utils::linkify::LinkifyIt;
-use std::sync::LazyLock;
 #[derive(Debug)]
 pub(super) struct AutoLinkMatcher {
-    linkifier: LinkifyIt,
     escaped: bool,
 }
-static COMMON_TLD_LINKIFIER: LazyLock<LinkifyIt> = LazyLock::new(|| {
-    let mut linkifier = LinkifyIt::default();
-    let tlds = [
-        "app", "biz", "ca", "co", "com", "dev", "edu", "gov", "info", "io", "me", "net", "org",
-        "shop", "site", "store", "tv", "uk", "us", "xyz",
-    ]
-    .map(str::to_owned);
-    linkifier
-        .tlds(&tlds, false)
-        .expect("source common TLD expressions");
-    linkifier
-});
 impl AutoLinkMatcher {
     pub(super) fn new(escaped: bool) -> Result<Self> {
-        Ok(Self {
-            linkifier: COMMON_TLD_LINKIFIER.clone(),
-            escaped,
-        })
+        Ok(Self { escaped })
     }
 }
 impl Matcher for AutoLinkMatcher {
@@ -52,7 +35,7 @@ impl Matcher for AutoLinkMatcher {
             }
             offsets.push(units.len());
             let decoded = String::from_utf16(&decoded).ok()?;
-            for link in self.linkifier.matches(&decoded) {
+            for link in find_auto_link_matches(&decoded, AutoLinkMode::CommonTlds) {
                 if !matches!(link.schema.as_str(), "" | "http:" | "https:" | "mailto:") {
                     continue;
                 }
@@ -71,7 +54,7 @@ impl Matcher for AutoLinkMatcher {
             }
             return None;
         }
-        for link in self.linkifier.matches(source) {
+        for link in find_auto_link_matches(source, AutoLinkMode::CommonTlds) {
             if !matches!(link.schema.as_str(), "" | "http:" | "https:" | "mailto:") {
                 continue;
             }
@@ -87,11 +70,7 @@ impl Matcher for AutoLinkMatcher {
             let start = link.index - usize::from(bracketed);
             let end = link.last_index + usize::from(bracketed);
             let raw = String::from_utf16(units.get(start..end)?).ok()?;
-            let url = if link.schema.is_empty() {
-                format!("https://{}", link.raw)
-            } else {
-                link.url
-            };
+            let url = link.url;
             return Match::new(
                 Utf16Offset(start as u32),
                 source,
