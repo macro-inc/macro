@@ -220,6 +220,11 @@ impl Transaction<'_> {
         }
         let mut collapsed = RangeSelection::collapsed(point);
         normalize_range_selection(self.view(), &mut collapsed)?;
+        if let Point::Text { key, offset: Utf16Offset(0) } = collapsed.anchor {
+            if let Some(previous) = self.prev_sibling(key).filter(|key| self.is_text(*key)) {
+                collapsed.anchor = Point::text(previous, self.text_content_size(previous));
+            }
+        }
         self.collapsed_selection_at(slot, collapsed.anchor, range.format, range.style)
     }
     /// Delete the nodes in the active node selection.

@@ -574,3 +574,22 @@ fn root_child_range_removes_the_selected_paragraph_identity() -> Result<(), Erro
     assert_eq!(commit.changes.mutations.get(&p), Some(&Mutation::Destroyed));
     Ok(())
 }
+
+#[test]
+fn removal_collapses_at_the_preceding_text_boundary() -> Result<(), Error> {
+    let mut editor = Editor::builder(EditorMode::Headless).build().unwrap();
+    editor.update(|tx| {
+        let p = tx.create(Paragraph::default())?;
+        let tab = tx.create(Tab::default())?;
+        let text = tx.create_text("abc")?;
+        tx.append(p, &[tab.key(), text.key()])?;
+        tx.append(NodeKey::ROOT, &[p.key()])?;
+        tx.set_selection(Some(Selection::Range(RangeSelection::new(
+            Point::text(text, Utf16Offset(2)), Point::element(p, ChildIndex(1)),
+        ))))?;
+        tx.remove_text()?;
+        assert_eq!(tx.anchor()?, Point::text(tab, Utf16Offset(1)));
+        Ok(())
+    })?;
+    Ok(())
+}
