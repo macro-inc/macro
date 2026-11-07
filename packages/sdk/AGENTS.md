@@ -25,7 +25,7 @@ enforced by the ordinary backend APIs.
 - File bytes must work inside code mode, whose sandbox reaches only Macro hosts:
   `documents.upload()` posts them to storage's `/documents/upload`, and
   `Document.bytes()` downloads through the CloudFront export host (`document-content`
-  in the harness's `sdk_hosts`). Never return a presigned S3 URL as the only path.
+  in the harness's `sdk_endpoints`). Never return a presigned S3 URL as the only path.
 - `src/entities/entity.ts`: lazy detail reads, mutation invalidation and safe JSON.
 - `Document.readPresentation`/`editPresentation`/`copyPresentation`,
   `readWord`/`editWord`, and `readDesign`/`readPhotoshop`/`readIllustrator`
@@ -135,8 +135,9 @@ the existing gateway prefixes.
 - Every public method carries one MCP hint tag (`@readonly`, `@write` or
   `@destructive`, plus `@openworld`/`@idempotent` when true) or
   `@mcp-exclude <reason>`; `../sdk-mcp` turns methods into ChatGPT MCP tools
-  by them and fails on an untagged method. A public API change updates that
-  package's tool snapshots (`bunx vitest run -u` there).
+  by them and fails on an untagged method. A new or changed public method
+  signature or hint tag updates that package's tool snapshots (`bunx vitest
+  run -u` there); doc text alone does not.
 - Every entity's namespace class carries one `@routing` sentence ("Use when …;
   not …") that agents route on, and may carry an `@agent` block: how that area
   of Macro works, for agents only. Both are stripped from the public
