@@ -237,7 +237,7 @@ in
         path.logs: /tmp/os/logs
         plugins.security.disabled: true
         EOF
-        export OPENSEARCH_PATH_CONF=/tmp/os/config OPENSEARCH_JAVA_OPTS="-Xms512m -Xmx512m"
+        export OPENSEARCH_PATH_CONF=/tmp/os/config OPENSEARCH_JAVA_OPTS="-Xms512m -Xmx512m -XX:ActiveProcessorCount=2"
         # jvm.options logs GC to a path relative to the working directory.
         mkdir -p /tmp/os/logs && cd /tmp/os
         exec ${opensearchHome}/bin/opensearch

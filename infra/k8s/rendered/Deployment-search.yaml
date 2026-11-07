@@ -35,7 +35,7 @@ spec:
           command: []
           env: []
           envFrom: []
-          image: localhost:32550/macro/opensearch:build.ganagiv2jp1rz0lbs5gbjlywd1dh58lg
+          image: localhost:32550/macro/opensearch:build.3vrvvq8fbrcrfcq1l9jvg6zcp3mbg5wj
           imagePullPolicy: IfNotPresent
           name: search
           ports:
