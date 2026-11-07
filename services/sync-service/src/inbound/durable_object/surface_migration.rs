@@ -304,15 +304,6 @@ impl SyncSession<'_> {
         Response::from_json(&SnapshotExport { proof, snapshot })
     }
 
-    pub(super) async fn has_target_migration(&mut self) -> Result<bool> {
-        Ok(self
-            .state
-            .storage()
-            .get::<TargetState>(TARGET_KEY)
-            .await?
-            .is_some())
-    }
-
     pub(super) async fn target_migration_handler(
         &mut self,
         mut req: Request,

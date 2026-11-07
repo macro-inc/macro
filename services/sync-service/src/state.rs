@@ -36,13 +36,6 @@ pub struct DocumentState {
     inner: CoreDocumentState,
 }
 impl DocumentState {
-    pub(crate) fn view(inner: &CoreDocumentState) -> Self {
-        Self::from_core(CoreDocumentState {
-            loro_doc: inner.loro_doc.clone(),
-            last_update: inner.last_update,
-            last_export: inner.last_export,
-        })
-    }
     pub(crate) fn from_core(inner: CoreDocumentState) -> Self {
         Self {
             loro_doc: inner.loro_doc.clone(),

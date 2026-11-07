@@ -128,4 +128,6 @@ mod atomic;
 pub use alarm::AlarmOutcome;
 
 mod http;
+mod surface;
 pub use http::{InitializeOutcome, RequestGate, RouteClass, SnapshotOutcome};
+pub use surface::{SurfacePreparation, SurfaceRequest, SurfaceStatus};
