@@ -80,13 +80,11 @@ function setup(props?: {
   defaultOpen?: boolean;
   narrowThreshold?: number;
   panel?: (sections: JSX.Element) => JSX.Element;
-  onOpenChange?: (open: boolean) => void;
 }) {
   render(() => (
     <SidePanel.Root
       floating={props?.floating ?? true}
       defaultOpen={props?.defaultOpen ?? false}
-      onOpenChange={props?.onOpenChange}
     >
       <SidePanel.Toggle />
       <SidePanel.Layout
@@ -206,12 +204,4 @@ it('composes custom content around floating sections', () => {
   expect(screen.getByTestId('custom-panel').textContent).toContain(
     'Edit property'
   );
-});
-
-it('notifies its owner when the floating panel opens and closes', () => {
-  const onOpenChange = vi.fn();
-  setup({ onOpenChange });
-  fireEvent.click(screen.getByRole('button', { name: 'Show details' }));
-  fireEvent.click(screen.getByRole('button', { name: 'Hide details' }));
-  expect(onOpenChange.mock.calls).toEqual([[true], [false]]);
 });

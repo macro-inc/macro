@@ -167,7 +167,8 @@ export function CallTranscript(props: {
     if (!element) return;
     const stopFollowing = () => setFollowing(false);
     const onScroll = () => {
-      if (performance.now() >= ignoreScrollUntil) updateVisibility();
+      if (!following() || performance.now() >= ignoreScrollUntil)
+        updateVisibility();
     };
     const onPointerDown = (event: PointerEvent) => {
       // Scrollbar presses target the viewport; content presses target a row.

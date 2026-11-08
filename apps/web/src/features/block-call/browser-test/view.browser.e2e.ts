@@ -104,7 +104,7 @@ for (const width of [390, 1280]) {
 
 for (const theme of ['light', 'dark']) {
   for (const width of [1440, 960]) {
-    test(`floating cards reserve content space and replace each other (${theme}, ${width}px)`, async ({
+    test(`floating cards reserve content space and keep transcript state under details (${theme}, ${width}px)`, async ({
       page,
     }) => {
       await page.setViewportSize({ width, height: 900 });
@@ -126,13 +126,24 @@ for (const theme of ['light', 'dark']) {
         .click();
       await expect(details).toBeVisible();
       await expect(details).toHaveCSS('opacity', '1');
+      await toggle.click();
+      await expect(details).toBeVisible();
+      await expect(transcript).toBeVisible();
+      const overlap = await details.evaluate((element) => {
+        const rect = element.getBoundingClientRect();
+        return element.contains(
+          document.elementFromPoint(rect.x + 20, rect.y + 20)
+        );
+      });
+      expect(overlap).toBe(true);
       if (process.env.CALL_PLAYBACK_SCREENSHOT_DIR)
         await page.screenshot({
-          path: `${process.env.CALL_PLAYBACK_SCREENSHOT_DIR}/d47-${theme}-${width}-details.png`,
+          path: `${process.env.CALL_PLAYBACK_SCREENSHOT_DIR}/d48-${theme}-${width}-both.png`,
         });
-      await toggle.click();
+      await page
+        .getByRole('button', { name: 'Hide details', exact: true })
+        .click();
       await expect(details).toHaveCount(0);
-      await expect(transcript).toBeVisible();
       await expect(toggle).toHaveAttribute('aria-pressed', 'true');
       const geometry = await transcript.evaluate((element: HTMLElement) => {
         const card = element.getBoundingClientRect();
@@ -167,7 +178,7 @@ for (const theme of ['light', 'dark']) {
       expect(geometry.padding).not.toBe('0px');
       if (process.env.CALL_PLAYBACK_SCREENSHOT_DIR)
         await page.screenshot({
-          path: `${process.env.CALL_PLAYBACK_SCREENSHOT_DIR}/d47-${theme}-${width}-transcript.png`,
+          path: `${process.env.CALL_PLAYBACK_SCREENSHOT_DIR}/d48-${theme}-${width}-transcript.png`,
         });
 
       // Seek first so the fixture has an active row, then scroll away from it.
@@ -187,31 +198,37 @@ for (const theme of ['light', 'dark']) {
         name: 'Sync to video',
         exact: true,
       });
+      await page.mouse.wheel(0, 600);
+      await expect(sync).toBeVisible();
+      const scroller = transcript.locator('.overflow-y-auto');
       await expect
-        .poll(async () => {
-          await page.mouse.wheel(0, 600);
-          return await sync.isVisible();
-        })
-        .toBe(true);
-      if (process.env.CALL_PLAYBACK_SCREENSHOT_DIR)
-        await page.screenshot({
-          path: `${process.env.CALL_PLAYBACK_SCREENSHOT_DIR}/d47-${theme}-${width}-sync.png`,
-        });
-      await sync.click();
-      await expect(activeRow).toBeInViewport();
+        .poll(() => scroller.evaluate((element) => element.scrollTop))
+        .toBe(600);
+      const scrollTop = await scroller.evaluate((element) => {
+        element.setAttribute('data-preserved-scroll', 'true');
+        return element.scrollTop;
+      });
       await page
         .getByRole('button', { name: 'Show details', exact: true })
         .click();
       await expect(details).toBeVisible();
-      await expect(transcript).toHaveCount(0);
-      await expect(toggle).toHaveAttribute('aria-pressed', 'false');
+      await expect(transcript).toBeVisible();
+      await expect(toggle).toHaveAttribute('aria-pressed', 'true');
+      if (process.env.CALL_PLAYBACK_SCREENSHOT_DIR)
+        await page.screenshot({
+          path: `${process.env.CALL_PLAYBACK_SCREENSHOT_DIR}/d48-${theme}-${width}-scrolled-both.png`,
+        });
       await page
         .getByRole('button', { name: 'Hide details', exact: true })
         .click();
       await expect(details).toHaveCount(0);
-      await expect(transcript).toHaveCount(0);
-      await toggle.click();
-      await expect(transcript).toBeVisible();
+      await expect(scroller).toHaveAttribute('data-preserved-scroll', 'true');
+      expect(await scroller.evaluate((element) => element.scrollTop)).toBe(
+        scrollTop
+      );
+      await expect(sync).toBeVisible();
+      await sync.click();
+      await expect(activeRow).toBeInViewport();
       await page.setViewportSize({ width: 959, height: 900 });
       await expect(toggle).toHaveCount(0);
       await expect(transcript).toHaveCount(0);

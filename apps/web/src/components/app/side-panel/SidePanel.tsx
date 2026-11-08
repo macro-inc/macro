@@ -87,7 +87,6 @@ function Root(
     defaultOpen?: boolean;
     persistKey?: string;
     floating?: boolean;
-    onOpenChange?: (open: boolean) => void;
   }>
 ) {
   const splitPanel = useSplitPanel();
@@ -122,7 +121,6 @@ function Root(
     const open = typeof next === 'function' ? next(isOpen()) : next;
     if (open === isOpen()) return;
     setter(open);
-    props.onOpenChange?.(open);
   };
   const toggle = () => setIsOpen((prev) => !prev);
 

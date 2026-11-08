@@ -9,7 +9,7 @@ The live call UI belongs to `features/channel/Call`, not this feature.
 
 - `views/CallDetailView.tsx`: native route hosts, query, header and loading states.
 - `component/CallRecording/CallRecordingBody.tsx`: one playback owner and responsive composition.
-- `component/CallRecording/CallRecordingRoot.tsx`: shared recording state and mutually exclusive floating cards.
+- `component/CallRecording/CallRecordingRoot.tsx`: shared recording and independent details state.
 - `component/CallTranscript.tsx`: transcript rows, inline chat and follow/seek behavior.
 - `component/sidepanel/CallSidePanelSections.tsx`: existing metadata, sharing and entity sections.
 - `primitives/recording-playback.ts`: native media state and actions.
@@ -31,7 +31,7 @@ The live call UI belongs to `features/channel/Call`, not this feature.
 - Use the standard SidePanel drawer for phone details, with the same content as desktop.
 - Place the Transcript header action after Share, hide it on touch and below 960px, and switch the reading tab to Summary only when opening that panel.
 - Float the 360px Transcript card inside Layer offset={1}, with SidePanel's 12px insets, padded bg-surface content and a bg-inset Sync surface; reserve its width plus both insets on the right.
-- Keep Transcript and Details mutually exclusive through explicit open/close actions; do not synchronize their state with effects.
+- Keep Transcript mounted when Details opens over it; closing Details must preserve transcript scrolling, follow state and its pressed button.
 
 ## Checks
 
@@ -40,7 +40,7 @@ From `apps/web`:
 - `bun run test -- src/features/block-call src/features/channel/Call/chat/CallChatHistory.test.tsx src/components/app/side-panel/SidePanel.test.tsx src/components/ui/components/ProgressPill.test.ts --maxWorkers=1`
 - `bun run type-check`
 - From the repository root: `just check full`
-- `bunx playwright test --config src/features/block-call/browser-test/playwright.config.ts`: backend-free playback, volume dragging and floating-card geometry, themes, navigation and mutual exclusion.
+- `bunx playwright test --config src/features/block-call/browser-test/playwright.config.ts`: backend-free playback, volume dragging and floating-card geometry, themes, navigation and overlapping card state.
 - Exercise desktop, 680px and 480px panes, and 390x844 touch with an authorized saved call; follow `docs/agent-guide/calls.md`.
 
 ## Related

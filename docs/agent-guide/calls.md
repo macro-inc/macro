@@ -55,8 +55,9 @@ The separate Transcript button directly after Share toggles a 360px floating car
 and stays pressed while open. The card has rounded corners, an edge and shadow,
 12px insets from the content pane's top/right/bottom, and padded transcript rows.
 It uses the next Layer surface depth, with an inset Sync surface, in both themes.
-The recording leaves room on the right so the card covers no content. Opening
-Transcript closes Details, and opening Details closes Transcript. Opening Transcript
+The recording leaves room on the right so the card covers no content. Details can
+float above Transcript without closing it; closing Details restores the same
+transcript scroll position, follow state and pressed button. Opening Transcript
 changes an active Transcript reading tab to Summary; choosing the Transcript tab
 again remains possible. The button and card are hidden on touch and below 960px
 of call-pane width; use the reading tab there.

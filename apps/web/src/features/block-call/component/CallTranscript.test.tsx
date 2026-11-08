@@ -42,6 +42,8 @@ afterEach(() => {
 });
 
 it('seeks from a transcript row and resumes following after manual scrolling', () => {
+  vi.spyOn(performance, 'now').mockReturnValue(0);
+  let rowTop = 200;
   vi.stubGlobal(
     'ResizeObserver',
     class {
@@ -59,7 +61,7 @@ it('seeks from a transcript row and resumes following after manual scrolling', (
   document.body.append(syncTarget);
   vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(
     function (this: HTMLElement) {
-      const top = this.hasAttribute('data-call-transcript-row') ? 200 : 0;
+      const top = this.hasAttribute('data-call-transcript-row') ? rowTop : 0;
       return {
         top,
         bottom: top + 100,
@@ -133,5 +135,11 @@ it('seeks from a transcript row and resumes following after manual scrolling', (
   setActive(null);
   setActive(1);
   expect(scroll).not.toHaveBeenCalled();
+  rowTop = 0;
+  setSeekGeneration(2);
+  fireEvent.wheel(viewport);
+  rowTop = 200;
+  fireEvent.scroll(viewport);
+  expect(screen.getByRole('button', { name: 'Sync to video' })).toBeTruthy();
   syncTarget.remove();
 });
