@@ -1536,7 +1536,7 @@ async fn run_server() -> anyhow::Result<()> {
     let word_documents = Arc::new(
         documents_hex::domain::word_document::WordDocumentService::new(
             document_service.clone(),
-            editing_worker,
+            editing_worker.clone(),
             sync_service_client.clone(),
             document_files.clone(),
             config.document_permission_jwt.as_ref().to_string(),
@@ -2531,6 +2531,8 @@ async fn run_server() -> anyhow::Result<()> {
             lexical_client: lexical_client.clone(),
             creator: document_creator,
             ai_editing: document_ai_editing,
+            editing_worker,
+            messages: message_service.clone(),
             canvas: canvas_routes,
             spreadsheet: document_spreadsheet,
             spreadsheet_ai_edit: document_spreadsheet_ai_edit,

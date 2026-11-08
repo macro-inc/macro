@@ -452,6 +452,11 @@ export {
   type SpreadsheetReadOptions,
   type SpreadsheetSheet,
 } from './entities/documents/spreadsheet';
+export {
+  CommentQuoteNotPlacedError,
+  type TextComment,
+  type TextCommentOptions,
+} from './entities/documents/text-comment';
 export { DocumentVersion } from './entities/documents/version';
 export {
   DraftAttachment,
