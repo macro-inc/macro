@@ -29,12 +29,12 @@ import {
   SplitPanelContext,
   type SplitPanelContextType,
 } from '../context';
-import { createSplitRowRename } from '../row-rename';
-import { createSplitTitleRenames } from '../title-rename';
 import { useSplitLayout } from '../layout';
 import type { SplitHandle, SplitState } from '../layoutManager';
 import { shouldShowSplitCloseButton } from '../layoutUtils';
 import { registerSplitHotkeys } from '../registerSplitHotkeys';
+import { createSplitRowRename } from '../row-rename';
+import { createSplitTitleRenames } from '../title-rename';
 import { createOwnedSlots } from '../utils/createOwnedSlots';
 import { createSplitAutofocus } from '../utils/createSplitAutofocus';
 import { SplitDrawerGroup } from './SplitDrawerContext';

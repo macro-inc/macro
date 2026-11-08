@@ -1,7 +1,5 @@
 import { ListSkeleton } from '@app/components/view-shell/ListSkeleton';
 import { EntityIcon } from '@core/component/EntityIcon';
-import { createInlineRename, RenameTitle } from '@ui/components/InlineRename';
-import { ResultAsync } from 'neverthrow';
 import {
   type CrmCompanyEntity,
   formatDateAndTime,
@@ -11,6 +9,8 @@ import ClockIcon from '@icon/system/regular/clock.svg';
 import GlobeIcon from '@icon/system/regular/globe.svg';
 import { createResizeObserver } from '@solid-primitives/resize-observer';
 import { Badge, Tooltip } from '@ui';
+import { createInlineRename, RenameTitle } from '@ui/components/InlineRename';
+import { ResultAsync } from 'neverthrow';
 import { createEffect, createSignal, For, onMount, Show } from 'solid-js';
 import { CompanyVisibilityButton } from './company-visibility-button';
 import { useSetCompanyNameMutation } from './use-crm';

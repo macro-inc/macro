@@ -1,13 +1,13 @@
 import { ListSkeleton } from '@app/components/view-shell/ListSkeleton';
 import { propertyPillClasses } from '@app/features/property/extractors/property-pill-classes';
 import { EntityIcon } from '@core/component/EntityIcon';
-import { createInlineRename, RenameTitle } from '@ui/components/InlineRename';
-import { ResultAsync } from 'neverthrow';
 import { formatDateAndTime, formatRelativeTimestamp } from '@entity';
 import ContactIcon from '@icon/system/regular/address-book.svg';
 import ClockIcon from '@icon/system/regular/clock.svg';
 import EnvelopeIcon from '@icon/system/regular/envelope.svg';
 import { Avatar, Badge, Tooltip } from '@ui';
+import { createInlineRename, RenameTitle } from '@ui/components/InlineRename';
+import { ResultAsync } from 'neverthrow';
 import { Show } from 'solid-js';
 import { useCrmContext } from '../context/crm-context';
 import type { CrmContact as CrmContactResponse } from '../core/contact';

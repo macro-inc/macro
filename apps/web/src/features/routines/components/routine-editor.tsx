@@ -4,8 +4,8 @@ import ClockCounterIcon from '@icon/system/regular/clock-counter-clockwise.svg';
 import { ComposerSurface, cn, TabSelector } from '@ui';
 import { For, type JSX, type ParentProps, Show } from 'solid-js';
 import type { ScheduleDraft } from '../core/draft';
-import { RoutineName } from './routine-name';
 import { RoutineDescription } from './routine-description';
+import { RoutineName } from './routine-name';
 
 /**
  * The raised card a page section or step sits on: the composer surface

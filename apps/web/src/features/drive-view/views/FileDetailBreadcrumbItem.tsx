@@ -4,11 +4,11 @@ import { useBlockEntityCommands } from '@app/features/next-soup/actions';
 import { FileDownloadHeader } from '@components/app/FileDownloadHeader';
 import type { FileOperation } from '@components/app/split-layout/components/SplitFileMenu';
 import { SplitFileMenu } from '@components/app/split-layout/components/SplitFileMenu';
-import { SplitTitleCrumb } from '@components/app/split-layout/title-rename';
 import {
   useSplitDisplayName,
   useSplitPanelOrThrow,
 } from '@components/app/split-layout/layoutUtils';
+import { SplitTitleCrumb } from '@components/app/split-layout/title-rename';
 import type { BlockAlias, BlockName } from '@core/block';
 import { EntityIcon } from '@core/component/EntityIcon';
 import { getPermissions } from '@core/component/SharePermissions';

@@ -1,4 +1,8 @@
 import {
+  createSplitTitleRenames,
+  SplitTitleName,
+} from '@components/app/split-layout/title-rename';
+import {
   cleanup,
   fireEvent,
   render,
@@ -7,10 +11,6 @@ import {
 } from '@solidjs/testing-library';
 import type { JSX, ParentProps } from 'solid-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import {
-  createSplitTitleRenames,
-  SplitTitleName,
-} from '@components/app/split-layout/title-rename';
 import type { SpreadsheetStore } from './primitives/create-spreadsheet-store';
 
 vi.mock('./spreadsheet-mentions', () => ({ spreadsheetMentions: undefined }));

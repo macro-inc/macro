@@ -75,6 +75,7 @@ import {
   useCanAutofocusSplitContent,
   useSplitPanelOrThrow,
 } from '@components/app/split-layout/layoutUtils';
+import { createSplitTitleRename } from '@components/app/split-layout/title-rename';
 import { useNavigatedFromJK } from '@components/app/useNavigatedFromJK';
 import { useBlockId } from '@core/block';
 import { ENABLE_CALLS } from '@core/constant/featureFlags';
@@ -96,8 +97,6 @@ import {
   canEditChannelIdentity,
   createRenameDssEntityMutation,
 } from '@entity';
-import { errAsync, ResultAsync } from 'neverthrow';
-import { createSplitTitleRename } from '@components/app/split-layout/title-rename';
 import CaretLeft from '@icon/system/regular/caret-left.svg';
 import PictureIcon from '@icon/system/regular/image.svg';
 import RenameIcon from '@icon/system/regular/pencil-line.svg';
@@ -106,6 +105,7 @@ import { useActiveCallQuery } from '@queries/call/call';
 import { useChannelParticipantsQuery } from '@queries/channel/channel-participants';
 import { useSearchParams } from '@solidjs/router';
 import { Button, cn } from '@ui';
+import { errAsync, ResultAsync } from 'neverthrow';
 import {
   createComputed,
   createEffect,

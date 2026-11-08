@@ -2,11 +2,11 @@ import { DocumentTitleHoverCard } from '@app/components/entity-detail/DocumentTi
 import { ViewBreadcrumbs } from '@app/components/view-shell';
 import { useBlockEntityCommands } from '@app/features/next-soup/actions';
 import { SplitFileMenu } from '@components/app/split-layout/components/SplitFileMenu';
-import { SplitTitleCrumb } from '@components/app/split-layout/title-rename';
 import {
   useSplitDisplayName,
   useSplitPanelOrThrow,
 } from '@components/app/split-layout/layoutUtils';
+import { SplitTitleCrumb } from '@components/app/split-layout/title-rename';
 import type { BlockAlias, BlockName } from '@core/block';
 import { EntityIcon } from '@core/component/EntityIcon';
 import { Permissions } from '@core/component/SharePermissions';

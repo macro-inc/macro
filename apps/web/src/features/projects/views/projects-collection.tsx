@@ -25,8 +25,10 @@ import {
   getSoupRowEntities,
 } from '@app/features/soup/collection/rows';
 import { TaskGroupHeader } from '@app/features/tasks-view/components/task-list/TaskGroupHeader';
+import { t } from '@app/lib/i18n';
 import { HeaderActionGroup } from '@components/app/HeaderActionGroup';
 import { toast } from '@core/component/Toast/Toast';
+import { isMobile } from '@core/mobile/isMobile';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { compareDateDesc } from '@core/util/date';
 import { fireAndForget } from '@core/util/fireAndForget';
@@ -39,8 +41,6 @@ import {
   SYSTEM_PROPERTY_IDS,
 } from '@property/identifiers';
 import type { Property, PropertyApiValues } from '@property/types';
-import { t } from '@app/lib/i18n';
-import { isMobile } from '@core/mobile/isMobile';
 import {
   Button,
   ButtonGroup,

@@ -1,11 +1,11 @@
 import { SidePanel } from '@components/app/side-panel';
 import { EntityMetadata } from '@components/app/side-panel/EntityMetadata';
-import { createInlineRename, RenameTitle } from '@ui/components/InlineRename';
-import { ResultAsync } from 'neverthrow';
 import { PropertyValuePill } from '@property/component/PropertyValuePill';
 import { SYSTEM_PROPERTY_IDS } from '@property/identifiers';
 import { EntityPropertiesSection } from '@property/side-panel/properties/EntityPropertiesSection';
 import { Key } from '@solid-primitives/keyed';
+import { createInlineRename, RenameTitle } from '@ui/components/InlineRename';
+import { ResultAsync } from 'neverthrow';
 import { type JSX, Match, Show, Switch } from 'solid-js';
 import {
   type ProjectSource,

@@ -21,11 +21,11 @@ import {
   type FileOperation,
   SplitFileMenu,
 } from '@components/app/split-layout/components/SplitFileMenu';
-import { SplitTitleCrumb } from '@components/app/split-layout/title-rename';
 import {
   useSplitDisplayName,
   useSplitPanelOrThrow,
 } from '@components/app/split-layout/layoutUtils';
+import { SplitTitleCrumb } from '@components/app/split-layout/title-rename';
 import { EntityIcon } from '@core/component/EntityIcon';
 import { getPermissions, Permissions } from '@core/component/SharePermissions';
 import { ShareTrigger } from '@core/component/TopBar/ShareButton';

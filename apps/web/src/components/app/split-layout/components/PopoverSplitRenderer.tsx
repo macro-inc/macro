@@ -17,8 +17,6 @@ import {
   SplitPanelContext,
   type SplitPanelContextType,
 } from '../context';
-import { createSplitRowRename } from '../row-rename';
-import { createSplitTitleRenames } from '../title-rename';
 import type {
   PopoverSplitOptions,
   SplitContent,
@@ -26,6 +24,8 @@ import type {
   SplitId,
   SplitMount,
 } from '../layoutManager';
+import { createSplitRowRename } from '../row-rename';
+import { createSplitTitleRenames } from '../title-rename';
 import { createOwnedSlots } from '../utils/createOwnedSlots';
 import { focusPopoverInput } from '../utils/focusPopoverInput';
 

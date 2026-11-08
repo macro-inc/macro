@@ -1,7 +1,7 @@
 import type { HotkeyToken } from '@core/hotkey/tokens';
 import type { EntityData } from '@entity';
-import type { InlineRename } from '@ui';
 import type { NullableSize } from '@solid-primitives/resize-observer';
+import type { InlineRename } from '@ui';
 import {
   type Accessor,
   type Component,

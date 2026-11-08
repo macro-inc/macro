@@ -5,6 +5,7 @@ import {
   MenuItem,
 } from '@core/component/ContextMenu';
 import { ContextMenu } from '@kobalte/core/context-menu';
+import { Key } from '@solid-primitives/keyed';
 import { Dropdown } from '@ui/components/Dropdown';
 import {
   createInlineRename,
@@ -12,7 +13,6 @@ import {
   RenameTitle,
 } from '@ui/components/InlineRename';
 import { errAsync, okAsync } from 'neverthrow';
-import { Key } from '@solid-primitives/keyed';
 import { createSignal, Show } from 'solid-js';
 import { render } from 'solid-js/web';
 
