@@ -85,8 +85,16 @@ and live keys equal the previous snapshot. Nonempty recovery metadata fails.
 The build postprocesses each optimized artifact with the native
 `instrument_exports` example. Forwarding wrappers count actual export entries,
 including imported function exports, raw allocator calls and trapping frees;
-internal calls retain their original indices. Do not optimize after this step.
+internal model calls retain their original indices. Bindgen throw imports receive
+internal string wrappers so trapping-receiver error messages count too. Do not optimize after this step.
 `debug.test.ts` verifies the resulting Node/web counters and editor-facade
 lifetimes. Reset starts a new crossing interval; observations count their own
-entry. These counters do not yet implement boundary-byte accounting or the full
-WP-54 EditorHandle contract.
+entry. Byte accounting derives fixed inputs and string ABI positions from the Rust
+exports, verifies optimized signatures, and rejects unknown export policies.
+Strings count UTF-16 units times two, including copied inputs of trapping calls;
+optional absent strings ignore stale bindgen lengths. Numeric values use their
+facade widths; returned object keys/values count recursively, with f64 JS numbers.
+Container, allocator, pointer/length and generated control metadata carry no
+payload. Reserved raw counter-helper arguments are measurement adjustments.
+The existing raw facades still do not implement the full WP-54 EditorHandle
+contract.
