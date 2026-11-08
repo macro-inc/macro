@@ -7,7 +7,7 @@ version = "0.1.0"
 [features]
 account_merge_request = ["dep:rand"]
 default = ["account_merge_request", "team"]
-team = ["dep:models_team"]
+team = ["dep:team_types"]
 
 [dependencies]
 anyhow = { workspace = true }
@@ -25,7 +25,7 @@ model_owner = { workspace = true }
 dcs_types = { workspace = true }
 opensearch_types = { workspace = true }
 permissions_types = { workspace = true }
-models_team = { workspace = true, optional = true }
+team_types = { workspace = true, optional = true }
 non_empty = { workspace = true }
 rand = { workspace = true, optional = true }
 serde = { workspace = true }
