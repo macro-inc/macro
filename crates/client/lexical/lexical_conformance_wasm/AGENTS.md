@@ -102,3 +102,7 @@ Reject the earlier unreleased packet format instead of maintaining a fallback.
 
 finish_noop preserves detached API values while closing a truly unchanged update
 without allocating a model commit; false leaves the pending update open.
+
+Count indexed JSON inputs at serde visitor delivery, including map keys and
+prefixes consumed before a later error. Keep the wrapped deserializer requests
+and error text unchanged; do not count only the final normalized JSON value.

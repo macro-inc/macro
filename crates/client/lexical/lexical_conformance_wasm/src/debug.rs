@@ -64,7 +64,7 @@ pub extern "C" fn record_payload_bytes(bytes: u64) {
     add_bytes(bytes);
 }
 
-fn add_bytes(bytes: u64) {
+pub(crate) fn add_bytes(bytes: u64) {
     BOUNDARY_BYTES.fetch_add(bytes, Ordering::Relaxed);
 }
 
