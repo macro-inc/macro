@@ -204,7 +204,7 @@ impl AgentSessionRepo for InMemoryAgentSessionRepo {
     async fn create(&self, params: CreateAgentSessionParams) -> Result<AgentSession> {
         let now = chrono::Utc::now();
         let session = AgentSession {
-            origin: Default::default(),
+            origin: params.origin.clone(),
             repo_branch: params.repo_branch,
             pull_request_url: None,
             task_id: None,

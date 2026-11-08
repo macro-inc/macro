@@ -938,12 +938,16 @@ edit, an attachment upload completing during another local save, and Discard
 while an attachment snapshot is still being saved. A snapshot based on an older
 local revision must fail without replacing newer content or files, including
 when another tab saves first. Reopen the draft to use the latest version.
-Then open one reply in two tabs, type in the first, wait for its queued save to
-reach the server, and send from the second. The first tab's composer must clear
-without "Your newer text was kept as a new draft", Drafts must not gain a copy
-of the sent reply, and the thread must not reopen it as a draft. Text typed
-after the server last acknowledged the draft is still kept as a new draft;
-each such move logs `email_draft.kept_as_new` with its reason.
+Then open one reply in two tabs, type in the first, reload the second so it
+holds that text, and send from the second. The first tab's composer must clear
+without "Your newer text was kept as a new draft", even when its own last save
+failed, Drafts must not gain a copy of the sent reply, and the thread must not
+reopen it as a draft. Text the first tab types after the send is still kept as
+a new draft, as is unsaved text when another device sends; each such move logs
+`email_draft.kept_as_new` with its reason and `email_draft.unsaved_edits`. Open
+a saved draft in two tabs before either edits: the second tab's first edit must
+fail with "This draft changed while saving" instead of replacing the first
+tab's text.
 A completed discard must not resurrect on reload. A clean,
 fully synchronized local copy must not hide newer server edits or sent state.
 While online, create a disposable reply, wait for its server identity, discard
@@ -1373,10 +1377,15 @@ Recovery re-uploads local attachment files and restores forwarded attachments.
 Remote-only draft attachments cannot be copied after the original draft is gone;
 their pills are removed and a notice asks you to attach those files again.
 
+The fallback **Draft could not be saved** toast keeps **Save as new draft** as its
+only action, with an accent-colored draft icon, a desktop close icon, and mobile
+swipe dismissal. Dismissing the toast does not save the draft or resume autosave;
+keep the editor open to preserve its unsaved contents.
+
 A successful initial schedule shows an **Email scheduled** notice whose description
-gives the full send time, with **Undo** and **View message** on their own row below
-it; a rescheduled email
-shows **Email rescheduled** with **View message**. Undo cancels the captured draft in
+gives the full send time, with secondary **View message** on the left and primary
+**Undo** on the right in their own row below it; a rescheduled email shows
+**Email rescheduled** with **View message**. Undo cancels the captured draft in
 the captured inbox and restores its editable body, envelope, and attachments; it must
 not overwrite a newer reply. View message opens the scheduled thread, or scrolls an
 inline reply back into view.

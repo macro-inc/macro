@@ -10,8 +10,8 @@ set -euo pipefail
 #    committed at the PR head (held for release, or live), built from the
 #    native tree the PR's merge result would have (`merge` is GitHub's test
 #    merge commit; the gate hashes the same). When it did, and the PR's latest
-#    `iOS Native Check` job (of the PR CI run) failed — it fails until Apple
-#    approves — re-run the run's failed jobs so the gate, and the `CI gate`
+#    `iOS Native Check` job (of PR CI or the earlier web workflow) failed — it
+#    fails until Apple approves — re-run the run's failed jobs so the gate, and the `CI gate`
 #    status that depends on it, go green without anyone clicking "Re-run".
 #
 # GH_TOKEN needs actions:write + pull-requests:write.
@@ -19,8 +19,50 @@ cd apps/web
 conf_path="apps/web/tauri/src-tauri/tauri.ios.conf.json"
 bump='cd apps/web && doppler run --project ios-release --config prd -- just ios-bump'
 
+rerun_approved_check() {
+  local run=$1 number=$2 version=$3 build=$4 run_id status run_url job conclusion job_id reruns
+  run_id=$(jq -r '.databaseId' <<<"$run")
+  status=$(jq -r '.status' <<<"$run")
+  run_url=$(jq -r '.url' <<<"$run")
+  if [[ "$status" != "completed" ]]; then
+    echo "  CI run ${run_id} is ${status}; skipping"
+    return 0
+  fi
+  job=$(gh run view "$run_id" --json jobs \
+    --jq '.jobs[] | select(.name == "Web App / iOS Native Check" or .name == "iOS Native Check") | {id: .databaseId, conclusion}')
+  if [[ -z "$job" ]]; then
+    echo "  run ${run_id} has no iOS Native Check job; skipping"
+    return 0
+  fi
+  job_id=$(jq -r '.id' <<<"$job")
+  conclusion=$(jq -r '.conclusion' <<<"$job")
+  if [[ "$conclusion" == "success" ]]; then
+    echo "  iOS Native Check already passed"
+    return 0
+  fi
+  if [[ "$conclusion" != "failure" ]]; then
+    echo "  iOS Native Check job concluded ${conclusion}; leaving it alone"
+    return 0
+  fi
+  # If our re-run also fails something else is wrong (the job's log says
+  # what), so stop after two rather than retrying every half hour forever.
+  # Counted by our own comments per run: the attempt number is shared with
+  # label re-runs and "re-run failed jobs" clicks for flaky tests.
+  reruns=$(gh pr view "$number" --json comments --jq \
+    "[.comments[].body | select(contains(\"Re-ran the **iOS Native Check**\")) | select(contains(\"iOS ${version} (build ${build})\")) | select(contains(\"[run](${run_url})\"))] | length")
+  if (( reruns >= 2 )); then
+    echo "  iOS Native Check already re-run ${reruns} times and still failing; not re-running again — see ${run_url}"
+    return 0
+  fi
+  # Re-run the failed jobs, not just this one: the CI gate job that sets the
+  # required status depends on it from outside the called web workflow.
+  echo "  re-running iOS Native Check (job ${job_id} of run ${run_id}; ${reruns} automatic re-runs so far)"
+  gh run rerun "$run_id" --failed
+  gh pr comment "$number" --body "📱 Apple approved iOS ${version} (build ${build}). Re-ran the **iOS Native Check** ([run](${run_url})); this PR can merge once it passes, and the next prod deploy releases it on the App Store."
+}
+
 check_pr() {
-  local pr=$1 number sha merge conf version build head_tree native_tree run run_id status run_url job conclusion job_id reruns outputs withdrawn held live
+  local pr=$1 number sha merge conf version build head_tree native_tree run legacy_run outputs withdrawn held live
   number=$(jq -r '.number' <<<"$pr")
   sha=$(jq -r '.sha' <<<"$pr")
   merge=$(jq -r '.merge // empty' <<<"$pr")
@@ -71,48 +113,18 @@ check_pr() {
   echo "  approved by Apple"
 
   run=$(pr_ci_run "$sha")
-  if [[ -z "$run" ]]; then
-    echo "  no PR CI run for this commit; skipping"
+  # Open PRs can still carry failed checks from before the PR CI migration.
+  # Check that workflow too, even when a newer PR CI run already passed:
+  # GitHub keeps the two sets of check names separately on the same commit.
+  legacy_run=$(gh run list --workflow web-app-check-main.yml --commit "$sha" \
+    --event pull_request --limit 1 --json databaseId,status,url --jq '.[0] // empty')
+  if [[ -z "$run" && -z "$legacy_run" ]]; then
+    echo "  no CI run for this commit; skipping"
     return 0
   fi
-  run_id=$(jq -r '.databaseId' <<<"$run")
-  status=$(jq -r '.status' <<<"$run")
-  run_url=$(jq -r '.url' <<<"$run")
-  if [[ "$status" != "completed" ]]; then
-    echo "  PR CI run ${run_id} is ${status}; skipping"
-    return 0
-  fi
-  job=$(gh run view "$run_id" --json jobs \
-    --jq '.jobs[] | select(.name == "Web App / iOS Native Check") | {id: .databaseId, conclusion}')
-  if [[ -z "$job" ]]; then
-    echo "  run ${run_id} has no iOS Native Check job; skipping"
-    return 0
-  fi
-  job_id=$(jq -r '.id' <<<"$job")
-  conclusion=$(jq -r '.conclusion' <<<"$job")
-  if [[ "$conclusion" == "success" ]]; then
-    echo "  iOS Native Check already passed"
-    return 0
-  fi
-  if [[ "$conclusion" != "failure" ]]; then
-    echo "  iOS Native Check job concluded ${conclusion}; leaving it alone"
-    return 0
-  fi
-  # If our re-run also fails something else is wrong (the job's log says
-  # what), so stop after two rather than retrying every half hour forever.
-  # Counted by our own comments: the run's attempt number is shared with
-  # label re-runs and "re-run failed jobs" clicks for flaky tests.
-  reruns=$(gh pr view "$number" --json comments --jq \
-    "[.comments[].body | select(contains(\"Re-ran the **iOS Native Check**\")) | select(contains(\"iOS ${version} (build ${build})\"))] | length")
-  if (( reruns >= 2 )); then
-    echo "  iOS Native Check already re-run ${reruns} times and still failing; not re-running again — see ${run_url}"
-    return 0
-  fi
-  # Re-run the failed jobs, not just this one: the CI gate job that sets the
-  # required status depends on it from outside the called web workflow.
-  echo "  re-running iOS Native Check (job ${job_id} of run ${run_id}; ${reruns} automatic re-runs so far)"
-  gh run rerun "$run_id" --failed
-  gh pr comment "$number" --body "📱 Apple approved iOS ${version} (build ${build}). Re-ran the **iOS Native Check** ([run](${run_url})); this PR can merge once it passes, and the next prod deploy releases it on the App Store."
+  while read -r run; do
+    rerun_approved_check "$run" "$number" "$version" "$build"
+  done < <(printf '%s\n' "$run" "$legacy_run" | jq -cs 'unique_by(.databaseId)[]')
 }
 
 # One PR's API hiccup must not stop the others from being checked this

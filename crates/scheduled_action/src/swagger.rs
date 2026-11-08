@@ -5,9 +5,10 @@ use utoipa::OpenApi;
     reason = "utoipa path macros require these generated symbols in scope"
 )]
 use crate::inbound::axum_router::{
-    __path_create_action, __path_delete_action, __path_execute_action, __path_get_action,
-    __path_health, __path_list_actions, __path_list_history, __path_set_action_enabled,
-    __path_update_action, ScheduledActionResponse, SetScheduledActionEnabled,
+    __path_check_action, __path_create_action, __path_delete_action, __path_execute_action,
+    __path_get_action, __path_health, __path_list_actions, __path_list_history,
+    __path_set_action_enabled, __path_update_action, ScheduledActionResponse,
+    SetScheduledActionEnabled,
 };
 #[expect(
     unused_imports,
@@ -46,6 +47,7 @@ use model::response::EmptyResponse;
         crate::inbound::axum_router::list_actions,
         crate::inbound::axum_router::get_action,
         crate::inbound::axum_router::create_action,
+        crate::inbound::axum_router::check_action,
         crate::inbound::axum_router::update_action,
         crate::inbound::axum_router::set_action_enabled,
         crate::inbound::axum_router::delete_action,
@@ -68,10 +70,6 @@ use model::response::EmptyResponse;
             crate::domain::drafts::RoutineSoFar,
             crate::domain::drafts::StepKind,
             crate::domain::drafts::DraftContext,
-            crate::domain::drafts::Workspace,
-            crate::domain::drafts::NamedItem,
-            crate::domain::drafts::WorkspaceTag,
-            crate::domain::drafts::WorkspaceAgent,
             crate::domain::drafts::Draft,
             crate::domain::drafts::DraftedRoutine,
             crate::domain::drafts::DraftedStep,
@@ -82,6 +80,10 @@ use model::response::EmptyResponse;
             ScheduledActionResponse,
             ActionConfiguration,
             ActionConfigurationUpdate,
+            crate::domain::models::RoutineCheck,
+            crate::domain::models::CheckedStepProblems,
+            crate::domain::models::CreatedItem,
+            crate::inbound::axum_router::CheckRoutineRequest,
             ActionTrigger,
             crate::domain::event_trigger::RoutineTrigger,
             crate::domain::event_trigger::RoutineTriggers,
@@ -109,6 +111,13 @@ use model::response::EmptyResponse;
             routine_program::AgentTask,
             routine_program::AgentSelection,
             routine_program::RoutineModelId,
+            routine_program::CodeIdentity,
+            routine_program::RoutineTask,
+            routine_program::RoutineProgram,
+            routine_program::Step,
+            routine_program::CodeStep,
+            routine_program::AgentStep,
+            routine_program::Knob,
         ),
     ),
     tags(
@@ -116,3 +125,6 @@ use model::response::EmptyResponse;
     )
 )]
 pub struct ApiDoc;
+
+#[cfg(test)]
+mod test;

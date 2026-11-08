@@ -20,12 +20,15 @@ mod routine_analytics;
 mod routine_run_notifications;
 use config::Config;
 use scheduled_action::domain::code_upgrade;
-use scheduled_action::domain::drafts::RoutineDrafts;
+use scheduled_action::domain::drafts::{DraftAgent, RoutineDrafts};
 use scheduled_action::domain::event_runs::{
     PageSize, admission::EventAdmissionService, condition::ConditionGate,
     dispatch::EventDispatchService,
 };
-use scheduled_action::domain::ports::ScheduledActionDispatcher;
+use scheduled_action::domain::models::CreatedItem;
+use scheduled_action::domain::ports::{
+    DraftHandBacks, RequestSessions, ScheduledActionDispatcher, SessionCreations,
+};
 use scheduled_action::domain::program_runner::ProgramRunner;
 use scheduled_action::domain::service::ScheduledActionServiceImpl;
 use scheduled_action::domain::target_runner::TargetRunner;
@@ -44,6 +47,7 @@ use scheduled_action::outbound::event_access::EventAccessAdapter;
 use scheduled_action::outbound::event_content::EventContentAdapter;
 use scheduled_action::outbound::inprocess_executor::InProcessExecutor;
 use scheduled_action::outbound::pg_code_upgrades::PgCodeUpgrades;
+use scheduled_action::outbound::pg_draft_hand_backs::PgDraftHandBacks;
 use scheduled_action::outbound::pg_event_run_repo::PgEventRunRepo;
 use scheduled_action::outbound::pg_polling_dispatcher::{
     PgPollingDispatcher, PgPollingDispatcherLifecycle,
@@ -67,6 +71,59 @@ const CONSUMER_RESTART_DELAY: Duration = Duration::from_secs(5);
 const EVENT_CONCURRENCY: u16 = 2;
 const ADMISSION_PAGE_SIZE: u16 = 100;
 const GATEWAY_PATH_PREFIX: &str = "/scheduled-action";
+/// How often drafts a stopped process left behind are cleaned up.
+const DRAFT_SWEEP_INTERVAL: Duration = Duration::from_secs(60);
+
+/// What a session's programs created, from the activity recorded for its
+/// code-mode invocations.
+struct ActivityCreations(activity::outbound::pg_activity_repo::PgActivityRepo);
+
+/// Activity rows read per draft; a draft creates a handful of items.
+const DRAFT_ACTIVITY_PAGE: u32 = 100;
+
+#[async_trait::async_trait]
+impl SessionCreations for ActivityCreations {
+    async fn created_by(&self, session: uuid::Uuid) -> Result<Vec<CreatedItem>> {
+        use activity::domain::models::{Action, RecordedAction};
+        use activity::domain::ports::AgentActivityReads as _;
+        let page = self
+            .0
+            .agent_activity(
+                session,
+                None,
+                None,
+                std::num::NonZeroU32::new(DRAFT_ACTIVITY_PAGE).context("page size")?,
+            )
+            .await
+            .map_err(|error| anyhow::anyhow!("could not read a session's activity: {error}"))?;
+        Ok(page
+            .records
+            .into_iter()
+            .filter(|record| matches!(record.action, RecordedAction::Known(Action::Created)))
+            .map(|record| CreatedItem {
+                entity_type: record.entity_type,
+                entity_id: record.entity_id,
+            })
+            .collect())
+    }
+}
+
+/// The agent session behind a code-mode request, from the invocation its
+/// credential names.
+struct CorrelationSessions(agent_correlation::outbound::PgCorrelationRepository);
+
+#[async_trait::async_trait]
+impl RequestSessions for CorrelationSessions {
+    async fn session_of(&self, correlation: uuid::Uuid) -> Result<Option<uuid::Uuid>> {
+        use agent_correlation::domain::CorrelationRepository as _;
+        Ok(self
+            .0
+            .find(correlation)
+            .await
+            .map_err(|error| anyhow::anyhow!("could not read a code-mode invocation: {error}"))?
+            .map(|correlation| correlation.session_id))
+    }
+}
 
 /// Scheduling routes and workers owned by the harness process.
 pub struct SchedulingRuntime {
@@ -95,7 +152,6 @@ pub async fn build<Ingress: notification::domain::service::NotificationIngress>(
     db: sqlx::PgPool,
     harness_address: std::net::SocketAddr,
     code: Option<crate::routine_code::SdkRoutineCode>,
-    drafter: crate::routine_drafts::ModelDrafts,
     ready: tokio::sync::watch::Receiver<bool>,
     notifications: Arc<Ingress>,
 ) -> Result<SchedulingRuntime> {
@@ -298,10 +354,44 @@ pub async fn build<Ingress: notification::domain::service::NotificationIngress>(
         },
     );
 
-    // AI drafts routines as their owner would save them, checking code
-    // with the same checker.
-    let drafts = RoutineDrafts::new(Arc::clone(&code), Arc::new(drafter), ai_admission)
-        .with_conditions_enabled(conditions_enabled);
+    // AI drafts routines in hidden sessions of the in-process Macro agent on
+    // the model the person's Ask AI steps use, admitted and billed as their
+    // agent session usage. A draft's session hands its routine back by checking
+    // it; the check is kept on the draft's row, so any replica can read it.
+    let hand_backs: Arc<dyn DraftHandBacks> = Arc::new(PgDraftHandBacks::new(db.clone()));
+    let drafts = Arc::new(
+        RoutineDrafts::new(
+            Arc::clone(&code),
+            Arc::clone(&sessions),
+            Arc::clone(&hand_backs),
+            DraftAgent {
+                bot: bot_id::MACRO_NEW_BOT_ID,
+                // Generated from the SDK at build time, so it is always there.
+                guide: agent_code_mode::domain::entity_guide("routines").unwrap_or_default(),
+            },
+        )
+        .with_session_creations(Arc::new(ActivityCreations(
+            activity::outbound::pg_activity_repo::PgActivityRepo::new(db.clone()),
+        )))
+        .with_conditions_enabled(conditions_enabled),
+    );
+    // Drafts a stopped process left behind lose their session and row.
+    {
+        let drafts = Arc::clone(&drafts);
+        let stop = lifecycle.stop_workers.clone();
+        lifecycle.workers.spawn(async move {
+            let mut every = tokio::time::interval(DRAFT_SWEEP_INTERVAL);
+            loop {
+                tokio::select! {
+                    biased;
+                    _ = stop.cancelled() => return,
+                    _ = every.tick() => {}
+                }
+                // Logged by the sweep's span.
+                let _ = drafts.sweep().await;
+            }
+        });
+    }
     let service = Arc::new(
         ScheduledActionServiceImpl::new(
             Arc::clone(&repo),
@@ -312,6 +402,12 @@ pub async fn build<Ingress: notification::domain::service::NotificationIngress>(
         .with_event_management_enabled(config.event_routines_enabled)
         .with_conditions_enabled(conditions_enabled)
         .with_target_validation(TargetValidation::new(sessions))
+        .with_draft_hand_backs(
+            hand_backs,
+            Arc::new(CorrelationSessions(
+                agent_correlation::outbound::PgCorrelationRepository(db.clone()),
+            )),
+        )
         .with_github_links(PgGithubInstallationClaims::new(db.clone()))
         .with_code(code, upgrades),
     );
@@ -340,7 +436,7 @@ pub async fn build<Ingress: notification::domain::service::NotificationIngress>(
         authorization_state: authorization_state.clone(),
     };
     let draft_state = RoutineDraftRouterState {
-        service: Arc::new(drafts),
+        service: drafts,
         authorization_state: authorization_state.clone(),
     };
     let state = ScheduledActionRouterState {

@@ -324,7 +324,8 @@ only teammate overlay. Replacing a login session clears team data and open
 teammate details before the new identity loads. Legacy out-of-office rows are
 read-only status displays and do not claim that every absence blocks availability.
 
-The `GetTeamAvailability` AI tool checks the requester together with the selected
+The `GetTeamAvailability` AI tool (and, in code mode, `macro.calendar.teamAvailability`
+over `POST /calendar-events/team/availability`) checks the requester together with the selected
 teammates. It reports confirmed free windows only when every participant has
 complete availability coverage. Hidden, disconnected, stale, or incomplete
 calendars are reported as unknown, never free. Busy blocks contain no event

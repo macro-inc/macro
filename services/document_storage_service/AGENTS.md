@@ -89,6 +89,9 @@ threads, pins, recents, notifications, folders, activity.
 
 ## Gotchas
 
+- Register add-only contact email and personal-provider company setters with required request fields in OpenAPI together;
+  the CRM domain owns authorization, normalization and relation invariants.
+
 - Provision required `POSTHOG_API_KEY` before startup; `enable-call-channel-thread`
   evaluation has a 300 ms timeout and keeps the call's own chat on failure.
 - The same flag client evaluates `enable-programmatic-calls` per caller for the
@@ -99,7 +102,9 @@ threads, pins, recents, notifications, folders, activity.
 - Several behaviors are Cargo-feature-gated (`connection_gateway`,
   `delete_document_worker`, `location_check`, all on by `default`) — a feature
   disabled locally can hide a bug that only shows in deployed builds.
-- Soup GraphQL reads a replica with multi-second lag; a read immediately after
+- CRM-scoped Soup email previews read the primary so consent withdrawal and
+  exclusions take effect without replica lag; ordinary inbox lists keep the replica.
+- Ordinary Soup GraphQL reads a replica with multi-second lag; a read immediately after
   a write through the same request needs the primary-reading loader, not the
   default one — see `crates/graphql_soup`.
 - Dev's readonly pool keeps 2–20 connections per task, independently of the

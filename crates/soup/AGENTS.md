@@ -79,6 +79,9 @@ rows, initiatives, ...) and get back a single unified, paginated result.
   read); REST group meta and GraphQL bins carry the result as `GroupLabels`,
   and a key it leaves out keeps itself as its label.
 
+- Attention feeds admit visible CRM records through current team membership,
+  independently of mailbox contribution consent or the retired team CRM switch.
+  Hidden companies, their contacts, and hidden company-less contacts stay out.
 - `crm_association.rs` resolves CRM scope before filtering, sorting, and paging.
   Activity uses property edges rather than references and matches email within
   the caller's mailbox. Keep browser requests bounded; never expand every CRM
