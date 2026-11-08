@@ -134,3 +134,5 @@ Node-returning hook results share the caught tree snapshot with exportJSON befor
 Commit-time exportJSON reads the exact canonical next state with leased update metadata, including previous/detached selections and composition. Preparation errors revoke derived read captures before rollback; keep ViewAttached writable-record identities unchanged by using metadata-only contexts.
 
 Decode indexed JS inputs through host_input/safe.rs: catch getters/proxies/iterator steps at their original lazy access points, then retain the existing counted visitor and scalar/byte decoder. Keep opaque accessor errors separate from ordinary serde diagnostics; never eagerly snapshot incoming arrays or change copied-prefix accounting.
+
+EditorHandle::read_state hosts associated-editor reads of retained versions through the same guarded owned peer. Preserve opaque body returns and throws without inspecting properties, and route nested reads through CURRENT rather than a leased Session. This explicit API does not provide editor-less EditorState.read semantics.

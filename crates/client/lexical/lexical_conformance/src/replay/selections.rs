@@ -1,7 +1,10 @@
 //! Shared selection objects and transaction-local slot/activation metadata.
 use super::{Result, fail};
 use lexical_model::{ForeignSelectionIdentity, Selection, SelectionSlot, Transaction};
-use std::sync::{Arc, Mutex, MutexGuard};
+use std::{
+    collections::BTreeSet,
+    sync::{Arc, Mutex, MutexGuard},
+};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) struct ActiveSelection {
@@ -18,6 +21,7 @@ pub(crate) struct SelectionBindings {
 struct Objects {
     identities: Vec<ForeignSelectionIdentity>,
     values: Vec<Option<Selection>>,
+    independent: BTreeSet<usize>,
 }
 #[derive(Clone, Default)]
 struct Frame {
@@ -177,11 +181,41 @@ impl SelectionBindings {
             .ok_or_else(|| fail("selection handle"))? = value;
         Ok(())
     }
-    pub fn restore_values(&self, values: Vec<Option<Selection>>) -> Result<()> {
+    /// Read-created ordinary values do not belong to a surrounding pending update.
+    pub fn save_independent_value(&self, id: usize, value: Option<Selection>) -> Result<()> {
+        let mut stored = self.objects()?;
+        *stored
+            .values
+            .get_mut(id)
+            .ok_or_else(|| fail("selection handle"))? = value;
+        stored.independent.insert(id);
+        Ok(())
+    }
+    pub fn restore_values(&self, mut values: Vec<Option<Selection>>) -> Result<()> {
         self.set_active(None)?;
         {
             let mut stored = self.objects()?;
+            if let Some(last) = stored
+                .independent
+                .range(values.len()..)
+                .next_back()
+                .copied()
+            {
+                // Retain indices through the last independent object. Aborted
+                // mutable objects leave empty slots, so their IDs cannot alias
+                // surviving read handles after rollback.
+                for id in values.len()..=last {
+                    values.push(if stored.independent.contains(&id) {
+                        stored.values[id]
+                            .as_ref()
+                            .map(Selection::snapshot_for_foreign_read)
+                    } else {
+                        None
+                    });
+                }
+            }
             stored.identities.truncate(values.len());
+            stored.independent.retain(|id| *id < values.len());
             stored.values = values;
         }
         self.frame()?.slots.clear();

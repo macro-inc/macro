@@ -189,6 +189,9 @@ export class ConformanceBackend implements ShimBackend {
       handle.call_native(id, { args, this: receiver })
     );
   }
+  readState(version: string, body: () => unknown): unknown {
+    return this.enter((handle) => handle.read_state(version, body));
+  }
   flush(): void {
     this.enter((handle) => handle.flush());
   }

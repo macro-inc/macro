@@ -94,6 +94,13 @@ impl ReadFrame<'_, '_, '_> {
     }
 }
 impl Dispatch for ReadFrame<'_, '_, '_> {
+    fn read_state(&self, version: u64, callback: &js_sys::Function) -> Result<JsValue, JsValue> {
+        self.with_peer(|peer| {
+            peer.with_state_read(version, |nested| {
+                invoke_state(self.owner, self.errors, nested, callback)
+            })
+        })
+    }
     fn owner(&self) -> &Arc<()> {
         self.owner
     }
@@ -165,5 +172,38 @@ impl Callback {
             .as_object()
             .cloned()
             .ok_or(Error::Invariant("exportJSON must return an object"))
+    }
+}
+
+/// Run an associated-state body without inspecting its ordinary JS return value.
+pub(crate) fn invoke_state(
+    owner: &Arc<()>,
+    errors: &Errors,
+    peer: &mut CallbackRead<'_, '_>,
+    callback: &js_sys::Function,
+) -> Result<JsValue, lexical_conformance::replay::ReplayError> {
+    #[cfg(target_arch = "wasm32")]
+    {
+        let frame = ReadFrame {
+            owner,
+            errors,
+            peer: RefCell::new(peer),
+        };
+        CURRENT
+            .set(&frame, || callback.call0(&JsValue::UNDEFINED))
+            .map(crate::debug::returned_handle)
+            .map_err(|error| {
+                errors.save(error);
+                lexical_conformance::replay::ReplayError::Model(Error::Invariant(
+                    "JS state read threw",
+                ))
+            })
+    }
+    #[cfg(not(target_arch = "wasm32"))]
+    {
+        let _ = (owner, errors, peer, callback);
+        Err(lexical_conformance::replay::ReplayError::Model(
+            Error::Invariant("JS state reads require WASM"),
+        ))
     }
 }

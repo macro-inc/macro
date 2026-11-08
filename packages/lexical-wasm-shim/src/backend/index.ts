@@ -19,6 +19,7 @@ export interface ShimBackend {
     args: readonly unknown[],
     receiver: unknown
   ): unknown;
+  readState(version: string, body: () => unknown): unknown;
   flush(): void;
   finishNoop(): boolean;
   commit(): CommitPacket;

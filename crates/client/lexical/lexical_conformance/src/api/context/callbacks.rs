@@ -5,6 +5,7 @@ use lexical_model::{ForeignEditorIdentity, ForeignReadSnapshot, ForeignUpdateIde
 use std::sync::{Arc, Mutex, Weak};
 mod publication;
 mod read;
+mod state;
 pub use read::CallbackRead;
 
 pub(super) struct Frames {

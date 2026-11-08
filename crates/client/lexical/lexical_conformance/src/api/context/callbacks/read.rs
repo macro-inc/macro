@@ -10,8 +10,8 @@ use super::*;
 /// explicitly; synchronizing those ordinary JS object writes requires a separate
 /// host protocol before this primitive can host every pure foreign hook.
 pub struct CallbackRead<'scope, 'editor> {
-    context: Context,
-    tx: &'scope mut Transaction<'editor>,
+    pub(super) context: Context,
+    pub(super) tx: &'scope mut Transaction<'editor>,
     snapshot: &'scope ForeignReadSnapshot,
     first_created: usize,
 }
@@ -63,7 +63,7 @@ impl CallbackContext {
 }
 
 impl CallbackRead<'_, '_> {
-    fn validate(&self) -> Result<()> {
+    pub(super) fn validate(&self) -> Result<()> {
         self.context.frames.captured(self.snapshot).map(|_| ())
     }
 
@@ -168,12 +168,18 @@ impl CallbackRead<'_, '_> {
                 // Read frames never hydrate absent tokens. A locally present,
                 // uncaptured token therefore belongs to a value created here.
                 // Nested scopes see it as inherited and cannot publish it.
-                self.context.replay.selections.save_value(
-                    id,
-                    self.tx
-                        .selection_at(slot)?
-                        .map(Selection::snapshot_for_foreign_read),
-                )?;
+                let value = self
+                    .tx
+                    .selection_at(slot)?
+                    .map(Selection::snapshot_for_foreign_read);
+                if self.context.replay.version <= self.context.replay.committed_version {
+                    self.context
+                        .replay
+                        .selections
+                        .save_independent_value(id, value)?;
+                } else {
+                    self.context.replay.selections.save_value(id, value)?;
+                }
             }
         }
         Ok(())

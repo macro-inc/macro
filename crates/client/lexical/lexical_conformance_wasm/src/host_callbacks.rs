@@ -7,6 +7,7 @@ use serde_json::Value;
 use std::{cell::Cell, sync::Arc};
 use wasm_bindgen::prelude::*;
 mod read;
+pub(super) use read::invoke_state;
 
 #[derive(Clone, Default)]
 pub(super) struct Errors(Arc<std::sync::Mutex<Option<HostValue>>>);
@@ -87,6 +88,7 @@ trait Dispatch {
     fn owner(&self) -> &Arc<()>;
     fn call(&self, id: u32, args: Value, receiver: Option<Value>) -> Result<Value, JsValue>;
     fn read_field(&self, handle: u32, field: &str) -> Result<Value, JsValue>;
+    fn read_state(&self, version: u64, callback: &js_sys::Function) -> Result<JsValue, JsValue>;
     fn call_native(&self, id: u32, args: Value, receiver: Value) -> Result<Value, JsValue>;
     fn register(
         &self,
@@ -130,6 +132,15 @@ impl Frame<'_, '_> {
     }
 }
 impl Dispatch for Frame<'_, '_> {
+    fn read_state(&self, version: u64, callback: &js_sys::Function) -> Result<JsValue, JsValue> {
+        self.with_tx(|tx| {
+            self.context
+                .with_state_read(tx, version, |peer| {
+                    read::invoke_state(self.owner, self.errors, peer, callback)
+                })
+                .map_err(|error| self.errors.convert(error))
+        })
+    }
     fn listen(
         &self,
         registration: lexical_model::CommandRegistration,
@@ -229,6 +240,14 @@ pub(super) fn call_native(
 }
 pub(super) fn read_field(owner: &Arc<()>, handle: u32, field: &str) -> Result<Value, JsValue> {
     current(owner, |frame| frame.read_field(handle, field))
+}
+
+pub(super) fn read_state(
+    owner: &Arc<()>,
+    version: u64,
+    callback: &js_sys::Function,
+) -> Result<JsValue, JsValue> {
+    current(owner, |frame| frame.read_state(version, callback))
 }
 
 pub(super) fn register(
