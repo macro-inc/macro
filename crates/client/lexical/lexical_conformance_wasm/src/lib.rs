@@ -5,6 +5,10 @@ use lexical_model::*;
 use serde::Deserialize;
 use serde_json::{Value, json};
 use wasm_bindgen::prelude::*;
+mod compat;
+pub use compat::text_format_flags;
+#[cfg(feature = "js-nodes")]
+pub use compat::{generate_random_key, reset_key_counter};
 mod rich;
 pub use rich::RichHandle;
 mod command;
