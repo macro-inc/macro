@@ -1,5 +1,5 @@
+use bulk_upload_types::ProjectDocumentStatus;
 use model_owner::Owner;
-use models_bulk_upload::ProjectDocumentStatus;
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 

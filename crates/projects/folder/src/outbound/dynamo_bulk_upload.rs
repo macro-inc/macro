@@ -1,7 +1,7 @@
 //! DynamoDB adapter for project bulk-upload requests.
 
 use crate::domain::ports::BulkUploadRequestPort;
-use models_bulk_upload::{BulkUploadRequest, BulkUploadRequestDocuments};
+use bulk_upload_types::{BulkUploadRequest, BulkUploadRequestDocuments};
 use uuid::Uuid;
 
 /// DynamoDB-backed bulk-upload request adapter.

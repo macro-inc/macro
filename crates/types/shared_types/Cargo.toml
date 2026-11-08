@@ -20,7 +20,7 @@ model_error_response = { workspace = true, features = ["anyhow"] }
 model_owner = { workspace = true }
 model_file_type = { workspace = true, features = ["utoipa"] }
 model_user = { workspace = true }
-models_bulk_upload = { workspace = true }
+bulk_upload_types = { workspace = true }
 models_pagination = { workspace = true }
 models_permissions = { workspace = true }
 schemars = { workspace = true }
