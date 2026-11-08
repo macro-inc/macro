@@ -38,6 +38,11 @@ impl Session {
         })
     }
 
+    /// Version owning the most recently published host records.
+    pub fn committed_version(&self) -> u64 {
+        self.context.committed_version()
+    }
+
     /// Last published model state, excluding suspended writes.
     pub fn state(&self) -> &EditorState {
         self.editor.state()

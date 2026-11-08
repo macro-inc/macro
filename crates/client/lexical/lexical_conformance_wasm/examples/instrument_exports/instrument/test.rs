@@ -397,8 +397,6 @@ fn string_payloads_count_utf16_optional_abi_aliases_and_entries_before_memory_tr
     ));
     assert!(matches!(
         instrument_with(&original, &[("input", 0, &[(0, 1, false)], &[0, 0])]),
-        Err(Error::Invalid(
-            "export has no generated input descriptor or supported glue policy"
-        ))
+        Err(Error::UnsupportedExport(name)) if name == "optional"
     ));
 }

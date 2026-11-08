@@ -138,6 +138,15 @@ fn signature(name: String, signature: &syn::Signature) -> Input {
                 position += 2;
                 abi.extend([0, 0]);
             }
+            "JsValue" => {
+                position += 1;
+                abi.push(2);
+            }
+            "bool" => {
+                bytes += 1;
+                position += 1;
+                abi.push(0);
+            }
             "u32" => {
                 bytes += 4;
                 position += 1;

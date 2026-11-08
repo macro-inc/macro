@@ -17,7 +17,7 @@ Development-only schema-2 fixture interpreter for the pinned upstream oracle.
 - `src/api.rs`: shared fixture/WASM call entry point; `build.rs` derives its sorted API index from dispatcher match arms with syn.
 - `src/api/context.rs`: host-owned fixture handles, suspended-call selection bookkeeping, publication/discard and explicit state release.
 - `src/api/context/callbacks.rs`: weak callback capability with independent mutable dispatcher frames and pure raw-field peers; exact update provenance authorizes reads through publication, while mutable dispatch stops before it. Pure raw reads grant no indexed API or selection dispatch.
-- `src/api/session.rs`: owned editor/pending-update boundary; with_context preserves preconfigured weak callback registrations; calls and flushes suspend without publishing, while failed commits discard model writes and pending handles.
+- `src/api/session.rs`: owned editor/pending-update boundary and published host version; with_context preserves preconfigured weak callback registrations; calls and flushes suspend without publishing, while failed commits discard model writes and pending handles.
 - `src/snapshot.rs`: full observable-state comparison.
 - `tests/replay_wasm.rs`: complete embedded corpus in wasm-bindgen-test via `just lexical-replay-wasm`.
 - `tests/replay.rs`: one libtest-mimic trial per recorded fixture.

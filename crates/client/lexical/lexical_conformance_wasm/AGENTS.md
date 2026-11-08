@@ -7,6 +7,9 @@ Never import them from production crates or bundles.
 
 ## Start here
 
+- `src/host.rs`: native-core EditorHandle indexed dispatch over a moved-out Session lease; JS conversions run outside that lease. Foreign nodes/callbacks and read-only API scopes are not wired yet.
+- `src/host_packet.rs`: development postcard envelope carrying the existing flat diff and changed base-record/mutation/selection metadata; production uses the session codec.
+- `examples/export_host_types.rs`: generate/check the Specta packet declaration with the web formatter.
 - `src/debug.rs`: actual export-entry, logical payload-byte and editor-facade lifetime counters; raw WASM must pass through instrument_exports before crossing measurements.
 - `build.rs`: build-time syn derivation of fixed scalar/receiver input sizes and string ABI locations; unsupported signatures or unknown exports fail instrumentation.
 - `src/compat.rs`: model-derived format flags and one WASM-instance key counter for shim host allocation/reset; Tier C handles retain their isolated counters.
@@ -33,6 +36,7 @@ Never import them from production crates or bundles.
 
 ## Checks
 
+- `TMPDIR=/home/wolf/tmp cargo run -p lexical_conformance_wasm --example export_host_types -j4 -- --check`
 - `TMPDIR=/home/wolf/tmp cargo test -p lexical_conformance_wasm -j4`
 - `TMPDIR=/home/wolf/tmp cargo test -p lexical_conformance_wasm --example instrument_exports -j4` (Bun executes actual synthetic WASM exports)
 - `TMPDIR=/home/wolf/tmp cargo clippy -p lexical_conformance_wasm --all-targets -j4 -- -D warnings`
@@ -59,3 +63,13 @@ accounting in src/debug.rs helpers when adding exports; raw-input accounting is
 derived and runs before receiver validation. Optional strings use pointer zero as
 absence even when bindgen leaves a stale length. Each artifact must contain one
 unshared memory32 when strings are accounted. Run the postprocessor after optimization.
+
+The native indexed host accepts `{args: [...], this?: encodedHandle}` as one call
+envelope. Its JS host owns namespace/editability/theme and discrete scheduling.
+Only the core registry is accepted until foreign definitions are wired; unknown
+node types fail explicitly. The development commit packet is versioned separately
+from its unchanged S1 flat diff. Its metadata currently covers base record fields;
+foreign payloads and NodeState identity descriptors still need the full host.
+Publication currently precedes packet encoding. Make delivery/encoding failure
+and chained-commit state/version/tag ownership explicit before enabling foreign
+callbacks or model follow-up queues through this host.
