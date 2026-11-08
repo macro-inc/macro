@@ -1,5 +1,9 @@
 import type { EditorView as MountedEditorView } from './view/editor-view';
 
+export {
+  type LocalSessionOptions,
+  mountLocalSessionView,
+} from './local-session-view';
 export { mountSessionView } from './session-view';
 export * from './view/commands';
 export {
