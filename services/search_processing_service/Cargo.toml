@@ -31,6 +31,10 @@ service = [
   "dep:properties",
 ]
 pdf = ["dep:pdfium-render"]
+# Local stacks skip pdfium: its bundled library is amd64-only and isn't in their
+# runtime image. Additive, unlike dropping the default `pdf` feature, so this
+# service builds in the same cargo invocation as every other local service.
+no_pdf = []
 
 [[bin]]
 name = "search_processing_service"

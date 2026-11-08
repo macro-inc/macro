@@ -65,6 +65,11 @@ unit tests. Standalone pure-logic crates need no database setup.
 `SQLX_OFFLINE=true` is allowed for `cargo check`, `cargo build`, and `cargo clippy`
 when the cache is current. Do not export it for a session that will run tests.
 
+Local `nix develop` shells build workspace crates incrementally, keep only line
+tables as debug info, and link with mold on Linux, which makes rebuilds after an
+edit much faster. To use a debugger, run `export CARGO_PROFILE_DEV_DEBUG=full`
+first. CI sets `CI` and keeps none of these.
+
 For deployable Lambda artifacts, use `just build_lambdas` or the relevant
 service's build recipe, e.g. `just services/document_text_extractor/build`.
 Use `just --show <recipe>` to check prerequisites; do not assume all Lambdas

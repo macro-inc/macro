@@ -492,7 +492,7 @@ cargo x deps --check && cargo x kafka-topics --check
 cd apps/web && bun run gen-api -- --check && bun run check
 cd packages/sdk && just check && just coverage
 just check full
-just run_local                          # or just stack up
+just run_local                          # no terminal needed
 ```
 
 In the browser (the `browser-verifier` subagent): create the entity, share it with

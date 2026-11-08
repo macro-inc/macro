@@ -57,6 +57,7 @@ workspace-members = [
     "xtask_kafka_topics",
     "xtask_workflows",
     "xtask_local",
+    "xtask_ports",
     "macro_sync_service_jwt",
     "sync_service",
     "sync_service_bebop_schema",

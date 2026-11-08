@@ -40,7 +40,7 @@ gateway `/calendar` prefix.
 ## Checks
 
 - `cargo test -p calendar_service` (`SQLX_OFFLINE` unset).
-- `curl http://localhost:8088/health` after `just run_local` or `just stack up`.
+- `curl http://localhost:8088/health` after `just run_local`.
 
 ## Gotchas
 

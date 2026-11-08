@@ -1248,12 +1248,11 @@
               # cmake-build feature, so no system librdkafka.pc is needed here.
               PKG_CONFIG_PATH_FOR_TARGET = pkgConfigPath;
               LIBCLANG_PATH = "${pkgs.libclang.lib}/lib";
-              # sccache shares third-party crates across worktrees. Cargo builds
-              # only workspace members incrementally, and sccache passes those
-              # through uncached, so incremental stays on: it cut the
-              # agent_harness_service edit-to-binary time by half.
-              # CI derivations do not inherit devShell attributes.
               RUSTC_WRAPPER = "${pkgs.sccache}/bin/sccache";
+              # CI needs sccache to cache every crate. It loads this shell through
+              # setup-nix-dev-shell, so these attributes reach its build steps.
+              # The shellHook switches local shells to incremental builds.
+              CARGO_INCREMENTAL = "0";
               SCCACHE_CACHE_SIZE = "30G";
               # Namespace CI runners preserve Cargo's ignored target directory.
               # A flake update can change the Nix C compiler while leaving CMake
@@ -1262,6 +1261,22 @@
               # Remove only caches configured by another compiler so ordinary
               # shell entry keeps reusable native build state.
               shellHook = ''
+                # Local rebuilds after an edit are mostly workspace crates, which
+                # incremental compilation reuses and sccache misses across
+                # worktrees anyway. Third-party crates still go through sccache.
+                # Line tables keep backtrace locations while shrinking test
+                # binaries; set CARGO_PROFILE_DEV_DEBUG=full to use a debugger.
+                if [ -z "''${CI:-}" ]; then
+                  unset CARGO_INCREMENTAL
+                  export CARGO_PROFILE_DEV_DEBUG="''${CARGO_PROFILE_DEV_DEBUG:-line-tables-only}"
+                  ${pkgs.lib.optionalString isLinux ''
+                    # Link host binaries with mold. Scoped to the host target, so
+                    # wasm and musl builds keep their own linkers; zig cc (cargo
+                    # zigbuild) ignores the flag. An exported RUSTFLAGS replaces
+                    # it, as cargo does.
+                    export CARGO_TARGET_${pkgs.stdenv.hostPlatform.rust.cargoEnvVarTarget}_RUSTFLAGS="''${CARGO_TARGET_${pkgs.stdenv.hostPlatform.rust.cargoEnvVarTarget}_RUSTFLAGS:--C link-arg=-fuse-ld=mold}"
+                  ''}
+                fi
                 if command -v prek >/dev/null 2>&1; then
                   repo_root="$(git rev-parse --show-toplevel 2>/dev/null || true)"
                   if [ -n "$repo_root" ] && [ -f "$repo_root/.pre-commit-config.yaml" ]; then

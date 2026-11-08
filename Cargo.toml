@@ -404,6 +404,7 @@ jsonwebtoken = { git = "https://github.com/whutchinson98/jsonwebtoken", features
 lambda_runtime = "0.13.0"
 lazy-regex = "3.6.1"
 lazy_static = "1.5.0"
+libc = "0.2"
 # Signal's curve25519 keys and XEdDSA; see crates/whatsapp/whatsmeow_signal/AGENTS.md.
 libsignal-core = { git = "https://github.com/signalapp/libsignal", tag = "v0.105.2" }
 livekit-api = { version = "0.4.16", default-features = false, features = [
@@ -966,6 +967,7 @@ work_feed = { path = "crates/search/work_feed" }
 worker_rs_otel = { path = "crates/platform/worker_rs_otel" }
 xtask_graph = { path = "tooling/xtask/crates/xtask_graph" }
 xtask_paths = { path = "tooling/xtask/crates/xtask_paths" }
+xtask_ports = { path = "tooling/xtask/crates/xtask_ports" }
 
 [patch.crates-io]
 # Only replaces tungstenite 0.27 (GraphQL subscriptions); 0.28/0.29 stay upstream.
