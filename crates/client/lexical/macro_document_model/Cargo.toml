@@ -4,7 +4,13 @@ version = "0.1.0"
 edition = "2024"
 publish = false
 
+[features]
+default = []
+html = ["dep:lexical_html", "dep:logos", "lexical_rich_nodes/html"]
+
 [dependencies]
+logos = { workspace = true, optional = true }
+lexical_html = { workspace = true, optional = true }
 lexical_loro.workspace = true
 rand_chacha.workspace = true
 chrono-tz.workspace = true
