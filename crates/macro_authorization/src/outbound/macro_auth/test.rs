@@ -203,6 +203,7 @@ fn a_token_signed_before_client_kinds_keeps_its_label_without_a_kind() {
         agent_via_kind: None,
         agent_correlation_id: None,
         agent_session_id: None,
+        routine_id: None,
         exp: unix_timestamp() + 60,
         iss: String::new(),
         fusion_user_id: FUSION_USER_ID.into(),
