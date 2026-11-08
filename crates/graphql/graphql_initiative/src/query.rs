@@ -61,7 +61,7 @@ pub async fn resolve_initiative<E: SoupEntityEdges>(
 ) -> async_graphql::Result<GraphqlSoupInitiative<E>> {
     resolve_visible_initiative(ctx, initiative_id)
         .await?
-        .ok_or_else(|| graphql_error(initiative::domain::models::InitiativeError::NotFound))
+        .ok_or_else(|| graphql_error(project::domain::models::InitiativeError::NotFound))
 }
 
 /// Resolve visible tasks from an authorized initiative.

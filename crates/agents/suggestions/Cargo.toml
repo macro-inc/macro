@@ -27,7 +27,7 @@ macro_uuid = { workspace = true }
 messages = { workspace = true, features = ["broker", "outbound"] }
 model_entity = { workspace = true }
 model_owner = { workspace = true }
-projects = { workspace = true }
+folder = { workspace = true }
 rdkafka = { workspace = true }
 rootcause = { workspace = true }
 serde = { workspace = true }

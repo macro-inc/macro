@@ -12,7 +12,7 @@ documents = { workspace = true, features = ["service"] }
 email = { workspace = true }
 futures = { workspace = true }
 github_pull_requests = { workspace = true }
-initiative = { workspace = true }
+project = { workspace = true }
 kafka_util = { workspace = true }
 macro_event_broker = { workspace = true, features = ["outbound"] }
 macro_user_id = { workspace = true }
@@ -20,7 +20,7 @@ messages = { workspace = true, features = ["broker"] }
 model_entity = { workspace = true }
 model_owner = { workspace = true }
 models_properties = { workspace = true }
-projects = { workspace = true, features = ["service"] }
+folder = { workspace = true, features = ["service"] }
 properties = { workspace = true, features = ["ports"] }
 rdkafka = { workspace = true }
 rootcause = { workspace = true }

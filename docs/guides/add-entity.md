@@ -18,7 +18,7 @@ follow-up fix; those misses are called out inline.
 | --- | --- | --- |
 | The smallest correct registration | `CrmPipeline` (`crates/databases/crm`, `crm_pipeline_entities`) | Newest kind; touches every core registration point with the least feature code |
 | A full-stack kind outside Soup | Forms (`crates/databases/forms`, `apps/web/src/features/block-form`) | Newest end-to-end launch: access, public audience, entity mutation, mentions, Drive catalog, AI tools, SDK entity, agent guide |
-| A Soup kind with properties, discussions, activity, MCP | Initiatives (`crates/projects/initiative`, `crates/graphql/graphql_initiative`) | Built in clean layers; the [design doc](../design/initiatives-projects.md) records the order |
+| A Soup kind with properties, discussions, activity, MCP | Initiatives (`crates/projects/project`, `crates/graphql/graphql_initiative`) | Built in clean layers; the [design doc](../design/initiatives-projects.md) records the order |
 | A kind on reusable storage | Databases (`crates/databases/databases`, `database_entities`) | Separates storage from the app entity; read the [database-core skill](../../.agents/skills/database-core/SKILL.md) |
 
 Collaborative markdown on the entity (descriptions, notes) follows the

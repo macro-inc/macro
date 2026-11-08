@@ -7,9 +7,9 @@ use std::sync::Arc;
 
 use collab_surface::domain::models::CollabSurfaceError;
 use collab_surface::domain::ports::OwnedSurfaceService;
-use initiative::domain::models::{InitiativeError, InitiativeId};
-use initiative::domain::ports::InitiativeDescriptionSurfaces;
 use model_entity::EntityType;
+use project::domain::models::{InitiativeError, InitiativeId};
+use project::domain::ports::InitiativeDescriptionSurfaces;
 
 #[cfg(test)]
 mod test;

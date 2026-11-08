@@ -20,8 +20,8 @@ use channels::domain::{
 use chat::domain::events::{ChatMacroEvent, ChatTopicEvent};
 use documents::domain::events::{DocumentMacroEvent, DocumentTopicEvent, InteractionReason};
 use email::domain::events::{EmailMacroEvent, EmailTopicEvent};
+use folder::domain::events::{ProjectMacroEvent, ProjectTopicEvent};
 use github_pull_requests::broker::{GithubPullRequestMacroEvent, GithubPullRequestTopicEvent};
-use initiative::domain::events::{InitiativeMacroEvent, InitiativeTopicEvent};
 use kafka_util::{GroupName, InitialOffset, KafkaEventConsumer};
 use macro_event_broker::{
     KafkaConsumerAdapter, MacroEvent as _, MacroEventCollection as _, MacroEventConsumerService,
@@ -31,7 +31,7 @@ use messages::outbound::broker::{MessageMacroEvent, MessageTopicEvent};
 use model_entity::{Entity, EntityType};
 use models_properties::EntityType as PropertyEntityType;
 use models_properties::service::property_value::PropertyValue;
-use projects::domain::events::{ProjectMacroEvent, ProjectTopicEvent};
+use project::domain::events::{InitiativeMacroEvent, InitiativeTopicEvent};
 use properties::domain::events::{PropertyMacroEvent, PropertyTopicEvent};
 use rdkafka::consumer::CommitMode;
 use rdkafka::message::{BorrowedMessage, Message as _};

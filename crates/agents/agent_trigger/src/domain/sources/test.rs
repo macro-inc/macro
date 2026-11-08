@@ -94,10 +94,10 @@ fn the_trigger_reads_messages_and_properties() {
 
 #[test]
 fn a_task_joining_a_project_decodes_as_a_project_addition() {
-    use initiative::domain::models::InitiativeId;
     use models_properties::{
         EntityType, service::property_value::PropertyValue, shared::EntityReference,
     };
+    use project::domain::models::InitiativeId;
     use properties::domain::events::EntityPropertyUpdatedMetadata;
     use system_properties::SystemPropertyKey;
 

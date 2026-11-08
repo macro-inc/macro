@@ -4,13 +4,13 @@ use async_graphql::{Enum, ID, InputObject, MaybeUndefined};
 use graphql_common::parse_id;
 use graphql_permission::GraphqlEntityAccessLevel;
 use graphql_properties::GraphqlSetPropertyValue;
-use initiative::domain::{
-    models::{CreateInitiativeRequest, InitialPropertyValue, UpdateInitiativeRequest},
-    reads::InitiativeTasksRequest,
-};
 use models_permissions::share_permission::{
     LinkShare, UpdateSharePermissionRequestV2,
     channel_share_permission::{UpdateChannelSharePermission, UpdateOperation},
+};
+use project::domain::{
+    models::{CreateInitiativeRequest, InitialPropertyValue, UpdateInitiativeRequest},
+    reads::InitiativeTasksRequest,
 };
 
 /// Cursor pagination for visible initiative tasks.

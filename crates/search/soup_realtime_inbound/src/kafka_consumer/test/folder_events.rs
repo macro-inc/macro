@@ -4,7 +4,7 @@ use entity_access::domain::{
     models::{AccessError, EntityAudience},
     ports::EntityAudienceLookup,
 };
-use projects::domain::events::{ProjectMacroEvent, ProjectPermanentlyDeletedMetadata};
+use folder::domain::events::{ProjectMacroEvent, ProjectPermanentlyDeletedMetadata};
 
 use super::*;
 use soup_realtime_core::{models::SoupRealtimeMessage, ports::SoupRealtimePublisher};

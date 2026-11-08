@@ -4,12 +4,12 @@ use async_graphql::{Context, EmptySubscription, ID, Object, Request, Schema, Sim
 use entity_access::domain::models::{EntityAccessReceipt, EntityType};
 use graphql_common::require_authenticated_user;
 use graphql_soup::{GraphqlSoupInitiative, SoupEntityEdges};
-use initiative::domain::{models::*, reads::*};
 use macro_user_id::user_id::MacroUserIdStr;
 use model_entity::Entity;
 use models_permissions::share_permission::{
     LinkShareState, SharePermissionV2, access_level::AccessLevel,
 };
+use project::domain::{models::*, reads::*};
 use std::sync::{Arc, Mutex};
 use uuid::Uuid;
 

@@ -27,7 +27,7 @@ impl InitiativeLifecycleReads for UnrelatedFacts {
     async fn initiative_is_live(
         &self,
         _: InitiativeId,
-    ) -> Result<bool, initiative::domain::models::InitiativeError> {
+    ) -> Result<bool, project::domain::models::InitiativeError> {
         Ok(false)
     }
 }
@@ -48,7 +48,7 @@ async fn host_lifecycle_reads_ignore_permissions_and_follow_trash_restore_and_ha
         pool.clone(),
         OwnedEntityRegistrar::new(OwnerGrantPolicy::new(NoBots)),
     );
-    let projects = projects::outbound::pg_project_repo::PgProjectRepo::new(
+    let projects = folder::outbound::pg_project_repo::PgProjectRepo::new(
         pool.clone(),
         OwnedEntityRegistrar::new(OwnerGrantPolicy::new(NoBots)),
     );
@@ -189,7 +189,7 @@ async fn host_lifecycle_reads_propagate_database_failures_instead_of_reporting_d
         pool.clone(),
         OwnedEntityRegistrar::new(OwnerGrantPolicy::new(NoBots)),
     );
-    let projects = projects::outbound::pg_project_repo::PgProjectRepo::new(
+    let projects = folder::outbound::pg_project_repo::PgProjectRepo::new(
         pool.clone(),
         OwnedEntityRegistrar::new(OwnerGrantPolicy::new(NoBots)),
     );

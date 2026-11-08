@@ -18,7 +18,7 @@ processing = [
   "dep:macro_event_topics",
   "dep:models_properties",
   "dep:opentelemetry",
-  "dep:projects",
+  "dep:folder",
   "dep:properties",
   "dep:rand",
   "dep:rdkafka",
@@ -114,7 +114,7 @@ pdfium-render = { workspace = true, optional = true }
 properties = { workspace = true, features = [
   "outbound",
 ], optional = true }
-projects = { workspace = true, optional = true }
+folder = { workspace = true, optional = true }
 rand = { workspace = true, optional = true }
 rdkafka = { workspace = true, optional = true }
 rootcause = { workspace = true, optional = true }

@@ -40,7 +40,7 @@ channel_sender = { workspace = true }
 macro_uuid = { workspace = true }
 messages = { workspace = true, features = ["broker", "ports"] }
 properties = { workspace = true }
-initiative = { workspace = true, features = ["ports"] }
+project = { workspace = true, features = ["ports"] }
 models_properties = { workspace = true }
 system_properties = { workspace = true }
 rootcause = { workspace = true }

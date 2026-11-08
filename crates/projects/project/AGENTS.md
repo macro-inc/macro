@@ -55,7 +55,7 @@ realtime appearance events do not re-ingest history.
 
 ## Checks
 
-- `cargo test -p initiative --all-features` (`SQLX_OFFLINE` unset).
+- `cargo test -p project --all-features` (`SQLX_OFFLINE` unset).
 
 ## Gotchas
 

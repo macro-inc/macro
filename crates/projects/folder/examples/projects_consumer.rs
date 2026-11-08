@@ -15,20 +15,20 @@
 //! Run against the local docker broker:
 //! ```sh
 //! ENVIRONMENT=local KAFKA_BROKERS=localhost:9092 \
-//!     cargo run -p projects --example projects_consumer
+//!     cargo run -p folder --example projects_consumer
 //! ```
 //! or against the dev MSK cluster (needs AWS credentials and network access):
 //! ```sh
 //! ENVIRONMENT=develop AWS_REGION=us-east-1 KAFKA_BROKERS=<bootstrapBrokersSaslIam> \
-//!     cargo run -p projects --example projects_consumer
+//!     cargo run -p folder --example projects_consumer
 //! ```
 
 use anyhow::Context as _;
+use folder::domain::events::{ProjectMacroEvent, ProjectTopicEvent};
 use kafka_util::{GroupName, KafkaEventConsumer};
 use macro_event_broker::{
     KafkaConsumerAdapter, MacroEvent as _, MacroEventCollection as _, MacroEventConsumerService,
 };
-use projects::domain::events::{ProjectMacroEvent, ProjectTopicEvent};
 use rdkafka::consumer::CommitMode;
 use rdkafka::message::Message;
 use tokio::sync::mpsc;
