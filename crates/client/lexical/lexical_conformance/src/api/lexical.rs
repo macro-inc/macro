@@ -77,9 +77,7 @@ pub(crate) fn call(r: &mut Replayer, tx: &mut Transaction<'_>, op: &Value) -> Re
             } else {
                 lexical_rich_nodes::utils::last_to_first(&view, parent)
             };
-            let id = r.iterators.len();
-            r.iterators.push(None);
-            r.child_iterators.insert(id, cursor);
+            let id = r.carets.iterator(IteratorValue::Children(cursor))?;
             Ok(json!({"$iteratorValue":id}))
         }
         "@lexical/list/formatList.$handleIndent" => {
@@ -111,9 +109,7 @@ pub(crate) fn call(r: &mut Replayer, tx: &mut Transaction<'_>, op: &Value) -> Re
                 .iter()
                 .map(|pair| pair[1].clone())
                 .collect();
-            let id = r.iterators.len();
-            r.iterators.push(None);
-            r.value_iterators.insert(id, values);
+            let id = r.carets.iterator(IteratorValue::Values(values))?;
             Ok(json!({"$iteratorValue":id}))
         }
         "@lexical/code-core.$createCodeNode" => {

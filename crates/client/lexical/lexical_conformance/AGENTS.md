@@ -11,6 +11,7 @@ Development-only schema-2 fixture interpreter for the pinned upstream oracle.
 - `src/replay.rs`: operation ordering, identities and callback tapes.
 - `src/replay/bindings.rs`: shared owned handle/key bindings, host ID allocation and published snapshot pins; return clones before any model or host call.
 - `src/replay/selections.rs`: shared mutable-frame selection identities and activation revisions; no model call executes under its lock.
+- `src/replay/carets.rs`: shared caret metadata and owned single-consumption cursors; move cursors out before model traversal.
 - `src/replay/records.rs`: shared record identities for independent callback frames; guards cover owned map operations only.
 - `src/api/`: explicit dispatch to model APIs, including caret object identity and metadata.
 - `src/api.rs`: shared fixture/WASM call entry point; `build.rs` derives its sorted API index from dispatcher match arms with syn.

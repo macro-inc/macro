@@ -620,3 +620,171 @@ fn paragraph_insertion_keeps_a_selection_activated_by_its_foreign_hook()
     tx.commit()?;
     Ok(())
 }
+
+#[test]
+fn caret_and_iterator_handles_cross_mutable_callback_frames()
+-> Result<(), crate::replay::ReplayError> {
+    struct Hooks {
+        carets: crate::replay::CaretBindings,
+        records: crate::replay::RecordIdentities,
+        seen: std::sync::Arc<std::sync::Mutex<Vec<serde_json::Value>>>,
+    }
+    impl ForeignHooks for Hooks {
+        fn insert_after(
+            &self,
+            tx: &mut Transaction<'_>,
+            key: NodeKey,
+            sibling: NodeKey,
+            _: bool,
+        ) -> Override<std::result::Result<NodeKey, Error>> {
+            let result = (|| -> Result<(), crate::replay::ReplayError> {
+                let mut child = Replayer {
+                    carets: self.carets.clone(),
+                    record_ids: self.records.clone(),
+                    version: 1,
+                    in_callback: true,
+                    ..Replayer::default()
+                };
+                let origin = api::call(
+                    &mut child,
+                    tx,
+                    &json!({"fn":"get:origin","this":{"$caretValue":0},"args":[]}),
+                )?;
+                assert_eq!(crate::replay::node_key(&origin)?, key);
+                let children = api::call(
+                    &mut child,
+                    tx,
+                    &json!({"fn":"iter","this":{"$iteratorValue":0},"args":[]}),
+                )?;
+                assert_eq!(children, json!([origin]));
+                let text = tx.create_text("nested")?.key();
+                tx.append(sibling, &[text])?;
+                let text = child.node(tx.view(), text)?;
+                let caret = api::call(
+                    &mut child,
+                    tx,
+                    &json!({"fn":"lexical.$getTextPointCaret","args":[text,"next",2]}),
+                )?;
+                assert_eq!(caret["$caretValue"], 1);
+                let sibling = child.node(tx.view(), sibling)?;
+                let iterator = api::call(
+                    &mut child,
+                    tx,
+                    &json!({"fn":"@lexical/utils.$firstToLastIterator","args":[sibling]}),
+                )?;
+                assert_eq!(iterator, json!({"$iteratorValue":1}));
+                self.seen
+                    .lock()
+                    .expect("log")
+                    .extend([caret, iterator, text]);
+                Ok(())
+            })();
+            match result {
+                Ok(()) => Override::Inherit,
+                Err(error) => Override::Value(Err(Error::invariant(error.to_string()))),
+            }
+        }
+    }
+    let carets = crate::replay::CaretBindings::default();
+    let records = crate::replay::RecordIdentities::default();
+    let seen = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
+    let mut editor = Editor::builder(EditorMode::Headless)
+        .foreign_node(ForeignNodeType {
+            type_name: "caret-paragraph".into(),
+            class_name: "CaretParagraph".into(),
+            kind: NodeKind::Element,
+            extends: Some("paragraph"),
+            required_state: vec![],
+            hooks: std::sync::Arc::new(Hooks {
+                carets: carets.clone(),
+                records: records.clone(),
+                seen: seen.clone(),
+            }),
+        })
+        .build()
+        .expect("editor");
+    let mut parent = Replayer {
+        carets,
+        record_ids: records,
+        version: 1,
+        in_callback: true,
+        ..Replayer::default()
+    };
+    let mut tx = editor.transaction();
+    let first = tx.create_foreign("caret-paragraph", SerializedNode::new())?;
+    let sibling = tx.create(Paragraph::default())?.key();
+    tx.append(NodeKey::ROOT, &[first])?;
+    let first = parent.node(tx.view(), first)?;
+    let sibling = parent.node(tx.view(), sibling)?;
+    let caret = api::call(
+        &mut parent,
+        &mut tx,
+        &json!({"fn":"lexical.$getChildCaret","args":[first,"next"]}),
+    )?;
+    assert_eq!(caret["$caretValue"], 0);
+    let root = parent.node(tx.view(), NodeKey::ROOT)?;
+    assert_eq!(
+        api::call(
+            &mut parent,
+            &mut tx,
+            &json!({"fn":"@lexical/utils.$firstToLastIterator","args":[root]})
+        )?,
+        json!({"$iteratorValue":0})
+    );
+    api::call(
+        &mut parent,
+        &mut tx,
+        &json!({"fn":"LexicalNode.insertAfter","this":first,"args":[sibling]}),
+    )?;
+    assert_eq!(
+        api::call(
+            &mut parent,
+            &mut tx,
+            &json!({"fn":"get:origin","this":caret,"args":[]})
+        )?,
+        first
+    );
+    let values = seen.lock().expect("log").clone();
+    assert_eq!(
+        api::call(
+            &mut parent,
+            &mut tx,
+            &json!({"fn":"get:offset","this":values[0],"args":[]})
+        )?,
+        2
+    );
+    assert_eq!(
+        api::call(
+            &mut parent,
+            &mut tx,
+            &json!({"fn":"get:origin","this":values[0],"args":[]})
+        )?,
+        values[2]
+    );
+    assert_eq!(
+        api::call(
+            &mut parent,
+            &mut tx,
+            &json!({"fn":"iter","this":{"$iteratorValue":0},"args":[]})
+        )?,
+        json!([])
+    );
+    assert_eq!(
+        api::call(
+            &mut parent,
+            &mut tx,
+            &json!({"fn":"iter","this":values[1],"args":[]})
+        )?,
+        json!([values[2]])
+    );
+    assert_eq!(
+        api::call(
+            &mut parent,
+            &mut tx,
+            &json!({"fn":"iter","this":values[1],"args":[]})
+        )?,
+        json!([])
+    );
+    tx.commit()?;
+    Ok(())
+}
