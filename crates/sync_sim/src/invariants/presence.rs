@@ -3,7 +3,7 @@ use std::collections::{BTreeMap, BTreeSet};
 
 /// At first quiescence every live form client sees exactly its document's selected peers.
 pub fn presence_converged(outcome: &Outcome) -> Result<(), Failure> {
-    if outcome.script.iter().any(|step| matches!(step, Step::ClockSkew { wall_offset_ms, .. } if wall_offset_ms.unsigned_abs() > outcome.config.session.presence_timeout.0.unsigned_abs() / 2)) { return Ok(()) }
+    if outcome.events.iter().any(|event| matches!(&event.fact, Fact::ClockSkew { wall_offset_ms, .. } if wall_offset_ms.unsigned_abs() > outcome.config.session.presence_timeout.0.unsigned_abs() / 2)) { return Ok(()) }
     let views = outcome.finals.presence.as_ref().ok_or_else(|| {
         Failure::new(
             "presence_converged",
@@ -77,15 +77,20 @@ pub fn presence_expires(outcome: &Outcome) -> Result<(), Failure> {
                 .0
                 .max(outcome.config.net.latency.1.0),
         );
-    let skew = outcome
-        .script
+    // Expiry compares a sender timestamp with a receiver's injected wall clock.
+    // Opposite signed offsets add: +2400 and -2400 require4800ms, not2400.
+    // Observed global bounds are a conservative fixed budget, never a waiver.
+    let (min_skew, max_skew) = outcome
+        .events
         .iter()
-        .filter_map(|step| match step {
-            Step::ClockSkew { wall_offset_ms, .. } => Some(wall_offset_ms.unsigned_abs()),
+        .filter_map(|event| match &event.fact {
+            Fact::ClockSkew { wall_offset_ms, .. } => Some(*wall_offset_ms),
             _ => None,
         })
-        .max()
-        .unwrap_or(0);
+        .fold((0i64, 0i64), |(min, max), skew| {
+            (min.min(skew), max.max(skew))
+        });
+    let skew = max_skew.abs_diff(min_skew);
     let observed_until = outcome.events.last().map(|event| event.at.0).unwrap_or(0);
     for (index, event) in outcome.events.iter().enumerate() {
         let (source, partition) = match &event.fact {

@@ -53,3 +53,6 @@ mod gap_push;
 
 #[path = "stories/lost_update.rs"]
 mod lost_update;
+
+#[path = "stories/presence_replacement.rs"]
+mod presence_replacement;

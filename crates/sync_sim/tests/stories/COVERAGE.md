@@ -86,3 +86,8 @@ server-backed gap recovery must preserve an outstanding own batch until ACK/time
 Affected-link settlement: `lost_update` retains literal40. Transport regressions
 cover exact direct and shared-router recovery, in-flight receive loss, explicit Heal,
 a no-traffic partition, lost ACKs, and an already replaced socket generation.
+
+Presence retirement and replacement: lifecycle cases cover opposite bounded source/
+receiver clocks, strict stale-key mutation, AI fixed-key death, and peer replacement
+with periodic refresh disabled. `presence_replacement` retains literal259. Actual
+ClockSkew facts define the signed clock spread for strict expiry deadlines.
