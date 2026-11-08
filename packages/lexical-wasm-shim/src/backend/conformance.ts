@@ -4,6 +4,7 @@ import type { ShimBackend } from './index';
 
 let initialized = false;
 let api: ReadonlyMap<string, number>;
+let hookNames: readonly string[];
 const commands = new WeakMap<object, string>();
 let nextCommand = 0;
 type Callback = (argument: unknown) => unknown;
@@ -45,7 +46,14 @@ export function initializeConformance(
   if (wasm.upstream_version() !== expectedVersion)
     throw new Error('conformance upstream version mismatch');
   api = new Map(wasm.EditorHandle.api_index().map((name, id) => [name, id]));
+  hookNames = Object.freeze(wasm.foreign_hook_index());
   initialized = true;
+}
+
+/** The override mask uses this Rust-derived order, never a second JS hook list. */
+export function foreignHookIndex(): readonly string[] {
+  if (!initialized) throw new Error('conformance WASM is not initialized');
+  return hookNames;
 }
 
 export const diagnostics = {

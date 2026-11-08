@@ -8,6 +8,7 @@ node types, immutable snapshots, transactional tree editing, update processing, 
 ## Start here
 
 - `src/lib.rs` exposes the model API.
+- `build.rs` derives development ForeignHook IDs from ForeignHooks; keep upstream aliases on the trait and syn optional behind foreign-nodes.
 - `src/node.rs` defines node kinds, inheritance and dispatch.
 - `src/read/record.rs` owns borrowed records and ephemeral copies; `src/foreign/` owns development runtime hooks, registration and state codecs.
 - `src/foreign/records.rs` exposes collected records for raw host captures without restoring graph membership; capture_for_foreign_read copies fields without clone hooks or key allocation.

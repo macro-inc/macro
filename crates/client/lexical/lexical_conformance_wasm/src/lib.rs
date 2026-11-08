@@ -10,7 +10,7 @@ pub use debug::{debug_boundary_bytes, debug_crossings, debug_live_editors, debug
 mod compat;
 pub use compat::text_format_flags;
 #[cfg(feature = "js-nodes")]
-pub use compat::{generate_random_key, reset_key_counter};
+pub use compat::{foreign_hook_index, generate_random_key, reset_key_counter};
 #[cfg(feature = "js-nodes")]
 mod host;
 #[cfg(feature = "js-nodes")]

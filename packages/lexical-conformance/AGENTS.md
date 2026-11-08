@@ -50,3 +50,5 @@ The upstream source is downloaded by checksum into this worktree's `target/`.
 - Entropy, node keys, handles and callback tapes reset for every test.
 
 - Keep the S1 D-11 error-mode text-offset guard enabled in the release differential oracle; compare rollback state and identities exactly.
+
+The debug suite validates model-derived host hook aliases against pinned upstream base classes and checks their boundary bytes; full callsite derivation and per-hook hosting remain separate gates.
