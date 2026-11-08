@@ -31,5 +31,4 @@ pub mod get_part_by_id;
 pub mod get_chat_notification_users;
 
 // chat
-pub mod create_chat;
 pub mod get_chat;

@@ -51,11 +51,9 @@ calendar_events = { path = "../../crates/calendar_events", features = ["postgres
 ai_usage = { path = "../../crates/ai_usage" }
 analytics_client = { path = "../../crates/analytics_client" }
 anyhow = { workspace = true }
-async-stream = { workspace = true }
 async-trait = { workspace = true }
 attachment = { path = "../../crates/attachment", features = ["provider"] }
 authentication_service_client = { path = "../../crates/authentication_service_client" }
-aws-sdk-dynamodb = { workspace = true }
 aws-sdk-kms = { workspace = true }
 aws-sdk-s3 = { workspace = true }
 aws-sdk-secretsmanager = { workspace = true }
@@ -72,7 +70,6 @@ code_execution = { path = "../../crates/code_execution" }
 codex_cloud_agents = { path = "../../crates/codex_cloud_agents" }
 codex_connection = { path = "../../crates/codex_connection" }
 cognition = { path = "../../crates/cognition" }
-connection_gateway = { path = "../connection_gateway" }
 connection_gateway_client = { path = "../../crates/connection_gateway_client" }
 contacts = { path = "../../crates/contacts" }
 crm = { path = "../../crates/crm", features = ["lookup", "ports"] }
@@ -112,7 +109,6 @@ jev = { path = "../../crates/jev", features = ["decisions", "outbound"] }
 kafka_util = { path = "../../crates/kafka_util" }
 lexical_client = { path = "../../crates/lexical_client" }
 lexical_mention_extractor = { path = "../../crates/lexical_mention_extractor" }
-log = { workspace = true }
 lru = { workspace = true }
 macro_auth = { path = "../../crates/macro_auth" }
 macro_authorization = { path = "../../crates/macro_authorization", features = ["axum", "outbound", "postgres"] }
@@ -143,7 +139,6 @@ model_notifications = { path = "../../crates/model_notifications" }
 model_owner = { path = "../../crates/model_owner" }
 models_dcs = { path = "../../crates/models_dcs" }
 models_permissions = { path = "../../crates/models_permissions" }
-non_empty = { path = "../../crates/non_empty" }
 notification = { path = "../../crates/notification", features = ["ai_tool"] }
 onboarding = { path = "../../crates/onboarding" }
 pipedream_mcp = { path = "../../crates/pipedream_mcp" }
@@ -164,7 +159,6 @@ search_service_client = { path = "../../crates/search_service_client" }
 secretsmanager_client = { path = "../../crates/secretsmanager_client" }
 serde = { workspace = true }
 serde_json = { workspace = true }
-share_permission_db_utils = { path = "../../crates/share_permission_db_utils" }
 skills = { path = "../../crates/skills", features = ["axum"] }
 soup = { path = "../../crates/soup", features = ["outbound"] }
 sqlx = { workspace = true }
@@ -173,7 +167,6 @@ sqs_worker = { path = "../../crates/sqs_worker" }
 static_file = { path = "../../crates/static_file", features = ["attachment"] }
 static_file_service_client = { path = "../../crates/static_file_service_client" }
 stream = { path = "../../crates/stream" }
-strum = { workspace = true }
 sync_service_client = { path = "../../crates/sync_service_client" }
 system_properties = { path = "../../crates/system_properties" }
 teams = { path = "../../crates/teams", default-features = false, features = ["outbound", "ports"] }
@@ -185,7 +178,6 @@ tokio-util = { workspace = true, features = ["rt"] }
 tower = { workspace = true, features = ["util"] }
 tower-http = { workspace = true, features = ["limit", "timeout"] }
 tracing = { workspace = true }
-unfurl_service = { path = "../unfurl_service" }
 url = { workspace = true }
 utoipa = { workspace = true, features = ["axum_extras", "chrono"] }
 utoipa-swagger-ui = { workspace = true, features = ["axum"] }

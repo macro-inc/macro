@@ -49,20 +49,15 @@ use macro_authorization::{
 };
 use macro_service_urls::{
     AppServiceUrl, AuthServiceUrl, CalendarServiceUrl, ConnectionGatewayUrl,
-    DocumentStorageServiceUrl, EmailServiceUrl, LexicalServiceUrl, StaticFileServiceUrl,
-    SyncServiceUrl,
+    DocumentStorageServiceUrl, EmailServiceUrl, LexicalServiceUrl, SyncServiceUrl,
 };
-use notification::domain::service::{
-    NotificationReaderService, PlatformArnConfig, SqsNotificationIngress,
-};
+use notification::domain::service::{NotificationReaderService, PlatformArnConfig};
 use notification::outbound::queue::SqsQueue;
 use notification::outbound::repository::DbNotificationRepository;
-use notification::outbound::websocket::ConnectionGatewayClient;
 use readonly_pool::ReadOnlyPool;
 use search_service_client::SearchServiceClient;
 
 use std::sync::Arc;
-use stream::outbound::redis_pg::RedisPostgresStreamRepo;
 use sync_service_client::SyncServiceClient;
 use tokio_util::task::TaskTracker;
 
@@ -113,7 +108,6 @@ pub async fn build(
         .await
         .context("failed to resolve cognition secrets")?;
     let non_user_owners = config.non_user_owners()?;
-    let dynamodb_client = aws_sdk_dynamodb::Client::new(&aws_config);
     let queue_aws_client = aws_sdk_sqs::Client::new(&aws_config);
 
     let document_text_extractor_queue = macro_queues::DocumentTextExtractorQueue::new();
@@ -198,29 +192,6 @@ pub async fn build(
             })
             .context("failed to connect to redis")?,
     );
-    let stream_repo = RedisPostgresStreamRepo::new((*redis_client).clone(), db.clone()).obj();
-
-    tracing::info!("initialized stream repo");
-
-    let connection_manager =
-        connection_gateway::service::dynamodb::create_dynamo_db_connection_manager(dynamodb_client)
-            .await
-            .context("failed to create connection manager")?;
-
-    tracing::info!("initialized connection repo");
-    let connection_gateway_client = Arc::new(ConnectionGatewayClient::new(
-        internal_api_key.clone(),
-        ConnectionGatewayUrl::new()?.to_string(),
-    ));
-
-    let ingress_queue = SqsQueue::new(
-        aws_sdk_sqs::Client::new(&aws_config),
-        notification_queue.to_string(),
-    );
-    let notification_ingress_service = Arc::new(SqsNotificationIngress {
-        queue: ingress_queue,
-    });
-
     let notification_reader_queue = SqsQueue::new(
         aws_sdk_sqs::Client::new(&aws_config),
         notification_queue.to_string(),
@@ -395,41 +366,6 @@ pub async fn build(
 
     tracing::info!("initialized document tool context");
 
-    let attachment_provider = attachment::provider::AttachmentProvider {
-        document: documents::inbound::attachment::DocumentAttachmentService::new(
-            document_tool_context.service.clone(),
-            document_tool_context.entity_access_service.clone(),
-            document_tool_context.lexical_client.clone(),
-        ),
-        email_thread: email::inbound::attachment::EmailAttachmentService::new(
-            email_service_for_tools.clone(),
-            entity_access_service.clone(),
-        ),
-        chat: chat::inbound::attachment::ChatAttachmentService::new(
-            Arc::new(chat::outbound::postgres::PgChatRepo::new(
-                db.clone(),
-                owned_entity_registrar.clone(),
-            )),
-            entity_access_service.clone(),
-        ),
-        channel: channels::inbound::attachment::ChannelAttachmentService::new(
-            Arc::new(PgChannelsRepo::new(db.clone())),
-            entity_access_service.clone(),
-        ),
-        static_file: static_file::inbound::attachment::StaticFileAttachmentService::new(Arc::new(
-            static_file::outbound::CdnStaticFileRepo::new(StaticFileServiceUrl::new()?.to_string()),
-        )),
-    };
-    let message_service = Arc::new(
-        chat::domain::service::MessageServiceImpl::new(
-            chat::outbound::postgres::PgChatRepo::new(db.clone(), owned_entity_registrar.clone()),
-            attachment_provider,
-        )
-        .with_event_broker(macro_event_broker.clone()),
-    );
-
-    tracing::info!("initialized attachment provider");
-
     let email_service_client_external = Arc::new(EmailServiceClientExternal::new(
         email_service_client.url().to_owned(),
     ));
@@ -491,8 +427,6 @@ pub async fn build(
     let chat_tool_context = chat::inbound::toolset::ChatToolContext::new(
         chat::domain::service::ChatServiceImpl::new(
             chat::outbound::postgres::PgChatRepo::new(db.clone(), owned_entity_registrar.clone()),
-            Arc::new(ai_toolset::AsyncToolCollection::new()),
-            (),
             entity_access_management::domain::service::EntityAccessManagementServiceImpl::new(
                 entity_access_management::outbound::PgRepository::new(db.clone()),
             ),
@@ -1140,12 +1074,8 @@ pub async fn build(
         ai_billing,
         internal_api_key: config.internal_api_key.clone(),
         config: Arc::new(config),
-        notification_ingress_service,
-        connection_repo: connection_manager.persistence,
-        connection_gateway_client,
         soup_service,
         email_service: email_service_for_tools,
-        stream_repo,
         document_tool_context,
         memory_service,
         usage_service,
@@ -1157,7 +1087,6 @@ pub async fn build(
         all_tools: all_tools_toolset,
         all_tools_prompt,
         entity_access_service,
-        message_service,
         ai_stream_registry: service::ai_stream_registry::AiStreamRegistry::new(
             redis_client.clone(),
         ),

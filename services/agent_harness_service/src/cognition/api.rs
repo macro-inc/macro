@@ -20,7 +20,6 @@ mod id_mapping;
 mod preview;
 pub mod stream;
 pub(crate) mod swagger;
-pub mod utils;
 
 mod attachments;
 mod chats;

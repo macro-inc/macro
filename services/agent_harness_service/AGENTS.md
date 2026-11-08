@@ -42,8 +42,10 @@ Pulumi stacks; they do not host extra agent processes.
   `$mcp_tool_call` events (PostHog MCP analytics schema) in the background,
   with the user's team as the `team` group. At most 64 sends run at once
   (more are dropped) and each user's team is cached for 10 minutes.
-- `src/cognition/`: existing chat, completions, integrations, and projection
-  workers; the library also exports their OpenAPI document.
+- `src/cognition/`: legacy chat reads, completions, integrations, and
+  projection workers; the library also exports their OpenAPI document. Legacy
+  AI chats are read-only: `POST /stream/chat/message` answers 410
+  `chat_read_only` for every request, before admission.
   `src/cognition/service/integration_analytics.rs` sends PostHog
   `integration_connected` / `integration_disconnected` for native MCP servers
   and Pipedream apps, from the router hooks wired in `src/cognition/server.rs`.

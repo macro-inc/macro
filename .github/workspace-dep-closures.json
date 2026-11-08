@@ -826,7 +826,6 @@
       "crates/email_utils",
       "crates/email_validator",
       "crates/embedding",
-      "crates/ensure_exists",
       "crates/entity_access",
       "crates/entity_access_db_utils",
       "crates/entity_access_management",
@@ -966,9 +965,7 @@
       "crates/web_search",
       "crates/workspace-hack",
       "services/agent_harness_service",
-      "services/connection_gateway",
-      "services/mcp_auth_proxy",
-      "services/unfurl_service"
+      "services/mcp_auth_proxy"
     ],
     "agent_inmem": [
       "crates/activity",

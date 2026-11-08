@@ -260,16 +260,11 @@ async fn unauthorized_request_does_not_disclose_quota(pool: sqlx::PgPool) {
 fn openapi_documents_admission_failures_with_existing_payloads() {
     use utoipa::OpenApi;
     let doc = serde_json::to_value(crate::cognition::api::swagger::ApiDoc::openapi()).unwrap();
-    for (path, schema) in [
-        ("/stream/chat/message", "ChatMessageError"),
-        ("/structured-completion", "StructuredCompletionError"),
-    ] {
-        for status in ["402", "503"] {
-            assert_eq!(
-                doc["paths"][path]["post"]["responses"][status]["content"]["application/json"]["schema"]
-                    ["$ref"],
-                format!("#/components/schemas/{schema}")
-            );
-        }
+    for status in ["402", "503"] {
+        assert_eq!(
+            doc["paths"]["/structured-completion"]["post"]["responses"][status]["content"]["application/json"]
+                ["schema"]["$ref"],
+            "#/components/schemas/StructuredCompletionError"
+        );
     }
 }

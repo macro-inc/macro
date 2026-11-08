@@ -1,37 +1,20 @@
 use crate::cognition::config::Config;
 use crate::cognition::service::ai_stream_registry::AiStreamRegistry;
 use ai_tools::{
-    AiToolSet, ToolCallToolContext, ToolDocumentService, ToolDocumentToolContext, ToolEmailService,
-    ToolEmailToolContext, ToolEntityAccessService, ToolPropertiesToolContext, ToolServiceContext,
-    ToolSoupService,
+    AiToolSet, ToolCallToolContext, ToolDocumentToolContext, ToolEmailService,
+    ToolEmailToolContext, ToolPropertiesToolContext, ToolServiceContext, ToolSoupService,
 };
-use attachment::provider::AttachmentProvider;
 use axum::extract::FromRef;
-use bots::outbound::pg_bots_repo::PgBotsRepo;
-use channels::inbound::attachment::ChannelAttachmentService;
-use channels::outbound::pg_channels_repo::PgChannelsRepo;
-use chat::domain::service::MessageServiceImpl;
-use chat::inbound::attachment::ChatAttachmentService;
-use chat::outbound::postgres::PgChatRepo;
-use connection_gateway::service::connection::ConnectionRepo;
 use document_storage_service_client::DocumentStorageServiceClient;
-use documents::inbound::attachment::DocumentAttachmentService;
-use email::inbound::attachment::EmailAttachmentService;
 use entity_access::{domain::service::EntityAccessServiceImpl, outbound::PgAccessRepository};
 use entity_registry::NonUserOwners;
 use macro_auth::InternalApiKey;
 use macro_authorization::{
     MacroAuthJwtValidator, MacroAuthorizationServiceImpl, MacroAuthorizationState,
 };
-use notification::domain::service::SqsNotificationIngress;
-use notification::outbound::queue::SqsQueue;
-use notification::outbound::websocket::ConnectionGatewayClient;
 use search_service_client::SearchServiceClient;
 use sqlx::PgPool;
-use static_file::inbound::attachment::StaticFileAttachmentService;
-use static_file::outbound::CdnStaticFileRepo;
 use std::sync::{Arc, OnceLock};
-use stream::domain::StreamRepo;
 
 /// Type alias for the entity access service.
 pub type DcsEntityAccessService = EntityAccessServiceImpl<PgAccessRepository>;
@@ -64,30 +47,14 @@ pub type DcsChatModelAccess = chat::inbound::http::extractors::ChatModelAccess<
     DcsUserPermissionsService,
 >;
 
-/// Type alias for the attachment provider wired to concrete DCS services.
-pub type DcsAttachmentProvider = AttachmentProvider<
-    DocumentAttachmentService<ToolDocumentService, ToolEntityAccessService>,
-    EmailAttachmentService<ToolEmailService, ToolEntityAccessService>,
-    ChatAttachmentService<PgChatRepo<PgBotsRepo>, ToolEntityAccessService>,
-    ChannelAttachmentService<PgChannelsRepo, ToolEntityAccessService>,
-    StaticFileAttachmentService<CdnStaticFileRepo>,
->;
-
 /// Kafka-backed event broker with publish tasks tracked for graceful shutdown.
 pub type DcsEventBroker = macro_event_broker::MacroEventBrokerService<
     macro_event_broker::KafkaEventPublisher,
     tokio_util::task::TaskTracker,
 >;
 
-/// Type alias for the message service wired to concrete DCS services.
-pub type DcsMessageService =
-    MessageServiceImpl<PgChatRepo<PgBotsRepo>, DcsAttachmentProvider, DcsEventBroker>;
-
 #[cfg(test)]
 pub(crate) mod test;
-#[cfg(test)]
-pub use test::test_api_context;
-pub(crate) type NotificationIngressType = SqsNotificationIngress<SqsQueue>;
 
 pub type DcsMemoryService =
     memory::domain::service::MemoryServiceImpl<memory::outbound::pg_memory_repo::PgMemoryRepo>;
@@ -162,12 +129,8 @@ pub struct ApiContext {
         Arc<dyn crate::cognition::service::structured_completion::ToolFreeCompletion>,
     pub config: Arc<Config>,
     pub internal_api_key: InternalApiKey,
-    pub notification_ingress_service: Arc<NotificationIngressType>,
-    pub connection_repo: Arc<dyn ConnectionRepo>,
-    pub connection_gateway_client: Arc<ConnectionGatewayClient>,
     pub soup_service: Arc<ToolSoupService>,
     pub email_service: Arc<ToolEmailService>,
-    pub stream_repo: Arc<dyn StreamRepo>,
     pub document_tool_context: ToolDocumentToolContext,
     pub memory_service: Arc<DcsMemoryService>,
     pub usage_service: Arc<DcsUsageService>,
@@ -179,7 +142,6 @@ pub struct ApiContext {
     pub all_tools: Arc<AiToolSet>,
     pub all_tools_prompt: Arc<dyn std::fmt::Display + Send + Sync>,
     pub entity_access_service: Arc<DcsEntityAccessService>,
-    pub message_service: Arc<DcsMessageService>,
     pub ai_stream_registry: AiStreamRegistry,
     /// Per-user limit on `/web/search` and `/web/fetch`.
     pub web_rate_limiter: WebRateLimiter,

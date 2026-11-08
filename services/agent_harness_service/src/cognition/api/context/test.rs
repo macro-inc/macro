@@ -1,12 +1,5 @@
 use super::*;
-use connection_gateway::model::connection::StoredConnectionEntity;
-use connection_gateway::model::tracking::{EntityConnection, UserEntityConnection};
-use connection_gateway::service::connection::ConnectionRepo;
 use std::sync::Arc;
-use stream::domain::{
-    ItemId, ItemStream, Result as StreamResult, StreamEvent, StreamId, StreamRepo,
-};
-use tokio::sync::broadcast::{self, Receiver};
 use tokio_util::task::TaskTracker;
 
 pub const ADMISSION_TEST_USER: &str = "macro|admission@example.com";
@@ -57,120 +50,6 @@ pub fn authorized_request(path: &str, body: serde_json::Value) -> axum::extract:
         .unwrap()
 }
 
-pub async fn test_model_access(ctx: &ApiContext) -> DcsChatModelAccess {
-    use axum::extract::FromRequestParts;
-    let (mut parts, _) = authorized_request("/", serde_json::json!({})).into_parts();
-    DcsChatModelAccess::from_request_parts(&mut parts, ctx)
-        .await
-        .unwrap_or_else(|_| panic!("test model access should resolve"))
-}
-
-pub struct MockConnectionRepo;
-
-impl MockConnectionRepo {
-    #[expect(
-        clippy::new_ret_no_self,
-        reason = "tests take the mock as the trait object ApiContext stores"
-    )]
-    pub fn new() -> Arc<dyn ConnectionRepo> {
-        Arc::new(Self)
-    }
-}
-
-#[async_trait::async_trait]
-impl ConnectionRepo for MockConnectionRepo {
-    async fn insert_connection_entry(
-        &self,
-        _connection: UserEntityConnection<'_>,
-    ) -> anyhow::Result<StoredConnectionEntity> {
-        unimplemented!()
-    }
-    async fn get_entries_by_entity(
-        &self,
-        _entity: &model_entity::Entity<'_>,
-    ) -> anyhow::Result<Vec<StoredConnectionEntity>> {
-        Ok(vec![])
-    }
-    async fn get_entries_by_connection_id(
-        &self,
-        _connection_id: &str,
-    ) -> anyhow::Result<Vec<StoredConnectionEntity>> {
-        Ok(vec![])
-    }
-    async fn get_connection(&self, _connection_id: &str) -> anyhow::Result<StoredConnectionEntity> {
-        unimplemented!()
-    }
-    async fn get_entry_for_connection_entity(
-        &self,
-        _entity: EntityConnection<'_>,
-    ) -> anyhow::Result<Option<StoredConnectionEntity>> {
-        Ok(None)
-    }
-    async fn remove_all_entries_for_by_connection_id(
-        &self,
-        _connection_id: &str,
-    ) -> anyhow::Result<()> {
-        Ok(())
-    }
-    async fn remove_entity(&self, _entity: &EntityConnection<'_>) -> anyhow::Result<()> {
-        Ok(())
-    }
-    async fn update_last_entity_ping(
-        &self,
-        _entity: &EntityConnection<'_>,
-        _timestamp: u64,
-    ) -> anyhow::Result<Option<StoredConnectionEntity>> {
-        unimplemented!()
-    }
-    async fn update_user_connection_last_ping(
-        &self,
-        _connection_id: &str,
-        _user: &str,
-        _timestamp: u64,
-    ) -> anyhow::Result<()> {
-        Ok(())
-    }
-}
-
-/// Mock StreamRepo for testing - does nothing but satisfies the interface
-pub struct MockStreamRepo {
-    tx: broadcast::Sender<StreamEvent>,
-}
-
-impl MockStreamRepo {
-    #[expect(
-        clippy::new_ret_no_self,
-        reason = "tests take the mock as the trait object ApiContext stores"
-    )]
-    pub fn new() -> Arc<dyn StreamRepo> {
-        let (tx, _) = broadcast::channel(16);
-        Arc::new(Self { tx })
-    }
-}
-
-#[async_trait::async_trait]
-impl StreamRepo for MockStreamRepo {
-    async fn append(&self, _id: &StreamId, _payload: serde_json::Value) -> StreamResult<ItemId> {
-        Ok("mock-item-id".to_string())
-    }
-
-    async fn stream_from_beginning(&self, _id: &StreamId) -> StreamResult<ItemStream> {
-        Ok(Box::pin(futures::stream::empty()))
-    }
-
-    async fn close(&self, _id: &StreamId) -> StreamResult<()> {
-        Ok(())
-    }
-
-    async fn active_streams(&self, _entity_id: &str) -> StreamResult<Vec<StreamId>> {
-        Ok(vec![])
-    }
-
-    async fn notify(&self) -> Receiver<StreamEvent> {
-        self.tx.subscribe()
-    }
-}
-
 pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Arc<ApiContext> {
     let config = Config::new_empty_for_test();
     let enforcement = config.enable_ai_usage_enforcement;
@@ -198,9 +77,7 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
         outbound::pg_github_pull_request_repo::PgGithubPullRequestRepo,
     };
     use lexical_client::LexicalClient;
-    use notification::domain::service::{
-        NotificationReaderService, PlatformArnConfig, SqsNotificationIngress,
-    };
+    use notification::domain::service::{NotificationReaderService, PlatformArnConfig};
     use notification::outbound::queue::SqsQueue;
     use notification::outbound::repository::DbNotificationRepository;
     use search_service_client::SearchServiceClient;
@@ -275,14 +152,6 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
         )
         .with_favorites(favorites_service.clone()),
     );
-
-    let ingress_queue = SqsQueue::new(
-        aws_sdk_sqs::Client::from_conf(sqs_config.clone()),
-        "test-notification-ingress-queue".to_string(),
-    );
-    let notification_ingress_service = Arc::new(SqsNotificationIngress {
-        queue: ingress_queue,
-    });
 
     let notification_reader_queue = SqsQueue::new(
         aws_sdk_sqs::Client::from_conf(sqs_config.clone()),
@@ -429,8 +298,6 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
     let chat_tool_context = chat::inbound::toolset::ChatToolContext::new(
         chat::domain::service::ChatServiceImpl::new(
             chat::outbound::postgres::PgChatRepo::new(pool.clone(), owned_entity_registrar.clone()),
-            Arc::new(ai_toolset::AsyncToolCollection::new()),
-            (),
             entity_access_management::domain::service::EntityAccessManagementServiceImpl::new(
                 entity_access_management::outbound::PgRepository::new(pool.clone()),
             ),
@@ -759,17 +626,8 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
         non_user_owners: NonUserOwners::Disabled,
         config: Arc::new(config),
         internal_api_key: InternalApiKey::Comptime("testing"),
-        notification_ingress_service,
-        connection_repo: MockConnectionRepo::new(),
-        connection_gateway_client: Arc::new(
-            notification::outbound::websocket::ConnectionGatewayClient::new(
-                "testing".to_string(),
-                "http://localhost".to_string(),
-            ),
-        ),
         soup_service,
         email_service: email_service_for_tools.clone(),
-        stream_repo: MockStreamRepo::new(),
         document_tool_context: document_tool_context.clone(),
         memory_service,
         usage_service,
@@ -781,42 +639,6 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
         all_tools: all_tools_toolset,
         all_tools_prompt,
         entity_access_service: entity_access_service.clone(),
-        message_service: Arc::new(
-            chat::domain::service::MessageServiceImpl::new(
-                chat::outbound::postgres::PgChatRepo::new(
-                    pool.clone(),
-                    owned_entity_registrar.clone(),
-                ),
-                attachment::provider::AttachmentProvider {
-                    document: documents::inbound::attachment::DocumentAttachmentService::new(
-                        document_tool_context.service.clone(),
-                        document_tool_context.entity_access_service.clone(),
-                        document_tool_context.lexical_client.clone(),
-                    ),
-                    email_thread: email::inbound::attachment::EmailAttachmentService::new(
-                        email_service_for_tools.clone(),
-                        entity_access_service.clone(),
-                    ),
-                    chat: chat::inbound::attachment::ChatAttachmentService::new(
-                        Arc::new(chat::outbound::postgres::PgChatRepo::new(
-                            pool.clone(),
-                            owned_entity_registrar.clone(),
-                        )),
-                        entity_access_service.clone(),
-                    ),
-                    channel: channels::inbound::attachment::ChannelAttachmentService::new(
-                        Arc::new(PgChannelsRepo::new(pool.clone())),
-                        entity_access_service.clone(),
-                    ),
-                    static_file: static_file::inbound::attachment::StaticFileAttachmentService::new(
-                        Arc::new(static_file::outbound::CdnStaticFileRepo::new(
-                            "http://localhost".into(),
-                        )),
-                    ),
-                },
-            )
-            .with_event_broker(macro_event_broker.clone()),
-        ),
         ai_stream_registry: crate::cognition::service::ai_stream_registry::AiStreamRegistry::new(
             Arc::new(redis::Client::open("redis://127.0.0.1:6379/").expect("valid redis url")),
         ),
