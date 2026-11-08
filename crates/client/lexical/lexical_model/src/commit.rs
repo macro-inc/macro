@@ -238,6 +238,10 @@ impl Transaction<'_> {
             selection.set_dirty(false);
         }
         let composition_changed = self.editor.composition_key != self.composition_key;
+        #[cfg(feature = "foreign-nodes")]
+        {
+            self.pending.foreign_selection_identity = self.foreign_selections.current.clone();
+        }
         let next = if dirty || selection_changed {
             self.pending.clone()
         } else {

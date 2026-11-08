@@ -23,6 +23,24 @@ pub(crate) struct SelectionIdentities {
     pub detached: Vec<ForeignSelectionIdentity>,
 }
 impl Transaction<'_> {
+    /// Expose the previous committed selection as the same host value object.
+    /// This hydrates metadata/value storage only, including in owned read peers;
+    /// it neither activates the object nor grants permission to mutate it.
+    pub fn detach_previous_foreign_selection(&mut self) -> Result<Option<SelectionSlot>, Error> {
+        let Some(selection) = self.previous_selection() else {
+            return Ok(None);
+        };
+        let identity = self
+            .view()
+            .foreign_previous_selection_identity
+            .cloned()
+            .ok_or(Error::Invariant("previous selection identity"))?;
+        if let Some(slot) = self.foreign_selection_slot(&identity) {
+            return Ok(Some(slot));
+        }
+        let value = selection.snapshot_for_foreign_read();
+        Ok(Some(self.detach_foreign_selection(value, identity)))
+    }
     /// Identity of the existing selection object at this transaction slot.
     pub fn foreign_selection_identity(
         &self,
