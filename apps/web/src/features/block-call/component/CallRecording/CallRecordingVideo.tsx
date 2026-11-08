@@ -27,6 +27,7 @@ export function CallRecordingVideo(props: {
     isLoaded() || !!posterBlobUrl() || playbackError();
   let rafId: number | null = null;
   let videoRef: HTMLVideoElement | undefined;
+  let revealOnlyTap = false;
 
   createEffect<string | undefined>((previousUrl) => {
     const url = props.url;
@@ -156,6 +157,13 @@ export function CallRecordingVideo(props: {
         preload="metadata"
         crossorigin="anonymous"
         poster={posterBlobUrl()}
+        onPointerDown={(event) => {
+          revealOnlyTap = event.pointerType === 'touch' && !controls.visible();
+        }}
+        onClick={() => {
+          if (!revealOnlyTap && !playbackError()) props.playback?.toggle();
+          revealOnlyTap = false;
+        }}
         src={props.url}
         onError={handlePlaybackError}
         onLoadedData={markPlaybackReady}

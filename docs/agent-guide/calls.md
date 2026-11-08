@@ -84,6 +84,8 @@ open menus keep them visible. Reduced motion uses only the fade. Speed uses a dr
 button on hover or focus. Clicking the icon still toggles mute. Both sliders keep
 white thumbs across themes. Dragging the volume thumb, clicking its track, and
 arrow keys update native volume immediately without closing the popover.
+Clicking the picture toggles playback without intercepting controls or overlays.
+On touch, the first tap reveals hidden controls; a tap with controls visible toggles playback.
 
 Phones use separate Back, title-menu, and Details header islands. The player
 comes before identity, then Summary/Transcript/Chat tabs with the real chat count.
