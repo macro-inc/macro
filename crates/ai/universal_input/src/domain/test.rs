@@ -1,6 +1,6 @@
 use super::*;
 use ai_billing::{DenyReason, DisabledAiAdmissionService};
-use jev::domain::{JevError, Probability};
+use jev_classifier::domain::{JevError, Probability};
 use std::sync::atomic::{AtomicUsize, Ordering};
 
 struct Classifier(Arc<AtomicUsize>);

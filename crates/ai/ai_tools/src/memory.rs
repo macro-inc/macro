@@ -67,12 +67,14 @@ fn memory_activity(pool: sqlx::PgPool) -> Arc<dyn MemoryActivity> {
 /// The privacy judge: TypeSafe's Jev when `TYPESAFE_API_KEY` is set. Without
 /// it nothing passes review, so this host saves no memory.
 fn build_memory_judge(recorder: Arc<dyn ai_usage::UsageRecorder>) -> Arc<dyn MemoryJudge> {
-    let provider = jev::outbound::TypesafeApiKey::new()
-        .and_then(|key| key.value().map(jev::outbound::SystemOneJev::typesafe));
+    let provider = jev_classifier::outbound::TypesafeApiKey::new().and_then(|key| {
+        key.value()
+            .map(jev_classifier::outbound::SystemOneJev::typesafe)
+    });
     match provider {
-        Some(Ok(provider)) => Arc::new(JevMemoryJudge::new(jev::domain::JevClassifier::new(
-            provider, recorder,
-        ))),
+        Some(Ok(provider)) => Arc::new(JevMemoryJudge::new(
+            jev_classifier::domain::JevClassifier::new(provider, recorder),
+        )),
         Some(Err(error)) => {
             tracing::error!(error = ?error, "memory privacy review is misconfigured; no memory will be saved");
             Arc::new(UnconfiguredJudge)

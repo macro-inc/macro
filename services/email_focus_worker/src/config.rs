@@ -37,7 +37,7 @@ pub struct Config {
     /// Authenticates the worker's pushes to the connection gateway.
     pub internal_api_key: InternalApiKey,
     /// TypeSafe credential for Jev. While it is unset the worker classifies nothing.
-    pub typesafe_api_key: jev::outbound::TypesafeApiKey,
+    pub typesafe_api_key: jev_classifier::outbound::TypesafeApiKey,
     /// The PostHog project the Focus rollout's flag is in.
     pub posthog_api_key: PosthogApiKey,
     /// Reads the Focus rollout: an inbox is classified while its owner's

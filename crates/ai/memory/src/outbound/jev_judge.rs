@@ -4,7 +4,7 @@
 
 use crate::domain::{models::MemoryKind, ports::*};
 use ai_usage::{AiFeature, UsageContext};
-use jev::domain::{JevError, YesNoClassifier, YesNoQuestion};
+use jev_classifier::domain::{JevError, YesNoClassifier, YesNoQuestion};
 use macro_user_id::user_id::MacroUserIdStr;
 use serde_json::{Value, json};
 use strum::{EnumIter, IntoEnumIterator, IntoStaticStr};

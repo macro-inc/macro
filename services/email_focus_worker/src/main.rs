@@ -38,7 +38,7 @@ use connection_gateway_client::ConnectionGatewayClient;
 use connection_gateway_url::ConnectionGatewayUrl;
 use email::{domain::focus::FocusService, outbound::FocusPgRepository};
 use feature_flags::outbound::posthog_local::PostHogLocalFeatureFlags;
-use jev::{domain::JevClassifier, outbound::SystemOneJev};
+use jev_classifier::{domain::JevClassifier, outbound::SystemOneJev};
 use macro_entrypoint::{MacroEntrypoint, shutdown_signal};
 use memory::outbound::pg_memory_repo::PgMemoryRepo;
 use rootcause::Report;

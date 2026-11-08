@@ -7,7 +7,7 @@ use axum::{
     http::Request,
 };
 use chrono::NaiveDate;
-use jev::domain::{JevError, Probability, YesNoQuestion};
+use jev_classifier::domain::{JevError, Probability, YesNoQuestion};
 use macro_authorization::{
     INTERNAL_API_KEY_HEADER, INTERNAL_MACRO_USER_ID_HEADER, InternalIdentityClaims,
     MacroAuthorizationError, ValidatedCredential,

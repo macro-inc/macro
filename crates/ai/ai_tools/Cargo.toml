@@ -48,7 +48,7 @@ channels = { workspace = true }
 channels_inbound = { workspace = true, features = ["ai_tools"] }
 channels_outbound = { workspace = true }
 cognition = { workspace = true }
-jev = { workspace = true, features = ["outbound"] }
+jev_classifier = { workspace = true, features = ["outbound"] }
 chrono.workspace = true
 dateparser.workspace = true
 connection = { workspace = true, features = [

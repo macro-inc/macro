@@ -1,7 +1,7 @@
 use std::sync::Mutex;
 
 use ai_usage::UsageContext;
-use jev::domain::JevError;
+use jev_classifier::domain::JevError;
 use serde_json::json;
 
 use super::super::test_support::*;

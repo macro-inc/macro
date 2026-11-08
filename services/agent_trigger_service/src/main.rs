@@ -32,8 +32,8 @@ use entity_access::domain::{ports::EntityAccessService, service::EntityAccessSer
 use entity_access_outbound::PgAccessRepository;
 use entity_registry::OwnerGrantPolicy;
 use entity_registry_db_utils::OwnedEntityRegistrar;
-use jev::domain::JevClassifier;
-use jev::outbound::SystemOneJev;
+use jev_classifier::domain::JevClassifier;
+use jev_classifier::outbound::SystemOneJev;
 use kafka_util::{GroupName, InitialOffset, KafkaEventConsumer, consumer_span, record_span_error};
 use lexical_client::LexicalClient;
 use lexical_service_url::LexicalServiceUrl;

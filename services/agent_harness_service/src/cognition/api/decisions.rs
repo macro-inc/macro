@@ -9,7 +9,7 @@ use axum::{
     response::IntoResponse,
     routing::{MethodRouter, post},
 };
-use jev::domain::{
+use jev_classifier::domain::{
     DecisionRequest, DecisionResponse, JevError, MAX_DECISION_REQUEST_BYTES,
     decisions::DecisionError,
 };

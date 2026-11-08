@@ -383,9 +383,9 @@ pub async fn run() -> anyhow::Result<()> {
         config
             .typesafe_api_key
             .value()
-            .map(jev::outbound::SystemOneJev::typesafe)
+            .map(jev_classifier::outbound::SystemOneJev::typesafe)
             .transpose()?
-            .map(|provider| jev::domain::JevClassifier::new(provider, recorder.clone())),
+            .map(|provider| jev_classifier::domain::JevClassifier::new(provider, recorder.clone())),
         universal_input::domain::temporal::WithTemporalExtraction::new(
             universal_input::domain::search::WithSearchExtraction::new(
                 universal_input::domain::FallbackFieldExtractor::new(
@@ -441,9 +441,11 @@ pub async fn run() -> anyhow::Result<()> {
                 config
                     .typesafe_api_key
                     .value()
-                    .map(jev::outbound::SystemOneJev::typesafe)
+                    .map(jev_classifier::outbound::SystemOneJev::typesafe)
                     .transpose()?
-                    .map(|provider| jev::domain::JevClassifier::new(provider, recorder.clone())),
+                    .map(|provider| {
+                        jev_classifier::domain::JevClassifier::new(provider, recorder.clone())
+                    }),
             ),
             admission.clone(),
         ),
@@ -2038,8 +2040,8 @@ pub async fn run() -> anyhow::Result<()> {
         config.cloudflare_account_id.value(),
         config.cloudflare_api_token.value(),
     ) {
-        (Some(account_id), Some(token)) => Some(jev::domain::JevClassifier::new(
-            jev::outbound::SystemOneJev::clef_flash(account_id, token)
+        (Some(account_id), Some(token)) => Some(jev_classifier::domain::JevClassifier::new(
+            jev_classifier::outbound::SystemOneJev::clef_flash(account_id, token)
                 .context("failed to configure Clef Flash")?,
             recorder.clone(),
         )),
@@ -2418,10 +2420,15 @@ pub async fn run() -> anyhow::Result<()> {
     let trigger_classifier = config
         .typesafe_api_key
         .value()
-        .map(jev::outbound::SystemOneJev::typesafe)
+        .map(jev_classifier::outbound::SystemOneJev::typesafe)
         .transpose()
         .context("invalid TYPESAFE_API_KEY")?
-        .map(|provider| Arc::new(jev::domain::JevClassifier::new(provider, recorder.clone())));
+        .map(|provider| {
+            Arc::new(jev_classifier::domain::JevClassifier::new(
+                provider,
+                recorder.clone(),
+            ))
+        });
 
     // Keep trigger generation in this deployment while retaining Kafka as the
     // boundary between channel events and harness commands.

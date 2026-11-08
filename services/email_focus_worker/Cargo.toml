@@ -22,7 +22,7 @@ doppler-config = { workspace = true }
 email = { workspace = true, features = ["outbound", "ports"] }
 feature_flags = { workspace = true }
 futures = { workspace = true }
-jev = { workspace = true, features = ["outbound"] }
+jev_classifier = { workspace = true, features = ["outbound"] }
 kafka_util = { workspace = true }
 macro_auth = { workspace = true }
 macro_aws_config = { workspace = true }

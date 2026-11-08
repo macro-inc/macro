@@ -4,7 +4,7 @@ use std::sync::Arc;
 
 use ai_billing::{AiAdmissionService, AiFeature};
 use ai_usage::UsageContext;
-use jev::domain::{JevError, YesNoClassifier, YesNoQuestion};
+use jev_classifier::domain::{JevError, YesNoClassifier, YesNoQuestion};
 
 use super::{model::AgentSession, ports::AgentSessionNameGenerator, retitle::ConversationDigest};
 

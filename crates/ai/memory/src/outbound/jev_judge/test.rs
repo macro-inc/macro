@@ -1,6 +1,6 @@
 use std::sync::Mutex;
 
-use jev::domain::{JevError, MAX_QUESTIONS, Probability};
+use jev_classifier::domain::{JevError, MAX_QUESTIONS, Probability};
 
 use super::*;
 

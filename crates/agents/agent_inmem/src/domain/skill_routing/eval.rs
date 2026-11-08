@@ -14,7 +14,7 @@ use cognition::domain::{
     Cognition, DecisionRequest, DecisionResponse, GenerateObjectRequest, GenerateObjectResponse,
     RoutingRequest,
 };
-use jev::domain::{JevProvider as _, YesNoQuestion};
+use jev_classifier::domain::{JevProvider as _, YesNoQuestion};
 use macro_user_id::user_id::MacroUserIdStr;
 use rootcause::Report;
 use skills::domain::model::{SkillContent, SkillError, SkillMatchType, SkillSummary};
@@ -199,7 +199,7 @@ impl SkillService for EvalSkills {
 
 /// The real Jev, keeping every score it gives.
 struct RecordingJev {
-    jev: jev::outbound::SystemOneJev,
+    jev: jev_classifier::outbound::SystemOneJev,
     scores: Mutex<BTreeMap<String, f32>>,
 }
 
@@ -244,10 +244,12 @@ impl Cognition for RecordingJev {
 #[tokio::test(flavor = "multi_thread")]
 #[ignore = "calls TypeSafe's Jev; needs TYPESAFE_API_KEY"]
 async fn route_evaluation() {
-    let key = jev::outbound::TypesafeApiKey::new().expect("TYPESAFE_API_KEY is set");
+    let key = jev_classifier::outbound::TypesafeApiKey::new().expect("TYPESAFE_API_KEY is set");
     let jev = Arc::new(RecordingJev {
-        jev: jev::outbound::SystemOneJev::typesafe(key.value().expect("TYPESAFE_API_KEY is set"))
-            .unwrap(),
+        jev: jev_classifier::outbound::SystemOneJev::typesafe(
+            key.value().expect("TYPESAFE_API_KEY is set"),
+        )
+        .unwrap(),
         scores: Mutex::new(BTreeMap::new()),
     });
     let cognition: Arc<dyn Cognition> = jev.clone();

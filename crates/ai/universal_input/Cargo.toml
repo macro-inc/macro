@@ -13,7 +13,7 @@ chrono = { workspace = true }
 chrono-tz = { workspace = true }
 futures = { workspace = true }
 schemars = { workspace = true }
-jev = { workspace = true }
+jev_classifier = { workspace = true }
 macro_authorization = { workspace = true, default-features = true }
 macro_env_var = { workspace = true }
 macro_tower_layers = { workspace = true }

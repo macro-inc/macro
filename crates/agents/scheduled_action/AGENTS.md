@@ -361,11 +361,11 @@ each run.
   it. Without PostHog configured, no one has it and the host starts no event
   intake.
 - Not here: the target being run (an agent turn, a routine's tool logic) →
-  `crates/agents/agent_session`, `ai_tools`; Jev condition evaluation → `crates/ai/jev`.
+  `crates/agents/agent_session`, `ai_tools`; Jev condition evaluation → `crates/ai/jev_classifier`.
 
 ## Boundaries
 
-- Depends on: `agent_session`, `trigger_context`, `jev`, `channels`, `crm`,
+- Depends on: `agent_session`, `trigger_context`, `jev_classifier`, `channels`, `crm`,
   `documents`, `github` (delivery fact and installation claims only),
   `macro_event_broker`/`macro_event_topics` (Kafka), `macro_db_client`.
 - Used by: the web app's automations/routines UI and agent tooling, through
