@@ -281,15 +281,6 @@ pub struct Placement {
     pub item_id: uuid::Uuid,
 }
 
-/// Who views: the identity a view token is minted for.
-#[derive(Debug, Clone, PartialEq, Eq, Default)]
-pub struct Viewer {
-    /// The viewing user, absent for anonymous public-link viewers.
-    pub user_id: Option<String>,
-    /// The bot viewing for them.
-    pub actor: Option<String>,
-}
-
 /// Color scheme the page is asked to render in.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Theme {
@@ -385,7 +376,8 @@ fn hostname(host_header: &str) -> String {
         Some((host, port)) if port.bytes().all(|byte| byte.is_ascii_digit()) => host,
         _ => host_header,
     };
-    host.to_ascii_lowercase()
+    // `host.` is the same name as `host`.
+    host.trim_end_matches('.').to_ascii_lowercase()
 }
 
 /// A request for one file of a version on an artifact's origin.

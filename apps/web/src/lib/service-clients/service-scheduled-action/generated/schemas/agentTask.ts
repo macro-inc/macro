@@ -10,12 +10,18 @@ import type { AgentMcpServer } from './agentMcpServer';
 import type { AgentTaskAgentProperty } from './agentTaskAgentProperty';
 import type { AgentTaskModel } from './agentTaskModel';
 
+/**
+ * The single agent task: how routines were stored before they had steps,
+and still how a routine that is only an agent is saved.
+ */
 export interface AgentTask {
   agent?: AgentTaskAgentProperty;
   /** Apps the routine requires on top of the agent's own. The owner must
 have each one connected to save the routine and for it to run. */
   mcp_servers?: AgentMcpServer[];
   model?: AgentTaskModel;
+  /** Instructions placed before the user's. */
   prompt: string;
+  /** What the agent should do. */
   user_prompt: string;
 }

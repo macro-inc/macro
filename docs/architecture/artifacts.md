@@ -19,7 +19,7 @@ every other created document.
 
 The generic document paths refuse artifacts: `POST /documents` and file
 uploads reject the file type, copying an artifact is refused (its body is its
-version history), `location_v3` points callers at `view_url`, and the AI
+version history) and duplicating a folder skips its artifacts, `location_v3` points callers at `view_url`, and the AI
 `ReadContent` tool says the content is a web page. Search indexes the name
 only.
 
@@ -114,7 +114,10 @@ but the content router: it is signed with DSS's existing permission secret
 issuer and the audience `artifact-content`, which every document grant
 decoder (sync-service, DSS `permissions_token/validate`, surface grants)
 rejects, and it carries no access level, so it can't pose as a document
-grant either. A document grant is likewise refused by the content router. Putting it in the path keeps
+grant either. A document grant is likewise refused by the content router.
+Its claims are only `document_id`, `exp`, `iss` and `aud`: a JWT payload is
+readable, so a token naming the viewer would hand their identity to the
+page's author. Putting it in the path keeps
 every relative URL in a page working without the author knowing about it, and
 needs no cookie, which browsers block in third-party frames.
 

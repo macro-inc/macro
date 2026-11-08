@@ -53,7 +53,6 @@ export default {
     projectBadge: 'Project',
     newProject: 'Nieuw project',
     contentAlreadyOpen: 'Inhoud is al geopend',
-    unableToOpenConversation: 'Kan gesprek niet openen. Probeer het opnieuw.',
     mobileSearchPlaceholder: 'Zoeken…',
     closeSearch: 'Zoeken sluiten',
     searchFullTextFor: 'Volledige tekst doorzoeken op “{{query}}”',

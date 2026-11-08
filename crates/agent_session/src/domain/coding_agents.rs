@@ -21,6 +21,7 @@ mod test;
 /// Information used to choose a coding persona for a task.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "ai_tools", derive(schemars::JsonSchema))]
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
 pub struct CodingAgent {
     /// Persona id to pass to dispatch.
     pub id: Uuid,
@@ -246,6 +247,9 @@ impl<Directory: CodingAgentDirectory, Sessions: RoutineSessions, Updates: Coding
                     session_id,
                     source: SessionSource::Agent,
                     visibility: SessionVisibility::Listed,
+                    origin: trigger_context::TriggerOrigin::Dispatched {
+                        on_behalf_of: command.user_id.clone(),
+                    },
                 })
                 .await
                 .map_err(failed)?;

@@ -229,7 +229,7 @@ async fn candidates_exact_recheck_activation_and_keyset_pages(pool: PgPool) {
         expected
     );
     assert!(
-        repo.candidate_actions(&event, Some(exact), page(1))
+        repo.candidate_actions(&event, Some(expected[1]), page(1))
             .await
             .unwrap()
             .next_after
@@ -322,6 +322,7 @@ async fn admission_skips_invalid_first_and_middle_pages_without_truncating_fanou
     let incoming = IncomingEvent {
         event_id: generate_uuid_v7(),
         schema_version: 1,
+        routine_id: None,
         payload: EventPayload::Document(
             serde_json::from_value(json!({
                 "event_type": "document.updated", "metadata": {

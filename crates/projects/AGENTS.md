@@ -12,6 +12,9 @@ soft delete/restore/purge, and bulk upload into a project tree.
   ports — start here to see the contract before the implementation.
 - `src/domain/service.rs`: the concrete service (access checks, team-share
   authorization, soft-delete/restore/purge, bulk upload orchestration).
+  Soft delete trashes a folder's documents and chats; its databases and forms
+  return to the root through the `FiledItemsUnfiler` port, which DSS
+  implements over the databases and forms repositories.
 - `src/domain/events.rs`: the `ProjectMacroEvent` variants published to the
   event broker.
 - `src/domain/duplicate.rs`: folder duplication (`ProjectDuplicator`, the
@@ -56,7 +59,8 @@ soft delete/restore/purge, and bulk upload into a project tree.
 - Folder duplication copies at most `MAX_PROJECT_DUPLICATE_ENTRIES` subfolders,
   documents, and chats, and discards the whole copy if any part fails.
   Email threads are filed by a link on the thread, not owned by the folder,
-  so they stay with the source.
+  so they stay with the source. Artifacts are skipped: a document copy can't
+  carry their version history.
 
 ## Checks
 

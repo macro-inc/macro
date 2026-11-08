@@ -286,6 +286,7 @@ async function mount(page: Page, state: LinkedServer, query = '') {
                     jid: '14155550199@s.whatsapp.net',
                     alternateJid: null,
                     displayName: 'Ana Ruiz',
+                    name: 'Ana Ruiz',
                     admin: true,
                   },
                 ],
@@ -1277,6 +1278,41 @@ function everyMessageType() {
     },
   ];
 }
+
+test('a send settling keeps an older page that is still loading', async ({
+  page,
+}) => {
+  const state = server();
+  await mount(page, state, `?chat=${CHAT_ID}`);
+  await expect(
+    page.getByRole('button', { name: 'Load earlier messages' })
+  ).toBeVisible();
+  let releaseOlder = () => {};
+  const older = new Promise<void>((resolve) => {
+    releaseOlder = resolve;
+  });
+  let olderRequested = false;
+  await page.route(
+    (url) =>
+      url.pathname.endsWith('/messages') && url.searchParams.has('before'),
+    async (route) => {
+      olderRequested = true;
+      await older;
+      await route.fallback();
+    }
+  );
+  await page.getByRole('button', { name: 'Load earlier messages' }).click();
+  await expect.poll(() => olderRequested).toBe(true);
+  await typeInComposer(page, 'Sent while history loads');
+  await page.getByRole('button', { name: 'Send message' }).click();
+  await expect.poll(() => state.outgoing.length).toBe(1);
+  // The send's reply has reached the page, and its refresh with it.
+  await expect(
+    page.getByText('Sent while history loads', { exact: true })
+  ).toBeVisible();
+  releaseOlder();
+  await expect(page.getByText('Previous day discussion')).toBeVisible();
+});
 
 test('every WhatsApp message type renders with Chat parts and small cards', async ({
   page,

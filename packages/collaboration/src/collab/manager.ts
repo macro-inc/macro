@@ -92,6 +92,8 @@ export interface SyncEngineManager<
   readonly doc: LoroDoc;
   readonly initialized: boolean;
   readonly peerId: bigint;
+  /** The latest state the manager published, if any. */
+  readonly state: StateUpdate<S> | undefined;
   importUpdate(
     update: LoroRawUpdate
   ): Result<boolean, ResultError<LoroManagerError>[]>;

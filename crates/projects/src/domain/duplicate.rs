@@ -5,7 +5,8 @@
 //! its parent, otherwise at the top level. Subfolders are recreated, and
 //! documents and chats are duplicated by their own domains through
 //! [`ProjectContentCopier`]. Entries the user cannot view are skipped, with
-//! everything inside a skipped folder. Email threads are only linked into a
+//! everything inside a skipped folder, and so are artifacts, which cannot be
+//! copied. Email threads are only linked into a
 //! folder, not owned by it, so they are left out. A failure part way discards
 //! the whole copy, so no partial copy survives.
 
@@ -146,6 +147,9 @@ where
         let Some(project_id) = copies.get(&item.project_id) else {
             return Ok(ItemOutcome::Skipped);
         };
+        if item.kind == ProjectItemKind::Artifact {
+            return Ok(ItemOutcome::Skipped);
+        }
         let Some(receipt) = self.contents.view_receipt(&item.entity()).await? else {
             return Ok(ItemOutcome::Skipped);
         };
@@ -190,7 +194,9 @@ where
             .await;
         for outcome in outcomes {
             match outcome? {
-                ItemOutcome::Copied(ProjectItemKind::Document) => copied.documents += 1,
+                ItemOutcome::Copied(ProjectItemKind::Document | ProjectItemKind::Artifact) => {
+                    copied.documents += 1;
+                }
                 ItemOutcome::Copied(ProjectItemKind::Chat) => copied.chats += 1,
                 ItemOutcome::Skipped => copied.skipped += 1,
                 ItemOutcome::NotAttempted => {}

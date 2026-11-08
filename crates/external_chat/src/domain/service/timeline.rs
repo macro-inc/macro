@@ -138,13 +138,27 @@ impl<P: ChatProvider> ExternalChatService<P> {
         messages: Vec<StoredMessage>,
     ) -> ExternalChatResult<Vec<ExternalChatMessage>> {
         let mut named = vec![];
+        let mut unnamed = vec![];
         for message in &messages {
             if let Some(RichContent::System(line)) = &message.rich {
                 named.extend(line.participants.iter().cloned());
             }
             named.extend(message.mentions.iter().cloned());
+            unnamed.extend(
+                std::iter::once(&message.sender)
+                    .chain(message.votes.iter().map(|vote| &vote.voter))
+                    .filter(|person| {
+                        person
+                            .name
+                            .as_deref()
+                            .is_none_or(|name| name.trim().is_empty())
+                    })
+                    .map(|person| person.person_id),
+            );
         }
-        let people = self.provider.people(chat, &named).await?;
+        unnamed.sort();
+        unnamed.dedup();
+        let people = self.provider.people(chat, &named, &unnamed).await?;
         let ids: Vec<Uuid> = messages.iter().map(|message| message.id).collect();
         let deliveries = if ids.is_empty() {
             vec![]

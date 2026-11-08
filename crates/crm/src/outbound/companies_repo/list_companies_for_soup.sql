@@ -150,13 +150,9 @@ WITH limited_companies AS (
             LIMIT $3
         )
     ) candidates
-    WHERE EXISTS (
-        SELECT 1 FROM team_crm_settings tcs
-        WHERE tcs.team_id = $1 AND tcs.crm_enabled
-    )
-      -- Keyset seek (NULL = first page): keep only rows that sort strictly
+    -- Keyset seek (NULL = first page): keep only rows that sort strictly
       -- after the cursor.
-      AND ($6::timestamptz IS NULL OR (sort_ts, id::text) < ($6, $7))
+    WHERE ($6::timestamptz IS NULL OR (sort_ts, id::text) < ($6, $7))
     ORDER BY sort_ts DESC NULLS LAST, id DESC
     LIMIT $3
 )

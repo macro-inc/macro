@@ -8,7 +8,11 @@ import { applyCanvasCode } from '../canvas/direct';
 import { canvasEmbedRequest, embedCanvasDocument } from '../canvas/embed';
 import { canvasRenderOptions, createCanvasRenderer } from '../canvas/render';
 import { canvasRevision } from '../canvas/revision';
-import { withCanvasSession } from '../canvas/session';
+import {
+  CanvasConflictError,
+  CanvasRejectedError,
+  withCanvasSession,
+} from '../canvas/session';
 import { tokenAccessLevel } from '../document-token';
 import { type Bindings, getEnv } from '../env';
 import { createWorkerSyncSource } from '../sources';
@@ -210,6 +214,11 @@ app.post('/', zValidator('json', body), async (c) => {
       })
     );
   } catch (error) {
+    // Both leave the scene untouched, so callers can fix and retry safely.
+    if (!signal.aborted && error instanceof CanvasConflictError)
+      return c.json({ error: error.message, outcome: 'conflict' }, 409);
+    if (!signal.aborted && error instanceof CanvasRejectedError)
+      return c.json({ error: error.message, outcome: 'rejected' }, 422);
     return c.json(
       {
         error: signal.aborted

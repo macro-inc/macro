@@ -9,7 +9,6 @@ use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use sqlx::PgPool;
 use sqlx::types::Json;
-use uuid::Uuid;
 
 use crate::domain::models::{
     ArtifactPath, ArtifactVersion, ArtifactVersionSummary, Manifest, Scene, SceneId, Sha256,
@@ -252,8 +251,8 @@ impl ArtifactRepository for PgArtifactRepository {
             VersionRow,
             r#"
             INSERT INTO artifact_versions
-                (id, document_id, number, files, scenes, message, created_by, created_by_agent)
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+                (document_id, number, files, scenes, message, created_by, created_by_agent)
+            VALUES ($1, $2, $3, $4, $5, $6, $7)
             ON CONFLICT (document_id, number) DO NOTHING
             RETURNING
                 number,
@@ -264,7 +263,6 @@ impl ArtifactRepository for PgArtifactRepository {
                 created_by_agent,
                 created_at
             "#,
-            Uuid::now_v7(),
             version.document_id,
             version.number,
             Json(files) as _,

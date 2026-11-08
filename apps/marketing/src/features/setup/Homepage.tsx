@@ -1,4 +1,3 @@
-import ArrowRight from '@phosphor/arrow-right.svg';
 import { createSignal } from 'solid-js';
 import { HomepageScrollCue } from '../marketing/components/HomepageScrollCue';
 import { HomepageSections } from '../marketing/components/HomepageSections';
@@ -37,12 +36,11 @@ export function Homepage() {
           action={
             <div class="homepage-hero-action mt-6 flex justify-center pb-5">
               <a
-                class="site-nav-start homepage-hero-cta homepage-primary-cta"
+                class="site-nav-start homepage-hero-cta"
                 href="/app/signup"
                 onClick={routePhoneToMobileSignup}
               >
-                <span>Get started</span>
-                <ArrowRight aria-hidden="true" />
+                Get Started
               </a>
             </div>
           }

@@ -294,6 +294,11 @@ async fn dispatch_sends_only_artifact_hosts_to_the_content_router() {
         ("dev-gateway.macro.com", "api"),
         ("evilartifacts.localhost", "api"),
         ("artifacts.localhost:8086", "content"),
+        ("artifacts.localhost.:8086", "content"),
+        (
+            "0193f3a4-7d1e-7c2a-9f00-5a1b2c3d4e5f.artifacts.localhost.",
+            "content",
+        ),
         (
             "0193F3A4-7D1E-7C2A-9F00-5A1B2C3D4E5F.ARTIFACTS.LOCALHOST",
             "content",
