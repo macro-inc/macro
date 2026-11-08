@@ -1,3 +1,4 @@
+import type { NativeMarkdownEditingPort } from '@core/component/LexicalMarkdown/editing/nativeMarkdownPorts';
 import { SYNC_SERVICE_HOSTS } from '@core/constant/servers';
 import {
   ABI_MAJOR,
@@ -8,6 +9,7 @@ import {
 import type { SessionAuthorization } from '@macro-inc/collaboration/session/executor';
 import { SessionTelemetry } from '@macro-inc/collaboration/session/telemetry';
 import {
+  type EditorView,
   mountSessionView,
   type NodeViewRegistry,
   type ViewOptions,
@@ -30,6 +32,7 @@ export async function createRustEditorSession(options: {
   viewOs: number;
   span: Span;
   onStatus(status: IViewEffectMsg): void;
+  installEditing?: (view: EditorView) => NativeMarkdownEditingPort;
 }) {
   const owner = crypto.randomUUID();
   const sessionSpan = options.span.span('doc.session');
@@ -86,16 +89,28 @@ export async function createRustEditorSession(options: {
         onStatus: options.onStatus,
       }
     );
+    let editing: NativeMarkdownEditingPort | undefined;
+    try {
+      editing = options.installEditing?.(mounted.view);
+    } catch (error) {
+      await mounted.close();
+      throw error;
+    }
     let closing: Promise<void> | undefined;
     return {
       ...mounted,
+      editing,
       close() {
         closing ??= (async () => {
           try {
-            await mounted.close();
+            editing?.dispose();
           } finally {
-            telemetry.close();
-            sessionSpan.end();
+            try {
+              await mounted.close();
+            } finally {
+              telemetry.close();
+              sessionSpan.end();
+            }
           }
         })();
         return closing;
