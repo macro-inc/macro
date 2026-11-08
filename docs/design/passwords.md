@@ -113,12 +113,19 @@ an external icon service.
 
 ## Operations
 
-Local development runs an isolated, loopback-bound single-node OpenBao with
-development auto-unseal. Development mode is ephemeral; restarting it loses
-values, so metadata cannot be treated as recovered vault contents. The bootstrap
-script accepts a team and local JWT verification settings and must be rerun after
-that restart. Never use development mode or local bootstrap credentials on a
-hosted environment.
+Local development runs an isolated, loopback-bound single-node OpenBao in normal
+server mode with single-node integrated Raft on a named Compose volume per instance.
+Startup initializes a new vault once and unseals it automatically using a generated
+32-byte static seal key. Raft storage, the seal key, and bootstrap credentials
+live together on the local volume and stay outside git; application services
+receive only their JWT signing identity. Container and stack restarts
+preserve values, history, TOTP seeds, namespaces, and JWT configuration. The
+[local bootstrap](../../infra/local/openbao/README.md) provisions each team
+idempotently without replacing stored values. Keep the vault volume and its seal
+key together when backing up or moving an instance; stack init snapshots omit the
+vault. Use Compose restart or recreation without deleting volumes to preserve the
+whole instance; xtask up/down can reset metadata or remove volumes. Never use this
+local seal or bootstrap identity in a hosted environment.
 
 Hosted dev and production require explicit configuration and provisioning:
 TLS, KMS auto-unseal, persistent replicated storage, backups with restore drills,

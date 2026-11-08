@@ -250,10 +250,20 @@ persona accounts it created. It is safe to run against a stack that you tested i
 
 ## Integration Secrets
 
-Passwords uses a local OpenBao development container with team-scoped namespaces.
-Provision each team after startup using the [local vault bootstrap](../../infra/local/openbao/README.md).
-OpenBao development storage is ephemeral across container restarts; use synthetic
-credentials and rerun provisioning after a restart.
+Passwords uses a local OpenBao server with team-scoped namespaces and single-node
+integrated Raft on a named Compose volume per instance. Startup initializes it once
+and unseals it automatically with a generated local seal key. Provision each new team
+using the [local vault bootstrap](../../infra/local/openbao/README.md); container
+and stack restarts preserve credentials, TOTP seeds, and provisioning without a
+reseed. Keep the volume and seal key together, and use synthetic credentials only.
+Migrating from the old in-memory development server requires restoring its values
+once; Postgres metadata alone cannot recover them. Do not reset Postgres or remove
+other stack volumes for that migration.
+
+For non-destructive restarts use `docker compose restart` with the instance's
+project and Compose files, or Compose `down`/`up` without `--volumes`. The xtask
+up/down paths can reset metadata or remove volumes, and stack init snapshots do
+not include the vault.
 
 A `--no-doppler` stack supplies deterministic stubs for required configuration. External integrations still need real values, and the agent harness additionally needs the Google Gmail identity provider created from real Google OAuth configuration:
 

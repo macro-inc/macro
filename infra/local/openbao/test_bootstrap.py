@@ -114,9 +114,14 @@ class BootstrapIntegration(unittest.TestCase):
             os.environ["PASSWORDS_TEST_OPENBAO_ADDRESS"], os.environ["BAO_TOKEN"], audit_id,
         )
         client.request("POST", "sys/config/auditing/request-headers/x-macro-audit-id", {"hmac": False})
-        client.request("POST", "secret/data/passwords-audit-check", {
-            "data": {"password": "synthetic-audit-password", "totp_seed": "JBSWY3DPEHPK3PXP"},
-        })
+        mount = "audit-check-" + uuid4().hex
+        client.request("POST", "sys/mounts/" + mount, {"type": "kv", "options": {"version": "2"}})
+        try:
+            client.request("POST", mount + "/data/item", {
+                "data": {"password": "synthetic-audit-password", "totp_seed": "JBSWY3DPEHPK3PXP"},
+            })
+        finally:
+            client.request("DELETE", "sys/mounts/" + mount)
         logs = subprocess.run(
             ["docker", "logs", os.environ["PASSWORDS_TEST_OPENBAO_CONTAINER"]],
             capture_output=True, check=True,

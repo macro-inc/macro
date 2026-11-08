@@ -1144,10 +1144,8 @@ fn reload_services(
     stage.run(&format!("Reloading {names}"), &mut up)
 }
 
-/// Every Docker volume an instance owns: the app DB/cache/search/Kafka plus the
-/// FusionAuth DB/config. The single list `teardown`, `ensure_external_resources`,
-/// and `destroy` share.
-fn instance_volumes(instance: &Instance) -> [String; 6] {
+/// Volumes created explicitly before Compose starts the instance.
+fn external_volumes(instance: &Instance) -> [String; 6] {
     [
         instance.volume_postgres(),
         instance.volume_redis(),
@@ -1156,6 +1154,13 @@ fn instance_volumes(instance: &Instance) -> [String; 6] {
         instance.volume_fusionauth_db(),
         instance.volume_fusionauth_config(),
     ]
+}
+
+/// Every owned volume removed by intentional full-stack teardown.
+fn instance_volumes(instance: &Instance) -> impl Iterator<Item = String> {
+    external_volumes(instance)
+        .into_iter()
+        .chain([format!("{}_openbao_data", instance.project_name())])
 }
 
 /// The instance's external Docker networks.
@@ -1167,8 +1172,8 @@ fn instance_networks(instance: &Instance) -> [String; 2] {
 /// stateful volumes — the basis of `run_local`'s full-delete/full-create
 /// idempotency, the quit hotkey, and `destroy-local`. Containers + project
 /// networks come down with `down -v`; the data volumes are then removed
-/// explicitly, because FusionAuth's (and named instances' infra) volumes are
-/// declared `external`, which `down -v` leaves behind. Output is captured (this
+/// explicitly: external volumes survive `down -v`, and the generated OpenBao
+/// volume is absent from this command's Compose file set. Output is captured (this
 /// is best-effort and noisy) so callers surface it as a single line; absent
 /// containers/volumes are ignored.
 fn teardown_commands(instance: &Instance) {
@@ -1217,7 +1222,7 @@ fn teardown(stage: &Stage, instance: &Instance) -> Result<()> {
 /// reference (idempotent — replaces the old `just create_networks`).
 fn ensure_external_resources(stage: &Stage, instance: &Instance) -> Result<()> {
     let networks = instance_networks(instance);
-    let volumes = instance_volumes(instance);
+    let volumes = external_volumes(instance);
     stage.run_step("Ensuring networks & volumes", || {
         for n in &networks {
             docker::ensure_network(n)?;

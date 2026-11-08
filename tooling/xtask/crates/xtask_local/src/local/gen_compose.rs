@@ -23,7 +23,7 @@ use serde_yaml::value::{Tag, TaggedValue};
 
 use super::build::{BinariesDir, RUNTIME_IMAGE_TAG};
 use super::instance::{Instance, Port};
-use super::inventory::{OPENBAO_IMAGE, OPENBAO_LOCAL_ROOT_TOKEN, RustService, services_for_mode};
+use super::inventory::{OPENBAO_IMAGE, RustService, services_for_mode};
 use super::{Mode, repo_root};
 
 #[cfg(test)]
@@ -158,9 +158,7 @@ pub fn generate(
     // external network/volume definitions, which the schema can't represent.
     let mut value = serde_yaml::to_value(&compose).context("serializing compose override")?;
     apply_tags(&mut value, mode, instance);
-    if mode.spec().runs_local_infra && !instance.is_default() {
-        set_external_networks_and_volumes(&mut value, instance);
-    }
+    set_networks_and_volumes(&mut value, mode, instance);
 
     let yaml = serde_yaml::to_string(&value).context("rendering override yaml")?;
     let path = instance
@@ -345,21 +343,26 @@ fn add_local_infra(
         "openbao".to_string(),
         Some(dct::Service {
             image: Some(OPENBAO_IMAGE.to_string()),
-            command: Some(dct::Command::Args(vec![
-                "server".to_string(),
-                "-dev".to_string(),
-                "-dev-no-store-token".to_string(),
-                "-config=/openbao/config/macro-local.hcl".to_string(),
+            entrypoint: Some(dct::Entrypoint::List(vec![
+                "/usr/bin/dumb-init".to_string(),
+                "--".to_string(),
+                "/bin/sh".to_string(),
+                "/openbao/config/start.sh".to_string(),
             ])),
-            volumes: vec![dct::Volumes::Simple(format!(
-                "{}:/openbao/config/macro-local.hcl:ro,z",
-                repo_root().join("infra/local/openbao/local.hcl").display()
-            ))],
-            environment: kv(&[
-                ("BAO_DEV_ROOT_TOKEN_ID", OPENBAO_LOCAL_ROOT_TOKEN),
-                ("BAO_DEV_LISTEN_ADDRESS", "0.0.0.0:8200"),
-                ("BAO_ADDR", "http://127.0.0.1:8200"),
-            ]),
+            command: Some(dct::Command::Args(vec![])),
+            volumes: vec![
+                dct::Volumes::Simple(format!(
+                    "{}:/openbao/config/macro-local.hcl:ro,z",
+                    repo_root().join("infra/local/openbao/local.hcl").display()
+                )),
+                dct::Volumes::Simple(format!(
+                    "{}:/openbao/config/start.sh:ro,z",
+                    repo_root().join("infra/local/openbao/start.sh").display()
+                )),
+                dct::Volumes::Simple("openbao_data:/openbao/file".to_string()),
+            ],
+            environment: kv(&[("BAO_ADDR", "http://127.0.0.1:8200")]),
+            restart: Some("unless-stopped".to_string()),
             ports: dct::Ports::Short(vec![format!(
                 "127.0.0.1:{}:8200",
                 instance.port(Port::OpenBao)
@@ -541,6 +544,31 @@ fn apply_tags(value: &mut Value, mode: Mode, instance: &Instance) {
             .expect("logging configuration is serializable"),
         );
     }
+}
+
+/// Define local storage and isolate named instances' networks and volumes.
+fn set_networks_and_volumes(value: &mut Value, mode: Mode, instance: &Instance) {
+    if !mode.spec().runs_local_infra {
+        return;
+    }
+
+    if !instance.is_default() {
+        set_external_networks_and_volumes(value, instance);
+    }
+
+    let map = value.as_mapping_mut().expect("compose root is a mapping");
+    let volumes = map
+        .entry(Value::from("volumes"))
+        .or_insert_with(|| Value::Mapping(serde_yaml::Mapping::new()))
+        .as_mapping_mut()
+        .expect("compose volumes is a mapping");
+    volumes.insert(
+        "openbao_data".into(),
+        serde_yaml::to_value(serde_json::json!({
+            "name": format!("{}_openbao_data", instance.project_name())
+        }))
+        .expect("volume configuration is serializable"),
+    );
 }
 
 /// Define the per-instance external networks and volumes (named-instance only).

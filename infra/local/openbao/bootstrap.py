@@ -121,13 +121,18 @@ def bootstrap(client, team_id, public_key, issuer):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--address", required=True)
+    parser.add_argument("--init-file", type=Path, help="local bootstrap.json copied from the instance volume")
     parser.add_argument("--team-id", required=True, type=UUID)
     parser.add_argument("--jwt-public-key", required=True, type=Path)
     parser.add_argument("--jwt-issuer", required=True)
     arguments = parser.parse_args()
     token = os.environ.get("BAO_TOKEN")
+    if arguments.init_file:
+        if token:
+            parser.error("use --init-file or BAO_TOKEN, not both")
+        token = json.loads(arguments.init_file.read_text())["root_token"]
     if not token:
-        parser.error("BAO_TOKEN is required (local bootstrap identity only)")
+        parser.error("--init-file or BAO_TOKEN is required (local bootstrap identity only)")
     bootstrap(
         LocalOpenBao(arguments.address, token),
         arguments.team_id,
