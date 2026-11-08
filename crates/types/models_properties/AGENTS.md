@@ -30,7 +30,7 @@ split into three layers plus a `shared` layer used by all of them.
 
 - Depends on: `document_sub_type`.
 - Used by: `agent_trigger`, `ai_tools`, `complete_graph`, `crm`, `databases`,
-  `databases_sql`, `documents`, `document_storage_service`, `email_service`,
+  `database_sql_runner`, `documents`, `document_storage_service`, `email_service`,
   `forms`, `github`, `graphql_common`, `graphql_crm`, `graphql_initiative`,
   `graphql_properties`, `graphql_soup`, `import`, `initiative`, `messages`,
   `models_soup`, `properties`, `properties_service`, `scheduled_action`,

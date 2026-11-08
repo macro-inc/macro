@@ -56,7 +56,7 @@ pub async fn generate_database_query(
             code: Some(error.code().to_string()),
         })?;
     // The adapter wires only view-capped database tools; no connector discovery.
-    let reference = databases_sql::toolset::SQL_READ_GUIDE.to_owned();
+    let reference = database_sql_runner::toolset::SQL_READ_GUIDE.to_owned();
     let tools = Arc::new(discovery_tools());
     let result = tokio::time::timeout(
         QUERY_TIMEOUT,

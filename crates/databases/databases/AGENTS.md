@@ -22,10 +22,10 @@ service with Axum, agent-tool and Postgres adapters.
 - Owns: database/table/column/row/view/saved-query persistence, the typed ops
   batch API, sharing, provisioning, duplication, and the `database_entities`
   app-entity layer.
-- Not here: the SQL grammar agents and the console compile → `crates/database_sql`
+- Not here: the SQL grammar agents and the console compile → `crates/database_sql_engine`
   (pure parse/resolve/fold engine, also runs in wasm); the agent-facing SQL
   adapter that runs that engine over this crate's ops and Soup →
-  `crates/databases_sql`.
+  `crates/database_sql_runner`.
 
 ## Boundaries
 
@@ -34,7 +34,7 @@ service with Axum, agent-tool and Postgres adapters.
   `macro_event_broker`/`macro_event_topics` (change notifications),
   `connection_gateway_client` (liveness), `entity_mutation`
   (rename/move/duplicate/trash/restore).
-- Used by: `databases_sql` (agent SQL), `crm` and `forms` (own storage via
+- Used by: `database_sql_runner` (agent SQL), `crm` and `forms` (own storage via
   `DatabaseStorage`, no `database_entities` row), `database_webhooks` (writes
   as its creator, re-checked through the `CreatorAccess` port and its
   `outbound::entity_access_creators` adapter), `ai_tools`, `complete_graph`,

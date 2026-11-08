@@ -297,7 +297,7 @@ operation-deduplication problem during review, which was fixed before publicatio
 
 Validation: 590 frontend tests across 83 files; TypeScript; `just check`; generated
 dependency verification; production frontend build and local DSS build; five QC
-reviews. Affected Rust suites passed: `database_sql` (136), `databases_sql` (35),
+reviews. Affected Rust suites passed: `database_sql_engine` (136), `database_sql_runner` (35),
 `databases` with Postgres/view features (222), `properties` (273, four ignored),
 `soup` (258, two ignored), `cache-core` (96 unit tests plus integration suites),
 `graphql_databases` (1), `complete_graph` (59), and DSS binary tests (17). Tests ran
@@ -308,7 +308,7 @@ For CI integration, the branch was merged with `main` at `55f06de203` and the
 dependency generator updated the closure entry for the relocated `agent_fold`
 crate. The database optimization code was unchanged. The 590 frontend tests,
 TypeScript and schema checks, scoped `just check`, generated dependency check,
-and the `database_sql`, `databases_sql`, `databases`, `graphql_databases`,
+and the `database_sql_engine`, `database_sql_runner`, `databases`, `graphql_databases`,
 `complete_graph` and DSS suites passed again. These checks used a separate test
 database; the measured 100k fixture and running bundle were preserved.
 

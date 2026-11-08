@@ -17,7 +17,7 @@ UUID string on the wire and in every generated schema.
 ## Checks
 
 - `cargo test -p database_id --all-features`
-- After a change: `cargo run -p database_sql --features cli --bin database_sql_types`
+- After a change: `cargo run -p database_sql_engine --features cli --bin database_sql_types`
   must leave `apps/web/src/lib/core/database-sql/generated/types.ts` unchanged.
 
 ## Gotchas

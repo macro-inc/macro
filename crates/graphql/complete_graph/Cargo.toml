@@ -72,7 +72,7 @@ contacts_core = { workspace = true }
 bot_id = { workspace = true }
 crm = { workspace = true, features = ["ports"] }
 databases = { workspace = true, features = ["ports"] }
-databases_sql = { workspace = true }
+database_sql_runner = { workspace = true }
 macro_db_migrator = { workspace = true }
 models_databases = { workspace = true }
 attention_feed = { workspace = true, features = ["inbound"] }

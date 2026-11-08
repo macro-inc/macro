@@ -2,7 +2,7 @@
 
 use async_graphql::{Enum, ID, InputObject, OneofObject};
 use chrono::{DateTime, Utc};
-use databases_sql::view_rows::{VIEW_PAGE_LIMIT, ViewRowsRequest};
+use database_sql_runner::view_rows::{VIEW_PAGE_LIMIT, ViewRowsRequest};
 use graphql_common::parse_id;
 use models_databases::{ColumnId, OptionId, TableId, views as model};
 

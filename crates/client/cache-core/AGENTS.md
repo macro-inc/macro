@@ -51,7 +51,7 @@ GraphQL response shape for callers. A concrete `Storage` impl (e.g.
 ## Boundaries
 
 - Depends on: `apollo-compiler`/`apollo-parser` (GraphQL parsing), `predicate-index`,
-  `maybe_send`, and the WASM-safe `database_sql` compiler.
+  `maybe_send`, and the WASM-safe `database_sql_engine` compiler.
 - Used by: `cache-turso`, `cache-wasm`.
 
 ## Recipes

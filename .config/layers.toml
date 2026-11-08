@@ -160,7 +160,7 @@ reason = "`toolset` feature records usage through ai_usage; move the toolset ada
 
 [[allow]]
 from = "cache-core"
-to = "database_sql"
+to = "database_sql_engine"
 reason = "browser people SQL runs the database_sql engine locally; split the wasm-safe engine core out of the domain layer"
 
 [[allow]]

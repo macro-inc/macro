@@ -4,7 +4,7 @@ use crate::domain::{
     models::{DatabaseError, RowRef},
     storage::StorageRowsQuery,
 };
-use database_sql::{Catalog, Cell, Row};
+use database_sql_engine::{Catalog, Cell, Row};
 use models_databases::{
     DateRange, OptionId, RowId, ViewId,
     views::{DatabaseView, ViewLayout},
@@ -72,7 +72,7 @@ pub(super) fn rows(
         created_at: now,
         updated_at: now,
     };
-    let select = database_sql::compile_view(&view, &catalog).map_err(|error| {
+    let select = database_sql_engine::compile_view(&view, &catalog).map_err(|error| {
         DatabaseError::InvalidOp(crate::domain::models::OpRefusal {
             op: 0,
             row: None,
@@ -82,9 +82,9 @@ pub(super) fn rows(
         })
     })?;
     let filter = select.where_.clone();
-    let mut plan = database_sql::split(&catalog, select);
+    let mut plan = database_sql_engine::split(&catalog, select);
     // Storage supplies unfiltered rows, so evaluate even predicates the SQL
     // planner would normally push into its external row source.
     plan.residual = filter;
-    Ok(database_sql::fold_relations(&catalog, &plan, vec![rows]).1)
+    Ok(database_sql_engine::fold_relations(&catalog, &plan, vec![rows]).1)
 }

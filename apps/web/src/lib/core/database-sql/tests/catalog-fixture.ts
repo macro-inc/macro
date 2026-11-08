@@ -1,5 +1,5 @@
 /**
- * The catalog fixtures from `crates/databases/database_sql/fixtures/catalogs`: a schema,
+ * The catalog fixtures from `crates/databases/database_sql_engine/fixtures/catalogs`: a schema,
  * a scope, and the catalog the engine's builder makes of them. The browser's
  * tests show a database detail maps onto the same schema, so the catalog a
  * statement runs against is the one the Rust side pins.
@@ -20,7 +20,7 @@ export function readCatalogFixture(name: string): CatalogFixture {
     readFileSync(
       resolve(
         import.meta.dirname,
-        `../../../../../../../crates/databases/database_sql/fixtures/catalogs/${name}.json`
+        `../../../../../../../crates/databases/database_sql_engine/fixtures/catalogs/${name}.json`
       ),
       'utf8'
     )

@@ -2,7 +2,7 @@
 
 use std::collections::BTreeSet;
 
-use database_sql::{
+use database_sql_engine::{
     catalog::{Column, ColumnKind, Table, TableSource},
     resolve::{
         ComparisonOperator, Direction, Filter, OrderKey, SelectQuery, Value, row_position_key,

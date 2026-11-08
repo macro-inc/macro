@@ -2,8 +2,8 @@
 
 pub mod projection;
 use crate::engine::HydrationScope;
-pub use database_sql::Outcome;
-pub use database_sql::local_people::{
+pub use database_sql_engine::Outcome;
+pub use database_sql_engine::local_people::{
     MAX_PEOPLE_SQL_BYTES, PeopleSqlPlan, SqlParameter, SqlScalar,
 };
 use serde::{Deserialize, Serialize};
