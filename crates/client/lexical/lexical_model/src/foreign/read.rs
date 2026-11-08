@@ -138,6 +138,14 @@ impl ForeignReadSnapshot {
         &self.state
     }
 
+    /// Whether a selection object was already present in this capture.
+    /// Hosts use this to distinguish inherited values from values created by
+    /// an independent read peer, without inspecting transaction-local slots.
+    pub fn contains_selection_identity(&self, identity: &ForeignSelectionIdentity) -> bool {
+        &self.selection_identities.current == identity
+            || self.selection_identities.detached.contains(identity)
+    }
+
     /// Whether this capture originated in the given editor and exact update.
     /// This proves provenance, not freshness or continued callback authorization;
     /// the host must also check that the matching update is still active.

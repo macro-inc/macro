@@ -29,10 +29,7 @@ fn peer_slots_and_activation_are_independent_while_object_ids_and_values_are_sha
         .expect("detached identity");
     let unrelated_id = parent.push(unrelated, identity)?;
     assert_eq!(unrelated_id, 1);
-    let peer = SelectionBindings {
-        objects: parent.objects.clone(),
-        frame: Arc::new(Mutex::new(Frame::default())),
-    };
+    let peer = parent.fork_read();
     let (created, peer_slot) =
         snapshot.with_read_transaction(&committed, |read| -> Result<_> {
             assert_eq!(peer.resolve(read, active)?, Some(SelectionSlot::Active));

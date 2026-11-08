@@ -3,6 +3,8 @@ use super::*;
 use crate::replay::{Bindings, CaretBindings, RecordIdentities, SelectionBindings};
 use lexical_model::{ForeignEditorIdentity, ForeignReadSnapshot, ForeignUpdateIdentity};
 use std::sync::{Arc, Mutex, Weak};
+mod read;
+pub use read::CallbackRead;
 
 pub(super) struct Frames {
     pub(super) arguments: super::arguments::HookArguments,
