@@ -8,11 +8,21 @@ pub struct MacroSyncPolicy;
 pub static MACRO_SYNC_POLICY: MacroSyncPolicy = MacroSyncPolicy;
 impl SyncPolicy for MacroSyncPolicy {
     fn canonicalize_node_json(&self, node: &mut SerializedNode) {
-        // Source own-undefined properties are null in the persisted mirror.
-        // Canonicalize both sides without changing any stored Loro operations.
-        if let Some(node_type) = node.get("type").and_then(serde_json::Value::as_str) {
-            for field in crate::policy::own_undefined_fields(node_type) {
-                node.entry(field.clone()).or_insert(serde_json::Value::Null);
+        // These source exportJSON fields are omitted when unset; Loro stores null.
+        let fields: &[&str] = match node.get("type").and_then(serde_json::Value::as_str) {
+            Some("table") => &[
+                "colWidths",
+                "frozenColumnCount",
+                "frozenRowCount",
+                "rowStriping",
+            ],
+            Some("tablecell") => &["width"],
+            Some("listitem") => &["checked"],
+            _ => &[],
+        };
+        for field in fields {
+            if node.get(*field).is_some_and(serde_json::Value::is_null) {
+                node.remove(*field);
             }
         }
     }

@@ -55,6 +55,9 @@ impl SyncPolicy for PlainPolicy {
 }
 pub(crate) fn mask_local(json: &mut SerializedNode, policy: &dyn SyncPolicy) {
     policy.canonicalize_node_json(json);
+    mask_local_state(json, policy);
+}
+pub(crate) fn mask_local_state(json: &mut SerializedNode, policy: &dyn SyncPolicy) {
     if let Some(Value::Object(state)) = json.get_mut("$") {
         for key in policy.local_state_keys() {
             state.remove(*key);
@@ -71,14 +74,37 @@ pub(crate) fn own(
 ) -> Result<SerializedNode> {
     let mut json = view.export_json(key)?;
     json.remove("children");
+    json.values_mut().for_each(schema::normalize_numbers);
+    mask_local(&mut json, policy);
+    Ok(json)
+}
+/// Encode source own-undefined fields only for persisted Loro node maps.
+pub(crate) fn storage_fields(json: &mut SerializedNode, policy: &dyn SyncPolicy) {
+    mask_local_state(json, policy);
     if let Some(ty) = json.get("type").and_then(Value::as_str) {
         for name in policy.own_undefined_fields(ty) {
             json.entry(name.clone()).or_insert(Value::Null);
         }
     }
-    json.values_mut().for_each(schema::normalize_numbers);
-    mask_local(&mut json, policy);
+}
+pub(crate) fn storage_own(
+    view: StateRef<'_>,
+    key: NodeKey,
+    policy: &dyn SyncPolicy,
+) -> Result<SerializedNode> {
+    let mut json = own(view, key, policy)?;
+    storage_fields(&mut json, policy);
     Ok(json)
+}
+pub(crate) fn storage_tree(json: &mut SerializedNode, policy: &dyn SyncPolicy) {
+    storage_fields(json, policy);
+    if let Some(Value::Array(children)) = json.get_mut("children") {
+        for child in children {
+            if let Value::Object(node) = child {
+                storage_tree(node, policy);
+            }
+        }
+    }
 }
 pub(crate) fn synced_children(
     view: StateRef<'_>,
@@ -103,14 +129,33 @@ pub(crate) fn synced_node(
     key: NodeKey,
     policy: &dyn SyncPolicy,
 ) -> Result<SerializedNode> {
-    let mut json = own(view, key, policy)?;
+    node_json(view, key, policy, false)
+}
+pub(crate) fn storage_node(
+    view: StateRef<'_>,
+    key: NodeKey,
+    policy: &dyn SyncPolicy,
+) -> Result<SerializedNode> {
+    node_json(view, key, policy, true)
+}
+fn node_json(
+    view: StateRef<'_>,
+    key: NodeKey,
+    policy: &dyn SyncPolicy,
+    storage: bool,
+) -> Result<SerializedNode> {
+    let mut json = if storage {
+        storage_own(view, key, policy)?
+    } else {
+        own(view, key, policy)?
+    };
     if view.is_element(key) {
         json.insert(
             "children".into(),
             Value::Array(
                 synced_children(view, key, policy)
                     .into_iter()
-                    .map(|k| synced_node(view, k, policy).map(Value::Object))
+                    .map(|k| node_json(view, k, policy, storage).map(Value::Object))
                     .collect::<Result<_>>()?,
             ),
         );
