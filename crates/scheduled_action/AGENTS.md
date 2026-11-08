@@ -69,6 +69,14 @@ each run.
   (`timeout` included), never the words; `routine.check` records
   whether a check passed and kept a draft's answer. `DraftContext` still
   accepts and ignores the `workspace` older web clients send.
+- `src/domain/knob_entities.rs`: the items code steps' entity knobs name,
+  checked as the owner through the `KnobEntities` port
+  (`outbound/knob_entities.rs` over entity access, and people through
+  `KnownPeople`, which the harness composes): `TargetValidation` refuses an unpicked item or one the
+  owner can't open on create, check and update, and the program runner
+  checks again before each code step that has one, failing it with the
+  reason and without running its code. A composition without the port
+  refuses entity knobs.
 - `src/domain/code_upgrade.rs`: before a run uses code checked against an
   older version (SDK or `StepContext`), it is checked again, and rewritten by
   a model only if that fails (once per routine and version,

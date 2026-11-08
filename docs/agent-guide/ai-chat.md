@@ -886,7 +886,12 @@ templates) open on the routine's Overview as a sentence of what they do,
 with each knob in place: values underlined, and what AI decides dotted with a
 sparkle. A choice opens a menu that saves the option picked; a number opens a
 field with − and +, its range, and Enter to save (Esc cancels); text or the
-question AI is asked open an editor with **Save**; on/off flips in place.
+question AI is asked open an editor with **Save**; on/off flips in place. An
+item the step uses (an entity knob: a channel, document, folder, person or
+database) shows by its icon and name and opens the app's entity picker (a
+popover on desktop, a sheet with **Done** on touch); a starter's item reads
+**Pick a channel** until one is picked. Saving refuses an item the owner can't
+open, and a run whose item was deleted or lost fails that step with the reason.
 Each change saves only that value, never the code. Knobs the sentence
 doesn't show are listed under **Settings**; a step without a sentence shows
 its summary. **Edit** in a code step's ⋯ menu opens **Change this step**

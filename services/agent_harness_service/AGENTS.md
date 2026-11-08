@@ -80,6 +80,8 @@ Pulumi stacks; they do not host extra agent processes.
   `dangerously_operate_as_user`, to the owner with no agent badge. Every such
   token carries the routine id, which the events its writes produce keep, so
   they never start routines.
+  Entity knobs' items are checked as the owner on save and before each code
+  step (`KnobEntityAccess`, people through notifications' user check).
   A routine's code steps are checked together, one file each; the owner's
   time zone for `run.timezone` comes from their primary calendar
   (`CalendarTimeZones`).
