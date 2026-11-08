@@ -1,4 +1,5 @@
 import { decodeHostPacket } from '../../../lexical-conformance/diff/host-packet';
+import type { HostNodeMutation } from '../../../lexical-conformance/diff/host-packet.generated';
 import * as wasm from '../../../lexical-conformance/pkg/web/lexical_conformance_wasm';
 import { foreignHooks } from '../hooks.generated';
 import type { ShimBackend } from './index';
@@ -85,10 +86,32 @@ export const diagnostics = {
   },
 };
 
+function isNodeMutation(
+  value: unknown
+): value is HostNodeMutation<unknown, unknown> {
+  return (
+    value !== null &&
+    typeof value === 'object' &&
+    'hook' in value &&
+    typeof value.hook === 'number' &&
+    Number.isInteger(value.hook) &&
+    value.hook >= 0 &&
+    value.hook < foreignHooks.length &&
+    'node' in value &&
+    value.node !== null &&
+    typeof value.node === 'object' &&
+    '$h' in value.node &&
+    typeof value.node.$h === 'number' &&
+    'args' in value &&
+    Array.isArray(value.args)
+  );
+}
+
 /** The shim has one model backend, with no production-session fallback. */
 export class ConformanceBackend implements ShimBackend {
   private readonly handle: wasm.EditorHandle;
   private readonly callbacks = new Map<number, Callback>();
+  private readonly foreignCallbacks = new Map<string, Callback>();
   private readonly bridges = new WeakMap<Callback, Callback>();
   private disposed = false;
   private pending = false;
@@ -123,6 +146,21 @@ export class ConformanceBackend implements ShimBackend {
     } finally {
       active.pop();
     }
+  }
+  installForeign(
+    type: string,
+    dispatch: (message: HostNodeMutation<unknown, unknown>) => unknown
+  ): void {
+    const callback: Callback = (message) => {
+      if (!isNodeMutation(message))
+        throw new Error('invalid native node mutation');
+      return dispatch(message);
+    };
+    this.enter((handle) => handle.install_foreign(type, this.bridge(callback)));
+    this.foreignCallbacks.set(type, callback);
+  }
+  setForeignMask(type: string, mask: bigint): void {
+    this.enter((handle) => handle.set_foreign_mask(type, mask.toString()));
   }
   beginUpdate(tags: readonly string[], discrete: boolean): void {
     this.enter((handle) => handle.begin_update(tags, discrete));
@@ -268,6 +306,7 @@ export class ConformanceBackend implements ShimBackend {
     this.disposed = true;
     editors.unregister(this);
     this.callbacks.clear();
+    this.foreignCallbacks.clear();
     this.collections.clear();
     this.nodeHandles = undefined;
   }

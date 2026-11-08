@@ -4,7 +4,11 @@ use lexical_conformance::api::{self, CallbackContext, Context, Session};
 use lexical_model::*;
 use serde::Deserialize;
 use serde_json::Value;
-use std::{cell::RefCell, collections::HashMap, sync::Arc};
+use std::{
+    cell::{Cell, RefCell},
+    collections::HashMap,
+    sync::Arc,
+};
 use wasm_bindgen::prelude::*;
 
 #[derive(Deserialize)]
@@ -22,6 +26,14 @@ fn headless() -> bool {
 struct NodeDef {
     #[serde(rename = "type")]
     type_name: String,
+    #[serde(default)]
+    kind: Option<String>,
+    #[serde(default)]
+    extends: Option<String>,
+    #[serde(default, rename = "className")]
+    class_name: Option<String>,
+    #[serde(default)]
+    overrides: Option<String>,
 }
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -38,6 +50,8 @@ pub struct EditorHandle {
     callbacks: CallbackContext,
     owner: Arc<()>,
     errors: super::host_callbacks::Errors,
+    foreign: HashMap<String, Arc<super::host_foreign::ForeignNode>>,
+    started: Cell<bool>,
     transforms: RefCell<HashMap<u32, (ForeignListenerId, Arc<super::host_callbacks::Callback>)>>,
     listeners: RefCell<HashMap<u32, (ForeignListenerId, Arc<super::host_commands::Listener>)>>,
     _lifetime: debug::LiveEditor,
@@ -103,8 +117,25 @@ impl EditorHandle {
     pub fn new(config: JsValue) -> Result<EditorHandle, JsError> {
         let config: Config = serde_json::from_value(from_js(config)?).map_err(debug::error)?;
         let _namespace = config.namespace;
+        let mode = if config.headless {
+            EditorMode::Headless
+        } else {
+            EditorMode::ViewAttached
+        };
+        let context = Context::default();
+        let callbacks = context.callbacks();
+        let owner = Arc::new(());
+        let errors = super::host_callbacks::Errors::default();
+        let mut foreign = HashMap::new();
+        let mut builder = Editor::builder(mode).key_source(KeySource::Shared(KEYS.clone()));
         for definition in config.nodes {
-            if ![
+            let mask = definition
+                .overrides
+                .as_deref()
+                .unwrap_or("0")
+                .parse::<u64>()
+                .map_err(debug::error)?;
+            if [
                 "root",
                 "paragraph",
                 "text",
@@ -114,33 +145,87 @@ impl EditorHandle {
             ]
             .contains(&definition.type_name.as_str())
             {
-                return Err(debug::error(format!(
+                if mask != 0 {
+                    return Err(debug::error("native class overlays are not wired yet"));
+                }
+                continue;
+            }
+            let kind = definition.kind.ok_or_else(|| {
+                debug::error(format!(
                     "node type {} needs a foreign registration",
                     definition.type_name
-                )));
+                ))
+            })?;
+            let kind = match kind.as_str() {
+                "Element" => NodeKind::Element,
+                "Text" => NodeKind::Text,
+                "Decorator" => NodeKind::Decorator,
+                "LineBreak" => NodeKind::LineBreak,
+                _ => return Err(debug::error("unsupported foreign node kind")),
+            };
+            let hooks =
+                Arc::new(super::host_foreign::ForeignNode::new(mask).map_err(debug::error)?);
+            if foreign
+                .insert(definition.type_name.clone(), hooks.clone())
+                .is_some()
+            {
+                return Err(debug::error("duplicate foreign node type"));
             }
+            builder = builder.foreign_node(ForeignNodeType {
+                type_name: definition.type_name.clone().into(),
+                class_name: definition.class_name.unwrap_or(definition.type_name).into(),
+                kind,
+                extends: definition
+                    .extends
+                    .map(|name| &*Box::leak(name.into_boxed_str())),
+                required_state: vec![],
+                hooks,
+            });
         }
-        let mode = if config.headless {
-            EditorMode::Headless
-        } else {
-            EditorMode::ViewAttached
-        };
-        let editor = Editor::builder(mode)
-            .key_source(KeySource::Shared(KEYS.clone()))
-            .build()
-            .map_err(debug::error)?;
-        let context = Context::default();
-        let callbacks = context.callbacks();
+        let editor = builder.build().map_err(debug::error)?;
         let session = Session::with_context(editor, context).map_err(debug::error)?;
         Ok(debug::returned_handle(Self {
             session: RefCell::new(Some(session)),
             callbacks,
-            owner: Arc::new(()),
-            errors: super::host_callbacks::Errors::default(),
+            owner,
+            errors,
+            foreign,
+            started: Cell::new(false),
             transforms: RefCell::default(),
             listeners: RefCell::default(),
             _lifetime: debug::LiveEditor::new(),
         }))
+    }
+    /// Attach the JS-owned weak forwarding function before opening any update.
+    pub fn install_foreign(
+        &self,
+        type_name: &str,
+        function: js_sys::Function,
+    ) -> Result<(), JsValue> {
+        if self.started.get() {
+            return Err(debug::error("install foreign dispatchers before the first update").into());
+        }
+        let node = self
+            .foreign
+            .get(type_name)
+            .ok_or_else(|| debug::error("unknown foreign node type"))?;
+        let callback = super::host_callbacks::Callback::new(
+            function,
+            self.callbacks.clone(),
+            self.owner.clone(),
+            self.errors.clone(),
+        )?;
+        node.install(Arc::new(callback));
+        Ok(())
+    }
+    /// Refresh one supported foreign mask; native-to-JS flips freeze on first update.
+    pub fn set_foreign_mask(&self, type_name: &str, mask: &str) -> Result<(), JsError> {
+        let mask = mask.parse::<u64>().map_err(debug::error)?;
+        self.foreign
+            .get(type_name)
+            .ok_or_else(|| debug::error("unknown foreign node type"))?
+            .set_mask(mask, self.started.get())
+            .map_err(debug::error)
     }
     /// Stable IDs from the same dispatch table as the Tier A replayer.
     pub fn api_index() -> Vec<String> {
@@ -185,7 +270,12 @@ impl EditorHandle {
             .map_err(debug::error)?;
         let tags = TagSet::from_tags(tags);
         let _discrete = discrete;
-        self.with_session(|session| session.begin_update(tags).map_err(debug::error))
+        if self.foreign.values().any(|node| !node.ready()) {
+            return Err(debug::error("foreign dispatcher is not installed"));
+        }
+        self.with_session(|session| session.begin_update(tags).map_err(debug::error))?;
+        self.started.set(true);
+        Ok(())
     }
     /// Run normal model normalization and transforms without publishing.
     pub fn flush(&self) -> Result<(), JsValue> {

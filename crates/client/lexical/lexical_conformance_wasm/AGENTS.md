@@ -114,3 +114,5 @@ Read foreign_hook_index in override-bit order; it is generated from the model tr
 EditorHandle::call_native uses the same validated call envelope, weak callback context, RAII lease and opaque error path as call. It supports mutable callback frames and indexed node hooks; pure callback API dispatch and import/clone construction scopes remain unfinished.
 
 Native-super currently selects the nearest registered native ancestor. Explicit older-prototype targeting (for example a TextNode base method on a TabNode) is still required with the native facade/overlay; do not count this primitive as full native-class hosting acceptance.
+
+Use host_foreign for the currently wired five mutable text hooks. Register metadata before editor construction and install JS-owned weak forwarding dispatchers before the first update; clone callback owners out of locks before JS. Unsupported hook bits and native-class overlays reject explicitly until their adapters land. Generate HostNodeMutation from host_protocol with export_host_types; the lexical facade and other foreign hooks remain unfinished.
