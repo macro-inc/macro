@@ -47,3 +47,61 @@ test('drags volume, clicks the track, and adjusts with arrow keys without closin
       path: `${process.env.CALL_PLAYBACK_SCREENSHOT_DIR}/d41-drag-after.png`,
     });
 });
+
+for (const reducedMotion of ['no-preference', 'reduce'] as const) {
+  test(`slides idle controls away and preserves interaction holds (${reducedMotion})`, async ({
+    page,
+  }) => {
+    await page.emulateMedia({ reducedMotion });
+    await page.clock.install();
+    await page.goto('/src/features/block-call/browser-test/playback.html');
+    const video = page.locator('video');
+    await expect(video).toHaveJSProperty('readyState', 4);
+    const player = page.getByRole('group', { name: 'Recording playback' });
+    const controls = player.locator('[aria-hidden]').first();
+    await page.getByRole('button', { name: 'Play', exact: true }).click();
+    await video.hover();
+    await page.clock.fastForward(3000);
+    await expect(controls).toHaveAttribute('aria-hidden', 'true');
+    await expect(player).toHaveCSS('cursor', 'none');
+    await expect(controls).toHaveCSS(
+      'translate',
+      reducedMotion === 'reduce' ? '0px' : '0px 100%'
+    );
+    await video.hover({ position: { x: 25, y: 25 } });
+    await expect(controls).toHaveAttribute('aria-hidden', 'false');
+    const pause = page.getByRole('button', { name: 'Pause', exact: true });
+    await pause.hover();
+    await page.clock.fastForward(3000);
+    await expect(controls).toHaveAttribute('aria-hidden', 'false');
+    await page.getByRole('button', { name: 'Mute', exact: true }).hover();
+    await page.clock.fastForward(3000);
+    await expect(page.getByRole('dialog', { name: 'Volume' })).toBeVisible();
+    await expect(controls).toHaveAttribute('aria-hidden', 'false');
+    await page.mouse.click(10, 10);
+    await video.hover();
+    await page.clock.fastForward(3000);
+    await expect(controls).toHaveAttribute('aria-hidden', 'true');
+    await player.focus();
+    await page.keyboard.press('Tab');
+    await page.clock.fastForward(3000);
+    await expect(controls).toHaveAttribute('aria-hidden', 'false');
+    await pause.click();
+    await video.hover();
+    await page.clock.fastForward(3000);
+    await expect(controls).toHaveAttribute('aria-hidden', 'false');
+    await page.getByRole('button', { name: 'Fullscreen', exact: true }).click();
+    await expect
+      .poll(() => page.evaluate(() => !!document.fullscreenElement))
+      .toBe(true);
+    await page.getByRole('button', { name: 'Play', exact: true }).click();
+    await video.hover();
+    await page.clock.fastForward(3000);
+    await expect(controls).toHaveAttribute('aria-hidden', 'true');
+    if (process.env.CALL_PLAYBACK_SCREENSHOT_DIR) {
+      await page.screenshot({
+        path: `${process.env.CALL_PLAYBACK_SCREENSHOT_DIR}/d42-fullscreen-${reducedMotion}.png`,
+      });
+    }
+  });
+}

@@ -5,6 +5,28 @@ import { CallRecordingVideo } from '../component/CallRecording/CallRecordingVide
 import { createRecordingPlayback } from '../primitives/recording-playback';
 import clip from './clip.webm?url';
 
+// Mirror the application shell's input-modality markers.
+document.addEventListener(
+  'keydown',
+  () => {
+    document.documentElement.dataset.modality = 'keyboard';
+  },
+  { capture: true }
+);
+document.addEventListener(
+  'mousedown',
+  () => {
+    document.documentElement.dataset.modality = 'mouse';
+  },
+  { capture: true }
+);
+document.addEventListener(
+  'touchstart',
+  () => {
+    document.documentElement.dataset.modality = 'touch';
+  },
+  { capture: true, passive: true }
+);
 function PlaybackFixture() {
   const [video, setVideo] = createSignal<HTMLVideoElement>();
   const playback = createRecordingPlayback(video);

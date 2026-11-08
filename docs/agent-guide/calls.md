@@ -77,9 +77,10 @@ narrow panes use the available width. Show video returns to the recording; all c
 element. Chat jump chips use message time relative to recording start and appear
 only within the known recording duration. Attachments retain their usual cards.
 There is no caption control without a caption track or synthetic speaker video
-layer over the recorded composite. Controls auto-dismiss after idle playback and
-return on movement, focus or tap; pause, control hover and open menus keep them
-visible. Speed uses a dropdown, and volume opens a vertical slider above the mute
+layer over the recorded composite. After 2.5 seconds of idle playback, controls
+slide down and fade out over 200ms and the cursor hides, including in fullscreen.
+Movement, focus or touch brings them back; pause, control hover, control focus and
+open menus keep them visible. Reduced motion uses only the fade. Speed uses a dropdown, and volume opens a vertical slider above the mute
 button on hover or focus. Clicking the icon still toggles mute. Both sliders keep
 white thumbs across themes. Dragging the volume thumb, clicking its track, and
 arrow keys update native volume immediately without closing the popover.

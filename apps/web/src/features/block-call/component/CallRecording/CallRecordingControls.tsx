@@ -354,8 +354,10 @@ export function CallRecordingControls(props: {
 }) {
   return (
     <div
-      class="pointer-events-none absolute inset-0 transition-opacity duration-200 motion-reduce:transition-none"
-      classList={{ 'opacity-0': !props.visibility.visible() }}
+      class="pointer-events-none absolute inset-0 transition-[translate,opacity] duration-200 ease-out motion-reduce:translate-y-0"
+      classList={{
+        'opacity-0 translate-y-full': !props.visibility.visible(),
+      }}
       inert={!props.visibility.visible()}
       aria-hidden={!props.visibility.visible()}
     >

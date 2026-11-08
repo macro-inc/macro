@@ -111,6 +111,7 @@ export function CallRecordingVideo(props: {
   return (
     <div
       class="portal-scope relative flex w-full flex-col overflow-hidden rounded-2xl bg-panel"
+      classList={{ 'cursor-none': !!props.playback && !controls.visible() }}
       role="group"
       aria-label={t('calls.detailPlayback')}
       tabIndex={props.playback ? 0 : undefined}
