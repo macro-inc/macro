@@ -26,7 +26,7 @@ export type CrmRecordNavigation = {
   setSection(section: CrmRecordSection): void;
   item: Accessor<
     | {
-        itemType: 'document' | 'email' | 'call' | 'database';
+        itemType: 'document' | 'email' | 'call';
         itemId: string;
         itemFileType?: string;
         itemSubType?: 'task' | 'snippet' | 'skill';

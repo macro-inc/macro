@@ -283,11 +283,7 @@ async fn an_artifact_created_without_files_publishes_version_one_later() {
     assert_eq!(artifact.current, None);
 
     let before = service
-        .view_url(
-            view_receipt(),
-            &Viewer::default(),
-            ViewUrlRequest::default(),
-        )
+        .view_url(view_receipt(), ViewUrlRequest::default())
         .await;
     assert!(
         matches!(before, Err(ArtifactError::NotFound(message)) if message.contains("no published version"))
@@ -398,7 +394,6 @@ async fn view_url_points_at_the_scene_on_the_artifact_origin() {
     let view_url = service
         .view_url(
             view_receipt(),
-            &Viewer::default(),
             ViewUrlRequest {
                 version: None,
                 scene: Some("empty".to_string()),
@@ -423,7 +418,6 @@ async fn view_url_points_at_the_scene_on_the_artifact_origin() {
     let missing = service
         .view_url(
             view_receipt(),
-            &Viewer::default(),
             ViewUrlRequest {
                 version: None,
                 scene: Some("full".to_string()),

@@ -1,3 +1,6 @@
+use std::str::FromStr;
+
+use model::document::FileType;
 use sqlx::PgPool;
 
 use crate::domain::models::{ProjectItemKind, ProjectTree, ProjectTreeFolder, ProjectTreeItem};
@@ -45,7 +48,7 @@ pub(super) async fn get_project_tree(
 
     let documents = sqlx::query!(
         r#"
-        SELECT id, name, "projectId" AS "project_id!"
+        SELECT id, name, "projectId" AS "project_id!", "fileType" AS file_type
         FROM "Document"
         WHERE "projectId" = ANY($1) AND "deletedAt" IS NULL
         LIMIT $2
@@ -71,7 +74,16 @@ pub(super) async fn get_project_tree(
     let items = documents
         .into_iter()
         .map(|row| ProjectTreeItem {
-            kind: ProjectItemKind::Document,
+            kind: if row
+                .file_type
+                .as_deref()
+                .and_then(|file_type| FileType::from_str(file_type).ok())
+                == Some(FileType::Artifact)
+            {
+                ProjectItemKind::Artifact
+            } else {
+                ProjectItemKind::Document
+            },
             id: row.id,
             project_id: row.project_id,
             name: row.name,

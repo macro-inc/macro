@@ -11,7 +11,9 @@ import { channelsSearch } from '@app/features/channels-view/channels-route';
 import {
   crmPeopleSearch,
   crmRecordSearch,
+  isCrmRetiredDatabasesRoute,
   legacyCrmPipelineId,
+  retiredCrmDatabasesPath,
 } from '@app/features/crm/crm-route';
 import {
   driveDocumentFromContent,
@@ -65,6 +67,19 @@ function redirectLegacyCrmPipeline({
   if (!pipelineId) return;
 
   return redirect(crmPipelinePath(pipelineId));
+}
+
+/** Customers no longer lists databases; old links go to the record or database. */
+function redirectRetiredCrmDatabases({
+  to,
+  redirect,
+}: SplitRouterMiddlewareContext): SplitRouterMiddlewareResult | undefined {
+  const route = to.location.route;
+  const leaf = route.matches.at(-1)?.id;
+  if (!leaf || !isCrmRetiredDatabasesRoute(leaf)) return;
+
+  const destination = retiredCrmDatabasesPath(routeParams(route));
+  return destination ? redirect(destination) : undefined;
 }
 
 /** Upgrade legacy component and block URLs when supported; on touch, keep
@@ -315,6 +330,7 @@ export function createAppSplitRouterMiddleware(
     // First: a cmd+click becomes a tab with the proposed entry as-is; legacy
     // redirects still run when that tab is activated.
     openInNewTabMiddleware,
+    redirectRetiredCrmDatabases,
     (context) => redirectLegacyRoutes(context, state),
     redirectLegacyCrmPipeline,
     migrateLegacySearch,

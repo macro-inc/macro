@@ -6,7 +6,7 @@ mod test;
 
 use std::sync::Arc;
 
-use artifacts::domain::models::{ArtifactError, MintedToken, Viewer};
+use artifacts::domain::models::{ArtifactError, MintedToken};
 use artifacts::domain::ports::{
     ArtifactDocuments, ArtifactNotifier, CreatedArtifactDocument, VerifiedToken, ViewTokens,
 };
@@ -107,7 +107,7 @@ impl ArtifactDocuments for DocumentsForArtifacts {
 /// View tokens are artifact content tokens, signed with the document
 /// permission secret but with an issuer and audience no document grant
 /// consumer accepts, so a page that reads its URL holds nothing usable
-/// elsewhere.
+/// elsewhere. They name no viewer, since the page can decode them.
 pub struct ArtifactContentViewTokens {
     secret: String,
 }
@@ -122,16 +122,11 @@ impl ArtifactContentViewTokens {
 }
 
 impl ViewTokens for ArtifactContentViewTokens {
-    fn mint(&self, viewer: &Viewer, document_id: &str) -> Result<MintedToken, ArtifactError> {
+    fn mint(&self, document_id: &str) -> Result<MintedToken, ArtifactError> {
         let now = chrono::Utc::now();
         let now_secs = u64::try_from(now.timestamp())
             .map_err(|error| ArtifactError::Internal(anyhow::Error::new(error)))?;
-        let claims = ArtifactContentClaims::new(
-            document_id.to_string(),
-            viewer.user_id.clone(),
-            viewer.actor.clone(),
-            now_secs,
-        );
+        let claims = ArtifactContentClaims::new(document_id.to_string(), now_secs);
         let expires_at = i64::try_from(claims.exp)
             .ok()
             .and_then(|exp| chrono::DateTime::from_timestamp(exp, 0))

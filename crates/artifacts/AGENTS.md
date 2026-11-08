@@ -31,7 +31,7 @@ origin pages are served from. How it works: [architecture](../../docs/architectu
 ## Checks
 
 - `cargo test -p artifacts` (repository tests need MacroDB; set `DATABASE_URL`).
-- After query changes: `cargo sqlx prepare --workspace` with a reachable `DATABASE_URL`.
+- After query changes: `nix develop --command just prepare_db` from the repository root.
 - After API changes: `bun run gen-api` in `apps/web`, then the SDK storage client.
 
 ## Gotchas

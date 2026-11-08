@@ -112,6 +112,35 @@ export function useScheduleHistoryQuery(
   return useQuery(() => scheduleHistoryQueryOptions(scheduleId(), enabled()));
 }
 
+// Cached past unmount; closes over the resolved schedule id only.
+function codeUpgradesQueryOptions(
+  scheduleId: string | null | undefined,
+  enabled: boolean
+) {
+  return queryOptions({
+    queryKey: scheduledActionKeys.codeUpgrades({
+      scheduleId: scheduleId ?? '__none__',
+    }).queryKey,
+    enabled: enabled && Boolean(scheduleId),
+    queryFn: async () =>
+      throwOnErr(
+        async () =>
+          await scheduledActionClient.listCodeUpgrades({
+            scheduleId: scheduleId!,
+          })
+      ),
+    ...QUERY_REFETCH_BEHAVIOR,
+  });
+}
+
+/** How the routine's code steps were brought to new SDKs, newest first. */
+export function useCodeUpgradesQuery(
+  scheduleId: Accessor<string | null | undefined>,
+  enabled: Accessor<boolean>
+) {
+  return useQuery(() => codeUpgradesQueryOptions(scheduleId(), enabled()));
+}
+
 export function invalidateSchedules() {
   return Promise.all([
     queryClient.invalidateQueries({

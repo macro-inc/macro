@@ -23,3 +23,5 @@ Agent guidance per SDK area: [`@routing` and `@agent`](architecture/agent-sdk-gu
 
 Bots: [building a bot](guides/bots.md) (set one up in the app, then search and
 post from the TypeScript SDK).
+
+Agent session activity: [correlation and visibility](architecture/agent-activity-correlation.md).

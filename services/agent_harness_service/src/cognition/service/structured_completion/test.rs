@@ -129,6 +129,7 @@ async fn real_completion_entrypoint_retains_activated_financial_scope() {
                     schema: json!({"type": "object"}),
                     description: None,
                 },
+                thinking: CompletionThinking::Default,
             },
         ))
         .await

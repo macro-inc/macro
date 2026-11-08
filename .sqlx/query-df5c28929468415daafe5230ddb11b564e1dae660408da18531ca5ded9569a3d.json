@@ -1,0 +1,64 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            INSERT INTO artifact_versions\n                (document_id, number, files, scenes, message, created_by, created_by_agent)\n            VALUES ($1, $2, $3, $4, $5, $6, $7)\n            ON CONFLICT (document_id, number) DO NOTHING\n            RETURNING\n                number,\n                files AS \"files: Json<BTreeMap<String, FileColumn>>\",\n                scenes AS \"scenes: Json<Vec<SceneColumn>>\",\n                message,\n                created_by,\n                created_by_agent,\n                created_at\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "number",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 1,
+        "name": "files: Json<BTreeMap<String, FileColumn>>",
+        "type_info": "Jsonb"
+      },
+      {
+        "ordinal": 2,
+        "name": "scenes: Json<Vec<SceneColumn>>",
+        "type_info": "Jsonb"
+      },
+      {
+        "ordinal": 3,
+        "name": "message",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "created_by",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 5,
+        "name": "created_by_agent",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 6,
+        "name": "created_at",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Int4",
+        "Jsonb",
+        "Jsonb",
+        "Text",
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      true,
+      false,
+      true,
+      false
+    ]
+  },
+  "hash": "df5c28929468415daafe5230ddb11b564e1dae660408da18531ca5ded9569a3d"
+}
