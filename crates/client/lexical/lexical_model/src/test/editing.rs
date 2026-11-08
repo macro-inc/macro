@@ -309,3 +309,32 @@ fn replacing_an_element_preserves_offset_in_the_last_text_descendant() -> Result
     assert!(tx.has_dirty_nodes());
     Ok(())
 }
+
+#[test]
+fn splice_text_only_moves_an_existing_range_selection() -> Result<(), Error> {
+    let mut editor = Editor::builder(EditorMode::Headless)
+        .build()
+        .expect("editor");
+    let mut tx = editor.transaction();
+    let p = tx.create(Paragraph::default())?;
+    let text = tx.create_text("abc")?;
+    tx.append(p, &[text.key()])?;
+    tx.append(NodeKey::ROOT, &[p.key()])?;
+    tx.text(text)?
+        .splice_text(Utf16Offset(1)..Utf16Offset(2), "x", true)?;
+    assert!(tx.selection().is_none());
+    let mut selection = NodeSelection::new();
+    selection.add(text.key());
+    tx.set_selection(Some(Selection::Node(selection)))?;
+    tx.text(text)?
+        .splice_text(Utf16Offset(1)..Utf16Offset(2), "y", true)?;
+    assert!(matches!(tx.selection(), Some(Selection::Node(_))));
+    tx.text(text)?
+        .select(Some(Utf16Offset(0)), Some(Utf16Offset(0)))?;
+    tx.text(text)?
+        .splice_text(Utf16Offset(1)..Utf16Offset(2), "z", true)?;
+    assert_eq!(tx.anchor()?, Point::text(text, Utf16Offset(2)));
+    assert_eq!(tx.focus()?, Point::text(text, Utf16Offset(2)));
+    assert_eq!(tx.text_content(text), "azc");
+    Ok(())
+}
