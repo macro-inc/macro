@@ -10,7 +10,11 @@ import {
   SessionInputMsg,
   Transport,
 } from '@macro-inc/collaboration/session/abi.generated';
-import { SessionExecutor } from '@macro-inc/collaboration/session/executor';
+import { mountSessionView } from '../src/session-view';
+import {
+  SessionExecutor,
+  type ExecutorOptions,
+} from '@macro-inc/collaboration/session/executor';
 import { decodeOutput } from '@macro-inc/collaboration/session/output';
 import { selectionMessage } from '../src/view/session-port';
 import { emptyInput } from '@macro-inc/collaboration/session/input';
@@ -18,6 +22,12 @@ import { SessionTelemetry } from '@macro-inc/collaboration/session/telemetry';
 import { EditorView } from '../src/view/editor-view';
 import { SessionPort } from '../src/view/session-port';
 import { createBuiltinRegistry } from '../src/view/node-views/builtins';
+import {
+  DRAG_START_COMMAND,
+  DRAG_OVER_COMMAND,
+  DRAG_END_COMMAND,
+  INTERNAL_DROP_COMMAND,
+} from '../src/view/drag';
 import type { ViewSink } from '../src/view/port';
 import {
   fixtureTypes,
@@ -45,7 +55,25 @@ const sink: ViewSink = {
     return view?.text(key) ?? null;
   },
 };
-const executor = new SessionExecutor({
+const nativeConfig = {
+  doc: 'browser-view-fixture',
+  session: '00000000-0000-0000-0000-000000000001',
+  user: 'fixture-user',
+  peers: [7n, 8n, 9n],
+  access: Access.Edit,
+  transport: Transport.None,
+  durable: false,
+  chatter: false,
+  headless: false,
+  viewEngine: 1,
+  viewOs: 0,
+  token: '',
+  traceparent: '',
+  coalesce: 10000,
+  snapshotInterval: 0,
+  observed: [],
+};
+const sessionOptions: ExecutorOptions<EditorSession> = {
   doc: 'browser-view-fixture',
   owner: '00000000-0000-0000-0000-000000000001',
   user: 'fixture-user',
@@ -65,28 +93,12 @@ const executor = new SessionExecutor({
   create: (now, wall) =>
     EditorSession.create(
       ABI_MAJOR,
-      SessionConfigMsg.encode({
-        doc: 'browser-view-fixture',
-        session: '00000000-0000-0000-0000-000000000001',
-        user: 'fixture-user',
-        peers: [7n, 8n, 9n],
-        access: Access.Edit,
-        transport: Transport.None,
-        durable: false,
-        chatter: false,
-        headless: false,
-        viewEngine: 1,
-        viewOs: 0,
-        token: '',
-        traceparent: '',
-        coalesce: 10000,
-        snapshotInterval: 0,
-        observed: [],
-      }),
+      SessionConfigMsg.encode(nativeConfig),
       now,
       wall
     ),
-});
+};
+const executor = new SessionExecutor(sessionOptions);
 class FixturePort extends SessionPort {
   override types(): readonly TypeRow[] {
     return [...super.types(), ...fixtureTypes];
@@ -99,7 +111,11 @@ view = EditorView.mount(
   registerFixtureViews(createBuiltinRegistry()),
   {
     namespace: 'fixture',
-    theme: {},
+    theme: {
+      text: { bold: 'theme-bold' },
+      heading: { h2: 'theme-h2' },
+      codeHighlight: { keyword: 'theme-keyword' },
+    },
     editable: true,
     preset: 'rich',
     onError: (error) => errors.push(String(error)),
@@ -113,8 +129,194 @@ executor.run(() =>
     Date.now()
   )
 );
+let second: Awaited<ReturnType<typeof mountSessionView>> | undefined;
+let highlightDisposers: (() => void)[] = [];
+const capturedMimes: { mime: string; value: string }[] = [];
+const admit = port.input.bind(port);
+port.input = (input) => {
+  if (input.isEditorPaste())
+    capturedMimes.splice(0, capturedMimes.length, ...input.value.clipboard);
+  admit(input);
+};
 const fixture = {
+  capturedMimes,
+  drag() {
+    const events: string[] = [];
+    let keys: readonly number[] = [];
+    const detach = [
+      view!.registerViewCommand(
+        DRAG_START_COMMAND,
+        () => {
+          events.push('start');
+          return false;
+        },
+        4
+      ),
+      view!.registerViewCommand(
+        DRAG_OVER_COMMAND,
+        () => {
+          events.push('over');
+          return false;
+        },
+        4
+      ),
+      view!.registerViewCommand(
+        DRAG_END_COMMAND,
+        () => {
+          events.push('end');
+          return false;
+        },
+        4
+      ),
+      view!.registerViewCommand(
+        INTERNAL_DROP_COMMAND,
+        (request) => {
+          if (request.source !== view) throw new Error('Wrong drag owner');
+          keys = request.keys;
+          events.push('internal');
+          return true;
+        },
+        4
+      ),
+    ];
+    const paragraph = root.querySelector('p'),
+      text = paragraph?.querySelector('[data-lexical-text]');
+    if (!paragraph || !text) throw new Error('Missing drag fixture');
+    const handle = document.createElement('span');
+    handle.dataset.lexicalBlockHandle = 'true';
+    paragraph.append(handle);
+    const data = new DataTransfer();
+    handle.dispatchEvent(
+      new DragEvent('dragstart', {
+        bubbles: true,
+        cancelable: true,
+        dataTransfer: data,
+      })
+    );
+    const rect = text.getBoundingClientRect();
+    const init = {
+      bubbles: true,
+      cancelable: true,
+      dataTransfer: data,
+      clientX: rect.left + rect.width / 2,
+      clientY: rect.top + rect.height / 2,
+    };
+    root.dispatchEvent(new DragEvent('dragover', init));
+    root.dispatchEvent(new DragEvent('drop', init));
+    root.dispatchEvent(new DragEvent('dragend', init));
+    for (const remove of detach) remove();
+    return {
+      events,
+      keys,
+      payload: data.getData('application/x-lexical-drag'),
+      caret: document.querySelector('[data-lexical-drop-caret]') !== null,
+    };
+  },
+  async second(nested: boolean, state?: string) {
+    const element = document.createElement('div');
+    element.dataset.secondEditor = 'true';
+    if (nested) {
+      fixture.render.createImage();
+      const widget = root.querySelector('[data-widget-instance]');
+      if (!widget) throw new Error('Missing nested host');
+      widget.append(element);
+    } else document.body.append(element);
+    second = await mountSessionView(
+      element,
+      createBuiltinRegistry(),
+      {
+        namespace: 'fixture',
+        theme: {},
+        editable: true,
+        preset: 'rich',
+        onError: (error) => errors.push(String(error)),
+      },
+      {
+        ...sessionOptions,
+        doc: 'second-view-fixture',
+        owner: '00000000-0000-0000-0000-000000000002',
+        telemetry: new SessionTelemetry(NOOP_SPAN),
+        create: (now, wall) =>
+          EditorSession.create(
+            ABI_MAJOR,
+            SessionConfigMsg.encode({
+              ...nativeConfig,
+              doc: 'second-view-fixture',
+              session: '00000000-0000-0000-0000-000000000002',
+              peers: [70n, 71n, 72n],
+            }),
+            now,
+            wall
+          ),
+      }
+    );
+    second.executor.run(() =>
+      second!.executor.session.input(
+        SessionInputMsg.encode(emptyInput(1)),
+        second!.executor.now(),
+        Date.now()
+      )
+    );
+    second.port.setState(
+      state ??
+        JSON.stringify({
+          root: {
+            type: 'root',
+            version: 1,
+            children: [
+              {
+                type: 'paragraph',
+                version: 1,
+                children: [{ type: 'text', version: 1, text: 'n' }],
+              },
+            ],
+          },
+        })
+    );
+    const node = [...second.view.mirror.values()].find(
+      (node) => node.kind === 'text'
+    );
+    if (!node) throw new Error('Missing second text');
+    const dom = second.view.getElementByKey(node.key)?.firstChild;
+    if (!dom) throw new Error('Missing second text DOM');
+    element.focus();
+    document.getSelection()?.setBaseAndExtent(dom, 1, dom, 1);
+    second.port.selectionFromView({
+      kind: 'range',
+      anchor: { key: node.key, offset: 1, type: 'text' },
+      focus: { key: node.key, offset: 1, type: 'text' },
+    });
+  },
+  async highlights() {
+    const { installCodeHighlighting } = await import(
+      '../src/view/code-highlight'
+    );
+    if (!second) throw new Error('Second view not mounted');
+    highlightDisposers = [
+      installCodeHighlighting(view!),
+      installCodeHighlighting(second.view),
+    ];
+  },
+  disposeFirstHighlight() {
+    highlightDisposers[0]?.();
+  },
+  async closeSecond() {
+    for (const dispose of highlightDisposers) dispose();
+    await second?.close();
+    document.querySelector('[data-second-editor]')?.remove();
+  },
+  async pasteCustom() {
+    const data = new DataTransfer();
+    data.setData('application/x-view-fixture', 'custom-payload');
+    data.setData('text/plain', 'x');
+    return view!.clipboard.paste(data);
+  },
   render: renderFixture(view),
+  async pasteHTML(html: string) {
+    const data = new DataTransfer();
+    data.setData('text/html', html);
+    return view!.clipboard.paste(data);
+  },
   presence(visible: boolean) {
     const template = decodeOutput(executor.session.initialize()).viewEffects[0];
     const node = [...view!.mirror.values()].find(
