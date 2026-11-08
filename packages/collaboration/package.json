@@ -10,6 +10,7 @@
     "./sync-service/*": "./src/sync-service/*.ts",
     "./websocket": "./src/websocket/index.ts",
     "./websocket/*": "./src/websocket/*.ts",
+    "./session/*": "./src/session/*.ts",
     "./forms/*": "./src/forms/*.ts"
   },
   "scripts": {

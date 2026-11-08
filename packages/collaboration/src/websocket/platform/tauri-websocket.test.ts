@@ -73,53 +73,53 @@ afterEach(() => {
 });
 
 describe('TauriWebSocketWrapper', () => {
-  it.each(['receive', 'send'] as const)(
-    'records one %s failure without recording URLs, payloads, or provider errors',
-    async (operation) => {
-      vi.spyOn(console, 'log').mockImplementation(() => {});
-      vi.spyOn(console, 'error').mockImplementation(() => {});
-      const socket = new TauriWebSocketWrapper(
-        'wss://dss.test/ws?token=private-token'
-      );
-      const events = track(socket);
-      plugin.connects[0].resolve(7);
-      await Promise.resolve();
-      const closed = new Promise<void>((resolve) =>
-        socket.addEventListener('close', () => resolve())
-      );
-      if (operation === 'receive') {
-        plugin.connects[0].args.onMessage.onmessage?.({
-          seq: 1,
-          message: 'private provider error',
-        });
-      } else {
-        vi.mocked(invoke).mockRejectedValueOnce(
-          new Error('private provider error')
-        );
-        socket.send('private payload');
-      }
-      await closed;
+  it.each([
+    'receive',
+    'send',
+  ] as const)('records one %s failure without recording URLs, payloads, or provider errors', async (operation) => {
+    vi.spyOn(console, 'log').mockImplementation(() => {});
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    const socket = new TauriWebSocketWrapper(
+      'wss://dss.test/ws?token=private-token'
+    );
+    const events = track(socket);
+    plugin.connects[0].resolve(7);
+    await Promise.resolve();
+    const closed = new Promise<void>((resolve) =>
+      socket.addEventListener('close', () => resolve())
+    );
+    if (operation === 'receive') {
       plugin.connects[0].args.onMessage.onmessage?.({
-        seq: 2,
-        message: 'duplicate error',
+        seq: 1,
+        message: 'private provider error',
       });
-
-      expect(events).toEqual(['open', 'error', 'close:1006']);
-      expect(telemetry.start.mock.calls).toEqual([
-        ['websocket.transport.failure'],
-      ]);
-      expect(telemetry.setAttr.mock.calls).toEqual([
-        ['websocket.transport', 'tauri'],
-        ['websocket.socket_id', 7],
-        ['websocket.operation', operation],
-        ['websocket.outcome', 'closed'],
-      ]);
-      expect(telemetry.error.mock.calls).toEqual([
-        [operation === 'send' ? 'Send failed' : 'Receive failed'],
-      ]);
-      expect(telemetry.end).toHaveBeenCalledOnce();
+    } else {
+      vi.mocked(invoke).mockRejectedValueOnce(
+        new Error('private provider error')
+      );
+      socket.send('private payload');
     }
-  );
+    await closed;
+    plugin.connects[0].args.onMessage.onmessage?.({
+      seq: 2,
+      message: 'duplicate error',
+    });
+
+    expect(events).toEqual(['open', 'error', 'close:1006']);
+    expect(telemetry.start.mock.calls).toEqual([
+      ['websocket.transport.failure'],
+    ]);
+    expect(telemetry.setAttr.mock.calls).toEqual([
+      ['websocket.transport', 'tauri'],
+      ['websocket.socket_id', 7],
+      ['websocket.operation', operation],
+      ['websocket.outcome', 'closed'],
+    ]);
+    expect(telemetry.error.mock.calls).toEqual([
+      [operation === 'send' ? 'Send failed' : 'Receive failed'],
+    ]);
+    expect(telemetry.end).toHaveBeenCalledOnce();
+  });
 
   it('handles a disconnect replayed after the WebView resumes', async () => {
     vi.spyOn(console, 'log').mockImplementation(() => {});
@@ -477,4 +477,36 @@ describe('TauriWebSocketWrapper incoming messages', () => {
 
     expect(received).toEqual(['first', 'second']);
   });
+});
+
+it('shares in-flight native recovery so Visible waits for the buffered replay', async () => {
+  vi.spyOn(console, 'log').mockImplementation(() => {});
+  const socket = new TauriWebSocketWrapper('wss://dss.test/ws');
+  const opened = new Promise<void>((resolve) =>
+    socket.addEventListener('open', () => resolve())
+  );
+  plugin.connects[0].resolve(7);
+  await opened;
+  let resolveRecovery!: (value: {
+    messages: ReplayEnvelope[];
+    gap: boolean;
+  }) => void;
+  const response = new Promise<{ messages: ReplayEnvelope[]; gap: boolean }>(
+    (resolve) => {
+      resolveRecovery = resolve;
+    }
+  );
+  vi.mocked(invoke).mockReturnValueOnce(response);
+  const first = socket.recover();
+  const second = socket.recover();
+  expect(second).toBe(first);
+  const messages: string[] = [];
+  socket.onmessage = (event) => messages.push(String(event.data));
+  resolveRecovery({
+    messages: [{ seq: 1, message: { type: 'Text', data: 'fixture-replay' } }],
+    gap: false,
+  });
+  await second;
+  expect(messages).toEqual(['fixture-replay']);
+  socket.close();
 });
