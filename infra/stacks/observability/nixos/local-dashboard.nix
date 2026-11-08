@@ -50,11 +50,12 @@ let
         ]
         { }
       )
-      (lokiTable 4 "steps" (grid 0 13 12 12))
-      (lokiTable 5 "services" (grid 12 13 12 12))
-      (lokiTable 6 "failures" (grid 0 25 12 8))
-      (lokiTable 7 "builds" (grid 12 25 12 8))
-      (lokiTable 8 "actions" (grid 0 33 24 6))
+      # Full width: step names are long.
+      (lokiTable 4 "steps" (grid 0 13 24 11))
+      (lokiTable 5 "services" (grid 0 24 12 10))
+      (lokiTable 7 "builds" (grid 12 24 12 5))
+      (lokiTable 8 "actions" (grid 12 29 12 5))
+      (lokiTable 6 "failures" (grid 0 34 24 6))
     ];
   };
 in

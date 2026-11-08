@@ -249,8 +249,12 @@ pub(crate) fn left_behind_batch(lines: &[Line]) -> Option<(Begin, Vec<Record>)> 
             }
         }
     }
+    let duration_ns = last_ns.saturating_sub(begin.started_ns);
     let mut fields = BTreeMap::new();
     fields.insert("outcome".to_owned(), Value::from("interrupted"));
+    // Up to the last thing it recorded, as a finished run's `seconds` is.
+    let millis = duration_ns / 1_000_000;
+    fields.insert("seconds".to_owned(), Value::from(millis as f64 / 1000.0));
     if let Some(step) = open_steps.last() {
         fields.insert("failed_step".to_owned(), Value::from(*step));
     }
@@ -260,7 +264,7 @@ pub(crate) fn left_behind_batch(lines: &[Line]) -> Option<(Begin, Vec<Record>)> 
         event: RUN_EVENT.to_owned(),
         name: Some(RUN_EVENT.to_owned()),
         at_ns: last_ns,
-        duration_ns: Some(last_ns.saturating_sub(begin.started_ns)),
+        duration_ns: Some(duration_ns),
         fields,
     });
     Some((begin, records))
