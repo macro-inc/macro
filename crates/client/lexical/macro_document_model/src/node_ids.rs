@@ -170,9 +170,15 @@ impl Plugin for NodeIdPlugin {
         "node-id"
     }
     fn commands(&self) -> &[CommandRegistration] {
-        &[]
+        const COMMANDS: &[CommandRegistration] = &[CommandRegistration {
+            command: CommandKind::InsertClipboardNodes,
+            priority: CommandPriority::Critical,
+            placement: Placement::Before,
+        }];
+        COMMANDS
     }
-    fn handle(&self, _: &mut Transaction<'_>, _: &Command) -> crate::ModelResult<Handled> {
+    fn handle(&self, tx: &mut Transaction<'_>, command: &Command) -> crate::ModelResult<Handled> {
+        if let Command::InsertClipboardNodes { nodes, .. } = command { prepare_clipboard_nodes(tx, nodes)?; }
         Ok(Handled::No)
     }
     fn after_commit(&self, tx: &mut Transaction<'_>, commit: &Commit) -> crate::ModelResult<()> {
