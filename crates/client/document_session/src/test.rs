@@ -78,6 +78,24 @@ fn literal_dom_first_keystroke_one_handle_zero_io_and_coalesced_wake() {
             .any(|v| matches!(v, ViewEffect::Initialize(InitialView::Editor { .. })))
     );
     assert!(!out.view.iter().any(|v| matches!(v, ViewEffect::Error(_))));
+    #[cfg(feature = "conformance")]
+    {
+        let observed = session.conformance_drain_output();
+        assert!(
+            observed
+                .sync_events
+                .iter()
+                .any(|event| matches!(event, SyncEvent::Seeded { .. }))
+        );
+        assert!(
+            observed
+                .view
+                .iter()
+                .any(|view| matches!(view, ViewEffect::Initialize(_)))
+        );
+        assert!(session.conformance_drain_output().view.is_empty());
+        assert_eq!(session.conformance_sync().phase(), Phase::Running);
+    }
     let state = session.surface().state().view();
     let p = state.first_child(NodeKey::ROOT).unwrap();
     let text = state.first_child(p).unwrap();
@@ -109,6 +127,25 @@ fn literal_dom_first_keystroke_one_handle_zero_io_and_coalesced_wake() {
     assert_eq!(out.wake_at, Some(Millis(26)));
     assert_eq!(session.surface().state().view().text_content(text), "ab");
     assert!(session.surface().history().can_undo);
+    #[cfg(feature = "conformance")]
+    {
+        let observed = session.conformance_drain_output();
+        assert_eq!(observed.wake_at, Some(Millis(26)));
+        assert_eq!(session.conformance_drain_output().wake_at, observed.wake_at);
+        let focused = session.handle(
+            Now {
+                mono: Millis(1),
+                wall: UnixMillis(1),
+            },
+            SessionInput::Focus(true),
+        );
+        assert_eq!(focused.wake_at, Some(Millis(26)));
+        assert_eq!(
+            session.conformance_reconstructed_state().unwrap(),
+            lexical_loro::synced_json(session.surface().state(), &lexical_loro::PlainPolicy)
+                .unwrap()
+        );
+    }
     let out = session.handle(
         Now {
             mono: Millis(2),
