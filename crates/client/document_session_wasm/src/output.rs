@@ -33,11 +33,15 @@ pub(crate) fn entry(out: &mut Vec<u8>, tag: u32, a: u32, b: u32, payload: &[u8])
     out.extend(payload);
     pad(out);
 }
+pub(crate) struct TextCorrection {
+    pub(crate) diff: lexical_model::Diff,
+    pub(crate) initialize: bool,
+}
 pub(crate) fn encode(
     output: &SessionOutput,
     terminal: bool,
     buffer: &mut Vec<u8>,
-    correction: Option<lexical_model::Diff>,
+    correction: Option<TextCorrection>,
 ) -> Result<u32, BoundaryError> {
     if output.view.is_empty()
         && output.io.is_empty()
@@ -57,6 +61,10 @@ pub(crate) fn encode(
         let mut m = view(0);
         match v {
             ViewEffect::Initialize(InitialView::Editor { diff: d, .. }) | ViewEffect::Diff(d) => {
+                if matches!(v, ViewEffect::Initialize(_)) {
+                    entry(&mut entries, 16, 8, 0, &bytes(&view(8))?);
+                    count += 1;
+                }
                 if let Some(previous) = &mut combined {
                     if d.full_reconcile {
                         *previous = d.clone();
@@ -241,11 +249,15 @@ pub(crate) fn encode(
     }
     if let Some(correction) = correction {
         flags |= 1;
-        if let Some(previous) = &mut combined {
-            previous.ops.extend(correction.ops);
+        if correction.initialize {
+            combined = Some(correction.diff);
+            entry(&mut entries, 16, 8, 0, &bytes(&view(8))?);
+            count += 1;
+        } else if let Some(previous) = &mut combined {
+            previous.ops.extend(correction.diff.ops);
             previous.view_text_matches = None;
         } else {
-            combined = Some(correction);
+            combined = Some(correction.diff);
         }
     }
     if let Some(combined) = combined {

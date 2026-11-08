@@ -20,7 +20,9 @@ use ::std::io::Write as _;
 use ::core::convert::TryInto as _;
 use ::bebop::FixedSized as _;
 
-pub const ABI_MAJOR: u32 = 1;
+pub const ABI_MAJOR: u32 = 2;
+
+pub const FLAG_HANDLED: u32 = 32;
 
 pub const DIFF_FORMAT_VERSION: u32 = 1;
 
@@ -2926,26 +2928,30 @@ pub struct TypeRowMsg<'raw> {
     pub index: u32,
     pub name: &'raw str,
     pub kind: u8,
+    pub flags: u32,
 }
 
 impl<'raw> ::bebop::SubRecord<'raw> for TypeRowMsg<'raw> {
     const MIN_SERIALIZED_SIZE: usize =
         <u32>::MIN_SERIALIZED_SIZE +
         <&'raw str>::MIN_SERIALIZED_SIZE +
-        <u8>::MIN_SERIALIZED_SIZE;
+        <u8>::MIN_SERIALIZED_SIZE +
+        <u32>::MIN_SERIALIZED_SIZE;
 
     #[inline]
     fn serialized_size(&self) -> usize {
         self.index.serialized_size() +
         self.name.serialized_size() +
-        self.kind.serialized_size()
+        self.kind.serialized_size() +
+        self.flags.serialized_size()
     }
 
     ::bebop::define_serialize_chained!(Self => |zelf, dest| {
         Ok(
             zelf.index._serialize_chained(dest)? +
             zelf.name._serialize_chained(dest)? +
-            zelf.kind._serialize_chained(dest)?
+            zelf.kind._serialize_chained(dest)? +
+            zelf.flags._serialize_chained(dest)?
         )
     });
 
@@ -2962,11 +2968,14 @@ impl<'raw> ::bebop::SubRecord<'raw> for TypeRowMsg<'raw> {
         i += read;
         let (read, v2) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
         i += read;
+        let (read, v3) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+        i += read;
 
         Ok((i, Self {
             index: v0,
             name: v1,
             kind: v2,
+            flags: v3,
         }))
     }
 }
@@ -3176,6 +3185,8 @@ pub mod owned {
     use ::bebop::FixedSized as _;
 
     pub use super::ABI_MAJOR;
+
+    pub use super::FLAG_HANDLED;
 
     pub use super::DIFF_FORMAT_VERSION;
 
@@ -5954,6 +5965,7 @@ pub mod owned {
         pub index: u32,
         pub name: String,
         pub kind: u8,
+        pub flags: u32,
     }
 
     impl<'raw> ::core::convert::From<super::TypeRowMsg<'raw>> for TypeRowMsg {
@@ -5962,6 +5974,7 @@ pub mod owned {
                 index: value.index,
                 name: value.name.into(),
                 kind: value.kind,
+                flags: value.flags,
             }
         }
     }
@@ -5970,20 +5983,23 @@ pub mod owned {
         const MIN_SERIALIZED_SIZE: usize =
             <u32>::MIN_SERIALIZED_SIZE +
             <String>::MIN_SERIALIZED_SIZE +
-            <u8>::MIN_SERIALIZED_SIZE;
+            <u8>::MIN_SERIALIZED_SIZE +
+            <u32>::MIN_SERIALIZED_SIZE;
 
         #[inline]
         fn serialized_size(&self) -> usize {
             self.index.serialized_size() +
             self.name.serialized_size() +
-            self.kind.serialized_size()
+            self.kind.serialized_size() +
+            self.flags.serialized_size()
         }
 
         ::bebop::define_serialize_chained!(Self => |zelf, dest| {
             Ok(
                 zelf.index._serialize_chained(dest)? +
                 zelf.name._serialize_chained(dest)? +
-                zelf.kind._serialize_chained(dest)?
+                zelf.kind._serialize_chained(dest)? +
+                zelf.flags._serialize_chained(dest)?
             )
         });
 
@@ -6000,11 +6016,14 @@ pub mod owned {
             i += read;
             let (read, v2) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
             i += read;
+            let (read, v3) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+            i += read;
 
             Ok((i, Self {
                 index: v0,
                 name: v1,
                 kind: v2,
+                flags: v3,
             }))
         }
     }

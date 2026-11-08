@@ -107,9 +107,9 @@ test('literal primitive typing uses one call, no I/O, and preserves UTF-16 and A
   expect(flags & 2).toBe(0);
   expect(session.textContent()).toBe('a😀');
   expect(session.wakeAt()).toBe(26);
-  expect(() =>
-    session.textFromView(key, 'a\ud800', 2, 2, 0, 0, undefined, 4)
-  ).toThrow('LoneSurrogate');
+  const rejected = session.textFromView(key, 'a\ud800', 2, 2, 0, 0, undefined, 4);
+  expect(rejected & 16).toBe(16);
+  expect(decodeOutput(session.takeOutput()).viewEffects.some(effect => effect.kind === 2 && effect.text.includes('LoneSurrogate'))).toBe(true);
   expect(session.textContent()).toBe('a😀');
   const huge = {
     root: {
