@@ -12429,8 +12429,6 @@ dependencies = [
 [[package]]
 name = "loro-internal"
 version = "1.17.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7e533c1688430aa4fcdd933f00861e331c169a4158ee6d27d054e0558892d447"
 dependencies = [
  "append-only-bytes",
  "arref",

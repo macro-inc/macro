@@ -220,9 +220,10 @@ and emitted fact. Public images/reads stay owned; restore the oldest popped imag
 once after computing the same rollback sequence. Compare with the original owned
 history algorithm across mixed writes, adoption, TTL, corruption and snapshot changes.
 
-The workspace test profile optimizes xxhash byte hashing, measured in real cold
-snapshot checksum validation and exact trace hashing. Debug assertions and
-overflow checks stay enabled; production profiles and hash algorithms do not
+The workspace test profile optimizes measured xxhash and both native Loro rich-text
+tracker paths. The two internal releases use checked bulk range fills with ordered
+sequential-update parity tests; public versions and encoder algorithms stay fixed.
+Debug assertions and overflow checks stay enabled; production profiles and hash algorithms do not
 change. Prebuild before timing a warm T0 run and retain all256 shrinking cases,
 500 coverage seeds, every story/peer and every invariant.
 
