@@ -63,6 +63,9 @@ impl<'a> LexicalServiceClient<'a> {
         request
             .headers_mut()?
             .set("Content-Type", "application/json")?;
+        if let Some(traceparent) = worker_rs_otel::traceparent_for_span(&tracing::Span::current()) {
+            request.headers_mut()?.set("traceparent", &traceparent)?;
+        }
         let mut response = timeout(Fetch::Request(request).send(), DEFAULT_TIMEOUT_MS)
             .await
             .into_result()??;

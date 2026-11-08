@@ -52,6 +52,7 @@ export async function setupMiniflare(
     dssUrl?: string;
     lexicalServiceUrl?: string;
     lexicalServiceAuthKey?: string | null;
+    commentGateMode?: "http" | "in_process" | "shadow";
     fetchMock?: MiniflareOptions['fetchMock'];
   } = {},
 ) {
@@ -86,6 +87,7 @@ export async function setupMiniflare(
     r2Persist: persist('r2'),
     fetchMock: options.fetchMock,
     bindings: {
+      COMMENT_GATE_MODE: options.commentGateMode ?? "http",
       SYNC_RECORD: process.env.SYNC_RECORD === "1",
       ...(options.fetchMock ? { DSS_URL: "https://dss.test", DSS_INTERNAL_AUTH_KEY: "local" } : {}),
       DOCUMENT_PERMISSIONS_SECRET: "local",

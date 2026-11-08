@@ -693,6 +693,7 @@ struct BootStubEnv;
 impl BootStubEnv {
     fn write(&self, env: &mut BTreeMap<String, String>) {
         // Route switches load through MacroConfig even without Doppler.
+        env.insert("COMMENT_GATE_MODE".into(), "http".into());
         env.insert(
             "LEXICAL_ROUTE_MODES".into(),
             "markdown=http,snapshot=http,composers=http,html=http".into(),
