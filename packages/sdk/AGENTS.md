@@ -48,7 +48,11 @@ enforced by the ordinary backend APIs.
   either the single agent task or `steps` (generated `CodeStep`s, agent steps
   with `Agent` handles) and `dangerouslyOperateAsUser`, which its TSDoc
   restricts to an explicit user request; `routineBody` maps both onto the
-  scheduler's `RoutineTask`.
+  scheduler's `RoutineTask`. `routines.check` sends the same body to
+  `POST /scheduled-actions/check` (as `{routine, created}`), which runs
+  saving's checks and saves nothing; code mode's catalog lists it as a read.
+  `created` takes handles with an `entityType` (`CreatedEntity`) and is kept
+  with a routine draft for its review.
 - `users.search(nameOrEmail)` searches existing Macro contacts with batched auth
   names and returns seeded User handles; it is not a global directory. Empty
   contact sets are 404, but authorization/service errors must propagate.
@@ -62,6 +66,10 @@ enforced by the ordinary backend APIs.
   `parseDatabaseQueryData`; `withView()` follows the AI editor's `setDatabaseQueryView` rules.
 - `src/entities/crm/pipeline.ts`: pipeline-authorized table/row/view handles;
   `PipelineTable.views()` returns views whose `positions()` reads saved board order.
+- `src/entities/crm/pipeline-entry.ts`: `PipelineEntry` handles from the
+  name-based pipeline methods (`find`, `addRecords`, `updateEntries`,
+  `removeRecords`, `edit`, `importCsv`/`exportCsv`), which call
+  `crm::inbound::pipeline_workflows`; field values are tagged by kind.
 - `src/entities/external-chat/`: added provider chats (`macro.externalChats`, entity type
   `external_chat`) and their message/send/upload/participant handles.
 - `src/entities/connected-apps/`: `macro.connectedApps.list(execution)` returns the
@@ -81,9 +89,14 @@ enforced by the ordinary backend APIs.
   `POST /images/generate`, admitted against the user's AI allowance) returns a
   sized `GeneratedImage`; `StaticImage` handles attach to `channel.send(text,
   { images })` and `thread.reply` as `static/image` attachments, and
+  `Document` handles as `document` attachments (`{ documents }`).
   `toMarkdown()` (also `markdown` in `toJSON()`) writes the `<m-image>` tag that
   shows one inline. It must match lexical-core's `I_IMAGE_CONSTRAINED`
   (pinned in `lexical-core/tests/generated-image.test.ts`).
+- `src/entities/documents/text-comment.ts`: `Document.commentOnText()` anchors a
+  thread to quoted text (`POST /documents/{id}/comments/text`, the
+  `CommentOnText` tool's domain function); a 422 becomes
+  `CommentQuoteNotPlacedError` carrying the reason.
 - `src/entities/web/`: `macro.web.search()` / `macro.web.fetch()` (cognition
   `POST /web/search`, `/web/fetch`, Tavily via `crates/web_search`), admitted and
   metered against the user's AI allowance; code mode hides the `WebSearch` /
@@ -99,6 +112,10 @@ enforced by the ordinary backend APIs.
   authenticated bot (`me`, `channels`) with bot auth. Code mode hides the
   bot-management tools in its favour; `IssueBotCredential` stays, because its
   chat card mints a token the model never reads.
+- `src/entities/memory/`, `activity/`: `macro.memory.read()`/`edit()` (cognition
+  `/memory/explicit`) and `macro.activity.mine()` (cognition `/activity`);
+  `User.activity()` reads `/memory/activity` and `Initiative.activity()` DSS
+  `/initiatives/{id}/activity`. Code mode hides the matching direct tools.
 - `services.ts`, `openapi-ts.config.ts`: generated service contract inputs.
 - `src/calls/`: optional Node and browser LiveKit helpers, exported only as
   `@macro-inc/sdk/calls/node` and `@macro-inc/sdk/calls/browser`. Keep them out of
@@ -110,7 +127,7 @@ enforced by the ordinary backend APIs.
 - Keep handwritten behavior in `src/`; never edit `generated/` or `specs/`.
 - Keep WhatsApp pairing, passkeys, connection setup/disconnect and rollout configuration out of the handwritten public SDK; operate on accounts linked in the app, with personal bearer sessions for account/access controls. External chat sends/uploads accept the connection owner's session or own API token; bots never send.
 - Use POST to start channel calls and call-id scoped joins/leaves; the legacy GET starts a call as a side effect.
-- Keep notification mute, unmute, and snooze endpoints, including bulk item preferences, in the app-only coverage exclusions.
+- One item's mute, snooze and unmute are `muteNotifications`/`unmuteNotifications` on every favoritable handle; keep mute-all, email unsubscribe and bulk item preferences in the app-only coverage exclusions.
 - Keep `external-chat/` provider-neutral; provider-specific reads (WhatsApp community chats) branch on `provider` with an exhaustive match.
 - Use existing entity handles for reads and mutations. Follow the
   [SDK rule](../../.agents/rules/sdk.md) and `add-sdk-endpoint` skill.

@@ -3,6 +3,7 @@
 #[cfg(test)]
 mod test;
 
+pub mod activity;
 pub mod create;
 pub mod delete;
 pub mod description;
@@ -29,9 +30,15 @@ use model_error_response::ErrorResponse;
 use serde::{Deserialize, Serialize};
 
 pub use self::{
-    create::create_initiative_handler, delete::delete_initiative_handler,
-    description::get_initiative_description_handler, get::get_initiative_handler,
-    list::list_initiatives_handler, page::page_initiatives_handler,
+    activity::{
+        InitiativeActivityRouterState, get_initiative_activity_handler, initiative_activity_router,
+    },
+    create::create_initiative_handler,
+    delete::delete_initiative_handler,
+    description::get_initiative_description_handler,
+    get::get_initiative_handler,
+    list::list_initiatives_handler,
+    page::page_initiatives_handler,
     update::update_initiative_handler,
 };
 use crate::domain::{

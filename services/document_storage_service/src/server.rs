@@ -1472,6 +1472,16 @@ async fn run_server() -> anyhow::Result<()> {
         ),
     );
     let admission = macro_agent_tool_context.admission.clone();
+    // The pipeline entry and CSV routes run through the same workflows the
+    // agent's pipeline tools use.
+    let pipeline_workflows = macro_agent_tool_context
+        .pipeline_tool_context
+        .service
+        .clone();
+    let crm_transfer = macro_agent_tool_context
+        .crm_transfer_tool_context
+        .service
+        .clone();
     let editing_worker = Arc::new(
         documents_hex::outbound::editing_worker_client::ReqwestEditingWorkerClient::from_url(
             AiEditingWorkerUrl::new()?.to_string(),
@@ -1526,7 +1536,7 @@ async fn run_server() -> anyhow::Result<()> {
     let word_documents = Arc::new(
         documents_hex::domain::word_document::WordDocumentService::new(
             document_service.clone(),
-            editing_worker,
+            editing_worker.clone(),
             sync_service_client.clone(),
             document_files.clone(),
             config.document_permission_jwt.as_ref().to_string(),
@@ -2467,6 +2477,15 @@ async fn run_server() -> anyhow::Result<()> {
             entity_access_service.clone(),
             authorization_state.clone(),
         ),
+        initiative_activity_state:
+            initiative::inbound::axum_router::InitiativeActivityRouterState::new(
+                Arc::new(initiative::domain::history::InitiativeHistory::new(
+                    activity::outbound::pg_activity_repo::PgActivityRepo::new(readonly_db.clone()),
+                    entity_access_service.clone(),
+                )),
+                entity_access_service.clone(),
+                authorization_state.clone(),
+            ),
         sql_state: databases_sql::inbound::axum_router::SqlRouterState::new(
             sql_service,
             authorization_state.clone(),
@@ -2565,6 +2584,8 @@ async fn run_server() -> anyhow::Result<()> {
             lexical_client: lexical_client.clone(),
             creator: document_creator,
             ai_editing: document_ai_editing,
+            editing_worker,
+            messages: message_service.clone(),
             canvas: canvas_routes,
             spreadsheet: document_spreadsheet,
             spreadsheet_ai_edit: document_spreadsheet_ai_edit,
@@ -2617,6 +2638,11 @@ async fn run_server() -> anyhow::Result<()> {
         pipeline_state: crm::inbound::pipelines::PipelineRouterState {
             service: pipeline_service,
             access: entity_access_service.clone(),
+            authorization: authorization_state.clone(),
+        },
+        pipeline_workflow_state: crm::inbound::pipeline_workflows::PipelineWorkflowRouterState {
+            workflows: pipeline_workflows,
+            transfer: crm_transfer,
             authorization: authorization_state.clone(),
         },
         crm_state: crm::inbound::axum_router::CrmRouterState {

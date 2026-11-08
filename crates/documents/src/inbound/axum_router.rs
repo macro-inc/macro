@@ -5,6 +5,7 @@
 //! - `GET /{document_id}` — get document metadata
 //! - `GET /slug/{slug}` - get document by team slug
 //! - `POST /{document_id}/ai-edit` — edit a markdown document by instructions
+//! - `POST /{document_id}/comments/text` — start a comment thread on a quoted passage
 //! - `POST /{document_id}/spreadsheet/read`, `/calculate`, `/edits`, `/ai-edit` —
 //!   read, calculate and edit a native spreadsheet, by operations or instructions
 //! - `POST /create_spreadsheet` — create a native spreadsheet
@@ -35,6 +36,8 @@ mod tests;
 pub mod ai_edit;
 #[cfg(feature = "ai_tools")]
 pub mod canvas;
+#[cfg(feature = "ai_tools")]
+pub mod comment_on_text;
 pub mod content_uploaded;
 pub mod copy_document;
 #[cfg(feature = "document_create")]
@@ -220,6 +223,12 @@ pub struct DocumentRouterState<T, Svc, Auth> {
     /// EditDocument's AI-editing use case, with the host's admission and metering.
     #[cfg(feature = "ai_tools")]
     pub ai_editing: Arc<crate::domain::ai_editing::AiEditingService<DefaultEditingWorker>>,
+    /// The editing worker that places comment marks in markdown documents.
+    #[cfg(feature = "ai_tools")]
+    pub editing_worker: Arc<DefaultEditingWorker>,
+    /// The shared message service comment threads are posted through.
+    #[cfg(feature = "ai_tools")]
+    pub messages: Arc<dyn messages::domain::api::MessageServiceApi>,
     /// The Canvas tools' worker, admission, metering and rollout, for the
     /// SDK's canvas routes.
     #[cfg(feature = "ai_tools")]
@@ -290,6 +299,9 @@ impl<T, Svc, Auth> Clone for DocumentRouterState<T, Svc, Auth> {
             #[cfg(feature = "ai_tools")]
             ai_editing: self.ai_editing.clone(),
             #[cfg(feature = "ai_tools")]
+            editing_worker: self.editing_worker.clone(),
+            #[cfg(feature = "ai_tools")]
+            messages: self.messages.clone(),
             canvas: self.canvas.clone(),
             #[cfg(feature = "ai_tools")]
             spreadsheet: self.spreadsheet.clone(),
@@ -411,6 +423,10 @@ where
         .route(
             "/{document_id}/ai-edit",
             axum::routing::post(ai_edit::ai_edit_handler::<T, Svc, Auth>),
+        )
+        .route(
+            "/{document_id}/comments/text",
+            axum::routing::post(comment_on_text::comment_on_text_handler::<T, Svc, Auth>),
         )
         .route(
             "/{document_id}/canvas/scene",

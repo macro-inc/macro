@@ -111,18 +111,13 @@ Vite's defaults.
 
 The local stack runs without Doppler. It runs Postgres, Redis, LocalStack, OpenSearch, Kafka, and FusionAuth in Docker, with dummy AWS credentials and fixed test secrets.
 
-On Linux, the Nix dev shell supplies the Docker CLI, daemon, Compose, and `fuse-overlayfs`. Nix is the only host dependency.
+The local stack runs on Linux. The Nix dev shell supplies the Docker CLI, daemon, Compose, and `fuse-overlayfs`. Nix is the only host dependency.
 
-On macOS, install a Docker runtime such as Docker Desktop, OrbStack, or Colima. The Nix dev shell supplies the Docker CLI, but macOS still needs the runtime to provide the daemon.
+The service binaries are built natively and link the Nix shell's libraries, so a macOS build can't run in the stack's Linux containers. On macOS, `run_local` and `stack up` stop before building and say so; for frontend-only work, [run the frontend against hosted services](#run-the-frontend-against-hosted-services).
 
-Install workspace dependencies from the repository root inside the Nix shell
-for each checkout or worktree before starting the stack. The SDK has its own install,
-which building the services needs:
-
-```bash
-bun install --frozen-lockfile
-(\cd packages/sdk && bun install --frozen-lockfile)
-```
+The first build in a checkout or worktree runs `bun install --frozen-lockfile`
+at the repository root and in `packages/sdk` when either has no `node_modules`:
+a Rust build script bundles the SDK from them.
 
 Run the preflight check before the first start:
 
@@ -130,7 +125,7 @@ Run the preflight check before the first start:
 just doctor-local
 ```
 
-The check tests the Docker daemon, the toolchain, and the required ports. It reports any problem and suggests a fix. If a start fails, run the check again.
+The check tests the Docker daemon, the toolchain, and the required ports, and names instances left holding ports or subnets. It reports any problem and suggests a fix. If a start fails, run the check again.
 
 Run this command from the repository root if you do not have Doppler access:
 
@@ -191,8 +186,8 @@ environment and proxy, and hard-refresh the browser to discard cached URLs.
 
 If LocalStack loses its temporary resources after a restart, restore missing
 buckets, queues, tables, and keys without resetting Postgres or volumes:
-`cargo x localstack-provision --instance <name>`. Include `--port-base` if the
-instance uses an explicit port base. This restores resources, not lost objects.
+`cargo x localstack-provision --instance <name>`. This restores resources, not
+lost objects.
 
 The stack does not create accounts in advance. Passwordless login creates a user
 on demand. Register with any email address. FusionAuth sends you a one-time code
@@ -405,14 +400,33 @@ Each instance has its own resources:
 - env files
 - a proxy port, a frontend port, and backend ports
 
-The ports are deterministic for the instance name. The same name gets the same
-port window on every run.
+You don't pick ports or subnets. In its first second, before any build, a start
+reserves a free port window and a free `10.254.<n>.0/24` for its four Docker
+networks, under a machine-wide lock, so parallel starts can't collide. A name
+gets the same window every run unless something else is on it. An instance with
+containers keeps its window and networks, including ones created before this
+allocator or with `--port-base`. Other commands find the window themselves, so
+repeat only `--instance`. Startup prints the window; `just status_local` and
+`just stack status --json` print the endpoints.
 
-If the port window conflicts with another program, change the base port:
+If a program outside this tooling takes a port during the build, the start moves
+to another window instead of failing at `docker compose up`.
+
+Pin a window only when something needs it fixed. A pinned window that isn't free
+fails straight away:
 
 ```bash
 just run_local --instance agent-a --port-base 23000
 ```
+
+Quitting with `q`, `just stack down`, and `just destroy_local` free the instance's
+networks and allocation. `just stop_local` keeps them, so a stopped instance
+still holds its window and subnet. `just doctor-local` names instances holding
+them with nothing running. It removes nothing, because they may be someone's data.
+
+Allocations in progress are recorded in `~/.local/state/macro-local/`. The file
+holds nothing Docker doesn't: entries for instances with no Docker resources and
+no running owner are dropped at the next start.
 
 The generated files for an instance live here:
 
@@ -487,43 +501,28 @@ The frontend loads, but login and API calls hit the other process. You see HTML
 or console errors instead of JSON. `just doctor-local` reports the busy ports
 before you start.
 
-Run the stack on a port window that is free on your machine. You do not need to
-kill the other process:
+A named instance doesn't have this problem: it gets a window with every port free.
+You do not need to kill the other process:
 
 ```bash
-just doctor-local                         # see which default ports are busy
-just doctor-local --instance test --port-base 31000   # check the new window is free
-just run_local --no-doppler --instance test --port-base 31000
+just run_local --no-doppler --instance test
+just seed-scenario --instance test apply --file seed/scenarios/team-perms.json
+just status_local --instance test
 ```
 
-A named instance binds every service at `port-base + offset`. A free base like
-`31000` moves the whole stack to one contiguous window. Use any base that is free
-on your machine. See `just doctor-local` for the busy ports. Keep the same
-`--instance` name and `--port-base` on later runs so the ports stay deterministic.
+The default instance (no `--instance`) always uses the fixed ports. If one is
+taken, its start fails before the build and names the ports.
 
-Use the same two flags for every command. Run the stack, seed it, and check it
-with the same `--instance` and `--port-base` values:
-
-```bash
-just run_local --no-doppler --instance test --port-base 31000
-just seed-scenario --instance test --port-base 31000 apply --file seed/scenarios/team-perms.json
-just seed-scenario --instance test --port-base 31000 status --file seed/scenarios/team-perms.json
-just status_local --instance test --port-base 31000
-```
-
-If you omit `--port-base`, a named instance gets a deterministic port window
-derived from its name. That window is different from the one you chose. A stack
-started with an explicit `--port-base` must be seeded with the same explicit
-`--port-base`, or the seed CLI looks at the wrong database. The default instance
-(no `--instance`) always uses the fixed ports and needs no extra flags.
-
-The seeded persona login links embed the frontend port. If you switch ports, run
-`just seed-scenario apply` again to get links that match the new window.
-`just status_local`, with the same two flags, prints the live endpoints.
+The seeded persona login links embed the frontend port. If an instance's window
+moves, run `just seed-scenario apply` again to get links that match.
 
 ## What the Stack Rebuilds
 
-The Rust services are built on the host with `cargo zigbuild`. The binaries are mounted into a shared runtime image. Docker does not compile these services during a normal `run_local`.
+The Rust services are built on the host with one `cargo build` in the Nix shell, into `target/debug`, the same directory `cargo build` and `cargo test` use. The binaries are mounted into a shared runtime image together with `/nix/store`, which holds the loader and libraries they link. Docker does not compile these services during a normal `run_local`. `cargo x build-services` runs the same build on its own.
+
+A Nix garbage collection can delete libraries a running stack's binaries use; rebuild with `r` or `just stack update` if a service then fails to start.
+
+A new worktree's first build reuses the registry dependencies another worktree on the machine already compiled. After a build, those dependencies are copied to `~/.cache/macro/local-deps/<key>` (override with `MACRO_LOCAL_DEP_CACHE_DIR`). The key covers `Cargo.lock`, the toolchain, the build arguments and the compiler flags. A build into a `target/` that has none of those dependencies yet, as in a new worktree, copies the matching entry in first and compiles little more than the workspace crates. A `target/` that already built some of them is left alone, since crates built in different worktrees can't be mixed. xtask builds itself into `target/xtask` so that it doesn't count. Cargo still checks every copied unit, so a stale one is rebuilt rather than used. The three most recently used entries are kept, at about 7 GB each. Delete the directory to drop them.
 
 Press `r`, or run `just run_local rebuild`, to rebuild the binaries. Only services
 whose binary is newer than their container restart, so a build that failed partway
@@ -567,7 +566,7 @@ The `run_local` start flags also apply to `stack up`. This includes `--instance`
 
 A static frontend (`stack up`, or `run_local --static-frontend`) is built once and served by the proxy at `<proxy>/app/`. The bundle counts as local, as the dev server does: flags, routes and tools gated on `LOCAL_ONLY` are on. It resolves its backend from the origin it is served on, so the same stack works on localhost or behind any hostname without a rebuild.
 
-Both frontends prepare the browser WebAssembly packages through `bun run dev:prepare`. A fresh worktree builds them before serving the app; later starts reuse the generated packages when they are current. See [Integration Secrets](#integration-secrets) for credential-free startup limitations.
+Both frontends prepare the browser WebAssembly packages through `bun run dev:prepare`. A fresh worktree builds them before serving the app; later starts reuse the generated packages when they are current. Instances started from one worktree share those packages and `apps/web/dist`, so their frontend builds take turns: a start that has to wait says so. See [Integration Secrets](#integration-secrets) for credential-free startup limitations.
 
 For Pipedream Connect on a machine hostname, include that HTTPS origin in
 `PIPEDREAM_ALLOWED_ORIGINS` through `--env-file`; the static-frontend default names

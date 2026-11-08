@@ -2,6 +2,7 @@
 //! backend to be reachable through the proxy, then launch Vite pointed
 //! at the proxy origin.
 
+use std::fs::{File, TryLockError};
 use std::os::unix::ffi::OsStrExt;
 use std::os::unix::process::CommandExt;
 use std::path::{Path, PathBuf};
@@ -77,10 +78,42 @@ pub fn stop_recorded(instance: &Instance) {
 pub fn read_pid(instance: &Instance) -> Option<String> {
     std::fs::read_to_string(pid_path(instance)).ok()
 }
+const BUILD_LOCK_FILE: &str = ".frontend-build.lock";
 
 /// The app dir where the Vite dev server runs.
 fn app_dir() -> std::path::PathBuf {
     repo_root().join("apps/web")
+}
+
+/// Serialize frontend builds within one checkout. Every instance there shares
+/// the generated wasm packages and `apps/web/dist`, and their builds check and
+/// then write without coordinating, so two instances building at once read
+/// each other's half-written files (wasm-opt fails with "error parsing wasm").
+/// The lock releases when the returned file drops.
+fn lock_checkout_build(stage: &Stage) -> Result<Option<File>> {
+    if stage.is_dry_run() {
+        return Ok(None);
+    }
+    lock_build_in(&repo_root().join("infra/local/generated"), || {
+        stage.note("another instance in this checkout is building the frontend; waiting for it");
+    })
+    .map(Some)
+}
+
+fn lock_build_in(dir: &Path, on_wait: impl FnOnce()) -> Result<File> {
+    std::fs::create_dir_all(dir).with_context(|| format!("creating {}", dir.display()))?;
+    let path = dir.join(BUILD_LOCK_FILE);
+    let file = File::create(&path).with_context(|| format!("creating {}", path.display()))?;
+    match file.try_lock() {
+        Ok(()) => return Ok(file),
+        Err(TryLockError::WouldBlock) => on_wait(),
+        Err(TryLockError::Error(error)) => {
+            return Err(error).with_context(|| format!("locking {}", path.display()));
+        }
+    }
+    file.lock()
+        .with_context(|| format!("locking {}", path.display()))?;
+    Ok(file)
 }
 
 fn prepare_dependencies(stage: &Stage) -> Result<()> {
@@ -139,6 +172,8 @@ pub fn static_dir(instance: &Instance) -> std::path::PathBuf {
 /// through `import.meta.hot`, so local-only flags, routes and tools match
 /// `just run_local`.
 pub fn build_static(stage: &Stage, instance: &Instance, mode: Mode) -> Result<()> {
+    // Held through staging: `dist/` is shared until it's copied out.
+    let _build_lock = lock_checkout_build(stage)?;
     prepare_dependencies(stage)?;
     let dist = {
         let mut cmd = Command::new("bun");
@@ -387,22 +422,19 @@ pub fn start(
     }
     let port = instance.port(Port::Frontend);
     // A successful connect means something is already listening — almost
-    // certainly a stale dev server from a previous run. (A bind probe is
-    // unreliable: std's TcpListener sets SO_REUSEADDR, so it binds right
-    // alongside the squatter.) Bail clearly rather than spawn a bun that can't
+    // certainly a stale dev server from a previous run. (A bind probe can miss
+    // it; see `accepting`.) Bail clearly rather than spawn a bun that can't
     // bind and dies with a confusing late "exited (status 1)".
-    if std::net::TcpStream::connect_timeout(
-        &([127, 0, 0, 1], port).into(),
-        std::time::Duration::from_millis(300),
-    )
-    .is_ok()
-    {
+    if xtask_ports::probe::accepting(port, std::time::Duration::from_millis(300)) {
         anyhow::bail!(
             "frontend port {port} is already in use — likely a stale dev server from a \
              previous run. Free it (`lsof -ti tcp:{port} | xargs kill`) and retry."
         );
     }
-    prepare_dependencies(stage)?;
+    {
+        let _build_lock = lock_checkout_build(stage)?;
+        prepare_dependencies(stage)?;
+    }
 
     // Vite's node-http-proxy WebSocket upgrades hang under Bun (including
     // 1.3.13). Use Node for the dev server, while keeping Bun for dependencies
@@ -454,7 +486,6 @@ fn spawn(stage: &Stage, cmd: &mut Command, port: u16, log: &Path) -> Result<Fron
     // Wait until OUR child is serving: poll the port, but fail fast (with Vite's
     // output) if the child exits first. A bare port poll would mistake a stale
     // server already on the port for "ready" while our child has died.
-    let addr: std::net::SocketAddr = ([127, 0, 0, 1], port).into();
     let startup = stage.run_step("Starting frontend", || {
         let deadline = std::time::Instant::now() + STARTUP_TIMEOUT;
         while std::time::Instant::now() < deadline {
@@ -469,9 +500,7 @@ fn spawn(stage: &Stage, cmd: &mut Command, port: u16, log: &Path) -> Result<Fron
                      (if the port is in use, free it: `lsof -ti tcp:{port} | xargs kill`)"
                 );
             }
-            if std::net::TcpStream::connect_timeout(&addr, std::time::Duration::from_millis(300))
-                .is_ok()
-            {
+            if xtask_ports::probe::accepting(port, std::time::Duration::from_millis(300)) {
                 return Ok(());
             }
         }
