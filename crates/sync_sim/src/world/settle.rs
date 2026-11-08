@@ -78,6 +78,7 @@ impl Sim {
         let mut presence_barriers = [Direction::ToServer, Direction::ToClient].into_iter();
         let mut presence_lifetimes = None;
         let mut published_at_idle = false;
+        let mut orphan_scanned_writes = None;
         let mut held_since = None;
         let mut settled_clients = BTreeSet::new();
         while self.clock.now <= deadline && !self.budget_hit {
@@ -155,15 +156,26 @@ impl Sim {
                     }
                     continue;
                 }
-                if !published_at_idle {
+                let storage_writes = self
+                    .profiles
+                    .iter()
+                    .map(|(profile, store)| (profile.clone(), store.completed_writes()))
+                    .collect::<Vec<_>>();
+                if !published_at_idle || orphan_scanned_writes.as_ref() != Some(&storage_writes) {
+                    // A snapshot/row write after the last scan can change which
+                    // orphans are eligible. Rescan the actual ports after every
+                    // finite write batch; never infer completion from old idleness.
+                    orphan_scanned_writes = Some(storage_writes);
+                    held_since = None;
+                    self.presence = None;
                     // Initial publications may age out while data work drains.
                     // After that work and old FIFO publications finish, issue
                     // one fresh real selection before certifying the first view.
                     // This fixed phase never consults expected presence values.
                     published_at_idle = true;
                     // Stop may release another owner's lease after the entry
-                    // Visible load. Rescan once through the real host input,
-                    // then drain adoption and snapshot work before capture.
+                    // Visible load. Rescan through the real host input, then
+                    // drain adoption and snapshot work before capture.
                     let visible = self
                         .clients
                         .iter()

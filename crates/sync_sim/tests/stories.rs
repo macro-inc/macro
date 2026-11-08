@@ -71,3 +71,6 @@ mod account_drain;
 
 #[path = "stories/editor_basic.rs"]
 mod editor_basic;
+
+#[path = "stories/quiet_adoption.rs"]
+mod quiet_adoption;
