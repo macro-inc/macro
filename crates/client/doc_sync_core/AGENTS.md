@@ -84,3 +84,7 @@ including across reset failure, replacement and pending dependencies; the server
 excludes the sender from broadcasts. Do not reload rows covered by server evidence.
 Queue assistance only with write authority; retained unsent assistance stays inactive
 while read-only and resumes after regrant without changing other owners' durable rows.
+
+Clear the old document's pending-import flag only after successful replacement,
+before WAL/assistance replay can establish new pending dependencies; failed
+replacement keeps the original document and its pending-history status.

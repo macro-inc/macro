@@ -29,3 +29,6 @@ mod chatter;
 mod faults;
 #[path = "stories/lifecycle.rs"]
 mod lifecycle;
+
+#[path = "stories/rebased_pending.rs"]
+mod rebased_pending;
