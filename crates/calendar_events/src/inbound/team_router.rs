@@ -1,13 +1,16 @@
 //! Thin HTTP adapters for team projections and personal sharing preferences.
 
-use crate::domain::{models::OccurrenceRange, team::*};
+#[cfg(test)]
+mod test;
+
+use crate::domain::{models::OccurrenceRange, team::*, team_availability::TeamAvailability};
 use axum::{
     Json, Router,
     extract::{FromRef, Path, Query, State},
     http::{HeaderValue, StatusCode, header::CACHE_CONTROL},
     middleware::map_response,
     response::{IntoResponse, Response},
-    routing::{get, put},
+    routing::{get, post, put},
 };
 use chrono::{DateTime, Utc};
 use macro_authorization::{
@@ -55,6 +58,10 @@ pub fn team_calendar_router<
 ) -> Router<T> {
     Router::new()
         .route("/calendar-events/team", get(list_team_calendar::<S, A>))
+        .route(
+            "/calendar-events/team/availability",
+            post(get_team_availability::<S, A>),
+        )
         .layer(map_response(private_no_store))
         .with_state(state)
 }
@@ -103,6 +110,19 @@ pub struct TeamCalendarQuery {
     pub cursor: Option<String>,
     /// Maximum source occurrences, at most 2,000. Zero returns the roster only.
     pub limit: Option<u16>,
+}
+
+/// A bounded window and the teammates whose busy time to merge.
+#[derive(Deserialize, utoipa::ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct TeamAvailabilityRequest {
+    /// Inclusive instant.
+    pub start: DateTime<Utc>,
+    /// Exclusive instant.
+    pub end: DateTime<Utc>,
+    /// At most 100 current teammates; the requester is always included.
+    /// Omit for the whole team; an empty list checks only the requester.
+    pub user_ids: Option<Vec<String>>,
 }
 
 /// Own-user sharing preference.
@@ -168,20 +188,7 @@ pub async fn list_team_calendar<S: CalendarTeamService, A: MacroAuthorizationSer
         .map(|cursor| serde_json::from_str(&cursor))
         .transpose()
         .map_err(|_| TeamCalendarApiError(StatusCode::BAD_REQUEST))?;
-    let range = OccurrenceRange {
-        starts_at: query.start,
-        ends_at: query.end,
-        start_date: query.start.date_naive(),
-        end_date: if query.end.time() == chrono::NaiveTime::MIN {
-            query.end.date_naive()
-        } else {
-            query
-                .end
-                .date_naive()
-                .succ_opt()
-                .ok_or(TeamCalendarApiError(StatusCode::BAD_REQUEST))?
-        },
-    };
+    let range = team_range(query.start, query.end)?;
     Ok(Json(
         state
             .service
@@ -193,6 +200,47 @@ pub async fn list_team_calendar<S: CalendarTeamService, A: MacroAuthorizationSer
             )
             .await?,
     ))
+}
+
+/// Merge the requester's and selected teammates' busy time in a bounded window.
+#[utoipa::path(post, path="/calendar-events/team/availability", request_body=TeamAvailabilityRequest, responses((status=200, body=TeamAvailability), (status=400, description="Invalid window or more than 100 teammates"), (status=404, description="Team calendar sharing is disabled")), tag="calendar_events")]
+#[tracing::instrument(skip_all, fields(selected = body.user_ids.as_ref().map(Vec::len)), err(Debug))]
+pub async fn get_team_availability<S: CalendarTeamService, A: MacroAuthorizationService>(
+    State(state): State<CalendarTeamRouterState<S, A>>,
+    user: MacroAuthorizationExtractor<A, UserOrInternal>,
+    Json(body): Json<TeamAvailabilityRequest>,
+) -> Result<Json<TeamAvailability>, TeamCalendarApiError> {
+    let range = team_range(body.start, body.end)?;
+    Ok(Json(
+        state
+            .service
+            .get_team_availability(
+                user.authorization.user.macro_user_id.as_ref(),
+                range,
+                body.user_ids.as_deref(),
+            )
+            .await?,
+    ))
+}
+
+/// The instant window plus the dates all-day events must overlap.
+fn team_range(
+    start: DateTime<Utc>,
+    end: DateTime<Utc>,
+) -> Result<OccurrenceRange, TeamCalendarApiError> {
+    let end_date = if end.time() == chrono::NaiveTime::MIN {
+        end.date_naive()
+    } else {
+        end.date_naive()
+            .succ_opt()
+            .ok_or(TeamCalendarApiError(StatusCode::BAD_REQUEST))?
+    };
+    Ok(OccurrenceRange {
+        starts_at: start,
+        ends_at: end,
+        start_date: start.date_naive(),
+        end_date,
+    })
 }
 
 /// Read the authenticated user's sharing choice.

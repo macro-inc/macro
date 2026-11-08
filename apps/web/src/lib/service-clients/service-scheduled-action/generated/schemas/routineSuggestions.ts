@@ -5,18 +5,16 @@
  * API for managing scheduled actions
  * OpenAPI spec version: 0.1.0
  */
-
 import type { GenerationStatus } from './generationStatus';
 import type { RoutineSuggestion } from './routineSuggestion';
-import type { RoutineSuggestionsGeneratedAt } from './routineSuggestionsGeneratedAt';
 
 /**
  * A person's suggestions, and whether more are on the way.
  */
 export interface RoutineSuggestions {
-  /** When the suggestions shown were generated; absent before the first. */
-  generatedAt?: RoutineSuggestionsGeneratedAt;
   status: GenerationStatus;
-  /** Best first within each surface. */
+  /** Per surface, AI's first, best first, then Macro's templates, so each
+surface has at least one and ideally three. A suggestion with
+several surfaces appears once. */
   suggestions: RoutineSuggestion[];
 }

@@ -5,10 +5,6 @@
  * API for managing scheduled actions
  * OpenAPI spec version: 0.1.0
  */
-import type { CatalogEntryCodeAnyOf } from './catalogEntryCodeAnyOf';
+import type { RoutineStep } from './routineStep';
 
-/**
- * Its code step, in the shape a routine's task holds it; absent where
-code can't be saved, or when it is an Ask AI routine.
- */
-export type CatalogEntryCode = CatalogEntryCodeAnyOf | null;
+export type CatalogEntryCode = null | RoutineStep;

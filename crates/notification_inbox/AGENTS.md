@@ -56,6 +56,9 @@ or agent session). Built on the shared feed layer, `crates/attention_feed`.
   (`groupId`, `principalId`, `targetId`).
 - Row contents must not depend on the scope; scopes only filter rows, so the
   web cache can normalize rows by id across inboxes.
+- An unread scope filters on each row's `unseen`, which follows the row's own
+  rule (mail by its unread messages), so a row leaves or returns through the
+  same recompute as any other change.
 
 ## Related
 

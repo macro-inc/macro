@@ -10,6 +10,33 @@ export type ClientOptions = {
 export type AccessLevel = 'view' | 'comment' | 'edit' | 'owner';
 
 /**
+ * A privacy-reviewed activity report; period_end is inclusive.
+ */
+export type Activity = {
+    content: string;
+    granularity: Granularity;
+    periodEnd: string;
+    periodStart: string;
+};
+
+/**
+ * Error body for activity reads.
+ */
+export type ActivityErrorBody = {
+    /**
+     * Error description.
+     */
+    error: string;
+};
+
+/**
+ * Activity reports for one user, ordered by period.
+ */
+export type ActivityReports = {
+    reports: Array<Activity>;
+};
+
+/**
  * Request body for adding a new MCP server.
  */
 export type AddServerRequest = {
@@ -653,6 +680,14 @@ export type ErrorResponse = {
 export type Expiry = 'day' | 'week' | 'month';
 
 /**
+ * A private explicit memory document and its optimistic concurrency token.
+ */
+export type ExplicitMemory = {
+    content: string;
+    revision: number;
+};
+
+/**
  * Recorded invocations and total for one feature.
  */
 export type FeatureUsage = {
@@ -825,6 +860,11 @@ export type GetChatsForAttachmentResponse = {
     all_chats: Array<Chat>;
     recent_chat?: null | Chat;
 };
+
+/**
+ * Fixed calendar granularity, always in UTC, with Monday-start weeks.
+ */
+export type Granularity = 'day' | 'week' | 'month' | 'summary';
 
 /**
  * HTTP request payload for sending a chat message.
@@ -1061,6 +1101,23 @@ export type LinearIssueMeta = {
 export type LinkShare = 'PUBLIC' | 'TEAM';
 
 export type MacroUserIdStr = string;
+
+/**
+ * An edit to one one-based line. A revision is required to prevent replay
+ * or concurrent edits from inserting twice or deleting a different line.
+ */
+export type MemoryEdit = {
+    action: 'insert';
+    content: string;
+    line: number;
+} | {
+    action: 'replace';
+    content: string;
+    line: number;
+} | {
+    action: 'delete';
+    line: number;
+};
 
 export type MemoryErrorBody = {
     /**
@@ -1708,6 +1765,20 @@ export type ProjectionStateResponse = {
 export type ProjectionStatus = 'loading' | 'cold' | 'ready' | 'refreshing' | 'error';
 
 /**
+ * Response from [`ReadActivity`].
+ */
+export type ReadActivityResponse = {
+    /**
+     * Matching activity events, newest first.
+     */
+    activities: Array<ToolActivityEvent>;
+    /**
+     * Whether more than 100 events matched the requested range.
+     */
+    truncated: boolean;
+};
+
+/**
  * How frequently an active projection is regenerated.
  */
 export type RefreshCadence = 'high' | 'medium' | 'low';
@@ -1904,6 +1975,84 @@ export type SharePermissionV2 = {
 };
 
 /**
+ * A skill's complete instructions.
+ */
+export type SkillContentResponse = {
+    /**
+     * Whether this is a built-in skill, with no document behind it.
+     */
+    builtIn: boolean;
+    /**
+     * The skill's full markdown instructions.
+     */
+    content: string;
+    /**
+     * The skill's id.
+     */
+    id: string;
+    /**
+     * The skill's name.
+     */
+    name: string;
+};
+
+/**
+ * Machine-readable failure of a skill request.
+ */
+export type SkillErrorBody = {
+    /**
+     * Stable failure code.
+     */
+    code: string;
+    /**
+     * Explanation without backend diagnostics.
+     */
+    error: string;
+};
+
+/**
+ * One skill the caller can read.
+ */
+export type SkillListing = {
+    /**
+     * Whether this is a built-in skill, with no document behind it.
+     */
+    builtIn: boolean;
+    /**
+     * When to use the skill, when it says.
+     */
+    description?: string | null;
+    /**
+     * The skill document's id, or a built-in skill's well-known id.
+     */
+    id: string;
+    /**
+     * The skill's name.
+     */
+    name: string;
+    /**
+     * When the skill document was last updated; built-in skills have none.
+     */
+    updatedAt?: string | null;
+};
+
+/**
+ * How search terms are matched against skill names.
+ */
+export type SkillsMatchType = 'partial' | 'exact';
+
+/**
+ * The skills matching a listing or search, most recently updated first,
+ * built-in skills last.
+ */
+export type SkillsResponse = {
+    /**
+     * The matching skills.
+     */
+    skills: Array<SkillListing>;
+};
+
+/**
  * Metadata for one staged Slack channel.
  */
 export type SlackChannelMeta = {
@@ -2077,6 +2226,114 @@ export type StructuredToolActivity = {
  */
 export type TargetType = 'user' | 'team';
 
+/**
+ * One activity action returned to the AI.
+ */
+export type ToolActivityAction = {
+    type: 'created';
+} | {
+    type: 'edited';
+} | {
+    type: 'opened';
+} | {
+    type: 'deleted';
+} | {
+    type: 'messaged';
+} | {
+    type: 'sent';
+} | {
+    type: 'responded';
+} | {
+    /**
+     * The previous value, when known.
+     */
+    from?: unknown;
+    /**
+     * Previous select/tag option ids resolved to display labels.
+     */
+    from_labels?: Array<string> | null;
+    /**
+     * The property definition id.
+     */
+    property: string;
+    /**
+     * The property definition's human-readable display name, when it is
+     * still visible to the caller.
+     */
+    property_name?: string | null;
+    /**
+     * The property's canonical data type, including `tag` for tag sets.
+     */
+    property_type?: string | null;
+    /**
+     * The new value, or `None` when cleared.
+     */
+    to?: unknown;
+    /**
+     * New select/tag option ids resolved to display labels.
+     */
+    to_labels?: Array<string> | null;
+    type: 'propertyChanged';
+} | {
+    /**
+     * The added principal.
+     */
+    participant: string;
+    type: 'participantAdded';
+} | {
+    /**
+     * The removed principal.
+     */
+    participant: string;
+    type: 'participantRemoved';
+} | {
+    /**
+     * The started call's id.
+     */
+    call_id: string;
+    type: 'callStarted';
+} | {
+    type: 'taskAdded';
+} | {
+    type: 'taskRemoved';
+} | {
+    /**
+     * The stored payload, verbatim.
+     */
+    payload?: unknown;
+    /**
+     * The stored action tag.
+     */
+    tag: string;
+    type: 'unknown';
+};
+
+/**
+ * One activity event returned by [`ReadActivity`].
+ */
+export type ToolActivityEvent = {
+    /**
+     * What the principal did.
+     */
+    action: ToolActivityAction;
+    /**
+     * The principal that mechanically performed the action.
+     */
+    actorId: string;
+    /**
+     * The entity acted on.
+     */
+    entityId: string;
+    /**
+     * The kind of entity acted on.
+     */
+    entityType: string;
+    /**
+     * When the action occurred.
+     */
+    occurredAt: string;
+};
+
 export type ToolOutcome = {
     changes: DatabaseChange;
     status: 'succeeded';
@@ -2105,6 +2362,20 @@ export type UpdateChannelSharePermission = {
      * You can add, remove or replace and existing permission
      */
     operation: UpdateOperation;
+};
+
+/**
+ * One explicit memory edit at the revision it was based on.
+ */
+export type UpdateExplicitMemoryRequest = {
+    /**
+     * The one-based line edit to apply.
+     */
+    edit: MemoryEdit;
+    /**
+     * The revision returned by the last read or successful edit.
+     */
+    revision: number;
 };
 
 export type UpdateOperation = 'add' | 'remove' | 'replace';
@@ -2471,6 +2742,44 @@ export type WebSearchTopic = 'general' | 'news';
 export type WithChatId = {
     chat_id: string;
 };
+
+export type ReadMyActivityData = {
+    body?: never;
+    path?: never;
+    query: {
+        /**
+         * Inclusive start, RFC 3339.
+         */
+        from: string;
+        /**
+         * Exclusive end, RFC 3339; must be after `from`.
+         */
+        to: string;
+    };
+    url: '/activity';
+};
+
+export type ReadMyActivityErrors = {
+    /**
+     * `from` is not before `to`
+     */
+    400: ActivityErrorBody;
+    /**
+     * Internal server error
+     */
+    500: ActivityErrorBody;
+};
+
+export type ReadMyActivityError = ReadMyActivityErrors[keyof ReadMyActivityErrors];
+
+export type ReadMyActivityResponses = {
+    /**
+     * Activity in the range
+     */
+    200: ReadActivityResponse;
+};
+
+export type ReadMyActivityResponse = ReadMyActivityResponses[keyof ReadMyActivityResponses];
 
 export type SetPricingHandlerData = {
     body: SetPricingRequest;
@@ -3556,6 +3865,114 @@ export type GetMemoryHandlerResponses = {
 
 export type GetMemoryHandlerResponse = GetMemoryHandlerResponses[keyof GetMemoryHandlerResponses];
 
+export type GetUserActivityData = {
+    body?: never;
+    path?: never;
+    query: {
+        /**
+         * A `macro|` user id; omit for the caller.
+         */
+        user?: string;
+        /**
+         * Inclusive first UTC date.
+         */
+        start: string;
+        /**
+         * Inclusive last UTC date, at most 366 days after `start`.
+         */
+        end: string;
+    };
+    url: '/memory/activity';
+};
+
+export type GetUserActivityErrors = {
+    /**
+     * Invalid user id or date range
+     */
+    400: MemoryErrorBody;
+    /**
+     * The user is not the caller or a current teammate
+     */
+    403: MemoryErrorBody;
+    /**
+     * Internal server error
+     */
+    500: MemoryErrorBody;
+};
+
+export type GetUserActivityError = GetUserActivityErrors[keyof GetUserActivityErrors];
+
+export type GetUserActivityResponses = {
+    /**
+     * Activity reports in the range
+     */
+    200: ActivityReports;
+};
+
+export type GetUserActivityResponse = GetUserActivityResponses[keyof GetUserActivityResponses];
+
+export type ReadExplicitMemoryData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/memory/explicit';
+};
+
+export type ReadExplicitMemoryErrors = {
+    /**
+     * Internal server error
+     */
+    500: MemoryErrorBody;
+};
+
+export type ReadExplicitMemoryError = ReadExplicitMemoryErrors[keyof ReadExplicitMemoryErrors];
+
+export type ReadExplicitMemoryResponses = {
+    /**
+     * The caller's explicit memory
+     */
+    200: ExplicitMemory;
+};
+
+export type ReadExplicitMemoryResponse = ReadExplicitMemoryResponses[keyof ReadExplicitMemoryResponses];
+
+export type EditExplicitMemoryData = {
+    body: UpdateExplicitMemoryRequest;
+    path?: never;
+    query?: never;
+    url: '/memory/explicit';
+};
+
+export type EditExplicitMemoryErrors = {
+    /**
+     * Invalid line or content
+     */
+    400: MemoryErrorBody;
+    /**
+     * The revision is stale
+     */
+    409: MemoryErrorBody;
+    /**
+     * Rejected by privacy review
+     */
+    422: MemoryErrorBody;
+    /**
+     * Internal server error
+     */
+    500: MemoryErrorBody;
+};
+
+export type EditExplicitMemoryError = EditExplicitMemoryErrors[keyof EditExplicitMemoryErrors];
+
+export type EditExplicitMemoryResponses = {
+    /**
+     * The edited explicit memory
+     */
+    200: ExplicitMemory;
+};
+
+export type EditExplicitMemoryResponse = EditExplicitMemoryResponses[keyof EditExplicitMemoryResponses];
+
 export type GetStateHandler2Data = {
     body?: never;
     path?: never;
@@ -3885,6 +4302,95 @@ export type GetBatchPreviewResponses = {
 };
 
 export type GetBatchPreviewResponse2 = GetBatchPreviewResponses[keyof GetBatchPreviewResponses];
+
+export type ListSkillsData = {
+    body?: never;
+    path?: never;
+    query?: {
+        /**
+         * Words from the skill's name, matched as one adjacent phrase. Omit to
+         * list the 100 most recently updated skills.
+         */
+        query?: string;
+        /**
+         * How `query` is matched; `partial` when omitted.
+         */
+        matchType?: SkillsMatchType;
+    };
+    url: '/skills';
+};
+
+export type ListSkillsErrors = {
+    /**
+     * Blank query
+     */
+    400: SkillErrorBody;
+    /**
+     * Unauthorized
+     */
+    401: unknown;
+    /**
+     * Listing failed
+     */
+    500: SkillErrorBody;
+    /**
+     * Search failed
+     */
+    502: SkillErrorBody;
+};
+
+export type ListSkillsError = ListSkillsErrors[keyof ListSkillsErrors];
+
+export type ListSkillsResponses = {
+    /**
+     * Matching skills, most recently updated first
+     */
+    200: SkillsResponse;
+};
+
+export type ListSkillsResponse = ListSkillsResponses[keyof ListSkillsResponses];
+
+export type ReadSkillData = {
+    body?: never;
+    path: {
+        /**
+         * The skill's id
+         */
+        id: string;
+    };
+    query?: never;
+    url: '/skills/{id}';
+};
+
+export type ReadSkillErrors = {
+    /**
+     * Unauthorized
+     */
+    401: unknown;
+    /**
+     * No skill the caller can view has this id
+     */
+    404: SkillErrorBody;
+    /**
+     * Reading failed
+     */
+    500: SkillErrorBody;
+    /**
+     * Access check unavailable
+     */
+    503: SkillErrorBody;
+};
+
+export type ReadSkillError = ReadSkillErrors[keyof ReadSkillErrors];
+
+export type ReadSkillResponses = {
+    /**
+     * The skill's instructions
+     */
+    200: SkillContentResponse;
+};
+
+export type ReadSkillResponse = ReadSkillResponses[keyof ReadSkillResponses];
 
 export type SendChatMessageData = {
     body: HttpSendChatMessageRequest;

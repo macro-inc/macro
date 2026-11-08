@@ -286,6 +286,7 @@ async function mount(page: Page, state: LinkedServer, query = '') {
                     jid: '14155550199@s.whatsapp.net',
                     alternateJid: null,
                     displayName: 'Ana Ruiz',
+                    name: 'Ana Ruiz',
                     admin: true,
                   },
                 ],

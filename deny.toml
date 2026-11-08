@@ -234,6 +234,7 @@ deny = [
     "email",                     # Dev logging only
     "email_api_client",          # Outlook transport span tests only
     "email_db_client",           # Purge phase span tests only
+    "email_service",             # CRM backfill trace propagation tests only (dev-dependency)
     "forms",                     # Anonymous-response span and log leak tests only (dev-dependency)
     "fusionauth",                # Credential log leak tests only (dev-dependency)
     "genai_telemetry",           # GenAI span tests

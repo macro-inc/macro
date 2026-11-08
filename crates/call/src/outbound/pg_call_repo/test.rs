@@ -3389,6 +3389,62 @@ fn standalone_meeting() -> crate::domain::meetings::Meeting {
     fixtures(path = "../../../fixtures", scripts("call_repo")),
     migrator = "MACRO_DB_MIGRATIONS"
 )]
+async fn live_call_join_access_requires_membership_or_invitation(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    insert_user_mapping(&pool, USER_B.deref(), MACRO_USER_B).await?;
+    insert_user_mapping(&pool, USER_C.deref(), MACRO_USER_C).await?;
+    insert_user_mapping(&pool, USER_D.deref(), Uuid::now_v7()).await?;
+    let repo = repo(pool);
+
+    assert!(repo.can_join_call(&CALL1, USER_A.as_ref()).await?);
+    assert!(repo.can_join_call(&CALL1, USER_C.as_ref()).await?);
+    assert!(!repo.can_join_call(&CALL1, USER_D.as_ref()).await?);
+
+    let meeting = repo.create_meeting(standalone_meeting()).await?;
+    let (call, _) = repo
+        .get_or_create_meeting_call(&meeting.id, &Uuid::now_v7())
+        .await?;
+    assert!(repo.can_join_call(&call.id, USER_B.as_ref()).await?);
+    assert!(!repo.can_join_call(&call.id, USER_C.as_ref()).await?);
+    repo.add_meeting_participant(&call.id, USER_C.clone())
+        .await?;
+    repo.add_meeting_invitees(&meeting.id, &call.id, &[USER_D.clone()])
+        .await?;
+    assert!(repo.can_join_call(&call.id, USER_C.as_ref()).await?);
+    assert!(repo.can_join_call(&call.id, USER_D.as_ref()).await?);
+    Ok(())
+}
+
+#[sqlx::test(
+    fixtures(path = "../../../fixtures", scripts("call_repo")),
+    migrator = "MACRO_DB_MIGRATIONS"
+)]
+async fn program_only_call_waits_for_last_person_departure(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    let repo = repo(pool.clone());
+    repo.set_participant_client(&CALL1, USER_B.as_ref(), "agent")
+        .await?;
+    assert!(repo.archive_call_if_program_only(&CALL1).await?.is_none());
+
+    repo.remove_participant(&CALL1, USER_A.clone()).await?;
+    assert!(repo.archive_call_if_program_only(&CALL1).await?.is_none());
+
+    sqlx::query!(
+        "UPDATE call_participants SET left_at = now() - interval '2 minutes' WHERE call_id = $1 AND user_id = $2",
+        CALL1, USER_A.as_ref(),
+    )
+    .execute(&pool)
+    .await?;
+    assert!(repo.archive_call_if_program_only(&CALL1).await?.is_some());
+    Ok(())
+}
+
+#[sqlx::test(
+    fixtures(path = "../../../fixtures", scripts("call_repo")),
+    migrator = "MACRO_DB_MIGRATIONS"
+)]
 async fn standalone_meeting_archives_guest_names_and_preserves_invitation(
     pool: Pool<Postgres>,
 ) -> anyhow::Result<()> {

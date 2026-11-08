@@ -16,6 +16,7 @@ mod queue;
 mod recovery;
 mod session_task;
 mod sharing;
+mod source;
 mod turn_state;
 mod work_registration;
 mod working_branch;
@@ -310,6 +311,7 @@ struct AgentSessionRow {
     pull_request_url: Option<String>,
     task_id: Option<String>,
     source: String,
+    source_row: Option<Json<source::SourceRow>>,
     visibility: String,
     workspace: String,
     sandbox_size: String,
@@ -365,6 +367,10 @@ impl TryFrom<AgentSessionRow> for AgentSession {
                 .source
                 .parse()
                 .map_err(|_| anyhow::anyhow!("unknown agent_session source {:?}", row.source))?,
+            origin: row
+                .source_row
+                .map(|Json(source)| source.into_origin())
+                .unwrap_or_default(),
             visibility: row.visibility.parse().map_err(|_| {
                 anyhow::anyhow!("unknown agent_session visibility {:?}", row.visibility)
             })?,
@@ -412,6 +418,7 @@ impl<B: BotFacts + 'static> AgentSessionRepo for PgAgentSessionRepo<B> {
             instructions,
             mcp_servers,
             egress_token_hash,
+            origin,
         } = params;
         let mcp_servers_json = serde_json::to_value(mcp_servers.servers())
             .context("serialize agent session mcp servers")?;
@@ -440,6 +447,7 @@ impl<B: BotFacts + 'static> AgentSessionRepo for PgAgentSessionRepo<B> {
             return Err(AgentSessionError::UnknownOwner);
         }
 
+        let source_id = source::insert_source(&mut transaction, &origin).await?;
         let (status, status_event_name) = status_columns(&SessionStatus::NoMessages);
         let conversation = sqlx::query_scalar!(
             "SELECT EXISTS (SELECT 1 FROM agent_conversation_sessions WHERE session_id = $1) AS \"exists!\"",
@@ -461,9 +469,9 @@ impl<B: BotFacts + 'static> AgentSessionRepo for PgAgentSessionRepo<B> {
                 id, owner_id, thread_id, originating_message_id, bot_id, model,
                 harness, repo_url, workspace, sandbox_size, instructions,
                 acp_session_id, status, status_event_name, egress_token_hash,
-                mcp_scope, mcp_servers, repo_branch, for_warming, source, visibility
+                mcp_scope, mcp_servers, repo_branch, for_warming, source, visibility, source_id
             )
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22)
             RETURNING
                 id, name, archived_by::TEXT AS "archived_by?", archived_at, owner_id, thread_id, originating_message_id, bot_id,
                 model, harness, repo_url, repo_branch, pull_request_url, task_id, source, visibility, workspace, sandbox_size, instructions,
@@ -472,6 +480,9 @@ impl<B: BotFacts + 'static> AgentSessionRepo for PgAgentSessionRepo<B> {
                 (SELECT jsonb_build_object('type', parent_entity_type, 'id', parent_entity_id)
                  FROM comms_messages WHERE id = agent_session.thread_id)
                     AS "thread_parent?: Json<MessageParent>",
+                (SELECT to_jsonb(origin_row) FROM agent_session_source origin_row
+                 WHERE origin_row.id = agent_session.source_id)
+                    AS "source_row?: Json<source::SourceRow>",
                 -- A row being created cannot have an external identity yet.
                 NULL::TEXT AS "external_provider?", NULL::TEXT AS "external_id?",
                 NULL::TEXT AS "external_name?", NULL::TEXT AS "external_url?",
@@ -498,6 +509,7 @@ impl<B: BotFacts + 'static> AgentSessionRepo for PgAgentSessionRepo<B> {
             warm,
             <&str>::from(purpose.source()),
             <&str>::from(visibility),
+            source_id,
         )
         .fetch_one(&mut *transaction)
         .await
@@ -604,6 +616,9 @@ impl<B: BotFacts + 'static> AgentSessionRepo for PgAgentSessionRepo<B> {
                 (SELECT jsonb_build_object('type', parent_entity_type, 'id', parent_entity_id)
                  FROM comms_messages WHERE id = agent_session.thread_id)
                     AS "thread_parent?: Json<MessageParent>",
+                (SELECT to_jsonb(origin_row) FROM agent_session_source origin_row
+                 WHERE origin_row.id = agent_session.source_id)
+                    AS "source_row?: Json<source::SourceRow>",
                 ext.provider AS "external_provider?", ext.external_id AS "external_id?",
                 ext.external_name AS "external_name?", ext.external_url AS "external_url?",
                 ext.last_run_id AS "external_last_run_id?"
@@ -711,6 +726,9 @@ impl<B: BotFacts + 'static> AgentSessionRepo for PgAgentSessionRepo<B> {
                 (SELECT jsonb_build_object('type', parent_entity_type, 'id', parent_entity_id)
                  FROM comms_messages WHERE id = agent_session.thread_id)
                     AS "thread_parent?: Json<MessageParent>",
+                (SELECT to_jsonb(origin_row) FROM agent_session_source origin_row
+                 WHERE origin_row.id = agent_session.source_id)
+                    AS "source_row?: Json<source::SourceRow>",
                 ext.provider AS "external_provider?", ext.external_id AS "external_id?",
                 ext.external_name AS "external_name?", ext.external_url AS "external_url?",
                 ext.last_run_id AS "external_last_run_id?"
@@ -752,6 +770,9 @@ impl<B: BotFacts + 'static> AgentSessionRepo for PgAgentSessionRepo<B> {
                 (SELECT jsonb_build_object('type', parent_entity_type, 'id', parent_entity_id)
                  FROM comms_messages WHERE id = agent_session.thread_id)
                     AS "thread_parent?: Json<MessageParent>",
+                (SELECT to_jsonb(origin_row) FROM agent_session_source origin_row
+                 WHERE origin_row.id = agent_session.source_id)
+                    AS "source_row?: Json<source::SourceRow>",
                 ext.provider AS "external_provider?", ext.external_id AS "external_id?",
                 ext.external_name AS "external_name?", ext.external_url AS "external_url?",
                 ext.last_run_id AS "external_last_run_id?"
@@ -786,6 +807,9 @@ impl<B: BotFacts + 'static> AgentSessionRepo for PgAgentSessionRepo<B> {
                 (SELECT jsonb_build_object('type', parent_entity_type, 'id', parent_entity_id)
                  FROM comms_messages WHERE id = agent_session.thread_id)
                     AS "thread_parent?: Json<MessageParent>",
+                (SELECT to_jsonb(origin_row) FROM agent_session_source origin_row
+                 WHERE origin_row.id = agent_session.source_id)
+                    AS "source_row?: Json<source::SourceRow>",
                 ext.provider AS "external_provider?", ext.external_id AS "external_id?",
                 ext.external_name AS "external_name?", ext.external_url AS "external_url?",
                 ext.last_run_id AS "external_last_run_id?"
@@ -822,6 +846,9 @@ impl<B: BotFacts + 'static> AgentSessionRepo for PgAgentSessionRepo<B> {
                 (SELECT jsonb_build_object('type', parent_entity_type, 'id', parent_entity_id)
                  FROM comms_messages WHERE id = agent_session.thread_id)
                     AS "thread_parent?: Json<MessageParent>",
+                (SELECT to_jsonb(origin_row) FROM agent_session_source origin_row
+                 WHERE origin_row.id = agent_session.source_id)
+                    AS "source_row?: Json<source::SourceRow>",
                 ext.provider AS "external_provider?", ext.external_id AS "external_id?",
                 ext.external_name AS "external_name?", ext.external_url AS "external_url?",
                 ext.last_run_id AS "external_last_run_id?"
@@ -1402,13 +1429,17 @@ impl<B: BotFacts + 'static> AgentSessionRepo for PgAgentSessionRepo<B> {
             r#"
             DELETE FROM agent_session
             WHERE id = $1
-            RETURNING share_permission_id
+            RETURNING share_permission_id, source_id
             "#,
             id.as_uuid(),
         )
         .fetch_optional(&mut *transaction)
         .await
         .context("failed to delete agent session")?;
+
+        if let Some(source_id) = permission.as_ref().and_then(|row| row.source_id) {
+            source::delete_source(&mut transaction, source_id).await?;
+        }
 
         if let Some(permission_id) = permission.and_then(|row| row.share_permission_id) {
             sqlx::query!(

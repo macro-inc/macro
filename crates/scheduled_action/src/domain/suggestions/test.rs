@@ -11,15 +11,53 @@ use super::*;
 use crate::domain::ports::{CodeOutcome, CodeUnavailable, StepProblems};
 use crate::domain::service::test::{TestService, service, user};
 
+/// One person's suggestions.
 #[derive(Default)]
 struct FakeRepo {
     generation: Mutex<Option<StoredGeneration>>,
     suggestions: Mutex<Vec<(RoutineSuggestion, bool)>>,
+    seen_at: Mutex<Option<DateTime<Utc>>>,
+    checked_at: Mutex<Option<DateTime<Utc>>>,
 }
 
 impl SuggestionRepo for FakeRepo {
     async fn generation(&self, _: &MacroUserIdStr<'_>) -> Result<Option<StoredGeneration>> {
         Ok(self.generation.lock().unwrap().clone())
+    }
+
+    async fn seen(&self, _: &MacroUserIdStr<'_>, now: DateTime<Utc>) -> Result<()> {
+        *self.seen_at.lock().unwrap() = Some(now);
+        self.generation
+            .lock()
+            .unwrap()
+            .get_or_insert_with(|| StoredGeneration {
+                status: GenerationStatus::Pending,
+                generation_id: Uuid::now_v7(),
+                inputs: None,
+                started_at: now,
+                generated_at: None,
+            });
+        Ok(())
+    }
+
+    async fn take_checks(
+        &self,
+        active_since: DateTime<Utc>,
+        checked_before: DateTime<Utc>,
+        now: DateTime<Utc>,
+        _: u16,
+    ) -> Result<Vec<MacroUserIdStr<'static>>> {
+        let active = self
+            .seen_at
+            .lock()
+            .unwrap()
+            .is_some_and(|seen| seen >= active_since);
+        let mut checked = self.checked_at.lock().unwrap();
+        if !active || checked.is_some_and(|at| at >= checked_before) {
+            return Ok(Vec::new());
+        }
+        *checked = Some(now);
+        Ok(vec![user()])
     }
 
     async fn claim(
@@ -214,16 +252,15 @@ struct FakeModel {
     prompts: Mutex<Vec<String>>,
 }
 
-impl DraftModel for FakeModel {
+impl SuggestionModel for FakeModel {
     async fn complete(
         &self,
         _: &MacroUserIdStr<'static>,
-        completion: DraftCompletion<'_>,
+        _: &str,
+        prompt: &str,
+        _: &Value,
     ) -> Option<Value> {
-        self.prompts
-            .lock()
-            .unwrap()
-            .push(completion.prompt.to_owned());
+        self.prompts.lock().unwrap().push(prompt.to_owned());
         Some(self.answer.clone())
     }
 }
@@ -294,6 +331,17 @@ impl Harness {
         self.tasks.wait().await;
         self.tasks.reopen();
     }
+
+    /// The scheduler's next pass, a check interval after the last.
+    async fn sweep(&self) -> SweepReport {
+        let report = self.service.sweep(Utc::now()).await.unwrap();
+        *self.repo.checked_at.lock().unwrap() = None;
+        report
+    }
+
+    fn prompts(&self) -> usize {
+        self.model.prompts.lock().unwrap().len()
+    }
 }
 
 fn email(subject: &str, snippet: &str) -> InboxMessage {
@@ -342,13 +390,96 @@ async fn without_the_flag_there_are_no_suggestions_and_nothing_is_generated() {
             .await
             .unwrap_err()
     ));
+    // Neither the scheduler nor a direct call generates for them.
+    *harness.repo.seen_at.lock().unwrap() = Some(Utc::now());
+    assert_eq!(
+        harness.service.generate_for(&user()).await.unwrap(),
+        GenerationOutcome::Off
+    );
+    assert_eq!(harness.sweep().await.generated, 0);
     harness.settle().await;
     assert!(harness.model.prompts.lock().unwrap().is_empty());
     assert_eq!(*harness.repo.generation.lock().unwrap(), None);
 }
 
+/// Reading suggestions never generates them, however often or however
+/// stale; only the scheduler's sweep does, for people who read them.
 #[tokio::test]
-async fn a_first_read_generates_from_the_inbox_and_workspace() {
+async fn reads_never_generate_and_the_sweep_does_for_people_who_read() {
+    let harness = Harness::new(
+        true,
+        Vec::new(),
+        json!({ "suggestions": [starter("triage", json!([]), 0.6)] }),
+    );
+    // Nobody read them, so nothing is generated.
+    assert_eq!(harness.sweep().await, SweepReport::default());
+    for _ in 0..3 {
+        let read = harness.service.suggestions(&user()).await.unwrap();
+        assert_eq!(read.status, GenerationStatus::Pending);
+        assert!(read.suggestions.is_empty());
+    }
+    harness.settle().await;
+    assert_eq!(harness.prompts(), 0);
+
+    let report = harness.sweep().await;
+    assert_eq!(
+        report,
+        SweepReport {
+            checked: 1,
+            generated: 1,
+            failed: 0
+        }
+    );
+    let read = harness.service.suggestions(&user()).await.unwrap();
+    assert_eq!(read.status, GenerationStatus::Ready);
+    assert_eq!(read.suggestions.len(), 1);
+    // Nothing changed: the next sweep looks and generates nothing.
+    assert_eq!(harness.sweep().await.generated, 0);
+    assert_eq!(harness.prompts(), 1);
+    // Someone who stopped reading isn't generated for.
+    *harness.repo.seen_at.lock().unwrap() = Some(Utc::now() - ACTIVE_FOR - TimeDelta::days(1));
+    harness
+        .sources
+        .inbox_ids
+        .lock()
+        .unwrap()
+        .push("inbox-2".to_owned());
+    assert_eq!(harness.sweep().await.checked, 0);
+    assert_eq!(harness.prompts(), 1);
+}
+
+/// What a scheduler, or one day a routine, calls: one generation at a time.
+#[tokio::test]
+async fn generate_for_waits_for_its_generation_and_skips_a_running_one() {
+    let harness = Harness::new(
+        true,
+        Vec::new(),
+        json!({ "suggestions": [starter("triage", json!([]), 0.6)] }),
+    );
+    assert_eq!(
+        harness.service.generate_for(&user()).await.unwrap(),
+        GenerationOutcome::Ready
+    );
+    assert_eq!(harness.prompts(), 1);
+    harness
+        .repo
+        .claim(
+            &user(),
+            Uuid::now_v7(),
+            Utc::now(),
+            Utc::now() - RECLAIM_GENERATING_AFTER,
+        )
+        .await
+        .unwrap();
+    assert_eq!(
+        harness.service.generate_for(&user()).await.unwrap(),
+        GenerationOutcome::Running
+    );
+    assert_eq!(harness.prompts(), 1);
+}
+
+#[tokio::test]
+async fn a_generation_reads_the_inbox_and_workspace() {
     let harness = Harness::new(
         true,
         vec![email(
@@ -362,9 +493,9 @@ async fn a_first_read_generates_from_the_inbox_and_workspace() {
         ] }),
     );
     let first = harness.service.suggestions(&user()).await.unwrap();
-    assert_eq!(first.status, GenerationStatus::Generating);
+    assert_eq!(first.status, GenerationStatus::Pending);
     assert!(first.suggestions.is_empty());
-    harness.settle().await;
+    harness.sweep().await;
 
     let read = harness.service.suggestions(&user()).await.unwrap();
     assert_eq!(read.status, GenerationStatus::Ready);
@@ -383,8 +514,8 @@ async fn a_first_read_generates_from_the_inbox_and_workspace() {
             (Surface::Crm, false)
         ]
     );
-    // Nothing changed, so a second read starts nothing.
-    harness.settle().await;
+    // Nothing changed, so the next sweep starts nothing.
+    harness.sweep().await;
     assert_eq!(harness.model.prompts.lock().unwrap().len(), 1);
     let prompt = harness.model.prompts.lock().unwrap()[0].clone();
     assert!(prompt.contains("Delivery confirmed for order 42"));
@@ -419,8 +550,7 @@ async fn an_injected_inbox_cant_switch_anything_on() {
             },
         ] }),
     );
-    harness.service.suggestions(&user()).await.unwrap();
-    harness.settle().await;
+    harness.service.generate_for(&user()).await.unwrap();
     let read = harness.service.suggestions(&user()).await.unwrap();
 
     // The injected text reached AI only inside the data block.
@@ -473,7 +603,7 @@ async fn not_interested_stays_dismissed_across_generations() {
         json!({ "suggestions": [starter("inbox", json!([]), 0.6), starter("triage", json!([]), 0.6)] }),
     );
     harness.service.suggestions(&user()).await.unwrap();
-    harness.settle().await;
+    harness.sweep().await;
     let read = harness.service.suggestions(&user()).await.unwrap();
     let inbox = read
         .suggestions
@@ -490,17 +620,15 @@ async fn not_interested_stays_dismissed_across_generations() {
             .unwrap_err()
     ));
 
-    // Connecting an inbox regenerates; AI suggests the dismissed routine
-    // again, and it stays away.
+    // Connecting an inbox regenerates at the next sweep; AI suggests the
+    // dismissed routine again, and it stays away.
     harness
         .sources
         .inbox_ids
         .lock()
         .unwrap()
         .push("inbox-2".to_owned());
-    let read = harness.service.suggestions(&user()).await.unwrap();
-    assert_eq!(read.status, GenerationStatus::Generating);
-    harness.settle().await;
+    assert_eq!(harness.sweep().await.generated, 1);
     let read = harness.service.suggestions(&user()).await.unwrap();
     let keys: Vec<_> = read
         .suggestions
@@ -524,12 +652,29 @@ async fn an_answer_with_nothing_usable_fails_and_is_retried_later() {
         json!({ "suggestions": [starter("nope", json!([]), 0.9)] }),
     );
     harness.service.suggestions(&user()).await.unwrap();
-    harness.settle().await;
+    assert_eq!(harness.sweep().await.failed, 1);
     let read = harness.service.suggestions(&user()).await.unwrap();
     assert_eq!(read.status, GenerationStatus::Failed);
-    harness.settle().await;
+    harness.sweep().await;
     // Not again straight away.
     assert_eq!(harness.model.prompts.lock().unwrap().len(), 1);
+}
+
+/// The person can still ask: onboarding refreshes once their inbox is
+/// connected, and the generation runs in the background.
+#[tokio::test]
+async fn a_refresh_generates_now_in_the_background() {
+    let harness = Harness::new(
+        true,
+        Vec::new(),
+        json!({ "suggestions": [starter("triage", json!([]), 0.6)] }),
+    );
+    let refreshed = harness.service.refresh(&user()).await.unwrap();
+    assert_eq!(refreshed.status, GenerationStatus::Generating);
+    harness.settle().await;
+    let read = harness.service.suggestions(&user()).await.unwrap();
+    assert_eq!(read.status, GenerationStatus::Ready);
+    assert_eq!(harness.prompts(), 1);
 }
 
 #[test]
@@ -543,6 +688,13 @@ fn generations_rerun_when_inputs_change_weekly_or_after_a_failure() {
         generated_at: Some(now - TimeDelta::days(1)),
     };
     assert!(needs_generation(None, "abc", now));
+    let pending = StoredGeneration {
+        status: GenerationStatus::Pending,
+        inputs: None,
+        generated_at: None,
+        ..ready.clone()
+    };
+    assert!(needs_generation(Some(&pending), "abc", now));
     assert!(!needs_generation(Some(&ready), "abc", now));
     assert!(needs_generation(Some(&ready), "abd", now));
     let old = StoredGeneration {

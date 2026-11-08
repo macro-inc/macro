@@ -17,7 +17,7 @@ import { type RoutineTemplate, templateChain } from '../core/routine-templates';
 import { RoutineSurface } from './routine-editor';
 
 /** Each template's icon and tint, by what it is for. */
-export function surfaceLook(surface: RoutineTemplate['surface']) {
+export function surfaceLook(surface: RoutineTemplate['surfaces'][number]) {
   return match(surface)
     .with('email', () => ({ icon: EnvelopeIcon, tint: 'text-blue' }))
     .with('tasks', () => ({ icon: CheckSquareIcon, tint: 'text-green' }))
@@ -33,7 +33,7 @@ export function surfaceLook(surface: RoutineTemplate['surface']) {
 
 /** What a routine card shows. Templates and suggestions share it. */
 export type RoutineCardContent = {
-  surface: RoutineTemplate['surface'];
+  surface: RoutineTemplate['surfaces'][number];
   title: string;
   /** What it does, in a line or two. */
   description: string;
@@ -46,7 +46,7 @@ export type RoutineCardContent = {
 /** A template as a card. */
 export function templateCard(template: RoutineTemplate): RoutineCardContent {
   return {
-    surface: template.surface,
+    surface: template.surfaces[0] ?? 'agents',
     title: template.title,
     description: template.description,
     chain: templateChain(template),

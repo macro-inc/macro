@@ -28,6 +28,7 @@ impl RoutineDraftService for Drafts {
             }
             _ => Ok(Draft::Failed {
                 message: owner.as_ref().to_owned(),
+                created: Vec::new(),
             }),
         }
     }
@@ -77,4 +78,17 @@ async fn drafts_for_the_signed_in_user() {
         .0,
         StatusCode::BAD_REQUEST
     );
+}
+
+#[tokio::test]
+async fn still_drafts_for_web_clients_that_send_workspace_lists() {
+    let mut old = body("label invoices");
+    old["context"]["workspace"] = json!({
+        "labels": ["Finance"],
+        "channels": [{ "name": "eng", "id": "c1" }],
+    });
+
+    let (status, _) = request(&router(), "POST", "/scheduled-actions/drafts", "owner", old).await;
+
+    assert_eq!(status, StatusCode::OK);
 }

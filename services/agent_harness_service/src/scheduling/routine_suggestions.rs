@@ -2,18 +2,24 @@
 
 use std::sync::Arc;
 
+use agent_session::domain::routines::ConnectedApps;
 use email_service_client::EmailServiceClient;
 use macro_user_id::user_id::MacroUserIdStr;
 use scheduled_action::domain::suggestions::ports::{InboxMessage, SuggestionSources};
 
+use crate::routine_sessions::PipedreamConnectedApps;
+
 /// The newest mail through email_service, which reads it from Gmail and
-/// Outlook, and the person's inboxes from MacroDB.
-pub struct HarnessSuggestionSources {
+/// Outlook, and the apps the person connected through Pipedream.
+pub struct HarnessSuggestionSources<Connections> {
     pub email: Arc<EmailServiceClient>,
-    pub db: sqlx::PgPool,
+    pub apps: PipedreamConnectedApps<Connections>,
 }
 
-impl SuggestionSources for HarnessSuggestionSources {
+impl<Connections> SuggestionSources for HarnessSuggestionSources<Connections>
+where
+    Connections: pipedream_mcp::domain::ports::ConnectionStore,
+{
     async fn inbox(
         &self,
         user: &MacroUserIdStr<'static>,
@@ -31,25 +37,17 @@ impl SuggestionSources for HarnessSuggestionSources {
                     Some(name) if !name.trim().is_empty() => format!("{name} <{}>", from.email),
                     _ => from.email,
                 }),
+                to: message.to,
                 subject: message.subject,
+                // The reader doesn't return the provider's labels yet.
+                labels: Vec::new(),
                 snippet: message.snippet,
                 received_at: message.received_at,
             })
             .collect())
     }
 
-    async fn inbox_ids(&self, user: &MacroUserIdStr<'static>) -> anyhow::Result<Vec<String>> {
-        let inboxes =
-            email_db_client::links::get::fetch_readable_owned_inboxes(&self.db, user).await?;
-        Ok(inboxes
-            .into_iter()
-            .map(|inbox| inbox.id.to_string())
-            .collect())
-    }
-
-    /// Detected tools arrive with onboarding's tool suggestions (#9893);
-    /// until then a generation reads none.
-    async fn tools(&self, _: &MacroUserIdStr<'static>) -> anyhow::Result<Vec<String>> {
-        Ok(Vec::new())
+    async fn apps(&self, user: &MacroUserIdStr<'static>) -> anyhow::Result<Vec<String>> {
+        self.apps.connected_app_slugs(user).await
     }
 }

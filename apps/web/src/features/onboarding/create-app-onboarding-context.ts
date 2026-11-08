@@ -307,11 +307,12 @@ export function createAppOnboardingContext(): OnboardingContext {
         },
       };
     },
-    createTeam: async ({ name, invites, allowDomainJoin }) => {
+    createTeam: async ({ name, invites, allowDomainJoin, notifyDomain }) => {
       const creation = createTeam.mutateAsync({
         name,
         invites: invites.map((email) => ({ email })),
         allowDomainJoin,
+        notifyDomain,
       });
       createdTeam = createdTeamId(creation);
       await creation;

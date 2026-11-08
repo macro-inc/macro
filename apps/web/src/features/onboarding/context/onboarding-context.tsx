@@ -119,12 +119,14 @@ export type OnboardingContext = {
   configureGithubRepositories(): void;
   createTeamDirectory(): TeamDirectorySource;
   /** Rejects on failure; the capability reports its own errors. */
-  /** `allowDomainJoin` lets people on the owner's work domain join, and
-   * tells the owner's same-domain contacts the team exists. */
+  /** `allowDomainJoin` lets people on the owner's work domain join.
+   * `notifyDomain` also emails the owner's same-domain contacts that the team
+   * exists; the server sends it only to a team with an auto-join domain. */
   createTeam(input: {
     name: string;
     invites: string[];
     allowDomainJoin: boolean;
+    notifyDomain: boolean;
   }): Promise<void>;
   /** Rejects on failure; the capability reports its own errors. */
   joinTeam(inviteId: string): Promise<void>;

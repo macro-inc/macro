@@ -1,5 +1,5 @@
-//! What routine suggestions need from outside: storage, and what the person's
-//! accounts say about their work.
+//! What routine suggestions need from outside: storage, what the person's
+//! accounts hold, and the hidden agent sessions that suggest.
 
 use std::future::Future;
 
@@ -7,68 +7,119 @@ use anyhow::Result;
 use chrono::{DateTime, Utc};
 use macro_user_id::user_id::MacroUserIdStr;
 use macro_uuid::Uuid;
+use routine_program::Surface;
 use serde::Serialize;
 
-use super::model::{CheckedSuggestion, RoutineSuggestion, StoredGeneration, SuggestionPick};
+use super::model::{
+    CheckedSuggestion, RoutineSuggestions, StoredGeneration, StoredSuggestion, SuggestOutcome,
+    SuggestRequest,
+};
 
-/// Each person's suggestions and the generation that made them.
+/// Each person's generation, the sessions suggesting for it, and what they
+/// handed back.
 pub trait SuggestionRepo: Send + Sync + 'static {
-    /// The person's last generation, if any.
+    /// The person's generation, if one ever started.
     fn generation(
         &self,
         user: &MacroUserIdStr<'_>,
     ) -> impl Future<Output = Result<Option<StoredGeneration>>> + Send;
 
-    /// Start `generation_id` for the person unless another generation started
-    /// after `reclaim_before` is still running; whether it was started.
-    fn claim(
+    /// Start the person's one generation at `now`; false when one started
+    /// before, whatever became of it.
+    fn begin(
         &self,
         user: &MacroUserIdStr<'_>,
-        generation_id: Uuid,
-        now: DateTime<Utc>,
-        reclaim_before: DateTime<Utc>,
-    ) -> impl Future<Output = Result<bool>> + Send;
-
-    /// Replace the person's open suggestions with `suggestions`, in order,
-    /// if `generation_id` still owns the generation; whether it did.
-    /// Dismissed and accepted suggestions stay.
-    fn complete(
-        &self,
-        user: &MacroUserIdStr<'_>,
-        generation_id: Uuid,
-        inputs: &str,
-        suggestions: &[CheckedSuggestion],
         now: DateTime<Utc>,
     ) -> impl Future<Output = Result<bool>> + Send;
 
-    /// Mark `generation_id` failed, if it still owns the generation.
-    fn fail(
+    /// Record how the person's generation ended.
+    fn finish(
         &self,
         user: &MacroUserIdStr<'_>,
-        generation_id: Uuid,
+        ready: bool,
+        now: DateTime<Utc>,
     ) -> impl Future<Output = Result<()>> + Send;
 
-    /// The person's suggestions that are neither dismissed nor made into a
-    /// routine, best first per surface. `safe_default` is false: the service
-    /// sets it from the catalog.
-    fn open(
+    /// Let hidden session `session`, run as `agent` for the person, suggest
+    /// for `surfaces`.
+    fn open_session(
+        &self,
+        session: Uuid,
+        user: &MacroUserIdStr<'_>,
+        agent: bot_id::BotId,
+        surfaces: &[Surface],
+        now: DateTime<Utc>,
+    ) -> impl Future<Output = Result<()>> + Send;
+
+    /// The suggestion session `session`, if it is one and still open.
+    fn session(
+        &self,
+        session: Uuid,
+    ) -> impl Future<Output = Result<Option<SuggestionSession>>> + Send;
+
+    /// Close `session`: it may suggest no more.
+    fn close_session(&self, session: Uuid) -> impl Future<Output = Result<()>> + Send;
+
+    /// Sessions opened before `before` and never closed, oldest first, at
+    /// most `limit`: left behind by a process that stopped.
+    fn stale_sessions(
+        &self,
+        before: DateTime<Utc>,
+        limit: u16,
+    ) -> impl Future<Output = Result<Vec<SuggestionSession>>> + Send;
+
+    /// Keep `suggestion`, handed back by `session` for the person; its id.
+    fn add(
         &self,
         user: &MacroUserIdStr<'_>,
-    ) -> impl Future<Output = Result<Vec<RoutineSuggestion>>> + Send;
+        session: Uuid,
+        suggestion: &CheckedSuggestion,
+        now: DateTime<Utc>,
+    ) -> impl Future<Output = Result<Uuid>> + Send;
 
-    /// What the person said they're not interested in.
-    fn dismissed(
+    /// Every suggestion AI made for the person, dismissed ones too.
+    fn suggestions(
         &self,
         user: &MacroUserIdStr<'_>,
-    ) -> impl Future<Output = Result<Vec<SuggestionPick>>> + Send;
+    ) -> impl Future<Output = Result<Vec<StoredSuggestion>>> + Send;
 
-    /// Mark the person's suggestion `id` not interesting; whether it was
-    /// theirs.
+    /// Catalog routines the person dismissed as Macro's templates, by key.
+    fn dismissed_templates(
+        &self,
+        user: &MacroUserIdStr<'_>,
+    ) -> impl Future<Output = Result<Vec<String>>> + Send;
+
+    /// Dismiss the person's suggestion `id` for good; whether it was theirs.
     fn dismiss(
         &self,
         user: &MacroUserIdStr<'_>,
         id: Uuid,
     ) -> impl Future<Output = Result<bool>> + Send;
+
+    /// Dismiss catalog routine `key` as a template for the person, for good.
+    fn dismiss_template(
+        &self,
+        user: &MacroUserIdStr<'_>,
+        key: &str,
+    ) -> impl Future<Output = Result<()>> + Send;
+
+    /// The suggestions the person's routines were saved from.
+    fn saved_from(
+        &self,
+        user: &MacroUserIdStr<'_>,
+    ) -> impl Future<Output = Result<Vec<Uuid>>> + Send;
+}
+
+/// A hidden session suggesting routines for its owner.
+#[derive(Debug, Clone, PartialEq)]
+pub struct SuggestionSession {
+    pub session: Uuid,
+    pub owner: MacroUserIdStr<'static>,
+    pub agent: bot_id::BotId,
+    /// The surfaces it suggests for.
+    pub surfaces: Vec<Surface>,
+    /// How many suggestions it kept so far.
+    pub kept: u32,
 }
 
 /// One of the newest messages in an inbox, read from the provider.
@@ -76,14 +127,17 @@ pub trait SuggestionRepo: Send + Sync + 'static {
 pub struct InboxMessage {
     /// The sender, as `Name <address>` or the address alone.
     pub from: Option<String>,
+    /// The recipients, likewise.
+    pub to: Vec<String>,
     pub subject: Option<String>,
+    /// The provider's labels or folders.
+    pub labels: Vec<String>,
     /// The provider's short preview of the body.
     pub snippet: Option<String>,
     pub received_at: Option<DateTime<Utc>>,
 }
 
-/// What the person's accounts say about their work, read when suggestions
-/// are generated.
+/// What the person's accounts hold, read when suggestions are generated.
 pub trait SuggestionSources: Send + Sync + 'static {
     /// Up to `limit` of the newest messages across the person's own
     /// inboxes, newest first, read from the provider so it works before
@@ -94,15 +148,8 @@ pub trait SuggestionSources: Send + Sync + 'static {
         limit: u16,
     ) -> impl Future<Output = Result<Vec<InboxMessage>>> + Send;
 
-    /// The ids of the person's connected inboxes, cheap enough to read on
-    /// every request, to tell when one is added.
-    fn inbox_ids(
-        &self,
-        user: &MacroUserIdStr<'static>,
-    ) -> impl Future<Output = Result<Vec<String>>> + Send;
-
-    /// Tools the person uses, detected from their mail, by name.
-    fn tools(
+    /// The apps the person connected for tool use, by slug.
+    fn apps(
         &self,
         user: &MacroUserIdStr<'static>,
     ) -> impl Future<Output = Result<Vec<String>>> + Send;
@@ -110,22 +157,37 @@ pub trait SuggestionSources: Send + Sync + 'static {
 
 /// Routine suggestions as the API serves them.
 pub trait RoutineSuggestionApi: Send + Sync + 'static {
-    /// The person's suggestions, starting a generation when they are due.
+    /// The person's suggestions: AI's, then Macro's templates filling each
+    /// surface (only `surface`, when given). Reading never generates.
     fn suggestions(
         &self,
         user: &MacroUserIdStr<'static>,
-    ) -> impl Future<Output = Result<super::model::RoutineSuggestions>> + Send;
+        surface: Option<Surface>,
+    ) -> impl Future<Output = Result<RoutineSuggestions>> + Send;
 
-    /// Start a generation now, unless one is running.
-    fn refresh(
+    /// Start the person's one generation in the background, if it never
+    /// started: their inbox is connected. Later calls change nothing.
+    fn generate(
         &self,
         user: &MacroUserIdStr<'static>,
-    ) -> impl Future<Output = Result<super::model::RoutineSuggestions>> + Send;
+        timezone: chrono_tz::Tz,
+    ) -> impl Future<Output = Result<RoutineSuggestions>> + Send;
 
-    /// The person isn't interested in suggestion `id`.
+    /// The person isn't interested in suggestion `id`, AI's or a template:
+    /// it is never suggested again.
     fn dismiss(
         &self,
         user: &MacroUserIdStr<'static>,
         id: Uuid,
     ) -> impl Future<Output = Result<()>> + Send;
+
+    /// Keep a suggestion a suggestion session hands back, from the request
+    /// `correlation` names (its code-mode invocation), after checking it.
+    /// Only the person's own open suggestion sessions may suggest.
+    fn suggest(
+        &self,
+        principal: &model_owner::CreationPrincipal,
+        correlation: Option<Uuid>,
+        request: SuggestRequest,
+    ) -> impl Future<Output = Result<SuggestOutcome>> + Send;
 }

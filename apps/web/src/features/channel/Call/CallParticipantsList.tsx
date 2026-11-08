@@ -6,16 +6,18 @@ import Microphone from '@icon/system/regular/microphone.svg';
 import MicrophoneSlash from '@icon/system/regular/microphone-slash.svg';
 import VideoCamera from '@icon/system/regular/video-camera.svg';
 import VideoCameraSlash from '@icon/system/regular/video-camera-slash.svg';
-import { Avatar, cn } from '@ui';
+import { Avatar, Badge, cn } from '@ui';
 import type { RemoteParticipant } from 'livekit-client';
 import { createMemo, For, Show } from 'solid-js';
 import { useCallContext } from './CallContext';
+import { isProgramParticipant } from './is-program-participant';
 import { LK_TRACK_SOURCE } from './livekit-loader';
 
 function ParticipantRow(props: {
   name: string;
   userId?: string;
   local?: boolean;
+  isProgram: boolean;
   speaking: boolean;
   muted: boolean;
   videoEnabled: boolean;
@@ -37,11 +39,18 @@ function ParticipantRow(props: {
         </Show>
       </div>
       <div class="min-w-0 flex-1">
-        <p class="truncate text-sm" title={props.name}>
-          {props.local
-            ? t('calls.localParticipant', { name: props.name })
-            : props.name}
-        </p>
+        <div class="flex min-w-0 items-center gap-1">
+          <p class="min-w-0 truncate text-sm" title={props.name}>
+            {props.local
+              ? t('calls.localParticipant', { name: props.name })
+              : props.name}
+          </p>
+          <Show when={props.isProgram}>
+            <Badge variant="secondary" size="xs">
+              {t('calls.agent')}
+            </Badge>
+          </Show>
+        </div>
         <Show when={props.speaking}>
           <p class="text-xs text-accent">{t('calls.speaking')}</p>
         </Show>
@@ -94,6 +103,7 @@ function RemoteParticipantRow(props: { participant: RemoteParticipant }) {
     <ParticipantRow
       name={name()}
       userId={userId()}
+      isProgram={isProgramParticipant(props.participant.attributes)}
       speaking={call.isParticipantSpeaking(props.participant)}
       muted={publication(LK_TRACK_SOURCE.Microphone)?.isMuted ?? true}
       videoEnabled={publication(LK_TRACK_SOURCE.Camera)?.isMuted === false}
@@ -130,6 +140,9 @@ export function CallParticipantsList(props: { localName?: string }) {
         name={localName()}
         userId={localUserId()}
         local
+        isProgram={isProgramParticipant(
+          call.room()?.localParticipant.attributes
+        )}
         speaking={call.isLocalSpeaking()}
         muted={call.isAudioMuted()}
         videoEnabled={!call.isVideoMuted()}

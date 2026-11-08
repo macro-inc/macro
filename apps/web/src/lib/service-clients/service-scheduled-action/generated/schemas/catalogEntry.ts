@@ -19,8 +19,6 @@ export interface CatalogEntry {
   action: string;
   /** It changes or sends what other people see. */
   affectsOthers: boolean;
-  /** Its code step, in the shape a routine's task holds it; absent where
-code can't be saved, or when it is an Ask AI routine. */
   code?: CatalogEntryCode;
   /** What it does, in a short line. */
   description: string;
@@ -36,8 +34,10 @@ items (a tag, channel or label), by knob name. */
   request: string;
   /** It may be switched on before its owner changes anything. */
   safeDefault: boolean;
-  /** Where it is offered. */
-  surface: Surface;
+  /** Offered unpicked as a suggestion from Macro. */
+  suggest: boolean;
+  /** Where it is offered, first the part of the app it belongs to most. */
+  surfaces: Surface[];
   /** Offered among the templates when someone creates a routine. */
   template: boolean;
   /** Its name once saved. */
