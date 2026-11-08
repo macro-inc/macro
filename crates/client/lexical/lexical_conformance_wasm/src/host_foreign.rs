@@ -20,7 +20,8 @@ impl ForeignNode {
         })
     }
     fn check_supported(mask: u64) -> Result<(), Error> {
-        let supported = ForeignHook::CoerceTextContent.bit()
+        let supported = ForeignHook::IsInline.bit()
+            | ForeignHook::CoerceTextContent.bit()
             | ForeignHook::CheckSpliceText.bit()
             | ForeignHook::CoerceDetail.bit()
             | ForeignHook::CoerceMode.bit()
@@ -133,6 +134,36 @@ impl ForeignNode {
     }
 }
 impl ForeignHooks for ForeignNode {
+    fn is_inline(&self, node: NodeView<'_>, _data: &ForeignData) -> Override<bool> {
+        if self.overrides.load(Ordering::SeqCst) & ForeignHook::IsInline.bit() == 0 {
+            return Override::Inherit;
+        }
+        // This private adapter is reachable only through the fallible host ABI.
+        // Direct unscoped model reads cannot invoke JS-backed pure predicates.
+        if !ForeignReadOperation::is_active() {
+            return Override::Inherit;
+        }
+        let callback = { self.callback.lock().expect("foreign dispatcher").clone() };
+        let result = match callback {
+            Some(callback) => node.state.snapshot_for_foreign_read().and_then(|snapshot| {
+                callback.predicate(&snapshot, node.key, ForeignHook::IsInline)
+            }),
+            None => Err(Error::Invariant("foreign dispatcher is not installed")),
+        };
+        match result {
+            Ok(value) => Override::Value(value),
+            Err(error) => {
+                // The active operation owns the error; native control flow may
+                // only continue through checked reads until its Result barrier.
+                // The caller's operation remains active through JS reentry.
+                match ForeignReadOperation::defer(error) {
+                    Ok(()) => Override::Value(false),
+                    Err(_) => Override::Inherit,
+                }
+            }
+        }
+    }
+
     fn adjust_export_json(
         &self,
         node: NodeView<'_>,
@@ -428,7 +459,8 @@ mod test {
         node.set_mask(0, true)?;
         assert!(node.ready());
         assert!(node.set_mask(ForeignHook::CoerceMode.bit(), true).is_err());
-        assert!(ForeignNode::new(ForeignHook::IsInline.bit()).is_err());
+        assert!(ForeignNode::new(ForeignHook::IsInline.bit()).is_ok());
+        assert!(ForeignNode::new(ForeignHook::CanBeEmpty.bit()).is_err());
         assert!(ForeignNode::new(1u64 << 63).is_err());
         Ok(())
     }

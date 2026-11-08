@@ -46,6 +46,7 @@ extern "C" {
 
 impl BoundFunction {
     fn invoke_export(&self, message: Value, errors: &Errors) -> Result<Value, Error> {
+        ForeignReadOperation::check()?;
         #[cfg(target_arch = "wasm32")]
         {
             let message = to_js(message).map_err(|error| Error::invariant(format!("{error:?}")))?;
@@ -142,6 +143,39 @@ impl Dispatch for ReadFrame<'_, '_, '_> {
 }
 
 impl Callback {
+    pub(crate) fn predicate(
+        &self,
+        snapshot: &ForeignReadSnapshot,
+        key: NodeKey,
+        hook: ForeignHook,
+    ) -> Result<bool, Error> {
+        if !ForeignReadOperation::is_active() {
+            return Err(Error::Invariant(
+                "JS read hooks require a fallible host operation",
+            ));
+        }
+        self.context
+            .with_read_scope(snapshot, |peer| {
+                let node = peer.node(key)?;
+                let args = peer.original_arguments(key, hook)?.unwrap_or_default();
+                let message =
+                    serde_json::to_value(super::super::host_protocol::HostNodeMutation {
+                        hook: hook as u8,
+                        node,
+                        args,
+                    })?;
+                let frame = ReadFrame {
+                    owner: &self.owner,
+                    errors: &self.errors,
+                    peer: RefCell::new(peer),
+                };
+                Ok(CURRENT.set(&frame, || {
+                    self.function.invoke_boolean(message, &self.errors)
+                }))
+            })
+            .map_err(|error| Error::invariant(error.to_string()))?
+    }
+
     pub(crate) fn export_json(
         &self,
         snapshot: &ForeignReadSnapshot,
@@ -182,6 +216,7 @@ pub(crate) fn invoke_state(
     peer: &mut CallbackRead<'_, '_>,
     callback: &js_sys::Function,
 ) -> Result<JsValue, lexical_conformance::replay::ReplayError> {
+    ForeignReadOperation::check()?;
     #[cfg(target_arch = "wasm32")]
     {
         let frame = ReadFrame {

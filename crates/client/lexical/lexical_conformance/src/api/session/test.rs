@@ -631,3 +631,5 @@ fn detached_direction_memo_survives_host_boundaries_but_explicit_clone_clears_it
 }
 
 mod state;
+
+mod failure;

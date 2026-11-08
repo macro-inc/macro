@@ -256,8 +256,10 @@ impl Context {
         handle: u32,
         field: &str,
     ) -> Result<Value> {
+        let operation = lexical_model::ForeignReadOperation::begin()?;
         let receiver = self.replay.decode(&json!({"$h":handle}))?;
-        let value = super::properties::get(&mut self.replay, tx, &receiver, field)?;
+        let value = super::properties::get(&mut self.replay, tx, &receiver, field);
+        let value = operation.finish(value)?;
         self.encode(value)
     }
 
@@ -295,6 +297,7 @@ impl Context {
     }
 
     fn encode(&mut self, value: Value) -> Result<Value> {
+        lexical_model::ForeignReadOperation::check()?;
         if value.get("$nodeKey").is_some() {
             let key = tagged_key(&value, "$nodeKey")?;
             let raw = key.to_string();

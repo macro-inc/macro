@@ -2,7 +2,9 @@
 #[cfg(target_arch = "wasm32")]
 use crate::host::to_js;
 use lexical_conformance::api::CallbackContext;
-use lexical_model::{Error, ForeignListenerId, ForeignTransform, NodeKey, Transaction};
+use lexical_model::{
+    Error, ForeignListenerId, ForeignReadOperation, ForeignTransform, NodeKey, Transaction,
+};
 use serde_json::Value;
 use std::{cell::Cell, sync::Arc};
 use wasm_bindgen::prelude::*;
@@ -117,7 +119,9 @@ impl Drop for Borrow<'_, '_, '_> {
 impl Frame<'_, '_> {
     fn with_tx<T>(
         &self,
-        operation: impl FnOnce(&mut Transaction<'_>) -> Result<T, JsValue>,
+        operation: impl FnOnce(
+            &mut Transaction<'_>,
+        ) -> Result<T, lexical_conformance::replay::ReplayError>,
     ) -> Result<T, JsValue> {
         let tx = self.tx.take().ok_or_else(|| {
             JsValue::from(crate::debug::error(
@@ -128,17 +132,19 @@ impl Frame<'_, '_> {
             slot: &self.tx,
             tx: Some(tx),
         };
-        operation(borrow.tx.as_deref_mut().expect("scoped transaction"))
+        let scope = ForeignReadOperation::begin().map_err(|error| self.errors.convert(error))?;
+        let result = operation(borrow.tx.as_deref_mut().expect("scoped transaction"));
+        scope
+            .finish(result)
+            .map_err(|error| self.errors.convert(error))
     }
 }
 impl Dispatch for Frame<'_, '_> {
     fn read_state(&self, version: u64, callback: &js_sys::Function) -> Result<JsValue, JsValue> {
         self.with_tx(|tx| {
-            self.context
-                .with_state_read(tx, version, |peer| {
-                    read::invoke_state(self.owner, self.errors, peer, callback)
-                })
-                .map_err(|error| self.errors.convert(error))
+            self.context.with_state_read(tx, version, |peer| {
+                read::invoke_state(self.owner, self.errors, peer, callback)
+            })
         })
     }
     fn listen(
@@ -155,10 +161,7 @@ impl Dispatch for Frame<'_, '_> {
         })
     }
     fn command(&self, command: &lexical_model::Command) -> Result<lexical_model::Handled, JsValue> {
-        self.with_tx(|tx| {
-            tx.dispatch(command)
-                .map_err(|error| self.errors.convert(error))
-        })
+        self.with_tx(|tx| Ok(tx.dispatch(command)?))
     }
     fn register(
         &self,
@@ -166,10 +169,8 @@ impl Dispatch for Frame<'_, '_> {
         callback: Arc<Callback>,
     ) -> Result<ForeignListenerId, JsValue> {
         self.with_tx(|tx| {
-            tx.mark_foreign_type_dirty(type_name)
-                .map_err(|error| self.errors.convert(error))?;
-            tx.register_foreign_transform(type_name, callback)
-                .map_err(|error| self.errors.convert(error))
+            tx.mark_foreign_type_dirty(type_name)?;
+            Ok(tx.register_foreign_transform(type_name, callback)?)
         })
     }
     fn unregister(&self, id: ForeignListenerId) -> Result<(), JsValue> {
@@ -182,28 +183,15 @@ impl Dispatch for Frame<'_, '_> {
         self.owner
     }
     fn call(&self, id: u32, args: Value, receiver: Option<Value>) -> Result<Value, JsValue> {
-        self.with_tx(|tx| {
-            self.context
-                .call(tx, id, args, receiver)
-                .map_err(|error| self.errors.convert(error))
-        })
+        self.with_tx(|tx| self.context.call(tx, id, args, receiver))
     }
     fn call_native(&self, id: u32, args: Value, receiver: Value) -> Result<Value, JsValue> {
-        self.with_tx(|tx| {
-            self.context
-                .call_native(tx, id, args, receiver)
-                .map_err(|error| self.errors.convert(error))
-        })
+        self.with_tx(|tx| self.context.call_native(tx, id, args, receiver))
     }
     fn read_field(&self, handle: u32, field: &str) -> Result<Value, JsValue> {
         self.with_tx(|tx| {
-            let snapshot = tx
-                .view()
-                .snapshot_for_foreign_read()
-                .map_err(|error| self.errors.convert(error))?;
-            self.context
-                .read_field(&snapshot, handle, field)
-                .map_err(|error| self.errors.convert(error))
+            let snapshot = tx.view().snapshot_for_foreign_read()?;
+            self.context.read_field(&snapshot, handle, field)
         })
     }
 }
@@ -289,6 +277,7 @@ unsafe impl Send for BoundFunction {}
 unsafe impl Sync for BoundFunction {}
 impl BoundFunction {
     fn invoke_opaque(&self, payload: &HostValue, errors: &Errors) -> Result<bool, Error> {
+        ForeignReadOperation::check()?;
         #[cfg(target_arch = "wasm32")]
         {
             match self.function.call1(&JsValue::UNDEFINED, &payload.to_js()) {
@@ -310,6 +299,7 @@ impl BoundFunction {
         }
     }
     fn invoke_boolean(&self, value: Value, errors: &Errors) -> Result<bool, Error> {
+        ForeignReadOperation::check()?;
         #[cfg(target_arch = "wasm32")]
         {
             let argument = to_js(value).map_err(|error| Error::invariant(format!("{error:?}")))?;
@@ -343,6 +333,7 @@ impl BoundFunction {
         }
     }
     fn invoke_value(&self, value: Value, errors: &Errors) -> Result<Value, Error> {
+        ForeignReadOperation::check()?;
         #[cfg(target_arch = "wasm32")]
         {
             let argument = to_js(value).map_err(|error| Error::invariant(format!("{error:?}")))?;
@@ -367,6 +358,7 @@ impl BoundFunction {
         }
     }
     fn invoke(&self, value: Value, errors: &Errors) -> Result<(), Error> {
+        ForeignReadOperation::check()?;
         #[cfg(target_arch = "wasm32")]
         {
             let argument =

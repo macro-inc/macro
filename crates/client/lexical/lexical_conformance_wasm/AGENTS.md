@@ -7,7 +7,7 @@ Never import them from production crates or bundles.
 
 ## Start here
 
-- `src/host.rs`: native-core EditorHandle indexed dispatch over a moved-out Session lease; JS conversions run outside that lease. Runtime transforms/listeners and mutable node hooks use scoped current-hook reborrows; exportJSON uses an owned guarded read peer. The complete class facade and remaining pure hooks are unfinished.
+- `src/host.rs`: native-core EditorHandle indexed dispatch over a moved-out Session lease; JS conversions run outside that lease. Runtime transforms/listeners and mutable node hooks use scoped current-hook reborrows; exportJSON and isInline use owned guarded read peers. The complete class facade and remaining pure hooks are unfinished.
 - `src/host_commands.rs`: opaque JS application-command envelope over the model extension pipeline, filtering identities before JS; the future shim supplies identity strings and handles parent-editor propagation.
 - `src/host_callbacks.rs`: single-threaded JS transform ownership, exact-owner scoped reborrows, callback identity dedup and opaque exception transport. Never recover an ancestor transaction pointer or hold a metadata lock over JS.
 - `src/host_packet.rs`: development postcard envelope carrying the existing flat diff and changed base-record/mutation/selection metadata; production uses the session codec.
@@ -68,8 +68,8 @@ unshared memory32 when strings are accounted. Run the postprocessor after optimi
 
 The native indexed host accepts `{args: [...], this?: encodedHandle}` as one call
 envelope. Its JS host owns namespace/editability/theme and discrete scheduling.
-Only the core registry is accepted until foreign definitions are wired; unknown
-node types fail explicitly. The development commit packet is versioned separately
+The core registry and explicit foreign definitions are accepted; unknown
+node types without a foreign definition fail explicitly. The development commit packet is versioned separately
 from its unchanged S1 flat diff. Its metadata currently covers base record fields;
 foreign payloads and NodeState identity descriptors still need the full host.
 Packet and Postcard encoding run through Session::commit_prepared before the
@@ -111,7 +111,7 @@ and error text unchanged; do not count only the final normalized JSON value.
 
 Read foreign_hook_index in override-bit order; it is generated from the model trait, including its explicit upstream aliases. Never hand-maintain another host hook list.
 
-EditorHandle::call_native uses the same validated call envelope, weak callback context, RAII lease and opaque error path as call. It supports mutable callback frames and indexed node hooks; pure callback API dispatch and import/clone construction scopes remain unfinished.
+EditorHandle::call_native uses the same validated call envelope, weak callback context, RAII lease and opaque error path as call. It supports mutable and owned-read callback frames and indexed node hooks; remaining pure hooks and import/clone construction scopes are unfinished.
 
 Native-super currently selects the nearest registered native ancestor. Explicit older-prototype targeting (for example a TextNode base method on a TabNode) is still required with the native facade/overlay; do not count this primitive as full native-class hosting acceptance.
 
@@ -136,3 +136,5 @@ Commit-time exportJSON reads the exact canonical next state with leased update m
 Decode indexed JS inputs through host_input/safe.rs: catch getters/proxies/iterator steps at their original lazy access points, then retain the existing counted visitor and scalar/byte decoder. Keep opaque accessor errors separate from ordinary serde diagnostics; never eagerly snapshot incoming arrays or change copied-prefix accounting.
 
 EditorHandle::read_state hosts associated-editor reads of retained versions through the same guarded owned peer. Preserve opaque body returns and throws without inspecting properties, and route nested reads through CURRENT rather than a leased Session. This explicit API does not provide editor-less EditorState.read semantics.
+
+isInline is the first hosted pure predicate: use the owned read peer and JS truthiness inside a fallible ForeignReadOperation. Opaque throws defer to the operation boundary; stop later callbacks/writes/caches before returning the original value. This private JS adapter is supported only through scoped host entry points; direct unscoped model predicate reads cannot invoke JS. Text and line-break inline flags remain fixed non-hooks.

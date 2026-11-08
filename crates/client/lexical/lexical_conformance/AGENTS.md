@@ -98,7 +98,7 @@ Preserve selection direction memos in host captures, detached-handle transfers a
 
 Route indexed text splicing, JSON updates, copy predicates and element creation through the model; retain D-6 surrogate and D-7 unsigned-offset checks at the bridge.
 
-Context/Session call_native uses the shared API index and model-derived hook names; accept only indexed node hooks and preserve the exact mutable callback frame. Native-super bypasses one outer foreign dispatch, never a whole native operation. Pure indexed read dispatch and lifecycle construction scopes remain separate host work.
+Context/Session call_native uses the shared API index and model-derived hook names; accept only indexed node hooks and preserve the exact mutable callback frame. Native-super bypasses one outer foreign dispatch, never a whole native operation. Pure indexed read dispatch uses CallbackRead; lifecycle construction scopes remain unfinished.
 
 Native-super currently selects the nearest registered native ancestor. Explicit older-prototype targeting (for example a TextNode base method on a TabNode) is still required with the native facade/overlay; do not count this primitive as full native-class hosting acceptance.
 
@@ -131,3 +131,5 @@ Commit preparation authorizes only commit.next through callbacks/publication.rs.
 Session::read_state reads a retained immutable version with its editor associated, without flushing suspended writes. Use nested CallbackRead/CallbackContext state reads while the Session is leased; restore prior authority on every exit. Historical graph ownership differs from the latest committed selection/point owner. Editor-less reads and inherited selection synchronization remain separate work.
 
 Retain newly created selection values from published-state reads independently of a surrounding pending rollback. Preserve their IDs and ordinary fields; never let surviving historical-version handles alias truncated or reused selection indices.
+
+Indexed calls, captured-field reads and Session update/commit bodies bracket ForeignReadOperation. Check deferred failures before selection synchronization, encoding, captures and publication; nested calls isolate caught exceptions without granting new editor authority. Finish the entire commit workflow result, including cleanup and early failures, so a secondary error cannot replace the first deferred failure.

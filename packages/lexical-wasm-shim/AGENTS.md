@@ -76,3 +76,5 @@ Verify attached foreign exports at commit, previous/current selections, opaque c
 Verify input getter/proxy exceptions for calls, native super, construction and update tags, followed by usable calls and disposal. Preserve lazy input access and the differential suite's prefix-byte observations.
 
 Use state-read.test.ts for real WASM associated reads: old/current graphs, latest previous-selection ownership, nested success/error restoration, suspended writes, foreign callbacks and opaque body returns. readState is the associated-editor primitive; editor-less reads still need explicit facade behavior.
+
+Exercise hosted isInline with original arguments, read guards, native super, opaque returns/throws, no later callback after failure, nested caught failures and fixed text/line-break inline flags. Keep remaining pure hooks disabled until their failure and mutation paths are verified.
