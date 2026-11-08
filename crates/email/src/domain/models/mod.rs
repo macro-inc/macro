@@ -43,9 +43,7 @@ pub use mail_projection::{
     EmailDraftAggregate, EmailDraftEntry, EmailPreview, EmailThreadDraftState,
     EmailThreadMailCacheFacts, EmailThreadMailPreviews, EmailThreadMailProjection,
 };
-pub use message::{
-    Message, MessageRow, ScheduledSend, ScheduledSendSource, ScheduledSendStatus, SimpleMessage,
-};
+pub use message::{Message, MessageRow, ScheduledSend, ScheduledSendStatus, SimpleMessage};
 pub use parsed_message::{ParsedLabel, ParsedMessage, ParsedThread};
 pub use preview::{
     EmailThreadPreview, EnrichedEmailThreadPreview, GetEmailsRequest, PreviewCursorQuery,

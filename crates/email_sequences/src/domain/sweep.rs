@@ -1,51 +1,42 @@
-//! The sweep that creates, watches and withdraws steps, and the hook that
-//! stops enrollments when a reply or bounce arrives.
+//! The sweep that creates and watches steps, and the hook that stops
+//! enrollments when a reply or bounce arrives.
 
 use chrono::{DateTime, Duration, Utc};
 use email::domain::{
     models::{ContactInfo, ScheduledSendStatus},
-    sequence_steps::{
-        CancelExpectation, CancelOutcome, InboundMessage, NewStep, ReplySearch, SequenceStepStore,
-        StepState,
-    },
+    sequence_steps::{InboundMessage, NewStep, ReplySearch, SequenceStepStore, StepState},
 };
 use uuid::Uuid;
 
 use super::{
-    models::{EnrollmentReason, EnrollmentRow, EnrollmentStatus, HistoryRow, StepStatus},
+    models::{
+        EnrollmentReason, EnrollmentRow, EnrollmentStatus, HistoryRow, Recipient, SequenceError,
+        SequenceStatus, StepStatus,
+    },
     ports::{DueEnrollment, OwnerAccess, ReplyCandidates, SentStep, SequenceRepo},
     render,
     replies::{self, Enrolled, Incoming, Response, SentIdentity},
-    service::{STUCK_AFTER, Sequences, in_flight, internal, recipient_contact},
+    service::{STUCK_AFTER, Sequences, in_flight, internal, next_step, recipient_contact},
 };
-use crate::domain::models::SequenceError;
 
 /// Rows per sweep page.
 const PAGE: i64 = 100;
-/// Due enrollments per creation page.
-const DUE_PAGE: i64 = 50;
-/// The soonest a new step may send, so its schedule is in the future when committed.
+/// The soonest a new step may send: its send time is in the future when
+/// committed, and a reply or unsubscribe in that minute can still withdraw it.
 const MIN_LEAD: Duration = Duration::seconds(60);
-/// Sends from one inbox are at least this far apart.
+/// Sends from one inbox are at least this far apart, so it never bursts.
 const SPACING: Duration = Duration::seconds(30);
 /// A step is created only when its slot is this close; later ones wait.
 const MAX_LEAD: Duration = Duration::seconds(90);
-/// Waits before automatic retries of a step Gmail refused.
-const RETRY_DELAYS: [Duration; 3] = [
-    Duration::minutes(5),
-    Duration::minutes(15),
-    Duration::minutes(45),
-];
-/// How long an enrollment waits after its step couldn't be created.
-const CREATE_BACKOFF: Duration = Duration::minutes(5);
 
 /// What trying to create a step did.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(super) enum Creation {
     Created,
     Skipped,
-    /// The inbox's next send slot isn't near yet.
-    InboxFull(Uuid),
+    /// Nothing can go from the inbox in this pass: its next slot isn't near,
+    /// it can't send, or its owner lost access. Its enrollments stay due.
+    InboxWaits(Uuid),
 }
 
 /// What one sweep did.
@@ -55,8 +46,6 @@ pub struct SweepReport {
     pub resolved: u32,
     /// Steps created.
     pub created: u32,
-    /// Orphaned schedules withdrawn.
-    pub withdrawn: u32,
     /// Items that failed and will be retried.
     pub failed: u32,
 }
@@ -101,21 +90,15 @@ where
     S: SequenceStepStore<Conn = R::Conn>,
     A: OwnerAccess,
 {
-    /// One pass: resolve in-flight steps, create due ones, withdraw orphans.
-    #[tracing::instrument(
-        name = "sequences.sweep",
-        skip_all,
-        fields(resolved, created, withdrawn, failed)
-    )]
+    /// One pass: resolve in-flight steps, then create due ones.
+    #[tracing::instrument(name = "sequences.sweep", skip_all, fields(resolved, created, failed))]
     pub async fn sweep(&self, now: DateTime<Utc>) -> SweepReport {
         let mut report = SweepReport::default();
         self.resolve_all(now, &mut report).await;
-        self.create_due(now, &mut report).await;
-        self.withdraw_orphans(&mut report).await;
+        self.create_due(&mut report).await;
         let span = tracing::Span::current();
         span.record("resolved", report.resolved);
         span.record("created", report.created);
-        span.record("withdrawn", report.withdrawn);
         span.record("failed", report.failed);
         report
     }
@@ -175,6 +158,10 @@ where
             .step_state(R::conn(&mut tx), step.message_id)
             .await
             .map_err(internal)?;
+        let live = matches!(
+            row.status,
+            EnrollmentStatus::Active | EnrollmentStatus::NeedsAttention
+        );
         match state {
             StepState::Sent {
                 sent_at,
@@ -191,182 +178,53 @@ where
                 self.record_sent(&mut tx, &mut row, &step, &sent, submitted_at, now)
                     .await?;
             }
+            // Gmail refused it. It shows in Mail as a failed send; a paused or
+            // stopped enrollment's (it was delivering when they changed) goes.
             StepState::Scheduled {
                 status: ScheduledSendStatus::Failed,
                 ..
-            } => self.failed(&mut tx, &mut row, &step, now).await?,
-            StepState::Scheduled { status, send_time } => {
-                if status == ScheduledSendStatus::Pending {
-                    match row.status {
-                        // Every path off `active` withdraws its step; heal one that didn't.
-                        EnrollmentStatus::Paused
-                        | EnrollmentStatus::Stopped
-                        | EnrollmentStatus::Completed => {
-                            self.withdraw(&mut tx, &row, &step, CancelExpectation::Scheduled)
-                                .await?;
-                        }
-                        EnrollmentStatus::Active | EnrollmentStatus::NeedsAttention => {
-                            if !self
-                                .recheck_pending(&mut tx, &mut row, &history, &step)
-                                .await?
-                            {
-                                return self.repo.commit(tx).await.map_err(internal);
-                            }
-                        }
-                    }
-                }
-                if row.status == EnrollmentStatus::Active && now > send_time + STUCK_AFTER {
-                    self.needs_attention(&mut tx, &mut row, EnrollmentReason::StepStuck)
-                        .await?;
-                }
-            }
-            // The owner is handling it in Mail; record it once it is sent.
-            StepState::TakenOver => {
-                if row.status == EnrollmentStatus::Active {
-                    self.needs_attention(&mut tx, &mut row, EnrollmentReason::StepWithdrawn)
-                        .await?;
-                }
-            }
-            StepState::Discarded => {
-                // It was never sent, so a draft already gone is withdrawn too.
-                match self
-                    .withdraw(&mut tx, &row, &step, CancelExpectation::Draft)
-                    .await?
-                {
-                    CancelOutcome::Cancelled => {}
-                    CancelOutcome::Gone => self
-                        .repo
-                        .delete_step(&mut tx, row.id, step.step)
-                        .await
-                        .map_err(internal)?,
-                    // It moved on; the next sweep records what happened.
-                    CancelOutcome::Sent
-                    | CancelOutcome::DeliveryStarted
-                    | CancelOutcome::Changed => {
-                        return self.repo.commit(tx).await.map_err(internal);
-                    }
-                }
-                self.needs_attention(&mut tx, &mut row, EnrollmentReason::StepWithdrawn)
-                    .await?;
-            }
-            StepState::Gone => {
-                self.mark_unknown(&mut tx, &mut row, &step).await?;
-                let reason = if self
-                    .usable_inbox(&mut tx, row.link_id, &row.owner_id)
-                    .await?
-                    .is_some()
-                {
-                    EnrollmentReason::StepUnknown
+            } => {
+                if live {
+                    self.needs_attention(&mut tx, &mut row).await?;
                 } else {
-                    EnrollmentReason::InboxUnavailable
-                };
-                self.needs_attention(&mut tx, &mut row, reason).await?;
+                    self.withdraw(&mut tx, &row, &step).await?;
+                }
+            }
+            StepState::Scheduled { status, send_time } => {
+                // An unsubscribe's stops or the reply hook may have failed
+                // after committing; the step hasn't gone yet.
+                if live
+                    && status == ScheduledSendStatus::Pending
+                    && let Some(reason) = self.stop_check(&mut tx, &row, &history).await?
+                {
+                    self.stop(&mut tx, &mut row, reason).await?;
+                } else if now > send_time + STUCK_AFTER {
+                    self.needs_attention(&mut tx, &mut row).await?;
+                }
+            }
+            // The owner cancelled or trashed it in Mail.
+            StepState::Unscheduled => self.needs_attention(&mut tx, &mut row).await?,
+            // Its inbox or message was deleted; it may have gone out, so it is
+            // never sent again.
+            StepState::Gone => {
+                self.repo
+                    .mark_unknown(&mut tx, row.id, step.step_id)
+                    .await
+                    .map_err(internal)?;
+                self.needs_attention(&mut tx, &mut row).await?;
             }
         }
         self.repo.commit(tx).await.map_err(internal)
     }
 
-    /// A step Gmail refused: retry it a few times, then ask the owner.
-    async fn failed(
-        &self,
-        tx: &mut R::Tx,
-        row: &mut EnrollmentRow,
-        step: &HistoryRow,
-        now: DateTime<Utc>,
-    ) -> Result<(), SequenceError> {
-        match row.status {
-            EnrollmentStatus::Active => {
-                let healthy = self
-                    .usable_inbox(tx, row.link_id, &row.owner_id)
-                    .await?
-                    .is_some();
-                let retry = usize::try_from(row.attempts)
-                    .ok()
-                    .and_then(|attempt| RETRY_DELAYS.get(attempt));
-                match (healthy, retry) {
-                    (true, Some(delay)) => {
-                        if self
-                            .withdraw(tx, row, step, CancelExpectation::Scheduled)
-                            .await?
-                            == CancelOutcome::Cancelled
-                        {
-                            row.attempts += 1;
-                            row.due_at = Some(now + *delay);
-                            self.repo
-                                .update_enrollment(tx, row)
-                                .await
-                                .map_err(internal)?;
-                        }
-                    }
-                    (true, None) => {
-                        self.needs_attention(tx, row, EnrollmentReason::StepFailed)
-                            .await?;
-                    }
-                    (false, _) => {
-                        self.needs_attention(tx, row, EnrollmentReason::InboxUnavailable)
-                            .await?;
-                    }
-                }
-            }
-            EnrollmentStatus::NeedsAttention => {
-                if !matches!(
-                    row.reason,
-                    Some(EnrollmentReason::StepFailed | EnrollmentReason::InboxUnavailable)
-                ) {
-                    self.needs_attention(tx, row, EnrollmentReason::StepFailed)
-                        .await?;
-                }
-            }
-            EnrollmentStatus::Paused | EnrollmentStatus::Stopped | EnrollmentStatus::Completed => {
-                self.withdraw(tx, row, step, CancelExpectation::Scheduled)
-                    .await?;
-            }
-        }
-        Ok(())
-    }
-
-    /// Before an unclaimed step sends, check again what may have changed since
-    /// it was created. Returns `false` when the enrollment stopped or paused.
-    async fn recheck_pending(
-        &self,
-        tx: &mut R::Tx,
-        row: &mut EnrollmentRow,
-        history: &[HistoryRow],
-        step: &HistoryRow,
-    ) -> Result<bool, SequenceError> {
-        if let Some(reason) = self.stop_check(tx, row, history).await? {
-            self.stop(tx, row, reason).await?;
-            return Ok(false);
-        }
-        if self
-            .usable_inbox(tx, row.link_id, &row.owner_id)
-            .await?
-            .is_none()
-            && self
-                .withdraw(tx, row, step, CancelExpectation::Scheduled)
-                .await?
-                == CancelOutcome::Cancelled
-        {
-            self.needs_attention(tx, row, EnrollmentReason::InboxUnavailable)
-                .await?;
-            return Ok(false);
-        }
-        Ok(true)
-    }
-
-    /// Why the enrollment must stop before sending: the person was deleted
-    /// from the CRM, an unsubscribe, or an answer to its emails found by
-    /// reading the inbox.
+    /// Why the enrollment must stop before sending: an unsubscribe, or an
+    /// answer to its emails found by reading the inbox.
     async fn stop_check(
         &self,
         tx: &mut R::Tx,
         row: &EnrollmentRow,
         history: &[HistoryRow],
     ) -> Result<Option<EnrollmentReason>, SequenceError> {
-        // Deleting the CRM person clears the reference.
-        if row.crm_contact_id.is_none() {
-            return Ok(Some(EnrollmentReason::ContactRemoved));
-        }
         if self
             .repo
             .recipient(tx, row.team_id, &row.email)
@@ -404,27 +262,15 @@ where
             .find_map(|message| replies::stop_reason(&enrolled, &incoming(message, Vec::new()))))
     }
 
-    async fn create_due(&self, now: DateTime<Utc>, report: &mut SweepReport) {
-        match self
-            .repo
-            .heal_stranded(now + super::timing::LEAD_TIME)
-            .await
-        {
-            Ok(0) => {}
-            Ok(healed) => tracing::warn!(healed, "gave stranded enrollments a due time"),
-            Err(error) => {
-                tracing::error!(error = ?error, "failed to heal stranded enrollments");
-                report.failed += 1;
-            }
-        }
-        // An inbox whose next send slot is too far out is skipped for the rest
-        // of the pass, so a backlog on one inbox costs one check, not one per
-        // enrollment, and doesn't hold up the others.
-        let mut full_inboxes = std::collections::HashSet::new();
+    async fn create_due(&self, report: &mut SweepReport) {
+        // An inbox that can't take a step now is skipped for the rest of the
+        // pass, so a backlog or outage costs one check, not one per enrollment,
+        // and doesn't hold up the others.
+        let mut waiting = std::collections::HashSet::new();
         let mut after = None;
         loop {
-            let skip: Vec<Uuid> = full_inboxes.iter().copied().collect();
-            let page = match self.repo.due_page(after, DUE_PAGE, &skip).await {
+            let skip: Vec<Uuid> = waiting.iter().copied().collect();
+            let page = match self.repo.due_page(after, PAGE, &skip).await {
                 Ok(page) => page,
                 Err(error) => {
                     tracing::error!(error = ?error, "failed to list due enrollments");
@@ -433,76 +279,85 @@ where
                 }
             };
             for due in &page {
-                if due
-                    .link_id
-                    .is_some_and(|link_id| full_inboxes.contains(&link_id))
-                {
+                if waiting.contains(&due.link_id) {
                     continue;
                 }
                 match self.create_step(due).await {
                     Ok(Creation::Created) => report.created += 1,
                     Ok(Creation::Skipped) => {}
-                    Ok(Creation::InboxFull(link_id)) => {
-                        full_inboxes.insert(link_id);
+                    Ok(Creation::InboxWaits(link_id)) => {
+                        waiting.insert(link_id);
                     }
                     Err(error) => {
                         tracing::warn!(enrollment_id = %due.id, error = ?error, "failed to create a sequence step");
                         report.failed += 1;
-                        if let Err(error) =
-                            self.repo.defer(due.id, Utc::now() + CREATE_BACKOFF).await
-                        {
-                            tracing::error!(enrollment_id = %due.id, error = ?error, "failed to defer an enrollment");
-                        }
                     }
                 }
             }
-            if page.len() < DUE_PAGE as usize {
+            if page.len() < PAGE as usize {
                 return;
             }
             after = page.last().map(|due| (due.due_at, due.id));
         }
     }
 
-    /// Create an enrollment's next step if every check passes.
+    /// Create an enrollment's next step, rendered from the sequence as it is
+    /// now and the CRM person's current name, if every check passes.
     pub(super) async fn create_step(&self, due: &DueEnrollment) -> Result<Creation, SequenceError> {
         // A long pass must not schedule against a stale clock.
         let now = Utc::now();
-        // Contacts are shared across messages: upsert them before taking locks.
-        let contacts = match due.link_id {
-            Some(link_id) => {
-                let mut tx = self.repo.begin().await.map_err(internal)?;
-                let inbox = self
-                    .steps
-                    .sending_inbox(R::conn(&mut tx), link_id)
-                    .await
-                    .map_err(internal)?;
-                let contacts = match inbox {
-                    Some(inbox) => Some(
-                        self.steps
-                            .upsert_contacts(
-                                R::conn(&mut tx),
-                                link_id,
-                                &ContactInfo {
-                                    email: inbox.email_address,
-                                    name: None,
-                                    photo_url: None,
-                                },
-                                &ContactInfo {
-                                    email: due.email.clone(),
-                                    name: due.contact_name.clone(),
-                                    photo_url: None,
-                                },
-                            )
-                            .await
-                            .map_err(internal)?,
-                    ),
-                    None => None,
-                };
-                self.repo.commit(tx).await.map_err(internal)?;
-                contacts
-            }
+        let has_access = self.access.team_of(&due.owner_id).await.map_err(internal)?
+            == Some(due.team_id)
+            && self
+                .access
+                .crm_enabled(due.team_id)
+                .await
+                .map_err(internal)?;
+        if !has_access {
+            return Ok(Creation::InboxWaits(due.link_id));
+        }
+        let mut tx = self.repo.begin().await.map_err(internal)?;
+        let Some(inbox) = self
+            .usable_inbox(&mut tx, due.link_id, &due.owner_id)
+            .await?
+        else {
+            return Ok(Creation::InboxWaits(due.link_id));
+        };
+        let person = match due.crm_contact_id {
+            Some(id) => self
+                .access
+                .people(&due.owner_id, &[id])
+                .await
+                .map_err(internal)?
+                .into_iter()
+                .find(|person| person.id == id && person.team_id == due.team_id),
             None => None,
         };
+        let name = person
+            .as_ref()
+            .and_then(|person| person.name.as_deref())
+            .and_then(render::sanitize_name);
+
+        // Contacts are shared across messages: upsert them before taking locks.
+        let contacts = self
+            .steps
+            .upsert_contacts(
+                R::conn(&mut tx),
+                inbox.link_id,
+                &ContactInfo {
+                    email: inbox.email_address.clone(),
+                    name: None,
+                    photo_url: None,
+                },
+                &ContactInfo {
+                    email: due.email.clone(),
+                    name: name.clone(),
+                    photo_url: None,
+                },
+            )
+            .await
+            .map_err(internal)?;
+        self.repo.commit(tx).await.map_err(internal)?;
 
         let mut tx = self.repo.begin().await.map_err(internal)?;
         let Some(mut row) = self
@@ -514,91 +369,53 @@ where
             return Ok(Creation::Skipped);
         };
         let history = self.repo.history(&mut tx, row.id).await.map_err(internal)?;
+        let sequence = self
+            .repo
+            .current_sequence(&mut tx, row.sequence_id)
+            .await
+            .map_err(internal)?
+            .ok_or(SequenceError::NotFound)?;
         if row.status != EnrollmentStatus::Active
-            || row.sequence_status != super::models::SequenceStatus::Active
+            || sequence.status != SequenceStatus::Active
+            || row.link_id.or(sequence.link_id) != Some(inbox.link_id)
             || row.due_at.is_none_or(|due_at| due_at > now)
             || in_flight(&history).is_some()
         {
             return Ok(Creation::Skipped);
         }
-
-        let access = self.access.team_of(&row.owner_id).await.map_err(internal)?
-            == Some(row.team_id)
-            && self
-                .access
-                .crm_enabled(row.team_id)
-                .await
-                .map_err(internal)?;
-        if !access {
-            self.stop(&mut tx, &mut row, EnrollmentReason::AccessLost)
-                .await?;
+        if person.is_none() {
             return self
-                .repo
-                .commit(tx)
-                .await
-                .map(|()| Creation::Skipped)
-                .map_err(internal);
+                .stop_and_commit(tx, &mut row, EnrollmentReason::ContactRemoved)
+                .await;
         }
-        let inbox = self
-            .usable_inbox(&mut tx, row.link_id, &row.owner_id)
-            .await?;
-        let (Some(inbox), Some(contacts)) = (inbox, contacts) else {
-            self.needs_attention(&mut tx, &mut row, EnrollmentReason::InboxUnavailable)
-                .await?;
-            return self
-                .repo
-                .commit(tx)
-                .await
-                .map(|()| Creation::Skipped)
-                .map_err(internal);
-        };
         if let Some(reason) = self.stop_check(&mut tx, &row, &history).await? {
-            self.stop(&mut tx, &mut row, reason).await?;
-            return self
-                .repo
-                .commit(tx)
-                .await
-                .map(|()| Creation::Skipped)
-                .map_err(internal);
+            return self.stop_and_commit(tx, &mut row, reason).await;
         }
-
-        let index = usize::try_from(row.next_step).unwrap_or_default();
-        let Some(step) = row.steps.get(index).cloned() else {
+        let Some((index, step)) = next_step(&sequence.steps, &history) else {
             row.status = EnrollmentStatus::Completed;
             row.due_at = None;
             self.repo
                 .update_enrollment(&mut tx, &row)
                 .await
                 .map_err(internal)?;
-            return self
-                .repo
-                .commit(tx)
-                .await
-                .map(|()| Creation::Skipped)
-                .map_err(internal);
-        };
-        let parent = if step.as_reply {
-            self.reply_parent(&mut tx, &row, &history, index, inbox.link_id)
-                .await?
-        } else {
-            None
-        };
-        let subject = match (step.as_reply, parent) {
-            (true, None) => render::standalone_subject(&step.subject).to_owned(),
-            _ => step.subject.clone(),
+            self.repo.commit(tx).await.map_err(internal)?;
+            return Ok(Creation::Skipped);
         };
 
+        self.repo
+            .lock_send_slot(&mut tx, inbox.link_id)
+            .await
+            .map_err(internal)?;
         let latest = self
             .steps
-            .lock_send_slot(R::conn(&mut tx), inbox.link_id)
+            .latest_send_until(R::conn(&mut tx), inbox.link_id, now + MAX_LEAD)
             .await
             .map_err(internal)?;
         let slot = latest.map_or(now + MIN_LEAD, |latest| {
             (latest + SPACING).max(now + MIN_LEAD)
         });
         if slot > now + MAX_LEAD {
-            // Stays due; the next pass tries again once the slot is near.
-            return Ok(Creation::InboxFull(inbox.link_id));
+            return Ok(Creation::InboxWaits(inbox.link_id));
         }
 
         let recipient = self
@@ -607,7 +424,28 @@ where
             .await
             .map_err(internal)?
             .ok_or_else(|| internal(std::io::Error::other("recipient row missing")))?;
-        let url = self.unsubscribe_url(recipient.token.as_str());
+        let rendered = render::render(
+            &sequence.steps,
+            index,
+            &sequence.footer,
+            &Recipient {
+                email: row.email.clone(),
+                name: name.clone(),
+            },
+            &self.unsubscribe_url(recipient.token.as_str()),
+        );
+        let parent = if step.as_reply {
+            self.reply_parent(&mut tx, &sequence.steps, &history, index, inbox.link_id)
+                .await?
+        } else {
+            None
+        };
+        let subject = match &parent {
+            Some((_, subject)) => render::reply_subject(subject),
+            None => rendered.subject,
+        };
+        row.link_id = Some(inbox.link_id);
+        row.contact_name = name;
         let message_id = self
             .steps
             .create_step(
@@ -618,17 +456,16 @@ where
                     contacts: &contacts,
                     to: &recipient_contact(&row),
                     subject: &subject,
-                    body_text: &step.body,
-                    reply_to: parent,
+                    body_text: &rendered.body,
+                    reply_to: parent.map(|(message_id, _)| message_id),
                     send_time: slot,
-                    list_unsubscribe_url: &url,
+                    list_unsubscribe_url: &self.unsubscribe_url(recipient.token.as_str()),
                 },
             )
             .await
             .map_err(internal)?;
-        let index = i16::try_from(index).map_err(internal)?;
         self.repo
-            .insert_step(&mut tx, row.id, index, message_id, slot)
+            .insert_step(&mut tx, row.id, step.id, message_id, slot)
             .await
             .map_err(internal)?;
         row.due_at = None;
@@ -640,97 +477,45 @@ where
         Ok(Creation::Created)
     }
 
-    /// The sent step a reply step answers: the latest one sent in its thread
-    /// that is still a sent message in this inbox.
+    async fn stop_and_commit(
+        &self,
+        mut tx: R::Tx,
+        row: &mut EnrollmentRow,
+        reason: EnrollmentReason,
+    ) -> Result<Creation, SequenceError> {
+        self.stop(&mut tx, row, reason).await?;
+        self.repo.commit(tx).await.map_err(internal)?;
+        Ok(Creation::Skipped)
+    }
+
+    /// The sent email a reply step answers, with the subject it went out
+    /// with: the latest one sent in its thread that is still a sent message
+    /// in this inbox.
     async fn reply_parent(
         &self,
         tx: &mut R::Tx,
-        row: &EnrollmentRow,
+        steps: &[super::models::Step],
         history: &[HistoryRow],
         index: usize,
         link_id: Uuid,
-    ) -> Result<Option<Uuid>, SequenceError> {
-        for earlier in (0..index).rev() {
-            if let Some(step) = history
+    ) -> Result<Option<(Uuid, String)>, SequenceError> {
+        for earlier in steps.iter().take(index).rev() {
+            if let Some(sent) = history
                 .iter()
-                .find(|step| usize::try_from(step.step).ok() == Some(earlier))
-                && step.status == StepStatus::Sent
-                && self
+                .find(|row| row.step_id == earlier.id && row.status == StepStatus::Sent)
+                && let Some(subject) = self
                     .steps
-                    .is_sent_in(R::conn(tx), link_id, step.message_id)
+                    .sent_subject(R::conn(tx), link_id, sent.message_id)
                     .await
                     .map_err(internal)?
             {
-                return Ok(Some(step.message_id));
+                return Ok(Some((sent.message_id, subject)));
             }
-            if !row.steps.get(earlier).is_some_and(|step| step.as_reply) {
+            if !earlier.as_reply {
                 return Ok(None);
             }
         }
         Ok(None)
-    }
-
-    async fn withdraw_orphans(&self, report: &mut SweepReport) {
-        let mut after = None;
-        loop {
-            let pending = async {
-                let mut tx = self.repo.begin().await.map_err(internal)?;
-                self.steps
-                    .pending_steps(R::conn(&mut tx), after, PAGE)
-                    .await
-                    .map_err(internal)
-            }
-            .await;
-            let pending = match pending {
-                Ok(pending) => pending,
-                Err(error) => {
-                    tracing::error!(error = ?error, "failed to list pending sequence schedules");
-                    report.failed += 1;
-                    return;
-                }
-            };
-            let ids: Vec<Uuid> = pending.iter().map(|step| step.message_id).collect();
-            let known = match self.repo.known_steps(&ids).await {
-                Ok(known) => known,
-                Err(error) => {
-                    tracing::error!(error = ?error, "failed to match pending sequence schedules");
-                    report.failed += 1;
-                    return;
-                }
-            };
-            for orphan in pending
-                .iter()
-                .filter(|step| !known.contains(&step.message_id))
-            {
-                let withdrawn = async {
-                    let mut tx = self.repo.begin().await.map_err(internal)?;
-                    let outcome = self
-                        .steps
-                        .cancel_step(
-                            R::conn(&mut tx),
-                            orphan.message_id,
-                            CancelExpectation::Scheduled,
-                        )
-                        .await
-                        .map_err(internal)?;
-                    self.repo.commit(tx).await.map_err(internal)?;
-                    Ok::<_, SequenceError>(outcome)
-                }
-                .await;
-                match withdrawn {
-                    Ok(CancelOutcome::Cancelled) => report.withdrawn += 1,
-                    Ok(_) => {}
-                    Err(error) => {
-                        tracing::warn!(message_id = %orphan.message_id, error = ?error, "failed to withdraw an orphaned sequence step");
-                        report.failed += 1;
-                    }
-                }
-            }
-            if pending.len() < PAGE as usize {
-                return;
-            }
-            after = ids.last().copied();
-        }
     }
 
     /// Stop enrollments a newly synced message answers. Safe to repeat.

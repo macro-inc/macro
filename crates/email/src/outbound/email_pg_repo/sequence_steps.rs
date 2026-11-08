@@ -3,12 +3,12 @@
 use super::{contact, draft, message, send_attempt, thread};
 use crate::domain::{
     models::{
-        ContactInfo, EmailErr, ParsedAddresses, ResolvedDraftInput, ScheduledSendSource,
-        ScheduledSendStatus, ThreadRow, UpsertedContacts, UserProvider,
+        ContactInfo, EmailErr, ParsedAddresses, ResolvedDraftInput, ScheduledSendStatus, ThreadRow,
+        UpsertedContacts, UserProvider,
     },
     sequence_steps::{
-        CancelExpectation, CancelOutcome, InboundMessage, NewStep, PendingStep, ReplySearch,
-        SendingInbox, SequenceStepStore, StepState,
+        CancelOutcome, InboundMessage, NewStep, ReplySearch, SendingInbox, SequenceStepStore,
+        StepState,
     },
 };
 use chrono::{DateTime, Utc};
@@ -205,16 +205,14 @@ impl SequenceStepStore for PgSequenceSteps {
         message::upsert_recipients(conn, message_id, step.contacts)
             .await
             .map_err(storage)?;
-        let source: &'static str = ScheduledSendSource::Sequence.into();
         sqlx::query!(
             r#"INSERT INTO email_scheduled_messages
-                (link_id, message_id, send_time, sent, processing, actor_id, source, list_unsubscribe_url)
-               VALUES ($1, $2, $3, false, false, $4, $5, $6)"#,
+                (link_id, message_id, send_time, sent, processing, actor_id, list_unsubscribe_url)
+               VALUES ($1, $2, $3, false, false, $4, $5)"#,
             step.link_id,
             message_id,
             step.send_time,
             step.actor,
-            source,
             step.list_unsubscribe_url,
         )
         .execute(&mut *conn)
@@ -231,7 +229,6 @@ impl SequenceStepStore for PgSequenceSteps {
         &self,
         conn: &mut PgConnection,
         message_id: Uuid,
-        expect: CancelExpectation,
     ) -> Result<CancelOutcome, EmailErr> {
         let Some(found) = sqlx::query!(
             "SELECT link_id, provider_thread_id FROM email_messages WHERE id = $1",
@@ -267,7 +264,7 @@ impl SequenceStepStore for PgSequenceSteps {
             return Ok(CancelOutcome::Sent);
         }
         let schedule = sqlx::query!(
-            r#"SELECT sent, processing, delivery_status, delivery_started_at, delivery_claim_id, source
+            r#"SELECT sent, processing, delivery_status, delivery_started_at, delivery_claim_id
                FROM email_scheduled_messages WHERE message_id = $1 AND link_id = $2 FOR UPDATE"#,
             message_id,
             locked.link_id,
@@ -275,16 +272,9 @@ impl SequenceStepStore for PgSequenceSteps {
         .fetch_optional(&mut *conn)
         .await
         .map_err(storage)?;
-        if schedule.is_none() && expect == CancelExpectation::Scheduled {
-            return Ok(CancelOutcome::Changed);
-        }
         if let Some(schedule) = schedule {
             if schedule.sent {
                 return Ok(CancelOutcome::Sent);
-            }
-            // The owner scheduled or sent it from Mail: it is theirs.
-            if schedule.source.is_none() {
-                return Ok(CancelOutcome::Changed);
             }
             // The rule `change_schedule` applies: a submitted or uncertain
             // delivery can't be withdrawn; a failed one can.
@@ -337,12 +327,9 @@ impl SequenceStepStore for PgSequenceSteps {
     ) -> Result<StepState, EmailErr> {
         let Some(row) = sqlx::query!(
             r#"SELECT m.is_sent, m.internal_date_ts, m.updated_at, m.global_id,
-                      s.message_id AS "scheduled?", s.send_time AS "send_time?", s.source,
-                      s.processing AS "processing?", s.delivery_status AS "delivery_status?",
-                      s.delivery_started_at, s.delivery_claim_id, s.delivery_message_id,
-                      (COALESCE((m.mailbox_state->>'provider_missing')::boolean, false)
-                       OR EXISTS (SELECT 1 FROM email_message_mailbox_facts mf
-                                  WHERE mf.id = m.id AND mf.in_trash)) AS "discarded!"
+                      s.send_time AS "send_time?", s.processing AS "processing?",
+                      s.delivery_status AS "delivery_status?", s.delivery_started_at,
+                      s.delivery_claim_id, s.delivery_message_id
                FROM email_messages m
                LEFT JOIN email_scheduled_messages s ON s.message_id = m.id AND s.link_id = m.link_id
                WHERE m.id = $1"#,
@@ -362,56 +349,49 @@ impl SequenceStepStore for PgSequenceSteps {
                 global_id: row.global_id,
             });
         }
-        Ok(match (row.scheduled, row.send_time, row.delivery_status) {
-            (Some(_), Some(send_time), Some(delivery_status)) if row.source.is_some() => {
-                StepState::Scheduled {
-                    send_time,
-                    status: schedule_status(
-                        &delivery_status,
-                        row.processing.unwrap_or_default(),
-                        row.delivery_claim_id.is_some(),
-                        row.delivery_started_at.is_some(),
-                    ),
-                }
-            }
-            (Some(_), _, _) => StepState::TakenOver,
-            (None, _, _) if row.discarded => StepState::Discarded,
-            (None, _, _) => StepState::TakenOver,
+        let (Some(send_time), Some(delivery_status)) = (row.send_time, row.delivery_status) else {
+            return Ok(StepState::Unscheduled);
+        };
+        Ok(StepState::Scheduled {
+            send_time,
+            status: schedule_status(
+                &delivery_status,
+                row.processing.unwrap_or_default(),
+                row.delivery_claim_id.is_some(),
+                row.delivery_started_at.is_some(),
+            ),
         })
     }
 
-    async fn is_sent_in(
+    async fn sent_subject(
         &self,
         conn: &mut PgConnection,
         link_id: Uuid,
         message_id: Uuid,
-    ) -> Result<bool, EmailErr> {
+    ) -> Result<Option<String>, EmailErr> {
         sqlx::query_scalar!(
-            r#"SELECT EXISTS (SELECT 1 FROM email_messages WHERE id = $1 AND link_id = $2 AND is_sent) AS "sent!""#,
+            "SELECT subject FROM email_messages WHERE id = $1 AND link_id = $2 AND is_sent",
             message_id,
             link_id,
         )
-        .fetch_one(&mut *conn)
+        .fetch_optional(&mut *conn)
         .await
+        .map(Option::flatten)
         .map_err(storage)
     }
 
-    async fn lock_send_slot(
+    async fn latest_send_until(
         &self,
         conn: &mut PgConnection,
         link_id: Uuid,
+        until: DateTime<Utc>,
     ) -> Result<Option<DateTime<Utc>>, EmailErr> {
-        sqlx::query!(
-            "SELECT pg_advisory_xact_lock(hashtextextended($1, 0))",
-            format!("email_sequence_send_slot:{link_id}"),
-        )
-        .execute(&mut *conn)
-        .await
-        .map_err(storage)?;
+        // `idx_email_scheduled_messages_send_time_sent` keeps this to the window.
         sqlx::query_scalar!(
             r#"SELECT max(send_time) FROM email_scheduled_messages
-               WHERE link_id = $1 AND source IS NOT NULL AND NOT sent"#,
+               WHERE link_id = $1 AND NOT sent AND send_time > now() AND send_time <= $2"#,
             link_id,
+            until,
         )
         .fetch_one(&mut *conn)
         .await
@@ -526,36 +506,6 @@ impl SequenceStepStore for PgSequenceSteps {
                 replying_to_id: row.replying_to_id,
                 headers: header_pairs(row.headers_jsonb),
                 body_text: row.body_text,
-            })
-            .collect())
-    }
-
-    async fn pending_steps(
-        &self,
-        conn: &mut PgConnection,
-        after: Option<Uuid>,
-        limit: i64,
-    ) -> Result<Vec<PendingStep>, EmailErr> {
-        let rows = sqlx::query!(
-            r#"SELECT link_id, message_id FROM email_scheduled_messages
-               WHERE source IS NOT NULL AND NOT sent
-                 -- What trash may withdraw (`delete_scheduled_messages_batch`).
-                 AND (delivery_status = 'failed' OR
-                      (delivery_started_at IS NULL AND delivery_status <> 'unconfirmed'
-                       AND (NOT processing OR delivery_claim_id IS NOT NULL)))
-                 AND ($1::uuid IS NULL OR message_id > $1)
-               ORDER BY message_id LIMIT $2"#,
-            after,
-            limit,
-        )
-        .fetch_all(&mut *conn)
-        .await
-        .map_err(storage)?;
-        Ok(rows
-            .into_iter()
-            .map(|row| PendingStep {
-                link_id: row.link_id,
-                message_id: row.message_id,
             })
             .collect())
     }

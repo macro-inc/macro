@@ -7,7 +7,7 @@ use axum::{
     extract::{DefaultBodyLimit, FromRef, Path, State},
     http::StatusCode,
     response::{IntoResponse, Response},
-    routing::{get, post},
+    routing::{get, patch, post},
 };
 use macro_authorization::{
     MacroAuthorizationExtractor, MacroAuthorizationService, MacroAuthorizationState, UserOnly,
@@ -18,8 +18,8 @@ use uuid::Uuid;
 
 use crate::domain::{
     models::{
-        ContactEnrollment, EnrollResult, EnrollmentAction, EnrollmentDetail, EnrollmentSummary,
-        Sequence, SequenceError, SequenceSummary,
+        ContactEnrollment, EnrollResult, EnrollmentAction, EnrollmentSummary, Sequence,
+        SequenceError, SequenceSummary,
     },
     ports::{NewSequence, SequencesApi},
     render::Problem,
@@ -100,28 +100,15 @@ pub struct ContactEnrollmentsResponse {
 pub enum SequenceErrorCode {
     /// No such sequence, enrollment or contact for the caller.
     NotFound,
-    /// The sequence changed since the caller read it.
-    VersionConflict,
-    /// The status change isn't allowed.
-    InvalidTransition,
     /// The sequence is invalid; see `problem`.
     InvalidSequence,
-    /// Too many contacts in one request.
-    TooManyContacts,
-    /// The start time isn't usable.
-    InvalidStart,
-    /// The time zone isn't an IANA zone.
-    InvalidTimezone,
-    /// The action doesn't apply to the enrollment's status.
+    /// The request is malformed: too many contacts, or an unknown time zone.
+    InvalidRequest,
+    /// The change doesn't apply to the current status, or an email is being
+    /// delivered; refresh and try again.
     ActionUnavailable,
-    /// A step is being delivered; try again shortly.
-    StepInDelivery,
-    /// The owner took the step's email over in Mail; send or delete it there.
-    StepTakenOver,
-    /// The caller isn't in a team.
-    NoTeam,
-    /// The team has CRM turned off.
-    CrmDisabled,
+    /// The caller isn't in a team with CRM on.
+    CrmUnavailable,
     /// Something else failed.
     Internal,
 }
@@ -146,35 +133,18 @@ impl IntoResponse for SequenceError {
     fn into_response(self) -> Response {
         let (status, code) = match &self {
             SequenceError::NotFound => (StatusCode::NOT_FOUND, SequenceErrorCode::NotFound),
-            SequenceError::VersionConflict => {
-                (StatusCode::CONFLICT, SequenceErrorCode::VersionConflict)
-            }
-            SequenceError::InvalidTransition => {
-                (StatusCode::CONFLICT, SequenceErrorCode::InvalidTransition)
-            }
             SequenceError::Invalid(_) => {
                 (StatusCode::BAD_REQUEST, SequenceErrorCode::InvalidSequence)
             }
-            SequenceError::TooManyContacts => {
-                (StatusCode::BAD_REQUEST, SequenceErrorCode::TooManyContacts)
-            }
-            SequenceError::InvalidStart => {
-                (StatusCode::BAD_REQUEST, SequenceErrorCode::InvalidStart)
-            }
-            SequenceError::InvalidTimezone => {
-                (StatusCode::BAD_REQUEST, SequenceErrorCode::InvalidTimezone)
+            SequenceError::InvalidRequest(_) => {
+                (StatusCode::BAD_REQUEST, SequenceErrorCode::InvalidRequest)
             }
             SequenceError::ActionUnavailable => {
                 (StatusCode::CONFLICT, SequenceErrorCode::ActionUnavailable)
             }
-            SequenceError::StepInDelivery => {
-                (StatusCode::CONFLICT, SequenceErrorCode::StepInDelivery)
+            SequenceError::CrmUnavailable => {
+                (StatusCode::FORBIDDEN, SequenceErrorCode::CrmUnavailable)
             }
-            SequenceError::StepTakenOver => {
-                (StatusCode::CONFLICT, SequenceErrorCode::StepTakenOver)
-            }
-            SequenceError::NoTeam => (StatusCode::FORBIDDEN, SequenceErrorCode::NoTeam),
-            SequenceError::CrmDisabled => (StatusCode::FORBIDDEN, SequenceErrorCode::CrmDisabled),
             SequenceError::Internal(_) => {
                 tracing::error!(error = ?self, "sequences request failed");
                 (
@@ -237,10 +207,7 @@ where
                 .delete(delete_sequence::<Api, Auth>),
         )
         .route("/{id}/enrollments", post(enroll_contacts::<Api, Auth>))
-        .route(
-            "/enrollments/{id}",
-            get(get_enrollment::<Api, Auth>).patch(update_enrollment::<Api, Auth>),
-        )
+        .route("/enrollments/{id}", patch(update_enrollment::<Api, Auth>))
         .route(
             "/contacts/{crm_contact_id}",
             get(contact_enrollments::<Api, Auth>),
@@ -291,7 +258,7 @@ pub async fn get_sequence<Api: SequencesApi, Auth: MacroAuthorizationService>(
     }))
 }
 
-/// Edit a draft or paused sequence, or change its status.
+/// Edit a sequence or change its status.
 #[utoipa::path(patch, tag = "sequences", operation_id = "update_sequence", path = "/email/sequences/{id}",
     params(("id" = Uuid, Path)), request_body = SequencePatch,
     responses((status = 200, body = Sequence), (status = 400, body = SequenceErrorResponse),
@@ -334,18 +301,6 @@ pub async fn enroll_contacts<Api: SequencesApi, Auth: MacroAuthorizationService>
     Ok(Json(EnrollResponse {
         results: state.service.enroll(user_id(&caller), id, request).await?,
     }))
-}
-
-/// An enrollment with its rendered steps and what happened to each.
-#[utoipa::path(get, tag = "sequences", operation_id = "get_enrollment", path = "/email/sequences/enrollments/{id}",
-    params(("id" = Uuid, Path)),
-    responses((status = 200, body = EnrollmentDetail), (status = 404, body = SequenceErrorResponse)))]
-pub async fn get_enrollment<Api: SequencesApi, Auth: MacroAuthorizationService>(
-    State(state): State<SequencesRouterState<Api, Auth>>,
-    caller: Caller<Auth>,
-    Path(id): Path<Uuid>,
-) -> Result<Json<EnrollmentDetail>, SequenceError> {
-    Ok(Json(state.service.enrollment(user_id(&caller), id).await?))
 }
 
 /// Pause, resume, stop or unsubscribe an enrollment.

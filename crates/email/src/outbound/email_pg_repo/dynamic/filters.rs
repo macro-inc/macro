@@ -435,23 +435,16 @@ fn build_address_message_predicate(
     })
 }
 
-/// A message any list may show: present, not trashed outside its explicit
-/// folder, and not a pending sequence step (a draft whose schedule has a
-/// source and is neither sent nor failed), which stays out of every mail list
-/// until it is sent or fails. Every candidate-stage message probe and the
-/// preview lateral use it, so a thread is a candidate only when the lateral
-/// can show one of its messages. The static preview views and
-/// `recompute_thread_metadata` restate the sequence predicate.
-pub(super) fn build_visible_message_check(resolved: &ResolvedFilters) -> SqlFragment {
-    let trash = if resolved.include_trash {
-        ""
-    } else {
-        " AND NOT mf.in_trash"
-    };
-    SqlFragment::raw(format!(
-        "EXISTS (SELECT 1 FROM email_message_mailbox_facts mf WHERE mf.id = m.id AND mf.is_present{trash}) \
-         AND NOT EXISTS (SELECT 1 FROM email_scheduled_messages sm_seq WHERE sm_seq.message_id = m.id AND sm_seq.source IS NOT NULL AND NOT sm_seq.sent AND sm_seq.delivery_status <> 'failed')",
-    ))
+/// Exclude absent messages, and trash outside its explicit folder.
+fn build_trash_check(resolved: &ResolvedFilters) -> SqlFragment {
+    if resolved.include_trash {
+        return SqlFragment::raw(
+            "EXISTS (SELECT 1 FROM email_message_mailbox_facts mf WHERE mf.id = m.id AND mf.is_present)",
+        );
+    }
+    SqlFragment::raw(
+        "EXISTS (SELECT 1 FROM email_message_mailbox_facts mf WHERE mf.id = m.id AND mf.is_present AND NOT mf.in_trash)",
+    )
 }
 
 /// True when the AST contains at least one pure-address top-level
@@ -478,11 +471,7 @@ pub(super) fn build_thread_address_filter(ast: &Expr<EmailLiteral>) -> SqlFragme
 /// per-message filter the address CTE doesn't model — a non-empty
 /// view-level message filter (Starred / Drafts / Important / …). Without
 /// this, the candidate `LIMIT` counts threads that the lateral later
-/// drops, so the page under-fills while still emitting a cursor. The EXISTS
-/// uses the lateral's visible-message check, so a thread holding only pending
-/// sequence steps can't take a slot either. Inbox needs no check:
-/// `inbox_visible` comes from the thread projection, which already leaves
-/// those steps out.
+/// drops, so the page under-fills while still emitting a cursor.
 pub(super) fn wants_message_exists_pushdown(view: &PreviewView) -> bool {
     !build_view_message_filter(view).is_empty()
 }
@@ -501,7 +490,7 @@ pub(super) fn build_thread_message_exists_filter(
     let mut f = SqlFragment::raw(
         " AND EXISTS (SELECT 1 FROM email_messages m WHERE m.thread_id = t.id AND ",
     );
-    f.extend(build_visible_message_check(resolved));
+    f.extend(build_lateral_trash_exclusion(resolved));
     let view_message_filter = build_view_message_filter(view);
     if !view_message_filter.is_empty() {
         f.extend(view_message_filter);
@@ -609,7 +598,7 @@ fn contacts_sender_branch(contact_ids: &[Uuid], resolved: &ResolvedFilters) -> S
         SqlFragment::raw("SELECT m.thread_id FROM email_messages m WHERE m.from_contact_id = ANY(");
     f.extend(SqlFragment::bind_uuid_array(contact_ids.to_vec()));
     f.push_raw(") AND ");
-    f.extend(build_visible_message_check(resolved));
+    f.extend(build_trash_check(resolved));
     f
 }
 
@@ -628,7 +617,7 @@ fn contacts_recipient_branch(
     f.extend(SqlFragment::bind_uuid_array(contact_ids.to_vec()));
     f.push_raw(format!("){}", kinds.recipient_type_sql()));
     f.push_raw(" AND ");
-    f.extend(build_visible_message_check(resolved));
+    f.extend(build_trash_check(resolved));
     f
 }
 
@@ -679,7 +668,7 @@ fn text_sender_branch(
          JOIN email_messages m ON m.from_contact_id = c.id \
          WHERE "
     ));
-    f.extend(build_visible_message_check(resolved));
+    f.extend(build_trash_check(resolved));
     f.extend(link_scope_fragment("m", link_scope));
     f
 }
@@ -697,7 +686,7 @@ fn text_recipient_branch(
          JOIN email_messages m ON m.id = mr.message_id \
          WHERE "
     ));
-    f.extend(build_visible_message_check(resolved));
+    f.extend(build_trash_check(resolved));
     f.push_raw(kinds.recipient_type_sql());
     f.extend(link_scope_fragment("m", link_scope));
     f
@@ -805,7 +794,7 @@ pub(super) fn build_matching_threads_ctes(
         .expect("non-empty checked above");
 
     let mut f = SqlFragment::raw("SELECT DISTINCT m.thread_id FROM email_messages m WHERE ");
-    f.extend(build_visible_message_check(resolved));
+    f.extend(build_trash_check(resolved));
     f.push_raw(" AND ");
     f.extend(predicate);
     f.extend(link_scope_fragment("m", link_scope));
@@ -865,7 +854,7 @@ pub(super) fn build_thread_email_filter(
         let mut f = SqlFragment::raw(
             "EXISTS (SELECT 1 FROM email_messages m WHERE m.thread_id = t.id AND ",
         );
-        f.extend(build_visible_message_check(resolved));
+        f.extend(build_trash_check(resolved));
         f.push_raw(" AND ");
         f.extend(build_candidate_pair_predicate(ast, sort_ts_field, resolved));
         f.push_raw(")");
@@ -1019,4 +1008,9 @@ pub(super) fn get_sort_timestamp_field(view: &PreviewView) -> &'static str {
         // equality scan can stop at LIMIT.
         _ => "COALESCE(t.latest_non_spam_message_ts, t.updated_at)",
     }
+}
+
+/// Use the same visibility rule for the candidate and its displayed preview.
+pub(super) fn build_lateral_trash_exclusion(resolved: &ResolvedFilters) -> SqlFragment {
+    build_trash_check(resolved)
 }

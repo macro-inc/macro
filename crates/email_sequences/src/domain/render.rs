@@ -1,4 +1,4 @@
-//! Sequence validation and the per-contact rendering frozen into enrollments.
+//! Sequence validation, and rendering a step for one person when it is created.
 
 #[cfg(test)]
 mod test;
@@ -6,22 +6,12 @@ mod test;
 use super::models::{Recipient, Step};
 use lazy_regex::regex;
 
-/// Longest sequence name.
-pub const MAX_NAME: usize = 200;
-/// Most steps in a sequence.
-pub const MAX_STEPS: usize = 20;
-/// Longest subject template.
-pub const MAX_SUBJECT: usize = 300;
-/// Longest body template.
-pub const MAX_BODY: usize = 50_000;
-/// Longest footer line.
-pub const MAX_FOOTER: usize = 300;
-/// Longest delay between two steps.
-pub const MAX_DELAY_DAYS: u16 = 365;
-/// The longest value a token can fill in: an address.
-const MAX_TOKEN_VALUE: usize = 320;
-/// The longest a body may become once personalized.
-const MAX_RENDERED_BODY: usize = 2 * MAX_BODY;
+// The editor stops at these; the server refuses past them.
+const MAX_NAME: usize = 200;
+const MAX_STEPS: usize = 20;
+const MAX_SUBJECT: usize = 300;
+const MAX_BODY: usize = 50_000;
+const MAX_FOOTER: usize = 300;
 /// What a missing name personalizes to.
 const FALLBACK_NAME: &str = "there";
 
@@ -33,33 +23,17 @@ const FALLBACK_NAME: &str = "there";
 pub enum Problem {
     /// The name is blank.
     NameRequired,
-    /// The name is too long.
-    NameTooLong,
-    /// The footer is too long.
-    FooterTooLong,
     /// There are no steps.
     StepsRequired,
-    /// There are too many steps.
-    TooManySteps,
-    /// The first step can't reply to anything.
-    FirstStepIsReply,
     /// A step that starts a thread has no subject.
     SubjectRequired,
-    /// A subject has a line break.
-    SubjectSingleLine,
-    /// A subject is too long.
-    SubjectTooLong,
     /// A body is blank.
     BodyRequired,
-    /// A body is too long.
-    BodyTooLong,
-    /// A delay is out of range.
-    DelayRange,
+    /// A name, footer, subject or body is too long, or there are too many steps.
+    OverLimit,
     /// Text uses a personalization token no contact can fill.
     UnknownToken,
-    /// No sending inbox is chosen.
-    SenderRequired,
-    /// The chosen inbox isn't the owner's connected Gmail inbox.
+    /// No inbox is chosen, or it isn't the owner's connected Gmail inbox.
     SenderUnavailable,
 }
 
@@ -85,38 +59,20 @@ impl InvalidSequence {
     }
 }
 
-/// Checks that hold on every save: limits, single-line subjects and tokens.
-/// A draft may still be incomplete.
+/// Checks that hold on every save: limits and tokens. A draft may still be
+/// incomplete.
 pub fn check_limits(name: &str, footer: &str, steps: &[Step]) -> Result<(), InvalidSequence> {
-    if name.chars().count() > MAX_NAME {
-        return Err(InvalidSequence::new(Problem::NameTooLong, None));
-    }
-    if footer.chars().count() > MAX_FOOTER {
-        return Err(InvalidSequence::new(Problem::FooterTooLong, None));
+    if name.chars().count() > MAX_NAME
+        || footer.chars().count() > MAX_FOOTER
+        || steps.len() > MAX_STEPS
+    {
+        return Err(InvalidSequence::new(Problem::OverLimit, None));
     }
     check_tokens(footer, None)?;
-    if steps.len() > MAX_STEPS {
-        return Err(InvalidSequence::new(Problem::TooManySteps, None));
-    }
     for (index, step) in steps.iter().enumerate() {
         let position = Some(index + 1);
-        if index == 0 && step.as_reply {
-            return Err(InvalidSequence::new(Problem::FirstStepIsReply, position));
-        }
-        if step.subject.contains(['\r', '\n']) {
-            return Err(InvalidSequence::new(Problem::SubjectSingleLine, position));
-        }
-        if step.subject.chars().count() > MAX_SUBJECT {
-            return Err(InvalidSequence::new(Problem::SubjectTooLong, position));
-        }
-        // Personalization can't grow a body far past the limit: every token
-        // counts as the longest value it can take.
-        let body = step.body.chars().count();
-        if body > MAX_BODY || body + token_count(&step.body) * MAX_TOKEN_VALUE > MAX_RENDERED_BODY {
-            return Err(InvalidSequence::new(Problem::BodyTooLong, position));
-        }
-        if step.delay_days > MAX_DELAY_DAYS {
-            return Err(InvalidSequence::new(Problem::DelayRange, position));
+        if step.subject.chars().count() > MAX_SUBJECT || step.body.chars().count() > MAX_BODY {
+            return Err(InvalidSequence::new(Problem::OverLimit, position));
         }
         check_tokens(&step.subject, position)?;
         check_tokens(&step.body, position)?;
@@ -160,10 +116,6 @@ fn check_tokens(text: &str, position: Option<usize>) -> Result<(), InvalidSequen
 
 /// A personalization token, `{{ name }}`; the name is the first group.
 static TOKEN: lazy_regex::Lazy<lazy_regex::Regex> = lazy_regex::lazy_regex!(r"\{\{\s*(\w+)\s*\}\}");
-
-fn token_count(text: &str) -> usize {
-    TOKEN.find_iter(text).count()
-}
 
 /// Tokens a contact can't fill in, including a stray `{{` or `}}`.
 fn unknown_tokens(text: &str) -> Vec<String> {
@@ -240,6 +192,11 @@ pub fn clean_text(text: &str) -> String {
         .collect()
 }
 
+/// A subject as it is stored: one header line.
+pub fn clean_subject(subject: &str) -> String {
+    clean_text(&regex!(r"[\r\n]+").replace_all(subject, " "))
+}
+
 /// The first name to greet someone by, from a display name.
 fn first_name(name: &str) -> &str {
     if name.to_lowercase().starts_with("the ") {
@@ -284,33 +241,19 @@ fn personalize(text: &str, recipient: &Recipient) -> String {
 
 /// A subject replying in a thread.
 pub fn reply_subject(subject: &str) -> String {
-    if has_reply_prefix(subject.trim_start()) {
+    let prefixed = subject
+        .trim_start()
+        .get(..3)
+        .is_some_and(|prefix| prefix.eq_ignore_ascii_case("re:"));
+    if prefixed {
         subject.to_owned()
     } else {
         format!("Re: {subject}")
     }
 }
 
-/// A reply step's subject when it has nothing to reply to and starts its own thread.
-pub fn standalone_subject(subject: &str) -> &str {
-    let trimmed = subject.trim_start();
-    if has_reply_prefix(trimmed) {
-        trimmed[REPLY_PREFIX.len()..].trim_start()
-    } else {
-        subject
-    }
-}
-
-const REPLY_PREFIX: &str = "re:";
-
-fn has_reply_prefix(subject: &str) -> bool {
-    subject
-        .get(..REPLY_PREFIX.len())
-        .is_some_and(|prefix| prefix.eq_ignore_ascii_case(REPLY_PREFIX))
-}
-
 /// The index of the step that starts `index`'s thread.
-pub fn thread_root(steps: &[Step], index: usize) -> usize {
+fn thread_root(steps: &[Step], index: usize) -> usize {
     let mut root = index.min(steps.len().saturating_sub(1));
     while root > 0 && steps.get(root).is_some_and(|step| step.as_reply) {
         root -= 1;
@@ -318,14 +261,25 @@ pub fn thread_root(steps: &[Step], index: usize) -> usize {
     root
 }
 
-/// The steps as one recipient gets them: personalized, reply subjects derived
-/// from their thread, and the footer plus unsubscribe link under every body.
-pub fn render_steps(
+/// One email, rendered for its recipient.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Rendered {
+    /// The subject of the step's thread; a reply sent in that thread uses
+    /// [`reply_subject`] of what was sent instead.
+    pub subject: String,
+    /// The body with the footer and unsubscribe link under it.
+    pub body: String,
+}
+
+/// Step `index` as `recipient` gets it: personalized, with its thread's
+/// subject, and the footer plus unsubscribe link under the body.
+pub fn render(
     steps: &[Step],
+    index: usize,
     footer: &str,
     recipient: &Recipient,
     unsubscribe_url: &str,
-) -> Vec<Step> {
+) -> Rendered {
     let footer = footer.trim();
     let signoff = if footer.is_empty() {
         format!("Unsubscribe: {unsubscribe_url}")
@@ -335,33 +289,13 @@ pub fn render_steps(
             personalize(footer, recipient)
         )
     };
-    steps
-        .iter()
-        .enumerate()
-        .map(|(index, step)| {
-            let as_reply = index > 0 && step.as_reply;
-            // A name can carry line breaks; a subject must stay one header line.
-            let subject = regex!(r"[\r\n]+")
-                .replace_all(
-                    &personalize(
-                        steps
-                            .get(thread_root(steps, index))
-                            .map_or("", |root| root.subject.as_str()),
-                        recipient,
-                    ),
-                    " ",
-                )
-                .into_owned();
-            Step {
-                delay_days: step.delay_days,
-                subject: if as_reply {
-                    reply_subject(&subject)
-                } else {
-                    subject
-                },
-                body: format!("{}\n\n{signoff}", personalize(&step.body, recipient)),
-                as_reply,
-            }
-        })
-        .collect()
+    let subject = steps
+        .get(thread_root(steps, index))
+        .map_or("", |root| root.subject.as_str());
+    let body = steps.get(index).map_or("", |step| step.body.as_str());
+    Rendered {
+        // A name can carry line breaks; a subject must stay one header line.
+        subject: clean_subject(&personalize(subject, recipient)),
+        body: format!("{}\n\n{signoff}", personalize(body, recipient)),
+    }
 }

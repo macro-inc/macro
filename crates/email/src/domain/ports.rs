@@ -342,8 +342,7 @@ pub trait EmailRepo: Send + Sync + 'static {
         link_ids: &[Uuid],
     ) -> impl Future<Output = Result<Option<Uuid>, Self::Err>> + Send;
 
-    /// Find an existing draft that replies to the given message ID. Never
-    /// returns an unsent sequence step as the user's reply draft.
+    /// Find an existing draft that replies to the given message ID.
     fn get_draft_replying_to(
         &self,
         link_id: Uuid,
