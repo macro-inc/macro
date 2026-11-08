@@ -17,7 +17,7 @@ async fn notifications_resolve_the_stored_type_and_preserve_attribution() {
 
         service
             .publish_sync_content_updated(
-                "doc-1",
+                &DocumentId::parse("doc-1").unwrap(),
                 vec![crate::domain::events::DocumentSyncEditor {
                     agent_correlation_id: None,
                     actor: activity::Actor::try_from(actor.to_owned()).unwrap(),
@@ -54,7 +54,7 @@ async fn missing_documents_do_not_publish_events() {
     });
     let (service, broker) = make_test_service_with_event_broker(repo);
     let result = service
-        .publish_sync_content_updated("missing", Vec::new())
+        .publish_sync_content_updated(&DocumentId::parse("missing").unwrap(), Vec::new())
         .await;
     assert!(matches!(result, Err(DocumentError::NotFound(_))));
     assert!(broker.published().lock().unwrap().is_empty());
@@ -68,7 +68,7 @@ async fn notifications_surface_broker_failures() {
     let (service, broker) =
         make_test_service_with_configured_event_broker(repo, TestEventBroker::failing());
     let result = service
-        .publish_sync_content_updated("doc-1", Vec::new())
+        .publish_sync_content_updated(&DocumentId::parse("doc-1").unwrap(), Vec::new())
         .await;
     assert!(matches!(result, Err(DocumentError::Internal(_))));
     assert!(broker.published().lock().unwrap().is_empty());
@@ -89,7 +89,7 @@ async fn a_batch_of_editors_still_publishes_only_one_search_event() {
         })
         .collect();
     service
-        .publish_sync_content_updated("doc-1", editors)
+        .publish_sync_content_updated(&DocumentId::parse("doc-1").unwrap(), editors)
         .await
         .unwrap();
     let published = broker.published();
