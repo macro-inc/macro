@@ -138,7 +138,7 @@ function setup(debug: boolean) {
     corrupt: () => {
       corrupt = true;
     },
-    advance: (milliseconds = 1) => now += milliseconds,
+    advance: (milliseconds = 1) => (now += milliseconds),
     executor,
   };
 }
@@ -207,7 +207,31 @@ test('non-text and stale text keys cannot remove live mirror nodes', () => {
     s.port.textFromView({ ...s.input('invalid'), key: 0 });
     expect(s.mirror.node(0)?.kind).toBe('root');
     expect(s.mirror.node(s.key)?.text).toBe('a');
-    s.port.setState(JSON.stringify({ root: { type: 'root', version: 1, children: [{ type: 'paragraph', version: 1, children: [{ type: 'text', version: 1, text: 'fresh', format: 0, detail: 0, mode: 'normal', style: '' }] }] } }));
+    s.port.setState(
+      JSON.stringify({
+        root: {
+          type: 'root',
+          version: 1,
+          children: [
+            {
+              type: 'paragraph',
+              version: 1,
+              children: [
+                {
+                  type: 'text',
+                  version: 1,
+                  text: 'fresh',
+                  format: 0,
+                  detail: 0,
+                  mode: 'normal',
+                  style: '',
+                },
+              ],
+            },
+          ],
+        },
+      })
+    );
     expect(s.mirror.node(s.key)).toBeNull();
     s.port.textFromView(s.input('stale'));
     expect(s.mirror.node(s.key)).toBeNull();
@@ -225,7 +249,9 @@ test('normalized composition text uses real Rust ops rather than local acknowled
     expect(s.acknowledgements()).toBe(0);
     expect(s.mirror.node(s.key)?.text).toBe('a');
     expect(s.session.nodeText(s.key)).toBe('a');
-  } finally { s.session.free(); }
+  } finally {
+    s.session.free();
+  }
 });
 test('an exact edit with other output still carries authoritative text', () => {
   const s = setup(true);
@@ -237,17 +263,24 @@ test('an exact edit with other output still carries authoritative text', () => {
     expect(s.flags()).not.toBe(0);
     expect(s.acknowledgements()).toBe(0);
     expect(s.mirror.node(s.key)?.text).toBe('ab');
-  } finally { s.session.free(); }
+  } finally {
+    s.session.free();
+  }
 });
 
 test('type flags, command propagation and cold initialize use the paired ABI', () => {
   const s = setup(true);
   try {
-    expect(s.port.types().find(row => row.name === 'text')?.flags?.canInsertTextBefore).toBe(true);
+    expect(
+      s.port.types().find((row) => row.name === 'text')?.flags
+        ?.canInsertTextBefore
+    ).toBe(true);
     expect(s.port.command(CommandCode.ClearHistory)).toBe(true);
     s.port.textFromView(s.input('ab'));
     s.port.initialize();
     expect(s.mirror.node(s.key)?.text).toBe('ab');
     expect(s.session.nodeText(s.key)).toBe('ab');
-  } finally { s.session.free(); }
+  } finally {
+    s.session.free();
+  }
 });

@@ -1,0 +1,140 @@
+/**
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
+ * MIT licensed. Retargeted LexicalSelection.ts DOM point resolution and
+ * unchanged-selection early return, Lexical 0.45.0, 0cfcc169296723e07de2396cd42ea3434b5b79ed.
+ */
+import type { EditorView } from './editor-view';
+import type { Point, ViewSelection } from './types';
+
+export function resolvePoint(
+  view: EditorView,
+  dom: Node,
+  offset: number
+): Point | null {
+  const key = view.keyFromDOM(dom);
+  if (key === null) return null;
+  const node = view.node(key);
+  if (!node) return null;
+  if (node.kind === 'text') {
+    const text = view.getElementByKey(key)?.firstChild;
+    const textOffset =
+      dom.nodeType === 3 ? offset : offset === 0 ? 0 : node.text.length;
+    if (
+      !text ||
+      text.nodeType !== 3 ||
+      textOffset > (text.nodeValue?.length ?? 0)
+    )
+      return null;
+    return { key, offset: textOffset, type: 'text' };
+  }
+  if (node.kind === 'element' || node.kind === 'root') {
+    const slot = view.slot(key);
+    if (!slot) return null;
+    const child = dom.childNodes.item(offset);
+    if (child) {
+      const childKey = view.keyFromDOM(child);
+      const index = childKey === null ? -1 : node.children.indexOf(childKey);
+      if (index !== -1) return { key, offset: index, type: 'element' };
+    }
+    return {
+      key,
+      offset: offset === 0 ? 0 : node.children.length,
+      type: 'element',
+    };
+  }
+  if (node.parent === null) return null;
+  const parent = view.node(node.parent);
+  if (!parent) return null;
+  return {
+    key: parent.key,
+    offset: parent.children.indexOf(key) + (offset > 0 ? 1 : 0),
+    type: 'element',
+  };
+}
+export function readSelection(view: EditorView): ViewSelection {
+  const selection = view.root.ownerDocument.getSelection();
+  if (!selection?.anchorNode || !selection.focusNode) return { kind: 'none' };
+  const anchor = resolvePoint(
+    view,
+    selection.anchorNode,
+    selection.anchorOffset
+  );
+  const focus = resolvePoint(view, selection.focusNode, selection.focusOffset);
+  return anchor && focus ? { kind: 'range', anchor, focus } : { kind: 'none' };
+}
+export function sameSelection(
+  left: ViewSelection,
+  right: ViewSelection
+): boolean {
+  if (left.kind !== right.kind) return false;
+  if (left.kind === 'range' && right.kind === 'range')
+    return (
+      left.anchor.key === right.anchor.key &&
+      left.anchor.offset === right.anchor.offset &&
+      left.anchor.type === right.anchor.type &&
+      left.focus.key === right.focus.key &&
+      left.focus.offset === right.focus.offset &&
+      left.focus.type === right.focus.type
+    );
+  if (left.kind === 'node' && right.kind === 'node')
+    return (
+      left.keys.length === right.keys.length &&
+      left.keys.every((key, i) => right.keys[i] === key)
+    );
+  if (left.kind === 'table' && right.kind === 'table')
+    return (
+      left.table === right.table &&
+      left.anchorCell === right.anchorCell &&
+      left.focusCell === right.focusCell
+    );
+  return true;
+}
+function domPoint(
+  view: EditorView,
+  point: Point
+): { node: Node; offset: number } | null {
+  const dom = view.getElementByKey(point.key);
+  const record = view.node(point.key);
+  if (!dom || !record) return null;
+  if (point.type === 'text')
+    return dom.firstChild
+      ? { node: dom.firstChild, offset: point.offset }
+      : null;
+  const slot = view.slot(point.key);
+  if (!slot) return null;
+  const nextKey = record.children[point.offset];
+  const next =
+    nextKey === undefined ? slot.before : view.getElementByKey(nextKey);
+  if (next)
+    return {
+      node: slot.element,
+      offset: Array.from<Node>(slot.element.childNodes).indexOf(next),
+    };
+  return { node: slot.element, offset: slot.element.childNodes.length };
+}
+export function writeSelection(
+  view: EditorView,
+  selection: ViewSelection
+): void {
+  if (selection.kind === 'keep') return;
+  const dom = view.root.ownerDocument.getSelection();
+  if (!dom) return;
+  if (selection.kind === 'none') {
+    if (dom.anchorNode && view.root.contains(dom.anchorNode))
+      dom.removeAllRanges();
+    return;
+  }
+  if (selection.kind !== 'range') return;
+  const anchor = domPoint(view, selection.anchor),
+    focus = domPoint(view, selection.focus);
+  if (!anchor || !focus)
+    throw new Error('Selection references missing DOM point');
+  if (
+    dom.anchorNode === anchor.node &&
+    dom.anchorOffset === anchor.offset &&
+    dom.focusNode === focus.node &&
+    dom.focusOffset === focus.offset
+  )
+    return;
+  dom.setBaseAndExtent(anchor.node, anchor.offset, focus.node, focus.offset);
+}
