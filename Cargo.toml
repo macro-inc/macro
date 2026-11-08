@@ -4,6 +4,7 @@ resolver = "2"
 exclude = ["vendor"]
 
 members = [
+  "crates/macro_document_composers",
   "crates/client/mention_date",
   "crates/client/lexical/macro_document_model",
   "crates/client/lexical/lexical_loro",
@@ -234,6 +235,7 @@ members = [
 ignored = ["quick-xml", "rand_chacha"]
 
 [workspace.dependencies]
+macro_document_composers = { path = "crates/macro_document_composers" }
 mention_date = { path = "crates/client/mention_date" }
 macro_document_model = { path = "crates/client/lexical/macro_document_model", default-features = false }
 phf = { version = "0.13.1", features = ["macros"] }

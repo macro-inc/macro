@@ -88,14 +88,20 @@ fn document_kind(block: &str) -> &str {
         _ => "document",
     }
 }
-fn view_forms(widgets: &Value, ids: &mut Vec<String>) {
-    let Some(widgets) = widgets.as_array() else {
-        return;
-    };
+fn view_forms(widgets: &Value, ids: &mut Vec<String>) -> Result<()> {
+    let widgets = widgets
+        .as_array()
+        .ok_or_else(|| crate::Error::InvalidArgument("view widgets must be an array".into()))?;
     for widget in widgets {
         match widget.get("type").and_then(Value::as_str) {
             Some("cards") => {
-                if let Some(items) = widget.get("items").and_then(Value::as_array) {
+                let items = widget
+                    .get("items")
+                    .and_then(Value::as_array)
+                    .ok_or_else(|| {
+                        crate::Error::InvalidArgument("view card items must be an array".into())
+                    })?;
+                {
                     for item in items {
                         if item.get("type").and_then(Value::as_str) == Some("form")
                             && let Some(id) = item.get("id").and_then(Value::as_str)
@@ -106,16 +112,15 @@ fn view_forms(widgets: &Value, ids: &mut Vec<String>) {
                 }
             }
             Some("container") => {
-                if let Some(children) = widget.get("children") {
-                    view_forms(children, ids);
-                }
+                view_forms(widget.get("children").unwrap_or(&Value::Null), ids)?;
             }
             _ => {}
         }
     }
+    Ok(())
 }
 /// Extract shareable references in document order, including forms presented in activity cards.
-pub fn extract_channel_mentions(view: StateRef<'_>) -> Vec<MessageReference> {
+pub fn extract_channel_mentions(view: StateRef<'_>) -> Result<Vec<MessageReference>> {
     let mut result = Vec::new();
     let mut push = |kind: &str, id: &str| {
         if let Some(reference) =
@@ -143,10 +148,13 @@ pub fn extract_channel_mentions(view: StateRef<'_>) -> Vec<MessageReference> {
             if let Some(rows) = node.0.get("rows").and_then(Value::as_array) {
                 for row in rows {
                     if let Some(card) = row.get("card").filter(|card| is_agent_activity_card(card))
-                        && let Some(widgets) = card.get("view").and_then(|view| view.get("widgets"))
                     {
+                        let widgets = card
+                            .get("view")
+                            .and_then(|view| view.get("widgets"))
+                            .unwrap_or(&Value::Null);
                         let mut ids = Vec::new();
-                        view_forms(widgets, &mut ids);
+                        view_forms(widgets, &mut ids)?;
                         for id in ids {
                             push("form", &id);
                         }
@@ -169,7 +177,7 @@ pub fn extract_channel_mentions(view: StateRef<'_>) -> Vec<MessageReference> {
             );
         }
     }
-    result
+    Ok(result)
 }
 /// Parse authored markdown before extracting references, respecting inert code and paste content.
 pub fn extract_channel_mentions_from_markdown(
@@ -177,7 +185,7 @@ pub fn extract_channel_mentions_from_markdown(
     context: &DocumentContext,
 ) -> Result<Vec<MessageReference>> {
     let editor = crate::markdown::editor_from_markdown(markdown, context)?;
-    Ok(extract_channel_mentions(editor.state().view()))
+    extract_channel_mentions(editor.state().view())
 }
 /// Extract a leading explicit reply only when later root content carries authored text.
 pub fn extract_explicit_reply(

@@ -34,12 +34,6 @@ pub mod node_ids;
 /// Typed authored message references and parsed markdown extraction.
 pub mod mentions;
 
-/// Node-authored agent chat replies and session announcements.
-pub mod agent_reply;
-
-/// Private context envelope composition.
-pub mod agent_context;
-
 /// Notion enhanced Markdown import.
 pub mod notion;
 

@@ -68,17 +68,12 @@ pub(crate) fn call(
                 )?,
             )?))
         }
-        "composeImageMarkdown" => Ok(json!(
-            macro_document_model::markdown::compose_image_markdown(
-                &serde_json::from_value(first.clone())?,
-                &r.document_context()
-            )?
-        )),
+        "composeImageMarkdown" => Ok(json!(macro_document_composers::wire::compose_source_image(
+            &serde_json::from_value(first.clone())?,
+            &r.document_context()
+        )?)),
         "composeAgentContextPrompt" => Ok(json!(
-            macro_document_model::agent_context::compose_agent_context_prompt(
-                first,
-                &r.document_context()
-            )?
+            macro_document_composers::wire::compose_source_context(first, &r.document_context())?
         )),
         "markdownToSerializedEditorStateWithIds" => {
             Ok(super::wire::exported_object(serde_json::to_value(
@@ -103,20 +98,18 @@ pub(crate) fn call(
         "extractExplicitReply" => Ok(serde_json::to_value(
             macro_document_model::mentions::extract_explicit_reply(text()?, &r.document_context())?,
         )?),
-        "composeAgentChatReply" => Ok(json!(
-            macro_document_model::agent_reply::compose_agent_chat_reply(
-                &serde_json::from_value(super::wire::json_value(first.clone()))?,
-                &r.document_context()
-            )?
-        )),
+        "composeAgentChatReply" => Ok(json!(macro_document_composers::compose_agent_chat_reply(
+            &serde_json::from_value(super::wire::json_value(first.clone()))?,
+            &r.document_context()
+        )?)),
         "composeAgentSessionAnnouncement" => Ok(json!(
-            macro_document_model::agent_reply::compose_agent_session_announcement(
+            macro_document_composers::compose_agent_session_announcement(
                 &serde_json::from_value(super::wire::json_value(first.clone()))?,
                 &r.document_context()
             )?
         )),
         "composeAgentConnectionPrompt" => Ok(json!(
-            macro_document_model::agent_reply::compose_agent_connection_prompt(
+            macro_document_composers::compose_agent_connection_prompt(
                 &serde_json::from_value(super::wire::json_value(first.clone()))?,
                 &r.document_context()
             )?
