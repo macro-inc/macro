@@ -9,7 +9,20 @@ struct SessionConfigMsg { string doc; string session; string user; uint64[] peer
 struct PointMsg { uint32 key; uint32 offset; byte type; }
 struct SelectionMsg { byte kind; PointMsg anchor; PointMsg focus; uint32[] nodes; uint32 table; bool dirty; }
 struct ClipboardEntryMsg { string mime; string value; }
-struct EditorInputMsg { byte kind; CommandCode command; uint32 a; uint32 b; string text; SelectionMsg selection; bool tripleClick; ClipboardEntryMsg[] clipboard; string[] htmlNodes; }
+struct ModifyTargetMsg { byte kind; PointMsg anchor; PointMsg focus; bool dirty; bool backward; }
+struct MarkedSelectionMsg { uint32 format; string style; PointMsg anchor; }
+struct RangeSelectionMsg { PointMsg anchor; PointMsg focus; uint32 format; string style; }
+message SelectionChangeMsg { 1 -> bool tripleClick; 2 -> bool domRangeSameNode; 3 -> MarkedSelectionMsg marked; 4 -> uint32 domAnchorOffset; 5 -> uint32 domFocusOffset; 6 -> RangeSelectionMsg postDeleteRestore; }
+union EditorInputMsg {
+ 1 -> struct EditorCommand { CommandCode command; uint32 a; uint32 b; string text; SelectionMsg selection; ModifyTargetMsg target; ModifyTargetMsg characterTarget; }
+ 2 -> struct EditorSetState { string json; }
+ 3 -> struct EditorSelection { SelectionMsg selection; SelectionChangeMsg change; }
+ 4 -> struct EditorPaste { SelectionMsg selection; ClipboardEntryMsg[] clipboard; bool hasFiles; string[] htmlNodes; }
+ 5 -> struct EditorInsertText { byte phase; bool hasData; string data; bool hasTransfer; string transfer; uint32 facts; string lastKey; SelectionMsg selection; }
+ 6 -> struct EditorComposition { byte kind; uint32 key; string text; uint32 anchorOffset; uint32 focusOffset; string data; SelectionMsg selection; }
+ 7 -> struct EditorText { uint32 key; uint16[] text; uint32 anchorOffset; uint32 focusOffset; bool compositionEnd; string compositionData; SelectionMsg selection; }
+}
+
 struct PathStepMsg { byte kind; string key; uint32 index; }
 struct ContainerPathMsg { string root; PathStepMsg[] steps; }
 struct DocValueNode { byte kind; string key; float64 num; int64 int; string str; byte[] bytes; uint32 children; }
@@ -21,12 +34,14 @@ struct OwnerRowsMsg { string owner; WalRecordMsg[] records; }
 struct LocalStateMsg { byte[] snapshot; string coversOwner; uint64 coversSeq; OwnerRowsMsg[] orphans; OwnerRowsMsg[] assist; }
 struct StorageOpMsg { byte kind; string doc; string owner; string user; string from; uint64 seq; uint64 through; int64 before; bool retry; bool terminal; WalRecordMsg record; byte[] snapshot; string coversOwner; uint64 coversSeq; }
 struct AttrMsg { string key; byte kind; string text; uint64 unsigned; int64 signed; bool flag; }
-struct TelemetryMsg { uint64 span; byte kind; string name; string outcome; bool error; AttrMsg[] attrs; }
+struct TelemetryMsg { uint64 span; byte kind; string name; string outcome; bool error; AttrMsg[] attrs; uint64 parent; }
 struct NodeCursorMsg { string nodeId; byte[] cursor; }
 struct DocEventMsg { byte kind; ContainerPathMsg path; DocOpMsg[] changes; }
-struct ViewEffectMsg { byte kind; uint32 request; uint32 code; uint32 detail; bool flag; string text; SelectionMsg selection; uint32 format; string style; string[] keys; DocValueNode[] values; DocEventMsg[] events; ContainerPathMsg[] paths; }
-struct QueryMsg { byte kind; uint32 key; string text; }
-struct QueryReplyMsg { string text; uint32 count; uint32[] keys; string[] nodes; }
+enum ClosedReason : byte { None = 0; Stopped = 1; Unauthorized = 2; Corrupt = 3; }
+enum SaveReason : byte { None = 0; Undelivered = 1; Storage = 2; ReadOnly = 3; Poison = 4; Gap = 5; Rebasing = 6; }
+struct ViewEffectMsg { ClosedReason closedReason; SaveReason saveReason; byte kind; uint32 request; uint32 code; uint32 detail; bool flag; string text; SelectionMsg selection; uint32 format; string style; string[] keys; DocValueNode[] values; DocEventMsg[] events; ContainerPathMsg[] paths; }
+struct QueryMsg { byte kind; uint32 key; string text; uint32 flags; }
+struct QueryReplyMsg { string text; uint32 count; uint32[] keys; string[] nodes; PointMsg[] points; }
 struct ClipboardMsg { string html; string lexical; string plain; }
 struct TypeRowMsg { uint32 index; string name; byte kind; }
 struct TypeTableMsg { TypeRowMsg[] rows; }

@@ -156,12 +156,10 @@ impl DocSession {
         wall: f64,
     ) -> Result<u32, JsError> {
         let result = match msg {
-            Some(msg) => Ok(storage::loaded(
-                wire::LocalStateMsg::deserialize(&msg)
-                    .map_err(BoundaryError::from)
-                    .map_err(js)?,
-            )
-            .map_err(js)?),
+            Some(msg) => wire::LocalStateMsg::deserialize(&msg)
+                .map_err(BoundaryError::from)
+                .and_then(storage::loaded)
+                .map_err(|_| StorageFailure::Corrupt),
             None => Err(codec::failure(failure).map_err(js)?),
         };
         self.machine
