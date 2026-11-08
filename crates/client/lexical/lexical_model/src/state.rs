@@ -100,9 +100,7 @@ impl EditorState {
     /// Cached root text, shared only by snapshots with identical nodes.
     /// s2: NODE-08
     pub fn root_text_content(&self) -> Arc<str> {
-        self.root_text
-            .get_or_init(|| Arc::from(self.view().text_content(NodeKey::ROOT).as_ref()))
-            .clone()
+        self.view().cached_root_text_content()
     }
     /// Whether both values share the same persistent map.
     pub fn same_snapshot(&self, other: &Self) -> bool {
