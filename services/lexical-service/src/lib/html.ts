@@ -45,8 +45,21 @@ function withDOM<T>(f: () => T): T {
 		document: globalThis.document,
 		DOMParser: globalThis.DOMParser,
 		MutationObserver: globalThis.MutationObserver,
+		HTMLElement: globalThis.HTMLElement,
+		DocumentFragment: globalThis.DocumentFragment,
+		Text: globalThis.Text,
+		Node: globalThis.Node,
 	};
-	Object.assign(globalThis, { window, document, DOMParser, MutationObserver });
+	Object.assign(globalThis, {
+		window,
+		document,
+		DOMParser,
+		MutationObserver,
+		HTMLElement: window.HTMLElement,
+		DocumentFragment: window.DocumentFragment,
+		Text: window.Text,
+		Node: window.Node,
+	});
 	try {
 		return f();
 	} finally {

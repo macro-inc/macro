@@ -2,6 +2,17 @@ import { describe, expect, it } from "bun:test";
 import { markdownToHtml } from "./html";
 
 describe("markdownToHtml", () => {
+	it("exports bullet and numbered list bodies byte-exactly", () => {
+		for (const [markdown, tag] of [
+			["- one\n- two", "ul"],
+			["1. one\n2. two", "ol"],
+		]) {
+			expect(markdownToHtml(markdown)).toEqual({
+				html: `<${tag}><li><span style="white-space:pre-wrap">one</span></li><li><span style="white-space:pre-wrap">two</span></li></${tag}>`,
+				text: "one\n\ntwo",
+			});
+		}
+	});
 	it("exports block structure the way the composer does", () => {
 		const { html } = markdownToHtml("# Title\n\nSome **bold** text.\n");
 
