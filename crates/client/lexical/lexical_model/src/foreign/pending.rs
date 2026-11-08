@@ -3,9 +3,35 @@ use crate::collections::{IndexMap, IndexSet};
 use crate::*;
 use std::sync::Arc;
 
+/// Opaque development host identity for an editor, independent of its state.
+/// Clones retain only an identity marker, never the editor or its callbacks.
+#[derive(Clone)]
+pub struct ForeignEditorIdentity(Arc<()>);
+
+impl ForeignEditorIdentity {
+    /// Whether a current transaction belongs to this identity's editor.
+    pub fn matches(&self, tx: &Transaction<'_>) -> bool {
+        Arc::ptr_eq(&self.0, &tx.editor.suspend_owner)
+    }
+}
+
+/// Opaque identity of one pending update, preserved across suspend/resume.
+/// Retaining this marker does not retain pending state or callbacks.
+#[derive(Clone)]
+pub struct ForeignUpdateIdentity(Arc<()>);
+
+impl ForeignUpdateIdentity {
+    /// Whether the transaction is the same pending update, rather than a fresh
+    /// transaction belonging to the same editor and committed publication.
+    pub fn matches(&self, tx: &Transaction<'_>) -> bool {
+        Arc::ptr_eq(&self.0, &tx.foreign_update)
+    }
+}
+
 /// An unpublished transaction detached from its editor borrow.
 /// Dropping it discards its writes, events, extensions, tags and queued updates.
 pub struct PendingUpdate {
+    update: Arc<()>,
     owner: Arc<()>,
     version: CommitId,
     extensions: crate::extension::Extensions,
@@ -33,9 +59,20 @@ pub struct PendingUpdate {
 }
 
 impl Transaction<'_> {
+    /// Capture editor identity without retaining its state or registry.
+    pub fn foreign_editor_identity(&self) -> ForeignEditorIdentity {
+        ForeignEditorIdentity(self.editor.suspend_owner.clone())
+    }
+
+    /// Capture pending-update identity without retaining its model state.
+    pub fn foreign_update_identity(&self) -> ForeignUpdateIdentity {
+        ForeignUpdateIdentity(self.foreign_update.clone())
+    }
+
     /// Detach without flushing or publishing the pending update.
     pub fn suspend(self) -> PendingUpdate {
         PendingUpdate {
+            update: self.foreign_update,
             native_projection: self.native_projection,
             owner: self.editor.suspend_owner.clone(),
             version: self.editor.suspend_version,
@@ -73,6 +110,7 @@ impl Editor {
             return Err(Error::StaleSuspendedUpdate);
         }
         Ok(Transaction {
+            foreign_update: update.update,
             native_projection: update.native_projection,
             editor: self,
             extensions: update.extensions,

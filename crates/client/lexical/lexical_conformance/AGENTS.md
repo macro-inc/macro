@@ -16,6 +16,7 @@ Development-only schema-2 fixture interpreter for the pinned upstream oracle.
 - `src/api/`: explicit dispatch to model APIs, including caret object identity and metadata.
 - `src/api.rs`: shared fixture/WASM call entry point; `build.rs` derives its sorted API index from dispatcher match arms with syn.
 - `src/api/context.rs`: host-owned fixture handles, suspended-call selection bookkeeping, publication/discard and explicit state release.
+- `src/api/context/callbacks.rs`: weak callback capability with independent mutable dispatcher frames, shared metadata and exact editor/scope checks.
 - `src/api/session.rs`: owned editor/pending-update boundary; calls and flushes suspend without publishing, while failed commits discard model writes and pending handles.
 - `src/snapshot.rs`: full observable-state comparison.
 - `tests/replay_wasm.rs`: complete embedded corpus in wasm-bindgen-test via `just lexical-replay-wasm`.
@@ -63,6 +64,7 @@ Development-only schema-2 fixture interpreter for the pinned upstream oracle.
 - Retain key generations in internal node/key handle values after shared-counter resets; visible keys stay decimal strings.
 - Detach replaced selection handles only if the call still owns their activation revision after nested callbacks.
 - Retain committed snapshots while their host handles are reachable; release their handles and saved-state pins together, without reusing record identities.
-- Keep callback owners from retaining strong binding-store references once real hosting is wired; pinned snapshots retain their node registry and callbacks.
+- Bind each Context to one model editor identity across updates, including peers sharing its registry and key allocator.
+- Retain Context::callbacks weak capabilities in callback owners; pinned snapshots retain their node registry and callbacks, so strong binding references would form a cycle.
 - Defer host version collection until any update borrowing that committed or pending version ends.
 - Report pass/fail/ledger totals by source package; ledgered cases do not count toward the 50-fixture core gate.

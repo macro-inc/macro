@@ -136,3 +136,32 @@ fn suspension_retains_nested_updates_and_staged_extension_state() -> Result<(), 
     assert_eq!(commit.next.text_content(NodeKey::ROOT).as_ref(), "queued");
     Ok(())
 }
+
+#[test]
+fn host_editor_identity_survives_resumption_and_distinguishes_shared_peers() -> Result<(), Error> {
+    let mut editor = Editor::builder(EditorMode::Headless)
+        .build()
+        .expect("editor");
+    let mut peer = editor.create_conformance_peer(EditorMode::Headless)?;
+    let tx = editor.transaction();
+    let identity = tx.foreign_editor_identity();
+    let update = tx.foreign_update_identity();
+    assert!(identity.matches(&tx));
+    assert!(update.matches(&tx));
+    let pending = tx.suspend();
+    let tx = peer.transaction();
+    assert!(!identity.matches(&tx));
+    assert!(!update.matches(&tx));
+    drop(tx);
+    let tx = editor.resume(pending)?;
+    assert!(identity.matches(&tx));
+    assert!(update.matches(&tx));
+    tx.commit()?;
+    let tx = editor.transaction();
+    assert!(identity.matches(&tx));
+    assert!(!update.matches(&tx));
+    drop(tx);
+    drop(editor);
+    assert!(!identity.matches(&peer.transaction()));
+    Ok(())
+}
