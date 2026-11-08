@@ -2,7 +2,7 @@
 
 ## What it is
 
-Leaf value types shared across the backend and the web client: ids (`macro_user_id`, `bot_id`, `harness_id`), tokens, entity kinds, owners and error responses, and the `model`/`models_<area>` wire models. No I/O; `sqlx`, `utoipa` and similar derives sit behind optional features. New ids get their own `<thing>_id` crate here.
+Leaf value types shared across the backend and the web client: ids (`macro_user_id`, `bot_id`, `harness_id`), tokens, entity kinds, owners and error responses, and the `shared_types`/`<area>_types` wire models. No I/O; `sqlx`, `utoipa` and similar derives sit behind optional features. New ids get their own `<thing>_id` crate here.
 
 Layer: `types` in [`.config/layers.toml`](../../.config/layers.toml), which
 lists what this group may depend on. `cargo x deps` reports edges that break it.
@@ -32,7 +32,7 @@ lists what this group may depend on. `cargo x deps` reports edges that break it.
 | `macro_uuid` |  |
 | `maybe_send` |  |
 | [`message_parent`](message_parent/AGENTS.md) |  |
-| [`model`](model/AGENTS.md) | Shared infrastructure underlying Documents, chat, and authentication. |
+| [`shared_types`](shared_types/AGENTS.md) | Shared infrastructure underlying Documents, chat, and authentication. |
 | `entity_kind` |  |
 | `model_error_response` |  |
 | `model_file_type` |  |

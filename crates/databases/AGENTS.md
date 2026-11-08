@@ -15,8 +15,8 @@ lists what this group may depend on. `cargo x deps` reports edges that break it.
 | [`database_sql_engine`](database_sql_engine/AGENTS.md) | Part of the Databases feature: the SQL subset agents and the console use to read and write Macro databases. |
 | [`database_sql_wasm`](database_sql_wasm/AGENTS.md) | The browser build of `database_sql_engine` (the database SQL engine the web app runs in the browser). |
 | `database_webhooks` |  |
-| [`databases`](databases/AGENTS.md) | The core of the Databases feature (also underlies CRM and Forms storage): tables of typed rows whose cells are entity properties, behind a hexagonal service with Axum … |
 | [`database_sql_runner`](database_sql_runner/AGENTS.md) | Part of the Databases feature: runs the `database_sql_engine` engine over Macro databases for agents and authenticated HTTP clients, alongside the browser's direct … |
+| [`databases`](databases/AGENTS.md) | The core of the Databases feature (also underlies CRM and Forms storage): tables of typed rows whose cells are entity properties, behind a hexagonal service with Axum … |
 | [`forms`](forms/AGENTS.md) | Backs the Forms feature: questionnaires that are views of a database table. |
 | [`properties`](properties/AGENTS.md) | Part of the Databases and CRM features. |
 | [`properties_inbound`](properties_inbound/AGENTS.md) | Part of the Databases and CRM features: the Properties HTTP API (feature `axum`: routes, router state, OpenAPI paths) and the AI property/tag toolset (feature … |
