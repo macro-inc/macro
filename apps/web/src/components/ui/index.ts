@@ -111,6 +111,12 @@ export {
   openDialog,
   useImperativeDialog,
 } from './components/ImperativeDialog';
+export {
+  createInlineRename,
+  type InlineRename,
+  RenameInput,
+  RenameTitle,
+} from './components/InlineRename';
 export type {
   InputClassOptions,
   InputProps,

@@ -13,6 +13,8 @@ import type { CreateTable, TableCreationResult } from '../core/table-creation';
 import { TableNavigation } from './table-navigation';
 
 vi.mock('../../../lib/core/mobile/isMobile', () => ({ isMobile: () => false }));
+const toast = vi.hoisted(() => ({ failure: vi.fn(), success: vi.fn() }));
+vi.mock('@core/component/Toast/Toast', () => ({ toast }));
 class ResizeObserverMock implements ResizeObserver {
   static instances: ResizeObserverMock[] = [];
   readonly targets = new Set<Element>();
@@ -60,6 +62,7 @@ beforeEach(() => {
 });
 afterEach(() => {
   cleanup();
+  toast.failure.mockReset();
   menuStyles.remove();
   vi.restoreAllMocks();
   vi.unstubAllGlobals();
@@ -226,20 +229,16 @@ describe('table creation and navigation', () => {
     expect(screen.queryByRole('button', { name: /Rename table/ })).toBeNull();
   });
 
-  it('keeps a failed rename draft for retry through refreshed table data', async () => {
-    const [tables, setTables] = createSignal([
-      { id: 'tasks', name: 'Tasks' },
-      { id: 'people', name: 'People' },
-    ]);
-    const rename = vi
-      .fn()
-      .mockReturnValueOnce(
-        errAsync([{ code: 'NETWORK_ERROR', message: 'Offline' }])
-      )
-      .mockReturnValueOnce(okAsync(undefined));
+  it('puts the table name back and says why when a rename fails', async () => {
+    const rename = vi.fn(() =>
+      errAsync([{ code: 'NETWORK_ERROR', message: 'Offline' }])
+    );
     render(() => (
       <TableNavigation
-        tables={tables()}
+        tables={[
+          { id: 'tasks', name: 'Tasks' },
+          { id: 'people', name: 'People' },
+        ]}
         activeTableId="tasks"
         canCreate
         onCreate={vi.fn<CreateTable>()}
@@ -252,17 +251,14 @@ describe('table creation and navigation', () => {
     const name = await screen.findByLabelText('Table name');
     fireEvent.input(name, { target: { value: 'Team' } });
     fireEvent.keyDown(name, { key: 'Enter' });
-    expect((await screen.findByRole('alert')).textContent).toBe(
-      'Could not rename this table. Its name may have changed. Check your connection, or reopen Rename table and try again.'
-    );
-    setTables((current) => current.map((table) => ({ ...table })));
-    expect(screen.getByLabelText('Table name')).toBe(name);
-    expect((name as HTMLInputElement).value).toBe('Team');
-    fireEvent.keyDown(name, { key: 'Enter' });
     await waitFor(() =>
-      expect(screen.queryByLabelText('Table name')).toBeNull()
+      expect(toast.failure).toHaveBeenCalledExactlyOnceWith(
+        'Could not rename this table. Its name may have changed. Check your connection, or reopen Rename table and try again.'
+      )
     );
-    expect(rename).toHaveBeenNthCalledWith(2, 'people', 'Team', 'People');
+    expect(rename).toHaveBeenCalledExactlyOnceWith('people', 'Team', 'People');
+    expect(screen.queryByLabelText('Table name')).toBeNull();
+    expect(screen.getByRole('tab', { name: 'People' })).toBe(tab);
     await waitFor(() => expect(document.activeElement).toBe(tab));
   });
 

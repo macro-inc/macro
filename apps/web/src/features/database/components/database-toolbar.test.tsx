@@ -13,6 +13,8 @@ import type { ViewChange } from '../core/view-state';
 import { DatabaseToolbar } from './database-toolbar';
 
 vi.mock('../../../lib/core/mobile/isMobile', () => ({ isMobile: () => false }));
+const toast = vi.hoisted(() => ({ failure: vi.fn(), success: vi.fn() }));
+vi.mock('@core/component/Toast/Toast', () => ({ toast }));
 
 let menuStyles: HTMLStyleElement;
 beforeEach(() => {
@@ -34,6 +36,7 @@ beforeEach(() => {
 afterEach(() => {
   cleanup();
   menuStyles.remove();
+  toast.failure.mockReset();
   vi.restoreAllMocks();
   vi.unstubAllGlobals();
 });
@@ -205,8 +208,7 @@ describe('database toolbar views', () => {
     expect(name.selectionStart).toBe(0);
     expect(name.selectionEnd).toBe('Next week'.length);
     fireEvent.input(name, { target: { value: '  Soon  ' } });
-    // Enter in the input submits its form; JSDOM does not do that itself.
-    fireEvent.submit(name.closest('form')!);
+    fireEvent.keyDown(name, { key: 'Enter' });
     await waitFor(() =>
       expect(screen.queryByRole('textbox', { name: 'View name' })).toBeNull()
     );
@@ -285,7 +287,7 @@ describe('database toolbar views', () => {
     expect(screen.getByRole('button', { name: 'My work' })).toBeTruthy();
   });
 
-  it('keeps the draft and says why when a rename is refused', async () => {
+  it('puts the old name back and says why when a rename is refused', async () => {
     const rename = vi.fn(() =>
       errAsync({
         kind: 'ops' as const,
@@ -356,15 +358,15 @@ describe('database toolbar views', () => {
       name: 'View name',
     })) as HTMLInputElement;
     fireEvent.input(name, { target: { value: 'My work' } });
-    fireEvent.submit(name.closest('form')!);
-    expect((await screen.findByRole('alert')).textContent).toBe(
-      'a view named `My work` already exists on this table'
+    fireEvent.keyDown(name, { key: 'Enter' });
+    await waitFor(() =>
+      expect(toast.failure).toHaveBeenCalledExactlyOnceWith(
+        'a view named `My work` already exists on this table'
+      )
     );
     expect(rename).toHaveBeenCalledOnce();
-    expect(
-      (screen.getByRole('textbox', { name: 'View name' }) as HTMLInputElement)
-        .value
-    ).toBe('My work');
+    expect(screen.queryByRole('textbox', { name: 'View name' })).toBeNull();
+    expect(screen.getByRole('button', { name: 'Next week' })).toBeTruthy();
   });
 
   it('deletes a view after confirming in the dialog', async () => {

@@ -17,6 +17,7 @@ import { Key } from '@solid-primitives/keyed';
 import { ConfirmDialog } from '@ui/components/ConfirmDialog';
 import { DeleteDialog } from '@ui/components/DeleteDialog';
 import { Dropdown } from '@ui/components/Dropdown';
+import { createInlineRename, RenameInput } from '@ui/components/InlineRename';
 import type { JSX } from 'solid-js';
 import { createSignal, createUniqueId, For, onCleanup, Show } from 'solid-js';
 import { match } from 'ts-pattern';
@@ -43,7 +44,6 @@ import {
   type DatabaseColumnConversionChoice,
 } from './column-type-menu';
 import { FormulaEditor } from './formula-editor';
-import { createInlineRename } from './inline-rename';
 import { OptionEditor } from './option-editor';
 import { PropertyIcon } from './property-icon';
 import { OptionPill } from './select-pill';
@@ -116,7 +116,6 @@ export function DatabaseColumnHeader(props: DatabaseColumnHeaderProps) {
   const editing = useOptionEditing();
   const errorId = createUniqueId();
   let header!: HTMLDivElement;
-  let input: HTMLInputElement | undefined;
   let mounted = true;
   onCleanup(() => {
     mounted = false;
@@ -125,38 +124,23 @@ export function DatabaseColumnHeader(props: DatabaseColumnHeaderProps) {
   const canRename = () => !!props.canRename && !!props.onRename;
   const focusHeader = () => header?.isConnected && header.focus();
   const restoreFocus = () => queueMicrotask(focusHeader);
+  const [error, setError] = createSignal('');
   const columnRename = createInlineRename({
-    name: (target: { id: string; name: string }) => target.name,
+    key: (target: { id: string; name: string }) => target.id,
+    name: (target) => target.name,
     rename: (target, name) => {
       if (!props.onRename) throw new Error('Renaming a column needs onRename');
       return props.onRename(target.id, name, target.name);
     },
     failureMessage: columnSchemaMessage,
-    emptyName: { message: 'Enter a column name.', onBlur: 'cancel' },
-    input: () => input,
     restoreFocus: focusHeader,
   });
-  const error = columnRename.error;
-  const setError = columnRename.setError;
-  const pending = () => operating() || columnRename.pending();
-  const columnName = () =>
-    columnRename.pending() && !columnRename.target()
-      ? columnRename.draft().trim()
-      : props.column.name;
+  const pending = operating;
+  const columnName = () => columnRename.displayName(props.column);
   const rename = () => {
     if (!canRename() || pending()) return;
     setMenuOpen(false);
     columnRename.begin({ id: props.column.id, name: props.column.name });
-  };
-  const save = (restoreFocus: boolean) => {
-    if (canRename())
-      fireAndForget(
-        columnRename.save(
-          restoreFocus,
-          restoreFocus ? props.onEnter : undefined
-        ),
-        'database'
-      );
   };
   props.registerRename?.(rename);
   async function changeType(change: DatabaseColumnTypeChange) {
@@ -512,40 +496,20 @@ export function DatabaseColumnHeader(props: DatabaseColumnHeaderProps) {
               </div>
             }
           >
-            <div
-              class="flex min-h-10 items-center gap-2 px-3 text-xs text-ink-muted"
-              aria-busy={pending()}
-            >
+            <div class="flex min-h-10 items-center gap-2 px-3 text-xs font-medium text-ink-muted">
               <PropertyIcon
                 relation={!!props.column.relation}
                 formula={!!props.column.formula}
                 type={props.column.dataType}
                 entityType={props.column.specificEntityType}
               />
-              <input
-                ref={input}
+              <RenameInput
+                rename={columnRename}
                 aria-label="Column name"
-                aria-invalid={!!error()}
-                aria-describedby={error() ? errorId : undefined}
-                maxlength={200}
-                value={columnRename.draft()}
-                readOnly={pending()}
-                class="-mx-1.5 h-7 min-w-0 flex-1 rounded-md border border-ink/40 bg-input px-1.5 text-xs font-medium text-ink outline-none aria-invalid:border-failure-ink"
-                onInput={(event) =>
-                  columnRename.setDraft(event.currentTarget.value)
-                }
-                onBlur={() => save(false)}
-                onKeyDown={(event) => {
-                  event.stopPropagation();
-                  if (event.isComposing || event.keyCode === 229) return;
-                  if (event.key === 'Enter') {
-                    event.preventDefault();
-                    save(true);
-                  } else if (event.key === 'Escape') {
-                    event.preventDefault();
-                    columnRename.cancel(true);
-                  }
-                }}
+                maxLength={200}
+                width="fill"
+                class="flex-1"
+                onSubmit={props.onEnter}
               />
             </div>
           </Show>

@@ -7,7 +7,8 @@ import { ColorSwatches } from '@property/tags/components/color-swatches';
 import { Button } from '@ui/components/Button';
 import { DeleteDialog } from '@ui/components/DeleteDialog';
 import { Dropdown } from '@ui/components/Dropdown';
-import { createSignal, createUniqueId, type JSX, Show } from 'solid-js';
+import { createInlineRename, RenameInput } from '@ui/components/InlineRename';
+import { createSignal, type JSX, Show } from 'solid-js';
 import { KanbanBoard } from '../../../components/kanban/kanban-board';
 import { toast } from '../../../lib/core/component/Toast/Toast';
 import {
@@ -18,7 +19,6 @@ import { inferDatabaseNumber } from '../core/column-inference';
 import type { DatabaseOption, DatabaseViewColumn } from '../core/database-view';
 import { isDatabaseNameTaken } from '../core/property-creation';
 import { databaseOpMessage } from '../core/write-failure';
-import { createInlineRename } from './inline-rename';
 
 type EditableOption = {
   column: DatabaseViewColumn;
@@ -87,15 +87,13 @@ export function BoardLaneHeader(props: {
 }
 
 function LaneName(props: { option: EditableOption }) {
-  const errorId = createUniqueId();
-  let input: HTMLInputElement | undefined;
   let trigger: HTMLButtonElement | undefined;
   const rename = createInlineRename({
-    name: (current: EditableOption) => current.option.label,
+    key: (current: EditableOption) => current.option.id,
+    name: (current) => current.option.label,
     rename: (current, label) =>
       current.editing.update(current.column.id, current.option.id, { label }),
     failureMessage: (failure) => databaseOpMessage(failure, 'this group'),
-    emptyName: { message: 'Enter a group name.', onBlur: 'cancel' },
     validate: (label, current) => {
       if (
         isDatabaseNameTaken(
@@ -112,73 +110,28 @@ function LaneName(props: { option: EditableOption }) {
       )
         return 'Enter a number.';
     },
-    input: () => input,
     restoreFocus: () => trigger?.focus(),
   });
   return (
-    <div class="relative min-w-0" data-kanban-no-drag>
-      {/* Keep the title in flow so the field starts at the same size. */}
-      <KanbanBoard.ColumnLabel title={props.option.option.label}>
-        <button
-          ref={trigger}
-          type="button"
-          class="block max-w-full truncate rounded text-left outline-none hover:bg-hover focus-visible:ring-2 focus-visible:ring-ink/50"
-          classList={{ invisible: !!rename.target() }}
-          aria-hidden={rename.target() ? true : undefined}
-          tabIndex={rename.target() ? -1 : 0}
-          aria-label={`Rename ${props.option.option.label}`}
-          onClick={() => rename.begin(props.option)}
-        >
-          {rename.target()
-            ? rename.draft() || '\u00a0'
-            : props.option.option.label}
-        </button>
-      </KanbanBoard.ColumnLabel>
-      <Show when={rename.target()}>
-        <input
-          ref={input}
-          value={rename.draft()}
-          maxlength={200}
-          aria-label="Group name"
-          aria-invalid={!!rename.error()}
-          aria-describedby={rename.error() ? errorId : undefined}
-          readOnly={rename.pending()}
-          class="absolute inset-0 h-full min-w-0 w-full rounded border-0 bg-input p-0 text-sm font-medium text-ink outline-none focus:ring-2 focus:ring-ink/50"
-          onFocus={(event) => {
-            const field = event.currentTarget;
-            // Run after inline rename selects the name, which scrolls long inputs.
-            queueMicrotask(() => {
-              if (
-                field.selectionStart === 0 &&
-                field.selectionEnd === field.value.length
-              )
-                field.scrollLeft = 0;
-            });
-          }}
-          onInput={(event) => rename.setDraft(event.currentTarget.value)}
-          onBlur={() => fireAndForget(rename.save(false), 'database')}
-          onKeyDown={(event) => {
-            if (event.isComposing) return;
-            if (event.key === 'Escape') {
-              event.preventDefault();
-              event.stopPropagation();
-              rename.cancel(true);
-            } else if (event.key === 'Enter') {
-              event.preventDefault();
-              event.stopPropagation();
-              fireAndForget(rename.save(true), 'database');
-            }
-          }}
-        />
-        <Show when={rename.error()}>
-          <p
-            id={errorId}
-            role="alert"
-            class="absolute top-full left-0 z-action-menu mt-1 w-56 rounded-md border border-edge-muted bg-panel p-2 text-xs text-failure-ink shadow-sm"
-          >
-            {rename.error()}
-          </p>
-        </Show>
+    <div class="min-w-0 text-sm font-medium" data-kanban-no-drag>
+      <Show
+        when={rename.isRenaming(props.option)}
+        fallback={
+          <KanbanBoard.ColumnLabel title={rename.displayName(props.option)}>
+            <button
+              ref={trigger}
+              type="button"
+              class="block max-w-full truncate rounded text-left outline-none hover:bg-hover focus-visible:ring-2 focus-visible:ring-ink/50"
+              aria-label={`Rename ${rename.displayName(props.option)}`}
+              aria-keyshortcuts="F2"
+              onClick={() => rename.begin(props.option)}
+            >
+              {rename.displayName(props.option)}
+            </button>
+          </KanbanBoard.ColumnLabel>
+        }
+      >
+        <RenameInput rename={rename} aria-label="Group name" maxLength={200} />
       </Show>
     </div>
   );

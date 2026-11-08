@@ -1,4 +1,3 @@
-import { fireAndForget } from '@core/util/fireAndForget';
 import ArrowLeftIcon from '@icon/system/regular/arrow-left.svg';
 import ArrowRightIcon from '@icon/system/regular/arrow-right.svg';
 import TableIcon from '@icon/system/regular/table.svg';
@@ -9,6 +8,7 @@ import { createResizeObserver } from '@solid-primitives/resize-observer';
 import { DragDropProvider, DragOverlay } from '@thisbeyond/solid-dnd';
 import { DeleteDialog } from '@ui/components/DeleteDialog';
 import { Dropdown } from '@ui/components/Dropdown';
+import { createInlineRename, RenameInput } from '@ui/components/InlineRename';
 import { TabSelector } from '@ui/components/TabSelector';
 import { Tooltip } from '@ui/components/Tooltip';
 import {
@@ -34,7 +34,6 @@ import {
 } from '../core/column-schema';
 import { isDatabaseNameTaken } from '../core/property-creation';
 import type { CreateTable } from '../core/table-creation';
-import { createInlineRename } from './inline-rename';
 import { NewTableTab } from './new-table-tab';
 
 export function TableNavigation(props: {
@@ -69,13 +68,11 @@ export function TableNavigation(props: {
     if (restoreFocus) queueMicrotask(() => createButton?.focus());
   };
   const [tabRail, setTabRail] = createSignal<HTMLDivElement>();
-  const renameErrorId = createUniqueId();
   const [menuTarget, setMenuTarget] = createSignal<{
     table: { id: string; name: string };
     origin: HTMLElement;
   }>();
   let menuTrigger: HTMLSpanElement | undefined;
-  let renameInput: HTMLInputElement | undefined;
   let createButton: HTMLButtonElement | undefined;
   const canRename = () => props.canCreate && !!props.onRename;
   const canReorder = () =>
@@ -115,13 +112,13 @@ export function TableNavigation(props: {
       moveTable(tableId, target.id, direction < 0 ? 'before' : 'after');
   };
   const tableRename = createInlineRename({
-    name: (target: RenamingTable) => target.name,
+    key: (target: RenamingTable) => target.id,
+    name: (target) => target.name,
     rename: (target, name) => {
       if (!props.onRename) throw new Error('Renaming a table needs onRename');
       return props.onRename(target.id, name, target.name);
     },
     failureMessage: tableRenameMessage,
-    emptyName: { message: 'Enter a table name.', onBlur: 'keep-editing' },
     validate: (name, target) =>
       isDatabaseNameTaken(
         name,
@@ -131,7 +128,6 @@ export function TableNavigation(props: {
       )
         ? 'A table with this name already exists. Try another name.'
         : undefined,
-    input: () => renameInput,
     restoreFocus: (target) => target.origin?.focus(),
   });
   const renaming = tableRename.target;
@@ -307,43 +303,17 @@ export function TableNavigation(props: {
                           classList={{ hidden: renaming()?.id === table().id }}
                         >
                           <TableIcon class="size-3.5 shrink-0" />
-                          <span class="truncate">{table().name}</span>
+                          <span class="truncate">
+                            {tableRename.displayName(table())}
+                          </span>
                         </TabSelector.Tab>
                       </Tooltip>
                       <Show when={renaming()?.id === table().id}>
-                        <input
-                          ref={renameInput}
+                        <RenameInput
+                          rename={tableRename}
                           aria-label="Table name"
-                          aria-invalid={!!tableRename.error()}
-                          aria-describedby={
-                            tableRename.error() ? renameErrorId : undefined
-                          }
-                          aria-busy={tableRename.pending()}
-                          maxlength={200}
-                          value={tableRename.draft()}
-                          readOnly={tableRename.pending()}
-                          onFocusIn={(event) => event.stopPropagation()}
-                          onMouseDown={(event) => event.stopPropagation()}
-                          class="h-8 w-full min-w-0 rounded-full border border-ink/40 bg-input px-3 text-xs text-ink outline-none not-touch:text-sm"
-                          onInput={(event) =>
-                            tableRename.setDraft(event.currentTarget.value)
-                          }
-                          onBlur={(event) => {
-                            event.stopPropagation();
-                            fireAndForget(tableRename.save(false), 'database');
-                          }}
-                          onKeyDown={(event) => {
-                            event.stopPropagation();
-                            if (event.isComposing || event.keyCode === 229)
-                              return;
-                            if (event.key === 'Enter') {
-                              event.preventDefault();
-                              fireAndForget(tableRename.save(true), 'database');
-                            } else if (event.key === 'Escape') {
-                              event.preventDefault();
-                              tableRename.cancel(true);
-                            }
-                          }}
+                          maxLength={200}
+                          width="fill"
                         />
                       </Show>
                     </DraggableTab>
@@ -408,11 +378,6 @@ export function TableNavigation(props: {
       <Show when={createError()}>
         <p id={createErrorId} role="alert" class="mt-1 text-xs text-failure">
           {createError()}
-        </p>
-      </Show>
-      <Show when={tableRename.error()}>
-        <p id={renameErrorId} role="alert" class="mt-1 text-xs text-failure">
-          {tableRename.error()}
         </p>
       </Show>
       <ContextMenu.Portal>
@@ -508,7 +473,7 @@ type RenamingTable = {
   id: string;
   name: string;
   /** The input keeps the tab's width, so the strip does not shift. */
-  width: string;
+  width?: string;
   /** The tab that takes focus back once the rename is done. */
   origin?: HTMLElement;
 };

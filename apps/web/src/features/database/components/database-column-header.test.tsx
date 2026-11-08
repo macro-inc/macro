@@ -14,6 +14,8 @@ import type { DatabaseViewColumn } from '../core/database-view';
 import { DatabaseColumnHeader } from './database-column-header';
 
 vi.mock('../../../lib/core/mobile/isMobile', () => ({ isMobile: () => false }));
+const toast = vi.hoisted(() => ({ failure: vi.fn(), success: vi.fn() }));
+vi.mock('@core/component/Toast/Toast', () => ({ toast }));
 const column: DatabaseViewColumn = {
   id: 'name',
   name: 'Name',
@@ -80,6 +82,7 @@ beforeEach(() => {
 });
 afterEach(() => {
   cleanup();
+  toast.failure.mockReset();
   menuStyles.remove();
   vi.unstubAllGlobals();
 });
@@ -148,25 +151,22 @@ describe('column header interactions', () => {
     expect(insert).toHaveBeenLastCalledWith('name', 'right');
   });
 
-  it('retains a failed draft and its original identity across refresh, then retries without duplicate writes', async () => {
+  it('sends a rename once, shows it while saving, and puts the column name back when it fails', async () => {
     let settle!: (result: Result<void, DatabaseOpsError>) => void;
-    const rename = vi
-      .fn<
-        (
-          id: string,
-          name: string,
-          previousName: string
-        ) => ResultAsync<void, DatabaseOpsError>
-      >()
-      .mockImplementationOnce(
-        () =>
-          new ResultAsync(
-            new Promise((resolve) => {
-              settle = resolve;
-            })
-          )
-      )
-      .mockReturnValue(okAsync(undefined));
+    const rename = vi.fn<
+      (
+        id: string,
+        name: string,
+        previousName: string
+      ) => ResultAsync<void, DatabaseOpsError>
+    >(
+      () =>
+        new ResultAsync(
+          new Promise((resolve) => {
+            settle = resolve;
+          })
+        )
+    );
     const [current, setCurrent] = createSignal(column);
     render(() => (
       <DatabaseColumnHeader
@@ -184,23 +184,21 @@ describe('column header interactions', () => {
     setCurrent({ ...column, name: 'Server label' });
     expect(input.value).toBe(' Task ');
     fireEvent.keyDown(input, { key: 'Enter' });
-    fireEvent.keyDown(input, { key: 'Enter' });
-    fireEvent.keyDown(input, { key: 'Escape' });
+    fireEvent.blur(input);
     expect(rename).toHaveBeenCalledExactlyOnceWith('name', 'Task', 'Name');
-    expect(input.readOnly).toBe(true);
-    expect(screen.getByLabelText('Column name')).toBe(input);
+    expect(screen.queryByLabelText('Column name')).toBeNull();
+    expect(screen.getByRole('columnheader', { name: 'Task' })).toBeTruthy();
     settle(
       err({ code: 'NETWORK_ERROR', message: 'Connection lost', refusal: null })
     );
-    expect((await screen.findByRole('alert')).textContent).toBe(
-      'Your change could not be sent. Check your connection.'
-    );
-    expect(input.value).toBe(' Task ');
-    fireEvent.keyDown(input, { key: 'Enter' });
     await waitFor(() =>
-      expect(screen.queryByLabelText('Column name')).toBeNull()
+      expect(toast.failure).toHaveBeenCalledExactlyOnceWith(
+        'Your change could not be sent. Check your connection.'
+      )
     );
-    expect(rename).toHaveBeenNthCalledWith(2, 'name', 'Task', 'Name');
+    expect(
+      screen.getByRole('columnheader', { name: 'Server label' })
+    ).toBeTruthy();
   });
 
   it('supports F2, cancels with Escape, and ignores composing Enter', async () => {

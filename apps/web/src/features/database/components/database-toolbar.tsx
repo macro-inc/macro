@@ -16,7 +16,11 @@ import {
 import { Button } from '@ui/components/Button';
 import { DeleteDialog } from '@ui/components/DeleteDialog';
 import { Dropdown } from '@ui/components/Dropdown';
-import { Input } from '@ui/components/Input';
+import {
+  createInlineRename,
+  type InlineRename,
+  RenameInput,
+} from '@ui/components/InlineRename';
 import { Tooltip } from '@ui/components/Tooltip';
 import type { ResultAsync } from 'neverthrow';
 import { createSignal, For, type JSX, Show } from 'solid-js';
@@ -42,7 +46,6 @@ import {
   databaseOpMessage,
 } from '../core/write-failure';
 import { DatabaseEditorToolbar } from './database-editor-toolbar';
-import { createInlineRename } from './inline-rename';
 
 /** A layout a stored view can be switched to from its tab's menu. */
 export type ShownLayout =
@@ -86,26 +89,23 @@ type DatabaseToolbarProps = {
 export function DatabaseToolbar(props: DatabaseToolbarProps) {
   const [creating, setCreating] = createSignal(false);
   const [deleting, setDeleting] = createSignal<{ view: DatabaseView }>();
-  let renameInput: HTMLInputElement | undefined;
   let allRecordsButton: HTMLButtonElement | undefined;
   let viewRail: HTMLDivElement | undefined;
   /** Viewers change only what All records shows them; stored views are everyone's. */
   const canChangeView = () => !props.selectedViewId || props.canEdit;
+  const [viewError, setViewError] = createSignal('');
   const viewRename = createInlineRename({
-    name: (view: DatabaseView) => view.name,
+    key: (view: DatabaseView) => view.id,
+    name: (view) => view.name,
     rename: (view, name) => props.onRenameView(view, name),
     failureMessage: (failure: DatabaseOpFailure) =>
       databaseOpMessage(failure, 'this view'),
-    emptyName: { message: 'Enter a view name.', onBlur: 'keep-editing' },
-    input: () => renameInput,
     // The tab is drawn again when the rename input goes, so focus finds it by its view.
     restoreFocus: (view) =>
       viewRail
         ?.querySelector<HTMLElement>(`[data-view-id="${view.id}"]`)
         ?.focus(),
   });
-  const viewError = viewRename.error;
-  const setViewError = viewRename.setError;
   const createView = async (kind: NewView['layout']) => {
     if (creating() || !props.canEdit) return;
     const base = match(kind)
@@ -203,20 +203,7 @@ export function DatabaseToolbar(props: DatabaseToolbarProps) {
                         selected={props.selectedViewId === view().id}
                         canEdit={props.canEdit}
                         canReorder={props.canEdit && !!props.onReorderViews}
-                        renaming={viewRename.target()?.id === view().id}
-                        renameDraft={viewRename.draft()}
-                        renamePending={viewRename.pending()}
-                        renameInput={(element) => {
-                          renameInput = element;
-                        }}
-                        onRenameInput={viewRename.setDraft}
-                        onRenameSave={(restoreFocus) =>
-                          fireAndForget(
-                            viewRename.save(restoreFocus),
-                            'database'
-                          )
-                        }
-                        onRenameCancel={() => viewRename.cancel(true)}
+                        rename={viewRename}
                         onSelect={() => props.onSelectView(view().id)}
                         onRename={() => {
                           if (props.canEdit) viewRename.begin(view());
@@ -330,13 +317,7 @@ function ViewTab(props: {
   selected: boolean;
   canEdit: boolean;
   canReorder: boolean;
-  renaming: boolean;
-  renameDraft: string;
-  renamePending: boolean;
-  renameInput: (element: HTMLInputElement) => void;
-  onRenameInput: (name: string) => void;
-  onRenameSave: (restoreFocus: boolean) => void;
-  onRenameCancel: () => void;
+  rename: InlineRename<DatabaseView>;
   onSelect: () => void;
   onRename: () => void;
   onDelete: () => void;
@@ -356,33 +337,14 @@ function ViewTab(props: {
       }
     >
       <Show
-        when={!props.renaming}
+        when={!props.rename.isRenaming(props.view)}
         fallback={
-          <form
-            onSubmit={(event) => {
-              event.preventDefault();
-              props.onRenameSave(true);
-            }}
-          >
-            <Input
-              ref={props.renameInput}
-              aria-label="View name"
-              maxlength={100}
-              value={props.renameDraft}
-              readOnly={props.renamePending}
-              class="w-36"
-              onInput={(event) =>
-                props.onRenameInput(event.currentTarget.value)
-              }
-              onBlur={() => props.onRenameSave(false)}
-              onKeyDown={(event) => {
-                if (event.key !== 'Escape') return;
-                event.preventDefault();
-                event.stopPropagation();
-                props.onRenameCancel();
-              }}
-            />
-          </form>
+          <RenameInput
+            rename={props.rename}
+            aria-label="View name"
+            maxLength={100}
+            class="w-36 text-sm"
+          />
         }
       >
         <ContextMenu>
@@ -410,7 +372,9 @@ function ViewTab(props: {
               }}
               class="max-w-40"
             >
-              <span class="truncate">{props.view.name}</span>
+              <span class="truncate">
+                {props.rename.displayName(props.view)}
+              </span>
             </ContextMenu.Trigger>
           </Tooltip>
           <Show when={props.canEdit}>

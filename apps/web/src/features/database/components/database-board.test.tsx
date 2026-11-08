@@ -2132,7 +2132,7 @@ describe('board lane header', () => {
     ));
   }
 
-  it('saves a rename once across Enter and blur, then restores name focus', async () => {
+  it('saves a rename once across Enter and blur, showing the new name and restoring name focus', async () => {
     let complete!: () => void;
     const saved = new Promise<void>((resolve) => {
       complete = resolve;
@@ -2151,13 +2151,11 @@ describe('board lane header', () => {
     expect(editing.update).toHaveBeenCalledExactlyOnceWith('status', 'todo', {
       label: 'In progress',
     });
-    expect((input as HTMLInputElement).readOnly).toBe(true);
+    const renamed = await screen.findByRole('button', {
+      name: 'Rename In progress',
+    });
+    await waitFor(() => expect(document.activeElement).toBe(renamed));
     complete();
-    await waitFor(() =>
-      expect(document.activeElement).toBe(
-        screen.getByRole('button', { name: 'Rename To do' })
-      )
-    );
   });
 
   it('cancels a rename with Escape without saving on blur', async () => {
@@ -2166,18 +2164,16 @@ describe('board lane header', () => {
       remove: vi.fn(() => okAsync(undefined)),
     };
     renderHeader(editing);
-    const trigger = screen.getByRole('button', { name: 'Rename To do' });
-    await userEvent.click(trigger);
-    expect(trigger.isConnected).toBe(true);
-    expect(trigger.getAttribute('aria-hidden')).toBe('true');
-    expect(trigger.tabIndex).toBe(-1);
+    await userEvent.click(screen.getByRole('button', { name: 'Rename To do' }));
     const input = screen.getByRole('textbox', { name: 'Group name' });
     fireEvent.input(input, { target: { value: 'Discarded' } });
     fireEvent.keyDown(input, { key: 'Escape' });
     fireEvent.blur(input);
-    await waitFor(() => expect(document.activeElement).toBe(trigger));
-    expect(trigger.hasAttribute('aria-hidden')).toBe(false);
-    expect(trigger.tabIndex).toBe(0);
+    await waitFor(() =>
+      expect(document.activeElement).toBe(
+        screen.getByRole('button', { name: 'Rename To do' })
+      )
+    );
     expect(editing.update).not.toHaveBeenCalled();
   });
 
