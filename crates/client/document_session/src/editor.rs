@@ -90,9 +90,14 @@ impl EditorSurface {
         })
     }
     pub(crate) fn builder(config: &EditorConfig, mode: EditorMode, peer: u64) -> EditorBuilder {
-        (config.builder)(mode, peer)
+        let builder = (config.builder)(mode, peer)
             .view_host(config.view_host)
-            .opaque_unknown_types(true)
+            .opaque_unknown_types(true);
+        if mode == EditorMode::Headless {
+            builder.plugin(builder::RestoreModelSelection)
+        } else {
+            builder
+        }
     }
     fn core(editor: Editor) -> EditorCore {
         EditorCore::new(
@@ -604,19 +609,27 @@ impl EditorSurface {
             let anchor = projection.point(doc, self.core.state(), &cursors.anchor);
             let focus = projection.point(doc, self.core.state(), &cursors.focus);
             if let (Some(anchor), Some(focus)) = (anchor, focus) {
+                let input = if self.config.mode == EditorMode::Headless {
+                    Input::Command {
+                        command: Command::Extension(ExtensionCommand::new(
+                            &builder::RESTORE_MODEL_SELECTION,
+                            RangeSelection::new(anchor, focus),
+                        )),
+                        selection: ViewSelection::KeepModel,
+                    }
+                } else {
+                    Input::SelectionFromView {
+                        selection: ViewSelection::Range {
+                            anchor,
+                            focus,
+                            resolution_dirty: false,
+                        },
+                        change: None,
+                    }
+                };
                 let output = self
                     .core
-                    .apply(
-                        Input::SelectionFromView {
-                            selection: ViewSelection::Range {
-                                anchor,
-                                focus,
-                                resolution_dirty: false,
-                            },
-                            change: None,
-                        },
-                        HistoryTime(now.mono.0),
-                    )
+                    .apply(input, HistoryTime(now.mono.0))
                     .map_err(|error| SessionError::Model(error.error))?;
                 Self::output(output, view);
                 // SelectionFromView says the host already installed its input. Here it
@@ -640,3 +653,6 @@ impl EditorSurface {
         Ok(changed)
     }
 }
+
+#[cfg(test)]
+mod selection_test;

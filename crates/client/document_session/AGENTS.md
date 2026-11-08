@@ -11,6 +11,8 @@ The host supplies identities and both clocks and executes the returned effects.
 - One host input calls `handle` once; keep keystrokes inside the append/presence window.
 - SyncCore owns WAL, catch-up, flush, reset, access and comment delivery policy.
 - Surface imports queue view effects in the same output as their sync input.
+- Restore headless remote cursors through the private model-selection command;
+  keep rejecting view-selection inputs in headless EditorCore.
 - Use the supplied editor factory for live editors and headless comment forks.
   Supply its matching comment-node constructor for fresh-peer staging; the default
   creates MarkNode. Application registry/policy wiring belongs to macro_document_model
