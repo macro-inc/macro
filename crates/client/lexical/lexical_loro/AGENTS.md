@@ -16,7 +16,8 @@ It preserves the persisted loro-mirror node schema and takes explicit clocks.
 
 ## Boundaries
 
-- Keep application node types and ownership policy behind SyncPolicy.
+- Keep application node types, canonical editor serialization and ownership policy behind SyncPolicy.
+- Canonicalize transport aliases identically on model and persisted JSON reads; retain every underlying Loro value and operation.
 - No network, database, async runtime or host callbacks; native Loro subscription only.
 - Set peer immediately after new/fork; disable live-session recorded timestamps and pass commit timestamps.
 - Retain recorded timestamps only in server-created snapshot helpers; never regenerate the frozen Markdown ancestor.

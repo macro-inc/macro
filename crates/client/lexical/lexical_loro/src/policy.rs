@@ -10,6 +10,9 @@ pub trait SyncPolicy: Send + Sync + 'static {
     fn is_dropped_json(&self, node: &SerializedNode) -> bool;
     /// The same transparent-wrapper rule for persisted JSON.
     fn is_transparent_json(&self, node: &SerializedNode) -> bool;
+    /// Canonical editor serialization for application-specific transport aliases.
+    /// The default preserves every field; this never changes the Loro document.
+    fn canonicalize_node_json(&self, _node: &mut SerializedNode) {}
     /// NodeState keys never written or deleted and masked on read.
     fn local_state_keys(&self) -> &'static [&'static str];
     /// Fields which alone do not trigger remote reconciliation.
@@ -47,6 +50,7 @@ impl SyncPolicy for PlainPolicy {
     }
 }
 pub(crate) fn mask_local(json: &mut SerializedNode, policy: &dyn SyncPolicy) {
+    policy.canonicalize_node_json(json);
     if let Some(Value::Object(state)) = json.get_mut("$") {
         for key in policy.local_state_keys() {
             state.remove(*key);
