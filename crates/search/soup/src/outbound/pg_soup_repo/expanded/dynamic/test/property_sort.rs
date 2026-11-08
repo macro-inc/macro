@@ -3,11 +3,11 @@ use crate::domain::models::{
     DynamicSort, SoupProjectionHydration, SoupSortDirection, grouping::ItemGroupingInfo,
 };
 use chrono::{DateTime, Utc};
+use grouping_types::{PropertyBucketing, PropertyDateRange, PropertyDateRanges};
 use item_filters::ast::{
     calendar_event::CalendarEventLiteral, chat::ChatLiteral, document::DocumentLiteral,
     project::ProjectLiteral,
 };
-use models_grouping::{PropertyBucketing, PropertyDateRange, PropertyDateRanges};
 use models_pagination::{
     CursorVal, CursorWithValAndFilter, Identify, Query, SimpleSortMethod, SortOn,
 };

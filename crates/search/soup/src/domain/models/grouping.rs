@@ -7,10 +7,10 @@ pub mod query;
 mod test;
 
 use super::{DynamicSort, EnrichedSoupItem, SoupDocumentServerFacts, SoupPropertiesField};
+pub use grouping_types::GroupByField;
+use grouping_types::{date_bucket_label, date_bucket_order};
 use indexmap::IndexMap;
 use item_filters::ast::EntityFilterAst;
-pub use models_grouping::GroupByField;
-use models_grouping::{date_bucket_label, date_bucket_order};
 use models_pagination::{Base64Str, CursorVal, CursorWithValAndFilter, Identify, SortOn};
 use models_soup::item::SoupItem;
 use serde::Serialize;

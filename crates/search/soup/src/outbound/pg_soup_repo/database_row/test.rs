@@ -6,6 +6,7 @@ use crate::outbound::pg_soup_repo::expanded::dynamic::{
     expanded_dynamic_cursor_soup_grouped,
 };
 use filter_ast::Expr;
+use grouping_types::{GroupByField, GroupingConfig};
 use item_filters::ast::{
     EntityFilterAst,
     calendar_event::CalendarEventLiteral,
@@ -17,7 +18,6 @@ use item_filters::ast::{
 };
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
 use macro_user_id::user_id::MacroUserIdStr;
-use models_grouping::{GroupByField, GroupingConfig};
 use models_pagination::{
     Cursor, CursorVal, CursorWithValAndFilter, Identify, Query, SimpleSortMethod,
 };

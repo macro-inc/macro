@@ -16,6 +16,7 @@ use databases_types::position::PositionError;
 use databases_types::{DateRange, OptionId, RowId, TableId};
 use email::domain::models::PreviewView;
 use filter_ast::Expr;
+use grouping_types::{GroupByField, GroupingConfig};
 use item_filters::ast::calendar_event::CalendarEventLiteral;
 use item_filters::ast::call::CallLiteral;
 use item_filters::ast::channel::{ChannelLiteral, ChannelThreadLiteral};
@@ -31,7 +32,6 @@ use item_filters::ast::properties::{
 };
 use item_filters::ast::{EmailFilterAst, EntityFilterAst};
 use macro_user_id::user_id::MacroUserIdStr;
-use models_grouping::{GroupByField, GroupingConfig};
 use models_pagination::{
     Base64SerdeErr, Base64Str, CursorWithValAndFilter, Query, SimpleSortMethod, TypeEraseCursor,
 };

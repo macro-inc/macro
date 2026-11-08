@@ -6699,12 +6699,12 @@ dependencies = [
  "entity_access",
  "entity_kind",
  "filter_ast",
+ "grouping_types",
  "item_filters",
  "macro_authorization",
  "macro_user_id",
  "model_error_response",
  "model_owner",
- "models_grouping",
  "models_pagination",
  "models_properties",
  "models_soup",
@@ -10833,11 +10833,11 @@ dependencies = [
  "graphql_email",
  "graphql_permission",
  "graphql_soup_filter_input",
+ "grouping_types",
  "item_filters",
  "macro_authorization",
  "macro_user_id",
  "model_owner",
- "models_grouping",
  "models_pagination",
  "models_properties",
  "models_soup",
@@ -10913,6 +10913,17 @@ dependencies = [
  "ff 0.14.0",
  "rand_core 0.10.1",
  "subtle",
+]
+
+[[package]]
+name = "grouping_types"
+version = "0.1.0"
+dependencies = [
+ "chrono",
+ "serde",
+ "utoipa",
+ "uuid",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -14912,17 +14923,6 @@ dependencies = [
  "serde_json",
  "sqlx",
  "strum 0.27.2",
- "utoipa",
- "uuid",
- "workspace-hack",
-]
-
-[[package]]
-name = "models_grouping"
-version = "0.1.0"
-dependencies = [
- "chrono",
- "serde",
  "utoipa",
  "uuid",
  "workspace-hack",
@@ -20812,6 +20812,7 @@ dependencies = [
  "frecency",
  "frecency_core",
  "github_pull_requests",
+ "grouping_types",
  "http-body-util",
  "indexmap 2.14.0",
  "item_filters",
@@ -20822,7 +20823,6 @@ dependencies = [
  "model_error_response",
  "model_owner",
  "model_user",
- "models_grouping",
  "models_pagination",
  "models_properties",
  "models_soup",

@@ -10,13 +10,13 @@ use crate::{
     },
 };
 use filter_ast::Expr;
+use grouping_types::{GroupByField, GroupingConfig};
 use item_filters::ast::{
     EntityFilterAst, calendar_event::CalendarEventLiteral, chat::ChatLiteral,
     document::DocumentLiteral, initiative::InitiativeLiteral, project::ProjectLiteral,
 };
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
 use macro_user_id::user_id::MacroUserIdStr;
-use models_grouping::{GroupByField, GroupingConfig};
 use models_pagination::Identify;
 use models_pagination::{CursorWithValAndFilter, Query, SimpleSortMethod, SortOn};
 use std::sync::Arc;

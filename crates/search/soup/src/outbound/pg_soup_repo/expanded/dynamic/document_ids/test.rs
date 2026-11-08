@@ -7,13 +7,13 @@ use crate::outbound::pg_soup_repo::expanded::dynamic::{
 };
 use document_sub_type::DocumentSubType;
 use filter_ast::Expr;
+use grouping_types::{GroupByField, GroupingConfig};
 use item_filters::ast::{
     EntityFilterAst, calendar_event::CalendarEventLiteral, chat::ChatLiteral,
     document::DocumentLiteral, project::ProjectLiteral,
 };
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
 use macro_user_id::user_id::MacroUserIdStr;
-use models_grouping::{GroupByField, GroupingConfig};
 use models_pagination::{CursorWithValAndFilter, Identify, Query, SimpleSortMethod, SortOn};
 use models_soup::item::SoupItem;
 use sqlx::PgPool;
