@@ -16,6 +16,7 @@ use ai_toolset::{
     AsyncTool, RequestContext, ServiceContext, schema::generate_validated_input_schema,
 };
 use bot_id::BotId;
+use channel_id::ChannelId;
 use channels::domain::{
     models::{
         AddParticipantsRequest, ChannelMetadata, ChannelType, CreateChannelRequest,
@@ -390,7 +391,7 @@ impl ChannelService for ToolTestChannelService {
 
     async fn get_channel_attachments(
         &self,
-        _channel_id: Uuid,
+        _channel_id: ChannelId,
         _query: models_pagination::Query<Uuid, models_pagination::CreatedAt, ()>,
         _limit: u16,
         _attachment_type: Option<channels::domain::models::ChannelAttachmentType>,
@@ -403,7 +404,7 @@ impl ChannelService for ToolTestChannelService {
 
     async fn get_channel_participants(
         &self,
-        _channel_id: Uuid,
+        _channel_id: ChannelId,
     ) -> Result<
         Vec<channels::domain::models::ChannelParticipant>,
         channels::domain::ports::ChannelMessagesErr,
@@ -413,7 +414,7 @@ impl ChannelService for ToolTestChannelService {
 
     async fn get_channel_metadata(
         &self,
-        _channel_id: Uuid,
+        _channel_id: ChannelId,
         _viewer_user_id: MacroUserIdStr<'static>,
     ) -> Result<ChannelMetadata, channels::domain::ports::ChannelMessagesErr> {
         Ok(ChannelMetadata {
@@ -500,9 +501,10 @@ impl ChannelService for ToolTestChannelService {
     async fn add_participants(
         &self,
         actor: Sender,
-        channel_id: Uuid,
+        channel_id: ChannelId,
         req: AddParticipantsRequest,
     ) -> Result<(), ChannelMutationErr> {
+        let channel_id = channel_id.0;
         self.adds
             .lock()
             .expect("add lock")
@@ -513,9 +515,10 @@ impl ChannelService for ToolTestChannelService {
     async fn remove_participants(
         &self,
         actor: Sender,
-        channel_id: Uuid,
+        channel_id: ChannelId,
         req: RemoveParticipantsRequest,
     ) -> Result<(), ChannelMutationErr> {
+        let channel_id = channel_id.0;
         self.removes
             .lock()
             .expect("remove lock")
@@ -526,9 +529,10 @@ impl ChannelService for ToolTestChannelService {
     async fn share_referenced_items_with_channel(
         &self,
         actor: MacroUserIdStr<'static>,
-        channel_id: Uuid,
+        channel_id: ChannelId,
         items: Vec<ReferencedShareItem>,
     ) -> Result<Vec<ReferenceShareResult>, ChannelMutationErr> {
+        let channel_id = channel_id.0;
         let results = items
             .iter()
             .map(|item| ReferenceShareResult {

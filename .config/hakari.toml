@@ -126,6 +126,7 @@ workspace-members = [
     "team_id",
     "email_thread_id",
     "form_id",
+    "channel_id",
     "calendar_event_id",
     # natural_time: date phrases are read in the browser's date fields as well
     # as in services, so it must stay wasm-safe.

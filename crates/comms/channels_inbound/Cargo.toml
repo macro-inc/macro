@@ -45,6 +45,7 @@ ai_toolset = { workspace = true, optional = true }
 async-trait = { workspace = true, optional = true }
 attachment = { workspace = true, optional = true }
 axum = { workspace = true, optional = true }
+channel_id = { workspace = true }
 channels = { workspace = true, features = ["ports"] }
 entity_access = { workspace = true, features = ["ports"] }
 frecency_core = { workspace = true, optional = true }

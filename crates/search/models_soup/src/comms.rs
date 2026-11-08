@@ -11,11 +11,7 @@ mod test;
 #[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
 pub struct OrganizationId(pub u32);
 
-/// Channel id for soup channel payloads.
-#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Hash)]
-#[serde(transparent)]
-#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
-pub struct ChannelId(pub Uuid);
+pub use channel_id::ChannelId;
 
 /// Channel type for soup channel payloads.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]

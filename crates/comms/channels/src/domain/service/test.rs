@@ -13,6 +13,7 @@ use crate::domain::{
         MockChannelRepo,
     },
 };
+use channel_id::ChannelId;
 use chrono::Utc;
 use entity_access::domain::models::{ParticipantRole as AccessRole, TeamRole};
 use macro_user_id::{cowlike::CowLike, user_id::MacroUserIdStr};
@@ -527,7 +528,7 @@ async fn share_referenced_items_with_channel_forwards_to_the_share_port() {
     let results = service
         .share_referenced_items_with_channel(
             macro_id("macro|owner@test.com"),
-            channel_id,
+            ChannelId(channel_id),
             vec![item.clone()],
         )
         .await
@@ -571,7 +572,7 @@ fn patch_receipt(
 async fn returns_empty_attachments_page() {
     let svc = ChannelServiceImpl::new(empty_repo());
     let page = svc
-        .get_channel_attachments(Uuid::nil(), Query::Sort(CreatedAt, ()), 50, None)
+        .get_channel_attachments(ChannelId(Uuid::nil()), Query::Sort(CreatedAt, ()), 50, None)
         .await
         .unwrap();
 
@@ -582,7 +583,10 @@ async fn returns_empty_attachments_page() {
 #[tokio::test]
 async fn returns_empty_participants_list() {
     let svc = ChannelServiceImpl::new(empty_repo());
-    let participants = svc.get_channel_participants(Uuid::nil()).await.unwrap();
+    let participants = svc
+        .get_channel_participants(ChannelId(Uuid::nil()))
+        .await
+        .unwrap();
 
     assert!(participants.is_empty());
 }

@@ -3,6 +3,7 @@ use ai_toolset::{
     AsyncTool, RequestContext, ServiceContext, ToolAnnotated, ToolAnnotations, ToolResult,
 };
 use async_trait::async_trait;
+use channel_id::ChannelId;
 use channels::domain::models::PatchChannelRequest;
 use channels::domain::ports::ChannelService;
 use entity_access::domain::ports::EntityAccessService;
@@ -68,7 +69,7 @@ where
             .await?;
         let previous_name = service_context
             .service
-            .get_channel_metadata(self.channel_id, request_context.user_id.clone())
+            .get_channel_metadata(ChannelId(self.channel_id), request_context.user_id.clone())
             .await
             .ok()
             .map(|metadata| metadata.channel_name);

@@ -6,6 +6,7 @@ use ai_toolset::{
     ToolResult,
 };
 use async_trait::async_trait;
+use channel_id::ChannelId;
 use channels::domain::{
     models::{ReferenceShareOutcome, ReferencedShareItem},
     ports::ChannelService,
@@ -89,7 +90,7 @@ where
             .service
             .share_referenced_items_with_channel(
                 request_context.user_id.clone(),
-                self.channel_id,
+                ChannelId(self.channel_id),
                 vec![item],
             )
             .await

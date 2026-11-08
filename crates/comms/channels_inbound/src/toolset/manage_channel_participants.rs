@@ -7,6 +7,7 @@ use ai_toolset::{
     ToolResult,
 };
 use async_trait::async_trait;
+use channel_id::ChannelId;
 use channels::domain::models::{AddParticipantsRequest, RemoveParticipantsRequest};
 use channels::domain::ports::ChannelService;
 use entity_access::domain::ports::EntityAccessService;
@@ -106,7 +107,7 @@ where
                 .service
                 .add_participants(
                     actor,
-                    self.channel_id,
+                    ChannelId(self.channel_id),
                     AddParticipantsRequest {
                         participants: HashSet::from_iter(participants),
                     },
@@ -117,7 +118,7 @@ where
                 .service
                 .remove_participants(
                     actor,
-                    self.channel_id,
+                    ChannelId(self.channel_id),
                     RemoveParticipantsRequest {
                         participants: participant_ids.clone(),
                     },

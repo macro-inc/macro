@@ -23,6 +23,7 @@ use crate::domain::{
     dm::{EnsureDms, EnsureDmsSummary},
     events::ChannelEvent,
 };
+use channel_id::ChannelId;
 use channel_sender::ChannelSender;
 use chrono::{DateTime, Utc};
 use entity_access::domain::models::{EntityAccessReceipt, MemberParticipantRole};
@@ -441,7 +442,7 @@ pub trait ChannelService: Send + Sync + 'static {
     /// Fetch a paginated page of channel-level attachments.
     fn get_channel_attachments(
         &self,
-        channel_id: Uuid,
+        channel_id: ChannelId,
         query: Query<Uuid, CreatedAt, ()>,
         limit: u16,
         attachment_type: Option<ChannelAttachmentType>,
@@ -450,7 +451,7 @@ pub trait ChannelService: Send + Sync + 'static {
     /// Fetch active participants for a channel.
     fn get_channel_participants(
         &self,
-        channel_id: Uuid,
+        channel_id: ChannelId,
     ) -> impl Future<Output = Result<Vec<ChannelParticipant>, ChannelMessagesErr>> + Send;
 
     /// Profile names (`first last`) for the given users, as the app shows
@@ -463,7 +464,7 @@ pub trait ChannelService: Send + Sync + 'static {
     /// Fetch channel metadata (type + resolved display name) from the viewer's perspective.
     fn get_channel_metadata(
         &self,
-        channel_id: Uuid,
+        channel_id: ChannelId,
         viewer_user_id: MacroUserIdStr<'static>,
     ) -> impl Future<Output = Result<ChannelMetadata, ChannelMessagesErr>> + Send {
         let _ = (channel_id, viewer_user_id);
@@ -630,7 +631,7 @@ pub trait ChannelService: Send + Sync + 'static {
     fn share_referenced_items_with_channel(
         &self,
         _actor: MacroUserIdStr<'static>,
-        _channel_id: Uuid,
+        _channel_id: ChannelId,
         _items: Vec<ReferencedShareItem>,
     ) -> impl Future<Output = Result<Vec<ReferenceShareResult>, ChannelMutationErr>> + Send {
         async move {
@@ -660,7 +661,7 @@ pub trait ChannelService: Send + Sync + 'static {
     fn delete_channel(
         &self,
         _actor: Sender,
-        _channel_id: Uuid,
+        _channel_id: ChannelId,
     ) -> impl Future<Output = Result<(), ChannelMutationErr>> + Send {
         async move {
             Err(ChannelMutationErr::NotFound(
@@ -673,7 +674,7 @@ pub trait ChannelService: Send + Sync + 'static {
     fn add_participants(
         &self,
         _actor: Sender,
-        _channel_id: Uuid,
+        _channel_id: ChannelId,
         _req: AddParticipantsRequest,
     ) -> impl Future<Output = Result<(), ChannelMutationErr>> + Send {
         async move {
@@ -687,7 +688,7 @@ pub trait ChannelService: Send + Sync + 'static {
     fn remove_participants(
         &self,
         _actor: Sender,
-        _channel_id: Uuid,
+        _channel_id: ChannelId,
         _req: RemoveParticipantsRequest,
     ) -> impl Future<Output = Result<(), ChannelMutationErr>> + Send {
         async move {
@@ -700,7 +701,7 @@ pub trait ChannelService: Send + Sync + 'static {
     /// Get or create the reusable join code for a private channel.
     fn get_channel_join_code(
         &self,
-        _channel_id: Uuid,
+        _channel_id: ChannelId,
     ) -> impl Future<Output = Result<ChannelJoinCodeResponse, ChannelMutationErr>> + Send {
         async move {
             Err(ChannelMutationErr::NotFound(
@@ -713,7 +714,7 @@ pub trait ChannelService: Send + Sync + 'static {
     fn join_channel(
         &self,
         _actor: Sender,
-        _channel_id: Uuid,
+        _channel_id: ChannelId,
     ) -> impl Future<Output = Result<(), ChannelMutationErr>> + Send {
         async move {
             Err(ChannelMutationErr::NotFound(
@@ -739,7 +740,7 @@ pub trait ChannelService: Send + Sync + 'static {
     fn leave_channel(
         &self,
         _actor: Sender,
-        _channel_id: Uuid,
+        _channel_id: ChannelId,
     ) -> impl Future<Output = Result<(), ChannelMutationErr>> + Send {
         async move {
             Err(ChannelMutationErr::NotFound(

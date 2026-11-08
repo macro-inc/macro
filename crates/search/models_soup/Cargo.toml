@@ -6,9 +6,10 @@ version = "0.1.0"
 
 [features]
 mock = []
-schema = ["dep:utoipa", "item_filters/schema", "soup_property/schema"]
+schema = ["dep:utoipa", "channel_id/schema", "item_filters/schema", "soup_property/schema"]
 
 [dependencies]
+channel_id = { workspace = true }
 chrono = { workspace = true }
 document_sub_type = { workspace = true, default-features = true }
 item_filters = { workspace = true, default-features = true }
