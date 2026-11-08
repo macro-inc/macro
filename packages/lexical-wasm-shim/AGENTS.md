@@ -78,3 +78,5 @@ Verify input getter/proxy exceptions for calls, native super, construction and u
 Use state-read.test.ts for real WASM associated reads: old/current graphs, latest previous-selection ownership, nested success/error restoration, suspended writes, foreign callbacks and opaque body returns. readState is the associated-editor primitive; editor-less reads still need explicit facade behavior.
 
 Exercise hosted isInline with original arguments, read guards, native super, opaque returns/throws, no later callback after failure, nested caught failures and fixed text/line-break inline flags. Keep remaining pure hooks disabled until their failure and mutation paths are verified.
+
+Use hosting-empty.test.ts for native child-removal dispatch of canBeEmpty, native super and falsy returns. After a throw, the child remains detached while the empty parent stays attached until an explicit later edit.
