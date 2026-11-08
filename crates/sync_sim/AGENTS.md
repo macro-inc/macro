@@ -44,7 +44,8 @@ clients and real `sync_server_core::Room` callbacks over `sync_server_sim` ports
   Editor projection, undo and comment-gate parity remain pending integration;
   never claim a skipped editor check establishes an editor safety property.
 - Preserve desired front-door grants across old-connection AccessChanged events;
-  track effective access separately in finals and coverage.
+  track effective access separately in finals and coverage. Admit document edits only
+  with actual effective Edit access; a desired grant does not change a fixed host capability.
 - Use immutable issued token claims through delayed dials. Send RouterSubscribed
   before upstream frames, record the connect callback before pumping queued inputs,
   and discard stale socket generations and route epochs. Router parity uses real
@@ -99,3 +100,13 @@ heal timers when faults are explicitly healed.
 Mixed TS driver setup, generated IPC, fidelity limits and checks are documented in
 [`tooling/sync-sim/AGENTS.md`](../../tooling/sync-sim/AGENTS.md). Native Outcome replay
 rejects foreign-driver runs without the caller's complete command/report transcript.
+
+Browser WAL recovery opportunities require a durable Tab in the exact settled
+session. AiWorker uses memory persistence, so it cannot drain a browser profile's
+StoreImage; its own live WAL and every acknowledged edit remain checked strictly.
+Power-loss exemptions require the exact emitted WalWriteLost row/adoption alias,
+including a previously stopped tab; never exempt a whole crashed profile.
+
+Presence expiry obligations use the live receiver's Opened epoch at the source
+fault. A receiver already crashed cannot tick, and a later reopen must not inherit
+its previous incarnation's last view; live and thawed receiver deadlines stay strict.

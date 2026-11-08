@@ -247,3 +247,112 @@ fn frozen_receiver_expires_a_dead_peer_at_its_actual_thaw() {
     }
     assert!(invariants::presence_expires(&stale).is_err());
 }
+
+/// covers: S7:R-6; power loss may roll back a stopped tab's exact recent durable row.
+#[test]
+fn power_loss_after_stop_exempts_only_the_row_actually_rolled_back() {
+    let outcome = verify(
+        SimConfig::calm(181),
+        &[
+            Step::Open(OpenSpec::form("a", "browser")),
+            Step::Run(Millis(500)),
+            Step::Edit {
+                client: ClientName("a".into()),
+                op: AbstractOp::FormSet {
+                    field: 1,
+                    value: 11,
+                },
+            },
+            Step::Run(Millis(200)),
+            Step::Net(NetStep::Partition(ClientName("a".into()))),
+            Step::Edit {
+                client: ClientName("a".into()),
+                op: AbstractOp::FormSet {
+                    field: 2,
+                    value: 22,
+                },
+            },
+            Step::Close {
+                client: ClientName("a".into()),
+            },
+            Step::CrashProfile {
+                profile: ProfileName("browser".into()),
+                mode: CrashMode::PowerLoss {
+                    window: Millis(100),
+                },
+            },
+            Step::Reopen {
+                client: ClientName("a".into()),
+            },
+            Step::Settle,
+        ],
+    );
+    assert!(
+        outcome
+            .events
+            .iter()
+            .any(|event| matches!(&event.fact, Fact::WalWriteLost { .. }))
+    );
+    assert_eq!(
+        outcome.finals.servers[&DocIx(0)].deep_value["fields"]["1"],
+        11
+    );
+    assert_ne!(
+        outcome.finals.servers[&DocIx(0)].deep_value["fields"]["2"],
+        22
+    );
+    let mut no_loss = outcome.clone();
+    no_loss
+        .events
+        .retain(|event| !matches!(event.fact, Fact::WalWriteLost { .. }));
+    assert!(invariants::no_edit_lost_without_crash(&no_loss).is_err());
+    assert!(invariants::no_persisted_edit_lost(&no_loss).is_err());
+    let mut unrelated = outcome.clone();
+    for event in &mut unrelated.events {
+        if let Fact::WalWriteLost { profile, .. } = &mut event.fact {
+            *profile = ProfileName("other".into());
+        }
+    }
+    assert!(invariants::no_edit_lost_without_crash(&unrelated).is_err());
+    let mut lost_acknowledged = outcome.clone();
+    lost_acknowledged
+        .finals
+        .servers
+        .get_mut(&DocIx(0))
+        .unwrap()
+        .persisted_vv
+        .clear();
+    assert!(invariants::no_acked_edit_lost(&lost_acknowledged).is_err());
+}
+
+/// covers: S7:104; an already dead receiver cannot run another peer's expiry timer.
+#[test]
+fn receiver_crashed_before_source_has_no_stale_live_presence_obligation() {
+    let outcome = verify(
+        SimConfig::calm(199),
+        &[
+            Step::Open(OpenSpec::form("source", "one")),
+            Step::Open(OpenSpec::form("receiver", "two")),
+            Step::Run(Millis(500)),
+            Step::Edit {
+                client: ClientName("source".into()),
+                op: AbstractOp::Select(Some(1)),
+            },
+            Step::Run(Millis(100)),
+            Step::Crash {
+                client: ClientName("receiver".into()),
+            },
+            Step::Crash {
+                client: ClientName("source".into()),
+            },
+            Step::Run(Millis(6_000)),
+            Step::ReopenCrashed,
+            Step::Settle,
+        ],
+    );
+    let mut live_receiver = outcome.clone();
+    live_receiver
+        .events
+        .retain(|event| !matches!(&event.fact, Fact::Crashed { client } if client.0 == "receiver"));
+    assert!(invariants::presence_expires(&live_receiver).is_err());
+}

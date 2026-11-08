@@ -27,7 +27,8 @@ impl Sim {
                 if !client.alive
                     || client.frozen
                     || !matches!(client.core.phase(), Phase::Running | Phase::Resetting)
-                    || (client.spec.access != Access::Edit && !matches!(op, AbstractOp::Select(_)))
+                    || (client.effective_access != Access::Edit
+                        && !matches!(op, AbstractOp::Select(_)))
                 {
                     self.emit(Fact::OpSkipped {
                         client: name,

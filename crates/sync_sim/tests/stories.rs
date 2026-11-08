@@ -32,3 +32,6 @@ mod lifecycle;
 
 #[path = "stories/rebased_pending.rs"]
 mod rebased_pending;
+
+#[path = "stories/storage_capabilities.rs"]
+mod storage_capabilities;
