@@ -1,6 +1,7 @@
 //! Structure, list, table, media, clipboard and link model plugins.
 use lexical_model::*;
 
+mod checklist;
 mod code;
 mod diff;
 mod keyboard;
@@ -59,10 +60,13 @@ pub fn register(builder: EditorBuilder, ty: crate::EditorType) -> EditorBuilder 
     let builder = keyboard::register(builder);
     let builder = table::register(builder);
     let builder = code::register(builder);
+    let builder = checklist::register(builder);
     let builder = diff::register(builder);
     metadata::register(builder)
 }
 
+#[cfg(test)]
+mod checklist_test;
 #[cfg(test)]
 mod code_test;
 #[cfg(test)]
@@ -76,6 +80,9 @@ pub fn decode_command(
     generation: u32,
     event: Option<&KeyEvent>,
 ) -> Result<Option<Command>, Error> {
+    if let Some(command) = checklist::decode(name, json, generation)? {
+        return Ok(Some(command));
+    }
     if let Some(command) = code::decode(name, json, generation)? {
         return Ok(Some(command));
     }
