@@ -10,7 +10,7 @@ use axum::{
 };
 use entity_access::inbound::axum_extractors::DocumentAccessExtractor;
 use macro_db_client::annotations::get::get_pdf_anchors;
-use models_permissions::share_permission::access_level::ViewAccessLevel;
+use permissions_types::share_permission::access_level::ViewAccessLevel;
 use shared_types::{
     annotations::Anchor,
     document::{DocumentBasic, FileType},

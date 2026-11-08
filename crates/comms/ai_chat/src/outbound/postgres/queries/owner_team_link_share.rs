@@ -1,7 +1,7 @@
 //! Read the link-share preference of an owner's team.
 
 use model_owner::Owner;
-use models_permissions::share_permission::{LinkShare, TeamLinkShareDefault};
+use permissions_types::share_permission::{LinkShare, TeamLinkShareDefault};
 
 /// Get the link-share preference of the team `owner` resolves to, or `None`
 /// when the owner has no team.

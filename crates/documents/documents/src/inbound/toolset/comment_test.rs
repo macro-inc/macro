@@ -15,7 +15,7 @@ use messages::domain::{
     ports::{MessageError, MessagePage, MessagePatch, MessageTimelinePage, MessageTimelineQuery},
     service::{MessageView, MessageWrite},
 };
-use models_permissions::share_permission::access_level::AccessLevel;
+use permissions_types::share_permission::access_level::AccessLevel;
 use sync_service_client::SyncServiceClient;
 use uuid::Uuid;
 

@@ -46,7 +46,7 @@ pub(super) struct StubChatRepo {
     metadata_deleted_at: Option<chrono::DateTime<chrono::Utc>>,
     metadata_missing: bool,
     message_persistence: Arc<Mutex<MessagePersistence>>,
-    team_default: Option<models_permissions::share_permission::TeamLinkShareDefault>,
+    team_default: Option<permissions_types::share_permission::TeamLinkShareDefault>,
     received_owners: Arc<Mutex<Vec<Owner>>>,
     received_share_permission: Arc<Mutex<Option<SharePermissionV2>>>,
     /// Facts returned by `get_team_share_facts`; `None` uses the owner-with-team default.
@@ -165,7 +165,7 @@ impl ChatRepo for StubChatRepo {
     async fn get_team_default_link_share(
         &self,
         owner: &Owner,
-    ) -> Result<Option<models_permissions::share_permission::TeamLinkShareDefault>> {
+    ) -> Result<Option<permissions_types::share_permission::TeamLinkShareDefault>> {
         self.received_owners.lock().unwrap().push(owner.clone());
         Ok(self.team_default)
     }
@@ -199,7 +199,7 @@ impl ChatRepo for StubChatRepo {
         &self,
         _user_id: MacroUserIdStr<'_>,
         _chat_id: &str,
-    ) -> Result<models_permissions::share_permission::access_level::AccessLevel> {
+    ) -> Result<permissions_types::share_permission::access_level::AccessLevel> {
         unimplemented!("not exercised")
     }
 
@@ -492,10 +492,8 @@ fn build_service_with_tools(
 
 fn patch_args(share_permission_updated: bool) -> PatchChatArgs {
     let share_permission = share_permission_updated.then_some(
-        models_permissions::share_permission::UpdateSharePermissionRequestV2 {
-            link_share: Some(Some(
-                models_permissions::share_permission::LinkShare::Public,
-            )),
+        permissions_types::share_permission::UpdateSharePermissionRequestV2 {
+            link_share: Some(Some(permissions_types::share_permission::LinkShare::Public)),
             link_share_access_level: None,
             team_share_access_level: None,
             channel_share_permissions: None,
@@ -612,8 +610,8 @@ async fn create_publishes_chat_created() {
 
 #[tokio::test]
 async fn create_resolves_share_permission_from_team_default() {
-    use models_permissions::share_permission::access_level::AccessLevel;
-    use models_permissions::share_permission::{LinkShare, TeamLinkShareDefault};
+    use permissions_types::share_permission::access_level::AccessLevel;
+    use permissions_types::share_permission::{LinkShare, TeamLinkShareDefault};
 
     let repo = StubChatRepo {
         team_default: Some(TeamLinkShareDefault(Some(LinkShare::Team))),
@@ -644,8 +642,8 @@ async fn create_resolves_share_permission_from_team_default() {
 
 #[tokio::test]
 async fn create_uses_chat_default_without_team() {
-    use models_permissions::share_permission::LinkShare;
-    use models_permissions::share_permission::access_level::AccessLevel;
+    use permissions_types::share_permission::LinkShare;
+    use permissions_types::share_permission::access_level::AccessLevel;
 
     let repo = StubChatRepo::default();
     let service = build_service(repo.clone(), RecordingEventBroker::default());
@@ -673,7 +671,7 @@ async fn create_uses_chat_default_without_team() {
 
 #[tokio::test]
 async fn create_disables_link_share_when_team_turned_it_off() {
-    use models_permissions::share_permission::TeamLinkShareDefault;
+    use permissions_types::share_permission::TeamLinkShareDefault;
 
     let repo = StubChatRepo {
         team_default: Some(TeamLinkShareDefault(None)),
@@ -704,8 +702,8 @@ async fn create_disables_link_share_when_team_turned_it_off() {
 
 #[tokio::test]
 async fn copy_chat_resolves_share_permission_from_team_default() {
-    use models_permissions::share_permission::access_level::AccessLevel;
-    use models_permissions::share_permission::{LinkShare, TeamLinkShareDefault};
+    use permissions_types::share_permission::access_level::AccessLevel;
+    use permissions_types::share_permission::{LinkShare, TeamLinkShareDefault};
 
     let repo = StubChatRepo {
         team_default: Some(TeamLinkShareDefault(Some(LinkShare::Team))),
@@ -996,8 +994,8 @@ async fn broker_scheduling_failure_does_not_fail_the_call() {
 
 // -- Team sharing --
 
-use models_permissions::share_permission::access_level::AccessLevel as ShareAccessLevel;
-use models_permissions::share_permission::team_share::{
+use permissions_types::share_permission::access_level::AccessLevel as ShareAccessLevel;
+use permissions_types::share_permission::team_share::{
     AuthorizedTeamShareCommand, TeamShareFacts, TeamShareLevel,
 };
 
@@ -1024,7 +1022,7 @@ fn team_share_args(level: Option<ShareAccessLevel>) -> PatchChatArgs {
         name: None,
         project_id: None,
         share_permission: Some(
-            models_permissions::share_permission::UpdateSharePermissionRequestV2 {
+            permissions_types::share_permission::UpdateSharePermissionRequestV2 {
                 link_share: None,
                 link_share_access_level: None,
                 team_share_access_level: Some(level),

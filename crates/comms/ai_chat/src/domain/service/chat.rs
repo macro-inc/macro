@@ -26,8 +26,8 @@ use entity_kind::EntityType;
 use macro_event_broker::{MacroEventBroker, NoopMacroEventBroker};
 use macro_user_id::user_id::MacroUserIdStr;
 use model_owner::Owner;
-use models_permissions::share_permission::SharePermissionV2;
-use models_permissions::share_permission::team_share::{
+use permissions_types::share_permission::SharePermissionV2;
+use permissions_types::share_permission::team_share::{
     AuthorizedTeamShareCommand, TeamShareLevel, TeamSharePolicyError, TeamShareRequest,
     authorize_team_share,
 };

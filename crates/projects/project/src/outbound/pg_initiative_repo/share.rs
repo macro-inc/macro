@@ -1,7 +1,7 @@
 use entity_access_db_utils::EntityType;
-use models_permissions::share_permission::channel_share_permission::UpdateOperation;
-use models_permissions::share_permission::team_share::TeamShareFacts;
-use models_permissions::share_permission::{
+use permissions_types::share_permission::channel_share_permission::UpdateOperation;
+use permissions_types::share_permission::team_share::TeamShareFacts;
+use permissions_types::share_permission::{
     LinkShare, SharePermissionV2, TeamLinkShareDefault, UpdateSharePermissionRequestV2,
     access_level::AccessLevel,
 };

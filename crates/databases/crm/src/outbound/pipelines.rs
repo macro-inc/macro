@@ -12,7 +12,7 @@ use databases_types::OptionId;
 use databases_types::{ColumnId, DatabaseId, RowId, TableId};
 use entity_access::domain::telemetry::span_count;
 use entity_access_db_utils::{AccessLevel, EntityAccessSourceType, EntityType};
-use models_permissions::share_permission::channel_share_permission::{
+use permissions_types::share_permission::channel_share_permission::{
     ChannelSharePermission, UpdateChannelSharePermission,
 };
 use sqlx::{PgPool, Postgres, Transaction};

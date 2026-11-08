@@ -14,7 +14,7 @@ use entity_access::domain::models::{
     EditAccessLevel, EntityAccessReceipt, RequiredPermission, ViewAccessLevel,
 };
 use macro_user_id::user_id::MacroUserIdStr;
-use models_permissions::share_permission::access_level::AccessLevel;
+use permissions_types::share_permission::access_level::AccessLevel;
 use std::sync::Arc;
 
 /// Narrow document metadata capability required by spreadsheet workflows.

@@ -24,8 +24,8 @@ use email_types::email::service::thread::Thread;
 use entity_access_db_utils::{AccessLevel, EntityAccessSourceType, EntityType};
 use macro_db_client::document::v2::create::CreateDocumentArgs;
 use macro_user_id::user_id::MacroUserIdStr;
-use models_permissions::share_permission::{LinkShare, SharePermissionV2};
 use models_properties::service::property_value::PropertyValue;
+use permissions_types::share_permission::{LinkShare, SharePermissionV2};
 use shared_types::document::FileType;
 use shared_types::item::ShareableItemType;
 use uuid::Uuid;
@@ -502,13 +502,13 @@ async fn seed_projects(ctx: &SeedCliContext, spec: &ScenarioSpec) -> anyhow::Res
 
 fn permission_access_level(
     level: ShareLevel,
-) -> models_permissions::share_permission::access_level::AccessLevel {
+) -> permissions_types::share_permission::access_level::AccessLevel {
     match level {
-        ShareLevel::View => models_permissions::share_permission::access_level::AccessLevel::View,
+        ShareLevel::View => permissions_types::share_permission::access_level::AccessLevel::View,
         ShareLevel::Comment => {
-            models_permissions::share_permission::access_level::AccessLevel::Comment
+            permissions_types::share_permission::access_level::AccessLevel::Comment
         }
-        ShareLevel::Edit => models_permissions::share_permission::access_level::AccessLevel::Edit,
+        ShareLevel::Edit => permissions_types::share_permission::access_level::AccessLevel::Edit,
     }
 }
 

@@ -49,7 +49,7 @@ image = { workspace = true, optional = true }
 macro_authorization = { workspace = true, features = ["axum"], optional = true }
 macro_user_id = { workspace = true, optional = true }
 entity_kind = { workspace = true }
-models_permissions = { workspace = true }
+permissions_types = { workspace = true }
 nom = { workspace = true, optional = true }
 opentelemetry = { workspace = true, features = ["trace"], optional = true }
 rootcause = { workspace = true, optional = true }

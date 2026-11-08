@@ -17,7 +17,7 @@ use model_owner::{
     Owner,
     team::{OwnerTeamFacts, owner_team},
 };
-use models_permissions::share_permission::{
+use permissions_types::share_permission::{
     access_level::AccessLevel,
     team_share::{
         AuthorizedTeamShareCommand, TeamShareCreation, TeamShareFacts, TeamShareGrant,

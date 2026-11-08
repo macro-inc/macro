@@ -6,7 +6,7 @@ use entity_access::{
 };
 use entity_kind::EntityAppearance;
 use macro_authorization::MacroAuthorizationService;
-use models_permissions::share_permission::access_level::EditAccessLevel;
+use permissions_types::share_permission::access_level::EditAccessLevel;
 
 use super::DocumentRouterState;
 use crate::domain::{models::DocumentError, ports::DocumentService};

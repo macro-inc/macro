@@ -1,7 +1,7 @@
 use super::*;
 use macro_user_id::cow_str::CowLike;
 use macro_user_id::user_id::MacroUserIdStr;
-use models_permissions::share_permission::SharePermissionV2;
+use permissions_types::share_permission::SharePermissionV2;
 use shared_types::document::SaveBomPart;
 use sqlx::{Pool, Postgres, Row};
 

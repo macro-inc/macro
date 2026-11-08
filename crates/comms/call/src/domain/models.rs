@@ -8,11 +8,11 @@ use item_filters::{
     ast::{LiteralTree, call::CallLiteral},
 };
 use macro_user_id::user_id::MacroUserIdStr;
-use models_permissions::share_permission::access_level::AccessLevel;
-use models_permissions::share_permission::team_share::{
+use pagination_types::{Query, SimpleSortMethod};
+use permissions_types::share_permission::access_level::AccessLevel;
+use permissions_types::share_permission::team_share::{
     AuthorizedTeamShareCommand, TeamSharePolicyError,
 };
-use pagination_types::{Query, SimpleSortMethod};
 use uuid::Uuid;
 
 /// Represents an active call in a channel.
@@ -544,7 +544,7 @@ pub struct EditCallRecordRequest {
     /// applied when the call is archived; afterwards only the call's creator
     /// may change it.
     pub share_permission:
-        Option<models_permissions::share_permission::UpdateSharePermissionRequestV2>,
+        Option<permissions_types::share_permission::UpdateSharePermissionRequestV2>,
     /// Deprecated alias for `sharePermission.teamShareAccessLevel`:
     /// `Some(true)` behaves like `"view"`, `Some(false)` like `null`, and
     /// `None` is a no-op. Supplying both with disagreeing values is rejected.
@@ -566,7 +566,7 @@ pub struct EditCallRecordRequest {
 pub struct EditCallRecordRepoArgs {
     /// Share permission updates, if changing (link and channel sharing).
     pub share_permission:
-        Option<models_permissions::share_permission::UpdateSharePermissionRequestV2>,
+        Option<permissions_types::share_permission::UpdateSharePermissionRequestV2>,
     /// Display name update; see [`EditCallRecordRequest::custom_name`].
     pub custom_name: Option<String>,
     /// Creator-authorized canonical team-share write for an archived call,

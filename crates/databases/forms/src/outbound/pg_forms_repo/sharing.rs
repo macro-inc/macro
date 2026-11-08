@@ -1,7 +1,7 @@
 //! A form's direct channel grants, through the owning access crate.
 
 use entity_access_db_utils::EntityType;
-use models_permissions::share_permission::channel_share_permission::{
+use permissions_types::share_permission::channel_share_permission::{
     ChannelSharePermission, UpdateChannelSharePermission,
 };
 

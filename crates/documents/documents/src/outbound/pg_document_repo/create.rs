@@ -3,8 +3,8 @@ use entity_registry::BotFacts;
 use entity_registry_db_utils::{NewEntityRecord, OwnedEntityRegistrar, RegisteredEntityType};
 use macro_user_id::user_id::MacroUserIdStr;
 use model_owner::Owner;
-use models_permissions::share_permission::SharePermissionV2;
-use models_permissions::share_permission::team_share::TeamShareCreation;
+use permissions_types::share_permission::SharePermissionV2;
+use permissions_types::share_permission::team_share::TeamShareCreation;
 use share_permission_db_utils::team_share::{self, TeamShareError};
 use shared_types::document::{DocumentMetadata, FileType, VersionIDWithTimeStamps};
 

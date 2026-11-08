@@ -6,7 +6,7 @@ use axum::{extract::Path, http::StatusCode, response::IntoResponse};
 use entity_access::domain::ports::EntityAccessService;
 use entity_kind::EntityType;
 use macro_authorization::{MacroAuthorizationExtractor, UserOrInternal};
-use models_permissions::share_permission::access_level::AccessLevel;
+use permissions_types::share_permission::access_level::AccessLevel;
 use shared_types::response::{GenericErrorResponse, GenericResponse};
 
 #[derive(serde::Deserialize)]

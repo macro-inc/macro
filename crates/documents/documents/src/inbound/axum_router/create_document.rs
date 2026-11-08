@@ -10,7 +10,7 @@ use macro_authorization::{
     MacroAuthorizationExtractor, MacroAuthorizationService, UserOrInternal, UserOrInternalCaller,
 };
 use model_owner::CreationPrincipal;
-use models_permissions::share_permission::access_level::EditAccessLevel;
+use permissions_types::share_permission::access_level::EditAccessLevel;
 use shared_types::document::response::CreateDocumentRequest;
 use shared_types::document::{FileType, FileTypeExt};
 

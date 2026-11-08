@@ -19,7 +19,7 @@ use macro_user_id::{
     user_id::{MacroUserId, MacroUserIdStr},
 };
 use model_user::UserContext;
-use models_permissions::share_permission::SharePermissionV2;
+use permissions_types::share_permission::SharePermissionV2;
 use rootcause::Report;
 use tower::ServiceExt;
 use uuid::Uuid;

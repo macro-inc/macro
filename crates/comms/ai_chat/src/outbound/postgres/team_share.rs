@@ -9,10 +9,8 @@ mod test;
 
 use entity_access::domain::models::AccessError;
 use entity_kind::{Entity, EntityType};
-use models_permissions::share_permission::UpdateSharePermissionRequestV2;
-use models_permissions::share_permission::team_share::{
-    AuthorizedTeamShareCommand, TeamShareFacts,
-};
+use permissions_types::share_permission::UpdateSharePermissionRequestV2;
+use permissions_types::share_permission::team_share::{AuthorizedTeamShareCommand, TeamShareFacts};
 use share_permission_db_utils::team_share::{self, TeamShareError};
 use sqlx::{PgPool, Postgres, Transaction};
 

@@ -239,7 +239,7 @@ impl DocumentService for FakeDocumentService {
     async fn set_appearance(
         &self,
         _receipt: entity_access::domain::models::EntityAccessReceipt<
-            models_permissions::share_permission::access_level::EditAccessLevel,
+            permissions_types::share_permission::access_level::EditAccessLevel,
         >,
         appearance: entity_kind::EntityAppearance,
     ) -> Result<entity_kind::EntityAppearance, DocumentError> {
@@ -556,7 +556,7 @@ impl DocumentService for FakeDocumentService {
     async fn set_skill_description(
         &self,
         _entity_access_receipt: entity_access::domain::models::EntityAccessReceipt<
-            models_permissions::share_permission::access_level::EditAccessLevel,
+            permissions_types::share_permission::access_level::EditAccessLevel,
         >,
         _description: crate::domain::skill_description::SkillDescription,
     ) -> Result<(), DocumentError> {

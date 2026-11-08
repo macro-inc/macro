@@ -1,6 +1,6 @@
 use super::*;
 use forms_types::UpdateForm;
-use models_permissions::share_permission::{
+use permissions_types::share_permission::{
     UpdateSharePermissionRequestV2,
     access_level::AccessLevel,
     channel_share_permission::{UpdateChannelSharePermission, UpdateOperation},

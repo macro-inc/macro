@@ -14,7 +14,7 @@ inbound = [
   "ports",
   "schema",
 ]
-outbound = ["dep:entity_access_db_utils", "dep:models_permissions", "dep:sqlx", "harnessd_protocol/sqlx", "ports"]
+outbound = ["dep:entity_access_db_utils", "dep:permissions_types", "dep:sqlx", "harnessd_protocol/sqlx", "ports"]
 ports = ["dep:tokio"]
 # `ToSchema` for the domain types other crates put in their API, e.g. `AgentProvider`.
 schema = ["dep:utoipa", "harnessd_protocol/schema", "macro_user_id/schema"]
@@ -36,7 +36,7 @@ macro_authorization = { workspace = true, optional = true }
 macro_user_id = { workspace = true }
 mockall = { workspace = true, optional = true }
 model_error_response = { workspace = true, optional = true }
-models_permissions = { workspace = true, optional = true }
+permissions_types = { workspace = true, optional = true }
 rand = { workspace = true }
 rootcause = { workspace = true }
 serde = { workspace = true }

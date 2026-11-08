@@ -24,7 +24,7 @@ documents, projects, threads, notifications, and uploads.
 ## Boundaries
 
 - Depends on: `model`, `model_owner`, `bulk_upload_types`,
-  `models_permissions`, `shared_entity_registry`.
+  `permissions_types`, `shared_entity_registry`.
 - Used by: `crates/agents/agent_trigger` and most services that call DSS directly
   (`document_cognition_service`, `authentication_service`,
   `agent_trigger_service`, `search_upload_handler`,

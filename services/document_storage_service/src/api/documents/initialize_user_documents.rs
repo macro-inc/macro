@@ -8,7 +8,7 @@ use macro_authorization::{MacroAuthorizationExtractor, UserOrInternal};
 use macro_event_broker::MacroEventBroker;
 use macro_user_id::cow_str::CowLike;
 use model_owner::Owner;
-use models_permissions::share_permission::SharePermissionV2;
+use permissions_types::share_permission::SharePermissionV2;
 use projects_hex::domain::events::{ProjectCreatedMetadata, ProjectMacroEvent};
 use reqwest::StatusCode;
 use s3_key::build_cloud_storage_bucket_document_key;

@@ -5,7 +5,7 @@
 //!
 //! The context grants no access. `agent_correlation` validates a signed claim
 //! at the HTTP boundary and sets it here; leaf crates such as
-//! `models_permissions` read it without depending on that adapter.
+//! `permissions_types` read it without depending on that adapter.
 
 pub mod context;
 pub mod scope;

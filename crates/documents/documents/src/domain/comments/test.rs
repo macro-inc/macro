@@ -12,7 +12,7 @@ use messages::domain::{
     },
     ports::{MessageCursor, MessagePage},
 };
-use models_permissions::share_permission::access_level::AccessLevel;
+use permissions_types::share_permission::access_level::AccessLevel;
 
 const DOCUMENT: &str = "019fd3b9-3c6c-7c05-89c2-a27f0121813b";
 

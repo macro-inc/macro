@@ -959,7 +959,6 @@ model_file_type = { path = "crates/types/model_file_type" }
 model_notifications = { path = "crates/notifications/model_notifications" }
 model_owner = { path = "crates/types/model_owner" }
 model_user = { path = "crates/types/model_user" }
-models_permissions = { path = "crates/types/models_permissions" }
 models_properties = { path = "crates/types/models_properties" }
 models_search = { path = "crates/search/models_search" }
 models_search_cursor = { path = "crates/types/models_search_cursor" }
@@ -988,6 +987,7 @@ pairing_id = { path = "crates/types/pairing_id" }
 password_events = { path = "crates/accounts/password_events" }
 password_import = { path = "crates/accounts/password_import" }
 passwords = { path = "crates/accounts/passwords" }
+permissions_types = { path = "crates/types/permissions_types" }
 pinned_tls = { path = "crates/platform/pinned_tls" }
 pipedream_mcp = { path = "crates/ai/pipedream_mcp" }
 pptx_engine = { path = "crates/engines/pptx_engine", default-features = false }

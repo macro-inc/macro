@@ -1,6 +1,6 @@
-use models_permissions::share_permission::LinkShare;
-use models_permissions::share_permission::access_level::AccessLevel;
-use models_permissions::share_permission::channel_share_permission::ChannelSharePermission;
+use permissions_types::share_permission::LinkShare;
+use permissions_types::share_permission::access_level::AccessLevel;
+use permissions_types::share_permission::channel_share_permission::ChannelSharePermission;
 use sqlx::{Pool, Postgres};
 
 use super::*;

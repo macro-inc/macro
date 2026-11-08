@@ -1,10 +1,10 @@
 //! Edit share permissions for a chat.
 
 use entity_kind::EntityType;
-use models_permissions::share_permission::channel_share_permission::{
+use permissions_types::share_permission::channel_share_permission::{
     ChannelSharePermission, UpdateChannelSharePermission, UpdateOperation,
 };
-use models_permissions::share_permission::{
+use permissions_types::share_permission::{
     UpdateSharePermissionRequestV2, access_level::AccessLevel,
 };
 use sqlx::{Postgres, Transaction};

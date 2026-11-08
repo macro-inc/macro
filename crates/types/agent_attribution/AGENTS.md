@@ -24,7 +24,7 @@ context and re-exports these modules under their old paths.
 ## Boundaries
 
 - Depends on: no workspace crates.
-- Used by: `agent_correlation` (re-exports it), `models_permissions`
+- Used by: `agent_correlation` (re-exports it), `permissions_types`
   (`may_share`).
 
 ## Checks

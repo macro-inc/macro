@@ -3,7 +3,7 @@ use crate::domain::ports::editing::{EditUsage, MockEditingWorkerService};
 use ai_billing::domain::{DenyReason, admission::AdmissionFuture};
 use ai_usage::{UsageAmount, UsageEvent};
 use entity_access::domain::models::{Entity, EntityPermission, EntityType};
-use models_permissions::share_permission::access_level::AccessLevel;
+use permissions_types::share_permission::access_level::AccessLevel;
 use std::sync::{
     Mutex,
     atomic::{AtomicBool, Ordering},

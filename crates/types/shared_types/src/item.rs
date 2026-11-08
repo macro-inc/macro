@@ -1,7 +1,7 @@
 use super::{chat::Chat, document::BasicDocument};
 use crate::project::Project;
-use models_permissions::share_permission::access_level::AccessLevel;
 use pagination_types::Identify;
+use permissions_types::share_permission::access_level::AccessLevel;
 use serde::{Deserialize, Serialize};
 use std::cmp::Ordering;
 use strum::EnumString;
@@ -158,7 +158,7 @@ pub struct ItemWithUserAccessLevel {
 #[serde(rename_all = "camelCase")]
 pub struct ItemWithSharePermission {
     pub item: Item,
-    pub share_permission: models_permissions::share_permission::SharePermissionV2,
+    pub share_permission: permissions_types::share_permission::SharePermissionV2,
 }
 
 #[derive(Debug, Deserialize, Serialize, ToSchema, Clone, Hash)]

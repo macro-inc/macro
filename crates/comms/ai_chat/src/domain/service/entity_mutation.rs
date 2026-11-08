@@ -10,7 +10,7 @@ use entity_mutation::{
     capability::MoveEntityRequest, project_refs,
 };
 use macro_user_id::user_id::MacroUserIdStr;
-use models_permissions::share_permission::UpdateSharePermissionRequestV2;
+use permissions_types::share_permission::UpdateSharePermissionRequestV2;
 
 use crate::domain::{
     models::{ChatErr, PatchChatArgs},

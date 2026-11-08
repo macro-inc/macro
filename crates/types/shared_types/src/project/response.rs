@@ -2,7 +2,7 @@ use utoipa::ToSchema;
 
 use crate::item::ItemWithUserAccessLevel;
 use crate::project::ProjectPreview;
-use models_permissions::share_permission::access_level::AccessLevel;
+use permissions_types::share_permission::access_level::AccessLevel;
 
 use super::Project;
 

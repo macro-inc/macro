@@ -9,7 +9,7 @@ use entity_access::inbound::axum_extractors::ProjectBodyAccessLevelExtractorV2;
 use entity_access::inbound::axum_extractors::ThreadAccessLevelExtractor;
 use macro_authorization::{MacroAuthorizationExtractor, UserOrInternal};
 use macro_db_client::share_permission::edit::edit_thread_permission;
-use models_permissions::share_permission::access_level::{
+use permissions_types::share_permission::access_level::{
     AccessLevel, EditAccessLevel, OwnerAccessLevel,
 };
 use shared_types::response::{
@@ -29,7 +29,7 @@ pub struct PatchThreadRequestV2 {
     pub project_id: Option<String>,
     /// The share permissions for the thread.
     pub share_permission:
-        Option<models_permissions::share_permission::UpdateSharePermissionRequestV2>,
+        Option<permissions_types::share_permission::UpdateSharePermissionRequestV2>,
 }
 
 /// Edits the share permissions of a thread.

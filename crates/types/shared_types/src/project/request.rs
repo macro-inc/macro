@@ -18,7 +18,7 @@ pub struct PatchProjectRequestV2 {
     pub project_parent_id: Option<String>,
     /// The share permissions for the project.
     pub share_permission:
-        Option<models_permissions::share_permission::UpdateSharePermissionRequestV2>,
+        Option<permissions_types::share_permission::UpdateSharePermissionRequestV2>,
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Debug, ToSchema)]

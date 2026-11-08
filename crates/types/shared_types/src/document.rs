@@ -21,7 +21,7 @@ pub use basic::{
 };
 mod document_family;
 pub use document_family::DocumentFamily;
-use models_permissions::share_permission::access_level::AccessLevel;
+use permissions_types::share_permission::access_level::AccessLevel;
 
 /// The longest document name DSS accepts, counted in extended grapheme clusters.
 pub const MAX_DOCUMENT_NAME_GRAPHEMES: usize = 200;
