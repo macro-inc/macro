@@ -177,6 +177,10 @@ impl Transaction<'_> {
         Ok(())
     }
     pub(crate) fn guard_write(&self) -> Result<(), Error> {
+        #[cfg(feature = "foreign-nodes")]
+        if self.foreign_read_only {
+            return Err(Error::ForeignReadOnly);
+        }
         if self.sealed {
             return Err(Error::WriteAfterSetEditorState);
         }

@@ -169,6 +169,7 @@ impl Editor {
 impl Transaction<'_> {
     /// Register a JS state config during a host callback.
     pub fn register_foreign_state(&mut self, config: ForeignStateConfig) -> Result<(), Error> {
+        self.guard_write()?;
         self.editor.register_foreign_state(config)
     }
     /// Set an already-unparsed host value, retaining unknown slots and custom equality.

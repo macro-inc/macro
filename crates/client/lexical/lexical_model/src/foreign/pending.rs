@@ -32,6 +32,8 @@ impl ForeignUpdateIdentity {
 /// Dropping it discards its writes, events, extensions, tags and queued updates.
 pub struct PendingUpdate {
     update: Arc<()>,
+    read_only: bool,
+    previous_selection: Option<Selection>,
     owner: Arc<()>,
     version: CommitId,
     extensions: crate::extension::Extensions,
@@ -73,6 +75,8 @@ impl Transaction<'_> {
     pub fn suspend(self) -> PendingUpdate {
         PendingUpdate {
             update: self.foreign_update,
+            read_only: self.foreign_read_only,
+            previous_selection: self.foreign_previous_selection,
             native_projection: self.native_projection,
             owner: self.editor.suspend_owner.clone(),
             version: self.editor.suspend_version,
@@ -111,6 +115,8 @@ impl Editor {
         }
         Ok(Transaction {
             foreign_update: update.update,
+            foreign_read_only: update.read_only,
+            foreign_previous_selection: update.previous_selection,
             native_projection: update.native_projection,
             editor: self,
             extensions: update.extensions,
