@@ -66,13 +66,17 @@ clients and real `sync_server_core::Room` callbacks over `sync_server_sim` ports
   its heartbeat hold; only periodic awareness, ping/pong, wake and alarm work is ignored.
   Core idleness and durable callback counters still cover outstanding operations.
   Complete already-issued token failures before the healing Online signal. Capture
-  presence once per Settle after finite upstream/downstream FIFO publication barriers;
+  the first presence view of each stable lifetime after finite upstream/downstream
+  FIFO publication barriers;
   ignore later refreshes and restart the barriers for new socket/route lifetimes.
   Include writer peer/key replacement in publication lifetimes and reissue the
   actual current selection even when periodic refresh is disabled. Keep bounded
   backward clock offsets and wait for publication time to catch up. Before that
   first resend, allow retired keys their fixed TTL plus observed signed clock
   spread, maximum issued latency and one millisecond; never wait for query success.
+  Once data work and old publications drain, issue one fresh selection and finite
+  FIFO barrier pair so bounded skew cannot expire the entry-time publication
+  before the first view. Heartbeat restarts alone do not replace that view.
 - Record actual partition/offline losses on exact open socket generations, including
   packets lost at delivery. Preserve evidence across explicit Heal. During Settle,
   close only affected generations still open through real direct/router callbacks;
