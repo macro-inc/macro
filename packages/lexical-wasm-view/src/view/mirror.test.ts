@@ -106,3 +106,23 @@ test('subtree removal destroys every descendant record', () => {
   expect(mirror.node(2)).toBeNull();
   expect(diff.mutations.get(2)?.kind).toBe('destroyed');
 });
+
+test('malformed graph updates roll back changed records without copying clean subtrees', () => {
+  const mirror = initialized();
+  const original = mirror.node(1);
+  expect(() =>
+    mirror.apply(
+      new Uint32Array([1, 0, 0, NO_KEY, 2, 7, 2, 0, 1, 6, 1, 1, 0]),
+      new TextEncoder().encode('b')
+    )
+  ).toThrow('Cyclic');
+  expect(mirror.node(1)).toBe(original);
+  expect(mirror.node(0)?.children).toEqual([1]);
+  expect(() =>
+    mirror.apply(
+      new Uint32Array([1, 0, 0, NO_KEY, 1, 1, 0, 1]),
+      new Uint8Array()
+    )
+  ).toThrow('root');
+  expect(mirror.node(2)?.text).toBe('a');
+});

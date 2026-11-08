@@ -183,17 +183,48 @@ export class SessionPort implements EditorPort {
   }
   command(code: number, a = 0, b = 0, text?: string): boolean | undefined {
     let handled: boolean | undefined;
-    this.executor.run(() => this.executor.session.command(code, a, b, text, this.executor.now()), flags => { handled = Boolean(flags & FLAG_HANDLED); });
+    this.executor.run(
+      () =>
+        this.executor.session.command(code, a, b, text, this.executor.now()),
+      (flags) => {
+        handled = Boolean(flags & FLAG_HANDLED);
+      }
+    );
     return handled;
   }
-  keyDown(code: number, mods: number, routed: number, key: string, selection: ViewSelection): boolean | undefined {
+  keyDown(
+    code: number,
+    mods: number,
+    routed: number,
+    key: string,
+    selection: ViewSelection
+  ): boolean | undefined {
     let handled: boolean | undefined;
-    const anchor = selection.kind === 'range' ? selection.anchor : { key: 0, offset: 0, type: 'text' };
+    const anchor =
+      selection.kind === 'range'
+        ? selection.anchor
+        : { key: 0, offset: 0, type: 'text' };
     const focus = selection.kind === 'range' ? selection.focus : anchor;
-    this.executor.run(() => this.executor.session.keyDown(code, mods, routed, key,
-      anchor.key, anchor.offset, anchor.type === 'text' ? 0 : 1,
-      focus.key, focus.offset, focus.type === 'text' ? 0 : 1,
-      selection.kind === 'range' ? 0 : selection.kind === 'none' ? 2 : 1, this.executor.now()), flags => { handled = Boolean(flags & FLAG_HANDLED); });
+    this.executor.run(
+      () =>
+        this.executor.session.keyDown(
+          code,
+          mods,
+          routed,
+          key,
+          anchor.key,
+          anchor.offset,
+          anchor.type === 'text' ? 0 : 1,
+          focus.key,
+          focus.offset,
+          focus.type === 'text' ? 0 : 1,
+          selection.kind === 'range' ? 0 : selection.kind === 'none' ? 2 : 1,
+          this.executor.now()
+        ),
+      (flags) => {
+        handled = Boolean(flags & FLAG_HANDLED);
+      }
+    );
     return handled;
   }
   input(editor: EditorInputMsg): void {

@@ -14,6 +14,8 @@ shares this view through EditorPort; it does not supply production model code.
 - Keep lexical and @lexical packages out of the production dependency graph.
 - Retarget copied DOM code from Lexical 0.45.0; preserve its MIT notice and pin.
 - Keep HTML import and code highlighting off the startup path.
+- Handle session effect kind 9 before painting: end native composition and suppress
+  its redundant synchronous input/end events; Rust already merged the accepted text.
 
 ## Checks
 
