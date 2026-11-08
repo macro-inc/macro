@@ -582,7 +582,7 @@ One computer's first setup is one trace, rooted at the purchase (Buy computer). 
   `generation`, `billing_kind` and `capacity_waited`. A rolled-back
   transaction can export a wait that a retry exports again.
 - `Enrollment.traceparent` carries the setup context to macrod; see
-  `crates/coding_agent_worker/AGENTS.md`.
+  `crates/agents/macrod/AGENTS.md`.
 - Fleet work and billing work emit one span per claimed effect, with errors
   marked even when retry scheduling succeeds.
 - Metrics: `computer.setup.phase.duration` (seconds, by `phase`),

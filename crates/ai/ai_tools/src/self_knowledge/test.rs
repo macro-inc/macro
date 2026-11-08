@@ -5,7 +5,7 @@ use super::ABOUT_MACRO;
 #[test]
 fn macrod_section_gives_the_current_setup_steps() {
     for step in [
-        "crates/coding_agent_worker/install/install.sh",
+        "crates/agents/macrod/install/install.sh",
         "Run `macrod`",
         "**Quickstart**",
         "**Workspace**",
