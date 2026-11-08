@@ -142,3 +142,7 @@ isInline is the first hosted pure predicate: use the owned read peer and JS trut
 canBeEmpty shares the scoped predicate/error adapter. Child removal happens before the parent predicate; a thrown predicate must preserve that earlier detach and stop subsequent empty-parent cleanup, matching the pinned native algorithm.
 
 All no-argument boolean ForeignHooks use the shared predicate adapter. Keep one literal per hook plus native editing cases; a canHaveFormat failure must stop later predicate callbacks and format setters while preserving opaque error identity.
+
+Node-argument canMergeWith/canReplaceWith/canInsertAfter predicates retain original indexed arguments; internal native calls encode their node through the shared owned read peer. Exercise native list append failure and retry in hosting-node-predicates.test.ts.
+
+Native rich-node registrations omit kind and reject foreign behavior; host/native.rs selects their existing Rust implementations. Registrations with kind remain foreign even when their type matches a package node.

@@ -10,6 +10,7 @@ use std::{
     sync::Arc,
 };
 use wasm_bindgen::prelude::*;
+mod native;
 
 #[derive(Deserialize)]
 struct Config {
@@ -155,6 +156,15 @@ impl EditorHandle {
                 if mask != 0 {
                     return Err(debug::error("native class overlays are not wired yet").into());
                 }
+                continue;
+            }
+            if definition.kind.is_none() {
+                if mask != 0 || definition.extends.is_some() {
+                    return Err(
+                        debug::error("native registration cannot have foreign behavior").into(),
+                    );
+                }
+                builder = native::register(builder, &definition.type_name).map_err(debug::error)?;
                 continue;
             }
             let kind = definition.kind.ok_or_else(|| {

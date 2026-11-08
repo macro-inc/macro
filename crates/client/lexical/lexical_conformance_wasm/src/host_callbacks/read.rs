@@ -148,6 +148,7 @@ impl Callback {
         snapshot: &ForeignReadSnapshot,
         key: NodeKey,
         hook: ForeignHook,
+        nodes: &[NodeKey],
     ) -> Result<bool, Error> {
         if !ForeignReadOperation::is_active() {
             return Err(Error::Invariant(
@@ -157,7 +158,13 @@ impl Callback {
         self.context
             .with_read_scope(snapshot, |peer| {
                 let node = peer.node(key)?;
-                let args = peer.original_arguments(key, hook)?.unwrap_or_default();
+                let args = match peer.original_arguments(key, hook)? {
+                    Some(args) => args,
+                    None => nodes
+                        .iter()
+                        .map(|key| peer.node(*key))
+                        .collect::<Result<Vec<_>, _>>()?,
+                };
                 let message =
                     serde_json::to_value(super::super::host_protocol::HostNodeMutation {
                         hook: hook as u8,
