@@ -32,3 +32,12 @@ GC and await that release event; explicit disposal is idempotent.
 The production view lives in `lexical-wasm-view`; DOM code belongs there.
 
 Captured-node identity is cached weakly per editor and version. Reachable nodes pin their Rust version; collection waits through active updates and cancels if a new node owner captures the version before publication. Full native node classes, foreign hosting and read scopes remain unfinished.
+
+Foreign class metadata captures native hook implementations before JS patches,
+walks registered and native ancestry, and computes inherited override masks in the
+model-derived hook order. Prototype writes update masks; a new native-to-JS flip
+rejects after the first update. A pre-update recheck also catches descriptor
+replacements such as spies. Registry ownership is weak at shared prototypes, and
+native non-writable methods and sealed prototypes retain their semantics. This
+metadata is an implementation prerequisite; connection to the facade and Rust
+foreign-node dispatch is still in progress.
