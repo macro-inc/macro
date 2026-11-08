@@ -13,6 +13,7 @@ shares this view through EditorPort; it does not supply production model code.
   through that applier. Authoritative Rust corrections take precedence.
 - Debug builds compare mirror text with Rust node text after every TextFromView.
 - Keep Android timing/native deletion in events.ts and composition clearing in Rust.
+- Route application special keys with registerKeyRoute and one EditorApplication input; preserve Rust KeyDown/Key command priorities and ordinary view listener tie checks.
 - Complete cold input callbacks after Diff/IO consumption so unhandled keys reach
   lower-priority view listeners, including queued inputs.
 - Send marked typing style for 200 ms and Android post-delete context through the

@@ -302,6 +302,35 @@ export function registerEvents(view: EditorView): {
       event.preventDefault();
       return;
     }
+    const route = view.keyRoute(event);
+    const generation = view.mirror.keyGeneration;
+    if (route && generation !== null) {
+      event.preventDefault();
+      view.port.input(
+        EditorInputMsg.fromEditorApplication({
+          ...route,
+          generation,
+          selection: selectionMessage(readSelection(view)),
+          keyboard: true,
+          key: event.key,
+          mods:
+            Number(event.shiftKey) |
+            (Number(event.altKey) << 1) |
+            (Number(event.ctrlKey) << 2) |
+            (Number(event.metaKey) << 3) |
+            (Number(event.repeat) << 4) |
+            (Number(event.isComposing) << 5),
+          code: event.keyCode,
+        }),
+        (handled) => {
+          if (!handled) {
+            view.runViewCommand('KeyDown', event, 'after');
+            if (keyCommand) view.runViewCommand(keyCommand, event, 'after');
+          }
+        }
+      );
+      return;
+    }
     const apple = /Mac|iPhone|iPad|iPod/.test(navigator.platform);
     const wordDelete =
       !event.shiftKey &&

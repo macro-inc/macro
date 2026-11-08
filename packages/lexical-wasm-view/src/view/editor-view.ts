@@ -15,6 +15,7 @@ import { batch, createComponent, createSignal } from 'solid-js';
 import { render } from 'solid-js/web';
 import { ClipboardAccess } from './clipboard';
 import type {
+  KeyRoute,
   ViewCommand,
   ViewCommandPriority,
   ViewListener,
@@ -65,6 +66,9 @@ export class EditorView implements ViewSink {
   readonly query: BulkQueries;
   readonly clipboard: ClipboardAccess;
   readonly context: RenderContext;
+  private readonly keyRoutes = new Set<
+    (event: KeyboardEvent) => KeyRoute | null
+  >();
   private readonly viewCommands = new Map<string, ViewListener[]>();
   private readonly rustListeners: ReadonlyMap<string, number>;
   private readonly dom = new Map<NodeKey, HTMLElement>();
@@ -720,6 +724,20 @@ export class EditorView implements ViewSink {
   ): boolean | undefined {
     return this.port.command(code, payload.a, payload.b, payload.text);
   }
+  /** Translate special keys into one admission, retaining model KeyDown precedence. */
+  registerKeyRoute(
+    resolve: (event: KeyboardEvent) => KeyRoute | null
+  ): () => void {
+    this.keyRoutes.add(resolve);
+    return () => this.keyRoutes.delete(resolve);
+  }
+  keyRoute(event: KeyboardEvent): KeyRoute | null {
+    for (const resolve of this.keyRoutes) {
+      const route = resolve(event);
+      if (route) return route;
+    }
+    return null;
+  }
   registerViewCommand<P>(
     command: ViewCommand<P>,
     listener: (payload: P, view: EditorView) => boolean,
@@ -801,6 +819,7 @@ export class EditorView implements ViewSink {
   }
   dispose(): void {
     this.disposed = true;
+    this.keyRoutes.clear();
     if (this.paintFrame !== null)
       this.root.ownerDocument.defaultView?.cancelAnimationFrame(
         this.paintFrame

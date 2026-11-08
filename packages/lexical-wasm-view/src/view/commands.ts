@@ -1,3 +1,9 @@
+/** An application key admission; native command priorities remain authoritative. */
+export interface KeyRoute {
+  readonly name: string;
+  readonly json: string;
+}
+
 export interface ViewCommand<P> {
   readonly name: string;
   readonly accepts: (payload: unknown) => payload is P;
