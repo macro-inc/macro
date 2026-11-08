@@ -13,3 +13,6 @@ pub(crate) mod projection;
 
 pub(crate) mod runtime;
 pub use runtime::{ForeignListener, ForeignListenerId, ForeignTransform};
+
+pub(crate) mod state;
+pub use state::{ForeignStateCodec, ForeignStateConfig};

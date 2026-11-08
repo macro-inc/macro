@@ -508,6 +508,9 @@ impl<'editor> Transaction<'editor> {
         raw: bool,
     ) -> Result<(), Error> {
         let index = self.type_index(key).ok_or(Error::NodeNotFound(key))?;
+        let layout = self.pending.registry.registered(index).state_layout.clone();
+        #[cfg(feature = "foreign-nodes")]
+        let layout = self.pending.registry.foreign_states.layout(&layout);
         let existing = self.view().slot(key).and_then(|slot| slot.state.clone());
         let mut filtered = json.clone();
         match import.state {
@@ -516,7 +519,7 @@ impl<'editor> Transaction<'editor> {
                 if let Some(serde_json::Value::Object(values)) = filtered.get_mut("$") {
                     values.retain(|name, _| names.contains(&name.as_str()));
                 }
-                for entry in &self.pending.registry.registered(index).state_layout.entries {
+                for entry in &layout.entries {
                     if entry.flat && !names.contains(&entry.key.name()) {
                         filtered.shift_remove(entry.key.name());
                     }
@@ -524,18 +527,14 @@ impl<'editor> Transaction<'editor> {
             }
             StateImportFilter::None => {
                 filtered.shift_remove("$");
-                for entry in &self.pending.registry.registered(index).state_layout.entries {
+                for entry in &layout.entries {
                     if entry.flat {
                         filtered.shift_remove(entry.key.name());
                     }
                 }
             }
         }
-        let state = NodeState::import(
-            &filtered,
-            &self.pending.registry.registered(index).state_layout,
-            existing.as_deref(),
-        );
+        let state = NodeState::import(&filtered, &layout, existing.as_deref());
         self.writable(key)?.state = state.map(Arc::new);
         if import.base_fields {
             let number = |name: &str| {
@@ -624,6 +623,20 @@ impl<'editor> Transaction<'editor> {
         }
         if import.own_fields {
             let update = self.pending.registry.vtable(index).update;
+            #[cfg(feature = "foreign-nodes")]
+            let own_json = {
+                let mut own = json.clone();
+                if self.pending.registry.registered(index).foreign.is_some() {
+                    for entry in &layout.entries {
+                        if entry.flat {
+                            own.shift_remove(entry.key.name());
+                        }
+                    }
+                }
+                own
+            };
+            #[cfg(feature = "foreign-nodes")]
+            let json = &own_json;
             let slot = self.writable(key)?;
             if Arc::get_mut(&mut slot.data).is_none() {
                 slot.data = slot.data.clone_arc();

@@ -4,6 +4,13 @@ use crate::{NodeKey, Utf16Offset};
 /// A failed model operation; the editor remains unchanged when an update fails.
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
+    /// A runtime state key was not registered on this editor.
+    #[cfg(feature = "foreign-nodes")]
+    #[error("unknown foreign state {key}")]
+    UnknownForeignState {
+        /// Unregistered state name.
+        key: std::sync::Arc<str>,
+    },
     /// An update belongs to another editor or predates a later publication.
     #[cfg(feature = "foreign-nodes")]
     #[error("stale suspended update")]
@@ -255,6 +262,13 @@ pub enum Error {
 /// Invalid editor configuration.
 #[derive(Debug, thiserror::Error)]
 pub enum BuildError {
+    /// A runtime node declaration names a state config the builder did not register.
+    #[cfg(feature = "foreign-nodes")]
+    #[error("unknown foreign state {key}")]
+    UnknownForeignState {
+        /// Unregistered state name.
+        key: &'static str,
+    },
     /// Runtime parent is missing, cyclic, or has another storage kind.
     #[cfg(feature = "foreign-nodes")]
     #[error("unknown or incompatible foreign parent {parent} for {type_name}")]
@@ -339,6 +353,8 @@ impl Error {
         match self {
             #[cfg(feature = "foreign-nodes")]
             Self::StaleSuspendedUpdate => "StaleSuspendedUpdate",
+            #[cfg(feature = "foreign-nodes")]
+            Self::UnknownForeignState { .. } => "UnknownForeignState",
             Self::InputNotBatchable => "InputNotBatchable",
             Self::ViewSelectionInHeadless => "ViewSelectionInHeadless",
             Self::RemoteChildrenInCreate => "RemoteChildrenInCreate",

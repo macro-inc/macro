@@ -88,6 +88,8 @@ impl<Original: NodeType, ReplacementNode: NodeType> Replacement
 /// Registry shared by all snapshots from one editor.
 /// s2: CFG-05, CFG-07
 pub struct Registry {
+    #[cfg(feature = "foreign-nodes")]
+    pub(crate) foreign_states: crate::foreign::state::ForeignStateRegistry,
     pub(crate) table_selection_hooks: Option<Arc<dyn TableSelectionHooks>>,
     pub(crate) nodes: Vec<RegisteredNode>,
     pub(crate) vtables: Vec<NodeVTable>,
@@ -198,6 +200,8 @@ enum TransformTarget {
 type TransformRegistrations = Vec<(TransformTarget, RegisteredTransform)>;
 /// Configuration builder; the six built-in types are always registered first.
 pub struct EditorBuilder {
+    #[cfg(feature = "foreign-nodes")]
+    pub(crate) foreign_states: Vec<ForeignStateConfig>,
     pub(crate) extensions: crate::extension::Extensions,
     pub(crate) duplicate_extension: Option<&'static str>,
     pub(crate) plugins: Vec<Arc<dyn Plugin>>,
@@ -215,6 +219,8 @@ impl EditorBuilder {
     /// Build with an explicit headless or view-attached mode.
     pub fn new(mode: EditorMode) -> Self {
         Self {
+            #[cfg(feature = "foreign-nodes")]
+            foreign_states: vec![],
             extensions: Default::default(),
             duplicate_extension: None,
             plugins: vec![],
@@ -325,6 +331,8 @@ impl EditorBuilder {
             }
         }
         let mut registry = Registry {
+            #[cfg(feature = "foreign-nodes")]
+            foreign_states: Default::default(),
             table_selection_hooks: self.table_selection_hooks,
             nodes: vec![],
             vtables: self.vtables,
@@ -334,6 +342,13 @@ impl EditorBuilder {
             replacements: HashMap::default(),
             projections: self.projections,
         };
+        #[cfg(feature = "foreign-nodes")]
+        for config in self.foreign_states {
+            registry
+                .foreign_states
+                .register(config)
+                .map_err(|key| BuildError::StateKeyCollision { key })?;
+        }
         for (position, v) in registry.vtables.iter().enumerate() {
             if v.marker {
                 return Err(BuildError::BaseMarkerRegistered {
@@ -386,6 +401,8 @@ impl EditorBuilder {
         }
         #[cfg(feature = "foreign-nodes")]
         crate::foreign::registry::resolve_parents(&mut registry)?;
+        #[cfg(feature = "foreign-nodes")]
+        crate::foreign::state::validate_declarations(&registry)?;
         for (original, replacement, with) in self.replacements {
             let a = *registry
                 .by_type
