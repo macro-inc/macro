@@ -1,0 +1,138 @@
+use super::*;
+use crate::{EditorType, surface};
+use lexical_rich_nodes::{
+    code::CodeNode,
+    heading::HeadingNode,
+    list::{ListItemNode, ListNode, ListType},
+};
+
+#[test]
+fn backward_block_conversion_includes_the_first_block_without_reversing_selection()
+-> Result<(), Error> {
+    let mut editor =
+        surface::preset_builder_with_mode(EditorType::MarkdownSync, EditorMode::ViewAttached)
+            .build()
+            .expect("surface registry");
+    editor.update(|tx| {
+        let a = tx.create(Paragraph::default())?;
+        let b = tx.create(Paragraph::default())?;
+        let c = tx.create(Paragraph::default())?;
+        let one = tx.create_text("one")?;
+        let two = tx.create_text("two")?;
+        tx.append(a, &[one.key()])?;
+        tx.append(b, &[two.key()])?;
+        tx.append(NodeKey::ROOT, &[a.key(), b.key(), c.key()])?;
+        let mut range = RangeSelection::collapsed(Point::text(two, Utf16Offset(3)));
+        range.focus = Point::text(one, Utf16Offset(0));
+        tx.set_selection(Some(Selection::Range(range)))
+    })?;
+    let (handled, _) = editor.dispatch(&Command::Extension(ExtensionCommand::new(
+        &NODE_TRANSFORM,
+        BlockKind::Heading1,
+    )))?;
+    assert_eq!(handled, Handled::Yes);
+    let state = editor.state().view();
+    let children = state.children_keys(NodeKey::ROOT)?;
+    assert!(state.is::<HeadingNode>(children[0]));
+    assert!(state.is::<HeadingNode>(children[1]));
+    assert!(state.is::<Paragraph>(children[2]));
+    assert!(
+        editor
+            .state()
+            .selection()
+            .and_then(Selection::as_range)
+            .expect("range")
+            .is_backward(state)?
+    );
+    Ok(())
+}
+
+#[test]
+fn delete_at_list_item_start_lifts_the_item_to_a_paragraph() -> Result<(), Error> {
+    let mut editor =
+        surface::preset_builder_with_mode(EditorType::MarkdownSync, EditorMode::ViewAttached)
+            .build()
+            .expect("surface registry");
+    editor.update(|tx| {
+        let list = tx.create(ListNode::new(ListType::Bullet, 1))?;
+        let item = tx.create(ListItemNode::default())?;
+        let text = tx.create_text("item")?;
+        tx.append(item, &[text.key()])?;
+        tx.append(list, &[item.key()])?;
+        tx.append(NodeKey::ROOT, &[list.key()])?;
+        tx.select_start(text)?;
+        Ok(())
+    })?;
+    let (handled, _) = editor.dispatch(&Command::DeleteWord {
+        direction: EditDirection::Backward,
+        target: ModifyTarget::NoView,
+        character_target: ModifyTarget::NoView,
+    })?;
+    assert_eq!(handled, Handled::Yes);
+    let state = editor.state().view();
+    let children = state.children_keys(NodeKey::ROOT)?;
+    assert_eq!(children.len(), 1);
+    assert!(state.is::<Paragraph>(children[0]));
+    assert_eq!(state.text_content(children[0]), "item");
+    Ok(())
+}
+
+#[test]
+fn code_has_one_trailing_caret_paragraph_only_on_the_application_surface() -> Result<(), Error> {
+    let mut editor =
+        surface::preset_builder_with_mode(EditorType::MarkdownSync, EditorMode::ViewAttached)
+            .build()
+            .expect("surface registry");
+    editor.update(|tx| {
+        let code = tx.create(CodeNode::default())?;
+        tx.append(NodeKey::ROOT, &[code.key()])?;
+        Ok(())
+    })?;
+    let state = editor.state().view();
+    let children = state.children_keys(NodeKey::ROOT)?;
+    assert_eq!(children.len(), 2);
+    assert!(state.is::<CodeNode>(children[0]));
+    assert!(state.is::<Paragraph>(children[1]));
+    assert_eq!(state.text_content(children[1]), "");
+    let mut bare =
+        crate::preset_builder_with_mode(EditorType::MarkdownSync, EditorMode::ViewAttached)
+            .build()
+            .expect("surface registry");
+    bare.update(|tx| {
+        let code = tx.create(CodeNode::default())?;
+        tx.append(NodeKey::ROOT, &[code.key()])?;
+        Ok(())
+    })?;
+    assert_eq!(bare.state().view().children_keys(NodeKey::ROOT)?.len(), 1);
+    Ok(())
+}
+
+#[test]
+fn title_removes_extra_lines_and_unwraps_nested_paragraph_content() -> Result<(), Error> {
+    let mut editor = surface::preset_builder_with_mode(EditorType::Title, EditorMode::ViewAttached)
+        .build()
+        .expect("surface registry");
+    editor.update(|tx| {
+        let p = tx.create(Paragraph::default())?;
+        let nested = tx.create(Paragraph::default())?;
+        let text = tx.create_text("outer")?;
+        let inner = tx.create_text("inner")?;
+        let line = tx.create(LineBreak::default())?;
+        let extra = tx.create(Paragraph::default())?;
+        tx.append(nested, &[inner.key()])?;
+        tx.append(p, &[text.key(), line.key(), nested.key()])?;
+        tx.append(NodeKey::ROOT, &[p.key(), extra.key()])?;
+        Ok(())
+    })?;
+    let state = editor.state().view();
+    let children = state.children_keys(NodeKey::ROOT)?;
+    assert_eq!(children.len(), 1);
+    assert_eq!(state.text_content(children[0]), "outerinner");
+    assert!(
+        state
+            .children_keys(children[0])?
+            .into_iter()
+            .all(|key| state.is_text(key))
+    );
+    Ok(())
+}

@@ -23,7 +23,7 @@ normal KeyDown listener dispatch before the routed deletion.
 
 - `abi/session.bop`: authoritative ABI, generated constants and messages.
 - `src/machine.rs`: clocks, lifecycle and one handle call per input.
-- `src/macro_editor.rs`: explicit MarkdownSync registry/policy, input clock and continuing per-peer constructor entropy for `EditorSession.createMacro`.
+- `src/macro_editor.rs`: application MarkdownSync surface preset/policy, input clock and continuing per-peer constructor entropy for `EditorSession.createMacro`; group plugin registration lives in macro_document_model/src/surface.rs.
 - `src/output.rs`: owned output envelope and raw framed socket bytes.
 - `src/editor_input.rs`: explicit cold model input adapter; Input has no wire derives.
 - `src/query.rs`: portable HTML, Markdown, clipboard and model queries.
