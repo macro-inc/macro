@@ -166,6 +166,25 @@ impl CallbackContext {
         context.encode(value)
     }
 
+    /// Resolve a hosted node return through this editor's captured identity store.
+    /// Only encoded node handles are accepted; raw keys and other API values are not nodes.
+    pub fn returned_node(&self, tx: &Transaction<'_>, value: &Value) -> Result<NodeKey> {
+        if value.get("$h").and_then(Value::as_u64).is_none() {
+            return Err(fail("foreign hook must return a node handle"));
+        }
+        let frames = self
+            .0
+            .upgrade()
+            .ok_or(crate::replay::ReplayError::NoActiveEditor)?;
+        let active = frames.active(tx)?;
+        let context = frames.context(&active)?;
+        let key = node_key(&context.replay.decode(value)?)?;
+        if tx.view().node(key).is_none() {
+            return Err(fail("foreign hook returned a missing node"));
+        }
+        Ok(key)
+    }
+
     /// Consume original encoded arguments for the first exact indexed hook call.
     /// Native-super does not install a frame; nested virtual calls use their own
     /// model arguments. This retains no transaction or host object.

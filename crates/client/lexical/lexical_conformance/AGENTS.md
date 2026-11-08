@@ -107,3 +107,5 @@ Key RecordIdentities by immutable model tokens, not allocation addresses; resolv
 Keep conformance.createForeignNode an internal development constructor in the shared indexed dispatcher; return through the normal captured-node identity encoder and honor read-mode guards before allocation.
 
 Preserve original encoded indexed-hook arguments in exact node/hook scopes before native normalization; consume once at JS dispatch and restore guards on every exit. Native-super installs no original-argument frame, so nested virtual calls receive their actual model arguments. Retain owned JSON only, with no transaction borrow or lock across host calls.
+
+Resolve hosted node return values with CallbackContext::returned_node in the exact active update. Require a known captured node handle whose key still exists; reject raw keys, non-node values and stale callback capabilities.

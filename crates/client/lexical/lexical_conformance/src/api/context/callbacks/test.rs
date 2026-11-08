@@ -122,3 +122,42 @@ fn pure_raw_field_capability_rejects_originless_wrong_editor_stale_and_freed_cap
     assert!(callback.read_field(&new, 0, "__text").is_err());
     Ok(())
 }
+
+#[test]
+fn returned_nodes_require_live_node_handles_and_the_exact_update() -> Result<()> {
+    let mut editor = Editor::builder(EditorMode::Headless)
+        .build()
+        .expect("editor");
+    let mut other = Editor::builder(EditorMode::Headless)
+        .build()
+        .expect("editor");
+    let mut context = Context::default();
+    let callback = context.callbacks();
+    let mut tx = editor.transaction();
+    context.begin_update(&mut tx)?;
+    let key = tx.create_text("returned")?.key();
+    let encoded = callback.node(&tx, key)?;
+    assert_eq!(callback.returned_node(&tx, &encoded)?, key);
+    assert!(callback.returned_node(&tx, &Value::Null).is_err());
+    assert!(
+        callback
+            .returned_node(&tx, &json!({"$key":0,"raw":"1"}))
+            .is_err()
+    );
+    assert!(callback.returned_node(&tx, &json!({"$h":999})).is_err());
+    assert!(
+        callback
+            .returned_node(&other.transaction(), &encoded)
+            .is_err()
+    );
+    let capture = tx.view().snapshot_for_foreign_read()?;
+    capture.with_read_transaction(tx.committed_state(), |peer| -> Result<()> {
+        assert!(callback.returned_node(peer, &encoded).is_err());
+        Ok(())
+    })??;
+    drop(tx);
+    context.discard_update()?;
+    let tx = editor.transaction();
+    assert!(callback.returned_node(&tx, &encoded).is_err());
+    Ok(())
+}
