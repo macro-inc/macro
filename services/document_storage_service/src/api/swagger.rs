@@ -135,6 +135,10 @@ use initiative::domain::models::{
     CreateInitiativeRequest, InitialPropertyValue, InitiativeDetail, InitiativeId, InitiativeList,
     InitiativeSummary, UpdateInitiativeRequest,
 };
+use initiative::domain::reads::{
+    InitiativePage, InitiativePageRow, InitiativePropertySnapshot, InitiativeSort,
+};
+use initiative::inbound::axum_router::description::InitiativeDescription;
 use model::document::response::{
     CreateDocumentRequest, CreateDocumentResponse, CreateDocumentResponseData,
     DocumentResponseMetadata,
@@ -552,6 +556,8 @@ use utoipa::OpenApi;
         reminders::inbound::axum_router::email_collection::list_email_reminders_handler,
         // initiatives
         initiative::inbound::axum_router::list::list_initiatives_handler,
+        initiative::inbound::axum_router::page::page_initiatives_handler,
+        initiative::inbound::axum_router::description::get_initiative_description_handler,
         initiative::inbound::axum_router::create::create_initiative_handler,
         initiative::inbound::axum_router::get::get_initiative_handler,
         initiative::inbound::axum_router::update::update_initiative_handler,
@@ -888,6 +894,11 @@ use utoipa::OpenApi;
             InitiativeSummary,
             InitiativeDetail,
             InitiativeList,
+            InitiativePage,
+            InitiativePageRow,
+            InitiativePropertySnapshot,
+            InitiativeSort,
+            InitiativeDescription,
             CreateInitiativeRequest,
             InitialPropertyValue,
             UpdateInitiativeRequest,
