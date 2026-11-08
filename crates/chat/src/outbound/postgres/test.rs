@@ -359,7 +359,8 @@ async fn update_message_content_bumps_chat_updated_at(pool: Pool<Postgres>) {
         .unwrap();
 
     tokio::time::sleep(Duration::from_millis(10)).await;
-    repo.update_message_content(
+    crate::domain::ports::MessageRepo::update_message_content(
+        &repo,
         &chat_id,
         &message_id,
         &ChatMessageContent::Text("final content".to_string()),
@@ -380,38 +381,6 @@ async fn update_message_content_bumps_chat_updated_at(pool: Pool<Postgres>) {
     migrator = "MACRO_DB_MIGRATIONS",
     fixtures(path = "fixtures", scripts("users"))
 )]
-async fn update_interim_message_content_does_not_bump_chat(pool: Pool<Postgres>) {
-    let repo = test_repo(pool);
-    let (chat_id, message_id) = create_chat_with_message(&repo).await;
-    let original_updated_at = repo
-        .get_metadata(&chat_id)
-        .await
-        .unwrap()
-        .updated_at
-        .unwrap();
-
-    tokio::time::sleep(Duration::from_millis(10)).await;
-    repo.update_interim_message_content(
-        &chat_id,
-        &message_id,
-        &ChatMessageContent::Text("interim content".to_string()),
-    )
-    .await
-    .unwrap();
-
-    let updated_at = repo
-        .get_metadata(&chat_id)
-        .await
-        .unwrap()
-        .updated_at
-        .unwrap();
-    assert_eq!(updated_at, original_updated_at);
-}
-
-#[sqlx::test(
-    migrator = "MACRO_DB_MIGRATIONS",
-    fixtures(path = "fixtures", scripts("users"))
-)]
 async fn nonexistent_message_does_not_bump_chat(pool: Pool<Postgres>) {
     let repo = test_repo(pool);
     let (chat_id, _) = create_chat_with_message(&repo).await;
@@ -423,7 +392,8 @@ async fn nonexistent_message_does_not_bump_chat(pool: Pool<Postgres>) {
         .unwrap();
 
     tokio::time::sleep(Duration::from_millis(10)).await;
-    repo.update_message_content(
+    crate::domain::ports::MessageRepo::update_message_content(
+        &repo,
         &chat_id,
         "nonexistent-message",
         &ChatMessageContent::Text("final content".to_string()),

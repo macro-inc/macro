@@ -1,5 +1,3 @@
-mod create;
-
 use axum::Extension;
 use axum::Router;
 use axum::body::Body;
@@ -14,22 +12,16 @@ use macro_authorization::{
 };
 use macro_user_id::user_id::MacroUserIdStr;
 use model::chat::ChatBasic;
-use model::response::StringIDResponse;
 use model::user::UserContext;
 use model_owner::Owner;
 use rootcause::Report;
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 use tower::util::ServiceExt;
 use uuid::Uuid;
 
-use crate::domain::models::{
-    ChatErr, ChatResponse, CreateChatArgs, GetChatResponse, PatchChatArgs, Result,
-};
+use crate::domain::models::{ChatErr, ChatResponse, GetChatResponse, PatchChatArgs, Result};
 use crate::domain::ports::ChatService;
-use crate::inbound::http::router::{
-    ChatRouterState, chat_create_router, chat_id_router, chat_view_router,
-};
-use ai_toolset::tool_object::UserToolResponse;
+use crate::inbound::http::router::{ChatRouterState, chat_id_router, chat_view_router};
 use entity_access::domain::models::{
     AccessError, AccessLevel, BotAccessScope, BotId, EditAccessLevel, EntityAccessReceipt,
     EntityPermission, EntityType, OwnerAccessLevel, UserTeamInfo, ViewAccessLevel,
@@ -39,28 +31,9 @@ use macro_user_id::lowercased::Lowercase;
 use macro_user_id::user_id::MacroUserId;
 
 #[derive(Clone, Default)]
-struct MockService {
-    created_owners: Arc<Mutex<Vec<Owner>>>,
-}
-
-impl MockService {
-    fn created_owners(&self) -> Vec<Owner> {
-        self.created_owners
-            .lock()
-            .expect("created owners lock poisoned")
-            .clone()
-    }
-}
+struct MockService;
 
 impl ChatService for MockService {
-    async fn create(&self, owner: Owner, _args: CreateChatArgs) -> Result<String> {
-        self.created_owners
-            .lock()
-            .expect("created owners lock poisoned")
-            .push(owner);
-        Ok("test-chat-id".to_string())
-    }
-
     #[allow(deprecated)]
     async fn get_chat(
         &self,
@@ -131,57 +104,11 @@ impl ChatService for MockService {
     ) -> Result<models_permissions::share_permission::SharePermissionV2> {
         Err(ChatErr::Unknown(anyhow::anyhow!("not implemented")))
     }
-
-    async fn update_tool_call(
-        &self,
-        _receipt: EntityAccessReceipt<OwnerAccessLevel>,
-        _message_id: &str,
-        _tool_call_id: &str,
-        _new_args: serde_json::Value,
-    ) -> Result<()> {
-        Ok(())
-    }
-
-    async fn update_tool_response(
-        &self,
-        _receipt: EntityAccessReceipt<OwnerAccessLevel>,
-        _message_id: &str,
-        _tool_call_id: &str,
-        _response: UserToolResponse<serde_json::Value>,
-    ) -> Result<()> {
-        Ok(())
-    }
-
-    async fn call_tool(
-        &self,
-        _receipt: EntityAccessReceipt<OwnerAccessLevel>,
-        _message_id: &str,
-        _tool_call_id: &str,
-        _args: Option<serde_json::Value>,
-    ) -> Result<serde_json::Value> {
-        Ok(serde_json::json!({
-            "argsWasProvided": _args.is_some(),
-            "args": _args,
-        }))
-    }
-
-    async fn reject_tool_call(
-        &self,
-        _receipt: EntityAccessReceipt<OwnerAccessLevel>,
-        _message_id: &str,
-        _tool_call_id: &str,
-    ) -> Result<()> {
-        Ok(())
-    }
 }
 
 struct ErrorService;
 
 impl ChatService for ErrorService {
-    async fn create(&self, _owner: Owner, _args: CreateChatArgs) -> Result<String> {
-        Err(ChatErr::Unknown(anyhow::anyhow!("db error")))
-    }
-
     async fn get_chat(
         &self,
         _entity_access_receipt: EntityAccessReceipt<ViewAccessLevel>,
@@ -236,45 +163,6 @@ impl ChatService for ErrorService {
         &self,
         _entity_access_receipt: EntityAccessReceipt<EditAccessLevel>,
     ) -> Result<models_permissions::share_permission::SharePermissionV2> {
-        Err(ChatErr::Unknown(anyhow::anyhow!("db error")))
-    }
-
-    async fn update_tool_call(
-        &self,
-        _receipt: EntityAccessReceipt<OwnerAccessLevel>,
-        _message_id: &str,
-        _tool_call_id: &str,
-        _new_args: serde_json::Value,
-    ) -> Result<()> {
-        Err(ChatErr::Unknown(anyhow::anyhow!("db error")))
-    }
-
-    async fn update_tool_response(
-        &self,
-        _receipt: EntityAccessReceipt<OwnerAccessLevel>,
-        _message_id: &str,
-        _tool_call_id: &str,
-        _response: UserToolResponse<serde_json::Value>,
-    ) -> Result<()> {
-        Err(ChatErr::Unknown(anyhow::anyhow!("db error")))
-    }
-
-    async fn call_tool(
-        &self,
-        _receipt: EntityAccessReceipt<OwnerAccessLevel>,
-        _message_id: &str,
-        _tool_call_id: &str,
-        _args: Option<serde_json::Value>,
-    ) -> Result<serde_json::Value> {
-        Err(ChatErr::Unknown(anyhow::anyhow!("db error")))
-    }
-
-    async fn reject_tool_call(
-        &self,
-        _receipt: EntityAccessReceipt<OwnerAccessLevel>,
-        _message_id: &str,
-        _tool_call_id: &str,
-    ) -> Result<()> {
         Err(ChatErr::Unknown(anyhow::anyhow!("db error")))
     }
 }
@@ -282,10 +170,6 @@ impl ChatService for ErrorService {
 struct NotFoundService;
 
 impl ChatService for NotFoundService {
-    async fn create(&self, _owner: Owner, _args: CreateChatArgs) -> Result<String> {
-        Err(ChatErr::Unknown(anyhow::anyhow!("db error")))
-    }
-
     async fn get_chat(
         &self,
         _entity_access_receipt: EntityAccessReceipt<ViewAccessLevel>,
@@ -341,45 +225,6 @@ impl ChatService for NotFoundService {
         _entity_access_receipt: EntityAccessReceipt<EditAccessLevel>,
     ) -> Result<models_permissions::share_permission::SharePermissionV2> {
         Err(ChatErr::Unknown(anyhow::anyhow!("db error")))
-    }
-
-    async fn update_tool_call(
-        &self,
-        _receipt: EntityAccessReceipt<OwnerAccessLevel>,
-        _message_id: &str,
-        _tool_call_id: &str,
-        _new_args: serde_json::Value,
-    ) -> Result<()> {
-        Err(ChatErr::NotFound)
-    }
-
-    async fn update_tool_response(
-        &self,
-        _receipt: EntityAccessReceipt<OwnerAccessLevel>,
-        _message_id: &str,
-        _tool_call_id: &str,
-        _response: UserToolResponse<serde_json::Value>,
-    ) -> Result<()> {
-        Err(ChatErr::NotFound)
-    }
-
-    async fn call_tool(
-        &self,
-        _receipt: EntityAccessReceipt<OwnerAccessLevel>,
-        _message_id: &str,
-        _tool_call_id: &str,
-        _args: Option<serde_json::Value>,
-    ) -> Result<serde_json::Value> {
-        Err(ChatErr::NotFound)
-    }
-
-    async fn reject_tool_call(
-        &self,
-        _receipt: EntityAccessReceipt<OwnerAccessLevel>,
-        _message_id: &str,
-        _tool_call_id: &str,
-    ) -> Result<()> {
-        Err(ChatErr::NotFound)
     }
 }
 
@@ -657,7 +502,7 @@ fn chat_basic_extension() -> Extension<ChatBasic> {
 
 fn mock_id_router() -> Router {
     let state = ChatRouterState::new(
-        MockService::default(),
+        MockService,
         MockAccessService,
         authorization_state(),
         permissions_service(),
@@ -818,36 +663,6 @@ async fn patch_chat_repo_error_returns_500() {
     assert_eq!(res.status(), StatusCode::INTERNAL_SERVER_ERROR);
 }
 
-// -- copy_chat tests --
-
-#[tokio::test]
-async fn copy_chat_returns_id() {
-    let req = Request::builder()
-        .method("POST")
-        .uri("/some-chat-id/copy")
-        .body(Body::empty())
-        .unwrap();
-
-    let res = mock_id_router().oneshot(req).await.unwrap();
-    assert_eq!(res.status(), StatusCode::OK);
-
-    let body = res.into_body().collect().await.unwrap().to_bytes();
-    let response: StringIDResponse = serde_json::from_slice(&body).unwrap();
-    assert_eq!(response.id, "copied-chat-id");
-}
-
-#[tokio::test]
-async fn copy_chat_repo_error_returns_500() {
-    let req = Request::builder()
-        .method("POST")
-        .uri("/some-chat-id/copy")
-        .body(Body::empty())
-        .unwrap();
-
-    let res = error_id_router().oneshot(req).await.unwrap();
-    assert_eq!(res.status(), StatusCode::INTERNAL_SERVER_ERROR);
-}
-
 // -- revert_delete tests --
 
 #[tokio::test]
@@ -887,103 +702,35 @@ async fn get_permissions_repo_error_returns_500() {
     assert_eq!(res.status(), StatusCode::INTERNAL_SERVER_ERROR);
 }
 
-// -- tool handler tests --
+// -- legacy chat writes --
 
+/// Legacy chats are read-only: nothing copies one or runs its stored tool calls.
 #[tokio::test]
-async fn update_tool_call_returns_ok() {
-    let req = Request::builder()
-        .method("POST")
-        .uri("/some-chat-id/tool/update")
-        .header("content-type", "application/json")
-        .body(Body::from(
-            r#"{"messageId":"message-1","toolCallId":"tool-1","args":{"x":1}}"#,
-        ))
-        .unwrap();
+async fn legacy_chat_writes_are_not_routed() {
+    for path in [
+        "/some-chat-id/copy",
+        "/some-chat-id/tool/update",
+        "/some-chat-id/tool/response/update",
+        "/some-chat-id/tool/call",
+        "/some-chat-id/tool/reject",
+    ] {
+        let req = Request::builder()
+            .method("POST")
+            .uri(path)
+            .header("content-type", "application/json")
+            .body(Body::from(
+                r#"{"messageId":"message-1","toolCallId":"tool-1","args":{"x":1}}"#,
+            ))
+            .unwrap();
 
-    let res = mock_id_router().oneshot(req).await.unwrap();
-    assert_eq!(res.status(), StatusCode::OK);
-}
-
-#[tokio::test]
-async fn update_tool_response_returns_ok() {
-    let req = Request::builder()
-        .method("POST")
-        .uri("/some-chat-id/tool/response/update")
-        .header("content-type", "application/json")
-        .body(Body::from(
-            r#"{"messageId":"message-1","toolCallId":"tool-1","response":{"UserAction":{"draftId":"draft-1"}}}"#,
-        ))
-        .unwrap();
-
-    let res = mock_id_router().oneshot(req).await.unwrap();
-    assert_eq!(res.status(), StatusCode::OK);
-}
-
-#[tokio::test]
-async fn call_tool_returns_result() {
-    let req = Request::builder()
-        .method("POST")
-        .uri("/some-chat-id/tool/call")
-        .header("content-type", "application/json")
-        .body(Body::from(
-            r#"{"messageId":"message-1","toolCallId":"tool-1","args":{"x":1}}"#,
-        ))
-        .unwrap();
-
-    let res = mock_id_router().oneshot(req).await.unwrap();
-    assert_eq!(res.status(), StatusCode::OK);
-
-    let body = res.into_body().collect().await.unwrap().to_bytes();
-    let response: serde_json::Value = serde_json::from_slice(&body).unwrap();
-    assert_eq!(
-        response,
-        serde_json::json!({
-            "result": {
-                "argsWasProvided": true,
-                "args": { "x": 1 },
-            }
-        })
-    );
-}
-
-#[tokio::test]
-async fn call_tool_forwards_missing_args() {
-    let req = Request::builder()
-        .method("POST")
-        .uri("/some-chat-id/tool/call")
-        .header("content-type", "application/json")
-        .body(Body::from(
-            r#"{"messageId":"message-1","toolCallId":"tool-1"}"#,
-        ))
-        .unwrap();
-
-    let res = mock_id_router().oneshot(req).await.unwrap();
-    assert_eq!(res.status(), StatusCode::OK);
-
-    let body = res.into_body().collect().await.unwrap().to_bytes();
-    let response: serde_json::Value = serde_json::from_slice(&body).unwrap();
-    assert_eq!(
-        response,
-        serde_json::json!({
-            "result": {
-                "argsWasProvided": false,
-                "args": null,
-            }
-        })
-    );
-}
-
-#[tokio::test]
-async fn reject_tool_call_returns_ok() {
-    let req = Request::builder()
-        .method("POST")
-        .uri("/some-chat-id/tool/reject")
-        .header("content-type", "application/json")
-        .body(Body::from(
-            r#"{"messageId":"message-1","toolCallId":"tool-1"}"#,
-        ))
-        .unwrap();
-
-    let res = mock_id_router().oneshot(req).await.unwrap();
-    assert_eq!(res.status(), StatusCode::OK);
+        let res = mock_id_router().oneshot(req).await.unwrap();
+        assert!(
+            matches!(
+                res.status(),
+                StatusCode::NOT_FOUND | StatusCode::METHOD_NOT_ALLOWED
+            ),
+            "{path} answered {}",
+            res.status()
+        );
+    }
 }

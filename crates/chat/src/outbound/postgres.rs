@@ -91,14 +91,9 @@ impl<B: BotFacts + 'static> PgChatRepo<B> {
         chat_id: &str,
         message_id: &str,
         content: &ChatMessageContent,
-        bump_chat_recency: bool,
     ) -> Result<()> {
         queries::update_message_content::update_message_content(
-            &self.pool,
-            chat_id,
-            message_id,
-            content,
-            bump_chat_recency,
+            &self.pool, chat_id, message_id, content,
         )
         .await
         .map_err(to_chat_err)
@@ -351,40 +346,7 @@ impl<B: BotFacts + 'static> ChatRepo for PgChatRepo<B> {
 
     #[tracing::instrument(err, skip(self))]
     async fn patch_message(&self, chat_id: &str, args: PatchChatMessageArgs) -> Result<()> {
-        self.persist_message_content(chat_id, &args.message_id, &args.content, true)
-            .await
-    }
-
-    #[tracing::instrument(err, skip(self))]
-    async fn get_message_content(
-        &self,
-        chat_id: &str,
-        message_id: &str,
-    ) -> Result<ChatMessageContent> {
-        queries::get_message_content::get_message_content(&self.pool, chat_id, message_id)
-            .await
-            .map_err(to_chat_err)
-    }
-
-    #[tracing::instrument(err, skip(self, content))]
-    async fn update_message_content(
-        &self,
-        chat_id: &str,
-        message_id: &str,
-        content: &ChatMessageContent,
-    ) -> Result<()> {
-        self.persist_message_content(chat_id, message_id, content, true)
-            .await
-    }
-
-    #[tracing::instrument(err, skip(self, content))]
-    async fn update_interim_message_content(
-        &self,
-        chat_id: &str,
-        message_id: &str,
-        content: &ChatMessageContent,
-    ) -> Result<()> {
-        self.persist_message_content(chat_id, message_id, content, false)
+        self.persist_message_content(chat_id, &args.message_id, &args.content)
             .await
     }
 
@@ -443,13 +405,13 @@ impl<B: BotFacts + 'static> MessageRepo for PgChatRepo<B> {
         message_id: &str,
         content: &ChatMessageContent,
     ) -> Result<()> {
-        self.persist_message_content(chat_id, message_id, content, true)
+        self.persist_message_content(chat_id, message_id, content)
             .await
     }
 
     #[tracing::instrument(err, skip(self))]
     async fn patch_message(&self, chat_id: &str, args: PatchChatMessageArgs) -> Result<()> {
-        self.persist_message_content(chat_id, &args.message_id, &args.content, true)
+        self.persist_message_content(chat_id, &args.message_id, &args.content)
             .await
     }
 

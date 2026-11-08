@@ -2,13 +2,16 @@
 
 ## What it is
 
-Part of AI chat: chats and chat messages, persistence, HTTP/toolset
+Legacy AI chat: chats and chat messages, persistence, HTTP/toolset
 adapters, and lifecycle events. See `README.md` for the Kafka event schema.
+Chats are read-only: the HTTP API reads, renames, shares and deletes them,
+but nothing creates one, copies one, sends to one, or runs its stored tool
+calls. Duplicating a folder or an item still copies a chat's history.
 
 ## Start here
 
-- `src/domain.rs`: `ChatService`/`MessageService` — chat and message CRUD,
-  copy, revert-delete, and project bookkeeping.
+- `src/domain.rs`: `ChatService`/`MessageService` — chat and message reads,
+  updates, duplication, revert-delete, and project bookkeeping.
 - `src/domain/events.rs`: `chat.*`/`chat.message_*` events published to
   `macro.chats` (schema in `README.md`).
 - `src/inbound/attachment.rs`: the `AttachmentService` impl for chat messages.
@@ -20,7 +23,7 @@ adapters, and lifecycle events. See `README.md` for the Kafka event schema.
 ## Scope
 
 - Owns: the `Chat`/`ChatMessage` tables, chat sharing/ownership, and message
-  send/store/delete.
+  storage/delete.
 - Not here: channel messages → `crates/channels`; model selection and provider
   calls → `crates/agent`.
 

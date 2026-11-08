@@ -1,9 +1,5 @@
-use std::sync::Mutex;
+use std::sync::{Arc, Mutex};
 
-use agent::types::{AssistantMessagePart, ChatMessageContent};
-use ai_toolset::{
-    AsyncTool, RequestContext, ServiceContext, ToolAnnotated, ToolAnnotations, ToolResult,
-};
 use attachment::FormattedParts;
 use entity_access_management::domain::models::EntityAccessManagementError;
 use macro_event_broker::{EventBrokerError, MacroEvent};
@@ -11,7 +7,7 @@ use model::chat::Chat;
 use model_owner::Owner;
 
 use super::*;
-use crate::domain::models::{ChatResponse, PatchChatMessageArgs};
+use crate::domain::models::{ChatResponse, CreateChatArgs, PatchChatMessageArgs};
 
 pub(super) const CHAT_ID: &str = "3f6f8b0a-6f9f-4a3f-9c3a-2b1e5d4c7a90";
 const NEW_CHAT_ID: &str = "0197f776-6e7b-7c69-a251-780ae754d3e4";
@@ -20,23 +16,8 @@ const OWNER: &str = "macro|owner@example.com";
 const OTHER_USER: &str = "macro|other@example.com";
 pub(super) const TEAM_ID: uuid::Uuid =
     uuid::Uuid::from_u128(0x7ea3_0000_0000_0000_0000_0000_0000_0001);
-const MESSAGE_ID: &str = "message-id";
-const TOOL_CALL_ID: &str = "tool-call-id";
-const TOOL_NAME: &str = "test_tool";
 
 // -- Stub ChatRepo --
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-enum MessageContentUpdate {
-    Final,
-    Interim,
-}
-
-#[derive(Default)]
-struct MessagePersistence {
-    content: Option<ChatMessageContent>,
-    updates: Vec<MessageContentUpdate>,
-}
 
 #[derive(Clone, Default)]
 pub(super) struct StubChatRepo {
@@ -45,7 +26,6 @@ pub(super) struct StubChatRepo {
     metadata_owner: Option<Owner>,
     metadata_deleted_at: Option<chrono::DateTime<chrono::Utc>>,
     metadata_missing: bool,
-    message_persistence: Arc<Mutex<MessagePersistence>>,
     team_default: Option<models_permissions::share_permission::TeamLinkShareDefault>,
     received_owners: Arc<Mutex<Vec<Owner>>>,
     received_share_permission: Arc<Mutex<Option<SharePermissionV2>>>,
@@ -54,7 +34,6 @@ pub(super) struct StubChatRepo {
     team_share_facts_loads: Arc<Mutex<usize>>,
     received_patch: Arc<Mutex<Option<PatchChatRepoArgs>>>,
     permanently_deleted: Arc<Mutex<Vec<String>>>,
-    fail_create: bool,
     fail_copy_chat: bool,
     fail_delete: bool,
     fail_permanently_delete: bool,
@@ -122,26 +101,6 @@ impl StubChatRepo {
             .map(|args| args.team_share.clone())
     }
 
-    fn with_tool_message() -> Self {
-        Self {
-            message_persistence: Arc::new(Mutex::new(MessagePersistence {
-                content: Some(tool_message_content()),
-                updates: Vec::new(),
-            })),
-            ..Self::default()
-        }
-    }
-
-    fn content_updates(&self) -> Vec<MessageContentUpdate> {
-        self.message_persistence.lock().unwrap().updates.clone()
-    }
-
-    fn record_content_update(&self, content: &ChatMessageContent, update: MessageContentUpdate) {
-        let mut persistence = self.message_persistence.lock().unwrap();
-        persistence.content = Some(content.clone());
-        persistence.updates.push(update);
-    }
-
     fn repo_err() -> ChatErr {
         ChatErr::Unknown(anyhow::anyhow!("intentional repo failure"))
     }
@@ -154,9 +113,6 @@ impl ChatRepo for StubChatRepo {
         _args: CreateChatArgs,
         share_permission: SharePermissionV2,
     ) -> Result<String> {
-        if self.fail_create {
-            return Err(Self::repo_err());
-        }
         self.received_owners.lock().unwrap().push(owner);
         *self.received_share_permission.lock().unwrap() = Some(share_permission);
         Ok(CHAT_ID.to_string())
@@ -279,39 +235,6 @@ impl ChatRepo for StubChatRepo {
         unimplemented!("not exercised")
     }
 
-    async fn get_message_content(
-        &self,
-        _chat_id: &str,
-        _message_id: &str,
-    ) -> Result<ChatMessageContent> {
-        self.message_persistence
-            .lock()
-            .unwrap()
-            .content
-            .clone()
-            .ok_or(ChatErr::NotFound)
-    }
-
-    async fn update_message_content(
-        &self,
-        _chat_id: &str,
-        _message_id: &str,
-        content: &ChatMessageContent,
-    ) -> Result<()> {
-        self.record_content_update(content, MessageContentUpdate::Final);
-        Ok(())
-    }
-
-    async fn update_interim_message_content(
-        &self,
-        _chat_id: &str,
-        _message_id: &str,
-        content: &ChatMessageContent,
-    ) -> Result<()> {
-        self.record_content_update(content, MessageContentUpdate::Interim);
-        Ok(())
-    }
-
     async fn store_resolved_message(
         &self,
         _message_id: &str,
@@ -411,48 +334,7 @@ impl MacroEventBroker for RecordingEventBroker {
     }
 }
 
-// -- Test tool --
-
-impl ToolAnnotated for TestTool {
-    const ANNOTATIONS: ToolAnnotations = ToolAnnotations::read_only("Test tool");
-}
-
-#[derive(serde::Deserialize, schemars::JsonSchema)]
-#[schemars(title = "test_tool", description = "A tool used by chat service tests")]
-struct TestTool {
-    value: String,
-}
-
-#[async_trait::async_trait]
-impl AsyncTool<()> for TestTool {
-    type Output = serde_json::Value;
-
-    async fn call(
-        &self,
-        _service_context: ServiceContext<()>,
-        _request_context: RequestContext,
-    ) -> ToolResult<Self::Output> {
-        Ok(serde_json::json!({ "value": self.value }))
-    }
-}
-
 // -- Helpers --
-
-fn tool_message_content() -> ChatMessageContent {
-    ChatMessageContent::AssistantMessageParts(vec![
-        AssistantMessagePart::ToolCall {
-            name: TOOL_NAME.to_string(),
-            json: serde_json::json!({ "value": "initial" }),
-            id: TOOL_CALL_ID.to_string(),
-        },
-        AssistantMessagePart::ToolCallResponseJson {
-            name: TOOL_NAME.to_string(),
-            json: serde_json::to_value(UserToolResponse::<serde_json::Value>::PendingUserExecution)
-                .unwrap(),
-            id: TOOL_CALL_ID.to_string(),
-        },
-    ])
-}
 
 pub(super) fn owner() -> MacroUserIdStr<'static> {
     MacroUserIdStr::try_from(OWNER.to_string()).expect("valid user id")
@@ -469,25 +351,8 @@ fn view_receipt(chat_id: &str) -> EntityAccessReceipt<ViewAccessLevel> {
 pub(super) fn build_service<B: MacroEventBroker>(
     repo: StubChatRepo,
     event_broker: B,
-) -> ChatServiceImpl<StubChatRepo, (), StubEntityAccessManagement, B> {
-    ChatServiceImpl::new(
-        repo,
-        Arc::new(AsyncToolCollection::new()),
-        (),
-        StubEntityAccessManagement,
-    )
-    .with_event_broker(event_broker)
-}
-
-fn build_service_with_tools(
-    repo: StubChatRepo,
-) -> ChatServiceImpl<StubChatRepo, (), StubEntityAccessManagement> {
-    ChatServiceImpl::new(
-        repo,
-        Arc::new(AsyncToolCollection::new().add_user_tool::<TestTool, ()>()),
-        (),
-        StubEntityAccessManagement,
-    )
+) -> ChatServiceImpl<StubChatRepo, StubEntityAccessManagement, B> {
+    ChatServiceImpl::new(repo, StubEntityAccessManagement).with_event_broker(event_broker)
 }
 
 fn patch_args(share_permission_updated: bool) -> PatchChatArgs {
@@ -510,197 +375,6 @@ fn patch_args(share_permission_updated: bool) -> PatchChatArgs {
 }
 
 // -- Tests --
-
-#[tokio::test]
-async fn update_tool_call_uses_interim_content_persistence() {
-    let repo = StubChatRepo::with_tool_message();
-    let service = build_service_with_tools(repo.clone());
-
-    service
-        .update_tool_call(
-            owner_receipt(CHAT_ID),
-            MESSAGE_ID,
-            TOOL_CALL_ID,
-            serde_json::json!({ "value": "updated" }),
-        )
-        .await
-        .unwrap();
-
-    assert_eq!(repo.content_updates(), vec![MessageContentUpdate::Interim]);
-}
-
-#[tokio::test]
-async fn update_tool_response_uses_final_content_persistence() {
-    let repo = StubChatRepo::with_tool_message();
-    let service = build_service(repo.clone(), RecordingEventBroker::default());
-
-    service
-        .update_tool_response(
-            owner_receipt(CHAT_ID),
-            MESSAGE_ID,
-            TOOL_CALL_ID,
-            UserToolResponse::UserAction(serde_json::json!({ "result": "done" })),
-        )
-        .await
-        .unwrap();
-
-    assert_eq!(repo.content_updates(), vec![MessageContentUpdate::Final]);
-}
-
-#[tokio::test]
-async fn call_tool_uses_interim_persistence_for_args_and_final_persistence_for_response() {
-    let repo = StubChatRepo::with_tool_message();
-    let service = build_service_with_tools(repo.clone());
-
-    service
-        .call_tool(
-            owner_receipt(CHAT_ID),
-            MESSAGE_ID,
-            TOOL_CALL_ID,
-            Some(serde_json::json!({ "value": "updated" })),
-        )
-        .await
-        .unwrap();
-
-    assert_eq!(
-        repo.content_updates(),
-        vec![MessageContentUpdate::Interim, MessageContentUpdate::Final]
-    );
-}
-
-#[tokio::test]
-async fn reject_tool_call_uses_final_content_persistence() {
-    let repo = StubChatRepo::with_tool_message();
-    let service = build_service(repo.clone(), RecordingEventBroker::default());
-
-    service
-        .reject_tool_call(owner_receipt(CHAT_ID), MESSAGE_ID, TOOL_CALL_ID)
-        .await
-        .unwrap();
-
-    assert_eq!(repo.content_updates(), vec![MessageContentUpdate::Final]);
-}
-
-#[tokio::test]
-async fn create_publishes_chat_created() {
-    let broker = RecordingEventBroker::default();
-    let service = build_service(StubChatRepo::default(), broker.clone());
-
-    let chat_id = service
-        .create(
-            Owner::User(owner()),
-            CreateChatArgs {
-                name: "New Chat".to_string(),
-                project_id: Some(PROJECT_ID.to_string()),
-            },
-        )
-        .await
-        .unwrap();
-    assert_eq!(chat_id, CHAT_ID);
-
-    let events = broker.events();
-    assert_eq!(events.len(), 1);
-    assert_eq!(events[0].topic, "macro.chats");
-    assert_eq!(events[0].key, CHAT_ID);
-    assert_eq!(events[0].envelope["event_type"], "chat.created");
-    let metadata = &events[0].envelope["metadata"];
-    assert_eq!(metadata["chat_id"], CHAT_ID);
-    assert_eq!(metadata["owner"], OWNER);
-    assert_eq!(metadata["name"], "New Chat");
-    assert_eq!(metadata["project_id"], PROJECT_ID);
-}
-
-#[tokio::test]
-async fn create_resolves_share_permission_from_team_default() {
-    use models_permissions::share_permission::access_level::AccessLevel;
-    use models_permissions::share_permission::{LinkShare, TeamLinkShareDefault};
-
-    let repo = StubChatRepo {
-        team_default: Some(TeamLinkShareDefault(Some(LinkShare::Team))),
-        ..StubChatRepo::default()
-    };
-    let service = build_service(repo.clone(), RecordingEventBroker::default());
-
-    service
-        .create(
-            Owner::User(owner()),
-            CreateChatArgs {
-                name: "New Chat".to_string(),
-                project_id: None,
-            },
-        )
-        .await
-        .unwrap();
-
-    let permission = repo
-        .received_share_permission
-        .lock()
-        .unwrap()
-        .clone()
-        .unwrap();
-    assert_eq!(permission.link_share, Some(LinkShare::Team));
-    assert_eq!(permission.link_share_access_level, Some(AccessLevel::View));
-}
-
-#[tokio::test]
-async fn create_uses_chat_default_without_team() {
-    use models_permissions::share_permission::LinkShare;
-    use models_permissions::share_permission::access_level::AccessLevel;
-
-    let repo = StubChatRepo::default();
-    let service = build_service(repo.clone(), RecordingEventBroker::default());
-
-    service
-        .create(
-            Owner::User(owner()),
-            CreateChatArgs {
-                name: "New Chat".to_string(),
-                project_id: None,
-            },
-        )
-        .await
-        .unwrap();
-
-    let permission = repo
-        .received_share_permission
-        .lock()
-        .unwrap()
-        .clone()
-        .unwrap();
-    assert_eq!(permission.link_share, Some(LinkShare::Public));
-    assert_eq!(permission.link_share_access_level, Some(AccessLevel::View));
-}
-
-#[tokio::test]
-async fn create_disables_link_share_when_team_turned_it_off() {
-    use models_permissions::share_permission::TeamLinkShareDefault;
-
-    let repo = StubChatRepo {
-        team_default: Some(TeamLinkShareDefault(None)),
-        ..StubChatRepo::default()
-    };
-    let service = build_service(repo.clone(), RecordingEventBroker::default());
-
-    service
-        .create(
-            Owner::User(owner()),
-            CreateChatArgs {
-                name: "New Chat".to_string(),
-                project_id: None,
-            },
-        )
-        .await
-        .unwrap();
-
-    let permission = repo
-        .received_share_permission
-        .lock()
-        .unwrap()
-        .clone()
-        .unwrap();
-    assert_eq!(permission.link_share, None);
-    assert_eq!(permission.link_share_access_level, None);
-}
 
 #[tokio::test]
 async fn copy_chat_resolves_share_permission_from_team_default() {
@@ -746,34 +420,6 @@ async fn copy_chat_publishes_chat_copied_keyed_by_new_chat() {
     assert_eq!(metadata["source_chat_id"], CHAT_ID);
     assert_eq!(metadata["owner"], OWNER);
     assert_eq!(metadata["name"], "Source Chat Copy");
-}
-
-#[tokio::test]
-async fn create_publishes_bot_owner_event() {
-    let bot_owner = Owner::Bot(bot_id::BotId::TEST_A);
-    let repo = StubChatRepo::default();
-    let broker = RecordingEventBroker::default();
-    let service = build_service(repo.clone(), broker.clone());
-
-    service
-        .create(
-            bot_owner.clone(),
-            CreateChatArgs {
-                name: "Bot Chat".to_string(),
-                project_id: None,
-            },
-        )
-        .await
-        .unwrap();
-
-    assert_eq!(repo.received_owners(), vec![bot_owner.clone(), bot_owner]);
-    let events = broker.events();
-    assert_eq!(events.len(), 1);
-    assert_eq!(events[0].envelope["event_type"], "chat.created");
-    assert_eq!(
-        events[0].envelope["metadata"]["owner"],
-        "bot|00000000-0000-0000-0000-00000000b07a"
-    );
 }
 
 #[tokio::test]
@@ -916,7 +562,6 @@ async fn failing_repo_calls_emit_no_events() {
     let broker = RecordingEventBroker::default();
     let service = build_service(
         StubChatRepo {
-            fail_create: true,
             fail_copy_chat: true,
             fail_delete: true,
             fail_permanently_delete: true,
@@ -927,18 +572,6 @@ async fn failing_repo_calls_emit_no_events() {
         broker.clone(),
     );
 
-    assert!(
-        service
-            .create(
-                Owner::User(owner()),
-                CreateChatArgs {
-                    name: "New Chat".to_string(),
-                    project_id: None,
-                },
-            )
-            .await
-            .is_err()
-    );
     assert!(service.copy_chat(view_receipt(CHAT_ID)).await.is_err());
     assert!(service.delete(owner_receipt(CHAT_ID)).await.is_err());
     assert!(
@@ -965,18 +598,6 @@ async fn broker_scheduling_failure_does_not_fail_the_call() {
         RecordingEventBroker::failing(),
     );
 
-    assert!(
-        service
-            .create(
-                Owner::User(owner()),
-                CreateChatArgs {
-                    name: "New Chat".to_string(),
-                    project_id: None,
-                },
-            )
-            .await
-            .is_ok()
-    );
     assert!(service.copy_chat(view_receipt(CHAT_ID)).await.is_ok());
     assert!(service.delete(owner_receipt(CHAT_ID)).await.is_ok());
     assert!(

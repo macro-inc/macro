@@ -2,8 +2,6 @@ use crate::domain::models::{
     ChatResponse, CopyChatArgs, CreateChatArgs, GetChatResponse, PatchChatArgs,
     PatchChatMessageArgs, PatchChatRepoArgs, Result,
 };
-use agent::types::ChatMessageContent;
-use ai_toolset::tool_object::UserToolResponse;
 use attachment::FormattedParts;
 use entity_access::domain::models::{
     EditAccessLevel, EntityAccessReceipt, OwnerAccessLevel, ViewAccessLevel,
@@ -119,29 +117,6 @@ pub trait ChatRepo: Send + Sync + 'static {
         args: PatchChatMessageArgs,
     ) -> impl std::future::Future<Output = Result<()>> + Send;
 
-    /// Get the content of a single message by ID
-    fn get_message_content(
-        &self,
-        chat_id: &str,
-        message_id: &str,
-    ) -> impl std::future::Future<Output = Result<ChatMessageContent>> + Send;
-
-    /// Update a specific message's final content and chat recency.
-    fn update_message_content(
-        &self,
-        chat_id: &str,
-        message_id: &str,
-        content: &ChatMessageContent,
-    ) -> impl std::future::Future<Output = Result<()>> + Send;
-
-    /// Persist interim message content without updating chat recency.
-    fn update_interim_message_content(
-        &self,
-        chat_id: &str,
-        message_id: &str,
-        content: &ChatMessageContent,
-    ) -> impl std::future::Future<Output = Result<()>> + Send;
-
     /// Store the resolved (AI-facing) representation of a user message.
     fn store_resolved_message(
         &self,
@@ -161,13 +136,6 @@ pub trait ChatRepo: Send + Sync + 'static {
 /// Handlers depend on this trait rather than [`ChatRepo`] directly.
 /// The default implementation is [`super::service::ChatServiceImpl`].
 pub trait ChatService: Send + Sync + 'static {
-    /// Create a new chat, returning the chat ID.
-    fn create(
-        &self,
-        owner: Owner,
-        args: CreateChatArgs,
-    ) -> impl std::future::Future<Output = Result<String>> + Send;
-
     /// Get a chat with messages, web citations, and the user's access level.
     fn get_chat(
         &self,
@@ -216,39 +184,4 @@ pub trait ChatService: Send + Sync + 'static {
         &self,
         entity_access_receipt: EntityAccessReceipt<EditAccessLevel>,
     ) -> impl std::future::Future<Output = Result<SharePermissionV2>> + Send;
-
-    /// Update a tool call's arguments after validation.
-    fn update_tool_call(
-        &self,
-        entity_access_receipt: EntityAccessReceipt<OwnerAccessLevel>,
-        message_id: &str,
-        tool_call_id: &str,
-        new_args: serde_json::Value,
-    ) -> impl std::future::Future<Output = Result<()>> + Send;
-
-    /// Update a tool response.
-    fn update_tool_response(
-        &self,
-        entity_access_receipt: EntityAccessReceipt<OwnerAccessLevel>,
-        message_id: &str,
-        tool_call_id: &str,
-        response: UserToolResponse<serde_json::Value>,
-    ) -> impl std::future::Future<Output = Result<()>> + Send;
-
-    /// Execute a pending tool call. Optionally update its arguments first.
-    fn call_tool(
-        &self,
-        entity_access_receipt: EntityAccessReceipt<OwnerAccessLevel>,
-        message_id: &str,
-        tool_call_id: &str,
-        args: Option<serde_json::Value>,
-    ) -> impl std::future::Future<Output = Result<serde_json::Value>> + Send;
-
-    /// Reject a pending tool call.
-    fn reject_tool_call(
-        &self,
-        entity_access_receipt: EntityAccessReceipt<OwnerAccessLevel>,
-        message_id: &str,
-        tool_call_id: &str,
-    ) -> impl std::future::Future<Output = Result<()>> + Send;
 }
