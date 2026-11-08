@@ -1,5 +1,6 @@
 import { decodeHostPacket } from '../../../lexical-conformance/diff/host-packet';
 import * as wasm from '../../../lexical-conformance/pkg/web/lexical_conformance_wasm';
+import { foreignHooks } from '../hooks.generated';
 import type { ShimBackend } from './index';
 
 let initialized = false;
@@ -46,7 +47,15 @@ export function initializeConformance(
   if (wasm.upstream_version() !== expectedVersion)
     throw new Error('conformance upstream version mismatch');
   api = new Map(wasm.EditorHandle.api_index().map((name, id) => [name, id]));
-  hookNames = Object.freeze(wasm.foreign_hook_index());
+  const modelHooks = wasm.foreign_hook_index();
+  if (
+    JSON.stringify(modelHooks) !==
+    JSON.stringify(foreignHooks.map((hook) => hook.name))
+  )
+    throw new Error(
+      'conformance foreign hooks differ from the upstream inventory'
+    );
+  hookNames = Object.freeze(modelHooks);
   initialized = true;
 }
 

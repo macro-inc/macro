@@ -9,6 +9,7 @@ The package is being assembled; the full lexical export surface is not ready.
 
 - `src/backend/conformance.ts`: the only backend and the only runtime WASM import.
 - `src/backend/index.ts`: model boundary; packet types come from Rust generation.
+- `scripts/derive-hooks.ts`: checksum-pinned upstream AST inventory versus the actual model hook enum; generates `src/hooks.generated.ts`.
 - `src/handles.ts`: per-editor weak captured-node identity and collected-version ownership.
 - `src/update.ts`: JS update scheduling, batching and callback phases.
 - `src/__tests__/setup.ts`: synchronous pinned WASM initialization and editor leak checks.
@@ -46,4 +47,6 @@ Use selection.test.ts to check captured selection fields across suspension, repl
 
 Keep mutations.test.ts literals tied to the pinned upstream observations; assert D-6/D-7 differences as specified errors, not upstream success cases.
 
-Use backend foreignHookIndex for override-bit order; hook names come from the model trait, and upstream derivation/hosting checks remain required separately.
+Use backend foreignHookIndex for override-bit order; the model trait and independent upstream inventory must agree. `bun run check` verifies committed hook evidence as well as TypeScript. Regenerate with `bun run derive-hooks` after a source or contract change; per-hook hosting tests remain a separate requirement.
+
+Derive polymorphic methods from actual inherited overrides, distinguishing static/instance membership and nearest base kind; ordinary calls to native accessors do not make hooks. Resolve import aliases and reexports with the source compiler, never a flat class-name map. Keep the three S4 reserved extension points and the two explicitly required ListItemNode predicates even when the pinned sources lack overrides or callers. Keep native root traversal and S1 non-hooks out of the virtual set.
