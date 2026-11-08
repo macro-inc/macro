@@ -66,6 +66,7 @@ impl Hash for ForeignRecordIdentity {
 /// separate guarded read dispatcher; this value grants no mutation capability.
 pub struct ForeignReadSnapshot {
     state: EditorState,
+    native_calls: Option<Arc<super::native::NativeCalls>>,
     previous_selection: Option<Selection>,
     composition_key: Option<NodeKey>,
     source_records: crate::state::NodeMap,
@@ -97,6 +98,7 @@ impl Clone for ForeignReadSnapshot {
             .map(Selection::snapshot_for_foreign_read);
         Self {
             state,
+            native_calls: self.native_calls.clone(),
             previous_selection: self
                 .previous_selection
                 .as_ref()
@@ -177,6 +179,9 @@ impl ForeignReadSnapshot {
             .map(Selection::snapshot_for_foreign_read);
         tx.composition_key = self.composition_key;
         tx.foreign_read_only = true;
+        if let Some(calls) = &self.native_calls {
+            tx.foreign_native_calls = calls.clone();
+        }
         tx.foreign_read_sources = Some(self.source_records.clone());
         tx.foreign_read_origin = self.origin.clone();
         tx.foreign_retired_records = self.retired_records.clone();
@@ -198,6 +203,7 @@ impl Read for ForeignReadSnapshot {
         StateRef {
             state: &self.state,
             native_projection: None,
+            foreign_native_calls: self.native_calls.as_ref(),
             source_records: Some(&self.source_records),
             retired_records: Some(&self.retired_records),
             foreign_origin: self.origin.as_ref().map(ReadOrigin::borrowed),
@@ -241,6 +247,7 @@ impl StateRef<'_> {
         }
         Ok(ForeignReadSnapshot {
             state,
+            native_calls: self.foreign_native_calls.cloned(),
             previous_selection: self
                 .previous_selection
                 .map(Selection::snapshot_for_foreign_read),

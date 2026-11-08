@@ -22,6 +22,8 @@ pub struct Transaction<'editor> {
     #[cfg(feature = "foreign-nodes")]
     pub(crate) foreign_update: Arc<()>,
     #[cfg(feature = "foreign-nodes")]
+    pub(crate) foreign_native_calls: Arc<crate::foreign::native::NativeCalls>,
+    #[cfg(feature = "foreign-nodes")]
     pub(crate) foreign_read_only: bool,
     #[cfg(feature = "foreign-nodes")]
     pub(crate) foreign_read_sources: Option<crate::state::NodeMap>,
@@ -70,6 +72,8 @@ impl<'editor> Transaction<'editor> {
         Self {
             #[cfg(feature = "foreign-nodes")]
             foreign_update: Arc::new(()),
+            #[cfg(feature = "foreign-nodes")]
+            foreign_native_calls: Arc::default(),
             #[cfg(feature = "foreign-nodes")]
             foreign_read_only: false,
             #[cfg(feature = "foreign-nodes")]
@@ -123,6 +127,8 @@ impl<'editor> Transaction<'editor> {
         StateRef {
             #[cfg(feature = "foreign-nodes")]
             native_projection: self.native_projection.as_ref(),
+            #[cfg(feature = "foreign-nodes")]
+            foreign_native_calls: Some(&self.foreign_native_calls),
             #[cfg(feature = "foreign-nodes")]
             detached_selections: &self.detached,
             #[cfg(feature = "foreign-nodes")]

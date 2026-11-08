@@ -26,6 +26,8 @@ node types, immutable snapshots, transactional tree editing, update processing, 
 - `benches/node_map.rs` measures isolated writes and full keystrokes at three document sizes; read `benches/README.md` before interpreting timings.
 - `src/json.rs` preserves export order and JavaScript number serialization.
 
+- `src/foreign/native.rs`: one-shot native-super scopes shared by owned read captures; skip only the matching outer virtual dispatch.
+
 ## Boundaries
 
 - Use Error::invariant for runtime diagnostic context; static and owned messages display verbatim and share the Invariant classification.
@@ -126,3 +128,7 @@ Capture an existing selection for a foreign host with snapshot_for_foreign_read;
 Apply splice_text through its own check hook and direct text write, without dispatching set_text_content; move_selection edits an existing range in place, preserving its identity and typing attributes.
 
 Move existing text ranges through point edits in select and splice_text so composition follows the old anchor/focus node.
+
+Use with_foreign_native for explicit development native-super dispatch; consume the exact node/hook before entering native behavior so nested virtual calls stay active. Keep scopes update-local and thread-local even when read captures share their owner; drop guards independent of transaction borrows; import/clone lifecycle dispatch needs its own construction scope.
+
+Native-super currently selects the nearest registered native ancestor. Explicit older-prototype targeting (for example a TextNode base method on a TabNode) is still required with the native facade/overlay; do not count this primitive as full native-class hosting acceptance.

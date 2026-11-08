@@ -1,4 +1,5 @@
 //! Development-only runtime node hosting and suspended updates.
+pub(crate) mod native;
 mod pending;
 pub use pending::{ForeignEditorIdentity, ForeignUpdateIdentity, PendingUpdate};
 mod read;
