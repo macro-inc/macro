@@ -7,34 +7,18 @@ use uuid::Uuid;
 #[cfg(test)]
 mod test;
 
-/// A validated document identifier. Historical document ids need not be UUIDs.
-#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
-#[serde(try_from = "String", into = "String")]
-#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
-#[cfg_attr(feature = "json-schema", derive(schemars::JsonSchema))]
-pub struct DocumentId(String);
-
-impl TryFrom<String> for DocumentId {
-    type Error = InvalidParent;
-
-    fn try_from(value: String) -> Result<Self, Self::Error> {
-        if value.is_empty() || value.trim() != value || value.chars().any(char::is_control) {
-            return Err(InvalidParent);
-        }
-        Ok(Self(value))
-    }
-}
-
-impl From<DocumentId> for String {
-    fn from(value: DocumentId) -> Self {
-        value.0
-    }
-}
+pub use document_id::DocumentId;
 
 /// Invalid or unsupported message parent.
 #[derive(Debug, Clone, Copy, thiserror::Error)]
 #[error("invalid message parent")]
 pub struct InvalidParent;
+
+impl From<document_id::InvalidDocumentId> for InvalidParent {
+    fn from(_: document_id::InvalidDocumentId) -> Self {
+        Self
+    }
+}
 
 /// The entity whose permissions and lifecycle govern a message.
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -96,7 +80,7 @@ impl MessageParent {
             | Self::Initiative(id)
             | Self::CrmCompany(id)
             | Self::CrmContact(id) => id.to_string(),
-            Self::Document(id) => id.0.clone(),
+            Self::Document(id) => id.as_str().to_owned(),
         }
     }
 

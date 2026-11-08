@@ -5,6 +5,7 @@ use axum::{
     extract::{Path, State},
     http::StatusCode,
 };
+use document_id::DocumentId;
 use entity_access::domain::ports::EntityAccessService;
 use macro_authorization::{InternalOnly, MacroAuthorizationExtractor, MacroAuthorizationService};
 use model::document::FileType;
@@ -36,7 +37,12 @@ pub async fn content_uploaded_handler<
 ) -> Result<StatusCode, DocumentError> {
     state
         .service
-        .publish_content_uploaded(&document_id, request.file_type, request.document_version_id)
+        .publish_content_uploaded(
+            &DocumentId::parse(&document_id)
+                .map_err(|_| DocumentError::NotFound(document_id.clone()))?,
+            request.file_type,
+            request.document_version_id,
+        )
         .await?;
 
     Ok(StatusCode::OK)
