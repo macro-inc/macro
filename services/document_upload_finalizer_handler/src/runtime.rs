@@ -78,7 +78,7 @@ impl AppContext {
 
         Ok(Self {
             finalizer,
-            lexical_client: LexicalClient::new(internal_api_secret, lexical_service_url),
+            lexical_client: LexicalClient::from_env(internal_api_secret, lexical_service_url)?,
             sync_service_client: SyncServiceClient::new(sync_service_auth_key, sync_service_url),
         })
     }

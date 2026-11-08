@@ -12,6 +12,7 @@ import {
   stack,
 } from '../../packages/shared';
 import { get_coparse_api_vpc } from '../../packages/vpc';
+import { lexicalRouteModesFromBundle } from './lexical-route-modes';
 import { CloudStorageService } from './cloud-storage-service';
 import { DeleteChatHandler } from './delete-chat-handler';
 import { DeleteDocumentHandler } from './delete-document-handler';
@@ -448,7 +449,16 @@ export const docxUnzipHandlerRoleArn = docxUnzipHandler.role.arn;
 export const docxUnzipHandlerName = docxUnzipHandler.lambda.name;
 
 // ------------------------------------------- Document Upload Finalizer -------------------------------------------
+// Lambda has an explicit environment map; copy the nonsecret route policy from
+// the same Doppler-synced configuration used by document storage.
+const lexicalRouteModes = aws.secretsmanager
+  .getSecretVersionOutput({
+    secretId: `/doppler-sync/${pulumi.getProject()}/${stack}/doppler`,
+  })
+  .apply(({ secretString }) => lexicalRouteModesFromBundle(secretString));
+
 const documentUploadFinalizerEnvVars: DocumentUploadFinalizerLambdaEnvVars = {
+  LEXICAL_ROUTE_MODES: lexicalRouteModes,
   DATABASE_URL: pulumi.interpolate`${DATABASE_URL_PROXY}`,
   INTERNAL_API_SECRET_KEY: pulumi.interpolate`${internalApiSecretValue}`,
   SYNC_SERVICE_AUTH_KEY: pulumi.interpolate`${syncServiceAuthKeyValue}`,

@@ -274,10 +274,13 @@ async fn main() -> anyhow::Result<()> {
             tracing::trace!("libpdfium is present");
         }
 
-        let lexical_client = Arc::new(LexicalClient::new(
-            config.internal_api_key.to_string(),
-            config.lexical_service_url.clone(),
-        ));
+        let lexical_client = Arc::new(
+            LexicalClient::new(
+                config.internal_api_key.to_string(),
+                config.lexical_service_url.clone(),
+            )
+            .with_route_modes(config.lexical_route_modes.clone()),
+        );
 
         let worker = sqs_worker::SQSWorker::new(
             aws_sdk_sqs::Client::new(&aws_config),

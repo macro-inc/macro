@@ -120,6 +120,9 @@ word docs, Illustrator/Photoshop files).
   migrating (run via `just backfill_markdown_content_location_dev` from this
   crate's `justfile`).
 
+Lexical client startup requires `LEXICAL_ROUTE_MODES`; see the
+[route-switch configuration](../lexical_client/README.md).
+
 ## Checks
 
 - `cargo test -p documents --all-features` (`SQLX_OFFLINE` unset; needs a
