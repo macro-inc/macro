@@ -5,8 +5,10 @@ fn registered_tab_limits_indent_before_rich_text_and_inserts_a_real_tab() -> Res
     let mut editor = Editor::builder(EditorMode::Headless)
         .build()
         .expect("editor");
-    let mut r = Replayer::default();
-    r.rich_text_registered = true;
+    let mut r = Replayer {
+        rich_text_registered: true,
+        ..Default::default()
+    };
     register(&mut r, &json!([{"$ed":0},2]))?;
     let mut tx = editor.transaction();
     let p = tx.create(Paragraph::default())?;
