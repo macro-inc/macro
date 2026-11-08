@@ -843,7 +843,10 @@ impl<'state> StateRef<'state> {
                 json.insert("textStyle".into(), serde_json::json!(data.text_style));
             }
         }
-        if slot.base.kind() != NodeKind::LineBreak {
+        let own_fields = slot.base.kind() != NodeKind::LineBreak;
+        #[cfg(feature = "foreign-nodes")]
+        let own_fields = own_fields || self.foreign_data(key).is_some();
+        if own_fields {
             json.extend(slot.data.to_json()?);
         }
         (v.adjust_export_json)(slot.data.as_any(), NodeView { key, state: self }, &mut json)?;

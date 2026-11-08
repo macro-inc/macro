@@ -7,6 +7,10 @@ impl NodeType for ElementBase {
     const TYPE: &'static str = "";
     const IS_MARKER: bool = true;
     type Kind = ElementKind;
+    fn import_json(_json: &SerializedNode) -> Result<Self, Error> {
+        // Unit markers have no own fields; foreign projections supply a JSON object.
+        Ok(Self)
+    }
 }
 impl ElementNode for ElementBase {
     type Parent = Self;
@@ -175,6 +179,10 @@ impl NodeType for TextBase {
     const TYPE: &'static str = "";
     const IS_MARKER: bool = true;
     type Kind = TextKind;
+    fn import_json(_json: &SerializedNode) -> Result<Self, Error> {
+        // Unit markers have no own fields; foreign projections supply a JSON object.
+        Ok(Self)
+    }
 }
 impl TextNode for TextBase {
     type Parent = Self;
@@ -314,6 +322,10 @@ impl NodeType for DecoratorBase {
     const TYPE: &'static str = "";
     const IS_MARKER: bool = true;
     type Kind = DecoratorKind;
+    fn import_json(_json: &SerializedNode) -> Result<Self, Error> {
+        // Unit markers have no own fields; foreign projections supply a JSON object.
+        Ok(Self)
+    }
 }
 impl DecoratorNode for DecoratorBase {
     type Parent = Self;
@@ -405,6 +417,10 @@ impl NodeType for LineBreakBase {
     const TYPE: &'static str = "";
     const IS_MARKER: bool = true;
     type Kind = LineBreakKind;
+    fn import_json(_json: &SerializedNode) -> Result<Self, Error> {
+        // Unit markers have no own fields; foreign projections supply a JSON object.
+        Ok(Self)
+    }
 }
 impl LineBreakNode for LineBreakBase {
     type Parent = Self;
@@ -473,3 +489,6 @@ impl LineBreakNode for LineBreakBase {
         Ok(tx.create(Paragraph::default())?.key())
     }
 }
+
+#[cfg(all(test, feature = "foreign-nodes"))]
+mod test;
