@@ -77,6 +77,7 @@
 			"packages/graphics",
 			"packages/loro-mirror",
 			"packages/lexical-core",
+			"packages/lexical-wasm-view",
 			"services/ai-editing-worker",
 			"services/bots/anthropic-status-bot",
 			"services/bots/goalert-bot",
