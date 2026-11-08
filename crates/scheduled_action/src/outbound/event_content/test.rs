@@ -324,3 +324,45 @@ fn deleted_documents_say_so_without_content() {
     assert_eq!(value["deleted"], true);
     assert_eq!(value["content"], Value::Null);
 }
+
+#[tokio::test]
+async fn routine_document_excerpt_uses_the_selected_route_in_every_mode() {
+    use lexical_client::test_utils::{FakeLexical, HELLO_DOCUMENT};
+    for mode in ["http", "in_process", "shadow"] {
+        let backend = FakeLexical::new(
+            HELLO_DOCUMENT,
+            vec![(
+                "GET",
+                "/markdown/00000000-0000-0000-0000-000000000000?target=external",
+                json!({"data":"Hello"}),
+            )],
+        )
+        .await;
+        let reader = EventContentAdapter::new(
+            (),
+            (),
+            (),
+            (),
+            (),
+            (),
+            backend.client(&format!("markdown={mode}")),
+        );
+        let mut document = task();
+        assert_eq!(
+            reader
+                .document_markdown(&document.document_id, &document)
+                .await
+                .as_deref(),
+            Some("Hello")
+        );
+        document.file_type = Some("pdf".into());
+        assert!(
+            reader
+                .document_markdown(&document.document_id, &document)
+                .await
+                .is_none()
+        );
+        assert_eq!(backend.requests().len(), usize::from(mode != "in_process"));
+        assert_eq!(backend.raw_reads(), usize::from(mode != "http"));
+    }
+}

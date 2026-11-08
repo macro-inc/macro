@@ -195,7 +195,7 @@ impl SyncRouter {
             io: std::mem::take(&mut self.out.io),
             ..Default::default()
         };
-        let mut flags = output::encode(&output, false, &mut self.output)?;
+        let mut flags = output::encode(&output, false, &mut self.output, None)?;
         if !self.out.to_sessions.is_empty() {
             if self.output.is_empty() {
                 for word in [

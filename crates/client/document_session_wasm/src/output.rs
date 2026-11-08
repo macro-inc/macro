@@ -37,8 +37,13 @@ pub(crate) fn encode(
     output: &SessionOutput,
     terminal: bool,
     buffer: &mut Vec<u8>,
+    correction: Option<lexical_model::Diff>,
 ) -> Result<u32, BoundaryError> {
-    if output.view.is_empty() && output.io.is_empty() && !output.need_peer_ids {
+    if output.view.is_empty()
+        && output.io.is_empty()
+        && !output.need_peer_ids
+        && correction.is_none()
+    {
         buffer.clear();
         return Ok(0);
     }
@@ -233,6 +238,15 @@ pub(crate) fn encode(
         }
         entry(&mut entries, 16, u32::from(m.kind), m.request, &bytes(&m)?);
         count += 1;
+    }
+    if let Some(correction) = correction {
+        flags |= 1;
+        if let Some(previous) = &mut combined {
+            previous.ops.extend(correction.ops);
+            previous.view_text_matches = None;
+        } else {
+            combined = Some(correction);
+        }
     }
     if let Some(combined) = combined {
         combined.encode(&mut diff);

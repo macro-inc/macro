@@ -29,6 +29,7 @@ binding = "DOCUMENT_SNAPSHOT_BUCKET"
 bucket_name = "document-snapshot-bucket-dev"
 
 [vars]
+COMMENT_GATE_MODE = "http"
 INTERNAL_API_SECRET_KEY = "LOCAL_API_KEY"
 SPS_URL = "http://search-processing-service:8080"
 DSS_URL = "http://document_storage_service:8080"
@@ -58,6 +59,7 @@ new_sqlite_classes = ["DocumentSyncSession"]
 name = "sync-service-dev3"
 
 [env.dev.vars]
+COMMENT_GATE_MODE = "http"
 INTERNAL_API_SECRET_KEY = "SYNC_SERVICE_KEY_DEV"
 ENVIRONMENT = "development"
 SPS_URL = "https://dev-gateway.macro.com/search-processing"
@@ -95,6 +97,7 @@ new_sqlite_classes = ["DocumentSyncSession"]
 name = "sync-service-prod2"
 
 [env.prod.vars]
+COMMENT_GATE_MODE = "http"
 INTERNAL_API_SECRET_KEY = "SYNC_SERVICE_KEY_PROD"
 ENVIRONMENT = "production"
 SPS_URL = "https://gateway.macro.com/search-processing"

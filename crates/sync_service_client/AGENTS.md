@@ -42,3 +42,6 @@ Object): document CRUD, state, surfaces, and wakeup calls.
 ## Related
 
 - Rules: `.agents/rules/config-and-service-urls.md`
+
+Raw document fetches propagate the active trace, use the service-compatible five-second
+timeout, and keep backend response content out of tracing events.

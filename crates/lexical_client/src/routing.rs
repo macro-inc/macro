@@ -1,4 +1,5 @@
 //! Startup configuration and shared execution/trace policy.
+pub(crate) mod snapshot;
 use anyhow::Result;
 use nom::Parser;
 use serde::{Deserialize, Deserializer, Serialize};
@@ -247,6 +248,18 @@ pub(crate) async fn dispatch<T: Serialize>(
     http: impl Future<Output = Result<T>>,
     in_process: impl Future<Output = Result<T>>,
 ) -> Result<T> {
+    dispatch_with_snapshot(mode, route, document_id, bytes_in, http, in_process, None).await
+}
+
+pub(crate) async fn dispatch_with_snapshot<T: Serialize>(
+    mode: RouteMode,
+    route: Route,
+    document_id: Option<&str>,
+    bytes_in: usize,
+    http: impl Future<Output = Result<T>>,
+    in_process: impl Future<Output = Result<T>>,
+    snapshot: Option<snapshot::SnapshotInput>,
+) -> Result<T> {
     let span = route.span();
     let group = route.group();
     let route = route.name();
@@ -263,10 +276,37 @@ pub(crate) async fn dispatch<T: Serialize>(
                     let (http, in_process) = tokio::join!(http, in_process);
                     let http_bytes = bytes(&http);
                     let local_bytes = bytes(&in_process);
-                    let equal = comparable(&http, group)
+                    let raw_equal = http_bytes
+                        .as_ref()
+                        .zip(local_bytes.as_ref())
+                        .is_some_and(|(a, b)| a == b);
+                    tracing::Span::current().record("raw_equal", raw_equal);
+                    let mut equal = comparable(&http, group)
                         .as_ref()
                         .zip(comparable(&in_process, group).as_ref())
                         .is_some_and(|(a, b)| a == b);
+                    if let Some(input) = snapshot {
+                        let left = serde_json::to_value(http.as_ref().ok());
+                        let right = serde_json::to_value(in_process.as_ref().ok());
+                        equal = match (left, right) {
+                            (Ok(left), Ok(right)) if http.is_ok() && in_process.is_ok() => {
+                                match crate::in_process::run(move |_| {
+                                    snapshot::compatible(&input, left, right)
+                                })
+                                .await
+                                {
+                                    Ok(equal) => equal,
+                                    Err(_) => {
+                                        tracing::Span::current()
+                                            .record("error.kind", "snapshot_comparison");
+                                        false
+                                    }
+                                }
+                            }
+                            _ => false,
+                        };
+                        tracing::Span::current().record("structural_equal", equal);
+                    }
                     tracing::Span::current().record("equal", equal);
                     record_size(
                         &tracing::Span::current(),
@@ -300,6 +340,8 @@ pub(crate) async fn dispatch<T: Serialize>(
                     route,
                     document_id,
                     equal = tracing::field::Empty,
+                    raw_equal = tracing::field::Empty,
+                    structural_equal = tracing::field::Empty,
                     http_bytes = tracing::field::Empty,
                     in_process_bytes = tracing::field::Empty,
                     outcome = tracing::field::Empty,

@@ -1,5 +1,8 @@
 //! Route-switch facade and the retained lexical-service HTTP transport.
 mod facade;
+mod in_process;
+mod raw_document;
+pub use raw_document::{MissingDocumentSource, RawDocumentSource};
 mod routing;
 pub use facade::LexicalClient;
 pub use routing::{
@@ -8,6 +11,8 @@ pub use routing::{
 pub(crate) static INTERNAL_ACCESS_HEADER: &str = "x-internal-auth-key";
 pub mod notion;
 pub mod parse_markdown;
+#[cfg(feature = "test-utils")]
+pub mod test_utils;
 pub mod types;
 
 #[derive(Clone)]

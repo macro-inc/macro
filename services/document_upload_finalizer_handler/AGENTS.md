@@ -53,3 +53,5 @@ sync at stack update; changing the Lambda policy requires another stack update.
 ## Related
 
 - Skill: `new-service`
+
+The awaited markdown initializer and Lexical native exports share one SyncServiceClient, so the Lambda returns only after the snapshot is stored.
