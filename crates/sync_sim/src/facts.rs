@@ -36,6 +36,15 @@ pub enum TelemetryPhase {
 /// Semantic observations at client, transport, storage and server boundaries.
 #[derive(Clone, Debug, PartialEq, Serialize)]
 pub enum Fact {
+    /// Actual child-reported local peer growth; never inferred from a requested edit.
+    ExternalCommit {
+        /// Foreign peer name.
+        client: ClientName,
+        /// Document route.
+        doc: DocIx,
+        /// Newly created peer operation ranges.
+        spans: Vec<IdSpan>,
+    },
     /// Exact row actually damaged by an injected storage fault, before any adoption.
     WalCorrupted {
         /// Durable storage namespace.
@@ -654,6 +663,8 @@ pub struct ServerPort {
 /// Completed run, including failures and the quiet observation window.
 #[derive(Clone)]
 pub struct Outcome {
+    /// Foreign drivers require their caller-owned command/report transcript for replay.
+    pub external_clients: Vec<ClientName>,
     /// Reproduction configuration; scripts may override network/storage profiles.
     pub config: SimConfig,
     /// Reproduction seed.

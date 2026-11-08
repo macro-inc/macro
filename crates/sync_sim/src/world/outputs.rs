@@ -172,6 +172,15 @@ impl Sim {
                     }
                 }
                 IoEffect::ChatterPost(message) => {
+                    match &message {
+                        ChatterMessage::Update(bytes) => {
+                            self.external_native_chatter(name, false, bytes)
+                        }
+                        ChatterMessage::Awareness(bytes) => {
+                            self.external_native_chatter(name, true, bytes)
+                        }
+                        ChatterMessage::Closing(_) => {}
+                    }
                     let Some(client) = self.clients.get(name) else {
                         continue;
                     };

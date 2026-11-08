@@ -299,6 +299,9 @@ impl Sim {
             return self.router_deliver(&profile, key, direction, delivery);
         }
         if direction == Direction::ToClient {
+            if self.external_deliver(&key.0, delivery.packet.clone()) {
+                return Ok(());
+            }
             if let Packet::Binary(frame) = &delivery.packet
                 && delivery.kind == FrameKind::Ack
                 && self.clients.get(&key.0).is_some_and(|client| {
@@ -636,6 +639,9 @@ impl Sim {
         // Close callbacks run while the native runtime still lists the socket.
         if let Some(socket) = socket {
             self.server_input(doc, Input::Runtime(ServerInput::Close(socket.clone())))?;
+        }
+        if self.external_closed(&key.0, code) {
+            return Ok(());
         }
         self.input(
             &key.0,

@@ -27,6 +27,7 @@ mod client;
 pub use client::SimClient;
 mod world;
 pub use world::Sim;
+pub use world::external::{ExternalEvent, ExternalIdentity};
 /// Fact-based safety and liveness queries; no running-world access.
 pub mod invariants;
 

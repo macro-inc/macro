@@ -16,6 +16,7 @@ clients and real `sync_server_core::Room` callbacks over `sync_server_sim` ports
 - `src/defaults.rs`: host-supplied production session policies.
 - `src/replay.rs`: exact replay and first-differing-event/port/final diagnostics.
 - `src/source.rs`: complete literal Rust reproductions, including every policy clock.
+- `src/world/external.rs`: pure ports for caller-owned TS drivers, no shadow SyncCore.
 - `tests/stories/COVERAGE.md`: GenericSurface story/S7 map and pending editor producers.
 - `src/stats.rs`: fact-derived coverage counters; runtime counters retain actual queue/handle timing.
 - `src/invariants.rs`: queries over the immutable Outcome facts.
@@ -94,3 +95,7 @@ Read replicas may retain extra private history, but must dominate server VV; equ
 VVs still require equal content. Keep failed accepted socket halves until their real
 close callback completes, then remove runtime membership. Cancel obsolete directory
 heal timers when faults are explicitly healed.
+
+Mixed TS driver setup, generated IPC, fidelity limits and checks are documented in
+[`tooling/sync-sim/AGENTS.md`](../../tooling/sync-sim/AGENTS.md). Native Outcome replay
+rejects foreign-driver runs without the caller's complete command/report transcript.
