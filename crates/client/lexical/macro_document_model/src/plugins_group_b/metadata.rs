@@ -1,0 +1,66 @@
+//! Document version policy; notifications are projected from root state by the view.
+use super::*;
+use serde_json::{Value, json};
+use std::sync::Arc;
+
+/// Current stored document schema version, synchronized with the web version counter.
+pub const DOCUMENT_VERSION: f64 = 10.0;
+/// Source-compatible document metadata parser, isolated to live application surfaces.
+pub static DOCUMENT_METADATA: StateKey<Arc<Value>> = StateKey::new("documentMetadata", |value| {
+    let Some(value) = value.filter(|value| value.is_object() || value.is_array()) else {
+        return Arc::new(json!({"version": -1}));
+    };
+    let version = value
+        .get("version")
+        .filter(|value| value.is_number())
+        .cloned()
+        .unwrap_or(json!(-1));
+    let tags = value
+        .get("environmentTags")
+        .and_then(Value::as_array)
+        .map(|tags| Value::Array(tags.iter().filter(|tag| tag.is_string()).cloned().collect()))
+        .unwrap_or(Value::Null);
+    Arc::new(json!({"version": version, "environmentTags": tags}))
+});
+
+pub(super) fn register(builder: EditorBuilder) -> EditorBuilder {
+    builder.plugin(Metadata)
+}
+struct Metadata;
+impl Plugin for Metadata {
+    fn name(&self) -> &'static str {
+        "group-b.document-metadata"
+    }
+    fn commands(&self) -> &[CommandRegistration] {
+        &[]
+    }
+    fn handle(&self, _: &mut Transaction<'_>, _: &Command) -> Result<Handled, Error> {
+        Ok(Handled::No)
+    }
+    fn after_commit(&self, tx: &mut Transaction<'_>, commit: &Commit) -> Result<(), Error> {
+        if commit.changes.mutations.is_empty() {
+            return Ok(());
+        }
+        let previous = commit
+            .prev
+            .view()
+            .get_state(NodeKey::ROOT, &DOCUMENT_METADATA)?;
+        if previous
+            .get("version")
+            .and_then(Value::as_f64)
+            .unwrap_or(-1.0)
+            < DOCUMENT_VERSION
+        {
+            let current = tx.get_state(NodeKey::ROOT, &DOCUMENT_METADATA)?;
+            // The source schedules a follow-up even when another update upgraded metadata.
+            // Avoid a redundant identity-only state write once the value is current.
+            if current.get("version").and_then(Value::as_f64) != Some(DOCUMENT_VERSION) {
+                let mut metadata = current.as_ref().clone();
+                metadata["version"] = json!(DOCUMENT_VERSION);
+                tx.add_tag(UpdateTag::HistoryMerge);
+                tx.set_state(NodeKey::ROOT, &DOCUMENT_METADATA, Arc::new(metadata))?;
+            }
+        }
+        Ok(())
+    }
+}

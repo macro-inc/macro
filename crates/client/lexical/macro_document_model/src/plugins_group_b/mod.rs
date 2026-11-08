@@ -1,7 +1,10 @@
 //! Structure, list, table, media, clipboard and link model plugins.
 use lexical_model::*;
 
+mod diff;
 mod keyboard;
+mod metadata;
+pub use metadata::{DOCUMENT_METADATA, DOCUMENT_VERSION};
 mod structure;
 
 /// Surface block conversion supported by the node-transform plugin.
@@ -50,7 +53,9 @@ pub fn register(builder: EditorBuilder, ty: crate::EditorType) -> EditorBuilder 
     );
     let builder =
         lexical_rich_nodes::normalize_triple_click::register_normalize_triple_click(builder);
-    keyboard::register(structure::register(builder))
+    metadata::register(diff::register(keyboard::register(structure::register(
+        builder,
+    ))))
 }
 
 #[cfg(test)]
