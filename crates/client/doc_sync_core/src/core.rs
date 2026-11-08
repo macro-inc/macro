@@ -91,6 +91,7 @@ struct Convergence {
 struct SinceRequest {
     vv: Vec<u8>,
     expired: bool,
+    recovery_deadline: Option<Millis>,
 }
 #[derive(Clone, Copy)]
 enum SnapshotPurpose {
@@ -112,6 +113,7 @@ struct CommentRequest {
 enum ResetState {
     Flushing { deadline: Millis, rebase: bool },
     Awaiting { rebase: bool },
+    AwaitingHistory { rebase: bool },
     WaitingPeer { rebase: bool, snapshot: Vec<u8> },
 }
 

@@ -20,7 +20,8 @@ clients and real `sync_server_core::Room` callbacks over `sync_server_sim` ports
 - `src/source.rs`: complete literal Rust reproductions, including every policy clock.
 - `src/generate.rs` + `src/generate/`: abstract action strategies, explicit causal scenarios
   and literal workload materialization; positions resolve only in the real world.
-- `tests/random_sessions.rs` and `.regressions`: standard proptest shrinking/persistence.
+- `tests/random_sessions.rs` and `.regressions*`: standard proptest shrinking/persistence.
+- `src/generate/test.rs`: literal minimized revoked memory-writer recovery draw; keep every invariant and replay check enabled.
 - `tests/generator_coverage.rs`: all500 observed runs on four isolated host workers.
 - `src/world/external.rs`: pure ports for caller-owned TS drivers, no shadow SyncCore.
 - `tests/stories/COVERAGE.md`: GenericSurface story/S7 map and pending editor producers.
