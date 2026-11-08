@@ -5,6 +5,8 @@ use lexical_model::*;
 use serde::Deserialize;
 use serde_json::{Value, json};
 use wasm_bindgen::prelude::*;
+mod gate;
+pub use gate::gate_compare;
 mod rich;
 pub use rich::RichHandle;
 mod command;
