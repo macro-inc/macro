@@ -137,3 +137,67 @@ fn tab_in_code_inserts_a_literal_tab_and_keeps_block_indentation_zero() -> Resul
     assert_eq!(editor.state().view().indent(code), 0);
     Ok(())
 }
+
+#[test]
+fn code_edge_arrows_insert_a_caret_before_the_first_block_and_leave_middle_lines_native()
+-> Result<(), Error> {
+    use lexical_rich_nodes::code::CodeHighlightNode;
+    let mut editor =
+        surface::preset_builder_with_mode(EditorType::MarkdownSync, EditorMode::ViewAttached)
+            .build()
+            .expect("surface");
+    let (code, highlight) = editor
+        .update(|tx| {
+            let code = create_custom_code_node(tx, Some("rust"))?;
+            let highlight = tx.create(CodeHighlightNode::default())?;
+            tx.text(highlight)?.set_text_content("first")?;
+            let middle = tx.create(CodeHighlightNode::default())?;
+            tx.text(middle)?.set_text_content("middle")?;
+            let last = tx.create(CodeHighlightNode::default())?;
+            tx.text(last)?.set_text_content("last")?;
+            let br = tx.create(LineBreak {})?;
+            let br2 = tx.create(LineBreak {})?;
+            tx.append(
+                code,
+                &[
+                    highlight.key(),
+                    br.key(),
+                    middle.key(),
+                    br2.key(),
+                    last.key(),
+                ],
+            )?;
+            tx.append(NodeKey::ROOT, &[code.key()])?;
+            tx.select_start(middle)?;
+            Ok((code, highlight))
+        })?
+        .0;
+    let up = Command::Key {
+        command: KeyCommand::ArrowUp,
+        event: None,
+    };
+    assert_eq!(editor.dispatch(&up)?.0, Handled::No);
+    assert_eq!(
+        editor.state().view().first_child(NodeKey::ROOT),
+        Some(code.key())
+    );
+    editor.update(|tx| tx.select_start(code))?;
+    assert_eq!(editor.dispatch(&up)?.0, Handled::Yes);
+    let state = editor.state().view();
+    let first = state.first_child(NodeKey::ROOT).expect("caret block");
+    assert!(state.is::<Paragraph>(first));
+    assert_eq!(
+        editor
+            .state()
+            .selection()
+            .and_then(Selection::as_range)
+            .expect("caret")
+            .anchor
+            .key(),
+        code.key()
+    );
+    editor.update(|tx| tx.select_start(highlight))?;
+    assert_eq!(editor.dispatch(&up)?.0, Handled::Yes);
+    assert_eq!(editor.state().view().children_keys(NodeKey::ROOT)?.len(), 3);
+    Ok(())
+}

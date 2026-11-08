@@ -502,7 +502,25 @@ impl EditorSession {
         };
         let prevent = routed != 0;
         let routed = if routed == 0 {
-            None
+            let command = match event.key.as_ref() {
+                "Enter" => Some(KeyCommand::Enter),
+                "Backspace" => Some(KeyCommand::Backspace),
+                "Delete" => Some(KeyCommand::Delete),
+                "Tab" => Some(KeyCommand::Tab),
+                "Escape" => Some(KeyCommand::Escape),
+                " " => Some(KeyCommand::Space),
+                "ArrowUp" => Some(KeyCommand::ArrowUp),
+                "ArrowDown" => Some(KeyCommand::ArrowDown),
+                "ArrowLeft" => Some(KeyCommand::ArrowLeft),
+                "ArrowRight" => Some(KeyCommand::ArrowRight),
+                "Home" => Some(KeyCommand::MoveToStart),
+                "End" => Some(KeyCommand::MoveToEnd),
+                _ => None,
+            };
+            command.map(|command| Command::Key {
+                command,
+                event: Some(event.clone()),
+            })
         } else {
             Some(editor_input::command(routed, 0, 0, None).map_err(js)?)
         };

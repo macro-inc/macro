@@ -1,5 +1,6 @@
 //! Code commands and scoped selection; token painting remains exclusively in the view.
 use super::*;
+mod navigation;
 use crate::nodes::{CustomCodeNode, create_custom_code_node, set_custom_code};
 use lexical_rich_nodes::code::{CodeNode, indent::*};
 
@@ -33,7 +34,17 @@ pub(super) fn decode(name: &str, json: &str, generation: u32) -> Result<Option<C
 pub(super) fn register(builder: EditorBuilder) -> EditorBuilder {
     builder.plugin(Code)
 }
-static COMMANDS: [CommandRegistration; 6] = [
+static COMMANDS: [CommandRegistration; 8] = [
+    CommandRegistration {
+        command: CommandKind::Key(KeyCommand::ArrowUp),
+        priority: CommandPriority::Low,
+        placement: Placement::After,
+    },
+    CommandRegistration {
+        command: CommandKind::Key(KeyCommand::ArrowDown),
+        priority: CommandPriority::Low,
+        placement: Placement::After,
+    },
     CommandRegistration {
         command: CommandKind::Extension(&CODE),
         priority: CommandPriority::Normal,
@@ -82,6 +93,14 @@ impl Plugin for Code {
                 return apply(tx, command);
             }
             Command::SelectAll(_) => return select_all(tx),
+            Command::Key {
+                command: KeyCommand::ArrowUp,
+                ..
+            } => return navigation::arrow(tx, false),
+            Command::Key {
+                command: KeyCommand::ArrowDown,
+                ..
+            } => return navigation::arrow(tx, true),
             Command::Key {
                 command: KeyCommand::Tab,
                 event,
