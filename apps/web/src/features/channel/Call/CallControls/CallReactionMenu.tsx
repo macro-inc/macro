@@ -83,6 +83,7 @@ export function CallReactionRow(props: {
 export function CallReactionMenu(props: {
   onReaction: (emoji: CallReactionEmoji) => void;
   onOpenChange: (open: boolean) => void;
+  compact?: boolean;
 }) {
   const [open, setOpen] = createSignal(false);
   const [trigger, setTrigger] = createSignal<HTMLButtonElement>();
@@ -100,7 +101,7 @@ export function CallReactionMenu(props: {
         ref={setTrigger}
         as={Button}
         variant={open() ? 'accent' : 'secondary'}
-        size="icon-lg"
+        size={props.compact ? 'icon-md' : 'icon-lg'}
         aria-label={t('calls.reactions')}
         tooltip={{
           content: t('calls.reactions'),

@@ -5,6 +5,7 @@ import './call-reactions.css';
 export function CallReactionLayer(props: {
   root: Accessor<HTMLElement | undefined>;
   reactions: CallReaction[];
+  compact?: boolean;
 }) {
   const position = (reaction: CallReaction) => {
     const root = props.root();
@@ -39,12 +40,16 @@ export function CallReactionLayer(props: {
     <div
       class="pointer-events-none absolute inset-0 z-40 overflow-hidden"
       aria-hidden="true"
-      style={{ '--call-reaction-duration': `${CALL_REACTION_LIFETIME_MS}ms` }}
+      style={{
+        '--call-reaction-duration': `${CALL_REACTION_LIFETIME_MS}ms`,
+        '--call-reaction-rise': props.compact ? '48px' : '96px',
+        '--call-reaction-sway': props.compact ? '3px' : '6px',
+      }}
     >
       <For each={props.reactions}>
         {(reaction) => (
           <span
-            class="call-reaction absolute rounded-full bg-surface/80 p-2 text-3xl"
+            class={`call-reaction absolute rounded-full bg-surface/80 ${props.compact ? 'p-1 text-xl' : 'p-2 text-3xl'}`}
             style={{
               ...position(reaction),
               'margin-left': `${((reaction.id * 13) % 33) - 16}px`,

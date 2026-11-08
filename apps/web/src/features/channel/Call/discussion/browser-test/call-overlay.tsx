@@ -12,16 +12,20 @@ import { useHotKeyRoot } from '@core/hotkey/hotkeys';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import type { BlockOrchestrator } from '@core/orchestrator';
 import { EntityProvider } from '@entity';
+import { Popover } from '@kobalte/core/popover';
 import type { NotificationSource } from '@notifications';
 import { authKeys, type UserInfoData } from '@queries/auth/user-info';
 import { queryClient } from '@queries/client';
+import { MemoryRouter, Route } from '@solidjs/router';
 import { QueryClientProvider } from '@tanstack/solid-query';
 import { DragDropProvider } from '@thisbeyond/solid-dnd';
-import { createSignal, Show, Suspense } from 'solid-js';
+import { createSignal, Match, Show, Suspense, Switch } from 'solid-js';
 import { Dynamic, render } from 'solid-js/web';
 import { ChannelTabProvider } from '../../../Channel/ChannelTabContext';
 import type { ChannelTabId } from '../../../Channel/channel-tabs';
 import { ActiveCallHeader } from '../../ActiveCallHeader';
+import { ActiveCallPopover } from '../../ActiveCallPopover';
+import { CallMiniPlayer } from '../../CallMiniPlayer';
 import { CallOverlay } from '../../CallOverlay';
 import { CallDiscussionContent } from '../CallDiscussionContent';
 
@@ -89,36 +93,63 @@ function Fixture() {
                               )}
                             </Show>
                             <Suspense>
-                              <Dynamic
-                                component={
-                                  params.get('baseline') === 'main'
-                                    ? MainCallOverlay
-                                    : CallOverlay
-                                }
-                                onLeave={() => undefined}
-                                showTeamSharing={false}
-                                showChat={params.get('chat') !== 'off'}
-                                discussion={{
-                                  label: () => undefined,
-                                  opensByDefault: () =>
-                                    params.get('view') === 'panel',
-                                  hasUpdates: () =>
-                                    params.get('unread') === 'true',
-                                  render: (panel) => (
-                                    <CallDiscussionContent
-                                      discussion={() => ({
-                                        kind: 'channel_thread',
-                                        channel_id:
-                                          '00000000-0000-7000-8000-00000000c0c0',
-                                        root_id:
-                                          '00000000-0000-7000-8000-0000000ca110',
-                                      })}
-                                      panel={panel}
-                                      onViewChannel={() => undefined}
+                              <Switch>
+                                <Match
+                                  when={params.get('surface') === 'player'}
+                                >
+                                  <CallMiniPlayer
+                                    onCollapse={() => {}}
+                                    onOpenCall={() => {}}
+                                  />
+                                </Match>
+                                <Match
+                                  when={params.get('surface') === 'popover'}
+                                >
+                                  <Popover open>
+                                    <Popover.Anchor>
+                                      <span class="absolute top-20 left-20">
+                                        Call
+                                      </span>
+                                    </Popover.Anchor>
+                                    <ActiveCallPopover
+                                      onOpenCall={() => {}}
+                                      onShowPlayer={() => {}}
                                     />
-                                  ),
-                                }}
-                              />
+                                  </Popover>
+                                </Match>
+                                <Match when={true}>
+                                  <Dynamic
+                                    component={
+                                      params.get('baseline') === 'main'
+                                        ? MainCallOverlay
+                                        : CallOverlay
+                                    }
+                                    onLeave={() => undefined}
+                                    showTeamSharing={false}
+                                    showChat={params.get('chat') !== 'off'}
+                                    discussion={{
+                                      label: () => undefined,
+                                      opensByDefault: () =>
+                                        params.get('view') === 'panel',
+                                      hasUpdates: () =>
+                                        params.get('unread') === 'true',
+                                      render: (panel) => (
+                                        <CallDiscussionContent
+                                          discussion={() => ({
+                                            kind: 'channel_thread',
+                                            channel_id:
+                                              '00000000-0000-7000-8000-00000000c0c0',
+                                            root_id:
+                                              '00000000-0000-7000-8000-0000000ca110',
+                                          })}
+                                          panel={panel}
+                                          onViewChannel={() => undefined}
+                                        />
+                                      ),
+                                    }}
+                                  />
+                                </Match>
+                              </Switch>
                             </Suspense>
                           </main>
                         </ChannelTabProvider>
@@ -135,4 +166,12 @@ function Fixture() {
   );
 }
 const root = document.getElementById('root');
-if (root) render(() => <Fixture />, root);
+if (root)
+  render(
+    () => (
+      <MemoryRouter>
+        <Route path="*" component={Fixture} />
+      </MemoryRouter>
+    ),
+    root
+  );

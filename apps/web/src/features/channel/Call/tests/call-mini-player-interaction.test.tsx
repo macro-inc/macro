@@ -9,9 +9,14 @@ vi.mock('../CallContext', () => ({
   useCallContext: () => ({
     activeCallId: () => 'call-1',
     trackVersion: () => 0,
-    room: () => ({ localParticipant: participant }),
+    room: () => ({
+      localParticipant: participant,
+      on: () => {},
+      off: () => {},
+    }),
     remoteParticipants: () => new Map(),
     isLocalSpeaking: () => false,
+    isAudioMuted: () => true,
   }),
 }));
 vi.mock('@queries/call/call', () => ({

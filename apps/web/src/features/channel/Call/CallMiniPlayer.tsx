@@ -1,6 +1,7 @@
 import { t } from '@app/lib/i18n';
 import { usePreference } from '@app/preferences/use-preference';
 import { getDisplayName, tryMacroId } from '@core/user';
+import { fireAndForget } from '@core/util/fireAndForget';
 import ArrowSquareOut from '@icon/system/regular/arrow-square-out.svg';
 import CornersIn from '@icon/system/regular/corners-in.svg';
 import Screencast from '@icon/system/regular/screencast.svg';
@@ -19,6 +20,7 @@ import { Portal } from 'solid-js/web';
 import { useCallContext } from './CallContext';
 import { CallLiveChip } from './CallLiveChip';
 import { CallQuickControls } from './CallQuickControls';
+import { CallReactionLayer } from './CallReactionLayer';
 import {
   type CallPlayerCorner,
   type CallPlayerResizeEdge,
@@ -27,7 +29,9 @@ import {
   resizeCallPlayer,
   selectCallPreview,
 } from './call-mini-player';
+import { createCallReactions } from './call-reactions';
 import { LK_TRACK_SOURCE } from './livekit-loader';
+import { MutedMicrophoneBadge } from './MutedMicrophoneBadge';
 import { TrackView } from './TrackView';
 
 export function CallMiniPlayer(props: {
@@ -35,6 +39,7 @@ export function CallMiniPlayer(props: {
   onOpenCall: () => void;
 }) {
   const call = useCallContext();
+  const reactions = createCallReactions(call.room);
   const record = useLiveCallRecordQuery(() => call.activeCallId() ?? '');
   const [corner, setCorner] = createSignal<CallPlayerCorner>('bottom-right');
   const [position, setPosition] = createSignal<{ x: number; y: number }>();
@@ -359,6 +364,15 @@ export function CallMiniPlayer(props: {
               >
                 <TrackView track={participant().screen} fit="contain" />
               </Show>
+              <MutedMicrophoneBadge
+                muted={participant().local && call.isAudioMuted()}
+                label="You are muted"
+              />
+              <CallReactionLayer
+                root={() => media}
+                reactions={reactions.entries()}
+                compact
+              />
               <span
                 class={cn(
                   'text-sm',
@@ -386,7 +400,13 @@ export function CallMiniPlayer(props: {
             </div>
           )}
         </Show>
-        <CallQuickControls settings controls={['camera', 'screen']} />
+        <CallQuickControls
+          settings
+          controls={['camera', 'screen']}
+          onReaction={(emoji) =>
+            fireAndForget(reactions.send(emoji), 'call-mini-player')
+          }
+        />
         <For
           each={
             [

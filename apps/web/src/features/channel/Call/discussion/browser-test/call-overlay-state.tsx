@@ -114,7 +114,12 @@ window.addEventListener('fixture-reaction', () => {
     JSON.stringify({ version: 1, emoji: '👍' })
   );
   for (const listener of listeners.get('dataReceived') ?? [])
-    listener(payload, participants[0], undefined, 'macro.call.reaction.v1');
+    listener(
+      payload,
+      participants[0] ?? { identity: 'macro|member@example.com' },
+      undefined,
+      'macro.call.reaction.v1'
+    );
 });
 const call = {
   activeCallId: () => callId,

@@ -10,7 +10,9 @@ import { Button } from '@ui';
 import { Show } from 'solid-js';
 import { useCallContext } from './CallContext';
 import { CallMediaControls } from './CallControls/CallMediaControls';
+import { CallReactionMenu } from './CallControls/CallReactionMenu';
 import { CallSharingMenu } from './CallControls/CallSharingMenu';
+import type { CallReactionEmoji } from './call-reactions';
 import { LK_TRACK_SOURCE } from './livekit-loader';
 import { useActiveCallCompanion } from './use-active-call-companion';
 import { useActiveCallTeamShare } from './use-toggle-share-with-team';
@@ -23,6 +25,7 @@ export function CallQuickControls(props: {
   size?: 'icon-md' | 'icon-lg';
   channelName?: string;
   settings?: boolean;
+  onReaction?: (emoji: CallReactionEmoji) => void;
 }) {
   const call = useCallContext();
   const sharing = useActiveCallTeamShare();
@@ -54,6 +57,13 @@ export function CallQuickControls(props: {
         onToggle={() => fireAndForget(sharing.toggle(), 'call-quick-controls')}
         onOpenChange={() => {}}
       />
+    </Show>
+  );
+  const ReactionControl = () => (
+    <Show when={props.onReaction}>
+      {(send) => (
+        <CallReactionMenu compact onReaction={send()} onOpenChange={() => {}} />
+      )}
     </Show>
   );
   return (
@@ -115,6 +125,7 @@ export function CallQuickControls(props: {
             </Button>
           </Show>
           <SharingControl />
+          <ReactionControl />
           <span class="flex-1" />
           <Show when={companion.canLeave()}>
             <Button
@@ -141,6 +152,7 @@ export function CallQuickControls(props: {
         onLeave={() => companion.leave()}
       >
         <SharingControl />
+        <ReactionControl />
       </CallMediaControls>
     </Show>
   );
