@@ -77,6 +77,8 @@ to the requested surface. These are scoped sync JWTs, not app-session tokens.
 - Use Node.js 22.12+/24.x/26+ for Vitest 5; install JS deps with `npm ci`
   (`package-lock.json` is authoritative, not `bun.lock`).
 
+- `COMMENT_GATE_MODE` is required per room (`http`, `in_process`, `shadow`); every checked-in environment defaults to HTTP. Invalid configuration refuses gate checks; shadow returns HTTP and reports only equality.
+
 ## Gotchas
 
 - Keep `loro-crdt` pinned to 1.17.1, matching the root Rust dependency and Bun
