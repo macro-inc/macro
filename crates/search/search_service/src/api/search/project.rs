@@ -21,7 +21,7 @@ pub(in crate::api::search) async fn enrich_projects(
 ) -> Result<Vec<ProjectSearchResponseItemWithMetadata>, SearchError> {
     let results: Vec<opensearch_client::search::model::SearchHit> = results
         .into_iter()
-        .filter(|r| r.entity_type == models_opensearch::SearchEntityType::Projects)
+        .filter(|r| r.entity_type == opensearch_types::SearchEntityType::Projects)
         .collect();
 
     if results.is_empty() {

@@ -4,10 +4,10 @@ use crate::Result;
 use crate::error::OpensearchClientError;
 use crate::search::query::QueryKey;
 use crate::search::query::{TermCombine, generate_terms_must_query};
-use models_opensearch::OpenSearchEntityType;
 use opensearch_query_builder::{
     BoolQueryBuilder, FieldSort, QueryType, Script, ScriptSort, ScriptSortType, SortOrder, SortType,
 };
+use opensearch_types::OpenSearchEntityType;
 
 /// A macro for generating delegation methods that forward calls to an inner field
 /// and return Self to maintain builder pattern chainability.

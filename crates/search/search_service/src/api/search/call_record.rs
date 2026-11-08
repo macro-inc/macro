@@ -22,7 +22,7 @@ pub(in crate::api::search) async fn enrich_call_records(
 ) -> Result<Vec<CallRecordSearchResponseItemWithMetadata>, SearchError> {
     let results: Vec<SearchHit> = results
         .into_iter()
-        .filter(|r| r.entity_type == models_opensearch::SearchEntityType::CallRecords)
+        .filter(|r| r.entity_type == opensearch_types::SearchEntityType::CallRecords)
         .collect();
 
     if results.is_empty() {

@@ -18,7 +18,6 @@ use crm::domain::auth::CrmTeamReceipt;
 use entity_access::domain::models::MemberTeamRole;
 use macro_authorization::{MacroAuthorizationExtractor, MacroUserAuthentication, UserOrInternal};
 use macro_user_id::{lowercased::Lowercase, user_id::MacroUserId};
-use models_opensearch::SearchEntityType;
 use models_search::unified::SearchEntityFilters;
 use models_search::{
     MatchType, SearchOn, SimpleSearchResponse, TermMatching, unified::UnifiedSearchRequest,
@@ -31,6 +30,7 @@ use opensearch_client::search::documents::{
 };
 use opensearch_client::search::model::SearchHit;
 use opensearch_client::search::unified::UnifiedSearchArgs;
+use opensearch_types::SearchEntityType;
 use shared_types::{response::ErrorResponse, user::UserContext};
 use std::collections::HashSet;
 use tracing::Instrument as _;
@@ -256,7 +256,7 @@ async fn search_content(
     if states.is_empty()
         || !args
             .search_indices
-            .contains(&models_opensearch::OpenSearchEntityType::Emails)
+            .contains(&opensearch_types::OpenSearchEntityType::Emails)
     {
         let (hits, cursor) = ctx.opensearch_client.search_unified(args).await?;
         return Ok(ContentHits {
@@ -388,7 +388,7 @@ fn unified_search_span(
 /// OpenSearch indices it queries plus the sources name-searched outside
 /// OpenSearch that run.
 fn searched_entity_types(
-    indices: &std::collections::HashSet<models_opensearch::OpenSearchEntityType>,
+    indices: &std::collections::HashSet<opensearch_types::OpenSearchEntityType>,
     name_sources: &[(&'static str, bool)],
 ) -> String {
     indices
@@ -739,33 +739,33 @@ async fn search_unified_sources(
         search_indices: {
             let mut indices = std::collections::HashSet::new();
             if !agent_sessions.is_empty() {
-                indices.insert(models_opensearch::OpenSearchEntityType::AgentSessions);
+                indices.insert(opensearch_types::OpenSearchEntityType::AgentSessions);
             }
             if should_include_documents
                 && !(filter_document_response.ids_only
                     && filter_document_response.document_ids.is_empty())
             {
-                indices.insert(models_opensearch::OpenSearchEntityType::Documents);
+                indices.insert(opensearch_types::OpenSearchEntityType::Documents);
             }
             if should_include_chats
                 && !(filter_chat_response.ids_only && filter_chat_response.chat_ids.is_empty())
             {
-                indices.insert(models_opensearch::OpenSearchEntityType::Chats);
+                indices.insert(opensearch_types::OpenSearchEntityType::Chats);
             }
             if email_searchable {
-                indices.insert(models_opensearch::OpenSearchEntityType::Emails);
+                indices.insert(opensearch_types::OpenSearchEntityType::Emails);
             }
             if should_search_channel_messages && !filter_channel_response.channel_ids.is_empty() {
-                indices.insert(models_opensearch::OpenSearchEntityType::Channels);
+                indices.insert(opensearch_types::OpenSearchEntityType::Channels);
             }
             if should_include_call_records && !filter_call_record_response.call_ids.is_empty() {
-                indices.insert(models_opensearch::OpenSearchEntityType::CallRecords);
+                indices.insert(opensearch_types::OpenSearchEntityType::CallRecords);
             }
             if should_include_projects
                 && !(filter_project_response.ids_only
                     && filter_project_response.project_ids.is_empty())
             {
-                indices.insert(models_opensearch::OpenSearchEntityType::Projects);
+                indices.insert(opensearch_types::OpenSearchEntityType::Projects);
             }
             // An event set narrowed to nothing would be rejected by the query
             // builder rather than matching everything, so drop the index.
@@ -773,7 +773,7 @@ async fn search_unified_sources(
                 && !(filter_calendar_event_response.ids_only
                     && filter_calendar_event_response.calendar_event_ids.is_empty())
             {
-                indices.insert(models_opensearch::OpenSearchEntityType::CalendarEvents);
+                indices.insert(opensearch_types::OpenSearchEntityType::CalendarEvents);
             }
             indices
         },
@@ -799,12 +799,12 @@ async fn search_unified_sources(
             unified_search_args.call_record_search_args.mode = CallRecordSearchMode::Name;
             unified_search_args.email_search_args.subject_only = true;
             unified_search_args.search_indices.retain(|i| {
-                *i == models_opensearch::OpenSearchEntityType::Documents
-                    || *i == models_opensearch::OpenSearchEntityType::AgentSessions
-                    || *i == models_opensearch::OpenSearchEntityType::Emails
-                    || *i == models_opensearch::OpenSearchEntityType::Projects
-                    || *i == models_opensearch::OpenSearchEntityType::CallRecords
-                    || *i == models_opensearch::OpenSearchEntityType::CalendarEvents
+                *i == opensearch_types::OpenSearchEntityType::Documents
+                    || *i == opensearch_types::OpenSearchEntityType::AgentSessions
+                    || *i == opensearch_types::OpenSearchEntityType::Emails
+                    || *i == opensearch_types::OpenSearchEntityType::Projects
+                    || *i == opensearch_types::OpenSearchEntityType::CallRecords
+                    || *i == opensearch_types::OpenSearchEntityType::CalendarEvents
             });
         }
         SearchOn::NameContent => {
@@ -815,10 +815,10 @@ async fn search_unified_sources(
             unified_search_args.document_search_args.mode = DocumentSearchMode::Content;
             unified_search_args
                 .search_indices
-                .remove(&models_opensearch::OpenSearchEntityType::Projects);
+                .remove(&opensearch_types::OpenSearchEntityType::Projects);
             unified_search_args
                 .search_indices
-                .remove(&models_opensearch::OpenSearchEntityType::CalendarEvents);
+                .remove(&opensearch_types::OpenSearchEntityType::CalendarEvents);
         }
     }
     let searches_names = matches!(search_on, SearchOn::Name | SearchOn::NameContent);

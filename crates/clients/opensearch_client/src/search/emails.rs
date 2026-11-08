@@ -7,10 +7,10 @@ use crate::{
     },
 };
 
-use models_opensearch::OpenSearchEntityType;
 use opensearch_query_builder::{
     BoolQuery, BoolQueryBuilder, QueryType, SimpleQueryStringQuery, WildcardQuery,
 };
+use opensearch_types::OpenSearchEntityType;
 
 pub(crate) struct EmailSearchConfig;
 

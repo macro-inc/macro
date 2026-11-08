@@ -36,8 +36,8 @@ use crate::{
 use chrono::Utc;
 use models_search_cursor::{SearchCursorOption, SearchMethodCursor};
 
-use models_opensearch::{OpenSearchEntityType, SearchEntityType};
 use opensearch_query_builder::*;
+use opensearch_types::{OpenSearchEntityType, SearchEntityType};
 
 impl UnifiedSearchArgs {
     /// Builds the OpenSearch query JSON for this set of search args.
