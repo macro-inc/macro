@@ -12,6 +12,9 @@ serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true, features = ["preserve_order"] }
 thiserror = { workspace = true }
 
+[build-dependencies]
+syn = { workspace = true }
+
 [dev-dependencies]
 wasm-bindgen-test = { workspace = true }
 libtest-mimic = { workspace = true }

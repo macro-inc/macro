@@ -10,6 +10,7 @@ Development-only schema-2 fixture interpreter for the pinned upstream oracle.
 - `src/config.rs`: strict host/provenance and constructor-reference validation.
 - `src/replay.rs`: operation ordering, identities and callback tapes.
 - `src/api/`: explicit dispatch to model APIs, including caret object identity and metadata.
+- `src/api.rs`: shared fixture/WASM call entry point; `build.rs` derives its sorted API index from dispatcher match arms with syn.
 - `src/snapshot.rs`: full observable-state comparison.
 - `tests/replay_wasm.rs`: complete embedded corpus in wasm-bindgen-test via `just lexical-replay-wasm`.
 - `tests/replay.rs`: one libtest-mimic trial per recorded fixture.

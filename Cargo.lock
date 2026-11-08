@@ -11758,6 +11758,7 @@ dependencies = [
  "libtest-mimic",
  "serde",
  "serde_json",
+ "syn 2.0.117",
  "thiserror 2.0.18",
  "wasm-bindgen-test",
 ]
