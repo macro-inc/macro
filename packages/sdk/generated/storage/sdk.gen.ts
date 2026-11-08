@@ -3619,6 +3619,18 @@ export class Sdk extends HeyApiClient {
     }
 
     /**
+     * Read an initiative's creation, edits, property changes and task membership
+     * changes, newest first.
+     *
+     * Task references require current view access to the task, so a page can hold
+     * fewer records than `limit`, even none. Follow `nextCursor` with the same
+     * window until it is absent.
+     */
+    public getInitiativeActivity<ThrowOnError extends boolean = false>(options: Options<GetInitiativeActivityData, ThrowOnError>): RequestResult<GetInitiativeActivityResponses, GetInitiativeActivityErrors, ThrowOnError> {
+        return (options.client ?? this.client).get<GetInitiativeActivityResponses, GetInitiativeActivityErrors, ThrowOnError>({ url: '/initiatives/{initiative_id}/activity', ...options });
+    }
+
+    /**
      * Read the description of an initiative the caller can view.
      */
     public getInitiativeDescription<ThrowOnError extends boolean = false>(options: Options<GetInitiativeDescriptionData, ThrowOnError>): RequestResult<GetInitiativeDescriptionResponses, GetInitiativeDescriptionErrors, ThrowOnError> {
@@ -4388,17 +4400,5 @@ export class Sdk extends HeyApiClient {
                 ...options.headers
             }
         });
-    }
-
-    /**
-     * Read an initiative's creation, edits, property changes and task membership
-     * changes, newest first.
-     *
-     * Task references require current view access to the task, so a page can hold
-     * fewer records than `limit`, even none. Follow `nextCursor` with the same
-     * window until it is absent.
-     */
-    public getInitiativeActivity<ThrowOnError extends boolean = false>(options: Options<GetInitiativeActivityData, ThrowOnError>): RequestResult<GetInitiativeActivityResponses, GetInitiativeActivityErrors, ThrowOnError> {
-        return (options.client ?? this.client).get<GetInitiativeActivityResponses, GetInitiativeActivityErrors, ThrowOnError>({ url: '/initiatives/{initiative_id}/activity', ...options });
     }
 }
