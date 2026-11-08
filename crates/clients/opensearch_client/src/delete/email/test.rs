@@ -4,7 +4,7 @@ use super::*;
 fn resolves_default_email_destination() {
     assert_eq!(
         resolve_destination(None),
-        models_opensearch::SearchIndex::Emails.as_ref()
+        opensearch_types::SearchIndex::Emails.as_ref()
     );
 }
 

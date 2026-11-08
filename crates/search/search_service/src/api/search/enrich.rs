@@ -1,8 +1,8 @@
 //! This module is responsible for enriching search results with metadata
 
-use models_opensearch::SearchEntityType;
 use models_search::unified::UnifiedSearchResponseItem;
 use opensearch_client::search::model::SearchHit;
+use opensearch_types::SearchEntityType;
 
 use crate::api::{
     context::SearchHandlerState,

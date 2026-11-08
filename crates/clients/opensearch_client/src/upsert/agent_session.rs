@@ -1,5 +1,5 @@
-use models_opensearch::SearchIndex;
 use opensearch::BulkParts;
+use opensearch_types::SearchIndex;
 use serde::Serialize;
 
 use crate::{

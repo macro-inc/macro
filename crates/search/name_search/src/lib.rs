@@ -8,8 +8,8 @@ mod highlight;
 pub use channel::{ChannelNameSearchScope, search_channel_names};
 pub use chat::search_chat_names;
 pub use highlight::highlight_name;
-pub use models_opensearch::SearchEntityType;
 use models_search_cursor::{PaginatedResult, SearchCursorAttributes};
+pub use opensearch_types::SearchEntityType;
 /// Escapes special regex characters in a search term
 pub fn escape_regex(term: &str) -> String {
     let special_chars = [

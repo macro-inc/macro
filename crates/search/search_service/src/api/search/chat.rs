@@ -21,7 +21,7 @@ pub(in crate::api::search) async fn enrich_chats(
 ) -> Result<Vec<ChatSearchResponseItemWithMetadata>, SearchError> {
     let results: Vec<opensearch_client::search::model::SearchHit> = results
         .into_iter()
-        .filter(|r| r.entity_type == models_opensearch::SearchEntityType::Chats)
+        .filter(|r| r.entity_type == opensearch_types::SearchEntityType::Chats)
         .collect();
 
     if results.is_empty() {

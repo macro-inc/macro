@@ -9,7 +9,7 @@ const CALL_URL: &str = "https://macro.com/app/meet/join/0123456789abcdef01234567
 fn hit(entity_id: Uuid) -> SearchHit {
     SearchHit {
         entity_id,
-        entity_type: models_opensearch::SearchEntityType::CalendarEvents,
+        entity_type: opensearch_types::SearchEntityType::CalendarEvents,
         score: Some(1.0),
         highlight: Highlight::default(),
         goto: None,

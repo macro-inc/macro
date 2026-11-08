@@ -1,4 +1,4 @@
-use models_opensearch::SearchIndex;
+use opensearch_types::SearchIndex;
 
 use super::BulkUpsertResult;
 use super::properties::IndexedProperty;

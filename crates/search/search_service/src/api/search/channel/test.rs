@@ -1,6 +1,6 @@
 use chrono::{DateTime, Utc};
-use models_opensearch::SearchEntityType;
 use opensearch_client::search::model::Highlight;
+use opensearch_types::SearchEntityType;
 
 use super::*;
 

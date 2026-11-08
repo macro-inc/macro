@@ -1,5 +1,5 @@
-use models_opensearch::OpenSearchEntityType;
 use opensearch::{Error, http::response::Response};
+use opensearch_types::OpenSearchEntityType;
 
 /// The OpenSearch operation an error came from, one per request the crate sends.
 #[derive(

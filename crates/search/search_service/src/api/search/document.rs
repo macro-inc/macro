@@ -1,7 +1,6 @@
 use crate::api::search::simple::SearchError;
 use indexmap::IndexMap;
 use macro_user_id::user_id::MacroUserIdStr;
-use models_opensearch::SearchEntityType;
 use models_properties::{EntityReference, EntityType};
 use models_search::SearchHighlight;
 use models_search::document::{
@@ -10,6 +9,7 @@ use models_search::document::{
 use models_soup::SoupProperty;
 use name_search::highlight_name;
 use opensearch_client::search::model::SearchGotoContent;
+use opensearch_types::SearchEntityType;
 use sqlx::types::Uuid;
 use std::collections::HashMap;
 use system_properties::SystemPropertyKey;

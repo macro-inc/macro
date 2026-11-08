@@ -6,8 +6,8 @@ use crate::{
     },
 };
 
-use models_opensearch::OpenSearchEntityType;
 use opensearch_query_builder::{BoolQueryBuilder, QueryType};
+use opensearch_types::OpenSearchEntityType;
 
 #[derive(Clone)]
 pub(crate) struct CalendarEventSearchConfig;

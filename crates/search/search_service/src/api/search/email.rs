@@ -24,7 +24,7 @@ pub(in crate::api::search) async fn enrich_emails(
 ) -> Result<Vec<EmailSearchResponseItemWithMetadata>, SearchError> {
     let results: Vec<opensearch_client::search::model::SearchHit> = results
         .into_iter()
-        .filter(|r| r.entity_type == models_opensearch::SearchEntityType::Emails)
+        .filter(|r| r.entity_type == opensearch_types::SearchEntityType::Emails)
         .collect();
 
     if results.is_empty() {

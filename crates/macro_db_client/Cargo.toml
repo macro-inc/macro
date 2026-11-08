@@ -23,7 +23,7 @@ shared_types = { workspace = true }
 entity_kind = { workspace = true }
 model_owner = { workspace = true }
 dcs_types = { workspace = true }
-models_opensearch = { workspace = true }
+opensearch_types = { workspace = true }
 models_permissions = { workspace = true }
 models_team = { workspace = true, optional = true }
 non_empty = { workspace = true }

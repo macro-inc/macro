@@ -26,11 +26,11 @@ highlighting.
 - Not here: the channel naming rule and its SQL → `channels`
   (`src/outbound/channel_name.rs`); content/full-text search →
   `models_search`, `search_service`; the OpenSearch-indexed entity types →
-  `models_opensearch`.
+  `opensearch_types`.
 
 ## Boundaries
 
-- Depends on: `channels` (outbound feature), `models_opensearch`,
+- Depends on: `channels` (outbound feature), `opensearch_types`,
   `models_search_cursor`.
 - Used by: `search_service`.
 

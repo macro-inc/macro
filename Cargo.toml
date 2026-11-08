@@ -860,7 +860,6 @@ model_file_type = { path = "crates/types/model_file_type" }
 model_notifications = { path = "crates/notifications/model_notifications" }
 model_owner = { path = "crates/types/model_owner" }
 model_user = { path = "crates/types/model_user" }
-models_opensearch = { path = "crates/types/models_opensearch" }
 models_pagination = { path = "crates/types/models_pagination" }
 models_permissions = { path = "crates/types/models_permissions" }
 models_properties = { path = "crates/types/models_properties" }
@@ -883,6 +882,7 @@ notification_state = { path = "crates/types/notification_state" }
 onboarding = { path = "crates/accounts/onboarding" }
 opensearch_client = { path = "crates/clients/opensearch_client" }
 opensearch_query_builder = { path = "crates/clients/opensearch_query_builder" }
+opensearch_types = { path = "crates/types/opensearch_types" }
 pipedream_mcp = { path = "crates/ai/pipedream_mcp" }
 pptx_engine = { path = "crates/engines/pptx_engine", default-features = false }
 predicate-index = { path = "crates/predicate_index" }

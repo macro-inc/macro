@@ -40,7 +40,7 @@ readonly_pool = { workspace = true }
 macro_user_id = { workspace = true }
 shared_types = { workspace = true }
 email_types = { workspace = true }
-models_opensearch = { workspace = true }
+opensearch_types = { workspace = true }
 models_search = { workspace = true }
 models_search_cursor = { workspace = true }
 name_search = { workspace = true }

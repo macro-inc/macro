@@ -13181,10 +13181,10 @@ dependencies = [
  "message_id",
  "messages",
  "model_owner",
- "models_opensearch",
  "models_permissions",
  "models_team",
  "non_empty",
+ "opensearch_types",
  "rand 0.9.4",
  "serde",
  "serde_json",
@@ -14109,15 +14109,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "models_opensearch"
-version = "0.1.0"
-dependencies = [
- "serde",
- "strum 0.27.2",
- "workspace-hack",
-]
-
-[[package]]
 name = "models_pagination"
 version = "0.1.0"
 dependencies = [
@@ -14326,8 +14317,8 @@ dependencies = [
  "chrono",
  "macro_db_migrator",
  "macro_user_id",
- "models_opensearch",
  "models_search_cursor",
+ "opensearch_types",
  "regex",
  "serde",
  "sqlx",
@@ -15266,10 +15257,10 @@ dependencies = [
  "h2 0.4.16",
  "hyper 1.9.0",
  "hyper-util",
- "models_opensearch",
  "models_search_cursor",
  "opensearch",
  "opensearch_query_builder",
+ "opensearch_types",
  "reqwest 0.13.4",
  "rustls",
  "serde",
@@ -15290,6 +15281,15 @@ version = "0.1.0"
 dependencies = [
  "serde",
  "serde_json",
+ "workspace-hack",
+]
+
+[[package]]
+name = "opensearch_types"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "strum 0.27.2",
  "workspace-hack",
 ]
 
@@ -18574,13 +18574,13 @@ dependencies = [
  "macro_authorization",
  "macro_db_client",
  "macro_user_id",
- "models_opensearch",
  "models_properties",
  "models_search",
  "models_search_cursor",
  "models_soup",
  "name_search",
  "opensearch_client",
+ "opensearch_types",
  "properties",
  "readonly_pool",
  "rootcause",

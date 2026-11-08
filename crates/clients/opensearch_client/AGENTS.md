@@ -26,7 +26,7 @@ projects.
 
 ## Boundaries
 
-- Depends on: `opensearch_query_builder`, `models_opensearch`,
+- Depends on: `opensearch_query_builder`, `opensearch_types`,
   `models_search_cursor`.
 - Used by: `models_search`, `search_service`,
   `services/document_storage_service`, `services/search_processing_service`.

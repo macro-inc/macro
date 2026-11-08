@@ -29,7 +29,7 @@ pub(in crate::api::search) async fn enrich_calendar_events(
 ) -> Result<Vec<CalendarEventSearchResponseItemWithMetadata>, SearchError> {
     let results: Vec<opensearch_client::search::model::SearchHit> = results
         .into_iter()
-        .filter(|r| r.entity_type == models_opensearch::SearchEntityType::CalendarEvents)
+        .filter(|r| r.entity_type == opensearch_types::SearchEntityType::CalendarEvents)
         .collect();
 
     if results.is_empty() {

@@ -4,7 +4,7 @@ mod test;
 use std::{collections::HashMap, fmt::Display};
 
 use chrono::{DateTime, Utc};
-use models_opensearch::SearchEntityType;
+use opensearch_types::SearchEntityType;
 
 use crate::search::query::Keys;
 

@@ -1,7 +1,7 @@
 use super::*;
 use chrono::{TimeZone, Utc};
-use models_opensearch::SearchEntityType;
 use opensearch_client::search::model::Highlight;
+use opensearch_types::SearchEntityType;
 use sqlx::types::Uuid;
 
 /// Helper to create a TaggedSearchHit for testing

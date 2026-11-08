@@ -13,11 +13,11 @@ use crate::{
     },
 };
 
-use models_opensearch::{OpenSearchEntityType, SearchEntityType};
 use opensearch_query_builder::{
     BoolQueryBuilder, HasChildQuery, InnerHits, MatchPhrasePrefixQuery, MatchPhraseQuery,
     QueryType, ToOpenSearchJson,
 };
+use opensearch_types::{OpenSearchEntityType, SearchEntityType};
 
 /// Relation names for the join field. Kept in sync with the upsert path
 /// in `upsert::call_record`.

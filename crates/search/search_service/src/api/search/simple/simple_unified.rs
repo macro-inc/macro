@@ -486,33 +486,33 @@ pub(in crate::api::search) async fn perform_unified_search(
         search_indices: {
             let mut indices = std::collections::HashSet::new();
             if !agent_sessions.is_empty() {
-                indices.insert(models_opensearch::OpenSearchEntityType::AgentSessions);
+                indices.insert(opensearch_types::OpenSearchEntityType::AgentSessions);
             }
             if should_include_documents
                 && !(filter_document_response.ids_only
                     && filter_document_response.document_ids.is_empty())
             {
-                indices.insert(models_opensearch::OpenSearchEntityType::Documents);
+                indices.insert(opensearch_types::OpenSearchEntityType::Documents);
             }
             if should_include_chats
                 && !(filter_chat_response.ids_only && filter_chat_response.chat_ids.is_empty())
             {
-                indices.insert(models_opensearch::OpenSearchEntityType::Chats);
+                indices.insert(opensearch_types::OpenSearchEntityType::Chats);
             }
             if should_include_emails {
-                indices.insert(models_opensearch::OpenSearchEntityType::Emails);
+                indices.insert(opensearch_types::OpenSearchEntityType::Emails);
             }
             if should_search_channel_messages && !filter_channel_response.channel_ids.is_empty() {
-                indices.insert(models_opensearch::OpenSearchEntityType::Channels);
+                indices.insert(opensearch_types::OpenSearchEntityType::Channels);
             }
             if should_include_call_records && !filter_call_record_response.call_ids.is_empty() {
-                indices.insert(models_opensearch::OpenSearchEntityType::CallRecords);
+                indices.insert(opensearch_types::OpenSearchEntityType::CallRecords);
             }
             if should_include_projects
                 && !(filter_project_response.ids_only
                     && filter_project_response.project_ids.is_empty())
             {
-                indices.insert(models_opensearch::OpenSearchEntityType::Projects);
+                indices.insert(opensearch_types::OpenSearchEntityType::Projects);
             }
             // An event set narrowed to nothing would be rejected by the query
             // builder rather than matching everything, so drop the index.
@@ -520,7 +520,7 @@ pub(in crate::api::search) async fn perform_unified_search(
                 && !(filter_calendar_event_response.ids_only
                     && filter_calendar_event_response.calendar_event_ids.is_empty())
             {
-                indices.insert(models_opensearch::OpenSearchEntityType::CalendarEvents);
+                indices.insert(opensearch_types::OpenSearchEntityType::CalendarEvents);
             }
             indices
         },
@@ -596,12 +596,12 @@ pub(in crate::api::search) async fn perform_unified_search(
                     args.call_record_search_args.mode = CallRecordSearchMode::Name;
                     args.email_search_args.subject_only = true;
                     args.search_indices.retain(|i| {
-                        *i == models_opensearch::OpenSearchEntityType::Documents
-                            || *i == models_opensearch::OpenSearchEntityType::AgentSessions
-                            || *i == models_opensearch::OpenSearchEntityType::Emails
-                            || *i == models_opensearch::OpenSearchEntityType::Projects
-                            || *i == models_opensearch::OpenSearchEntityType::CallRecords
-                            || *i == models_opensearch::OpenSearchEntityType::CalendarEvents
+                        *i == opensearch_types::OpenSearchEntityType::Documents
+                            || *i == opensearch_types::OpenSearchEntityType::AgentSessions
+                            || *i == opensearch_types::OpenSearchEntityType::Emails
+                            || *i == opensearch_types::OpenSearchEntityType::Projects
+                            || *i == opensearch_types::OpenSearchEntityType::CallRecords
+                            || *i == opensearch_types::OpenSearchEntityType::CalendarEvents
                     });
                 }
                 SearchOn::NameContent => {
@@ -611,9 +611,9 @@ pub(in crate::api::search) async fn perform_unified_search(
                 SearchOn::Content => {
                     args.document_search_args.mode = DocumentSearchMode::Content;
                     args.search_indices
-                        .remove(&models_opensearch::OpenSearchEntityType::Projects);
+                        .remove(&opensearch_types::OpenSearchEntityType::Projects);
                     args.search_indices
-                        .remove(&models_opensearch::OpenSearchEntityType::CalendarEvents);
+                        .remove(&opensearch_types::OpenSearchEntityType::CalendarEvents);
                 }
             }
             if args.search_indices.is_empty() {

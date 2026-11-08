@@ -200,7 +200,7 @@
       "source_paths": [
         "services/search_processing_service/**",
         "crates/search/models_search/**",
-        "crates/types/models_opensearch/**",
+        "crates/types/opensearch_types/**",
         "crates/clients/opensearch_client/**",
         "crates/comms/comms_db_client/**"
       ],
