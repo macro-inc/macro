@@ -5,6 +5,7 @@ mod checklist;
 mod code;
 mod diff;
 mod keyboard;
+mod links;
 mod list_insert;
 mod media;
 mod metadata;
@@ -64,6 +65,7 @@ pub fn register(builder: EditorBuilder, ty: crate::EditorType) -> EditorBuilder 
     let builder = code::register(builder);
     let builder = checklist::register(builder);
     let builder = media::register(builder);
+    let builder = links::register(builder, ty);
     let builder = diff::register(builder);
     metadata::register(builder)
 }
@@ -72,6 +74,8 @@ pub fn register(builder: EditorBuilder, ty: crate::EditorType) -> EditorBuilder 
 mod checklist_test;
 #[cfg(test)]
 mod code_test;
+#[cfg(test)]
+mod links_test;
 #[cfg(test)]
 mod media_test;
 #[cfg(test)]
@@ -85,6 +89,9 @@ pub fn decode_command(
     generation: u32,
     event: Option<&KeyEvent>,
 ) -> Result<Option<Command>, Error> {
+    if let Some(command) = links::decode(name, json)? {
+        return Ok(Some(command));
+    }
     if let Some(command) = media::decode(name, json, generation)? {
         return Ok(Some(command));
     }
