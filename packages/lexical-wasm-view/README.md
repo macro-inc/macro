@@ -5,6 +5,15 @@ connects an initialized WASM module, host session options, node views and an
 editable root to the existing collaboration I/O executor. Applications supply
 session identity, transport URLs, authorization and telemetry.
 
+`mountLocalSessionView` uses the same native model, view and executor for local
+composers and read-only content. It starts and seeds an independent document
+with transport, durability and cross-tab chatter disabled. The host loads WASM
+and supplies the session factory for its node/plugin preset and browser platform.
+Local read-only views retain native edit access for host content imports while
+the view is non-editable; this never changes collaborative authorization.
+Close the returned runtime when its owning surface is disposed. Closing twice
+shares one completion and releases the native view before draining the executor.
+
 The flat Diff applier owns immutable mirror records. A zero TextFromView result
 acknowledges exactly the submitted DOM text through that applier. Other results
 carry authoritative Rust text or full repair. Development builds compare mirror
@@ -30,6 +39,8 @@ Production modules import neither Lexical nor the development shim.
 Build `document_session_wasm` before tests. Run `bun run check`, `bun run test`,
 and `bun run test:browser` from this directory. Chromium tests launch a separate
 browser; set `PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH` when using a system browser.
+`local-session.browser.e2e.ts` exercises independent drafts, native undo/redo,
+read-only host import, repeated close and absence of sync/storage effects.
 
 `view.clipboard.paste` reads every MIME entry before loading HTML converters;
 it rejects a stale asynchronous result after selection or document changes.
