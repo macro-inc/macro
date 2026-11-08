@@ -133,6 +133,43 @@ pub(crate) fn call(
                 node_key(a.first().ok_or_else(|| fail("isParentOf target"))?)?
             )));
         }
+        "isSelected" => {
+            let selection = a
+                .first()
+                .filter(|value| !value.is_null() && value.get("$undef").is_none())
+                .map(|value| {
+                    slot_arg(r, value).and_then(|slot| tx.selection_at(slot).map_err(Into::into))
+                })
+                .transpose()?
+                .flatten();
+            return Ok(json!(view.is_selected(key, selection)));
+        }
+        "excludeFromCopy" => {
+            let destination = a
+                .first()
+                .filter(|value| value.get("$undef").is_none())
+                .map(copy_destination)
+                .transpose()?;
+            return Ok(json!(view.exclude_from_copy(key, destination)));
+        }
+        "extractWithChild" => {
+            let child = node_key(a.first().ok_or_else(|| fail("child"))?)?;
+            let selection = a
+                .get(1)
+                .filter(|value| !value.is_null() && value.get("$undef").is_none())
+                .map(|value| {
+                    slot_arg(r, value).and_then(|slot| tx.selection_at(slot).map_err(Into::into))
+                })
+                .transpose()?
+                .flatten();
+            let destination = copy_destination(a.get(2).ok_or_else(|| fail("copy destination"))?)?;
+            return Ok(json!(view.extract_with_child(
+                key,
+                child,
+                selection,
+                destination
+            )));
+        }
         "isAttached" => return Ok(json!(view.is_attached(key))),
         "isLastChild" => return Ok(json!(view.is_last_child(key)?)),
         "isDirty" => {
@@ -392,6 +429,41 @@ pub(crate) fn call(
                 .unwrap_or(SelectionSlot::Active);
             return Ok(json!(tx.collapse_at_start(key, slot)?));
         }
+        "createParentElementNode" => {
+            let parent = tx.create_parent_element(key)?;
+            return r.node(tx.view(), parent);
+        }
+        "insertNewAfter" => {
+            let selection = slot_arg(r, a.first().ok_or_else(|| fail("selection"))?)?;
+            let restore = a.get(1).and_then(Value::as_bool).unwrap_or(true);
+            return tx
+                .insert_new_after(key, selection, restore)?
+                .map(|node| r.node(tx.view(), node))
+                .unwrap_or(Ok(Value::Null));
+        }
+        "resetOnCopyNodeFrom" => {
+            let original = node_key(a.first().ok_or_else(|| fail("original node"))?)?;
+            tx.reset_on_copy(key, original)?;
+            return Ok(undefined());
+        }
+        "updateFromJSON" => {
+            let json = a
+                .first()
+                .and_then(Value::as_object)
+                .ok_or_else(|| fail("serialized node"))?;
+            tx.update_from_json(key, json)?;
+        }
+        "spliceText" => {
+            let start = u32_arg(a, 0, 0)?;
+            let end = start.saturating_add(u32_arg(a, 1, 0)?);
+            let insert = str_arg(a, 2)?;
+            let move_selection = a.get(3).and_then(Value::as_bool).unwrap_or(false);
+            tx.text(key)?.splice_text(
+                Utf16Offset(start)..Utf16Offset(end),
+                insert,
+                move_selection,
+            )?;
+        }
         "append" => {
             let nodes = a.iter().map(node_key).collect::<Result<Vec<_>>>()?;
             tx.append(key, &nodes)?;
@@ -538,6 +610,14 @@ pub(crate) fn call(
         _ => return Err(fail(format!("unmapped API: Node.{method}"))),
     }
     r.node(tx.view(), key)
+}
+
+fn copy_destination(value: &Value) -> Result<CopyDestination> {
+    match value.as_str() {
+        Some("clone") => Ok(CopyDestination::Clone),
+        Some("html") => Ok(CopyDestination::Html),
+        _ => Err(fail("copy destination")),
+    }
 }
 
 #[cfg(test)]

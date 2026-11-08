@@ -95,3 +95,5 @@ Keep element alignment/style/text-format fields distinct from text format/detail
 and preserve null versus undefined when decoding getFormatFlags alignment.
 
 Preserve selection direction memos in host captures, detached-handle transfers and rollback values; clear them only for explicit upstream selection clones and active update clones.
+
+Route indexed text splicing, JSON updates, copy predicates and element creation through the model; retain D-6 surrogate and D-7 unsigned-offset checks at the bridge.
