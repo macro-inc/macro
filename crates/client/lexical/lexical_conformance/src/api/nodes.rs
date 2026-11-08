@@ -98,7 +98,7 @@ pub(crate) fn call(
             return r.node(tx.view(), key);
         }
         "getType" => return Ok(json!(view.type_name(key)?)),
-        "getKey" => return Ok(json!({"$nodeKey":key.index()})),
+        "getKey" => return Ok(key_value(key)),
         "getTextContent" => return Ok(json!(view.text_content(key))),
         "getTextContentSize" => return Ok(json!(view.text_content_size(key).get())),
         "isBefore" => {

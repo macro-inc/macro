@@ -52,4 +52,5 @@ Development-only schema-2 fixture interpreter for the pinned upstream oracle.
 ## Gotchas
 
 - Preserve callback argument/order checks, versioned handles, exact errors and JSON property order.
+- Retain key generations in internal node/key handle values after shared-counter resets; visible keys stay decimal strings.
 - Report pass/fail/ledger totals by source package; ledgered cases do not count toward the 50-fixture core gate.

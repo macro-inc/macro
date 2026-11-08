@@ -492,9 +492,9 @@ pub(crate) fn call(r: &mut Replayer, tx: &mut Transaction<'_>, op: &Value) -> Re
         "lexical/LexicalUtils.getTextDirection" => {
             Ok(serde_json::to_value(text_direction(str_arg(a, 0)?))?)
         }
-        "lexical/LexicalUtils.$getCompositionKey" => Ok(tx
-            .composition_key()
-            .map_or_else(|| Value::Null, |key| json!({"$nodeKey":key.index()}))),
+        "lexical/LexicalUtils.$getCompositionKey" => {
+            Ok(tx.composition_key().map_or_else(|| Value::Null, key_value))
+        }
         "lexical/LexicalUtils.$setCompositionKey" => {
             let key = match a.first() {
                 Some(v) if !v.is_null() => Some(key_arg(r, v)?),
@@ -528,8 +528,8 @@ pub(crate) fn call(r: &mut Replayer, tx: &mut Transaction<'_>, op: &Value) -> Re
     }
 }
 pub(crate) fn key_arg(r: &Replayer, value: &Value) -> Result<NodeKey> {
-    if let Some(key) = value.get("$nodeKey") {
-        return key_index(key);
+    if value.get("$nodeKey").is_some() {
+        return tagged_key(value, "$nodeKey");
     }
     if value.get("$node").is_some() {
         return node_key(value);

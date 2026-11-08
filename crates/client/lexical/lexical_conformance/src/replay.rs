@@ -653,7 +653,7 @@ impl Replayer {
                     .keys
                     .get(string(&object["raw"])?)
                     .ok_or_else(|| fail("unknown key"))?;
-                return Ok(json!({"$nodeKey":key.index()}));
+                return Ok(key_value(*key));
             }
             let mut decoded = serde_json::Map::new();
             for (key, value) in object {
@@ -748,7 +748,7 @@ impl Replayer {
             }
             if object.contains_key("$key") {
                 let key = if actual.get("$nodeKey").is_some() {
-                    key_index(&actual["$nodeKey"])?
+                    tagged_key(actual, "$nodeKey")?
                 } else if let Some(raw) = actual.as_str() {
                     if raw == "root" {
                         NodeKey::ROOT
@@ -828,7 +828,9 @@ impl Replayer {
             .records
             .entry((key, pointer))
             .or_insert((self.version, next));
-        Ok(json!({"$node":key.index(),"identity":identity,"ver":version,"type":node.type_name()}))
+        Ok(
+            json!({"$node":key.index(),"generation":key.generation(),"identity":identity,"ver":version,"type":node.type_name()}),
+        )
     }
     pub(crate) fn selection(&mut self, tx: &mut Transaction<'_>) -> Value {
         if tx.selection().is_none() {
@@ -850,8 +852,23 @@ pub(crate) fn key_index(value: &Value) -> Result<NodeKey> {
         index: u32::try_from(integer(value)?).map_err(|_| fail("key overflow"))?,
     }))
 }
+pub(crate) fn key_value(key: NodeKey) -> Value {
+    json!({"$nodeKey":key.index(),"generation":key.generation()})
+}
+pub(crate) fn tagged_key(value: &Value, tag: &str) -> Result<NodeKey> {
+    let index = key_index(&value[tag])?.index();
+    let generation = value
+        .get("generation")
+        .map(integer)
+        .transpose()?
+        .unwrap_or(0);
+    Ok(NodeKey::from_parts(KeyParts {
+        generation: u32::try_from(generation).map_err(|_| fail("key generation overflow"))?,
+        index,
+    }))
+}
 pub(crate) fn node_key(value: &Value) -> Result<NodeKey> {
-    key_index(&value["$node"])
+    tagged_key(value, "$node")
 }
 
 #[cfg(test)]
@@ -859,7 +876,7 @@ mod test;
 
 fn materialize_keys(value: &mut Value) -> Result<()> {
     if value.get("$nodeKey").is_some() {
-        *value = json!(key_index(&value["$nodeKey"])?.to_string());
+        *value = json!(tagged_key(value, "$nodeKey")?.to_string());
     } else if let Some(object) = value.as_object_mut() {
         for child in object.values_mut() {
             materialize_keys(child)?;
