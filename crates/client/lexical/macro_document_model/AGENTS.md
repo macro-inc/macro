@@ -6,14 +6,18 @@ Portable Macro node payloads, model hooks and exact export/headless/web registri
 Server prompt/reply composers live in crates/macro_document_composers.
 The transformer layer uses the shared lexical_markdown engine; route adapters are separate.
 
+- Sync gate adapters supply explicit clock/entropy through is_comment_only_root_change_with_context so constructor defaults preserve service behavior without ambient host calls.
+
 ## Boundaries
+
+- Compose application plugins in surface.rs with append-only group registration blocks; keep editor.rs registry-only presets free of surface mutations.
 
 - Own unknown HTML node names in exporter errors; opaque type names borrow their snapshot.
 
 - Keep HTML opt-in; parse template fragments with logos starts and nom lexical modes before serializing owned nodes.
 - Keep the two S3 Q7 equation exceptions bound to exact source-row hashes and exact UTF-8 markup; compare Latin-1 exports directly.
 - Match list DOM exports and source attribute order byte-for-byte; never emit stored HTML directly.
-- Restore source own-undefined properties as null only at the snapshot storage boundary; ordinary editor JSON continues to omit them.
+- Restore source own-undefined properties as null at snapshot and live sync storage boundaries using the generated catalog; keep ordinary editor JSON unchanged.
 - Keep wire-properties.json generated from actual source node exports and shared with conformance.
 - Keep all 41 concrete nodes typed, with own fields in upstream exportJSON order.
 - Preserve raw code language/theme when the parent afterCloneFrom hook restores them.
@@ -47,6 +51,9 @@ nested array nulls, unknown nulls and every nonnull value; never erase the under
 Loro fields.
 
 ## Checks
+
+- `bun apps/web/scripts/lexical-group-b-app-blocks.ts --check` checks the Group B pasted app-link block catalog.
+- `bun apps/web/scripts/lexical-group-b-themes.ts --check` checks Group B theme paste validation/migration constants and source cases.
 
 - `TMPDIR=/home/wolf/tmp cargo test -p macro_document_model -j4`
 - `TMPDIR=/home/wolf/tmp cargo test -p lexical_conformance --test replay -j4 -- upstream::lexical-core`; the full source corpus is acceptance, and synthetic JSON oracles supplement it.

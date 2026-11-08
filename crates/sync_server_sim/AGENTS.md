@@ -14,7 +14,7 @@ Native in-memory room capabilities and the golden Worker transcript corpus.
 - `src/replay/golden.rs`: ordered Worker-boundary projection and final storage checks.
 - `src/replay/golden/receipts.rs`: validated native snapshot/receipt correspondence.
 - `src/transcript.rs`: lossless JSONL parsing and comparison helpers.
-- `tests/transcripts/COVERAGE.md`: behavior inventory and representative fixtures.
+- `tests/transcripts/COVERAGE.md`: behavior inventory and 158 Worker fixtures, including the three application comment-root gate modes.
 
 ## Boundaries
 

@@ -72,5 +72,6 @@ macro_tower_layers = { path = "../macro_tower_layers" }
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
 
 [dev-dependencies]
+lexical_client = { path = "../lexical_client", features = ["test-utils"] }
 bot_id = { path = "../bot_id", features = ["test-utils"] }
 macro_db_migrator = { path = "../macro_db_migrator" }

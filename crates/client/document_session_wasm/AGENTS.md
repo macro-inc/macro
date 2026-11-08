@@ -5,11 +5,33 @@
 The production cdylib for portable editor and generic document sessions.
 The generated Bebop schema and flat Diff stream are the only cold wire contract.
 Hot editor inputs use wasm-bindgen primitives and reject lone UTF-16 surrogates.
+TextFromView returns zero only for an exact accepted DOM edit; all other outcomes
+include authoritative text or full view repair, including permission rejection,
+stale/non-text keys and malformed UTF-16. A cold `initialize` rebuilds only the
+view. ABI major 2 includes static type predicate flags and initialize markers.
+View effect kind 9 ends native composition before a bounded remote hold is painted.
+Kind 10 replaces remote cursors: a flag=true marker clears the set, followed by
+point selections with peer key/color in keys[0]/keys[1].
+Kind 11 carries commit tag names in keys for view commit listeners.
+Composition kind 2 clears ownership without admitting DOM text; the view owns
+Android event timing and the 30 ms re-clear. Cold EditorCommand b=1 clears
+composition at the supplied selection before executing the command in one input;
+b=0 preserves composition. EditorKeyDown carries the layout target through
+normal KeyDown listener dispatch before the routed deletion. Primitive keyDown
+inputs dispatch recognized key-specific listeners after generic KeyDown without
+claiming the browser default unless a handler consumes it.
+
+Application command envelopes carry the mirror generation and an optional
+keyboard event; reject stale generations before decoding typed surface commands.
+Use clipboard kind 2 for complete block-drag subtrees; retain ordinary node-selection copy semantics for kinds 0 and 1.
+Use the surface decoder table so migration groups append registrations independently.
 
 ## Start here
 
 - `abi/session.bop`: authoritative ABI, generated constants and messages.
 - `src/machine.rs`: clocks, lifecycle and one handle call per input.
+- `src/macro_editor.rs`: application MarkdownSync surface preset/policy, input clock and continuing per-peer constructor entropy for `EditorSession.createMacro`; group plugin registration lives in macro_document_model/src/surface.rs.
+- Serialize application PluginEvent payloads through surface.rs group encoders into the existing editor-effect envelope; never perform host I/O in the model.
 - `src/output.rs`: owned output envelope and raw framed socket bytes.
 - `src/editor_input.rs`: explicit cold model input adapter; Input has no wire derives.
 - `src/query.rs`: portable HTML, Markdown, clipboard and model queries.
@@ -23,6 +45,7 @@ Hot editor inputs use wasm-bindgen primitives and reject lone UTF-16 surrogates.
 Sync policy, authorization, history and retries remain in document_session/doc_sync_core.
 Hosts own clocks, identities, transport, storage and telemetry. Generated artifacts ship
 with their glue in one bundle. ABI major mismatch is fatal; no fallback decoding.
+Use `createMacro` for application markdown; `create` retains the generic rich-text registry for portable clients and conformance. Keep server composers out of both constructors.
 Carry the exact WAL adoption selection across the ABI, including delivered flags and bytes.
 Compile release WASM tracing at INFO to match HostSubscriber; preserve emitted cold spans and native tracing.
 Preserve keystroke work counters when changing code-generation or post-processing settings.

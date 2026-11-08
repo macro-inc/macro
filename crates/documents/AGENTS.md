@@ -144,3 +144,8 @@ Lexical client startup requires `LEXICAL_ROUTE_MODES`; see the
   Skill: `collab-surface-core`
 
 - Signed document grants carry agent correlation into Sync; editor deduplication and activity debounce include the invocation ID.
+
+Lexical caller mode checks use hand-written `lexical_client/test-utils` boundaries;
+verify HTTP call counts and independent raw-source reads in all three modes.
+The ignored `local_stack_document_snapshot_and_live_export` probe initializes
+and reads through real isolated sync/lexical services; its trace ID is printed.

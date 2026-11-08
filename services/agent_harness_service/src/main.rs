@@ -638,6 +638,11 @@ async fn run() -> anyhow::Result<()> {
     )
     .await
     .context("failed to build the in-memory agent tool context")?;
+    let lexical = tool_context
+        .document_tool_context
+        .lexical_client
+        .as_ref()
+        .clone();
     let cognition_runtime = agent_harness_service::cognition::build(
         agent_harness_service::cognition::config::Config::from_env()?,
         pool.clone(),
@@ -726,12 +731,15 @@ async fn run() -> anyhow::Result<()> {
     let (http_listening, http_ready) = tokio::sync::watch::channel(false);
     let scheduling_runtime = scheduling::build(
         scheduling::config::Config::from_env()?,
-        pool.clone(),
         std::net::SocketAddr::from(([127, 0, 0, 1], config.port)),
-        routine_code,
-        routine_drafts::ModelDrafts::new(Arc::clone(&recorder)),
         http_ready,
-        Arc::clone(&notifications),
+        scheduling::SchedulingDependencies {
+            db: pool.clone(),
+            code: routine_code,
+            drafter: routine_drafts::ModelDrafts::new(Arc::clone(&recorder)),
+            notifications: Arc::clone(&notifications),
+            lexical: lexical.clone(),
+        },
     )
     .await?;
     let scheduling_router = scheduling_runtime.router.clone();

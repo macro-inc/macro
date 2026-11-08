@@ -45,6 +45,8 @@ export interface ExecutorOptions<S extends NativeSession> {
   /** Supplied by the application's servers.ts; the package never invents hosts. */
   socketUrl: (doc: string, token: string, traceparent: string) => string;
   telemetry: SessionTelemetry;
+  /** Observe native connection/save status without changing session policy. */
+  onStatus?: (status: IViewEffectMsg) => void;
   storage?: StorageAdapter;
   router?: SessionRouter;
   sockets?: WebSocketFactory;
@@ -63,7 +65,7 @@ export class SessionExecutor<S extends NativeSession = EditorSession> {
   private readonly storage: StorageAdapter;
   private storageQueue: Promise<void>;
   private busy = false;
-  private queue: (() => number)[] = [];
+  private queue: (() => void)[] = [];
   private closed = false;
   private started = false;
   private closing?: Promise<void>;
@@ -142,16 +144,20 @@ export class SessionExecutor<S extends NativeSession = EditorSession> {
   }
   now = () => this.clock.mono() - this.t0;
   /** All synchronous admission, including view inputs, is serialized here. */
-  run(call: () => number): void {
+  run(call: () => number, after?: (flags: number) => void): void {
     if (this.closed) return;
-    this.queue.push(call);
+    this.queue.push(() => {
+      const flags = call();
+      this.consume(flags);
+      after?.(flags);
+    });
     if (this.busy) return;
     this.busy = true;
     try {
       while (this.queue.length) {
         const call = this.queue.shift();
         if (!call) break;
-        this.consume(call());
+        call();
       }
     } finally {
       this.busy = false;
@@ -181,25 +187,16 @@ export class SessionExecutor<S extends NativeSession = EditorSession> {
   }
   private consume(flags: number): void {
     if (flags & Flag.WakeChanged) {
-      clearTimeout(this.timer);
-      const at = this.session.wakeAt();
-      this.timer =
-        at < 0
-          ? undefined
-          : setTimeout(
-              () =>
-                this.run(() =>
-                  this.session.tick(this.now(), this.clock.wall())
-                ),
-              Math.max(0, at - this.now())
-            );
+      this.scheduleWake();
     }
     if (!(flags & (Flag.View | Flag.Io | Flag.NeedPeerIds | Flag.Error)))
       return;
     const out = decodeOutput(this.session.takeOutput());
     this.options.view.apply(out.view, out.strings, out.viewEffects);
-    for (const effect of out.viewEffects)
+    for (const effect of out.viewEffects) {
+      if (effect.kind === 3) this.options.onStatus?.(effect);
       if (effect.kind === 5 && effect.code === 0) this.stopped?.();
+    }
     for (const effect of out.effects) this.execute(effect);
     if (flags & Flag.NeedPeerIds) {
       const values = crypto.getRandomValues(new BigUint64Array(4));
@@ -215,6 +212,27 @@ export class SessionExecutor<S extends NativeSession = EditorSession> {
         )
       );
     }
+  }
+  private scheduleWake(): void {
+    clearTimeout(this.timer);
+    const at = this.closed ? -1 : this.session.wakeAt();
+    this.timer =
+      at < 0
+        ? undefined
+        : setTimeout(
+            () => {
+              this.timer = undefined;
+              this.run(
+                () => this.session.tick(this.now(), this.clock.wall()),
+                () => {
+                  // Browser timers may run before Rust's integer-millisecond deadline.
+                  // An unchanged deadline must remain armed after that early tick.
+                  if (this.timer === undefined) this.scheduleWake();
+                }
+              );
+            },
+            Math.max(0, Math.ceil(at - this.now()))
+          );
   }
   private execute(effect: Effect): void {
     if (effect.tag === 1) {

@@ -33,12 +33,21 @@ pub(crate) fn entry(out: &mut Vec<u8>, tag: u32, a: u32, b: u32, payload: &[u8])
     out.extend(payload);
     pad(out);
 }
+pub(crate) struct TextCorrection {
+    pub(crate) diff: lexical_model::Diff,
+    pub(crate) initialize: bool,
+}
 pub(crate) fn encode(
     output: &SessionOutput,
     terminal: bool,
     buffer: &mut Vec<u8>,
+    correction: Option<TextCorrection>,
 ) -> Result<u32, BoundaryError> {
-    if output.view.is_empty() && output.io.is_empty() && !output.need_peer_ids {
+    if output.view.is_empty()
+        && output.io.is_empty()
+        && !output.need_peer_ids
+        && correction.is_none()
+    {
         buffer.clear();
         return Ok(0);
     }
@@ -52,6 +61,10 @@ pub(crate) fn encode(
         let mut m = view(0);
         match v {
             ViewEffect::Initialize(InitialView::Editor { diff: d, .. }) | ViewEffect::Diff(d) => {
+                if matches!(v, ViewEffect::Initialize(_)) {
+                    entry(&mut entries, 16, 8, 0, &bytes(&view(8))?);
+                    count += 1;
+                }
                 if let Some(previous) = &mut combined {
                     if d.full_reconcile {
                         *previous = d.clone();
@@ -72,6 +85,9 @@ pub(crate) fn encode(
                     m.paths.push(generic::wire_path(p));
                     generic::flatten(v, String::new(), &mut m.values);
                 }
+            }
+            ViewEffect::EndComposition => {
+                m.kind = 9;
             }
             ViewEffect::Error(error) => {
                 flags |= 16;
@@ -110,6 +126,24 @@ pub(crate) fn encode(
                     _ => wire::SaveReason::None,
                 };
                 m.flag = status.pending_import;
+            }
+            ViewEffect::CommitTags(tags) => {
+                m.kind = 11;
+                m.keys.clone_from(tags);
+            }
+            ViewEffect::Cursors(peers) => {
+                let mut marker = view(10);
+                marker.flag = true;
+                entry(&mut entries, 16, 10, 0, &bytes(&marker)?);
+                count += 1;
+                for peer in peers {
+                    let mut cursor = view(10);
+                    cursor.keys = vec![peer.key.clone(), peer.color.clone()];
+                    cursor.selection = editor_input::view_selection(&peer.selection);
+                    entry(&mut entries, 16, 10, 0, &bytes(&cursor)?);
+                    count += 1;
+                }
+                continue;
             }
             ViewEffect::Presence(peers) => {
                 m.kind = 4;
@@ -216,6 +250,10 @@ pub(crate) fn encode(
                     Effect::PluginEvent(event) => {
                         m.code = 9;
                         m.text = event.name().into();
+                        if let Some(payload) = macro_document_model::surface::event_payload(event)?
+                        {
+                            m.style = serde_json::to_string(&payload)?;
+                        }
                     }
                     Effect::FollowUpFailed { plugin, kind, .. } => {
                         m.code = 10;
@@ -233,6 +271,19 @@ pub(crate) fn encode(
         }
         entry(&mut entries, 16, u32::from(m.kind), m.request, &bytes(&m)?);
         count += 1;
+    }
+    if let Some(correction) = correction {
+        flags |= 1;
+        if correction.initialize {
+            combined = Some(correction.diff);
+            entry(&mut entries, 16, 8, 0, &bytes(&view(8))?);
+            count += 1;
+        } else if let Some(previous) = &mut combined {
+            previous.ops.extend(correction.diff.ops);
+            previous.view_text_matches = None;
+        } else {
+            combined = Some(correction.diff);
+        }
     }
     if let Some(combined) = combined {
         combined.encode(&mut diff);

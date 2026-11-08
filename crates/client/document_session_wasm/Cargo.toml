@@ -13,6 +13,8 @@ bebop-owned-all = []
 
 [dependencies]
 document_session.workspace = true
+macro_document_model = { workspace = true, features = ["html"] }
+rand_chacha.workspace = true
 doc_sync_core.workspace = true
 lexical_model.workspace = true
 lexical_markdown.workspace = true

@@ -1,16 +1,16 @@
 // Execute the real mirror; do not duplicate its diff/container implementation here.
 import {
+	type ContainerID,
 	Cursor,
+	isContainer,
 	LoroDoc,
-	LoroMap,
 	LoroList,
+	LoroMap,
 	LoroMovableList,
 	LoroText,
-	isContainer,
-	type ContainerID,
 } from "loro-crdt";
-import { Mirror } from "../../../../../../../packages/loro-mirror/src/index";
 import { MARKDOWN_LORO_SCHEMA } from "../../../../../../../packages/lexical-core/markdown-loro-schema";
+import { Mirror } from "../../../../../../../packages/loro-mirror/src/index";
 
 type State = ReturnType<Mirror<typeof MARKDOWN_LORO_SCHEMA>["getState"]>;
 type Run = { snapshot?: number[]; states: State[]; updates?: number[][] };
@@ -137,7 +137,7 @@ if (input.relay) {
 		observations.push(observe(docs[event.peer]));
 	}
 	console.log(JSON.stringify(observations));
-	mirrors.forEach((mirror) => mirror.dispose());
+	mirrors.forEach((mirror) => { mirror.dispose(); });
 	process.exit(0);
 }
 if (!input.runs) throw new Error("missing differential runs");

@@ -6,7 +6,8 @@ Vitest version:
 ```sh
 bun install --cwd packages/lexical-conformance --frozen-lockfile
 \cd packages/lexical-conformance
-STEPS=10000 bunx vitest run --config diff/vitest.config.mts
+STEPS=10000 bunx vitest run --config diff/vitest.config.mts --exclude 'diff/collab/**'
+bunx vitest run --config diff/collab.config.mts
 ```
 
 Prebuild the native collab bridge before running its independent profile:

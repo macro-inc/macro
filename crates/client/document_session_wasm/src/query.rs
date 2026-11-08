@@ -1,5 +1,17 @@
 use crate::*;
 use lexical_model::*;
+#[derive(Clone, Copy)]
+pub(crate) enum ExportFlavor {
+    Upstream,
+    Macro,
+}
+pub(crate) fn export_flavor(session: &crate::EditorSession) -> ExportFlavor {
+    if session.surface().registry().get("custom-code").is_some() {
+        ExportFlavor::Macro
+    } else {
+        ExportFlavor::Upstream
+    }
+}
 pub(crate) fn markdown(
     state: &EditorState,
     flavor: u32,
@@ -30,7 +42,29 @@ pub(crate) fn markdown(
         )?)
     }
 }
-fn html(state: &EditorState, selected: bool) -> Result<String, BoundaryError> {
+fn html(
+    state: &EditorState,
+    selected: bool,
+    flavor: ExportFlavor,
+) -> Result<String, BoundaryError> {
+    html_for_selection(
+        state,
+        if selected { state.selection() } else { None },
+        flavor,
+    )
+}
+fn html_for_selection(
+    state: &EditorState,
+    selection: Option<&Selection>,
+    flavor: ExportFlavor,
+) -> Result<String, BoundaryError> {
+    if matches!(flavor, ExportFlavor::Macro) {
+        return Ok(lexical_html::HtmlExporter::new(
+            macro_document_model::html::macro_export_registry(),
+            lexical_html::EditorTheme::default(),
+        )
+        .generate_html_from_nodes(state, selection)?);
+    }
     let registry = lexical_html::register_core(lexical_html::ExportRegistry::builder());
     let registry = [
         "heading",
@@ -53,7 +87,7 @@ fn html(state: &EditorState, selected: bool) -> Result<String, BoundaryError> {
     .build();
     Ok(
         lexical_html::HtmlExporter::new(registry, lexical_html::EditorTheme::default())
-            .generate_html_from_nodes(state, if selected { state.selection() } else { None })?,
+            .generate_html_from_nodes(state, selection)?,
     )
 }
 fn rich_html<'a>(
@@ -142,25 +176,70 @@ fn rich_html<'a>(
     }
     Ok(DomExportOutput::element(element))
 }
-pub(crate) fn clipboard(state: &EditorState) -> Result<wire::ClipboardMsg, BoundaryError> {
-    let entries = lexical_rich_nodes::clipboard::get_clipboard_data_from_selection(
+pub(crate) fn clipboard(
+    state: &EditorState,
+    blocks: bool,
+    flavor: ExportFlavor,
+) -> Result<wire::ClipboardMsg, BoundaryError> {
+    if blocks {
+        return block_clipboard(state, flavor);
+    }
+
+    let plain = state
+        .selection()
+        .map(|selection| selection.text_content(state.view()))
+        .transpose()?
+        .unwrap_or_default();
+    let lexical = lexical_rich_nodes::clipboard::get_lexical_content(
         state.view(),
         "document-session",
         state.selection(),
-    )?;
+    )?
+    .unwrap_or_default();
     Ok(wire::ClipboardMsg {
-        plain: entries.get("text/plain").cloned().unwrap_or_default(),
-        lexical: entries
-            .get("application/x-lexical-editor")
-            .cloned()
-            .unwrap_or_default(),
+        plain,
+        lexical,
         html: if state.selection().is_some() {
-            html(state, true)?
+            html(state, true, flavor)?
         } else {
             String::new()
         },
     })
 }
+/// Block dragging explicitly includes descendants without changing normal copy semantics.
+fn block_clipboard(
+    state: &EditorState,
+    flavor: ExportFlavor,
+) -> Result<wire::ClipboardMsg, BoundaryError> {
+    let Some(Selection::Node(roots)) = state.selection() else {
+        return Err(BoundaryError::Invalid("block clipboard selection"));
+    };
+    let view = state.view();
+    let mut expanded = NodeSelection::new();
+    let mut pending: Vec<_> = roots.keys().collect();
+    while let Some(key) = pending.pop() {
+        if !view.contains(key) || expanded.has(key) {
+            continue;
+        }
+        expanded.add(key);
+        if view.is_element(key) {
+            pending.extend(view.children_keys(key)?);
+        }
+    }
+    let selection = Selection::Node(expanded);
+    let lexical = lexical_rich_nodes::clipboard::get_lexical_content(
+        view,
+        "document-session",
+        Some(&selection),
+    )?
+    .unwrap_or_default();
+    Ok(wire::ClipboardMsg {
+        plain: roots.text_content(view),
+        lexical,
+        html: html_for_selection(state, Some(&selection), flavor)?,
+    })
+}
+
 pub(crate) fn query(
     session: &crate::EditorSession,
     msg: wire::QueryMsg,
@@ -176,7 +255,7 @@ pub(crate) fn query(
         points: vec![],
     };
     match msg.kind {
-        0 => reply.text = html(state, msg.flags & 1 != 0)?,
+        0 => reply.text = html(state, msg.flags & 1 != 0, export_flavor(session))?,
         1 => reply.text = markdown(state, msg.flags & 1, true)?,
         2 => {
             use lexical_rich_nodes::utils::matcher::RegexMatcher;
@@ -240,4 +319,60 @@ pub(crate) fn query(
         _ => return Err(BoundaryError::Invalid("query kind")),
     }
     Ok(reply)
+}
+
+#[cfg(test)]
+mod block_test {
+    use super::*;
+    #[test]
+    fn block_drag_copies_descendants_without_expanding_ordinary_node_copy(
+    ) -> Result<(), BoundaryError> {
+        use lexical_rich_nodes::list::{ListItemNode, ListNode, ListType};
+        let mut editor = macro_document_model::surface::preset_builder_with_mode(
+            macro_document_model::EditorType::MarkdownSync,
+            EditorMode::ViewAttached,
+        )
+        .build()
+        .expect("surface");
+        editor.update(|tx| {
+            let list = tx.create(ListNode::new(ListType::Bullet, 1))?;
+            let a = tx.create(ListItemNode::default())?;
+            let b = tx.create(ListItemNode::default())?;
+            let first = tx.create_text("first")?;
+            let second = tx.create_text("second")?;
+            tx.append(a, &[first.key()])?;
+            tx.append(b, &[second.key()])?;
+            tx.append(list, &[a.key(), b.key()])?;
+            tx.append(NodeKey::ROOT, &[list.key()])?;
+            let mut selection = NodeSelection::new();
+            selection.add(list);
+            tx.set_selection(Some(Selection::Node(selection)))
+        })?;
+        let ordinary = clipboard(editor.state(), false, ExportFlavor::Macro)?;
+        let drag = clipboard(editor.state(), true, ExportFlavor::Macro)?;
+        let normal: serde_json::Value = serde_json::from_str(&ordinary.lexical)?;
+        let full: serde_json::Value = serde_json::from_str(&drag.lexical)?;
+        assert_eq!(
+            normal.pointer("/nodes/0/children"),
+            Some(&serde_json::json!([]))
+        );
+        assert_eq!(
+            full.pointer("/nodes/0/children/0/children/0/text")
+                .and_then(serde_json::Value::as_str),
+            Some("first")
+        );
+        assert_eq!(
+            full.pointer("/nodes/0/children/1/children/0/text")
+                .and_then(serde_json::Value::as_str),
+            Some("second")
+        );
+        assert_eq!(drag.plain, ordinary.plain);
+        assert!(drag.html.contains("first"));
+        assert!(drag.html.contains("second"));
+        assert_eq!(
+            clipboard(editor.state(), false, ExportFlavor::Macro)?.lexical,
+            ordinary.lexical
+        );
+        Ok(())
+    }
 }

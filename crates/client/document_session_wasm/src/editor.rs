@@ -9,6 +9,18 @@ pub struct EditorSession {
 }
 #[wasm_bindgen]
 impl EditorSession {
+    /// Construct the application's MarkdownSync registry and projection policy.
+    #[wasm_bindgen(js_name=createMacro)]
+    pub fn create_macro(
+        abi_major: u32,
+        config: &[u8],
+        now: f64,
+        wall: f64,
+    ) -> Result<Self, JsError> {
+        Ok(Self {
+            machine: machine::Machine::create_macro(abi_major, config, now, wall).map_err(js)?,
+        })
+    }
     /// Construct a session; reject incompatible ABI majors before decoding configuration.
     pub fn create(abi_major: u32, config: &[u8], now: f64, wall: f64) -> Result<Self, JsError> {
         Ok(Self {
@@ -282,6 +294,14 @@ impl EditorSession {
         composition_data: Option<js_sys::JsString>,
         now: f64,
     ) -> Result<u32, JsError> {
+        let text = match utf16(text) {
+            Ok(text) => text,
+            Err(_) => return self.machine.reject_text("LoneSurrogate").map_err(js),
+        };
+        let composition_data = match composition_data.map(utf16).transpose() {
+            Ok(data) => data,
+            Err(_) => return self.machine.reject_text("LoneSurrogate").map_err(js),
+        };
         let key = editor_input::key(key, self.machine.generation());
         let selection = match sel_kind {
             0 => ViewSelection::Range {
@@ -291,17 +311,17 @@ impl EditorSession {
             },
             1 => ViewSelection::KeepModel,
             2 => ViewSelection::None,
-            _ => return Err(js(BoundaryError::Invalid("selection kind"))),
+            _ => return self.machine.reject_text("selection kind").map_err(js),
         };
         self.machine
             .editor(
                 Input::TextFromView {
                     key,
-                    text: utf16(text)?,
+                    text,
                     anchor: Some(Utf16Offset(anchor_offset)),
                     focus: Some(Utf16Offset(focus_offset)),
                     composition_end: flags & 1 != 0,
-                    composition_data: composition_data.map(utf16).transpose()?,
+                    composition_data,
                     selection,
                 },
                 now,
@@ -431,14 +451,45 @@ impl EditorSession {
     }
     /// Key routing computed by the host view.
     #[wasm_bindgen(js_name=keyDown)]
+    #[expect(
+        clippy::too_many_arguments,
+        reason = "Resolved selection uses primitive hot ABI fields"
+    )]
     pub fn key_down(
         &mut self,
         code: u32,
         mods: u32,
         routed: u32,
         key: js_sys::JsString,
+        anchor_key: u32,
+        anchor_offset: u32,
+        anchor_type: u32,
+        focus_key: u32,
+        focus_offset: u32,
+        focus_type: u32,
+        selection_kind: u32,
         now: f64,
     ) -> Result<u32, JsError> {
+        let point = |key, offset, kind| {
+            editor_input::point(
+                &wire::PointMsg {
+                    key,
+                    offset,
+                    _type: u8::try_from(kind).map_err(|_| BoundaryError::Invalid("point kind"))?,
+                },
+                self.machine.generation(),
+            )
+        };
+        let selection = match selection_kind {
+            0 => ViewSelection::Range {
+                anchor: point(anchor_key, anchor_offset, anchor_type).map_err(js)?,
+                focus: point(focus_key, focus_offset, focus_type).map_err(js)?,
+                resolution_dirty: false,
+            },
+            1 => ViewSelection::KeepModel,
+            2 => ViewSelection::None,
+            _ => return Err(js(BoundaryError::Invalid("selection kind"))),
+        };
         let event = KeyEvent {
             key: utf16(key)?.into(),
             code: code.to_string().into(),
@@ -451,7 +502,25 @@ impl EditorSession {
         };
         let prevent = routed != 0;
         let routed = if routed == 0 {
-            None
+            let command = match event.key.as_ref() {
+                "Enter" => Some(KeyCommand::Enter),
+                "Backspace" => Some(KeyCommand::Backspace),
+                "Delete" => Some(KeyCommand::Delete),
+                "Tab" => Some(KeyCommand::Tab),
+                "Escape" => Some(KeyCommand::Escape),
+                " " => Some(KeyCommand::Space),
+                "ArrowUp" => Some(KeyCommand::ArrowUp),
+                "ArrowDown" => Some(KeyCommand::ArrowDown),
+                "ArrowLeft" => Some(KeyCommand::ArrowLeft),
+                "ArrowRight" => Some(KeyCommand::ArrowRight),
+                "Home" => Some(KeyCommand::MoveToStart),
+                "End" => Some(KeyCommand::MoveToEnd),
+                _ => None,
+            };
+            command.map(|command| Command::Key {
+                command,
+                event: Some(event.clone()),
+            })
         } else {
             Some(editor_input::command(routed, 0, 0, None).map_err(js)?)
         };
@@ -461,11 +530,35 @@ impl EditorSession {
                     event,
                     routed,
                     routed_prevent_default: prevent,
-                    selection: ViewSelection::KeepModel,
+                    selection,
                 },
                 now,
             )
             .map_err(js)
+    }
+    /// Cold recovery patch from an empty view; does not reset sync or history.
+    pub fn initialize(&self) -> Result<Vec<u8>, JsError> {
+        let out = document_session::SessionOutput {
+            view: vec![document_session::ViewEffect::Initialize(
+                document_session::InitialView::Editor {
+                    diff: self
+                        .surface()
+                        .view_diff()
+                        .map_err(BoundaryError::from)
+                        .map_err(js)?,
+                    state: self
+                        .surface()
+                        .state()
+                        .to_json()
+                        .map_err(BoundaryError::from)
+                        .map_err(js)?,
+                },
+            )],
+            ..Default::default()
+        };
+        let mut bytes = vec![];
+        output::encode(&out, false, &mut bytes, None).map_err(js)?;
+        Ok(bytes)
     }
     /// Current complete document text in one crossing.
     #[wasm_bindgen(js_name=textContent)]
@@ -478,10 +571,11 @@ impl EditorSession {
         self.surface()
             .state()
             .view()
-            .text_content(editor_input::key(key, self.machine.generation()))
-            .into_owned()
+            .text(editor_input::key(key, self.machine.generation()))
+            .map(|node| node.text.as_str().to_owned())
+            .unwrap_or_default()
     }
-    /// Registered types, without instance-specific view flags.
+    /// Registered types and static predicate flags; bit zero marks known flags.
     #[wasm_bindgen(js_name=typeTable)]
     pub fn type_table(&self) -> Result<Vec<u8>, JsError> {
         let rows = self
@@ -490,6 +584,14 @@ impl EditorSession {
             .type_table()
             .iter()
             .map(|r| wire::TypeRowMsg {
+                flags: r.flags.map_or(0, |f| {
+                    1 | (u32::from(f.is_inline) << 1)
+                        | (u32::from(f.can_insert_text_before) << 2)
+                        | (u32::from(f.can_insert_text_after) << 3)
+                        | (u32::from(f.is_keyboard_selectable) << 4)
+                        | (u32::from(f.is_isolated) << 5)
+                        | (u32::from(f.is_shadow_root) << 6)
+                }),
                 index: u32::from(r.index.get()),
                 name: r.type_name.into(),
                 kind: match r.kind {
@@ -557,6 +659,7 @@ impl EditorSession {
                 focus: (focus != u32::MAX).then_some(Utf16Offset(focus)),
                 data,
             },
+            2 => CompositionEvent::Clear,
             _ => return Err(js(BoundaryError::Invalid("composition kind"))),
         };
         self.machine
@@ -594,14 +697,18 @@ impl EditorSession {
         .and_then(|reply| bytes(&reply))
         .map_err(js)
     }
-    /// Current clipboard formats; kind 0 copy, kind 1 cut uses the same read snapshot.
+    /// Clipboard formats: kind 0 copy, 1 cut, 2 complete block-drag subtrees.
     pub fn clipboard(&self, kind: u32) -> Result<Vec<u8>, JsError> {
-        if kind > 1 {
+        if kind > 2 {
             return Err(js(BoundaryError::Invalid("clipboard kind")));
         }
-        query::clipboard(self.surface().state())
-            .and_then(|reply| bytes(&reply))
-            .map_err(js)
+        query::clipboard(
+            self.surface().state(),
+            kind == 2,
+            query::export_flavor(self),
+        )
+        .and_then(|reply| bytes(&reply))
+        .map_err(js)
     }
     /// Development checksum of the complete rendered tree.
     #[wasm_bindgen(js_name=debugViewChecksum)]
@@ -618,6 +725,43 @@ impl EditorSession {
         Ok(serialized.iter().fold(2166136261u32, |hash, byte| {
             (hash ^ u32::from(*byte)).wrapping_mul(16777619)
         }))
+    }
+    /// Full development insertion predicate using the host's resolved selection.
+    #[wasm_bindgen(js_name=debugInsertion)]
+    pub fn debug_insertion(
+        &self,
+        selection: &[u8],
+        format: u32,
+        style: String,
+        text: js_sys::JsString,
+        facts: u32,
+    ) -> Result<bool, JsError> {
+        let selection = wire::SelectionMsg::deserialize(selection)
+            .map_err(BoundaryError::from)
+            .map_err(js)?;
+        let ViewSelection::Range { anchor, focus, .. } =
+            editor_input::selection(&selection, self.machine.generation()).map_err(js)?
+        else {
+            return Ok(true);
+        };
+        let mut range = RangeSelection::new(anchor, focus);
+        range.format = TextFormat::from_bits(format)
+            .ok_or_else(|| js(BoundaryError::Invalid("text format")))?;
+        range.style = style.into();
+        self.surface()
+            .state()
+            .view()
+            .should_prevent_default_and_insert_text(
+                &range,
+                &utf16(text)?,
+                InsertTextFacts {
+                    dangling_input: facts & 1 != 0,
+                    dom_anchor_not_backing_text: facts & 2 != 0,
+                    target_range_mismatch: facts & 4 != 0,
+                },
+            )
+            .map_err(BoundaryError::from)
+            .map_err(js)
     }
     /// Development cross-check for the host insertion predicate.
     #[wasm_bindgen(js_name=debugShouldPreventDefault)]

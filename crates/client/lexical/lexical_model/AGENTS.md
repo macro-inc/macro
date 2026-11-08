@@ -38,6 +38,8 @@ node types, immutable snapshots, transactional tree editing, update processing, 
 - Use Error::invariant for runtime diagnostic context; static and owned messages display verbatim and share the Invariant classification.
 - Use NodeType::create_default for context-dependent constructors; default_node and flag probes remain pure data for foreign projections; runtime foreign types without defaults reject create_resolved.
 - Pure Rust model; no network, database, runtime or browser dependencies.
+- Use CompositionEvent::Clear for Android ownership reset; it preserves text and
+  restores anchor typing style without CompositionEnd semantics.
 - Client crate: keep it excluded from workspace-hack through `crates/client/*`.
 - Use `replace_selection` when a package allocates a new selection object; point mutations preserve the active object identity.
 - TableSelection::set changes keys while preserving point offsets/kinds and dirties only changed keys, retaining any existing dirty mark.

@@ -113,6 +113,64 @@ function isTrace(value: unknown): value is Trace {
   );
 }
 const directory = new URL('../../tests/executor-traces/', import.meta.url);
+test('an early browser wake keeps an unchanged native deadline armed', async () => {
+  const { SessionConfigMsg, SessionInputMsg, Transport, Access } = await import(
+    './abi.generated'
+  );
+  const { emptyInput } = await import('./input');
+  vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+  let mono = 0;
+  const config = SessionConfigMsg.encode({
+    doc: 'early-wake-fixture',
+    session: '00000000-0000-0000-0000-000000000001',
+    user: 'fixture-user',
+    peers: [7n, 8n, 9n],
+    access: Access.Edit,
+    transport: Transport.None,
+    durable: false,
+    chatter: false,
+    headless: true,
+    viewEngine: 0,
+    viewOs: 0,
+    token: '',
+    traceparent: '',
+    coalesce: 25,
+    snapshotInterval: 10,
+    observed: [],
+  });
+  const executor = new SessionExecutor({
+    doc: 'early-wake-fixture',
+    owner: '00000000-0000-0000-0000-000000000001',
+    user: 'fixture-user',
+    create: (now, wall) => DocSession.create(ABI_MAJOR, config, now, wall),
+    clock: { mono: () => mono, wall: () => 1_000_000 + mono },
+    auth: {
+      token: async () => ({ token: '', access: Access.Edit }),
+      subscribe: () => () => {},
+    },
+    socketUrl: () => {
+      throw new Error('Offline fixture cannot connect');
+    },
+    view: { apply() {} },
+    telemetry: new SessionTelemetry(NOOP_SPAN),
+  });
+  executor.start();
+  executor.run(() =>
+    executor.session.input(
+      SessionInputMsg.encode(emptyInput(1)),
+      executor.now(),
+      1_000_000
+    )
+  );
+  expect(executor.session.wakeAt()).toBe(10);
+  mono = 9.9;
+  await vi.advanceTimersByTimeAsync(10);
+  expect(executor.session.wakeAt()).toBe(10);
+  mono = 10.1;
+  await vi.advanceTimersByTimeAsync(1);
+  expect(executor.session.wakeAt()).toBe(20);
+  await executor.close();
+});
 for (const file of readdirSync(directory).filter((f) => f.endsWith('.json'))) {
   const parsed: unknown = JSON.parse(
     readFileSync(new URL(file, directory), 'utf8')

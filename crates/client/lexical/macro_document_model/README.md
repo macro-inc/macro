@@ -11,6 +11,10 @@ Use `export_registry` for gate/export callers and `headless_editor` for authored
 headless content. Export has no replacements. Headless creation replaces code
 and list nodes; importing stored `list` JSON preserves its exact type, matching
 Lexical's static-config importer. Presets match the source node exclusions.
+Application sessions use `surface::preset_builder_with_mode` to add their model
+plugins in append-only migration-group blocks. The registry-only builders above
+remain unchanged for export, fixture and standalone node callers.
+
 Unknown types remain errors; collaborative sessions can explicitly enable opaque
 imports on the corresponding builder.
 

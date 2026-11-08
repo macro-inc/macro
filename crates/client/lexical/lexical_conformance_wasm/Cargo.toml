@@ -12,9 +12,9 @@ default = ["js-nodes"]
 js-nodes = ["lexical_model/foreign-nodes"]
 
 [dependencies]
+macro_document_composers.workspace = true
 lexical_loro.workspace = true
 macro_document_model = { workspace = true, default-features = false, features = ["html"] }
-macro_document_composers.workspace = true
 thiserror.workspace = true
 lexical_model.workspace = true
 lexical_rich_nodes.workspace = true

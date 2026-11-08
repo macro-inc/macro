@@ -1,0 +1,1836 @@
+[
+  {
+    "input": {
+      "id": "fixture-theme",
+      "name": "Fixture theme",
+      "version": 2,
+      "depth": 0.15,
+      "tokens": {
+        "a0": {
+          "l": 0.61,
+          "c": 0.123456789,
+          "h": 269.7
+        },
+        "a1": {
+          "l": 0.61,
+          "c": 0.123456789,
+          "h": 269.7
+        },
+        "a2": {
+          "l": 0.61,
+          "c": 0.123456789,
+          "h": 269.7
+        },
+        "a3": {
+          "l": 0.61,
+          "c": 0.123456789,
+          "h": 269.7
+        },
+        "a4": {
+          "l": 0.61,
+          "c": 0.123456789,
+          "h": 269.7
+        },
+        "b0": {
+          "l": 0.9,
+          "c": 0.018,
+          "h": 72
+        },
+        "b1": {
+          "l": 0.915,
+          "c": 0.018,
+          "h": 72
+        },
+        "b2": {
+          "l": 0.93,
+          "c": 0.018,
+          "h": 72
+        },
+        "b3": {
+          "l": 0.9450000000000001,
+          "c": 0.018,
+          "h": 72
+        },
+        "b4": {
+          "l": 0.96,
+          "c": 0.018,
+          "h": 72
+        },
+        "c0": {
+          "l": 0.1,
+          "c": 0.018,
+          "h": 72
+        },
+        "c1": {
+          "l": 0.2,
+          "c": 0.018,
+          "h": 72
+        },
+        "c2": {
+          "l": 0.30000000000000004,
+          "c": 0.018,
+          "h": 72
+        },
+        "c3": {
+          "l": 0.4,
+          "c": 0.018,
+          "h": 72
+        },
+        "c4": {
+          "l": 0.5,
+          "c": 0.018,
+          "h": 72
+        }
+      }
+    },
+    "expected": {
+      "id": "fixture-theme",
+      "name": "Fixture theme",
+      "version": 3,
+      "mode": "light",
+      "colorTokens": {
+        "surface-0": "oklch(0.9 0.018 72deg)",
+        "surface-1": "oklch(0.925 0.0135 72deg)",
+        "surface-2": "oklch(0.95 0.009 72deg)",
+        "surface-3": "oklch(0.975 0.0045 72deg)",
+        "surface-4": "oklch(1 0 72deg)",
+        "content-0": "oklch(0.1 0.018 72deg)",
+        "content-1": "oklch(0.2 0.018 72deg)",
+        "content-2": "oklch(0.3 0.018 72deg)",
+        "content-3": "oklch(0.4 0.018 72deg)",
+        "content-4": "oklch(0.5 0.018 72deg)",
+        "edge": "oklch(0.96 0.018 72deg)",
+        "edge-muted": "oklch(0.945 0.018 72deg)",
+        "accent": "oklch(0.61 0.12345679 269.7deg)",
+        "red": "oklch(0.61 0.12345679 25.331deg)",
+        "orange": "oklch(0.61 0.12345679 47.604deg)",
+        "amber": "oklch(0.61 0.12345679 70.08deg)",
+        "yellow": "oklch(0.61 0.12345679 86.047deg)",
+        "lime": "oklch(0.61 0.12345679 130.85deg)",
+        "green": "oklch(0.61 0.12345679 149.579deg)",
+        "teal": "oklch(0.61 0.12345679 182.503deg)",
+        "cyan": "oklch(0.61 0.12345679 215.221deg)",
+        "blue": "oklch(0.61 0.12345679 259.815deg)",
+        "violet": "oklch(0.61 0.12345679 292.717deg)",
+        "purple": "oklch(0.61 0.12345679 303.9deg)",
+        "pink": "oklch(0.61 0.12345679 354.308deg)",
+        "surface": "var(--layer-surface)",
+        "inset": "var(--layer-inset)",
+        "ink": "var(--color-content-0)",
+        "ink-muted": "var(--color-content-1)",
+        "ink-subtle": "var(--color-content-2)",
+        "ink-disabled": "var(--color-content-3)",
+        "ink-placeholder": "var(--color-content-4)",
+        "link": "var(--color-accent)",
+        "link-hover": "var(--color-accent)",
+        "link-visited": "var(--color-accent)",
+        "page": "var(--color-surface-0)",
+        "panel": "var(--color-surface-1)",
+        "dialog": "var(--color-surface-2)",
+        "menu": "var(--color-surface-2)",
+        "tooltip": "var(--color-surface-2)",
+        "toast": "var(--color-surface-2)",
+        "input": "transparent",
+        "input-focus": "var(--color-surface-1)",
+        "message": "var(--color-surface-1)",
+        "inline-code": "color-mix(in oklch, var(--color-ink) 5%, transparent)",
+        "hover": "color-mix(in oklch, var(--color-content-0) 3%, transparent)",
+        "active": "color-mix(in oklch, var(--color-content-0) 6%, transparent)",
+        "selected": "color-mix(in oklch, var(--color-accent) 8%, transparent)",
+        "success": "var(--color-green)",
+        "warning": "var(--color-yellow)",
+        "failure": "var(--color-red)",
+        "priority-urgent": "var(--color-orange)",
+        "task-status-not-started": "var(--color-content-1)",
+        "task-status-in-progress": "color-mix(in srgb, var(--color-amber) 85%, var(--color-content-0))",
+        "task-status-in-review": "var(--color-violet)",
+        "task-status-completed": "var(--color-accent)",
+        "task-status-canceled": "var(--color-content-1)",
+        "chrome": "var(--color-surface-4)"
+      }
+    }
+  },
+  {
+    "input": {
+      "id": "fixture-theme",
+      "name": "Fixture theme",
+      "version": 3,
+      "mode": "light",
+      "colorTokens": {
+        "surface-0": "oklch(0.9 0.018 72deg)",
+        "surface-1": "oklch(0.925 0.0135 72deg)",
+        "surface-2": "oklch(0.95 0.009 72deg)",
+        "surface-3": "oklch(0.975 0.0045 72deg)",
+        "surface-4": "oklch(1 0 72deg)",
+        "content-0": "oklch(0.1 0.018 72deg)",
+        "content-1": "oklch(0.2 0.018 72deg)",
+        "content-2": "oklch(0.3 0.018 72deg)",
+        "content-3": "oklch(0.4 0.018 72deg)",
+        "content-4": "oklch(0.5 0.018 72deg)",
+        "edge": "oklch(0.96 0.018 72deg)",
+        "edge-muted": "oklch(0.945 0.018 72deg)",
+        "accent": "oklch(0.61 0.12345679 269.7deg)",
+        "red": "oklch(0.61 0.12345679 25.331deg)",
+        "orange": "oklch(0.61 0.12345679 47.604deg)",
+        "amber": "oklch(0.61 0.12345679 70.08deg)",
+        "yellow": "oklch(0.61 0.12345679 86.047deg)",
+        "lime": "oklch(0.61 0.12345679 130.85deg)",
+        "green": "oklch(0.61 0.12345679 149.579deg)",
+        "teal": "oklch(0.61 0.12345679 182.503deg)",
+        "cyan": "oklch(0.61 0.12345679 215.221deg)",
+        "blue": "oklch(0.61 0.12345679 259.815deg)",
+        "violet": "oklch(0.61 0.12345679 292.717deg)",
+        "purple": "oklch(0.61 0.12345679 303.9deg)",
+        "pink": "oklch(0.61 0.12345679 354.308deg)",
+        "surface": "var(--layer-surface)",
+        "inset": "var(--layer-inset)",
+        "ink": "var(--color-content-0)",
+        "ink-muted": "var(--color-content-1)",
+        "ink-subtle": "var(--color-content-2)",
+        "ink-disabled": "var(--color-content-3)",
+        "ink-placeholder": "var(--color-content-4)",
+        "link": "var(--color-accent)",
+        "link-hover": "var(--color-accent)",
+        "link-visited": "var(--color-accent)",
+        "page": "var(--color-surface-0)",
+        "panel": "var(--color-surface-1)",
+        "dialog": "var(--color-surface-2)",
+        "menu": "var(--color-surface-2)",
+        "tooltip": "var(--color-surface-2)",
+        "toast": "var(--color-surface-2)",
+        "input": "transparent",
+        "input-focus": "var(--color-surface-1)",
+        "message": "var(--color-surface-1)",
+        "inline-code": "color-mix(in oklch, var(--color-ink) 5%, transparent)",
+        "hover": "color-mix(in oklch, var(--color-content-0) 3%, transparent)",
+        "active": "color-mix(in oklch, var(--color-content-0) 6%, transparent)",
+        "selected": "color-mix(in oklch, var(--color-accent) 8%, transparent)",
+        "success": "var(--color-green)",
+        "warning": "var(--color-yellow)",
+        "failure": "var(--color-red)",
+        "priority-urgent": "var(--color-orange)",
+        "task-status-not-started": "var(--color-content-1)",
+        "task-status-in-progress": "color-mix(in srgb, var(--color-amber) 85%, var(--color-content-0))",
+        "task-status-in-review": "var(--color-violet)",
+        "task-status-completed": "var(--color-accent)",
+        "task-status-canceled": "var(--color-content-1)",
+        "chrome": "var(--color-surface-4)"
+      },
+      "future": {
+        "keep": true
+      }
+    },
+    "expected": {
+      "id": "fixture-theme",
+      "name": "Fixture theme",
+      "version": 3,
+      "mode": "light",
+      "colorTokens": {
+        "surface-0": "oklch(0.9 0.018 72deg)",
+        "surface-1": "oklch(0.925 0.0135 72deg)",
+        "surface-2": "oklch(0.95 0.009 72deg)",
+        "surface-3": "oklch(0.975 0.0045 72deg)",
+        "surface-4": "oklch(1 0 72deg)",
+        "content-0": "oklch(0.1 0.018 72deg)",
+        "content-1": "oklch(0.2 0.018 72deg)",
+        "content-2": "oklch(0.3 0.018 72deg)",
+        "content-3": "oklch(0.4 0.018 72deg)",
+        "content-4": "oklch(0.5 0.018 72deg)",
+        "edge": "oklch(0.96 0.018 72deg)",
+        "edge-muted": "oklch(0.945 0.018 72deg)",
+        "accent": "oklch(0.61 0.12345679 269.7deg)",
+        "red": "oklch(0.61 0.12345679 25.331deg)",
+        "orange": "oklch(0.61 0.12345679 47.604deg)",
+        "amber": "oklch(0.61 0.12345679 70.08deg)",
+        "yellow": "oklch(0.61 0.12345679 86.047deg)",
+        "lime": "oklch(0.61 0.12345679 130.85deg)",
+        "green": "oklch(0.61 0.12345679 149.579deg)",
+        "teal": "oklch(0.61 0.12345679 182.503deg)",
+        "cyan": "oklch(0.61 0.12345679 215.221deg)",
+        "blue": "oklch(0.61 0.12345679 259.815deg)",
+        "violet": "oklch(0.61 0.12345679 292.717deg)",
+        "purple": "oklch(0.61 0.12345679 303.9deg)",
+        "pink": "oklch(0.61 0.12345679 354.308deg)",
+        "surface": "var(--layer-surface)",
+        "inset": "var(--layer-inset)",
+        "ink": "var(--color-content-0)",
+        "ink-muted": "var(--color-content-1)",
+        "ink-subtle": "var(--color-content-2)",
+        "ink-disabled": "var(--color-content-3)",
+        "ink-placeholder": "var(--color-content-4)",
+        "link": "var(--color-accent)",
+        "link-hover": "var(--color-accent)",
+        "link-visited": "var(--color-accent)",
+        "page": "var(--color-surface-0)",
+        "panel": "var(--color-surface-1)",
+        "dialog": "var(--color-surface-2)",
+        "menu": "var(--color-surface-2)",
+        "tooltip": "var(--color-surface-2)",
+        "toast": "var(--color-surface-2)",
+        "input": "transparent",
+        "input-focus": "var(--color-surface-1)",
+        "message": "var(--color-surface-1)",
+        "inline-code": "color-mix(in oklch, var(--color-ink) 5%, transparent)",
+        "hover": "color-mix(in oklch, var(--color-content-0) 3%, transparent)",
+        "active": "color-mix(in oklch, var(--color-content-0) 6%, transparent)",
+        "selected": "color-mix(in oklch, var(--color-accent) 8%, transparent)",
+        "success": "var(--color-green)",
+        "warning": "var(--color-yellow)",
+        "failure": "var(--color-red)",
+        "priority-urgent": "var(--color-orange)",
+        "task-status-not-started": "var(--color-content-1)",
+        "task-status-in-progress": "color-mix(in srgb, var(--color-amber) 85%, var(--color-content-0))",
+        "task-status-in-review": "var(--color-violet)",
+        "task-status-completed": "var(--color-accent)",
+        "task-status-canceled": "var(--color-content-1)",
+        "chrome": "var(--color-surface-4)"
+      },
+      "future": {
+        "keep": true
+      }
+    }
+  },
+  {
+    "input": {
+      "id": "fixture-theme",
+      "name": "Fixture theme",
+      "version": 2,
+      "depth": 0.15,
+      "tokens": {
+        "a0": {
+          "l": 0.61,
+          "c": 0.123456789,
+          "h": 269.7
+        },
+        "a1": {
+          "l": 0.61,
+          "c": 0.123456789,
+          "h": 269.7
+        },
+        "a2": {
+          "l": 0.61,
+          "c": 0.123456789,
+          "h": 269.7
+        },
+        "a3": {
+          "l": 0.61,
+          "c": 0.123456789,
+          "h": 269.7
+        },
+        "a4": {
+          "l": 0.61,
+          "c": 0.123456789,
+          "h": 269.7
+        },
+        "b0": {
+          "l": 0.9,
+          "c": 0.018,
+          "h": 72
+        },
+        "b1": {
+          "l": 0.915,
+          "c": 0.018,
+          "h": 72
+        },
+        "b2": {
+          "l": 0.93,
+          "c": 0.018,
+          "h": 72
+        },
+        "b3": {
+          "l": 0.9450000000000001,
+          "c": 0.018,
+          "h": 72
+        },
+        "b4": {
+          "l": 0.96,
+          "c": 0.018,
+          "h": 72
+        },
+        "c0": {
+          "l": 0.1,
+          "c": 0.018,
+          "h": 72
+        },
+        "c1": {
+          "l": 0.2,
+          "c": 0.018,
+          "h": 72
+        },
+        "c2": {
+          "l": 0.30000000000000004,
+          "c": 0.018,
+          "h": 72
+        },
+        "c3": {
+          "l": 0.4,
+          "c": 0.018,
+          "h": 72
+        },
+        "c4": {
+          "l": 0.5,
+          "c": 0.018,
+          "h": 72
+        }
+      },
+      "overrides": [
+        {
+          "token": "ink",
+          "value": {
+            "l": 0.8,
+            "c": 0.08,
+            "h": 29.5
+          }
+        }
+      ],
+      "colorTokens": {
+        "accent": "#abcdef",
+        "future-token": "custom"
+      }
+    },
+    "expected": {
+      "id": "fixture-theme",
+      "name": "Fixture theme",
+      "version": 3,
+      "mode": "light",
+      "colorTokens": {
+        "surface-0": "oklch(0.9 0.018 72deg)",
+        "surface-1": "oklch(0.925 0.0135 72deg)",
+        "surface-2": "oklch(0.95 0.009 72deg)",
+        "surface-3": "oklch(0.975 0.0045 72deg)",
+        "surface-4": "oklch(1 0 72deg)",
+        "content-0": "oklch(0.1 0.018 72deg)",
+        "content-1": "oklch(0.2 0.018 72deg)",
+        "content-2": "oklch(0.3 0.018 72deg)",
+        "content-3": "oklch(0.4 0.018 72deg)",
+        "content-4": "oklch(0.5 0.018 72deg)",
+        "edge": "oklch(0.96 0.018 72deg)",
+        "edge-muted": "oklch(0.945 0.018 72deg)",
+        "accent": "#abcdef",
+        "red": "oklch(0.61 0.12345679 25.331deg)",
+        "orange": "oklch(0.61 0.12345679 47.604deg)",
+        "amber": "oklch(0.61 0.12345679 70.08deg)",
+        "yellow": "oklch(0.61 0.12345679 86.047deg)",
+        "lime": "oklch(0.61 0.12345679 130.85deg)",
+        "green": "oklch(0.61 0.12345679 149.579deg)",
+        "teal": "oklch(0.61 0.12345679 182.503deg)",
+        "cyan": "oklch(0.61 0.12345679 215.221deg)",
+        "blue": "oklch(0.61 0.12345679 259.815deg)",
+        "violet": "oklch(0.61 0.12345679 292.717deg)",
+        "purple": "oklch(0.61 0.12345679 303.9deg)",
+        "pink": "oklch(0.61 0.12345679 354.308deg)",
+        "surface": "var(--layer-surface)",
+        "inset": "var(--layer-inset)",
+        "ink": "oklch(0.8 0.08 29.5deg)",
+        "ink-muted": "var(--color-content-1)",
+        "ink-subtle": "var(--color-content-2)",
+        "ink-disabled": "var(--color-content-3)",
+        "ink-placeholder": "var(--color-content-4)",
+        "link": "var(--color-accent)",
+        "link-hover": "var(--color-accent)",
+        "link-visited": "var(--color-accent)",
+        "page": "var(--color-surface-0)",
+        "panel": "var(--color-surface-1)",
+        "dialog": "var(--color-surface-2)",
+        "menu": "var(--color-surface-2)",
+        "tooltip": "var(--color-surface-2)",
+        "toast": "var(--color-surface-2)",
+        "input": "transparent",
+        "input-focus": "var(--color-surface-1)",
+        "message": "var(--color-surface-1)",
+        "inline-code": "color-mix(in oklch, var(--color-ink) 5%, transparent)",
+        "hover": "color-mix(in oklch, var(--color-content-0) 3%, transparent)",
+        "active": "color-mix(in oklch, var(--color-content-0) 6%, transparent)",
+        "selected": "color-mix(in oklch, var(--color-accent) 8%, transparent)",
+        "success": "var(--color-green)",
+        "warning": "var(--color-yellow)",
+        "failure": "var(--color-red)",
+        "priority-urgent": "var(--color-orange)",
+        "task-status-not-started": "var(--color-content-1)",
+        "task-status-in-progress": "color-mix(in srgb, var(--color-amber) 85%, var(--color-content-0))",
+        "task-status-in-review": "var(--color-violet)",
+        "task-status-completed": "var(--color-accent)",
+        "task-status-canceled": "var(--color-content-1)",
+        "chrome": "var(--color-surface-4)",
+        "future-token": "custom"
+      }
+    }
+  },
+  {
+    "input": {
+      "id": "fixture-theme",
+      "name": "Fixture theme",
+      "version": 3,
+      "mode": "light",
+      "colorTokens": {
+        "surface-0": "oklch(0.9 0.018 72deg)",
+        "surface-1": "oklch(0.925 0.0135 72deg)",
+        "surface-2": "oklch(0.95 0.009 72deg)",
+        "surface-3": "oklch(0.975 0.0045 72deg)",
+        "surface-4": "oklch(1 0 72deg)",
+        "content-0": "oklch(0.1 0.018 72deg)",
+        "content-1": "oklch(0.2 0.018 72deg)",
+        "content-2": "oklch(0.3 0.018 72deg)",
+        "content-3": "oklch(0.4 0.018 72deg)",
+        "content-4": "oklch(0.5 0.018 72deg)",
+        "edge": "oklch(0.96 0.018 72deg)",
+        "edge-muted": "oklch(0.945 0.018 72deg)",
+        "accent": "#abcdef",
+        "red": "oklch(0.61 0.12345679 25.331deg)",
+        "orange": "oklch(0.61 0.12345679 47.604deg)",
+        "amber": "oklch(0.61 0.12345679 70.08deg)",
+        "yellow": "oklch(0.61 0.12345679 86.047deg)",
+        "lime": "oklch(0.61 0.12345679 130.85deg)",
+        "green": "oklch(0.61 0.12345679 149.579deg)",
+        "teal": "oklch(0.61 0.12345679 182.503deg)",
+        "cyan": "oklch(0.61 0.12345679 215.221deg)",
+        "blue": "oklch(0.61 0.12345679 259.815deg)",
+        "violet": "oklch(0.61 0.12345679 292.717deg)",
+        "purple": "oklch(0.61 0.12345679 303.9deg)",
+        "pink": "oklch(0.61 0.12345679 354.308deg)",
+        "surface": "var(--layer-surface)",
+        "inset": "var(--layer-inset)",
+        "ink": "oklch(0.8 0.08 29.5deg)",
+        "ink-muted": "var(--color-content-1)",
+        "ink-subtle": "var(--color-content-2)",
+        "ink-disabled": "var(--color-content-3)",
+        "ink-placeholder": "var(--color-content-4)",
+        "link": "var(--color-accent)",
+        "link-hover": "var(--color-accent)",
+        "link-visited": "var(--color-accent)",
+        "page": "var(--color-surface-0)",
+        "panel": "var(--color-surface-1)",
+        "dialog": "var(--color-surface-2)",
+        "menu": "var(--color-surface-2)",
+        "tooltip": "var(--color-surface-2)",
+        "toast": "var(--color-surface-2)",
+        "input": "transparent",
+        "input-focus": "var(--color-surface-1)",
+        "message": "var(--color-surface-1)",
+        "inline-code": "color-mix(in oklch, var(--color-ink) 5%, transparent)",
+        "hover": "color-mix(in oklch, var(--color-content-0) 3%, transparent)",
+        "active": "color-mix(in oklch, var(--color-content-0) 6%, transparent)",
+        "selected": "color-mix(in oklch, var(--color-accent) 8%, transparent)",
+        "success": "var(--color-green)",
+        "warning": "var(--color-yellow)",
+        "failure": "var(--color-red)",
+        "priority-urgent": "var(--color-orange)",
+        "task-status-not-started": "var(--color-content-1)",
+        "task-status-in-progress": "color-mix(in srgb, var(--color-amber) 85%, var(--color-content-0))",
+        "task-status-in-review": "var(--color-violet)",
+        "task-status-completed": "var(--color-accent)",
+        "task-status-canceled": "var(--color-content-1)",
+        "chrome": "var(--color-surface-4)",
+        "future-token": "custom"
+      },
+      "future": {
+        "keep": true
+      }
+    },
+    "expected": {
+      "id": "fixture-theme",
+      "name": "Fixture theme",
+      "version": 3,
+      "mode": "light",
+      "colorTokens": {
+        "surface-0": "oklch(0.9 0.018 72deg)",
+        "surface-1": "oklch(0.925 0.0135 72deg)",
+        "surface-2": "oklch(0.95 0.009 72deg)",
+        "surface-3": "oklch(0.975 0.0045 72deg)",
+        "surface-4": "oklch(1 0 72deg)",
+        "content-0": "oklch(0.1 0.018 72deg)",
+        "content-1": "oklch(0.2 0.018 72deg)",
+        "content-2": "oklch(0.3 0.018 72deg)",
+        "content-3": "oklch(0.4 0.018 72deg)",
+        "content-4": "oklch(0.5 0.018 72deg)",
+        "edge": "oklch(0.96 0.018 72deg)",
+        "edge-muted": "oklch(0.945 0.018 72deg)",
+        "accent": "#abcdef",
+        "red": "oklch(0.61 0.12345679 25.331deg)",
+        "orange": "oklch(0.61 0.12345679 47.604deg)",
+        "amber": "oklch(0.61 0.12345679 70.08deg)",
+        "yellow": "oklch(0.61 0.12345679 86.047deg)",
+        "lime": "oklch(0.61 0.12345679 130.85deg)",
+        "green": "oklch(0.61 0.12345679 149.579deg)",
+        "teal": "oklch(0.61 0.12345679 182.503deg)",
+        "cyan": "oklch(0.61 0.12345679 215.221deg)",
+        "blue": "oklch(0.61 0.12345679 259.815deg)",
+        "violet": "oklch(0.61 0.12345679 292.717deg)",
+        "purple": "oklch(0.61 0.12345679 303.9deg)",
+        "pink": "oklch(0.61 0.12345679 354.308deg)",
+        "surface": "var(--layer-surface)",
+        "inset": "var(--layer-inset)",
+        "ink": "oklch(0.8 0.08 29.5deg)",
+        "ink-muted": "var(--color-content-1)",
+        "ink-subtle": "var(--color-content-2)",
+        "ink-disabled": "var(--color-content-3)",
+        "ink-placeholder": "var(--color-content-4)",
+        "link": "var(--color-accent)",
+        "link-hover": "var(--color-accent)",
+        "link-visited": "var(--color-accent)",
+        "page": "var(--color-surface-0)",
+        "panel": "var(--color-surface-1)",
+        "dialog": "var(--color-surface-2)",
+        "menu": "var(--color-surface-2)",
+        "tooltip": "var(--color-surface-2)",
+        "toast": "var(--color-surface-2)",
+        "input": "transparent",
+        "input-focus": "var(--color-surface-1)",
+        "message": "var(--color-surface-1)",
+        "inline-code": "color-mix(in oklch, var(--color-ink) 5%, transparent)",
+        "hover": "color-mix(in oklch, var(--color-content-0) 3%, transparent)",
+        "active": "color-mix(in oklch, var(--color-content-0) 6%, transparent)",
+        "selected": "color-mix(in oklch, var(--color-accent) 8%, transparent)",
+        "success": "var(--color-green)",
+        "warning": "var(--color-yellow)",
+        "failure": "var(--color-red)",
+        "priority-urgent": "var(--color-orange)",
+        "task-status-not-started": "var(--color-content-1)",
+        "task-status-in-progress": "color-mix(in srgb, var(--color-amber) 85%, var(--color-content-0))",
+        "task-status-in-review": "var(--color-violet)",
+        "task-status-completed": "var(--color-accent)",
+        "task-status-canceled": "var(--color-content-1)",
+        "chrome": "var(--color-surface-4)",
+        "future-token": "custom"
+      },
+      "future": {
+        "keep": true
+      }
+    }
+  },
+  {
+    "input": {
+      "id": "fixture-theme",
+      "name": "Fixture theme",
+      "version": 2,
+      "depth": 0.15,
+      "tokens": {
+        "a0": {
+          "l": 0.61,
+          "c": 0.123456789,
+          "h": 269.7
+        },
+        "a1": {
+          "l": 0.61,
+          "c": 0.123456789,
+          "h": 269.7
+        },
+        "a2": {
+          "l": 0.61,
+          "c": 0.123456789,
+          "h": 269.7
+        },
+        "a3": {
+          "l": 0.61,
+          "c": 0.123456789,
+          "h": 269.7
+        },
+        "a4": {
+          "l": 0.61,
+          "c": 0.123456789,
+          "h": 269.7
+        },
+        "b0": {
+          "l": 0.9,
+          "c": 0.018,
+          "h": 72
+        },
+        "b1": {
+          "l": 0.915,
+          "c": 0.018,
+          "h": 72
+        },
+        "b2": {
+          "l": 0.93,
+          "c": 0.018,
+          "h": 72
+        },
+        "b3": {
+          "l": 0.9450000000000001,
+          "c": 0.018,
+          "h": 72
+        },
+        "b4": {
+          "l": 0.96,
+          "c": 0.018,
+          "h": 72
+        },
+        "c0": {
+          "l": 0.1,
+          "c": 0.018,
+          "h": 72
+        },
+        "c1": {
+          "l": 0.2,
+          "c": 0.018,
+          "h": 72
+        },
+        "c2": {
+          "l": 0.30000000000000004,
+          "c": 0.018,
+          "h": 72
+        },
+        "c3": {
+          "l": 0.4,
+          "c": 0.018,
+          "h": 72
+        },
+        "c4": {
+          "l": 0.5,
+          "c": 0.018,
+          "h": 72
+        }
+      },
+      "overrides": [
+        {
+          "token": "ink",
+          "value": {
+            "l": "2",
+            "c": [],
+            "h": null
+          }
+        }
+      ],
+      "colorTokens": {
+        "accent": "#abcdef",
+        "future-token": "custom"
+      }
+    },
+    "expected": {
+      "id": "fixture-theme",
+      "name": "Fixture theme",
+      "version": 3,
+      "mode": "light",
+      "colorTokens": {
+        "surface-0": "oklch(0.9 0.018 72deg)",
+        "surface-1": "oklch(0.925 0.0135 72deg)",
+        "surface-2": "oklch(0.95 0.009 72deg)",
+        "surface-3": "oklch(0.975 0.0045 72deg)",
+        "surface-4": "oklch(1 0 72deg)",
+        "content-0": "oklch(0.1 0.018 72deg)",
+        "content-1": "oklch(0.2 0.018 72deg)",
+        "content-2": "oklch(0.3 0.018 72deg)",
+        "content-3": "oklch(0.4 0.018 72deg)",
+        "content-4": "oklch(0.5 0.018 72deg)",
+        "edge": "oklch(0.96 0.018 72deg)",
+        "edge-muted": "oklch(0.945 0.018 72deg)",
+        "accent": "#abcdef",
+        "red": "oklch(0.61 0.12345679 25.331deg)",
+        "orange": "oklch(0.61 0.12345679 47.604deg)",
+        "amber": "oklch(0.61 0.12345679 70.08deg)",
+        "yellow": "oklch(0.61 0.12345679 86.047deg)",
+        "lime": "oklch(0.61 0.12345679 130.85deg)",
+        "green": "oklch(0.61 0.12345679 149.579deg)",
+        "teal": "oklch(0.61 0.12345679 182.503deg)",
+        "cyan": "oklch(0.61 0.12345679 215.221deg)",
+        "blue": "oklch(0.61 0.12345679 259.815deg)",
+        "violet": "oklch(0.61 0.12345679 292.717deg)",
+        "purple": "oklch(0.61 0.12345679 303.9deg)",
+        "pink": "oklch(0.61 0.12345679 354.308deg)",
+        "surface": "var(--layer-surface)",
+        "inset": "var(--layer-inset)",
+        "ink": "oklch(0 0 0deg)",
+        "ink-muted": "var(--color-content-1)",
+        "ink-subtle": "var(--color-content-2)",
+        "ink-disabled": "var(--color-content-3)",
+        "ink-placeholder": "var(--color-content-4)",
+        "link": "var(--color-accent)",
+        "link-hover": "var(--color-accent)",
+        "link-visited": "var(--color-accent)",
+        "page": "var(--color-surface-0)",
+        "panel": "var(--color-surface-1)",
+        "dialog": "var(--color-surface-2)",
+        "menu": "var(--color-surface-2)",
+        "tooltip": "var(--color-surface-2)",
+        "toast": "var(--color-surface-2)",
+        "input": "transparent",
+        "input-focus": "var(--color-surface-1)",
+        "message": "var(--color-surface-1)",
+        "inline-code": "color-mix(in oklch, var(--color-ink) 5%, transparent)",
+        "hover": "color-mix(in oklch, var(--color-content-0) 3%, transparent)",
+        "active": "color-mix(in oklch, var(--color-content-0) 6%, transparent)",
+        "selected": "color-mix(in oklch, var(--color-accent) 8%, transparent)",
+        "success": "var(--color-green)",
+        "warning": "var(--color-yellow)",
+        "failure": "var(--color-red)",
+        "priority-urgent": "var(--color-orange)",
+        "task-status-not-started": "var(--color-content-1)",
+        "task-status-in-progress": "color-mix(in srgb, var(--color-amber) 85%, var(--color-content-0))",
+        "task-status-in-review": "var(--color-violet)",
+        "task-status-completed": "var(--color-accent)",
+        "task-status-canceled": "var(--color-content-1)",
+        "chrome": "var(--color-surface-4)",
+        "future-token": "custom"
+      }
+    }
+  },
+  {
+    "input": {
+      "id": "fixture-theme",
+      "name": "Fixture theme",
+      "version": 3,
+      "mode": "light",
+      "colorTokens": {
+        "surface-0": "oklch(0.9 0.018 72deg)",
+        "surface-1": "oklch(0.925 0.0135 72deg)",
+        "surface-2": "oklch(0.95 0.009 72deg)",
+        "surface-3": "oklch(0.975 0.0045 72deg)",
+        "surface-4": "oklch(1 0 72deg)",
+        "content-0": "oklch(0.1 0.018 72deg)",
+        "content-1": "oklch(0.2 0.018 72deg)",
+        "content-2": "oklch(0.3 0.018 72deg)",
+        "content-3": "oklch(0.4 0.018 72deg)",
+        "content-4": "oklch(0.5 0.018 72deg)",
+        "edge": "oklch(0.96 0.018 72deg)",
+        "edge-muted": "oklch(0.945 0.018 72deg)",
+        "accent": "#abcdef",
+        "red": "oklch(0.61 0.12345679 25.331deg)",
+        "orange": "oklch(0.61 0.12345679 47.604deg)",
+        "amber": "oklch(0.61 0.12345679 70.08deg)",
+        "yellow": "oklch(0.61 0.12345679 86.047deg)",
+        "lime": "oklch(0.61 0.12345679 130.85deg)",
+        "green": "oklch(0.61 0.12345679 149.579deg)",
+        "teal": "oklch(0.61 0.12345679 182.503deg)",
+        "cyan": "oklch(0.61 0.12345679 215.221deg)",
+        "blue": "oklch(0.61 0.12345679 259.815deg)",
+        "violet": "oklch(0.61 0.12345679 292.717deg)",
+        "purple": "oklch(0.61 0.12345679 303.9deg)",
+        "pink": "oklch(0.61 0.12345679 354.308deg)",
+        "surface": "var(--layer-surface)",
+        "inset": "var(--layer-inset)",
+        "ink": "oklch(0 0 0deg)",
+        "ink-muted": "var(--color-content-1)",
+        "ink-subtle": "var(--color-content-2)",
+        "ink-disabled": "var(--color-content-3)",
+        "ink-placeholder": "var(--color-content-4)",
+        "link": "var(--color-accent)",
+        "link-hover": "var(--color-accent)",
+        "link-visited": "var(--color-accent)",
+        "page": "var(--color-surface-0)",
+        "panel": "var(--color-surface-1)",
+        "dialog": "var(--color-surface-2)",
+        "menu": "var(--color-surface-2)",
+        "tooltip": "var(--color-surface-2)",
+        "toast": "var(--color-surface-2)",
+        "input": "transparent",
+        "input-focus": "var(--color-surface-1)",
+        "message": "var(--color-surface-1)",
+        "inline-code": "color-mix(in oklch, var(--color-ink) 5%, transparent)",
+        "hover": "color-mix(in oklch, var(--color-content-0) 3%, transparent)",
+        "active": "color-mix(in oklch, var(--color-content-0) 6%, transparent)",
+        "selected": "color-mix(in oklch, var(--color-accent) 8%, transparent)",
+        "success": "var(--color-green)",
+        "warning": "var(--color-yellow)",
+        "failure": "var(--color-red)",
+        "priority-urgent": "var(--color-orange)",
+        "task-status-not-started": "var(--color-content-1)",
+        "task-status-in-progress": "color-mix(in srgb, var(--color-amber) 85%, var(--color-content-0))",
+        "task-status-in-review": "var(--color-violet)",
+        "task-status-completed": "var(--color-accent)",
+        "task-status-canceled": "var(--color-content-1)",
+        "chrome": "var(--color-surface-4)",
+        "future-token": "custom"
+      },
+      "future": {
+        "keep": true
+      }
+    },
+    "expected": {
+      "id": "fixture-theme",
+      "name": "Fixture theme",
+      "version": 3,
+      "mode": "light",
+      "colorTokens": {
+        "surface-0": "oklch(0.9 0.018 72deg)",
+        "surface-1": "oklch(0.925 0.0135 72deg)",
+        "surface-2": "oklch(0.95 0.009 72deg)",
+        "surface-3": "oklch(0.975 0.0045 72deg)",
+        "surface-4": "oklch(1 0 72deg)",
+        "content-0": "oklch(0.1 0.018 72deg)",
+        "content-1": "oklch(0.2 0.018 72deg)",
+        "content-2": "oklch(0.3 0.018 72deg)",
+        "content-3": "oklch(0.4 0.018 72deg)",
+        "content-4": "oklch(0.5 0.018 72deg)",
+        "edge": "oklch(0.96 0.018 72deg)",
+        "edge-muted": "oklch(0.945 0.018 72deg)",
+        "accent": "#abcdef",
+        "red": "oklch(0.61 0.12345679 25.331deg)",
+        "orange": "oklch(0.61 0.12345679 47.604deg)",
+        "amber": "oklch(0.61 0.12345679 70.08deg)",
+        "yellow": "oklch(0.61 0.12345679 86.047deg)",
+        "lime": "oklch(0.61 0.12345679 130.85deg)",
+        "green": "oklch(0.61 0.12345679 149.579deg)",
+        "teal": "oklch(0.61 0.12345679 182.503deg)",
+        "cyan": "oklch(0.61 0.12345679 215.221deg)",
+        "blue": "oklch(0.61 0.12345679 259.815deg)",
+        "violet": "oklch(0.61 0.12345679 292.717deg)",
+        "purple": "oklch(0.61 0.12345679 303.9deg)",
+        "pink": "oklch(0.61 0.12345679 354.308deg)",
+        "surface": "var(--layer-surface)",
+        "inset": "var(--layer-inset)",
+        "ink": "oklch(0 0 0deg)",
+        "ink-muted": "var(--color-content-1)",
+        "ink-subtle": "var(--color-content-2)",
+        "ink-disabled": "var(--color-content-3)",
+        "ink-placeholder": "var(--color-content-4)",
+        "link": "var(--color-accent)",
+        "link-hover": "var(--color-accent)",
+        "link-visited": "var(--color-accent)",
+        "page": "var(--color-surface-0)",
+        "panel": "var(--color-surface-1)",
+        "dialog": "var(--color-surface-2)",
+        "menu": "var(--color-surface-2)",
+        "tooltip": "var(--color-surface-2)",
+        "toast": "var(--color-surface-2)",
+        "input": "transparent",
+        "input-focus": "var(--color-surface-1)",
+        "message": "var(--color-surface-1)",
+        "inline-code": "color-mix(in oklch, var(--color-ink) 5%, transparent)",
+        "hover": "color-mix(in oklch, var(--color-content-0) 3%, transparent)",
+        "active": "color-mix(in oklch, var(--color-content-0) 6%, transparent)",
+        "selected": "color-mix(in oklch, var(--color-accent) 8%, transparent)",
+        "success": "var(--color-green)",
+        "warning": "var(--color-yellow)",
+        "failure": "var(--color-red)",
+        "priority-urgent": "var(--color-orange)",
+        "task-status-not-started": "var(--color-content-1)",
+        "task-status-in-progress": "color-mix(in srgb, var(--color-amber) 85%, var(--color-content-0))",
+        "task-status-in-review": "var(--color-violet)",
+        "task-status-completed": "var(--color-accent)",
+        "task-status-canceled": "var(--color-content-1)",
+        "chrome": "var(--color-surface-4)",
+        "future-token": "custom"
+      },
+      "future": {
+        "keep": true
+      }
+    }
+  },
+  {
+    "input": {
+      "id": "fixture-theme",
+      "name": "Fixture theme",
+      "version": 2,
+      "depth": 0.15,
+      "tokens": {
+        "a0": {
+          "l": 0.61,
+          "c": 0.123456789,
+          "h": 269.7
+        },
+        "a1": {
+          "l": 0.61,
+          "c": 0.123456789,
+          "h": 269.7
+        },
+        "a2": {
+          "l": 0.61,
+          "c": 0.123456789,
+          "h": 269.7
+        },
+        "a3": {
+          "l": 0.61,
+          "c": 0.123456789,
+          "h": 269.7
+        },
+        "a4": {
+          "l": 0.61,
+          "c": 0.123456789,
+          "h": 269.7
+        },
+        "b0": {
+          "l": 0.1,
+          "c": 0.018,
+          "h": 72
+        },
+        "b1": {
+          "l": 0.115,
+          "c": 0.018,
+          "h": 72
+        },
+        "b2": {
+          "l": 0.13,
+          "c": 0.018,
+          "h": 72
+        },
+        "b3": {
+          "l": 0.14500000000000002,
+          "c": 0.018,
+          "h": 72
+        },
+        "b4": {
+          "l": 0.16,
+          "c": 0.018,
+          "h": 72
+        },
+        "c0": {
+          "l": 0.95,
+          "c": 0.018,
+          "h": 72
+        },
+        "c1": {
+          "l": 0.85,
+          "c": 0.018,
+          "h": 72
+        },
+        "c2": {
+          "l": 0.75,
+          "c": 0.018,
+          "h": 72
+        },
+        "c3": {
+          "l": 0.6499999999999999,
+          "c": 0.018,
+          "h": 72
+        },
+        "c4": {
+          "l": 0.5499999999999999,
+          "c": 0.018,
+          "h": 72
+        }
+      }
+    },
+    "expected": {
+      "id": "fixture-theme",
+      "name": "Fixture theme",
+      "version": 3,
+      "mode": "dark",
+      "colorTokens": {
+        "surface-0": "oklch(0.1 0.018 72deg)",
+        "surface-1": "oklch(0.115 0.018 72deg)",
+        "surface-2": "oklch(0.13 0.018 72deg)",
+        "surface-3": "oklch(0.145 0.018 72deg)",
+        "surface-4": "oklch(0.16 0.018 72deg)",
+        "content-0": "oklch(0.95 0.018 72deg)",
+        "content-1": "oklch(0.85 0.018 72deg)",
+        "content-2": "oklch(0.75 0.018 72deg)",
+        "content-3": "oklch(0.65 0.018 72deg)",
+        "content-4": "oklch(0.55 0.018 72deg)",
+        "edge": "oklch(0.16 0.018 72deg)",
+        "edge-muted": "oklch(0.145 0.018 72deg)",
+        "accent": "oklch(0.61 0.12345679 269.7deg)",
+        "red": "oklch(0.61 0.12345679 25.331deg)",
+        "orange": "oklch(0.61 0.12345679 47.604deg)",
+        "amber": "oklch(0.61 0.12345679 70.08deg)",
+        "yellow": "oklch(0.61 0.12345679 86.047deg)",
+        "lime": "oklch(0.61 0.12345679 130.85deg)",
+        "green": "oklch(0.61 0.12345679 149.579deg)",
+        "teal": "oklch(0.61 0.12345679 182.503deg)",
+        "cyan": "oklch(0.61 0.12345679 215.221deg)",
+        "blue": "oklch(0.61 0.12345679 259.815deg)",
+        "violet": "oklch(0.61 0.12345679 292.717deg)",
+        "purple": "oklch(0.61 0.12345679 303.9deg)",
+        "pink": "oklch(0.61 0.12345679 354.308deg)",
+        "surface": "var(--layer-surface)",
+        "inset": "var(--layer-inset)",
+        "ink": "var(--color-content-0)",
+        "ink-muted": "var(--color-content-1)",
+        "ink-subtle": "var(--color-content-2)",
+        "ink-disabled": "var(--color-content-3)",
+        "ink-placeholder": "var(--color-content-4)",
+        "link": "var(--color-accent)",
+        "link-hover": "var(--color-accent)",
+        "link-visited": "var(--color-accent)",
+        "page": "var(--color-surface-0)",
+        "panel": "var(--color-surface-1)",
+        "dialog": "var(--color-surface-2)",
+        "menu": "var(--color-surface-2)",
+        "tooltip": "var(--color-surface-2)",
+        "toast": "var(--color-surface-2)",
+        "input": "transparent",
+        "input-focus": "var(--color-surface-1)",
+        "message": "var(--color-surface-1)",
+        "inline-code": "color-mix(in oklch, var(--color-ink) 5%, transparent)",
+        "hover": "color-mix(in oklch, var(--color-content-0) 3%, transparent)",
+        "active": "color-mix(in oklch, var(--color-content-0) 6%, transparent)",
+        "selected": "color-mix(in oklch, var(--color-accent) 8%, transparent)",
+        "success": "var(--color-green)",
+        "warning": "var(--color-amber)",
+        "failure": "var(--color-red)",
+        "priority-urgent": "var(--color-orange)",
+        "task-status-not-started": "var(--color-content-1)",
+        "task-status-in-progress": "color-mix(in srgb, var(--color-amber) 80%, var(--color-content-0))",
+        "task-status-in-review": "var(--color-violet)",
+        "task-status-completed": "var(--color-accent)",
+        "task-status-canceled": "var(--color-content-1)",
+        "chrome": "var(--color-surface-4)"
+      }
+    }
+  },
+  {
+    "input": {
+      "id": "fixture-theme",
+      "name": "Fixture theme",
+      "version": 3,
+      "mode": "dark",
+      "colorTokens": {
+        "surface-0": "oklch(0.1 0.018 72deg)",
+        "surface-1": "oklch(0.115 0.018 72deg)",
+        "surface-2": "oklch(0.13 0.018 72deg)",
+        "surface-3": "oklch(0.145 0.018 72deg)",
+        "surface-4": "oklch(0.16 0.018 72deg)",
+        "content-0": "oklch(0.95 0.018 72deg)",
+        "content-1": "oklch(0.85 0.018 72deg)",
+        "content-2": "oklch(0.75 0.018 72deg)",
+        "content-3": "oklch(0.65 0.018 72deg)",
+        "content-4": "oklch(0.55 0.018 72deg)",
+        "edge": "oklch(0.16 0.018 72deg)",
+        "edge-muted": "oklch(0.145 0.018 72deg)",
+        "accent": "oklch(0.61 0.12345679 269.7deg)",
+        "red": "oklch(0.61 0.12345679 25.331deg)",
+        "orange": "oklch(0.61 0.12345679 47.604deg)",
+        "amber": "oklch(0.61 0.12345679 70.08deg)",
+        "yellow": "oklch(0.61 0.12345679 86.047deg)",
+        "lime": "oklch(0.61 0.12345679 130.85deg)",
+        "green": "oklch(0.61 0.12345679 149.579deg)",
+        "teal": "oklch(0.61 0.12345679 182.503deg)",
+        "cyan": "oklch(0.61 0.12345679 215.221deg)",
+        "blue": "oklch(0.61 0.12345679 259.815deg)",
+        "violet": "oklch(0.61 0.12345679 292.717deg)",
+        "purple": "oklch(0.61 0.12345679 303.9deg)",
+        "pink": "oklch(0.61 0.12345679 354.308deg)",
+        "surface": "var(--layer-surface)",
+        "inset": "var(--layer-inset)",
+        "ink": "var(--color-content-0)",
+        "ink-muted": "var(--color-content-1)",
+        "ink-subtle": "var(--color-content-2)",
+        "ink-disabled": "var(--color-content-3)",
+        "ink-placeholder": "var(--color-content-4)",
+        "link": "var(--color-accent)",
+        "link-hover": "var(--color-accent)",
+        "link-visited": "var(--color-accent)",
+        "page": "var(--color-surface-0)",
+        "panel": "var(--color-surface-1)",
+        "dialog": "var(--color-surface-2)",
+        "menu": "var(--color-surface-2)",
+        "tooltip": "var(--color-surface-2)",
+        "toast": "var(--color-surface-2)",
+        "input": "transparent",
+        "input-focus": "var(--color-surface-1)",
+        "message": "var(--color-surface-1)",
+        "inline-code": "color-mix(in oklch, var(--color-ink) 5%, transparent)",
+        "hover": "color-mix(in oklch, var(--color-content-0) 3%, transparent)",
+        "active": "color-mix(in oklch, var(--color-content-0) 6%, transparent)",
+        "selected": "color-mix(in oklch, var(--color-accent) 8%, transparent)",
+        "success": "var(--color-green)",
+        "warning": "var(--color-amber)",
+        "failure": "var(--color-red)",
+        "priority-urgent": "var(--color-orange)",
+        "task-status-not-started": "var(--color-content-1)",
+        "task-status-in-progress": "color-mix(in srgb, var(--color-amber) 80%, var(--color-content-0))",
+        "task-status-in-review": "var(--color-violet)",
+        "task-status-completed": "var(--color-accent)",
+        "task-status-canceled": "var(--color-content-1)",
+        "chrome": "var(--color-surface-4)"
+      },
+      "future": {
+        "keep": true
+      }
+    },
+    "expected": {
+      "id": "fixture-theme",
+      "name": "Fixture theme",
+      "version": 3,
+      "mode": "dark",
+      "colorTokens": {
+        "surface-0": "oklch(0.1 0.018 72deg)",
+        "surface-1": "oklch(0.115 0.018 72deg)",
+        "surface-2": "oklch(0.13 0.018 72deg)",
+        "surface-3": "oklch(0.145 0.018 72deg)",
+        "surface-4": "oklch(0.16 0.018 72deg)",
+        "content-0": "oklch(0.95 0.018 72deg)",
+        "content-1": "oklch(0.85 0.018 72deg)",
+        "content-2": "oklch(0.75 0.018 72deg)",
+        "content-3": "oklch(0.65 0.018 72deg)",
+        "content-4": "oklch(0.55 0.018 72deg)",
+        "edge": "oklch(0.16 0.018 72deg)",
+        "edge-muted": "oklch(0.145 0.018 72deg)",
+        "accent": "oklch(0.61 0.12345679 269.7deg)",
+        "red": "oklch(0.61 0.12345679 25.331deg)",
+        "orange": "oklch(0.61 0.12345679 47.604deg)",
+        "amber": "oklch(0.61 0.12345679 70.08deg)",
+        "yellow": "oklch(0.61 0.12345679 86.047deg)",
+        "lime": "oklch(0.61 0.12345679 130.85deg)",
+        "green": "oklch(0.61 0.12345679 149.579deg)",
+        "teal": "oklch(0.61 0.12345679 182.503deg)",
+        "cyan": "oklch(0.61 0.12345679 215.221deg)",
+        "blue": "oklch(0.61 0.12345679 259.815deg)",
+        "violet": "oklch(0.61 0.12345679 292.717deg)",
+        "purple": "oklch(0.61 0.12345679 303.9deg)",
+        "pink": "oklch(0.61 0.12345679 354.308deg)",
+        "surface": "var(--layer-surface)",
+        "inset": "var(--layer-inset)",
+        "ink": "var(--color-content-0)",
+        "ink-muted": "var(--color-content-1)",
+        "ink-subtle": "var(--color-content-2)",
+        "ink-disabled": "var(--color-content-3)",
+        "ink-placeholder": "var(--color-content-4)",
+        "link": "var(--color-accent)",
+        "link-hover": "var(--color-accent)",
+        "link-visited": "var(--color-accent)",
+        "page": "var(--color-surface-0)",
+        "panel": "var(--color-surface-1)",
+        "dialog": "var(--color-surface-2)",
+        "menu": "var(--color-surface-2)",
+        "tooltip": "var(--color-surface-2)",
+        "toast": "var(--color-surface-2)",
+        "input": "transparent",
+        "input-focus": "var(--color-surface-1)",
+        "message": "var(--color-surface-1)",
+        "inline-code": "color-mix(in oklch, var(--color-ink) 5%, transparent)",
+        "hover": "color-mix(in oklch, var(--color-content-0) 3%, transparent)",
+        "active": "color-mix(in oklch, var(--color-content-0) 6%, transparent)",
+        "selected": "color-mix(in oklch, var(--color-accent) 8%, transparent)",
+        "success": "var(--color-green)",
+        "warning": "var(--color-amber)",
+        "failure": "var(--color-red)",
+        "priority-urgent": "var(--color-orange)",
+        "task-status-not-started": "var(--color-content-1)",
+        "task-status-in-progress": "color-mix(in srgb, var(--color-amber) 80%, var(--color-content-0))",
+        "task-status-in-review": "var(--color-violet)",
+        "task-status-completed": "var(--color-accent)",
+        "task-status-canceled": "var(--color-content-1)",
+        "chrome": "var(--color-surface-4)"
+      },
+      "future": {
+        "keep": true
+      }
+    }
+  },
+  {
+    "input": {
+      "id": "fixture-theme",
+      "name": "Fixture theme",
+      "version": 2,
+      "depth": 0.15,
+      "tokens": {
+        "a0": {
+          "l": 0.61,
+          "c": 0.123456789,
+          "h": 269.7
+        },
+        "a1": {
+          "l": 0.61,
+          "c": 0.123456789,
+          "h": 269.7
+        },
+        "a2": {
+          "l": 0.61,
+          "c": 0.123456789,
+          "h": 269.7
+        },
+        "a3": {
+          "l": 0.61,
+          "c": 0.123456789,
+          "h": 269.7
+        },
+        "a4": {
+          "l": 0.61,
+          "c": 0.123456789,
+          "h": 269.7
+        },
+        "b0": {
+          "l": 0.1,
+          "c": 0.018,
+          "h": 72
+        },
+        "b1": {
+          "l": 0.115,
+          "c": 0.018,
+          "h": 72
+        },
+        "b2": {
+          "l": 0.13,
+          "c": 0.018,
+          "h": 72
+        },
+        "b3": {
+          "l": 0.14500000000000002,
+          "c": 0.018,
+          "h": 72
+        },
+        "b4": {
+          "l": 0.16,
+          "c": 0.018,
+          "h": 72
+        },
+        "c0": {
+          "l": 0.95,
+          "c": 0.018,
+          "h": 72
+        },
+        "c1": {
+          "l": 0.85,
+          "c": 0.018,
+          "h": 72
+        },
+        "c2": {
+          "l": 0.75,
+          "c": 0.018,
+          "h": 72
+        },
+        "c3": {
+          "l": 0.6499999999999999,
+          "c": 0.018,
+          "h": 72
+        },
+        "c4": {
+          "l": 0.5499999999999999,
+          "c": 0.018,
+          "h": 72
+        }
+      },
+      "overrides": [
+        {
+          "token": "ink",
+          "value": {
+            "l": 0.8,
+            "c": 0.08,
+            "h": 29.5
+          }
+        }
+      ],
+      "colorTokens": {
+        "accent": "#abcdef",
+        "future-token": "custom"
+      }
+    },
+    "expected": {
+      "id": "fixture-theme",
+      "name": "Fixture theme",
+      "version": 3,
+      "mode": "dark",
+      "colorTokens": {
+        "surface-0": "oklch(0.1 0.018 72deg)",
+        "surface-1": "oklch(0.115 0.018 72deg)",
+        "surface-2": "oklch(0.13 0.018 72deg)",
+        "surface-3": "oklch(0.145 0.018 72deg)",
+        "surface-4": "oklch(0.16 0.018 72deg)",
+        "content-0": "oklch(0.95 0.018 72deg)",
+        "content-1": "oklch(0.85 0.018 72deg)",
+        "content-2": "oklch(0.75 0.018 72deg)",
+        "content-3": "oklch(0.65 0.018 72deg)",
+        "content-4": "oklch(0.55 0.018 72deg)",
+        "edge": "oklch(0.16 0.018 72deg)",
+        "edge-muted": "oklch(0.145 0.018 72deg)",
+        "accent": "#abcdef",
+        "red": "oklch(0.61 0.12345679 25.331deg)",
+        "orange": "oklch(0.61 0.12345679 47.604deg)",
+        "amber": "oklch(0.61 0.12345679 70.08deg)",
+        "yellow": "oklch(0.61 0.12345679 86.047deg)",
+        "lime": "oklch(0.61 0.12345679 130.85deg)",
+        "green": "oklch(0.61 0.12345679 149.579deg)",
+        "teal": "oklch(0.61 0.12345679 182.503deg)",
+        "cyan": "oklch(0.61 0.12345679 215.221deg)",
+        "blue": "oklch(0.61 0.12345679 259.815deg)",
+        "violet": "oklch(0.61 0.12345679 292.717deg)",
+        "purple": "oklch(0.61 0.12345679 303.9deg)",
+        "pink": "oklch(0.61 0.12345679 354.308deg)",
+        "surface": "var(--layer-surface)",
+        "inset": "var(--layer-inset)",
+        "ink": "oklch(0.8 0.08 29.5deg)",
+        "ink-muted": "var(--color-content-1)",
+        "ink-subtle": "var(--color-content-2)",
+        "ink-disabled": "var(--color-content-3)",
+        "ink-placeholder": "var(--color-content-4)",
+        "link": "var(--color-accent)",
+        "link-hover": "var(--color-accent)",
+        "link-visited": "var(--color-accent)",
+        "page": "var(--color-surface-0)",
+        "panel": "var(--color-surface-1)",
+        "dialog": "var(--color-surface-2)",
+        "menu": "var(--color-surface-2)",
+        "tooltip": "var(--color-surface-2)",
+        "toast": "var(--color-surface-2)",
+        "input": "transparent",
+        "input-focus": "var(--color-surface-1)",
+        "message": "var(--color-surface-1)",
+        "inline-code": "color-mix(in oklch, var(--color-ink) 5%, transparent)",
+        "hover": "color-mix(in oklch, var(--color-content-0) 3%, transparent)",
+        "active": "color-mix(in oklch, var(--color-content-0) 6%, transparent)",
+        "selected": "color-mix(in oklch, var(--color-accent) 8%, transparent)",
+        "success": "var(--color-green)",
+        "warning": "var(--color-amber)",
+        "failure": "var(--color-red)",
+        "priority-urgent": "var(--color-orange)",
+        "task-status-not-started": "var(--color-content-1)",
+        "task-status-in-progress": "color-mix(in srgb, var(--color-amber) 80%, var(--color-content-0))",
+        "task-status-in-review": "var(--color-violet)",
+        "task-status-completed": "var(--color-accent)",
+        "task-status-canceled": "var(--color-content-1)",
+        "chrome": "var(--color-surface-4)",
+        "future-token": "custom"
+      }
+    }
+  },
+  {
+    "input": {
+      "id": "fixture-theme",
+      "name": "Fixture theme",
+      "version": 3,
+      "mode": "dark",
+      "colorTokens": {
+        "surface-0": "oklch(0.1 0.018 72deg)",
+        "surface-1": "oklch(0.115 0.018 72deg)",
+        "surface-2": "oklch(0.13 0.018 72deg)",
+        "surface-3": "oklch(0.145 0.018 72deg)",
+        "surface-4": "oklch(0.16 0.018 72deg)",
+        "content-0": "oklch(0.95 0.018 72deg)",
+        "content-1": "oklch(0.85 0.018 72deg)",
+        "content-2": "oklch(0.75 0.018 72deg)",
+        "content-3": "oklch(0.65 0.018 72deg)",
+        "content-4": "oklch(0.55 0.018 72deg)",
+        "edge": "oklch(0.16 0.018 72deg)",
+        "edge-muted": "oklch(0.145 0.018 72deg)",
+        "accent": "#abcdef",
+        "red": "oklch(0.61 0.12345679 25.331deg)",
+        "orange": "oklch(0.61 0.12345679 47.604deg)",
+        "amber": "oklch(0.61 0.12345679 70.08deg)",
+        "yellow": "oklch(0.61 0.12345679 86.047deg)",
+        "lime": "oklch(0.61 0.12345679 130.85deg)",
+        "green": "oklch(0.61 0.12345679 149.579deg)",
+        "teal": "oklch(0.61 0.12345679 182.503deg)",
+        "cyan": "oklch(0.61 0.12345679 215.221deg)",
+        "blue": "oklch(0.61 0.12345679 259.815deg)",
+        "violet": "oklch(0.61 0.12345679 292.717deg)",
+        "purple": "oklch(0.61 0.12345679 303.9deg)",
+        "pink": "oklch(0.61 0.12345679 354.308deg)",
+        "surface": "var(--layer-surface)",
+        "inset": "var(--layer-inset)",
+        "ink": "oklch(0.8 0.08 29.5deg)",
+        "ink-muted": "var(--color-content-1)",
+        "ink-subtle": "var(--color-content-2)",
+        "ink-disabled": "var(--color-content-3)",
+        "ink-placeholder": "var(--color-content-4)",
+        "link": "var(--color-accent)",
+        "link-hover": "var(--color-accent)",
+        "link-visited": "var(--color-accent)",
+        "page": "var(--color-surface-0)",
+        "panel": "var(--color-surface-1)",
+        "dialog": "var(--color-surface-2)",
+        "menu": "var(--color-surface-2)",
+        "tooltip": "var(--color-surface-2)",
+        "toast": "var(--color-surface-2)",
+        "input": "transparent",
+        "input-focus": "var(--color-surface-1)",
+        "message": "var(--color-surface-1)",
+        "inline-code": "color-mix(in oklch, var(--color-ink) 5%, transparent)",
+        "hover": "color-mix(in oklch, var(--color-content-0) 3%, transparent)",
+        "active": "color-mix(in oklch, var(--color-content-0) 6%, transparent)",
+        "selected": "color-mix(in oklch, var(--color-accent) 8%, transparent)",
+        "success": "var(--color-green)",
+        "warning": "var(--color-amber)",
+        "failure": "var(--color-red)",
+        "priority-urgent": "var(--color-orange)",
+        "task-status-not-started": "var(--color-content-1)",
+        "task-status-in-progress": "color-mix(in srgb, var(--color-amber) 80%, var(--color-content-0))",
+        "task-status-in-review": "var(--color-violet)",
+        "task-status-completed": "var(--color-accent)",
+        "task-status-canceled": "var(--color-content-1)",
+        "chrome": "var(--color-surface-4)",
+        "future-token": "custom"
+      },
+      "future": {
+        "keep": true
+      }
+    },
+    "expected": {
+      "id": "fixture-theme",
+      "name": "Fixture theme",
+      "version": 3,
+      "mode": "dark",
+      "colorTokens": {
+        "surface-0": "oklch(0.1 0.018 72deg)",
+        "surface-1": "oklch(0.115 0.018 72deg)",
+        "surface-2": "oklch(0.13 0.018 72deg)",
+        "surface-3": "oklch(0.145 0.018 72deg)",
+        "surface-4": "oklch(0.16 0.018 72deg)",
+        "content-0": "oklch(0.95 0.018 72deg)",
+        "content-1": "oklch(0.85 0.018 72deg)",
+        "content-2": "oklch(0.75 0.018 72deg)",
+        "content-3": "oklch(0.65 0.018 72deg)",
+        "content-4": "oklch(0.55 0.018 72deg)",
+        "edge": "oklch(0.16 0.018 72deg)",
+        "edge-muted": "oklch(0.145 0.018 72deg)",
+        "accent": "#abcdef",
+        "red": "oklch(0.61 0.12345679 25.331deg)",
+        "orange": "oklch(0.61 0.12345679 47.604deg)",
+        "amber": "oklch(0.61 0.12345679 70.08deg)",
+        "yellow": "oklch(0.61 0.12345679 86.047deg)",
+        "lime": "oklch(0.61 0.12345679 130.85deg)",
+        "green": "oklch(0.61 0.12345679 149.579deg)",
+        "teal": "oklch(0.61 0.12345679 182.503deg)",
+        "cyan": "oklch(0.61 0.12345679 215.221deg)",
+        "blue": "oklch(0.61 0.12345679 259.815deg)",
+        "violet": "oklch(0.61 0.12345679 292.717deg)",
+        "purple": "oklch(0.61 0.12345679 303.9deg)",
+        "pink": "oklch(0.61 0.12345679 354.308deg)",
+        "surface": "var(--layer-surface)",
+        "inset": "var(--layer-inset)",
+        "ink": "oklch(0.8 0.08 29.5deg)",
+        "ink-muted": "var(--color-content-1)",
+        "ink-subtle": "var(--color-content-2)",
+        "ink-disabled": "var(--color-content-3)",
+        "ink-placeholder": "var(--color-content-4)",
+        "link": "var(--color-accent)",
+        "link-hover": "var(--color-accent)",
+        "link-visited": "var(--color-accent)",
+        "page": "var(--color-surface-0)",
+        "panel": "var(--color-surface-1)",
+        "dialog": "var(--color-surface-2)",
+        "menu": "var(--color-surface-2)",
+        "tooltip": "var(--color-surface-2)",
+        "toast": "var(--color-surface-2)",
+        "input": "transparent",
+        "input-focus": "var(--color-surface-1)",
+        "message": "var(--color-surface-1)",
+        "inline-code": "color-mix(in oklch, var(--color-ink) 5%, transparent)",
+        "hover": "color-mix(in oklch, var(--color-content-0) 3%, transparent)",
+        "active": "color-mix(in oklch, var(--color-content-0) 6%, transparent)",
+        "selected": "color-mix(in oklch, var(--color-accent) 8%, transparent)",
+        "success": "var(--color-green)",
+        "warning": "var(--color-amber)",
+        "failure": "var(--color-red)",
+        "priority-urgent": "var(--color-orange)",
+        "task-status-not-started": "var(--color-content-1)",
+        "task-status-in-progress": "color-mix(in srgb, var(--color-amber) 80%, var(--color-content-0))",
+        "task-status-in-review": "var(--color-violet)",
+        "task-status-completed": "var(--color-accent)",
+        "task-status-canceled": "var(--color-content-1)",
+        "chrome": "var(--color-surface-4)",
+        "future-token": "custom"
+      },
+      "future": {
+        "keep": true
+      }
+    }
+  },
+  {
+    "input": {
+      "id": "fixture-theme",
+      "name": "Fixture theme",
+      "version": 2,
+      "depth": 0.15,
+      "tokens": {
+        "a0": {
+          "l": 0.61,
+          "c": 0.123456789,
+          "h": 269.7
+        },
+        "a1": {
+          "l": 0.61,
+          "c": 0.123456789,
+          "h": 269.7
+        },
+        "a2": {
+          "l": 0.61,
+          "c": 0.123456789,
+          "h": 269.7
+        },
+        "a3": {
+          "l": 0.61,
+          "c": 0.123456789,
+          "h": 269.7
+        },
+        "a4": {
+          "l": 0.61,
+          "c": 0.123456789,
+          "h": 269.7
+        },
+        "b0": {
+          "l": 0.1,
+          "c": 0.018,
+          "h": 72
+        },
+        "b1": {
+          "l": 0.115,
+          "c": 0.018,
+          "h": 72
+        },
+        "b2": {
+          "l": 0.13,
+          "c": 0.018,
+          "h": 72
+        },
+        "b3": {
+          "l": 0.14500000000000002,
+          "c": 0.018,
+          "h": 72
+        },
+        "b4": {
+          "l": 0.16,
+          "c": 0.018,
+          "h": 72
+        },
+        "c0": {
+          "l": 0.95,
+          "c": 0.018,
+          "h": 72
+        },
+        "c1": {
+          "l": 0.85,
+          "c": 0.018,
+          "h": 72
+        },
+        "c2": {
+          "l": 0.75,
+          "c": 0.018,
+          "h": 72
+        },
+        "c3": {
+          "l": 0.6499999999999999,
+          "c": 0.018,
+          "h": 72
+        },
+        "c4": {
+          "l": 0.5499999999999999,
+          "c": 0.018,
+          "h": 72
+        }
+      },
+      "overrides": [
+        {
+          "token": "ink",
+          "value": {
+            "l": "2",
+            "c": [],
+            "h": null
+          }
+        }
+      ],
+      "colorTokens": {
+        "accent": "#abcdef",
+        "future-token": "custom"
+      }
+    },
+    "expected": {
+      "id": "fixture-theme",
+      "name": "Fixture theme",
+      "version": 3,
+      "mode": "dark",
+      "colorTokens": {
+        "surface-0": "oklch(0.1 0.018 72deg)",
+        "surface-1": "oklch(0.115 0.018 72deg)",
+        "surface-2": "oklch(0.13 0.018 72deg)",
+        "surface-3": "oklch(0.145 0.018 72deg)",
+        "surface-4": "oklch(0.16 0.018 72deg)",
+        "content-0": "oklch(0.95 0.018 72deg)",
+        "content-1": "oklch(0.85 0.018 72deg)",
+        "content-2": "oklch(0.75 0.018 72deg)",
+        "content-3": "oklch(0.65 0.018 72deg)",
+        "content-4": "oklch(0.55 0.018 72deg)",
+        "edge": "oklch(0.16 0.018 72deg)",
+        "edge-muted": "oklch(0.145 0.018 72deg)",
+        "accent": "#abcdef",
+        "red": "oklch(0.61 0.12345679 25.331deg)",
+        "orange": "oklch(0.61 0.12345679 47.604deg)",
+        "amber": "oklch(0.61 0.12345679 70.08deg)",
+        "yellow": "oklch(0.61 0.12345679 86.047deg)",
+        "lime": "oklch(0.61 0.12345679 130.85deg)",
+        "green": "oklch(0.61 0.12345679 149.579deg)",
+        "teal": "oklch(0.61 0.12345679 182.503deg)",
+        "cyan": "oklch(0.61 0.12345679 215.221deg)",
+        "blue": "oklch(0.61 0.12345679 259.815deg)",
+        "violet": "oklch(0.61 0.12345679 292.717deg)",
+        "purple": "oklch(0.61 0.12345679 303.9deg)",
+        "pink": "oklch(0.61 0.12345679 354.308deg)",
+        "surface": "var(--layer-surface)",
+        "inset": "var(--layer-inset)",
+        "ink": "oklch(0 0 0deg)",
+        "ink-muted": "var(--color-content-1)",
+        "ink-subtle": "var(--color-content-2)",
+        "ink-disabled": "var(--color-content-3)",
+        "ink-placeholder": "var(--color-content-4)",
+        "link": "var(--color-accent)",
+        "link-hover": "var(--color-accent)",
+        "link-visited": "var(--color-accent)",
+        "page": "var(--color-surface-0)",
+        "panel": "var(--color-surface-1)",
+        "dialog": "var(--color-surface-2)",
+        "menu": "var(--color-surface-2)",
+        "tooltip": "var(--color-surface-2)",
+        "toast": "var(--color-surface-2)",
+        "input": "transparent",
+        "input-focus": "var(--color-surface-1)",
+        "message": "var(--color-surface-1)",
+        "inline-code": "color-mix(in oklch, var(--color-ink) 5%, transparent)",
+        "hover": "color-mix(in oklch, var(--color-content-0) 3%, transparent)",
+        "active": "color-mix(in oklch, var(--color-content-0) 6%, transparent)",
+        "selected": "color-mix(in oklch, var(--color-accent) 8%, transparent)",
+        "success": "var(--color-green)",
+        "warning": "var(--color-amber)",
+        "failure": "var(--color-red)",
+        "priority-urgent": "var(--color-orange)",
+        "task-status-not-started": "var(--color-content-1)",
+        "task-status-in-progress": "color-mix(in srgb, var(--color-amber) 80%, var(--color-content-0))",
+        "task-status-in-review": "var(--color-violet)",
+        "task-status-completed": "var(--color-accent)",
+        "task-status-canceled": "var(--color-content-1)",
+        "chrome": "var(--color-surface-4)",
+        "future-token": "custom"
+      }
+    }
+  },
+  {
+    "input": {
+      "id": "fixture-theme",
+      "name": "Fixture theme",
+      "version": 3,
+      "mode": "dark",
+      "colorTokens": {
+        "surface-0": "oklch(0.1 0.018 72deg)",
+        "surface-1": "oklch(0.115 0.018 72deg)",
+        "surface-2": "oklch(0.13 0.018 72deg)",
+        "surface-3": "oklch(0.145 0.018 72deg)",
+        "surface-4": "oklch(0.16 0.018 72deg)",
+        "content-0": "oklch(0.95 0.018 72deg)",
+        "content-1": "oklch(0.85 0.018 72deg)",
+        "content-2": "oklch(0.75 0.018 72deg)",
+        "content-3": "oklch(0.65 0.018 72deg)",
+        "content-4": "oklch(0.55 0.018 72deg)",
+        "edge": "oklch(0.16 0.018 72deg)",
+        "edge-muted": "oklch(0.145 0.018 72deg)",
+        "accent": "#abcdef",
+        "red": "oklch(0.61 0.12345679 25.331deg)",
+        "orange": "oklch(0.61 0.12345679 47.604deg)",
+        "amber": "oklch(0.61 0.12345679 70.08deg)",
+        "yellow": "oklch(0.61 0.12345679 86.047deg)",
+        "lime": "oklch(0.61 0.12345679 130.85deg)",
+        "green": "oklch(0.61 0.12345679 149.579deg)",
+        "teal": "oklch(0.61 0.12345679 182.503deg)",
+        "cyan": "oklch(0.61 0.12345679 215.221deg)",
+        "blue": "oklch(0.61 0.12345679 259.815deg)",
+        "violet": "oklch(0.61 0.12345679 292.717deg)",
+        "purple": "oklch(0.61 0.12345679 303.9deg)",
+        "pink": "oklch(0.61 0.12345679 354.308deg)",
+        "surface": "var(--layer-surface)",
+        "inset": "var(--layer-inset)",
+        "ink": "oklch(0 0 0deg)",
+        "ink-muted": "var(--color-content-1)",
+        "ink-subtle": "var(--color-content-2)",
+        "ink-disabled": "var(--color-content-3)",
+        "ink-placeholder": "var(--color-content-4)",
+        "link": "var(--color-accent)",
+        "link-hover": "var(--color-accent)",
+        "link-visited": "var(--color-accent)",
+        "page": "var(--color-surface-0)",
+        "panel": "var(--color-surface-1)",
+        "dialog": "var(--color-surface-2)",
+        "menu": "var(--color-surface-2)",
+        "tooltip": "var(--color-surface-2)",
+        "toast": "var(--color-surface-2)",
+        "input": "transparent",
+        "input-focus": "var(--color-surface-1)",
+        "message": "var(--color-surface-1)",
+        "inline-code": "color-mix(in oklch, var(--color-ink) 5%, transparent)",
+        "hover": "color-mix(in oklch, var(--color-content-0) 3%, transparent)",
+        "active": "color-mix(in oklch, var(--color-content-0) 6%, transparent)",
+        "selected": "color-mix(in oklch, var(--color-accent) 8%, transparent)",
+        "success": "var(--color-green)",
+        "warning": "var(--color-amber)",
+        "failure": "var(--color-red)",
+        "priority-urgent": "var(--color-orange)",
+        "task-status-not-started": "var(--color-content-1)",
+        "task-status-in-progress": "color-mix(in srgb, var(--color-amber) 80%, var(--color-content-0))",
+        "task-status-in-review": "var(--color-violet)",
+        "task-status-completed": "var(--color-accent)",
+        "task-status-canceled": "var(--color-content-1)",
+        "chrome": "var(--color-surface-4)",
+        "future-token": "custom"
+      },
+      "future": {
+        "keep": true
+      }
+    },
+    "expected": {
+      "id": "fixture-theme",
+      "name": "Fixture theme",
+      "version": 3,
+      "mode": "dark",
+      "colorTokens": {
+        "surface-0": "oklch(0.1 0.018 72deg)",
+        "surface-1": "oklch(0.115 0.018 72deg)",
+        "surface-2": "oklch(0.13 0.018 72deg)",
+        "surface-3": "oklch(0.145 0.018 72deg)",
+        "surface-4": "oklch(0.16 0.018 72deg)",
+        "content-0": "oklch(0.95 0.018 72deg)",
+        "content-1": "oklch(0.85 0.018 72deg)",
+        "content-2": "oklch(0.75 0.018 72deg)",
+        "content-3": "oklch(0.65 0.018 72deg)",
+        "content-4": "oklch(0.55 0.018 72deg)",
+        "edge": "oklch(0.16 0.018 72deg)",
+        "edge-muted": "oklch(0.145 0.018 72deg)",
+        "accent": "#abcdef",
+        "red": "oklch(0.61 0.12345679 25.331deg)",
+        "orange": "oklch(0.61 0.12345679 47.604deg)",
+        "amber": "oklch(0.61 0.12345679 70.08deg)",
+        "yellow": "oklch(0.61 0.12345679 86.047deg)",
+        "lime": "oklch(0.61 0.12345679 130.85deg)",
+        "green": "oklch(0.61 0.12345679 149.579deg)",
+        "teal": "oklch(0.61 0.12345679 182.503deg)",
+        "cyan": "oklch(0.61 0.12345679 215.221deg)",
+        "blue": "oklch(0.61 0.12345679 259.815deg)",
+        "violet": "oklch(0.61 0.12345679 292.717deg)",
+        "purple": "oklch(0.61 0.12345679 303.9deg)",
+        "pink": "oklch(0.61 0.12345679 354.308deg)",
+        "surface": "var(--layer-surface)",
+        "inset": "var(--layer-inset)",
+        "ink": "oklch(0 0 0deg)",
+        "ink-muted": "var(--color-content-1)",
+        "ink-subtle": "var(--color-content-2)",
+        "ink-disabled": "var(--color-content-3)",
+        "ink-placeholder": "var(--color-content-4)",
+        "link": "var(--color-accent)",
+        "link-hover": "var(--color-accent)",
+        "link-visited": "var(--color-accent)",
+        "page": "var(--color-surface-0)",
+        "panel": "var(--color-surface-1)",
+        "dialog": "var(--color-surface-2)",
+        "menu": "var(--color-surface-2)",
+        "tooltip": "var(--color-surface-2)",
+        "toast": "var(--color-surface-2)",
+        "input": "transparent",
+        "input-focus": "var(--color-surface-1)",
+        "message": "var(--color-surface-1)",
+        "inline-code": "color-mix(in oklch, var(--color-ink) 5%, transparent)",
+        "hover": "color-mix(in oklch, var(--color-content-0) 3%, transparent)",
+        "active": "color-mix(in oklch, var(--color-content-0) 6%, transparent)",
+        "selected": "color-mix(in oklch, var(--color-accent) 8%, transparent)",
+        "success": "var(--color-green)",
+        "warning": "var(--color-amber)",
+        "failure": "var(--color-red)",
+        "priority-urgent": "var(--color-orange)",
+        "task-status-not-started": "var(--color-content-1)",
+        "task-status-in-progress": "color-mix(in srgb, var(--color-amber) 80%, var(--color-content-0))",
+        "task-status-in-review": "var(--color-violet)",
+        "task-status-completed": "var(--color-accent)",
+        "task-status-canceled": "var(--color-content-1)",
+        "chrome": "var(--color-surface-4)",
+        "future-token": "custom"
+      },
+      "future": {
+        "keep": true
+      }
+    }
+  },
+  {
+    "input": null,
+    "expected": null
+  },
+  {
+    "input": {},
+    "expected": null
+  },
+  {
+    "input": {
+      "id": "fixture-theme",
+      "name": "bad",
+      "version": 3,
+      "mode": "light",
+      "colorTokens": {
+        "accent": "  "
+      }
+    },
+    "expected": null
+  }
+]

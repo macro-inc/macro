@@ -115,6 +115,9 @@ pub enum Input {
 /// Explicit host composition data.
 #[derive(Clone, PartialEq, Debug)]
 pub enum CompositionEvent {
+    /// Clear browser composition ownership without committing displayed text.
+    /// Android schedules this again after its native backspace.
+    Clear,
     /// Start composition at the current range anchor.
     Start {
         /// Host data.

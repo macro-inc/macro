@@ -112,7 +112,7 @@ impl SyncCore {
             }
         } else {
             self.has_converged = true;
-            self.confirmed_base = doc.oplog_vv().get_frontiers();
+            self.confirmed_base = doc.oplog_frontiers();
             if convergence.rerun {
                 self.request_since(1, now, doc, out);
             } else {

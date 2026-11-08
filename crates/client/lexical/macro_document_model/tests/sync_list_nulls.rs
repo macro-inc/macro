@@ -42,10 +42,9 @@ fn unchecked_source_listitems_reconstruct_without_changing_loro_or_hiding_boolea
     let before = doc.export(ExportMode::Snapshot).expect("source snapshot");
     let vv = doc.oplog_vv();
     let expected = lexical_loro::synced_json(editor.state(), &MACRO_SYNC_POLICY)?;
-    assert!(
-        expected.root["children"][0]["children"][0]
-            .get("checked")
-            .is_none()
+    assert_eq!(
+        expected.root["children"][0]["children"][0].get("checked"),
+        Some(&serde_json::Value::Null)
     );
     assert_eq!(reconstruct_state(&doc, &MACRO_SYNC_POLICY)?, expected);
     projection

@@ -2,6 +2,10 @@ use crate::*;
 use doc_sync_core::*;
 use document_session::*;
 use lexical_model::{EditorMode, Input};
+use std::sync::{
+    atomic::{AtomicI64, Ordering},
+    Arc,
+};
 pub(crate) enum Session {
     Editor(Box<DocumentSession<EditorSurface>>),
     Doc(Box<DocumentSession<GenericSurface>>),
@@ -13,6 +17,7 @@ pub(crate) struct Machine {
     wall_origin: f64,
     terminal: bool,
     initial_telemetry: Vec<wire::TelemetryMsg>,
+    constructor_clock: Option<Arc<AtomicI64>>,
 }
 impl Machine {
     pub(crate) fn create(
@@ -22,15 +27,34 @@ impl Machine {
         wall: f64,
         editor: bool,
     ) -> Result<Self, BoundaryError> {
+        Self::create_with(abi, config, mono, wall, editor, false)
+    }
+    pub(crate) fn create_macro(
+        abi: u32,
+        config: &[u8],
+        mono: f64,
+        wall: f64,
+    ) -> Result<Self, BoundaryError> {
+        Self::create_with(abi, config, mono, wall, true, true)
+    }
+    fn create_with(
+        abi: u32,
+        config: &[u8],
+        mono: f64,
+        wall: f64,
+        editor: bool,
+        application: bool,
+    ) -> Result<Self, BoundaryError> {
         if abi != generated::ABI_MAJOR {
             return Err(BoundaryError::AbiMismatch);
         }
         let (mut config, headless, view_host) =
             codec::config(wire::SessionConfigMsg::deserialize(config)?)?;
         let now = codec::now(mono, wall)?;
+        let constructor_clock = application.then(|| Arc::new(AtomicI64::new(now.wall.0)));
         let capture = crate::telemetry::begin();
         let session = if editor {
-            config.surface = SurfaceConfig::Editor(EditorConfig {
+            let mut editor_config = EditorConfig {
                 view_host,
                 mode: if headless {
                     EditorMode::Headless
@@ -38,7 +62,11 @@ impl Machine {
                     EditorMode::ViewAttached
                 },
                 ..EditorConfig::default()
-            });
+            };
+            if let Some(clock) = &constructor_clock {
+                editor_config = crate::macro_editor::config(editor_config, clock.clone());
+            }
+            config.surface = SurfaceConfig::Editor(editor_config);
             Session::Editor(Box::new(DocumentSession::new(config, now)?))
         } else {
             Session::Doc(Box::new(DocumentSession::new(config, now)?))
@@ -50,6 +78,7 @@ impl Machine {
             wall_origin: wall - mono,
             terminal: false,
             initial_telemetry: capture.finish(),
+            constructor_clock,
         })
     }
     pub(crate) fn generation(&self) -> u32 {
@@ -65,6 +94,9 @@ impl Machine {
         wall: Option<f64>,
     ) -> Result<u32, BoundaryError> {
         let now = codec::now(mono, wall.unwrap_or(self.wall_origin + mono))?;
+        if let Some(clock) = &self.constructor_clock {
+            clock.store(now.wall.0, Ordering::Relaxed);
+        }
         if let Some(wall) = wall {
             self.wall_origin = wall - mono;
         }
@@ -75,16 +107,83 @@ impl Machine {
             SessionInput::Sync(SyncInput::Host(HostSignal::Visible)) => self.terminal = false,
             _ => {}
         }
-        let capture = crate::telemetry::begin();
-        let out = match &mut self.session {
-            Session::Editor(s) => s.handle(now, input),
-            Session::Doc(s) => s.handle(now, input),
+        let command = matches!(
+            &input,
+            SessionInput::Editor(
+                Input::Command { .. } | Input::KeyDown { .. } | Input::Undo | Input::Redo
+            )
+        );
+        let submitted = match &input {
+            SessionInput::Editor(Input::TextFromView { key, text, .. }) => {
+                Some((*key, text.clone()))
+            }
+            _ => None,
         };
-        let mut flags = output::encode(out, self.terminal, &mut self.output)?;
+        let capture = crate::telemetry::begin();
+        match &mut self.session {
+            Session::Editor(s) => {
+                s.handle(now, input);
+            }
+            Session::Doc(s) => {
+                s.handle(now, input);
+            }
+        }
         let mut messages = std::mem::take(&mut self.initial_telemetry);
         messages.extend(capture.finish());
+        let (out, surface) = match &self.session {
+            Session::Editor(s) => (s.last_output(), Some(s.surface())),
+            Session::Doc(s) => (s.last_output(), None),
+        };
+        let wake_changed = self.wake != out.wake_at;
+        // A zero return is an exact acknowledgement of the DOM edit. Every
+        // other result carries authoritative text, including rejected edits
+        // whose rollback would otherwise produce no model Diff.
+        let correction = if let (Some((key, submitted)), Some(surface)) = (submitted, surface) {
+            let state = surface.state();
+            if let Some(text) = state.view().text(key) {
+                let exact = text.text.as_str() == submitted;
+                let nonzero = !out.view.is_empty()
+                    || !out.io.is_empty()
+                    || out.need_peer_ids
+                    || wake_changed
+                    || !messages.is_empty();
+                if exact && !nonzero {
+                    None
+                } else {
+                    Some(output::TextCorrection {
+                        initialize: false,
+                        diff: lexical_model::Diff {
+                            generation: state.max_key().generation(),
+                            full_reconcile: false,
+                            view_text_matches: None,
+                            ops: vec![lexical_model::DiffOp::Text {
+                                key,
+                                text: text.text.as_str().to_owned(),
+                            }],
+                        },
+                    })
+                }
+            } else {
+                // Invalid, stale or transformed-away text keys require a complete
+                // repair. A Remove could destroy a live non-text node, or name a
+                // key the mirror already forgot.
+                Some(output::TextCorrection {
+                    diff: surface.view_diff()?,
+                    initialize: true,
+                })
+            }
+        } else {
+            None
+        };
+        let mut flags = output::encode(out, self.terminal, &mut self.output, correction)?;
         flags |= crate::telemetry::append(messages, &mut self.output)?;
-        if self.wake != out.wake_at {
+        if command
+            && flags & 16 == 0
+            && surface.is_some_and(|s| s.command_handled() == lexical_model::Handled::Yes)
+        {
+            flags |= generated::FLAG_HANDLED;
+        }
+        if wake_changed {
             flags |= 4;
             self.wake = out.wake_at;
         }
@@ -97,6 +196,24 @@ impl Machine {
         wall: Option<f64>,
     ) -> Result<u32, BoundaryError> {
         self.call(SessionInput::Sync(input), mono, wall)
+    }
+    pub(crate) fn reject_text(&mut self, reason: &'static str) -> Result<u32, BoundaryError> {
+        let Session::Editor(session) = &self.session else {
+            return Err(BoundaryError::Invalid("editor"));
+        };
+        let output = SessionOutput {
+            view: vec![ViewEffect::Error(SessionError::Configuration(reason))],
+            ..Default::default()
+        };
+        output::encode(
+            &output,
+            self.terminal,
+            &mut self.output,
+            Some(output::TextCorrection {
+                diff: session.surface().view_diff()?,
+                initialize: true,
+            }),
+        )
     }
     pub(crate) fn editor(&mut self, input: Input, mono: f64) -> Result<u32, BoundaryError> {
         self.call(SessionInput::Editor(input), mono, None)
@@ -113,7 +230,14 @@ impl Machine {
                 },
                 snapshot: msg.bytes,
             }),
-            2 => SessionInput::Editor(editor_input::input(msg.editor, self.generation())?),
+            2 => {
+                let text_input = matches!(&msg.editor, wire::EditorInputMsg::EditorText { .. });
+                match editor_input::input(msg.editor, self.generation()) {
+                    Ok(input) => SessionInput::Editor(input),
+                    Err(_) if text_input => return self.reject_text("invalid DOM text input"),
+                    Err(error) => return Err(error),
+                }
+            }
             3 => SessionInput::Doc(
                 msg.operations
                     .into_iter()

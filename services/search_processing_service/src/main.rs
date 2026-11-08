@@ -279,7 +279,8 @@ async fn main() -> anyhow::Result<()> {
                 config.internal_api_key.to_string(),
                 config.lexical_service_url.clone(),
             )
-            .with_route_modes(config.lexical_route_modes.clone()),
+            .with_route_modes(config.lexical_route_modes.clone())
+            .with_sync_from_env()?,
         );
 
         let worker = sqs_worker::SQSWorker::new(

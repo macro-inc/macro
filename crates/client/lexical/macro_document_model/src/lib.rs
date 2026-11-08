@@ -58,3 +58,8 @@ pub mod sync;
 /// Optional owned HTML export and htmlparser2-compatible fragment parsing.
 #[cfg(feature = "html")]
 pub mod html;
+
+/// Structure, list, table, media, clipboard and link surface policy.
+pub mod plugins_group_b;
+/// Application surface plugin registration.
+pub mod surface;

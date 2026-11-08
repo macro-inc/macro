@@ -2134,3 +2134,6 @@ fn event_only_commits_preserve_the_typing_history_group() {
 }
 
 mod comment_factory;
+mod ime;
+
+mod presence;
