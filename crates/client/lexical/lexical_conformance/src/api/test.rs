@@ -491,12 +491,18 @@ fn nested_model_callback_frames_share_record_identity_without_borrowing_the_pare
             }
         );
         assert_eq!(tx.range_at(SelectionSlot::Active)?.anchor.offset(), 2);
+        let slot = selections
+            .resolve(&mut tx, 0)?
+            .ok_or_else(|| crate::replay::fail("selection handle"))?;
         assert_eq!(
-            tx.range_at(selections.slot(0)?)?.anchor.offset(),
+            tx.range_at(slot)?.anchor.offset(),
             if return_to_original { 2 } else { 0 }
         );
+        let slot = selections
+            .resolve(&mut tx, 1)?
+            .ok_or_else(|| crate::replay::fail("selection handle"))?;
         assert_eq!(
-            tx.range_at(selections.slot(1)?)?.anchor.offset(),
+            tx.range_at(slot)?.anchor.offset(),
             if return_to_original { 0 } else { 2 }
         );
         let nested = seen.lock().expect("test log")[0].clone();
@@ -643,7 +649,10 @@ fn paragraph_insertion_keeps_a_selection_activated_by_its_foreign_hook()
         json!({"$selection":1,"kind":"range"})
     );
     assert_eq!(tx.range_at(SelectionSlot::Active)?.anchor.offset(), 2);
-    assert_eq!(tx.range_at(selections.slot(0)?)?.anchor.offset(), 5);
+    let slot = selections
+        .resolve(&mut tx, 0)?
+        .ok_or_else(|| crate::replay::fail("selection handle"))?;
+    assert_eq!(tx.range_at(slot)?.anchor.offset(), 5);
     tx.commit()?;
     Ok(())
 }

@@ -493,15 +493,22 @@ impl Replayer {
                 if !clone_active && previous_active == Some(id) {
                     tx.bind_foreign_selection_identity(
                         SelectionSlot::Active,
-                        self.selections.identity(id)?,
+                        self.selections
+                            .identity(id)?
+                            .ok_or_else(|| fail("selection identity"))?,
                     )?;
-                    Ok(SelectionSlot::Active)
+                    Ok(Some(SelectionSlot::Active))
                 } else {
                     match s {
-                        Some(value) => {
-                            Ok(tx.detach_foreign_selection(value, self.selections.identity(id)?))
-                        }
-                        None => Ok(SelectionSlot::Active),
+                        Some(value) => Ok(Some(
+                            tx.detach_foreign_selection(
+                                value,
+                                self.selections
+                                    .identity(id)?
+                                    .ok_or_else(|| fail("selection identity"))?,
+                            ),
+                        )),
+                        None => Ok(None),
                     }
                 }
             })
@@ -511,16 +518,16 @@ impl Replayer {
     pub(crate) fn capture_slots(&mut self, tx: &Transaction<'_>) -> Result<()> {
         self.selections.synchronize(tx)?;
         self.bindings.capture_retired_records(tx, self.version)?;
-        let values = self
-            .selections
-            .slots()?
-            .into_iter()
-            .map(|slot| {
-                tx.selection_at(slot)
-                    .map(|s| s.map(Selection::snapshot_for_foreign_read))
-            })
-            .collect::<std::result::Result<_, _>>()?;
-        self.selections.replace_values(values)
+        for (id, slot) in self.selections.slots()?.into_iter().enumerate() {
+            if let Some(slot) = slot {
+                self.selections.save_value(
+                    id,
+                    tx.selection_at(slot)?
+                        .map(Selection::snapshot_for_foreign_read),
+                )?;
+            }
+        }
+        Ok(())
     }
     pub(crate) fn execute(&mut self, op: &Value, tx: &mut Transaction<'_>) -> Result<()> {
         validate_operation(op)?;
@@ -880,6 +887,15 @@ impl Replayer {
         Ok(
             json!({"$node":key.index(),"generation":key.generation(),"identity":identity,"ver":version,"type":node.type_name()}),
         )
+    }
+    pub(crate) fn selection_slot(
+        &self,
+        tx: &mut Transaction<'_>,
+        id: usize,
+    ) -> Result<SelectionSlot> {
+        self.selections
+            .resolve(tx, id)?
+            .ok_or_else(|| fail("selection handle"))
     }
     pub(crate) fn selection(&mut self, tx: &mut Transaction<'_>) -> Result<Value> {
         self.selection_at(tx, SelectionSlot::Active)

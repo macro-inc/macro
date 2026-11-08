@@ -12,6 +12,21 @@ pub(crate) fn call(
     let key = node_key(receiver)?;
     // These public accessors call getLatest() in upstream. Raw get:__fields
     // resolve the receiver's captured version in properties.rs instead.
+    let selection_arg = match method {
+        "isSelected" => a.first(),
+        "extractWithChild" => a.get(1),
+        _ => None,
+    };
+    let selection = selection_arg
+        .filter(|value| !value.is_null() && value.get("$undef").is_none())
+        .map(|value| -> Result<_> {
+            let slot = slot_arg(r, tx, value)?;
+            Ok(tx
+                .selection_at(slot)?
+                .map(Selection::snapshot_for_foreign_read))
+        })
+        .transpose()?
+        .flatten();
     let snapshot = r.read_state.clone();
     let view = snapshot
         .as_ref()
@@ -134,15 +149,7 @@ pub(crate) fn call(
             )));
         }
         "isSelected" => {
-            let selection = a
-                .first()
-                .filter(|value| !value.is_null() && value.get("$undef").is_none())
-                .map(|value| {
-                    slot_arg(r, value).and_then(|slot| tx.selection_at(slot).map_err(Into::into))
-                })
-                .transpose()?
-                .flatten();
-            return Ok(json!(view.is_selected(key, selection)));
+            return Ok(json!(view.is_selected(key, selection.as_ref())));
         }
         "excludeFromCopy" => {
             let destination = a
@@ -154,19 +161,11 @@ pub(crate) fn call(
         }
         "extractWithChild" => {
             let child = node_key(a.first().ok_or_else(|| fail("child"))?)?;
-            let selection = a
-                .get(1)
-                .filter(|value| !value.is_null() && value.get("$undef").is_none())
-                .map(|value| {
-                    slot_arg(r, value).and_then(|slot| tx.selection_at(slot).map_err(Into::into))
-                })
-                .transpose()?
-                .flatten();
             let destination = copy_destination(a.get(2).ok_or_else(|| fail("copy destination"))?)?;
             return Ok(json!(view.extract_with_child(
                 key,
                 child,
-                selection,
+                selection.as_ref(),
                 destination
             )));
         }
@@ -424,7 +423,7 @@ pub(crate) fn call(
         "collapseAtStart" => {
             let slot = a
                 .first()
-                .map(|v| slot_arg(r, v))
+                .map(|v| slot_arg(r, tx, v))
                 .transpose()?
                 .unwrap_or(SelectionSlot::Active);
             return Ok(json!(tx.collapse_at_start(key, slot)?));
@@ -434,7 +433,7 @@ pub(crate) fn call(
             return r.node(tx.view(), parent);
         }
         "insertNewAfter" => {
-            let selection = slot_arg(r, a.first().ok_or_else(|| fail("selection"))?)?;
+            let selection = slot_arg(r, tx, a.first().ok_or_else(|| fail("selection"))?)?;
             let restore = a.get(1).and_then(Value::as_bool).unwrap_or(true);
             return tx
                 .insert_new_after(key, selection, restore)?
