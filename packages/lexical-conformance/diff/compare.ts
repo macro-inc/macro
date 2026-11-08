@@ -2,6 +2,7 @@ import { expect } from 'vitest';
 import type { CommitRecord, Snapshot } from './commands';
 /** Persistent bijection: paths may move, identities may never be reused or rebound. */
 export class Comparison {
+  private previous: Snapshot | null = null;
   private uLife = { seen: new Set<string>(), retired: new Set<string>() };
   private rLife = { seen: new Set<string>(), retired: new Set<string>() };
   private track(snapshot: Snapshot, life: typeof this.uLife) {
@@ -51,6 +52,23 @@ export class Comparison {
       'node paths'
     ).toEqual(u.keys.map((k) => k.path));
     u.keys.forEach((k, i) => this.bind(k.key, r.keys[i].key));
+    if (
+      /^UTF-16 offset Utf16Offset\(\d+\) is out of range$/.test(
+        u.error ?? ''
+      ) &&
+      r.commit === null &&
+      u.commit !== null &&
+      Object.values(u.commit).every((entries) => entries.length === 0)
+    ) {
+      // S1 D-13: upstream can publish empty recovery; Rust returns no commit.
+      expect(this.previous, 'rollback baseline').not.toBeNull();
+      for (const field of ['state', 'selection', 'text', 'keys'] as const)
+        expect(r[field], `atomic rollback: ${field}`).toEqual(
+          this.previous?.[field]
+        );
+      return;
+    }
+    this.previous = r;
     if (u.commit === null || r.commit === null) {
       expect(r.commit, 'commit presence').toEqual(u.commit);
       return;

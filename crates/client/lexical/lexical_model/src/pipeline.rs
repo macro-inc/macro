@@ -78,6 +78,8 @@ impl Transaction<'_> {
             return Ok(());
         }
         let result = self.flush_inner(mode);
+        #[cfg(feature = "foreign-nodes")]
+        let result = result.and_then(|()| self.view().check_foreign_payloads());
         self.transform_iterations = 0;
         if result.is_ok() {
             self.dirty_since_flush = false;

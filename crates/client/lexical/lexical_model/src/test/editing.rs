@@ -259,8 +259,8 @@ fn moving_a_child_updates_selection_in_its_source_parent() -> Result<(), Error> 
     let line = tx.create(LineBreak {})?;
     tx.append(target, &[line.key()])?;
     tx.insert_before(line, a, true)?;
-    assert_eq!(tx.anchor()?, Point::element(source, ChildIndex(2)));
-    assert_eq!(tx.focus()?, Point::element(source, ChildIndex(2)));
+    assert_eq!(tx.anchor()?, Point::text(c, Utf16Offset(1)));
+    assert_eq!(tx.focus()?, Point::text(c, Utf16Offset(1)));
     Ok(())
 }
 

@@ -5,7 +5,7 @@ edition = "2024"
 publish = false
 
 [features]
-# Reserved for the development-only conformance host; no production consumer.
+# Development-only runtime hosting and suspended updates; no production consumer.
 foreign-nodes = []
 bench-counters = []
 model-segmentation = ["dep:unicode-segmentation"]

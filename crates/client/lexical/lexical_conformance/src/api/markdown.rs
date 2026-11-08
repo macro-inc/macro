@@ -86,7 +86,8 @@ pub(crate) fn call(
         .as_ref()
         .map(EditorState::view)
         .unwrap_or(tx.view());
-    match name.rsplit('.').next().unwrap_or(name) {
+    let short = name.rsplit('.').next().unwrap_or(name);
+    match short {
         "normalizeMarkdown" => Ok(json!(normalize_markdown(
             string(args.first().ok_or_else(|| fail("markdown source"))?)?,
             args.get(1).and_then(Value::as_bool).unwrap_or(false)

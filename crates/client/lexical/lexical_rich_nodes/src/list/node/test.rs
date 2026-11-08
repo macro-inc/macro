@@ -210,3 +210,55 @@ fn splitting_raw_text_in_list_dispatches_parent_splice() -> Result<()> {
     assert_eq!(tx.text_content(children[1]), "ab");
     Ok(())
 }
+
+#[test]
+fn paragraph_insertion_at_a_list_boundary_uses_the_root_fallback() -> Result<()> {
+    let mut editor = register_list_nodes(Editor::builder(EditorMode::Headless))
+        .build()
+        .expect("editor");
+    let mut tx = editor.transaction();
+    let list = create_list_node(&mut tx, ListType::Bullet, 1)?;
+    let item = create_list_item_node(&mut tx, None)?;
+    tx.append(list, &[item.key()])?;
+    tx.append(NodeKey::ROOT, &[list.key()])?;
+    tx.set_selection(Some(Selection::Range(RangeSelection::collapsed(
+        Point::element(list, ChildIndex(0)),
+    ))))?;
+    tx.insert_paragraph()?;
+    let children = tx.children_keys(NodeKey::ROOT)?;
+    assert_eq!(children.len(), 3);
+    assert_eq!(children[0], list.key());
+    assert!(tx.is::<Paragraph>(children[1]));
+    assert!(tx.is::<Paragraph>(children[2]));
+    assert_eq!(tx.anchor()?, Point::element(children[2], ChildIndex(0)));
+    Ok(())
+}
+
+#[test]
+fn converting_an_indented_break_preserves_the_element_caret_offset() -> Result<()> {
+    let mut editor = list_extension(Editor::builder(EditorMode::Headless), ListConfig::default())
+        .build()
+        .expect("editor");
+    editor.update(|tx| {
+        let paragraph = tx.create(Paragraph::default())?;
+        let line = tx.create(LineBreak {})?;
+        tx.append(paragraph, &[line.key()])?;
+        tx.set_indent(paragraph, 1)?;
+        tx.append(NodeKey::ROOT, &[paragraph.key()])?;
+        tx.set_selection(Some(Selection::Range(RangeSelection::collapsed(
+            Point::element(paragraph, ChildIndex(1)),
+        ))))
+    })?;
+    editor.update(|tx| super::super::format::insert_list(tx, ListType::Bullet))?;
+    let range = editor
+        .state()
+        .selection()
+        .and_then(Selection::as_range)
+        .expect("range");
+    assert_eq!(range.anchor.offset(), 1);
+    assert_eq!(range.focus.offset(), 1);
+    let item = range.anchor.key();
+    assert!(editor.state().is::<ListItemNode>(item));
+    assert_eq!(editor.state().children_size(item), 1);
+    Ok(())
+}

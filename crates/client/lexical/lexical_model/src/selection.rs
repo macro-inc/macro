@@ -55,7 +55,7 @@ impl Point {
     }
 }
 /// Anchor/focus selection and typing attributes.
-#[derive(Clone, Debug)]
+#[derive(Debug)]
 pub struct RangeSelection {
     pub(crate) cached_direction: Option<(Point, Point, bool)>,
     pub(crate) dirty: bool,
@@ -214,6 +214,18 @@ fn comparison_point(view: StateRef<'_>, point: Point) -> Result<Point, Error> {
         return Ok(Point::element(key, ChildIndex(index as u32)));
     }
 }
+impl Clone for RangeSelection {
+    fn clone(&self) -> Self {
+        Self {
+            cached_direction: None,
+            dirty: self.dirty,
+            anchor: self.anchor,
+            focus: self.focus,
+            format: self.format,
+            style: self.style.clone(),
+        }
+    }
+}
 impl PartialEq for RangeSelection {
     fn eq(&self, other: &Self) -> bool {
         self.anchor == other.anchor
@@ -226,12 +238,12 @@ impl RangeSelection {
     /// Construct an initially clean range with no typing attributes.
     pub fn new(anchor: Point, focus: Point) -> Self {
         Self {
+            cached_direction: None,
             anchor,
             focus,
             format: TextFormat::empty(),
             style: Arc::from(""),
             dirty: false,
-            cached_direction: None,
         }
     }
     /// Construct a range at the start of the root.

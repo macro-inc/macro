@@ -1,5 +1,7 @@
 //! Borrowed views over committed and pending node maps.
 mod api;
+mod record;
+pub use record::{NodeRecord, NodeRef};
 mod selection;
 mod structural;
 use crate::node::NodeSlot;
@@ -10,6 +12,8 @@ pub use structural::CommonAncestor;
 /// A read-only view whose returned borrows live as long as the underlying state.
 #[derive(Clone, Copy)]
 pub struct StateRef<'state> {
+    #[cfg(feature = "foreign-nodes")]
+    pub(crate) native_projection: Option<&'state crate::foreign::projection::NativeProjection>,
     pub(crate) state: &'state EditorState,
     pub(crate) previous_selection: Option<&'state Selection>,
     pub(crate) composition_key: Option<NodeKey>,
@@ -56,80 +60,6 @@ impl<'state> TextView<'state> {
         self.state.text(self.key).unwrap_or(&EMPTY)
     }
 }
-/// Borrowed framework record without exposing mutable links.
-#[derive(Clone, Copy)]
-pub struct NodeRef<'state> {
-    slot: &'state NodeSlot,
-    registry: &'state std::sync::Arc<Registry>,
-}
-/// An owned ephemeral record that cannot mutate a snapshot.
-pub struct NodeRecord {
-    slot: NodeSlot,
-    registry: std::sync::Arc<Registry>,
-}
-impl NodeRecord {
-    /// Borrow the copied framework fields and payload.
-    pub fn as_ref(&self) -> NodeRef<'_> {
-        NodeRef {
-            slot: &self.slot,
-            registry: &self.registry,
-        }
-    }
-}
-impl<'state> NodeRef<'state> {
-    /// Make an independent ephemeral record, applying the clone hook.
-    /// s2: ID-07
-    pub fn to_owned(self) -> NodeRecord {
-        let mut slot = self.slot.clone();
-        if let Some(data) = slot.data.after_clone() {
-            slot.data = data;
-        }
-        NodeRecord {
-            slot,
-            registry: std::sync::Arc::clone(self.registry),
-        }
-    }
-    /// Node identity.
-    pub fn key(self) -> NodeKey {
-        self.slot.key
-    }
-    /// Node kind.
-    pub fn kind(self) -> NodeKind {
-        self.slot.base.kind()
-    }
-    /// Registered type index.
-    pub fn type_index(self) -> NodeTypeIndex {
-        self.slot.type_index
-    }
-    /// Registered type name.
-    pub fn type_name(self) -> &'static str {
-        self.registry.registered(self.slot.type_index).type_name
-    }
-    /// Parent identity.
-    pub fn parent(self) -> Option<NodeKey> {
-        self.slot.links.parent
-    }
-    /// Previous sibling.
-    pub fn prev(self) -> Option<NodeKey> {
-        self.slot.links.prev
-    }
-    /// Next sibling.
-    pub fn next(self) -> Option<NodeKey> {
-        self.slot.links.next
-    }
-    /// Base framework fields.
-    pub fn base(self) -> &'state BaseData {
-        &self.slot.base
-    }
-    /// Node state, if allocated.
-    pub fn node_state(self) -> Option<&'state NodeState> {
-        self.slot.state.as_deref()
-    }
-    /// Type-erased user payload.
-    pub fn data_any(self) -> &'state dyn std::any::Any {
-        self.slot.data.as_any()
-    }
-}
 impl<'state> StateRef<'state> {
     /// Borrow the immutable snapshot behind this view, including pending node data.
     pub fn snapshot(self) -> &'state EditorState {
@@ -152,7 +82,12 @@ impl<'state> StateRef<'state> {
     }
     /// Get.
     pub fn get<Node: NodeType>(self, key: impl Into<NodeKey>) -> Option<&'state Node> {
-        let slot = self.slot(key.into())?;
+        let key = key.into();
+        #[cfg(feature = "foreign-nodes")]
+        if let Some(frame) = self.native_projection.filter(|frame| frame.key == key) {
+            return frame.get::<Node>();
+        }
+        let slot = self.slot(key)?;
         (self.state.registry.vtable(slot.type_index).project)(
             slot.data.as_any(),
             TypeId::of::<Node>(),
@@ -162,10 +97,27 @@ impl<'state> StateRef<'state> {
     /// Cast.
     pub fn cast<Node: NodeType>(self, key: impl Into<NodeKey>) -> Option<Id<Node>> {
         let key = key.into();
-        self.get::<Node>(key).map(|_| Id::new_unchecked(key))
+        self.is::<Node>(key).then(|| Id::new_unchecked(key))
     }
     /// Is.
     pub fn is<Node: NodeType>(self, key: impl Into<NodeKey>) -> bool {
+        let key = key.into();
+        #[cfg(feature = "foreign-nodes")]
+        if let Some(slot) = self.slot(key)
+            && self
+                .state
+                .registry
+                .registered(slot.type_index)
+                .foreign
+                .is_some()
+        {
+            return self
+                .state
+                .registry
+                .registered(slot.type_index)
+                .ancestry
+                .contains(&TypeId::of::<Node>());
+        }
         self.get::<Node>(key).is_some()
     }
     /// Kind.
@@ -787,6 +739,16 @@ impl<'state> StateRef<'state> {
                 });
             }
         }
+        #[cfg(feature = "foreign-nodes")]
+        if slot
+            .state
+            .as_ref()
+            .is_some_and(|state| state.foreign.contains(state_key.name()))
+        {
+            return Err(Error::StateKeyCollision {
+                key: state_key.name(),
+            });
+        }
         if slot.state.is_some() {
             self.state
                 .shared_state_configs
@@ -841,6 +803,16 @@ impl<'state> StateRef<'state> {
             serde_json::json!((v.json_version)(slot.data.as_any())),
         );
         if let Some(state) = &slot.state {
+            #[cfg(feature = "foreign-nodes")]
+            state.export(
+                &self
+                    .state
+                    .registry
+                    .foreign_states
+                    .layout(&registration.state_layout),
+                &mut json,
+            );
+            #[cfg(not(feature = "foreign-nodes"))]
             state.export(&registration.state_layout, &mut json);
         }
         if let BaseData::Element(data) = &slot.base
@@ -876,7 +848,15 @@ impl<'state> StateRef<'state> {
         if self.text_data(key)?.text.as_str() == text {
             return self.export_json(key);
         }
-        self.with_text_slice(key, text)?.view().export_json(key)
+        let snapshot = self.with_text_slice(key, text)?;
+        StateRef {
+            #[cfg(feature = "foreign-nodes")]
+            native_projection: self.native_projection,
+            state: &snapshot,
+            previous_selection: self.previous_selection,
+            composition_key: self.composition_key,
+        }
+        .export_json(key)
     }
     /// Copy one text record for export, invoking its clone hook before replacing text.
     /// The resulting snapshot retains node identities and cannot mutate this view.

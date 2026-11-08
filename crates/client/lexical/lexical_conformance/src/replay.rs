@@ -8,7 +8,15 @@ mod editors;
 mod host;
 pub(crate) mod protocol;
 use protocol::validate_operation;
+mod bindings;
+mod carets;
+pub(crate) use carets::{CaretBindings, IteratorValue};
 mod initial;
+mod records;
+mod selections;
+pub(crate) use bindings::Bindings;
+pub(crate) use records::RecordIdentities;
+pub(crate) use selections::SelectionBindings;
 
 /// A malformed fixture, unsupported operation, or observable oracle mismatch.
 #[derive(Debug, thiserror::Error)]
@@ -72,29 +80,17 @@ pub struct Replayer {
     pub(crate) d6_model_leaves: std::collections::HashSet<NodeKey>,
     pub(crate) markdown_options: lexical_markdown::MarkdownOptions,
     pub(crate) in_callback: bool,
-    pub(crate) carets: Vec<crate::api::caret::CaretValue>,
-    pub(crate) caret_endpoints: HashMap<usize, (Value, Value)>,
-    pub(crate) caret_origins: HashMap<usize, Value>,
-    pub(crate) iterators: Vec<Option<(lexical_model::NodeCaretCursor, Option<Value>)>>,
-    pub(crate) handles: HashMap<String, Value>,
-    pub(crate) keys: HashMap<String, NodeKey>,
-    pub(crate) next_record: u64,
-    pub(crate) records: HashMap<(NodeKey, usize), (u64, u64)>,
+    pub(crate) carets: CaretBindings,
+    pub(crate) bindings: Bindings,
+    pub(crate) record_ids: RecordIdentities,
+    pub(crate) record_owner: Option<(u64, EditorState)>,
     pub(crate) version: u64,
-    pub(crate) record_version: u64,
-    pub(crate) states: HashMap<(u64, u64), EditorState>,
+    pub(crate) committed_version: u64,
     pub(crate) editor_id: u64,
     pub(crate) key_counter: SharedKeyCounter,
-    host_tape: std::sync::Arc<std::sync::Mutex<host::HostTape>>,
-    pub(crate) saved_states: Vec<EditorState>,
-    pub(crate) saved_editor_states: HashMap<(u64, u64), usize>,
-    pub(crate) committed_version: u64,
-    pub(crate) child_iterators: HashMap<usize, lexical_rich_nodes::utils::ChildCursor>,
-    pub(crate) value_iterators: HashMap<usize, Vec<Value>>,
+    pub(crate) host_tape: std::sync::Arc<std::sync::Mutex<host::HostTape>>,
     pub(crate) read_state: Option<EditorState>,
-    pub(crate) selections: Vec<SelectionSlot>,
-    pub(crate) selection_values: Vec<Option<Selection>>,
-    pub(crate) active_selection: Option<usize>,
+    pub(crate) selections: SelectionBindings,
     pub(crate) tapes: Vec<crate::fixture::Tape>,
     pub(crate) tape_positions: Vec<usize>,
     pub(crate) updates: Vec<Value>,
@@ -114,6 +110,9 @@ pub struct Replayer {
     pub(crate) microtasks: std::collections::VecDeque<Value>,
 }
 impl Replayer {
+    pub(crate) fn saved_state(&self, id: usize) -> Result<EditorState> {
+        self.bindings.saved_state(id)
+    }
     /// Replay all trace operations and final state; no original JS executes.
     pub fn replay(&mut self, fixture: &Fixture) -> Result<()> {
         if fixture.schema != 2
@@ -177,7 +176,7 @@ impl Replayer {
         {
             return Err(fail("unknown recorder build"));
         }
-        self.keys.insert("root".into(), NodeKey::ROOT);
+        self.bindings.bind_key("root".into(), NodeKey::ROOT)?;
         self.tapes = fixture.tapes.clone();
         self.tape_positions = vec![0; fixture.tapes.len()];
         let mut editor = None;
@@ -299,15 +298,17 @@ impl Replayer {
                             .ok_or_else(|| fail("state install commit"))?;
                         self.pending_command = false;
                         self.version += 1;
-                        self.record_version = self.version;
                         self.compare(&op["updates"], &json!(self.updates))?;
                         self.compare(&op["causes"], &json!(self.causes))?;
                         if op["index"] != self.version {
                             return Err(fail("state install commit index"));
                         }
                         self.committed_version = self.version;
-                        self.states
-                            .insert((self.editor_id, self.version), commit.next.clone());
+                        self.bindings.pin_editor_state(
+                            self.editor_id,
+                            self.version,
+                            commit.next.clone(),
+                        )?;
                         snapshot::compare(self, &op["snapshot"], &commit.next, Some(&commit))?;
                         self.updates.clear();
                         self.causes.clear();
@@ -320,9 +321,8 @@ impl Replayer {
                     }
                     let ed = editor.as_mut().ok_or_else(|| fail("missing editor"))?;
                     self.version += 1;
-                    self.record_version = self.version;
                     let mut tx = ed.transaction();
-                    self.begin_slots(&mut tx, true);
+                    self.begin_slots(&mut tx, true)?;
                     self.pending_writes = false;
                     if kind == "commit" && self.version == 1 && self.attached {
                         tx.mark_dirty(NodeKey::ROOT)?;
@@ -340,8 +340,11 @@ impl Replayer {
                                 return Err(fail("commit index mismatch"));
                             }
                             self.committed_version = self.version;
-                            self.states
-                                .insert((self.editor_id, self.version), commit.next.clone());
+                            self.bindings.pin_editor_state(
+                                self.editor_id,
+                                self.version,
+                                commit.next.clone(),
+                            )?;
                             snapshot::compare(
                                 self,
                                 &pending["snapshot"],
@@ -419,7 +422,7 @@ impl Replayer {
                 "call" if op["fn"] == "LexicalEditor.dispatchCommand" => {
                     let ed = editor.as_mut().ok_or_else(|| fail("missing editor"))?;
                     let mut tx = ed.transaction();
-                    self.begin_slots(&mut tx, false);
+                    self.begin_slots(&mut tx, false)?;
                     self.execute(op, &mut tx)?;
                     self.capture_slots(&tx)?;
                     self.pending_install = Some(tx.commit()?);
@@ -459,7 +462,7 @@ impl Replayer {
                         self.compare(&op["ret"], &undefined())
                     } else {
                         let mut tx = ed.transaction();
-                        self.begin_slots(&mut tx, false);
+                        self.begin_slots(&mut tx, false)?;
                         self.execute(op, &mut tx)
                     }
                 }
@@ -556,15 +559,7 @@ impl Replayer {
         validate_operation(op)?;
         match string(&op["op"])? {
             "call" => {
-                let selection = tx.selection().cloned();
-                let replacements = tx.selection_replacements();
-                let result = crate::api::lexical::call(self, tx, op);
-                if replacements != tx.selection_replacements()
-                    && let Some(id) = self.active_selection.take()
-                    && let Some(selection) = selection
-                {
-                    self.selections[id] = tx.detach_selection(selection);
-                }
+                let result = crate::api::call(self, tx, op);
                 if let Some(expected) = op.get("throws") {
                     match result {
                         Ok(value) => {
@@ -634,16 +629,22 @@ impl Replayer {
             }
             "read" => {
                 let previous = self.read_state.take();
+                let previous_owner = self.record_owner.take();
+                let mut version = self.committed_version;
                 self.read_state = if let Some(state) = op.get("state") {
                     let decoded = self.decode(state)?;
-                    Some(self.saved_states[integer(&decoded["$snapshot"])? as usize].clone())
+                    let id = integer(&decoded["$snapshot"])? as usize;
+                    version = self.bindings.saved_version(id)?.unwrap_or(self.version);
+                    Some(self.saved_state(id)?)
                 } else if self.updates.is_empty() {
                     Some(tx.committed_state().clone())
                 } else {
                     None
                 };
+                self.record_owner = self.read_state.clone().map(|state| (version, state));
                 let result = self.execute_calls(&op["calls"], tx);
                 self.read_state = previous;
+                self.record_owner = previous_owner;
                 result
             }
             "tick" => {
@@ -717,19 +718,18 @@ impl Replayer {
             for tag in ["$h", "$ed", "$state", "$sel", "$pt", "$caret", "$iterator"] {
                 if let Some(id) = object.get(tag) {
                     return self
-                        .handles
-                        .get(&format!("{tag}:{id}"))
-                        .cloned()
+                        .bindings
+                        .handle(&format!("{tag}:{id}"))?
                         .ok_or_else(|| fail(format!("unknown handle {tag}:{id}")));
                 }
             }
             if let Some(raw) = object.get("$key") {
                 let _ = raw;
                 let key = self
-                    .keys
-                    .get(string(&object["raw"])?)
+                    .bindings
+                    .key(string(&object["raw"])?)?
                     .ok_or_else(|| fail("unknown key"))?;
-                return Ok(json!({"$nodeKey":key_wire(*key)}));
+                return Ok(key_value(key));
             }
             let mut decoded = serde_json::Map::new();
             for (key, value) in object {
@@ -758,8 +758,8 @@ impl Replayer {
                         return Err(fail(format!("expected {tag} object, got {actual}")));
                     }
                     let binding = format!("{tag}:{id}");
-                    if let Some(bound) = self.handles.get(&binding) {
-                        if bound != actual {
+                    if let Some(bound) = self.bindings.handle(&binding)? {
+                        if &bound != actual {
                             return Err(fail(format!(
                                 "identity mismatch {binding}: {bound} != {actual}"
                             )));
@@ -820,20 +820,21 @@ impl Replayer {
                             }
                         }
                         if self
-                            .handles
+                            .bindings
+                            .handles()?
                             .iter()
                             .any(|(other, value)| other.starts_with(tag) && value == actual)
                         {
                             return Err(fail(format!("distinct oracle handles alias {binding}")));
                         }
-                        self.handles.insert(binding, actual.clone());
+                        self.bindings.bind_handle(binding, actual.clone())?;
                     }
                     return Ok(());
                 }
             }
             if object.contains_key("$key") {
                 let key = if actual.get("$nodeKey").is_some() {
-                    key_index(&actual["$nodeKey"])?
+                    tagged_key(actual, "$nodeKey")?
                 } else if let Some(raw) = actual.as_str() {
                     if raw == "root" {
                         NodeKey::ROOT
@@ -889,64 +890,79 @@ impl Replayer {
                 "strict key allocation mismatch: {raw} != {key}"
             )));
         }
-        if let Some(existing) = self.keys.get(raw) {
-            if *existing != key {
+        if let Some(existing) = self.bindings.key(raw)? {
+            if existing != key {
                 return Err(fail(format!(
                     "key bijection mismatch: {raw} {existing} != {key}"
                 )));
             }
         } else {
-            if self.keys.values().any(|other| *other == key) {
+            if self.bindings.keys()?.values().any(|other| *other == key) {
                 return Err(fail(format!(
                     "key bijection is not injective: {raw} -> {key}"
                 )));
             }
-            self.keys.insert(raw.into(), key);
+            self.bindings.bind_key(raw.into(), key)?;
         }
         Ok(())
     }
     pub(crate) fn node(&mut self, view: StateRef<'_>, key: NodeKey) -> Result<Value> {
         let node = view.node_or_err(key)?;
         let pointer = std::ptr::from_ref(node.base()) as usize;
-        let (version, identity) = if let Some(record) = self.records.get(&(key, pointer)) {
-            *record
-        } else {
-            let identity = self.next_record;
-            self.next_record += 1;
-            let record = (self.record_version, identity);
-            self.records.insert((key, pointer), record);
-            record
-        };
+        let version = self
+            .record_owner
+            .as_ref()
+            .filter(|(_, state)| {
+                state
+                    .view()
+                    .node(key)
+                    .is_some_and(|node| std::ptr::from_ref(node.base()) as usize == pointer)
+            })
+            .map_or(self.version, |(version, _)| *version);
+        let (version, identity) = self.record_ids.identify(key, pointer, version)?;
         Ok(
-            json!({"$node":key_wire(key),"identity":identity,"ver":version,"editor":self.editor_id,"type":node.type_name()}),
+            json!({"$node":key.index(),"generation":key.generation(),"identity":identity,"ver":version,"editor":self.editor_id,"type":node.type_name()}),
         )
     }
-    pub(crate) fn selection(&mut self, tx: &mut Transaction<'_>) -> Value {
+    pub(crate) fn selection(&mut self, tx: &mut Transaction<'_>) -> Result<Value> {
         if tx.selection().is_none() {
-            return Value::Null;
+            return Ok(Value::Null);
         }
-        if let Some(id) = self.active_selection {
-            return json!({"$selection":id,"kind":if tx.selection().is_some_and(Selection::is_range) {"range"} else {"node"}});
-        }
-        let id = self.selections.len();
-        self.selections.push(SelectionSlot::Active);
-        self.selection_values.push(None);
-        self.active_selection = Some(id);
-        json!({"$selection":id,"kind":if tx.selection().is_some_and(Selection::is_range) {"range"} else {"node"}})
+        let id = if let Some(active) = self.selections.active()? {
+            active.id
+        } else {
+            let id = self.selections.push(SelectionSlot::Active)?;
+            self.selections.set_active(Some(id))?;
+            id
+        };
+        Ok(
+            json!({"$selection":id,"kind":if tx.selection().is_some_and(Selection::is_range) {"range"} else {"node"}}),
+        )
     }
 }
-pub(crate) fn key_wire(key: NodeKey) -> u64 {
-    (u64::from(key.generation()) << 32) | u64::from(key.index())
-}
 pub(crate) fn key_index(value: &Value) -> Result<NodeKey> {
-    let encoded = integer(value)?;
     Ok(NodeKey::from_parts(KeyParts {
-        generation: (encoded >> 32) as u32,
-        index: (encoded & u64::from(u32::MAX)) as u32,
+        generation: 0,
+        index: u32::try_from(integer(value)?).map_err(|_| fail("key overflow"))?,
+    }))
+}
+pub(crate) fn key_value(key: NodeKey) -> Value {
+    json!({"$nodeKey":key.index(),"generation":key.generation()})
+}
+pub(crate) fn tagged_key(value: &Value, tag: &str) -> Result<NodeKey> {
+    let index = key_index(&value[tag])?.index();
+    let generation = value
+        .get("generation")
+        .map(integer)
+        .transpose()?
+        .unwrap_or(0);
+    Ok(NodeKey::from_parts(KeyParts {
+        generation: u32::try_from(generation).map_err(|_| fail("key generation overflow"))?,
+        index,
     }))
 }
 pub(crate) fn node_key(value: &Value) -> Result<NodeKey> {
-    key_index(&value["$node"])
+    tagged_key(value, "$node")
 }
 
 #[cfg(test)]
@@ -954,7 +970,7 @@ mod test;
 
 fn materialize_keys(value: &mut Value) -> Result<()> {
     if value.get("$nodeKey").is_some() {
-        *value = json!(key_index(&value["$nodeKey"])?.to_string());
+        *value = json!(tagged_key(value, "$nodeKey")?.to_string());
     } else if let Some(object) = value.as_object_mut() {
         for child in object.values_mut() {
             materialize_keys(child)?;

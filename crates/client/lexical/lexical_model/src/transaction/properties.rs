@@ -333,8 +333,8 @@ impl TextMut<'_, '_> {
         }
         let mut value = self.data().text.as_str().to_owned();
         value.replace_range(start..end, insert);
-        // TextNode.spliceText obtains a writable record even for identical text.
-        self.tx.writable(self.key)?;
+        // spliceText acquires a writable record even when the result is unchanged.
+        self.data_mut()?;
         self.set_text_content(&value)?;
         if move_selection {
             let offset = range.start + TextBuffer::new(insert).utf16_len();

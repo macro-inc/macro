@@ -4,6 +4,17 @@ use crate::{NodeKey, Utf16Offset};
 /// A failed model operation; the editor remains unchanged when an update fails.
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
+    /// A runtime state key was not registered on this editor.
+    #[cfg(feature = "foreign-nodes")]
+    #[error("unknown foreign state {key}")]
+    UnknownForeignState {
+        /// Unregistered state name.
+        key: std::sync::Arc<str>,
+    },
+    /// An update belongs to another editor or predates a later publication.
+    #[cfg(feature = "foreign-nodes")]
+    #[error("stale suspended update")]
+    StaleSuspendedUpdate,
     /// input cannot be batched.
     #[error("input cannot be batched")]
     InputNotBatchable,
@@ -251,6 +262,22 @@ pub enum Error {
 /// Invalid editor configuration.
 #[derive(Debug, thiserror::Error)]
 pub enum BuildError {
+    /// A runtime node declaration names a state config the builder did not register.
+    #[cfg(feature = "foreign-nodes")]
+    #[error("unknown foreign state {key}")]
+    UnknownForeignState {
+        /// Unregistered state name.
+        key: &'static str,
+    },
+    /// Runtime parent is missing, cyclic, or has another storage kind.
+    #[cfg(feature = "foreign-nodes")]
+    #[error("unknown or incompatible foreign parent {parent} for {type_name}")]
+    UnknownForeignParent {
+        /// Runtime type being registered.
+        type_name: &'static str,
+        /// Parent type name.
+        parent: &'static str,
+    },
     /// Command behavior was installed more than once.
     #[error("plugin {name} registered twice")]
     DuplicatePlugin {
@@ -324,6 +351,10 @@ impl Error {
     /// Stable variant name for cross-boundary error classification.
     pub fn kind(&self) -> &'static str {
         match self {
+            #[cfg(feature = "foreign-nodes")]
+            Self::StaleSuspendedUpdate => "StaleSuspendedUpdate",
+            #[cfg(feature = "foreign-nodes")]
+            Self::UnknownForeignState { .. } => "UnknownForeignState",
             Self::InputNotBatchable => "InputNotBatchable",
             Self::ViewSelectionInHeadless => "ViewSelectionInHeadless",
             Self::RemoteChildrenInCreate => "RemoteChildrenInCreate",

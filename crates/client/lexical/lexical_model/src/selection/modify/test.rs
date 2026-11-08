@@ -553,3 +553,91 @@ fn text_selection_and_caret_reads_allow_surrogate_interiors_but_edits_reject_the
     assert_eq!(tx.text_content(text), "a😀b");
     Ok(())
 }
+
+#[test]
+fn collapsing_an_empty_paragraph_selects_its_sibling_element() -> Result<(), Error> {
+    let mut editor = Editor::builder(EditorMode::Headless)
+        .node::<Inline>()
+        .build()
+        .expect("editor");
+    let mut tx = editor.transaction();
+    let empty = tx.create(Paragraph::default())?;
+    let next = tx.create(Paragraph::default())?;
+    let inline = tx.create(Inline {})?;
+    let text = tx.create_text("link")?;
+    tx.append(inline, &[text.key()])?;
+    tx.append(next, &[inline.key()])?;
+    tx.append(NodeKey::ROOT, &[empty.key(), next.key()])?;
+    tx.select_start(empty)?;
+    tx.delete_character(EditDirection::Backward, ModifyTarget::NoView)?;
+    assert_eq!(tx.children_keys(NodeKey::ROOT)?, vec![next.key()]);
+    assert_eq!(tx.anchor()?, Point::element(next, ChildIndex(0)));
+    assert_eq!(tx.focus()?, Point::element(next, ChildIndex(0)));
+    Ok(())
+}
+
+#[test]
+fn raw_splice_preserves_parent_offsets_while_sibling_insertion_adjusts_them() -> Result<(), Error> {
+    let mut editor = Editor::builder(EditorMode::Headless)
+        .build()
+        .expect("editor");
+    let mut tx = editor.transaction();
+    let parent = tx.create(Paragraph::default())?;
+    let a = tx.create(Paragraph::default())?;
+    let b = tx.create(Paragraph::default())?;
+    let c = tx.create(Paragraph::default())?;
+    tx.append(parent, &[a.key(), b.key(), c.key()])?;
+    tx.append(NodeKey::ROOT, &[parent.key()])?;
+    tx.set_selection(Some(Selection::Range(RangeSelection::collapsed(
+        Point::element(parent, ChildIndex(2)),
+    ))))?;
+    let inserted = tx.create(Paragraph::default())?;
+    tx.splice(parent, ChildIndex(0), 0, &[inserted.key()])?;
+    assert_eq!(tx.anchor()?, Point::element(parent, ChildIndex(2)));
+    tx.splice(parent, ChildIndex(0), 1, &[])?;
+    assert_eq!(tx.anchor()?, Point::element(parent, ChildIndex(2)));
+    tx.insert_before(c, inserted, true)?;
+    assert_eq!(tx.anchor()?, Point::element(parent, ChildIndex(3)));
+    Ok(())
+}
+
+#[test]
+fn raw_splice_relocates_a_removed_descendant_after_a_line_break() -> Result<(), Error> {
+    let mut editor = Editor::builder(EditorMode::Headless)
+        .node::<Inline>()
+        .build()
+        .expect("editor");
+    let mut tx = editor.transaction();
+    let paragraph = tx.create(Paragraph::default())?;
+    let line = tx.create(LineBreak {})?;
+    let inline = tx.create(Inline {})?;
+    let text = tx.create_text("a")?;
+    tx.append(inline, &[text.key()])?;
+    tx.append(paragraph, &[line.key(), inline.key()])?;
+    tx.append(NodeKey::ROOT, &[paragraph.key()])?;
+    tx.select_start(text)?;
+    tx.splice(paragraph, ChildIndex(1), 1, &[])?;
+    assert_eq!(tx.anchor()?, Point::element(paragraph, ChildIndex(0)));
+    assert_eq!(tx.focus()?, Point::element(paragraph, ChildIndex(0)));
+    Ok(())
+}
+
+#[test]
+fn raw_splice_relocation_skips_a_predecessor_moved_into_the_range() -> Result<(), Error> {
+    let mut editor = Editor::builder(EditorMode::Headless)
+        .build()
+        .expect("editor");
+    let mut tx = editor.transaction();
+    let paragraph = tx.create(Paragraph::default())?;
+    let a = tx.create_text("a")?;
+    let b = tx.create_text("b")?;
+    let c = tx.create_text("c")?;
+    tx.append(paragraph, &[a.key(), b.key(), c.key()])?;
+    tx.append(NodeKey::ROOT, &[paragraph.key()])?;
+    tx.select_end(b)?;
+    tx.splice(paragraph, ChildIndex(1), 1, &[a.key()])?;
+    assert_eq!(tx.children_keys(paragraph)?, vec![a.key(), c.key()]);
+    assert_eq!(tx.anchor()?, Point::text(c, Utf16Offset(0)));
+    assert_eq!(tx.focus()?, Point::text(c, Utf16Offset(0)));
+    Ok(())
+}
