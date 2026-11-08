@@ -8,6 +8,8 @@ The transformer layer uses the shared lexical_markdown engine; route adapters ar
 
 ## Boundaries
 
+- Own unknown HTML node names in exporter errors; opaque type names borrow their snapshot.
+
 - Keep HTML opt-in; parse template fragments with logos starts and nom lexical modes before serializing owned nodes.
 - Keep the two S3 Q7 equation exceptions bound to exact source-row hashes and exact UTF-8 markup; compare Latin-1 exports directly.
 - Match list DOM exports and source attribute order byte-for-byte; never emit stored HTML directly.
