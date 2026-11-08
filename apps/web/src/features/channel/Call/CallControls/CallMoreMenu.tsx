@@ -3,7 +3,7 @@ import { IS_MAC } from '@core/constant/isMac';
 import CaretRight from '@icon/system/regular/caret-right.svg';
 import CornersIn from '@icon/system/regular/corners-in.svg';
 import CornersOut from '@icon/system/regular/corners-out.svg';
-import DotsThree from '@icon/system/regular/dots-three.svg';
+import DotsThree from '@icon/system/regular/dots-three-vertical.svg';
 import Keyboard from '@icon/system/regular/keyboard.svg';
 import LayoutIcon from '@icon/system/regular/sidebar-simple.svg';
 import UsersSlash from '@icon/system/regular/users-slash.svg';

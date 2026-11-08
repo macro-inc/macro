@@ -364,7 +364,8 @@ A shared-screen chip leads with its screen icon, then the presenter's avatar
 and name. A hidden-participant speaking chip uses the same order with a waveform; the
 presenter's tile also carries a screen icon. Local sharing shows **You're sharing
 your screen** and **Stop sharing** instead of recursively playing your own display.
-Desktop **More → Layout** offers Auto, Grid, Speaker and Sidebar and remembers
+The call bar uses the vertical three-dot More icon; the live-call popover keeps
+its horizontal icon. Desktop **More → Layout** offers Auto, Grid, Speaker and Sidebar and remembers
 the choice for later calls. Auto keeps the existing behavior; Grid gives people
 equal tiles; Speaker puts the active person or share above a filmstrip; Sidebar
 puts that strip on the right. Phones always use Auto.
