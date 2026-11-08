@@ -16,259 +16,29 @@ import {
   useDragDropContext,
   useSortableContext,
 } from '@thisbeyond/solid-dnd';
-import {
-  Button,
-  ConfirmDialog,
-  cn,
-  Dialog,
-  Panel,
-  ToggleSwitch,
-  Tooltip,
-} from '@ui';
-import {
-  createSignal,
-  For,
-  type JSX,
-  Match,
-  Show,
-  Suspense,
-  Switch,
-} from 'solid-js';
+import { Button, ConfirmDialog, cn, Tooltip } from '@ui';
+import { For, type JSX, Match, Show, Suspense, Switch } from 'solid-js';
 import {
   SettingsCard,
   SettingsPage,
-  SettingsRow,
   SettingsSection,
 } from '../../settings/primitives';
 import { CrmStageIcon } from '../components/stage-icon';
 import { useCrmContext } from '../context/crm-context';
 import { createStageEditor } from '../primitives/stage-editor';
+import { CrmEmailPrivacySettings } from './email-privacy';
 import { EmailSyncSection } from './email-sync-settings';
 import {
   useCrmPermissions,
   useCurrentTeamQuery,
   useDealStages,
-  useIsTeamAdmin,
-  usePatchTeamCrmSettingsMutation,
   useReplaceCrmStagesMutation,
   useResetCrmStagesMutation,
   useTeamCrmConfig,
 } from './use-crm';
 
 /* ------------------------------------------------------------------ */
-/* CRM enablement                                                     */
-/* ------------------------------------------------------------------ */
-
-const DISABLE_CRM_PHRASE = 'Disable CRM';
-
-/** Typed confirmation matching the Team tab's Delete Team dialog. */
-function DisableCrmDialog(props: {
-  open: boolean;
-  pending: boolean;
-  confirmation: string;
-  onConfirmationInput: (value: string) => void;
-  onConfirm: () => void;
-  onClose: () => void;
-}) {
-  return (
-    <Dialog open={props.open} onOpenChange={(open) => !open && props.onClose()}>
-      <Panel depth={2} class="max-h-[75vh] text-ink rounded-xl">
-        <Panel.Header class="px-2 gap-1">
-          <Dialog.CloseButton as={Button} variant="ghost" size="icon-sm">
-            <XIcon class="size-3.5 touch:size-6 shrink-0 pointer-events-none" />
-          </Dialog.CloseButton>
-          <Dialog.Title as="span" class="text-sm font-medium p-0 m-0">
-            Disable CRM
-          </Dialog.Title>
-        </Panel.Header>
-        <Panel.Body class="p-3 flex flex-col gap-3">
-          <p>
-            Disabling the CRM{' '}
-            <span class="font-medium">permanently purges</span> your team's CRM
-            data — companies, contacts, and their history. Re-enabling later
-            lets you backfill again or start fresh.
-          </p>
-          <p class="text-sm text-ink-muted">
-            Type <span class="font-medium text-ink">{DISABLE_CRM_PHRASE}</span>{' '}
-            to confirm.
-          </p>
-          <input
-            type="text"
-            value={props.confirmation}
-            onInput={(e) => props.onConfirmationInput(e.currentTarget.value)}
-            placeholder={DISABLE_CRM_PHRASE}
-            class="settings-input w-full"
-          />
-          <div class="flex justify-end gap-1 pt-2">
-            <Button
-              variant="ghost"
-              disabled={props.pending}
-              onClick={props.onClose}
-            >
-              Cancel
-            </Button>
-            <Button
-              variant="secondary"
-              disabled={
-                props.pending || props.confirmation !== DISABLE_CRM_PHRASE
-              }
-              onClick={props.onConfirm}
-            >
-              <Show when={props.pending} fallback={DISABLE_CRM_PHRASE}>
-                <SpinnerIcon class="size-4 animate-spin" />
-              </Show>
-            </Button>
-          </div>
-        </Panel.Body>
-      </Panel>
-    </Dialog>
-  );
-}
-
-function CrmEnablementSection() {
-  const isTeamAdmin = useIsTeamAdmin();
-  const teamQuery = useCurrentTeamQuery();
-  const patchCrmMutation = usePatchTeamCrmSettingsMutation();
-
-  // The mutation invalidates the team query on success, which refetches
-  // the authoritative flag. The switch stays on that flag until a dialog
-  // confirms the change.
-  const crmEnabled = () => teamQuery.data?.team.crm_enabled ?? false;
-  const [showEnableModal, setShowEnableModal] = createSignal(false);
-  const [enableChoice, setEnableChoice] = createSignal<'backfill' | 'fresh'>();
-  const [showDisableModal, setShowDisableModal] = createSignal(false);
-  const [disableConfirmation, setDisableConfirmation] = createSignal('');
-
-  const handleToggle = (next: boolean) => {
-    if (!isTeamAdmin() || patchCrmMutation.isPending) return;
-    if (next) {
-      // Enabling asks whether to backfill from existing email history.
-      setShowEnableModal(true);
-    } else {
-      // Disabling purges the team's CRM data — force a typed confirmation.
-      setDisableConfirmation('');
-      setShowDisableModal(true);
-    }
-  };
-
-  const handleEnable = (backfill: boolean) => {
-    setEnableChoice(backfill ? 'backfill' : 'fresh');
-    patchCrmMutation.mutate(
-      { enabled: true, backfill },
-      {
-        onSuccess: () => setShowEnableModal(false),
-        onSettled: () => setEnableChoice(undefined),
-      }
-    );
-  };
-
-  const handleDisable = () => {
-    patchCrmMutation.mutate(
-      { enabled: false, backfill: false },
-      {
-        onSuccess: () => setShowDisableModal(false),
-      }
-    );
-  };
-
-  return (
-    <SettingsSection title="General">
-      <SettingsCard>
-        <SettingsRow
-          label="Team CRM"
-          description={
-            isTeamAdmin()
-              ? 'Companies, contacts, and pipelines for everyone on your team.'
-              : 'Companies, contacts, and pipelines for everyone on your team. Only team admins can turn it on or off.'
-          }
-        >
-          <Show when={patchCrmMutation.isPending}>
-            <SpinnerIcon class="size-4 animate-spin text-ink-muted" />
-          </Show>
-          <ToggleSwitch
-            size="md"
-            label="Team CRM"
-            labelClass="sr-only"
-            checked={crmEnabled()}
-            disabled={!isTeamAdmin() || patchCrmMutation.isPending}
-            onChange={handleToggle}
-          />
-        </SettingsRow>
-      </SettingsCard>
-
-      <Dialog
-        open={showEnableModal()}
-        onOpenChange={(open) => !open && setShowEnableModal(false)}
-      >
-        <Panel depth={2} class="max-h-[75vh] text-ink rounded-xl">
-          <Panel.Header class="px-2 gap-1">
-            <Dialog.CloseButton as={Button} variant="ghost" size="icon-sm">
-              <XIcon class="size-3.5 touch:size-6 shrink-0 pointer-events-none" />
-            </Dialog.CloseButton>
-            <Dialog.Title as="span" class="text-sm font-medium p-0 m-0">
-              Enable CRM
-            </Dialog.Title>
-          </Panel.Header>
-          <Panel.Body class="p-3 flex flex-col gap-3">
-            <p>
-              Start the CRM from your team's existing email, or from a clean
-              slate.
-            </p>
-            <div class="flex justify-end gap-1 pt-2">
-              <Button
-                variant="ghost"
-                disabled={patchCrmMutation.isPending}
-                onClick={() => setShowEnableModal(false)}
-              >
-                Cancel
-              </Button>
-              <Button
-                variant="secondary"
-                disabled={patchCrmMutation.isPending}
-                onClick={() => handleEnable(false)}
-              >
-                <Show
-                  when={
-                    enableChoice() === 'fresh' && patchCrmMutation.isPending
-                  }
-                  fallback="Start from now"
-                >
-                  <SpinnerIcon class="size-4 animate-spin" />
-                </Show>
-              </Button>
-              <Button
-                variant="secondary"
-                disabled={patchCrmMutation.isPending}
-                onClick={() => handleEnable(true)}
-              >
-                <Show
-                  when={
-                    enableChoice() === 'backfill' && patchCrmMutation.isPending
-                  }
-                  fallback="Backfill existing emails"
-                >
-                  <SpinnerIcon class="size-4 animate-spin" />
-                </Show>
-              </Button>
-            </div>
-          </Panel.Body>
-        </Panel>
-      </Dialog>
-
-      <DisableCrmDialog
-        open={showDisableModal()}
-        pending={patchCrmMutation.isPending}
-        confirmation={disableConfirmation()}
-        onConfirmationInput={setDisableConfirmation}
-        onConfirm={handleDisable}
-        onClose={() => setShowDisableModal(false)}
-      />
-    </SettingsSection>
-  );
-}
-
-/* ------------------------------------------------------------------ */
-/* Stages                                                             */
+/* Deal stages                                                        */
 /* ------------------------------------------------------------------ */
 
 /**
@@ -735,13 +505,11 @@ function CrmContent() {
     <Show when={teamQuery.data} fallback={<NoTeamState />}>
       <SettingsPage
         title="CRM"
-        description="Turn your team's CRM on or off, choose its stages, and decide what email sync brings in."
+        description="Manage email sharing and shape your team’s deal pipeline."
       >
-        <CrmEnablementSection />
-        <Show when={teamQuery.data?.team.crm_enabled}>
-          <StagesSection />
-          <EmailSyncSection />
-        </Show>
+        <CrmEmailPrivacySettings />
+        <StagesSection />
+        <EmailSyncSection />
       </SettingsPage>
     </Show>
   );

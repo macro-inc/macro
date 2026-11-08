@@ -67,6 +67,20 @@ pub fn ensure_volume(name: &str) -> Result<()> {
     })
 }
 
+/// Whether a named volume exists.
+pub fn volume_exists(name: &str) -> Result<bool> {
+    block_on(async {
+        let docker = connect()?;
+        match docker.inspect_volume(name).await {
+            Ok(_) => Ok(true),
+            Err(bollard::errors::Error::DockerResponseServerError {
+                status_code: 404, ..
+            }) => Ok(false),
+            Err(e) => Err(e).with_context(|| format!("inspecting volume {name}")),
+        }
+    })
+}
+
 fn already_exists(e: &bollard::errors::Error) -> bool {
     let s = e.to_string();
     s.contains("already exists") || s.contains("409")
@@ -82,6 +96,10 @@ pub struct ProjectContainer {
     pub status: String,
     /// Published host ports, sorted and deduplicated.
     pub host_ports: Vec<u16>,
+    /// The compose service this container runs.
+    pub service: Option<String>,
+    /// When the container was created, in unix seconds.
+    pub created: i64,
 }
 
 /// List every container (running or not) labeled with the compose `project`.
@@ -120,7 +138,13 @@ pub fn project_containers(project: &str) -> Result<Vec<ProjectContainer>> {
                     .collect();
                 host_ports.sort_unstable();
                 host_ports.dedup();
+                let service = c
+                    .labels
+                    .unwrap_or_default()
+                    .remove("com.docker.compose.service");
                 ProjectContainer {
+                    service,
+                    created: c.created.unwrap_or_default(),
                     name,
                     running: c.state == Some(ContainerSummaryStateEnum::RUNNING),
                     status: c.status.unwrap_or_default(),

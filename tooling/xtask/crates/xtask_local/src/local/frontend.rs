@@ -2,16 +2,81 @@
 //! backend to be reachable through the proxy, then launch Vite pointed
 //! at the proxy origin.
 
-use std::io::Read;
+use std::os::unix::ffi::OsStrExt;
 use std::os::unix::process::CommandExt;
+use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Stdio};
-use std::sync::{Arc, Mutex};
-use std::thread::JoinHandle;
+use std::time::Duration;
 
 use anyhow::{Context, Result};
 
 use super::instance::{Instance, Port};
 use super::{Mode, proxy, repo_root, stage::Stage};
+
+/// How long Vite gets to serve. Cold starts may rebuild optimized Wasm packages
+/// before it launches.
+pub const STARTUP_TIMEOUT: Duration = Duration::from_secs(180);
+
+/// Vite's output, kept across the whole dev server's life for `run_local logs`.
+pub fn log_path(instance: &Instance) -> PathBuf {
+    instance.artifact_dir().join("run/frontend.log")
+}
+
+fn pid_path(instance: &Instance) -> PathBuf {
+    instance.artifact_dir().join("run/frontend.pid")
+}
+
+/// Preloaded into Vite's node: turns stdin EOF, which comes when the process
+/// holding the pipe dies, into SIGTERM, which Vite handles by closing its server.
+/// Vite listens for stdin `end` itself but never resumes the paused stream, so
+/// on a pipe that event never fires.
+const EXIT_ON_STDIN_EOF: &str = "data:text/javascript,\
+    process.stdin.on('end',()=>process.kill(process.pid,'SIGTERM'));\
+    process.stdin.resume();";
+
+fn vite_bin() -> PathBuf {
+    repo_root().join("node_modules/vite/bin/vite.js")
+}
+
+/// Stops a Vite left behind by a supervisor that died before the pipe could
+/// stop it (one started before Vite had [`EXIT_ON_STDIN_EOF`]). The recorded
+/// pid is only signalled while it still runs this repository's Vite, so a pid
+/// reused by an unrelated process is left alone.
+pub fn stop_recorded(instance: &Instance) {
+    let Some(pid) = read_pid(instance).and_then(|pid| pid.trim().parse::<i32>().ok()) else {
+        return;
+    };
+    let runs_vite = || {
+        std::fs::read(format!("/proc/{pid}/cmdline")).is_ok_and(|cmdline| {
+            cmdline
+                .split(|byte| *byte == 0)
+                .any(|arg| Path::new(std::ffi::OsStr::from_bytes(arg)) == vite_bin())
+        })
+    };
+    if !runs_vite() {
+        return;
+    }
+    // SAFETY: plain kill(2) on the group Vite leads (it is spawned with
+    // process_group(0)); ESRCH is harmless when it already exited.
+    unsafe {
+        libc::kill(-pid, libc::SIGTERM);
+    }
+    let deadline = std::time::Instant::now() + Duration::from_secs(5);
+    while runs_vite() && std::time::Instant::now() < deadline {
+        std::thread::sleep(Duration::from_millis(100));
+    }
+    if runs_vite() {
+        // SAFETY: as above.
+        unsafe {
+            libc::kill(-pid, libc::SIGKILL);
+        }
+    }
+}
+
+/// The pid of the latest Vite, recorded once it is serving.
+pub fn read_pid(instance: &Instance) -> Option<String> {
+    std::fs::read_to_string(pid_path(instance)).ok()
+}
 
 /// The app dir where the Vite dev server runs.
 fn app_dir() -> std::path::PathBuf {
@@ -227,19 +292,19 @@ fn wait_frontend_proxy_ready(stage: &Stage, instance: &Instance) -> Result<()> {
         })
 }
 
-/// A running frontend dev server plus its captured output, so an unexpected
-/// exit can be explained (the output is otherwise suppressed).
+/// A running frontend dev server. Its output goes to a log file, so an
+/// unexpected exit can be explained and `run_local logs` can read it.
 pub struct Frontend {
     pub process: FrontendProcess,
     command: Command,
     port: u16,
+    log: PathBuf,
+    pid_file: PathBuf,
 }
 
-/// One dev-server process and its captured output, replaced on restart.
+/// One dev-server process, replaced on restart.
 pub struct FrontendProcess {
     pub child: Child,
-    captured: Arc<Mutex<Vec<u8>>>,
-    drains: Vec<JoinHandle<()>>,
 }
 
 impl Frontend {
@@ -247,7 +312,8 @@ impl Frontend {
     /// Killing the old process group also recovers a stuck in-process reload.
     pub fn restart(&mut self, stage: &Stage) -> Result<()> {
         self.shutdown();
-        self.process = spawn(stage, &mut self.command, self.port)?;
+        self.process = spawn(stage, &mut self.command, self.port, &self.log)?;
+        record_pid(&self.pid_file, &self.process);
         Ok(())
     }
 
@@ -258,16 +324,25 @@ impl Frontend {
 
     /// Return the last output from an exited dev server.
     pub fn tail_output(&mut self, lines: usize) -> String {
-        self.process.tail_output(lines)
+        tail_of_log(&self.log, lines)
     }
+}
+
+/// Best effort: only a later `restart-frontend` reads it, to see the restart land.
+fn record_pid(path: &Path, process: &FrontendProcess) {
+    let _ = std::fs::write(path, process.child.id().to_string());
+}
+
+fn tail_of_log(log: &Path, lines: usize) -> String {
+    let output = std::fs::read(log).unwrap_or_default();
+    tail_str(&String::from_utf8_lossy(&output), lines)
 }
 
 impl FrontendProcess {
     /// Stop the dev server and all its children. We put Vite and its children
     /// in their own process group at spawn — so signal the
     /// GROUP (negative pid). SIGKILL is enough: the kernel releases the port the
-    /// moment the processes die. Then reap Vite and join the drain threads (their
-    /// pipes close, so they exit).
+    /// moment the processes die. Then reap Vite.
     pub fn shutdown(&mut self) {
         if matches!(self.child.try_wait(), Ok(None)) {
             let pgid = self.child.id() as i32;
@@ -278,19 +353,6 @@ impl FrontendProcess {
             }
         }
         let _ = self.child.wait();
-        for h in self.drains.drain(..) {
-            let _ = h.join();
-        }
-    }
-
-    /// Join the drain threads and return the last `lines` lines of the dev
-    /// server's captured output (for diagnosing why it exited).
-    pub fn tail_output(&mut self, lines: usize) -> String {
-        for h in self.drains.drain(..) {
-            let _ = h.join();
-        }
-        let buf = self.captured.lock().unwrap_or_else(|e| e.into_inner());
-        tail_str(&String::from_utf8_lossy(&buf), lines)
     }
 }
 
@@ -307,18 +369,15 @@ fn tail_str(s: &str, n: usize) -> String {
 }
 
 /// Start the frontend dev server and wait until *our* child is serving. Output
-/// is captured (suppressed — the vite banner would duplicate the summary's URL)
-/// but retained so an unexpected exit can be diagnosed. Returns `None` in
-/// dry-run mode.
+/// goes to [`log_path`] (the vite banner would duplicate the summary's URL), so
+/// an unexpected exit can be diagnosed. Callers have already waited for the
+/// backend. Returns `None` in dry-run mode.
 pub fn start(
     stage: &Stage,
     instance: &Instance,
     mode: Mode,
     traces_enabled: bool,
 ) -> Result<Option<Frontend>> {
-    if mode.spec().wait_backend_before_frontend {
-        wait_backend_ready(stage, instance)?;
-    }
     if stage.is_dry_run() {
         stage.note(&format!(
             "Dry run: would start frontend at {}",
@@ -350,55 +409,55 @@ pub fn start(
     // and builds: https://github.com/oven-sh/bun/issues/10441.
     let mut cmd = Command::new("node");
     cmd.current_dir(app_dir())
-        .arg(repo_root().join("node_modules/vite/bin/vite.js"))
+        .args(["--import", EXIT_ON_STDIN_EOF])
+        .arg(vite_bin())
         .args(["-c", "vite.config.ts"])
         // Run Vite directly in its OWN process group. Avoiding the `bun run`
         // package-script wrapper keeps the listener in the process we own.
         .process_group(0)
         // Open-but-empty stdin (piped, held open, never written): vite sees a
         // non-TTY stdin so it won't bind its own keypress shortcuts (no fight
-        // with our hotkey loop), but it never reaches EOF — Stdio::null is EOF
-        // immediately, which makes vite shut itself down right after boot.
-        .stdin(Stdio::piped())
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped());
+        // with our hotkey loop). When this process dies, however it dies, the
+        // pipe closes and EXIT_ON_STDIN_EOF stops Vite instead of leaving it
+        // holding the port.
+        .stdin(Stdio::piped());
     for (k, v) in dev_env(instance, mode, traces_enabled)? {
         cmd.env(k, v);
     }
-    let process = spawn(stage, &mut cmd, port)?;
+    instance.ensure_artifact_dir()?;
+    let log = log_path(instance);
+    let pid_file = pid_path(instance);
+    if let Some(dir) = log.parent() {
+        std::fs::create_dir_all(dir).with_context(|| format!("creating {}", dir.display()))?;
+    }
+    let process = spawn(stage, &mut cmd, port, &log)?;
+    record_pid(&pid_file, &process);
     wait_frontend_proxy_ready(stage, instance)?;
     Ok(Some(Frontend {
         process,
         command: cmd,
         port,
+        log,
+        pid_file,
     }))
 }
 
-fn spawn(stage: &Stage, cmd: &mut Command, port: u16) -> Result<FrontendProcess> {
-    let mut child = cmd.spawn().context("launching the Vite dev server")?;
+fn spawn(stage: &Stage, cmd: &mut Command, port: u16, log: &Path) -> Result<FrontendProcess> {
+    let output =
+        std::fs::File::create(log).with_context(|| format!("creating {}", log.display()))?;
+    cmd.stdout(output.try_clone()?).stderr(output);
 
-    // Drain stdout+stderr into a buffer on their own threads (a full pipe would
-    // otherwise block Vite); the output stays hidden unless the server exits.
-    // stdin is intentionally NOT taken — its write end stays open so Vite never
-    // sees stdin EOF.
-    let captured = Arc::new(Mutex::new(Vec::new()));
-    let mut drains = Vec::new();
-    if let Some(mut out) = child.stdout.take() {
-        let buf = Arc::clone(&captured);
-        drains.push(std::thread::spawn(move || drain_into(&mut out, &buf)));
-    }
-    if let Some(mut err) = child.stderr.take() {
-        let buf = Arc::clone(&captured);
-        drains.push(std::thread::spawn(move || drain_into(&mut err, &buf)));
-    }
+    // stdin is intentionally NOT taken — its write end stays open in `Child` so
+    // Vite never sees stdin EOF while we live.
+    let mut child = cmd.spawn().context("launching the Vite dev server")?;
 
     // Wait until OUR child is serving: poll the port, but fail fast (with Vite's
     // output) if the child exits first. A bare port poll would mistake a stale
     // server already on the port for "ready" while our child has died.
     let addr: std::net::SocketAddr = ([127, 0, 0, 1], port).into();
     let startup = stage.run_step("Starting frontend", || {
-        // Cold starts may rebuild optimized Wasm packages before Vite launches.
-        for _ in 0..600 {
+        let deadline = std::time::Instant::now() + STARTUP_TIMEOUT;
+        while std::time::Instant::now() < deadline {
             // Settle first: a failed bind (e.g. port already in use) makes vite
             // exit near-instantly, so if the child is still alive after this it
             // genuinely bound the port — rather than us connecting to a stale
@@ -416,7 +475,10 @@ fn spawn(stage: &Stage, cmd: &mut Command, port: u16) -> Result<FrontendProcess>
                 return Ok(());
             }
         }
-        anyhow::bail!("frontend dev server did not become ready after 180 seconds")
+        anyhow::bail!(
+            "frontend dev server did not become ready after {} seconds",
+            STARTUP_TIMEOUT.as_secs()
+        )
     });
 
     if let Err(error) = startup {
@@ -427,31 +489,11 @@ fn spawn(stage: &Stage, cmd: &mut Command, port: u16) -> Result<FrontendProcess>
             libc::kill(-pgid, libc::SIGKILL);
         }
         let _ = child.wait();
-        for handle in drains.drain(..) {
-            let _ = handle.join();
-        }
-        let out = tail_str(&String::from_utf8_lossy(&captured.lock().unwrap()), 30);
+        let out = tail_of_log(log, 30);
         anyhow::bail!("{error}\nfrontend output (last lines):\n{out}");
     }
 
-    Ok(FrontendProcess {
-        child,
-        captured,
-        drains,
-    })
-}
-
-/// Copy a child pipe into the shared capture buffer until EOF.
-fn drain_into(reader: &mut impl Read, buf: &Mutex<Vec<u8>>) {
-    let mut chunk = [0u8; 4096];
-    while let Ok(n) = reader.read(&mut chunk) {
-        if n == 0 {
-            break;
-        }
-        if let Ok(mut b) = buf.lock() {
-            b.extend_from_slice(&chunk[..n]);
-        }
-    }
+    Ok(FrontendProcess { child })
 }
 
 #[cfg(test)]

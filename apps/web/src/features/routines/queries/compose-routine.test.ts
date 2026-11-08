@@ -1,3 +1,7 @@
+import type {
+  DraftedRoutine,
+  RoutineStep,
+} from '@service-scheduled-action/generated/schemas';
 import { err, ok } from 'neverthrow';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { validateSteps } from '../core/routine-steps';
@@ -18,17 +22,11 @@ vi.mock('@core/constant/allBlocks', () => ({
 const context = {
   timezone: 'America/New_York',
   defaultModel: 'claude',
-  labels: ['Finance'],
-  tags: [],
-  channels: [{ name: 'eng', id: 'channel-1' }],
-  folders: [],
-  people: [],
-  agents: [{ name: 'Researcher', botId: 'bot-1' }],
   decisions: true,
   codeSteps: true,
 };
 
-const labelStep = {
+const labelStep: RoutineStep = {
   type: 'code',
   id: 'label_by_topic',
   title: 'Label by topic',
@@ -36,8 +34,10 @@ const labelStep = {
   source: 'export async function main() {}',
 };
 
-const routine = (overrides: object = {}) => ({
-  outcome: 'routine' as const,
+const routine = (
+  overrides: Partial<DraftedRoutine> = {}
+): DraftedRoutine & { outcome: 'routine' } => ({
+  outcome: 'routine',
   name: 'Inbox triage',
   trigger: {
     type: 'events' as const,
@@ -65,16 +65,12 @@ describe('composeRoutine', () => {
         agentModel: 'claude',
         code: true,
         conditions: true,
-        workspace: {
-          labels: ['Finance'],
-          tags: [],
-          channels: [{ name: 'eng', id: 'channel-1' }],
-          folders: [],
-          people: [],
-          agents: [{ name: 'Researcher', botId: 'bot-1' }],
-        },
       },
     });
+    // A large workspace once made this request exceed the size limit.
+    expect(draftRoutine.mock.calls[0][0].context).not.toHaveProperty(
+      'workspace'
+    );
     if (typeof draft === 'string') throw new Error(draft);
     expect(draft.name).toBe('Inbox triage');
     expect(draft.triggers).toMatchObject([
@@ -99,6 +95,10 @@ describe('composeRoutine', () => {
     expect(await composeRoutine('x', context)).toBe(
       'Couldn’t draft that routine. Please try again.'
     );
+    draftRoutine.mockResolvedValueOnce(
+      err([{ code: 'HTTP_ERROR', message: 'HTTP error! status: 413' }])
+    );
+    expect(await composeRoutine('x', context)).toMatch(/too large/);
   });
 });
 
@@ -162,7 +162,7 @@ describe('a drafted routine in the editor', () => {
   it('explains steps the editor can’t use', () => {
     expect(
       draftFromRoutine(
-        routine({ steps: [{ type: 'wait', seconds: 5 }] }),
+        routine({ steps: [{ type: 'agent', instructions: 'Go' }] }),
         'claude'
       )
     ).toMatch(/can’t run/);

@@ -19,6 +19,8 @@ use anyhow::{Result, bail};
 use console::Style;
 use indicatif::{ProgressBar, ProgressDrawTarget, ProgressStyle, TermLike};
 
+use super::supervisor::Job;
+
 #[cfg(test)]
 mod test;
 
@@ -107,6 +109,9 @@ pub struct Stage {
     /// [`Stage::quiet`] children so folded sub-steps are recorded too, and with
     /// the threads that run the background lanes.
     timings: Arc<Mutex<Vec<(String, Duration)>>>,
+    /// Where steps are recorded, so another process can read what this one is
+    /// doing and which step failed (see `supervisor`).
+    job: Option<Arc<Job>>,
 }
 
 impl Stage {
@@ -122,7 +127,14 @@ impl Stage {
             dry_run: env_flag("MACRO_LOCAL_DRY_RUN"),
             quiet: false,
             timings: Arc::new(Mutex::new(Vec::new())),
+            job: None,
         }
+    }
+
+    /// Record every step of this stage, and of the stages derived from it, on `job`.
+    pub fn with_job(mut self, job: Arc<Job>) -> Self {
+        self.job = Some(job);
+        self
     }
 
     /// Like [`Stage::from_env`], plus an explicit `--verbose` flag OR-ed with the
@@ -143,11 +155,6 @@ impl Stage {
         self.verbose
     }
 
-    /// Whether stdout is an interactive terminal (drives the hotkey loop).
-    pub fn is_tty(&self) -> bool {
-        self.is_tty
-    }
-
     /// A child stage that suppresses its own output, so a multi-step action can
     /// be folded under a single parent spinner. Commands still run and capture;
     /// a failure surfaces via the returned error (with the captured output) so
@@ -159,6 +166,7 @@ impl Stage {
             dry_run: self.dry_run,
             quiet: true,
             timings: Arc::clone(&self.timings),
+            job: self.job.clone(),
         }
     }
 
@@ -322,6 +330,22 @@ impl Stage {
     /// captured and a spinner animates until completion; on failure the
     /// captured output is dumped and the error propagated (fail-fast).
     pub fn run(&self, label: &str, cmd: &mut Command) -> Result<()> {
+        self.recording_job(label, || self.run_command(label, cmd))
+    }
+
+    /// Run a step, telling the job it started and whether it failed.
+    fn recording_job(&self, label: &str, step: impl FnOnce() -> Result<()>) -> Result<()> {
+        if let Some(job) = &self.job {
+            job.step_started(label);
+        }
+        let result = step();
+        if let (Some(job), Err(_)) = (&self.job, &result) {
+            job.step_failed(label);
+        }
+        result
+    }
+
+    fn run_command(&self, label: &str, cmd: &mut Command) -> Result<()> {
         let program = cmd.get_program().to_string_lossy().to_string();
         let args: Vec<String> = cmd
             .get_args()
@@ -396,6 +420,10 @@ impl Stage {
     /// while the closure blocks this one, with the same ✓/✗ contract and
     /// dry-run handling.
     pub fn run_step<F: FnOnce() -> Result<()>>(&self, label: &str, f: F) -> Result<()> {
+        self.recording_job(label, || self.run_closure(label, f))
+    }
+
+    fn run_closure<F: FnOnce() -> Result<()>>(&self, label: &str, f: F) -> Result<()> {
         if self.dry_run {
             println!("{}", self.line("•", label, "Dry run", &Style::new().dim()));
             return Ok(());
