@@ -400,6 +400,7 @@ impl SyncCore {
             || !self.storage.is_empty()
             || self.convergence.is_some()
             || self.convergence_retry.is_some()
+            || self.load_retry.is_some()
             || self.snapshots.iter().any(|r| !r.expired)
             || !self.comments.is_empty()
             || self.wal.append_due.is_some()
