@@ -33,7 +33,7 @@ Use these steps for a server or a computer without the Macro desktop app. You ne
    <Accordion title="Install on macOS or Linux">
 
    ```bash
-   curl -fsSL https://raw.githubusercontent.com/macro-inc/macro/main/crates/coding_agent_worker/install/install.sh | sh
+   curl -fsSL https://raw.githubusercontent.com/macro-inc/macro/main/crates/agents/macrod/install/install.sh | sh
    ```
 
    Open a new terminal after installation. The installer adds `~/.local/bin` to your `PATH`. Use `--no-modify-path` or set `MACROD_NO_MODIFY_PATH=1` to preserve your shell startup files.
@@ -43,7 +43,7 @@ Use these steps for a server or a computer without the Macro desktop app. You ne
    <Accordion title="Install on Windows">
 
    ```powershell
-   irm https://raw.githubusercontent.com/macro-inc/macro/main/crates/coding_agent_worker/install/install.ps1 | iex
+   irm https://raw.githubusercontent.com/macro-inc/macro/main/crates/agents/macrod/install/install.ps1 | iex
    ```
 
    The installer adds `%LOCALAPPDATA%\Programs\macrod` to your user `PATH`. Open a new PowerShell window after installation.

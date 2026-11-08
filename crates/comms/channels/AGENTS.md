@@ -33,7 +33,7 @@ DMs, and the shared message store other domains discuss things on.
   `schema`, `sqlx` and `agent_tools` add the utoipa, sqlx and JsonSchema derives
   the adapter crates need.
 - Used by: widely — `bots`, `call`, `teams`, `webhook`, `soup`/`soup_realtime_inbound`,
-  `agent_harness`, `agent_trigger`, `coding_agent_worker`, `comms_db_client`,
+  `agent_harness`, `agent_trigger`, `macrod`, `comms_db_client`,
   `graphql_channel`, `search_service`, `name_search`, `agent_tools`, `memory`.
   Check callers before changing a public service method's signature.
 

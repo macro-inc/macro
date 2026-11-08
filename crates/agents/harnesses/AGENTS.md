@@ -65,13 +65,13 @@ before acting"); paired machines keep it off until their owner turns it on.
 - Direct grants and access requests go through `crates/entities/access_requests`
   (`ShareEntityType::Harness`, whose levels are `view` and `edit`).
 - Not here: running an agent session or the ACP protocol itself →
-  `crates/agents/agent_session`, `coding_agent_worker`.
+  `crates/agents/agent_session`, `macrod`.
 
 ## Boundaries
 
 - Depends on: `harness_id`, `bearer_token`, `bot_id`, `macro_authorization`,
   `entity_access_db_utils`, `permissions_types`.
-- Used by: `coding_agent_worker`, `bots` (`HarnessTeamAgents`).
+- Used by: `macrod`, `bots` (`HarnessTeamAgents`).
 
 - `authorize_harness(caller, harness_id, HarnessPermission::{View, Use, Manage})` is
   the access boundary for other services' routes: View requires effective

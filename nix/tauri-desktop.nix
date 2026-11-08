@@ -304,7 +304,7 @@
       # build_agent_daemon_on_tag.yml.
       macrodBinary = workspaceBinary {
         pname = "macrod";
-        package = "coding_agent_worker";
+        package = "macrod";
       };
 
       # The agent of Firecracker hosts (nix/hosts/_nixos/firecracker-host.nix).

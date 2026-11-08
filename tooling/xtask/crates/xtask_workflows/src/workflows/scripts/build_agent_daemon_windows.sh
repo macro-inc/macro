@@ -23,4 +23,4 @@ if ! command -v cmake >/dev/null 2>&1; then
   export PATH="/c/Program Files/CMake/bin:$PATH"
 fi
 
-cargo build --release --package coding_agent_worker --target "$TARGET"
+cargo build --release --package macrod --target "$TARGET"

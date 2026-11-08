@@ -1,7 +1,7 @@
 #!/bin/sh
 # Install macrod, Macro's agent daemon, on macOS or Linux:
 #
-#   curl -fsSL https://raw.githubusercontent.com/macro-inc/macro/main/crates/coding_agent_worker/install/install.sh | sh
+#   curl -fsSL https://raw.githubusercontent.com/macro-inc/macro/main/crates/agents/macrod/install/install.sh | sh
 #
 # A running macrod updates itself; run this again to update right away.
 #

@@ -17,4 +17,4 @@ export AWS_LC_SYS_CMAKE_BUILDER=1
 # carry sqlx macros; offline mode keeps a release build from wanting a database.
 export SQLX_OFFLINE=true
 
-cargo zigbuild --release --package coding_agent_worker --target "$TARGET"
+cargo zigbuild --release --package macrod --target "$TARGET"

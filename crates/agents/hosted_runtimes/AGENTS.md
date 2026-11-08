@@ -76,7 +76,7 @@ read it before changing behaviour.
   `entity_access`, `macro_authorization`; with `outbound`, `harnesses` (its
   repository for Claude logins, never its tables).
 - Used by: authentication_service (routes, billing worker), agent_harness_service
-  (operator, harnessd), `coding_agent_worker` (enrollment).
+  (operator, harnessd), `macrod` (enrollment).
 
 ## Checks
 
