@@ -4,8 +4,8 @@ use lexical_model::{ForeignReadContext, ForeignReadLease};
 use std::borrow::Cow;
 
 pub(super) struct PreparedRead {
-    state: EditorState,
-    source: ForeignReadContext,
+    pub(super) state: EditorState,
+    pub(super) source: ForeignReadContext,
     pub(super) lease: ForeignReadLease,
 }
 struct Preparation<'scope> {

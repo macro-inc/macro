@@ -267,6 +267,26 @@ impl EditorHandle {
         };
         to_js(result).map_err(Into::into)
     }
+    /// Read a retained published version with this editor associated.
+    /// This leaves suspended writes untouched and never flushes or publishes.
+    pub fn read_state(
+        &self,
+        version: &str,
+        callback: &js_sys::Function,
+    ) -> Result<JsValue, JsValue> {
+        let version = version.parse::<u64>().map_err(debug::error)?;
+        let available = self.session.borrow().is_some();
+        let result = if available {
+            self.with_callback_session(|session| {
+                session.read_state(version, |peer| {
+                    super::host_callbacks::invoke_state(&self.owner, &self.errors, peer, callback)
+                })
+            })?
+        } else {
+            super::host_callbacks::read_state(&self.owner, version, callback)?
+        };
+        Ok(debug::returned_handle(result))
+    }
     /// Open one unpublished update. Discrete scheduling belongs to the JS host.
     pub fn begin_update(&self, tags: JsValue, discrete: bool) -> Result<(), JsValue> {
         let tags: Vec<String> = serde_json::from_value(from_js(tags)?).map_err(debug::error)?;

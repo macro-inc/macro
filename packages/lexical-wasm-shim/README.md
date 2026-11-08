@@ -58,4 +58,6 @@ The internal `$parseSerializedNode` entry uses the model import algorithm. Stati
 
 Mutable `selectionTransform` hooks receive the existing previous committed and current active selection handles; the pipeline follows focus movement made by the anchor hook. `$getPreviousSelection` and its point handles retain committed ownership through later update rollback. The full class facade and ordinary selection freezing remain unfinished.
 
-The backend also hosts `exportJSON` with scoped reentrant reads, native-super, opaque exceptions and write/effect rejection. The read peer still rejects inherited selection value writes. Committed-state exports require the exact scoped publication lease; the other pure hooks and complete class facade remain unfinished.
+The backend also hosts `exportJSON` with scoped reentrant reads, native-super, opaque exceptions and write/effect rejection. The read peer still rejects inherited selection value writes. Committed-state exports require the exact state-read or publication lease; the other pure hooks and complete class facade remain unfinished.
+
+`backend.readState(version, body)` reads an exact retained published state with its editor associated, preserving suspended writes and nested callback scopes. Historical graph reads retain the latest committed previous-selection owner. Body returns and throws stay opaque. Editor-less reads and inherited selection value synchronization remain unfinished.

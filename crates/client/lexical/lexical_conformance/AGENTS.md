@@ -127,3 +127,7 @@ Gate Session commit_prepared's implicit pipeline pass with Transaction::needs_fl
 CallbackRead::node encodes the captured source record in the shared identity store. Consume original pure-hook arguments through that same read capability, never by borrowing an ancestor transaction.
 
 Commit preparation authorizes only commit.next through callbacks/publication.rs. Capture ForeignReadContext metadata after flush without pinning pending records; pair exact canonical state captures inside an RAII lease. Validate both editor/update and the installed lease on every derived read, and remove/drop prepared owners outside locks. Unrelated and expired captures reject.
+
+Session::read_state reads a retained immutable version with its editor associated, without flushing suspended writes. Use nested CallbackRead/CallbackContext state reads while the Session is leased; restore prior authority on every exit. Historical graph ownership differs from the latest committed selection/point owner. Editor-less reads and inherited selection synchronization remain separate work.
+
+Retain newly created selection values from published-state reads independently of a surrounding pending rollback. Preserve their IDs and ordinary fields; never let surviving historical-version handles alias truncated or reused selection indices.

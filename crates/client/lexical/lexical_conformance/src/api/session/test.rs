@@ -629,3 +629,5 @@ fn detached_direction_memo_survives_host_boundaries_but_explicit_clone_clears_it
     assert!(host.finish_noop()?);
     Ok(())
 }
+
+mod state;

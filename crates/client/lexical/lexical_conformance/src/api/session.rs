@@ -217,6 +217,17 @@ impl Session {
         self.context.discard_update()
     }
 
+    /// Read an exact retained immutable state with this editor associated.
+    /// Suspended writes remain untouched; nested callback reads use CallbackRead.
+    pub fn read_state<T>(
+        &mut self,
+        version: u64,
+        read: impl FnOnce(&mut super::CallbackRead<'_, '_>) -> Result<T>,
+    ) -> Result<T> {
+        self.context
+            .read_state(self.editor.transaction(), version, read)
+    }
+
     /// Read a captured node field during an update or from a published snapshot.
     pub fn read_field(&mut self, handle: u32, field: &str) -> Result<Value> {
         if self.pending.is_some() {
