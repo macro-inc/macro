@@ -52,6 +52,9 @@ mod ios_app_store_release;
 mod ios_preview;
 mod ios_release_drift;
 mod ios_release_watch;
+mod lexical_conformance;
+mod lexical_nightly;
+mod loro_pair;
 mod native_check_label;
 mod observability_image;
 mod path_validation;
@@ -126,6 +129,26 @@ fn job_mut<'a>(root: &'a mut serde_yaml::Value, id: &str) -> Result<&'a mut serd
 
 /// Every workflow we generate. Add new workflows here.
 const WORKFLOWS: &[WorkflowFile] = &[
+    WorkflowFile {
+        slug: "lexical_conformance",
+        file_name: "lexical_conformance.yml",
+        render_yaml: || render_gh_workflow(lexical_conformance::lexical_conformance)(),
+    },
+    WorkflowFile {
+        slug: "lexical_conformance",
+        file_name: "document_session.yml",
+        render_yaml: || render_gh_workflow(lexical_conformance::document_session)(),
+    },
+    WorkflowFile {
+        slug: "lexical_nightly",
+        file_name: "lexical_nightly.yml",
+        render_yaml: || render_gh_workflow(lexical_nightly::lexical_nightly)(),
+    },
+    WorkflowFile {
+        slug: "loro_pair",
+        file_name: "loro-pair.yml",
+        render_yaml: || render_gh_workflow(loro_pair::loro_pair)(),
+    },
     WorkflowFile {
         slug: "observability_image",
         file_name: "observability_image.yml",

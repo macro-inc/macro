@@ -174,7 +174,7 @@ fn upstream_restoring_snapshot_reconciles_existing_element_caches() -> Result<()
 }
 
 #[test]
-fn upstream_rejects_inline_insertion_without_a_leaf_block_ancestor() -> Result<(), Error> {
+fn root_deletion_preserves_the_insertion_boundary_after_a_decorator() -> Result<(), Error> {
     let mut editor = Editor::builder(EditorMode::Headless)
         .node::<Opaque>()
         .build()
@@ -192,13 +192,12 @@ fn upstream_rejects_inline_insertion_without_a_leaf_block_ancestor() -> Result<(
     for _ in 0..2 {
         editor.update(|tx| tx.delete_character(EditDirection::Forward, ModifyTarget::NoView))?;
     }
-    let previous = editor.state().clone();
-    let result = editor.update(|tx| tx.insert_line_break(false));
-    assert!(matches!(
-        result,
-        Err(Error::Invariant("insertion requires a block"))
-    ));
-    assert!(editor.state().same_snapshot(&previous));
-    assert_eq!(editor.state().selection(), previous.selection());
+    editor.update(|tx| tx.insert_line_break(false))?;
+    let state = editor.state();
+    let root = state.children_keys(NodeKey::ROOT)?;
+    assert_eq!(root.len(), 2);
+    let children = state.children_keys(root[0])?;
+    assert_eq!(children.len(), 1);
+    assert!(state.is_line_break(children[0]));
     Ok(())
 }

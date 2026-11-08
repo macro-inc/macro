@@ -106,3 +106,32 @@ fn replacement_across_mark_boundary_leaves_new_text_outside_mark() -> Result<(),
     assert_eq!(selected.anchor, selected.focus);
     Ok(())
 }
+
+#[test]
+fn typing_after_link_inside_mark_escapes_both_protected_parents() -> Result<(), Error> {
+    let mut editor = Editor::builder(EditorMode::Headless)
+        .node::<MarkNode>()
+        .node::<crate::link::LinkNode>()
+        .build()
+        .unwrap();
+    let mut tx = editor.transaction();
+    let paragraph = tx.create(Paragraph::default())?;
+    let mark = tx.create(MarkNode {
+        ids: vec!["annotation".into()],
+    })?;
+    let link = crate::link::create_link_node(&mut tx, "/", Default::default())?;
+    let text = tx.create_text("a")?;
+    tx.append(link, &[text.key()])?;
+    tx.append(mark, &[link.key()])?;
+    tx.append(paragraph, &[mark.key()])?;
+    tx.append(NodeKey::ROOT, &[paragraph.key()])?;
+    tx.select_end(text)?;
+    tx.insert_text("b")?;
+    let children = tx.children_keys(paragraph)?;
+    assert_eq!(children.len(), 2);
+    assert_eq!(children[0], mark.key());
+    assert_eq!(tx.text_content(mark), "a");
+    assert!(tx.is_text(children[1]));
+    assert_eq!(tx.text_content(children[1]), "b");
+    Ok(())
+}

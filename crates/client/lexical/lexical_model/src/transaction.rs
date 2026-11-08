@@ -44,7 +44,10 @@ pub struct Transaction<'editor> {
 }
 impl<'editor> Transaction<'editor> {
     pub(crate) fn new(editor: &'editor mut Editor) -> Self {
-        let pending = editor.state.pending();
+        let mut pending = editor.state.pending();
+        if let Some(Selection::Range(range)) = &mut pending.selection {
+            range.clear_direction_cache();
+        }
         let composition_key = editor.composition_key;
         let options = UpdateOptions {
             tags: editor.carried_tags.clone(),
@@ -467,7 +470,13 @@ impl<'editor> Transaction<'editor> {
                         .get("text")
                         .and_then(serde_json::Value::as_str)
                         .unwrap_or_default();
-                    let format = TextFormat::from_bits_retain(number("format"));
+                    let format_type = json.get("format").and_then(serde_json::Value::as_str);
+                    let parsed_format =
+                        format_type.and_then(|value| value.parse::<TextFormatType>().ok());
+                    let format = parsed_format.map_or_else(
+                        || TextFormat::from_bits_retain(number("format")),
+                        TextFormatType::flag,
+                    );
                     let detail = TextDetail::from_bits_retain(number("detail"));
                     let mode = json
                         .get("mode")
@@ -503,12 +512,15 @@ impl<'editor> Transaction<'editor> {
                     };
                     data.absent =
                         AbsentKeys::from_json(json, &["text", "format", "detail", "mode", "style"]);
+                    if format_type.is_some() && parsed_format.is_none() {
+                        data.absent.insert(AbsentKeys::FORMAT);
+                    }
                 }
                 Some(NodeKind::Element) => {
                     let format = json
                         .get("format")
-                        .map(|value| serde_json::from_value(value.clone()))
-                        .transpose()?
+                        .and_then(serde_json::Value::as_str)
+                        .and_then(|value| value.parse::<ElementFormat>().ok())
                         .unwrap_or_default();
                     let direction = json
                         .get("direction")
@@ -581,8 +593,11 @@ impl<'editor> Transaction<'editor> {
     /// Replace the active selection.
     pub fn set_selection(&mut self, selection: Option<Selection>) -> Result<(), Error> {
         self.guard_write()?;
-        self.selection_dirty |= selection.is_some();
+        self.selection_dirty = selection.is_some();
         let selection = selection.map(|mut selection| {
+            if let Selection::Range(range) = &mut selection {
+                range.invalidate_changed_direction();
+            }
             selection.set_dirty(true);
             selection
         });

@@ -139,3 +139,70 @@ fn nested_view_cache_uses_the_first_text_descendant() -> Result<(), Error> {
     assert_eq!(commit.changes.mutations.len(), 1);
     Ok(())
 }
+
+#[test]
+fn optional_state_preserves_inner_identity_and_omits_none() -> Result<(), Error> {
+    use std::sync::Arc;
+    static LOCAL: StateKey<Option<bool>> =
+        StateKey::new("local", |value| value.and_then(serde_json::Value::as_bool));
+    static PEERS: StateKey<Option<Arc<[String]>>> = StateKey::new("peers", |_| None);
+    let mut editor = Editor::builder(EditorMode::Headless)
+        .build()
+        .expect("editor");
+    let mut tx = editor.transaction();
+    let paragraph = tx.create(Paragraph::default())?;
+    tx.append(NodeKey::ROOT, &[paragraph.key()])?;
+    tx.set_state(paragraph, &LOCAL, Some(false))?;
+    let peers: Arc<[String]> = vec!["peer".to_owned()].into();
+    tx.set_state(paragraph, &PEERS, Some(peers.clone()))?;
+    let first = tx.commit()?;
+    assert_eq!(
+        first.next.view().export_json(paragraph)?["$"]["local"],
+        false
+    );
+    let mut tx = editor.transaction();
+    tx.update_state(paragraph, &PEERS, |_| Some(peers))?;
+    assert!(tx.commit()?.is_noop());
+    let mut tx = editor.transaction();
+    tx.set_state(paragraph, &PEERS, Some(vec!["peer".to_owned()].into()))?;
+    assert!(!tx.commit()?.is_noop());
+    let mut tx = editor.transaction();
+    tx.set_state(paragraph, &LOCAL, None)?;
+    tx.set_state(paragraph, &PEERS, None)?;
+    assert!(
+        !tx.commit()?
+            .next
+            .view()
+            .export_json(paragraph)?
+            .contains_key("$")
+    );
+    Ok(())
+}
+
+#[test]
+fn imported_text_format_names_and_undefined_style_reach_paragraph_export() -> Result<(), Error> {
+    let mut editor = Editor::builder(EditorMode::Headless)
+        .build()
+        .expect("editor");
+    let input: SerializedEditorState = serde_json::from_value(
+        serde_json::json!({"root":{"type":"root","version":1,"children":[{"type":"paragraph","version":1,"format":"unknown","children":[{"type":"text","version":1,"text":"text","format":"unknown","detail":0,"mode":"normal"}]}]}}),
+    )?;
+    let state = editor.parse_editor_state(&input)?;
+    let output = serde_json::to_value(state.to_json()?)?;
+    assert_eq!(output["root"]["children"][0]["format"], "");
+    assert!(output["root"]["children"][0].get("textFormat").is_none());
+    assert!(output["root"]["children"][0].get("textStyle").is_none());
+    assert!(
+        output["root"]["children"][0]["children"][0]
+            .get("format")
+            .is_none()
+    );
+    let mut named = input;
+    named.root["children"][0]["children"][0]["format"] = serde_json::json!("bold");
+    assert_eq!(
+        serde_json::to_value(editor.parse_editor_state(&named)?.to_json()?)?["root"]["children"][0]
+            ["textFormat"],
+        1
+    );
+    Ok(())
+}

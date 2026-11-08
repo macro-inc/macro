@@ -133,3 +133,33 @@ fn formatted_invariant_messages_keep_the_static_error_classification() {
     assert_eq!(dynamic_error.kind(), "Invariant");
     assert!(matches!(dynamic_error, Error::InvariantMessage(_)));
 }
+
+#[test]
+fn identical_text_splice_still_marks_and_clones_the_record() -> Result<(), Error> {
+    let mut editor = Editor::builder(EditorMode::Headless)
+        .build()
+        .expect("editor");
+    let ((p, text), _) = editor.update(|tx| {
+        let p = tx.create(Paragraph::default())?;
+        let text = tx.create_text("eא́\u{2028}א")?;
+        tx.append(p, &[text.key()])?;
+        tx.append(NodeKey::ROOT, &[p.key()])?;
+        tx.select_points(
+            Point::element(NodeKey::ROOT, ChildIndex(1)),
+            Point::text(text, Utf16Offset(4)),
+        )?;
+        Ok((p.key(), text.key()))
+    })?;
+    let (_, commit) = editor.update(|tx| tx.insert_text("א"))?;
+    assert_eq!(commit.next.text_content(text), "eא́\u{2028}א");
+    assert!(commit.changes.dirty_leaves.contains(&text));
+    assert_eq!(
+        commit.changes.dirty_elements.get(&p),
+        Some(&DirtyIntent::AncestorOfDirty)
+    );
+    assert_eq!(
+        commit.changes.mutations.get(&text),
+        Some(&Mutation::Updated)
+    );
+    Ok(())
+}

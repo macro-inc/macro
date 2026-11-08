@@ -112,14 +112,15 @@ fn text_offsets_slices_selection_and_direction() {
             assert_eq!(focus.offset, Utf16Offset(5));
             assert!(anchor.is_extendable(tx.view())?);
             assert!(!focus.is_extendable(tx.view())?);
-            assert!(
+            assert_eq!(
                 TextPointCaret::new(
                     tx.view(),
                     text,
                     CaretDirection::Next,
                     TextOffsetSpec::At(Utf16Offset(2))
-                )
-                .is_err()
+                )?
+                .offset,
+                Utf16Offset(2)
             );
             assert!(
                 text_node_offset(

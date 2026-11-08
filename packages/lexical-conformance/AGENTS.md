@@ -14,6 +14,7 @@ The upstream source is downloaded by checksum into this worktree's `target/`.
 - `corpus/synthetic.ts`: fixed per-node JSON and editor registry oracle against actual Macro classes.
 - `diff/README.md`: WP-07 raw-model WASM loader and Tier C text/paragraph harness.
 - `record/initial.ts`: partial-state key layout and selection restoration.
+- `coverage/README.md`: traceability evidence, pending ratchet and CI gates.
 - `record/inventory.json`: S4 per-file expected counts; mixed files have no exact case labels.
 
 ## Boundaries
@@ -28,7 +29,10 @@ The upstream source is downloaded by checksum into this worktree's `target/`.
 
 - In this package: `bun install --frozen-lockfile`, `bunx tsc --noEmit`, `bun run test`.
 - From the repository: `just lexical-fixtures --check` twice, then `just check`.
-- Differential changes: `bunx tsc --noEmit -p diff/tsconfig.json` in this package; from root, `STEPS=10000 bunx vitest run --config packages/lexical-conformance/diff/vitest.config.mts`.
+- Differential changes: `bunx tsc --noEmit -p diff/tsconfig.json` and `STEPS=10000 bunx vitest run --config diff/vitest.config.mts` in this package (uses its pinned Vitest).
+
+- In this package: `bunx tsc --noEmit -p coverage/tsconfig.json`, `bunx vitest run --config coverage/vitest.config.ts`.
+- From the repository: `just lexical-coverage-seed --check`, `just lexical-coverage --check`.
 
 ## Gotchas
 
@@ -40,3 +44,5 @@ The upstream source is downloaded by checksum into this worktree's `target/`.
 - Regenerate the full corpus after changing copied Macro or Loro source.
 - Review fixtures for account identities beyond the machine privacy scanner.
 - Entropy, node keys, handles and callback tapes reset for every test.
+
+- Keep the S1 D-11 error-mode text-offset guard enabled in the release differential oracle; compare rollback state and identities exactly.

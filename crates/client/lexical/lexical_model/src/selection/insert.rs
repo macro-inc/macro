@@ -1,4 +1,5 @@
 use crate::*;
+mod nodes;
 impl Transaction<'_> {
     /// Insert text at the active selection.
     pub fn insert_text(&mut self, text: &str) -> Result<(), Error> {
@@ -35,12 +36,19 @@ impl Transaction<'_> {
             let placement = self.child_at_index(key, offset);
             if let Some(paragraph) = placement.filter(|child| self.is::<Paragraph>(*child)) {
                 self.splice(paragraph, ChildIndex(0), 0, &[text.key()])?;
-            } else if key == NodeKey::ROOT {
-                let paragraph = self.create(Paragraph::default())?;
-                self.append(paragraph, &[text.key()])?;
-                self.splice(key, offset, 0, &[paragraph.key()])?;
             } else {
-                self.splice(key, offset, 0, &[text.key()])?;
+                let target = if key == NodeKey::ROOT {
+                    let paragraph = self.create(Paragraph::default())?;
+                    self.append(paragraph, &[text.key()])?;
+                    paragraph.key()
+                } else {
+                    text.key()
+                };
+                if let Some(placement) = placement {
+                    self.insert_before(placement, target, true)?;
+                } else {
+                    self.append(key, &[target])?;
+                }
             }
             let next = Point::text(text, Utf16Offset::ZERO);
             let shifted = self.range_at(slot)?;
@@ -126,8 +134,25 @@ impl Transaction<'_> {
             }) {
                 // Upstream clears protected inline parents first, then resolves
                 // the surviving boundary before inserting the replacement.
+                let identity = self.selection_replacements;
                 self.insert_text_at(slot, "")?;
                 let mut normalized = self.range_at(slot)?.clone();
+                let key = normalized.anchor.key();
+                if self.selection_replacements != identity
+                    && normalized.is_collapsed()
+                    && self.is_text(key)
+                    && self.text_content_size(key) == Utf16Offset::ZERO
+                    && self.prev_sibling(key).is_none()
+                    && self
+                        .parent(key)
+                        .is_some_and(|parent| !self.can_insert_text_before(parent))
+                {
+                    // The upstream receiver is detached by replacement. Retrying
+                    // from its empty protected boundary cannot advance it.
+                    return Err(Error::Invariant(
+                        "replaced selection cannot advance at a protected boundary",
+                    ));
+                }
                 self.normalize_view_boundaries(&mut normalized)?;
                 self.install_selection_at(slot, Selection::Range(normalized))?;
                 return self.insert_text_at(slot, text);
@@ -149,6 +174,44 @@ impl Transaction<'_> {
                 original.format,
                 original.style,
             );
+        }
+        if !original.is_collapsed()
+            && let [key] = selected.as_slice()
+            && self.is_text(*key)
+        {
+            let data = self.view().text_data(*key)?.clone();
+            let (start, end) = if backward {
+                (original.focus, original.anchor)
+            } else {
+                (original.anchor, original.focus)
+            };
+            self.text(*key)?.splice_text(
+                Utf16Offset(start.offset())..Utf16Offset(end.offset()),
+                text,
+                false,
+            )?;
+            self.finish_text_insertion(
+                slot,
+                false,
+                Point::text(
+                    *key,
+                    Utf16Offset(start.offset()) + TextBuffer::new(text).utf16_len(),
+                ),
+                if self.text_content_size(*key) == Utf16Offset::ZERO {
+                    original.format
+                } else {
+                    data.format
+                },
+                if self.text_content_size(*key) == Utf16Offset::ZERO {
+                    original.style
+                } else {
+                    data.style
+                },
+            )?;
+            if self.text_content_size(*key) == Utf16Offset::ZERO {
+                self.remove(*key, true)?;
+            }
+            return Ok(());
         }
         let first_format = selected
             .first()
@@ -219,7 +282,11 @@ impl Transaction<'_> {
             || (at_end && self.next_sibling(key).is_none() && !self.can_insert_text_after(parent));
         if original.is_collapsed() && protected && (at_start || at_end) {
             force_selection = true;
-            let adjacent = if at_start {
+            let insert_before = !(at_end
+                && (self.is_token_or_segmented(key)
+                    || !self.can_insert_text_after(key)
+                    || (self.next_sibling(key).is_none() && !self.can_insert_text_after(parent))));
+            let adjacent = if insert_before {
                 self.prev_sibling(key)
             } else {
                 self.next_sibling(key)
@@ -227,7 +294,7 @@ impl Transaction<'_> {
             let target = if let Some(adjacent) = adjacent.filter(|key| {
                 self.is_text(*key)
                     && !self.is_token_or_segmented(*key)
-                    && if at_start {
+                    && if insert_before {
                         self.can_insert_text_after(*key)
                     } else {
                         self.can_insert_text_before(*key)
@@ -239,13 +306,13 @@ impl Transaction<'_> {
                 self.text(new)?
                     .set_format(range.format)?
                     .set_style(&range.style)?;
-                let outside = if at_start {
+                let outside = if insert_before {
                     !self.can_insert_text_before(parent)
                 } else {
                     !self.can_insert_text_after(parent)
                 };
                 let target = if outside { parent } else { key };
-                if at_start {
+                if insert_before {
                     self.insert_before(target, new, false)?;
                 } else {
                     self.insert_after(target, new, false)?;
@@ -253,11 +320,20 @@ impl Transaction<'_> {
                 new.key()
             };
             key = target;
-            offset = if at_start {
+            offset = if insert_before {
                 self.text_content_size(target)
             } else {
                 Utf16Offset::ZERO
             };
+            if !text.is_empty() {
+                self.collapsed_selection_at(
+                    slot,
+                    Point::text(key, offset),
+                    range.format,
+                    range.style.clone(),
+                )?;
+                return self.insert_text_at(slot, text);
+            }
         } else if self.is_token_or_tab(key) {
             let replacement = self.create_text(text)?;
             self.replace(key, replacement, false)?;
@@ -467,8 +543,16 @@ impl Transaction<'_> {
                     first,
                     Utf16Offset(start.offset()) + TextBuffer::new(text).utf16_len(),
                 ),
-                first_data.format,
-                first_data.style,
+                if self.text_content_size(first) == Utf16Offset::ZERO {
+                    range.format
+                } else {
+                    first_data.format
+                },
+                if self.text_content_size(first) == Utf16Offset::ZERO {
+                    range.style.clone()
+                } else {
+                    first_data.style
+                },
             )?;
             if self.text_content_size(first) == Utf16Offset::ZERO {
                 self.remove(first, false)?;
@@ -517,7 +601,7 @@ impl Transaction<'_> {
         // Root insertion is a splice at the anchor, even for a noncollapsed range.
         // Upstream checks this before removing the selected block contents.
         let point = self.anchor_at(slot)?;
-        if self.is_root_or_shadow_root(point.key()) {
+        if point.key() == NodeKey::ROOT {
             let p = self.create(Paragraph::default())?;
             self.splice(point.key(), ChildIndex(point.offset()), 0, &[p.key()])?;
             let range = self.range_at(slot)?.clone();
@@ -585,185 +669,6 @@ impl Transaction<'_> {
             )?;
         }
         Ok(())
-    }
-    /// Insert nodes at the active selection.
-    pub fn insert_nodes(&mut self, nodes: &[NodeKey]) -> Result<(), Error> {
-        self.insert_nodes_at(SelectionSlot::Active, nodes)
-    }
-    /// Insert inline runs or blocks through the node's virtual hooks.
-    pub fn insert_nodes_at(&mut self, slot: SelectionSlot, nodes: &[NodeKey]) -> Result<(), Error> {
-        self.guard_write()?;
-        if nodes.is_empty() {
-            return Ok(());
-        }
-        let selection = self
-            .selection_at(slot)?
-            .cloned()
-            .ok_or(Error::NoSelection)?;
-        match selection {
-            Selection::Table(_) => {
-                let hooks = self
-                    .pending
-                    .registry
-                    .table_selection_hooks
-                    .clone()
-                    .ok_or(Error::UnsupportedSelection)?;
-                return hooks.insert_nodes(self, slot, nodes);
-            }
-            Selection::Node(selection) => {
-                let selected = selection.nodes(self.view());
-                let Some(last) = selected.last().copied() else {
-                    return Ok(());
-                };
-                let point = if self.is_text(last) {
-                    self.end_point(last)?
-                } else {
-                    Point::element(
-                        self.parent_or_err(last)?,
-                        ChildIndex(
-                            self.index_within_parent(last)
-                                .ok_or(Error::NoParent(last))?
-                                .0
-                                + 1,
-                        ),
-                    )
-                };
-                self.set_selection(Some(Selection::Range(RangeSelection::collapsed(point))))?;
-                self.insert_nodes_at(SelectionSlot::Active, nodes)?;
-                for key in selected {
-                    if self.is_attached(key) {
-                        self.remove(key, false)?;
-                    }
-                }
-                return Ok(());
-            }
-            Selection::Range(range) => {
-                if !range.is_collapsed() {
-                    self.remove_text_at(slot)?;
-                }
-            }
-        }
-        let slot = if self.is_root_or_shadow_root(self.anchor_at(slot)?.key()) {
-            self.insert_paragraph_at(slot)?;
-            SelectionSlot::Active
-        } else {
-            slot
-        };
-        let first_block = self
-            .selection_block(self.anchor_at(slot)?)
-            .ok_or(Error::Invariant("insertion requires a block"))?;
-        if self.has_language_field(first_block) && self.has_language_field(nodes[0]) {
-            let text = self.text_content(nodes[0]).into_owned();
-            return self.insert_text_at(slot, &text);
-        }
-        let (block, index) = self.split_selection_boundary(slot)?;
-        let blocks = nodes
-            .iter()
-            .any(|key| (self.is_element(*key) || self.is_decorator(*key)) && !self.is_inline(*key));
-        if self.has_language_field(block) || !blocks {
-            self.splice(block, index, 0, nodes)?;
-            let last = *nodes
-                .last()
-                .ok_or(Error::Invariant("empty node insertion"))?;
-            let point = if !self.is_text(last) && !self.is_element(last) {
-                match self
-                    .next_sibling(last)
-                    .filter(|key| self.is_text(*key) || self.is_element(*key))
-                {
-                    Some(next) => self.element_select_point(next, false)?,
-                    None => self.end_point(last)?,
-                }
-            } else {
-                self.end_point(last)?
-            };
-            let range = self.range_at(slot)?.clone();
-            return self.collapsed_selection_at(
-                SelectionSlot::Active,
-                point,
-                range.format,
-                range.style,
-            );
-        }
-        // Upstream uses a virtual paragraph while grouping inline runs; its key is burned.
-        let _virtual_root = self.create(Paragraph::default())?;
-        let mut wrapped = Vec::new();
-        let mut wrapper = None;
-        for key in nodes {
-            if (self.is_element(*key) || self.is_decorator(*key))
-                && !self.is_inline(*key)
-                && !self.is_parent_required(*key)
-            {
-                wrapper = None;
-                wrapped.push(*key);
-            } else if let Some(parent) = wrapper {
-                self.append(parent, &[*key])?;
-            } else {
-                let parent = self.create_parent_element(*key)?;
-                if !self.is_line_break(*key) {
-                    self.append(parent, &[*key])?;
-                }
-                wrapped.push(parent);
-                wrapper = Some(parent);
-            }
-        }
-        let Some(last) = wrapped.last().copied() else {
-            return Ok(());
-        };
-        let select = self.last_descendant(last).unwrap_or(last);
-        let trailing = if !self.is_empty(block) {
-            self.insert_paragraph_at(slot)?
-        } else {
-            None
-        };
-        let mut after = block;
-        for (i, key) in wrapped.into_iter().enumerate() {
-            if i == 0
-                && self.is_element(key)
-                && self.is_block(key)
-                && !self.is_empty(key)
-                && (!self.is_empty(block) || self.can_merge_when_empty(block))
-            {
-                let children = self.children_keys(key)?;
-                self.append(block, &children)?;
-            } else {
-                self.insert_after(after, key, false)?;
-                after = key;
-            }
-        }
-        let last_inserted_block =
-            self.find_matching_parent(select, |state, key| state.is_block(key));
-        if let Some(trailing) = trailing
-            && let Some(last_block) = last_inserted_block.filter(|key| self.is_element(*key))
-            && (self.can_merge_when_empty(trailing) || self.is_block(last))
-        {
-            let children = self.children_keys(trailing)?;
-            self.append(last_block, &children)?;
-            self.remove(trailing, false)?;
-        }
-        if self.is_empty(block) {
-            self.remove(block, false)?;
-        }
-        if last_inserted_block != Some(block)
-            && let Some(last) = self.last_child(block)
-            && self.is_line_break(last)
-        {
-            self.remove(last, false)?;
-        }
-        let point = self.end_point(select)?;
-        let range = self.range_at(slot)?.clone();
-        self.collapsed_selection_at(SelectionSlot::Active, point, range.format, range.style)
-    }
-    /// Insert using the active selection, previous selection, or end of root in that order.
-    pub fn insert_nodes_at_selection(&mut self, nodes: &[NodeKey]) -> Result<(), Error> {
-        let slot = if self.pending.selection.is_some() {
-            SelectionSlot::Active
-        } else if let Some(slot) = self.detach_previous_selection()? {
-            slot
-        } else {
-            self.select_end(NodeKey::ROOT)?;
-            SelectionSlot::Active
-        };
-        self.insert_nodes_at(slot, nodes)
     }
     /// Extract active selected nodes, splitting boundary text.
     pub fn extract(&mut self) -> Result<Vec<NodeKey>, Error> {

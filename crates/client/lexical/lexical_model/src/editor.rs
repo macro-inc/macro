@@ -1,6 +1,8 @@
 //! Editor ownership and atomic update entry points.
 use crate::*;
 use std::sync::Arc;
+#[cfg(feature = "foreign-nodes")]
+mod conformance;
 /// Whether the model serves a view.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum EditorMode {

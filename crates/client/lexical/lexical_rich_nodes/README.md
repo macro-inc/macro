@@ -87,16 +87,17 @@ intentionally dropped), orphan grouping/lifting, element-point remapping,
 subclass dispatch, check-state reset/copy, numbering and every package command.
 DOM classes, HTML import/export, focus/hit testing and fractional JS indent input
 remain view/HTML concerns or use the core's typed unsigned indent boundary.
-The replayer now runs all eleven recorded rich-text, one hashtag and both list
-fixtures; there are no recorded plain-text fixtures. JS return objects with an
-undefined checked property retain that marker in the replayer, while model JSON
-correctly omits it from serialized snapshots.
+The replayer dispatches rich-text, hashtag and list fixtures through these APIs;
+expanded-corpus gaps remain explicit. JS return objects with an undefined checked
+property retain that marker, while model JSON omits it from snapshots.
 
 `code::register_code_nodes` registers code-block payloads and import-only legacy
 highlights without a tokenizer. Stored nonempty highlights preserve text, style,
 detail, mode, NodeState and highlight type; format stays zero and normalization
 never merges them. Empty highlights are removed by the orphan transform; other
 orphaned highlights become plain text and drop their attributes as upstream does.
+Registering the classes directly leaves this opt-in cleanup disabled, as in the
+service export and gate registries.
 Language and theme normalize absent/null/empty values to omitted JSON fields.
 
 Code line helpers preserve UTF-16 selection offsets and split only LF/tab separators; the ordered language catalog is independent of tokenization.
@@ -157,7 +158,7 @@ LexicalAutoLinkExtension: serialization/inheritance, insertion, selected-span
 splitting, NodeSelection, command/paste validation, attribute precedence, lifting,
 merging, cross-node matches, neighbor invalidation and notification order.
 DOM rendering/import, clipboard events and mouse behavior remain view concerns.
-All 23 recorded lexical-link fixtures replay, including the MarkNode case.
+All 25 recorded lexical-link fixtures replay through these APIs, including MarkNode descendants.
 
 `utils::matcher` holds the shared Match/Matcher/RegexMatcher contract for later
 markdown reuse: UTF-16 positions, undefined captures and synthetic mutable groups.

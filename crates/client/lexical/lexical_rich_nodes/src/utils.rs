@@ -40,7 +40,10 @@ pub fn handle_indent_and_outdent(
     Ok(!handled.is_empty())
 }
 
-pub(crate) use lexical_model::is_js_whitespace;
+/// ECMAScript trim whitespace, excluding Unicode-only whitespace such as NEL.
+pub(crate) fn is_js_whitespace(ch: char) -> bool {
+    matches!(ch, '\u{0009}'..='\u{000d}' | ' ' | '\u{00a0}' | '\u{1680}' | '\u{2000}'..='\u{200a}' | '\u{2028}' | '\u{2029}' | '\u{202f}' | '\u{205f}' | '\u{3000}' | '\u{feff}')
+}
 
 /// Lift a block at its current position to its nearest root, splitting enclosing blocks.
 /// Suppresses empty edge copies, as upstream shouldSplit=false does.

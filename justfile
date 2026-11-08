@@ -185,3 +185,20 @@ lexical-fixtures *ARGS:
 # Build optimized development-only Node and web conformance artifacts.
 build-lexical-conformance-wasm:
   bun packages/lexical-conformance/diff/build-wasm.ts
+
+# Generate the specification row inventory from the checked-in recorder index.
+lexical-coverage-seed *ARGS:
+  bun packages/lexical-conformance/coverage/gen-matrix.ts {{ARGS}}
+
+# Generate or check traceability and list every uncovered P0 symbol.
+lexical-coverage *ARGS:
+  bun packages/lexical-conformance/coverage/check.ts {{ARGS}}
+
+# Replay the complete corpus and emit content-bound per-case evidence.
+lexical-replay:
+  bun packages/lexical-conformance/coverage/run-replay.ts
+
+# Execute the same complete corpus in wasm-bindgen-test's Node runner.
+lexical-replay-wasm:
+  bun packages/lexical-conformance/coverage/wasm-fixtures.ts
+  LEXICAL_WASM_FIXTURES="$(pwd)/target/lexical-conformance/wasm-fixtures.rs" CARGO_TARGET_WASM32_UNKNOWN_UNKNOWN_RUNNER=wasm-bindgen-test-runner cargo test -p lexical_conformance --target wasm32-unknown-unknown --test replay_wasm -j4
