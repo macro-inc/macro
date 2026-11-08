@@ -256,7 +256,7 @@ pub async fn plan_workspace_handler<T: WorkspaceImporter, Auth: MacroAuthorizati
     let user = user.authorization.user.macro_user_id;
     let planned = match source {
         ImportSource::Notion => {
-            let scope = match super::notion_scope(&body.roots) {
+            let scope = match super::workspace_plan::notion_scope(&body.roots) {
                 Ok(scope) => scope,
                 Err(root) => {
                     return (
@@ -267,7 +267,7 @@ pub async fn plan_workspace_handler<T: WorkspaceImporter, Auth: MacroAuthorizati
                 }
             };
             service
-                .prepare_notion_import(&user, scope, body.sharing, super::PLAN_WAIT)
+                .prepare_notion_import(&user, scope, body.sharing, super::workspace_plan::PLAN_WAIT)
                 .await
         }
         ImportSource::Linear | ImportSource::Jira | ImportSource::Slack => {
@@ -276,7 +276,12 @@ pub async fn plan_workspace_handler<T: WorkspaceImporter, Auth: MacroAuthorizati
                     .into_response();
             }
             service
-                .prepare_workspace_import(&user, source, body.sharing, super::PLAN_WAIT)
+                .prepare_workspace_import(
+                    &user,
+                    source,
+                    body.sharing,
+                    super::workspace_plan::PLAN_WAIT,
+                )
                 .await
         }
     };

@@ -5,7 +5,7 @@ use crate::domain::{
     ports::ImportError,
     service::WorkspaceImporter,
 };
-use crate::inbound::PLAN_WAIT;
+use crate::inbound::workspace_plan::PLAN_WAIT;
 use ai_toolset::{
     AsyncTool, RequestContext, ServiceContext, ToolAnnotated, ToolAnnotations, ToolResult,
 };

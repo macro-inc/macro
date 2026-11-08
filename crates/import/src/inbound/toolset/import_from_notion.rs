@@ -12,7 +12,7 @@ use super::{ImportToolContext, import_error, tool_error};
 use crate::domain::models::{NotionImportReport, NotionSharing, RunStatus};
 use crate::domain::ports::ImportError;
 use crate::domain::service::NotionWorkspaceImporter;
-use crate::inbound::{PLAN_WAIT, notion_scope};
+use crate::inbound::workspace_plan::{PLAN_WAIT, notion_scope};
 
 #[cfg(test)]
 mod test;
