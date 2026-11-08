@@ -150,3 +150,33 @@ fn transform(tx: &mut Transaction<'_>, kind: BlockKind) -> Result<Handled, Error
     })?;
     Ok(Handled::Yes)
 }
+
+pub(super) fn remove_and_restore_selection(
+    tx: &mut Transaction<'_>,
+    key: NodeKey,
+) -> Result<(), Error> {
+    let parent = tx.parent(key);
+    let previous = tx.prev_sibling(key);
+    let next = tx.next_sibling(key);
+    tx.remove(key, false)?;
+    if let Some(next) = next {
+        return tx.select_start(next);
+    }
+    if let Some(previous) = previous {
+        return tx.select_end(previous);
+    }
+    let Some(parent) = parent else {
+        return Ok(());
+    };
+    if tx.children_size(parent) == 0 {
+        if tx.is::<Root>(parent) || tx.is_shadow_root(parent) {
+            let p = tx.create(Paragraph::default())?;
+            tx.append(parent, &[p.key()])?;
+            tx.select_start(p)
+        } else {
+            tx.select_start(parent)
+        }
+    } else {
+        tx.select_end(parent)
+    }
+}
