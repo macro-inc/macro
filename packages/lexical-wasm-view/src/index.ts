@@ -1,3 +1,4 @@
+import type { EditorView as MountedEditorView } from './view/editor-view';
 export { SessionPort } from './view/session-port';
 export type {
   EditorPort,
@@ -14,6 +15,7 @@ export {
 export {
   NodeViewRegistry,
   type NodeView,
+  type EditorThemeClasses,
   type ElementDOMSlot,
   type RenderContext,
   type DecoratorProps,
@@ -34,3 +36,17 @@ export {
 
 export * from './view/commands';
 export { createDOMRange, createRectsFromDOMRange } from './view/selection';
+
+export {
+  INTERNAL_DROP_COMMAND,
+  DRAG_START_COMMAND,
+  DRAG_OVER_COMMAND,
+  DRAG_END_COMMAND,
+  type InternalDrop,
+} from './view/drag';
+
+export async function enableCodeHighlighting(
+  view: MountedEditorView
+): Promise<() => void> {
+  return (await import('./view/code-highlight')).installCodeHighlighting(view);
+}

@@ -1,16 +1,34 @@
 import type { Component, Accessor } from 'solid-js';
 import type { EditorView } from './editor-view';
-import type { JsonObject, ViewNode } from './types';
+import type { JsonObject, ViewNode, TypeFlags } from './types';
 
 export interface ElementDOMSlot {
   readonly element: HTMLElement;
   readonly after?: Node | null;
   readonly before?: Node | null;
 }
+export interface EditorThemeClasses {
+  readonly [name: string]:
+    | string
+    | EditorThemeClasses
+    | readonly string[]
+    | undefined;
+}
+export function themeClass(
+  theme: EditorThemeClasses,
+  ...path: readonly string[]
+): string {
+  let value: unknown = theme;
+  for (const key of path) {
+    if (typeof value !== 'object' || value === null) return '';
+    value = Reflect.get(value, key);
+  }
+  return typeof value === 'string' ? value : '';
+}
 export interface RenderContext {
   readonly document: Document;
   readonly namespace: string;
-  readonly theme: Readonly<Record<string, string>>;
+  readonly theme: EditorThemeClasses;
   readonly view: EditorView;
 }
 export interface DecoratorProps {
@@ -28,6 +46,7 @@ export type DraftConversionMap = Readonly<
   Record<string, (element: HTMLElement) => DraftConversion | null>
 >;
 export interface NodeView {
+  flags?(node: ViewNode): TypeFlags;
   createDOM(node: ViewNode, context: RenderContext): HTMLElement;
   updateDOM(
     previous: ViewNode,

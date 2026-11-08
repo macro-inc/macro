@@ -12,6 +12,7 @@ view. ABI major 2 includes static type predicate flags and initialize markers.
 View effect kind 9 ends native composition before a bounded remote hold is painted.
 Kind 10 replaces remote cursors: a flag=true marker clears the set, followed by
 point selections with peer key/color in keys[0]/keys[1].
+Kind 11 carries commit tag names in keys for view commit listeners.
 
 ## Start here
 

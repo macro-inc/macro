@@ -14,6 +14,7 @@ import {
 import { Mirror } from './mirror';
 import type { EditorPort, TextFromView, ViewSink } from './port';
 import type {
+  EditorThemeClasses,
   ElementDOMSlot,
   NodeViewRegistry,
   RenderContext,
@@ -26,6 +27,7 @@ import type {
   ViewNode,
   ViewSelectionInfo,
   ViewSelection,
+  TypeFlags,
 } from './types';
 import { registerEvents } from './events';
 import { BulkQueries } from './queries';
@@ -36,18 +38,20 @@ import type {
   ViewListener,
 } from './commands';
 import { selectionMessage } from './session-port';
+import { ClipboardAccess } from './clipboard';
 import { PresenceLayer } from './presence';
 import { Telemetry, type Span } from '@macro-inc/observability';
 
 const roots = new WeakMap<Node, EditorView>();
 export interface CommitInfo {
+  readonly tags: readonly string[];
   readonly keys: readonly NodeKey[];
   readonly fullReconcile: boolean;
   readonly selectionChanged: boolean;
 }
 export interface ViewOptions {
   readonly namespace: string;
-  readonly theme: Readonly<Record<string, string>>;
+  readonly theme: EditorThemeClasses;
   readonly editable: boolean;
   readonly preset: 'rich' | 'plain';
   readonly onError: (error: unknown) => void;
@@ -57,6 +61,7 @@ export interface ViewOptions {
 export class EditorView implements ViewSink {
   readonly mirror: Mirror;
   readonly query: BulkQueries;
+  readonly clipboard: ClipboardAccess;
   readonly context: RenderContext;
   private readonly viewCommands = new Map<string, ViewListener[]>();
   private readonly rustListeners: ReadonlyMap<string, number>;
@@ -88,18 +93,27 @@ export class EditorView implements ViewSink {
   };
   private disposed = false;
   private recovering = false;
-  private initialReconciled = false;
   private prevented = false;
   private lastOps = 0;
+  private paintFrame: number | null = null;
+  private revisionValue = 0;
+  get revision(): number {
+    return this.revisionValue;
+  }
+  get isMounted(): boolean {
+    return !this.disposed && roots.get(this.root) === this;
+  }
   private readonly cleanupTimers = new Set<ReturnType<typeof setTimeout>>();
   private constructor(
     readonly root: HTMLElement,
     readonly port: EditorPort,
     readonly registry: NodeViewRegistry,
-    readonly options: ViewOptions
+    readonly options: ViewOptions,
+    private openingSpan: Span | undefined
   ) {
     this.mirror = new Mirror(port.types());
     this.query = new BulkQueries(this, port);
+    this.clipboard = new ClipboardAccess(this, port);
     this.rustListeners = port.listeners();
     this.context = {
       document: root.ownerDocument,
@@ -109,7 +123,16 @@ export class EditorView implements ViewSink {
     };
     this.observer = new MutationObserver((records) => {
       const seen = new Set<NodeKey>();
+      const repair = new Set<NodeKey>();
       for (const record of records) {
+        const owner = EditorView.fromDOM(record.target);
+        if (owner && owner !== this) continue;
+        if (record.type === 'childList') {
+          const key = this.keyFromDOM(record.target);
+          if (key !== null && this.node(key)?.kind !== 'decorator')
+            repair.add(key);
+          continue;
+        }
         if (record.type !== 'characterData') continue;
         const key = this.keyFromDOM(record.target);
         if (key === null || seen.has(key)) continue;
@@ -117,6 +140,25 @@ export class EditorView implements ViewSink {
         const node = this.node(key);
         if (node?.kind === 'text' && record.target.nodeValue !== node.text)
           this.submitText(key);
+      }
+      if (repair.size) {
+        this.observer.disconnect();
+        try {
+          for (const key of repair) {
+            const node = this.node(key),
+              dom = this.getElementByKey(key);
+            if (!node || !dom) continue;
+            if (node.kind === 'text') {
+              if (dom.childNodes.length !== 1 || dom.firstChild?.nodeType !== 3)
+                this.replace(node, node, dom);
+            } else this.reconcileChildren(key);
+          }
+          const active = this.root.ownerDocument.activeElement;
+          if (active && this.ownsSelection(active))
+            writeSelection(this, this.selectionInfo.selection);
+        } finally {
+          this.observe();
+        }
       }
     });
     roots.set(root, this);
@@ -137,10 +179,17 @@ export class EditorView implements ViewSink {
     if (roots.has(root)) throw new Error('Editor root is already mounted');
     const span = options.parentSpan?.span('view.mount') ?? Telemetry.span('editor.open');
     try {
-      return span.run(() => new EditorView(root, port, registry, options));
-    } finally {
+      return span.run(
+        () => new EditorView(root, port, registry, options, span)
+      );
+    } catch (error) {
+      span.error('view mount failed');
       span.end();
+      throw error;
     }
+  }
+  ownsSelection(node: Node): boolean {
+    return EditorView.fromDOM(node) === this;
   }
   static fromDOM(node: Node): EditorView | null {
     for (
@@ -179,6 +228,12 @@ export class EditorView implements ViewSink {
   }
   node(key: NodeKey): ViewNode | null {
     return this.mirror.node(key);
+  }
+  flags(node: ViewNode): TypeFlags | undefined {
+    return (
+      this.mirror.type(node.typeIndex).flags ??
+      this.registry.get(node.type).flags?.(node)
+    );
   }
   text(key: NodeKey): string | null {
     return this.node(key)?.text ?? null;
@@ -245,8 +300,42 @@ export class EditorView implements ViewSink {
     for (const effect of effects) {
       if (effect.kind === 2) this.options.onError(new Error(effect.text || 'Editor session failed'));
     }
-    const initial = effects.some((effect) => effect.kind === 8) && !this.initialReconciled;
-    const reconcile = initial ? this.options.parentSpan?.span('view.reconcile') : undefined;
+    const initialize = effects.some((effect) => effect.kind === 8);
+    const paste = effects.some(
+      (effect) => effect.kind === 11 && effect.keys.includes('paste')
+    );
+    if (!initialize && !paste) {
+      this.applyOutput(words, strings, effects);
+      return;
+    }
+    const load = initialize
+      ? (this.openingSpan?.span('state.load') ?? Telemetry.span('state.load'))
+      : undefined;
+    const phase = load?.span('view.reconcile') ?? Telemetry.span('view.apply');
+    try {
+      phase.run(() => this.applyOutput(words, strings, effects));
+      phase.setAttr('nodes', this.dom.size);
+      phase.setAttr('decorators', this.decorators.size);
+    } finally {
+      phase.end();
+      load?.end();
+    }
+    const window = this.root.ownerDocument.defaultView;
+    if (initialize && window && this.openingSpan && this.paintFrame === null) {
+      this.paintFrame = window.requestAnimationFrame(() => {
+        this.paintFrame = window.requestAnimationFrame(() => {
+          this.paintFrame = null;
+          this.openingSpan?.end();
+          this.openingSpan = undefined;
+        });
+      });
+    }
+  }
+  private applyOutput(
+    words: Uint32Array,
+    strings: Uint8Array,
+    effects: IViewEffectMsg[]
+  ): void {
     this.observer.disconnect();
     try {
       this.presence.update(effects);
@@ -384,11 +473,15 @@ export class EditorView implements ViewSink {
         for (const [key, mutation] of diff.mutations)
           if (mutation.after) this.updateDecorator(key, mutation.after);
       });
-      this.notify(diff, selectionChanged);
+      this.notify(
+        diff,
+        selectionChanged,
+        effects
+          .filter((effect) => effect.kind === 11)
+          .flatMap((effect) => effect.keys)
+      );
       this.recovering = false;
-      if (initial) this.initialReconciled = true;
     } catch (error) {
-      reconcile?.error(error);
       this.options.onError(error);
       if (this.recovering) throw error;
       this.recovering = true;
@@ -401,7 +494,6 @@ export class EditorView implements ViewSink {
       }
     } finally {
       this.observe();
-      reconcile?.end();
     }
   }
   private create(node: ViewNode): void {
@@ -504,7 +596,13 @@ export class EditorView implements ViewSink {
       update: (next) => set(() => next),
     });
   }
-  private notify(diff: AppliedDiff, selectionChanged: boolean): void {
+  private notify(
+    diff: AppliedDiff,
+    selectionChanged: boolean,
+    tags: readonly string[] = []
+  ): void {
+    if (diff.mutations.size || selectionChanged || diff.fullReconcile)
+      this.revisionValue++;
     for (const [type, listeners] of this.mutations) {
       const records = new Map<NodeKey, MutationKind>();
       for (const [key, change] of diff.mutations)
@@ -513,6 +611,7 @@ export class EditorView implements ViewSink {
       if (records.size) for (const listener of listeners) listener(records);
     }
     const info = {
+      tags,
       keys: [...diff.mutations.keys()],
       fullReconcile: diff.fullReconcile,
       selectionChanged,
@@ -684,6 +783,12 @@ export class EditorView implements ViewSink {
   }
   dispose(): void {
     this.disposed = true;
+    if (this.paintFrame !== null)
+      this.root.ownerDocument.defaultView?.cancelAnimationFrame(
+        this.paintFrame
+      );
+    this.openingSpan?.end();
+    this.openingSpan = undefined;
     this.observer.disconnect();
     for (const timer of this.cleanupTimers) clearTimeout(timer);
     this.cleanupTimers.clear();

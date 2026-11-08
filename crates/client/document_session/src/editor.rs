@@ -507,6 +507,17 @@ impl EditorSurface {
         });
     }
     fn output(output: Output, view: &mut Vec<ViewEffect>) {
+        let mut tags = Vec::new();
+        for tag in output.commits.iter().flat_map(|commit| commit.tags.iter()) {
+            let tag = tag.to_string();
+            if !tags.contains(&tag) {
+                tags.push(tag);
+            }
+        }
+        if !tags.is_empty() {
+            view.push(ViewEffect::CommitTags(tags));
+        }
+
         for effect in &output.effects {
             if let Effect::FollowUpFailed { plugin, kind, .. } = effect {
                 tracing::error!(
