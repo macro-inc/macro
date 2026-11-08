@@ -164,7 +164,10 @@ const ALL_SURFACES: [Surface; 9] = [
 /// The id of catalog routine `key` as Macro's template for `user`: the
 /// same on every read, so it can be dismissed and saved from.
 pub fn template_id(user: &MacroUserIdStr<'_>, key: &str) -> Uuid {
-    Uuid::new_v5(&TEMPLATE_NAMESPACE, format!("{}\n{key}", user.as_ref()).as_bytes())
+    Uuid::new_v5(
+        &TEMPLATE_NAMESPACE,
+        format!("{}\n{key}", user.as_ref()).as_bytes(),
+    )
 }
 
 /// Suggests routines in hidden sessions and serves them.
@@ -333,8 +336,7 @@ where
             let run = Run {
                 user: user.clone(),
                 timezone,
-                code: self.inner.code.sdk().is_some()
-                    && flags.is_enabled(ROUTINE_CODE_STEPS_FLAG),
+                code: self.inner.code.sdk().is_some() && flags.is_enabled(ROUTINE_CODE_STEPS_FLAG),
             };
             // A child of the request's span, so the start and the
             // generation stay one trace.
@@ -369,7 +371,9 @@ where
             tracing::info!(event = "routine_suggestions.dismissed", from = "for_you");
             return Ok(());
         }
-        let Some(routine) = CATALOG.iter().find(|routine| template_id(user, routine.key) == id)
+        let Some(routine) = CATALOG
+            .iter()
+            .find(|routine| template_id(user, routine.key) == id)
         else {
             bail!(ActionPolicyError::NotFound);
         };
@@ -411,7 +415,10 @@ where
         };
         span.record("agent.session.id", session.session.to_string());
         let kind = request.kind_name();
-        let outcome = self.inner.suggest(principal, &user, &session, request).await?;
+        let outcome = self
+            .inner
+            .suggest(principal, &user, &session, request)
+            .await?;
         span.record("routine.suggestion.ok", outcome.ok);
         span.record("routine.suggestion.problems", outcome.problems.len());
         if let Some(id) = outcome.id {
@@ -450,13 +457,7 @@ where
         let status = generation.map_or(GenerationStatus::None, |generation| generation.status);
         Ok(RoutineSuggestions {
             status,
-            suggestions: fill(
-                user,
-                &stored,
-                &dismissed_templates,
-                &saved_from,
-                surface,
-            ),
+            suggestions: fill(user, &stored, &dismissed_templates, &saved_from, surface),
         })
     }
 
@@ -649,12 +650,12 @@ where
             self.repo.dismissed_templates(user),
         );
         let mut names = templates.unwrap_or_default();
-        names.extend(stored.unwrap_or_default().into_iter().map(|suggestion| {
-            match suggestion.pick {
+        names.extend(stored.unwrap_or_default().into_iter().map(
+            |suggestion| match suggestion.pick {
                 StoredPick::Catalog { key, .. } => key,
                 StoredPick::Routine { routine } => routine.name,
-            }
-        }));
+            },
+        ));
         names
     }
 
@@ -667,7 +668,9 @@ where
         brief: String,
         shutdown: &CancellationToken,
     ) -> (u32, bool) {
-        let kept = self.session(user, surfaces, brief.clone(), 1, shutdown).await;
+        let kept = self
+            .session(user, surfaces, brief.clone(), 1, shutdown)
+            .await;
         if kept > 0 || shutdown.is_cancelled() {
             return (kept, false);
         }

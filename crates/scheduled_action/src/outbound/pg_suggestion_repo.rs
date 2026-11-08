@@ -55,7 +55,9 @@ fn session(
     Ok(SuggestionSession {
         session: session_id,
         owner: MacroUserIdStr::try_from(user_id).context("a suggestion session's owner")?,
-        agent: bot_id::BotId::new_from_uuid(agent_id.parse().context("a suggestion session's agent")?),
+        agent: bot_id::BotId::new_from_uuid(
+            agent_id.parse().context("a suggestion session's agent")?,
+        ),
         surfaces: surfaces(names)?,
         kept: kept.unwrap_or(0).try_into().unwrap_or(u32::MAX),
     })
@@ -142,8 +144,16 @@ impl SuggestionRepo for PgSuggestionRepo {
         )
         .fetch_optional(&self.pool)
         .await?;
-        row.map(|row| session(row.session_id, row.user_id, row.agent_id, row.surfaces, row.kept))
-            .transpose()
+        row.map(|row| {
+            session(
+                row.session_id,
+                row.user_id,
+                row.agent_id,
+                row.surfaces,
+                row.kept,
+            )
+        })
+        .transpose()
     }
 
     async fn close_session(&self, session_id: Uuid) -> Result<()> {
@@ -174,7 +184,15 @@ impl SuggestionRepo for PgSuggestionRepo {
         .fetch_all(&self.pool)
         .await?;
         rows.into_iter()
-            .map(|row| session(row.session_id, row.user_id, row.agent_id, row.surfaces, None))
+            .map(|row| {
+                session(
+                    row.session_id,
+                    row.user_id,
+                    row.agent_id,
+                    row.surfaces,
+                    None,
+                )
+            })
             .collect()
     }
 
