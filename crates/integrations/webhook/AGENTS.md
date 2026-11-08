@@ -29,7 +29,7 @@ before changing ingestion or delivery behavior.
 - Depends on: `channels`, `documents`, `messages`, `agent_session`,
   `agent_trigger`, `entity_access`, `macro_event_broker`, `kafka_util`,
   `rdkafka`, `rate_limit`.
-- Used by: `services/document_storage_service`, `crates/coding_agent_worker`.
+- Used by: `services/document_storage_service`, `crates/agents/macrod`.
 
 ## Recipes
 

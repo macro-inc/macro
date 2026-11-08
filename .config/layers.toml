@@ -87,7 +87,6 @@ paths = [
   "crates/accounts/**",
   "crates/notifications/**",
   "crates/integrations/**",
-  "crates/coding_agent_worker",
 ]
 may_depend_on = ["types", "platform", "aws", "clients", "engines", "client", "domain"]
 
