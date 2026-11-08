@@ -101,7 +101,7 @@ s3_key = { workspace = true }
 email_types = { workspace = true }
 model_file_type = { workspace = true }
 properties_types = { workspace = true, optional = true }
-models_search = { workspace = true }
+search_types = { workspace = true }
 nom = { workspace = true }
 opensearch_client = { workspace = true }
 ensure_exists = { workspace = true, features = ["dynamodb"] }

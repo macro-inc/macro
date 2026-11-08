@@ -1116,7 +1116,6 @@ dependencies = [
  "messages",
  "model_owner",
  "model_user",
- "models_search",
  "models_soup",
  "notification",
  "notification_inbound",
@@ -1136,6 +1135,7 @@ dependencies = [
  "scheduled_action_service_url",
  "schemars 1.2.1",
  "search_service_client",
+ "search_types",
  "secretsmanager_client",
  "serde",
  "serde_json",
@@ -14109,25 +14109,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "models_search"
-version = "0.1.0"
-dependencies = [
- "chrono",
- "document_sub_type",
- "item_filters",
- "model_file_type",
- "opensearch_client",
- "schemars 1.2.1",
- "serde",
- "serde_json",
- "soup_property",
- "strum 0.27.2",
- "utoipa",
- "uuid",
- "workspace-hack",
-]
-
-[[package]]
 name = "models_soup"
 version = "0.1.0"
 dependencies = [
@@ -18490,7 +18471,6 @@ dependencies = [
  "messages",
  "model_file_type",
  "model_owner",
- "models_search",
  "nom 8.0.0",
  "opensearch_client",
  "pdfium-render",
@@ -18502,6 +18482,7 @@ dependencies = [
  "rust-embed",
  "s3_client",
  "s3_key",
+ "search_types",
  "serde",
  "serde_json",
  "shared_types",
@@ -18552,7 +18533,6 @@ dependencies = [
  "macro_authorization",
  "macro_db_client",
  "macro_user_id",
- "models_search",
  "models_soup",
  "name_search",
  "opensearch_client",
@@ -18562,6 +18542,7 @@ dependencies = [
  "readonly_pool",
  "rootcause",
  "search_cursor_types",
+ "search_types",
  "serde",
  "serde_json",
  "shared_types",
@@ -18580,8 +18561,27 @@ name = "search_service_client"
 version = "0.1.0"
 dependencies = [
  "anyhow",
- "models_search",
  "reqwest 0.13.4",
+ "search_types",
+ "workspace-hack",
+]
+
+[[package]]
+name = "search_types"
+version = "0.1.0"
+dependencies = [
+ "chrono",
+ "document_sub_type",
+ "item_filters",
+ "model_file_type",
+ "opensearch_client",
+ "schemars 1.2.1",
+ "serde",
+ "serde_json",
+ "soup_property",
+ "strum 0.27.2",
+ "utoipa",
+ "uuid",
  "workspace-hack",
 ]
 
@@ -19501,12 +19501,12 @@ dependencies = [
  "macro_authorization",
  "macro_user_id",
  "model_user",
- "models_search",
  "models_soup",
  "pagination_types",
  "rootcause",
  "schemars 1.2.1",
  "search_service_client",
+ "search_types",
  "serde",
  "serde_json",
  "soup",

@@ -5,11 +5,11 @@ use std::sync::Arc;
 use document_sub_type::DocumentSubType;
 use item_filters::{DocumentFilters, EntityFilters};
 use macro_user_id::user_id::MacroUserIdStr;
-use models_search::unified::{
+use search_service_client::SearchServiceClient;
+use search_types::unified::{
     UnifiedSearchIndex, UnifiedSearchRequest, UnifiedSearchResponseItem,
     entity_filters_from_include,
 };
-use search_service_client::SearchServiceClient;
 
 use crate::domain::model::{SkillError, SkillMatchType, SkillSummary};
 use crate::domain::ports::SkillSearcher;
@@ -51,11 +51,11 @@ impl SkillSearcher for SearchServiceSkillSearcher {
         let request = UnifiedSearchRequest {
             query: query.to_owned(),
             match_type: match match_type {
-                SkillMatchType::Partial => models_search::MatchType::Partial,
-                SkillMatchType::Exact => models_search::MatchType::Exact,
+                SkillMatchType::Partial => search_types::MatchType::Partial,
+                SkillMatchType::Exact => search_types::MatchType::Exact,
             },
             filters: entity_filters_from_include(vec![UnifiedSearchIndex::Documents], base_filters),
-            search_on: models_search::SearchOn::Name,
+            search_on: search_types::SearchOn::Name,
             include_crm: false,
             calendar_event_scope: Default::default(),
             collapse: None,

@@ -9,10 +9,10 @@ use async_trait::async_trait;
 use email::domain::ports::EmailService;
 use item_filters::{EmailFilters, EntityFilters};
 use macro_user_id::user_id::MacroUserIdStr;
-use models_search::channel::ChannelNameSearchRequest;
-use models_search::unified::{UnifiedSearchRequest, UnifiedSearchResponseItem};
 use properties_types::service::tag_sets::{TagFilter, TagMatch};
 use schemars::JsonSchema;
+use search_types::channel::ChannelNameSearchRequest;
+use search_types::unified::{UnifiedSearchRequest, UnifiedSearchResponseItem};
 use serde::Deserialize;
 
 #[derive(Debug, JsonSchema, Deserialize, Clone)]
@@ -159,7 +159,7 @@ impl AsyncTool<SearchToolContext> for NameSearch {
             query: self.name.to_owned(),
             match_type: self.match_type.into(),
             filters: search_filters(&non_channel_types, base_filters),
-            search_on: models_search::SearchOn::Name,
+            search_on: search_types::SearchOn::Name,
             include_crm: false,
             calendar_event_scope: Default::default(),
             collapse: None,

@@ -199,7 +199,7 @@
     "search-processing-service": {
       "source_paths": [
         "services/search_processing_service/**",
-        "crates/search/models_search/**",
+        "crates/search/search_types/**",
         "crates/types/opensearch_types/**",
         "crates/clients/opensearch_client/**",
         "crates/comms/comms_db_client/**"

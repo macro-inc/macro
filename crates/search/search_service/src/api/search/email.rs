@@ -4,13 +4,13 @@ use email_db_client::contacts::get::ThreadContactsMap;
 use email_types::service::message::{MessageSenderInfo, ThreadHistoryInfo};
 use indexmap::IndexMap;
 use macro_user_id::user_id::MacroUserIdStr;
-use models_search::email::{
-    EmailSearchParticipant, EmailSearchResponseItem, EmailSearchResponseItemWithMetadata,
-    EmailSearchResult,
-};
 use models_soup::SoupProperty;
 use opensearch_client::search::model::SearchGotoContent;
 use properties_types::{EntityReference, EntityType};
+use search_types::email::{
+    EmailSearchParticipant, EmailSearchResponseItem, EmailSearchResponseItemWithMetadata,
+    EmailSearchResult,
+};
 use sqlx::types::Uuid;
 use std::collections::HashMap;
 use system_properties::SystemPropertyKey;

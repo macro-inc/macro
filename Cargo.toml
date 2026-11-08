@@ -860,7 +860,6 @@ model_file_type = { path = "crates/types/model_file_type" }
 model_notifications = { path = "crates/notifications/model_notifications" }
 model_owner = { path = "crates/types/model_owner" }
 model_user = { path = "crates/types/model_user" }
-models_search = { path = "crates/search/models_search" }
 models_soup = { path = "crates/search/models_soup" }
 name_search = { path = "crates/search/name_search" }
 native_app_service = { path = "crates/accounts/native_app_service" }
@@ -907,6 +906,7 @@ search_cursor_types = { path = "crates/types/search_cursor_types" }
 search_processing_service_url = { path = "crates/platform/service_urls/search_processing_service_url" }
 search_service = { path = "crates/search/search_service" }
 search_service_client = { path = "crates/clients/search_service_client" }
+search_types = { path = "crates/search/search_types" }
 secretsmanager_client = { path = "crates/aws/secretsmanager_client" }
 serde_utils = { path = "crates/platform/serde_utils" }
 service_url = { path = "crates/platform/service_urls/service_url" }

@@ -9,9 +9,9 @@ use async_trait::async_trait;
 use email::domain::ports::EmailService;
 use item_filters::{EmailFilters, EntityFilters};
 use macro_user_id::user_id::MacroUserIdStr;
-use models_search::unified::UnifiedSearchRequest;
 use properties_types::service::tag_sets::{TagFilter, TagMatch};
 use schemars::JsonSchema;
+use search_types::unified::UnifiedSearchRequest;
 use serde::Deserialize;
 use uuid::Uuid;
 
@@ -159,7 +159,7 @@ impl AsyncTool<SearchToolContext> for ContentSearch {
             query: self.query.to_owned(),
             match_type: self.match_type.into(),
             filters: content_filters(&self.entity_types, &self.agent_session_ids, base_filters),
-            search_on: models_search::SearchOn::Content,
+            search_on: search_types::SearchOn::Content,
             include_crm: false,
             calendar_event_scope: Default::default(),
             collapse: None,

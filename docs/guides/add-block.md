@@ -191,7 +191,7 @@ you are only giving it an editor (as `pptx` and `docx` did).
   `fileTypeToBlockName` and `verifyBlockName` in `allBlocks.ts` as `write`
   does.
 - **Search.** Add the type to `is_searchable_file_type` in
-  `crates/search/models_search/src/unified.rs`, a parser in
+  `crates/search/search_types/src/unified.rs`, a parser in
   `services/search_processing_service/src/parsers/<type>.rs` (registered in
   `parsers/mod.rs`), and the dispatch in
   `services/search_processing_service/src/process/document/raw_document.rs`.

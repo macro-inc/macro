@@ -1,4 +1,4 @@
-# models_search
+# search_types
 
 ## What it is
 
@@ -38,7 +38,7 @@ cross-entity response.
 
 ## Checks
 
-- `cargo test -p models_search` (`SQLX_OFFLINE` unset).
+- `cargo test -p search_types` (`SQLX_OFFLINE` unset).
 
 ## Gotchas
 

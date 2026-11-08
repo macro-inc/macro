@@ -1,6 +1,6 @@
 use crate::api::search::simple::SearchError;
 use item_filters::CalendarEventFilters;
-use models_search::calendar_event::CalendarEventSearchScope;
+use search_types::calendar_event::CalendarEventSearchScope;
 use uuid::Uuid;
 
 use crate::api::context::SearchHandlerState;

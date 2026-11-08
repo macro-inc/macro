@@ -6,7 +6,6 @@ use document_sub_type::DocumentSubType;
 use lexical_client::types::MarkdownParseResult;
 use macro_db_client::document::get_document_version_id;
 use model_owner::Owner;
-use models_search::unified::is_searchable_file_type;
 use opensearch_client::{
     OpensearchClient, date_format::EpochMillis, upsert::document::UpsertDocumentArgs,
 };
@@ -16,6 +15,7 @@ use s3_key::{
     CONVERTED_DOCUMENT_FILE_NAME, build_cloud_storage_bucket_document_key,
     build_docx_to_pdf_converted_document_key,
 };
+use search_types::unified::is_searchable_file_type;
 use shared_types::document::{DocumentMetadata, FileType};
 
 #[cfg(all(feature = "pdf", not(feature = "no_pdf")))]

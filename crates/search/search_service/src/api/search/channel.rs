@@ -15,16 +15,16 @@ use axum::{
 use channels::domain::models::ChannelHistoryInfo;
 use macro_authorization::{InternalOnly, MacroAuthorizationExtractor, UserOrInternal};
 use macro_user_id::user_id::MacroUserId;
-use models_search::MatchType;
-use models_search::channel::{
+use opensearch_client::search::channels::{ChannelSearchArgs, ChannelSortMode};
+use opensearch_client::search::model::SearchGotoContent;
+use search_cursor_types::{SearchCursorOption, SearchMethodCursor};
+use search_types::MatchType;
+use search_types::channel::{
     ChannelMessageSearchResponseItem, ChannelNameSearchRequest, ChannelNameSearchResponse,
     ChannelNameSearchResponseItem, ChannelSearchRequest, ChannelSearchResponse,
     ChannelSearchResponseItem, ChannelSearchResponseItemWithMetadata, ChannelSearchResult,
     ChannelSortTimestamp,
 };
-use opensearch_client::search::channels::{ChannelSearchArgs, ChannelSortMode};
-use opensearch_client::search::model::SearchGotoContent;
-use search_cursor_types::{SearchCursorOption, SearchMethodCursor};
 use sqlx::types::Uuid;
 
 /// Fetches the per-user channel history info and message deletion states
@@ -152,7 +152,7 @@ fn construct_channel_name_items(
         .filter_map(|hit| {
             let info = channel_histories.get(&hit.entity_id)?;
             Some(ChannelNameSearchResponseItem {
-                metadata: Some(models_search::channel::ChannelMetadata {
+                metadata: Some(search_types::channel::ChannelMetadata {
                     created_at: info.created_at,
                     updated_at: info.updated_at,
                     viewed_at: info.viewed_at,
@@ -280,7 +280,7 @@ pub fn construct_search_result(
 
             if let Some(info) = channel_histories.get(&entity_id) {
                 let info = info.clone();
-                let metadata = models_search::channel::ChannelMetadata {
+                let metadata = search_types::channel::ChannelMetadata {
                     created_at: info.created_at,
                     updated_at: info.updated_at,
                     viewed_at: info.viewed_at,

@@ -1,15 +1,15 @@
 use crate::api::search::simple::SearchError;
 use indexmap::IndexMap;
 use macro_user_id::user_id::MacroUserIdStr;
-use models_search::SearchHighlight;
-use models_search::document::{
-    DocumentSearchResponseItem, DocumentSearchResponseItemWithMetadata, DocumentSearchResult,
-};
 use models_soup::SoupProperty;
 use name_search::highlight_name;
 use opensearch_client::search::model::SearchGotoContent;
 use opensearch_types::SearchEntityType;
 use properties_types::{EntityReference, EntityType};
+use search_types::SearchHighlight;
+use search_types::document::{
+    DocumentSearchResponseItem, DocumentSearchResponseItemWithMetadata, DocumentSearchResult,
+};
 use sqlx::types::Uuid;
 use std::collections::HashMap;
 use system_properties::SystemPropertyKey;
@@ -162,7 +162,7 @@ pub fn construct_search_result(
         .filter_map(|(entity_id, hits)| {
             if let Some(info) = document_histories.get(&entity_id.to_string()) {
                 let info = info.clone();
-                let metadata = models_search::document::DocumentMetadata {
+                let metadata = search_types::document::DocumentMetadata {
                     created_at: info.created_at,
                     updated_at: info.updated_at,
                     viewed_at: info.viewed_at,

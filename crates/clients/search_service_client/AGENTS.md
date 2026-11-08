@@ -18,7 +18,7 @@ authenticating with the internal API key header instead of a user JWT.
 
 ## Boundaries
 
-- Depends on: `models_search` (request/response types).
+- Depends on: `search_types` (request/response types).
 - Used by: `agent_tools`, `memory`, `skills`, `document_cognition_service`, `mcp_service`.
 
 ## Recipes

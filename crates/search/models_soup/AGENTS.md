@@ -29,7 +29,7 @@ model.
   `email`, `macro_user_id`, `model`, `entity_kind`, `model_owner`,
   `pagination_types`, `properties_types`.
 - Used by: `agent_tools`, `complete_graph`, `database_sql_runner`, `graphql_initiative`,
-  `graphql_soup`, `models_search`, `search_service`, `skills`, `soup`,
+  `graphql_soup`, `search_types`, `search_service`, `skills`, `soup`,
   `soup_filter_projection`, `attention_feed`.
 
 ## Recipes

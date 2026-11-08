@@ -7,34 +7,34 @@ use item_filters::{
     ChannelFilters, ChatFilters, DocumentFilters, EmailFilters, EntityFilters, NotificationFilters,
     ProjectFilters, PropertyFilter, SharedEmailFilter, TaskFilters,
 };
-use models_search::channel::{
+use search_types::channel::{
     ChannelSearchRequest, ChannelSearchResponse, ChannelSearchResponseItem, ChannelSearchResult,
     SimpleChannelSearchReponseItem, SimpleChannelSearchResponse,
 };
-use models_search::chat::{
+use search_types::chat::{
     ChatMessageSearchResult, ChatSearchRequest, ChatSearchResponse, ChatSearchResponseItem,
     SimpleChatSearchResponse, SimpleChatSearchResponseItem,
 };
-use models_search::document::{
+use search_types::document::{
     DocumentSearchRequest, DocumentSearchResponse, DocumentSearchResponseItem,
     DocumentSearchResult, SimpleDocumentSearchResponse, SimpleDocumentSearchResponseItem,
 };
-use models_search::email::{
+use search_types::email::{
     EmailSearchRequest, EmailSearchResponse, EmailSearchResponseItem, EmailSearchResult,
     SimpleEmailSearchResponse, SimpleEmailSearchResponseItem,
 };
-use models_search::unified::{
+use search_types::unified::{
     SimpleUnifiedSearchResponse, SimpleUnifiedSearchResponseItem, UnifiedSearchRequest,
     UnifiedSearchResponse, UnifiedSearchResponseItem,
 };
 use shared_types::{document::FileType, response::EmptyResponse};
 
-use models_search::project::{
+use search_types::project::{
     ProjectSearchMetadata, ProjectSearchRequest, ProjectSearchResponse, ProjectSearchResponseItem,
     ProjectSearchResult, SimpleProjectSearchResponse, SimpleProjectSearchResponseItem,
 };
 
-use models_search::{MatchType, SearchHighlight};
+use search_types::{MatchType, SearchHighlight};
 
 #[derive(OpenApi)]
 #[openapi(

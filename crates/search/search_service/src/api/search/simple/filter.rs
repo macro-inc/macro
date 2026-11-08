@@ -2,12 +2,12 @@
 //! This is used in simple_unified.rs
 
 use comms_db_client::model::SimpleMention;
-use models_search::calendar_event::CalendarEventSearchScope;
 use opensearch_client::search::unified::{
     UnifiedCalendarEventSearchArgs, UnifiedCallRecordSearchArgs, UnifiedChannelMessageSearchArgs,
     UnifiedChatSearchArgs, UnifiedDocumentSearchArgs, UnifiedEmailSearchArgs,
     UnifiedProjectSearchArgs,
 };
+use search_types::calendar_event::CalendarEventSearchScope;
 
 use crate::api::{
     context::SearchHandlerState,

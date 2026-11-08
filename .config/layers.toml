@@ -203,7 +203,7 @@ reason = "computes parsed bodies and token cache keys with email_utils; move tho
 
 [[allow]]
 from = "search_service_client"
-to = "models_search"
+to = "search_types"
 reason = "models_search is a search domain crate because it depends on models_soup and opensearch_client (plan N14)"
 
 [[allow]]

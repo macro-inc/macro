@@ -6,7 +6,7 @@
 //! dispatch and the channel-only endpoint. [`drop_wordless_terms`] then removes
 //! the terms no indexed text can match.
 
-use models_search::MatchType;
+use search_types::MatchType;
 
 /// Splits search terms by whitespace, preserving double-quoted phrases.
 /// e.g. `["hello world"]` → `["hello", "world"]`

@@ -41,7 +41,7 @@ macro_user_id = { workspace = true }
 shared_types = { workspace = true }
 email_types = { workspace = true }
 opensearch_types = { workspace = true }
-models_search = { workspace = true }
+search_types = { workspace = true }
 search_cursor_types = { workspace = true }
 name_search = { workspace = true }
 opensearch_client = { workspace = true }

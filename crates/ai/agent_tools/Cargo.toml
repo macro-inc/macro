@@ -96,7 +96,7 @@ notification_inbound = { workspace = true, features = ["ai_tool"] }
 notification_outbound = { workspace = true }
 agent_prompts = { workspace = true }
 properties_types = { workspace = true }
-models_search = { workspace = true }
+search_types = { workspace = true }
 models_soup = { workspace = true }
 reqwest.workspace = true
 readonly_pool = { workspace = true }

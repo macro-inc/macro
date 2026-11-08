@@ -1,14 +1,14 @@
 use ai_toolset::{ToolCallError, ToolResult};
 use calendar_events::domain::labels::off_schedule_summary;
 use item_filters::TagFilterMode;
-use models_search::MatchType;
-use models_search::unified::UnifiedSearchResponseItem;
 use models_soup::SoupProperty;
 use properties::PropertiesService as _;
 use properties_types::DataType;
 use properties_types::service::property_value::PropertyValue;
 use properties_types::service::tag_sets::{AppliedTag, CallerTagSets, TagFilter, TagMatch};
 use schemars::JsonSchema;
+use search_types::MatchType;
+use search_types::unified::UnifiedSearchResponseItem;
 use serde::{Deserialize, Serialize};
 
 use super::context::SearchToolContext;
@@ -26,7 +26,7 @@ pub enum SearchEntityType {
     CalendarEvents,
 }
 
-impl From<SearchEntityType> for models_search::unified::UnifiedSearchIndex {
+impl From<SearchEntityType> for search_types::unified::UnifiedSearchIndex {
     fn from(value: SearchEntityType) -> Self {
         match value {
             SearchEntityType::AgentSessions => Self::AgentSessions,
@@ -45,7 +45,7 @@ pub(super) fn search_filters(
     types: &[SearchEntityType],
     base: item_filters::EntityFilters,
 ) -> item_filters::EntityFilters {
-    let mut filters = models_search::unified::entity_filters_from_include(
+    let mut filters = search_types::unified::entity_filters_from_include(
         types.iter().copied().map(Into::into).collect(),
         base,
     );
@@ -57,15 +57,15 @@ pub(super) fn search_filters(
 #[derive(Debug, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "camelCase", tag = "type")]
 pub enum SessionAwareSearchResult {
-    Document(models_search::document::DocumentSearchResponseItemWithMetadata),
-    Email(models_search::email::EmailSearchResponseItemWithMetadata),
-    ChannelMessage(models_search::channel::ChannelMessageSearchResponseItem),
-    Channel(models_search::channel::ChannelNameSearchResponseItem),
-    Project(models_search::project::ProjectSearchResponseItemWithMetadata),
-    Call(models_search::call_record::CallRecordSearchResponseItemWithMetadata),
-    Company(models_search::crm_company::CrmCompanySearchResponseItem),
-    CalendarEvent(models_search::calendar_event::CalendarEventSearchResponseItemWithMetadata),
-    AgentSession(models_search::agent_session::AgentSessionSearchResponseItem),
+    Document(search_types::document::DocumentSearchResponseItemWithMetadata),
+    Email(search_types::email::EmailSearchResponseItemWithMetadata),
+    ChannelMessage(search_types::channel::ChannelMessageSearchResponseItem),
+    Channel(search_types::channel::ChannelNameSearchResponseItem),
+    Project(search_types::project::ProjectSearchResponseItemWithMetadata),
+    Call(search_types::call_record::CallRecordSearchResponseItemWithMetadata),
+    Company(search_types::crm_company::CrmCompanySearchResponseItem),
+    CalendarEvent(search_types::calendar_event::CalendarEventSearchResponseItemWithMetadata),
+    AgentSession(search_types::agent_session::AgentSessionSearchResponseItem),
 }
 
 impl SessionAwareSearchResult {

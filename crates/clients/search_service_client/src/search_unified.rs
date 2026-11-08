@@ -4,10 +4,10 @@ impl SearchServiceClient {
     pub async fn search_unified(
         &self,
         user_id: &str,
-        body: models_search::unified::UnifiedSearchRequest,
+        body: search_types::unified::UnifiedSearchRequest,
         cursor: Option<String>,
         page_size: i64,
-    ) -> anyhow::Result<models_search::unified::UnifiedSearchResponse> {
+    ) -> anyhow::Result<search_types::unified::UnifiedSearchResponse> {
         let url = format!("{}/internal/search", self.url);
 
         let mut query_params: Vec<(&str, String)> = vec![("page_size", page_size.to_string())];
@@ -27,7 +27,7 @@ impl SearchServiceClient {
         match res.status() {
             reqwest::StatusCode::OK => {
                 let result = res
-                    .json::<models_search::unified::UnifiedSearchResponse>()
+                    .json::<search_types::unified::UnifiedSearchResponse>()
                     .await?;
                 Ok(result)
             }

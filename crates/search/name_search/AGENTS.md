@@ -25,7 +25,7 @@ highlighting.
   chat name SQL.
 - Not here: the channel naming rule and its SQL → `channels`
   (`src/outbound/channel_name.rs`); content/full-text search →
-  `models_search`, `search_service`; the OpenSearch-indexed entity types →
+  `search_types`, `search_service`; the OpenSearch-indexed entity types →
   `opensearch_types`.
 
 ## Boundaries
