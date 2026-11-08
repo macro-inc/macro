@@ -30,9 +30,9 @@ use macro_authorization::{
 };
 use macro_user_id::user_id::MacroUserIdStr;
 use macro_uuid::Uuid;
-use model::response::EmptyResponse;
 use model_owner::Owner;
 use serde::{Deserialize, Serialize};
+use shared_types::response::EmptyResponse;
 use utoipa::{IntoParams, ToSchema};
 
 #[cfg(test)]

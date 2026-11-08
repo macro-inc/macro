@@ -5,7 +5,7 @@ use axum::{
     response::{IntoResponse, Response},
 };
 use macro_authorization::{InternalOnly, MacroAuthorizationExtractor};
-use model::response::{EmptyResponse, GenericErrorResponse};
+use shared_types::response::{EmptyResponse, GenericErrorResponse};
 
 #[derive(serde::Deserialize)]
 pub struct Params {

@@ -10,14 +10,6 @@ use entity_access_management::domain::ports::EntityAccessManagementService;
 use futures::stream::{FuturesUnordered, StreamExt};
 use macro_event_broker::MacroEventBroker;
 use macro_user_id::user_id::MacroUserIdStr;
-use model::folder::{FileSystemNodeWithIds, UploadFolderRequest, UploadFolderResponseData};
-use model::item::{Item, ItemWithUserAccessLevel};
-use model::project::request::{CreateProjectRequest, PatchProjectRequestV2};
-use model::project::response::GetProjectResponseData;
-use model::project::{
-    BasicProject, PendingProject, Project, ProjectPreview, ProjectPreviewData, ProjectPreviewV2,
-    WithProjectId,
-};
 use model_owner::{CreationPrincipal, Owner};
 use models_bulk_upload::{UploadExtractFolderRequest, UploadExtractFolderResponseData};
 use models_permissions::share_permission::SharePermissionV2;
@@ -28,6 +20,14 @@ use models_permissions::share_permission::team_share::{
 };
 use project_id::ProjectId;
 use s3_key::BulkUploadStagingKey;
+use shared_types::folder::{FileSystemNodeWithIds, UploadFolderRequest, UploadFolderResponseData};
+use shared_types::item::{Item, ItemWithUserAccessLevel};
+use shared_types::project::request::{CreateProjectRequest, PatchProjectRequestV2};
+use shared_types::project::response::GetProjectResponseData;
+use shared_types::project::{
+    BasicProject, PendingProject, Project, ProjectPreview, ProjectPreviewData, ProjectPreviewV2,
+    WithProjectId,
+};
 use unicode_segmentation::UnicodeSegmentation;
 use uuid::Uuid;
 

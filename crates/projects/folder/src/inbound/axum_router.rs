@@ -27,8 +27,8 @@ use axum::{
 use entity_access::domain::ports::EntityAccessService;
 use entity_registry::NonUserOwners;
 use macro_authorization::{MacroAuthorizationService, MacroAuthorizationState};
-use model::response::GenericErrorResponse;
 use serde::Deserialize;
+use shared_types::response::GenericErrorResponse;
 
 use self::{
     create_project::create_project_handler,

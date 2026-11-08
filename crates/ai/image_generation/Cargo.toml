@@ -23,7 +23,7 @@ lexical_client = { workspace = true }
 macro_authorization = { workspace = true, features = [
   "axum",
 ], optional = true }
-model = { workspace = true }
+shared_types = { workspace = true }
 model_entity = { workspace = true }
 model_owner = { workspace = true }
 non_empty = { workspace = true }

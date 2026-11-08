@@ -1,7 +1,7 @@
 use anyhow::Context;
 use lambda_runtime::tracing::{self, Level};
-use model::{convert::ConvertQueueMessage, document::SaveBomPart};
 use s3_key::build_docx_to_pdf_converted_document_key;
+use shared_types::{convert::ConvertQueueMessage, document::SaveBomPart};
 
 use crate::{
     context::{self},

@@ -10,9 +10,9 @@ use axum::{
 use email::domain::{mailbox::MailboxError, recent_inbox::MAX_RECENT_MESSAGES};
 use macro_authorization::{InternalOnly, MacroAuthorizationExtractor};
 use macro_user_id::user_id::MacroUserIdStr;
-use model::response::ErrorResponse;
 use models_email::email::service::message::RecentInboxMessagesResponse;
 use serde::Deserialize;
+use shared_types::response::ErrorResponse;
 
 use crate::api::context::{ApiContext, AuthorizationService};
 

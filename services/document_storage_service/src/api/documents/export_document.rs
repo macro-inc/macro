@@ -11,11 +11,11 @@ use axum::{
 use documents_hex::domain::docx_export::{DocxExport, export_docx};
 use entity_access::inbound::axum_extractors::DocumentAccessExtractor;
 use macro_authorization::{MacroAuthorizationExtractor, UserOrInternal};
-use model::{
+use model_owner::Owner;
+use shared_types::{
     document::{DocumentBasic, FileType, response::LocationResponseData},
     response::{ErrorResponse, GenericErrorResponse},
 };
-use model_owner::Owner;
 
 use models_permissions::share_permission::access_level::ViewAccessLevel;
 use serde::{Deserialize, Serialize};

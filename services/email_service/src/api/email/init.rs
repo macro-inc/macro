@@ -20,12 +20,12 @@ use macro_authorization::{MacroAuthorizationExtractor, UserOrInternal};
 use macro_db_client::in_progress_user_link::InProgressUserLink;
 use macro_user_id::email::EmailStr;
 use macro_user_id::user_id::MacroUserIdStr;
-use model::response::ErrorResponse;
 use models_email::email::service::backfill::{
     BackfillOperation, BackfillPubsubMessage, InitPayload, JobScopedPayload,
 };
 use models_email::service::link;
 use models_email::service::link::Link;
+use shared_types::response::ErrorResponse;
 use std::sync::Arc;
 use strum_macros::AsRefStr;
 use thiserror::Error;

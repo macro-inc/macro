@@ -19,7 +19,7 @@ use macro_auth::{
         validate_macro_access_token,
     },
 };
-use model::response::UserTokensResponse;
+use shared_types::response::UserTokensResponse;
 use std::{sync::Arc, time::Duration};
 use tower_cookies::Cookies;
 

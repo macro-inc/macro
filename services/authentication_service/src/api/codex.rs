@@ -117,7 +117,7 @@ impl IntoResponse for ApiError {
             Self::Unavailable => {
                 return (
                     StatusCode::SERVICE_UNAVAILABLE,
-                    Json(model::response::ErrorResponse {
+                    Json(shared_types::response::ErrorResponse {
                         message: "Codex connection is unavailable in this deployment".into(),
                     }),
                 )
@@ -138,7 +138,7 @@ impl IntoResponse for ApiError {
         };
         (
             code,
-            Json(model::response::ErrorResponse {
+            Json(shared_types::response::ErrorResponse {
                 message: error.to_string().into(),
             }),
         )

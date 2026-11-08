@@ -18,14 +18,14 @@ use crate::{
 };
 use fusionauth::error::FusionAuthClientError;
 use macro_user_id::user_id::MacroUserId;
-use model::{
+use referral::domain::{models::ReferralCode, ports::ReferralService};
+use shared_types::{
     authentication::login::{
         request::PasswordlessRequest,
         response::{PasswordlessStartedResponse, SsoRequiredResponse},
     },
     response::ErrorResponse,
 };
-use referral::domain::{models::ReferralCode, ports::ReferralService};
 
 /// Initiates a passwordless login
 #[utoipa::path(

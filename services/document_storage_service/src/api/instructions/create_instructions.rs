@@ -11,9 +11,9 @@ use macro_db_client::instructions::create::{
     CreateInstructionsError, insert_instructions_document,
 };
 use macro_db_client::instructions::get::get_instructions_document;
-use model::response::GenericErrorResponse;
 use model_owner::CreationPrincipal;
 use models_dcs::constants::INSTRUCTIONS_FILE_NAME;
+use shared_types::response::GenericErrorResponse;
 
 /// Creates an instructions document for the current user
 #[utoipa::path(

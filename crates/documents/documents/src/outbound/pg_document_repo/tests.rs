@@ -602,7 +602,7 @@ fn create_document_args(
             id: None,
             sha: "sha".to_string(),
             document_name: "task".to_string(),
-            file_type: Some(model::document::FileType::Md),
+            file_type: Some(shared_types::document::FileType::Md),
             project_id: None,
             team_id,
             share_with_team: false,
@@ -657,14 +657,17 @@ async fn count_entity_rows_for_id(pool: &Pool<Postgres>, document_id: &str) -> i
 /// The no-team default permission for an md document — the repo persists whatever
 /// the domain layer resolved, so tests pass it explicitly.
 fn md_share_permission() -> SharePermissionV2 {
-    SharePermissionV2::new_document_share_permission(Some(model::document::FileType::Md), None)
+    SharePermissionV2::new_document_share_permission(
+        Some(shared_types::document::FileType::Md),
+        None,
+    )
 }
 
 async fn create_task_for_team(
     repo: &TestRepo,
     user_id: &str,
     team_id: uuid::Uuid,
-) -> model::document::DocumentMetadata {
+) -> shared_types::document::DocumentMetadata {
     repo.create_document(
         create_document_args(user_id, true, Some(team_id)),
         md_share_permission(),
@@ -1206,7 +1209,7 @@ async fn test_create_document_persists_resolved_team_share_permission(pool: Pool
         .create_document(
             create_document_args(TEST_DOCUMENT_OWNER_ID, false, None),
             SharePermissionV2::new_document_share_permission(
-                Some(model::document::FileType::Md),
+                Some(shared_types::document::FileType::Md),
                 Some(TeamLinkShareDefault(Some(LinkShare::Team))),
             ),
         )
@@ -1258,7 +1261,7 @@ async fn test_edit_document_set_file_type(pool: Pool<Postgres>) {
         project_id: None,
         share_permission: None,
         revoke_non_owner_user_access: false,
-        file_type: Some(FileTypeUpdate::Set(model::document::FileType::Rs)),
+        file_type: Some(FileTypeUpdate::Set(shared_types::document::FileType::Rs)),
         team_share: None,
     })
     .await
@@ -2208,7 +2211,7 @@ async fn test_copying_task_allocates_new_team_task_number(pool: Pool<Postgres>) 
                 original_document: original,
                 owner: Owner::User(user_id("macro|user@user.com")),
                 document_name: "copied task".to_string(),
-                file_type: Some(model::document::FileType::Md),
+                file_type: Some(shared_types::document::FileType::Md),
                 team_id: Some(TEST_TEAM_ID),
             },
             md_share_permission(),
@@ -2582,7 +2585,10 @@ async fn test_get_project_children_empty(pool: Pool<Postgres>) {
 }
 
 fn pdf_share_permission() -> SharePermissionV2 {
-    SharePermissionV2::new_document_share_permission(Some(model::document::FileType::Pdf), None)
+    SharePermissionV2::new_document_share_permission(
+        Some(shared_types::document::FileType::Pdf),
+        None,
+    )
 }
 
 #[sqlx::test(
@@ -2647,7 +2653,7 @@ fn import_email_document_args(
             id: None,
             sha: sha.to_string(),
             document_name: "contract".to_string(),
-            file_type: Some(model::document::FileType::Pdf),
+            file_type: Some(shared_types::document::FileType::Pdf),
             project_id: None,
             team_id: None,
             share_with_team: false,
@@ -2842,7 +2848,7 @@ async fn test_import_email_attachment_does_not_reuse_non_email_document_by_sha(
 
     let mut uploaded = create_document_args(TEST_DOCUMENT_OWNER_ID, false, None);
     uploaded.document.sha = sha.to_string();
-    uploaded.document.file_type = Some(model::document::FileType::Pdf);
+    uploaded.document.file_type = Some(shared_types::document::FileType::Pdf);
     uploaded.document.document_name = "manual-upload".to_string();
 
     let uploaded_doc = repo
@@ -2912,7 +2918,7 @@ async fn test_create_document_does_not_reuse_email_document_by_sha(pool: Pool<Po
 
     let mut created = create_document_args(TEST_DOCUMENT_OWNER_ID, false, None);
     created.document.sha = sha.to_string();
-    created.document.file_type = Some(model::document::FileType::Pdf);
+    created.document.file_type = Some(shared_types::document::FileType::Pdf);
     created.document.document_name = "same-sha-upload".to_string();
 
     let created_doc = repo
@@ -3016,7 +3022,7 @@ async fn copy_document_registers_distinct_entity_row(pool: Pool<Postgres>) {
                 original_document: original.clone(),
                 owner: Owner::User(user_id(TEST_DOCUMENT_OWNER_ID)),
                 document_name: "copied task".to_string(),
-                file_type: Some(model::document::FileType::Md),
+                file_type: Some(shared_types::document::FileType::Md),
                 team_id: Some(TEST_TEAM_ID),
             },
             md_share_permission(),
@@ -3243,12 +3249,15 @@ fn owned_document_args(owner: Owner) -> CreateDocumentRepoArgs {
     args
 }
 
-fn copy_args(original: &model::document::DocumentMetadata, owner: Owner) -> CopyDocumentRepoArgs {
+fn copy_args(
+    original: &shared_types::document::DocumentMetadata,
+    owner: Owner,
+) -> CopyDocumentRepoArgs {
     CopyDocumentRepoArgs {
         original_document: original.clone(),
         owner,
         document_name: "copy".to_string(),
-        file_type: Some(model::document::FileType::Md),
+        file_type: Some(shared_types::document::FileType::Md),
         team_id: None,
     }
 }

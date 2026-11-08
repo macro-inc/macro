@@ -3,7 +3,7 @@ use axum::{
     http::{Response, StatusCode},
 };
 
-use model::response::GenericResponse;
+use shared_types::response::GenericResponse;
 
 /// Generic wrapper for error responses in middleware
 pub fn error_handler(message: &str, status_code: StatusCode) -> Response<Body> {

@@ -4,8 +4,8 @@ use axum::extract::{Path, State};
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
 use macro_authorization::{InternalOnly, MacroAuthorizationExtractor};
-use model::response::ErrorResponse;
 use models_email::email::service::pubsub::LinkManagerMessage;
+use shared_types::response::ErrorResponse;
 
 #[tracing::instrument(skip(ctx))]
 pub async fn handler(

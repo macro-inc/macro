@@ -11,7 +11,7 @@ use macro_authorization::{
     OptionalMacroAuthorizationExtractor, UserOrInternalService, UserOrInternalServiceAuthorization,
 };
 use macro_sync_service_jwt::ISSUER;
-use model::{document::DocumentPermissionsToken, response::ErrorResponse};
+use shared_types::{document::DocumentPermissionsToken, response::ErrorResponse};
 use utoipa::ToSchema;
 
 use crate::api::context::AuthorizationService;

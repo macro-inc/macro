@@ -16,12 +16,12 @@ use entity_registry::BotFacts;
 use entity_registry_db_utils::{NewEntityRecord, OwnedEntityRegistrar, RegisteredEntityType};
 use macro_user_id::cow_str::CowLike;
 use macro_user_id::user_id::MacroUserIdStr;
-use model::chat::ChatMessageWithAttachments;
-use model::chat::NewChatMessage;
 use model_owner::Owner;
 use models_permissions::share_permission::access_level::AccessLevel;
 use models_permissions::share_permission::team_share::TeamShareFacts;
 use models_permissions::share_permission::{SharePermissionV2, TeamLinkShareDefault};
+use shared_types::chat::ChatMessageWithAttachments;
+use shared_types::chat::NewChatMessage;
 use sqlx::{PgPool, Postgres, Transaction};
 use uuid::Uuid;
 
@@ -182,7 +182,7 @@ impl<B: BotFacts + 'static> ChatRepo for PgChatRepo<B> {
     }
 
     #[tracing::instrument(err, skip(self))]
-    async fn get_metadata(&self, chat_id: &str) -> Result<model::chat::Chat> {
+    async fn get_metadata(&self, chat_id: &str) -> Result<shared_types::chat::Chat> {
         queries::get_chat::get_chat(&self.pool, chat_id)
             .await
             .map_err(to_chat_err)

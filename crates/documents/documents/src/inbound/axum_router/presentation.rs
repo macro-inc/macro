@@ -23,8 +23,8 @@ use entity_access::{
 };
 use entity_registry::CreationPrincipalExtractor;
 use macro_authorization::{AnyPrincipal, MacroAuthorizationExtractor, MacroAuthorizationService};
-use model::document::{DocumentBasic, FileType};
 use pptx_engine::EditOp;
+use shared_types::document::{DocumentBasic, FileType};
 
 /// Which slides to read.
 #[derive(Debug, Default, serde::Deserialize, utoipa::IntoParams)]

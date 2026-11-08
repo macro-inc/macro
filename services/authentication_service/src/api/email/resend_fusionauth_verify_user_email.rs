@@ -9,7 +9,7 @@ use utoipa::ToSchema;
 
 use crate::{api::context::ApiContext, rate_limit_config::RATE_LIMIT_CONFIG};
 
-use model::response::{EmptyResponse, ErrorResponse};
+use shared_types::response::{EmptyResponse, ErrorResponse};
 
 #[derive(serde::Deserialize, serde::Serialize, ToSchema)]
 pub struct ResendFusionauthVerifyUserEmailRequest {

@@ -1,19 +1,19 @@
 use macro_user_id::cow_str::CowLike;
 use macro_user_id::user_id::MacroUserIdStr;
-use model::document::FileType;
-use model::document::SaveBomPart;
 use models_permissions::share_permission::SharePermissionV2;
+use shared_types::document::FileType;
+use shared_types::document::SaveBomPart;
 use sqlx::{Pool, Postgres};
 
 use crate::document::insert_bom_parts;
 use crate::history::upsert_item_last_accessed;
 use crate::history::upsert_user_history;
 use crate::share_permission::create::create_document_permission;
-use model::document::DocumentMetadata;
-use model::document::ID;
-use model::document::VersionID;
-use model::document::VersionIDWithTimeStamps;
 use model_owner::Owner;
+use shared_types::document::DocumentMetadata;
+use shared_types::document::ID;
+use shared_types::document::VersionID;
+use shared_types::document::VersionIDWithTimeStamps;
 use tracing::instrument;
 
 /// Creates a blank docx document

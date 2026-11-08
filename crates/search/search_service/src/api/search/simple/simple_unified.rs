@@ -14,7 +14,6 @@ use crm::domain::auth::CrmTeamReceipt;
 use entity_access::domain::models::MemberTeamRole;
 use macro_authorization::{MacroAuthorizationExtractor, UserOrInternal};
 use macro_user_id::user_id::MacroUserId;
-use model::{response::ErrorResponse, user::UserContext};
 use models_search::unified::SearchEntityFilters;
 use models_search::{MatchType, SearchOn, SimpleSearchResponse, unified::UnifiedSearchRequest};
 use models_search_cursor::{SearchCursor, SearchCursorOption, SearchMethodCursor};
@@ -25,6 +24,7 @@ use opensearch_client::search::documents::{
 };
 use opensearch_client::search::model::SearchHit;
 use opensearch_client::search::unified::UnifiedSearchArgs;
+use shared_types::{response::ErrorResponse, user::UserContext};
 
 /// Whether calendar events may appear in this search.
 ///

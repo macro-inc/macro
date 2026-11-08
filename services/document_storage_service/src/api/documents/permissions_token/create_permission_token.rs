@@ -12,9 +12,9 @@ use documents_hex::domain::permission_token::encode_permission_token;
 use entity_access::domain::models::EntityPermission;
 use entity_access::inbound::axum_extractors::DocumentAccessExtractor;
 use macro_authorization::{AnyPrincipal, MacroAuthorization, OptionalMacroAuthorizationExtractor};
-use model::response::ErrorResponse;
 use models_permissions::share_permission::access_level::{AccessLevel, ViewAccessLevel};
 use serde::Deserialize;
+use shared_types::response::ErrorResponse;
 use utoipa::ToSchema;
 
 use crate::api::context::ApiContext;

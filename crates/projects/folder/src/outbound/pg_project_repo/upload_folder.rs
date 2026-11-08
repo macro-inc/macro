@@ -4,11 +4,11 @@ use async_recursion::async_recursion;
 use entity_registry::BotFacts;
 use entity_registry_db_utils::{OwnedEntityRegistrar, RegisteredEntityType};
 use macro_user_id::user_id::MacroUserIdStr;
-use model::document::{DocumentMetadata, FileType, FileTypeExt};
-use model::folder::{FileSystemNode, FileSystemNodeWithIds, UploadFolderWithIdsResponse};
-use model::project::Project;
 use model_owner::Owner;
 use models_permissions::share_permission::SharePermissionV2;
+use shared_types::document::{DocumentMetadata, FileType, FileTypeExt};
+use shared_types::folder::{FileSystemNode, FileSystemNodeWithIds, UploadFolderWithIdsResponse};
+use shared_types::project::Project;
 use sqlx::{Postgres, Transaction};
 
 use crate::domain::models::{MarkedUploadedTree, UploadFolderRepoArgs};
@@ -199,7 +199,7 @@ async fn create_empty_document<B: BotFacts>(
     registrar: &OwnedEntityRegistrar<B>,
     user_id: MacroUserIdStr<'static>,
     share_permission: &SharePermissionV2,
-    item: &model::folder::FolderItem,
+    item: &shared_types::folder::FolderItem,
     project: &Project,
 ) -> Result<DocumentMetadata, sqlx::Error> {
     let document_name =

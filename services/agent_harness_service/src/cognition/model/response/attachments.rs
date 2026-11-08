@@ -1,5 +1,5 @@
-use model::chat::Chat;
 use serde::{Deserialize, Serialize};
+use shared_types::chat::Chat;
 use utoipa::ToSchema;
 
 #[derive(Serialize, Deserialize, Debug, ToSchema)]

@@ -8,8 +8,8 @@ use entity_access::domain::ports::EntityAccessService;
 use entity_access::inbound::axum_extractors::DocumentAccessExtractor;
 use entity_registry::CreationPrincipalExtractor;
 use macro_authorization::MacroAuthorizationService;
-use model::document::{DocumentBasic, FileTypeExt};
 use models_permissions::share_permission::access_level::ViewAccessLevel;
+use shared_types::document::{DocumentBasic, FileTypeExt};
 
 use super::{DocumentRouterState, Params};
 use crate::domain::models::{
@@ -54,7 +54,7 @@ pub async fn copy_document_handler<
     Json(mut req): Json<CopyDocumentRequest>,
 ) -> Result<Json<CopyDocumentResponse>, DocumentError> {
     // Clean the document name (remove file extension if present)
-    req.document_name = model::document::FileType::clean_document_name(&req.document_name)
+    req.document_name = shared_types::document::FileType::clean_document_name(&req.document_name)
         .unwrap_or(req.document_name);
 
     let response = state

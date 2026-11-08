@@ -7,7 +7,7 @@ use axum::{
     response::{IntoResponse, Json, Response},
 };
 use macro_authorization::{MacroAuthorizationExtractor, UserOrInternal};
-use model::response::ErrorResponse;
+use shared_types::response::ErrorResponse;
 use sqlx::types::Uuid;
 use std::collections::HashSet;
 use strum_macros::AsRefStr;

@@ -21,13 +21,13 @@ use entity_access::domain::models::{
 };
 use entity_access::domain::ports::EntityAccessService;
 use macro_user_id::user_id::MacroUserIdStr;
-use model::document::{ContentType, DocumentBasic, DocumentMetadata, FileType};
 use model_owner::{CreationPrincipal, Owner};
 use models_permissions::share_permission::SharePermissionV2;
 use models_permissions::share_permission::team_share::{
     AuthorizedTeamShareCommand, TeamShareFacts,
 };
 use models_properties::service::property_change_source::PropertyChangeSource;
+use shared_types::document::{ContentType, DocumentBasic, DocumentMetadata, FileType};
 
 use super::content::DocumentContent;
 use super::events::InteractionReason;
@@ -36,7 +36,7 @@ use super::response::{
 };
 use super::skill_description::SkillDescription;
 
-use model::sync_service::SyncServiceVersionID;
+use shared_types::sync_service::SyncServiceVersionID;
 
 use model_entity::Entity;
 

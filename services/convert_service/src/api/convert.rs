@@ -9,7 +9,7 @@ use axum::{
     routing::post,
 };
 use macro_authorization::{InternalOnly, MacroAuthorizationExtractor};
-use model::{
+use shared_types::{
     convert::ConvertRequest,
     document::FileType,
     response::{EmptyResponse, ErrorResponse},

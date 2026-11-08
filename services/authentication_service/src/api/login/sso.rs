@@ -5,8 +5,8 @@ use axum::{
     http::StatusCode,
     response::{IntoResponse, Redirect, Response},
 };
-use model::response::ErrorResponse;
 use serde_utils::urlencode::UrlEncoded;
+use shared_types::response::ErrorResponse;
 use url::Url;
 use utoipa::ToSchema;
 

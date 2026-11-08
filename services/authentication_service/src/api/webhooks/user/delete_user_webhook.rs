@@ -9,9 +9,9 @@ use comms_db_client::{
 };
 use macro_authorization::{InternalOnly, MacroAuthorizationExtractor};
 use macro_user_id::user_id::MacroUserIdStr;
-use model::{authentication::webhooks::FusionAuthUserWebhook, user::UserInfo};
 use notification::domain::ports::NotificationRepository;
 use notification_outbound::repository::DbNotificationRepository;
+use shared_types::{authentication::webhooks::FusionAuthUserWebhook, user::UserInfo};
 use sqlx::{Pool, Postgres};
 use tracing::Instrument;
 

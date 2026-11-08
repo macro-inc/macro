@@ -13,10 +13,10 @@ use entity_access::inbound::axum_extractors::{
 };
 use lexical_client::LexicalClient;
 use macro_authorization::{MacroAuthorizationExtractor, MacroAuthorizationService, UserOrInternal};
-use model::document::DocumentBasic;
-use model::response::GenericSuccessResponse;
 use models_permissions::share_permission::access_level::{OwnerAccessLevel, ViewAccessLevel};
 use serde::{Deserialize, Serialize};
+use shared_types::document::DocumentBasic;
+use shared_types::response::GenericSuccessResponse;
 use task_dedup::{
     EmbeddingMarkdown, NewTask, PgTaskDedupService, TaskDedupError, TaskDuplicate,
     TaskSimilarityResult,

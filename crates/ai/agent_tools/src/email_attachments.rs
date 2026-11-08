@@ -22,7 +22,7 @@ use email::domain::{
 use email::outbound::S3DraftAttachmentStorage;
 use entity_access::domain::models::{EntityAccessReceipt, ViewAccessLevel};
 use macro_env_var::maybe_env_var;
-use model::document::{ContentType, FileType};
+use shared_types::document::{ContentType, FileType};
 
 maybe_env_var! {
     /// The bucket the email service stages draft attachments in. Shared

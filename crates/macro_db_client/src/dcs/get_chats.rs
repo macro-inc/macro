@@ -1,5 +1,5 @@
-use model::chat::Chat;
 use model_owner::Owner;
+use shared_types::chat::Chat;
 use sqlx::{Pool, Postgres};
 
 #[tracing::instrument(skip(db))]

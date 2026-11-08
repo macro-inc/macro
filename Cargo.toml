@@ -846,7 +846,6 @@ message_id = { path = "crates/types/message_id" }
 message_parent = { path = "crates/types/message_parent" }
 messages = { path = "crates/comms/messages" }
 mobile_welcome_email_db_client = { path = "crates/accounts/mobile_welcome_email_db_client" }
-model = { path = "crates/types/model" }
 model_entity = { path = "crates/types/model_entity" }
 model_error_response = { path = "crates/types/model_error_response" }
 model_file_type = { path = "crates/types/model_file_type" }
@@ -916,6 +915,7 @@ service_url = { path = "crates/platform/service_urls/service_url" }
 ses_client = { path = "crates/aws/ses_client" }
 share_permission_db_utils = { path = "crates/entities/share_permission_db_utils" }
 shared_entity_registry = { path = "crates/entities/shared_entity_registry" }
+shared_types = { path = "crates/types/shared_types" }
 skills = { path = "crates/agents/skills", default-features = false }
 slack_integration = { path = "crates/comms/slack_integration" }
 sns_client = { path = "crates/aws/sns_client" }

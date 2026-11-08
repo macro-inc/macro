@@ -160,7 +160,7 @@ you are only giving it an editor (as `pptx` and `docx` did).
 
 - **Backend enum.** Add a `generate_file_types!` row to
   `crates/types/model_file_type/src/lib.rs`: variant, extension, MIME, app category.
-  Check `ContentTypeExt` in `crates/types/model/src/document/file_type.rs`: Photoshop
+  Check `ContentTypeExt` in `crates/types/shared_types/src/document/file_type.rs`: Photoshop
   files carry an `image/` MIME and had to be excluded from `is_image`, or image
   pipelines would try to decode them.
 - **Generated clients.** The `FileType` enum reaches the storage, cognition, and

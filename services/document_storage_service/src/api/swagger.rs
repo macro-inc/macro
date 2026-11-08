@@ -131,46 +131,6 @@ use github_pull_requests::inbound::changes_router::{
     ChangedFileDto, ChangesetDto, ChangesetSourceDto, FileChangeKindDto, GitRefDto,
     GithubPullRequestChangesPatchResponse, GithubPullRequestChangesResponse,
 };
-use project::domain::models::{
-    CreateInitiativeRequest, InitialPropertyValue, InitiativeDetail, InitiativeId, InitiativeList,
-    InitiativeSummary, UpdateInitiativeRequest,
-};
-use project::domain::reads::{
-    InitiativePage, InitiativePageRow, InitiativePropertySnapshot, InitiativeSort,
-};
-use project::inbound::axum_router::description::InitiativeDescription;
-use model::document::response::{
-    CreateDocumentRequest, CreateDocumentResponse, CreateDocumentResponseData,
-    DocumentResponseMetadata,
-};
-use model::{
-    annotations::AnnotationIncrementalUpdate,
-    chat::Chat,
-    document::{
-        BasicDocument, BomPart, DocumentMetadata, DocumentPermissionsToken, FileType, SaveBomPart,
-        response::{
-            GetDocumentListResult, GetDocumentResponse, GetDocumentResponseData,
-            LocationResponseData,
-        },
-    },
-    item::{CloudStorageItemType, Item, ItemWithUserAccessLevel},
-    pin::{PinnedItem, request::ReorderPinRequest},
-    project::{
-        Project,
-        request::{CreateProjectRequest, GetBatchProjectPreviewRequest, PatchProjectRequestV2},
-        response::{
-            CreateProjectResponse, GetBatchProjectPreviewResponse, GetProjectContentResponse,
-            GetProjectResponse, GetProjectResponseData, GetProjectsResponse,
-        },
-    },
-    response::{
-        GenericErrorResponse, GenericResponse, GenericSuccessResponse, PresignedUrl,
-        SuccessResponse,
-    },
-    sync_service::SyncServiceVersionID,
-    user_document_view_location::UserDocumentViewLocation,
-    version::DocumentStorageServiceApiVersion,
-};
 use models_databases::views::{
     CardPosition as DatabaseCardPosition, Conjunction as DatabaseFilterConjunction, DatabaseView,
     DateOperator as DatabaseDateOperator, FilterCondition as DatabaseFilterCondition,
@@ -209,8 +169,44 @@ use project::domain::models::{
     CreateInitiativeRequest, InitialPropertyValue, InitiativeDetail, InitiativeId, InitiativeList,
     InitiativeSummary, UpdateInitiativeRequest,
 };
+use project::domain::reads::{
+    InitiativePage, InitiativePageRow, InitiativePropertySnapshot, InitiativeSort,
+};
+use project::inbound::axum_router::description::InitiativeDescription;
 use projects_hex::inbound::axum_router::delete_project::{
     ProjectDeleteResponse, ProjectDeleteResponseData,
+};
+use shared_types::document::response::{
+    CreateDocumentRequest, CreateDocumentResponse, CreateDocumentResponseData,
+    DocumentResponseMetadata,
+};
+use shared_types::{
+    annotations::AnnotationIncrementalUpdate,
+    chat::Chat,
+    document::{
+        BasicDocument, BomPart, DocumentMetadata, DocumentPermissionsToken, FileType, SaveBomPart,
+        response::{
+            GetDocumentListResult, GetDocumentResponse, GetDocumentResponseData,
+            LocationResponseData,
+        },
+    },
+    item::{CloudStorageItemType, Item, ItemWithUserAccessLevel},
+    pin::{PinnedItem, request::ReorderPinRequest},
+    project::{
+        Project,
+        request::{CreateProjectRequest, GetBatchProjectPreviewRequest, PatchProjectRequestV2},
+        response::{
+            CreateProjectResponse, GetBatchProjectPreviewResponse, GetProjectContentResponse,
+            GetProjectResponse, GetProjectResponseData, GetProjectsResponse,
+        },
+    },
+    response::{
+        GenericErrorResponse, GenericResponse, GenericSuccessResponse, PresignedUrl,
+        SuccessResponse,
+    },
+    sync_service::SyncServiceVersionID,
+    user_document_view_location::UserDocumentViewLocation,
+    version::DocumentStorageServiceApiVersion,
 };
 use soup::domain::models::{SoupItemWithProperties, SoupPropertiesField};
 use soup::inbound::axum_router::{

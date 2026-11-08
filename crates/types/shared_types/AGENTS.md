@@ -44,7 +44,7 @@ authentication — one of the most widely depended-on crates in the backend.
 
 ## Checks
 
-- `cargo test -p model` (`SQLX_OFFLINE` unset).
+- `cargo test -p shared_types` (`SQLX_OFFLINE` unset).
 
 ## Gotchas
 

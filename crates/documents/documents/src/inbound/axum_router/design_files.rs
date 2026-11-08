@@ -15,7 +15,7 @@ use entity_access::{
     inbound::axum_extractors::DocumentAccessExtractor,
 };
 use macro_authorization::MacroAuthorizationService;
-use model::document::{DocumentBasic, FileType};
+use shared_types::document::{DocumentBasic, FileType};
 
 /// Which pages of a design to read.
 #[derive(Debug, Default, serde::Deserialize, utoipa::IntoParams)]

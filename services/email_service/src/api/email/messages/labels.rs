@@ -9,8 +9,8 @@ use axum::response::{IntoResponse, Response};
 use email::domain::events::{EmailEventOrigin, EmailMacroEvent, LabelRef};
 use email::domain::ports::EmailMessageEnqueuer;
 use macro_authorization::{MacroAuthorizationExtractor, UserOrInternal};
-use model::response::ErrorResponse;
 use models_email::service;
+use shared_types::response::ErrorResponse;
 use sqlx::types::Uuid;
 use utoipa::ToSchema;
 

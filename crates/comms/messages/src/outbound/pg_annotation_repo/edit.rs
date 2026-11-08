@@ -1,6 +1,6 @@
 use super::{repository_error, stale_capability};
 use crate::domain::{annotations::AnnotationMutation, ports::MessageError};
-use model::annotations::{
+use shared_types::annotations::{
     Anchor, PdfAnchor, PdfPlaceableCommentAnchor,
     edit::{
         EditAnchorRequest, EditAnchorResponse, EditPdfAnchorRequest,

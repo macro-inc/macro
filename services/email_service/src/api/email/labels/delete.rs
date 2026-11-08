@@ -4,8 +4,8 @@ use axum::extract::{Path, State};
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
 use macro_authorization::{MacroAuthorizationExtractor, UserOrInternal};
-use model::response::{EmptyResponse, ErrorResponse};
 use models_email::service::link::Link;
+use shared_types::response::{EmptyResponse, ErrorResponse};
 use uuid::Uuid;
 
 /// Delete a label.

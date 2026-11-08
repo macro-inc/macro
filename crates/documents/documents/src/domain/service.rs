@@ -38,17 +38,17 @@ use foreign_entity::domain::ports::ForeignEntityService;
 use github_pull_requests::domain::models::GITHUB_PULL_REQUEST_FOREIGN_ENTITY_SOURCE;
 use macro_event_broker::MacroEventBroker;
 use macro_user_id::user_id::MacroUserIdStr;
-use model::document::response::{DocumentResponseMetadata, LocationResponseData};
-use model::document::{
-    ContentType, DocumentBasic, DocumentMetadata, FileAssociation, FileType, FileTypeExt,
-    MAX_DOCUMENT_NAME_GRAPHEMES,
-};
-use model::response::PresignedUrl;
 use model_owner::{CreationPrincipal, Owner};
 use s3_key::{
     build_cloud_storage_bucket_document_key, build_docx_staging_bucket_document_key,
     build_docx_to_pdf_converted_document_key, document_key_url_path,
 };
+use shared_types::document::response::{DocumentResponseMetadata, LocationResponseData};
+use shared_types::document::{
+    ContentType, DocumentBasic, DocumentMetadata, FileAssociation, FileType, FileTypeExt,
+    MAX_DOCUMENT_NAME_GRAPHEMES,
+};
+use shared_types::response::PresignedUrl;
 use tracing;
 
 use crate::domain::models::{
@@ -1893,9 +1893,9 @@ impl<
         principal: &CreationPrincipal,
         document_name: String,
         query_version_id: Option<i64>,
-        sync_version_id: Option<model::sync_service::SyncServiceVersionID>,
+        sync_version_id: Option<shared_types::sync_service::SyncServiceVersionID>,
     ) -> Result<DocumentResponse, DocumentError> {
-        use model::document::response::DocumentResponseMetadata;
+        use shared_types::document::response::DocumentResponseMetadata;
 
         if document_name.graphemes(true).count() > MAX_DOCUMENT_NAME_GRAPHEMES {
             return Err(DocumentError::NameTooLong {

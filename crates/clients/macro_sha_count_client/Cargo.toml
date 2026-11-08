@@ -9,7 +9,7 @@ redis_test = []
 
 [dependencies]
 anyhow = { workspace = true }
-model = { workspace = true }
+shared_types = { workspace = true }
 redis = { workspace = true, features = [
   "aio",
   "tokio-rustls-comp",

@@ -2,7 +2,7 @@ use attachment::FormattedParts;
 use chat_id::ChatId;
 use chat_message::ChatMessageContent;
 use macro_user_id::user_id::MacroUserIdStr;
-use model::chat::{ChatMessageWithAttachments, NewChatMessage};
+use shared_types::chat::{ChatMessageWithAttachments, NewChatMessage};
 use std::future::Future;
 
 use crate::domain::models::{PatchChatMessageArgs, ResolvedMessageContent, Result, WebCitation};

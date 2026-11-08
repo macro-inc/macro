@@ -9,7 +9,7 @@ use roles_and_permissions::domain::model::PermissionId;
 
 use crate::api::{context::ApiContext, permissions_extractor::DbPermissionsExtractor};
 
-use model::response::ErrorResponse;
+use shared_types::response::ErrorResponse;
 
 #[derive(serde::Serialize, Debug, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]

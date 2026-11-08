@@ -10,8 +10,8 @@ use entity_access::domain::models::{
     EditAccessLevel, EntityAccessAuth, EntityAccessReceipt, EntityType,
 };
 use macro_sync_service_jwt::DocumentPermissionToken;
-use model::document::{DocumentBasic, FileType};
 use models_permissions::share_permission::access_level::AccessLevel;
+use shared_types::document::{DocumentBasic, FileType};
 
 #[cfg(test)]
 mod test;

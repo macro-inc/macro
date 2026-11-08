@@ -6,11 +6,11 @@ use axum::middleware::Next;
 use axum::response::Response;
 use macro_user_id::cow_str::CowLike;
 use macro_user_id::user_id::MacroUserIdStr;
-use model::thread::EmailThreadPermission;
 use model_entity::EntityType;
 use models_permissions::share_permission::SharePermissionV2;
 use models_permissions::share_permission::access_level::AccessLevel;
 use serde::Deserialize;
+use shared_types::thread::EmailThreadPermission;
 use sqlx::{PgPool, Pool, Postgres};
 
 #[derive(Deserialize)]

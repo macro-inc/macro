@@ -12,10 +12,10 @@ use entity_mutation::{
     TrashEntity, UpdateEntitySharePolicy, capability::MoveEntityRequest, project_refs,
 };
 use macro_user_id::user_id::MacroUserIdStr;
-use model::document::DocumentBasic;
 use model_entity::{Entity, EntityType};
 use model_owner::CreationPrincipal;
 use models_permissions::share_permission::UpdateSharePermissionRequestV2;
+use shared_types::document::DocumentBasic;
 
 use crate::domain::ports::sync::DocumentSyncPort;
 use connection::domain::ports::ConnectionService;

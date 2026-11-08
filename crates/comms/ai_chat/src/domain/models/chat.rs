@@ -1,8 +1,8 @@
-use model::chat::ChatMessageWithAttachments;
 use model_owner::Owner;
 use models_permissions::share_permission::access_level::AccessLevel;
 use models_permissions::share_permission::team_share::AuthorizedTeamShareCommand;
 use serde::{Deserialize, Serialize};
+use shared_types::chat::ChatMessageWithAttachments;
 use utoipa::ToSchema;
 
 /// Arguments for creating a new chat.

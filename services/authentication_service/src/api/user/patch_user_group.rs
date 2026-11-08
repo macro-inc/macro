@@ -9,7 +9,7 @@ use macro_user_id::user_id::MacroUserId;
 
 use crate::api::context::{ApiContext, AuthorizationService};
 
-use model::response::{EmptyResponse, ErrorResponse};
+use shared_types::response::{EmptyResponse, ErrorResponse};
 use utoipa::ToSchema;
 
 #[derive(Default, Debug, serde::Serialize, serde::Deserialize, ToSchema)]

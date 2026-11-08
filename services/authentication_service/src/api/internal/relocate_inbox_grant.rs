@@ -9,7 +9,7 @@ use axum::{
 };
 use fusionauth::identity_provider::{IdentityProviderLink, LinkUserRequest};
 use macro_authorization::{InternalOnly, MacroAuthorizationExtractor};
-use model::response::ErrorResponse;
+use shared_types::response::ErrorResponse;
 
 use crate::api::context::{ApiContext, AuthorizationService};
 

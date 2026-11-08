@@ -7,7 +7,7 @@ use entity_access::{
 };
 use entity_registry::CreationPrincipalExtractor;
 use macro_authorization::MacroAuthorizationService;
-use model::project::{request::CreateProjectRequest, response::CreateProjectResponse};
+use shared_types::project::{request::CreateProjectRequest, response::CreateProjectResponse};
 
 use super::ProjectRouterState;
 use crate::domain::{models::ProjectError, ports::ProjectService};
@@ -20,8 +20,8 @@ use crate::domain::{models::ProjectError, ports::ProjectService};
     request_body = CreateProjectRequest,
     responses(
         (status = 200, body = CreateProjectResponse),
-        (status = 401, body = model::response::GenericErrorResponse),
-        (status = 500, body = model::response::GenericErrorResponse),
+        (status = 401, body = shared_types::response::GenericErrorResponse),
+        (status = 500, body = shared_types::response::GenericErrorResponse),
     )
 )]
 #[tracing::instrument(skip(state, project), err)]

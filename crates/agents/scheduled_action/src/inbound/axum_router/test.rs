@@ -21,10 +21,10 @@ use macro_user_id::{
     lowercased::Lowercase,
     user_id::{MacroUserId, MacroUserIdStr},
 };
-use model::user::UserContext;
 use model_owner::Owner;
 use rootcause::Report;
 use serde_json::{Value, json};
+use shared_types::user::UserContext;
 use std::collections::HashMap;
 use tower::ServiceExt;
 use utoipa::OpenApi;

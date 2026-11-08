@@ -551,7 +551,7 @@ pub struct DocumentIdPathParams {
     pub document_id: String,
 }
 
-/// Middleware that loads [`DocumentBasic`](model::document::DocumentBasic) into request extensions.
+/// Middleware that loads [`DocumentBasic`](shared_types::document::DocumentBasic) into request extensions.
 ///
 /// Extracts `document_id` from the path and queries the database.
 /// Returns 404 if the document does not exist.

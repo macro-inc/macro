@@ -8,8 +8,8 @@ use documents::domain::legacy_office_upgrade::{
 use documents::domain::models::DocumentError;
 use documents::domain::notion_markdown::NotionMarkdown;
 use documents::domain::ports::markdown::MarkdownSnapshot;
-use model::document::DocumentBasic;
 use model_owner::Owner;
+use shared_types::document::DocumentBasic;
 
 use super::*;
 

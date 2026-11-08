@@ -314,7 +314,7 @@ async fn a_form_surface_token_requires_edit_on_the_form() {
             .mint_token(&user("macro|a@b.c"), form_receipt(id, allowed), id)
             .await
             .unwrap();
-        let claims: model::document::DocumentPermissionsToken =
+        let claims: shared_types::document::DocumentPermissionsToken =
             macro_sync_service_jwt::decode(token.as_str(), SECRET).unwrap();
         assert_eq!(claims.document_id, id.to_string());
         assert_eq!(claims.access_level, allowed);
@@ -365,7 +365,7 @@ async fn other_parents_keep_view_tokens() {
         .mint_token(&user("macro|a@b.c"), receipt, id)
         .await
         .unwrap();
-    let claims: model::document::DocumentPermissionsToken =
+    let claims: shared_types::document::DocumentPermissionsToken =
         macro_sync_service_jwt::decode(token.as_str(), SECRET).unwrap();
     assert_eq!(claims.access_level, AccessLevel::View);
 }

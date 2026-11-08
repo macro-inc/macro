@@ -12,7 +12,7 @@ use crate::api::{
     utils::generate_session_code,
 };
 
-use model::response::{EmptyResponse, ErrorResponse};
+use shared_types::response::{EmptyResponse, ErrorResponse};
 
 /// Refreshes a JWT token
 #[utoipa::path(

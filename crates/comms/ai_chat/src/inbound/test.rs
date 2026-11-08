@@ -13,11 +13,11 @@ use macro_authorization::{
     MacroUserAuthentication,
 };
 use macro_user_id::user_id::MacroUserIdStr;
-use model::chat::ChatBasic;
-use model::response::StringIDResponse;
-use model::user::UserContext;
 use model_owner::Owner;
 use rootcause::Report;
+use shared_types::chat::ChatBasic;
+use shared_types::response::StringIDResponse;
+use shared_types::user::UserContext;
 use std::sync::{Arc, Mutex};
 use tower::util::ServiceExt;
 use uuid::Uuid;
@@ -85,7 +85,7 @@ impl ChatService for MockService {
     async fn get_metadata(
         &self,
         _entity_access_receipt: EntityAccessReceipt<ViewAccessLevel>,
-    ) -> Result<model::chat::Chat> {
+    ) -> Result<shared_types::chat::Chat> {
         Err(ChatErr::NotFound)
     }
 
@@ -192,7 +192,7 @@ impl ChatService for ErrorService {
     async fn get_metadata(
         &self,
         _entity_access_receipt: EntityAccessReceipt<ViewAccessLevel>,
-    ) -> Result<model::chat::Chat> {
+    ) -> Result<shared_types::chat::Chat> {
         Err(ChatErr::Unknown(anyhow::anyhow!("db error")))
     }
 
@@ -296,7 +296,7 @@ impl ChatService for NotFoundService {
     async fn get_metadata(
         &self,
         _entity_access_receipt: EntityAccessReceipt<ViewAccessLevel>,
-    ) -> Result<model::chat::Chat> {
+    ) -> Result<shared_types::chat::Chat> {
         Err(ChatErr::NotFound)
     }
 

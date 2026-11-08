@@ -3,7 +3,7 @@ use ::notification_inbound::http::NotificationRouterState;
 use anyhow::Context;
 use axum::Router;
 use macro_tower_layers::MacroRequestIdAndTracingLayer;
-use model::version::{ServiceNameState, VersionedApiServiceName, validate_api_version};
+use shared_types::version::{ServiceNameState, VersionedApiServiceName, validate_api_version};
 use std::time::Duration;
 use tower::ServiceBuilder;
 use tower_http::compression::CompressionLayer;
@@ -125,7 +125,7 @@ mod tests {
                 continue;
             };
             assert!(
-                model::version::NotificationServiceApiVersion::from_str(version).is_ok(),
+                shared_types::version::NotificationServiceApiVersion::from_str(version).is_ok(),
                 "{path} is documented under {version}, which the service doesn't serve"
             );
         }

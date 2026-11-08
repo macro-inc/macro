@@ -1,7 +1,7 @@
 //! Text read policy for live Markdown and extracted file content.
 use super::{models::DocumentError, ports::DocumentService};
 use entity_access::domain::models::{EntityAccessReceipt, EntityType, ViewAccessLevel};
-use model::document::DocumentBasic;
+use shared_types::document::DocumentBasic;
 use std::future::Future;
 
 #[cfg(test)]

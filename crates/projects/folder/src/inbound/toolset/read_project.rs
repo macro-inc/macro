@@ -6,11 +6,11 @@ use async_trait::async_trait;
 use entity_access::domain::models::ViewAccessLevel;
 use entity_access::domain::ports::EntityAccessService;
 use entity_mutation::{DuplicateEntity, MoveEntity};
-use model::item::Item;
 use model_entity::EntityType;
 use project_id::ProjectId;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
+use shared_types::item::Item;
 
 use super::{DocumentCapabilities, ProjectCapabilities, ProjectToolContext};
 

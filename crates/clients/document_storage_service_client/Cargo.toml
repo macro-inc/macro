@@ -6,7 +6,7 @@ version = "0.1.0"
 
 [dependencies]
 anyhow = { workspace = true }
-model = { workspace = true }
+shared_types = { workspace = true }
 model_owner = { workspace = true }
 models_bulk_upload = { workspace = true }
 models_permissions = { workspace = true }

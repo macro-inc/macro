@@ -2,14 +2,14 @@
 
 use chrono::{DateTime, Utc};
 use macro_user_id::user_id::MacroUserIdStr;
-use model::document::response::DocumentResponseMetadata;
-use model::document::{DocumentMetadata, FileType};
 use model_owner::Owner;
 use models_permissions::share_permission::{LinkShareState, TeamLinkShareDefault};
+use shared_types::document::response::DocumentResponseMetadata;
+use shared_types::document::{DocumentMetadata, FileType};
 
 use super::response::DocumentResponse;
-use model::sync_service::SyncServiceVersionID;
 use models_properties::api::requests::SetPropertyValue;
+use shared_types::sync_service::SyncServiceVersionID;
 
 /// SHA256 hash of an empty string — used for empty markdown documents (tasks).
 pub const EMPTY_SHA256: &str = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855";

@@ -5,8 +5,8 @@ use axum::{
     response::{IntoResponse, Json},
 };
 use entity_access::inbound::axum_extractors::DocumentAccessExtractor;
-use model::response::GenericErrorResponse;
 use models_permissions::share_permission::access_level::ViewAccessLevel;
+use shared_types::response::GenericErrorResponse;
 use sqlx::PgPool;
 use utoipa::ToSchema;
 

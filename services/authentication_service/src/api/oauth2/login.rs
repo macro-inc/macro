@@ -11,8 +11,8 @@ use axum::{
     response::{IntoResponse, Redirect, Response},
 };
 use macro_env::Environment;
-use model::response::ErrorResponse;
 use reqwest::StatusCode;
+use shared_types::response::ErrorResponse;
 use tower_cookies::Cookies;
 
 /// Handles logging in through an identity provider

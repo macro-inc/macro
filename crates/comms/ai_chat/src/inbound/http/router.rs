@@ -14,10 +14,10 @@ use entity_access::domain::ports::EntityAccessService;
 use entity_access::inbound::axum_extractors::ChatAccessLevelExtractor;
 use entity_registry::{CreationPrincipalExtractor, NonUserOwners};
 use macro_authorization::{MacroAuthorizationService, MacroAuthorizationState};
-use model::response::StringIDResponse;
 use models_permissions::share_permission::SharePermissionV2;
 use roles_and_permissions::domain::port::UserRolesAndPermissionsService;
 use serde::{Deserialize, Serialize};
+use shared_types::response::StringIDResponse;
 use utoipa::ToSchema;
 
 use crate::domain::models::{CreateChatArgs, GetChatResponse, PatchChatArgs, Result};

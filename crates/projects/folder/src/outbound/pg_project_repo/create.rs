@@ -1,6 +1,6 @@
 use entity_registry::BotFacts;
 use entity_registry_db_utils::{OwnedEntityRegistrar, RegisteredEntityType};
-use model::project::Project;
+use shared_types::project::Project;
 use sqlx::{Postgres, Transaction};
 
 use crate::domain::models::CreateProjectArgs;

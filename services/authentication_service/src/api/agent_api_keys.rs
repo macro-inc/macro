@@ -161,7 +161,7 @@ impl axum::response::IntoResponse for AgentApiKeyError {
         };
         (
             status,
-            Json(model::response::ErrorResponse {
+            Json(shared_types::response::ErrorResponse {
                 message: self.to_string().into(),
             }),
         )
@@ -203,8 +203,8 @@ async fn keyed_agent(
     responses(
         (status = 200, body = AgentApiKey),
         (status = 401, body = String),
-        (status = 403, body = model::response::ErrorResponse),
-        (status = 404, body = model::response::ErrorResponse),
+        (status = 403, body = shared_types::response::ErrorResponse),
+        (status = 404, body = shared_types::response::ErrorResponse),
     )
 )]
 #[tracing::instrument(skip_all, err, fields(agent_id = %agent_id))]
@@ -227,10 +227,10 @@ pub async fn get_handler(
     request_body = PutAgentApiKeyRequest,
     responses(
         (status = 200, body = AgentApiKey),
-        (status = 400, body = model::response::ErrorResponse),
+        (status = 400, body = shared_types::response::ErrorResponse),
         (status = 401, body = String),
-        (status = 403, body = model::response::ErrorResponse),
-        (status = 404, body = model::response::ErrorResponse),
+        (status = 403, body = shared_types::response::ErrorResponse),
+        (status = 404, body = shared_types::response::ErrorResponse),
     )
 )]
 // The body is skipped: it is the key itself.
@@ -257,8 +257,8 @@ pub async fn put_handler(
     responses(
         (status = 200, body = AgentApiKey),
         (status = 401, body = String),
-        (status = 403, body = model::response::ErrorResponse),
-        (status = 404, body = model::response::ErrorResponse),
+        (status = 403, body = shared_types::response::ErrorResponse),
+        (status = 404, body = shared_types::response::ErrorResponse),
     )
 )]
 #[tracing::instrument(skip_all, err, fields(agent_id = %agent_id))]

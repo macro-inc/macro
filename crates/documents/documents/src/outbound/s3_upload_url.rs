@@ -5,8 +5,8 @@ use std::time::Duration;
 use anyhow::Context;
 use aws_sdk_s3::{presigning::PresigningConfig, primitives::ByteStream};
 use base64::Engine;
-use model::document::ContentType;
 use s3_key::{SYNC_SERVICE_SNAPSHOT_PREFIX, document_key_url_path};
+use shared_types::document::ContentType;
 
 use crate::domain::ports::PresignedUploadUrlPort;
 

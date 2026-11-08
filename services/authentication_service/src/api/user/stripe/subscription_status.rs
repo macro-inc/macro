@@ -6,7 +6,7 @@ use macro_authorization::{MacroAuthorizationExtractor, UserOrInternal};
 use super::StripeOperationError;
 use crate::api::context::{ApiContext, AuthorizationService};
 use crate::service::subscription_status::SubscriptionStatus;
-use model::response::ErrorResponse;
+use shared_types::response::ErrorResponse;
 
 /// Read subscription state for the authenticated user's seat.
 #[utoipa::path(

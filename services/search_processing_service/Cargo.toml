@@ -95,7 +95,7 @@ illustrator_engine = { workspace = true }
 fig_engine = { workspace = true, default-features = true }
 psd_engine = { workspace = true }
 doppler-config = { workspace = true }
-model = { workspace = true }
+shared_types = { workspace = true }
 model_owner = { workspace = true }
 s3_key = { workspace = true }
 models_email = { workspace = true }

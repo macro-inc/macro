@@ -10,7 +10,7 @@ use axum::{
 };
 use fusionauth::error::FusionAuthClientError;
 use macro_middleware::tracking::ClientIp;
-use model::{
+use shared_types::{
     authentication::login::request::PasswordRequest,
     response::{ErrorResponse, UserTokensResponse},
 };

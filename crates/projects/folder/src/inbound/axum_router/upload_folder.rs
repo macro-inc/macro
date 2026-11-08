@@ -8,15 +8,15 @@ use entity_access::domain::{
 use macro_authorization::{
     MacroAuthorizationExtractor, MacroAuthorizationService, UserOrInternal, UserOrInternalCaller,
 };
-use model::{
-    folder::{UploadFolderRequest, UploadFolderResponseData},
-    response::TypedSuccessResponse,
-};
 use models_bulk_upload::{
     MarkProjectUploadedRequest, MarkProjectUploadedResponse, UploadExtractFolderRequest,
     UploadExtractFolderResponseData,
 };
 use project_id::ProjectId;
+use shared_types::{
+    folder::{UploadFolderRequest, UploadFolderResponseData},
+    response::TypedSuccessResponse,
+};
 
 use super::ProjectRouterState;
 use crate::domain::{models::ProjectError, ports::ProjectService};
@@ -33,9 +33,9 @@ pub type UploadExtractFolderResponse = TypedSuccessResponse<UploadExtractFolderR
     path = "/projects/upload",
     responses(
         (status = 200, body = inline(UploadFolderResponse)),
-        (status = 401, body = model::response::GenericErrorResponse),
-        (status = 404, body = model::response::GenericErrorResponse),
-        (status = 500, body = model::response::GenericErrorResponse),
+        (status = 401, body = shared_types::response::GenericErrorResponse),
+        (status = 404, body = shared_types::response::GenericErrorResponse),
+        (status = 500, body = shared_types::response::GenericErrorResponse),
     )
 )]
 #[tracing::instrument(
@@ -73,9 +73,9 @@ where
     path = "/projects/upload_extract",
     responses(
         (status = 200, body = inline(UploadExtractFolderResponse)),
-        (status = 401, body = model::response::GenericErrorResponse),
-        (status = 404, body = model::response::GenericErrorResponse),
-        (status = 500, body = model::response::GenericErrorResponse),
+        (status = 401, body = shared_types::response::GenericErrorResponse),
+        (status = 404, body = shared_types::response::GenericErrorResponse),
+        (status = 500, body = shared_types::response::GenericErrorResponse),
     )
 )]
 #[tracing::instrument(

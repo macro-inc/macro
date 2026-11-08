@@ -3,11 +3,11 @@
 use std::str::FromStr;
 
 use anyhow::Context;
-use model::document::{DocumentMetadata, FileType};
-use model::folder::{FileSystemNode, FolderItem, S3Destination, S3DestinationMap};
-use model::response::PresignedUrl;
 use models_bulk_upload::S3ObjectInfo;
 use s3_key::{build_cloud_storage_bucket_document_key, build_docx_staging_bucket_document_key};
+use shared_types::document::{DocumentMetadata, FileType};
+use shared_types::folder::{FileSystemNode, FolderItem, S3Destination, S3DestinationMap};
+use shared_types::response::PresignedUrl;
 
 use super::ports::ProjectUploadUrlPort;
 
@@ -91,7 +91,7 @@ pub async fn build_destination_map<U: ProjectUploadUrlPort>(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use model::document::FileTypeExt;
+    use shared_types::document::FileTypeExt;
 
     fn item(relative_path: &str, full_name: &str) -> FolderItem {
         let (name, file_type) = match FileType::split_suffix_match(full_name) {

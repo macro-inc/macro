@@ -10,15 +10,6 @@ use entity_access::domain::models::{
 };
 use entity_mutation::EntityMutationErrorCode;
 use macro_user_id::user_id::MacroUserIdStr;
-use model::document::ContentType;
-use model::folder::{UploadFolderRequest, UploadFolderResponseData, UploadFolderWithIdsResponse};
-use model::item::{Item, ItemWithUserAccessLevel};
-use model::project::request::{CreateProjectRequest, PatchProjectRequestV2};
-use model::project::response::GetProjectResponseData;
-use model::project::{
-    BasicProject, PendingProject, Project, ProjectPreview, ProjectPreviewV2,
-    ProjectWithUploadRequest,
-};
 use model_entity::Entity;
 use model_owner::{CreationPrincipal, Owner};
 use models_bulk_upload::{
@@ -30,6 +21,17 @@ use models_permissions::share_permission::team_share::TeamShareFacts;
 use models_permissions::share_permission::{SharePermissionV2, TeamLinkShareDefault};
 use project_id::ProjectId;
 use s3_key::BulkUploadStagingKey;
+use shared_types::document::ContentType;
+use shared_types::folder::{
+    UploadFolderRequest, UploadFolderResponseData, UploadFolderWithIdsResponse,
+};
+use shared_types::item::{Item, ItemWithUserAccessLevel};
+use shared_types::project::request::{CreateProjectRequest, PatchProjectRequestV2};
+use shared_types::project::response::GetProjectResponseData;
+use shared_types::project::{
+    BasicProject, PendingProject, Project, ProjectPreview, ProjectPreviewV2,
+    ProjectWithUploadRequest,
+};
 use uuid::Uuid;
 
 use super::models::{

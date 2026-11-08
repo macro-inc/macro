@@ -2,7 +2,7 @@
 
 use axum::{Json, extract::State};
 use macro_authorization::{MacroAuthorizationExtractor, UserOrInternal};
-use model::response::ErrorResponse;
+use shared_types::response::ErrorResponse;
 
 use super::StripeOperationError;
 use crate::api::context::{ApiContext, AuthorizationService};

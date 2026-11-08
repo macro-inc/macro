@@ -14,9 +14,9 @@ use async_trait::async_trait;
 use entity_access::domain::models::{EditAccessLevel, EntityType};
 use entity_access::domain::ports::EntityAccessService;
 use macro_user_id::user_id::MacroUserIdStr;
-use model::document::FileType;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
+use shared_types::document::FileType;
 
 use super::DocumentToolContext;
 

@@ -68,7 +68,7 @@ macro_event_broker = { workspace = true }
 macro_event_topics = { workspace = true }
 entity_mutation = { workspace = true }
 macro_user_id = { workspace = true }
-model = { workspace = true }
+shared_types = { workspace = true }
 model_entity = { workspace = true }
 model_owner = { workspace = true }
 models_bulk_upload = { workspace = true }

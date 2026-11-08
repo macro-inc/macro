@@ -21,12 +21,12 @@ use macro_user_id::email::Email;
 use macro_user_id::lowercased::Lowercase;
 use macro_user_id::user_id::MacroUserIdStr;
 use miniserde::json::Value as JsonValue;
-use model::response::ErrorResponse;
 use roles_and_permissions::domain::{
     model::{ProductTier, SubscriptionStatus},
     port::UserRolesAndPermissionsService,
 };
 use serde::Serialize;
+use shared_types::response::ErrorResponse;
 use stripe_webhook::{EventObject, EventType};
 use team_id::TeamId;
 use teams::domain::team_repo::TeamService;

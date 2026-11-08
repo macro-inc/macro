@@ -8,7 +8,7 @@ use axum::{
 use email::domain::{models::EmailErr, ports::EmailService};
 use email_thread_id::EmailThreadId;
 use macro_authorization::{MacroAuthorizationExtractor, UserOrInternal};
-use model::response::{EmptyResponse, ErrorResponse};
+use shared_types::response::{EmptyResponse, ErrorResponse};
 use utoipa::ToSchema;
 use uuid::Uuid;
 

@@ -39,7 +39,6 @@ use github_pull_requests::domain::{
     service::GithubPullRequestServiceImpl,
 };
 use macro_user_id::user_id::MacroUserIdStr;
-use model::document::{DocumentBasic, DocumentMetadata};
 use model_entity::Entity;
 use model_owner::CreationPrincipal;
 use models_permissions::share_permission::access_level::AccessLevel;
@@ -48,6 +47,7 @@ use notification::domain::{
     models::{Notification, NotificationResult, SendNotificationRequest},
     service::{NotificationIngress, SendNotificationError},
 };
+use shared_types::document::{DocumentBasic, DocumentMetadata};
 
 use super::*;
 use crate::domain::models::AppJwt;
@@ -306,7 +306,7 @@ impl DocumentService for StubDocumentService {
         _principal: &CreationPrincipal,
         _document_name: String,
         _query_version_id: Option<i64>,
-        _sync_version_id: Option<model::sync_service::SyncServiceVersionID>,
+        _sync_version_id: Option<shared_types::sync_service::SyncServiceVersionID>,
     ) -> Result<DocumentResponse, DocumentError> {
         unimplemented!()
     }

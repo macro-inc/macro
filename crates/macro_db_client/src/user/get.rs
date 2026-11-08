@@ -8,7 +8,7 @@ pub mod get_user_permissions;
 mod get_legacy_user_info;
 pub use get_legacy_user_info::{LegacyUserInfo, get_legacy_user_info};
 use macro_user_id::{lowercased::Lowercase, user_id::MacroUserId};
-use model::user::{UserInfo, UserInfoWithMacroUserId};
+use shared_types::user::{UserInfo, UserInfoWithMacroUserId};
 
 /// Gets the stripe customer id for a given user id
 #[tracing::instrument(skip(db))]

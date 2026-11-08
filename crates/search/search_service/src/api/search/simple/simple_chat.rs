@@ -1,8 +1,8 @@
 use crate::api::search::simple::SearchError;
 use item_filters::ChatFilters;
 use macro_user_id::user_id::MacroUserId;
-use model::item::{ShareableItem, ShareableItemType, UserAccessibleItem};
 use opensearch_client::search::model::{Highlight, SearchHit};
+use shared_types::item::{ShareableItem, ShareableItemType, UserAccessibleItem};
 use sqlx::{Pool, Postgres, types::Uuid};
 
 use crate::api::context::SearchHandlerState;

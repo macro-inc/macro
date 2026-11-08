@@ -1,6 +1,6 @@
 // TODO: remove dependency on model crate
-use model::document::{BackfillSearchDocumentInformation, FileType};
 use s3_key::CONVERTED_DOCUMENT_FILE_NAME;
+use shared_types::document::{BackfillSearchDocumentInformation, FileType};
 
 /// Search text extractor message
 #[derive(serde::Serialize, serde::Deserialize, PartialEq, Eq, Debug)]

@@ -1,5 +1,5 @@
 use anyhow::Result;
-use model::project::response::GetProjectContentResponse;
+use shared_types::project::response::GetProjectContentResponse;
 
 use super::DocumentStorageServiceClient;
 

@@ -10,10 +10,10 @@ use entity_mutation::{
     capability::MoveEntityRequest, project_refs,
 };
 use macro_event_broker::MacroEventBroker;
-use model::project::{BasicProject, request::PatchProjectRequestV2};
 use model_entity::{Entity, EntityType};
 use models_permissions::share_permission::UpdateSharePermissionRequestV2;
 use project_id::ProjectId;
+use shared_types::project::{BasicProject, request::PatchProjectRequestV2};
 
 use super::{
     models::ProjectError,

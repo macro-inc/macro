@@ -7,8 +7,8 @@ use axum::{
 use github::domain::{models::GithubError, ports::GithubLinkService};
 use macro_authorization::{InternalOnly, MacroAuthorizationExtractor};
 use macro_user_id::{cow_str::CowLike, user_id::MacroUserId};
-use model::authentication::github_token::GithubAccessToken;
-use model::response::ErrorResponse;
+use shared_types::authentication::github_token::GithubAccessToken;
+use shared_types::response::ErrorResponse;
 
 use crate::api::context::{ApiContext, AuthorizationService};
 

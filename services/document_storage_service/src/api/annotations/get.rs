@@ -10,12 +10,12 @@ use axum::{
 };
 use entity_access::inbound::axum_extractors::DocumentAccessExtractor;
 use macro_db_client::annotations::get::get_pdf_anchors;
-use model::{
+use models_permissions::share_permission::access_level::ViewAccessLevel;
+use shared_types::{
     annotations::Anchor,
     document::{DocumentBasic, FileType},
     response::ErrorResponse,
 };
-use models_permissions::share_permission::access_level::ViewAccessLevel;
 use sqlx::PgPool;
 
 use super::annotation_error_response;

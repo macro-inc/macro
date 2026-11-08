@@ -1,7 +1,7 @@
 use macro_user_id::user_id::MacroUserIdStr;
-use model::thread::EmailThreadPermission;
 use models_permissions::share_permission::access_level::AccessLevel;
 use models_permissions::share_permission::{LinkShare, SharePermissionV2};
+use shared_types::thread::EmailThreadPermission;
 
 use super::channel_permission::create::create_channel_share_permissions;
 

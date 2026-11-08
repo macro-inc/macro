@@ -16,7 +16,7 @@ use github::domain::{
     ports::GithubLinkService,
 };
 use macro_authorization::{MacroAuthorizationExtractor, UserOrInternal};
-use model::response::ErrorResponse;
+use shared_types::response::ErrorResponse;
 use upstream_error::UpstreamErrorResponse;
 
 use crate::api::context::{ApiContext, AuthorizationService};

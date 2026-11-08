@@ -13,11 +13,11 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use anyhow::Context;
 use base64::{Engine, engine::general_purpose::URL_SAFE_NO_PAD};
-use model::{
+use reqwest::{StatusCode, header::HeaderMap};
+use shared_types::{
     authentication::login::{request::PasswordlessRequest, response::SsoRequiredResponse},
     response::UserTokensResponse,
 };
-use reqwest::{StatusCode, header::HeaderMap};
 use tracing::Instrument;
 use url::Url;
 

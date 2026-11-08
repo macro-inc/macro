@@ -6,7 +6,7 @@ use entity_access::{
     inbound::axum_extractors::ProjectAccessLevelExtractor,
 };
 use macro_authorization::{MacroAuthorizationExtractor, MacroAuthorizationService, UserOrInternal};
-use model::project::response::{GetProjectContentResponse, GetProjectResponse};
+use shared_types::project::response::{GetProjectContentResponse, GetProjectResponse};
 
 use super::ProjectRouterState;
 use crate::domain::{models::ProjectError, ports::ProjectService};
@@ -18,8 +18,8 @@ use crate::domain::{models::ProjectError, ports::ProjectService};
     params(("id" = String, Path, description = "ID of the project")),
     responses(
         (status = 200, body = GetProjectResponse),
-        (status = 401, body = model::response::GenericErrorResponse),
-        (status = 500, body = model::response::GenericErrorResponse),
+        (status = 401, body = shared_types::response::GenericErrorResponse),
+        (status = 500, body = shared_types::response::GenericErrorResponse),
     )
 )]
 #[tracing::instrument(
@@ -52,8 +52,8 @@ where
     params(("id" = String, Path, description = "ID of the project")),
     responses(
         (status = 200, body = GetProjectContentResponse),
-        (status = 401, body = model::response::GenericErrorResponse),
-        (status = 500, body = model::response::GenericErrorResponse),
+        (status = 401, body = shared_types::response::GenericErrorResponse),
+        (status = 500, body = shared_types::response::GenericErrorResponse),
     )
 )]
 #[tracing::instrument(

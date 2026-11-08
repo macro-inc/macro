@@ -13,9 +13,9 @@ use document_sub_type::DocumentSubType;
 use macro_event_broker::{Event, MacroEvent, TopicEvent};
 use macro_event_topics::MacroDocumentsTopic;
 use macro_user_id::user_id::MacroUserIdStr;
-use model::document::FileType;
 use model_owner::Owner;
 use serde::{Deserialize, Serialize};
+use shared_types::document::FileType;
 
 use super::models::FileTypeUpdate;
 

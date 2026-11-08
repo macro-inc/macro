@@ -8,8 +8,8 @@ use fusionauth::{
     FusionAuthClient,
     identity_provider::{IdentityProviderLink, LinkUserRequest},
 };
-use model::response::ErrorResponse;
 use reqwest::StatusCode;
+use shared_types::response::ErrorResponse;
 use url::Url;
 use uuid::Uuid;
 

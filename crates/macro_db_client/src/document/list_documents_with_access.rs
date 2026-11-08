@@ -1,5 +1,5 @@
-use model::document::list::{DocumentListFilters, DocumentListItem};
 use models_permissions::share_permission::access_level::AccessLevel;
+use shared_types::document::list::{DocumentListFilters, DocumentListItem};
 use sqlx::{Pool, Postgres};
 use std::str::FromStr;
 
@@ -108,8 +108,8 @@ pub async fn list_documents_with_access(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use model::document::list::DocumentListFilters;
     use models_permissions::share_permission::access_level::AccessLevel;
+    use shared_types::document::list::DocumentListFilters;
     use sqlx::{Pool, Postgres};
 
     #[sqlx::test(fixtures(path = "../../fixtures", scripts("list_documents_with_access")))]

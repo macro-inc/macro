@@ -1,9 +1,9 @@
 use crate::api::context::AuthorizationService;
 use axum::{Extension, Json, extract::Path, http::StatusCode, response::IntoResponse};
 use macro_authorization::{InternalOnly, MacroAuthorizationExtractor};
-use model::document::DocumentBasic;
-use model::response::GenericErrorResponse;
 use serde::Deserialize;
+use shared_types::document::DocumentBasic;
+use shared_types::response::GenericErrorResponse;
 
 #[derive(Deserialize)]
 pub struct Params {

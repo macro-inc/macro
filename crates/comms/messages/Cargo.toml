@@ -6,7 +6,7 @@ version = "0.1.0"
 
 [features]
 ai_tools = ["dep:ai_toolset", "dep:schemars", "ports"]
-annotations = ["dep:model", "ports"]
+annotations = ["dep:shared_types", "ports"]
 broker = ["dep:macro_event_broker", "dep:macro_event_topics", "ports"]
 default = []
 delivery = [
@@ -57,7 +57,7 @@ macro_event_topics = { workspace = true, optional = true }
 macro_user_id = { workspace = true }
 macro_uuid = { workspace = true, optional = true }
 mockall = { workspace = true, optional = true }
-model = { workspace = true, optional = true }
+shared_types = { workspace = true, optional = true }
 model_entity = { workspace = true, optional = true }
 model_notifications = { workspace = true, optional = true }
 model_owner = { workspace = true, optional = true }

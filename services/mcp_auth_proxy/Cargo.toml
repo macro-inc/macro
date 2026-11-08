@@ -23,7 +23,7 @@ outbound = [
   "dep:cursor_api_key",
   "dep:fusionauth",
   "dep:macro_tower_layers",
-  "dep:model",
+  "dep:shared_types",
   "dep:reqwest",
   "dep:sqlx",
   "dep:upstream_error",
@@ -44,7 +44,7 @@ fusionauth = { workspace = true, optional = true }
 macro_auth = { workspace = true, optional = true }
 macro_tower_layers = { workspace = true, optional = true }
 macro_user_id = { workspace = true, optional = true }
-model = { workspace = true, optional = true }
+shared_types = { workspace = true, optional = true }
 rand = { workspace = true }
 redis = { workspace = true, features = ["aio", "tokio-comp"] }
 reqwest = { workspace = true, optional = true }

@@ -1,6 +1,6 @@
 use crate::AuthServiceClient;
 use crate::error::{AuthServiceClientError, GenericErrorResponse};
-use model::authentication::google_token::GoogleAccessToken;
+use shared_types::authentication::google_token::GoogleAccessToken;
 
 impl AuthServiceClient {
     /// Gets the Google access token for the given fusionauth user and linked email.

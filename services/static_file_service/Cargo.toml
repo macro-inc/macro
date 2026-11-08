@@ -39,7 +39,7 @@ macro_entrypoint = { workspace = true }
 macro_env = { workspace = true }
 macro_env_var = { workspace = true }
 macro_queues = { workspace = true }
-model = { workspace = true }
+shared_types = { workspace = true }
 models_sfs = { workspace = true }
 s3_key = { workspace = true }
 secretsmanager_client = { workspace = true }

@@ -32,7 +32,7 @@ macro_env = { workspace = true }
 macro_middleware = { workspace = true, features = [
   "tracking",
 ] }
-model = { workspace = true }
+shared_types = { workspace = true }
 bytes = { workspace = true }
 futures = { workspace = true }
 reqwest = { workspace = true, features = ["stream"] }

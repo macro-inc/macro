@@ -1,6 +1,6 @@
 use document_sub_type::DocumentSubType;
-use model::document::DocumentMetadata;
 use model_owner::Owner;
+use shared_types::document::DocumentMetadata;
 use sqlx::{Pool, Postgres};
 
 /// Used to get all documents in a paginated format

@@ -15,14 +15,14 @@ use axum::{
     http::{Response, StatusCode},
     response::IntoResponse,
 };
-use model::{
-    document::{DocumentBasic, FileType, FileTypeExt, response::LocationResponseData},
-    response::{GenericErrorResponse, GenericResponse, PresignedUrl},
-};
 use model_owner::Owner;
 use s3_key::{
     build_cloud_storage_bucket_document_key, build_docx_to_pdf_converted_document_key,
     document_key_url_path,
+};
+use shared_types::{
+    document::{DocumentBasic, FileType, FileTypeExt, response::LocationResponseData},
+    response::{GenericErrorResponse, GenericResponse, PresignedUrl},
 };
 
 #[derive(serde::Deserialize)]

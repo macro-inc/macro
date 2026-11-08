@@ -1,8 +1,8 @@
-use model::{
+use models_bulk_upload::{MarkProjectUploadedRequest, MarkProjectUploadedResponse};
+use shared_types::{
     folder::{FolderItem, UploadFolderRequest, UploadFolderResponseData},
     response::TypedSuccessResponse,
 };
-use models_bulk_upload::{MarkProjectUploadedRequest, MarkProjectUploadedResponse};
 
 use crate::constants::MACRO_INTERNAL_USER_ID_HEADER_KEY;
 

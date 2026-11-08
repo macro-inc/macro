@@ -12,11 +12,11 @@ use macro_authorization::{MacroAuthorizationExtractor, UserOrInternal};
 use macro_db_client::document::build_pdf_modification_data::{
     get_complete_pdf_modification_data, get_pdf_modification_data_for_document,
 };
-use model::{
+use serde::Deserialize;
+use shared_types::{
     document::{DocumentBasic, FileType},
     response::{GenericErrorResponse, GenericResponse},
 };
-use serde::Deserialize;
 
 #[derive(Deserialize)]
 pub struct Params {

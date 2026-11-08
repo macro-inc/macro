@@ -5,7 +5,7 @@ use axum::{
     response::{IntoResponse, Json, Response},
 };
 use macro_authorization::{InternalOnly, MacroAuthorizationExtractor};
-use model::response::ErrorResponse;
+use shared_types::response::ErrorResponse;
 use sqlx::types::Uuid;
 
 #[derive(serde::Serialize, serde::Deserialize, Debug)]

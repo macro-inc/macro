@@ -10,7 +10,9 @@ use crate::api::context::{ApiContext, AuthorizationService};
 
 use macro_db_client::user::update_user_name::update_user_name;
 
-use model::{authentication::webhooks::update_name::UpdateNameWebhook, response::EmptyResponse};
+use shared_types::{
+    authentication::webhooks::update_name::UpdateNameWebhook, response::EmptyResponse,
+};
 
 use sqlx::{Pool, Postgres};
 

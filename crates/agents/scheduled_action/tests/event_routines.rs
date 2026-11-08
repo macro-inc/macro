@@ -29,7 +29,6 @@ use macro_authorization::{
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
 use macro_user_id::user_id::MacroUserIdStr;
 use macro_uuid::{Uuid, generate_uuid_v7};
-use model::user::UserContext;
 use rootcause::Report;
 use scheduled_action::{
     domain::{
@@ -63,6 +62,7 @@ use scheduled_action::{
     },
 };
 use serde_json::{Value, json};
+use shared_types::user::UserContext;
 use sqlx::PgPool;
 use tokio::sync::{Semaphore, mpsc};
 use tokio_util::{sync::CancellationToken, task::TaskTracker};

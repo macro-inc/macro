@@ -2,8 +2,8 @@ use std::sync::{Arc, Mutex};
 
 use bot_id::{BotId, NonSystemBotId};
 use macro_user_id::user_id::MacroUserIdStr;
-use model::document::FileType;
 use model_owner::CreationPrincipal;
+use shared_types::document::FileType;
 
 use super::{
     DocumentCreator, MarkdownSubtype, NewDocumentMetadata, NewMarkdownTextDocument,
@@ -20,7 +20,7 @@ use crate::domain::ports::mentions::DocumentMentionTrackingPort;
 use crate::domain::response::{
     CreateDocumentResponseData, DocumentResponse, DocumentResponseMetadataWithContent,
 };
-use model::document::response::DocumentResponseMetadata;
+use shared_types::document::response::DocumentResponseMetadata;
 
 const DOCUMENT_ID: &str = "created-task";
 const EMAIL_SEED: &str = r#"<m-document-mention>{"documentId":"thread-7","blockName":"email","documentName":"Re: invoice"}</m-document-mention>"#;

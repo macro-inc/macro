@@ -11,16 +11,6 @@ use entity_access_management::domain::ports::EntityAccessManagementService;
 use entity_mutation::{EntityMutationEffect, RestoreEntity};
 use macro_event_broker::{EventBrokerError, MacroEvent, MacroEventBroker};
 use macro_user_id::user_id::MacroUserIdStr;
-use model::document::{ContentType, DocumentMetadata, FileType};
-use model::folder::{
-    FileSystemNodeWithIds, FolderItem, S3Destination, UploadFolderRequest,
-    UploadFolderWithIdsResponse,
-};
-use model::item::Item;
-use model::project::request::{CreateProjectRequest, PatchProjectRequestV2};
-use model::project::{
-    BasicProject, Project, ProjectPreviewData, ProjectPreviewV2, ProjectWithUploadRequest,
-};
 use model_owner::{CreationPrincipal, Owner};
 use models_bulk_upload::{
     BulkUploadRequest, BulkUploadRequestDocuments, ProjectDocumentStatus, UploadDocumentStatus,
@@ -29,6 +19,16 @@ use models_bulk_upload::{
 use models_permissions::share_permission::access_level::AccessLevel;
 use models_permissions::share_permission::{LinkShare, UpdateSharePermissionRequestV2};
 use s3_key::BulkUploadStagingKey;
+use shared_types::document::{ContentType, DocumentMetadata, FileType};
+use shared_types::folder::{
+    FileSystemNodeWithIds, FolderItem, S3Destination, UploadFolderRequest,
+    UploadFolderWithIdsResponse,
+};
+use shared_types::item::Item;
+use shared_types::project::request::{CreateProjectRequest, PatchProjectRequestV2};
+use shared_types::project::{
+    BasicProject, Project, ProjectPreviewData, ProjectPreviewV2, ProjectWithUploadRequest,
+};
 use uuid::Uuid;
 
 use super::*;

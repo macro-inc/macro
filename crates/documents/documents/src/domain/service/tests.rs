@@ -6,7 +6,7 @@ use foreign_entity::domain::models::{
 use foreign_entity::domain::ports::{ForeignEntityListQuery, ForeignEntityService};
 use macro_event_broker::{EventBrokerError, MacroEvent, MacroEventBroker};
 use macro_user_id::cow_str::CowLike;
-use model::document::{DocumentMetadata, FileType};
+use shared_types::document::{DocumentMetadata, FileType};
 use std::sync::{Arc, Mutex};
 
 use crate::domain::models::{

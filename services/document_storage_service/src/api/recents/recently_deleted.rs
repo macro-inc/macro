@@ -2,8 +2,8 @@ use crate::api::context::AuthorizationService;
 use axum::extract::State;
 use axum::{http::StatusCode, response::IntoResponse};
 use macro_authorization::{MacroAuthorizationExtractor, UserOrInternal};
-use model::item::Item;
-use model::response::{GenericErrorResponse, GenericResponse, TypedSuccessResponse};
+use shared_types::item::Item;
+use shared_types::response::{GenericErrorResponse, GenericResponse, TypedSuccessResponse};
 use sqlx::PgPool;
 use utoipa::ToSchema;
 

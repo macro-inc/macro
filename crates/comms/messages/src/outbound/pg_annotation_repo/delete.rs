@@ -5,7 +5,7 @@ use crate::domain::{
     ports::MessageError,
 };
 use crate::outbound::pg_message_repo::PgMessageRepository;
-use model::annotations::{
+use shared_types::annotations::{
     AnchorId, PdfAnchorId,
     delete::{
         DeleteUnthreadedAnchorRequest, DeleteUnthreadedAnchorResponse,

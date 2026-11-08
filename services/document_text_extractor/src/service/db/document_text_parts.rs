@@ -1,7 +1,7 @@
 use anyhow::Result;
 use lambda_runtime::tracing;
-use model::citations::TextReference;
 use serde_json;
+use shared_types::citations::TextReference;
 use sqlx::{Pool, Postgres};
 
 #[tracing::instrument(skip(db, references))]

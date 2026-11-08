@@ -5,8 +5,8 @@ use axum::{
     extract::{Path, State},
 };
 use macro_authorization::{MacroAuthorizationExtractor, UserOrInternal};
-use model::response::ErrorResponse;
 use models_email::service::attachment;
+use shared_types::response::ErrorResponse;
 use utoipa::ToSchema;
 use uuid::Uuid;
 

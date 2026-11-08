@@ -4,8 +4,8 @@ use attachment::{AttachmentContent, AttachmentPart, Attachments};
 use chat_message::Role;
 use chrono::Utc;
 use macro_event_broker::{EventBrokerError, MacroEvent};
-use model::chat::{ChatMessageWithAttachments, NewAttachment};
 use serde_json::json;
+use shared_types::chat::{ChatMessageWithAttachments, NewAttachment};
 
 use super::*;
 use crate::domain::models::{PatchChatMessageArgs, WebCitation};

@@ -6,9 +6,9 @@ use std::time::Duration;
 use entity_access::domain::models::{
     EditAccessLevel, EntityAccessAuth, EntityAccessReceipt, EntityType,
 };
-use model::document::{FileType, FileTypeExt};
 use model_owner::CreationPrincipal;
 use rootcause::compat::anyhow1::IntoAnyhow;
+use shared_types::document::{FileType, FileTypeExt};
 use tracing::Instrument;
 
 use super::{

@@ -6,7 +6,7 @@ use axum::{
 };
 use sqlx::PgPool;
 
-use model::authentication::permission::Permission;
+use shared_types::authentication::permission::Permission;
 
 /// Gets all permissions
 #[utoipa::path(

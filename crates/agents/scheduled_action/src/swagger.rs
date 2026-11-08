@@ -33,7 +33,7 @@ use crate::domain::models::{
     ScheduledAction, ScheduledActionUpdate,
 };
 use ai_billing::inbound::admission::AiAdmissionErrorBody;
-use model::response::EmptyResponse;
+use shared_types::response::EmptyResponse;
 
 #[derive(OpenApi)]
 #[openapi(

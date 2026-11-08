@@ -22,7 +22,7 @@ lambda_runtime = { workspace = true }
 macro_entrypoint = { workspace = true }
 macro_env_var = { workspace = true }
 mockall = { workspace = true }
-model = { workspace = true }
+shared_types = { workspace = true }
 s3_key = { workspace = true }
 pdfium-render = { workspace = true }
 serde = { workspace = true }

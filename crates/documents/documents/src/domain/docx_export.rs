@@ -1,7 +1,7 @@
 //! Export an uploaded Word document only after its extracted parts are ready.
 
 use entity_access::domain::models::{EntityAccessReceipt, EntityType, ViewAccessLevel};
-use model::document::BomPart;
+use shared_types::document::BomPart;
 use std::future::Future;
 
 use super::models::DocumentError;

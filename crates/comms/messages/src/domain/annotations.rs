@@ -9,7 +9,7 @@ use entity_access::domain::{
     ports::EntityAccessService,
 };
 use macro_user_id::user_id::MacroUserIdStr;
-use model::annotations::{
+use shared_types::annotations::{
     delete::{DeleteUnthreadedAnchorRequest, DeleteUnthreadedAnchorResponse},
     edit::{EditAnchorRequest, EditAnchorResponse},
 };
@@ -123,9 +123,9 @@ impl<R: AnnotationRepository, A: EntityAccessService, P: MessageEventPublisher>
         org: Option<i64>,
         input: EditAnchorRequest,
     ) -> Result<EditAnchorResponse, MessageError> {
-        let EditAnchorRequest::Pdf(model::annotations::edit::EditPdfAnchorRequest::FreeComment(
-            ref request,
-        )) = input;
+        let EditAnchorRequest::Pdf(
+            shared_types::annotations::edit::EditPdfAnchorRequest::FreeComment(ref request),
+        ) = input;
         if [
             request.x_pct,
             request.y_pct,
@@ -171,7 +171,7 @@ impl<R: AnnotationRepository, A: EntityAccessService, P: MessageEventPublisher>
         input: DeleteUnthreadedAnchorRequest,
     ) -> Result<DeleteUnthreadedAnchorResponse, MessageError> {
         let DeleteUnthreadedAnchorRequest::Pdf(
-            model::annotations::delete::DeleteUnthreadedPdfAnchorRequest::Highlight(id),
+            shared_types::annotations::delete::DeleteUnthreadedPdfAnchorRequest::Highlight(id),
         ) = input;
         let access = self.capability(user, org, id, true).await?;
         let parent = MessageParent::parse("document", &access.target().document_id)

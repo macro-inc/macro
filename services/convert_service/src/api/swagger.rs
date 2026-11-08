@@ -4,7 +4,7 @@ use utoipa::{
 };
 
 use crate::api::{backfill, convert, health};
-use model::{
+use shared_types::{
     convert::ConvertRequest,
     response::{EmptyResponse, ErrorResponse},
 };

@@ -5,8 +5,8 @@ use axum::{
     response::{IntoResponse, Response},
 };
 use macro_authorization::{MacroAuthorizationExtractor, UserOrInternal};
-use model::response::ErrorResponse;
 use model_notifications::UserUnsubscribe;
+use shared_types::response::ErrorResponse;
 
 use crate::api::context::{ApiContext, AuthorizationService};
 

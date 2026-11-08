@@ -7,8 +7,8 @@ use attachment::FormattedParts;
 use chat_message::{AssistantMessagePart, ChatMessageContent};
 use entity_access_management::domain::models::EntityAccessManagementError;
 use macro_event_broker::{EventBrokerError, MacroEvent};
-use model::chat::Chat;
 use model_owner::Owner;
+use shared_types::chat::Chat;
 
 use super::*;
 use crate::domain::models::{ChatResponse, PatchChatMessageArgs};

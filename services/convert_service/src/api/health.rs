@@ -1,5 +1,5 @@
 use axum::{Json, Router, http::StatusCode, response::IntoResponse, routing::get};
-use model::response::EmptyResponse;
+use shared_types::response::EmptyResponse;
 
 /// Health check
 #[utoipa::path(

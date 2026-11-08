@@ -1,4 +1,4 @@
-use model::user::UserInfo;
+use shared_types::user::UserInfo;
 
 /// Gets the user id by email
 #[tracing::instrument(skip(db))]

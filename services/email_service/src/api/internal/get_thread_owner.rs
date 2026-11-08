@@ -6,8 +6,8 @@ use axum::response::{IntoResponse, Response};
 use macro_authorization::{InternalOnly, MacroAuthorizationExtractor};
 use macro_user_id::cow_str::CowLike;
 use macro_user_id::user_id::MacroUserIdStr;
-use model::response::ErrorResponse;
 use models_email::service::thread::GetThreadOwnerResponse;
+use shared_types::response::ErrorResponse;
 use uuid::Uuid;
 
 #[tracing::instrument(skip(ctx))]

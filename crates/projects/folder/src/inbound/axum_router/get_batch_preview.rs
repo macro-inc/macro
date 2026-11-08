@@ -5,7 +5,7 @@ use entity_access::domain::ports::EntityAccessService;
 use macro_authorization::{
     MacroAuthorizationService, OptionalMacroAuthorizationExtractor, UserOrInternalService,
 };
-use model::project::{
+use shared_types::project::{
     request::GetBatchProjectPreviewRequest, response::GetBatchProjectPreviewResponse,
 };
 
@@ -20,8 +20,8 @@ use crate::domain::{models::ProjectError, ports::ProjectService};
     operation_id = "get_batch_project_preview",
     responses(
         (status = 200, body = GetBatchProjectPreviewResponse),
-        (status = 401, body = model::response::GenericErrorResponse),
-        (status = 500, body = model::response::GenericErrorResponse),
+        (status = 401, body = shared_types::response::GenericErrorResponse),
+        (status = 500, body = shared_types::response::GenericErrorResponse),
     )
 )]
 #[tracing::instrument(

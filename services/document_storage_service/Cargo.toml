@@ -206,7 +206,7 @@ macro_user_id = { workspace = true }
 mcp_client = { workspace = true }
 macro_uuid = { workspace = true }
 mockall = { workspace = true }
-model = { workspace = true, features = ["axum"] }
+shared_types = { workspace = true, features = ["axum"] }
 model_entity = { workspace = true }
 model_notifications = { workspace = true }
 model_owner = { workspace = true }

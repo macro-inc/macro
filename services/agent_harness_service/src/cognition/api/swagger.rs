@@ -48,7 +48,7 @@ use ai_chat::inbound::http::router::{
     UpdateToolResponseRequest,
 };
 
-use model::{
+use shared_types::{
     chat::{
         AttachmentMetadata, AttachmentType, Chat, ChatAttachment, ChatHistory, ChatMessage,
         ChatMessageWithAttachments, ConversationRecord, MessageWithAttachments, NewAttachment,
@@ -58,9 +58,9 @@ use model::{
     version::DocumentCognitionServiceApiVersion,
 };
 
-use model::citations::DocumentTextPart;
 use models_dcs::api::ChatHistoryBatchMessagesRequest;
 use models_permissions::share_permission::channel_share_permission::UpdateOperation;
+use shared_types::citations::DocumentTextPart;
 use utoipa::OpenApi;
 
 // TODO: update to a real license - I added this bc it's required by orval

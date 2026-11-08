@@ -9,10 +9,10 @@ use entity_registry::CreationPrincipalExtractor;
 use macro_authorization::{
     MacroAuthorizationExtractor, MacroAuthorizationService, UserOrInternal, UserOrInternalCaller,
 };
-use model::document::response::CreateDocumentRequest;
-use model::document::{FileType, FileTypeExt};
 use model_owner::CreationPrincipal;
 use models_permissions::share_permission::access_level::EditAccessLevel;
+use shared_types::document::response::CreateDocumentRequest;
+use shared_types::document::{FileType, FileTypeExt};
 
 use super::DocumentRouterState;
 use crate::domain::models::{

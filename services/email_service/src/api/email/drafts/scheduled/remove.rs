@@ -8,7 +8,7 @@ use email::domain::scheduled::{EmailSchedulingService, ScheduleChange};
 use email::inbound::axum::api_types::DraftEditPrecondition;
 use email::inbound::axum::axum_impls::EmailLinkExtractor;
 use macro_authorization::{MacroAuthorizationExtractor, UserOrInternal};
-use model::response::ErrorResponse;
+use shared_types::response::ErrorResponse;
 use uuid::Uuid;
 
 use super::upsert::UpsertScheduledError;

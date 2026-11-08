@@ -1,6 +1,6 @@
-use model::StringID;
-use model::chat::{AttachmentType, NewChatAttachment};
 use model_entity::EntityType;
+use shared_types::StringID;
+use shared_types::chat::{AttachmentType, NewChatAttachment};
 use sqlx::{Postgres, Transaction};
 
 fn attachment_type_to_entity_type(at: &AttachmentType) -> EntityType {

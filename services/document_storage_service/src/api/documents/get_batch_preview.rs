@@ -10,9 +10,9 @@ use axum::extract::Json;
 use axum::extract::State;
 use axum::response::{IntoResponse, Response};
 use macro_authorization::{OptionalMacroAuthorizationExtractor, UserOrInternalService};
-use model::document::{DocumentPreview, DocumentPreviewV2, WithDocumentId};
-use model::response::{GenericErrorResponse, GenericResponse};
 use reqwest::StatusCode;
+use shared_types::document::{DocumentPreview, DocumentPreviewV2, WithDocumentId};
+use shared_types::response::{GenericErrorResponse, GenericResponse};
 
 #[tracing::instrument(
     skip(ctx, user, req),

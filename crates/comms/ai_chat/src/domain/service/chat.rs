@@ -245,7 +245,7 @@ where
     async fn get_metadata(
         &self,
         entity_access_receipt: EntityAccessReceipt<ViewAccessLevel>,
-    ) -> Result<model::chat::Chat> {
+    ) -> Result<shared_types::chat::Chat> {
         self.repo
             .get_metadata(&entity_access_receipt.entity().entity_id)
             .await

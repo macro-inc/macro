@@ -51,7 +51,7 @@ where
     ) -> Result<
         (
             entity_access::domain::models::EntityAccessReceipt<ViewAccessLevel>,
-            model::document::DocumentBasic,
+            shared_types::document::DocumentBasic,
         ),
         SessionTaskError,
     > {

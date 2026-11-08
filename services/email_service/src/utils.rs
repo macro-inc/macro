@@ -1,6 +1,6 @@
 use axum::Json;
 use axum::http::StatusCode;
-use model::response::ErrorResponse;
+use shared_types::response::ErrorResponse;
 
 /// User IDs are expected to be in the format "macro|email@example.com"
 /// Returns the email or an error if the email is invalid

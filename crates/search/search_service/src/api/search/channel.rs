@@ -378,9 +378,9 @@ pub async fn name_handler(
     ),
     responses(
         (status = 200, body=ChannelSearchResponse),
-        (status = 400, body=model::response::ErrorResponse),
-        (status = 401, body=model::response::ErrorResponse),
-        (status = 500, body=model::response::ErrorResponse),
+        (status = 400, body=shared_types::response::ErrorResponse),
+        (status = 401, body=shared_types::response::ErrorResponse),
+        (status = 500, body=shared_types::response::ErrorResponse),
     )
 )]
 #[tracing::instrument(

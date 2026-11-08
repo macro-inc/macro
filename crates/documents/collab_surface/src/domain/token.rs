@@ -1,7 +1,7 @@
 //! Minting sync-service connection tokens for collab surfaces.
 //!
 //! A surface token is the same JWT shape the sync service already validates
-//! for documents ([`model::document::DocumentPermissionsToken`], signed with
+//! for documents ([`shared_types::document::DocumentPermissionsToken`], signed with
 //! the shared `document_permission_jwt` secret): the worker string-compares
 //! the `document_id` claim against its session key, so a surface id flows
 //! through the existing claim unchanged. Deliberately not lifted into
@@ -13,9 +13,9 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use entity_access::domain::models::EntityPermission;
 use macro_sync_service_jwt::{DocumentPermissionToken, ISSUER, TOKEN_TTL_SECS};
 use macro_user_id::user_id::MacroUserIdStr;
-use model::document::DocumentPermissionsToken;
 use model_entity::EntityType;
 use models_permissions::share_permission::access_level::AccessLevel;
+use shared_types::document::DocumentPermissionsToken;
 
 use crate::domain::models::CollabSurfaceError;
 

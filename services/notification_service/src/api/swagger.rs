@@ -1,10 +1,6 @@
 extern crate notification as notification_crate;
 
 use crate::notification::send::push::PushNotificationData;
-use model::{
-    response::{EmptyResponse, ErrorResponse},
-    version::NotificationServiceApiVersion,
-};
 use model_notifications::{
     ChannelInviteMetadata, ChannelMentionMetadata, ChannelMessageReactionMetadata,
     ChannelMessageSendMetadata, ChannelReplyMetadata, CommentedOnDocumentMetadata,
@@ -14,6 +10,10 @@ use model_notifications::{
     GithubPrReview, GithubPrReviewState, GithubPrStatusChanged, GithubReviewRequested,
     InviteToTeamMetadata, ItemSharedMetadata, NewEmailMetadata,
     RepliedToDocumentCommentThreadMetadata, UserUnsubscribe,
+};
+use shared_types::{
+    response::{EmptyResponse, ErrorResponse},
+    version::NotificationServiceApiVersion,
 };
 use utoipa::OpenApi;
 

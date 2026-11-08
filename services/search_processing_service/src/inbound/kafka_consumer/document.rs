@@ -2,7 +2,7 @@
 
 use documents::domain::events::{DocumentMacroEvent, DocumentTopicEvent};
 use macro_event_broker::MacroEvent as _;
-use model::document::FileType;
+use shared_types::document::FileType;
 use sqs_client::search::document::SearchExtractorMessage;
 
 use super::{

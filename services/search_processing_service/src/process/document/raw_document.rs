@@ -5,7 +5,6 @@ use chrono::Utc;
 use document_sub_type::DocumentSubType;
 use lexical_client::types::MarkdownParseResult;
 use macro_db_client::document::get_document_version_id;
-use model::document::{DocumentMetadata, FileType};
 use model_owner::Owner;
 use models_properties::EntityType;
 use models_search::unified::is_searchable_file_type;
@@ -17,6 +16,7 @@ use s3_key::{
     CONVERTED_DOCUMENT_FILE_NAME, build_cloud_storage_bucket_document_key,
     build_docx_to_pdf_converted_document_key,
 };
+use shared_types::document::{DocumentMetadata, FileType};
 
 #[cfg(all(feature = "pdf", not(feature = "no_pdf")))]
 use crate::parsers::pdf::parse_pdf_pages;

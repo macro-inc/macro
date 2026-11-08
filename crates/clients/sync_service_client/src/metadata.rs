@@ -1,4 +1,4 @@
-use model::sync_service::DocumentMetadata;
+use shared_types::sync_service::DocumentMetadata;
 
 use super::SyncServiceClient;
 use anyhow::Result;

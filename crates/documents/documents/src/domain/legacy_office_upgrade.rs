@@ -15,8 +15,8 @@
 
 use std::future::Future;
 
-use model::document::{DocumentBasic, FileType};
 use model_owner::Owner;
+use shared_types::document::{DocumentBasic, FileType};
 
 use super::content::{DocumentContent, DocumentContentLocation};
 use super::models::DocumentError;

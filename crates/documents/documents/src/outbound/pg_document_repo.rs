@@ -16,9 +16,9 @@ use document_sub_type::DocumentSubType;
 use entity_registry::BotFacts;
 use entity_registry_db_utils::{NewEntityRecord, OwnedEntityRegistrar, RegisteredEntityType};
 use macro_user_id::{cow_str::CowLike, user_id::MacroUserIdStr};
-use model::document::{DocumentBasic, DocumentMetadata};
 use model_owner::Owner;
 use models_permissions::share_permission::{LinkShare, SharePermissionV2, TeamLinkShareDefault};
+use shared_types::document::{DocumentBasic, DocumentMetadata};
 use sqlx::PgPool;
 
 use model_entity::{Entity, EntityType};
@@ -1274,7 +1274,7 @@ impl<B: BotFacts + 'static> DocumentRepo for PgDocumentRepo<B> {
         let mut transaction = self.pool.begin().await?;
 
         let document = match file_type {
-            Some(model::document::FileType::Docx) => {
+            Some(shared_types::document::FileType::Docx) => {
                 copy::copy_docx_document(
                     &mut transaction,
                     &original_document,

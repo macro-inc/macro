@@ -1,6 +1,6 @@
 use super::*;
-use model::document::DocumentBasic;
 use model_owner::Owner;
+use shared_types::document::DocumentBasic;
 
 const DOCUMENT: &str = "019fd3b9-3c6c-7c05-89c2-a27f01218141";
 

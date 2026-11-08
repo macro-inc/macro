@@ -1,6 +1,6 @@
 use crate::api::search::simple::SearchError;
 use item_filters::DocumentFilters;
-use model::item::{ShareableItem, ShareableItemType, UserAccessibleItem};
+use shared_types::item::{ShareableItem, ShareableItemType, UserAccessibleItem};
 
 use crate::api::context::SearchHandlerState;
 

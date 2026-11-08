@@ -38,7 +38,7 @@ properties = { workspace = true, features = [
 system_properties = { workspace = true }
 readonly_pool = { workspace = true }
 macro_user_id = { workspace = true }
-model = { workspace = true }
+shared_types = { workspace = true }
 models_email = { workspace = true }
 models_opensearch = { workspace = true }
 models_search = { workspace = true }

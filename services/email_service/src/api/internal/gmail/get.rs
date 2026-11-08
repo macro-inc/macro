@@ -5,8 +5,8 @@ use axum::{
     response::{IntoResponse, Json, Response},
 };
 use macro_authorization::{InternalOnly, MacroAuthorizationExtractor};
-use model::response::ErrorResponse;
 use models_email::email::service::backfill::BackfillJob;
+use shared_types::response::ErrorResponse;
 use sqlx::PgPool;
 use sqlx::types::Uuid;
 use utoipa::ToSchema;

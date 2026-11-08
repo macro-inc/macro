@@ -2,7 +2,7 @@
 
 use std::future::Future;
 
-use model::sync_service::SyncServiceVersionID;
+use shared_types::sync_service::SyncServiceVersionID;
 
 /// Durable collaborative content, independent of the document's editor schema.
 #[cfg_attr(test, mockall::automock)]

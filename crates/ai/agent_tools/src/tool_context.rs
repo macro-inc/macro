@@ -1690,7 +1690,7 @@ impl ToolEntityCreator {
                 let document =
                     documents::domain::create::NewPlainTextDocument::builder(metadata.build())
                         .file_type(
-                            model::document::FileType::from_str("md")
+                            shared_types::document::FileType::from_str("md")
                                 .expect("md is a valid file type"),
                         )
                         .text(markdown)

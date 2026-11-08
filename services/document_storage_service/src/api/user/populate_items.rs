@@ -1,7 +1,7 @@
 use crate::api::context::AuthorizationService;
 use axum::{http::StatusCode, response::IntoResponse};
 use macro_authorization::{MacroAuthorizationExtractor, UserOrInternal};
-use model::response::{GenericErrorResponse, GenericResponse, GenericSuccessResponse};
+use shared_types::response::{GenericErrorResponse, GenericResponse, GenericSuccessResponse};
 
 /// Populates the users items
 #[utoipa::path(

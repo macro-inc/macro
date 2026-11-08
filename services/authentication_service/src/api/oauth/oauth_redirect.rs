@@ -18,11 +18,11 @@ use axum::{
 };
 use macro_auth::middleware::decode_jwt::decode_macro_access_token_allow_expired;
 use maud::{DOCTYPE, Markup, html};
-use model::response::ErrorResponse;
 use referral::domain::{models::ReferralCode, ports::ReferralService};
 use reqwest::{Url, header::CONTENT_TYPE};
 use serde::Deserialize;
 use serde_utils::JsonEncoded;
+use shared_types::response::ErrorResponse;
 use std::time::Duration;
 use thiserror::Error;
 use tokio::time::sleep;

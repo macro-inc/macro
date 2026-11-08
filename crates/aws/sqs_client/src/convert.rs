@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
 use anyhow::Context;
-use model::convert::ConvertQueueMessage;
+use shared_types::convert::ConvertQueueMessage;
 
 use crate::{SQS, message_attribute::build_string_message_attribute};
 

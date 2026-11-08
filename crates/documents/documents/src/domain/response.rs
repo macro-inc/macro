@@ -2,10 +2,10 @@
 
 use std::str::FromStr;
 
-use model::document::response::DocumentResponseMetadata;
-use model::document::{DocumentBasic, DocumentMetadata, FileType};
-use model::response::{PresignedUrl, TypedSuccessResponse};
 use models_permissions::share_permission::access_level::AccessLevel;
+use shared_types::document::response::DocumentResponseMetadata;
+use shared_types::document::{DocumentBasic, DocumentMetadata, FileType};
+use shared_types::response::{PresignedUrl, TypedSuccessResponse};
 
 use super::content::DocumentContent;
 use super::models::TeamTaskMetadata;
@@ -119,7 +119,7 @@ pub struct CreateDocumentResponseData {
 impl CreateDocumentResponseData {
     /// Attach content metadata to a legacy create response.
     pub fn from_legacy(
-        legacy: model::document::response::CreateDocumentResponseData,
+        legacy: shared_types::document::response::CreateDocumentResponseData,
         content: DocumentContent,
     ) -> Self {
         Self {

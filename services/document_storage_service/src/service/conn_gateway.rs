@@ -1,6 +1,6 @@
 use connection_gateway_client::client::ConnectionGatewayClient;
-use model::annotations::AnnotationIncrementalUpdate;
 use model_entity::EntityType;
+use shared_types::annotations::AnnotationIncrementalUpdate;
 
 #[tracing::instrument(skip(client))]
 pub async fn update_live_comment_state(

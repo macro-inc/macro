@@ -15,13 +15,13 @@ use lambda_runtime::{
 };
 use macro_entrypoint::MacroEntrypoint;
 use macro_env_var::env_vars;
-use model::{
-    document::{FileType, FileTypeExt},
-    folder::{FileSystemNodeWithIds, FolderItem, S3Destination, S3DestinationMap},
-};
 use model_entity::EntityType;
 use models_bulk_upload::{UploadDocumentStatus, UploadFolderStatus, UploadFolderStatusUpdate};
 use sha2::{Digest, Sha256};
+use shared_types::{
+    document::{FileType, FileTypeExt},
+    folder::{FileSystemNodeWithIds, FolderItem, S3Destination, S3DestinationMap},
+};
 use sqs_client::upload_extractor::UploadExtractQueueMessage;
 use std::ffi::OsStr;
 use std::path::Path;
@@ -681,8 +681,8 @@ async fn main() -> Result<(), Error> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use model::document::FileType;
-    use model::folder::FolderItem;
+    use shared_types::document::FileType;
+    use shared_types::folder::FolderItem;
     use std::fs::{self, File};
     use std::io::Write;
     use std::path::PathBuf;

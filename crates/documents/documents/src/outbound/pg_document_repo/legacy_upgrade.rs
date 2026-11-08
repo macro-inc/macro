@@ -1,7 +1,7 @@
 //! Persistence for swapping a legacy Office document to its OpenXML upgrade.
 
 use entity_registry::BotFacts;
-use model::document::FileType;
+use shared_types::document::FileType;
 
 use crate::domain::content::DocumentContent;
 use crate::domain::legacy_office_upgrade::LegacyOfficeUpgradeRepoPort;
