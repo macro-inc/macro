@@ -68,6 +68,11 @@ word docs, Illustrator/Photoshop files).
   an acting user; a bot caller's id rides in the worker token as the actor.
   Caller-fixable failures (`PresentationError`, `WordDocumentRejected`, the
   readers' errors) are 400s.
+- `src/domain/text_comment.rs`: a comment thread anchored to quoted text, shared
+  by the `CommentOnText` tool and `POST /{id}/comments/text` (the SDK's
+  `Document.commentOnText`). Markdown places the mark first and removes it if
+  the post fails; 422 `quote_not_placed` is an ambiguous or missing quote. Word
+  posts with the quote for the editor to place.
 - `axum_router/upload_file.rs`: `POST /upload` takes a file's raw bytes (25 MiB)
   and runs UploadFile's `DocumentCreator::upload_file`, minting the project
   receipt from the caller like the tool. It exists for clients that cannot PUT

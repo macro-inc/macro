@@ -23098,6 +23098,231 @@ export const readCanvasSceneResponse = zod
   .describe('The live scene at one revision.');
 
 /**
+ * @summary Start a comment thread anchored to a quoted passage of a markdown or Word
+document, with the caller's comment access. On markdown the passage is
+marked in the live document first, and nothing is posted when the quote is
+ambiguous or missing.
+ */
+export const commentOnDocumentTextParams = zod.object({
+  document_id: zod.string().describe('Document identity'),
+});
+
+export const commentOnDocumentTextBody = zod
+  .object({
+    content: zod.string().describe('Comment body in macro markdown.'),
+    mentions: zod
+      .array(
+        zod
+          .object({
+            entity_id: zod.string().describe('Mentioned entity identifier.'),
+            entity_type: zod.string().describe('Mentioned entity type.'),
+          })
+          .describe('A mention tracked in a message body.')
+      )
+      .optional()
+      .describe(
+        'The people and items the body mentions, notified as in any comment.'
+      ),
+    occurrence: zod
+      .number()
+      .min(1)
+      .nullish()
+      .describe(
+        'Which appearance of the passage, counting from 1 in document order.\nOnly needed when it appears more than once.'
+      ),
+    quote: zod
+      .string()
+      .min(1)
+      .describe(
+        'The passage to comment on, quoted exactly as the document reads: plain\ntext without markdown syntax, within one paragraph, heading, list item\nor table cell.'
+      ),
+  })
+  .describe('A comment on a quoted passage.');
+
+export const commentOnDocumentTextResponse = zod
+  .object({
+    comment: zod
+      .object({
+        attachments: zod
+          .array(
+            zod
+              .object({
+                created_at: zod.iso
+                  .datetime({})
+                  .describe('When the attachment was added.'),
+                entity_id: zod.string().describe('Attached entity identifier.'),
+                entity_type: zod.string().describe('Attached entity type.'),
+                height: zod
+                  .number()
+                  .nullish()
+                  .describe('Optional media height.'),
+                id: zod.uuid().describe('Attachment UUID.'),
+                width: zod.number().nullish().describe('Optional media width.'),
+              })
+              .describe('An entity attached to a message.')
+          )
+          .describe('Attached entities.'),
+        bot_profile: zod
+          .union([
+            zod.null(),
+            zod
+              .object({
+                avatar_url: zod.string().nullish().describe('Bot avatar URL.'),
+                name: zod.string().describe('Bot display name.'),
+              })
+              .describe(
+                'Public bot profile attached to bot-authored messages.'
+              ),
+          ])
+          .optional(),
+        content: zod.string().describe('Macro Markdown body.'),
+        created_at: zod.iso.datetime({}).describe('Creation time.'),
+        deleted_at: zod.iso
+          .datetime({})
+          .nullish()
+          .describe('Message tombstone, independent of thread deletion.'),
+        edited_at: zod.iso
+          .datetime({})
+          .nullish()
+          .describe('Last content edit, if any.'),
+        guest_name: zod
+          .string()
+          .nullish()
+          .describe(
+            'Display name of a verified call guest, retained after the call ends.'
+          ),
+        id: zod.uuid().describe('Message UUID.'),
+        imported_author: zod
+          .union([
+            zod.null(),
+            zod
+              .object({
+                name: zod
+                  .string()
+                  .describe(
+                    'Original author text; never interpreted as an authenticated principal.'
+                  ),
+              })
+              .describe(
+                'Display attribution for a comment imported from an external document.'
+              ),
+          ])
+          .optional(),
+        kind: zod
+          .enum(['message', 'call_root'])
+          .optional()
+          .describe(
+            'What a persisted message is. Set by the server, never by a client.'
+          ),
+        mentions: zod
+          .array(
+            zod
+              .object({
+                entity_id: zod
+                  .string()
+                  .describe('Mentioned entity identifier.'),
+                entity_type: zod.string().describe('Mentioned entity type.'),
+              })
+              .describe('A mention tracked in a message body.')
+          )
+          .describe(
+            'Tracked mentions, retained when a caller changes attachments only.'
+          ),
+        parent: zod
+          .union([
+            zod
+              .object({
+                id: zod
+                  .uuid()
+                  .describe('A channel, including direct messages.'),
+                type: zod.enum(['channel']),
+              })
+              .describe('A channel, including direct messages.'),
+            zod
+              .object({
+                id: zod
+                  .string()
+                  .describe(
+                    'A validated document identifier. Historical document ids need not be UUIDs.'
+                  ),
+                type: zod.enum(['document']),
+              })
+              .describe('A document, including tasks and PDFs.'),
+            zod
+              .object({
+                id: zod
+                  .uuid()
+                  .describe(
+                    'An initiative, presented as a project in the application.'
+                  ),
+                type: zod.enum(['initiative']),
+              })
+              .describe(
+                'An initiative, presented as a project in the application.'
+              ),
+            zod
+              .object({
+                id: zod.uuid().describe('A CRM company.'),
+                type: zod.enum(['crm_company']),
+              })
+              .describe('A CRM company.'),
+            zod
+              .object({
+                id: zod.uuid().describe('A CRM contact.'),
+                type: zod.enum(['crm_contact']),
+              })
+              .describe('A CRM contact.'),
+            zod
+              .object({
+                id: zod
+                  .uuid()
+                  .describe('A video call and its persistent chat thread.'),
+                type: zod.enum(['call']),
+              })
+              .describe('A video call and its persistent chat thread.'),
+          ])
+          .describe(
+            'The entity whose permissions and lifecycle govern a message.'
+          ),
+        reactions: zod
+          .array(
+            zod
+              .object({
+                emoji: zod.string().describe('Emoji being reacted with.'),
+                users: zod.array(zod.string()).describe('User identifiers.'),
+              })
+              .describe('Reaction emoji and the users who added it.')
+          )
+          .describe('Aggregated reactions.'),
+        sender_id: zod
+          .string()
+          .describe('Authenticated actor or owner of imported content.'),
+        thread_id: zod
+          .uuid()
+          .nullish()
+          .describe('Root message UUID for replies; absent on roots.'),
+        triggered_by: zod
+          .string()
+          .nullish()
+          .describe('User who triggered a bot-authored message.'),
+        triggered_via: zod
+          .string()
+          .nullish()
+          .describe(
+            'Self-reported name of the client the user triggered it through, such\nas \"Claude Code\"; a display label only.'
+          ),
+        updated_at: zod.iso.datetime({}).describe('Last persisted update.'),
+      })
+      .describe(
+        'Shared message representation for channel timelines and entity discussions.'
+      ),
+    markedText: zod
+      .string()
+      .describe('The text the comment is anchored to, as the document reads.'),
+  })
+  .describe('The thread the comment started.');
+
+/**
  * Copies an existing document, creating a new document with the same content.
 Does not require re-uploading the document file.
  * @summary Handler for `POST /documents/{document_id}/copy`.
