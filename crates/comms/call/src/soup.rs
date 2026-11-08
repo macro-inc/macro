@@ -2,7 +2,7 @@
 
 use crate::domain::models::{CallRecord, CallRecordParticipant};
 use item_filters::CallStatus;
-use models_soup::call_record::{SoupCallRecord, SoupCallRecordGuest, SoupCallRecordParticipant};
+use soup_types::call_record::{SoupCallRecord, SoupCallRecordGuest, SoupCallRecordParticipant};
 
 #[cfg(test)]
 mod test;

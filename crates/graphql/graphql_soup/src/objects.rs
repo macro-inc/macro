@@ -9,7 +9,12 @@ use graphql_common::{
 use graphql_email::GraphqlEmailLabel;
 use graphql_permission::GraphqlEntityPermission;
 use macro_user_id::user_id::MacroUserIdStr;
-use models_soup::{
+use pagination_types::PaginatedOpaqueCursor;
+use predicate_index::RecordKey;
+use serde_json::Value;
+use soup::domain::models::{EnrichedSoupItem, SoupProjectionHydration, grouping::GroupedResponse};
+use soup_filter_projection::{encode_cache_projection_supplement, project_soup_cache_supplement};
+use soup_types::{
     agent_session::{AgentPullRequestState, AgentSessionArchiveCause, SoupAgentSession},
     calendar_event::SoupCalendarEvent,
     call_record::{SoupCallRecord, SoupCallRecordGuest, SoupCallRecordParticipant},
@@ -27,11 +32,6 @@ use models_soup::{
     item::SoupItem,
     project::SoupProject,
 };
-use pagination_types::PaginatedOpaqueCursor;
-use predicate_index::RecordKey;
-use serde_json::Value;
-use soup::domain::models::{EnrichedSoupItem, SoupProjectionHydration, grouping::GroupedResponse};
-use soup_filter_projection::{encode_cache_projection_supplement, project_soup_cache_supplement};
 use uuid::Uuid;
 
 use crate::loaders::SoupItemDataLoader;
@@ -1842,9 +1842,9 @@ impl GraphqlSoupChannelParticipant {
     /// The role.
     async fn role(&self) -> &'static str {
         match self.0.role {
-            models_soup::comms::ParticipantRole::Owner => "owner",
-            models_soup::comms::ParticipantRole::Admin => "admin",
-            models_soup::comms::ParticipantRole::Member => "member",
+            soup_types::comms::ParticipantRole::Owner => "owner",
+            soup_types::comms::ParticipantRole::Admin => "admin",
+            soup_types::comms::ParticipantRole::Member => "member",
         }
     }
 

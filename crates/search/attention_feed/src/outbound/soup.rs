@@ -4,7 +4,6 @@ use std::sync::Arc;
 
 use cow_str::CowLike;
 use email::domain::ports::EmailService;
-use models_soup::item::SoupItem;
 use rootcause::Report;
 use soup::domain::{
     models::{
@@ -12,6 +11,7 @@ use soup::domain::{
     },
     ports::SoupService,
 };
+use soup_types::item::SoupItem;
 
 use crate::domain::{
     models::{

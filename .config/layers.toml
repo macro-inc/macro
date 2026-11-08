@@ -213,7 +213,7 @@ reason = "uses materialize_graphql_filter; move it to a wasm-safe crate"
 
 [[allow]]
 from = "soup-filter-projection"
-to = "models_soup"
+to = "soup_types"
 reason = "projects Soup DTOs in the client; models_soup depends on domains until plan N10"
 
 [[allow]]

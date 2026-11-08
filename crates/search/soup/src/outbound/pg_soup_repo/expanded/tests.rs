@@ -22,9 +22,9 @@ use item_filters::{
 };
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
 use macro_user_id::{cow_str::CowLike, user_id::MacroUserIdStr};
-use models_soup::item::SoupItem;
 use pagination_types::Identify;
 use pagination_types::{Frecency, PaginateOn, Query, SimpleSortMethod};
+use soup_types::item::SoupItem;
 use sqlx::{PgPool, Pool, Postgres};
 use std::collections::HashSet;
 use std::sync::Arc;
@@ -2929,7 +2929,7 @@ async fn test_exhaustive_deep_hierarchy_access(pool: Pool<Postgres>) -> anyhow::
     )
 )]
 async fn test_exhaustive_task_completion_status(pool: Pool<Postgres>) -> anyhow::Result<()> {
-    use models_soup::document::SoupDocumentSubType;
+    use soup_types::document::SoupDocumentSubType;
 
     let user_id = MacroUserIdStr::parse_from_str("macro|user-1@test.com").unwrap();
     let items = expanded_generic_cursor_soup(
@@ -4363,7 +4363,7 @@ async fn test_dyn_task_include_cbm_atm_nc_bypasses_document_filters(
     )
 )]
 async fn test_dyn_task_completion_status(db: PgPool) -> anyhow::Result<()> {
-    use models_soup::document::SoupDocumentSubType;
+    use soup_types::document::SoupDocumentSubType;
 
     let items = dyn_fetch(
         &db,

@@ -41,7 +41,7 @@ in-call chat.
 
 - Depends on: `channels` (feature `outbound`), `agent`/`ai_usage` (call summarization),
   `entity_access_db_utils`, `livekit-api`/`livekit-protocol`.
-- Used by: `memory`, `agent_tools`, `models_soup`, `agent_trigger`, `crm`, `soup`,
+- Used by: `memory`, `agent_tools`, `soup_types`, `agent_trigger`, `crm`, `soup`,
   `calendar_events` (meeting links).
 
 ## Recipes

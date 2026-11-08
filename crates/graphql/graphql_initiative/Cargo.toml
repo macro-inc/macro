@@ -23,7 +23,7 @@ workspace-hack = { version = "0.1", path = "../../workspace-hack" }
 
 [dev-dependencies]
 soup = { workspace = true, features = ["ports"] }
-models_soup = { workspace = true }
+soup_types = { workspace = true }
 pagination_types = { workspace = true }
 properties_types = { workspace = true }
 model_owner = { workspace = true }

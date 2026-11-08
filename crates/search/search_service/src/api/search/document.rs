@@ -1,7 +1,6 @@
 use crate::api::search::simple::SearchError;
 use indexmap::IndexMap;
 use macro_user_id::user_id::MacroUserIdStr;
-use models_soup::SoupProperty;
 use name_search::highlight_name;
 use opensearch_client::search::model::SearchGotoContent;
 use opensearch_types::SearchEntityType;
@@ -10,6 +9,7 @@ use search_types::SearchHighlight;
 use search_types::document::{
     DocumentSearchResponseItem, DocumentSearchResponseItemWithMetadata, DocumentSearchResult,
 };
+use soup_types::SoupProperty;
 use sqlx::types::Uuid;
 use std::collections::HashMap;
 use system_properties::SystemPropertyKey;

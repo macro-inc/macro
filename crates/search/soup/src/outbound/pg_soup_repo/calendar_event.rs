@@ -6,11 +6,11 @@ use item_filters::ast::{
     properties::{PropertiesLiteral, PropertyEntityType, properties_filter_can_apply_to},
 };
 use macro_user_id::user_id::MacroUserIdStr;
-use models_soup::{
+use pagination_types::{Query, SimpleSortMethod};
+use soup_types::{
     calendar_event::{SoupCalendarEvent, SoupCalendarEventTime},
     item::SoupItem,
 };
-use pagination_types::{Query, SimpleSortMethod};
 use sqlx::{FromRow, PgPool, Postgres, QueryBuilder};
 use uuid::Uuid;
 
@@ -258,7 +258,7 @@ fn sort_sql(sort: SimpleSortMethod) -> &'static str {
         // row a reminder surfaces sorts at delivery time rather than at the
         // event's Google last-modified time. GREATEST ignores the NULL when
         // no reminder has fired. Must mirror `cursor_timestamp` in
-        // models_soup or keyset pagination breaks.
+        // soup_types or keyset pagination breaks.
         SimpleSortMethod::UpdatedAt | SimpleSortMethod::ViewedUpdated => {
             "GREATEST(event.updated_at, event.last_reminder_fired_at)"
         }

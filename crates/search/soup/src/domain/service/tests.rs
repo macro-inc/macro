@@ -32,13 +32,13 @@ use item_filters::{
     },
 };
 use model_owner::Owner;
-use models_soup::document::{SoupDocument, SoupDocumentSubType};
 use ordered_float::OrderedFloat;
 use pagination_types::{
     Cursor, CursorVal, CursorWithValAndFilter, FrecencyValue, PaginatedCursor, SimpleSortMethod,
     TypeEraseCursor,
 };
 use rootcause::Report;
+use soup_types::document::{SoupDocument, SoupDocumentSubType};
 use std::sync::{Arc, Mutex};
 use uuid::Uuid;
 
@@ -2549,7 +2549,7 @@ async fn touched_soup_orders_by_touch_and_drops_unhydrated() {
             assert_eq!(params.entities.len(), 1);
             assert_eq!(params.entities[0].entity_type, EntityType::Project);
             Box::pin(async move {
-                Ok(vec![SoupItem::Project(models_soup::project::SoupProject {
+                Ok(vec![SoupItem::Project(soup_types::project::SoupProject {
                     id: project,
                     name: 'p'.to_string(),
                     owner_id: Owner::from_principal_str("macro|test@example.com").unwrap(),
@@ -2776,7 +2776,7 @@ async fn unexpanded_touched_hydrates_projects_in_the_main_query() {
             Box::pin(async move {
                 Ok(vec![
                     SoupItem::Document(soup_document_uuid_with_updated(doc, Default::default())),
-                    SoupItem::Project(models_soup::project::SoupProject {
+                    SoupItem::Project(soup_types::project::SoupProject {
                         id: project,
                         name: 'p'.to_string(),
                         owner_id: Owner::from_principal_str("macro|test@example.com").unwrap(),
@@ -3136,7 +3136,7 @@ async fn notified_soup_refills_after_hydration_drops_and_ends_when_exhausted() {
         .returning(move |params| {
             assert_eq!(params.entities.len(), 1);
             Box::pin(async move {
-                Ok(vec![SoupItem::Project(models_soup::project::SoupProject {
+                Ok(vec![SoupItem::Project(soup_types::project::SoupProject {
                     id: project,
                     name: 'p'.to_string(),
                     owner_id: Owner::from_principal_str("macro|test@example.com").unwrap(),

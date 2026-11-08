@@ -6,9 +6,9 @@ use async_graphql::async_trait::async_trait;
 use chrono::{TimeZone, Utc};
 use graphql_soup::{FoldersQueryError, FoldersQueryReader};
 use macro_user_id::user_id::MacroUserIdStr;
-use models_soup::project::SoupProject;
 use projects_hex::domain::ports::ProjectService;
 use shared_types::project::Project;
+use soup_types::project::SoupProject;
 use uuid::Uuid;
 
 use crate::api::context::ProjectService as DssProjectService;

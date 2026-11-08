@@ -4,7 +4,7 @@ use crate::domain::models::{
     Attachment, Contact, EmailThreadPreview, EnrichedEmailThreadPreview, Label,
     LabelListVisibility, LabelType, MessageListVisibility,
 };
-use models_soup::email_thread::{
+use soup_types::email_thread::{
     SoupAttachment, SoupContact, SoupEmailThreadPreview, SoupEnrichedEmailThreadPreview, SoupLabel,
     SoupLabelListVisibility, SoupLabelType, SoupMessageListVisibility,
 };

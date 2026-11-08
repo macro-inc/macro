@@ -2,8 +2,8 @@ use chrono::DateTime;
 use grouping_types::GroupByField;
 use item_filters::ast::EntityFilterAst;
 use model_owner::Owner;
-use models_soup::{item::SoupItem, project::SoupProject};
 use pagination_types::SimpleSortMethod;
+use soup_types::{item::SoupItem, project::SoupProject};
 use uuid::Uuid;
 
 use super::*;

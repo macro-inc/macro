@@ -17,9 +17,9 @@ use item_filters::ast::{
 };
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
 use macro_user_id::user_id::MacroUserIdStr;
-use models_soup::database_row::SoupDatabaseRow;
 use pagination_types::{Cursor, CursorVal, Identify, Query, SimpleSortMethod};
 use properties_types::service::property_value::PropertyValue;
+use soup_types::database_row::SoupDatabaseRow;
 use std::sync::Arc;
 
 const CRM: Uuid = Uuid::from_u128(0xdb000000_0000_0000_0000_000000000001);

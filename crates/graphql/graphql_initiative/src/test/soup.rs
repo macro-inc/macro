@@ -9,7 +9,6 @@ use graphql_soup::{
 };
 use macro_user_id::user_id::MacroUserIdStr;
 use model_owner::Owner;
-use models_soup::{initiative::SoupInitiative, item::SoupItem};
 use pagination_types::{Paginated, PaginatedCursor, SimpleSortMethod};
 use properties_types::service::property_definition_with_options::PropertyDefinitionWithOptions;
 use soup::domain::{
@@ -19,6 +18,7 @@ use soup::domain::{
     },
     ports::{SoupOutput, SoupService},
 };
+use soup_types::{initiative::SoupInitiative, item::SoupItem};
 use uuid::Uuid;
 
 use super::{RecordingApi, detail, user};
@@ -179,7 +179,7 @@ impl SoupEmailThreadReader for NoThreads {
         _user_id: MacroUserIdStr<'static>,
         _thread_ids: Vec<Uuid>,
     ) -> Result<
-        Vec<models_soup::email_thread::SoupEnrichedEmailThreadPreview<()>>,
+        Vec<soup_types::email_thread::SoupEnrichedEmailThreadPreview<()>>,
         SoupItemLoaderError,
     > {
         unreachable!("initiative hydration must not request email threads")

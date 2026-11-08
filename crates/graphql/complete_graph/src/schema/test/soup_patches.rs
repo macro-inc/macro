@@ -429,7 +429,7 @@ async fn initiative_patches_hydrate_and_delete_the_soup_record() {
 
 #[tokio::test]
 async fn pr_and_linked_session_updates_serialize_current_metadata() {
-    use models_soup::{
+    use soup_types::{
         agent_session::{AgentPullRequestState, SoupAgentSession},
         foreign_entity::SoupForeignEntity,
     };
@@ -471,8 +471,8 @@ async fn pr_and_linked_session_updates_serialize_current_metadata() {
             updated_at: now,
             viewed_at: None,
             extra: (),
-            source: models_soup::agent_session::AgentSessionSource::User,
-            visibility: models_soup::agent_session::AgentSessionVisibility::Listed,
+            source: soup_types::agent_session::AgentSessionSource::User,
+            visibility: soup_types::agent_session::AgentSessionVisibility::Listed,
         }),
     ]);
     let calls = soup.raw_calls.clone();

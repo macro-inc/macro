@@ -12,7 +12,7 @@ ai_tools = [
   "email/ai_tools",
   "email/inbound",
   "email/outbound",
-  "models_soup/schema",
+  "soup_types/schema",
   "outbound",
   "ports",
 ]
@@ -27,7 +27,7 @@ axum = [
   "email/inbound",
   "item_filters/schema",
   "pagination_types/axum",
-  "models_soup/schema",
+  "soup_types/schema",
 ]
 inbound = ["email/inbound", "entity_access/inbound", "ports"]
 outbound = [
@@ -75,7 +75,7 @@ model_owner = { workspace = true }
 grouping_types = { workspace = true }
 pagination_types = { workspace = true }
 properties_types = { workspace = true }
-models_soup = { workspace = true }
+soup_types = { workspace = true }
 non_empty = { workspace = true }
 properties = { workspace = true }
 readonly_pool = { workspace = true, optional = true }

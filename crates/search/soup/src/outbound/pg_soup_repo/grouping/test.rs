@@ -398,7 +398,7 @@ async fn tagged_calendar_event_participates_in_grouped_property_soup(
     assert_eq!(items[0].key, IN_PROGRESS_OPTION_ID);
     assert!(matches!(
         items[0].item,
-        models_soup::item::SoupItem::CalendarEvent(_)
+        soup_types::item::SoupItem::CalendarEvent(_)
     ));
 
     Ok(())
@@ -485,7 +485,7 @@ async fn grouped_recency_sort_uses_reminder_delivery_time(
         },
     )
     .await?
-    .filter(|item| matches!(item.item, models_soup::item::SoupItem::CalendarEvent(_)))
+    .filter(|item| matches!(item.item, soup_types::item::SoupItem::CalendarEvent(_)))
     .map(|item| item.item.id())
     .collect();
 
@@ -726,7 +726,7 @@ async fn grouped_soup_renders_bind_bearing_calendar_literals(
         },
     )
     .await?
-    .filter(|item| matches!(item.item, models_soup::item::SoupItem::CalendarEvent(_)))
+    .filter(|item| matches!(item.item, soup_types::item::SoupItem::CalendarEvent(_)))
     .collect::<Vec<_>>();
 
     assert_eq!(calendar_items.len(), 1);
@@ -854,7 +854,7 @@ async fn grouped_soup_filters_calendar_events_by_notification_done(
         },
     )
     .await?
-    .filter(|item| matches!(item.item, models_soup::item::SoupItem::CalendarEvent(_)))
+    .filter(|item| matches!(item.item, soup_types::item::SoupItem::CalendarEvent(_)))
     .collect::<Vec<_>>();
 
     assert_eq!(

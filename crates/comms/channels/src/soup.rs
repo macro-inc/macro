@@ -6,7 +6,7 @@ use crate::domain::models::{
     RecentChannelMessage, ThreadInfo, ThreadReply,
 };
 use macro_user_id::{cow_str::CowLike, user_id::MacroUserIdStr};
-use models_soup::comms::{
+use soup_types::comms::{
     self as soup, OrganizationId, SoupChannel, SoupChannelThread, SoupCountedReaction,
     SoupMessageAttachment, SoupMessageSender, SoupThreadInfo, SoupThreadReply,
 };

@@ -10,8 +10,8 @@ use email::domain::{
 use filter_ast::Expr;
 use item_filters::ast::email::EmailLiteral;
 use macro_user_id::user_id::MacroUserIdStr;
-use models_soup::email_thread::SoupEnrichedEmailThreadPreview;
 use pagination_types::{Query, SimpleSortMethod};
+use soup_types::email_thread::SoupEnrichedEmailThreadPreview;
 use uuid::Uuid;
 
 /// A fresh, user-scoped snapshot from the same service that performs writes.

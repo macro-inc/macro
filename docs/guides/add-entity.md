@@ -243,7 +243,7 @@ target, but REST Soup still serves users behind `enable-graphql-soup`, so the
 kind must work on both; a kind that only worked on one path showed empty lists
 on the other.
 
-- **Model:** `crates/search/models_soup/src/<kind>.rs` and a `SoupItem` variant in
+- **Model:** `crates/search/soup_types/src/<kind>.rs` and a `SoupItem` variant in
   `item.rs`.
 - **Filters:** `crates/search/item_filters/src/ast/<kind>.rs`, a field on
   `EntityFilterAst` in `ast.rs` (plus `expand_ast` and `IsEmpty`), and

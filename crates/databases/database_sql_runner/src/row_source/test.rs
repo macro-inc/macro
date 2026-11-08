@@ -13,8 +13,6 @@ use database_sql_engine::catalog::Catalog;
 use database_sql_engine::fold::Bin;
 use database_sql_engine::run::{OpsSink, Outcome};
 use databases_types::{DatabaseId, DatabaseOp, OpResult, OptionId, RowId, TableId};
-use models_soup::database_row::SoupDatabaseRow;
-use models_soup::properties::SoupProperty;
 use pagination_types::{Base64Str, Cursor, CursorVal, Paginated};
 use properties_types::service::property_definition::PropertyDefinition;
 use properties_types::service::property_definition_with_options::PropertyDefinitionWithOptions;
@@ -23,6 +21,8 @@ use serde::Deserialize;
 use soup::domain::models::grouping::ItemGroupingInfo;
 use soup::domain::models::{EnrichedSoupItem, IntoSoupReqAst, SoupErr};
 use soup::domain::ports::SoupOutput;
+use soup_types::database_row::SoupDatabaseRow;
+use soup_types::properties::SoupProperty;
 
 use super::*;
 

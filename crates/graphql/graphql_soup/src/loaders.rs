@@ -46,7 +46,6 @@ use item_filters::ast::{
     project::ProjectLiteral,
 };
 use macro_user_id::user_id::MacroUserIdStr;
-use models_soup::{email_thread::SoupEnrichedEmailThreadPreview, item::SoupItem};
 use pagination_types::SimpleSortMethod;
 use rootcause::{
     Report,
@@ -56,6 +55,7 @@ use soup::domain::{
     models::{SoupProjectionHydration, SoupQuery, SoupRequest, SoupSortDirection, SoupType},
     ports::SoupService,
 };
+use soup_types::{email_thread::SoupEnrichedEmailThreadPreview, item::SoupItem};
 use uuid::Uuid;
 
 /// Maximum number of entity keys folded into one user-scoped Soup request.

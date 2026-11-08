@@ -13,12 +13,12 @@ use item_filters::ast::{
     foreign_entity::ForeignEntityLiteral, project::ProjectLiteral,
 };
 use macro_user_id::user_id::MacroUserIdStr;
-use models_soup::item::SoupItem;
 use pagination_types::{SimpleSortMethod, TypeEraseCursor};
 use soup::domain::{
     models::{SoupQuery, SoupRequest, SoupSortDirection, SoupType},
     ports::SoupService,
 };
+use soup_types::item::SoupItem;
 use uuid::Uuid;
 
 use crate::domain::model::{SkillError, SkillSummary};

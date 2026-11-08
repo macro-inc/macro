@@ -118,7 +118,7 @@ tracing = { workspace = true }
 utoipa = { workspace = true, optional = true }
 uuid = { workspace = true }
 workspace-hack = { version = "0.1", path = "../../workspace-hack" }
-models_soup = { workspace = true }
+soup_types = { workspace = true }
 email_api_client_core = { workspace = true, optional = true, features = ["ports"] }
 frecency_core = { workspace = true }
 

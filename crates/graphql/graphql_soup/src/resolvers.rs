@@ -258,8 +258,7 @@ where
             let Some(thread) = loader.read(user_id, thread_id).await? else {
                 return Ok(None);
             };
-            match GraphqlSoupEntity::<Edges>::new(models_soup::item::SoupItem::EmailThread(thread))
-            {
+            match GraphqlSoupEntity::<Edges>::new(soup_types::item::SoupItem::EmailThread(thread)) {
                 GraphqlSoupEntity::EmailThread(thread) => Ok(Some(thread)),
                 _ => Err(async_graphql::Error::new("expected an email thread")),
             }

@@ -110,7 +110,7 @@ tracing-opentelemetry = { workspace = true, optional = true }
 sqlx = { workspace = true, optional = true }
 unfurl = { workspace = true, features = ["ports"], optional = true }
 workspace-hack = { version = "0.1", path = "../../workspace-hack" }
-models_soup = { workspace = true }
+soup_types = { workspace = true }
 
 [dev-dependencies]
 databases = { workspace = true, features = ["postgres", "gateway"] }

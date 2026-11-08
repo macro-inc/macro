@@ -11,9 +11,9 @@ pub use grouping_types::GroupByField;
 use grouping_types::{date_bucket_label, date_bucket_order};
 use indexmap::IndexMap;
 use item_filters::ast::EntityFilterAst;
-use models_soup::item::SoupItem;
 use pagination_types::{Base64Str, CursorVal, CursorWithValAndFilter, Identify, SortOn};
 use serde::Serialize;
+use soup_types::item::SoupItem;
 use std::collections::HashMap;
 use uuid::Uuid;
 

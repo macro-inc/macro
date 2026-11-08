@@ -1,4 +1,4 @@
-# models_soup
+# soup_types
 
 ## What it is
 
@@ -40,7 +40,7 @@ model.
 
 ## Checks
 
-- `cargo test -p models_soup` (`SQLX_OFFLINE` unset).
+- `cargo test -p soup_types` (`SQLX_OFFLINE` unset).
 
 ## Related
 

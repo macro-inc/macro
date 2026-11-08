@@ -1,8 +1,8 @@
 use super::*;
 use chrono::{DateTime, Duration, Utc};
 use item_filters::CallStatus;
-use models_soup::item::SoupItem;
 use pagination_types::{SimpleSortMethod, SortOn};
+use soup_types::item::SoupItem;
 use uuid::Uuid;
 
 fn record_with_participants(user_ids: &[&str]) -> CallRecord {

@@ -217,7 +217,7 @@ pagination_types = { workspace = true, features = [
 ] }
 permissions_types = { workspace = true }
 properties_types = { workspace = true }
-models_soup = { workspace = true, features = ["schema"] }
+soup_types = { workspace = true, features = ["schema"] }
 notification = { workspace = true, default-features = true }
 notification_outbound = { workspace = true }
 notification_inbox = { workspace = true }

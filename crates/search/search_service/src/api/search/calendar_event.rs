@@ -6,13 +6,13 @@ use macro_db_client::calendar_event::get_events_for_search::{
     CalendarEventSearchInfo, get_calendar_events_for_search,
 };
 use macro_user_id::user_id::MacroUserIdStr;
-use models_soup::SoupProperty;
 use properties_types::{EntityReference, EntityType};
 use search_types::calendar_event::{
     CalendarEventMetadata, CalendarEventOrganizer, CalendarEventSearchOccurrence,
     CalendarEventSearchResponseItem, CalendarEventSearchResponseItemWithMetadata,
     CalendarEventSearchResult, CalendarEventSearchRole, CalendarEventSearchTime,
 };
+use soup_types::SoupProperty;
 use sqlx::types::Uuid;
 use std::collections::HashMap;
 use system_properties::SystemPropertyKey;

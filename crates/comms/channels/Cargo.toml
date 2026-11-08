@@ -10,7 +10,7 @@ ai_tools = ["dep:schemars", "ports"]
 # The attachment-rendering port the attachment adapter implements.
 attachment = ["ports"]
 list = [
-  "dep:models_soup",
+  "dep:soup_types",
   "dep:entity_kind",
   "dep:rootcause",
   "ports",
@@ -76,7 +76,7 @@ uuid = { workspace = true }
 async-trait = { workspace = true, optional = true }
 schemars = { workspace = true, optional = true }
 workspace-hack = { version = "0.1", path = "../../workspace-hack" }
-models_soup = { workspace = true, optional = true }
+soup_types = { workspace = true, optional = true }
 frecency_core = { workspace = true, optional = true }
 
 [dev-dependencies]

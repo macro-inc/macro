@@ -1,6 +1,6 @@
 use super::*;
 use crate::domain::ports::{AgentWorkingBranch, AgentWorkingBranches, AgentWorkingBranchesFuture};
-use models_soup::agent_session::{AgentPullRequestState, SoupAgentSession};
+use soup_types::agent_session::{AgentPullRequestState, SoupAgentSession};
 
 #[derive(Default)]
 struct Branches {
@@ -37,8 +37,8 @@ fn agent(id: Uuid, pull_request: Option<&str>) -> SoupCandidate {
         updated_at: Utc::now(),
         viewed_at: None,
         extra: (),
-        source: models_soup::agent_session::AgentSessionSource::User,
-        visibility: models_soup::agent_session::AgentSessionVisibility::Listed,
+        source: soup_types::agent_session::AgentSessionSource::User,
+        visibility: soup_types::agent_session::AgentSessionVisibility::Listed,
     }))
 }
 

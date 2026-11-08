@@ -14,10 +14,10 @@ use crate::{
 };
 use item_filters::ast::EntityFilterAst;
 use macro_user_id::user_id::MacroUserIdStr;
-use models_soup::{SoupProperty, item::SoupItem};
 use pagination_types::{Identify, SortOn};
 use properties_types::service::property_definition_with_options::PropertyDefinitionWithOptions;
 use readonly_pool::ReadOnlyPool;
+use soup_types::{SoupProperty, item::SoupItem};
 use system_properties::SystemPropertyKey;
 
 mod agent_session;
@@ -493,8 +493,8 @@ macro_rules! map_soup_type {
     (@item $row:ident) => {{
         let r = $row;
         match r.item_type.as_ref() {
-            "document" => Ok(::models_soup::item::SoupItem::Document(
-                ::models_soup::document::SoupDocument {
+            "document" => Ok(::soup_types::item::SoupItem::Document(
+                ::soup_types::document::SoupDocument {
                     id: Uuid::parse_str(&r.id).map_err(type_err)?,
                     document_version_id: r
                         .document_version_id
@@ -522,7 +522,7 @@ macro_rules! map_soup_type {
                     created_at: r.created_at,
                     updated_at: r.updated_at,
                     viewed_at: r.viewed_at,
-                    sub_type: ::models_soup::document::SoupDocumentSubType::from_db(
+                    sub_type: ::soup_types::document::SoupDocumentSubType::from_db(
                         r.sub_type,
                         r.is_completed,
                     ),
@@ -530,8 +530,8 @@ macro_rules! map_soup_type {
                     extra: (),
                 },
             )),
-            "chat" => Ok(::models_soup::item::SoupItem::Chat(
-                ::models_soup::chat::SoupChat {
+            "chat" => Ok(::soup_types::item::SoupItem::Chat(
+                ::soup_types::chat::SoupChat {
                     id: Uuid::parse_str(&r.id).map_err(type_err)?,
                     name: r.name,
                     model: r.model,
@@ -551,8 +551,8 @@ macro_rules! map_soup_type {
                     extra: (),
                 },
             )),
-            "project" => Ok(::models_soup::item::SoupItem::Project(
-                ::models_soup::project::SoupProject {
+            "project" => Ok(::soup_types::item::SoupItem::Project(
+                ::soup_types::project::SoupProject {
                     id: Uuid::parse_str(&r.id).map_err(type_err)?,
                     name: r.name,
                     owner_id: ::model_owner::Owner::from_principal_str(&r.user_id)

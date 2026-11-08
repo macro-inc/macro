@@ -4,7 +4,7 @@ use async_graphql::{ID, Object};
 use graphql_common::GraphqlSoupEntityType;
 
 use super::GraphqlEntityMetadata;
-use models_soup::crm_contact::SoupCrmContact;
+use soup_types::crm_contact::SoupCrmContact;
 
 use super::{SoupCacheProjection, SoupEntityEdges, graphql_entity};
 

@@ -29,7 +29,7 @@ ownership. A typed owner reference (`Owner`/`OwnerType`) for Macro entities
 - Used by: nearly every domain crate with typed ownership — `agent_session`,
   `agent_trigger`, `bots`, `channels`, `database_sql_runner`, `documents`,
   `entity_access`, `entity_registry`, `model`, `model_notifications`,
-  `permissions_types`, `models_soup`, `projects`, `scheduled_action`,
+  `permissions_types`, `soup_types`, `projects`, `scheduled_action`,
   `soup`, `teams`, and more.
 
 ## Checks

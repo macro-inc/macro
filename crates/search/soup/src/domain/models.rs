@@ -25,13 +25,13 @@ use item_filters::{
     ast::{EntityFilterAst, ExpandErr},
 };
 use macro_user_id::user_id::MacroUserIdStr;
-use models_soup::SoupProperty;
-use models_soup::item::SoupItem;
 use non_empty::IsEmpty;
 use pagination_types::{
     CursorWithValAndFilter, Frecency, NotifiedAt, Query, SimpleSortMethod, TouchedByMe,
 };
 use serde::{Deserialize, Serialize};
+use soup_types::SoupProperty;
+use soup_types::item::SoupItem;
 use thiserror::Error;
 use uuid::Uuid;
 
@@ -1270,7 +1270,7 @@ fn or_is_ids_only(expr: &Expr<CrmCompanyLiteral>, out: &mut CrmCompanyFilterExtr
 ///
 /// This value is internal hydration state. It is deliberately separate from
 /// public Soup entity models so relation-backed facts do not become business
-/// fields on [`models_soup::document::SoupDocument`].
+/// fields on [`soup_types::document::SoupDocument`].
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SoupDocumentServerFacts {
     /// Whether `document_email` contains a row for the document.

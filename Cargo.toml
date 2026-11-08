@@ -860,7 +860,6 @@ model_file_type = { path = "crates/types/model_file_type" }
 model_notifications = { path = "crates/notifications/model_notifications" }
 model_owner = { path = "crates/types/model_owner" }
 model_user = { path = "crates/types/model_user" }
-models_soup = { path = "crates/search/models_soup" }
 name_search = { path = "crates/search/name_search" }
 native_app_service = { path = "crates/accounts/native_app_service" }
 non_empty = { path = "crates/types/non_empty" }
@@ -925,6 +924,7 @@ soup_property = { path = "crates/types/soup_property" }
 soup_realtime_core = { path = "crates/search/soup_realtime_core" }
 soup_realtime_inbound = { path = "crates/search/soup_realtime_inbound" }
 soup_realtime_outbound = { path = "crates/search/soup_realtime_outbound" }
+soup_types = { path = "crates/search/soup_types" }
 sqs_client = { path = "crates/aws/sqs_client", default-features = false }
 sqs_worker = { path = "crates/aws/sqs_worker" }
 static_file = { path = "crates/documents/static_file", default-features = false }

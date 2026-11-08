@@ -28,16 +28,16 @@ use item_filters::{
         properties::{PropertiesLiteral, PropertyMatchValue},
     },
 };
-use models_soup::{
-    SoupProperty, agent_session::AgentSessionArchiveCause, document::SoupDocumentSubType,
-    item::SoupItem,
-};
 use pagination_types::{SimpleSortMethod, TypeEraseCursor};
 use properties_types::DataType;
 use properties_types::service::property_value::PropertyValue;
 use properties_types::service::tag_sets::{AppliedTag, CallerTagSets, TagFilter, TagMatch};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
+use soup_types::{
+    SoupProperty, agent_session::AgentSessionArchiveCause, document::SoupDocumentSubType,
+    item::SoupItem,
+};
 use uuid::Uuid;
 
 use cow_str::CowLike;

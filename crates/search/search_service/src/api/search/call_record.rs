@@ -1,13 +1,13 @@
 use indexmap::IndexMap;
 use item_filters::CallStatus;
 use macro_user_id::user_id::MacroUserIdStr;
-use models_soup::SoupProperty;
 use opensearch_client::search::model::{SearchGotoContent, SearchHit};
 use properties_types::{EntityReference, EntityType};
 use search_types::call_record::{
     CallRecordMetadata, CallRecordSearchResponseItem, CallRecordSearchResponseItemWithMetadata,
     CallRecordSearchResult,
 };
+use soup_types::SoupProperty;
 use sqlx::types::Uuid;
 use std::collections::HashMap;
 

@@ -155,15 +155,6 @@ use github_pull_requests::inbound::changes_router::{
     ChangedFileDto, ChangesetDto, ChangesetSourceDto, FileChangeKindDto, GitRefDto,
     GithubPullRequestChangesPatchResponse, GithubPullRequestChangesResponse,
 };
-use models_soup::call_record::{SoupCallRecord, SoupCallRecordParticipant};
-use models_soup::chat::SoupChat;
-use models_soup::document::SoupDocument;
-use models_soup::email_thread::{
-    SoupAttachment, SoupContact, SoupEmailThreadPreview, SoupEnrichedEmailThreadPreview, SoupLabel,
-    SoupLabelListVisibility, SoupLabelType, SoupMessageListVisibility,
-};
-use models_soup::foreign_entity::SoupForeignEntity;
-use models_soup::project::SoupProject;
 use permissions_types::share_permission::channel_share_permission::UpdateOperation;
 use project::domain::models::{
     CreateInitiativeRequest, InitialPropertyValue, InitiativeDetail, InitiativeId, InitiativeList,
@@ -215,6 +206,15 @@ use soup::inbound::axum_router::{
     PostGroupedSoupAstRequest, PostSoupAstRequest, PostSoupRequest, PropertyBucketing,
     PropertyDateRange, PropertyDateRanges, SoupApiItem, SoupApiSort, SoupPage,
 };
+use soup_types::call_record::{SoupCallRecord, SoupCallRecordParticipant};
+use soup_types::chat::SoupChat;
+use soup_types::document::SoupDocument;
+use soup_types::email_thread::{
+    SoupAttachment, SoupContact, SoupEmailThreadPreview, SoupEnrichedEmailThreadPreview, SoupLabel,
+    SoupLabelListVisibility, SoupLabelType, SoupMessageListVisibility,
+};
+use soup_types::foreign_entity::SoupForeignEntity;
+use soup_types::project::SoupProject;
 use user_api_key::domain::models::{CreatedUserApiKey, UserApiKeyInfo};
 use user_api_key::inbound::axum_router::{CreateUserApiKeyRequest, UserApiKeysList};
 use utoipa::OpenApi;

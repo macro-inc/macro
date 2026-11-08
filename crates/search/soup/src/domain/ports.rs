@@ -13,13 +13,13 @@ use crate::domain::models::{
 };
 use entity_access::domain::models::{EntityAccessReceipt, MemberTeamRole};
 use macro_user_id::user_id::MacroUserIdStr;
-use models_soup::item::SoupItem;
 use pagination_types::{
     Frecency, NotifiedAt, PaginatedCursor, PaginatedOpaqueCursor, SimpleSortMethod, TouchedByMe,
     TypeEraseCursor,
 };
 use properties_types::service::property_definition_with_options::PropertyDefinitionWithOptions;
 use serde::Serialize;
+use soup_types::item::SoupItem;
 use uuid::Uuid;
 
 /// The head branch captured for an agent session's linked pull request.

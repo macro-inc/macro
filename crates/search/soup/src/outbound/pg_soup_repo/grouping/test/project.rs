@@ -5,7 +5,7 @@ use crate::domain::models::grouping::{GroupLabels, ItemGroupingInfo, build_group
 use document_sub_type::DocumentSubType;
 use entity_kind::EntityType;
 use item_filters::ast::project::ProjectLiteral;
-use models_soup::item::SoupItem;
+use soup_types::item::SoupItem;
 use uuid::{Uuid, uuid};
 
 #[sqlx::test(

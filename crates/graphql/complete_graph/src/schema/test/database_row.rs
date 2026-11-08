@@ -1,5 +1,5 @@
 use super::*;
-use models_soup::database_row::SoupDatabaseRow;
+use soup_types::database_row::SoupDatabaseRow;
 
 #[tokio::test]
 async fn a_row_of_a_named_table_comes_back_with_its_placement() {
