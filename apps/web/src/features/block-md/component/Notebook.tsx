@@ -406,9 +406,12 @@ export function Notebook(props: {
         </div>
         <ParamsProvider state={params}>
           {props.body({
-            autoFocus: props.autoFocus && !isTouchDevice(),
-            showStateDebugger:
-              canUseLexicalStateDebugger() && showLexicalStateDebugger(),
+            get autoFocus() {
+              return props.autoFocus && !isTouchDevice();
+            },
+            get showStateDebugger() {
+              return canUseLexicalStateDebugger() && showLexicalStateDebugger();
+            },
             closeStateDebugger: () => setShowLexicalStateDebugger(false),
           })}
           <DocumentDiscussion editorHasFocus={editorHasFocus()} />
