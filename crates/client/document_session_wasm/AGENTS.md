@@ -12,6 +12,9 @@ Hot editor inputs use wasm-bindgen primitives and reject lone UTF-16 surrogates.
 - `src/machine.rs`: clocks, lifecycle and one handle call per input.
 - `src/output.rs`: owned output envelope and raw framed socket bytes.
 - `src/editor_input.rs`: explicit cold model input adapter; Input has no wire derives.
+- `src/query.rs`: portable HTML, Markdown, clipboard and model queries.
+- `src/router.rs`: shared RouterCore boundary; outer protocol remains unframed.
+- `src/telemetry.rs`: content-free cold native spans forwarded to the host.
 - `src/storage.rs`: durable metadata conversions; no storage I/O in Rust.
 - `packages/collaboration/src/session/`: JS executor and browser adapters.
 

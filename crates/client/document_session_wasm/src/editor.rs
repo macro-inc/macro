@@ -157,12 +157,10 @@ impl EditorSession {
         wall: f64,
     ) -> Result<u32, JsError> {
         let result = match msg {
-            Some(msg) => Ok(storage::loaded(
-                wire::LocalStateMsg::deserialize(&msg)
-                    .map_err(BoundaryError::from)
-                    .map_err(js)?,
-            )
-            .map_err(js)?),
+            Some(msg) => wire::LocalStateMsg::deserialize(&msg)
+                .map_err(BoundaryError::from)
+                .and_then(storage::loaded)
+                .map_err(|_| StorageFailure::Corrupt),
             None => Err(codec::failure(failure).map_err(js)?),
         };
         self.machine
@@ -269,6 +267,10 @@ impl EditorSession {
 impl EditorSession {
     /// DOM-first text input. UTF-16 decoding rejects unpaired surrogates.
     #[wasm_bindgen(js_name=textFromView)]
+    #[expect(
+        clippy::too_many_arguments,
+        reason = "Primitive ABI avoids allocating encoded hot inputs"
+    )]
     pub fn text_from_view(
         &mut self,
         key: u32,
@@ -308,6 +310,10 @@ impl EditorSession {
     }
     /// Install resolved anchor and focus in one crossing.
     #[wasm_bindgen(js_name=selectionFromView)]
+    #[expect(
+        clippy::too_many_arguments,
+        reason = "Primitive ABI avoids allocating encoded hot inputs"
+    )]
     pub fn selection_from_view(
         &mut self,
         anchor_key: u32,
@@ -329,8 +335,18 @@ impl EditorSession {
             )
         };
         let selection = ViewSelection::Range {
-            anchor: point(anchor_key, anchor_offset, anchor_type as u8).map_err(js)?,
-            focus: point(focus_key, focus_offset, focus_type as u8).map_err(js)?,
+            anchor: point(
+                anchor_key,
+                anchor_offset,
+                u8::try_from(anchor_type).map_err(|_| js(BoundaryError::Invalid("point kind")))?,
+            )
+            .map_err(js)?,
+            focus: point(
+                focus_key,
+                focus_offset,
+                u8::try_from(focus_type).map_err(|_| js(BoundaryError::Invalid("point kind")))?,
+            )
+            .map_err(js)?,
             resolution_dirty: false,
         };
         self.machine
@@ -389,6 +405,10 @@ impl EditorSession {
         )
     }
     /// Full IME primitive input, preserving UTF-16 offsets and composition data.
+    #[expect(
+        clippy::too_many_arguments,
+        reason = "Primitive ABI avoids allocating encoded hot inputs"
+    )]
     pub fn composition(
         &mut self,
         kind: u32,
@@ -498,12 +518,16 @@ impl EditorSession {
     }
 }
 impl EditorSession {
-    fn surface(&self) -> &document_session::EditorSurface {
+    pub(crate) fn surface(&self) -> &document_session::EditorSurface {
         let machine::Session::Editor(session) = &self.machine.session else {
             unreachable!("editor session")
         };
         session.surface()
     }
+    #[expect(
+        clippy::too_many_arguments,
+        reason = "Shares the primitive composition ABI implementation"
+    )]
     fn composition_inner(
         &mut self,
         kind: u32,
@@ -541,6 +565,82 @@ impl EditorSession {
     }
 }
 fn utf16(text: js_sys::JsString) -> Result<String, JsError> {
-    String::from_utf16(&text.iter().collect::<Vec<_>>())
-        .map_err(|_| js(BoundaryError::Invalid("LoneSurrogate")))
+    let decoded = text
+        .as_string()
+        .ok_or_else(|| js(BoundaryError::Invalid("string")))?;
+    // JS replaces lone surrogates during UTF-8 transfer. Only ambiguous replacement
+    // characters need the slower code-unit validation; normal typing stays bulk.
+    if decoded.contains('\u{fffd}') {
+        return String::from_utf16(&text.iter().collect::<Vec<_>>())
+            .map_err(|_| js(BoundaryError::Invalid("LoneSurrogate")));
+    }
+    Ok(decoded)
+}
+
+#[wasm_bindgen]
+impl EditorSession {
+    /// Bulk Markdown export: flavor 0 upstream, flavor 1 application indentation.
+    pub fn markdown(&self, flavor: u32) -> Result<String, JsError> {
+        query::markdown(self.surface().state(), flavor, false).map_err(js)
+    }
+    /// Bulk typed read queries; no per-node JavaScript callbacks.
+    pub fn query(&self, msg: &[u8]) -> Result<Vec<u8>, JsError> {
+        query::query(
+            self,
+            wire::QueryMsg::deserialize(msg)
+                .map_err(BoundaryError::from)
+                .map_err(js)?,
+        )
+        .and_then(|reply| bytes(&reply))
+        .map_err(js)
+    }
+    /// Current clipboard formats; kind 0 copy, kind 1 cut uses the same read snapshot.
+    pub fn clipboard(&self, kind: u32) -> Result<Vec<u8>, JsError> {
+        if kind > 1 {
+            return Err(js(BoundaryError::Invalid("clipboard kind")));
+        }
+        query::clipboard(self.surface().state())
+            .and_then(|reply| bytes(&reply))
+            .map_err(js)
+    }
+    /// Development checksum of the complete rendered tree.
+    #[wasm_bindgen(js_name=debugViewChecksum)]
+    pub fn debug_view_checksum(&self) -> Result<u32, JsError> {
+        let json = self
+            .surface()
+            .state()
+            .to_json()
+            .map_err(BoundaryError::from)
+            .map_err(js)?;
+        let serialized = serde_json::to_vec(&json)
+            .map_err(BoundaryError::from)
+            .map_err(js)?;
+        Ok(serialized.iter().fold(2166136261u32, |hash, byte| {
+            (hash ^ u32::from(*byte)).wrapping_mul(16777619)
+        }))
+    }
+    /// Development cross-check for the host insertion predicate.
+    #[wasm_bindgen(js_name=debugShouldPreventDefault)]
+    pub fn debug_should_prevent_default(
+        &self,
+        index: u32,
+        offset: u32,
+        text: js_sys::JsString,
+    ) -> Result<bool, JsError> {
+        let key = editor_input::key(index, self.machine.generation());
+        let range = RangeSelection::new(
+            Point::text(key, Utf16Offset(offset)),
+            Point::text(key, Utf16Offset(offset)),
+        );
+        self.surface()
+            .state()
+            .view()
+            .should_prevent_default_and_insert_text(
+                &range,
+                &utf16(text)?,
+                InsertTextFacts::default(),
+            )
+            .map_err(BoundaryError::from)
+            .map_err(js)
+    }
 }

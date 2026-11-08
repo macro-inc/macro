@@ -3,14 +3,16 @@ use doc_sync_core::*;
 use document_session::*;
 use lexical_model::{EditorMode, Input};
 pub(crate) enum Session {
-    Editor(DocumentSession<EditorSurface>),
-    Doc(DocumentSession<GenericSurface>),
+    Editor(Box<DocumentSession<EditorSurface>>),
+    Doc(Box<DocumentSession<GenericSurface>>),
 }
 pub(crate) struct Machine {
     pub(crate) session: Session,
     pub(crate) output: Vec<u8>,
     pub(crate) wake: Option<Millis>,
     wall_origin: f64,
+    terminal: bool,
+    initial_telemetry: Vec<wire::TelemetryMsg>,
 }
 impl Machine {
     pub(crate) fn create(
@@ -26,6 +28,7 @@ impl Machine {
         let (mut config, headless, view_host) =
             codec::config(wire::SessionConfigMsg::deserialize(config)?)?;
         let now = codec::now(mono, wall)?;
+        let capture = crate::telemetry::begin();
         let session = if editor {
             config.surface = SurfaceConfig::Editor(EditorConfig {
                 view_host,
@@ -36,15 +39,17 @@ impl Machine {
                 },
                 ..EditorConfig::default()
             });
-            Session::Editor(DocumentSession::new(config, now)?)
+            Session::Editor(Box::new(DocumentSession::new(config, now)?))
         } else {
-            Session::Doc(DocumentSession::new(config, now)?)
+            Session::Doc(Box::new(DocumentSession::new(config, now)?))
         };
         Ok(Self {
             session,
             output: vec![],
             wake: None,
             wall_origin: wall - mono,
+            terminal: false,
+            initial_telemetry: capture.finish(),
         })
     }
     pub(crate) fn generation(&self) -> u32 {
@@ -63,17 +68,22 @@ impl Machine {
         if let Some(wall) = wall {
             self.wall_origin = wall - mono;
         }
-        let terminal = matches!(
-            input,
+        match &input {
             SessionInput::Sync(
-                SyncInput::Stop(_) | SyncInput::Host(HostSignal::Hidden | HostSignal::PageHide)
-            )
-        );
+                SyncInput::Stop(_) | SyncInput::Host(HostSignal::Hidden | HostSignal::PageHide),
+            ) => self.terminal = true,
+            SessionInput::Sync(SyncInput::Host(HostSignal::Visible)) => self.terminal = false,
+            _ => {}
+        }
+        let capture = crate::telemetry::begin();
         let out = match &mut self.session {
             Session::Editor(s) => s.handle(now, input),
             Session::Doc(s) => s.handle(now, input),
         };
-        let mut flags = output::encode(out, terminal, &mut self.output)?;
+        let mut flags = output::encode(out, self.terminal, &mut self.output)?;
+        let mut messages = std::mem::take(&mut self.initial_telemetry);
+        messages.extend(capture.finish());
+        flags |= crate::telemetry::append(messages, &mut self.output)?;
         if self.wake != out.wake_at {
             flags |= 4;
             self.wake = out.wake_at;
@@ -129,6 +139,25 @@ impl Machine {
                 },
             }),
             10 => SessionInput::Sync(SyncInput::RequestSnapshot(RequestId(msg.request))),
+            11 => {
+                let msg = wire::RouteMsg::deserialize(&msg.bytes)?;
+                SessionInput::Sync(SyncInput::Route(match msg.kind {
+                    0 => RouteEvent::Subscribed {
+                        conn: ConnId(msg.conn),
+                        access: crate::router::access_value(u32::from(msg.access))?,
+                    },
+                    1 => RouteEvent::Frame {
+                        conn: ConnId(msg.conn),
+                        frame: msg.frame,
+                    },
+                    2 => RouteEvent::Closed {
+                        conn: ConnId(msg.conn),
+                        code: u16::try_from(msg.code)
+                            .map_err(|_| BoundaryError::Invalid("close code"))?,
+                    },
+                    _ => return Err(BoundaryError::Invalid("route event")),
+                }))
+            }
             _ => return Err(BoundaryError::Invalid("session input")),
         };
         self.call(input, mono, Some(wall))

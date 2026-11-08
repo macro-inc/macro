@@ -681,55 +681,34 @@ impl<'raw> ::bebop::SubRecord<'raw> for ClipboardEntryMsg<'raw> {
 
 impl<'raw> ::bebop::Record<'raw> for ClipboardEntryMsg<'raw> {}
 
-#[derive(Clone, Debug, PartialEq)]
-pub struct EditorInputMsg<'raw> {
+#[derive(Clone, Debug, PartialEq, Copy)]
+#[repr(packed)]
+pub struct ModifyTargetMsg {
     pub kind: u8,
-    pub command: CommandCode,
-    pub a: u32,
-    pub b: u32,
-    pub text: &'raw str,
-    pub selection: SelectionMsg<'raw>,
-    pub triple_click: bool,
-    pub clipboard: ::std::vec::Vec<ClipboardEntryMsg<'raw>>,
-    pub html_nodes: ::std::vec::Vec<&'raw str>,
+    pub anchor: PointMsg,
+    pub focus: PointMsg,
+    pub dirty: bool,
+    pub backward: bool,
 }
 
-impl<'raw> ::bebop::SubRecord<'raw> for EditorInputMsg<'raw> {
-    const MIN_SERIALIZED_SIZE: usize =
-        <u8>::MIN_SERIALIZED_SIZE +
-        <CommandCode>::MIN_SERIALIZED_SIZE +
-        <u32>::MIN_SERIALIZED_SIZE +
-        <u32>::MIN_SERIALIZED_SIZE +
-        <&'raw str>::MIN_SERIALIZED_SIZE +
-        <SelectionMsg<'raw>>::MIN_SERIALIZED_SIZE +
-        <bool>::MIN_SERIALIZED_SIZE +
-        <::std::vec::Vec<ClipboardEntryMsg<'raw>>>::MIN_SERIALIZED_SIZE +
-        <::std::vec::Vec<&'raw str>>::MIN_SERIALIZED_SIZE;
+impl ::bebop::FixedSized for ModifyTargetMsg {}
+
+impl<'raw> ::bebop::SubRecord<'raw> for ModifyTargetMsg {
+    const MIN_SERIALIZED_SIZE: usize = Self::SERIALIZED_SIZE;
+    const EXACT_SERIALIZED_SIZE: Option<usize> = Some(Self::SERIALIZED_SIZE);
 
     #[inline]
     fn serialized_size(&self) -> usize {
-        self.kind.serialized_size() +
-        self.command.serialized_size() +
-        self.a.serialized_size() +
-        self.b.serialized_size() +
-        self.text.serialized_size() +
-        self.selection.serialized_size() +
-        self.triple_click.serialized_size() +
-        self.clipboard.serialized_size() +
-        self.html_nodes.serialized_size()
+        Self::SERIALIZED_SIZE
     }
 
-    ::bebop::define_serialize_chained!(Self => |zelf, dest| {
+    ::bebop::define_serialize_chained!(*Self => |zelf, dest| {
         Ok(
-            zelf.kind._serialize_chained(dest)? +
-            zelf.command._serialize_chained(dest)? +
-            zelf.a._serialize_chained(dest)? +
-            zelf.b._serialize_chained(dest)? +
-            zelf.text._serialize_chained(dest)? +
-            zelf.selection._serialize_chained(dest)? +
-            zelf.triple_click._serialize_chained(dest)? +
-            zelf.clipboard._serialize_chained(dest)? +
-            zelf.html_nodes._serialize_chained(dest)?
+            ::bebop::packed_read!(zelf.kind)._serialize_chained(dest)? +
+            ::bebop::packed_read!(zelf.anchor)._serialize_chained(dest)? +
+            ::bebop::packed_read!(zelf.focus)._serialize_chained(dest)? +
+            ::bebop::packed_read!(zelf.dirty)._serialize_chained(dest)? +
+            ::bebop::packed_read!(zelf.backward)._serialize_chained(dest)?
         )
     });
 
@@ -750,27 +729,771 @@ impl<'raw> ::bebop::SubRecord<'raw> for EditorInputMsg<'raw> {
         i += read;
         let (read, v4) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
         i += read;
-        let (read, v5) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
-        i += read;
-        let (read, v6) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
-        i += read;
-        let (read, v7) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
-        i += read;
-        let (read, v8) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
-        i += read;
 
         Ok((i, Self {
             kind: v0,
-            command: v1,
-            a: v2,
-            b: v3,
-            text: v4,
-            selection: v5,
-            triple_click: v6,
-            clipboard: v7,
-            html_nodes: v8,
+            anchor: v1,
+            focus: v2,
+            dirty: v3,
+            backward: v4,
         }))
     }
+}
+
+impl<'raw> ::bebop::Record<'raw> for ModifyTargetMsg {}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct MarkedSelectionMsg<'raw> {
+    pub format: u32,
+    pub style: &'raw str,
+    pub anchor: PointMsg,
+}
+
+impl<'raw> ::bebop::SubRecord<'raw> for MarkedSelectionMsg<'raw> {
+    const MIN_SERIALIZED_SIZE: usize =
+        <u32>::MIN_SERIALIZED_SIZE +
+        <&'raw str>::MIN_SERIALIZED_SIZE +
+        <PointMsg>::MIN_SERIALIZED_SIZE;
+
+    #[inline]
+    fn serialized_size(&self) -> usize {
+        self.format.serialized_size() +
+        self.style.serialized_size() +
+        self.anchor.serialized_size()
+    }
+
+    ::bebop::define_serialize_chained!(Self => |zelf, dest| {
+        Ok(
+            zelf.format._serialize_chained(dest)? +
+            zelf.style._serialize_chained(dest)? +
+            zelf.anchor._serialize_chained(dest)?
+        )
+    });
+
+    fn _deserialize_chained(raw: &'raw [u8]) -> ::bebop::DeResult<(usize, Self)> {
+        let mut i = 0;
+        if raw.len() - i < Self::MIN_SERIALIZED_SIZE {
+            let missing = Self::MIN_SERIALIZED_SIZE - (raw.len() - i);
+            return Err(::bebop::DeserializeError::MoreDataExpected(missing));
+        }
+
+        let (read, v0) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+        i += read;
+        let (read, v1) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+        i += read;
+        let (read, v2) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+        i += read;
+
+        Ok((i, Self {
+            format: v0,
+            style: v1,
+            anchor: v2,
+        }))
+    }
+}
+
+impl<'raw> ::bebop::Record<'raw> for MarkedSelectionMsg<'raw> {}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct RangeSelectionMsg<'raw> {
+    pub anchor: PointMsg,
+    pub focus: PointMsg,
+    pub format: u32,
+    pub style: &'raw str,
+}
+
+impl<'raw> ::bebop::SubRecord<'raw> for RangeSelectionMsg<'raw> {
+    const MIN_SERIALIZED_SIZE: usize =
+        <PointMsg>::MIN_SERIALIZED_SIZE +
+        <PointMsg>::MIN_SERIALIZED_SIZE +
+        <u32>::MIN_SERIALIZED_SIZE +
+        <&'raw str>::MIN_SERIALIZED_SIZE;
+
+    #[inline]
+    fn serialized_size(&self) -> usize {
+        self.anchor.serialized_size() +
+        self.focus.serialized_size() +
+        self.format.serialized_size() +
+        self.style.serialized_size()
+    }
+
+    ::bebop::define_serialize_chained!(Self => |zelf, dest| {
+        Ok(
+            zelf.anchor._serialize_chained(dest)? +
+            zelf.focus._serialize_chained(dest)? +
+            zelf.format._serialize_chained(dest)? +
+            zelf.style._serialize_chained(dest)?
+        )
+    });
+
+    fn _deserialize_chained(raw: &'raw [u8]) -> ::bebop::DeResult<(usize, Self)> {
+        let mut i = 0;
+        if raw.len() - i < Self::MIN_SERIALIZED_SIZE {
+            let missing = Self::MIN_SERIALIZED_SIZE - (raw.len() - i);
+            return Err(::bebop::DeserializeError::MoreDataExpected(missing));
+        }
+
+        let (read, v0) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+        i += read;
+        let (read, v1) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+        i += read;
+        let (read, v2) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+        i += read;
+        let (read, v3) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+        i += read;
+
+        Ok((i, Self {
+            anchor: v0,
+            focus: v1,
+            format: v2,
+            style: v3,
+        }))
+    }
+}
+
+impl<'raw> ::bebop::Record<'raw> for RangeSelectionMsg<'raw> {}
+
+#[derive(Clone, Debug, PartialEq, Default)]
+pub struct SelectionChangeMsg<'raw> {
+    /// Field 1
+    pub triple_click: ::core::option::Option<bool>,
+    /// Field 2
+    pub dom_range_same_node: ::core::option::Option<bool>,
+    /// Field 3
+    pub marked: ::core::option::Option<MarkedSelectionMsg<'raw>>,
+    /// Field 4
+    pub dom_anchor_offset: ::core::option::Option<u32>,
+    /// Field 5
+    pub dom_focus_offset: ::core::option::Option<u32>,
+    /// Field 6
+    pub post_delete_restore: ::core::option::Option<RangeSelectionMsg<'raw>>,
+}
+
+impl<'raw> ::bebop::SubRecord<'raw> for SelectionChangeMsg<'raw> {
+    const MIN_SERIALIZED_SIZE: usize = ::bebop::LEN_SIZE + 1;
+
+    #[inline]
+    fn serialized_size(&self) -> usize {
+        ::bebop::LEN_SIZE + 1 +
+        self.triple_click.as_ref().map(|v| v.serialized_size() + 1).unwrap_or(0) +
+        self.dom_range_same_node.as_ref().map(|v| v.serialized_size() + 1).unwrap_or(0) +
+        self.marked.as_ref().map(|v| v.serialized_size() + 1).unwrap_or(0) +
+        self.dom_anchor_offset.as_ref().map(|v| v.serialized_size() + 1).unwrap_or(0) +
+        self.dom_focus_offset.as_ref().map(|v| v.serialized_size() + 1).unwrap_or(0) +
+        self.post_delete_restore.as_ref().map(|v| v.serialized_size() + 1).unwrap_or(0)
+    }
+
+    ::bebop::define_serialize_chained!(Self => |zelf, dest| {
+        let size = zelf.serialized_size();
+        ::bebop::write_len(dest, size - ::bebop::LEN_SIZE)?;
+        if let Some(ref v) = zelf.triple_click {
+            1u8._serialize_chained(dest)?;
+            v._serialize_chained(dest)?;
+        }
+        if let Some(ref v) = zelf.dom_range_same_node {
+            2u8._serialize_chained(dest)?;
+            v._serialize_chained(dest)?;
+        }
+        if let Some(ref v) = zelf.marked {
+            3u8._serialize_chained(dest)?;
+            v._serialize_chained(dest)?;
+        }
+        if let Some(ref v) = zelf.dom_anchor_offset {
+            4u8._serialize_chained(dest)?;
+            v._serialize_chained(dest)?;
+        }
+        if let Some(ref v) = zelf.dom_focus_offset {
+            5u8._serialize_chained(dest)?;
+            v._serialize_chained(dest)?;
+        }
+        if let Some(ref v) = zelf.post_delete_restore {
+            6u8._serialize_chained(dest)?;
+            v._serialize_chained(dest)?;
+        }
+        0u8._serialize_chained(dest)?;
+        Ok(size)
+    });
+
+    fn _deserialize_chained(raw: &'raw [u8]) -> ::bebop::DeResult<(usize, Self)> {
+        let mut i = 0;
+        let len = ::bebop::read_len(&raw[i..])? + ::bebop::LEN_SIZE;
+        i += ::bebop::LEN_SIZE;
+
+        #[cfg(not(feature = "unchecked"))]
+        if len == 0 {
+            return Err(::bebop::DeserializeError::CorruptFrame);
+        }
+
+        if raw.len() < len {
+            return Err(::bebop::DeserializeError::MoreDataExpected(len - raw.len()));
+        }
+
+        let mut _triple_click = None;
+        let mut _dom_range_same_node = None;
+        let mut _marked = None;
+        let mut _dom_anchor_offset = None;
+        let mut _dom_focus_offset = None;
+        let mut _post_delete_restore = None;
+
+        #[cfg(not(feature = "unchecked"))]
+        let mut last = 0;
+
+        while i < len {
+            let di = raw[i];
+
+            #[cfg(not(feature = "unchecked"))]
+            if di != 0 {
+                if di < last {
+                    return Err(::bebop::DeserializeError::CorruptFrame);
+                }
+                last = di;
+            }
+
+            i += 1;
+            match di {
+                0 => {
+                    break;
+                }
+                1 => {
+                    #[cfg(not(feature = "unchecked"))]
+                    if _triple_click.is_some() {
+                        return Err(::bebop::DeserializeError::DuplicateMessageField);
+                    }
+                    let (read, value) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+                    i += read;
+                    _triple_click = Some(value)
+                }
+                2 => {
+                    #[cfg(not(feature = "unchecked"))]
+                    if _dom_range_same_node.is_some() {
+                        return Err(::bebop::DeserializeError::DuplicateMessageField);
+                    }
+                    let (read, value) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+                    i += read;
+                    _dom_range_same_node = Some(value)
+                }
+                3 => {
+                    #[cfg(not(feature = "unchecked"))]
+                    if _marked.is_some() {
+                        return Err(::bebop::DeserializeError::DuplicateMessageField);
+                    }
+                    let (read, value) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+                    i += read;
+                    _marked = Some(value)
+                }
+                4 => {
+                    #[cfg(not(feature = "unchecked"))]
+                    if _dom_anchor_offset.is_some() {
+                        return Err(::bebop::DeserializeError::DuplicateMessageField);
+                    }
+                    let (read, value) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+                    i += read;
+                    _dom_anchor_offset = Some(value)
+                }
+                5 => {
+                    #[cfg(not(feature = "unchecked"))]
+                    if _dom_focus_offset.is_some() {
+                        return Err(::bebop::DeserializeError::DuplicateMessageField);
+                    }
+                    let (read, value) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+                    i += read;
+                    _dom_focus_offset = Some(value)
+                }
+                6 => {
+                    #[cfg(not(feature = "unchecked"))]
+                    if _post_delete_restore.is_some() {
+                        return Err(::bebop::DeserializeError::DuplicateMessageField);
+                    }
+                    let (read, value) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+                    i += read;
+                    _post_delete_restore = Some(value)
+                }
+                _ => {
+                    i = len;
+                    break;
+                }
+            }
+        }
+
+        if i != len {
+            debug_assert!(i > len);
+            return Err(::bebop::DeserializeError::CorruptFrame)
+        }
+
+        Ok((i, Self {
+            triple_click: _triple_click,
+            dom_range_same_node: _dom_range_same_node,
+            marked: _marked,
+            dom_anchor_offset: _dom_anchor_offset,
+            dom_focus_offset: _dom_focus_offset,
+            post_delete_restore: _post_delete_restore,
+        }))
+    }
+}
+
+impl<'raw> ::bebop::Record<'raw> for SelectionChangeMsg<'raw> {}
+
+#[derive(Clone, Debug, PartialEq)]
+pub enum EditorInputMsg<'raw> {
+    /// An unknown type which is likely defined in a newer version of the schema.
+    Unknown,
+
+    /// Discriminator 1
+    EditorCommand {
+        command: CommandCode,
+        a: u32,
+        b: u32,
+        text: &'raw str,
+        selection: SelectionMsg<'raw>,
+        target: ModifyTargetMsg,
+        character_target: ModifyTargetMsg,
+    },
+
+    /// Discriminator 2
+    EditorSetState {
+        json: &'raw str,
+    },
+
+    /// Discriminator 3
+    EditorSelection {
+        selection: SelectionMsg<'raw>,
+        change: SelectionChangeMsg<'raw>,
+    },
+
+    /// Discriminator 4
+    EditorPaste {
+        selection: SelectionMsg<'raw>,
+        clipboard: ::std::vec::Vec<ClipboardEntryMsg<'raw>>,
+        has_files: bool,
+        html_nodes: ::std::vec::Vec<&'raw str>,
+    },
+
+    /// Discriminator 5
+    EditorInsertText {
+        phase: u8,
+        has_data: bool,
+        data: &'raw str,
+        has_transfer: bool,
+        transfer: &'raw str,
+        facts: u32,
+        last_key: &'raw str,
+        selection: SelectionMsg<'raw>,
+    },
+
+    /// Discriminator 6
+    EditorComposition {
+        kind: u8,
+        key: u32,
+        text: &'raw str,
+        anchor_offset: u32,
+        focus_offset: u32,
+        data: &'raw str,
+        selection: SelectionMsg<'raw>,
+    },
+
+    /// Discriminator 7
+    EditorText {
+        key: u32,
+        text: ::bebop::SliceWrapper<'raw, u16>,
+        anchor_offset: u32,
+        focus_offset: u32,
+        composition_end: bool,
+        composition_data: &'raw str,
+        selection: SelectionMsg<'raw>,
+    },
+}
+
+impl<'raw> ::bebop::SubRecord<'raw> for EditorInputMsg<'raw> {
+    const MIN_SERIALIZED_SIZE: usize = ::bebop::LEN_SIZE + 1;
+
+    fn serialized_size(&self) -> usize {
+        ::bebop::LEN_SIZE + 1 +
+        match self {
+            EditorInputMsg::Unknown => {
+                0
+            }
+            Self::EditorCommand {
+                command: ref _command,
+                a: ref _a,
+                b: ref _b,
+                text: ref _text,
+                selection: ref _selection,
+                target: ref _target,
+                character_target: ref _character_target,
+            }
+            => {
+                _command.serialized_size() +
+                _a.serialized_size() +
+                _b.serialized_size() +
+                _text.serialized_size() +
+                _selection.serialized_size() +
+                _target.serialized_size() +
+                _character_target.serialized_size()
+            }
+            Self::EditorSetState {
+                json: ref _json,
+            }
+            => {
+                _json.serialized_size()
+            }
+            Self::EditorSelection {
+                selection: ref _selection,
+                change: ref _change,
+            }
+            => {
+                _selection.serialized_size() +
+                _change.serialized_size()
+            }
+            Self::EditorPaste {
+                selection: ref _selection,
+                clipboard: ref _clipboard,
+                has_files: ref _has_files,
+                html_nodes: ref _html_nodes,
+            }
+            => {
+                _selection.serialized_size() +
+                _clipboard.serialized_size() +
+                _has_files.serialized_size() +
+                _html_nodes.serialized_size()
+            }
+            Self::EditorInsertText {
+                phase: ref _phase,
+                has_data: ref _has_data,
+                data: ref _data,
+                has_transfer: ref _has_transfer,
+                transfer: ref _transfer,
+                facts: ref _facts,
+                last_key: ref _last_key,
+                selection: ref _selection,
+            }
+            => {
+                _phase.serialized_size() +
+                _has_data.serialized_size() +
+                _data.serialized_size() +
+                _has_transfer.serialized_size() +
+                _transfer.serialized_size() +
+                _facts.serialized_size() +
+                _last_key.serialized_size() +
+                _selection.serialized_size()
+            }
+            Self::EditorComposition {
+                kind: ref _kind,
+                key: ref _key,
+                text: ref _text,
+                anchor_offset: ref _anchor_offset,
+                focus_offset: ref _focus_offset,
+                data: ref _data,
+                selection: ref _selection,
+            }
+            => {
+                _kind.serialized_size() +
+                _key.serialized_size() +
+                _text.serialized_size() +
+                _anchor_offset.serialized_size() +
+                _focus_offset.serialized_size() +
+                _data.serialized_size() +
+                _selection.serialized_size()
+            }
+            Self::EditorText {
+                key: ref _key,
+                text: ref _text,
+                anchor_offset: ref _anchor_offset,
+                focus_offset: ref _focus_offset,
+                composition_end: ref _composition_end,
+                composition_data: ref _composition_data,
+                selection: ref _selection,
+            }
+            => {
+                _key.serialized_size() +
+                _text.serialized_size() +
+                _anchor_offset.serialized_size() +
+                _focus_offset.serialized_size() +
+                _composition_end.serialized_size() +
+                _composition_data.serialized_size() +
+                _selection.serialized_size()
+            }
+        }
+    }
+
+    ::bebop::define_serialize_chained!(Self => |zelf, dest| {
+        let size = zelf.serialized_size();
+        ::bebop::write_len(dest, size - ::bebop::LEN_SIZE - 1)?;
+        match zelf {
+            Self::Unknown => {
+                return Err(::bebop::SerializeError::CannotSerializeUnknownUnion);
+            }
+            Self::EditorCommand {
+                command: ref _command,
+                a: ref _a,
+                b: ref _b,
+                text: ref _text,
+                selection: ref _selection,
+                target: ref _target,
+                character_target: ref _character_target,
+            }
+            => {
+                1u8._serialize_chained(dest)?;
+                _command._serialize_chained(dest)?;
+                _a._serialize_chained(dest)?;
+                _b._serialize_chained(dest)?;
+                _text._serialize_chained(dest)?;
+                _selection._serialize_chained(dest)?;
+                _target._serialize_chained(dest)?;
+                _character_target._serialize_chained(dest)?;
+            }
+            Self::EditorSetState {
+                json: ref _json,
+            }
+            => {
+                2u8._serialize_chained(dest)?;
+                _json._serialize_chained(dest)?;
+            }
+            Self::EditorSelection {
+                selection: ref _selection,
+                change: ref _change,
+            }
+            => {
+                3u8._serialize_chained(dest)?;
+                _selection._serialize_chained(dest)?;
+                _change._serialize_chained(dest)?;
+            }
+            Self::EditorPaste {
+                selection: ref _selection,
+                clipboard: ref _clipboard,
+                has_files: ref _has_files,
+                html_nodes: ref _html_nodes,
+            }
+            => {
+                4u8._serialize_chained(dest)?;
+                _selection._serialize_chained(dest)?;
+                _clipboard._serialize_chained(dest)?;
+                _has_files._serialize_chained(dest)?;
+                _html_nodes._serialize_chained(dest)?;
+            }
+            Self::EditorInsertText {
+                phase: ref _phase,
+                has_data: ref _has_data,
+                data: ref _data,
+                has_transfer: ref _has_transfer,
+                transfer: ref _transfer,
+                facts: ref _facts,
+                last_key: ref _last_key,
+                selection: ref _selection,
+            }
+            => {
+                5u8._serialize_chained(dest)?;
+                _phase._serialize_chained(dest)?;
+                _has_data._serialize_chained(dest)?;
+                _data._serialize_chained(dest)?;
+                _has_transfer._serialize_chained(dest)?;
+                _transfer._serialize_chained(dest)?;
+                _facts._serialize_chained(dest)?;
+                _last_key._serialize_chained(dest)?;
+                _selection._serialize_chained(dest)?;
+            }
+            Self::EditorComposition {
+                kind: ref _kind,
+                key: ref _key,
+                text: ref _text,
+                anchor_offset: ref _anchor_offset,
+                focus_offset: ref _focus_offset,
+                data: ref _data,
+                selection: ref _selection,
+            }
+            => {
+                6u8._serialize_chained(dest)?;
+                _kind._serialize_chained(dest)?;
+                _key._serialize_chained(dest)?;
+                _text._serialize_chained(dest)?;
+                _anchor_offset._serialize_chained(dest)?;
+                _focus_offset._serialize_chained(dest)?;
+                _data._serialize_chained(dest)?;
+                _selection._serialize_chained(dest)?;
+            }
+            Self::EditorText {
+                key: ref _key,
+                text: ref _text,
+                anchor_offset: ref _anchor_offset,
+                focus_offset: ref _focus_offset,
+                composition_end: ref _composition_end,
+                composition_data: ref _composition_data,
+                selection: ref _selection,
+            }
+            => {
+                7u8._serialize_chained(dest)?;
+                _key._serialize_chained(dest)?;
+                _text._serialize_chained(dest)?;
+                _anchor_offset._serialize_chained(dest)?;
+                _focus_offset._serialize_chained(dest)?;
+                _composition_end._serialize_chained(dest)?;
+                _composition_data._serialize_chained(dest)?;
+                _selection._serialize_chained(dest)?;
+            }
+        }
+        Ok(size)
+    });
+
+    fn _deserialize_chained(raw: &'raw [u8]) -> ::bebop::DeResult<(usize, Self)> {
+        let len = ::bebop::read_len(raw)? + ::bebop::LEN_SIZE + 1;
+        let mut i = ::bebop::LEN_SIZE + 1;
+        let de = match raw[::bebop::LEN_SIZE] {
+            1 => {
+                let (read, v0) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+                i += read;
+                let (read, v1) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+                i += read;
+                let (read, v2) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+                i += read;
+                let (read, v3) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+                i += read;
+                let (read, v4) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+                i += read;
+                let (read, v5) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+                i += read;
+                let (read, v6) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+                i += read;
+
+                EditorInputMsg::EditorCommand {
+                    command: v0,
+                    a: v1,
+                    b: v2,
+                    text: v3,
+                    selection: v4,
+                    target: v5,
+                    character_target: v6,
+                }
+            }
+            2 => {
+                let (read, v0) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+                i += read;
+
+                EditorInputMsg::EditorSetState {
+                    json: v0,
+                }
+            }
+            3 => {
+                let (read, v0) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+                i += read;
+                let (read, v1) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+                i += read;
+
+                EditorInputMsg::EditorSelection {
+                    selection: v0,
+                    change: v1,
+                }
+            }
+            4 => {
+                let (read, v0) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+                i += read;
+                let (read, v1) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+                i += read;
+                let (read, v2) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+                i += read;
+                let (read, v3) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+                i += read;
+
+                EditorInputMsg::EditorPaste {
+                    selection: v0,
+                    clipboard: v1,
+                    has_files: v2,
+                    html_nodes: v3,
+                }
+            }
+            5 => {
+                let (read, v0) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+                i += read;
+                let (read, v1) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+                i += read;
+                let (read, v2) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+                i += read;
+                let (read, v3) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+                i += read;
+                let (read, v4) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+                i += read;
+                let (read, v5) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+                i += read;
+                let (read, v6) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+                i += read;
+                let (read, v7) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+                i += read;
+
+                EditorInputMsg::EditorInsertText {
+                    phase: v0,
+                    has_data: v1,
+                    data: v2,
+                    has_transfer: v3,
+                    transfer: v4,
+                    facts: v5,
+                    last_key: v6,
+                    selection: v7,
+                }
+            }
+            6 => {
+                let (read, v0) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+                i += read;
+                let (read, v1) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+                i += read;
+                let (read, v2) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+                i += read;
+                let (read, v3) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+                i += read;
+                let (read, v4) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+                i += read;
+                let (read, v5) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+                i += read;
+                let (read, v6) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+                i += read;
+
+                EditorInputMsg::EditorComposition {
+                    kind: v0,
+                    key: v1,
+                    text: v2,
+                    anchor_offset: v3,
+                    focus_offset: v4,
+                    data: v5,
+                    selection: v6,
+                }
+            }
+            7 => {
+                let (read, v0) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+                i += read;
+                let (read, v1) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+                i += read;
+                let (read, v2) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+                i += read;
+                let (read, v3) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+                i += read;
+                let (read, v4) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+                i += read;
+                let (read, v5) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+                i += read;
+                let (read, v6) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+                i += read;
+
+                EditorInputMsg::EditorText {
+                    key: v0,
+                    text: v1,
+                    anchor_offset: v2,
+                    focus_offset: v3,
+                    composition_end: v4,
+                    composition_data: v5,
+                    selection: v6,
+                }
+            }
+            _ => {
+                i = len;
+                EditorInputMsg::Unknown
+            }
+        };
+        if !cfg!(feature = "unchecked") && i != len {
+            debug_assert!(i > len);
+            Err(::bebop::DeserializeError::CorruptFrame)
+        }
+        else {
+            Ok((i, de))
+        }
+    }
+
 }
 
 impl<'raw> ::bebop::Record<'raw> for EditorInputMsg<'raw> {}
@@ -1593,6 +2316,7 @@ pub struct TelemetryMsg<'raw> {
     pub outcome: &'raw str,
     pub error: bool,
     pub attrs: ::std::vec::Vec<AttrMsg<'raw>>,
+    pub parent: u64,
 }
 
 impl<'raw> ::bebop::SubRecord<'raw> for TelemetryMsg<'raw> {
@@ -1602,7 +2326,8 @@ impl<'raw> ::bebop::SubRecord<'raw> for TelemetryMsg<'raw> {
         <&'raw str>::MIN_SERIALIZED_SIZE +
         <&'raw str>::MIN_SERIALIZED_SIZE +
         <bool>::MIN_SERIALIZED_SIZE +
-        <::std::vec::Vec<AttrMsg<'raw>>>::MIN_SERIALIZED_SIZE;
+        <::std::vec::Vec<AttrMsg<'raw>>>::MIN_SERIALIZED_SIZE +
+        <u64>::MIN_SERIALIZED_SIZE;
 
     #[inline]
     fn serialized_size(&self) -> usize {
@@ -1611,7 +2336,8 @@ impl<'raw> ::bebop::SubRecord<'raw> for TelemetryMsg<'raw> {
         self.name.serialized_size() +
         self.outcome.serialized_size() +
         self.error.serialized_size() +
-        self.attrs.serialized_size()
+        self.attrs.serialized_size() +
+        self.parent.serialized_size()
     }
 
     ::bebop::define_serialize_chained!(Self => |zelf, dest| {
@@ -1621,7 +2347,8 @@ impl<'raw> ::bebop::SubRecord<'raw> for TelemetryMsg<'raw> {
             zelf.name._serialize_chained(dest)? +
             zelf.outcome._serialize_chained(dest)? +
             zelf.error._serialize_chained(dest)? +
-            zelf.attrs._serialize_chained(dest)?
+            zelf.attrs._serialize_chained(dest)? +
+            zelf.parent._serialize_chained(dest)?
         )
     });
 
@@ -1644,6 +2371,8 @@ impl<'raw> ::bebop::SubRecord<'raw> for TelemetryMsg<'raw> {
         i += read;
         let (read, v5) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
         i += read;
+        let (read, v6) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+        i += read;
 
         Ok((i, Self {
             span: v0,
@@ -1652,6 +2381,7 @@ impl<'raw> ::bebop::SubRecord<'raw> for TelemetryMsg<'raw> {
             outcome: v3,
             error: v4,
             attrs: v5,
+            parent: v6,
         }))
     }
 }
@@ -1755,8 +2485,133 @@ impl<'raw> ::bebop::SubRecord<'raw> for DocEventMsg<'raw> {
 
 impl<'raw> ::bebop::Record<'raw> for DocEventMsg<'raw> {}
 
+#[repr(u8)]
+#[derive(Copy, Clone, Debug, Eq, PartialEq)]
+pub enum ClosedReason {
+    None = 0,
+    Stopped = 1,
+    Unauthorized = 2,
+    Corrupt = 3,
+}
+
+impl ::core::convert::TryFrom<u8> for ClosedReason {
+    type Error = ::bebop::DeserializeError;
+
+    fn try_from(value: u8) -> ::bebop::DeResult<Self> {
+        match value {
+            0 => Ok(ClosedReason::None),
+            1 => Ok(ClosedReason::Stopped),
+            2 => Ok(ClosedReason::Unauthorized),
+            3 => Ok(ClosedReason::Corrupt),
+            d => Err(::bebop::DeserializeError::InvalidEnumDiscriminator(d.into())),
+        }
+    }
+}
+
+impl ::core::convert::From<ClosedReason> for u8 {
+    fn from(value: ClosedReason) -> Self {
+        match value {
+            ClosedReason::None => 0,
+            ClosedReason::Stopped => 1,
+            ClosedReason::Unauthorized => 2,
+            ClosedReason::Corrupt => 3,
+        }
+    }
+}
+
+impl ::bebop::SubRecord<'_> for ClosedReason {
+    const MIN_SERIALIZED_SIZE: usize = ::std::mem::size_of::<u8>();
+    const EXACT_SERIALIZED_SIZE: Option<usize> = Some(::std::mem::size_of::<u8>());
+
+    #[inline]
+    fn serialized_size(&self) -> usize { ::std::mem::size_of::<u8>() }
+
+    ::bebop::define_serialize_chained!(*Self => |zelf, dest| {
+        u8::from(zelf)._serialize_chained(dest)
+    });
+
+    #[inline]
+    fn _deserialize_chained(raw: &[u8]) -> ::bebop::DeResult<(usize, Self)> {
+        let (n, v) = u8::_deserialize_chained(raw)?;
+        Ok((n, v.try_into()?))
+    }
+}
+
+impl ::bebop::FixedSized for ClosedReason {
+    const SERIALIZED_SIZE: usize = ::std::mem::size_of::<u8>();
+}
+
+
+#[repr(u8)]
+#[derive(Copy, Clone, Debug, Eq, PartialEq)]
+pub enum SaveReason {
+    None = 0,
+    Undelivered = 1,
+    Storage = 2,
+    ReadOnly = 3,
+    Poison = 4,
+    Gap = 5,
+    Rebasing = 6,
+}
+
+impl ::core::convert::TryFrom<u8> for SaveReason {
+    type Error = ::bebop::DeserializeError;
+
+    fn try_from(value: u8) -> ::bebop::DeResult<Self> {
+        match value {
+            0 => Ok(SaveReason::None),
+            1 => Ok(SaveReason::Undelivered),
+            2 => Ok(SaveReason::Storage),
+            3 => Ok(SaveReason::ReadOnly),
+            4 => Ok(SaveReason::Poison),
+            5 => Ok(SaveReason::Gap),
+            6 => Ok(SaveReason::Rebasing),
+            d => Err(::bebop::DeserializeError::InvalidEnumDiscriminator(d.into())),
+        }
+    }
+}
+
+impl ::core::convert::From<SaveReason> for u8 {
+    fn from(value: SaveReason) -> Self {
+        match value {
+            SaveReason::None => 0,
+            SaveReason::Undelivered => 1,
+            SaveReason::Storage => 2,
+            SaveReason::ReadOnly => 3,
+            SaveReason::Poison => 4,
+            SaveReason::Gap => 5,
+            SaveReason::Rebasing => 6,
+        }
+    }
+}
+
+impl ::bebop::SubRecord<'_> for SaveReason {
+    const MIN_SERIALIZED_SIZE: usize = ::std::mem::size_of::<u8>();
+    const EXACT_SERIALIZED_SIZE: Option<usize> = Some(::std::mem::size_of::<u8>());
+
+    #[inline]
+    fn serialized_size(&self) -> usize { ::std::mem::size_of::<u8>() }
+
+    ::bebop::define_serialize_chained!(*Self => |zelf, dest| {
+        u8::from(zelf)._serialize_chained(dest)
+    });
+
+    #[inline]
+    fn _deserialize_chained(raw: &[u8]) -> ::bebop::DeResult<(usize, Self)> {
+        let (n, v) = u8::_deserialize_chained(raw)?;
+        Ok((n, v.try_into()?))
+    }
+}
+
+impl ::bebop::FixedSized for SaveReason {
+    const SERIALIZED_SIZE: usize = ::std::mem::size_of::<u8>();
+}
+
+
 #[derive(Clone, Debug, PartialEq)]
 pub struct ViewEffectMsg<'raw> {
+    pub closed_reason: ClosedReason,
+    pub save_reason: SaveReason,
     pub kind: u8,
     pub request: u32,
     pub code: u32,
@@ -1774,6 +2629,8 @@ pub struct ViewEffectMsg<'raw> {
 
 impl<'raw> ::bebop::SubRecord<'raw> for ViewEffectMsg<'raw> {
     const MIN_SERIALIZED_SIZE: usize =
+        <ClosedReason>::MIN_SERIALIZED_SIZE +
+        <SaveReason>::MIN_SERIALIZED_SIZE +
         <u8>::MIN_SERIALIZED_SIZE +
         <u32>::MIN_SERIALIZED_SIZE +
         <u32>::MIN_SERIALIZED_SIZE +
@@ -1790,6 +2647,8 @@ impl<'raw> ::bebop::SubRecord<'raw> for ViewEffectMsg<'raw> {
 
     #[inline]
     fn serialized_size(&self) -> usize {
+        self.closed_reason.serialized_size() +
+        self.save_reason.serialized_size() +
         self.kind.serialized_size() +
         self.request.serialized_size() +
         self.code.serialized_size() +
@@ -1807,6 +2666,8 @@ impl<'raw> ::bebop::SubRecord<'raw> for ViewEffectMsg<'raw> {
 
     ::bebop::define_serialize_chained!(Self => |zelf, dest| {
         Ok(
+            zelf.closed_reason._serialize_chained(dest)? +
+            zelf.save_reason._serialize_chained(dest)? +
             zelf.kind._serialize_chained(dest)? +
             zelf.request._serialize_chained(dest)? +
             zelf.code._serialize_chained(dest)? +
@@ -1856,21 +2717,27 @@ impl<'raw> ::bebop::SubRecord<'raw> for ViewEffectMsg<'raw> {
         i += read;
         let (read, v12) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
         i += read;
+        let (read, v13) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+        i += read;
+        let (read, v14) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+        i += read;
 
         Ok((i, Self {
-            kind: v0,
-            request: v1,
-            code: v2,
-            detail: v3,
-            flag: v4,
-            text: v5,
-            selection: v6,
-            format: v7,
-            style: v8,
-            keys: v9,
-            values: v10,
-            events: v11,
-            paths: v12,
+            closed_reason: v0,
+            save_reason: v1,
+            kind: v2,
+            request: v3,
+            code: v4,
+            detail: v5,
+            flag: v6,
+            text: v7,
+            selection: v8,
+            format: v9,
+            style: v10,
+            keys: v11,
+            values: v12,
+            events: v13,
+            paths: v14,
         }))
     }
 }
@@ -1882,82 +2749,30 @@ pub struct QueryMsg<'raw> {
     pub kind: u8,
     pub key: u32,
     pub text: &'raw str,
+    pub flags: u32,
 }
 
 impl<'raw> ::bebop::SubRecord<'raw> for QueryMsg<'raw> {
     const MIN_SERIALIZED_SIZE: usize =
         <u8>::MIN_SERIALIZED_SIZE +
         <u32>::MIN_SERIALIZED_SIZE +
-        <&'raw str>::MIN_SERIALIZED_SIZE;
+        <&'raw str>::MIN_SERIALIZED_SIZE +
+        <u32>::MIN_SERIALIZED_SIZE;
 
     #[inline]
     fn serialized_size(&self) -> usize {
         self.kind.serialized_size() +
         self.key.serialized_size() +
-        self.text.serialized_size()
+        self.text.serialized_size() +
+        self.flags.serialized_size()
     }
 
     ::bebop::define_serialize_chained!(Self => |zelf, dest| {
         Ok(
             zelf.kind._serialize_chained(dest)? +
             zelf.key._serialize_chained(dest)? +
-            zelf.text._serialize_chained(dest)?
-        )
-    });
-
-    fn _deserialize_chained(raw: &'raw [u8]) -> ::bebop::DeResult<(usize, Self)> {
-        let mut i = 0;
-        if raw.len() - i < Self::MIN_SERIALIZED_SIZE {
-            let missing = Self::MIN_SERIALIZED_SIZE - (raw.len() - i);
-            return Err(::bebop::DeserializeError::MoreDataExpected(missing));
-        }
-
-        let (read, v0) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
-        i += read;
-        let (read, v1) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
-        i += read;
-        let (read, v2) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
-        i += read;
-
-        Ok((i, Self {
-            kind: v0,
-            key: v1,
-            text: v2,
-        }))
-    }
-}
-
-impl<'raw> ::bebop::Record<'raw> for QueryMsg<'raw> {}
-
-#[derive(Clone, Debug, PartialEq)]
-pub struct QueryReplyMsg<'raw> {
-    pub text: &'raw str,
-    pub count: u32,
-    pub keys: ::bebop::SliceWrapper<'raw, u32>,
-    pub nodes: ::std::vec::Vec<&'raw str>,
-}
-
-impl<'raw> ::bebop::SubRecord<'raw> for QueryReplyMsg<'raw> {
-    const MIN_SERIALIZED_SIZE: usize =
-        <&'raw str>::MIN_SERIALIZED_SIZE +
-        <u32>::MIN_SERIALIZED_SIZE +
-        <::bebop::SliceWrapper<'raw, u32>>::MIN_SERIALIZED_SIZE +
-        <::std::vec::Vec<&'raw str>>::MIN_SERIALIZED_SIZE;
-
-    #[inline]
-    fn serialized_size(&self) -> usize {
-        self.text.serialized_size() +
-        self.count.serialized_size() +
-        self.keys.serialized_size() +
-        self.nodes.serialized_size()
-    }
-
-    ::bebop::define_serialize_chained!(Self => |zelf, dest| {
-        Ok(
             zelf.text._serialize_chained(dest)? +
-            zelf.count._serialize_chained(dest)? +
-            zelf.keys._serialize_chained(dest)? +
-            zelf.nodes._serialize_chained(dest)?
+            zelf.flags._serialize_chained(dest)?
         )
     });
 
@@ -1978,10 +2793,76 @@ impl<'raw> ::bebop::SubRecord<'raw> for QueryReplyMsg<'raw> {
         i += read;
 
         Ok((i, Self {
+            kind: v0,
+            key: v1,
+            text: v2,
+            flags: v3,
+        }))
+    }
+}
+
+impl<'raw> ::bebop::Record<'raw> for QueryMsg<'raw> {}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct QueryReplyMsg<'raw> {
+    pub text: &'raw str,
+    pub count: u32,
+    pub keys: ::bebop::SliceWrapper<'raw, u32>,
+    pub nodes: ::std::vec::Vec<&'raw str>,
+    pub points: ::bebop::SliceWrapper<'raw, PointMsg>,
+}
+
+impl<'raw> ::bebop::SubRecord<'raw> for QueryReplyMsg<'raw> {
+    const MIN_SERIALIZED_SIZE: usize =
+        <&'raw str>::MIN_SERIALIZED_SIZE +
+        <u32>::MIN_SERIALIZED_SIZE +
+        <::bebop::SliceWrapper<'raw, u32>>::MIN_SERIALIZED_SIZE +
+        <::std::vec::Vec<&'raw str>>::MIN_SERIALIZED_SIZE +
+        <::bebop::SliceWrapper<'raw, PointMsg>>::MIN_SERIALIZED_SIZE;
+
+    #[inline]
+    fn serialized_size(&self) -> usize {
+        self.text.serialized_size() +
+        self.count.serialized_size() +
+        self.keys.serialized_size() +
+        self.nodes.serialized_size() +
+        self.points.serialized_size()
+    }
+
+    ::bebop::define_serialize_chained!(Self => |zelf, dest| {
+        Ok(
+            zelf.text._serialize_chained(dest)? +
+            zelf.count._serialize_chained(dest)? +
+            zelf.keys._serialize_chained(dest)? +
+            zelf.nodes._serialize_chained(dest)? +
+            zelf.points._serialize_chained(dest)?
+        )
+    });
+
+    fn _deserialize_chained(raw: &'raw [u8]) -> ::bebop::DeResult<(usize, Self)> {
+        let mut i = 0;
+        if raw.len() - i < Self::MIN_SERIALIZED_SIZE {
+            let missing = Self::MIN_SERIALIZED_SIZE - (raw.len() - i);
+            return Err(::bebop::DeserializeError::MoreDataExpected(missing));
+        }
+
+        let (read, v0) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+        i += read;
+        let (read, v1) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+        i += read;
+        let (read, v2) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+        i += read;
+        let (read, v3) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+        i += read;
+        let (read, v4) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+        i += read;
+
+        Ok((i, Self {
             text: v0,
             count: v1,
             keys: v2,
             nodes: v3,
+            points: v4,
         }))
     }
 }
@@ -2616,71 +3497,110 @@ pub mod owned {
 
     impl<'raw> ::bebop::Record<'raw> for ClipboardEntryMsg {}
 
+    pub use super::ModifyTargetMsg;
+
     #[derive(Clone, Debug, PartialEq)]
-    pub struct EditorInputMsg {
-        pub kind: u8,
-        pub command: CommandCode,
-        pub a: u32,
-        pub b: u32,
-        pub text: String,
-        pub selection: SelectionMsg,
-        pub triple_click: bool,
-        pub clipboard: ::std::vec::Vec<ClipboardEntryMsg>,
-        pub html_nodes: ::std::vec::Vec<String>,
+    pub struct MarkedSelectionMsg {
+        pub format: u32,
+        pub style: String,
+        pub anchor: PointMsg,
     }
 
-    impl<'raw> ::core::convert::From<super::EditorInputMsg<'raw>> for EditorInputMsg {
-        fn from(value: super::EditorInputMsg) -> Self {
+    impl<'raw> ::core::convert::From<super::MarkedSelectionMsg<'raw>> for MarkedSelectionMsg {
+        fn from(value: super::MarkedSelectionMsg) -> Self {
             Self {
-                kind: value.kind,
-                command: value.command,
-                a: value.a,
-                b: value.b,
-                text: value.text.into(),
-                selection: value.selection.into(),
-                triple_click: value.triple_click,
-                clipboard: value.clipboard.into_iter().map(|value| value.into()).collect(),
-                html_nodes: value.html_nodes.into_iter().map(|value| value.into()).collect(),
+                format: value.format,
+                style: value.style.into(),
+                anchor: value.anchor,
             }
         }
     }
 
-    impl<'raw> ::bebop::SubRecord<'raw> for EditorInputMsg {
+    impl<'raw> ::bebop::SubRecord<'raw> for MarkedSelectionMsg {
         const MIN_SERIALIZED_SIZE: usize =
-            <u8>::MIN_SERIALIZED_SIZE +
-            <CommandCode>::MIN_SERIALIZED_SIZE +
-            <u32>::MIN_SERIALIZED_SIZE +
             <u32>::MIN_SERIALIZED_SIZE +
             <String>::MIN_SERIALIZED_SIZE +
-            <SelectionMsg>::MIN_SERIALIZED_SIZE +
-            <bool>::MIN_SERIALIZED_SIZE +
-            <::std::vec::Vec<ClipboardEntryMsg>>::MIN_SERIALIZED_SIZE +
-            <::std::vec::Vec<String>>::MIN_SERIALIZED_SIZE;
+            <PointMsg>::MIN_SERIALIZED_SIZE;
 
         #[inline]
         fn serialized_size(&self) -> usize {
-            self.kind.serialized_size() +
-            self.command.serialized_size() +
-            self.a.serialized_size() +
-            self.b.serialized_size() +
-            self.text.serialized_size() +
-            self.selection.serialized_size() +
-            self.triple_click.serialized_size() +
-            self.clipboard.serialized_size() +
-            self.html_nodes.serialized_size()
+            self.format.serialized_size() +
+            self.style.serialized_size() +
+            self.anchor.serialized_size()
         }
 
         ::bebop::define_serialize_chained!(Self => |zelf, dest| {
             Ok(
-                zelf.kind._serialize_chained(dest)? +
-                zelf.command._serialize_chained(dest)? +
-                zelf.a._serialize_chained(dest)? +
-                zelf.b._serialize_chained(dest)? +
-                zelf.text._serialize_chained(dest)? +
-                zelf.selection._serialize_chained(dest)? +
-                zelf.triple_click._serialize_chained(dest)? +
-                zelf.clipboard._serialize_chained(dest)? +
-                zelf.html_nodes._serialize_chained(dest)?
+                zelf.format._serialize_chained(dest)? +
+                zelf.style._serialize_chained(dest)? +
+                zelf.anchor._serialize_chained(dest)?
+            )
+        });
+
+        fn _deserialize_chained(raw: &'raw [u8]) -> ::bebop::DeResult<(usize, Self)> {
+            let mut i = 0;
+            if raw.len() - i < Self::MIN_SERIALIZED_SIZE {
+                let missing = Self::MIN_SERIALIZED_SIZE - (raw.len() - i);
+                return Err(::bebop::DeserializeError::MoreDataExpected(missing));
+            }
+
+            let (read, v0) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+            i += read;
+            let (read, v1) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+            i += read;
+            let (read, v2) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+            i += read;
+
+            Ok((i, Self {
+                format: v0,
+                style: v1,
+                anchor: v2,
+            }))
+        }
+    }
+
+    impl<'raw> ::bebop::Record<'raw> for MarkedSelectionMsg {}
+
+    #[derive(Clone, Debug, PartialEq)]
+    pub struct RangeSelectionMsg {
+        pub anchor: PointMsg,
+        pub focus: PointMsg,
+        pub format: u32,
+        pub style: String,
+    }
+
+    impl<'raw> ::core::convert::From<super::RangeSelectionMsg<'raw>> for RangeSelectionMsg {
+        fn from(value: super::RangeSelectionMsg) -> Self {
+            Self {
+                anchor: value.anchor,
+                focus: value.focus,
+                format: value.format,
+                style: value.style.into(),
+            }
+        }
+    }
+
+    impl<'raw> ::bebop::SubRecord<'raw> for RangeSelectionMsg {
+        const MIN_SERIALIZED_SIZE: usize =
+            <PointMsg>::MIN_SERIALIZED_SIZE +
+            <PointMsg>::MIN_SERIALIZED_SIZE +
+            <u32>::MIN_SERIALIZED_SIZE +
+            <String>::MIN_SERIALIZED_SIZE;
+
+        #[inline]
+        fn serialized_size(&self) -> usize {
+            self.anchor.serialized_size() +
+            self.focus.serialized_size() +
+            self.format.serialized_size() +
+            self.style.serialized_size()
+        }
+
+        ::bebop::define_serialize_chained!(Self => |zelf, dest| {
+            Ok(
+                zelf.anchor._serialize_chained(dest)? +
+                zelf.focus._serialize_chained(dest)? +
+                zelf.format._serialize_chained(dest)? +
+                zelf.style._serialize_chained(dest)?
             )
         });
 
@@ -2699,29 +3619,796 @@ pub mod owned {
             i += read;
             let (read, v3) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
             i += read;
-            let (read, v4) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
-            i += read;
-            let (read, v5) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
-            i += read;
-            let (read, v6) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
-            i += read;
-            let (read, v7) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
-            i += read;
-            let (read, v8) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
-            i += read;
 
             Ok((i, Self {
-                kind: v0,
-                command: v1,
-                a: v2,
-                b: v3,
-                text: v4,
-                selection: v5,
-                triple_click: v6,
-                clipboard: v7,
-                html_nodes: v8,
+                anchor: v0,
+                focus: v1,
+                format: v2,
+                style: v3,
             }))
         }
+    }
+
+    impl<'raw> ::bebop::Record<'raw> for RangeSelectionMsg {}
+
+    #[derive(Clone, Debug, PartialEq, Default)]
+    pub struct SelectionChangeMsg {
+        /// Field 1
+        pub triple_click: ::core::option::Option<bool>,
+        /// Field 2
+        pub dom_range_same_node: ::core::option::Option<bool>,
+        /// Field 3
+        pub marked: ::core::option::Option<MarkedSelectionMsg>,
+        /// Field 4
+        pub dom_anchor_offset: ::core::option::Option<u32>,
+        /// Field 5
+        pub dom_focus_offset: ::core::option::Option<u32>,
+        /// Field 6
+        pub post_delete_restore: ::core::option::Option<RangeSelectionMsg>,
+    }
+
+    impl<'raw> ::core::convert::From<super::SelectionChangeMsg<'raw>> for SelectionChangeMsg {
+        fn from(value: super::SelectionChangeMsg) -> Self {
+            Self {
+                triple_click: value.triple_click,
+                dom_range_same_node: value.dom_range_same_node,
+                marked: value.marked.map(|value| value.into()),
+                dom_anchor_offset: value.dom_anchor_offset,
+                dom_focus_offset: value.dom_focus_offset,
+                post_delete_restore: value.post_delete_restore.map(|value| value.into()),
+            }
+        }
+    }
+
+    impl<'raw> ::bebop::SubRecord<'raw> for SelectionChangeMsg {
+        const MIN_SERIALIZED_SIZE: usize = ::bebop::LEN_SIZE + 1;
+
+        #[inline]
+        fn serialized_size(&self) -> usize {
+            ::bebop::LEN_SIZE + 1 +
+            self.triple_click.as_ref().map(|v| v.serialized_size() + 1).unwrap_or(0) +
+            self.dom_range_same_node.as_ref().map(|v| v.serialized_size() + 1).unwrap_or(0) +
+            self.marked.as_ref().map(|v| v.serialized_size() + 1).unwrap_or(0) +
+            self.dom_anchor_offset.as_ref().map(|v| v.serialized_size() + 1).unwrap_or(0) +
+            self.dom_focus_offset.as_ref().map(|v| v.serialized_size() + 1).unwrap_or(0) +
+            self.post_delete_restore.as_ref().map(|v| v.serialized_size() + 1).unwrap_or(0)
+        }
+
+        ::bebop::define_serialize_chained!(Self => |zelf, dest| {
+            let size = zelf.serialized_size();
+            ::bebop::write_len(dest, size - ::bebop::LEN_SIZE)?;
+            if let Some(ref v) = zelf.triple_click {
+                1u8._serialize_chained(dest)?;
+                v._serialize_chained(dest)?;
+            }
+            if let Some(ref v) = zelf.dom_range_same_node {
+                2u8._serialize_chained(dest)?;
+                v._serialize_chained(dest)?;
+            }
+            if let Some(ref v) = zelf.marked {
+                3u8._serialize_chained(dest)?;
+                v._serialize_chained(dest)?;
+            }
+            if let Some(ref v) = zelf.dom_anchor_offset {
+                4u8._serialize_chained(dest)?;
+                v._serialize_chained(dest)?;
+            }
+            if let Some(ref v) = zelf.dom_focus_offset {
+                5u8._serialize_chained(dest)?;
+                v._serialize_chained(dest)?;
+            }
+            if let Some(ref v) = zelf.post_delete_restore {
+                6u8._serialize_chained(dest)?;
+                v._serialize_chained(dest)?;
+            }
+            0u8._serialize_chained(dest)?;
+            Ok(size)
+        });
+
+        fn _deserialize_chained(raw: &'raw [u8]) -> ::bebop::DeResult<(usize, Self)> {
+            let mut i = 0;
+            let len = ::bebop::read_len(&raw[i..])? + ::bebop::LEN_SIZE;
+            i += ::bebop::LEN_SIZE;
+
+            #[cfg(not(feature = "unchecked"))]
+            if len == 0 {
+                return Err(::bebop::DeserializeError::CorruptFrame);
+            }
+
+            if raw.len() < len {
+                return Err(::bebop::DeserializeError::MoreDataExpected(len - raw.len()));
+            }
+
+            let mut _triple_click = None;
+            let mut _dom_range_same_node = None;
+            let mut _marked = None;
+            let mut _dom_anchor_offset = None;
+            let mut _dom_focus_offset = None;
+            let mut _post_delete_restore = None;
+
+            #[cfg(not(feature = "unchecked"))]
+            let mut last = 0;
+
+            while i < len {
+                let di = raw[i];
+
+                #[cfg(not(feature = "unchecked"))]
+                if di != 0 {
+                    if di < last {
+                        return Err(::bebop::DeserializeError::CorruptFrame);
+                    }
+                    last = di;
+                }
+
+                i += 1;
+                match di {
+                    0 => {
+                        break;
+                    }
+                    1 => {
+                        #[cfg(not(feature = "unchecked"))]
+                        if _triple_click.is_some() {
+                            return Err(::bebop::DeserializeError::DuplicateMessageField);
+                        }
+                        let (read, value) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+                        i += read;
+                        _triple_click = Some(value)
+                    }
+                    2 => {
+                        #[cfg(not(feature = "unchecked"))]
+                        if _dom_range_same_node.is_some() {
+                            return Err(::bebop::DeserializeError::DuplicateMessageField);
+                        }
+                        let (read, value) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+                        i += read;
+                        _dom_range_same_node = Some(value)
+                    }
+                    3 => {
+                        #[cfg(not(feature = "unchecked"))]
+                        if _marked.is_some() {
+                            return Err(::bebop::DeserializeError::DuplicateMessageField);
+                        }
+                        let (read, value) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+                        i += read;
+                        _marked = Some(value)
+                    }
+                    4 => {
+                        #[cfg(not(feature = "unchecked"))]
+                        if _dom_anchor_offset.is_some() {
+                            return Err(::bebop::DeserializeError::DuplicateMessageField);
+                        }
+                        let (read, value) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+                        i += read;
+                        _dom_anchor_offset = Some(value)
+                    }
+                    5 => {
+                        #[cfg(not(feature = "unchecked"))]
+                        if _dom_focus_offset.is_some() {
+                            return Err(::bebop::DeserializeError::DuplicateMessageField);
+                        }
+                        let (read, value) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+                        i += read;
+                        _dom_focus_offset = Some(value)
+                    }
+                    6 => {
+                        #[cfg(not(feature = "unchecked"))]
+                        if _post_delete_restore.is_some() {
+                            return Err(::bebop::DeserializeError::DuplicateMessageField);
+                        }
+                        let (read, value) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+                        i += read;
+                        _post_delete_restore = Some(value)
+                    }
+                    _ => {
+                        i = len;
+                        break;
+                    }
+                }
+            }
+
+            if i != len {
+                debug_assert!(i > len);
+                return Err(::bebop::DeserializeError::CorruptFrame)
+            }
+
+            Ok((i, Self {
+                triple_click: _triple_click,
+                dom_range_same_node: _dom_range_same_node,
+                marked: _marked,
+                dom_anchor_offset: _dom_anchor_offset,
+                dom_focus_offset: _dom_focus_offset,
+                post_delete_restore: _post_delete_restore,
+            }))
+        }
+    }
+
+    impl<'raw> ::bebop::Record<'raw> for SelectionChangeMsg {}
+
+    #[derive(Clone, Debug, PartialEq)]
+    pub enum EditorInputMsg {
+        /// An unknown type which is likely defined in a newer version of the schema.
+        Unknown,
+
+        /// Discriminator 1
+        EditorCommand {
+            command: CommandCode,
+            a: u32,
+            b: u32,
+            text: String,
+            selection: SelectionMsg,
+            target: ModifyTargetMsg,
+            character_target: ModifyTargetMsg,
+        },
+
+        /// Discriminator 2
+        EditorSetState {
+            json: String,
+        },
+
+        /// Discriminator 3
+        EditorSelection {
+            selection: SelectionMsg,
+            change: SelectionChangeMsg,
+        },
+
+        /// Discriminator 4
+        EditorPaste {
+            selection: SelectionMsg,
+            clipboard: ::std::vec::Vec<ClipboardEntryMsg>,
+            has_files: bool,
+            html_nodes: ::std::vec::Vec<String>,
+        },
+
+        /// Discriminator 5
+        EditorInsertText {
+            phase: u8,
+            has_data: bool,
+            data: String,
+            has_transfer: bool,
+            transfer: String,
+            facts: u32,
+            last_key: String,
+            selection: SelectionMsg,
+        },
+
+        /// Discriminator 6
+        EditorComposition {
+            kind: u8,
+            key: u32,
+            text: String,
+            anchor_offset: u32,
+            focus_offset: u32,
+            data: String,
+            selection: SelectionMsg,
+        },
+
+        /// Discriminator 7
+        EditorText {
+            key: u32,
+            text: ::std::vec::Vec<u16>,
+            anchor_offset: u32,
+            focus_offset: u32,
+            composition_end: bool,
+            composition_data: String,
+            selection: SelectionMsg,
+        },
+    }
+
+    impl<'raw> ::core::convert::From<super::EditorInputMsg<'raw>> for EditorInputMsg {
+        fn from(value: super::EditorInputMsg) -> Self {
+            match value {
+                super::EditorInputMsg::Unknown => {
+                    Self::Unknown
+                }
+                super::EditorInputMsg::EditorCommand {
+                    command: _command,
+                    a: _a,
+                    b: _b,
+                    text: _text,
+                    selection: _selection,
+                    target: _target,
+                    character_target: _character_target,
+                }
+                => {
+                    Self::EditorCommand {
+                        command: _command,
+                        a: _a,
+                        b: _b,
+                        text: _text.into(),
+                        selection: _selection.into(),
+                        target: _target,
+                        character_target: _character_target,
+                    }
+                }
+                super::EditorInputMsg::EditorSetState {
+                    json: _json,
+                }
+                => {
+                    Self::EditorSetState {
+                        json: _json.into(),
+                    }
+                }
+                super::EditorInputMsg::EditorSelection {
+                    selection: _selection,
+                    change: _change,
+                }
+                => {
+                    Self::EditorSelection {
+                        selection: _selection.into(),
+                        change: _change.into(),
+                    }
+                }
+                super::EditorInputMsg::EditorPaste {
+                    selection: _selection,
+                    clipboard: _clipboard,
+                    has_files: _has_files,
+                    html_nodes: _html_nodes,
+                }
+                => {
+                    Self::EditorPaste {
+                        selection: _selection.into(),
+                        clipboard: _clipboard.into_iter().map(|value| value.into()).collect(),
+                        has_files: _has_files,
+                        html_nodes: _html_nodes.into_iter().map(|value| value.into()).collect(),
+                    }
+                }
+                super::EditorInputMsg::EditorInsertText {
+                    phase: _phase,
+                    has_data: _has_data,
+                    data: _data,
+                    has_transfer: _has_transfer,
+                    transfer: _transfer,
+                    facts: _facts,
+                    last_key: _last_key,
+                    selection: _selection,
+                }
+                => {
+                    Self::EditorInsertText {
+                        phase: _phase,
+                        has_data: _has_data,
+                        data: _data.into(),
+                        has_transfer: _has_transfer,
+                        transfer: _transfer.into(),
+                        facts: _facts,
+                        last_key: _last_key.into(),
+                        selection: _selection.into(),
+                    }
+                }
+                super::EditorInputMsg::EditorComposition {
+                    kind: _kind,
+                    key: _key,
+                    text: _text,
+                    anchor_offset: _anchor_offset,
+                    focus_offset: _focus_offset,
+                    data: _data,
+                    selection: _selection,
+                }
+                => {
+                    Self::EditorComposition {
+                        kind: _kind,
+                        key: _key,
+                        text: _text.into(),
+                        anchor_offset: _anchor_offset,
+                        focus_offset: _focus_offset,
+                        data: _data.into(),
+                        selection: _selection.into(),
+                    }
+                }
+                super::EditorInputMsg::EditorText {
+                    key: _key,
+                    text: _text,
+                    anchor_offset: _anchor_offset,
+                    focus_offset: _focus_offset,
+                    composition_end: _composition_end,
+                    composition_data: _composition_data,
+                    selection: _selection,
+                }
+                => {
+                    Self::EditorText {
+                        key: _key,
+                        text: _text.iter().map(|value| value).collect(),
+                        anchor_offset: _anchor_offset,
+                        focus_offset: _focus_offset,
+                        composition_end: _composition_end,
+                        composition_data: _composition_data.into(),
+                        selection: _selection.into(),
+                    }
+                }
+            }
+        }
+
+    }
+    impl<'raw> ::bebop::SubRecord<'raw> for EditorInputMsg {
+        const MIN_SERIALIZED_SIZE: usize = ::bebop::LEN_SIZE + 1;
+
+        fn serialized_size(&self) -> usize {
+            ::bebop::LEN_SIZE + 1 +
+            match self {
+                EditorInputMsg::Unknown => {
+                    0
+                }
+                Self::EditorCommand {
+                    command: ref _command,
+                    a: ref _a,
+                    b: ref _b,
+                    text: ref _text,
+                    selection: ref _selection,
+                    target: ref _target,
+                    character_target: ref _character_target,
+                }
+                => {
+                    _command.serialized_size() +
+                    _a.serialized_size() +
+                    _b.serialized_size() +
+                    _text.serialized_size() +
+                    _selection.serialized_size() +
+                    _target.serialized_size() +
+                    _character_target.serialized_size()
+                }
+                Self::EditorSetState {
+                    json: ref _json,
+                }
+                => {
+                    _json.serialized_size()
+                }
+                Self::EditorSelection {
+                    selection: ref _selection,
+                    change: ref _change,
+                }
+                => {
+                    _selection.serialized_size() +
+                    _change.serialized_size()
+                }
+                Self::EditorPaste {
+                    selection: ref _selection,
+                    clipboard: ref _clipboard,
+                    has_files: ref _has_files,
+                    html_nodes: ref _html_nodes,
+                }
+                => {
+                    _selection.serialized_size() +
+                    _clipboard.serialized_size() +
+                    _has_files.serialized_size() +
+                    _html_nodes.serialized_size()
+                }
+                Self::EditorInsertText {
+                    phase: ref _phase,
+                    has_data: ref _has_data,
+                    data: ref _data,
+                    has_transfer: ref _has_transfer,
+                    transfer: ref _transfer,
+                    facts: ref _facts,
+                    last_key: ref _last_key,
+                    selection: ref _selection,
+                }
+                => {
+                    _phase.serialized_size() +
+                    _has_data.serialized_size() +
+                    _data.serialized_size() +
+                    _has_transfer.serialized_size() +
+                    _transfer.serialized_size() +
+                    _facts.serialized_size() +
+                    _last_key.serialized_size() +
+                    _selection.serialized_size()
+                }
+                Self::EditorComposition {
+                    kind: ref _kind,
+                    key: ref _key,
+                    text: ref _text,
+                    anchor_offset: ref _anchor_offset,
+                    focus_offset: ref _focus_offset,
+                    data: ref _data,
+                    selection: ref _selection,
+                }
+                => {
+                    _kind.serialized_size() +
+                    _key.serialized_size() +
+                    _text.serialized_size() +
+                    _anchor_offset.serialized_size() +
+                    _focus_offset.serialized_size() +
+                    _data.serialized_size() +
+                    _selection.serialized_size()
+                }
+                Self::EditorText {
+                    key: ref _key,
+                    text: ref _text,
+                    anchor_offset: ref _anchor_offset,
+                    focus_offset: ref _focus_offset,
+                    composition_end: ref _composition_end,
+                    composition_data: ref _composition_data,
+                    selection: ref _selection,
+                }
+                => {
+                    _key.serialized_size() +
+                    _text.serialized_size() +
+                    _anchor_offset.serialized_size() +
+                    _focus_offset.serialized_size() +
+                    _composition_end.serialized_size() +
+                    _composition_data.serialized_size() +
+                    _selection.serialized_size()
+                }
+            }
+        }
+
+        ::bebop::define_serialize_chained!(Self => |zelf, dest| {
+            let size = zelf.serialized_size();
+            ::bebop::write_len(dest, size - ::bebop::LEN_SIZE - 1)?;
+            match zelf {
+                Self::Unknown => {
+                    return Err(::bebop::SerializeError::CannotSerializeUnknownUnion);
+                }
+                Self::EditorCommand {
+                    command: ref _command,
+                    a: ref _a,
+                    b: ref _b,
+                    text: ref _text,
+                    selection: ref _selection,
+                    target: ref _target,
+                    character_target: ref _character_target,
+                }
+                => {
+                    1u8._serialize_chained(dest)?;
+                    _command._serialize_chained(dest)?;
+                    _a._serialize_chained(dest)?;
+                    _b._serialize_chained(dest)?;
+                    _text._serialize_chained(dest)?;
+                    _selection._serialize_chained(dest)?;
+                    _target._serialize_chained(dest)?;
+                    _character_target._serialize_chained(dest)?;
+                }
+                Self::EditorSetState {
+                    json: ref _json,
+                }
+                => {
+                    2u8._serialize_chained(dest)?;
+                    _json._serialize_chained(dest)?;
+                }
+                Self::EditorSelection {
+                    selection: ref _selection,
+                    change: ref _change,
+                }
+                => {
+                    3u8._serialize_chained(dest)?;
+                    _selection._serialize_chained(dest)?;
+                    _change._serialize_chained(dest)?;
+                }
+                Self::EditorPaste {
+                    selection: ref _selection,
+                    clipboard: ref _clipboard,
+                    has_files: ref _has_files,
+                    html_nodes: ref _html_nodes,
+                }
+                => {
+                    4u8._serialize_chained(dest)?;
+                    _selection._serialize_chained(dest)?;
+                    _clipboard._serialize_chained(dest)?;
+                    _has_files._serialize_chained(dest)?;
+                    _html_nodes._serialize_chained(dest)?;
+                }
+                Self::EditorInsertText {
+                    phase: ref _phase,
+                    has_data: ref _has_data,
+                    data: ref _data,
+                    has_transfer: ref _has_transfer,
+                    transfer: ref _transfer,
+                    facts: ref _facts,
+                    last_key: ref _last_key,
+                    selection: ref _selection,
+                }
+                => {
+                    5u8._serialize_chained(dest)?;
+                    _phase._serialize_chained(dest)?;
+                    _has_data._serialize_chained(dest)?;
+                    _data._serialize_chained(dest)?;
+                    _has_transfer._serialize_chained(dest)?;
+                    _transfer._serialize_chained(dest)?;
+                    _facts._serialize_chained(dest)?;
+                    _last_key._serialize_chained(dest)?;
+                    _selection._serialize_chained(dest)?;
+                }
+                Self::EditorComposition {
+                    kind: ref _kind,
+                    key: ref _key,
+                    text: ref _text,
+                    anchor_offset: ref _anchor_offset,
+                    focus_offset: ref _focus_offset,
+                    data: ref _data,
+                    selection: ref _selection,
+                }
+                => {
+                    6u8._serialize_chained(dest)?;
+                    _kind._serialize_chained(dest)?;
+                    _key._serialize_chained(dest)?;
+                    _text._serialize_chained(dest)?;
+                    _anchor_offset._serialize_chained(dest)?;
+                    _focus_offset._serialize_chained(dest)?;
+                    _data._serialize_chained(dest)?;
+                    _selection._serialize_chained(dest)?;
+                }
+                Self::EditorText {
+                    key: ref _key,
+                    text: ref _text,
+                    anchor_offset: ref _anchor_offset,
+                    focus_offset: ref _focus_offset,
+                    composition_end: ref _composition_end,
+                    composition_data: ref _composition_data,
+                    selection: ref _selection,
+                }
+                => {
+                    7u8._serialize_chained(dest)?;
+                    _key._serialize_chained(dest)?;
+                    _text._serialize_chained(dest)?;
+                    _anchor_offset._serialize_chained(dest)?;
+                    _focus_offset._serialize_chained(dest)?;
+                    _composition_end._serialize_chained(dest)?;
+                    _composition_data._serialize_chained(dest)?;
+                    _selection._serialize_chained(dest)?;
+                }
+            }
+            Ok(size)
+        });
+
+        fn _deserialize_chained(raw: &'raw [u8]) -> ::bebop::DeResult<(usize, Self)> {
+            let len = ::bebop::read_len(raw)? + ::bebop::LEN_SIZE + 1;
+            let mut i = ::bebop::LEN_SIZE + 1;
+            let de = match raw[::bebop::LEN_SIZE] {
+                1 => {
+                    let (read, v0) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+                    i += read;
+                    let (read, v1) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+                    i += read;
+                    let (read, v2) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+                    i += read;
+                    let (read, v3) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+                    i += read;
+                    let (read, v4) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+                    i += read;
+                    let (read, v5) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+                    i += read;
+                    let (read, v6) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+                    i += read;
+
+                    EditorInputMsg::EditorCommand {
+                        command: v0,
+                        a: v1,
+                        b: v2,
+                        text: v3,
+                        selection: v4,
+                        target: v5,
+                        character_target: v6,
+                    }
+                }
+                2 => {
+                    let (read, v0) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+                    i += read;
+
+                    EditorInputMsg::EditorSetState {
+                        json: v0,
+                    }
+                }
+                3 => {
+                    let (read, v0) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+                    i += read;
+                    let (read, v1) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+                    i += read;
+
+                    EditorInputMsg::EditorSelection {
+                        selection: v0,
+                        change: v1,
+                    }
+                }
+                4 => {
+                    let (read, v0) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+                    i += read;
+                    let (read, v1) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+                    i += read;
+                    let (read, v2) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+                    i += read;
+                    let (read, v3) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+                    i += read;
+
+                    EditorInputMsg::EditorPaste {
+                        selection: v0,
+                        clipboard: v1,
+                        has_files: v2,
+                        html_nodes: v3,
+                    }
+                }
+                5 => {
+                    let (read, v0) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+                    i += read;
+                    let (read, v1) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+                    i += read;
+                    let (read, v2) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+                    i += read;
+                    let (read, v3) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+                    i += read;
+                    let (read, v4) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+                    i += read;
+                    let (read, v5) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+                    i += read;
+                    let (read, v6) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+                    i += read;
+                    let (read, v7) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+                    i += read;
+
+                    EditorInputMsg::EditorInsertText {
+                        phase: v0,
+                        has_data: v1,
+                        data: v2,
+                        has_transfer: v3,
+                        transfer: v4,
+                        facts: v5,
+                        last_key: v6,
+                        selection: v7,
+                    }
+                }
+                6 => {
+                    let (read, v0) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+                    i += read;
+                    let (read, v1) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+                    i += read;
+                    let (read, v2) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+                    i += read;
+                    let (read, v3) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+                    i += read;
+                    let (read, v4) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+                    i += read;
+                    let (read, v5) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+                    i += read;
+                    let (read, v6) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+                    i += read;
+
+                    EditorInputMsg::EditorComposition {
+                        kind: v0,
+                        key: v1,
+                        text: v2,
+                        anchor_offset: v3,
+                        focus_offset: v4,
+                        data: v5,
+                        selection: v6,
+                    }
+                }
+                7 => {
+                    let (read, v0) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+                    i += read;
+                    let (read, v1) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+                    i += read;
+                    let (read, v2) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+                    i += read;
+                    let (read, v3) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+                    i += read;
+                    let (read, v4) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+                    i += read;
+                    let (read, v5) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+                    i += read;
+                    let (read, v6) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+                    i += read;
+
+                    EditorInputMsg::EditorText {
+                        key: v0,
+                        text: v1,
+                        anchor_offset: v2,
+                        focus_offset: v3,
+                        composition_end: v4,
+                        composition_data: v5,
+                        selection: v6,
+                    }
+                }
+                _ => {
+                    i = len;
+                    EditorInputMsg::Unknown
+                }
+            };
+            if !cfg!(feature = "unchecked") && i != len {
+                debug_assert!(i > len);
+                Err(::bebop::DeserializeError::CorruptFrame)
+            }
+            else {
+                Ok((i, de))
+            }
+        }
+
     }
 
     impl<'raw> ::bebop::Record<'raw> for EditorInputMsg {}
@@ -3688,6 +5375,7 @@ pub mod owned {
         pub outcome: String,
         pub error: bool,
         pub attrs: ::std::vec::Vec<AttrMsg>,
+        pub parent: u64,
     }
 
     impl<'raw> ::core::convert::From<super::TelemetryMsg<'raw>> for TelemetryMsg {
@@ -3699,6 +5387,7 @@ pub mod owned {
                 outcome: value.outcome.into(),
                 error: value.error,
                 attrs: value.attrs.into_iter().map(|value| value.into()).collect(),
+                parent: value.parent,
             }
         }
     }
@@ -3710,7 +5399,8 @@ pub mod owned {
             <String>::MIN_SERIALIZED_SIZE +
             <String>::MIN_SERIALIZED_SIZE +
             <bool>::MIN_SERIALIZED_SIZE +
-            <::std::vec::Vec<AttrMsg>>::MIN_SERIALIZED_SIZE;
+            <::std::vec::Vec<AttrMsg>>::MIN_SERIALIZED_SIZE +
+            <u64>::MIN_SERIALIZED_SIZE;
 
         #[inline]
         fn serialized_size(&self) -> usize {
@@ -3719,7 +5409,8 @@ pub mod owned {
             self.name.serialized_size() +
             self.outcome.serialized_size() +
             self.error.serialized_size() +
-            self.attrs.serialized_size()
+            self.attrs.serialized_size() +
+            self.parent.serialized_size()
         }
 
         ::bebop::define_serialize_chained!(Self => |zelf, dest| {
@@ -3729,7 +5420,8 @@ pub mod owned {
                 zelf.name._serialize_chained(dest)? +
                 zelf.outcome._serialize_chained(dest)? +
                 zelf.error._serialize_chained(dest)? +
-                zelf.attrs._serialize_chained(dest)?
+                zelf.attrs._serialize_chained(dest)? +
+                zelf.parent._serialize_chained(dest)?
             )
         });
 
@@ -3752,6 +5444,8 @@ pub mod owned {
             i += read;
             let (read, v5) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
             i += read;
+            let (read, v6) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+            i += read;
 
             Ok((i, Self {
                 span: v0,
@@ -3760,6 +5454,7 @@ pub mod owned {
                 outcome: v3,
                 error: v4,
                 attrs: v5,
+                parent: v6,
             }))
         }
     }
@@ -3882,8 +5577,14 @@ pub mod owned {
 
     impl<'raw> ::bebop::Record<'raw> for DocEventMsg {}
 
+    pub use super::ClosedReason;
+
+    pub use super::SaveReason;
+
     #[derive(Clone, Debug, PartialEq)]
     pub struct ViewEffectMsg {
+        pub closed_reason: ClosedReason,
+        pub save_reason: SaveReason,
         pub kind: u8,
         pub request: u32,
         pub code: u32,
@@ -3902,6 +5603,8 @@ pub mod owned {
     impl<'raw> ::core::convert::From<super::ViewEffectMsg<'raw>> for ViewEffectMsg {
         fn from(value: super::ViewEffectMsg) -> Self {
             Self {
+                closed_reason: value.closed_reason,
+                save_reason: value.save_reason,
                 kind: value.kind,
                 request: value.request,
                 code: value.code,
@@ -3921,6 +5624,8 @@ pub mod owned {
 
     impl<'raw> ::bebop::SubRecord<'raw> for ViewEffectMsg {
         const MIN_SERIALIZED_SIZE: usize =
+            <ClosedReason>::MIN_SERIALIZED_SIZE +
+            <SaveReason>::MIN_SERIALIZED_SIZE +
             <u8>::MIN_SERIALIZED_SIZE +
             <u32>::MIN_SERIALIZED_SIZE +
             <u32>::MIN_SERIALIZED_SIZE +
@@ -3937,6 +5642,8 @@ pub mod owned {
 
         #[inline]
         fn serialized_size(&self) -> usize {
+            self.closed_reason.serialized_size() +
+            self.save_reason.serialized_size() +
             self.kind.serialized_size() +
             self.request.serialized_size() +
             self.code.serialized_size() +
@@ -3954,6 +5661,8 @@ pub mod owned {
 
         ::bebop::define_serialize_chained!(Self => |zelf, dest| {
             Ok(
+                zelf.closed_reason._serialize_chained(dest)? +
+                zelf.save_reason._serialize_chained(dest)? +
                 zelf.kind._serialize_chained(dest)? +
                 zelf.request._serialize_chained(dest)? +
                 zelf.code._serialize_chained(dest)? +
@@ -4003,21 +5712,27 @@ pub mod owned {
             i += read;
             let (read, v12) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
             i += read;
+            let (read, v13) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+            i += read;
+            let (read, v14) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+            i += read;
 
             Ok((i, Self {
-                kind: v0,
-                request: v1,
-                code: v2,
-                detail: v3,
-                flag: v4,
-                text: v5,
-                selection: v6,
-                format: v7,
-                style: v8,
-                keys: v9,
-                values: v10,
-                events: v11,
-                paths: v12,
+                closed_reason: v0,
+                save_reason: v1,
+                kind: v2,
+                request: v3,
+                code: v4,
+                detail: v5,
+                flag: v6,
+                text: v7,
+                selection: v8,
+                format: v9,
+                style: v10,
+                keys: v11,
+                values: v12,
+                events: v13,
+                paths: v14,
             }))
         }
     }
@@ -4029,6 +5744,7 @@ pub mod owned {
         pub kind: u8,
         pub key: u32,
         pub text: String,
+        pub flags: u32,
     }
 
     impl<'raw> ::core::convert::From<super::QueryMsg<'raw>> for QueryMsg {
@@ -4037,6 +5753,7 @@ pub mod owned {
                 kind: value.kind,
                 key: value.key,
                 text: value.text.into(),
+                flags: value.flags,
             }
         }
     }
@@ -4045,87 +5762,23 @@ pub mod owned {
         const MIN_SERIALIZED_SIZE: usize =
             <u8>::MIN_SERIALIZED_SIZE +
             <u32>::MIN_SERIALIZED_SIZE +
-            <String>::MIN_SERIALIZED_SIZE;
+            <String>::MIN_SERIALIZED_SIZE +
+            <u32>::MIN_SERIALIZED_SIZE;
 
         #[inline]
         fn serialized_size(&self) -> usize {
             self.kind.serialized_size() +
             self.key.serialized_size() +
-            self.text.serialized_size()
+            self.text.serialized_size() +
+            self.flags.serialized_size()
         }
 
         ::bebop::define_serialize_chained!(Self => |zelf, dest| {
             Ok(
                 zelf.kind._serialize_chained(dest)? +
                 zelf.key._serialize_chained(dest)? +
-                zelf.text._serialize_chained(dest)?
-            )
-        });
-
-        fn _deserialize_chained(raw: &'raw [u8]) -> ::bebop::DeResult<(usize, Self)> {
-            let mut i = 0;
-            if raw.len() - i < Self::MIN_SERIALIZED_SIZE {
-                let missing = Self::MIN_SERIALIZED_SIZE - (raw.len() - i);
-                return Err(::bebop::DeserializeError::MoreDataExpected(missing));
-            }
-
-            let (read, v0) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
-            i += read;
-            let (read, v1) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
-            i += read;
-            let (read, v2) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
-            i += read;
-
-            Ok((i, Self {
-                kind: v0,
-                key: v1,
-                text: v2,
-            }))
-        }
-    }
-
-    impl<'raw> ::bebop::Record<'raw> for QueryMsg {}
-
-    #[derive(Clone, Debug, PartialEq)]
-    pub struct QueryReplyMsg {
-        pub text: String,
-        pub count: u32,
-        pub keys: ::std::vec::Vec<u32>,
-        pub nodes: ::std::vec::Vec<String>,
-    }
-
-    impl<'raw> ::core::convert::From<super::QueryReplyMsg<'raw>> for QueryReplyMsg {
-        fn from(value: super::QueryReplyMsg) -> Self {
-            Self {
-                text: value.text.into(),
-                count: value.count,
-                keys: value.keys.iter().map(|value| value).collect(),
-                nodes: value.nodes.into_iter().map(|value| value.into()).collect(),
-            }
-        }
-    }
-
-    impl<'raw> ::bebop::SubRecord<'raw> for QueryReplyMsg {
-        const MIN_SERIALIZED_SIZE: usize =
-            <String>::MIN_SERIALIZED_SIZE +
-            <u32>::MIN_SERIALIZED_SIZE +
-            <::std::vec::Vec<u32>>::MIN_SERIALIZED_SIZE +
-            <::std::vec::Vec<String>>::MIN_SERIALIZED_SIZE;
-
-        #[inline]
-        fn serialized_size(&self) -> usize {
-            self.text.serialized_size() +
-            self.count.serialized_size() +
-            self.keys.serialized_size() +
-            self.nodes.serialized_size()
-        }
-
-        ::bebop::define_serialize_chained!(Self => |zelf, dest| {
-            Ok(
                 zelf.text._serialize_chained(dest)? +
-                zelf.count._serialize_chained(dest)? +
-                zelf.keys._serialize_chained(dest)? +
-                zelf.nodes._serialize_chained(dest)?
+                zelf.flags._serialize_chained(dest)?
             )
         });
 
@@ -4146,10 +5799,88 @@ pub mod owned {
             i += read;
 
             Ok((i, Self {
+                kind: v0,
+                key: v1,
+                text: v2,
+                flags: v3,
+            }))
+        }
+    }
+
+    impl<'raw> ::bebop::Record<'raw> for QueryMsg {}
+
+    #[derive(Clone, Debug, PartialEq)]
+    pub struct QueryReplyMsg {
+        pub text: String,
+        pub count: u32,
+        pub keys: ::std::vec::Vec<u32>,
+        pub nodes: ::std::vec::Vec<String>,
+        pub points: ::std::vec::Vec<PointMsg>,
+    }
+
+    impl<'raw> ::core::convert::From<super::QueryReplyMsg<'raw>> for QueryReplyMsg {
+        fn from(value: super::QueryReplyMsg) -> Self {
+            Self {
+                text: value.text.into(),
+                count: value.count,
+                keys: value.keys.iter().map(|value| value).collect(),
+                nodes: value.nodes.into_iter().map(|value| value.into()).collect(),
+                points: value.points.iter().map(|value| value).collect(),
+            }
+        }
+    }
+
+    impl<'raw> ::bebop::SubRecord<'raw> for QueryReplyMsg {
+        const MIN_SERIALIZED_SIZE: usize =
+            <String>::MIN_SERIALIZED_SIZE +
+            <u32>::MIN_SERIALIZED_SIZE +
+            <::std::vec::Vec<u32>>::MIN_SERIALIZED_SIZE +
+            <::std::vec::Vec<String>>::MIN_SERIALIZED_SIZE +
+            <::std::vec::Vec<PointMsg>>::MIN_SERIALIZED_SIZE;
+
+        #[inline]
+        fn serialized_size(&self) -> usize {
+            self.text.serialized_size() +
+            self.count.serialized_size() +
+            self.keys.serialized_size() +
+            self.nodes.serialized_size() +
+            self.points.serialized_size()
+        }
+
+        ::bebop::define_serialize_chained!(Self => |zelf, dest| {
+            Ok(
+                zelf.text._serialize_chained(dest)? +
+                zelf.count._serialize_chained(dest)? +
+                zelf.keys._serialize_chained(dest)? +
+                zelf.nodes._serialize_chained(dest)? +
+                zelf.points._serialize_chained(dest)?
+            )
+        });
+
+        fn _deserialize_chained(raw: &'raw [u8]) -> ::bebop::DeResult<(usize, Self)> {
+            let mut i = 0;
+            if raw.len() - i < Self::MIN_SERIALIZED_SIZE {
+                let missing = Self::MIN_SERIALIZED_SIZE - (raw.len() - i);
+                return Err(::bebop::DeserializeError::MoreDataExpected(missing));
+            }
+
+            let (read, v0) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+            i += read;
+            let (read, v1) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+            i += read;
+            let (read, v2) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+            i += read;
+            let (read, v3) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+            i += read;
+            let (read, v4) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+            i += read;
+
+            Ok((i, Self {
                 text: v0,
                 count: v1,
                 keys: v2,
                 nodes: v3,
+                points: v4,
             }))
         }
     }

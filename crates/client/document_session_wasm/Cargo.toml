@@ -15,6 +15,9 @@ bebop-owned-all = []
 document_session.workspace = true
 doc_sync_core.workspace = true
 lexical_model.workspace = true
+lexical_markdown.workspace = true
+lexical_html.workspace = true
+lexical_rich_nodes.workspace = true
 lexical_loro.workspace = true
 loro.workspace = true
 sync_protocol.workspace = true
@@ -23,7 +26,7 @@ js-sys.workspace = true
 bebop.workspace = true
 serde_json.workspace = true
 thiserror.workspace = true
-rootcause.workspace = true
+tracing.workspace = true
 
 [package.metadata.wasm-pack.profile.release]
 wasm-opt = ["-Oz"]

@@ -2,10 +2,9 @@ use crate::*;
 use doc_sync_core::*;
 pub(crate) fn now(mono: f64, wall: f64) -> Result<Now, BoundaryError> {
     if !mono.is_finite()
-        || mono < 0.0
-        || mono > u64::MAX as f64
+        || !(0.0..=9_007_199_254_740_991.0).contains(&mono)
         || !wall.is_finite()
-        || wall.abs() > i64::MAX as f64
+        || wall.abs() > 9_007_199_254_740_991.0
     {
         return Err(BoundaryError::Invalid("clock"));
     }

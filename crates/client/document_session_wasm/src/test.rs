@@ -1,3 +1,4 @@
+mod session_bop;
 use super::*;
 use doc_sync_core::*;
 use document_session::*;
@@ -217,4 +218,116 @@ fn ordered_diff_chain_keeps_both_text_patches_and_nested_observation_paths() {
     let view = wire::ViewEffectMsg::deserialize(&buffer[at + 16..at + 16 + payload_len]).unwrap();
     assert_eq!(view.paths[0].root, "fixture");
     assert_eq!(view.paths[0].steps[0].key, "nested");
+}
+#[test]
+fn bulk_queries_export_markup_and_selected_clipboard_from_the_native_model() {
+    let config = wire::SessionConfigMsg {
+        doc: "query-fixture".into(),
+        session: "00000000-0000-0000-0000-000000000001".into(),
+        user: "fixture-user".into(),
+        peers: vec![7, 8, 9],
+        access: wire::Access::Edit,
+        transport: wire::Transport::None,
+        durable: false,
+        chatter: false,
+        headless: false,
+        view_engine: 1,
+        view_os: 0,
+        token: String::new(),
+        traceparent: String::new(),
+        coalesce: 25,
+        snapshot_interval: 0,
+        observed: vec![],
+    };
+    let mut machine = machine::Machine::create(
+        generated::ABI_MAJOR,
+        &bytes(&config).unwrap(),
+        0.0,
+        0.0,
+        true,
+    )
+    .unwrap();
+    machine.sync(SyncInput::Start, 0.0, Some(0.0)).unwrap();
+    machine
+        .sync(
+            SyncInput::Seed {
+                kind: SeedKind::Optimistic,
+                snapshot: vec![],
+            },
+            1.0,
+            Some(1.0),
+        )
+        .unwrap();
+    machine.editor(Input::SetState{state:serde_json::from_value(serde_json::json!({"root":{"type":"root","version":1,"children":[{"type":"paragraph","version":1,"children":[{"type":"text","version":1,"text":"hello 😀","format":1,"detail":0,"mode":"normal","style":""}]}]}})).unwrap(),tags:TagSet::default()},2.0).unwrap();
+    let session = EditorSession { machine };
+    assert_eq!(
+        query::markdown(session.surface().state(), 0, false).unwrap(),
+        "**hello 😀**"
+    );
+    let words = query::query(
+        &session,
+        wire::QueryMsg {
+            kind: 3,
+            key: 0,
+            text: String::new(),
+            flags: 0,
+        },
+    )
+    .unwrap();
+    assert_eq!(words.count, 2);
+    let matches = query::query(
+        &session,
+        wire::QueryMsg {
+            kind: 2,
+            key: 0,
+            text: "😀".into(),
+            flags: 0,
+        },
+    )
+    .unwrap();
+    assert_eq!(matches.count, 1);
+    assert_eq!({ matches.points[0].offset }, 6);
+    assert_eq!({ matches.points[1].offset }, 8);
+    let html = query::query(
+        &session,
+        wire::QueryMsg {
+            kind: 0,
+            key: 0,
+            text: String::new(),
+            flags: 0,
+        },
+    )
+    .unwrap();
+    assert!(html.text.contains("<b>"));
+    assert!(html.text.contains("hello 😀"));
+    let nodes = query::query(
+        &session,
+        wire::QueryMsg {
+            kind: 4,
+            key: 0,
+            text: "text".into(),
+            flags: 0,
+        },
+    )
+    .unwrap();
+    assert_eq!(nodes.keys.len(), 1);
+    assert!(nodes.nodes[0].contains("hello 😀"));
+}
+#[test]
+fn closed_and_unsaved_reasons_survive_the_view_boundary() {
+    let output = SessionOutput {
+        view: vec![ViewEffect::Status(SyncStatus {
+            connection: ConnectionStatus::Closed(CloseReason::Unauthorized),
+            save: SaveState::Unsaved(UnsavedReason::ReadOnly),
+            pending_import: true,
+        })],
+        ..SessionOutput::default()
+    };
+    let mut buffer = vec![];
+    output::encode(&output, false, &mut buffer).unwrap();
+    let len = u32::from_le_bytes(buffer[36..40].try_into().unwrap()) as usize;
+    let status = wire::ViewEffectMsg::deserialize(&buffer[40..40 + len]).unwrap();
+    assert_eq!(status.closed_reason, wire::ClosedReason::Unauthorized);
+    assert_eq!(status.save_reason, wire::SaveReason::ReadOnly);
+    assert!(status.flag);
 }

@@ -17,14 +17,16 @@ pub(crate) fn view(kind: u8) -> wire::ViewEffectMsg {
         values: vec![],
         events: vec![],
         paths: vec![],
+        closed_reason: wire::ClosedReason::None,
+        save_reason: wire::SaveReason::None,
     }
 }
 fn pad(out: &mut Vec<u8>) {
-    while out.len() % 4 != 0 {
+    while !out.len().is_multiple_of(4) {
         out.push(0);
     }
 }
-fn entry(out: &mut Vec<u8>, tag: u32, a: u32, b: u32, payload: &[u8]) {
+pub(crate) fn entry(out: &mut Vec<u8>, tag: u32, a: u32, b: u32, payload: &[u8]) {
     for v in [tag, a, b, payload.len() as u32] {
         out.extend(v.to_le_bytes());
     }
@@ -89,6 +91,23 @@ pub(crate) fn encode(
                     SaveState::Saved => 0,
                     SaveState::Saving => 1,
                     SaveState::Unsaved(_) => 2,
+                };
+                m.closed_reason = match &status.connection {
+                    ConnectionStatus::Closed(CloseReason::Stopped) => wire::ClosedReason::Stopped,
+                    ConnectionStatus::Closed(CloseReason::Unauthorized) => {
+                        wire::ClosedReason::Unauthorized
+                    }
+                    ConnectionStatus::Closed(CloseReason::Corrupt) => wire::ClosedReason::Corrupt,
+                    _ => wire::ClosedReason::None,
+                };
+                m.save_reason = match &status.save {
+                    SaveState::Unsaved(UnsavedReason::Undelivered) => wire::SaveReason::Undelivered,
+                    SaveState::Unsaved(UnsavedReason::Storage) => wire::SaveReason::Storage,
+                    SaveState::Unsaved(UnsavedReason::ReadOnly) => wire::SaveReason::ReadOnly,
+                    SaveState::Unsaved(UnsavedReason::Poison) => wire::SaveReason::Poison,
+                    SaveState::Unsaved(UnsavedReason::Gap) => wire::SaveReason::Gap,
+                    SaveState::Unsaved(UnsavedReason::Rebasing) => wire::SaveReason::Rebasing,
+                    _ => wire::SaveReason::None,
                 };
                 m.flag = status.pending_import;
             }
@@ -299,6 +318,7 @@ pub(crate) fn encode(
                     0,
                     &bytes(&wire::TelemetryMsg {
                         span: t.span.0,
+                        parent: 0,
                         kind,
                         name: name.into(),
                         outcome: outcome.into(),

@@ -10,11 +10,15 @@ mod editor_input;
 mod generic;
 mod machine;
 mod output;
+mod query;
+mod router;
 mod storage;
+mod telemetry;
 use bebop::Record;
 pub use document::DocSession;
 pub use editor::EditorSession;
 use generated::owned as wire;
+pub use router::SyncRouter;
 use wasm_bindgen::prelude::*;
 const _: () = assert!(lexical_model::DIFF_FORMAT_VERSION == generated::DIFF_FORMAT_VERSION);
 #[derive(Debug, thiserror::Error)]
@@ -25,6 +29,10 @@ enum BoundaryError {
     Invalid(&'static str),
     #[error(transparent)]
     Session(#[from] document_session::SessionError),
+    #[error(transparent)]
+    Markdown(#[from] lexical_markdown::Error),
+    #[error(transparent)]
+    Html(#[from] lexical_html::Error),
     #[error(transparent)]
     Model(#[from] lexical_model::Error),
     #[error(transparent)]
