@@ -5,6 +5,9 @@ use serde_json::{Value, json};
 use specta::Type;
 use std::collections::BTreeSet;
 
+#[cfg(test)]
+mod test;
+
 /// Postcard envelope containing the existing flat model diff and host metadata.
 #[derive(Serialize, Deserialize, Type)]
 pub struct HostCommitPacket {

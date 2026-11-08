@@ -3,6 +3,54 @@ use lexical_model::*;
 use serde_json::json;
 
 #[test]
+fn failed_packet_preparation_keeps_the_committed_version_and_invalidates_pending_handles()
+-> Result<()> {
+    let editor = Editor::builder(EditorMode::Headless)
+        .build()
+        .expect("editor");
+    let mut host = Session::new(editor);
+    let root = super::super::index()
+        .binary_search(&"lexical.$getRoot")
+        .expect("root") as u32;
+    let paragraph = super::super::index()
+        .binary_search(&"lexical.$createParagraphNode")
+        .expect("paragraph") as u32;
+    let append = super::super::index()
+        .binary_search(&"LexicalNode.append")
+        .expect("append") as u32;
+    host.begin_update(TagSet::default())?;
+    let p = host.call(paragraph, json!([]), None)?;
+    let r = host.call(root, json!([]), None)?;
+    host.call(append, json!([p.clone()]), Some(r))?;
+    let error = host
+        .commit_prepared::<()>(|commit, version| {
+            assert_eq!(version, 1);
+            assert!(!commit.next.is_empty_state());
+            Err(fail("packet preparation failed"))
+        })
+        .expect_err("preparation error");
+    assert_eq!(error.to_string(), "packet preparation failed");
+    assert!(host.state().is_empty_state());
+    assert_eq!(host.committed_version(), 0);
+    assert!(
+        host.read_field(p["$h"].as_u64().expect("handle") as u32, "__type")
+            .is_err()
+    );
+    host.begin_update(TagSet::default())?;
+    let p = host.call(paragraph, json!([]), None)?;
+    let r = host.call(root, json!([]), None)?;
+    host.call(append, json!([p]), Some(r))?;
+    let (commit, artifact) = host.commit_prepared(|commit, version| {
+        assert_eq!(version, 2);
+        Ok(commit.next.to_json()?)
+    })?;
+    assert_eq!(host.committed_version(), 2);
+    assert_eq!(host.state().to_json()?, artifact);
+    assert_eq!(commit.id, CommitId(2));
+    Ok(())
+}
+
+#[test]
 fn closing_noop_retains_detached_values_without_burning_a_model_commit() -> Result<()> {
     let editor = Editor::builder(EditorMode::Headless)
         .build()

@@ -72,9 +72,11 @@ Only the core registry is accepted until foreign definitions are wired; unknown
 node types fail explicitly. The development commit packet is versioned separately
 from its unchanged S1 flat diff. Its metadata currently covers base record fields;
 foreign payloads and NodeState identity descriptors still need the full host.
-Publication currently precedes packet encoding. Make delivery/encoding failure
-and chained-commit state/version/tag ownership explicit before enabling foreign-class
-commit-time hooks or model follow-up queues through this host.
+Packet and Postcard encoding run through Session::commit_prepared before the
+current model transition publishes; errors discard its writes and pending handles.
+Previously published preceding transitions remain published. Make delivery failures,
+backlogged preceding transitions and chained state/version/tag ownership explicit
+before enabling foreign-class commit-time hooks or model follow-up queues here.
 
 Transform registrations share the original JS function identity. Registration and
 unregistration inside a callback use its current transaction; type-transform

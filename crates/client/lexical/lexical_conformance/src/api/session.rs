@@ -145,6 +145,16 @@ impl Session {
 
     /// Flush and publish the update atomically, or discard it on failure.
     pub fn commit(&mut self) -> Result<Commit> {
+        self.commit_prepared(|_, _| Ok(()))
+            .map(|(commit, ())| commit)
+    }
+
+    /// Encode a host artifact before model publication, discarding this update
+    /// if preparation fails. Earlier published transitions are not rolled back.
+    pub fn commit_prepared<T>(
+        &mut self,
+        prepare: impl FnOnce(&Commit, u64) -> Result<T>,
+    ) -> Result<(Commit, T)> {
         let pending = self
             .pending
             .take()
@@ -166,15 +176,17 @@ impl Session {
             self.context.discard_update()?;
             return Err(error);
         }
-        let commit = match tx.commit() {
-            Ok(commit) => commit,
+        let version = self.context.publishing_version()?;
+        let (commit, artifact) = match tx.commit_foreign(|commit| prepare(commit, version)) {
+            Ok(prepared) => prepared,
             Err(error) => {
                 self.context.discard_update()?;
-                return Err(error.into());
+                return Err(error);
             }
         };
-        self.context.publish(commit.next.clone())?;
-        Ok(commit)
+        let last = commit.chain().last().expect("commit chain includes itself");
+        self.context.publish(last.next.clone())?;
+        Ok((commit, artifact))
     }
 
     /// Drop unpublished model writes and invalidate their handles.

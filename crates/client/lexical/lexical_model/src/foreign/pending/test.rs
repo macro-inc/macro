@@ -1,6 +1,49 @@
 use super::*;
 
 #[test]
+fn failed_host_preparation_discards_current_model_effects_and_preserves_published_state()
+-> Result<(), Error> {
+    let mut editor = Editor::builder(EditorMode::Headless)
+        .extension_state(0u32)
+        .build()
+        .expect("registry");
+    let unchanged = editor.transaction().suspend();
+    let mut tx = editor.transaction();
+    let p = tx.create(Paragraph::default())?;
+    let text = tx.create_text("pending")?;
+    tx.append(p, &[text.key()])?;
+    tx.append(NodeKey::ROOT, &[p.key()])?;
+    tx.select_end(text)?;
+    tx.set_composition_key(Some(text.key()))?;
+    *tx.extension_mut::<u32>()? = 7;
+    tx.prevent_default();
+    let result: Result<(Commit, ()), Error> = tx.commit_foreign(|commit| {
+        assert_eq!(commit.next.root_text_content().as_ref(), "pending");
+        assert!(commit.selection_changed);
+        assert!(commit.composition_changed);
+        assert!(commit.default_prevented);
+        Err(Error::Invariant("host encoding failed"))
+    });
+    assert!(matches!(
+        result,
+        Err(Error::Invariant("host encoding failed"))
+    ));
+    assert!(editor.state().is_empty_state());
+    assert!(editor.state().selection().is_none());
+    assert_eq!(*editor.extension::<u32>()?, 0);
+    let mut tx = editor.resume(unchanged)?;
+    assert_eq!(tx.composition_key(), None);
+    let next = tx.create(Paragraph::default())?;
+    assert!(next.key() > text.key());
+    tx.append(NodeKey::ROOT, &[next.key()])?;
+    let (commit, artifact) = tx.commit_foreign(|commit| commit.next.to_json())?;
+    assert_eq!(commit.id, CommitId(2));
+    assert_eq!(editor.state().to_json()?, artifact);
+    assert!(!commit.default_prevented);
+    Ok(())
+}
+
+#[test]
 fn no_op_detection_preserves_event_and_prevent_default_only_updates() -> Result<(), Error> {
     static EVENT: EventKey<u32> = EventKey::new("host-event");
     let mut editor = Editor::builder(EditorMode::Headless)
