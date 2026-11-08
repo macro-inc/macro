@@ -2,6 +2,7 @@
 //! backend to be reachable through the proxy, then launch Vite pointed
 //! at the proxy origin.
 
+use std::fs::{File, TryLockError};
 use std::os::unix::ffi::OsStrExt;
 use std::os::unix::process::CommandExt;
 use std::path::{Path, PathBuf};
@@ -9,6 +10,10 @@ use std::process::{Child, Command, Stdio};
 use std::time::Duration;
 
 use anyhow::{Context, Result};
+
+mod bundle_cache;
+
+use super::content_key;
 
 use super::instance::{Instance, Port};
 use super::{Mode, proxy, repo_root, stage::Stage};
@@ -77,16 +82,66 @@ pub fn stop_recorded(instance: &Instance) {
 pub fn read_pid(instance: &Instance) -> Option<String> {
     std::fs::read_to_string(pid_path(instance)).ok()
 }
+const BUILD_LOCK_FILE: &str = ".frontend-build.lock";
 
 /// The app dir where the Vite dev server runs.
 fn app_dir() -> std::path::PathBuf {
     repo_root().join("apps/web")
 }
 
+/// Serialize frontend builds within one checkout. Every instance there shares
+/// the generated wasm packages and `apps/web/dist`, and their builds check and
+/// then write without coordinating, so two instances building at once read
+/// each other's half-written files (wasm-opt fails with "error parsing wasm").
+/// The lock releases when the returned file drops.
+fn lock_checkout_build(stage: &Stage) -> Result<Option<File>> {
+    if stage.is_dry_run() {
+        return Ok(None);
+    }
+    lock_build_in(&repo_root().join("infra/local/generated"), || {
+        stage.note("another instance in this checkout is building the frontend; waiting for it");
+    })
+    .map(Some)
+}
+
+fn lock_build_in(dir: &Path, on_wait: impl FnOnce()) -> Result<File> {
+    std::fs::create_dir_all(dir).with_context(|| format!("creating {}", dir.display()))?;
+    let path = dir.join(BUILD_LOCK_FILE);
+    let file = File::create(&path).with_context(|| format!("creating {}", path.display()))?;
+    match file.try_lock() {
+        Ok(()) => return Ok(file),
+        Err(TryLockError::WouldBlock) => on_wait(),
+        Err(TryLockError::Error(error)) => {
+            return Err(error).with_context(|| format!("locking {}", path.display()));
+        }
+    }
+    file.lock()
+        .with_context(|| format!("locking {}", path.display()))?;
+    Ok(file)
+}
+
+/// Build or restore the generated wasm packages the app imports. Builds share
+/// a machine-wide cache keyed by each package's sources (see
+/// `apps/web/scripts/cached-wasm-build.sh`), so a new checkout or instance
+/// copies packages another one already built instead of compiling them.
 fn prepare_dependencies(stage: &Stage) -> Result<()> {
     let mut prepare = Command::new("bun");
     prepare.current_dir(app_dir()).args(["run", "dev:prepare"]);
+    if macro_env_var::maybe_read_env("WASM_PKG_CACHE_DIR").is_none() {
+        let home = macro_env_var::maybe_read_env("HOME").context("HOME is not set")?;
+        prepare.env(
+            "WASM_PKG_CACHE_DIR",
+            Path::new(&home).join(".cache/macro-local/wasm-pkgs"),
+        );
+    }
     stage.run("Preparing frontend dependencies", &mut prepare)
+}
+
+/// Prepare the dev server's dependencies. `bring_up` runs this alongside the
+/// service build, before [`start`].
+pub fn prepare(stage: &Stage) -> Result<()> {
+    let _build_lock = lock_checkout_build(stage)?;
+    prepare_dependencies(stage)
 }
 
 /// Host-facing frontend URL.
@@ -138,32 +193,69 @@ pub fn static_dir(instance: &Instance) -> std::path::PathBuf {
 /// `VITE_LOCAL_ONLY` makes the bundle count as local, as the dev server does
 /// through `import.meta.hot`, so local-only flags, routes and tools match
 /// `just run_local`.
+///
+/// Bundles are cached machine-wide by everything the build reads (see
+/// [`bundle_cache`]), so an unchanged frontend is staged without rebuilding.
 pub fn build_static(stage: &Stage, instance: &Instance, mode: Mode) -> Result<()> {
+    // Held through staging: `dist/` is shared until it's copied out.
+    let _build_lock = lock_checkout_build(stage)?;
     prepare_dependencies(stage)?;
-    let dist = {
-        let mut cmd = Command::new("bun");
-        cmd.current_dir(app_dir())
-            .args(["run", "--bun", "build"])
-            .env("MODE", "development")
-            .env("NODE_ENV", "production")
-            .env("VITE_LOCAL_SERVERS", "ALL")
-            .env("VITE_LOCAL_BACKEND_ORIGIN", "same-origin")
-            .env("VITE_LOCAL_ONLY", "true");
-        if mode.spec().runs_local_infra {
-            cmd.env("VITE_AI_EDITING_WORKER_URL", "/ai-editing");
-        }
-        stage.run("Building frontend bundle", &mut cmd)?;
-        app_dir().join("dist")
-    };
+    let mut cmd = Command::new("bun");
+    cmd.current_dir(app_dir())
+        .args(["run", "--bun", "build"])
+        .env("MODE", "development")
+        .env("NODE_ENV", "production")
+        .env("VITE_LOCAL_SERVERS", "ALL")
+        .env("VITE_LOCAL_BACKEND_ORIGIN", "same-origin")
+        .env("VITE_LOCAL_ONLY", "true");
+    if mode.spec().runs_local_infra {
+        cmd.env("VITE_AI_EDITING_WORKER_URL", "/ai-editing");
+    }
     if stage.is_dry_run() {
-        return Ok(());
+        return stage.run("Building frontend bundle", &mut cmd);
     }
-    if !dist.join("index.html").exists() {
-        anyhow::bail!(
-            "no index.html in {} — frontend build did not produce a bundle",
-            dist.display()
-        );
-    }
+
+    let key = bundle_cache::key(&repo_root(), &cmd)?;
+    // Held until the bundle is staged, so pruning can't remove it first.
+    let (bundle, _reading) = match bundle_cache::lookup(&key)? {
+        Some((cached, reading)) => {
+            stage.note(&format!(
+                "frontend unchanged: reusing bundle {}",
+                &key[..12]
+            ));
+            (cached, reading)
+        }
+        None => {
+            stage.run("Building frontend bundle", &mut cmd)?;
+            let dist = app_dir().join("dist");
+            if !dist.join("index.html").exists() {
+                anyhow::bail!(
+                    "no index.html in {} — frontend build did not produce a bundle",
+                    dist.display()
+                );
+            }
+            // The read lock is taken after the store's install lock is released.
+            // Another checkout would have to store a cache's worth of newer
+            // bundles in that gap for this one to be pruned, but if it is gone,
+            // store it again from `dist/`, which this checkout's lock still holds.
+            let mut stored = None;
+            for _ in 0..2 {
+                let mut cached = None;
+                stage.run_step("Caching frontend bundle", || {
+                    cached = Some(bundle_cache::store(&key, &dist)?);
+                    Ok(())
+                })?;
+                let cached = cached.context("frontend bundle was not cached")?;
+                let reading = content_key::read_lock(&cached)
+                    .with_context(|| format!("locking {}", cached.display()))?;
+                if cached.join("index.html").exists() {
+                    stored = Some((cached, reading));
+                    break;
+                }
+            }
+            stored.context("the cached frontend bundle was pruned before it could be staged")?
+        }
+    };
     stage.run_step("Staging frontend bundle", || {
         let staged = static_dir(instance);
         if staged.exists() {
@@ -171,14 +263,7 @@ pub fn build_static(stage: &Stage, instance: &Instance, mode: Mode) -> Result<()
                 .with_context(|| format!("clearing {}", staged.display()))?;
         }
         instance.ensure_artifact_dir()?;
-        let status = Command::new("cp")
-            .arg("-a")
-            .arg(&dist)
-            .arg(&staged)
-            .status()
-            .context("running cp -a")?;
-        anyhow::ensure!(status.success(), "cp -a exited with {status}");
-        Ok(())
+        bundle_cache::copy_tree(&bundle, &staged)
     })
 }
 
@@ -371,7 +456,8 @@ fn tail_str(s: &str, n: usize) -> String {
 /// Start the frontend dev server and wait until *our* child is serving. Output
 /// goes to [`log_path`] (the vite banner would duplicate the summary's URL), so
 /// an unexpected exit can be diagnosed. Callers have already waited for the
-/// backend. Returns `None` in dry-run mode.
+/// backend and run [`prepare`] (`bring_up` does both). Returns `None` in
+/// dry-run mode.
 pub fn start(
     stage: &Stage,
     instance: &Instance,
@@ -387,22 +473,15 @@ pub fn start(
     }
     let port = instance.port(Port::Frontend);
     // A successful connect means something is already listening — almost
-    // certainly a stale dev server from a previous run. (A bind probe is
-    // unreliable: std's TcpListener sets SO_REUSEADDR, so it binds right
-    // alongside the squatter.) Bail clearly rather than spawn a bun that can't
+    // certainly a stale dev server from a previous run. (A bind probe can miss
+    // it; see `accepting`.) Bail clearly rather than spawn a bun that can't
     // bind and dies with a confusing late "exited (status 1)".
-    if std::net::TcpStream::connect_timeout(
-        &([127, 0, 0, 1], port).into(),
-        std::time::Duration::from_millis(300),
-    )
-    .is_ok()
-    {
+    if xtask_ports::probe::accepting(port, std::time::Duration::from_millis(300)) {
         anyhow::bail!(
             "frontend port {port} is already in use — likely a stale dev server from a \
              previous run. Free it (`lsof -ti tcp:{port} | xargs kill`) and retry."
         );
     }
-    prepare_dependencies(stage)?;
 
     // Vite's node-http-proxy WebSocket upgrades hang under Bun (including
     // 1.3.13). Use Node for the dev server, while keeping Bun for dependencies
@@ -454,7 +533,6 @@ fn spawn(stage: &Stage, cmd: &mut Command, port: u16, log: &Path) -> Result<Fron
     // Wait until OUR child is serving: poll the port, but fail fast (with Vite's
     // output) if the child exits first. A bare port poll would mistake a stale
     // server already on the port for "ready" while our child has died.
-    let addr: std::net::SocketAddr = ([127, 0, 0, 1], port).into();
     let startup = stage.run_step("Starting frontend", || {
         let deadline = std::time::Instant::now() + STARTUP_TIMEOUT;
         while std::time::Instant::now() < deadline {
@@ -469,9 +547,7 @@ fn spawn(stage: &Stage, cmd: &mut Command, port: u16, log: &Path) -> Result<Fron
                      (if the port is in use, free it: `lsof -ti tcp:{port} | xargs kill`)"
                 );
             }
-            if std::net::TcpStream::connect_timeout(&addr, std::time::Duration::from_millis(300))
-                .is_ok()
-            {
+            if xtask_ports::probe::accepting(port, std::time::Duration::from_millis(300)) {
                 return Ok(());
             }
         }

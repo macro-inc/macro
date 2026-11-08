@@ -15,13 +15,13 @@ and backend spans can be retrieved from the local collector.
 
 After a machine restart, follow the existing-instance recovery steps in the local
 running guide. Restore missing LocalStack resources with
-`cargo x localstack-provision --instance <name> --port-base <base>`, then start services
+`cargo x localstack-provision --instance <name>`, then start services
 that exited while their dependencies were unavailable. Check the collaboration
 gateway as well as Postgres and DSS: a stopped gateway can add seconds of DNS or
 connection retries to otherwise fast database writes.
 
 ```sh
-nix develop --command just run_local --no-doppler --instance database-profiling-audit --port-base 21000
+nix develop --command just run_local --no-doppler --instance database-profiling-audit
 ```
 
 Use a private Playwright browser to sign in and save its `storageState` outside
