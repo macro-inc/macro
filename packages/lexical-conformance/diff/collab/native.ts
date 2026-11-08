@@ -42,7 +42,8 @@ export class Native {
       path.dirname(fileURLToPath(import.meta.url)),
       '../../../..'
     );
-    this.child = spawn(path.join(root, 'target/debug/examples/collab'), [], {
+    const target = path.resolve(root, process.env.CARGO_TARGET_DIR ?? 'target');
+    this.child = spawn(path.join(target, 'debug/examples/collab'), [], {
       cwd: root,
       stdio: ['pipe', 'pipe', 'pipe'],
     });
