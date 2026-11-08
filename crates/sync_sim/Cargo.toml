@@ -6,6 +6,9 @@ publish = false
 autotests = false
 
 [dependencies]
+document_session = { workspace = true, features = ["conformance"] }
+lexical_model = { workspace = true, features = ["model-segmentation"] }
+lexical_loro.workspace = true
 proptest.workspace = true
 doc_sync_core.workspace = true
 sync_protocol = { workspace = true, features = ["presence"] }

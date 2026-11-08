@@ -517,6 +517,11 @@ impl DocumentSession<GenericSurface> {
 
 #[cfg(feature = "conformance")]
 impl<S: Surface> DocumentSession<S> {
+    /// Whether the real winning seed has initialized the surface.
+    #[doc(hidden)]
+    pub fn conformance_ready(&self) -> bool {
+        self.ready
+    }
     /// Development-only immutable core diagnostics; no mutable document handle escapes.
     #[doc(hidden)]
     pub fn conformance_sync(&self) -> &SyncCore {
@@ -571,6 +576,16 @@ impl DocumentSession<EditorSurface> {
 
 #[cfg(feature = "conformance")]
 impl DocumentSession<EditorSurface> {
+    /// Serialize the live model using the actual configured synchronization policy.
+    #[doc(hidden)]
+    pub fn conformance_synced_state(
+        &self,
+    ) -> Result<lexical_model::SerializedEditorState, SessionError> {
+        Ok(lexical_loro::synced_json(
+            self.surface.state(),
+            self.surface.config.policy,
+        )?)
+    }
     /// Reconstruct the persisted editor tree independently of the live projection.
     #[doc(hidden)]
     pub fn conformance_reconstructed_state(

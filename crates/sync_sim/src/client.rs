@@ -1,9 +1,12 @@
-//! Real client core with a GenericSurface Loro document and an explicit executor boundary.
+//! Exclusive real client runtime with an explicit executor boundary.
 use crate::{
     document::{SimDoc, vv},
     *,
 };
 use doc_sync_core::*;
+pub(crate) mod commands;
+pub(crate) mod resolve;
+pub(crate) mod runtime;
 use std::collections::{BTreeMap, VecDeque};
 
 pub(crate) struct Identity {
@@ -13,17 +16,17 @@ pub(crate) struct Identity {
     pub user: String,
     pub color: PaletteColor,
 }
-/// A real client core and lending document; runtime effects are executed by the world.
+/// A real generic client or document session; effects are executed by the world.
 pub struct SimClient {
     pub(crate) spec: OpenSpec,
     pub(crate) effective_access: crate::Access,
     pub(crate) session: SessionId,
     pub(crate) doc_id: SyncDocId,
     pub(crate) user: String,
-    pub(crate) core: SyncCore,
+    pub(crate) core: runtime::Runtime,
+    pub(crate) failures: Vec<Failure>,
     pub(crate) routed: bool,
     pub(crate) outgoing: sync_protocol::framing::Reassembler,
-    pub(crate) doc: SimDoc,
     pub(crate) alive: bool,
     pub(crate) frozen: bool,
     pub(crate) deferred: VecDeque<SyncInput>,
@@ -46,6 +49,7 @@ impl SimClient {
         supply: Vec<u64>,
         now: Now,
         defaults: &SessionDefaults,
+        editor: bool,
     ) -> Result<Self, Failure> {
         let Identity {
             doc,
@@ -103,12 +107,7 @@ impl SimClient {
             chatter: !ai,
             reset_budget: defaults.reset_budget,
         };
-        let mut peers = PeerSupply::new(if ai { PeerRange::Ai } else { PeerRange::User });
-        peers
-            .extend(supply)
-            .map_err(|e| Failure::new("peer_supply", e))?;
-        let core = SyncCore::with_peer_supply(config, now, peers)
-            .map_err(|e| Failure::new("client_configuration", e))?;
+        let core = runtime::Runtime::new(config, peer, supply, now, editor, ai)?;
         Ok(Self {
             effective_access: spec.access,
             spec,
@@ -116,9 +115,9 @@ impl SimClient {
             doc_id: doc,
             user,
             core,
+            failures: vec![],
             routed: defaults.transport == TransportKind::Routed && !ai,
             outgoing: sync_protocol::framing::Reassembler::default(),
-            doc: SimDoc::new(peer)?,
             alive: true,
             frozen: false,
             deferred: VecDeque::new(),
@@ -153,15 +152,31 @@ impl SimClient {
         id
     }
     pub(crate) fn handle(&mut self, input: SyncInput, now: Now) -> (SyncOutput, Vec<Fact>) {
-        let mut out = SyncOutput::default();
-        let before = self.doc.oplog_vv();
-        self.core.handle(now, &mut self.doc, input, &mut out);
-        let peer = self.doc.peer_id();
+        let before = self.core.version();
+        let handled = self.core.handle(input, now);
+        self.finish(before, handled)
+    }
+    pub(crate) fn finish(
+        &mut self,
+        before: loro::VersionVector,
+        handled: runtime::Handled,
+    ) -> (SyncOutput, Vec<Fact>) {
+        let runtime::Handled {
+            out,
+            imports,
+            errors,
+        } = handled;
+        self.failures.extend(
+            errors
+                .into_iter()
+                .map(|error| Failure::new("editor_surface", error)),
+        );
+        let peer = self.core.peer_id();
         if self.spec.kind == ClientKind::Tab {
             self.presence_key = peer.to_string();
         }
         let start = before.get(&peer).copied().unwrap_or(0);
-        let end = self.doc.oplog_vv().get(&peer).copied().unwrap_or(0);
+        let end = self.core.version().get(&peer).copied().unwrap_or(0);
         let mut facts = Vec::new();
         if end > start {
             facts.push(Fact::LocalCommit {
@@ -169,7 +184,7 @@ impl SimClient {
                 spans: vec![IdSpan { peer, start, end }],
             });
         }
-        for (origin, pending, error) in self.doc.imports.drain(..) {
+        for (origin, pending, error) in imports {
             facts.push(Fact::Imported {
                 client: self.spec.client.clone(),
                 origin,
@@ -208,6 +223,7 @@ impl SimClient {
             _ => None,
         };
         Ok(ClientFinal {
+            editor: self.core.editor_final()?,
             alive: self.alive,
             terminal,
             session: self.session,
@@ -216,9 +232,9 @@ impl SimClient {
             doc: self.spec.doc,
             access: self.effective_access,
             kind: self.spec.kind,
-            peer: self.doc.peer_id(),
-            oplog_vv: vv(&self.doc.oplog_vv()),
-            deep_value: self.doc.value()?,
+            peer: self.core.peer_id(),
+            oplog_vv: vv(&self.core.version()),
+            deep_value: self.core.value()?,
             wal_undelivered: undelivered,
             wal_total: total,
             delivered: self
@@ -248,7 +264,7 @@ impl SimClient {
                 .collect(),
             status: self.core.status().clone(),
             storage_healthy: matches!(self.core.wal().health, StorageHealth::Ok),
-            pending_import: self.doc.pending || self.core.status().pending_import,
+            pending_import: self.core.pending() || self.core.status().pending_import,
             selection: self.selection,
             presence_key: self.presence_key.clone(),
             skew: self.skew,

@@ -7,6 +7,8 @@ clients and real `sync_server_core::Room` callbacks over `sync_server_sim` ports
 
 ## Start here
 
+- `src/client/runtime.rs`: exclusive generic/session ownership; `src/client/resolve.rs`: live UTF-16 positions.
+- `src/world/editor.rs`: real session editor inputs and effects.
 - `src/world.rs`: virtual event executor; `src/world/settle.rs`: healing and quiescence.
 - `src/storage.rs`: durable profile storage and lease/adoption rules.
 - `src/storage_reference.rs`: independent flat-row IndexedDbModel and portable StorageCase/StorageContract suite.
@@ -46,9 +48,16 @@ clients and real `sync_server_core::Room` callbacks over `sync_server_sim` ports
 - Build cached seed versions from one Loro history; install profile-local cache
   once per profile/document and observe real `Seeded` events. The core defers a
   remote seed while local load is pending; never bypass that arbitration.
-- GenericSurface/Loro clients are available before editor/session siblings.
-  Editor projection, undo and comment-gate parity remain pending integration;
-  never claim a skipped editor check establishes an editor safety property.
+- Editor seeds create real DocumentSession<EditorSurface> clients; generic seeds
+  retain the real lending SyncCore host. A session exclusively owns its editor,
+  projection, undo and document; never keep a shadow core or mutable document copy.
+- Capture live synced editor JSON and independently reconstructed persisted JSON.
+  Compare both per step and in finals; include editor finals in replay/hash evidence.
+  Remaining M2 command/story and comment-gate producers are listed in COVERAGE.md.
+- Headless inputs always use KeepModel. Install resolved selection through the
+  registered model-selection-only command, then dispatch the actual command in
+  the same core Batch. SelectionFromView(Range) is rejected in headless mode even
+  inside Batch; never bypass that guard or invent Edit authority.
 - Preserve desired front-door grants across old-connection AccessChanged events;
   track effective access separately in finals and coverage. Admit document edits only
   with actual effective Edit access; a desired grant does not change a fixed host capability.

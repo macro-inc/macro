@@ -23,9 +23,22 @@ pub fn presence_converged(outcome: &Outcome) -> Result<(), Failure> {
                     && peer.alive
                     && peer.terminal.is_none()
                     && peer.doc == client.doc
-                    && peer.selection.is_some()
+                    && peer
+                        .editor
+                        .as_ref()
+                        .map_or(peer.selection.is_some(), |editor| {
+                            editor.selection.is_some()
+                        })
             })
-            .map(|(_, peer)| (peer.presence_key.clone(), peer.selection))
+            .map(|(_, peer)| {
+                (
+                    peer.presence_key.clone(),
+                    peer.editor.as_ref().map_or_else(
+                        || peer.selection.map(serde_json::Value::from),
+                        |editor| editor.selection.clone(),
+                    ),
+                )
+            })
             .collect::<BTreeMap<_, _>>();
         let actual = views
             .get(name)
@@ -41,11 +54,8 @@ pub fn presence_converged(outcome: &Outcome) -> Result<(), Failure> {
             ));
         }
         for (key, selection) in expected {
-            let selected = actual
-                .get(&key)
-                .and_then(|value| value.get("selection"))
-                .and_then(serde_json::Value::as_u64);
-            if selected != selection.map(u64::from) {
+            let selected = actual.get(&key).and_then(|value| value.get("selection"));
+            if selected != selection.as_ref() {
                 return Err(Failure::new(
                     "presence_converged",
                     format!("{name:?}/{key}: selection differs"),

@@ -17,6 +17,9 @@ impl Sim {
                     .saturating_add(self.clock.now.saturating_sub(start));
             }
             Step::Edit { client: name, op } => {
+                if let AbstractOp::Editor(op) = op {
+                    return self.editor_edit(&name, op);
+                }
                 let Some(client) = self.clients.get_mut(&name) else {
                     self.emit(Fact::OpSkipped {
                         client: name,
@@ -47,13 +50,15 @@ impl Sim {
                     });
                     self.input(&name, session, SyncInput::SetPresence(value))?;
                 } else {
-                    let before = client.doc.loro.oplog_vv();
-                    client
-                        .doc
-                        .edit(&op, self.config.fields, self.clock.wall(client.skew))?;
-                    let peer = client.doc.loro.peer_id();
+                    let before = client.core.version();
+                    client.core.edit_generic(
+                        &op,
+                        self.config.fields,
+                        self.clock.wall(client.skew),
+                    )?;
+                    let peer = client.core.peer_id();
                     let start = before.get(&peer).copied().unwrap_or(0);
-                    let end = client.doc.loro.oplog_vv().get(&peer).copied().unwrap_or(0);
+                    let end = client.core.version().get(&peer).copied().unwrap_or(0);
                     let spans = if end > start {
                         vec![IdSpan { peer, start, end }]
                     } else {
@@ -379,6 +384,10 @@ impl Sim {
             supply,
             now,
             &self.config.session,
+            matches!(
+                self.config.seeds.get(&spec.doc),
+                Some(SeedDocument::Editor(_))
+            ),
         )?;
         let server = self
             .servers
