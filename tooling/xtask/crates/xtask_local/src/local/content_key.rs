@@ -21,6 +21,10 @@ pub fn tracked(repo: &Path, paths: &[&str]) -> Result<Vec<u8>> {
         .copied()
         .filter(|path| repo.join(path).exists())
         .collect();
+    // With no pathspec, `git add -A` would stage the whole checkout.
+    if present.is_empty() {
+        return Ok(Vec::new());
+    }
     let index = git(repo, &["rev-parse", "--git-path", "index"], None)?;
     let index = repo.join(String::from_utf8_lossy(&index).trim());
     let scratch = scratch_dir()?;
@@ -68,6 +72,22 @@ pub fn install_entry(tmp: &Path, entry: &Path, is_complete: impl Fn(&Path) -> bo
     }
     std::fs::rename(tmp, entry)
         .with_context(|| format!("moving {} into place at {}", tmp.display(), entry.display()))
+}
+
+/// Remove a cache entry while holding its install lock, so pruning never races
+/// an install of the same key. A key someone is installing is skipped. The
+/// lock file stays: removing it would let a later installer lock a new file
+/// while another still holds the old one. Readers take no lock; they mark an
+/// entry used before reading it, which keeps it from being pruned.
+pub fn prune_entry(entry: &Path) -> bool {
+    let lock_path = entry.with_extension("lock");
+    let Ok(lock) = std::fs::File::create(&lock_path) else {
+        return false;
+    };
+    if lock.try_lock().is_err() {
+        return false;
+    }
+    std::fs::remove_dir_all(entry).is_ok()
 }
 
 pub fn git(repo: &Path, args: &[&str], index: Option<&Path>) -> Result<Vec<u8>> {

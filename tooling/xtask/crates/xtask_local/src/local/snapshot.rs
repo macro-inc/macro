@@ -178,6 +178,8 @@ pub fn restore(stage: &Stage, instance: &Instance, plan: &Plan) -> Result<()> {
     stage.run_step(
         &format!("Restoring init snapshot ({})", plan.short_key()),
         || {
+            // Before reading, so pruning sees the snapshot as in use.
+            mark_used(&dir);
             for (archive, _) in &pairs {
                 if !dir.join(archive).exists() {
                     bail!("snapshot {} is missing {archive}", dir.display());
@@ -189,7 +191,6 @@ pub fn restore(stage: &Stage, instance: &Instance, plan: &Plan) -> Result<()> {
                 &format!("{}:/snap:ro", dir.display()),
                 |archive, vol| format!("tar xzf /snap/{archive} -C {vol}"),
             )?;
-            mark_used(&dir);
             Ok(())
         },
     )
@@ -298,8 +299,7 @@ fn prune_unused(root: &std::path::Path, keep: &str) {
             .and_then(|used| used.elapsed().ok())
             .is_some_and(|age| age > max_age);
         if unused {
-            let _ = std::fs::remove_dir_all(&path);
-            let _ = std::fs::remove_file(path.with_extension("lock"));
+            super::content_key::prune_entry(&path);
         }
     }
 }

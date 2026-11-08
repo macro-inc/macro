@@ -221,8 +221,7 @@ fn prune(root: &Path, keep: &str) {
     for (index, (modified, path)) in used.iter().enumerate() {
         let old = modified.elapsed().is_ok_and(|age| age > max_age);
         if old || index + 1 >= MAX_ENTRIES {
-            let _ = std::fs::remove_dir_all(path);
-            let _ = std::fs::remove_file(path.with_extension("lock"));
+            content_key::prune_entry(path);
         }
     }
 }

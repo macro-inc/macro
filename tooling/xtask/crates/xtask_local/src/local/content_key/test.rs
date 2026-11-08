@@ -100,3 +100,45 @@ fn an_installed_entry_is_never_replaced_by_a_concurrent_install() {
     );
     std::fs::remove_dir_all(&root).unwrap();
 }
+
+/// Pruning takes the key's install lock: a key being installed is skipped,
+/// and the lock file outlives the entry so every installer locks the same file.
+#[test]
+fn pruning_skips_a_key_being_installed_and_keeps_its_lock() {
+    let root = std::env::temp_dir().join(format!("content-key-prune-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&root);
+    std::fs::create_dir_all(&root).unwrap();
+    let entry = entry_with(&root, "key", "old");
+    let lock_path = entry.with_extension("lock");
+
+    let installer = std::fs::File::create(&lock_path).unwrap();
+    installer.lock().unwrap();
+    assert!(!prune_entry(&entry), "a key under install is not pruned");
+    assert!(complete(&entry));
+
+    drop(installer);
+    assert!(prune_entry(&entry));
+    assert!(!entry.exists());
+    assert!(lock_path.exists(), "the lock file stays");
+    std::fs::remove_dir_all(&root).unwrap();
+}
+
+/// No input path exists: the key covers nothing rather than the whole checkout.
+#[test]
+fn tracked_with_no_present_inputs_is_empty() {
+    let root = std::env::temp_dir().join(format!("content-key-empty-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&root);
+    std::fs::create_dir_all(&root).unwrap();
+    std::fs::write(root.join("unrelated.txt"), "x").unwrap();
+    assert!(
+        Command::new("git")
+            .current_dir(&root)
+            .args(["init", "-q"])
+            .status()
+            .unwrap()
+            .success()
+    );
+
+    assert!(tracked(&root, &["missing"]).unwrap().is_empty());
+    std::fs::remove_dir_all(&root).unwrap();
+}
