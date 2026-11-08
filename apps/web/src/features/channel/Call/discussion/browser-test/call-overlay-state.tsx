@@ -1,5 +1,10 @@
+import type { BackgroundEffect } from '@core/media/background-effect';
 import { createClient, fetchExchange } from '@urql/core';
-import type { ParentProps } from 'solid-js';
+import { createSignal, type ParentProps } from 'solid-js';
+
+const [backgroundEffect, setBackgroundEffect] = createSignal<BackgroundEffect>({
+  type: 'none',
+});
 
 const callId = '00000000-0000-7000-8000-0000000ca110';
 const channelId = '00000000-0000-7000-8000-00000000c0c0';
@@ -53,8 +58,10 @@ const call = {
   switchVideoInput: async () => {},
   isNoiseSuppressed: () => false,
   toggleNoiseSuppression: async () => {},
-  backgroundEffect: () => ({ type: 'none' }),
-  setBackgroundEffect: async () => {},
+  backgroundEffect,
+  setBackgroundEffect: async (effect: BackgroundEffect) => {
+    setBackgroundEffect(effect);
+  },
   isSharedWithTeam: () => false,
 };
 export const CallProvider = (props: ParentProps) => props.children;

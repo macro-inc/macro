@@ -88,7 +88,7 @@ export function RecentBackgroundImages(props: {
                 aria-label={`Recent image ${index() + 1}`}
                 aria-checked={current(image)}
                 disabled={props.disabled}
-                class="aspect-[4/3] w-full overflow-hidden rounded-lg border border-edge-muted focus-visible:outline-2 focus-visible:outline-accent"
+                class="relative aspect-[4/3] w-full overflow-hidden rounded-lg border border-edge-muted p-0 after:pointer-events-none after:absolute after:inset-0 after:rounded-[inherit] data-highlighted:after:overlay-hover data-highlighted:bg-transparent focus-visible:outline-2 focus-visible:outline-accent"
                 classList={{ 'ring-2 ring-accent': current(image) }}
                 onClick={props.phone ? () => select(image) : undefined}
                 onKeyDown={(event: KeyboardEvent) => {

@@ -247,7 +247,7 @@ export function CallMediaControls(props: {
             <Dropdown.Separator />
             <Dropdown.Group>
               <Dropdown.GroupLabel>Background</Dropdown.GroupLabel>
-              <div class="grid grid-cols-3 gap-2">
+              <div class="mx-2 grid grid-cols-3 gap-2">
                 <Dropdown.RadioGroup
                   class="contents"
                   value={backgroundChoice(call.backgroundEffect())}
@@ -280,13 +280,15 @@ export function CallMediaControls(props: {
                   </BackgroundTile>
                 </Dropdown.RadioGroup>
               </div>
-              <RecentBackgroundImages
-                effect={call.backgroundEffect()}
-                disabled={backgroundDisabled()}
-                uploading={applyingBackground()}
-                onSelect={applyBackground}
-                onUploadClick={() => upload?.click()}
-              />
+              <div class="mx-2">
+                <RecentBackgroundImages
+                  effect={call.backgroundEffect()}
+                  disabled={backgroundDisabled()}
+                  uploading={applyingBackground()}
+                  onSelect={applyBackground}
+                  onUploadClick={() => upload?.click()}
+                />
+              </div>
             </Dropdown.Group>
           </>
         }
@@ -464,9 +466,11 @@ function BackgroundTile(props: {
     <Dropdown.RadioItem
       value={props.value}
       disabled={props.disabled}
-      class="group flex-col justify-center gap-1 p-0 text-center text-xs text-ink-muted data-checked:text-ink"
+      class="group flex-col justify-center gap-1 p-0 text-center text-xs text-ink-muted data-checked:text-ink data-highlighted:bg-transparent focus-visible:outline-2 focus-visible:outline-accent"
     >
-      {props.children}
+      <span class="relative block w-full rounded-lg after:pointer-events-none after:absolute after:inset-0 after:rounded-[inherit] group-data-highlighted:after:overlay-hover">
+        {props.children}
+      </span>
       <Dropdown.ItemLabel class="sr-only">{props.label}</Dropdown.ItemLabel>
       <span aria-hidden="true">{props.caption ?? props.label}</span>
     </Dropdown.RadioItem>
