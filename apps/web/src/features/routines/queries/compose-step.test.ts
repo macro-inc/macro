@@ -130,6 +130,7 @@ describe('changing a step in words', () => {
         step: { ...wire('v2'), id: 'escalate', title: 'Escalate' },
         reason: '',
         problems: [],
+        created: [],
       })
     );
 

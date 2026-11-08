@@ -1,5 +1,6 @@
 import type { MacroOpts } from './config';
 import { AccountManagerNamespace } from './entities/account-managers/namespace';
+import { ActivityNamespace } from './entities/activity/namespace';
 import { AgentSessionNamespace } from './entities/agent-sessions/namespace';
 import { AgentNamespace } from './entities/agents/namespace';
 import { AiNamespace } from './entities/ai/namespace';
@@ -26,6 +27,7 @@ import { ImagesNamespace } from './entities/images/namespace';
 import { InitiativeNamespace } from './entities/initiatives/namespace';
 import { MeNamespace } from './entities/me/namespace';
 import { MeetingNamespace } from './entities/meetings/namespace';
+import { MemoryNamespace } from './entities/memory/namespace';
 import { NotificationNamespace } from './entities/notifications/namespace';
 import { PinsNamespace } from './entities/pins/namespace';
 import { ProjectNamespace } from './entities/projects/namespace';
@@ -46,6 +48,11 @@ import type { MacroEvents } from './events/receiver';
 import { MacroClient } from './utils/client';
 
 export type { MacroOpts } from './config';
+export type {
+  ActivityAction,
+  ActivityEvent,
+  ActivityRange,
+} from './entities/activity/namespace';
 export { CodeExecution } from './entities/agent-sessions/code-execution';
 export type {
   DecisionRequest,
@@ -100,6 +107,7 @@ export {
 export { FormOption, FormQuestion } from './entities/forms/question';
 export { FormResponse } from './entities/forms/response';
 export { FormSection } from './entities/forms/section';
+export type { CreatedEntity } from './entities/routines/namespace';
 export type { ListenOptions, MacroEvents } from './events/receiver';
 export {
   here,
@@ -194,6 +202,12 @@ export class Macro<T extends MacroOpts = MacroOpts> {
   readonly images: ImagesNamespace;
   /** Search the public web and read web pages. */
   readonly web: WebNamespace;
+
+  /** The acting user's private explicit memory. */
+  readonly memory: MemoryNamespace;
+
+  /** The acting user's own action history. */
+  readonly activity: ActivityNamespace;
   /** Your own profile: set your name and profile picture. */
   readonly me: MeNamespace;
 
@@ -267,6 +281,8 @@ export class Macro<T extends MacroOpts = MacroOpts> {
     this.forms = new FormNamespace(client);
     this.images = new ImagesNamespace(client);
     this.web = new WebNamespace(client);
+    this.memory = new MemoryNamespace(client);
+    this.activity = new ActivityNamespace(client);
     this.notifications = new NotificationNamespace(client);
     this.pins = new PinsNamespace(client);
     this.projects = new ProjectNamespace(client);
@@ -304,9 +320,13 @@ export {
   AgentInvocation,
 } from './entities/agent-sessions/activity';
 export type {
+  AgentSessionUpdate,
+  AgentSessionUpdates,
   ArchiveCause,
   AutoArchiveOverrides,
   FoldedAgentSessionLog,
+  LinkedTask,
+  PendingToolApproval,
   SessionAutoArchive,
 } from './entities/agent-sessions/agent-session';
 export type { CodeResult } from './entities/agent-sessions/code-execution';
@@ -399,6 +419,20 @@ export {
   PipelineTable,
   PipelineView,
 } from './entities/crm/pipeline';
+export {
+  type CompanyImport,
+  PipelineEntry,
+  type PipelineField,
+  type PipelineFieldChange,
+  type PipelineFieldInput,
+  type PipelineFieldInputs,
+  type PipelineFieldTotal,
+  type PipelineFieldValue,
+  type PipelineImport,
+  type PipelineImportSkip,
+  type PipelineOptionCounts,
+  type PipelineRecordInput,
+} from './entities/crm/pipeline-entry';
 export type {
   DatabaseQueryOptions,
   DatabaseQueryResult,
@@ -438,6 +472,11 @@ export {
   type SpreadsheetReadOptions,
   type SpreadsheetSheet,
 } from './entities/documents/spreadsheet';
+export {
+  CommentQuoteNotPlacedError,
+  type TextComment,
+  type TextCommentOptions,
+} from './entities/documents/text-comment';
 export { DocumentVersion } from './entities/documents/version';
 export {
   DraftAttachment,
@@ -468,6 +507,7 @@ export type {
 } from './entities/images/namespace';
 export {
   Initiative,
+  type InitiativeActivityEntry,
   type InitiativeOptions,
 } from './entities/initiatives/initiative';
 export type {
@@ -483,6 +523,10 @@ export {
   type UploadProfilePictureOptions,
 } from './entities/me/namespace';
 export { Meeting } from './entities/meetings/meeting';
+export type {
+  ExplicitMemory,
+  MemoryEdit,
+} from './entities/memory/namespace';
 export type { TimelineOptions } from './entities/messages/thread';
 export { type MessageParent, MessageThread } from './entities/messages/thread';
 export type { EntityReference } from './entities/reference';
@@ -509,6 +553,7 @@ export { AccessRequest, EntityAccess } from './entities/sharing/access';
 export type { SharePermissionOptions } from './entities/sharing/permissions';
 export type { TaskSummary } from './entities/tasks/task';
 export { TeamInvite } from './entities/teams/invite';
+export type { ActivityReport } from './entities/users/user';
 export type {
   WebFetchOptions,
   WebFetchResponse,

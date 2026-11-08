@@ -1139,6 +1139,13 @@ fn test_state(
             Arc::new(ai_usage::NoOpUsageRecorder),
         )),
         #[cfg(feature = "ai_tools")]
+        editing_worker: Arc::new(
+            crate::outbound::editing_worker_client::ReqwestEditingWorkerClient::from_url(
+                "http://localhost/unused-editing-worker".to_string(),
+            ),
+        ),
+        #[cfg(feature = "ai_tools")]
+        messages: Arc::new(messages::domain::api::MockMessageServiceApi::new()),
         spreadsheet: Arc::new(crate::domain::spreadsheet::SpreadsheetService::new(
             document_service.clone(),
             Arc::new(
