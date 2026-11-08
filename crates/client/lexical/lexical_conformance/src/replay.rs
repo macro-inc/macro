@@ -5,6 +5,8 @@ use lexical_model::*;
 use serde_json::{Value, json};
 use std::collections::HashMap;
 mod initial;
+mod records;
+pub(crate) use records::RecordIdentities;
 
 /// A malformed fixture, unsupported operation, or observable oracle mismatch.
 #[derive(Debug, thiserror::Error)]
@@ -65,8 +67,7 @@ pub struct Replayer {
     pub(crate) iterators: Vec<Option<(lexical_model::NodeCaretCursor, Option<Value>)>>,
     pub(crate) handles: HashMap<String, Value>,
     pub(crate) keys: HashMap<String, NodeKey>,
-    pub(crate) records: HashMap<(NodeKey, usize), (u64, u64)>,
-    pub(crate) next_record: u64,
+    pub(crate) record_ids: RecordIdentities,
     pub(crate) record_owner: Option<(u64, EditorState)>,
     pub(crate) version: u64,
     pub(crate) states: HashMap<u64, EditorState>,
@@ -822,24 +823,17 @@ impl Replayer {
     pub(crate) fn node(&mut self, view: StateRef<'_>, key: NodeKey) -> Result<Value> {
         let node = view.node_or_err(key)?;
         let pointer = std::ptr::from_ref(node.base()) as usize;
-        let (version, identity) = if let Some(record) = self.records.get(&(key, pointer)) {
-            *record
-        } else {
-            let version = self
-                .record_owner
-                .as_ref()
-                .filter(|(_, state)| {
-                    state
-                        .view()
-                        .node(key)
-                        .is_some_and(|node| std::ptr::from_ref(node.base()) as usize == pointer)
-                })
-                .map_or(self.version, |(version, _)| *version);
-            let record = (version, self.next_record);
-            self.next_record += 1;
-            self.records.insert((key, pointer), record);
-            record
-        };
+        let version = self
+            .record_owner
+            .as_ref()
+            .filter(|(_, state)| {
+                state
+                    .view()
+                    .node(key)
+                    .is_some_and(|node| std::ptr::from_ref(node.base()) as usize == pointer)
+            })
+            .map_or(self.version, |(version, _)| *version);
+        let (version, identity) = self.record_ids.identify(key, pointer, version)?;
         Ok(
             json!({"$node":key.index(),"generation":key.generation(),"identity":identity,"ver":version,"type":node.type_name()}),
         )
