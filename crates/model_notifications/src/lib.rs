@@ -13,10 +13,10 @@ pub use metadata::{
     AgentSessionMentionedMetadata, AgentSessionNotificationRef, AgentSessionOriginParent,
     AgentSessionSettledMetadata, AgentSessionWaitingForInputMetadata, AgentTurnStopReason,
     AiResponseMetadata, CalendarEventJoinRequestMetadata, CalendarEventReminderMetadata,
-    CallStartedMetadata, ChannelInviteMetadata, ChannelMentionMetadata,
-    ChannelMessageReactionMetadata, ChannelMessageSendMetadata, ChannelReplyMetadata, ChannelType,
-    ColleagueJoinedMacro, CommentedOnDocumentMetadata, CommonChannelMetadata,
-    CrmDiscussionMetadata, CrmDiscussionReason, DocumentMentionMetadata,
+    CallStartedMetadata, ChannelAccessRequestedMetadata, ChannelInviteMetadata,
+    ChannelMentionMetadata, ChannelMessageReactionMetadata, ChannelMessageSendMetadata,
+    ChannelReplyMetadata, ChannelType, ColleagueJoinedMacro, CommentedOnDocumentMetadata,
+    CommonChannelMetadata, CrmDiscussionMetadata, CrmDiscussionReason, DocumentMentionMetadata,
     EntityAccessGrantedMetadata, EntityAccessRequestedMetadata, ExternalChatMessageMetadata,
     GithubPrCheckRun, GithubPrCheckRunState, GithubPrComment, GithubPrCommentKind,
     GithubPrEventAction, GithubPrEventStatus, GithubPrMention, GithubPrMentionLocation,
@@ -280,6 +280,8 @@ define_notif_event!(
         /// user shared with the channel.
         CalendarEventJoinRequest(CalendarEventJoinRequestMetadata),
 
+        /// Someone asked to join a channel the user participates in.
+        ChannelAccessRequested(ChannelAccessRequestedMetadata),
         /// One of the user's routines finished a run, successfully or not.
         RoutineRunFinished(RoutineRunFinishedMetadata),
     }
@@ -307,6 +309,7 @@ impl NotificationTitle for NotifEvent {
             NotifEvent::InitiativeDiscussion(m) => m.format_title(sender_id),
             NotifEvent::CrmDiscussion(m) => m.format_title(sender_id),
             NotifEvent::ChannelInvite(m) => m.format_title(sender_id),
+            NotifEvent::ChannelAccessRequested(m) => m.format_title(sender_id),
             NotifEvent::ChannelMessageSend(channel_message_send_metadata) => {
                 channel_message_send_metadata.format_title(sender_id)
             }
@@ -378,6 +381,7 @@ impl NotificationTitle for NotifEvent {
             NotifEvent::InitiativeDiscussion(m) => m.format_body(sender_id),
             NotifEvent::CrmDiscussion(m) => m.format_body(sender_id),
             NotifEvent::ChannelInvite(m) => m.format_body(sender_id),
+            NotifEvent::ChannelAccessRequested(m) => m.format_body(sender_id),
             NotifEvent::ChannelMessageSend(channel_message_send_metadata) => {
                 channel_message_send_metadata.format_body(sender_id)
             }

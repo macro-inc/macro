@@ -14,9 +14,9 @@ use uuid::Uuid;
 use crate::domain::{
     models::{
         Harness, HarnessAgent, HarnessOwner, HarnessSession, PairingClaimFacts, PairingDetails,
-        PairingStatus, RequestedHarnessScope,
+        PairingStatus,
     },
-    ports::{HarnessRepo, NewHarness, NewPairing, OpenPairingCounts, PairingRow},
+    ports::{HarnessChanges, HarnessRepo, NewHarness, NewPairing, OpenPairingCounts, PairingRow},
 };
 
 /// Postgres-backed harness repository.
@@ -44,21 +44,40 @@ struct HarnessRow {
     updated_at: DateTime<Utc>,
     last_connected_at: Option<DateTime<Utc>>,
     last_disconnected_at: Option<DateTime<Utc>>,
+    has_live_connection: bool,
+    has_connection_record: bool,
+}
+
+impl HarnessRow {
+    /// A live connection row is the answer. A row whose lease lapsed means the
+    /// replica holding it died. With no rows at all, the connection may come
+    /// from a replica older than these rows, which only stamps the timestamps.
+    fn connected(&self) -> bool {
+        if self.has_live_connection {
+            return true;
+        }
+
+        if self.has_connection_record {
+            return false;
+        }
+
+        match (self.last_connected_at, self.last_disconnected_at) {
+            (Some(connected_at), Some(disconnected_at)) => connected_at > disconnected_at,
+            (Some(_), None) => true,
+            (None, _) => false,
+        }
+    }
 }
 
 impl TryFrom<HarnessRow> for Harness {
     type Error = anyhow::Error;
 
     fn try_from(row: HarnessRow) -> Result<Self, Self::Error> {
+        let connected = row.connected();
         let owner = match (row.owner_user_id, row.team_id) {
             (Some(user_id), None) => HarnessOwner::User { user_id },
             (None, Some(team_id)) => HarnessOwner::Team { team_id },
             _ => anyhow::bail!("harness row violated its owner invariant"),
-        };
-        let connected = match (row.last_connected_at, row.last_disconnected_at) {
-            (Some(connected_at), Some(disconnected_at)) => connected_at > disconnected_at,
-            (Some(_), None) => true,
-            (None, _) => false,
         };
 
         Ok(Self {
@@ -94,7 +113,15 @@ async fn fetch_harness(
         r#"
         SELECT
             id, kind, name, owner_user_id, team_id, created_by, allow_permission_bypass,
-            created_at, updated_at, last_connected_at, last_disconnected_at
+            created_at, updated_at, last_connected_at, last_disconnected_at,
+                EXISTS (
+                    SELECT 1 FROM harness_runtime_connection c
+                    WHERE c.harness_id = harnesses.id AND c.lease_expires_at > now()
+                ) AS "has_live_connection!",
+                EXISTS (
+                    SELECT 1 FROM harness_runtime_connection c
+                    WHERE c.harness_id = harnesses.id
+                ) AS "has_connection_record!"
         FROM harnesses
         WHERE id = $1 AND deleted_at IS NULL
         "#,
@@ -114,9 +141,8 @@ impl HarnessRepo for PgHarnessRepo {
         let inserted = sqlx::query!(
             r#"
             INSERT INTO harness_pairing_requests
-                (id, code, device_secret_hash, requested_name, host_info, requested_scope,
-                 expires_at, requested_allow_permission_bypass)
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+                (id, code, device_secret_hash, requested_name, host_info, expires_at)
+            VALUES ($1, $2, $3, $4, $5, $6)
             ON CONFLICT (code) DO NOTHING
             "#,
             pairing.id,
@@ -124,9 +150,7 @@ impl HarnessRepo for PgHarnessRepo {
             &pairing.device_secret_hash[..],
             pairing.requested_name,
             pairing.host,
-            pairing.requested_scope.map(RequestedHarnessScope::as_str),
             pairing.expires_at,
-            pairing.requested_allow_permission_bypass,
         )
         .execute(&self.pool)
         .await
@@ -175,8 +199,7 @@ impl HarnessRepo for PgHarnessRepo {
     async fn get_pairing(&self, code: &str) -> Result<Option<PairingRow>, Self::Err> {
         let row = sqlx::query!(
             r#"
-            SELECT code, requested_name, host_info, requested_scope,
-                   requested_allow_permission_bypass, status, created_at, expires_at
+            SELECT code, requested_name, host_info, status, created_at, expires_at
             FROM harness_pairing_requests
             WHERE code = $1
             "#,
@@ -187,19 +210,11 @@ impl HarnessRepo for PgHarnessRepo {
         .context("failed to fetch pairing")?;
 
         row.map(|row| {
-            let requested_scope = row
-                .requested_scope
-                .as_deref()
-                .map(str::parse::<RequestedHarnessScope>)
-                .transpose()
-                .map_err(anyhow::Error::msg)?;
             Ok(PairingRow {
                 details: PairingDetails {
                     code: row.code,
                     requested_name: row.requested_name,
                     host: row.host_info,
-                    requested_scope,
-                    requested_allow_permission_bypass: row.requested_allow_permission_bypass,
                     created_at: row.created_at,
                     expires_at: row.expires_at,
                 },
@@ -350,7 +365,15 @@ impl HarnessRepo for PgHarnessRepo {
             r#"
             SELECT
                 id, kind, name, owner_user_id, team_id, created_by, allow_permission_bypass,
-                created_at, updated_at, last_connected_at, last_disconnected_at
+                created_at, updated_at, last_connected_at, last_disconnected_at,
+                EXISTS (
+                    SELECT 1 FROM harness_runtime_connection c
+                    WHERE c.harness_id = harnesses.id AND c.lease_expires_at > now()
+                ) AS "has_live_connection!",
+                EXISTS (
+                    SELECT 1 FROM harness_runtime_connection c
+                    WHERE c.harness_id = harnesses.id
+                ) AS "has_connection_record!"
             FROM harnesses
             WHERE deleted_at IS NULL
               AND (
@@ -370,6 +393,43 @@ impl HarnessRepo for PgHarnessRepo {
 
     async fn get_harness(&self, harness_id: HarnessId) -> Result<Option<Harness>, Self::Err> {
         fetch_harness(&self.pool, harness_id.as_uuid()).await
+    }
+
+    async fn update_harness(
+        &self,
+        harness_id: HarnessId,
+        changes: HarnessChanges,
+    ) -> Result<Option<Harness>, Self::Err> {
+        let row = sqlx::query_as!(
+            HarnessRow,
+            r#"
+            UPDATE harnesses
+            SET
+                name = COALESCE($2, name),
+                allow_permission_bypass = COALESCE($3, allow_permission_bypass),
+                updated_at = now()
+            WHERE id = $1 AND deleted_at IS NULL
+            RETURNING
+                id, kind, name, owner_user_id, team_id, created_by, allow_permission_bypass,
+                created_at, updated_at, last_connected_at, last_disconnected_at,
+                EXISTS (
+                    SELECT 1 FROM harness_runtime_connection c
+                    WHERE c.harness_id = harnesses.id AND c.lease_expires_at > now()
+                ) AS "has_live_connection!",
+                EXISTS (
+                    SELECT 1 FROM harness_runtime_connection c
+                    WHERE c.harness_id = harnesses.id
+                ) AS "has_connection_record!"
+            "#,
+            harness_id.as_uuid(),
+            changes.name,
+            changes.allow_permission_bypass,
+        )
+        .fetch_optional(&self.pool)
+        .await
+        .context("failed to update harness")?;
+
+        row.map(Harness::try_from).transpose()
     }
 
     async fn delete_harness(&self, harness_id: HarnessId) -> Result<bool, Self::Err> {

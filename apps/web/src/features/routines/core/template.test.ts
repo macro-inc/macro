@@ -35,7 +35,7 @@ describe('extractTemplateVariables', () => {
   it('fills the author and time zone as the activator and keeps other references', () => {
     expect(
       extractTemplateVariables({
-        prompt: PROMPT,
+        texts: [PROMPT],
         timezone: CRON.timezone,
         authorId: 'macro|eric@macro.com',
       })
@@ -73,7 +73,7 @@ describe('extractTemplateVariables', () => {
   it('has no time zone for event-only routines', () => {
     expect(
       extractTemplateVariables({
-        prompt: 'Summarize it',
+        texts: ['Summarize it'],
         timezone: undefined,
         authorId: 'macro|eric@macro.com',
       })
@@ -83,7 +83,7 @@ describe('extractTemplateVariables', () => {
 
 describe('fillTemplatePrompt', () => {
   const variables = extractTemplateVariables({
-    prompt: PROMPT,
+    texts: [PROMPT],
     timezone: CRON.timezone,
     authorId: 'macro|eric@macro.com',
   });
@@ -156,6 +156,55 @@ describe('fillTemplateTrigger', () => {
 });
 
 describe('templateShareBody', () => {
+  it('shares references from the Ask AI step’s text', () => {
+    const draft = {
+      ...createEmptyDraft(''),
+      triggers: [
+        {
+          id: 'tasks',
+          kind: 'event' as const,
+          events: ['task.created' as const],
+        },
+      ],
+      steps: [
+        {
+          id: 'label',
+          kind: 'code' as const,
+          title: 'Label it',
+          summary: '',
+          source: 'export async function main() {}',
+          knobs: [],
+        },
+        {
+          id: 'tell',
+          kind: 'agent' as const,
+          target: { kind: 'model' as const, model: 'model' },
+          instructions: `Tell ${AUTHOR}, cc ${TEAMMATE}`,
+        },
+      ],
+    };
+    expect(
+      templateShareBody({
+        draft,
+        authorId: 'macro|eric@macro.com',
+        shared: null,
+      }).variables
+    ).toEqual([
+      {
+        kind: 'user',
+        id: 'macro|eric@macro.com',
+        label: 'Eric',
+        fill: 'activator',
+      },
+      {
+        kind: 'user',
+        id: 'macro|priya@macro.com',
+        label: 'Priya Shah',
+        fill: 'shared',
+      },
+    ]);
+  });
+
   it('keeps the shared template’s fills and description for references the routine still has', () => {
     const draft = {
       ...createEmptyDraft(''),
@@ -172,7 +221,7 @@ describe('templateShareBody', () => {
           description: 'Weekly renewals digest',
           id: 'routine-1',
           name: 'Renewals',
-          task: { user_prompt: PROMPT },
+          task: { prompt: '', user_prompt: PROMPT, model: 'model' },
           trigger: CRON,
           updated_at: '2026-10-01T00:00:00Z',
           variables: [

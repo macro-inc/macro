@@ -1,16 +1,15 @@
 import { ListSkeleton } from '@app/components/view-shell/ListSkeleton';
-import { EntityIcon } from '@core/component/EntityIcon';
 import { InlineTitleEditor } from '@core/component/InlineTitleEditor';
 import { formatDateAndTime, formatRelativeTimestamp } from '@entity';
 import ContactIcon from '@icon/system/regular/address-book.svg';
 import ClockIcon from '@icon/system/regular/clock.svg';
-import EnvelopeIcon from '@icon/system/regular/envelope.svg';
-import { Avatar, Badge, badgeTriggerClasses, Tooltip } from '@ui';
+import { Avatar, Badge, Tooltip } from '@ui';
 import { Show } from 'solid-js';
 import { useCrmContext } from '../context/crm-context';
 import type { CrmContact as CrmContactResponse } from '../core/contact';
+import { ContactCompanyField, ContactEmailField } from './contact-properties';
 import { ContactVisibilityButton } from './contact-visibility-button';
-import { useCompanyQuery, useSetContactNameMutation } from './use-crm';
+import { useSetContactNameMutation } from './use-crm';
 
 // Renames overwrite `crm_contacts.name`, which is already team-scoped —
 // no global directory involved (unlike company renames).
@@ -32,32 +31,6 @@ function TitleEditor(props: { contact: CrmContactResponse }) {
         })
       }
     />
-  );
-}
-
-function CompanyPill(props: {
-  companyId: string;
-  onOpenCompany?: (companyId: string) => boolean;
-}) {
-  const { openWithSplit } = useCrmContext().createNavigation();
-  const { company } = useCompanyQuery(() => props.companyId);
-  const openCompany = (event: MouseEvent) => {
-    const companyId = props.companyId;
-    if (!event.shiftKey && props.onOpenCompany?.(companyId)) return;
-    openWithSplit(
-      { type: 'company', id: companyId },
-      { activate: true, preferNewSplit: event.shiftKey }
-    );
-  };
-  return (
-    <button
-      type="button"
-      onClick={openCompany}
-      class={badgeTriggerClasses({ variant: 'outline', size: 'sm' })}
-    >
-      <EntityIcon targetType="crm_company" size="xs" />
-      {company()?.name ?? 'Open company'}
-    </button>
   );
 }
 
@@ -120,24 +93,13 @@ export function ContactHeader(props: {
             class="mt-3 flex flex-wrap items-center gap-2"
             aria-label="Contact details"
           >
-            <Show when={contact().email}>
-              {(email) => (
-                <Badge variant="outline" size="sm">
-                  <EnvelopeIcon class="size-3" />
-                  {email()}
-                </Badge>
-              )}
-            </Show>
-            <Show when={contact().companyId}>
-              {(companyId) => (
-                <CompanyPill
-                  companyId={companyId()}
-                  onOpenCompany={props.onOpenCompany}
-                />
-              )}
-            </Show>
+            <ContactEmailField contact={contact()} />
+            <ContactCompanyField
+              contact={contact()}
+              onOpenCompany={props.onOpenCompany}
+            />
             <Tooltip label={formatDateAndTime(contact().lastInteraction)}>
-              <Badge variant="outline" size="sm">
+              <Badge variant="ghost" size="sm">
                 <ClockIcon class="size-3" />
                 Last interacted{' '}
                 {formatRelativeTimestamp(contact().lastInteraction)}

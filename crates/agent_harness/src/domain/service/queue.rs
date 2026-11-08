@@ -891,7 +891,12 @@ where
                 Ok(CommandOutcome::Completed)
             }
             HarnessCommand::Reattach => {
-                self.reattach(session_id).await?;
+                // Prompts queued behind a turn the drop interrupted are
+                // restored with the session; only a turn end or a new prompt
+                // dispatches otherwise, and an idle session gets neither.
+                if self.reattach(session_id).await? && !self.busy.is_pending(session_id) {
+                    self.dispatch_next(session_id).await?;
+                }
                 Ok(CommandOutcome::Completed)
             }
             HarnessCommand::Delete => {

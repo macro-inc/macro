@@ -334,7 +334,9 @@ The **Filter** and **Sort** icons open their panels. The pickers support keyboar
 navigation and mark the selected table. Rows added or edited elsewhere, including
 by AI, appear through the database's gateway subscription. The editor catches up after
 reconnecting or returning to the tab after a long absence.
-Edits write to the original database. **Open** opens the full database.
+Edits write to the original database. **Open** opens the full database; opening
+a row (its row-number button, a board card or a timeline bar) opens the full
+database at that row.
 **Collapse** converts the editor to a small mention; **Expand** brings it back.
 Removing either reference leaves the database and its rows intact.
 
@@ -898,6 +900,14 @@ creation/rename/duplication/deletion.
 `{ "format": "date", "numberFormat": "mmm yyyy" }`.
 Edits require a revision from a fresh read; a concurrent change rejects the entire
 batch so the AI can reread. Tool rows expand to show the actual results and warnings.
+In code mode these tools are hidden: programs use the SDK's
+`macro.documents.spreadsheet(document)` handle (`read`, `calculate`, and
+`applyEdits(operations, { expectedRevision })`, over DSS
+`POST /documents/{id}/spreadsheet/read|calculate|edits`), which runs the same
+engine, and `macro.documents.createSpreadsheet()` creates a blank workbook.
+`sheet.edit(instructions)` (`POST /documents/{id}/spreadsheet/ai-edit`) hands a
+described change to the editing worker's writer model, which saves one batch;
+it is billed as an AI edit, and the result lists the changes and warnings.
 
 Verify with a saved workbook: select B4:E9, click Ask Macro, check the adjacent
 chat's mention and trailing space, and ask for a total or a what-if calculation.
@@ -2867,9 +2877,13 @@ Discussion's timeline or expanding it. Existing highlights locate threads by
 their stable mark IDs. Replies, attachments, reactions, and editing use the same
 message controls as channels. In every floating comment card (the Markdown,
 PDF, and Word margins and expanded minimized threads), a long comment folds to
-a faded preview with **Show more**; **Show less** folds it again. Short
-comments, the phone drawer, the bottom Discussion, and channels always show the
-full text. Markdown and Word margin cards stack without overlapping: a tall or expanded card
+a faded preview with **Show more**; **Show less** folds it again. A press
+outside the card does the same, including the press that closes an expanded
+minimized card. Presses on the card, its margin badge, and menus or dialogs
+the card opened leave the body expanded. In that card, Open session is the
+icon-only button from a narrow agent card, so the label does not take a line
+of its own. Channels keep the labeled chip. Short comments, the phone drawer,
+the bottom Discussion, and channels always show the full text. Markdown and Word margin cards stack without overlapping: a tall or expanded card
 pushes the cards below it down (past the end of a short document if needed),
 and no card starts above the top of the document. Check this with a long
 thread active near the bottom of a short document that has another thread
@@ -3109,6 +3123,7 @@ AI can create a native workbook without an open editor using `CreateDocument`
 with `fileExtension: "spreadsheet"`, empty `fileContent`, and `isTask: false`.
 Read the returned document with `ReadSpreadsheet`, then populate it with
 `EditSpreadsheet`; do not create a CSV as a substitute for a native workbook.
+In code mode, `macro.documents.createSpreadsheet({ name })` does the same.
 Spreadsheet reads and edits run against server state even when no tab is open.
 An edit uses the revision from a fresh read and atomically applies a CRDT delta
 that is broadcast to connected collaborators. A stale revision is rejected:

@@ -9,49 +9,32 @@
 //! (which drifted from the workspace toolchain) and gives the `cargo install`
 //! and xtask builds warm caches instead of compiling cold on every run.
 
-use gh_workflow::{
-    Concurrency, Event, Expression, Job, PullRequest, PullRequestType, Run, Step, Use, Workflow,
-};
+use gh_workflow::{Event, Job, Run, Step, Use, Workflow, WorkflowCall};
+use xtask_paths::RepoGlob;
 
 use crate::workflows::{runners, steps, vars};
+
+/// Files whose change makes `PR CI` call this workflow.
+pub const PATHS: &[RepoGlob<'static>] = &[
+    xtask_paths::repo_glob!("Cargo.toml"),
+    xtask_paths::repo_glob!("crates/**/Cargo.toml"),
+    xtask_paths::repo_glob!("services/**/Cargo.toml"),
+    xtask_paths::repo_glob!("tooling/xtask/**/Cargo.toml"),
+    xtask_paths::repo_glob!("Cargo.lock"),
+    xtask_paths::repo_glob!(".config/hakari.toml"),
+    xtask_paths::repo_glob!("crates/workspace-hack/**"),
+    // Source of `cargo x deps` only — not every xtask crate. A nextest-filter
+    // or workflow-generator edit cannot drift the hack crate or closure map.
+    xtask_paths::repo_glob!("tooling/xtask/src/**"),
+    xtask_paths::repo_glob!("tooling/xtask/crates/xtask_deps/**"),
+    xtask_paths::repo_glob!("tooling/xtask/crates/xtask_graph/**"),
+    xtask_paths::repo_glob!(".github/workspace-dep-closures.json"),
+];
 
 /// Build the workflow.
 pub fn cargo_workspace_dependency_check() -> Workflow {
     Workflow::new("cargo workspace dependency check")
-        .on(Event::default().pull_request(
-            PullRequest::default()
-                .add_branch("main")
-                .add_type(PullRequestType::Opened)
-                .add_type(PullRequestType::Synchronize)
-                .add_type(PullRequestType::Reopened)
-                .add_type(PullRequestType::ReadyForReview)
-                .add_path(xtask_paths::repo_glob!("Cargo.toml"))
-                .add_path(xtask_paths::repo_glob!("crates/**/Cargo.toml"))
-                .add_path(xtask_paths::repo_glob!("services/**/Cargo.toml"))
-                .add_path(xtask_paths::repo_glob!("tooling/xtask/**/Cargo.toml"))
-                .add_path(xtask_paths::repo_glob!("Cargo.lock"))
-                .add_path(xtask_paths::repo_glob!(".config/hakari.toml"))
-                .add_path(xtask_paths::repo_glob!("crates/workspace-hack/**"))
-                // Source of `cargo x deps` only — not every xtask crate. A
-                // nextest-filter or workflow-generator edit cannot drift the
-                // hack crate or closure map.
-                .add_path(xtask_paths::repo_glob!("tooling/xtask/src/**"))
-                .add_path(xtask_paths::repo_glob!(
-                    "tooling/xtask/crates/xtask_deps/**"
-                ))
-                .add_path(xtask_paths::repo_glob!(
-                    "tooling/xtask/crates/xtask_graph/**"
-                ))
-                .add_path(xtask_paths::repo_glob!(
-                    ".github/workspace-dep-closures.json"
-                )),
-        ))
-        .concurrency(
-            Concurrency::new(Expression::new(
-                "cargo-workspace-dependency-check-${{ github.ref }}",
-            ))
-            .cancel_in_progress(true),
-        )
+        .on(Event::default().workflow_call(WorkflowCall::default()))
         .add_job("dependency-check", dependency_check())
         .add_job("hakari-and-dep-closures", hakari_and_dep_closures())
 }

@@ -1,4 +1,4 @@
-use super::mutations::{IssuedToken, NoOpenClients, OWNER, connected_mailbox};
+use super::mutations::{IssuedToken, NoOpenClients, OWNER, connected_mailbox, linked_mailbox};
 use super::*;
 use calendar_events::outbound::pg::PgCalendarRepository;
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
@@ -220,4 +220,153 @@ async fn a_stored_event_that_turns_unreadable_leaves_the_calendar(pool: PgPool) 
         occurrence_is_member(&pool, "AAMkChanged").await,
         "a later tombstone for it still resolves"
     );
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_mailbox_in_a_time_zone_macro_cannot_map_still_discovers_and_syncs(pool: PgPool) {
+    let (server, api) = setup().await;
+    let repo = linked_mailbox(
+        &pool,
+        &server,
+        mailbox_settings(Some("tzone://Microsoft/Custom")),
+        json!([default_calendar("AAMkCalendar")]),
+    )
+    .await;
+    let sync = OutlookCalendarSync::new(repo, api, IssuedToken, NoOpenClients);
+    serve_delta(&server, None, &[single("AAMkReadable")], "complete").await;
+    serve_event(&server, upcoming("AAMkReadable")).await;
+    // Discovery, then the calendar's page, its event and the finish.
+    sync_until_idle(&sync).await;
+
+    assert_synced(&pool).await;
+    assert_eq!(imported(&pool).await, vec!["AAMkReadable"]);
+    let time_zone = sqlx::query_scalar!(
+        "SELECT time_zone FROM calendars WHERE provider_calendar_id = 'AAMkCalendar'"
+    )
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(time_zone, None, "the calendar's zone is unknown, not UTC");
+}
+
+async fn serve_series(server: &MockServer, master: Value, instances: Vec<Value>) {
+    let id = master["id"].as_str().unwrap().to_owned();
+    Mock::given(method("GET"))
+        .and(path(format!("/v1.0/me/calendars/AAMkCalendar/events/{id}")))
+        .respond_with(ResponseTemplate::new(200).set_body_json(master))
+        .mount(server)
+        .await;
+    Mock::given(method("GET"))
+        .and(path(format!("/v1.0/me/events/{id}/instances")))
+        .respond_with(Instances(instances))
+        .mount(server)
+        .await;
+}
+
+/// How many times the round read the event `id` from Graph.
+async fn reads_of(server: &MockServer, id: &str) -> usize {
+    let event = format!("/v1.0/me/calendars/AAMkCalendar/events/{id}");
+    server
+        .received_requests()
+        .await
+        .unwrap()
+        .iter()
+        .filter(|request| request.url.path() == event)
+        .count()
+}
+
+async fn next_round(pool: &PgPool) {
+    sqlx::query!(
+        "UPDATE calendar_outlook_work SET next_run_at = now() WHERE calendar_id IS NOT NULL"
+    )
+    .execute(pool)
+    .await
+    .unwrap();
+}
+
+/// A series whose decline policy this build cannot read, standing in for a
+/// series an older build could not read.
+fn unreadable(mut master: Value) -> Value {
+    master["showAs"] = json!("oof");
+    master["singleValueExtendedProperties"] = json!([{
+        "id":PREFERENCES_ID,
+        "value":json!({"automaticDecline":{"mode":"declineWhenAway"}}).to_string(),
+    }]);
+    master
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_series_with_a_moved_meeting_is_imported_with_it(pool: PgPool) {
+    let (server, sync) = connected(&pool).await;
+    serve_delta(&server, None, &[occurrence("AAMkDaily")], "complete").await;
+    let (master, instances) = upcoming_series("AAMkDaily", "ada@example.com", false);
+    let moved = instances[2]["originalStart"].as_str().unwrap().to_owned();
+    serve_series(&server, master, instances).await;
+    sync_until_idle(&sync).await;
+
+    assert_synced(&pool).await;
+    assert_eq!(imported(&pool).await, vec!["AAMkDaily"]);
+    let overrides = sqlx::query!(
+        "SELECT o.recurrence_id, o.title FROM calendar_event_overrides o JOIN calendar_events e ON e.id = o.event_id WHERE e.owner_id = $1",
+        OWNER
+    )
+    .fetch_all(&pool)
+    .await
+    .unwrap();
+    assert_eq!(overrides.len(), 1);
+    assert_eq!(
+        overrides[0]
+            .recurrence_id
+            .parse::<chrono::DateTime<Utc>>()
+            .unwrap(),
+        moved.parse::<chrono::DateTime<Utc>>().unwrap(),
+        "the moved meeting replaces its original slot"
+    );
+    assert_eq!(
+        overrides[0].title.as_deref(),
+        Some("Daily standup, an hour later")
+    );
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_series_an_older_build_skipped_is_read_again_once_on_the_next_delta_round(pool: PgPool) {
+    let (server, sync) = connected(&pool).await;
+    let (master, instances) = upcoming_series("AAMkDaily", "ada@example.com", false);
+    serve_delta(&server, None, &[occurrence("AAMkDaily")], "first").await;
+    serve_series(&server, unreadable(master.clone()), instances.clone()).await;
+    sync_until_idle(&sync).await;
+    assert!(imported(&pool).await.is_empty());
+
+    // Nothing changed in Outlook, so a series this build skipped costs no read.
+    server.reset().await;
+    serve_delta(&server, Some("first"), &[], "second").await;
+    serve_series(&server, master.clone(), instances.clone()).await;
+    next_round(&pool).await;
+    sync_until_idle(&sync).await;
+    assert_eq!(reads_of(&server, "AAMkDaily").await, 0);
+
+    // What a build before reader revisions left behind when it skipped one.
+    sqlx::query!("UPDATE calendar_outlook_members SET reader_revision = NULL")
+        .execute(&pool)
+        .await
+        .unwrap();
+    server.reset().await;
+    serve_delta(&server, Some("second"), &[], "third").await;
+    serve_series(&server, master.clone(), instances.clone()).await;
+    next_round(&pool).await;
+    sync_until_idle(&sync).await;
+    assert_synced(&pool).await;
+    assert_eq!(reads_of(&server, "AAMkDaily").await, 1);
+    assert_eq!(
+        imported(&pool).await,
+        vec!["AAMkDaily"],
+        "the series comes back without changing in Outlook"
+    );
+
+    server.reset().await;
+    serve_delta(&server, Some("third"), &[], "fourth").await;
+    serve_series(&server, master, instances).await;
+    next_round(&pool).await;
+    sync_until_idle(&sync).await;
+    assert_eq!(reads_of(&server, "AAMkDaily").await, 0, "it is read once");
 }

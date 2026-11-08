@@ -4,12 +4,16 @@
  * authentication_service
  * OpenAPI spec version: 0.1.0
  */
+import type { PutCursorDefaultModelRequestEffort } from './putCursorDefaultModelRequestEffort';
 import type { PutCursorDefaultModelRequestModelId } from './putCursorDefaultModelRequestModelId';
 
 /**
- * The model the user chose for their sessions.
+ * The model the user chose for their sessions, and its effort.
  */
 export interface PutCursorDefaultModelRequest {
+  /** The value of the model's reasoning-effort parameter (e.g. `high`), or
+`null` for the model's own default. Ignored without a model. */
+  effort?: PutCursorDefaultModelRequestEffort;
   /** A Cursor model id (e.g. `grok-4.6`), or `null` to clear the choice and
 fall back to the deployment default. */
   modelId?: PutCursorDefaultModelRequestModelId;

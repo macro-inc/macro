@@ -25,6 +25,16 @@ pub struct MacroApiToken {
     /// such as "Claude Code"; a display label signed with `agent_id`.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub agent_via: Option<String>,
+    /// Invocation attribution, signed by the code-mode host.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub agent_correlation_id: Option<Uuid>,
+    /// Session provenance for managed MCP callers; not an access grant.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub agent_session_id: Option<Uuid>,
+    /// Routine whose run this token acts for, signed by the harness; never
+    /// supplied by an API caller.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub routine_id: Option<Uuid>,
 }
 
 pub struct EncodeMacroApiTokenArgs {
@@ -44,6 +54,13 @@ pub struct EncodeMacroApiTokenArgs {
     pub agent_id: Option<Uuid>,
     /// Optional client label for `agent_id`; never supplied by an API caller.
     pub agent_via: Option<String>,
+    /// Optional signed invocation attribution.
+    pub agent_correlation_id: Option<Uuid>,
+    /// Optional managed MCP session provenance.
+    pub agent_session_id: Option<Uuid>,
+    /// Routine whose run this token acts for, signed by the harness; never
+    /// supplied by an API caller.
+    pub routine_id: Option<Uuid>,
 }
 
 #[tracing::instrument(skip(args))]
@@ -57,6 +74,9 @@ pub fn encode_macro_api_token(args: EncodeMacroApiTokenArgs) -> anyhow::Result<S
         exp: now + args.expiry_seconds,
         agent_id: args.agent_id,
         agent_via: args.agent_via,
+        agent_correlation_id: args.agent_correlation_id,
+        agent_session_id: args.agent_session_id,
+        routine_id: args.routine_id,
         iss: args.issuer.clone(),
         fusion_user_id: args.fusionauth_id.clone(),
         macro_user_id: args.macro_user_id.clone(),

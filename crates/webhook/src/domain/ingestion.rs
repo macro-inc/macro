@@ -17,6 +17,7 @@ use crate::domain::{
 };
 use agent_session::domain::events::{AgentSessionLifecycleEvent, AgentSessionLifecycleEventName};
 use agent_trigger::domain::broker_events::AgentTriggerTopicEvent;
+use call::domain::notification_events::CallNotificationEvent;
 use channels::domain::broker_events::ChannelTopicEvent;
 use chrono::Utc;
 use documents::domain::events::DocumentTopicEvent;
@@ -34,6 +35,7 @@ use uuid::Uuid;
 
 const DOCUMENT_ENTITY_TYPE: &str = "document";
 const CHANNEL_ENTITY_TYPE: &str = "channel";
+const CALL_ENTITY_TYPE: &str = "call";
 const WEBHOOK_ENTITY_TYPE: &str = "webhook";
 const AGENT_SESSION_ENTITY_TYPE: &str = "agent_session";
 
@@ -51,6 +53,9 @@ pub enum WebhookEventIngestionError {
         /// Invalid entity identifier.
         entity_id: String,
     },
+    /// A private call notification has no explicit recipient.
+    #[error("private call notification has no recipient")]
+    MissingCallRecipient,
     /// The broker envelope could not be represented by the queue contract.
     #[error("failed to serialize broker envelope: {0}")]
     Serialization(#[from] serde_json::Error),
@@ -99,6 +104,12 @@ pub trait WebhookEventIngestionService: Clone + Send + Sync + 'static {
     fn ingest_channel_event(
         &self,
         event: Event<ChannelTopicEvent>,
+    ) -> impl Future<Output = Result<(), WebhookEventIngestionError>> + Send;
+
+    /// Ingest one access-checked call notification.
+    fn ingest_call_notification_event(
+        &self,
+        event: Event<CallNotificationEvent>,
     ) -> impl Future<Output = Result<(), WebhookEventIngestionError>> + Send;
 
     /// Ingest one `macro.messages` event envelope.
@@ -287,6 +298,45 @@ pub(crate) fn normalized_document_event(
     )))
 }
 
+/// Normalize a call event and remove its private routing field before delivery.
+pub(crate) fn normalized_call_notification_event(
+    event: &Event<CallNotificationEvent>,
+) -> Result<(NormalizedWebhookEvent, Option<String>), WebhookEventIngestionError> {
+    let metadata = event.event.metadata();
+    let recipient = match &event.event {
+        CallNotificationEvent::Ringing(_)
+        | CallNotificationEvent::Answered(_)
+        | CallNotificationEvent::Declined(_)
+        | CallNotificationEvent::Invited(_) => Some(
+            metadata
+                .recipient_user_id
+                .clone()
+                .filter(|id| !id.is_empty())
+                .ok_or(WebhookEventIngestionError::MissingCallRecipient)?,
+        ),
+        _ => None,
+    };
+    let mut broker_envelope = serde_json::to_value(event)?;
+    if let Some(metadata) = broker_envelope
+        .get_mut("metadata")
+        .and_then(serde_json::Value::as_object_mut)
+    {
+        metadata.remove("recipient_user_id");
+    }
+    let call_id = metadata.call_id.to_string();
+    Ok((
+        normalized_event(
+            event.event_id,
+            event.schema_version,
+            event.event.name(),
+            CALL_ENTITY_TYPE,
+            &call_id,
+            broker_envelope,
+        ),
+        recipient,
+    ))
+}
+
 pub(crate) fn normalized_channel_event(
     event: &Event<ChannelTopicEvent>,
 ) -> Result<NormalizedWebhookEvent, WebhookEventIngestionError> {
@@ -302,6 +352,9 @@ pub(crate) fn normalized_channel_event(
         }
         ChannelTopicEvent::ParticipantRemoved(metadata) => {
             ("channel.participant_removed", metadata.channel_id)
+        }
+        ChannelTopicEvent::AccessRequested(metadata) => {
+            ("channel.access_requested", metadata.channel_id)
         }
     };
     let entity_id = channel_id.to_string();
@@ -600,6 +653,34 @@ where
         let event = normalized_channel_event(&event)?;
         self.resolve_entity_access_and_enqueue(event, EntityType::Channel)
             .await
+    }
+
+    #[tracing::instrument(skip(self, event), fields(event_id = %event.event_id), err)]
+    async fn ingest_call_notification_event(
+        &self,
+        event: Event<CallNotificationEvent>,
+    ) -> Result<(), WebhookEventIngestionError> {
+        let (normalized, recipient) = normalized_call_notification_event(&event)?;
+        match recipient {
+            Some(recipient) => {
+                // The recipient is the grant for a private notification.
+                // In particular, an invitation precedes call entity access.
+                self.match_and_enqueue(normalized, vec![recipient]).await
+            }
+            None => {
+                let accessors = self
+                    .users_with_access(&normalized.entity_id, EntityType::Call)
+                    .await?;
+                let workspace_ids = self
+                    .repository
+                    .resolve_workspace_ids(accessors)
+                    .await
+                    .map_err(|error| {
+                        WebhookEventIngestionError::WorkspaceResolution(error.into())
+                    })?;
+                self.match_and_enqueue(normalized, workspace_ids).await
+            }
+        }
     }
 
     #[tracing::instrument(skip(self, event), fields(event_id = %event.event_id), err)]

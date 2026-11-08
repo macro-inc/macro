@@ -57,6 +57,7 @@ export function getNotificationAction(n: UnifiedNotification): string {
       .with('channel_message_reply', () => 'replied in')
       .with('call_started', () => 'started a call')
       .with('channel_invite', () => 'invited you to')
+      .with('channel_access_requested', () => 'asked to join')
       .with('new_email', () => 'sent a new email')
       .with('external_chat_message', () => {
         const meta = n.notification_metadata;
@@ -112,6 +113,7 @@ export function getNotificationTargetName(
   return (
     match(m)
       .with({ tag: 'channel_invite' }, (m) => m.content.channelName)
+      .with({ tag: 'channel_access_requested' }, (m) => m.content.channelName)
       .with({ tag: 'document_mention' }, (m) => m.content.documentName)
       .with(
         { tag: 'mentioned_in_document_comment' },
@@ -234,6 +236,7 @@ export function getNotificationContent(
           m.content.reviewSnippet || m.content.title || m.content.displayName
       )
       .with({ tag: 'channel_invite' }, () => undefined)
+      .with({ tag: 'channel_access_requested' }, () => undefined)
       .with({ tag: 'invite_to_team' }, () => undefined)
       // The description the user wrote is the whole point of a reminder.
       .with({ tag: 'reminder' }, (m) => m.content.description)
@@ -313,6 +316,7 @@ export function shouldShowNotificationTarget(n: UnifiedNotification): boolean {
       .with({ tag: 'commented_on_document' }, () => true)
       .with({ tag: 'crm_discussion' }, () => true)
       .with({ tag: 'channel_invite' }, () => true)
+      .with({ tag: 'channel_access_requested' }, () => true)
       .with({ tag: 'invite_to_team' }, () => true)
       // Shown so "Reminder" reads as being about something; a standalone
       // reminder resolves to no target name and renders without one anyway.

@@ -8,6 +8,21 @@ const reply = { id: 'reply-1', thread_id: 'root-1' } as MessageData;
 const otherRoot = { id: 'root-2', thread_id: null } as MessageData;
 
 describe('createUnifiedInputManager', () => {
+  it('stays bound to its default thread, and returns there after a reply', () => {
+    createRoot((dispose) => {
+      const manager = createUnifiedInputManager({ defaultThreadId: 'call-1' });
+      expect(manager.replyTarget()).toEqual({ threadId: 'call-1' });
+
+      manager.bindReply(otherRoot);
+      expect(manager.replyTarget()?.threadId).toBe('root-2');
+
+      manager.closeReply();
+      expect(manager.replyTarget()).toEqual({ threadId: 'call-1' });
+
+      dispose();
+    });
+  });
+
   it('binds a root message as a root-bound pointer', () => {
     createRoot((dispose) => {
       const manager = createUnifiedInputManager();

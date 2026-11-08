@@ -59,8 +59,29 @@ impl ChannelRealtimePublisher for ConnectionGatewayChannelRealtimePublisher {
                 )
                 .await
             }
+            ChannelRealtimeEffect::AccessRequestChanged {
+                recipients,
+                channel_id,
+                request_id,
+            } => {
+                self.send_update(
+                    "channel_access_request_changed",
+                    AccessRequestChangedRealtimeData {
+                        channel_id,
+                        request_id,
+                    },
+                    recipients,
+                )
+                .await
+            }
         }
     }
+}
+
+#[derive(Serialize)]
+struct AccessRequestChangedRealtimeData {
+    channel_id: Uuid,
+    request_id: Uuid,
 }
 
 #[derive(Serialize)]

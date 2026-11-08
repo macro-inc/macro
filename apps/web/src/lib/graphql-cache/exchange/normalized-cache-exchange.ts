@@ -41,6 +41,7 @@ import { type Span, Telemetry } from '@macro-inc/observability';
 import {
   type Client,
   CombinedError,
+  createRequest,
   type Exchange,
   makeOperation,
   type Operation,
@@ -119,6 +120,35 @@ const QUERY_MUTATION_VERSION_CONTEXT_KEY =
   'normalizedCacheQueryMutationVersion';
 /** Marks dependency-pushed reads as latency-sensitive worker work. */
 const AFFECTED_READ_CONTEXT_KEY = 'normalizedCacheAffectedRead';
+
+// Below every hashed operation key, so a link repair shares none of them.
+let lastLinkRepairKey = -(2 ** 40);
+
+/**
+ * A link repair gets its own operation key, because the mutation queue waits for
+ * it. urql drops a query whose key has a dispatch outstanding, and an affected
+ * reread this exchange fences never reports back, so on a shared key the repair
+ * was never sent and held the whole queue until its timeout. Other revalidations
+ * aren't waited on, and share the mounted reader's key and scope.
+ */
+function revalidationQuery(
+  client: Client,
+  document: DocumentNode,
+  variables: Record<string, unknown>,
+  isLinkRepair: boolean
+) {
+  if (!isLinkRepair) {
+    return client.query(document, variables, { requestPolicy: 'network-only' });
+  }
+  lastLinkRepairKey -= 1;
+  return client.executeRequestOperation(
+    client.createRequestOperation(
+      'query',
+      { ...createRequest(document, variables), key: lastLinkRepairKey },
+      { requestPolicy: 'network-only' }
+    )
+  );
+}
 /** Prevents a replacement-registration cache read from forwarding the API again. */
 const REPLACEMENT_REGISTRATION_ONLY_CONTEXT_KEY =
   'normalizedCacheReplacementRegistrationOnly';
@@ -953,11 +983,12 @@ export function normalizedCacheExchange(
               })
             )
               return;
-            const result = await client
-              .query(document, variables as Record<string, unknown>, {
-                requestPolicy: 'network-only',
-              })
-              .toPromise();
+            const result = await revalidationQuery(
+              client,
+              document,
+              variables as Record<string, unknown>,
+              revalidation.onlyOnLinkFailure === true
+            ).toPromise();
             if (result.error)
               reportError(result.error, mutation ?? result.operation);
             const metadata = normalizedCacheResultMetadata(result);

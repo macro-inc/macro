@@ -49,12 +49,31 @@ echo "Releasing Android version code ${version_code}."
 
 # (`gh pr checks` names are job names, not workflow names, plus the contexts
 # of commit statuses, such as the android-play/* ones Android Play Publish
-# and Android Release Watch set.)
-ours='^(Android Native Check|Android Play Release|Re-run the native check|Web App Status Check|Android Release Drift|iOS Native Check|android-play/)'
+# and Android Release Watch set. PR CI prefixes the jobs it calls with
+# `Web App / `. The CI gate status aggregates every check, and stays pending
+# on a head no one has run PR CI on.)
+ours='^((Web App / )?(Android Native Check|Web App Status Check|iOS Native Check)|Android Play Release|Re-run the native check|Android Release Drift|android-play/|CI gate$)'
 deadline=$(( $(date +%s) + WAIT_MINUTES * 60 ))
 while true; do
-  checks=$(gh pr checks "$PR_NUMBER" --repo "$GH_REPO" --json name,bucket \
-    | jq -c --arg ours "$ours" '[.[] | select(.name | test($ours) | not)]')
+  all_checks=$(gh pr checks "$PR_NUMBER" --repo "$GH_REPO" --json name,bucket,description)
+  # The checks only exist once someone has run PR CI on this head; its CI gate
+  # fails with the native check, so only the gate's description is read here.
+  gate=$(jq -r '[.[] | select(.name == "CI gate") | .description][0] // ""' <<<"$all_checks")
+  case "$gate" in
+    "" | "Not run on this commit."*)
+      echo "CI has not run on ${head_sha:0:10}. Run it (gh api repos/${GH_REPO}/issues/${PR_NUMBER}/labels -f "labels[]=run-ci"), then re-add android-update once it passes." >&2
+      exit 1
+      ;;
+    "Running on"* | "Passed on"* | "Failed:"*) ;;
+    *)
+      echo "CI could not run on ${head_sha:0:10}: ${gate}. Re-add android-update once it passes." >&2
+      exit 1
+      ;;
+  esac
+  checks=$(jq -c --arg ours "$ours" '[.[] | select(.name | test($ours) | not)]' <<<"$all_checks")
+  if [[ "$gate" == "Running on"* ]]; then
+    checks=$(jq -c '. + [{name: "CI gate", bucket: "pending"}]' <<<"$checks")
+  fi
   failing=$(jq -r '[.[] | select(.bucket == "fail" or .bucket == "cancel") | .name] | join(", ")' <<<"$checks")
   pending=$(jq -r '[.[] | select(.bucket == "pending") | .name] | join(", ")' <<<"$checks")
   if [[ -n "$failing" ]]; then

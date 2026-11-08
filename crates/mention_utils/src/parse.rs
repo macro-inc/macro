@@ -107,14 +107,115 @@ pub struct ParsedDateMention<'a> {
 
 impl<'de> XmlTaggedParsed<'de> for ParsedDateMention<'de> {
     const TAG_NAME: &'static str = "m-date-mention";
+
+    /// The body is the JSON object, or a bare ISO 8601 date or timestamp,
+    /// which models write in place of it.
+    fn parse(s: &'de str) -> IResult<&'de str, Self> {
+        tag_content(Self::TAG_NAME)
+            .map_res(|body: &'de str| match bare_date_label(body.trim()) {
+                Some(label) => Ok(Self {
+                    display_format: Cow::Owned(label),
+                }),
+                None => serde_json::from_str(body),
+            })
+            .parse(s)
+    }
+}
+
+const MONTHS: [&str; 12] = [
+    "Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
+];
+
+/// Label for a bare ISO date or timestamp, as written: "Nov 13, 2026" or
+/// "Nov 13, 2026, 3:00 PM". `None` when it is not a real date and time.
+/// `parseDateMentionBody` in `packages/lexical-core` labels them the same way.
+fn bare_date_label(body: &str) -> Option<String> {
+    let (_, year, month, day, hour, minute) = lazy_regex::regex_captures!(
+        r"^(\d{4})-(\d{2})-(\d{2})(?:T(\d{2}):(\d{2})(?::\d{2}(?:\.\d+)?)?(?:Z|[+-]\d{2}:\d{2}))?$",
+        body
+    )?;
+    let year: u32 = year.parse().ok()?;
+    let month: usize = month.parse().ok()?;
+    let day: u32 = day.parse().ok()?;
+    let is_leap = (year.is_multiple_of(4) && !year.is_multiple_of(100)) || year.is_multiple_of(400);
+    let days_in_month = match month {
+        2 if is_leap => 29,
+        2 => 28,
+        4 | 6 | 9 | 11 => 30,
+        1..=12 => 31,
+        _ => return None,
+    };
+    if day == 0 || day > days_in_month {
+        return None;
+    }
+    let date = format!("{} {day}, {year}", MONTHS[month - 1]);
+    if hour.is_empty() {
+        return Some(date);
+    }
+    let hour: u32 = hour.parse().ok()?;
+    if hour > 23 || minute.parse::<u32>().ok()? > 59 {
+        return None;
+    }
+    let period = if hour < 12 { "AM" } else { "PM" };
+    let hour = match hour % 12 {
+        0 => 12,
+        hour => hour,
+    };
+    Some(format!("{date}, {hour}:{minute} {period}"))
 }
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 #[non_exhaustive]
 pub struct ParsedDocumentMention<'a> {
-    #[serde(borrow)]
+    /// A cached label; agents leave it empty or omit it, since the app shows
+    /// the live name.
+    #[serde(borrow, default)]
     pub document_name: Cow<'a, str>,
+    #[serde(borrow, default)]
+    pub block_name: Cow<'a, str>,
+    /// Free-form navigation parameters. Any shape is accepted, so an odd
+    /// value never stops the rest of the text from being formatted.
+    #[serde(default)]
+    pub block_params: serde_json::Value,
+}
+
+impl ParsedDocumentMention<'_> {
+    /// What the mention points at, as a lowercase noun, for text that cannot
+    /// show the live name.
+    pub fn kind(&self) -> &'static str {
+        let is_message = self
+            .block_params
+            .get("channel_message_id")
+            .is_some_and(|id| !id.is_null());
+
+        match self.block_name.as_ref() {
+            "channel" if is_message => "message",
+            "channel" => "channel",
+            "md" | "write" | "pdf" | "code" | "canvas" | "spreadsheet" | "csv" | "pptx" | "psd"
+            | "fig" | "ai" | "unknown" => "document",
+            "task" => "task",
+            "email" => "email",
+            "calendar" => "event",
+            "database" => "database",
+            "form" => "form",
+            "initiative" => "project",
+            "project" => "folder",
+            "company" => "company",
+            "contact" => "contact",
+            "pipeline" => "pipeline",
+            "call" => "call",
+            "chat" => "chat",
+            "agent" => "agent session",
+            "pr" => "pull request",
+            "image" => "image",
+            "video" => "video",
+            "skill" => "skill",
+            "snippet" => "snippet",
+            "routine" | "automation" => "routine",
+            _ => "item",
+        }
+    }
 }
 
 impl<'de> XmlTaggedParsed<'de> for ParsedDocumentMention<'de> {
@@ -534,7 +635,12 @@ impl XmlFormatter for PlainTextFormatter {
         write!(f, "{}", link.text)
     }
 
+    /// A nameless mention reads as its kind in angle brackets, e.g. `<task>`.
+    /// The brackets are literal text: HTML consumers must escape them.
     fn format_doc(doc: &ParsedDocumentMention<'_>, f: &mut Formatter<'_>) -> std::fmt::Result {
+        if doc.document_name.trim().is_empty() {
+            return write!(f, "<{}>", doc.kind());
+        }
         write!(f, "{}", doc.document_name)
     }
 
