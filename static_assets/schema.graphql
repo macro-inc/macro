@@ -2119,9 +2119,13 @@ type GraphqlAgentSessionSettledMetadata {
 	"""
 	actor: String
 	"""
+	ACP stop reason, or `error`, in ACP's spelling.
+	"""
+	stopReason: String! @deprecated(reason: "Use turnStopReason. Remove after 2026-12-09.")
+	"""
 	Why the turn stopped.
 	"""
-	stopReason: GraphqlAgentTurnStopReason!
+	turnStopReason: GraphqlAgentTurnStopReason!
 	"""
 	The agent's last prose in the turn.
 	"""

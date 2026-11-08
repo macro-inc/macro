@@ -1122,7 +1122,10 @@ function toNotificationDocumentSubType(
     : null;
 }
 
-/** A turn's stop reason, from GraphQL's enum to the REST spelling. */
+/**
+ * A turn's stop reason, from GraphQL's enum to the REST spelling. A reason
+ * a newer server adds reads as `other`, as the backend reads one ACP adds.
+ */
 function agentTurnStopReason(
   stopReason: GraphqlAgentTurnStopReason
 ): AgentTurnStopReason {
@@ -1134,7 +1137,7 @@ function agentTurnStopReason(
     .with('CANCELLED', () => 'cancelled')
     .with('ERROR', () => 'error')
     .with('OTHER', () => 'other')
-    .exhaustive();
+    .exhaustive(() => 'other');
 }
 
 /** The flattened session block every agent-session kind carries. */

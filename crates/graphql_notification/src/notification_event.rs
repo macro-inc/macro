@@ -1246,8 +1246,22 @@ impl GraphqlAgentSessionSettledMetadata {
         self.0.actor.as_ref().map(ToString::to_string)
     }
 
+    /// ACP stop reason, or `error`, in ACP's spelling.
+    #[graphql(deprecation = "Use turnStopReason. Remove after 2026-12-09.")]
+    async fn stop_reason(&self) -> &'static str {
+        match self.0.stop_reason {
+            AgentTurnStopReason::EndTurn => "end_turn",
+            AgentTurnStopReason::MaxTokens => "max_tokens",
+            AgentTurnStopReason::MaxTurnRequests => "max_turn_requests",
+            AgentTurnStopReason::Refusal => "refusal",
+            AgentTurnStopReason::Cancelled => "cancelled",
+            AgentTurnStopReason::Error => "error",
+            AgentTurnStopReason::Other => "other",
+        }
+    }
+
     /// Why the turn stopped.
-    async fn stop_reason(&self) -> GraphqlAgentTurnStopReason {
+    async fn turn_stop_reason(&self) -> GraphqlAgentTurnStopReason {
         self.0.stop_reason.into()
     }
 
