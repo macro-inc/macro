@@ -71,12 +71,27 @@ function tag(node: ViewNode): string {
       throw new Error('No built-in element tag: ' + node.type);
   }
 }
-function elementProps(node: ViewNode, dom: HTMLElement): void {
+function elementProps(
+  node: ViewNode,
+  dom: HTMLElement,
+  ctx: RenderContext
+): void {
   const props = node.props(),
     fields = node.elementProps;
-  dom.dir =
-    fields?.direction === 1 ? 'ltr' : fields?.direction === 2 ? 'rtl' : '';
-  dom.style.cssText = fields?.style ?? '';
+  const parent = node.parent === null ? null : ctx.view.node(node.parent);
+  const automatic =
+    parent &&
+    (parent.kind === 'root' || ctx.view.flags(parent)?.isShadowRoot) &&
+    !parent.elementProps?.direction;
+  if (fields?.direction === 1) dom.dir = 'ltr';
+  else if (fields?.direction === 2) dom.dir = 'rtl';
+  else if (node.kind !== 'root' && automatic) dom.dir = 'auto';
+  else dom.removeAttribute('dir');
+  if (node.kind === 'root') {
+    dom.style.userSelect = 'text';
+    dom.style.whiteSpace = 'pre-wrap';
+    dom.style.wordBreak = 'break-word';
+  } else dom.style.cssText = fields?.style ?? '';
   const alignment =
     ['', 'left', 'center', 'right', 'justify', 'start', 'end'][
       fields?.format ?? 0
@@ -186,13 +201,13 @@ const element: NodeView = {
   createDOM(node, ctx) {
     const dom = ctx.document.createElement(tag(node));
     dom.className = elementClasses(node, ctx);
-    elementProps(node, dom);
+    elementProps(node, dom, ctx);
     return dom;
   },
   updateDOM(previous, next, dom, ctx) {
     if (tag(previous) !== tag(next)) return true;
-    elementProps(next, dom);
-    dom.className = elementClasses(next, ctx);
+    elementProps(next, dom, ctx);
+    if (next.kind !== 'root') dom.className = elementClasses(next, ctx);
     return false;
   },
 };

@@ -838,15 +838,13 @@ test('a pending parent table correction cannot steal nested-editor focus', async
   }, state);
   const counters = await page.evaluate(async () => {
     window.groupB.first.resetCounters();
-    document
-      .getElementById('first')
-      ?.dispatchEvent(
-        new KeyboardEvent('keydown', {
-          key: 'ArrowDown',
-          bubbles: true,
-          cancelable: true,
-        })
-      );
+    document.getElementById('first')?.dispatchEvent(
+      new KeyboardEvent('keydown', {
+        key: 'ArrowDown',
+        bubbles: true,
+        cancelable: true,
+      })
+    );
     const immediate = window.groupB.first.counters();
     window.groupB.second.caret('nested', 1);
     await new Promise<void>((resolve) =>
@@ -865,5 +863,36 @@ test('a pending parent table correction cannot steal nested-editor focus', async
   });
   expect(counters.final).toEqual(counters.immediate);
   expect(counters.focus).toBe('second');
+  expect(await page.evaluate(() => window.groupB.errors)).toEqual([]);
+});
+
+test('native roots retain editable wrapping and source automatic block direction', async ({
+  page,
+}) => {
+  await page.evaluate(() => {
+    document.getElementById('first')?.classList.add('md');
+    window.groupB.first.set(
+      JSON.stringify({
+        root: {
+          type: 'root',
+          version: 1,
+          children: [{ type: 'paragraph', version: 1, children: [] }],
+        },
+      })
+    );
+  });
+  const styles = await page.locator('#first').evaluate((root) => ({
+    md: root.classList.contains('md'),
+    userSelect: root.style.userSelect,
+    whiteSpace: root.style.whiteSpace,
+    wordBreak: root.style.wordBreak,
+  }));
+  expect(styles).toEqual({
+    md: true,
+    userSelect: 'text',
+    whiteSpace: 'pre-wrap',
+    wordBreak: 'break-word',
+  });
+  await expect(page.locator('#first p')).toHaveAttribute('dir', 'auto');
   expect(await page.evaluate(() => window.groupB.errors)).toEqual([]);
 });
