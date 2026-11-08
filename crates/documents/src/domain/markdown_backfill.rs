@@ -9,7 +9,7 @@ use tokio::time::timeout;
 use tokio_retry::Retry;
 
 use crate::domain::models::DocumentError;
-use crate::domain::ports::markdown::MarkdownInitializationPort;
+use crate::domain::ports::markdown::{MarkdownInitializationOptions, MarkdownInitializationPort};
 
 /// Runtime options for markdown lifecycle backfill.
 #[derive(Clone, Debug)]
@@ -338,7 +338,11 @@ where
 
         match self
             .markdown_initializer
-            .initialize_existing_markdown(&candidate.id, &markdown, None)
+            .initialize_existing_markdown(
+                &candidate.id,
+                &markdown,
+                MarkdownInitializationOptions::default(),
+            )
             .await
         {
             Ok(_) => CandidateResult::Initialized,

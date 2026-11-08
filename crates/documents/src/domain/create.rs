@@ -26,7 +26,9 @@ use crate::domain::notion_markdown::NotionMarkdown;
 use crate::domain::ports::create::{
     DocumentBytesUpload, DocumentBytesUploadPort, DocumentCreationService,
 };
-use crate::domain::ports::markdown::{MarkdownInitializationPort, MarkdownSnapshot};
+use crate::domain::ports::markdown::{
+    MarkdownInitializationOptions, MarkdownInitializationPort, MarkdownSnapshot,
+};
 use crate::domain::ports::mentions::DocumentMentionTrackingPort;
 use crate::domain::response::CreateDocumentResponseData;
 
@@ -749,17 +751,15 @@ where
 
         // Only task creation supplies explicit pins. Other markdown callers retain
         // their existing implicit editor defaults.
-        let initial_pins = task.as_ref().and_then(|(_, pins, _, _)| pins.clone());
+        let options = MarkdownInitializationOptions {
+            initial_pins: task.as_ref().and_then(|(_, pins, _, _)| pins.clone()),
+        };
         let finalize_result = async {
             let initialized = match &content {
                 MarkdownContent::Markdown(markdown) => MarkdownSnapshot {
                     snapshot: self
                         .markdown_initializer
-                        .initialize_existing_markdown(
-                            &document_id,
-                            markdown,
-                            initial_pins.as_deref(),
-                        )
+                        .initialize_existing_markdown(&document_id, markdown, options)
                         .await?,
                     markdown: markdown.clone(),
                 },

@@ -24,6 +24,13 @@ struct LexicalResponse {
     data: Vec<LexicalResponseItem>,
 }
 
+/// Options for creating a Lexical markdown snapshot.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct MarkdownSnapshotOptions {
+    /// Property definition IDs to pin; `None` preserves implicit editor defaults.
+    pub initial_pins: Option<Vec<String>>,
+}
+
 #[derive(Debug, serde::Serialize)]
 struct MarkdownSnapshotRequest<'a> {
     markdown: &'a str,
@@ -564,7 +571,7 @@ impl LexicalClient {
     pub async fn markdown_to_loro_snapshot(
         &self,
         markdown: &str,
-        initial_pins: Option<&[String]>,
+        options: MarkdownSnapshotOptions,
     ) -> Result<Vec<u8>> {
         let url = format!("{}/snapshot/markdown", self.url);
         let response = check_response(
@@ -572,7 +579,7 @@ impl LexicalClient {
                 .post(&url)
                 .json(&MarkdownSnapshotRequest {
                     markdown,
-                    initial_pins,
+                    initial_pins: options.initial_pins.as_deref(),
                 })
                 .send()
                 .await?,

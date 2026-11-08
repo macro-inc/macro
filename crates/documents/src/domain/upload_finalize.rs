@@ -7,7 +7,7 @@ use model::document::{DocumentBasic, FileType, FileTypeExt};
 use super::content::{DocumentContent, DocumentContentLocation, DocumentContentState};
 use super::models::DocumentError;
 use super::ports::DocumentRepo;
-use super::ports::markdown::MarkdownInitializationPort;
+use super::ports::markdown::{MarkdownInitializationOptions, MarkdownInitializationPort};
 
 /// Minimal document operations needed to finalize an uploaded object.
 pub trait UploadFinalizeDocumentPort: Send + Sync {
@@ -195,7 +195,11 @@ where
 
             match self
                 .markdown_initializer
-                .initialize_existing_markdown(&document_context.document_id, markdown, None)
+                .initialize_existing_markdown(
+                    &document_context.document_id,
+                    markdown,
+                    MarkdownInitializationOptions::default(),
+                )
                 .await
             {
                 Ok(_) => {}

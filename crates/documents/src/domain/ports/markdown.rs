@@ -14,6 +14,14 @@ pub struct MarkdownSnapshot {
     pub markdown: String,
 }
 
+/// Options for initializing a markdown document's collaborative snapshot.
+/// Omitted pins preserve implicit editor defaults; an empty list explicitly sets none.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct MarkdownInitializationOptions {
+    /// Property definition IDs pinned on creation, if explicitly provided.
+    pub initial_pins: Option<Vec<String>>,
+}
+
 /// Initializes markdown document content in the collaborative editor backend.
 pub trait MarkdownInitializationPort: Send + Sync {
     /// Initialize an already-created markdown document and return the canonical snapshot.
@@ -21,7 +29,7 @@ pub trait MarkdownInitializationPort: Send + Sync {
         &self,
         document_id: &str,
         markdown: &str,
-        initial_pins: Option<&[String]>,
+        options: MarkdownInitializationOptions,
     ) -> impl Future<Output = Result<Vec<u8>, DocumentError>> + Send;
 
     /// Initialize an already-created markdown document from a Notion page
@@ -40,7 +48,7 @@ pub trait LexicalSnapshotPort: Send + Sync + 'static {
     fn markdown_to_loro_snapshot(
         &self,
         markdown: &str,
-        initial_pins: Option<Vec<String>>,
+        options: MarkdownInitializationOptions,
     ) -> impl Future<Output = anyhow::Result<Vec<u8>>> + Send;
 
     /// Convert a Notion page to loro via lexical using lexical service

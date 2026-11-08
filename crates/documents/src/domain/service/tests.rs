@@ -2335,7 +2335,7 @@ impl crate::domain::ports::markdown::MarkdownInitializationPort for RejectUnexpe
         &self,
         _: &str,
         _: &str,
-        _: Option<&[String]>,
+        _: crate::domain::ports::markdown::MarkdownInitializationOptions,
     ) -> Result<Vec<u8>, DocumentError> {
         panic!("failed repository creation must not initialize markdown");
     }

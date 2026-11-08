@@ -15,7 +15,9 @@ use crate::domain::notion_markdown::NotionMarkdown;
 use crate::domain::ports::create::{
     DocumentBytesUpload, DocumentBytesUploadPort, DocumentCreationService,
 };
-use crate::domain::ports::markdown::{MarkdownInitializationPort, MarkdownSnapshot};
+use crate::domain::ports::markdown::{
+    MarkdownInitializationOptions, MarkdownInitializationPort, MarkdownSnapshot,
+};
 use crate::domain::ports::mentions::DocumentMentionTrackingPort;
 use crate::domain::response::{
     CreateDocumentResponseData, DocumentResponse, DocumentResponseMetadataWithContent,
@@ -136,7 +138,7 @@ impl MarkdownInitializationPort for FakeMarkdownInitializer {
         &self,
         _document_id: &str,
         _markdown: &str,
-        _initial_pins: Option<&[String]>,
+        _options: MarkdownInitializationOptions,
     ) -> Result<Vec<u8>, DocumentError> {
         Ok(vec![1, 2, 3])
     }
@@ -164,13 +166,13 @@ impl MarkdownInitializationPort for RecordingMarkdownInitializer {
         &self,
         _document_id: &str,
         _markdown: &str,
-        initial_pins: Option<&[String]>,
+        options: MarkdownInitializationOptions,
     ) -> Result<Vec<u8>, DocumentError> {
         self.lifecycle.lock().unwrap().push("initialize");
         self.received_pins
             .lock()
             .unwrap()
-            .push(initial_pins.map(|ids| ids.to_vec()));
+            .push(options.initial_pins);
         if self.fail {
             return Err(DocumentError::Internal(anyhow::anyhow!(
                 "initialization failed"
