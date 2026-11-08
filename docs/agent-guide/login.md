@@ -332,7 +332,9 @@ can be sent, the addresses stay on screen. On phones, the paired buttons stack
 full width.
 
 Members with an active or trialing license, including a license from their team,
-finish directly from the team step without visiting the plan page. The Continue
+finish directly from the team step without visiting the plan page; a licensed
+team owner instead continues to the optional demo call step (see
+[onboarding](onboarding.md#demo-call-step--apponboarding)). The Continue
 button reads "Opening your workspace…" while saving; a failed save leaves the
 team step available to retry. Checkout returns still use the plan step to confirm
 payment. Session refreshes must preserve the mounted onboarding flow so

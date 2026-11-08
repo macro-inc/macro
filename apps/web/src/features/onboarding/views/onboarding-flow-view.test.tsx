@@ -7,7 +7,9 @@ import {
   saveSignupDraft,
   saveStep,
 } from '../primitives/flow-storage';
+import { renderDemoBookingStub } from '../tests/demo-booking-stub';
 import {
+  defaultFakeWorld,
   FAKE_VIEWER_ID,
   type FakeOnboardingWorld,
 } from '../tests/fake-onboarding-context';
@@ -52,6 +54,7 @@ function setup(
         onRedirect={redirect}
         onSignedOut={signedOut}
         renderInviteOffer={renderInviteOfferStub}
+        renderDemoBooking={renderDemoBookingStub}
       />
     ),
     options.world
@@ -59,8 +62,14 @@ function setup(
   return { fake, navigate, redirect, signedOut };
 }
 
-const heading = (name: string | RegExp) =>
-  screen.findByRole('heading', { name, level: 1 });
+/** A fresh copy per test: the fake backend mutates the world it is given. */
+const licensedViewer = () => ({
+  ...defaultFakeWorld().viewer!,
+  licensed: true,
+});
+
+const heading = (name: string | RegExp, options?: { timeout: number }) =>
+  screen.findByRole('heading', { name, level: 1 }, options);
 const click = (name: string | RegExp) =>
   fireEvent.click(screen.getByRole('button', { name }));
 
@@ -231,7 +240,7 @@ describe('onboarding flow', () => {
     await heading('Built for teams.');
     click('Create team & invite 2');
     await screen.findByText("You're on Acme");
-    expect(fake.world.teams).toEqual([{ name: 'Acme' }]);
+    expect(fake.world.teams).toEqual([{ name: 'Acme', owned: true }]);
 
     click('Copy invite link');
     await waitFor(() =>
@@ -256,7 +265,7 @@ describe('onboarding flow', () => {
     const { fake } = setup({
       resume: 'team',
       world: {
-        teams: [{ name: 'Acme' }],
+        teams: [{ name: 'Acme', owned: false }],
         failures: { teamInviteLink: 'Not an admin' },
       },
     });
@@ -544,7 +553,7 @@ describe('onboarding flow', () => {
   it('passes over the team step for someone who already joined a team', async () => {
     const { fake } = setup({
       resume: 'tools',
-      world: { teams: [{ name: 'Acme' }] },
+      world: { teams: [{ name: 'Acme', owned: false }] },
     });
     await heading('Connect your tools.');
     click('Continue');
@@ -562,7 +571,7 @@ describe('onboarding flow', () => {
     const { navigate } = setup({
       resume: 'tools',
       world: {
-        teams: [{ name: 'Acme' }],
+        teams: [{ name: 'Acme', owned: false }],
         viewer: {
           id: FAKE_VIEWER_ID,
           email: 'ada@acme.com',
@@ -582,7 +591,7 @@ describe('onboarding flow', () => {
   it('confirms an existing team membership', async () => {
     const { fake } = setup({
       resume: 'team',
-      world: { teams: [{ name: 'Acme' }] },
+      world: { teams: [{ name: 'Acme', owned: false }] },
     });
     await screen.findByText("You're on Acme");
     expect(fake.events()).toContainEqual({
@@ -595,7 +604,7 @@ describe('onboarding flow', () => {
     const { navigate, redirect } = setup({
       resume: 'plan',
       world: {
-        teams: [{ name: 'Acme' }],
+        teams: [{ name: 'Acme', owned: false }],
         viewer: {
           id: FAKE_VIEWER_ID,
           email: 'ada@acme.com',
@@ -622,7 +631,7 @@ describe('onboarding flow', () => {
     const { fake, navigate } = setup({
       resume: 'team',
       world: {
-        teams: [{ name: 'Acme' }],
+        teams: [{ name: 'Acme', owned: false }],
         viewer: {
           id: FAKE_VIEWER_ID,
           email: 'ada@acme.com',
@@ -660,7 +669,7 @@ describe('onboarding flow', () => {
     const { fake, navigate } = setup({
       resume: 'team',
       world: {
-        teams: [{ name: 'Acme' }],
+        teams: [{ name: 'Acme', owned: false }],
         viewer: {
           id: FAKE_VIEWER_ID,
           email: 'ada@acme.com',
@@ -687,6 +696,105 @@ describe('onboarding flow', () => {
     await waitFor(() =>
       expect(navigate).toHaveBeenCalledExactlyOnceWith('/home')
     );
+  });
+
+  it('offers a paid team owner an optional demo call as the last step', async () => {
+    const { fake, navigate } = setup({
+      resume: 'team',
+      world: {
+        teams: [{ name: 'Acme', owned: true }],
+        viewer: licensedViewer(),
+      },
+    });
+    await heading('Built for teams.');
+    click('Continue');
+    await heading('Want a live walkthrough?');
+    expect(screen.getByText('One last thing')).toBeTruthy();
+    expect(readSavedStep(FAKE_VIEWER_ID)).toBe('demo');
+    expect(
+      screen.queryByRole('button', { name: 'Back to previous step' })
+    ).toBeNull();
+    expect(navigate).not.toHaveBeenCalled();
+
+    click('Skip');
+    await waitFor(() =>
+      expect(navigate).toHaveBeenCalledExactlyOnceWith('/home')
+    );
+    expect(fake.events()).toContainEqual({
+      event: 'onboarding_v4_step',
+      data: { step: 'demo', index: 8, state: 'skipped' },
+    });
+    expect(fake.events()).toContainEqual(
+      expect.objectContaining({
+        event: 'onboarding_v4_completed',
+        data: expect.objectContaining({ plan: 'premium' }),
+      })
+    );
+  });
+
+  it('confirms a booked demo before entering the workspace', async () => {
+    const { fake, navigate } = setup({
+      resume: 'team',
+      world: {
+        teams: [{ name: 'Acme', owned: true }],
+        viewer: licensedViewer(),
+      },
+    });
+    await heading('Built for teams.');
+    click('Continue');
+    await heading('Want a live walkthrough?');
+    click('Book now');
+    await heading('Pick a time.');
+    expect(
+      screen.getByText(`Booking as ${licensedViewer().email}`)
+    ).toBeTruthy();
+    click('Book Tuesday 5pm');
+    await heading("You're booked.");
+    expect(navigate).not.toHaveBeenCalled();
+    click('Continue to workspace');
+    await waitFor(() =>
+      expect(navigate).toHaveBeenCalledExactlyOnceWith('/home')
+    );
+    expect(fake.events()).toContainEqual({
+      event: 'onboarding_v4_step',
+      data: { step: 'demo', index: 8, state: 'completed' },
+    });
+  });
+
+  it('offers the demo call after checkout to someone who created a team', async () => {
+    const { navigate } = setup({
+      resume: 'welcome',
+      checkoutReturn: { t: 'success', tier: 'premium' },
+      world: {
+        teams: [{ name: 'Acme', owned: true }],
+        webhookPollsRemaining: 1,
+      },
+    });
+    await heading('Want a live walkthrough?', { timeout: 3_000 });
+    expect(navigate).not.toHaveBeenCalled();
+  });
+
+  it('skips the demo call for a free team owner', async () => {
+    const { navigate } = setup({
+      resume: 'plan',
+      world: { teams: [{ name: 'Acme', owned: true }] },
+    });
+    await heading('Free Claude & GPT for 30 days.');
+    fireEvent.click(
+      screen.getAllByRole('button', { name: 'Continue with Free' }).at(-1)!
+    );
+    await waitFor(() =>
+      expect(navigate).toHaveBeenCalledExactlyOnceWith('/home')
+    );
+    expect(screen.queryByText('Want a live walkthrough?')).toBeNull();
+  });
+
+  it('sends an unpaid visitor from a demo link on to the plan offer', async () => {
+    const { navigate } = setup({ step: 'demo' });
+    await heading('Want a live walkthrough?');
+    click('Skip');
+    await heading('Free Claude & GPT for 30 days.');
+    expect(navigate).not.toHaveBeenCalled();
   });
 
   it('sends a signed-out visitor to sign in', async () => {

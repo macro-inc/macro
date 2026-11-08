@@ -67,7 +67,11 @@ export type ConnectedToolsSource = {
   retry(): void;
 };
 
-export type Team = { name: string };
+export type Team = {
+  name: string;
+  /** The viewer created (owns) this team. */
+  owned: boolean;
+};
 export type TeamInvite = { id: string; invitedBy: string };
 
 export type TeamDirectorySource = {

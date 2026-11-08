@@ -13,6 +13,7 @@ import {
 import { renderInviteOfferStub } from '../tests/invite-offer-stub';
 import { OnboardingFlowView } from '../views/onboarding-flow-view';
 import { SignupJourneyView } from '../views/signup-journey-view';
+import { renderFixtureDemoBooking } from './demo-booking';
 import { FIXTURE_KEYS, type FixtureLanding } from './fixture-keys';
 
 /**
@@ -139,6 +140,7 @@ function Fixture() {
             onRedirect={(url) => location.assign(url)}
             onSignedOut={() => land({ t: 'signed-out' })}
             renderInviteOffer={renderInviteOfferStub}
+            renderDemoBooking={renderFixtureDemoBooking}
           />
         </Match>
       </Switch>

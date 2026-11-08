@@ -7,6 +7,8 @@ export const ONBOARDING_STEPS = [
   'tools',
   'team',
   'plan',
+  /** Optional demo booking, only for a paid owner of a team. */
+  'demo',
 ] as const;
 export type OnboardingStep = (typeof ONBOARDING_STEPS)[number];
 
