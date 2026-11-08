@@ -4,6 +4,8 @@ import type {
   PlanWorkspaceImportRequest,
   TrackImportEntityRequest,
 } from '../../../generated/cognition/types.gen';
+// Documents and tasks import each other; load them in the SDK's entry order.
+import '../../macro';
 import type { MacroClient } from '../../utils/client';
 import type { SessionReview } from '../agent-sessions/review';
 import { Document } from '../documents/document';

@@ -1,3 +1,4 @@
+import type { ImportReviewSource } from '../../../generated/agent-reviews';
 import type {
   NotionImportReport,
   NotionSharing,
@@ -8,7 +9,7 @@ import type { SessionReview } from '../agent-sessions/review';
 import { ImportItem, type ImportResult } from './import-item';
 
 /** Workspaces imported through a reviewed plan. */
-export type WorkspaceImportSource = 'notion' | 'linear' | 'jira';
+export type WorkspaceImportSource = ImportReviewSource;
 
 /**
  * Who sees what an import writes: `team` shares everything with the user's
