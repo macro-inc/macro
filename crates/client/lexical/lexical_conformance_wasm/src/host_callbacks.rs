@@ -289,6 +289,28 @@ impl BoundFunction {
             Err(Error::Invariant("JS callbacks require WASM"))
         }
     }
+    fn invoke_boolean(&self, value: Value, errors: &Errors) -> Result<bool, Error> {
+        #[cfg(target_arch = "wasm32")]
+        {
+            let argument = to_js(value).map_err(|error| Error::invariant(format!("{error:?}")))?;
+            match self.function.call1(&JsValue::UNDEFINED, &argument) {
+                Ok(value) => {
+                    let result = value.is_truthy();
+                    crate::debug::json_payload(&Value::Bool(result));
+                    Ok(result)
+                }
+                Err(error) => {
+                    errors.save(error);
+                    Err(Error::Invariant("JS node hook threw"))
+                }
+            }
+        }
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            let _ = (value, errors);
+            Err(Error::Invariant("JS callbacks require WASM"))
+        }
+    }
     fn new(function: js_sys::Function) -> Result<Self, JsValue> {
         #[cfg(target_arch = "wasm32")]
         {
@@ -305,6 +327,7 @@ impl BoundFunction {
         {
             let argument = to_js(value).map_err(|error| Error::invariant(format!("{error:?}")))?;
             match self.function.call1(&JsValue::UNDEFINED, &argument) {
+                Ok(value) if value.is_undefined() => Ok(serde_json::json!({"$undef":true})),
                 Ok(value) => crate::host::from_js(value)
                     .map_err(|error| Error::invariant(format!("{error:?}"))),
                 Err(error) => {
@@ -373,6 +396,42 @@ impl Callback {
                     .map_err(|error| Error::invariant(error.to_string()))
             })
             .collect()
+    }
+    pub(super) fn selection(
+        &self,
+        tx: &mut Transaction<'_>,
+        slot: lexical_model::SelectionSlot,
+    ) -> Result<Value, Error> {
+        self.context
+            .selection(tx, slot)
+            .map_err(|error| Error::invariant(error.to_string()))
+    }
+    pub(super) fn node_boolean(
+        &self,
+        tx: &mut Transaction<'_>,
+        key: NodeKey,
+        hook: lexical_model::ForeignHook,
+        args: Vec<Value>,
+    ) -> Result<bool, Error> {
+        let message = self.node_message(tx, key, hook, args)?;
+        self.with_scope(tx, || self.function.invoke_boolean(message, &self.errors))
+    }
+    pub(super) fn node_optional_result(
+        &self,
+        tx: &mut Transaction<'_>,
+        key: NodeKey,
+        hook: lexical_model::ForeignHook,
+        args: Vec<Value>,
+    ) -> Result<Option<NodeKey>, Error> {
+        let message = self.node_message(tx, key, hook, args)?;
+        let result = self.with_scope(tx, || self.function.invoke_value(message, &self.errors))?;
+        if result.is_null() {
+            return Ok(None);
+        }
+        self.context
+            .returned_node(tx, &result)
+            .map(Some)
+            .map_err(|error| Error::invariant(error.to_string()))
     }
     pub(super) fn node_mutation(
         &self,

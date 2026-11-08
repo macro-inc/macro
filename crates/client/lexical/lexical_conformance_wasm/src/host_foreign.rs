@@ -34,7 +34,10 @@ impl ForeignNode {
             | ForeignHook::Replace.bit()
             | ForeignHook::InsertAfter.bit()
             | ForeignHook::InsertBefore.bit()
-            | ForeignHook::CreateParentElement.bit();
+            | ForeignHook::CreateParentElement.bit()
+            | ForeignHook::InsertNewAfter.bit()
+            | ForeignHook::CollapseAtStart.bit()
+            | ForeignHook::StaticTransform.bit();
         if let Some(hook) = ForeignHook::ALL
             .iter()
             .find(|hook| mask & !supported & hook.bit() != 0)
@@ -127,6 +130,53 @@ impl ForeignNode {
     }
 }
 impl ForeignHooks for ForeignNode {
+    fn static_transform(
+        &self,
+        tx: &mut Transaction<'_>,
+        key: NodeKey,
+    ) -> Override<Result<(), Error>> {
+        self.invoke(tx, key, ForeignHook::StaticTransform, vec![])
+    }
+    fn insert_new_after(
+        &self,
+        tx: &mut Transaction<'_>,
+        key: NodeKey,
+        selection: SelectionSlot,
+        restore_selection: bool,
+    ) -> Override<Result<Option<NodeKey>, Error>> {
+        if self.overrides.load(Ordering::SeqCst) & ForeignHook::InsertNewAfter.bit() == 0 {
+            return Override::Inherit;
+        }
+        let callback = { self.callback.lock().expect("foreign dispatcher").clone() };
+        Override::Value(match callback {
+            Some(callback) => callback.selection(tx, selection).and_then(|selection| {
+                callback.node_optional_result(
+                    tx,
+                    key,
+                    ForeignHook::InsertNewAfter,
+                    vec![selection, json!(restore_selection)],
+                )
+            }),
+            None => Err(Error::Invariant("foreign dispatcher is not installed")),
+        })
+    }
+    fn collapse_at_start(
+        &self,
+        tx: &mut Transaction<'_>,
+        key: NodeKey,
+        selection: SelectionSlot,
+    ) -> Override<Result<bool, Error>> {
+        if self.overrides.load(Ordering::SeqCst) & ForeignHook::CollapseAtStart.bit() == 0 {
+            return Override::Inherit;
+        }
+        let callback = { self.callback.lock().expect("foreign dispatcher").clone() };
+        Override::Value(match callback {
+            Some(callback) => callback.selection(tx, selection).and_then(|selection| {
+                callback.node_boolean(tx, key, ForeignHook::CollapseAtStart, vec![selection])
+            }),
+            None => Err(Error::Invariant("foreign dispatcher is not installed")),
+        })
+    }
     fn replace(
         &self,
         tx: &mut Transaction<'_>,
