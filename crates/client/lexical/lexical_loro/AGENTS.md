@@ -31,6 +31,8 @@ It preserves the persisted loro-mirror node schema and takes explicit clocks.
 
 Install root Bun dependencies before running tests; the differential oracle must
 run the current mirror source and must never be replaced with expected values.
+The editor pair uses workspace Loro1.17.1; the isolated Worker transcript driver
+remains1.16.3 beside the vendored1.16.2 server encoder to preserve C0 bytes.
 
 
 - `TMPDIR=/home/wolf/tmp cargo test -p lexical_loro -j4`
