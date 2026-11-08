@@ -1,7 +1,8 @@
 //! Content keys over repository paths as they are on disk: tracked, modified
 //! and untracked (non-ignored) files alike. The machine-wide caches (static
 //! bundles, content-tagged images) are keyed by these, so an edit anywhere in
-//! an input changes the key whether or not it was committed.
+//! an input changes the key whether or not it was committed. Entries of those
+//! caches and of the init snapshots go into place through [`install_entry`].
 
 use std::path::{Path, PathBuf};
 use std::process::Command;
@@ -45,6 +46,30 @@ pub fn of_paths(repo: &Path, paths: &[&str]) -> Result<String> {
     Ok(hex(&Sha256::digest(tracked(repo, paths)?)))
 }
 
+/// Move a finished `tmp` into place at `entry` without ever removing a
+/// complete entry (`is_complete`), which another checkout may have installed
+/// meanwhile and may be reading. A rename onto a non-empty directory fails, so
+/// the rename goes first; only an incomplete leftover is removed before one
+/// retry.
+pub fn install_entry(tmp: &Path, entry: &Path, is_complete: impl Fn(&Path) -> bool) -> Result<()> {
+    if std::fs::rename(tmp, entry).is_ok() {
+        return Ok(());
+    }
+    if !is_complete(entry) {
+        let _ = std::fs::remove_dir_all(entry);
+        if std::fs::rename(tmp, entry).is_ok() {
+            return Ok(());
+        }
+    }
+    anyhow::ensure!(
+        is_complete(entry),
+        "could not move {} into place at {}",
+        tmp.display(),
+        entry.display()
+    );
+    std::fs::remove_dir_all(tmp).with_context(|| format!("removing {}", tmp.display()))
+}
+
 pub fn git(repo: &Path, args: &[&str], index: Option<&Path>) -> Result<Vec<u8>> {
     let mut cmd = Command::new("git");
     cmd.current_dir(repo).args(args);
@@ -76,3 +101,6 @@ fn scratch_dir() -> Result<PathBuf> {
 pub fn hex(bytes: &[u8]) -> String {
     bytes.iter().map(|b| format!("{b:02x}")).collect()
 }
+
+#[cfg(test)]
+mod test;

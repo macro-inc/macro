@@ -15,12 +15,15 @@ use sha2::{Digest, Sha256};
 use crate::local::content_key;
 
 /// Bump when the key's inputs or the entry layout change.
-const FORMAT: u32 = 1;
+/// 2: `vendor/ironcalc/pkg` joined the inputs.
+const FORMAT: u32 = 2;
 
 /// The repository paths the bundle is built from, relative to the repo root.
 const INPUTS: &[&str] = &[
     "apps/web",
     "packages",
+    // The `@ironcalc/wasm` workspace package the spreadsheet imports.
+    "vendor/ironcalc/pkg",
     "static_assets",
     "package.json",
     "bun.lock",
@@ -163,14 +166,8 @@ pub fn store(key: &str, dist: &Path) -> Result<PathBuf> {
         .status()
         .context("running cp -a")?;
     anyhow::ensure!(status.success(), "cp -a exited with {status}");
-    if entry.join("index.html").exists() {
-        std::fs::remove_dir_all(&tmp)?;
-    } else {
-        if entry.exists() {
-            std::fs::remove_dir_all(&entry)?;
-        }
-        std::fs::rename(&tmp, &entry).context("moving the bundle into the cache")?;
-    }
+    content_key::install_entry(&tmp, &entry, |entry| entry.join("index.html").exists())
+        .context("moving the bundle into the cache")?;
     prune(&root, key);
     Ok(entry)
 }

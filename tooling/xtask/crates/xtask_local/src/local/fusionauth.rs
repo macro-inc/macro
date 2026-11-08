@@ -154,7 +154,16 @@ fn curl_json(
     let mut child = cmd.spawn().context("running curl")?;
     if let Some(body) = body {
         let mut stdin = child.stdin.take().context("curl stdin")?;
-        std::io::Write::write_all(&mut stdin, &serde_json::to_vec(body)?)?;
+        // A curl that failed early has closed its stdin: report its own error
+        // below rather than the broken pipe.
+        let written = std::io::Write::write_all(&mut stdin, &serde_json::to_vec(body)?);
+        if let Err(error) = written
+            && error.kind() != std::io::ErrorKind::BrokenPipe
+        {
+            let _ = child.kill();
+            let _ = child.wait();
+            return Err(error).context("writing the request to curl");
+        }
     }
     drop(child.stdin.take());
     let output = child.wait_with_output().context("waiting for curl")?;

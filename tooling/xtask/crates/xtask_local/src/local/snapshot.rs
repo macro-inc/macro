@@ -238,16 +238,10 @@ pub fn save(
             tmp.join("manifest.json"),
             serde_json::to_string_pretty(&manifest)?,
         )?;
-        // A complete snapshot under this key may have landed meanwhile, and
-        // another bring-up may be restoring from it: keep it, drop ours.
-        if plan.exists() {
-            std::fs::remove_dir_all(&tmp)?;
-        } else {
-            if plan.dir.exists() {
-                std::fs::remove_dir_all(&plan.dir)?;
-            }
-            std::fs::rename(&tmp, &plan.dir).context("moving snapshot into place")?;
-        }
+        // A complete snapshot under this key may land meanwhile, and another
+        // bring-up may be restoring from it: keep it and drop ours.
+        super::content_key::install_entry(&tmp, &plan.dir, |_| plan.exists())
+            .context("moving snapshot into place")?;
         prune_unused(&root, &plan.key);
         Ok(())
     };
