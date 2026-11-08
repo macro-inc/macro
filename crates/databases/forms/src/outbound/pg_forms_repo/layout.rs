@@ -3,8 +3,8 @@
 
 use std::collections::HashMap;
 
-use models_databases::position::keys_between;
-use models_databases::views::FilterGroup;
+use databases_types::position::keys_between;
+use databases_types::views::FilterGroup;
 use sqlx::{PgPool, Postgres, Transaction};
 use uuid::Uuid;
 

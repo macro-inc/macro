@@ -3,7 +3,7 @@
 //! changes made by the underlying storage domain.
 
 use super::*;
-use models_databases::{
+use databases_types::{
     CellValue, CellWrite, ColumnChange, DatabaseOp, OptionId, OptionRef, RowChanges, RowsChange,
     ViewChange, ViewId,
     views::{RequestedLayout, ViewLayout},

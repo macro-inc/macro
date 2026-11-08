@@ -3,7 +3,7 @@
 mod query;
 
 use database_sql_engine::{catalog::Table, resolve::SelectQuery};
-use models_databases::{RowId, TableVersion};
+use databases_types::{RowId, TableVersion};
 use sqlx::PgPool;
 use tracing::Instrument;
 

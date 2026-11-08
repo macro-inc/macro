@@ -304,7 +304,7 @@ impl WorkspaceWriter for FakeWriter {
                     ..
                 } => Some(OpResult::Rows {
                     table: TableId::from_uuid(TABLE),
-                    table_version: models_databases::TableVersion(1),
+                    table_version: databases_types::TableVersion(1),
                     change: RowsResult::Inserted {
                         rows: rows
                             .iter()

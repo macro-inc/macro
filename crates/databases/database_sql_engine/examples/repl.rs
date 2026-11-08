@@ -11,7 +11,7 @@
 
 mod common;
 
-use models_databases::{ColumnId, DatabaseId, OptionId, RowId, TableId};
+use databases_types::{ColumnId, DatabaseId, OptionId, RowId, TableId};
 use std::collections::HashMap;
 use std::io::{self, BufRead, Write};
 use std::sync::Mutex;
@@ -23,7 +23,7 @@ use database_sql_engine::catalog::{
 use database_sql_engine::fold::{Bin, Cell, Row};
 use database_sql_engine::run::{OpsSink, Page, RowSource, run};
 use database_sql_engine::split::GqlQuery;
-use models_databases::{
+use databases_types::{
     CellValue, CellWrite, DatabaseOp, OpResult, OptionRef, RowChanges, RowsChange, RowsResult,
     TableVersion,
 };

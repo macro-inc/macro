@@ -1,7 +1,7 @@
 //! SaveDatabaseQuery tool: save a question and hand back the live block that
 //! renders its answer wherever it is pasted.
 
-use models_databases::{DatabaseId, QueryId};
+use databases_types::{DatabaseId, QueryId};
 use std::collections::HashSet;
 
 use ai_toolset::{

@@ -1,4 +1,4 @@
-# models_databases
+# databases_types
 
 ## What it is
 
@@ -43,7 +43,7 @@ domain.
 
 ## Checks
 
-- `cargo test -p models_databases` (`SQLX_OFFLINE` unset).
+- `cargo test -p databases_types` (`SQLX_OFFLINE` unset).
 
 ## Gotchas
 

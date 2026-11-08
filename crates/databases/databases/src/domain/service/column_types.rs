@@ -348,7 +348,7 @@ fn date(value: &str) -> Result<chrono::DateTime<Utc>, Misfit> {
 /// `start/end`, two dates or date-times as [`date`] reads them, ending no
 /// earlier than it starts; or one date, the range of that instant.
 fn date_range(value: &str) -> Result<DateRange, Misfit> {
-    match models_databases::DateRange::parse_interval(value, |end| date(end).ok()) {
+    match databases_types::DateRange::parse_interval(value, |end| date(end).ok()) {
         Some(range) => DateRange::new(range.start, range.end).map_err(|_| Misfit::NotDateRange),
         None => date(value)
             .map(DateRange::at)

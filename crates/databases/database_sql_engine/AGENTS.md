@@ -30,7 +30,7 @@ uses the wasm build directly).
 ## Boundaries
 
 - Depends on: `filter_ast`, `item_filters` (predicate ASTs shared with other
-  filtering code), `models_databases` (wire types).
+  filtering code), `databases_types` (wire types).
 - Used by: `crates/databases/databases` and `crates/databases/database_sql_runner` natively; the web
   app's database SQL console via the `wasm` module, built as the
   `database_sql_wasm` wrapper's cdylib.

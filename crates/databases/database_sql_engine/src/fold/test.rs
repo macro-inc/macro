@@ -1,4 +1,4 @@
-use models_databases::RowId;
+use databases_types::RowId;
 use std::collections::HashMap;
 
 use chrono::{TimeZone, Utc};

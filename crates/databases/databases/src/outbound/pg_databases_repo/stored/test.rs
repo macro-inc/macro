@@ -1,5 +1,5 @@
-use models_databases::views::{Lane, LaneKey, NewView, RequestedLayout, ViewLayout, ViewQuery};
-use models_databases::{ColumnId, DatabaseOp, OptionId, RowId, TableId, ViewChange};
+use databases_types::views::{Lane, LaneKey, NewView, RequestedLayout, ViewLayout, ViewQuery};
+use databases_types::{ColumnId, DatabaseOp, OptionId, RowId, TableId, ViewChange};
 use serde_json::json;
 use uuid::Uuid;
 

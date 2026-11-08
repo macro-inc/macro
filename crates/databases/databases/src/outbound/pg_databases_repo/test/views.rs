@@ -1,11 +1,11 @@
 //! Positions and views over Postgres: the byte order positions compare in,
 //! and views and card places through the ops.
 
-use models_databases::position::{Position, key_between, keys_between};
-use models_databases::views::{
+use databases_types::position::{Position, key_between, keys_between};
+use databases_types::views::{
     CardPosition, Lane, LaneKey, NewView, RequestedLayout, ViewId, ViewLayout, ViewQuery,
 };
-use models_databases::{
+use databases_types::{
     CellValue, CellWrite, ColumnChange, ColumnKind, DatabaseOp, NewColumn, NewOption, OpResult,
     OptionId, OptionRef, RowId, RowsChange, RowsResult, ViewChange, ViewResult,
 };
@@ -524,7 +524,7 @@ async fn a_card_moved_to_a_persons_lane_is_stored_under_them(pool: PgPool) {
                         definition: NewColumn::New {
                             name: "Host".into(),
                             kind: ColumnKind::Entity {
-                                target: models_databases::EntityKind::User,
+                                target: databases_types::EntityKind::User,
                                 multi: false,
                             },
                             options: vec![],

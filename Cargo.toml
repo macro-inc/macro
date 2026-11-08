@@ -206,6 +206,7 @@ members = [
   "crates/types/chat_message",
   "crates/types/cow_str",
   "crates/types/database_id",
+  "crates/types/databases_types",
   "crates/types/document_id",
   "crates/types/email_thread_id",
   "crates/types/entity_basic_types",
@@ -218,7 +219,6 @@ members = [
   "crates/types/message_id",
   "crates/types/message_parent",
   "crates/types/model_owner",
-  "crates/types/models_databases",
   "crates/types/models_forms",
   "crates/types/natural_time",
   "crates/types/notification_state",
@@ -712,6 +712,7 @@ database_sql_engine = { path = "crates/databases/database_sql_engine" }
 database_sql_runner = { path = "crates/databases/database_sql_runner" }
 database_webhooks = { path = "crates/databases/database_webhooks" }
 databases = { path = "crates/databases/databases" }
+databases_types = { path = "crates/types/databases_types" }
 datastore_env_vars = { path = "crates/platform/datastore_env_vars" }
 decode_jwt = { path = "crates/platform/decode_jwt" }
 dictation = { path = "crates/ai/dictation" }
@@ -854,7 +855,6 @@ model_file_type = { path = "crates/types/model_file_type" }
 model_notifications = { path = "crates/notifications/model_notifications" }
 model_owner = { path = "crates/types/model_owner" }
 model_user = { path = "crates/types/model_user" }
-models_databases = { path = "crates/types/models_databases" }
 models_dcs = { path = "crates/types/models_dcs" }
 models_email = { path = "crates/types/models_email" }
 models_entity_access_management = { path = "crates/types/models_entity_access_management", default-features = false }

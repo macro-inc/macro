@@ -17,10 +17,10 @@ mod schema_error;
 
 pub use schema_error::{ConversionRefusal, Misfit, MisfitGroup, SchemaError, SharingError};
 
-use models_databases::DatabaseOp;
-pub use models_databases::position::Position;
-pub use models_databases::views::{CardPosition, DatabaseView, ViewId, ViewPosition};
-pub use models_databases::{
+use databases_types::DatabaseOp;
+pub use databases_types::position::Position;
+pub use databases_types::views::{CardPosition, DatabaseView, ViewId, ViewPosition};
+pub use databases_types::{
     ChangeId, ColumnId, DatabaseId, OptionId, QueryId, RowId, TableId, TableVersion, TakenId,
 };
 
@@ -164,7 +164,7 @@ impl Column {
     }
 
     /// A derived column's formula.
-    pub fn formula(&self) -> Option<&models_databases::Formula> {
+    pub fn formula(&self) -> Option<&databases_types::Formula> {
         match &self.config {
             Some(ColumnConfig::Derived { formula }) => Some(formula),
             _ => None,
@@ -225,7 +225,7 @@ pub struct ConvertedCell {
     #[schema(value_type = Uuid)]
     pub row: RowId,
     /// Its value under the new type.
-    pub value: models_databases::CellValue,
+    pub value: databases_types::CellValue,
 }
 
 /// Whether a column's values convert to a type.
@@ -270,7 +270,7 @@ pub enum ColumnConfig {
     /// its definition, a number or date one, never holds a value.
     Derived {
         /// How its cells are computed.
-        formula: models_databases::Formula,
+        formula: databases_types::Formula,
     },
 }
 
@@ -809,7 +809,7 @@ pub struct CommittedChange {
 #[serde(rename_all = "camelCase")]
 pub struct AppliedOps {
     /// One result per op, in order.
-    pub results: Vec<models_databases::OpResult>,
+    pub results: Vec<databases_types::OpResult>,
     /// The journal's changes.
     pub changes: Vec<CommittedChange>,
 }

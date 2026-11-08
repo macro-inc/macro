@@ -3,8 +3,8 @@
 //! column, which then cannot go while the timeline needs it.
 
 use chrono::TimeZone;
-use models_databases::DateRange;
-use models_databases::views::{NewView, RequestedLayout, ViewLayout, ViewQuery};
+use databases_types::DateRange;
+use databases_types::views::{NewView, RequestedLayout, ViewLayout, ViewQuery};
 
 use super::*;
 

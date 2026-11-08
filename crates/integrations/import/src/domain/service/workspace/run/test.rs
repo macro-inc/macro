@@ -277,8 +277,8 @@ impl WorkspaceWriter for Writer {
         &self,
         _: &MacroUserIdStr<'static>,
         _: Uuid,
-        _: Vec<models_databases::DatabaseOp>,
-    ) -> anyhow::Result<Vec<models_databases::OpResult>> {
+        _: Vec<databases_types::DatabaseOp>,
+    ) -> anyhow::Result<Vec<databases_types::OpResult>> {
         unimplemented!("only pages here")
     }
 

@@ -18,8 +18,8 @@ mod test;
 use std::collections::{HashMap, HashSet};
 
 use chrono::{DateTime, Utc};
-use models_databases::position::Position;
-use models_databases::{DateRange, OptionId, RowId};
+use databases_types::position::Position;
+use databases_types::{DateRange, OptionId, RowId};
 use serde::{Deserialize, Serialize};
 use specta::Type;
 use uuid::Uuid;

@@ -18,7 +18,7 @@ ai_tools = [
   "dep:anyhow",
   "dep:async-trait",
   "dep:schemars",
-  "models_databases/schema",
+  "databases_types/schema",
   "ports",
 ]
 # The one-off backfill of formula columns' stored cells.
@@ -83,7 +83,7 @@ macro_user_id = { workspace = true }
 macro_uuid = { workspace = true }
 entity_kind = { workspace = true }
 model_error_response = { workspace = true, optional = true }
-models_databases = { workspace = true }
+databases_types = { workspace = true }
 models_properties = { workspace = true }
 models_permissions = { workspace = true }
 properties = { workspace = true, optional = true, features = ["outbound"] }

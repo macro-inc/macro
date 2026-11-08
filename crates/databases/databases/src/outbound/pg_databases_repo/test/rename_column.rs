@@ -1,7 +1,7 @@
 //! Column renames through the ops over Postgres: a rename relabels one
 //! placement, and of two at once exactly one wins.
 
-use models_databases::{
+use databases_types::{
     ColumnChange, ColumnResult, DatabaseOp, NewColumn, OpResult, PropertyId, TableChange,
 };
 

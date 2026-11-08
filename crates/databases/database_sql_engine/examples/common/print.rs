@@ -5,7 +5,7 @@ use database_sql_engine::fold::Cell;
 use database_sql_engine::resolve::{Query, compile};
 use database_sql_engine::run::{Outcome, OutcomeKind};
 use database_sql_engine::split::{GqlQuery, split};
-use models_databases::OptionId;
+use databases_types::OptionId;
 
 /// A cell as a person would read it: option labels, not ids.
 pub fn show(catalog: &Catalog, value: Option<&Cell>) -> String {

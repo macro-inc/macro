@@ -24,7 +24,7 @@ inbound = [
 gateway = ["dep:anyhow", "dep:connection_gateway_client", "dep:serde_json", "outbound"]
 # Driven adapters share the port contracts.
 outbound = ["dep:collab_surface", "dep:reqwest", "dep:base64", "dep:macro_tower_layers", "ports"]
-ports = ["dep:schemars", "models_forms/schema", "models_databases/schema", "databases/ports", "dep:entity_access", "dep:tracing", "dep:loro", "dep:serde_json"]
+ports = ["dep:schemars", "models_forms/schema", "databases_types/schema", "databases/ports", "dep:entity_access", "dep:tracing", "dep:loro", "dep:serde_json"]
 # Branding images read through the static-file service.
 static_files = ["dep:anyhow", "dep:static_file_service_client", "outbound"]
 # Postgres persistence for forms, layouts and the submission ledger.
@@ -57,7 +57,7 @@ macro_event_broker = { workspace = true }
 macro_event_topics = { workspace = true }
 macro_user_id = { workspace = true }
 entity_kind = { workspace = true }
-models_databases = { workspace = true }
+databases_types = { workspace = true }
 models_forms = { workspace = true }
 models_permissions = { workspace = true }
 rootcause = { workspace = true }

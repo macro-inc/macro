@@ -1,7 +1,7 @@
 //! Derived columns: a formula instead of cells, checked against the table
 //! as the ops before it leave it, and undone like any schema change.
 
-use models_databases::{Formula, Operator};
+use databases_types::{Formula, Operator};
 
 use super::*;
 use crate::domain::journal::UndoOutcome;

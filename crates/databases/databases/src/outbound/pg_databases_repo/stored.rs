@@ -8,8 +8,8 @@
 #[cfg(test)]
 mod test;
 
-use models_databases::views::{Lane, LaneKey, ViewColumn, ViewLayout};
-use models_databases::{ColumnId, DatabaseOp, OptionId};
+use databases_types::views::{Lane, LaneKey, ViewColumn, ViewLayout};
+use databases_types::{ColumnId, DatabaseOp, OptionId};
 use serde::Deserialize;
 use serde_json::Value;
 

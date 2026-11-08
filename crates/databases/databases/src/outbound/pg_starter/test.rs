@@ -1,7 +1,7 @@
+use databases_types::views::LaneKey;
+use databases_types::views::{Lane, ViewLayout, ViewQuery};
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
 use macro_user_id::{cow_str::CowLike, user_id::MacroUserIdStr};
-use models_databases::views::LaneKey;
-use models_databases::views::{Lane, ViewLayout, ViewQuery};
 use properties::outbound::properties_pg_repo::PropertiesPgRepo;
 
 use super::*;
@@ -73,13 +73,10 @@ async fn the_starter_records_initial_values_in_history(pool: PgPool) {
         assert_eq!(
             history[0].after,
             std::collections::BTreeMap::from([
-                (
-                    columns[0].id,
-                    models_databases::CellValue::Text(name.into())
-                ),
+                (columns[0].id, databases_types::CellValue::Text(name.into())),
                 (
                     columns[1].id,
-                    models_databases::CellValue::Options(vec![models_databases::OptionRef::Id(
+                    databases_types::CellValue::Options(vec![databases_types::OptionRef::Id(
                         OptionId::from_uuid(definitions[0].property_options[stage_index].id),
                     )]),
                 ),

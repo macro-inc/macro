@@ -1,9 +1,9 @@
-use models_databases::{ColumnId, DatabaseId, RowId};
+use databases_types::{ColumnId, DatabaseId, RowId};
 use std::collections::HashMap;
 use std::sync::Mutex;
 
 use chrono::{TimeZone, Utc};
-use models_databases::{
+use databases_types::{
     CellValue, CellWrite, ColumnChange, ColumnResult, OptionRef, RowChanges, RowsChange,
     RowsResult, TableVersion,
 };
@@ -530,7 +530,7 @@ fn an_error_crosses_as_a_typed_value_with_its_words() {
 #[test]
 fn a_view_problem_crosses_tagged_by_its_stage() {
     let problem =
-        RunError::from(models_databases::views::ViewProblem::UnknownTable { table: DEALS });
+        RunError::from(databases_types::views::ViewProblem::UnknownTable { table: DEALS });
 
     assert_eq!(
         serde_json::to_value(EngineError::from(problem)).unwrap(),
@@ -784,7 +784,7 @@ fn a_type_change_is_one_op_without_reading_rows() {
                 table: DEALS,
                 column: ColumnId::from_uuid(NAME),
                 change: ColumnChange::ChangeType {
-                    to: models_databases::ColumnKind::Number,
+                    to: databases_types::ColumnKind::Number,
                 },
             }],
         )]
@@ -861,7 +861,7 @@ fn a_result_of_another_kind_than_the_op_is_refused() {
 
 /// `crm.deals` with `doubled = amount * 2` and `follow up = "closed at" + 7`.
 fn catalog_with_derived() -> Catalog {
-    use models_databases::{Formula, Operator};
+    use databases_types::{Formula, Operator};
     let mut catalog = catalog();
     let deals = catalog
         .tables
@@ -998,15 +998,15 @@ fn catalog_with_contract() -> Catalog {
 
 #[test]
 fn date_ranges_compare_to_dates_and_sort_by_start() {
-    let august = models_databases::DateRange {
+    let august = databases_types::DateRange {
         start: Utc.with_ymd_and_hms(2026, 8, 10, 0, 0, 0).unwrap(),
         end: Utc.with_ymd_and_hms(2026, 8, 20, 0, 0, 0).unwrap(),
     };
-    let july_into_august = models_databases::DateRange {
+    let july_into_august = databases_types::DateRange {
         start: Utc.with_ymd_and_hms(2026, 7, 25, 0, 0, 0).unwrap(),
         end: Utc.with_ymd_and_hms(2026, 8, 2, 0, 0, 0).unwrap(),
     };
-    let october = models_databases::DateRange {
+    let october = databases_types::DateRange {
         start: Utc.with_ymd_and_hms(2026, 10, 1, 0, 0, 0).unwrap(),
         end: Utc.with_ymd_and_hms(2026, 10, 3, 0, 0, 0).unwrap(),
     };
@@ -1076,14 +1076,14 @@ fn a_date_range_is_written_as_an_interval_or_one_day() {
     };
     assert_eq!(
         rows[0][1].value,
-        CellValue::DateRange(models_databases::DateRange {
+        CellValue::DateRange(databases_types::DateRange {
             start: Utc.with_ymd_and_hms(2026, 8, 10, 0, 0, 0).unwrap(),
             end: Utc.with_ymd_and_hms(2026, 8, 20, 0, 0, 0).unwrap(),
         })
     );
     assert_eq!(
         rows[1][1].value,
-        CellValue::DateRange(models_databases::DateRange {
+        CellValue::DateRange(databases_types::DateRange {
             start: Utc.with_ymd_and_hms(2026, 9, 1, 0, 0, 0).unwrap(),
             end: Utc.with_ymd_and_hms(2026, 9, 1, 0, 0, 0).unwrap(),
         })

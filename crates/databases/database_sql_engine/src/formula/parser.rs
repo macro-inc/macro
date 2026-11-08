@@ -8,7 +8,7 @@ use nom::combinator::{cut, opt};
 use nom::multi::many0;
 use nom::{Finish, IResult, Input, Parser};
 
-use models_databases::{Formula, Operator};
+use databases_types::{Formula, Operator};
 
 use super::lexer::{self, Token, TokenKind};
 use crate::catalog::Table;

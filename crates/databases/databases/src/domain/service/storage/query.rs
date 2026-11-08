@@ -5,7 +5,7 @@ use crate::domain::{
     storage::StorageRowsQuery,
 };
 use database_sql_engine::{Catalog, Cell, Row};
-use models_databases::{
+use databases_types::{
     DateRange, OptionId, RowId, ViewId,
     views::{DatabaseView, ViewLayout},
 };

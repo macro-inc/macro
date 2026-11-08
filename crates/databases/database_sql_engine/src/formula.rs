@@ -26,7 +26,7 @@ use std::collections::HashMap;
 use std::ops::Range;
 
 use chrono::{DateTime, Duration, Utc};
-use models_databases::{ColumnId, Formula, FormulaType, Operator};
+use databases_types::{ColumnId, Formula, FormulaType, Operator};
 use serde::{Deserialize, Serialize};
 use specta::Type;
 use uuid::Uuid;

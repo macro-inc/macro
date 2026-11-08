@@ -6,6 +6,8 @@ use std::sync::{Arc, Mutex};
 use ai_toolset::schema::generate_validated_input_schema;
 use ai_toolset::{AsyncTool, RequestContext, ServiceContext};
 use chrono::Utc;
+use databases_types::position::Position;
+use databases_types::{ColumnId, DatabaseId, TableId, ViewId};
 use entity_access::domain::models::{
     AccessError, AccessLevel, BotAccessScope, BotId, CallChannelInfo, Entity as AccessEntity,
     EntityAccessReceipt, EntityPermission, EntityType as AccessEntityType, OwnerAccessLevel,
@@ -13,8 +15,6 @@ use entity_access::domain::models::{
 };
 use macro_user_id::lowercased::Lowercase;
 use macro_user_id::user_id::MacroUserId;
-use models_databases::position::Position;
-use models_databases::{ColumnId, DatabaseId, TableId, ViewId};
 use models_properties::service::property_definition::PropertyDefinition;
 use models_properties::service::property_definition_with_options::PropertyDefinitionWithOptions;
 use models_properties::service::property_option::{PropertyOption, PropertyOptionValue};
@@ -189,7 +189,7 @@ impl DatabasesService for FakeService {
         _receipt: EntityAccessReceipt<ViewAccessLevel>,
         _table_id: TableId,
         _column_id: ColumnId,
-        _to: models_databases::ColumnKind,
+        _to: databases_types::ColumnKind,
     ) -> Result<crate::domain::models::ColumnConversion, DatabaseError> {
         unimplemented!("no tool converts a column into a new one")
     }
@@ -247,7 +247,7 @@ impl DatabasesService for FakeService {
         viewer: Viewer,
         batch: OpBatch,
     ) -> Result<Vec<OpResult>, DatabaseError> {
-        use models_databases::{DatabaseOp, ViewChange, ViewResult};
+        use databases_types::{DatabaseOp, ViewChange, ViewResult};
         {
             let mut calls = self.calls.lock().unwrap();
             calls.applied.push(batch.clone());

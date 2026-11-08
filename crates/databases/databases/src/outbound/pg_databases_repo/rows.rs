@@ -3,7 +3,7 @@
 
 use sqlx::{PgConnection, PgExecutor};
 
-use models_databases::position::keys_between;
+use databases_types::position::keys_between;
 
 use super::{PgDatabasesRepoError, last_position, uuids};
 use crate::domain::journal::RestoredRow;

@@ -3,10 +3,10 @@
 
 use std::collections::HashMap;
 
-use models_databases::cast::{Cast, CastKind, Contents, TARGETS, cast};
-use models_databases::property::{DataType as StoredDataType, OptionValue, stored_cast_kind};
-use models_databases::views::{SchemaColumn, ValueKind};
-use models_databases::{ColumnKind, EntityKind, OptionId};
+use databases_types::cast::{Cast, CastKind, Contents, TARGETS, cast};
+use databases_types::property::{DataType as StoredDataType, OptionValue, stored_cast_kind};
+use databases_types::views::{SchemaColumn, ValueKind};
+use databases_types::{ColumnKind, EntityKind, OptionId};
 use models_permissions::share_permission::access_level::AccessLevel;
 use models_properties::service::property_definition_with_options::PropertyDefinitionWithOptions;
 use models_properties::service::property_option::PropertyOptionValue;

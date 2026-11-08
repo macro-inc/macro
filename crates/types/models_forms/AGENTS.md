@@ -4,7 +4,7 @@
 
 Part of Macro Forms. The wire vocabulary: ids, layout, answers, submission
 outcomes, and summaries. A form is a view of one database table — answers
-reuse `models_databases` cells, gate rules reuse its filters, unchanged.
+reuse `databases_types` cells, gate rules reuse its filters, unchanged.
 
 ## Start here
 
@@ -22,13 +22,13 @@ reuse `models_databases` cells, gate rules reuse its filters, unchanged.
 ## Scope
 
 - Owns: form ids, layout, response/tally, and error types.
-- Not here: database ops/cells/filters (reused as-is) → `models_databases`;
+- Not here: database ops/cells/filters (reused as-is) → `databases_types`;
   form service logic and storage → `forms`.
 
 ## Boundaries
 
-- Depends on: `macro_uuid`, `models_databases` (feature `schema` forwards to
-  `models_databases/schema`).
+- Depends on: `macro_uuid`, `databases_types` (feature `schema` forwards to
+  `databases_types/schema`).
 - Used by: `forms`.
 
 ## Recipes

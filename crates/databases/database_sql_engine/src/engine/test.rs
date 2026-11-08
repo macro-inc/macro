@@ -1,5 +1,5 @@
-use models_databases::position::Position;
-use models_databases::{DatabaseId, OptionId, RowId};
+use databases_types::position::Position;
+use databases_types::{DatabaseId, OptionId, RowId};
 use std::collections::HashMap;
 
 mod limits;

@@ -60,7 +60,7 @@ and cells. The core storage adapter purges its journal in the same transaction.
 1. Rows are read as Soup items, scoped to the databases the caller can reach as
    `entity_access` answers it.
 2. Every write to a database's schema or data is one batch of typed ops
-   (`models_databases::DatabaseOp`, `POST /databases/{id}/ops`,
+   (`databases_types::DatabaseOp`, `POST /databases/{id}/ops`,
    `DatabasesService::apply_ops`), grouped by the resource they change. Each op
    is `{kind, <ids>, change: {kind, ...}}`:
 
@@ -74,8 +74,8 @@ and cells. The core storage adapter purges its journal in the same transaction.
 
    Ops are checked against the receipt's database and apply in order in one
    transaction, all or nothing; any refusal writes nothing. Lists are ordered
-   by fractional keys (`models_databases::position`), stored `COLLATE "C"`.
-3. Each op answers one `models_databases::OpResult`, in the order sent, grouped
+   by fractional keys (`databases_types::position`), stored `COLLATE "C"`.
+3. Each op answers one `databases_types::OpResult`, in the order sent, grouped
    the same way: the result's outer `kind` is its op's, it echoes the op's ids
    with the table's version after the commit (`tableVersion`, left out when
    the table was deleted), and its `change` says what happened, in the past
@@ -143,11 +143,11 @@ through `apply_ops`.
 | --- | --- |
 | Domain contracts and orchestration | `src/domain/models.rs`, `ports.rs`, `service.rs` |
 | Catalog entries | `src/domain/catalog.rs` |
-| Typed ops | `src/domain/service/ops.rs`, `models_databases` |
+| Typed ops | `src/domain/service/ops.rs`, `databases_types` |
 | Rows, cells, imports, and column definitions | `src/outbound/pg_databases_repo.rs`, `pg_cell_store.rs`, `pg_definition_store.rs` |
 | Table, column and cell ops | `src/domain/service/ops/tables.rs`, `columns.rs`, `cells.rs`, `src/outbound/pg_databases_repo/schema.rs` |
 | Column casts and inference | `src/domain/service/casts.rs`, `column_types.rs`, `infer_column_type.rs` |
-| Typed views and a board's card places | `models_databases::views`, `src/domain/service/ops/views.rs`, `src/outbound/pg_databases_repo/views.rs` |
+| Typed views and a board's card places | `databases_types::views`, `src/domain/service/ops/views.rs`, `src/outbound/pg_databases_repo/views.rs` |
 | Saved queries, sharing, imports, starter data | Corresponding modules under `src/domain/` |
 | Duplicates | `src/domain/duplicate.rs`, `src/domain/service/duplicate.rs`, `src/outbound/pg_cell_store/duplicate.rs` |
 | HTTP transport | `src/inbound/axum_router.rs`, `starter_router.rs` |

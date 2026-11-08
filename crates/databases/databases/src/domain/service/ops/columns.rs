@@ -4,9 +4,9 @@
 
 use std::collections::{HashMap, HashSet};
 
-use models_databases::cast::{Cast, Contents, cast};
-use models_databases::position::{key_between, keys_between};
-use models_databases::{ColumnKind, Formula, FormulaType, NewColumn, NewOption, TakenId};
+use databases_types::cast::{Cast, Contents, cast};
+use databases_types::position::{key_between, keys_between};
+use databases_types::{ColumnKind, Formula, FormulaType, NewColumn, NewOption, TakenId};
 use models_properties::api::is_valid_hex_color;
 use models_properties::service::property_definition::PropertyDefinition;
 use models_properties::service::property_definition_with_options::PropertyDefinitionWithOptions;
@@ -816,8 +816,8 @@ fn column_position(
     entry: &StorageTable,
     place: Place,
     after: Option<ColumnId>,
-) -> Result<models_databases::position::Position, DatabaseError> {
-    let positions: Vec<&models_databases::position::Position> = entry
+) -> Result<databases_types::position::Position, DatabaseError> {
+    let positions: Vec<&databases_types::position::Position> = entry
         .columns
         .iter()
         .map(|column| &column.column.position)

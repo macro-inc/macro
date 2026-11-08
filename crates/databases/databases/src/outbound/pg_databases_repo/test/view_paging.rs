@@ -1,5 +1,5 @@
 use database_sql_engine::catalog::{Catalog, Column, ColumnKind, Table as QueryTable, TableSource};
-use models_databases::views::{
+use databases_types::views::{
     Conjunction, FilterCondition, FilterGroup, FilterNode, FilterTest, NumberOperator,
     SortDirection, SortKey, ViewQuery,
 };
@@ -140,7 +140,7 @@ async fn changed_versions_cannot_continue_an_old_page(pool: PgPool) {
 async fn formula_fixture(pool: &PgPool) -> (QueryTable, Vec<RowId>) {
     use crate::domain::derivation::Derivation;
     use crate::domain::models::{ColumnConfig, NewDefinition};
-    use models_databases::{Formula, Operator};
+    use databases_types::{Formula, Operator};
     use models_properties::DataType;
     let (repo, table, _) = fixture(pool).await;
     let [price, qty, due, total, double, ratio, follow_up] =
@@ -213,10 +213,10 @@ async fn formula_fixture(pool: &PgPool) -> (QueryTable, Vec<RowId>) {
             ),
         ],
     };
-    let mut position: models_databases::position::Position = "80".parse().unwrap();
+    let mut position: databases_types::position::Position = "80".parse().unwrap();
     let mut columns = Vec::new();
     for placed in &query_table.columns {
-        position = models_databases::position::key_between(Some(&position), None).unwrap();
+        position = databases_types::position::key_between(Some(&position), None).unwrap();
         columns.push(Write::CreateColumn {
             column: crate::domain::models::Column {
                 protections: vec![],
@@ -374,7 +374,7 @@ fn ascending(table: &QueryTable) -> ViewQuery {
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn text_filters_escape_wildcards_and_text_sorts_ignore_case(pool: PgPool) {
-    use models_databases::views::{PresenceOperator, TextOperator};
+    use databases_types::views::{PresenceOperator, TextOperator};
     let (mut table, rows) = page_fixture(&pool).await;
     table.columns[0].kind = ColumnKind::Text;
     values(
@@ -475,7 +475,7 @@ async fn text_filters_escape_wildcards_and_text_sorts_ignore_case(pool: PgPool) 
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn checkbox_dates_and_links_keep_the_existing_cell_semantics(pool: PgPool) {
-    use models_databases::views::{DateOperator, PresenceOperator, TextOperator};
+    use databases_types::views::{DateOperator, PresenceOperator, TextOperator};
     let (mut table, rows) = page_fixture(&pool).await;
     table.columns[0].kind = ColumnKind::Boolean;
     values(
@@ -588,7 +588,7 @@ async fn checkbox_dates_and_links_keep_the_existing_cell_semantics(pool: PgPool)
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn select_and_entity_pages_preserve_option_rank_membership_and_empty_sets(pool: PgPool) {
     use database_sql_engine::catalog::{EntityKind, SelectOption};
-    use models_databases::{OptionId, views::SetOperator};
+    use databases_types::{OptionId, views::SetOperator};
     use models_properties::shared::{EntityReference, EntityType};
     let (mut table, rows) = page_fixture(&pool).await;
     let first = OptionId::from_uuid(Uuid::from_u128(201));
@@ -807,7 +807,7 @@ async fn select_and_entity_pages_preserve_option_rank_membership_and_empty_sets(
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn unicode_case_mapping_matches_the_view_engine(pool: PgPool) {
-    use models_databases::views::TextOperator;
+    use databases_types::views::TextOperator;
     let (mut table, rows) = page_fixture(&pool).await;
     table.columns[0].kind = ColumnKind::Text;
     values(
@@ -849,7 +849,7 @@ async fn unicode_case_mapping_matches_the_view_engine(pool: PgPool) {
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn date_comparisons_preserve_sub_microsecond_precision(pool: PgPool) {
-    use models_databases::views::DateOperator;
+    use databases_types::views::DateOperator;
     let (mut table, rows) = page_fixture(&pool).await;
     table.columns[0].kind = ColumnKind::Date;
     values(
@@ -891,7 +891,7 @@ async fn date_comparisons_preserve_sub_microsecond_precision(pool: PgPool) {
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn date_ranges_sort_by_start_then_end_and_filter_by_day_like_the_engine(pool: PgPool) {
-    use models_databases::views::DateRangeOperator;
+    use databases_types::views::DateRangeOperator;
     use models_properties::shared::DateRange;
     let (mut table, rows) = page_fixture(&pool).await;
     table.columns[0].kind = ColumnKind::DateRange;

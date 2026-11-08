@@ -21,7 +21,7 @@ async fn required_cells_are_checked_for_app_and_core_writes(pool: PgPool) {
     let (repo, table, _) = fixture(&pool).await;
     let definition = insert_definition(&pool, "Required").await;
     let position =
-        models_databases::position::key_between(Some(&"80".parse().unwrap()), None).unwrap();
+        databases_types::position::key_between(Some(&"80".parse().unwrap()), None).unwrap();
     let mut create = bind(table.id, definition, position.as_str());
     let Write::CreateColumn { column, .. } = &mut create else {
         unreachable!()
@@ -158,7 +158,7 @@ async fn adding_a_required_column_requires_values_for_existing_rows_in_the_same_
     let row = repo.insert_rows(table.id, USER, 1).await.unwrap().unwrap()[0].id;
     let definition = insert_definition(&pool, "Required").await;
     let position =
-        models_databases::position::key_between(Some(&"80".parse().unwrap()), None).unwrap();
+        databases_types::position::key_between(Some(&"80".parse().unwrap()), None).unwrap();
     let mut create = bind(table.id, definition, position.as_str());
     let Write::CreateColumn { column, .. } = &mut create else {
         unreachable!()

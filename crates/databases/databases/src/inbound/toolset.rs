@@ -9,11 +9,12 @@ mod save_database_view;
 #[cfg(test)]
 mod test;
 
-use models_databases::{ColumnId, DatabaseId, OpResult, OptionId, TableId};
+use databases_types::{ColumnId, DatabaseId, OpResult, OptionId, TableId};
 use std::sync::Arc;
 
 use ai_toolset::{AsyncToolCollection, ToolCallError};
 use bot_id::BotId;
+use databases_types::cast::SpelledColumnType;
 use entity_access::domain::{
     models::{
         AccessError, AccessLevel, EditAccessLevel, EntityAccessReceipt, RequiredPermission,
@@ -22,7 +23,6 @@ use entity_access::domain::{
     ports::EntityAccessService,
 };
 use macro_user_id::user_id::MacroUserIdStr;
-use models_databases::cast::SpelledColumnType;
 use models_properties::shared::DataType;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};

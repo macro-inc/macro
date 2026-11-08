@@ -2,7 +2,7 @@
 //! branches on, a message people read, and the question or layout problem
 //! it is about.
 
-use models_databases::ColumnId;
+use databases_types::ColumnId;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 

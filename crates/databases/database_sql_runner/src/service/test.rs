@@ -9,13 +9,13 @@ use models_properties::shared::PropertyOwner;
 use std::sync::{Arc, Mutex};
 
 use databases::domain::models::{DatabaseError, OpRefusal, QueryDefinition, TableVersion};
-use entity_access::domain::models::AccessLevel;
-use item_filters::ast::database_row::DatabaseRowLiteral;
-use models_databases::position::Position;
-use models_databases::{
+use databases_types::position::Position;
+use databases_types::{
     CellValue, CellWrite, ColumnId, ColumnResult, DatabaseId, DatabaseOp, OpResult, OptionId,
     OptionRef, RowChanges, RowId, RowsChange, RowsResult, TableId,
 };
+use entity_access::domain::models::AccessLevel;
+use item_filters::ast::database_row::DatabaseRowLiteral;
 use models_properties::service::property_value::PropertyValue;
 use models_properties::shared::{DataType, EntityReference, EntityType as PropertyEntityType};
 use uuid::Uuid;
@@ -1008,7 +1008,7 @@ async fn schema_sql_uses_atomic_ops_and_preserves_actor() {
     assert!(matches!(
         batch.ops[0],
         DatabaseOp::Table {
-            change: models_databases::TableChange::Create { .. },
+            change: databases_types::TableChange::Create { .. },
             ..
         }
     ));
@@ -1075,7 +1075,7 @@ async fn schema_sql_resolves_column_placements_and_never_writes_hidden_tables() 
         .await
         .unwrap();
     assert!(
-        matches!(&world.lock().unwrap().applied[0].ops[0], DatabaseOp::Column {column: STATUS_COLUMN, change: models_databases::ColumnChange::Rename {previous_name: Some(name), ..}, ..} if name == "Status")
+        matches!(&world.lock().unwrap().applied[0].ops[0], DatabaseOp::Column {column: STATUS_COLUMN, change: databases_types::ColumnChange::Rename {previous_name: Some(name), ..}, ..} if name == "Status")
     );
     let denied = sql(&world)
         .execute(
@@ -1100,7 +1100,7 @@ async fn schema_database_resolution_prefers_scope_and_reorder_reports_versions()
         .unwrap()
         .op_answers
         .push_back(Ok(vec![OpResult::ReorderTables {
-            tables: vec![models_databases::VersionedTable {
+            tables: vec![databases_types::VersionedTable {
                 table: GUESTS,
                 version: TableVersion(2),
             }],
@@ -1234,9 +1234,9 @@ async fn create_table_resolves_relations_against_its_destination_schema() {
         assert!(matches!(
             &batch.ops[1],
             DatabaseOp::Column {
-                change: models_databases::ColumnChange::Create {
-                    definition: models_databases::NewColumn::New {
-                        kind: models_databases::ColumnKind::Relation { database, table },
+                change: databases_types::ColumnChange::Create {
+                    definition: databases_types::NewColumn::New {
+                        kind: databases_types::ColumnKind::Relation { database, table },
                         ..
                     },
                     ..

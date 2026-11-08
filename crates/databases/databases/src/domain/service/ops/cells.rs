@@ -1,7 +1,7 @@
 //! Turning one row's cell writes into stored values, checked against each
 //! column's type and options as the ops before them leave those.
 
-use models_databases::{CellValue, CellWrite, OptionId, OptionRef};
+use databases_types::{CellValue, CellWrite, OptionId, OptionRef};
 use models_properties::service::property_definition_with_options::PropertyDefinitionWithOptions;
 use models_properties::service::property_value::PropertyValue;
 use models_properties::shared::{DataType, EntityReference};

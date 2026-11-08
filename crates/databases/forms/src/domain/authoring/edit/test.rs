@@ -1,5 +1,5 @@
 use super::*;
-use models_databases::ColumnId;
+use databases_types::ColumnId;
 use models_forms::{FormQuestionId, FormSectionId};
 
 #[test]
@@ -141,7 +141,7 @@ fn a_batch_can_add_then_edit_a_question() {
 
 #[test]
 fn show_when_is_set_kept_by_unrelated_edits_cleared_by_null_and_only_on_questions_sections() {
-    use models_databases::views::{
+    use databases_types::views::{
         Conjunction, FilterCondition, FilterGroup, FilterNode, FilterTest, PresenceOperator,
     };
     let first = FormSectionId::generate();

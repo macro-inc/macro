@@ -8,7 +8,7 @@ use database_sql_engine::{
         ComparisonOperator, Direction, Filter, OrderKey, SelectQuery, Value, row_position_key,
     },
 };
-use models_databases::RowId;
+use databases_types::RowId;
 use sqlx::{Postgres, QueryBuilder};
 use uuid::Uuid;
 

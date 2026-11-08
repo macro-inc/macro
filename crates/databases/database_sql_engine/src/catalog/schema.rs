@@ -6,10 +6,10 @@
 #[cfg(test)]
 mod test;
 
-use models_databases::EntityKind as OpEntityKind;
-use models_databases::property::stored_cast_kind;
-pub use models_databases::property::{DataType, OptionValue};
-use models_databases::{ColumnId, DatabaseId, Formula, OptionId, TableId};
+use databases_types::EntityKind as OpEntityKind;
+use databases_types::property::stored_cast_kind;
+pub use databases_types::property::{DataType, OptionValue};
+use databases_types::{ColumnId, DatabaseId, Formula, OptionId, TableId};
 use serde::{Deserialize, Serialize};
 use specta::Type;
 use uuid::Uuid;

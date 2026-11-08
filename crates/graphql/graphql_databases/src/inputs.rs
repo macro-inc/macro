@@ -3,8 +3,8 @@
 use async_graphql::{Enum, ID, InputObject, OneofObject};
 use chrono::{DateTime, Utc};
 use database_sql_runner::view_rows::{VIEW_PAGE_LIMIT, ViewRowsRequest};
+use databases_types::{ColumnId, OptionId, TableId, views as model};
 use graphql_common::parse_id;
-use models_databases::{ColumnId, OptionId, TableId, views as model};
 
 /// A table view and its optional continuation, with a bounded page size.
 #[derive(InputObject)]

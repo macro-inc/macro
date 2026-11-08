@@ -7,7 +7,7 @@ pub(super) fn primary_references(
     record_type: PipelineRecordType,
     batch: &OpBatch,
 ) -> Result<std::collections::BTreeSet<Uuid>, PipelineError> {
-    use models_databases::{CellValue, CellWrite, DatabaseOp, RowChanges, RowsChange};
+    use databases_types::{CellValue, CellWrite, DatabaseOp, RowChanges, RowsChange};
     let mut references = std::collections::BTreeSet::new();
     for op in &batch.ops {
         let cells: Vec<&CellWrite> = match op {

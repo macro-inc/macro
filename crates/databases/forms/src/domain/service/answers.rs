@@ -6,8 +6,8 @@
 
 use std::collections::HashMap;
 
-use models_databases::views::eval;
-use models_databases::{CellValue, ColumnId, ColumnKind, OptionRef};
+use databases_types::views::eval;
+use databases_types::{CellValue, ColumnId, ColumnKind, OptionRef};
 
 use super::layout::QuestionColumn;
 use crate::domain::models::{

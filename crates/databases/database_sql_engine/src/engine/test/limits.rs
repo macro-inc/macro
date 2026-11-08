@@ -1,7 +1,7 @@
 use super::*;
 
 fn finish(sql: &str) {
-    assert!(sql.len() < models_databases::MAX_STATEMENT_LENGTH);
+    assert!(sql.len() < databases_types::MAX_STATEMENT_LENGTH);
     let (mut engine, step) = Engine::start(&catalog(), sql).expect("a supported long query");
     serde_json::to_string(&step).expect("the request crosses the wire");
     let Step::Fetch(request) = step else {

@@ -11,10 +11,10 @@ use databases::domain::{
     catalog,
     models::{ColumnDetail, ColumnId},
 };
-use macro_user_id::user_id::MacroUserIdStr;
-use models_databases::{
+use databases_types::{
     CellValue, ColumnKind, DateRange, EntityKind, EntityRef, OptionId, OptionRef,
 };
+use macro_user_id::user_id::MacroUserIdStr;
 use models_properties::{DataType, service::property_value::PropertyValue};
 
 use super::super::pipelines::{Pipeline, PipelineRecordType};

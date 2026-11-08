@@ -210,7 +210,7 @@ shared_types = { workspace = true, features = ["axum"] }
 entity_kind = { workspace = true }
 model_notifications = { workspace = true }
 model_owner = { workspace = true }
-models_databases = { workspace = true }
+databases_types = { workspace = true }
 models_dcs = { workspace = true }
 models_pagination = { workspace = true, features = [
   "axum",

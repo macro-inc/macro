@@ -116,12 +116,12 @@ workspace-members = [
     # wasm-safe.
     "database_sql_engine",
     "database_sql_wasm",
-    # models_databases: the typed write ops the SQL engine will emit, so it
+    # databases_types: the typed write ops the SQL engine will emit, so it
     # joins database_sql_engine in the browser and must stay wasm-safe too.
-    "models_databases",
-    # database_id: the ids models_databases re-exports, so wasm-safe too.
+    "databases_types",
+    # database_id: the ids databases_types re-exports, so wasm-safe too.
     "database_id",
-    # id_newtype: the id macro models_databases builds its ids with.
+    # id_newtype: the id macro databases_types builds its ids with.
     "id_newtype",
     # Leaf id crates built with it stay light the same way.
     "team_id",

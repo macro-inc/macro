@@ -16,8 +16,8 @@ use serde::{Deserialize, Serialize};
 use specta::Type;
 use uuid::Uuid;
 
-use models_databases::views::ViewProblem;
-use models_databases::{
+use databases_types::views::ViewProblem;
+use databases_types::{
     ColumnResult, DatabaseId, DatabaseOp, OpResult, RowId, RowsResult, TableId, TableResult,
     ViewResult,
 };

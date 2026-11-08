@@ -1,6 +1,6 @@
 use chrono::{TimeZone, Utc};
-use models_databases::ColumnId;
-use models_databases::views::{
+use databases_types::ColumnId;
+use databases_types::views::{
     Conjunction, DatabaseView, DateOperator, FilterCondition, FilterGroup, FilterNode, FilterTest,
     NumberOperator, PresenceOperator, SetOperator, SortDirection, SortKey, TextOperator, ValueKind,
     ViewLayout, ViewProblem, ViewQuery,

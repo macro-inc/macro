@@ -14,15 +14,15 @@ use ::databases::domain::models::{
 };
 use ::databases::domain::ports::{DatabaseMetadataReads, DatabaseRowReads, DatabasesService};
 use chrono::{TimeZone, Utc};
-use entity_access::domain::models::{
-    AccessLevel, EditAccessLevel, EntityAccessAuth, EntityAccessReceipt, OwnerAccessLevel,
-    RequiredPermission, ViewAccessLevel,
-};
-use models_databases::position::keys_between;
-use models_databases::{
+use databases_types::position::keys_between;
+use databases_types::{
     CellValue, CellWrite, ColumnChange, ColumnId, ColumnKind, ColumnResult, DatabaseId, DatabaseOp,
     NewColumn, OpResult, OptionId, OptionRef, RowChanges, RowId, RowsChange, RowsResult,
     TableChange, TableId, TableResult,
+};
+use entity_access::domain::models::{
+    AccessLevel, EditAccessLevel, EntityAccessAuth, EntityAccessReceipt, OwnerAccessLevel,
+    RequiredPermission, ViewAccessLevel,
 };
 use models_properties::service::property_definition::PropertyDefinition;
 use models_properties::service::property_definition_with_options::PropertyDefinitionWithOptions;
@@ -122,7 +122,7 @@ fn column_detail(
     database: &FakeDatabase,
     table: &FakeTable,
     column: &FakeColumn,
-    position: models_databases::position::Position,
+    position: databases_types::position::Position,
 ) -> ColumnDetail {
     let property = PropertyType::from_column_kind(column.kind);
     let definition_id = *column.id.as_uuid();

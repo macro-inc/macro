@@ -4,8 +4,8 @@
 use std::collections::HashSet;
 use std::sync::Arc;
 
-use models_databases::TakenId;
-use models_databases::position::{key_between, keys_between};
+use databases_types::TakenId;
+use databases_types::position::{key_between, keys_between};
 
 use super::{Planner, refuse, refuse_taken};
 use crate::domain::catalog::StorageTable;

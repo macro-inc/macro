@@ -197,7 +197,7 @@ pub async fn view_positions<
             .service
             .view_positions(
                 receipt::<ViewAccessLevel, _, _>(&*state.access, auth, id).await?,
-                models_databases::ViewId::from_uuid(view),
+                databases_types::ViewId::from_uuid(view),
             )
             .await?,
     ))
@@ -224,7 +224,7 @@ pub async fn rows<P: PipelineService, E: EntityAccessService, A: MacroAuthorizat
             .service
             .rows(
                 receipt::<ViewAccessLevel, _, _>(&*state.access, auth, id).await?,
-                query.after.map(models_databases::RowId::from_uuid),
+                query.after.map(databases_types::RowId::from_uuid),
             )
             .await?,
     ))

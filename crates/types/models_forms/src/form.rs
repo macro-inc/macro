@@ -1,7 +1,7 @@
 //! A form's own facts, and the requests that create and change them.
 
 use chrono::{DateTime, Utc};
-use models_databases::{ColumnId, DatabaseId, TableId};
+use databases_types::{ColumnId, DatabaseId, TableId};
 use serde::{Deserialize, Deserializer, Serialize};
 
 use crate::branding::{AccentColor, FormBranding};

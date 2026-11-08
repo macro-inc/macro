@@ -40,7 +40,7 @@ pub struct StorageRowsQuery {
     pub after: Option<RowId>,
     /// The common database filter and sort semantics.
     #[serde(default)]
-    pub query: models_databases::views::ViewQuery,
+    pub query: databases_types::views::ViewQuery,
     /// Read these retained rows regardless of the active filter.
     pub row_ids: Option<Vec<RowId>>,
 }

@@ -5,6 +5,7 @@ use databases::{
     domain::storage::DatabaseStorageService,
     outbound::gateway_event_publisher::NoOpTableEventPublisher, wiring::build_service,
 };
+use databases_types::{DatabaseId, TableId};
 use entity_access::domain::{
     models::{EntityType as AccessEntityType, ViewAccessLevel},
     ports::EntityAccessService,
@@ -14,7 +15,6 @@ use entity_access_outbound::PgAccessRepository;
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
 use macro_event_broker::NoopMacroEventBroker;
 use macro_user_id::{cow_str::CowLike, user_id::MacroUserIdStr};
-use models_databases::{DatabaseId, TableId};
 use models_properties::{EntityReference, EntityType, service::property_value::PropertyValue};
 use properties::{PropertiesPgRepo, domain::database_cell_writer::DatabaseCellWriter};
 use serde_json::json;
@@ -481,7 +481,7 @@ async fn invalid_values_roll_back_the_entire_copy_and_can_retry(pool: PgPool) {
     for row in rows {
         assert_eq!(row.id.get_version_num(), 7);
         row.position
-            .parse::<models_databases::position::Position>()
+            .parse::<databases_types::position::Position>()
             .unwrap();
     }
 

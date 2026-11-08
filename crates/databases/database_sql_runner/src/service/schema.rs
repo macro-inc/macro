@@ -6,7 +6,7 @@ use database_sql_engine::parse::schema::{
 };
 use database_sql_engine::parse::{Identifier, TableName};
 use databases::domain::models::{CreateDatabase, OpBatch};
-use models_databases::{
+use databases_types::{
     ColumnChange, ColumnId, ColumnKind, DatabaseOp, NewColumn, NewOption, OptionId, TableChange,
 };
 
@@ -404,7 +404,7 @@ impl<
             })?;
         let mut versions = HashMap::new();
         for (table, result) in written.into_iter().zip(&results) {
-            if let models_databases::OpResult::ReorderTables { tables } = result {
+            if let databases_types::OpResult::ReorderTables { tables } = result {
                 versions.extend(tables.iter().map(|entry| (entry.table, entry.version)));
             } else if let (Some(table), Some(version)) = (table, result.table_version()) {
                 versions.insert(table, version);

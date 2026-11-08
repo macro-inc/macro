@@ -68,7 +68,7 @@ bot_id = { workspace = true }
 crm = { workspace = true, features = ["ports"] }
 databases = { workspace = true, features = ["ports"] }
 database_sql_runner = { workspace = true }
-models_databases = { workspace = true }
+databases_types = { workspace = true }
 activity = { workspace = true, features = ["realtime"] }
 attention_feed = { workspace = true, features = ["inbound"] }
 notification_inbox = { workspace = true }

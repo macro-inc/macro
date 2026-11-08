@@ -8,7 +8,7 @@ use crate::domain::journal::Restoration;
 use crate::domain::models::{AppliedOps, WritesOutcome};
 use crate::domain::ports::DatabaseStorage;
 use crate::domain::storage::{DatabaseStorageService, StorageRow, StorageRows, StorageRowsQuery};
-use models_databases::{ColumnChange, ColumnKind, DatabaseOp, NewColumn};
+use databases_types::{ColumnChange, ColumnKind, DatabaseOp, NewColumn};
 
 impl<R, D, C, E, A, B> DatabasesServiceImpl<R, D, C, E, A, B>
 where

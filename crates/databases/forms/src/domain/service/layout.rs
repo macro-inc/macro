@@ -8,10 +8,10 @@ use std::collections::{HashMap, HashSet};
 use databases::domain::catalog::{self, PropertyType};
 use databases::domain::models::TableDetail;
 use databases::domain::ports::{DatabaseMetadataReads, DatabaseRowReads, DatabasesService};
+use databases_types::ColumnKind;
+use databases_types::views::{FilterGroup, SchemaColumn, ViewLayout, ViewQuery, check};
 use entity_access::domain::models::{EditAccessLevel, EntityAccessReceipt, ViewAccessLevel};
 use macro_event_broker::MacroEventBroker;
-use models_databases::ColumnKind;
-use models_databases::views::{FilterGroup, SchemaColumn, ViewLayout, ViewQuery, check};
 use models_forms::{MAX_TEXT_LENGTH, MAX_TITLE_LENGTH};
 use uuid::Uuid;
 

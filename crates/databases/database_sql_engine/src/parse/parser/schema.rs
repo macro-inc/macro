@@ -6,8 +6,8 @@ use nom::combinator::{cut, not, opt};
 use nom::sequence::{preceded, terminated};
 use strum::IntoEnumIterator;
 
-use models_databases::cast::ColumnTypeName;
-use models_databases::{ColumnKind as OpColumnKind, EntityKind as OpEntityKind};
+use databases_types::cast::ColumnTypeName;
+use databases_types::{ColumnKind as OpColumnKind, EntityKind as OpEntityKind};
 
 use super::super::ast::AlterColumnType;
 use super::super::lexer::TokenKind;

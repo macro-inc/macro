@@ -8,6 +8,7 @@ use databases::outbound::{
     gateway_event_publisher::NoOpTableEventPublisher, pg_cell_store::PgCellStore,
 };
 use databases::wiring::{PgDatabasesService, build_service};
+use databases_types::*;
 use entity_access::domain::{
     models::*,
     ports::{AccessibleDatabases, EntityAccessService},
@@ -17,7 +18,6 @@ use entity_access_outbound::PgAccessRepository;
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
 use macro_event_broker::NoopMacroEventBroker;
 use macro_user_id::{cow_str::CowLike, user_id::MacroUserIdStr};
-use models_databases::*;
 use properties::PropertiesPgRepo;
 use serde_json::json;
 use sqlx::PgPool;

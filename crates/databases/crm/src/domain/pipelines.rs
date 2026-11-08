@@ -70,10 +70,10 @@ impl PipelineRecordType {
         }
     }
     /// The kind of record the primary column's cells reference.
-    pub fn entity_kind(self) -> models_databases::EntityKind {
+    pub fn entity_kind(self) -> databases_types::EntityKind {
         match self {
-            Self::Company => models_databases::EntityKind::Company,
-            Self::Contact => models_databases::EntityKind::Contact,
+            Self::Company => databases_types::EntityKind::Company,
+            Self::Contact => databases_types::EntityKind::Contact,
         }
     }
 }
@@ -929,7 +929,7 @@ where
         acting_bot: Option<BotId>,
         mut batch: OpBatch,
     ) -> Result<AppliedOps, PipelineError> {
-        use models_databases::{DatabaseOp, TableChange};
+        use databases_types::{DatabaseOp, TableChange};
         let pipeline = self.pipeline(&receipt).await?;
         for op in &batch.ops {
             let table = match op {

@@ -12,7 +12,7 @@ use contacts_core::models::messages::ContactsNodes;
 use database_sql_engine::catalog::Catalog;
 use database_sql_engine::fold::Bin;
 use database_sql_engine::run::{OpsSink, Outcome};
-use models_databases::{DatabaseId, DatabaseOp, OpResult, OptionId, RowId, TableId};
+use databases_types::{DatabaseId, DatabaseOp, OpResult, OptionId, RowId, TableId};
 use models_pagination::{Base64Str, Cursor, CursorVal, Paginated};
 use models_properties::service::property_definition::PropertyDefinition;
 use models_properties::service::property_definition_with_options::PropertyDefinitionWithOptions;

@@ -12,7 +12,7 @@ use std::sync::Arc;
 
 use cells::column_kind_name;
 
-use models_databases::{
+use databases_types::{
     ColumnChange, ColumnKind, ColumnResult, DatabaseOp, NewColumn, OpResult, PropertyId,
     RowChanges, RowsChange, RowsResult, TableChange, TableResult, TakenId, VersionedTable,
     ViewChange, ViewResult,
@@ -181,7 +181,7 @@ where
             labels: HashMap::new(),
             views: HashMap::new(),
             boards,
-            now: models_databases::views::written_at(),
+            now: databases_types::views::written_at(),
             related: Vec::new(),
             written_rows: 0,
             written_tables: HashSet::new(),

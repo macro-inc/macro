@@ -1,7 +1,7 @@
 //! Duplicating a database: a new one, owned by whoever duplicates it, with
 //! everything the source holds under new ids.
 
-use models_databases::views::{
+use databases_types::views::{
     Conjunction, FilterCondition, FilterGroup, FilterNode, FilterTest, Lane, LaneKey, NewView,
     SetOperator, ViewLayout, ViewQuery,
 };
@@ -772,7 +772,7 @@ async fn a_shared_property_the_duplicator_cannot_bind_is_copied_into_one_the_cop
             table_id: seeded.table_id,
             property_definition_id: shared_id,
             display_name: None,
-            position: models_databases::position::key_between(Some(&last), None).unwrap(),
+            position: databases_types::position::key_between(Some(&last), None).unwrap(),
             infer_type: false,
             config: None,
         });
@@ -865,12 +865,12 @@ async fn a_formula_column_is_copied_with_its_values_computed_in_the_copy() {
                 change: ColumnChange::Create {
                     definition: NewColumn::Derived {
                         name: "Seats".into(),
-                        formula: models_databases::Formula::Binary {
-                            operator: models_databases::Operator::Multiply,
-                            left: Box::new(models_databases::Formula::Column {
+                        formula: databases_types::Formula::Binary {
+                            operator: databases_types::Operator::Multiply,
+                            left: Box::new(databases_types::Formula::Column {
                                 column: seeded.plus_ones_column.id,
                             }),
-                            right: Box::new(models_databases::Formula::Number { value: 2.0 }),
+                            right: Box::new(databases_types::Formula::Number { value: 2.0 }),
                         },
                     },
                     after: None,

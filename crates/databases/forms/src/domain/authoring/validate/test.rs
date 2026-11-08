@@ -78,7 +78,7 @@ fn review_regression_preserving_human_content_keeps_authoring_limits() {
         id: ColumnId::generate(),
         name: "Contact".into(),
         kind: ColumnKind::Entity {
-            target: models_databases::EntityKind::User,
+            target: databases_types::EntityKind::User,
             multi: false,
         },
         options: vec![],
@@ -103,7 +103,7 @@ fn review_regression_preserving_human_content_keeps_authoring_limits() {
                 title: String::new(),
                 description: String::new(),
                 rules: FilterGroup {
-                    conjunction: models_databases::views::Conjunction::And,
+                    conjunction: databases_types::views::Conjunction::And,
                     conditions: vec![],
                 },
                 message: String::new(),
@@ -154,10 +154,10 @@ fn review_regression_preserving_human_content_keeps_authoring_limits() {
         .code,
         Code::EmptyScreeningGroup
     );
-    let condition = FilterNode::Condition(models_databases::views::FilterCondition {
+    let condition = FilterNode::Condition(databases_types::views::FilterCondition {
         column: column.id,
-        test: models_databases::views::FilterTest::Presence {
-            operator: models_databases::views::PresenceOperator::IsEmpty,
+        test: databases_types::views::FilterTest::Presence {
+            operator: databases_types::views::PresenceOperator::IsEmpty,
         },
     });
     let mut crowded = previous.clone();
@@ -171,7 +171,7 @@ fn review_regression_preserving_human_content_keeps_authoring_limits() {
         title: String::new(),
         description: String::new(),
         rules: FilterGroup {
-            conjunction: models_databases::views::Conjunction::And,
+            conjunction: databases_types::views::Conjunction::And,
             conditions: vec![condition; 20],
         },
         message: String::new(),
@@ -214,11 +214,11 @@ fn show_when_resolves_earlier_keys_and_refuses_its_own_or_later_questions() {
     assert_eq!(
         show_when,
         &Some(FilterGroup {
-            conjunction: models_databases::views::Conjunction::And,
+            conjunction: databases_types::views::Conjunction::And,
             conditions: vec![FilterNode::Condition(FilterCondition {
                 column: plan.keys.columns["role"],
                 test: FilterTest::Options {
-                    operator: models_databases::views::SetOperator::IsAnyOf,
+                    operator: databases_types::views::SetOperator::IsAnyOf,
                     options: vec![plan.keys.options["role"]["employee"]],
                 },
             })],
@@ -241,7 +241,7 @@ fn show_when_resolves_earlier_keys_and_refuses_its_own_or_later_questions() {
         question: Reference::Key { key: "diet".into() },
         test: Predicate::Value {
             test: FilterTest::Presence {
-                operator: models_databases::views::PresenceOperator::IsEmpty,
+                operator: databases_types::views::PresenceOperator::IsEmpty,
             },
         },
     }];
@@ -261,7 +261,7 @@ fn show_when_resolves_earlier_keys_and_refuses_its_own_or_later_questions() {
         question: Reference::Key { key: "role".into() },
         test: Predicate::Value {
             test: FilterTest::Text {
-                operator: models_databases::views::TextOperator::Is,
+                operator: databases_types::views::TextOperator::Is,
                 value: "Employee".into(),
             },
         },
@@ -288,11 +288,11 @@ fn a_canonical_show_when_must_name_an_earlier_section_and_an_unchanged_one_is_ke
         options: vec![],
     };
     let on = |column: ColumnId| FilterGroup {
-        conjunction: models_databases::views::Conjunction::And,
+        conjunction: databases_types::views::Conjunction::And,
         conditions: vec![FilterNode::Condition(FilterCondition {
             column,
             test: FilterTest::Text {
-                operator: models_databases::views::TextOperator::Is,
+                operator: databases_types::views::TextOperator::Is,
                 value: "Employee".into(),
             },
         })],
@@ -337,7 +337,7 @@ fn a_canonical_show_when_must_name_an_earlier_section_and_an_unchanged_one_is_ke
         Code::ShowWhenReferencesLaterQuestion
     );
     let empty = FilterGroup {
-        conjunction: models_databases::views::Conjunction::And,
+        conjunction: databases_types::views::Conjunction::And,
         conditions: vec![],
     };
     assert_eq!(

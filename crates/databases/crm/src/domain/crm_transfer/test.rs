@@ -64,7 +64,7 @@ fn overview(record_type: PipelineRecordType) -> PipelineOverview {
             field("Revenue", FieldKind::Number),
             field(
                 "Proposal",
-                FieldKind::Entity(models_databases::EntityKind::Document),
+                FieldKind::Entity(databases_types::EntityKind::Document),
             ),
         ],
         version: TableVersion(1),

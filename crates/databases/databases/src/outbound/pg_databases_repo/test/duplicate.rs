@@ -1,16 +1,16 @@
 //! Duplicating a database over Postgres: the copy, its owner's grant and
 //! everything in it commit together, or none of it does.
 
+use databases_types::views::{LaneKey, NewView, ViewLayout, ViewQuery};
+use databases_types::{
+    CellValue, CellWrite, ColumnChange, ColumnKind, DatabaseOp, NewColumn, OpResult, OptionRef,
+    RowsChange, RowsResult, TableChange, ViewChange,
+};
 use entity_access::domain::models::{
     AccessLevel, Entity, EntityAccessReceipt, EntityPermission, EntityType, ViewAccessLevel,
 };
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
 use macro_user_id::{cow_str::CowLike, user_id::MacroUserIdStr};
-use models_databases::views::{LaneKey, NewView, ViewLayout, ViewQuery};
-use models_databases::{
-    CellValue, CellWrite, ColumnChange, ColumnKind, DatabaseOp, NewColumn, OpResult, OptionRef,
-    RowsChange, RowsResult, TableChange, ViewChange,
-};
 use models_properties::service::property_value::PropertyValue;
 use models_properties::shared::{EntityReference, EntityType as PropertyEntityType};
 use sqlx::PgPool;
@@ -199,7 +199,7 @@ async fn a_duplicate_copies_tables_columns_rows_relations_and_boards(pool: PgPoo
                 view: board,
                 change: ViewChange::MoveCard {
                     row: sam,
-                    lane: LaneKey::Option(models_databases::OptionId::from_uuid(going)),
+                    lane: LaneKey::Option(databases_types::OptionId::from_uuid(going)),
                     before: None,
                     after: None,
                 },
@@ -295,7 +295,7 @@ async fn a_duplicate_copies_tables_columns_rows_relations_and_boards(pool: PgPoo
     assert_eq!(places[0].row, sam_copy);
     assert_eq!(
         places[0].lane,
-        LaneKey::Option(models_databases::OptionId::from_uuid(copied_going))
+        LaneKey::Option(databases_types::OptionId::from_uuid(copied_going))
     );
 }
 

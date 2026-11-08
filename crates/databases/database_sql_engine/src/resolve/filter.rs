@@ -2,7 +2,7 @@
 //! the column's kind.
 
 use chrono::{DateTime, NaiveDate, Utc};
-use models_databases::{DateRange, OptionId};
+use databases_types::{DateRange, OptionId};
 
 use crate::catalog::{Column, ColumnKind, EntityKind, SelectOption};
 use crate::parse::{ComparisonOperator, Condition, Literal};
@@ -279,7 +279,7 @@ fn typed_option(
 
 fn typed_entity(column: &Column, target: EntityKind, lit: Literal) -> Result<String, ResolveError> {
     match (target, lit) {
-        (EntityKind::Row, Literal::Text(id)) => match id.parse::<models_databases::RowId>() {
+        (EntityKind::Row, Literal::Text(id)) => match id.parse::<databases_types::RowId>() {
             Ok(_) => Ok(id),
             Err(_) => Err(ResolveError::RowIdNotAnId { written: id }),
         },

@@ -18,7 +18,7 @@ pub(crate) mod views;
 
 use std::collections::HashMap;
 
-use models_databases::position::{Position, PositionError, key_between};
+use databases_types::position::{Position, PositionError, key_between};
 use uuid::Uuid;
 
 use macro_user_id::user_id::MacroUserIdStr;

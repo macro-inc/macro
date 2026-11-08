@@ -2,7 +2,7 @@
 
 use super::super::apply_ops::version;
 use super::*;
-use models_databases::{NewOption, OptionId};
+use databases_types::{NewOption, OptionId};
 use models_properties::service::property_value::PropertyValue;
 use models_properties::{EntityReference, EntityType};
 use properties::domain::database_cell_writer::DatabaseCellWriter;

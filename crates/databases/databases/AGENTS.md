@@ -38,7 +38,7 @@ service with Axum, agent-tool and Postgres adapters.
 
 ## Recipes
 
-- Add a new op kind: `models_databases` (op/result shape) → `src/domain/service/ops/`
+- Add a new op kind: `databases_types` (op/result shape) → `src/domain/service/ops/`
   (per README's review map) → `src/outbound/pg_databases_repo.rs` → add a row to
   the README's op/result tables.
 - Add a Postgres-backed read/write path for a new host (like CRM/forms): use

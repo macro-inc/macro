@@ -27,7 +27,7 @@ use crate::domain::duplicate::DatabaseDuplicateService;
 use crate::domain::sharing::DatabaseSharingService;
 use crate::domain::transfer::DatabaseTransferService;
 use casts::{column_casts_handler, column_conversion_handler};
-use models_databases::{DatabaseId, TableId};
+use databases_types::{DatabaseId, TableId};
 use std::sync::Arc;
 use tracing::Level;
 

@@ -1,7 +1,7 @@
 //! Structural undo preserves net changes and later collaborators' work.
 
 use super::*;
-use models_databases::{ColumnId, ColumnKind, NewColumn, NewOption, OptionId, TableChange};
+use databases_types::{ColumnId, ColumnKind, NewColumn, NewOption, OptionId, TableChange};
 use uuid::Uuid;
 
 async fn board(pool: &PgPool, wedding: &Wedding) -> ViewId {
@@ -419,7 +419,7 @@ async fn a_filter_only_dependency_protects_a_new_option(pool: PgPool) {
                             conditions: vec![FilterNode::Condition(FilterCondition {
                                 column: wedding.rsvp,
                                 test: FilterTest::Options {
-                                    operator: models_databases::views::SetOperator::IsAnyOf,
+                                    operator: databases_types::views::SetOperator::IsAnyOf,
                                     options: vec![option],
                                 },
                             })],
@@ -456,7 +456,7 @@ async fn move_then_delete_restores_the_row_before_moving_it_back(pool: PgPool) {
                 view,
                 change: ViewChange::MoveCard {
                     row,
-                    lane: models_databases::views::LaneKey::Option(wedding.no),
+                    lane: databases_types::views::LaneKey::Option(wedding.no),
                     before: None,
                     after: None,
                 },
@@ -489,7 +489,7 @@ async fn deleting_a_positioned_card_does_not_claim_to_restore_its_position(pool:
             view,
             change: ViewChange::MoveCard {
                 row,
-                lane: models_databases::views::LaneKey::Option(wedding.no),
+                lane: databases_types::views::LaneKey::Option(wedding.no),
                 before: None,
                 after: None,
             },
@@ -529,7 +529,7 @@ async fn deleting_a_lane_with_card_positions_does_not_claim_complete_restoration
             view,
             change: ViewChange::MoveCard {
                 row,
-                lane: models_databases::views::LaneKey::Option(wedding.no),
+                lane: databases_types::views::LaneKey::Option(wedding.no),
                 before: None,
                 after: None,
             },

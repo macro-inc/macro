@@ -4,13 +4,13 @@
 //! them, is serialized and walked against the schema it claims.
 
 use chrono::{TimeZone, Utc};
-use models_databases::views::{
+use databases_types::views::{
     CardPosition, Conjunction, DatabaseView, DateOperator, FilterCondition, FilterGroup,
     FilterNode, FilterTest, Lane, LaneKey, NewView, NumberOperator, PresenceOperator,
     RequestedLayout, SetOperator, SortDirection, SortKey, TextOperator, ViewColumn, ViewLayout,
     ViewPosition, ViewQuery,
 };
-use models_databases::{
+use databases_types::{
     CellValue, CellWrite, ColumnChange, ColumnId, ColumnKind, ColumnResult, DatabaseId, DatabaseOp,
     EntityKind, EntityRef, Formula, NewColumn, NewOption, OpResult, Operator, OptionId, OptionRef,
     PropertyId, RowChange, RowChanges, RowId, RowsChange, RowsResult, TableChange, TableId,

@@ -1,6 +1,6 @@
 //! Reordering a database's tables through the ops over Postgres.
 
-use models_databases::{DatabaseOp, OpResult, TableChange, VersionedTable};
+use databases_types::{DatabaseOp, OpResult, TableChange, VersionedTable};
 
 use super::apply_ops::{edit, guests, service, viewer};
 use super::*;

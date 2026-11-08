@@ -2,8 +2,8 @@ use chrono::Utc;
 use databases::domain::models::{
     Column, ColumnDetail, Database, DatabaseDetail, Table, TableDetail, TableVersion,
 };
+use databases_types::{ColumnId, DatabaseId, TableId};
 use entity_access::domain::models::AccessLevel;
-use models_databases::{ColumnId, DatabaseId, TableId};
 use models_properties::service::property_definition::PropertyDefinition;
 use models_properties::service::property_definition_with_options::PropertyDefinitionWithOptions;
 use models_properties::shared::{DataType, PropertyOwner};

@@ -19,7 +19,7 @@ mod test;
 
 use std::collections::HashSet;
 
-use models_databases::{DatabaseId, DatabaseOp, OpResult, RowId, TableId};
+use databases_types::{DatabaseId, DatabaseOp, OpResult, RowId, TableId};
 use serde::{Deserialize, Serialize};
 use specta::Type;
 use uuid::Uuid;

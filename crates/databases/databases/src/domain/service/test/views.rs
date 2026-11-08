@@ -2,13 +2,13 @@
 //! cards, and what removing or retyping a column or an option does to the
 //! views that refer to it.
 
-use models_databases::views::{
+use databases_types::views::{
     CardPosition, Conjunction, FilterCondition, FilterGroup, FilterNode, FilterTest, Lane, LaneKey,
     NewView, NumberOperator, RequestedLayout, SetOperator, SortDirection, SortKey, ViewColumn,
     ViewLayout, ViewPosition, ViewQuery,
 };
 
-use models_databases::{EntityKind, EntityRef};
+use databases_types::{EntityKind, EntityRef};
 
 use super::*;
 
@@ -1423,7 +1423,7 @@ async fn a_new_type_drops_the_tests_of_the_old_one_but_not_under_a_board() {
         ViewLayout::Table { columns: vec![] },
     )
     .await;
-    let retype = |column: ColumnId, to: models_databases::ColumnKind| DatabaseOp::Column {
+    let retype = |column: ColumnId, to: databases_types::ColumnKind| DatabaseOp::Column {
         table: seeded.table_id,
         column,
         change: ColumnChange::ChangeType { to },
@@ -1436,7 +1436,7 @@ async fn a_new_type_drops_the_tests_of_the_old_one_but_not_under_a_board() {
             viewer(OWNER),
             OpBatch::from(vec![retype(
                 seeded.plus_ones_column.id,
-                models_databases::ColumnKind::Text,
+                databases_types::ColumnKind::Text,
             )]),
         )
         .await
@@ -1470,7 +1470,7 @@ async fn a_new_type_drops_the_tests_of_the_old_one_but_not_under_a_board() {
             viewer(OWNER),
             OpBatch::from(vec![retype(
                 seeded.status_column.id,
-                models_databases::ColumnKind::Text,
+                databases_types::ColumnKind::Text,
             )]),
         )
         .await

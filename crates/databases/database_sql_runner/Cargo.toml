@@ -29,7 +29,7 @@ entity_access = { workspace = true, features = ["ports"] }
 filter_ast = { workspace = true }
 item_filters = { workspace = true }
 macro_user_id = { workspace = true }
-models_databases = { workspace = true }
+databases_types = { workspace = true }
 models_grouping = { workspace = true }
 models_pagination = { workspace = true }
 models_properties = { workspace = true }

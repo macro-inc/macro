@@ -4,6 +4,11 @@
 
 use std::collections::{HashMap, HashSet};
 
+use databases_types::{
+    CellValue, CellWrite, ColumnChange, ColumnId, ColumnKind, DatabaseId, DatabaseOp, EntityKind,
+    EntityRef, NewColumn, NewOption, OpResult, RowChange, RowChanges, RowId, RowsChange,
+    RowsResult, TableChange, TableId,
+};
 use futures::{FutureExt, StreamExt, stream};
 use import_notion::domain::inventory::{all_rows, full_markdown};
 use import_notion::domain::model::{
@@ -11,11 +16,6 @@ use import_notion::domain::model::{
 };
 use import_notion::domain::ports::NotionApi;
 use macro_user_id::user_id::MacroUserIdStr;
-use models_databases::{
-    CellValue, CellWrite, ColumnChange, ColumnId, ColumnKind, DatabaseId, DatabaseOp, EntityKind,
-    EntityRef, NewColumn, NewOption, OpResult, RowChange, RowChanges, RowId, RowsChange,
-    RowsResult, TableChange, TableId,
-};
 use uuid::Uuid;
 
 use super::{BODY_CONCURRENCY, Cancel, Progress, WriteItem, folder_once};

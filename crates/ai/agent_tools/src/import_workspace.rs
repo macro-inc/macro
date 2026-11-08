@@ -281,8 +281,8 @@ impl import::domain::ports::WorkspaceWriter for ToolEntityCreator {
         &self,
         user: &MacroUserIdStr<'static>,
         database_id: Uuid,
-        ops: Vec<models_databases::DatabaseOp>,
-    ) -> anyhow::Result<Vec<models_databases::OpResult>> {
+        ops: Vec<databases_types::DatabaseOp>,
+    ) -> anyhow::Result<Vec<databases_types::OpResult>> {
         let viewer = viewer(user);
         let receipt = database_receipt::<EditAccessLevel, _>(
             self.entity_access_service.as_ref(),

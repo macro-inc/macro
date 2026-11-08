@@ -4,15 +4,15 @@
 mod options;
 mod structure;
 
-use macro_db_migrator::MACRO_DB_MIGRATIONS;
-use models_databases::views::{
+use databases_types::views::{
     Conjunction, FilterCondition, FilterGroup, FilterNode, FilterTest, NewView, NumberOperator,
     RequestedLayout, ViewId, ViewQuery,
 };
-use models_databases::{
+use databases_types::{
     CellValue, CellWrite, ColumnChange, DatabaseOp, OptionRef, RowChange, RowChanges, RowsChange,
     ViewChange,
 };
+use macro_db_migrator::MACRO_DB_MIGRATIONS;
 use properties::outbound::properties_pg_repo::PropertiesPgRepo;
 use sqlx::PgPool;
 

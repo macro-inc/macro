@@ -5,9 +5,9 @@ use std::sync::{Arc, Mutex};
 
 use chrono::{TimeZone, Utc};
 use databases::domain::models::{DatabaseError, Viewer};
+use databases_types::{CellWrite, DatabaseId, RowId, TableId};
 use entity_access::domain::models::{EditAccessLevel, EntityAccessReceipt, EntityType};
 use macro_user_id::user_id::MacroUserIdStr;
-use models_databases::{CellWrite, DatabaseId, RowId, TableId};
 use uuid::Uuid;
 
 use crate::domain::mapping::WebhookColumn;

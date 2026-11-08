@@ -1,7 +1,7 @@
-use models_databases::views::{
+use databases_types::views::{
     CardPosition, Lane, LaneKey, SortDirection, SortKey, ViewLayout, ViewProblem, ViewQuery,
 };
-use models_databases::{OptionId, RowId};
+use databases_types::{OptionId, RowId};
 use uuid::Uuid;
 
 use super::*;
@@ -378,7 +378,7 @@ fn only_a_board_view_of_a_visible_table_lays_out() {
         Err(ViewProblem::NotABoard)
     );
 
-    let elsewhere = models_databases::views::DatabaseView {
+    let elsewhere = databases_types::views::DatabaseView {
         table_id: DEALS,
         ..issues_view(
             ViewQuery::default(),

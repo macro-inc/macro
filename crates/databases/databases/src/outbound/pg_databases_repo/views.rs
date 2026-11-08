@@ -10,8 +10,8 @@
 #[cfg(test)]
 mod test;
 
+use databases_types::views::LaneKey;
 use macro_user_id::user_id::MacroUserIdStr;
-use models_databases::views::LaneKey;
 use sqlx::PgExecutor;
 use uuid::Uuid;
 

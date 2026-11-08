@@ -4,7 +4,7 @@
 
 use std::fmt;
 
-use models_databases::ColumnKind as OpColumnKind;
+use databases_types::ColumnKind as OpColumnKind;
 
 /// An identifier as written, quotes removed, case preserved.
 #[derive(Debug, Clone, PartialEq, Eq)]

@@ -3,8 +3,8 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use models_databases::views::{LaneKey, NewView, RequestedLayout};
-use models_databases::{
+use databases_types::views::{LaneKey, NewView, RequestedLayout};
+use databases_types::{
     CellValue, CellWrite, ColumnChange, ColumnId, DatabaseOp, NewColumn, NewOption, OptionId,
     OptionRef, PropertyId, RowChange, RowChanges, RowId, RowsChange, TableChange, TableId,
     ViewChange, ViewId,

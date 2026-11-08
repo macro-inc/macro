@@ -9,8 +9,8 @@ use databases::domain::models::{
     DatabaseError, DatabaseId, OpBatch, TableId, TableVersion, Viewer,
 };
 use databases::domain::ports::DatabasesService;
+use databases_types::{DatabaseOp, OpResult};
 use entity_access::domain::models::{EditAccessLevel, EntityAccessReceipt};
-use models_databases::{DatabaseOp, OpResult};
 
 /// Applies a statement's writes as `viewer`, keeping the table versions
 /// they produced.

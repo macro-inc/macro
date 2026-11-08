@@ -27,7 +27,7 @@ mcp_select = { workspace = true }
 entity_kind = { workspace = true }
 import_notion = { workspace = true }
 import_tracker = { workspace = true }
-models_databases = { workspace = true }
+databases_types = { workspace = true }
 models_properties = { workspace = true }
 properties = { workspace = true, features = [
   "ports",

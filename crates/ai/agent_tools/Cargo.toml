@@ -88,7 +88,7 @@ url = { workspace = true }
 shared_types = { workspace = true }
 entity_kind = { workspace = true }
 model_owner = { workspace = true }
-models_databases = { workspace = true }
+databases_types = { workspace = true }
 models_pagination = { workspace = true }
 models_permissions = { workspace = true }
 notification = { workspace = true, default-features = true, features = ["ai_tool"] }

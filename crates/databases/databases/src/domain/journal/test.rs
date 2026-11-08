@@ -1,14 +1,14 @@
 //! Explicit literal tests of inverting each kind of op.
 
-use models_databases::views::LaneKey;
+use databases_types::views::LaneKey;
 use std::collections::BTreeMap;
 
 use chrono::{DateTime, Utc};
-use models_databases::position::{Position, key_between};
-use models_databases::views::{
+use databases_types::position::{Position, key_between};
+use databases_types::views::{
     CardPosition, DatabaseView, NewView, RequestedLayout, ViewColumn, ViewId, ViewLayout, ViewQuery,
 };
-use models_databases::{
+use databases_types::{
     CellValue, CellWrite, ColumnChange, ColumnId, ColumnKind, DatabaseId, DatabaseOp, NewColumn,
     NewOption, OptionId, OptionRef, PropertyId, RowChange, RowChanges, RowId, RowsChange,
     TableChange, TableId, TableVersion, ViewChange,
@@ -61,9 +61,9 @@ fn views() -> [DatabaseView; 2] {
             position: first_key(),
             query: ViewQuery {
                 filter: None,
-                sort: vec![models_databases::views::SortKey {
+                sort: vec![databases_types::views::SortKey {
                     column: PLUS_ONES,
-                    direction: models_databases::views::SortDirection::Descending,
+                    direction: databases_types::views::SortDirection::Descending,
                 }],
             },
             layout: ViewLayout::Table {

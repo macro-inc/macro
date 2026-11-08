@@ -1,8 +1,8 @@
 //! Reading a form and replacing its layout: what a layout put accepts and
 //! every way it is refused.
 
+use databases_types::views::{DateOperator, TextOperator};
 use entity_access::domain::models::{EditAccessLevel, ViewAccessLevel};
-use models_databases::views::{DateOperator, TextOperator};
 
 use super::*;
 use crate::domain::models::{FormAccess, FormError, FormSectionDetail, LayoutProblem};

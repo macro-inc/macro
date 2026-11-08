@@ -3,12 +3,12 @@
 
 use std::collections::{HashMap, HashSet};
 
-use models_databases::position::{key_between, keys_between};
-use models_databases::views::{
+use databases_types::position::{key_between, keys_between};
+use databases_types::views::{
     CardPosition, DatabaseView, LaneKey, NewView, RequestedLayout, SchemaColumn, ViewId,
     ViewLayout, ViewPosition, ViewQuery, arrange_lane, check, check_lane, place_card,
 };
-use models_databases::{ColumnId, OptionId, TakenId, ViewChange};
+use databases_types::{ColumnId, OptionId, TakenId, ViewChange};
 use models_properties::service::property_value::PropertyValue;
 
 use super::{Place, Planner, refuse, refuse_taken};

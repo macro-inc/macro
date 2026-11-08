@@ -5,7 +5,7 @@ use chrono::{DateTime, Utc};
 
 use super::*;
 use crate::domain::models::{DatabaseView, ViewId};
-use models_databases::views::ViewLayout;
+use databases_types::views::ViewLayout;
 
 impl<Repository, Definitions, Cells, Events, Access, Broker>
     DatabasesServiceImpl<Repository, Definitions, Cells, Events, Access, Broker>

@@ -32,7 +32,7 @@ where
 #[derive(Debug, Deserialize, utoipa::ToSchema)]
 pub struct ColumnConversionRequest {
     /// The type of the column the values would go to.
-    pub to: models_databases::ColumnKind,
+    pub to: databases_types::ColumnKind,
 }
 
 /// What one column's values become under another type: the values that

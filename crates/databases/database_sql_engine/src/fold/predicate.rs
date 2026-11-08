@@ -2,7 +2,7 @@
 
 use std::cmp::Ordering;
 
-use models_databases::RowId;
+use databases_types::RowId;
 
 use crate::resolve::{ComparisonOperator, Filter, Value};
 

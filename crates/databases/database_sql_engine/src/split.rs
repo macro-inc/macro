@@ -16,9 +16,9 @@ mod pushdown;
 #[cfg(test)]
 mod test;
 
+use databases_types::TableId;
 use filter_ast::Expr;
 use item_filters::ast::properties::PropertiesLiteral;
-use models_databases::TableId;
 use serde::{Deserialize, Serialize};
 use specta::Type;
 use uuid::Uuid;

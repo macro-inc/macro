@@ -9,8 +9,8 @@
 use database_sql_engine::catalog::Schema;
 use database_sql_engine::formula::FormulaReading;
 use database_sql_engine::{Bin, Board, Catalog, EngineError, Outcome, Page, Step};
-use models_databases::views::{CardPosition, DatabaseView};
-use models_databases::{Formula, OpResult};
+use databases_types::views::{CardPosition, DatabaseView};
+use databases_types::{Formula, OpResult};
 use specta::Types;
 use specta::datatype::{DataType, Fields};
 use specta_typescript::Typescript;

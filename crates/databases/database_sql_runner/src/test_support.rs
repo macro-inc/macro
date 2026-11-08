@@ -16,6 +16,7 @@ use databases::domain::models::{
     QueryDefinition, QueryId, SavedQuery, SavedQueryError, TableId, Viewer,
 };
 use databases::domain::ports::DatabasesService;
+use databases_types::{DatabaseOp, OpResult};
 use entity_access::domain::models::{
     AccessError, AccessLevel, BotAccessScope, CallChannelInfo, EditAccessLevel, Entity,
     EntityAccessReceipt, EntityPermission, EntityType, OwnerAccessLevel, RequiredPermission,
@@ -29,7 +30,6 @@ use item_filters::ast::properties::{PropertiesLiteral, PropertyMatchValue};
 use macro_user_id::lowercased::Lowercase;
 use macro_user_id::user_id::{MacroUserId, MacroUserIdStr};
 use model_owner::Owner;
-use models_databases::{DatabaseOp, OpResult};
 use models_grouping::GroupByField;
 use models_pagination::Paginated;
 use models_properties::service::property_definition::PropertyDefinition;
@@ -325,7 +325,7 @@ impl DatabasesService for FakeDatabases {
         _: EntityAccessReceipt<ViewAccessLevel>,
         _: TableId,
         _: ColumnId,
-        _: models_databases::ColumnKind,
+        _: databases_types::ColumnKind,
     ) -> Result<ColumnConversion, DatabaseError> {
         unimplemented!("SQL never converts a column into another")
     }

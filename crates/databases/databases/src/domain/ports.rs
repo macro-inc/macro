@@ -23,7 +23,7 @@ use crate::domain::models::{
     QueryDefinition, QueryId, RowId, RowRef, SavedQuery, SavedQueryError, Table, TableId,
     TableVersion, ViewId, Viewer, Writes, WritesOutcome,
 };
-use models_databases::{ColumnKind, OpResult};
+use databases_types::{ColumnKind, OpResult};
 
 /// Persistence for databases, tables, column placements and row identities.
 pub trait DatabasesRepo: Send + Sync + 'static {
@@ -539,9 +539,8 @@ pub trait DatabaseRowReads: Send + Sync + 'static {
         receipt: EntityAccessReceipt<ViewAccessLevel>,
         table_id: TableId,
         rows: &[RowId],
-    ) -> impl Future<
-        Output = Result<HashMap<RowId, Vec<models_databases::CellWrite>>, DatabaseError>,
-    > + Send;
+    ) -> impl Future<Output = Result<HashMap<RowId, Vec<databases_types::CellWrite>>, DatabaseError>>
+    + Send;
 
     /// One column's nonempty cells, by row, across the whole table.
     fn column_cells(
@@ -549,7 +548,7 @@ pub trait DatabaseRowReads: Send + Sync + 'static {
         receipt: EntityAccessReceipt<ViewAccessLevel>,
         table_id: TableId,
         column_id: ColumnId,
-    ) -> impl Future<Output = Result<HashMap<RowId, models_databases::CellValue>, DatabaseError>> + Send;
+    ) -> impl Future<Output = Result<HashMap<RowId, databases_types::CellValue>, DatabaseError>> + Send;
 
     /// How many rows the table has.
     fn row_count(

@@ -2,12 +2,12 @@
 
 use std::sync::Arc;
 
+use databases_types::DatabaseId;
 use entity_access::domain::models::{
     AccessError, EditAccessLevel, EntityAccessReceipt, EntityType,
 };
 use entity_access::domain::ports::EntityAccessService;
 use macro_user_id::user_id::MacroUserIdStr;
-use models_databases::DatabaseId;
 
 use crate::domain::ports::CreatorAccess;
 

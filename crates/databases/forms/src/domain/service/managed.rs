@@ -4,7 +4,7 @@
 
 use std::collections::HashMap;
 
-use models_databases::{ColumnId, ColumnKind, EntityKind};
+use databases_types::{ColumnId, ColumnKind, EntityKind};
 
 use super::layout::QuestionColumn;
 

@@ -12,8 +12,8 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use models_databases::views::ViewId;
-use models_databases::{
+use databases_types::views::ViewId;
+use databases_types::{
     CellValue, ColumnChange, ColumnId, DatabaseOp, OptionId, RowChange, RowChanges, RowId,
     RowsChange, TableChange, TableId, ViewChange,
 };

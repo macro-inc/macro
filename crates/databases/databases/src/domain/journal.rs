@@ -13,9 +13,9 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use bot_id::BotId;
 use chrono::{DateTime, Utc};
-use models_databases::position::Position;
-use models_databases::views::{CardPosition, DatabaseView, ViewId};
-use models_databases::{
+use databases_types::position::Position;
+use databases_types::views::{CardPosition, DatabaseView, ViewId};
+use databases_types::{
     CellValue, ChangeId, ColumnId, ColumnKind, DatabaseId, DatabaseOp, DateRange, EntityRef,
     OptionId, OptionRef, RowId, TableId, TableVersion,
 };
@@ -137,7 +137,7 @@ pub struct RestoredColumn {
     pub nullable: bool,
     /// A derived column's formula.
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub formula: Option<models_databases::Formula>,
+    pub formula: Option<databases_types::Formula>,
 }
 
 /// A row a delete removed: its id and place.
@@ -310,7 +310,7 @@ fn reads_schema(op: &DatabaseOp) -> bool {
         op,
         DatabaseOp::Rows { .. }
             | DatabaseOp::View {
-                change: models_databases::ViewChange::MoveCard { .. },
+                change: databases_types::ViewChange::MoveCard { .. },
                 ..
             }
     )
@@ -394,7 +394,7 @@ pub struct ColumnImage {
     /// Its options, in order.
     pub options: Vec<OptionImage>,
     /// A derived column's formula.
-    pub formula: Option<models_databases::Formula>,
+    pub formula: Option<databases_types::Formula>,
 }
 
 /// An option as the planner read it.
@@ -554,7 +554,7 @@ pub fn created_table(
         inverse: ChangeInverse {
             ops: vec![DatabaseOp::Table {
                 table,
-                change: models_databases::TableChange::Delete,
+                change: databases_types::TableChange::Delete,
             }],
             after,
             ..ChangeInverse::default()

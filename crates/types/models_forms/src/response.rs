@@ -2,7 +2,7 @@
 //! response, and the counts editors and poll voters read.
 
 use chrono::{DateTime, Utc};
-use models_databases::{CellValue, OptionId, RowId};
+use databases_types::{CellValue, OptionId, RowId};
 use serde::{Deserialize, Serialize};
 
 use crate::ids::{FormId, FormQuestionId, FormResponseId, FormSectionId};

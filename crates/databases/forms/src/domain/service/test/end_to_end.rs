@@ -5,14 +5,14 @@ use std::collections::BTreeMap;
 
 use ::databases::domain::models::OpBatch;
 use ::databases::domain::ports::DatabasesService;
-use entity_access::domain::models::{EditAccessLevel, ViewAccessLevel};
-use models_databases::views::{
+use databases_types::views::{
     Conjunction, DateOperator, FilterCondition, FilterGroup, FilterNode, FilterTest, SetOperator,
 };
-use models_databases::{
+use databases_types::{
     CellValue, CellWrite, ColumnChange, ColumnId, ColumnKind, DatabaseOp, EntityKind, EntityRef,
     NewColumn, NewOption, OptionId, OptionRef, RowsChange, TableChange,
 };
+use entity_access::domain::models::{EditAccessLevel, ViewAccessLevel};
 use uuid::Uuid;
 
 use super::*;

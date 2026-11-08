@@ -546,9 +546,9 @@ pub struct NewDatabase {
     /// The new database.
     pub database_id: Uuid,
     /// The table every new database starts with.
-    pub table: models_databases::TableId,
+    pub table: databases_types::TableId,
     /// That table's title column.
-    pub title_column: models_databases::ColumnId,
+    pub title_column: databases_types::ColumnId,
 }
 
 /// Something a workspace import shares with the user's team.
@@ -678,8 +678,8 @@ pub trait WorkspaceWriter: Send + Sync + 'static {
         &self,
         user: &MacroUserIdStr<'static>,
         database_id: Uuid,
-        ops: Vec<models_databases::DatabaseOp>,
-    ) -> impl Future<Output = anyhow::Result<Vec<models_databases::OpResult>>> + Send;
+        ops: Vec<databases_types::DatabaseOp>,
+    ) -> impl Future<Output = anyhow::Result<Vec<databases_types::OpResult>>> + Send;
 
     /// Share `entity`, which `user` owns, with `user`'s team at edit level.
     /// Sharing a folder reaches everything inside it, folders included.

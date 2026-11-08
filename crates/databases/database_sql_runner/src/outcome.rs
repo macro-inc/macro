@@ -19,7 +19,7 @@ use crate::service::SqlError;
 #[serde(rename_all = "camelCase")]
 pub struct SqlOutcome {
     /// Owning database of each visible table referenced by this outcome.
-    pub table_databases: HashMap<TableId, models_databases::DatabaseId>,
+    pub table_databases: HashMap<TableId, databases_types::DatabaseId>,
     /// The rows a `SELECT` returned; `None` for a write.
     pub result: Option<ResultSet>,
     /// How many rows a write changed.
@@ -53,7 +53,7 @@ pub enum SqlStatement {
     #[serde(rename_all = "camelCase")]
     Schema {
         /// Owning database.
-        database_id: models_databases::DatabaseId,
+        database_id: databases_types::DatabaseId,
         /// What changed and how to read the resulting schema.
         summary: String,
     },

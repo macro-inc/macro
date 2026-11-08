@@ -173,7 +173,7 @@ impl TableDetail {
 fn option_label_key(data_type: DataType, label: &str) -> String {
     match label.trim().parse::<f64>() {
         Ok(number) if data_type == DataType::SelectNumber && number.is_finite() => {
-            models_databases::cast::number_label(number)
+            databases_types::cast::number_label(number)
         }
         _ => name_key(label),
     }
@@ -778,7 +778,7 @@ where
         receipt: EntityAccessReceipt<ViewAccessLevel>,
         table_id: TableId,
         column_id: ColumnId,
-        to: models_databases::ColumnKind,
+        to: databases_types::ColumnKind,
     ) -> Result<ColumnConversion, DatabaseError> {
         self.convert_values(receipt, table_id, column_id, to).await
     }
@@ -789,7 +789,7 @@ where
         receipt: EntityAccessReceipt<EditAccessLevel>,
         viewer: Viewer,
         batch: OpBatch,
-    ) -> Result<Vec<models_databases::OpResult>, DatabaseError> {
+    ) -> Result<Vec<databases_types::OpResult>, DatabaseError> {
         self.apply_database_ops(receipt, viewer, batch).await
     }
 

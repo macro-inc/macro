@@ -40,7 +40,7 @@ lists what this group may depend on. `cargo x deps` reports edges that break it.
 | `model_user` |  |
 | `ai_projection_types` |  |
 | `bulk_upload_types` |  |
-| [`models_databases`](models_databases/AGENTS.md) | Part of Macro Databases. |
+| [`databases_types`](databases_types/AGENTS.md) | Part of Macro Databases. |
 | `models_dcs` |  |
 | [`models_email`](models_email/AGENTS.md) | Part of the Email feature. |
 | `models_entity_access_management` |  |

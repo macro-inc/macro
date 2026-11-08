@@ -3,9 +3,9 @@ mod fakes;
 use std::collections::HashMap;
 
 use databases::domain::models::{DatabaseError, OpRefusal};
+use databases_types::{CellValue, CellWrite, ColumnId, ColumnKind, DatabaseId, RowId, TableId};
 use entity_access::domain::models::{EntityAccessReceipt, EntityType};
 use macro_user_id::user_id::MacroUserIdStr;
-use models_databases::{CellValue, CellWrite, ColumnId, ColumnKind, DatabaseId, RowId, TableId};
 use serde_json::json;
 use uuid::Uuid;
 

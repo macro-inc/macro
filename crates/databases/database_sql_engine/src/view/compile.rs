@@ -3,8 +3,8 @@
 #[cfg(test)]
 mod test;
 
-use models_databases::TableId;
-use models_databases::views::{
+use databases_types::TableId;
+use databases_types::views::{
     Conjunction, DatabaseView, DateOperator, DateRangeOperator, FilterCondition, FilterGroup,
     FilterNode, FilterTest, NumberOperator, PresenceOperator, SetOperator, SortDirection,
     TextOperator, ViewLayout, ViewProblem, ViewQuery,
@@ -43,7 +43,7 @@ pub fn compile_table_query(
         .iter()
         .map(super::schema_column)
         .collect::<Vec<_>>();
-    models_databases::views::check(query, &ViewLayout::Table { columns: vec![] }, &columns)?;
+    databases_types::views::check(query, &ViewLayout::Table { columns: vec![] }, &columns)?;
     compile_query_checked(query, table)
 }
 

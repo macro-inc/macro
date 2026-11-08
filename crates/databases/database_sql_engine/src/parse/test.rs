@@ -1,7 +1,7 @@
 mod nesting;
 
 use super::*;
-use models_databases::{ColumnKind as OpColumnKind, EntityKind};
+use databases_types::{ColumnKind as OpColumnKind, EntityKind};
 
 #[test]
 fn grouped_aggregate_with_mixed_where() {

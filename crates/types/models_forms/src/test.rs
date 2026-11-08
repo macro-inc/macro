@@ -1,8 +1,8 @@
 use chrono::{TimeZone, Utc};
-use models_databases::views::{
+use databases_types::views::{
     Conjunction, FilterCondition, FilterGroup, FilterNode, FilterTest, SetOperator,
 };
-use models_databases::{CellValue, ColumnId, ColumnKind, DatabaseId, OptionId, RowId, TableId};
+use databases_types::{CellValue, ColumnId, ColumnKind, DatabaseId, OptionId, RowId, TableId};
 use serde_json::json;
 use uuid::Uuid;
 
@@ -316,7 +316,7 @@ fn a_submission_and_its_outcomes_read_as_tagged_objects() {
         submission.answers,
         vec![Answer {
             question: TEAM_QUESTION,
-            value: CellValue::Options(vec![models_databases::OptionRef::Id(CONTRACTOR)]),
+            value: CellValue::Options(vec![databases_types::OptionRef::Id(CONTRACTOR)]),
         }]
     );
 

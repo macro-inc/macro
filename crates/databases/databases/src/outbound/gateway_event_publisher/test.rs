@@ -1,5 +1,5 @@
 use chrono::TimeZone;
-use models_databases::{ColumnId, RowId};
+use databases_types::{ColumnId, RowId};
 use uuid::Uuid;
 
 use super::*;

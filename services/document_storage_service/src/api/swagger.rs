@@ -113,6 +113,30 @@ use databases::inbound::axum_router::{CreateDatabaseRequest, duplicate::Duplicat
 use databases::outbound::gateway_event_publisher::{
     AwarenessRelay as DatabaseAwarenessRelay, TableChanged as DatabaseTableChanged,
 };
+use databases_types::views::{
+    CardPosition as DatabaseCardPosition, Conjunction as DatabaseFilterConjunction, DatabaseView,
+    DateOperator as DatabaseDateOperator, FilterCondition as DatabaseFilterCondition,
+    FilterGroup as DatabaseFilterGroup, FilterNode as DatabaseFilterNode,
+    FilterTest as DatabaseFilterTest, Lane as DatabaseBoardLane, LaneKey as DatabaseLaneKey,
+    NewView as DatabaseNewView, NumberOperator as DatabaseNumberOperator,
+    PresenceOperator as DatabasePresenceOperator, RequestedLayout as DatabaseRequestedLayout,
+    SetOperator as DatabaseSetOperator, SortDirection as DatabaseSortDirection,
+    SortKey as DatabaseSortKey, TextOperator as DatabaseTextOperator,
+    ViewColumn as DatabaseViewColumn, ViewLayout as DatabaseViewLayout,
+    ViewPosition as DatabaseViewPosition, ViewQuery as DatabaseViewQuery,
+};
+use databases_types::{
+    CellValue as DatabaseCellValue, CellWrite as DatabaseCellWrite,
+    ColumnChange as DatabaseColumnChange, ColumnKind as DatabaseColumnKind,
+    ColumnResult as DatabaseColumnResult, DatabaseOp, EntityKind as DatabaseEntityKind,
+    EntityRef as DatabaseEntityRef, NewColumn as DatabaseNewColumn, NewOption as DatabaseNewOption,
+    OpResult as DatabaseOpResult, OptionRef as DatabaseOptionRef, RowChange as DatabaseRowChange,
+    RowChanges as DatabaseRowChanges, RowsChange as DatabaseRowsChange,
+    RowsResult as DatabaseRowsResult, TableChange as DatabaseTableChange,
+    TableResult as DatabaseTableResult, TakenId as DatabaseTakenId,
+    VersionedTable as DatabaseVersionedTable, ViewChange as DatabaseViewChange,
+    ViewResult as DatabaseViewResult,
+};
 use document_sub_type::DocumentSubType;
 use documents_hex::inbound::axum_router::{
     edit_document::EditDocumentResponse, get_branch_name::BranchNameResponse,
@@ -130,30 +154,6 @@ use github_pull_requests::domain::models::{
 use github_pull_requests::inbound::changes_router::{
     ChangedFileDto, ChangesetDto, ChangesetSourceDto, FileChangeKindDto, GitRefDto,
     GithubPullRequestChangesPatchResponse, GithubPullRequestChangesResponse,
-};
-use models_databases::views::{
-    CardPosition as DatabaseCardPosition, Conjunction as DatabaseFilterConjunction, DatabaseView,
-    DateOperator as DatabaseDateOperator, FilterCondition as DatabaseFilterCondition,
-    FilterGroup as DatabaseFilterGroup, FilterNode as DatabaseFilterNode,
-    FilterTest as DatabaseFilterTest, Lane as DatabaseBoardLane, LaneKey as DatabaseLaneKey,
-    NewView as DatabaseNewView, NumberOperator as DatabaseNumberOperator,
-    PresenceOperator as DatabasePresenceOperator, RequestedLayout as DatabaseRequestedLayout,
-    SetOperator as DatabaseSetOperator, SortDirection as DatabaseSortDirection,
-    SortKey as DatabaseSortKey, TextOperator as DatabaseTextOperator,
-    ViewColumn as DatabaseViewColumn, ViewLayout as DatabaseViewLayout,
-    ViewPosition as DatabaseViewPosition, ViewQuery as DatabaseViewQuery,
-};
-use models_databases::{
-    CellValue as DatabaseCellValue, CellWrite as DatabaseCellWrite,
-    ColumnChange as DatabaseColumnChange, ColumnKind as DatabaseColumnKind,
-    ColumnResult as DatabaseColumnResult, DatabaseOp, EntityKind as DatabaseEntityKind,
-    EntityRef as DatabaseEntityRef, NewColumn as DatabaseNewColumn, NewOption as DatabaseNewOption,
-    OpResult as DatabaseOpResult, OptionRef as DatabaseOptionRef, RowChange as DatabaseRowChange,
-    RowChanges as DatabaseRowChanges, RowsChange as DatabaseRowsChange,
-    RowsResult as DatabaseRowsResult, TableChange as DatabaseTableChange,
-    TableResult as DatabaseTableResult, TakenId as DatabaseTakenId,
-    VersionedTable as DatabaseVersionedTable, ViewChange as DatabaseViewChange,
-    ViewResult as DatabaseViewResult,
 };
 use models_permissions::share_permission::channel_share_permission::UpdateOperation;
 use models_soup::call_record::{SoupCallRecord, SoupCallRecordParticipant};

@@ -2,7 +2,7 @@ use std::sync::Mutex;
 
 use database_sql_engine::{catalog::Table, resolve::SelectQuery};
 use databases::domain::{models::Viewer, receipt::database_receipt};
-use models_databases::DatabaseId;
+use databases_types::DatabaseId;
 use uuid::Uuid;
 
 use super::*;
@@ -119,9 +119,9 @@ async fn a_cursor_rejects_a_changed_query_or_table_version() {
         .unwrap();
     let cursor = first.next_cursor.unwrap();
     let mut changed = request(table_id, Some(cursor.clone()));
-    changed.query.sort.push(models_databases::views::SortKey {
+    changed.query.sort.push(databases_types::views::SortKey {
         column: detail.tables[0].columns[0].column.id,
-        direction: models_databases::views::SortDirection::Ascending,
+        direction: databases_types::views::SortDirection::Ascending,
     });
     assert!(matches!(
         service

@@ -108,8 +108,8 @@ fn an_ops_body_reads_every_op_kind() {
     }))
     .unwrap();
 
-    use models_databases::RowChanges;
-    use models_databases::{
+    use databases_types::RowChanges;
+    use databases_types::{
         CellValue, CellWrite, ColumnChange, ColumnKind, DatabaseOp, OptionRef, RowChange,
         RowsChange,
     };
@@ -532,11 +532,11 @@ async fn an_invalid_schema_operation_answers_its_reason_alone() {
 async fn a_schema_batch_reaches_the_service_with_its_base_versions() {
     use axum::body::Body;
     use axum::http::{Request, header};
-    use entity_access::domain::models::AccessLevel;
-    use models_databases::{
+    use databases_types::{
         ColumnChange, ColumnKind, DatabaseOp, EntityKind, NewColumn, NewOption, PropertyId,
         TableChange,
     };
+    use entity_access::domain::models::AccessLevel;
     use std::collections::HashMap;
     use tower::ServiceExt;
 
@@ -749,8 +749,8 @@ async fn a_schema_batch_reaches_the_service_with_its_base_versions() {
 async fn a_taken_id_refuses_the_batch_with_400_naming_it() {
     use axum::body::Body;
     use axum::http::{Request, header};
+    use databases_types::TakenId;
     use entity_access::domain::models::AccessLevel;
-    use models_databases::TakenId;
     use tower::ServiceExt;
 
     let database = Uuid::from_u128(0x0dbb);
@@ -923,8 +923,8 @@ async fn the_schema_routes_are_gone() {
 async fn a_conversion_request_reaches_the_service_and_answers_the_converted_cells() {
     use axum::body::Body;
     use axum::http::{Request, header};
+    use databases_types::{CellValue, ColumnKind};
     use entity_access::domain::models::AccessLevel;
-    use models_databases::{CellValue, ColumnKind};
     use tower::ServiceExt;
 
     use crate::domain::models::{ColumnConversion, ConvertedCell};

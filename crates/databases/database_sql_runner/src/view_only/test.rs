@@ -1,11 +1,11 @@
 use std::sync::{Arc, Mutex};
 
+use databases_types::DatabaseId;
 use entity_access::domain::models::{
     AccessError, AccessLevel, BotAccessScope, EditAccessLevel, EntityPermission, EntityType,
     ViewAccessLevel,
 };
 use entity_access::domain::ports::EntityAccessService;
-use models_databases::DatabaseId;
 use uuid::Uuid;
 
 use super::ViewOnlyAccess;

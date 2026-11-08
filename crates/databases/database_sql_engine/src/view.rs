@@ -5,8 +5,8 @@
 mod board;
 mod compile;
 
-use models_databases::ColumnId;
-use models_databases::views::{DatabaseView, SchemaColumn, ViewProblem, check};
+use databases_types::ColumnId;
+use databases_types::views::{DatabaseView, SchemaColumn, ViewProblem, check};
 
 use crate::catalog::{Catalog, Column, ColumnKind, Table};
 

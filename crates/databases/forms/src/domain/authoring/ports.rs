@@ -15,7 +15,7 @@ pub trait AuthoringCore: FormsService + crate::domain::sharing::FormSharingServi
         &self,
         source: &crate::domain::ports::CreateSource,
     ) -> impl Future<
-        Output = Result<(Vec<super::Column>, Vec<models_databases::ColumnId>), FormError>,
+        Output = Result<(Vec<super::Column>, Vec<databases_types::ColumnId>), FormError>,
     > + Send;
     /// Publish liveness after a committed authoring write.
     fn authoring_changed(

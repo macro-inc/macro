@@ -4,10 +4,10 @@
 use std::collections::BTreeMap;
 
 use ::databases::domain::models::{DatabaseError, OpRefusal};
-use entity_access::domain::models::ViewAccessLevel;
-use models_databases::{
+use databases_types::{
     CellValue, CellWrite, DatabaseOp, EntityKind, EntityRef, OptionRef, RowsChange,
 };
+use entity_access::domain::models::ViewAccessLevel;
 
 use super::*;
 use crate::domain::models::{

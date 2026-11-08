@@ -1,7 +1,7 @@
 use database_sql_runner::view_rows::{
     ViewPageError, ViewRowsPage, ViewRowsRequest, ViewRowsService,
 };
-use models_databases::{
+use databases_types::{
     RowId, TableVersion,
     views::{DateRangeOperator, FilterNode, FilterTest, NumberOperator, SortDirection},
 };

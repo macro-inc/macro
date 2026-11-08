@@ -2,11 +2,11 @@
 //! commit in one transaction, minted ids are checked against every
 //! database, and expected versions are checked under the batch's locks.
 
-use models_databases::views::{
+use databases_types::views::{
     Conjunction, FilterCondition, FilterGroup, FilterNode, FilterTest, NewView, PresenceOperator,
     RequestedLayout, SortDirection, SortKey, TextOperator, ViewId, ViewQuery,
 };
-use models_databases::{
+use databases_types::{
     CellValue, CellWrite, ColumnChange, ColumnKind, ColumnResult, DatabaseOp, NewColumn, NewOption,
     OpResult, OptionId, OptionRef, RowsChange, RowsResult, TableChange, TableResult, TakenId,
     ViewChange, ViewResult,
@@ -832,7 +832,7 @@ async fn protected_columns_refuse_direct_sql_but_allow_parent_deletion(pool: PgP
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn a_derived_column_stores_its_formula_and_keeps_its_definition_across_edits(pool: PgPool) {
     use crate::domain::models::ColumnConfig;
-    use models_databases::{Formula, Operator};
+    use databases_types::{Formula, Operator};
     let guests = guests(&pool).await;
     let (seats, doubled) = (ColumnId::generate(), ColumnId::generate());
     let times = |factor: f64| Formula::Binary {

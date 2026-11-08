@@ -1,8 +1,8 @@
 #![deny(missing_docs)]
 //! The wire types of Macro Forms: ids, the layout a form shows a table's
 //! columns in, answers, submission outcomes, summaries and errors. A form is
-//! a view of one database table, so answers are `models_databases` cells and
-//! gate rules are `models_databases` filters.
+//! a view of one database table, so answers are `databases_types` cells and
+//! gate rules are `databases_types` filters.
 
 mod branding;
 mod collaboration;

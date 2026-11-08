@@ -158,7 +158,7 @@ async fn an_edit_naming_the_sections_own_question_in_show_when_is_refused_before
                         conditions: vec![FilterNode::Condition(FilterCondition {
                             column: DIET,
                             test: FilterTest::Presence {
-                                operator: models_databases::views::PresenceOperator::IsEmpty,
+                                operator: databases_types::views::PresenceOperator::IsEmpty,
                             },
                         })],
                     }),
