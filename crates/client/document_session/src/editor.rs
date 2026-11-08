@@ -103,6 +103,14 @@ impl EditorSurface {
     pub fn state(&self) -> &EditorState {
         self.core.state()
     }
+    /// Immutable registered type metadata for bulk host queries.
+    pub fn registry(&self) -> &std::sync::Arc<Registry> {
+        self.core.editor().registry()
+    }
+    /// Static command subscriptions read once by the view at initialization.
+    pub fn listener_table(&self) -> &ListenerTable {
+        self.core.editor().listener_table()
+    }
     /// Collaborative undo/redo availability.
     pub fn history(&self) -> HistoryAvailability {
         self.availability
