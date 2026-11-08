@@ -27,6 +27,16 @@ typed results, and returns the HTTP result, including HTTP errors. Shadow
 comparison masks only `"awaitId":"[A-Za-z0-9_-]{21}"` in composer markdown,
 as prescribed by S3 §4.4 and §6.5. It never changes the returned response.
 
+Snapshot shadow spans separately record `raw_equal` (unchanged binary bytes)
+and `structural_equal`. For these two routes, `equal` means structural
+compatibility: golden ancestry and root containers, container kinds/sharing,
+content, formatting and authored values all match. Two controlled imports
+identify only constructor-generated identity/time fields for the specific input;
+identity normalization must be bijective and never rewrites arbitrary payloads.
+Notion's returned Markdown stays exact. Empty `MARKDOWN_GOLDEN` remains byte-exact.
+This corrects S3's raw-only comparison for independently generated snapshots;
+fixture/replayer comparisons are unchanged.
+
 Local adapters call macro_document_model and macro_document_composers, running
 CPU work in spawn_blocking under the captured route span. Document exports use
 an injected RawDocumentSource, implemented by SyncServiceClient. Composition

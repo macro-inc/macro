@@ -102,6 +102,25 @@ impl LexicalClient {
         )
         .await
     }
+    async fn dispatch_snapshot<T: Serialize>(
+        &self,
+        route: Route,
+        input: crate::routing::snapshot::SnapshotInput,
+        bytes_in: usize,
+        http: impl Future<Output = Result<T>>,
+        in_process: impl Future<Output = Result<T>>,
+    ) -> Result<T> {
+        crate::routing::dispatch_with_snapshot(
+            self.modes.mode(route.group()),
+            route,
+            None,
+            bytes_in,
+            http,
+            in_process,
+            Some(input),
+        )
+        .await
+    }
     /// Dispatch `parse_markdown` through its configured route group.
     pub async fn parse_markdown(&self, document_id: &str) -> Result<Vec<MarkdownParseResult>> {
         self.dispatch(
@@ -237,9 +256,12 @@ impl LexicalClient {
     }
     /// Dispatch `markdown_to_loro_snapshot` through its configured route group.
     pub async fn markdown_to_loro_snapshot(&self, markdown: &str) -> Result<Vec<u8>> {
-        self.dispatch(
+        self.dispatch_snapshot(
             Route::SnapshotMarkdown,
-            None,
+            crate::routing::snapshot::SnapshotInput {
+                markdown: markdown.to_owned(),
+                notion: None,
+            },
             serde_json::to_vec(&MarkdownSnapshotRequest { markdown })?.len(),
             self.http.markdown_to_loro_snapshot(markdown),
             crate::in_process::markdown_snapshot(markdown),
@@ -391,9 +413,12 @@ impl LexicalClient {
         &self,
         request: &NotionSnapshotRequest<'_>,
     ) -> Result<NotionSnapshot> {
-        self.dispatch(
+        self.dispatch_snapshot(
             Route::SnapshotNotion,
-            None,
+            crate::routing::snapshot::SnapshotInput {
+                markdown: request.markdown.to_owned(),
+                notion: Some(crate::in_process::wire(&request.links)?),
+            },
             serde_json::to_vec(&request)?.len(),
             self.http.notion_to_loro_snapshot(request),
             crate::in_process::notion_snapshot(request),

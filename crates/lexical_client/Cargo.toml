@@ -21,6 +21,8 @@ macro_config = { workspace = true }
 macro_document_model = { workspace = true, features = ["html"] }
 macro_document_composers = { workspace = true }
 lexical_model = { workspace = true }
+lexical_loro = { workspace = true }
+loro = { workspace = true }
 getrandom = { workspace = true }
 chrono = { workspace = true }
 sync_service_client = { workspace = true }
