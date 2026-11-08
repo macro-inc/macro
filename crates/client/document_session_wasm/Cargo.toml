@@ -20,7 +20,6 @@ lexical_html.workspace = true
 lexical_rich_nodes.workspace = true
 lexical_loro.workspace = true
 loro.workspace = true
-sync_protocol.workspace = true
 wasm-bindgen.workspace = true
 js-sys.workspace = true
 bebop.workspace = true
@@ -30,3 +29,6 @@ tracing.workspace = true
 
 [package.metadata.wasm-pack.profile.release]
 wasm-opt = ["-Oz"]
+
+[dev-dependencies]
+sync_protocol.workspace = true
