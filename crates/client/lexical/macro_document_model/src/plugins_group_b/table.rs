@@ -1,9 +1,12 @@
 //! Application table integrity, list-first Tab, row growth and scoped select-all.
 use super::*;
+mod actions;
+mod list_grid;
+pub(super) use actions::decode;
 use lexical_rich_nodes::{list::ListItemNode, table::*};
 
 pub(super) fn register(builder: EditorBuilder) -> EditorBuilder {
-    builder
+    actions::register(builder)
         .node_trait::<TableNode, dyn CanSelectBefore>(|node| node)
         .table_selection_hooks(TableSelectionHooksImpl)
         .transform::<TableNode>(transforms::table_transform)
