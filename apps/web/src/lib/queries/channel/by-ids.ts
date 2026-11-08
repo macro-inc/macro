@@ -4,7 +4,7 @@ import {
   queryStateFrom,
 } from '@app/features/next-soup/filters/filter-store';
 import { useUserId } from '@core/context/user';
-import { arrayEquals } from '@core/util/compareUtils';
+import { arrayEquals, setEquals } from '@core/util/compareUtils';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { isChannelEntity } from '@entity';
 import { getGraphqlSoupClient } from '@service-storage/graphql-soup';
@@ -62,17 +62,18 @@ export function useChannelsByIdsQuery(
   channelIds: Accessor<readonly string[]>,
   options: Accessor<{ cacheFirst?: boolean }> = () => ({})
 ) {
-  const query = useSoupAstItemsQuery(
-    () => channelsByIdsQueryArgs(channelIds()),
-    () => ({
-      enabled: channelIds().length > 0,
-      staleTime: 30_000,
-      graphqlProjection: 'channel-list',
-      graphqlCacheFirstEntities: options().cacheFirst
-        ? channelIds().map((entityId) => ({ entityType: 'CHANNEL', entityId }))
-        : undefined,
-    })
-  );
+  // Callers rebuild ID arrays on unrelated updates; compile the filter (up to
+  // 500 IDs) only when the IDs change.
+  const ids = createMemo(() => channelIds(), [], { equals: arrayEquals });
+  const args = createMemo(() => channelsByIdsQueryArgs(ids()));
+  const query = useSoupAstItemsQuery(args, () => ({
+    enabled: ids().length > 0,
+    staleTime: 30_000,
+    graphqlProjection: 'channel-list',
+    graphqlCacheFirstEntities: options().cacheFirst
+      ? ids().map((entityId) => ({ entityType: 'CHANNEL', entityId }))
+      : undefined,
+  }));
   registerChannelListNotificationRefresh(query);
   createEffect(() => {
     if (
@@ -109,14 +110,22 @@ export function useCachedChannelsByIds(
           () => batchIds,
           () => ({ cacheFirst: true })
         );
-        const channels = () =>
-          queryReadyGate(query)
-            ? query.data.entities.filter(isChannelEntity)
-            : [];
-        const unresolved = () => {
-          const loaded = new Set(channels().map((channel) => channel.id));
-          return batchIds.filter((id) => !loaded.has(id));
-        };
+        const channels = createMemo(
+          () =>
+            queryReadyGate(query)
+              ? query.data.entities.filter(isChannelEntity)
+              : [],
+          [],
+          { equals: arrayEquals }
+        );
+        const unresolved = createMemo(
+          () => {
+            const loaded = new Set(channels().map((channel) => channel.id));
+            return batchIds.filter((id) => !loaded.has(id));
+          },
+          [],
+          { equals: arrayEquals }
+        );
         const error = () => query.fetchError ?? query.error;
         const loading = () =>
           !error() &&
@@ -127,15 +136,29 @@ export function useCachedChannelsByIds(
     });
   });
   return {
-    channels: () => source().flatMap((batch) => batch.channels()),
-    pendingIds: () =>
-      new Set(
-        source().flatMap((batch) => (batch.loading() ? batch.unresolved() : []))
-      ),
-    failedIds: () =>
-      new Set(
-        source().flatMap((batch) => (batch.error() ? batch.unresolved() : []))
-      ),
+    channels: createMemo(
+      () => source().flatMap((batch) => batch.channels()),
+      [],
+      { equals: arrayEquals }
+    ),
+    pendingIds: createMemo(
+      () =>
+        new Set(
+          source().flatMap((batch) =>
+            batch.loading() ? batch.unresolved() : []
+          )
+        ),
+      new Set<string>(),
+      { equals: setEquals }
+    ),
+    failedIds: createMemo(
+      () =>
+        new Set(
+          source().flatMap((batch) => (batch.error() ? batch.unresolved() : []))
+        ),
+      new Set<string>(),
+      { equals: setEquals }
+    ),
     isLoading: () => source().some((batch) => batch.loading()),
     error: () =>
       source()

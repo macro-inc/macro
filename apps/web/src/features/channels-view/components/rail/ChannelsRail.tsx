@@ -122,6 +122,22 @@ const CHANNEL_TAB_IDS_WITH_THREADS: ChannelsTab[] = [
 ];
 const DM_LOADING_PREVIEW_OFFSET = 80;
 
+type ReferenceStatuses = Partial<
+  Record<ChannelSectionKey, 'loading' | 'error'>
+>;
+
+/** Cache revisions recompute statuses; equal ones must not rebuild the rows. */
+function sameReferenceStatuses(
+  previous: ReferenceStatuses,
+  next: ReferenceStatuses
+) {
+  const keys = Object.keys(next) as ChannelSectionKey[];
+  return (
+    keys.length === Object.keys(previous).length &&
+    keys.every((key) => previous[key] === next[key])
+  );
+}
+
 export type ChannelsRailProps = {
   sources: ChannelsSources;
   searchOpen: boolean;
@@ -450,9 +466,11 @@ export function ChannelsRail(props: ChannelsRailProps) {
   const channelsById = createMemo(
     () => new Map(allChannels().map((channel) => [channel.id, channel]))
   );
+  const referencedChannelsById = createMemo(
+    () => new Map(referencedChannels().map((channel) => [channel.id, channel]))
+  );
   const channelById = (channelId: string) =>
-    channelsById().get(channelId) ??
-    referencedChannels().find((channel) => channel.id === channelId);
+    channelsById().get(channelId) ?? referencedChannelsById().get(channelId);
 
   const favoriteChannels = createMemo(() =>
     favoriteChannelIds().flatMap((id) => channelById(id) ?? [])
@@ -492,27 +510,31 @@ export function ChannelsRail(props: ChannelsRailProps) {
     ).length;
   };
 
-  const referenceStatuses = createMemo(() => {
-    const statuses: Partial<Record<ChannelSectionKey, 'loading' | 'error'>> =
-      {};
-    if (!sectionsEnabled()) return statuses;
-    const pending = nextReferencedChannels.pendingIds();
-    const failed = nextReferencedChannels.failedIds();
-    const statusFor = (ids: readonly string[]) => {
-      if (ids.some((id) => failed.has(id) && !channelById(id))) return 'error';
-      if (ids.some((id) => pending.has(id) && !channelById(id)))
-        return 'loading';
-    };
-    if (state.expandedGroups.favorites) {
-      statuses.favorites = statusFor(favoriteChannelIds());
-    }
-    for (const label of labels()) {
-      if (isLabelOpen(label.id)) {
-        statuses[`label:${label.id}`] = statusFor(label.channelIds);
+  const referenceStatuses = createMemo(
+    () => {
+      const statuses: ReferenceStatuses = {};
+      if (!sectionsEnabled()) return statuses;
+      const pending = nextReferencedChannels.pendingIds();
+      const failed = nextReferencedChannels.failedIds();
+      const statusFor = (ids: readonly string[]) => {
+        if (ids.some((id) => failed.has(id) && !channelById(id)))
+          return 'error';
+        if (ids.some((id) => pending.has(id) && !channelById(id)))
+          return 'loading';
+      };
+      if (state.expandedGroups.favorites) {
+        statuses.favorites = statusFor(favoriteChannelIds());
       }
-    }
-    return statuses;
-  });
+      for (const label of labels()) {
+        if (isLabelOpen(label.id)) {
+          statuses[`label:${label.id}`] = statusFor(label.channelIds);
+        }
+      }
+      return statuses;
+    },
+    undefined,
+    { equals: sameReferenceStatuses }
+  );
 
   const visibleRows = createMemo(() => {
     if (props.searchOpen) {
