@@ -61,6 +61,16 @@ impl Editor {
     }
 }
 impl Transaction<'_> {
+    #[cfg(feature = "foreign-nodes")]
+    pub(crate) fn foreign_extensions_changed(&self) -> bool {
+        self.extensions.len() != self.editor.extensions.len()
+            || self.extensions.iter().any(|(key, entry)| {
+                self.editor
+                    .extensions
+                    .get(key)
+                    .is_none_or(|previous| !Arc::ptr_eq(&entry.value, &previous.value))
+            })
+    }
     /// Read registered state from this transaction's staged copy.
     pub fn extension<State: ExtensionState>(&self) -> Result<&State, Error> {
         self.try_extension().ok_or(Error::UnknownExtensionState {

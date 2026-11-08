@@ -32,6 +32,7 @@ test('indexed host suspends writes, flushes, publishes records and retains captu
     editor.flush();
     expect(editor.read_field(t.$h, '__text')).toBe('aé😀');
     const first = decodeHostPacket(editor.commit());
+    expect(first.changed).toBe(true);
     expect(first.words.slice(0, 2)).toEqual([1, 1]);
     const metadata = JSON.parse(first.metadata_json);
     expect(metadata.version).toBe(1);
@@ -100,24 +101,68 @@ test('host argument getters can reenter before the session lease and caught call
   }
 });
 
+test('selection-only commits carry effects even without changed node records', () => {
+  const editor = new node.EditorHandle({
+    namespace: 'selection effects',
+    nodes: [],
+  });
+  const index = node.EditorHandle.api_index();
+  try {
+    editor.begin_update([], false);
+    const root = editor.call(index.indexOf('lexical.$getRoot'), { args: [] });
+    const p = editor.call(index.indexOf('lexical.$createParagraphNode'), {
+      args: [],
+    });
+    const t = editor.call(index.indexOf('lexical.$createTextNode'), {
+      args: ['abc'],
+    });
+    editor.call(index.indexOf('LexicalNode.append'), { this: p, args: [t] });
+    editor.call(index.indexOf('LexicalNode.append'), { this: root, args: [p] });
+    editor.commit();
+    editor.begin_update([], false);
+    editor.call(index.indexOf('LexicalNode.select'), { this: t, args: [1, 2] });
+    editor.flush();
+    expect(editor.finish_noop()).toBe(false);
+    const packet = decodeHostPacket(editor.commit());
+    expect(packet.changed).toBe(true);
+    expect(JSON.parse(packet.metadata_json)).toMatchObject({
+      records: [],
+      mutations: [],
+      selection: {
+        type: 'range',
+        anchor: { key: t.key, offset: 1, type: 'text' },
+        focus: { key: t.key, offset: 2, type: 'text' },
+      },
+    });
+  } finally {
+    editor.free();
+  }
+});
+
 test('host constructors and postcard decoding reject unsupported or malformed input', () => {
   expect(
     () =>
       new node.EditorHandle({ namespace: 'host', nodes: [{ type: 'custom' }] })
   ).toThrow('needs a foreign registration');
-  expect(() => decodeHostPacket(new Uint8Array([2]))).toThrow(
+  expect(() => decodeHostPacket(new Uint8Array([3]))).toThrow(
     'unsupported host packet version'
   );
   expect(() =>
     decodeHostPacket(new Uint8Array([255, 255, 255, 255, 31]))
   ).toThrow('invalid postcard u32');
-  expect(() => decodeHostPacket(new Uint8Array([1, 0, 0, 1]))).toThrow(
+  expect(() => decodeHostPacket(new Uint8Array([2, 0, 0, 1]))).toThrow(
     'truncated postcard data'
   );
-  expect(() => decodeHostPacket(new Uint8Array([1, 0, 0, 0, 0]))).toThrow(
+  expect(() => decodeHostPacket(new Uint8Array([2, 0, 0, 0, 0, 0]))).toThrow(
     'trailing postcard bytes'
   );
-  expect(() => decodeHostPacket(new Uint8Array([1, 0, 0, 1, 255]))).toThrow();
+  expect(() => decodeHostPacket(new Uint8Array([2, 0, 0, 1, 255]))).toThrow();
+  expect(() => decodeHostPacket(new Uint8Array([1]))).toThrow(
+    'unsupported host packet version'
+  );
+  expect(() => decodeHostPacket(new Uint8Array([2, 0, 0, 0, 2]))).toThrow(
+    'invalid postcard bool'
+  );
   expect(node.debug_live_editors()).toBe(0);
 });
 
@@ -135,6 +180,7 @@ test('no-op versions and subtree removals preserve native mutations without dead
   try {
     editor.begin_update([], false);
     const empty = decodeHostPacket(editor.commit());
+    expect(empty.changed).toBe(false);
     expect(empty.words).toEqual([1, 0, 0, 0xffffffff, 0]);
     expect(JSON.parse(empty.metadata_json)).toMatchObject({
       version: 1,

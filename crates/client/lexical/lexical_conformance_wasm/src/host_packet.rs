@@ -16,6 +16,8 @@ pub struct HostCommitPacket {
     pub strings: Vec<u8>,
     /// Ordered changed base-record fields, mutations, tags and selection as JSON.
     pub metadata_json: String,
+    /// Whether this transition has model, selection, composition or reconciliation effects.
+    pub changed: bool,
 }
 
 impl HostCommitPacket {
@@ -50,10 +52,16 @@ impl HostCommitPacket {
             "selection": selection(last.next.selection()),
         });
         Ok(Self {
-            format_version: 1,
+            format_version: 2,
             words: buffer.words,
             strings: buffer.strings,
             metadata_json: to_js_json_string(&metadata),
+            changed: commit.chain().any(|transition| {
+                !transition.is_noop()
+                    || transition.composition_changed
+                    || transition.full_reconcile
+                    || transition.default_prevented
+            }),
         })
     }
 }

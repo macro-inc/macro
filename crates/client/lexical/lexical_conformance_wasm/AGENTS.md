@@ -94,3 +94,11 @@ shim still owns automatic updates and parent-editor command propagation.
 Builtin native commands and Tier A indexed fixture dispatch keep their existing
 codecs. No production codec carries opaque JS values. Opaque reference transfers
 count four logical bytes; listener results cross as a truthiness boolean.
+
+Host packet format2 carries a model-derived changed flag for JS commit-listener
+scheduling. A transition can have effects without field diff ops (selection,
+composition or reconciliation); never infer no-op status from record/op counts.
+Reject the earlier unreleased packet format instead of maintaining a fallback.
+
+finish_noop preserves detached API values while closing a truly unchanged update
+without allocating a model commit; false leaves the pending update open.

@@ -3,6 +3,41 @@ use lexical_model::*;
 use serde_json::json;
 
 #[test]
+fn closing_noop_retains_detached_values_without_burning_a_model_commit() -> Result<()> {
+    let editor = Editor::builder(EditorMode::Headless)
+        .build()
+        .expect("editor");
+    let mut host = Session::new(editor);
+    let create = super::super::index()
+        .binary_search(&"lexical.$createRangeSelection")
+        .expect("selection") as u32;
+    let collapsed = super::super::index()
+        .binary_search(&"Selection.isCollapsed")
+        .expect("collapsed") as u32;
+    let root = super::super::index()
+        .binary_search(&"lexical.$getRoot")
+        .expect("root") as u32;
+    let paragraph = super::super::index()
+        .binary_search(&"lexical.$createParagraphNode")
+        .expect("paragraph") as u32;
+    let append = super::super::index()
+        .binary_search(&"LexicalNode.append")
+        .expect("append") as u32;
+    host.begin_update(TagSet::default())?;
+    let selection = host.call(create, json!([]), None)?;
+    assert!(host.finish_noop()?);
+    assert!(host.flush().is_err());
+    host.begin_update(TagSet::default())?;
+    assert_eq!(host.call(collapsed, json!([]), Some(selection))?, true);
+    let root = host.call(root, json!([]), None)?;
+    let p = host.call(paragraph, json!([]), None)?;
+    host.call(append, json!([p]), Some(root))?;
+    assert!(!host.finish_noop()?);
+    assert_eq!(host.commit()?.id, CommitId(1));
+    Ok(())
+}
+
+#[test]
 fn captured_unattached_nodes_keep_raw_fields_after_collection_until_version_release() -> Result<()>
 {
     static FLAG: StateKey<bool> = StateKey::new("flag", |value| {

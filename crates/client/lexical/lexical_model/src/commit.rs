@@ -134,6 +134,15 @@ impl Commit {
     }
 }
 impl Transaction<'_> {
+    pub(crate) fn selection_will_change(&self) -> bool {
+        self.selection_dirty
+            || self
+                .pending
+                .selection
+                .as_ref()
+                .is_some_and(Selection::is_dirty)
+            || self.pending.selection != self.editor.state.selection
+    }
     /// Flush pending writes and publish atomically; any error leaves the editor unchanged.
     pub fn commit(mut self) -> Result<Commit, Error> {
         if self.dirty_since_flush {
@@ -148,13 +157,7 @@ impl Transaction<'_> {
         }
         let next_id = self.editor.keys.next_commit()?;
         let prev = self.editor.state.clone();
-        let selection_changed = self.selection_dirty
-            || self
-                .pending
-                .selection
-                .as_ref()
-                .is_some_and(Selection::is_dirty)
-            || self.pending.selection != prev.selection;
+        let selection_changed = self.selection_will_change();
         let mut changes = Changes {
             dirty_leaves: self.dirty_leaves.clone(),
             dirty_elements: self.dirty_elements.clone(),

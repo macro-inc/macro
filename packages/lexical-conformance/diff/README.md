@@ -125,3 +125,7 @@ objects or browser events and preserve identity. This explicit-update route
 retains the original exception value and leaves caught failures recoverable.
 The future shim must allocate command identities, schedule idle dispatch and
 propagate commands between parent editors. Tier A fixture codecs stay separate.
+
+Host packet format2 adds a model-derived changed flag so the JS scheduler can
+suppress no-op update listeners without guessing from diff operation counts.
+The decoder rejects the earlier unreleased format and malformed boolean flags.

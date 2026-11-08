@@ -126,6 +126,23 @@ impl Session {
         self.with_update(|_, tx| Ok(tx.flush()?))
     }
 
+    /// Close a truly unchanged update without publishing a model commit.
+    /// Unlike rollback, this retains newly created detached API value objects.
+    pub fn finish_noop(&mut self) -> Result<bool> {
+        let finished = self.with_update(|context, tx| {
+            if tx.has_foreign_effects() {
+                return Ok(false);
+            }
+            context.finish_update(tx)?;
+            context.publish(tx.committed_state().clone())?;
+            Ok(true)
+        })?;
+        if finished {
+            drop(self.pending.take());
+        }
+        Ok(finished)
+    }
+
     /// Flush and publish the update atomically, or discard it on failure.
     pub fn commit(&mut self) -> Result<Commit> {
         let pending = self
