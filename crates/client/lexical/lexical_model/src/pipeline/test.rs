@@ -82,7 +82,7 @@ fn non_converging_transform_rolls_back_after_one_hundred_passes() -> Result<(), 
     Ok(())
 }
 #[test]
-fn normalization_merges_asymmetrically_and_collects_detached_subtrees() -> Result<(), Error> {
+fn normalization_preserves_neighbor_state_and_collects_detached_subtrees() -> Result<(), Error> {
     static LABEL: StateKey<String> = StateKey::new("label", |value| {
         value
             .and_then(serde_json::Value::as_str)
@@ -106,19 +106,18 @@ fn normalization_merges_asymmetrically_and_collects_detached_subtrees() -> Resul
     })?;
     assert_eq!(
         commit.next.view().children(p).collect::<Vec<_>>(),
-        vec![first.key()]
+        vec![first.key(), second.key()]
     );
-    assert_eq!(commit.next.view().text_content(first), "leftright");
+    assert_eq!(commit.next.view().text_content(first), "left");
+    assert_eq!(commit.next.view().text_content(second), "right");
+    assert_eq!(commit.next.view().get_state(second, &LABEL)?, "right state");
     assert_eq!(commit.next.view().get_state(first, &LABEL)?, "");
-    assert!(commit.next.view().node(second).is_none());
+    assert!(commit.next.view().node(second).is_some());
     assert!(commit.next.view().node(orphan).is_none());
     assert!(commit.next.view().node(orphan_child).is_none());
     assert!(commit.changes.dirty_leaves.contains(&orphan_child.key()));
     assert!(!commit.changes.dirty_elements.contains_key(&orphan.key()));
-    assert_eq!(
-        commit.normalized.iter().copied().collect::<Vec<_>>(),
-        vec![first.key(), second.key()]
-    );
+    assert!(commit.normalized.is_empty());
     Ok(())
 }
 #[test]

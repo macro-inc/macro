@@ -27,6 +27,7 @@ node types, immutable snapshots, transactional tree editing, update processing, 
 ## Boundaries
 
 - Keep parse_editor_state strict; parse_editor_state_report exposes partial state and its diagnostic only to hosts that choose a logging error policy.
+- Require equivalent NodeState on both text neighbors before normalization merges them, including absent versus populated state.
 - Preserve optional StateValue inner identity and imported undefined text fields through paragraph exports.
 
 - Use Error::invariant for runtime diagnostic context; static and owned messages display verbatim and share the Invariant classification.
