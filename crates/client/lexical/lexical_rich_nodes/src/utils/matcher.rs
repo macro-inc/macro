@@ -105,13 +105,21 @@ impl RegexMatcher {
         &self.flags
     }
 }
-impl Matcher for RegexMatcher {
-    fn exec(&self, text: &str) -> Option<Match> {
+impl RegexMatcher {
+    /// Execute from a UTF-16 offset while keeping anchors and captures on the original input.
+    pub fn exec_from(&self, text: &str, start: Utf16Offset) -> Option<Match> {
         let units: Vec<_> = text.encode_utf16().collect();
+        if start.get() as usize > units.len() {
+            return None;
+        }
         let m = if self.flags.contains('u') {
-            self.regex.find_from_utf16(&units, 0).next()
+            self.regex
+                .find_from_utf16(&units, start.get() as usize)
+                .next()
         } else {
-            self.regex.find_from_ucs2(&units, 0).next()
+            self.regex
+                .find_from_ucs2(&units, start.get() as usize)
+                .next()
         }?;
         let mut groups = vec![Some(String::from_utf16_lossy(&units[m.range()]))];
         groups.extend(
@@ -120,6 +128,41 @@ impl Matcher for RegexMatcher {
                 .map(|range| range.clone().map(|r| String::from_utf16_lossy(&units[r]))),
         );
         Match::new(Utf16Offset(m.start() as u32), text, groups).ok()
+    }
+}
+impl RegexMatcher {
+    /// Equivalent to matchAll with explicit JS empty-match advancement.
+    pub fn find_all(&self, text: &str) -> Vec<Match> {
+        let units: Vec<_> = text.encode_utf16().collect();
+        let mut start = 0;
+        let mut out = Vec::new();
+        while let Some(m) = self.exec_from(text, Utf16Offset(start as u32)) {
+            start = m.end().get() as usize;
+            if m.full_len16() == 0 {
+                start += if self.flags.contains('u')
+                    && units
+                        .get(start)
+                        .is_some_and(|u| (0xd800..=0xdbff).contains(u))
+                    && units
+                        .get(start + 1)
+                        .is_some_and(|u| (0xdc00..=0xdfff).contains(u))
+                {
+                    2
+                } else {
+                    1
+                };
+            }
+            out.push(m);
+            if start > units.len() {
+                break;
+            }
+        }
+        out
+    }
+}
+impl Matcher for RegexMatcher {
+    fn exec(&self, text: &str) -> Option<Match> {
+        self.exec_from(text, Utf16Offset::ZERO)
     }
 }
 #[cfg(test)]

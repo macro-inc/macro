@@ -6632,13 +6632,16 @@ dependencies = [
  "doc_sync_core",
  "document_session",
  "js-sys",
+ "lexical_html",
  "lexical_loro",
+ "lexical_markdown",
  "lexical_model",
+ "lexical_rich_nodes",
  "loro",
- "rootcause",
  "serde_json",
  "sync_protocol",
  "thiserror 2.0.18",
+ "tracing",
  "wasm-bindgen",
 ]
 
@@ -11861,6 +11864,19 @@ dependencies = [
  "loro",
  "proptest",
  "rustc-hash 2.1.2",
+ "serde_json",
+ "thiserror 2.0.18",
+ "tracing",
+]
+
+[[package]]
+name = "lexical_markdown"
+version = "0.1.0"
+dependencies = [
+ "lexical_model",
+ "lexical_rich_nodes",
+ "libtest-mimic",
+ "serde",
  "serde_json",
  "thiserror 2.0.18",
  "tracing",

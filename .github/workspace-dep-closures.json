@@ -5230,7 +5230,9 @@
       "crates/client/doc_sync_core",
       "crates/client/document_session",
       "crates/client/document_session_wasm",
+      "crates/client/lexical/lexical_html",
       "crates/client/lexical/lexical_loro",
+      "crates/client/lexical/lexical_markdown",
       "crates/client/lexical/lexical_model",
       "crates/client/lexical/lexical_rich_nodes",
       "crates/cowlike",
@@ -10211,6 +10213,11 @@
     "lexical_loro": [
       "crates/client/lexical/lexical_loro",
       "crates/client/lexical/lexical_model"
+    ],
+    "lexical_markdown": [
+      "crates/client/lexical/lexical_markdown",
+      "crates/client/lexical/lexical_model",
+      "crates/client/lexical/lexical_rich_nodes"
     ],
     "lexical_mention_extractor": [
       "crates/activity",
