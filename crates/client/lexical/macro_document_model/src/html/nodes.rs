@@ -440,7 +440,11 @@ pub(super) fn export<'a>(
             )?;
             element.set_text_content(&view.text_content(key));
         }
-        _ => return Err(lexical_html::Error::UnregisteredNodeType { type_name: ty }),
+        _ => {
+            return Err(lexical_html::Error::UnregisteredNodeType {
+                type_name: ty.to_owned(),
+            });
+        }
     }
     Ok(DomExportOutput::element(element))
 }
