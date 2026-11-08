@@ -165,6 +165,7 @@ impl SimClient {
             out,
             imports,
             errors,
+            undo_applied,
         } = handled;
         self.failures.extend(
             errors
@@ -182,6 +183,35 @@ impl SimClient {
             facts.push(Fact::LocalCommit {
                 client: self.spec.client.clone(),
                 spans: vec![IdSpan { peer, start, end }],
+            });
+        }
+        for undo in undo_applied {
+            let ids = match undo.removed {
+                Ok(ids) => ids,
+                Err(error) => {
+                    self.failures.push(Failure::new("undo_observation", error));
+                    continue;
+                }
+            };
+            let mut removed = Vec::new();
+            for id in ids {
+                let Some(end) = id.counter.checked_add(1) else {
+                    self.failures.push(Failure::new(
+                        "undo_observation",
+                        "removed identity counter overflow",
+                    ));
+                    continue;
+                };
+                removed.push(IdSpan {
+                    peer: id.peer,
+                    start: id.counter,
+                    end,
+                });
+            }
+            facts.push(Fact::UndoApplied {
+                client: self.spec.client.clone(),
+                redo: undo.redo,
+                removed,
             });
         }
         for (origin, pending, error) in imports {

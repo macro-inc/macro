@@ -22,6 +22,7 @@ pub(crate) struct Handled {
     pub out: SyncOutput,
     pub imports: Vec<(String, bool, Option<String>)>,
     pub errors: Vec<String>,
+    pub undo_applied: Vec<document_session::UndoObservation>,
 }
 impl Runtime {
     pub fn new(
@@ -106,6 +107,7 @@ impl Runtime {
                     out,
                     imports: std::mem::take(&mut doc.imports),
                     errors: vec![],
+                    undo_applied: vec![],
                 }
             }
             Self::Editor(session) => Self::editor_handle(session, SessionInput::Sync(input), now),
@@ -125,6 +127,7 @@ impl Runtime {
                 wake_at: output.wake_at,
             },
             imports: output.imports,
+            undo_applied: output.undo_applied,
             errors: output
                 .view
                 .into_iter()

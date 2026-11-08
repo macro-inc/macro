@@ -329,7 +329,7 @@ pub fn ai_peers_hidden(outcome: &Outcome) -> Result<(), Failure> {
     }
     Ok(())
 }
-/// Collaborative undo may remove only IDs created by the undoing client's own peers.
+/// Collaborative undo/redo may remove only IDs created by the client's own peers.
 pub fn undo_reverts_only_own(outcome: &Outcome) -> Result<(), Failure> {
     let mut owned = BTreeMap::<ClientName, Vec<IdSpan>>::new();
     for event in &outcome.events {
@@ -338,7 +338,9 @@ pub fn undo_reverts_only_own(outcome: &Outcome) -> Result<(), Failure> {
                 .entry(client.clone())
                 .or_default()
                 .extend(spans.clone()),
-            Fact::UndoApplied { client, removed } => {
+            Fact::UndoApplied {
+                client, removed, ..
+            } => {
                 let spans = owned.get(client).map(Vec::as_slice).unwrap_or_default();
                 if removed.iter().any(|removed| !ranges_cover(spans, removed)) {
                     return Err(Failure::new(

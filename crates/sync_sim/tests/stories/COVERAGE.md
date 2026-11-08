@@ -52,14 +52,19 @@ replay. Negative mutations reject changed editor JSON and missing observations.
 Live synced JSON and independent persisted reconstruction are compared per step
 and at settlement; sharedPeerIds remains synced, only policy-local data is excluded.
 
+`editor_undo` covers S7:48 with actual collaborative undo/redo after another peer's
+edit, including astral text. Both clients retain the other writer's content; real
+removed IDs feed the unchanged ownership query. A foreign-removal mutation fails
+that query, and empty history emits no applied-undo fact. The session collector is
+read-only and observes IDs before projection fixups, not inferred new op spans.
+
 ## Remaining M2 producers
 
 Real document_session/lexical_model/lexical_loro editor clients are integrated.
 Remaining application/editor producers:
-collaborative undo after a remote edit; reset-budget closure driven by a faulty editor
-projection; stripping abandoned draft comment marks; restoration of editor cursors
+reset-budget closure driven by a faulty editor projection; stripping abandoned draft comment marks; restoration of editor cursors
 through remote edits; real Markdown corpus paste; comment-only gate verdict parity;
-undo removal attribution and undo/backspace generator floors. Existing core unit
+undo/backspace generator floors. Existing core unit
 reset-budget tests do not establish faulty-editor integration.
 
 Executor-only unit rows remain in their existing adapters/core suites: IDB abort retry
