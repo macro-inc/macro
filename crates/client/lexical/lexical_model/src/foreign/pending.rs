@@ -64,6 +64,26 @@ pub struct PendingUpdate {
 }
 
 impl Transaction<'_> {
+    /// Whether dropping this update would lose model effects beyond host API values/tags.
+    /// This observes the current pending state; it neither flushes nor authorizes writes.
+    pub fn has_foreign_effects(&self) -> bool {
+        self.has_dirty_nodes()
+            || self.selection_will_change()
+            || self.composition_key != self.editor.composition_key
+            || self.full_reconcile
+            || self.default_prevented
+            || !self.events.is_empty()
+            || !self.nested.is_empty()
+            || self.foreign_extensions_changed()
+            || self.preceding.as_ref().is_some_and(|commit| {
+                commit.chain().any(|entry| {
+                    !entry.is_noop()
+                        || entry.composition_changed
+                        || entry.full_reconcile
+                        || entry.default_prevented
+                })
+            })
+    }
     /// Capture editor identity without retaining its state or registry.
     pub fn foreign_editor_identity(&self) -> ForeignEditorIdentity {
         ForeignEditorIdentity(self.editor.suspend_owner.clone())

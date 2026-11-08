@@ -10,4 +10,6 @@ export type HostCommitPacket = {
   strings: number[];
   /**  Ordered changed base-record fields, mutations, tags and selection as JSON. */
   metadata_json: string;
+  /**  Whether this transition has model, selection, composition or reconciliation effects. */
+  changed: boolean;
 };

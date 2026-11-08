@@ -24,7 +24,7 @@ export function decodeHostPacket(bytes: Uint8Array): HostCommitPacket {
     return value;
   };
   const format_version = word();
-  if (format_version !== 1) throw new Error('unsupported host packet version');
+  if (format_version !== 2) throw new Error('unsupported host packet version');
   const count = word();
   if (count > bytes.length - position)
     throw new Error('truncated postcard words');
@@ -34,6 +34,9 @@ export function decodeHostPacket(bytes: Uint8Array): HostCommitPacket {
   const metadata_json = new TextDecoder('utf-8', { fatal: true }).decode(
     data()
   );
+  const flag = bytes[position++];
+  if (flag !== 0 && flag !== 1) throw new Error('invalid postcard bool');
+  const changed = flag === 1;
   if (position !== bytes.length) throw new Error('trailing postcard bytes');
-  return { format_version, words, strings, metadata_json };
+  return { format_version, words, strings, metadata_json, changed };
 }

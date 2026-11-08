@@ -81,3 +81,7 @@ development WASM adapter, not the portable shared API value encoding.
 $getNodeByKey follows the upstream Map lookup for absent or non-key arguments:
 return null instead of failing raw-key binding resolution. The WASM host retains
 JSON null distinctly from the fixture encoding for undefined.
+
+Session::finish_noop closes an unchanged suspended update without a model commit,
+retaining detached API value objects. It must reject selection, composition,
+extension, event, reconciliation and queued-work effects; tags alone may close.

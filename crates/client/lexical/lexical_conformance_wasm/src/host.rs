@@ -174,6 +174,12 @@ impl EditorHandle {
     pub fn flush(&self) -> Result<(), JsValue> {
         self.with_callback_session(|session| session.flush())
     }
+    /// Close an unchanged update while retaining detached API values; false leaves it open.
+    pub fn finish_noop(&self) -> Result<bool, JsValue> {
+        let finished = self.with_callback_session(|session| session.finish_noop())?;
+        debug::json_payload(&Value::Bool(finished));
+        Ok(finished)
+    }
     /// Publish and encode the flat diff, changed core records and mutation metadata.
     pub fn commit(&self) -> Result<Vec<u8>, JsValue> {
         let packet = self.with_callback_session(|session| {

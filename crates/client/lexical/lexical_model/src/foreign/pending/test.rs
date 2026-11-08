@@ -1,6 +1,57 @@
 use super::*;
 
 #[test]
+fn no_op_detection_preserves_event_and_prevent_default_only_updates() -> Result<(), Error> {
+    static EVENT: EventKey<u32> = EventKey::new("host-event");
+    let mut editor = Editor::builder(EditorMode::Headless)
+        .build()
+        .expect("registry");
+    let mut tx = editor.transaction();
+    tx.prevent_default();
+    assert!(tx.has_foreign_effects());
+    assert!(tx.commit()?.default_prevented);
+    let mut tx = editor.transaction();
+    tx.emit(&EVENT, 7);
+    assert!(tx.has_foreign_effects());
+    assert_eq!(tx.commit()?.events.len(), 1);
+    Ok(())
+}
+
+#[test]
+fn no_op_detection_preserves_selection_extensions_and_queued_work() -> Result<(), Error> {
+    let mut editor = Editor::builder(EditorMode::Headless)
+        .extension_state(0u32)
+        .build()
+        .expect("registry");
+    let mut tx = editor.transaction();
+    tx.add_tag(UpdateTag::HistoryPush);
+    assert!(!tx.has_foreign_effects());
+    tx.select_start(NodeKey::ROOT)?;
+    assert!(tx.has_foreign_effects());
+    drop(tx);
+
+    let mut tx = editor.transaction();
+    *tx.extension_mut::<u32>()? = 7;
+    assert!(tx.has_foreign_effects());
+    tx.commit()?;
+    assert_eq!(*editor.extension::<u32>()?, 7);
+
+    let mut tx = editor.transaction();
+    assert!(!tx.has_foreign_effects());
+    tx.queue_update(
+        |tx| {
+            *tx.extension_mut::<u32>()? = 8;
+            Ok(())
+        },
+        UpdateOptions::default(),
+    )?;
+    assert!(tx.has_foreign_effects());
+    tx.commit()?;
+    assert_eq!(*editor.extension::<u32>()?, 8);
+    Ok(())
+}
+
+#[test]
 fn suspended_update_retains_writes_selection_composition_and_tags() -> Result<(), Error> {
     let mut editor = Editor::builder(EditorMode::Headless)
         .build()
