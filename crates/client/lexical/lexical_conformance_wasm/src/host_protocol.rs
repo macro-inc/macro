@@ -7,7 +7,7 @@ use specta::Type;
 pub struct HostNodeMutation<Node, Arg> {
     /// Index in the model-derived ForeignHook enum.
     pub hook: u8,
-    /// Captured node handle encoded by the shared host identity store.
+    /// Captured node handle, or null for a static import factory without an instance.
     pub node: Node,
     /// Positional upstream method arguments encoded for the development host.
     pub args: Vec<Arg>,

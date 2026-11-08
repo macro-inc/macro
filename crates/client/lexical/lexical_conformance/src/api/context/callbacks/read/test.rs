@@ -122,6 +122,9 @@ fn read_scopes_reject_model_effects_and_inherited_value_writes_before_dispatch()
     let create = index
         .binary_search(&"lexical.$createTextNode")
         .expect("create") as u32;
+    let parse = index
+        .binary_search(&"lexical.$parseSerializedNode")
+        .expect("parse") as u32;
     let mutate = index
         .binary_search(&"LexicalNode.setTextContent")
         .expect("mutate") as u32;
@@ -154,6 +157,15 @@ fn read_scopes_reject_model_effects_and_inherited_value_writes_before_dispatch()
     let capture = tx.view().snapshot_for_foreign_read()?;
     callback.with_read_scope(&capture, |scope| {
         assert!(scope.call(create, json!(["forbidden"]), None).is_err());
+        assert!(
+            scope
+                .call(
+                    parse,
+                    json!([{"type":"text","version":1,"text":"forbidden"}]),
+                    None
+                )
+                .is_err()
+        );
         assert!(
             scope
                 .call(mutate, json!(["changed"]), Some(node.clone()))

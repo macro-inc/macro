@@ -37,7 +37,8 @@ impl ForeignNode {
             | ForeignHook::CreateParentElement.bit()
             | ForeignHook::InsertNewAfter.bit()
             | ForeignHook::CollapseAtStart.bit()
-            | ForeignHook::StaticTransform.bit();
+            | ForeignHook::StaticTransform.bit()
+            | ForeignHook::Import.bit();
         if let Some(hook) = ForeignHook::ALL
             .iter()
             .find(|hook| mask & !supported & hook.bit() != 0)
@@ -130,6 +131,20 @@ impl ForeignNode {
     }
 }
 impl ForeignHooks for ForeignNode {
+    fn import(
+        &self,
+        tx: &mut Transaction<'_>,
+        json: &SerializedNode,
+    ) -> Override<Result<NodeKey, Error>> {
+        if self.overrides.load(Ordering::SeqCst) & ForeignHook::Import.bit() == 0 {
+            return Override::Inherit;
+        }
+        let callback = { self.callback.lock().expect("foreign dispatcher").clone() };
+        Override::Value(match callback {
+            Some(callback) => callback.import_node(tx, json),
+            None => Err(Error::Invariant("foreign dispatcher is not installed")),
+        })
+    }
     fn static_transform(
         &self,
         tx: &mut Transaction<'_>,

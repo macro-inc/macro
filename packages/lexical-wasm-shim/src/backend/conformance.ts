@@ -98,10 +98,11 @@ function isNodeMutation(
     value.hook >= 0 &&
     value.hook < foreignHooks.length &&
     'node' in value &&
-    value.node !== null &&
-    typeof value.node === 'object' &&
-    '$h' in value.node &&
-    typeof value.node.$h === 'number' &&
+    ((value.node === null && foreignHooks[value.hook]?.name === 'importJSON') ||
+      (value.node !== null &&
+        typeof value.node === 'object' &&
+        '$h' in value.node &&
+        typeof value.node.$h === 'number')) &&
     'args' in value &&
     Array.isArray(value.args)
   );

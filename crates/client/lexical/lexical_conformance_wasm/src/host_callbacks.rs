@@ -456,6 +456,22 @@ impl Callback {
             .returned_node(tx, &result)
             .map_err(|error| Error::invariant(error.to_string()))
     }
+    pub(super) fn import_node(
+        &self,
+        tx: &mut Transaction<'_>,
+        json: &lexical_model::SerializedNode,
+    ) -> Result<NodeKey, Error> {
+        let message = serde_json::to_value(super::host_protocol::HostNodeMutation {
+            hook: lexical_model::ForeignHook::Import as u8,
+            node: Value::Null,
+            args: vec![Value::Object(json.clone())],
+        })
+        .map_err(|error| Error::invariant(error.to_string()))?;
+        let result = self.with_scope(tx, || self.function.invoke_value(message, &self.errors))?;
+        self.context
+            .returned_node(tx, &result)
+            .map_err(|error| Error::invariant(error.to_string()))
+    }
     fn node_message(
         &self,
         tx: &Transaction<'_>,
