@@ -19,6 +19,7 @@ use std::{
     collections::{HashMap, HashSet},
     sync::Arc,
 };
+use thread_id::ThreadId;
 use uuid::Uuid;
 
 const CH1: Uuid = Uuid::from_u128(0x00000000_0000_0000_0000_000000000c01);
@@ -2330,7 +2331,9 @@ async fn thread_participants_exclude_departed_senders(pool: Pool<Postgres>) -> a
     // ch3 thread parent (msg id 0x..31) was authored by an active participant,
     // while its only reply was authored by a participant who has since left.
     let parent = Uuid::from_u128(0x00000000_0000_0000_0000_000000000031);
-    let participants = repo.get_thread_participants(parent).await?;
+    let participants = repo
+        .get_thread_participants(ThreadId::from_uuid(parent))
+        .await?;
 
     let ids: Vec<&str> = participants.iter().map(|p| p.as_ref()).collect();
     assert!(
@@ -2353,7 +2356,9 @@ async fn thread_participants_exclude_deleted_messages(pool: Pool<Postgres>) -> a
     // t41: user-b rooted the thread and user-c replied. user-e only appears in
     // soft-deleted replies: one they authored, and one from user-b that
     // @-mentioned them (whose mention row still exists).
-    let participants = repo.get_thread_participants(T41).await?;
+    let participants = repo
+        .get_thread_participants(ThreadId::from_uuid(T41))
+        .await?;
 
     let ids: Vec<&str> = participants.iter().map(|p| p.as_ref()).collect();
     assert!(

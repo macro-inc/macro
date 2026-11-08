@@ -50,6 +50,7 @@ anyhow = { workspace = true }
 bot_id = { workspace = true }
 channel_id = { workspace = true }
 channel_sender = { workspace = true }
+thread_id = { workspace = true }
 entity_mutation = { workspace = true, optional = true }
 chrono = { workspace = true }
 entity_access = { workspace = true, optional = true }

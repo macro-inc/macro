@@ -30,6 +30,7 @@ use entity_access::domain::models::{EntityAccessReceipt, MemberParticipantRole};
 use macro_user_id::user_id::MacroUserIdStr;
 use models_pagination::{CreatedAt, Query};
 use std::collections::{HashMap, HashSet};
+use thread_id::ThreadId;
 use uuid::Uuid;
 
 /// Verified channel participation required to change a channel picture.
@@ -406,7 +407,7 @@ pub trait ChannelRepo: Send + Sync + 'static {
     /// Fetch notification recipients for a thread.
     fn get_thread_participants(
         &self,
-        thread_id: Uuid,
+        thread_id: ThreadId,
     ) -> impl Future<Output = Result<Vec<MacroUserIdStr<'static>>, Self::Err>> + Send;
 
     /// Upsert activity for the user in the channel.
@@ -881,7 +882,7 @@ pub trait ChannelSideEffectContext: Send + Sync + 'static {
     /// Load notification context for a thread reply.
     fn get_thread_notification_context(
         &self,
-        thread_id: Uuid,
+        thread_id: ThreadId,
     ) -> impl Future<Output = Result<ThreadNotificationContext, Self::Err>> + Send;
 
     /// Load a user's profile picture URL for notification copy.

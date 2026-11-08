@@ -12,6 +12,7 @@ use channels::domain::{
 use macro_user_id::{cowlike::CowLike, user_id::MacroUserIdStr};
 use sqlx::PgPool;
 use std::collections::HashSet;
+use thread_id::ThreadId;
 use uuid::Uuid;
 
 struct SenderIdRow {
@@ -113,8 +114,9 @@ impl ChannelSideEffectContext for PgChannelSideEffectContext {
 
     async fn get_thread_notification_context(
         &self,
-        thread_id: Uuid,
+        thread_id: ThreadId,
     ) -> Result<ThreadNotificationContext, Self::Err> {
+        let thread_id = thread_id.into_uuid();
         let participants = get_channel_participants_for_thread_id(&self.pool, thread_id).await?;
         let parent_sender_id = get_message_owner(&self.pool, thread_id)
             .await

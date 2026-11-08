@@ -40,6 +40,7 @@ use recursion::CollapsibleExt;
 use sqlx::{Executor, PgPool, Postgres};
 use sqlx::{QueryBuilder, Row, postgres::PgRow};
 use std::collections::{HashMap, HashSet};
+use thread_id::ThreadId;
 
 use indexmap::IndexMap;
 use uuid::Uuid;
@@ -3074,9 +3075,9 @@ impl ChannelRepo for PgChannelsRepo {
 
     async fn get_thread_participants(
         &self,
-        thread_id: Uuid,
+        thread_id: ThreadId,
     ) -> Result<Vec<MacroUserIdStr<'static>>, Self::Err> {
-        get_channel_participants_for_thread_id(&self.pool, thread_id).await
+        get_channel_participants_for_thread_id(&self.pool, thread_id.into_uuid()).await
     }
 
     async fn upsert_activity(
