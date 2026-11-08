@@ -184,7 +184,7 @@ export function CallMediaControls(props: {
                 indicator={
                   <span inert aria-hidden="true">
                     <ToggleSwitch
-                      size="md"
+                      size="sm"
                       checked={call.isNoiseSuppressed()}
                     />
                   </span>
@@ -207,7 +207,7 @@ export function CallMediaControls(props: {
               indicator={
                 <span inert aria-hidden="true">
                   <ToggleSwitch
-                    size="md"
+                    size="sm"
                     checked={call.shareScreenAudio()}
                     disabled={call.isConnecting() || call.isScreenSharing()}
                   />
