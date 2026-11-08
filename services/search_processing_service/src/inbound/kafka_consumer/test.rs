@@ -1257,6 +1257,7 @@ fn property_event_cases() -> Vec<(PropertyTopicEvent, PropertyEventDescription<'
         ),
         (
             PropertyTopicEvent::EntityPropertyUpdated(EntityPropertyUpdatedMetadata {
+                inherited_from_project: None,
                 entity_property_id: ENTITY_PROPERTY_ID,
                 entity_id: PROPERTY_ENTITY_ID.to_string(),
                 entity_type: EntityType::Document,

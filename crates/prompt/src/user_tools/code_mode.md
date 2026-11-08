@@ -11,7 +11,9 @@ continue the requested work and finish the turn normally. The user can edit and
 submit the card while continuing to chat. Actual submission outcomes arrive later
 as private session context. Never repeat a completed action.
 
-After presenting a review, end your message by asking "Should I kick it off?".
+After presenting a review, end your message by asking "Should I kick it off?" when
+the user wants it to go out.
+If they said not to send, create or import it yet, do not ask; say it is waiting on the card for them.
 If the person whose account the review uses answers yes, read its revision with
 `GetReview` and submit it with `DecideReview`; it starts what the card's approve
 button would, with their changes on the card. Never submit a review they did not

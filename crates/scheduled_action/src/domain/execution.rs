@@ -46,6 +46,8 @@ pub struct ExecutionHandle {
     pub history: RunHistory,
     /// What started this run and when, once the runner knows.
     pub run: Option<RunInfo>,
+    /// What fired the routine, for the session this run opens.
+    pub firing: Option<trigger_context::origin::RoutineCause>,
     // Cancellation during admission must not contact a runner that never started.
     preparation_started: bool,
     // Started was published, so Stopped must follow even without a transcript.
@@ -62,6 +64,7 @@ impl Default for ExecutionHandle {
             steps: Vec::new(),
             history: RunHistory::default(),
             run: None,
+            firing: None,
             preparation_started: false,
             announced: false,
         }
@@ -379,7 +382,10 @@ where
                 }
             }
             let mut ready_tx = Some(ready_tx);
-            let mut handle = ExecutionHandle::default();
+            let mut handle = ExecutionHandle {
+                firing: Some(firing.cause()),
+                ..ExecutionHandle::default()
+            };
             let result = bounded(deadline, executor.cancellation.cancelled(), async {
                 let resource = executor.prepare(&action, &mut handle).await?;
                 if let Some(ready_tx) = ready_tx.take() {
@@ -471,7 +477,10 @@ where
         run: &ClaimedEventRun,
         cancellation: impl Future<Output = ()> + Send,
     ) -> EventExecutionResult {
-        let mut handle = ExecutionHandle::default();
+        let mut handle = ExecutionHandle {
+            firing: Some(RoutineRun::Event(&run.run).cause()),
+            ..ExecutionHandle::default()
+        };
         let shutdown = async {
             tokio::select! {
                 _ = self.cancellation.cancelled() => {},

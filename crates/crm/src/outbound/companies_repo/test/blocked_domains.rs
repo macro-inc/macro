@@ -1,5 +1,5 @@
 //! The team blocklist: blocked domains stay out of email sync, and what
-//! the CRM already holds for them is hidden until unblocked.
+//! existing records and archive state remain unchanged.
 
 use super::helpers::*;
 use crate::domain::companies_repo::CompaniesRepository;
@@ -23,11 +23,12 @@ fn personal(local: &str) -> String {
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
-async fn blocking_hides_existing_records_and_stops_sync(pool: PgPool) -> anyhow::Result<()> {
+async fn blocking_preserves_records_and_stops_consented_sync(pool: PgPool) -> anyhow::Result<()> {
     let team_id = Uuid::now_v7();
     seed_team(&pool, team_id, OWNER).await?;
     enable_crm_for_team(&pool, team_id).await?;
-    let link_id = insert_email_link(&pool, OWNER, "user@macro.com").await?;
+    let link_id = insert_email_link(&pool, OWNER, "owner@example.com").await?;
+    consent_to_mailbox(&pool, team_id, link_id).await?;
     let repo = CompaniesRepositoryImpl::new(pool.clone());
     let service = CrmServiceImpl::new(repo.clone(), NoOpCompanyMetadataResolver);
     let acme = insert_company(&pool, team_id, true, &["example.com"]).await?;
@@ -56,17 +57,18 @@ async fn blocking_hides_existing_records_and_stops_sync(pool: PgPool) -> anyhow:
             .collect::<Vec<_>>(),
         ["example.com", PERSONAL_DOMAIN]
     );
-    assert!(fetch_company_hidden(&pool, acme).await? == Some(true));
-    assert!(fetch_contact_hidden(&pool, jane).await? == Some(true));
-    assert!(fetch_contact_hidden(&pool, solo.id).await? == Some(true));
+    assert!(fetch_company_hidden(&pool, acme).await? == Some(false));
+    assert!(fetch_contact_hidden(&pool, jane).await? == Some(false));
+    assert!(fetch_contact_hidden(&pool, solo.id).await? == Some(false));
 
     // Sync skips blocked domains: no new company, no new contact.
     for email in ["bob@example.com".to_owned(), personal("ann")] {
+        insert_interaction(&pool, link_id, &email, Utc::now(), true).await?;
         service
             .populate_contact(
                 &team_id,
                 &link_id,
-                "user@macro.com",
+                "owner@example.com",
                 &email,
                 None,
                 Utc::now(),
@@ -87,7 +89,7 @@ async fn blocking_hides_existing_records_and_stops_sync(pool: PgPool) -> anyhow:
     repo.unblock_domain(&team_id, "example.com").await?;
     assert!(fetch_company_hidden(&pool, acme).await? == Some(false));
     assert!(fetch_contact_hidden(&pool, jane).await? == Some(false));
-    assert!(fetch_contact_hidden(&pool, solo.id).await? == Some(true));
+    assert!(fetch_contact_hidden(&pool, solo.id).await? == Some(false));
     assert_eq!(
         repo.list_blocked_domains(&team_id).await?.len(),
         1,
@@ -113,9 +115,7 @@ async fn blocklists_are_per_team(pool: PgPool) -> anyhow::Result<()> {
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
-async fn a_company_stays_hidden_while_any_of_its_domains_is_blocked(
-    pool: PgPool,
-) -> anyhow::Result<()> {
+async fn multiple_domain_blocks_do_not_hide_records(pool: PgPool) -> anyhow::Result<()> {
     let team_id = Uuid::now_v7();
     seed_team(&pool, team_id, OWNER).await?;
     enable_crm_for_team(&pool, team_id).await?;
@@ -127,8 +127,8 @@ async fn a_company_stays_hidden_while_any_of_its_domains_is_blocked(
     repo.block_domain(&team_id, "example.org").await?;
     repo.unblock_domain(&team_id, "example.com").await?;
 
-    assert!(fetch_company_hidden(&pool, acme).await? == Some(true));
-    assert!(fetch_contact_hidden(&pool, jane).await? == Some(true));
+    assert!(fetch_company_hidden(&pool, acme).await? == Some(false));
+    assert!(fetch_contact_hidden(&pool, jane).await? == Some(false));
 
     repo.unblock_domain(&team_id, "example.org").await?;
 
@@ -150,14 +150,14 @@ async fn concurrent_domain_changes_keep_company_and_contacts_consistent(
     repo.block_domain(&team_id, "example.com").await?;
     repo.block_domain(&team_id, "example.org").await?;
 
-    change_domains_while_company_locked(&pool, team_id, company, false).await?;
+    change_domains_while_privacy_locked(&pool, team_id, false).await?;
 
     assert!(repo.list_blocked_domains(&team_id).await?.is_empty());
     assert_eq!(fetch_company_hidden(&pool, company).await?, Some(false));
     assert_eq!(fetch_contact_hidden(&pool, contact).await?, Some(false));
 
     repo.block_domain(&team_id, "example.com").await?;
-    change_domains_while_company_locked(&pool, team_id, company, true).await?;
+    change_domains_while_privacy_locked(&pool, team_id, true).await?;
 
     assert_eq!(
         repo.list_blocked_domains(&team_id)
@@ -167,24 +167,21 @@ async fn concurrent_domain_changes_keep_company_and_contacts_consistent(
             .collect::<Vec<_>>(),
         ["example.org"]
     );
-    assert_eq!(fetch_company_hidden(&pool, company).await?, Some(true));
-    assert_eq!(fetch_contact_hidden(&pool, contact).await?, Some(true));
+    assert_eq!(fetch_company_hidden(&pool, company).await?, Some(false));
+    assert_eq!(fetch_contact_hidden(&pool, contact).await?, Some(false));
     Ok(())
 }
 
-async fn change_domains_while_company_locked(
+async fn change_domains_while_privacy_locked(
     pool: &PgPool,
     team_id: Uuid,
-    company_id: Uuid,
     block_second: bool,
 ) -> anyhow::Result<()> {
     let mut barrier = pool.begin().await?;
-    sqlx::query!(
-        "SELECT id FROM crm_companies WHERE id = $1 FOR UPDATE",
-        company_id,
-    )
-    .fetch_one(&mut *barrier)
-    .await?;
+    let key = format!("crm-email:{team_id}");
+    sqlx::query!("SELECT pg_advisory_xact_lock(hashtextextended($1, 0))", key)
+        .execute(&mut *barrier)
+        .await?;
 
     let first_repo = CompaniesRepositoryImpl::new(pool.clone());
     let first =
@@ -198,8 +195,8 @@ async fn change_domains_while_company_locked(
         }
     });
 
-    // Both operations must reach their company-row wait before either can
-    // commit. An UPDATE that starts its snapshot before this wait is stale.
+    // Both changes wait for the privacy boundary. Once released they
+    // serialize and preserve both distinct domain changes without hiding rows.
     tokio::time::timeout(std::time::Duration::from_secs(10), async {
         loop {
             let waiting = sqlx::query_scalar!(
@@ -239,6 +236,8 @@ async fn unblocking_a_domain_that_was_never_blocked_keeps_hand_hidden_records(
 
     repo.unblock_domain(&team_id, "example.com").await?;
 
+    repo.block_domain(&team_id, "example.com").await?;
+    repo.unblock_domain(&team_id, "example.com").await?;
     assert!(fetch_company_hidden(&pool, acme).await? == Some(true));
     assert!(fetch_contact_hidden(&pool, jane).await? == Some(true));
     Ok(())

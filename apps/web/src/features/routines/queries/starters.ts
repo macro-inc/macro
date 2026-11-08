@@ -3,7 +3,7 @@ import { enableRoutineCodeSteps } from '@core/constant/featureFlags';
 import { throwOnErr } from '@core/util/result';
 import { scheduledActionClient } from '@service-scheduled-action/client';
 import { queryOptions, useQuery } from '@tanstack/solid-query';
-import { stepsFromTask } from '../core/routine-steps';
+import { stepsFromWire } from '../core/routine-steps';
 import type { RoutineTemplate, StarterSteps } from '../core/routine-templates';
 import { scheduledActionKeys } from './keys';
 
@@ -22,7 +22,7 @@ async function fetchStarterSteps(): Promise<StarterSteps> {
   const starters = await throwOnErr(() => scheduledActionClient.codeStarters());
   const steps: StarterSteps = {};
   for (const starter of starters) {
-    const parsed = stepsFromTask({ steps: starter.steps });
+    const parsed = stepsFromWire(starter.steps);
     if (parsed && isStarterKey(starter.key)) steps[starter.key] = parsed;
   }
   return steps;

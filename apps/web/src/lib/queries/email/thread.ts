@@ -759,6 +759,8 @@ export async function blockSenderWithToast(
   }
 
   toast.success('Sender block queued', {
+    dismissStyle: 'icon',
+    actionLayout: 'inline',
     subtext: `Applying the rule for ${senderEmail}`,
     actions: [
       {
@@ -808,6 +810,8 @@ async function upsertSenderFilterWithToast(
   invalidateAllSoup();
 
   toast.success(`Sender marked as ${label}`, {
+    dismissStyle: 'icon',
+    actionLayout: 'inline',
     subtext: `Messages from ${senderEmail} will appear in ${label}`,
     actions: [
       {

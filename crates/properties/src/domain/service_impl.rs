@@ -259,6 +259,7 @@ where
         previous_value: &Option<PropertyValue>,
         access: &EditReceipt,
         source: Option<&PropertyChangeSource>,
+        inherited_from_project: Option<Uuid>,
     ) -> PropertyMacroEvent {
         let PublishedEventActors {
             actor,
@@ -274,6 +275,7 @@ where
             actor,
             on_behalf_of,
             source: source.cloned(),
+            inherited_from_project,
             value: value.clone(),
             previous_value: previous_value.clone(),
             updated_at: property.updated_at,
@@ -295,6 +297,7 @@ where
                 &mutation.value,
                 &mutation.previous_value,
                 access,
+                None,
                 None,
             ));
         }
@@ -472,6 +475,7 @@ where
         for mutation in mutations {
             self.publish_property_event(PropertyMacroEvent::entity_property_updated(
                 EntityPropertyUpdatedMetadata {
+                    inherited_from_project: None,
                     entity_property_id: mutation.property.id,
                     entity_id: mutation.property.entity_id.clone(),
                     entity_type: mutation.property.entity_type,
@@ -747,6 +751,7 @@ where
                 &None,
                 access,
                 source.as_ref(),
+                None,
             ));
             return Ok(EntityPropertyWithDefinition {
                 property,
@@ -795,6 +800,7 @@ where
             &snapshot.previous_value,
             access,
             source.as_ref(),
+            None,
         ));
 
         Ok(EntityPropertyWithDefinition {
@@ -869,6 +875,7 @@ where
                 &mutation.previous_value,
                 task,
                 None,
+                Uuid::parse_str(project.entity_id()).ok(),
             ));
         }
         Ok(())
@@ -935,6 +942,7 @@ where
             &mutation.previous_value,
             access,
             None,
+            None,
         ));
 
         Ok(())
@@ -974,6 +982,7 @@ where
                 &mutation.value,
                 &mutation.previous_value,
                 access,
+                None,
                 None,
             ));
         }

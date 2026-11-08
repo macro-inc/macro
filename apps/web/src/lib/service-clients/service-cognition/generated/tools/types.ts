@@ -49,6 +49,10 @@ export type ToolPropertyTargetEntityType =
   | 'company'
   | 'chat';
 /**
+ * A cell's new input, typed as the caller has it.
+ */
+export type SpreadsheetCellValue = boolean | number | string | null;
+/**
  * Structured output from a deterministic workbook operation.
  */
 export type SpreadsheetResponse =
@@ -5590,15 +5594,7 @@ export interface SpreadsheetCellInput {
    * A1 address, from A1 through XFD100000.
    */
   address: string;
-  /**
-   * Raw text or formula, at most 10,000 characters. Macro links render as mention pills.
-   * For named pills, use the same inline tags as docs: <m-user-mention>{"userId":"macro|person@example.com","email":"person@example.com","displayName":"Person"}</m-user-mention>
-   * or <m-document-mention>{"documentId":"UUID","documentName":"Budget","blockName":"spreadsheet"}</m-document-mention>.
-   * A date chip is <m-date-mention>{"date":"2026-09-28T00:00:00.000Z","displayFormat":"Sep 28"}</m-date-mention>; a cell holding only that chip calculates as the date.
-   * Plain dates such as 9/28/2026 or =DATE(2026,9,28) display as dates without a number format.
-   * Tags can be mixed with ordinary text. Use IDs from search/read results; do not invent them. Other Markdown is literal.
-   */
-  value: string;
+  value: SpreadsheetCellValue;
 }
 /**
  * Compact metadata for a sheet.
@@ -8417,6 +8413,8 @@ export interface CreateProjectResponse {
  *
  * Prefer code: it is exact and cheap, and it can read many items, loop and decide. Use an agent step only for open-ended work, and put it last.
  *
+ * By default, code steps' posts, comments and emails are attributed to Macro's agent acting for the user. `dangerouslyOperateAsUser: true` makes them appear written by the user, with no agent badge. Set it ONLY when the user explicitly asks for the routine to act as them, send as them or post as them; never infer it from the task, and leave it out otherwise. Ask AI steps stay attributed to their agent either way.
+ *
  * Example, label invoices as they arrive. Triggers: `[{"type":"event","events":["email.message_received"]}]`. Its `steps` string holds:
  * [{"type":"code","title":"Label invoices","summary":"Asks AI whether the new email is an invoice and adds the inbox's Finance label if so.","source":"export async function main({ macro, trigger }: StepContext) {\n  if (trigger.kind !== 'event') return { labeled: false };\n  const { probabilities } = await macro.ai.decide({\n    input: { subject: trigger.item.email?.subject },\n    questions: { invoice: 'Is this email an invoice or a payment request?' },\n  });\n  if ((probabilities.invoice ?? 0) < 0.5) return { labeled: false };\n  const thread = macro.email.byId(trigger.item.entity_id);\n  const inbox = (await thread.link()).id;\n  for (const label of await macro.email.labels()) {\n    if ((await label.linkId()) === inbox && (await label.name()) === 'Finance') {\n      await thread.addLabel(label);\n      return { labeled: true };\n    }\n  }\n  return { labeled: false, missing: 'Finance' };\n}\n"}]
  *
@@ -8439,7 +8437,8 @@ export interface CreateProjectResponse {
  * - Call SDK methods as their declarations show, with `await`. Don't import anything.
  * - Judge with `macro.ai.decide({ input, questions })`: `questions` maps keys to yes/no questions, and `probabilities[key]` in the answer is from 0 to 1 (treat 0.5 and above as yes). Ask every question about one item in one call. Pass question knobs as the questions: `questions: { aboutMoney: knobs.aboutMoney }`. Build questions in code only when they come from data, such as one per label the owner has. To pick one of several options (a label, a priority, a person), ask one question per option and take the most likely one that reaches 0.5.
  * - Resolve names to ids in code, from the SDK (labels, properties, people, channels), rather than hard-coding ids.
- * - The code is type-checked against the SDK; the checker's errors come back, and the step isn't saved until they are fixed. It runs as the owner, within 30 seconds.
+ * - The code is type-checked against the SDK; the checker's errors come back, and the step isn't saved until they are fixed. It runs with the owner's access, within 30 seconds.
+ * - Its writes (messages, comments, emails) are attributed to Macro's agent acting for the owner. A routine's `dangerouslyOperateAsUser` setting makes them appear written by the owner, with no agent badge: it is set only when the user explicitly asks for the routine to act, send or post as them, never inferred from what the routine does.
  *
  */
 export interface CreateRoutine {
@@ -8469,6 +8468,16 @@ export interface RoutineConfiguration {
    * current apps; a list replaces them, and an empty list removes them.
    */
   requiredApps?: RoutineApp[] | null;
+  /**
+   * Dangerous: true makes its code steps post, comment and email as the
+   * user, with no agent badge, as if the user wrote them. Set it only
+   * when the user explicitly asks for the routine to act, send or post as
+   * them; never infer it. By default, and when false, code steps' writes
+   * are attributed to Macro's agent acting for the user. Ask AI steps are
+   * always attributed to their agent. On update, omit it to keep the
+   * routine's current setting.
+   */
+  dangerouslyOperateAsUser?: boolean | null;
 }
 /**
  * A Pipedream app a routine requires.
@@ -13409,6 +13418,12 @@ export interface SessionConversation {
    */
   status: string;
   /**
+   * What opened the session: who or what started it, and what it is about.
+   */
+  origin: {
+    [k: string]: unknown;
+  };
+  /**
    * Messages in the requested turn, or the latest messages, oldest first.
    */
   messages: SessionConversationMessage[];
@@ -16574,13 +16589,13 @@ export interface CodeGuide {
   markdown: string;
 }
 /**
- * Copy turn_id from the current prompt’s hidden invocation context; never substitute another turn’s ID for a stale call. Run a JavaScript ES module in Deno. Export async function main({macro, session, execution}); return {data: <JSON>}. Optional reviews: [{kind: "email" | "calendar", id: "..."}] defaults to an empty list when omitted. The host supplies real public Macro SDK handles authenticated as the explicitly selected acting_as account. Optional imports: import {Macro} from "@macro-inc/sdk"; import Handlebars from "handlebars". main also receives token, hosts, sessionId and executionId for explicit SDK construction. Never print, return or persist token. No TypeScript syntax or package installation.
+ * Copy turn_id from the current prompt’s hidden invocation context; never substitute another turn’s ID for a stale call. Run a JavaScript ES module in Deno. Export async function main({macro, session, execution}); return {data: <JSON>}. Optional reviews: [{kind: "email" | "calendar", id: "..."}] defaults to an empty list when omitted. The host supplies real public Macro SDK handles authenticated as the explicitly selected acting_as account. Optional imports: import {Macro} from "@macro-inc/sdk"; import Handlebars from "handlebars". main also receives token, hosts, webAppUrl, sessionId and executionId for explicit SDK construction. Never print, return or persist token. No TypeScript syntax or package installation.
  *
  * Prefer ExecuteCode for supported Macro work, including a single precise call. Entity indexes in context list each method with its signature. Before writing a program, read the symbols it needs with ReadCodeDocs for their parameters, options and return types, all together in one call, unless their reference is already in context; do not guess option names. Use DescribeCodeTools for the index of an entity not in context or for workflow guides, requesting entities together (e.g. documents, email, ai, core).
  *
  * For editable email/calendar drafts, persist them with execution.reviews.create({kind, title, drafts}), then return reviews: [await review.reference()]. This does not send emails or create calendar events. Creation immediately presents a completed PresentReview ACP tool call, even while main continues. "Presented to the user" means saved in the conversation, not approved or sent. The saved cards remain usable after this execution and chat continues. User decisions arrive as typed system events referring to the same review ID. Use GetReview to read final drafts and confirmed outcomes; notifications never authorize repeating an action. To show the user what the program made, changed or found, present a view with await execution.views.present(view). It is checked and drawn at once, while main continues; nothing is saved and nothing comes back. When to present a view, and its format, are in the PresentView schema at the end of this description. Direct human-interactive tools, subagents and unsupported SDK operations remain available. Never sleep, call setTimeout or poll inside ExecuteCode to wait for something. To check back later, create a routine with a once trigger due shortly, macro.routines.create({trigger: {type: "once", at}, ...}), whose prompt says what to check and where to report, then finish; it runs within about a second of at.
  *
- * Change the text of existing markdown documents and task bodies in place with the SDK document edit(instructions) method; pass {fast: true} for small edits, because a full edit can take tens of seconds of the execution deadline.
+ * Change the text of existing markdown documents and task bodies in place with the SDK document edit(instructions) method; pass {fast: true} for small edits, because a full edit can take tens of seconds of the execution deadline. Read and edit canvases with document.canvas(). Read, calculate and edit native spreadsheets with macro.documents.spreadsheet(document).
  *
  * Do the whole job in as few executions as possible, ideally one: every execution costs a model turn. Put control flow in the program instead of checking in one execution and acting in the next, e.g. if macro.tasks.findSimilar finds no likely duplicate, create the task and return it, else return the matches without creating. Use nested SDK entities, e.g. macro.documents.search(query) is an async iterator and document.content() is a promise. Use for await...of, break, conditions and ordinary JavaScript freely. Batch useful independent work with Promise.all or Promise.allSettled; inspect partial failures and await every started operation. Use bounded concurrency for large inputs. Preserve user source scope on every search and retry: macro.documents.search searches documents; macro.email.search searches emails. Read names in batches: macro.initiatives.summaries() and macro.tasks.summaries(tasks) each take one request, while name() on every handle loads each entity separately. Create a task with its initiative, assignees and dueDate in one macro.tasks.create call. Return compact evidence with source IDs, URLs, explicit failures and coverage limits, enough to answer without a follow-up execution; for each item you create or point the user to, return its webUrl() as the URL rather than building one; do not return SDK objects, raw large batches, or claim a stopped iterator is exhaustive.
  *
@@ -16601,7 +16616,7 @@ export interface ExecuteCode {
    */
   turn_id: string;
   /**
-   * JavaScript module, at most 64 KiB. Import { Macro } from '@macro-inc/sdk' and Handlebars from 'handlebars'. Export async function main({token, hosts}) { const macro = new Macro({token, hosts}); return {data: ...}; }. The optional reviews array defaults to empty. Dependencies are preinstalled; no TypeScript syntax or package downloads. The token and hosts are supplied by the runner; never return or log the token.
+   * JavaScript module, at most 64 KiB. Import { Macro } from '@macro-inc/sdk' and Handlebars from 'handlebars'. Export async function main({token, hosts, webAppUrl}) { const macro = new Macro({token, hosts, webAppUrl}); return {data: ...}; }. The optional reviews array defaults to empty. Dependencies are preinstalled; no TypeScript syntax or package downloads. The token, hosts and webAppUrl are supplied by the runner; never return or log the token.
    */
   source: string;
   /**

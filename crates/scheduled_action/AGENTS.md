@@ -20,6 +20,9 @@ each run.
   AI") step through `target_runner.rs`. An old single-agent task runs as one
   agent step. Event trigger conditions are answered before a run starts
   (`event_runs/condition.rs`), not by the runner.
+  Each code step's credential says who it writes as (`CodeRun::acts_as`,
+  from the task's `dangerously_operate_as_user`) and carries the routine id;
+  the run records it as `run.code_acts_as`.
   `run_context` builds what code receives: the trigger's time (not the
   clock), the schedule's zone or else the owner's, and the previous run
   (`ScheduledActionRepo::run_history`, skipped runs excluded). Every tool and
@@ -163,6 +166,11 @@ that listener is ready. Cancellation can stop the gate before startup finishes.
   it after the template is unshared or its source routine is deleted.
 - `run_visibility` is copied onto each run's agent session when the run is
   prepared, so changing it affects later runs only.
+- An event stamped with a `routine_id` (a routine run's write, even one
+  operating as its owner) never starts a routine: `IncomingEvent::normalize`
+  rejects it as `RoutineWrite`, for any routine, so two can't trigger each
+  other. Mail received, internal hops and sync-service document edits carry
+  no stamp.
 - `EventReference` rejects unknown keys, so a replica still on older code can't
   read a run row with a new key: write a new optional key only when it is set.
 

@@ -1075,7 +1075,7 @@
             "description": "Omitted by clients that predate the setting; runs then start unlisted."
           },
           "task": {
-            "type": "object"
+            "$ref": "#/components/schemas/RoutineTask"
           },
           "trigger": {
             "$ref": "#/components/schemas/ActionTrigger"
@@ -1114,7 +1114,7 @@
             ]
           },
           "task": {
-            "type": "object"
+            "$ref": "#/components/schemas/RoutineTask"
           },
           "trigger": {
             "$ref": "#/components/schemas/ActionTrigger"
@@ -1246,6 +1246,33 @@
           }
         }
       },
+      "AgentStep": {
+        "type": "object",
+        "description": "Hand the run to a model running as Macro, or to an agent.",
+        "required": ["instructions"],
+        "properties": {
+          "agent": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/AgentTaskAgent",
+                "description": "The agent (persona) that runs, by `bot_id` from ListAgents."
+              }
+            ]
+          },
+          "instructions": {
+            "type": "string",
+            "description": "What the model or agent should do. It also sees the triggering event\nand what earlier steps in this run did."
+          },
+          "model": {
+            "type": ["string", "null"],
+            "description": "Required when no agent is selected; otherwise overrides the agent's default model."
+          }
+        },
+        "additionalProperties": false
+      },
       "AgentTask": {
         "type": "object",
         "description": "The single agent task: how routines were stored before they had steps,\nand still how a routine that is only an agent is saved.",
@@ -1318,6 +1345,53 @@
           }
         }
       },
+      "CodeIdentity": {
+        "type": "string",
+        "description": "Who a routine's code steps write as.",
+        "enum": ["agent", "owner"]
+      },
+      "CodeStep": {
+        "type": "object",
+        "description": "TypeScript written against Macro's SDK, usually by the AI that built the\nroutine. It is type-checked before it is saved and runs with its owner's\naccess.",
+        "required": ["title", "source"],
+        "properties": {
+          "id": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/StepId",
+                "description": "Names this step's output for later steps: `steps.<id>` in later code.\nSaving gives a step without one an id from its title, e.g.\n`label_invoices`."
+              }
+            ]
+          },
+          "knobs": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/RoutineKnob"
+            },
+            "description": "Values its owner can change without new code, which the code reads\nas `knobs.<name>`."
+          },
+          "sentence": {
+            "type": ["string", "null"],
+            "description": "What it does as one sentence for its owner, with `{name}` where a\nknob's value shows and `{?name}` where a question knob's question\nshows, e.g. \"Label it {label} when {?aboutMoney}\". Saving checks every\nslot names one of its knobs."
+          },
+          "source": {
+            "type": "string",
+            "description": "A module exporting `async function main({ macro, run, routine,\ntrigger, steps }: StepContext)`: `run` is this run (its time, zone and\nthe previous run), `trigger` what started it (a schedule, an event and\nits item, or a person), `steps` the typed outputs of the steps before\nit. What `main` returns, as JSON of at most 64 KB, is the step's output."
+          },
+          "summary": {
+            "type": "string",
+            "description": "One or two sentences on how, for the routine's owner."
+          },
+          "title": {
+            "type": "string",
+            "description": "What the step does, in a few words, e.g. \"Label invoices\"."
+          }
+        },
+        "additionalProperties": false
+      },
       "CodeUpgrade": {
         "type": "object",
         "description": "One time a routine's code was brought to a new SDK.",
@@ -1346,7 +1420,7 @@
             "$ref": "#/components/schemas/UpgradeOutcome"
           },
           "previousTask": {
-            "type": "object",
+            "$ref": "#/components/schemas/RoutineTask",
             "description": "The task before."
           },
           "reason": {
@@ -1354,8 +1428,15 @@
             "description": "Why the routine needs its owner."
           },
           "task": {
-            "type": ["object", "null"],
-            "description": "The saved rewrite, or the rewrite that failed its checks."
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/RoutineTask",
+                "description": "The saved rewrite, or the rewrite that failed its checks."
+              }
+            ]
           },
           "toSdk": {
             "type": "string",
@@ -1582,7 +1663,7 @@
           "steps": {
             "type": "array",
             "items": {
-              "type": "object"
+              "$ref": "#/components/schemas/RoutineStep"
             },
             "description": "What it does, in the shape a routine's task holds steps, each code\nstep named as saving names it."
           },
@@ -1616,7 +1697,7 @@
             "description": "Why AI made a step it chose code or Ask AI, in a few words; empty\nwhen it gave no short reason or didn't choose."
           },
           "step": {
-            "type": "object",
+            "$ref": "#/components/schemas/RoutineStep",
             "description": "The step, in the shape a routine's task holds it."
           }
         }
@@ -1840,6 +1921,10 @@
           }
         }
       },
+      "KnobName": {
+        "type": "string",
+        "description": "How code reads a knob: a lowercase letter, then up to 31 letters or\ndigits, e.g. `dueWithinDays`."
+      },
       "NamedItem": {
         "type": "object",
         "description": "An item and its name.",
@@ -1940,9 +2025,184 @@
         },
         "additionalProperties": false
       },
+      "RoutineKnob": {
+        "oneOf": [
+          {
+            "type": "object",
+            "description": "Free text, such as a label or channel name.",
+            "required": ["name", "label", "value", "type"],
+            "properties": {
+              "label": {
+                "type": "string",
+                "description": "What it is, for the owner, e.g. \"Label for money email\"."
+              },
+              "name": {
+                "$ref": "#/components/schemas/KnobName",
+                "description": "How the code reads it: `knobs.<name>`."
+              },
+              "type": {
+                "type": "string",
+                "enum": ["text"]
+              },
+              "value": {
+                "type": "string",
+                "description": "Its value."
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "A number, optionally bounded.",
+            "required": ["name", "label", "value", "type"],
+            "properties": {
+              "label": {
+                "type": "string",
+                "description": "What it is, for the owner."
+              },
+              "max": {
+                "type": ["number", "null"],
+                "format": "double",
+                "description": "The largest value the owner may set."
+              },
+              "min": {
+                "type": ["number", "null"],
+                "format": "double",
+                "description": "The smallest value the owner may set."
+              },
+              "name": {
+                "$ref": "#/components/schemas/KnobName",
+                "description": "How the code reads it: `knobs.<name>`."
+              },
+              "type": {
+                "type": "string",
+                "enum": ["number"]
+              },
+              "value": {
+                "type": "number",
+                "format": "double",
+                "description": "Its value."
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "On or off.",
+            "required": ["name", "label", "value", "type"],
+            "properties": {
+              "label": {
+                "type": "string",
+                "description": "What it is, for the owner."
+              },
+              "name": {
+                "$ref": "#/components/schemas/KnobName",
+                "description": "How the code reads it: `knobs.<name>`."
+              },
+              "type": {
+                "type": "string",
+                "enum": ["boolean"]
+              },
+              "value": {
+                "type": "boolean",
+                "description": "Its value."
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "One of a fixed list of options, such as a priority.",
+            "required": ["name", "label", "value", "options", "type"],
+            "properties": {
+              "label": {
+                "type": "string",
+                "description": "What it is, for the owner."
+              },
+              "name": {
+                "$ref": "#/components/schemas/KnobName",
+                "description": "How the code reads it: `knobs.<name>`."
+              },
+              "options": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                },
+                "description": "Every option, in the order they are offered."
+              },
+              "type": {
+                "type": "string",
+                "enum": ["choice"]
+              },
+              "value": {
+                "type": "string",
+                "description": "The chosen option."
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "A yes/no question the code asks AI with `macro.ai.decide`, so the\nowner can reword what AI decides.",
+            "required": ["name", "label", "value", "type"],
+            "properties": {
+              "label": {
+                "type": "string",
+                "description": "The condition as a short clause that reads inside the step's\nsentence, e.g. \"it's about money\"."
+              },
+              "name": {
+                "$ref": "#/components/schemas/KnobName",
+                "description": "How the code reads it: `knobs.<name>`."
+              },
+              "type": {
+                "type": "string",
+                "enum": ["question"]
+              },
+              "value": {
+                "type": "string",
+                "description": "The question AI is asked, e.g. \"Is this email about money:\ninvestors, fundraising or finance?\"."
+              }
+            }
+          }
+        ],
+        "description": "A value a code step reads as `knobs.<name>`, which its owner can change\nwithout the step being rewritten: the label it adds, a priority, a\nnumber of days, a question it asks AI. Its type is part of the step's\ntype-checked contract; its value is not, so changing it needs no check."
+      },
       "RoutineModelId": {
         "type": "string",
         "description": "A nonblank model identifier. Runtime catalogs, not the scheduler, own availability."
+      },
+      "RoutineProgram": {
+        "type": "object",
+        "description": "What a routine does each time it runs.",
+        "required": ["steps"],
+        "properties": {
+          "dangerously_operate_as_user": {
+            "type": "boolean",
+            "description": "Code steps write as the owner, with no agent badge: their posts,\ncomments and emails appear written by the owner. Set only when the\nowner explicitly asked for the routine to act or send as them; by\ndefault code steps' writes are attributed to Macro's agent acting for\nthe owner. Agent (\"Ask AI\") steps keep their own agent attribution\neither way: an agent session speaking as a person is a different\nchange. A single agent task has no code steps, so it never applies."
+          },
+          "mcp_servers": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AgentMcpServer"
+            },
+            "description": "Apps the routine requires, handed to its agent on top of the agent's\nown. The owner must have each one connected to save the routine and\nfor it to run."
+          },
+          "sdk": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/SdkFingerprint",
+                "description": "The SDK its code steps were last type-checked against, recorded by\nthe service that checked them. A run on another SDK checks them again\nbefore running them."
+              }
+            ]
+          },
+          "steps": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/RoutineStep"
+            },
+            "description": "Steps run in order. A failed step stops the run."
+          }
+        },
+        "additionalProperties": false
       },
       "RoutineSoFar": {
         "type": "object",
@@ -1952,7 +2212,7 @@
           "steps": {
             "type": "array",
             "items": {
-              "type": "object"
+              "$ref": "#/components/schemas/RoutineStep"
             },
             "description": "Its steps, in the shape a routine's task holds them."
           },
@@ -1962,6 +2222,62 @@
           }
         },
         "additionalProperties": false
+      },
+      "RoutineStep": {
+        "oneOf": [
+          {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/CodeStep",
+                "description": "Run TypeScript against Macro's SDK, as the routine owner."
+              },
+              {
+                "type": "object",
+                "required": ["type"],
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "enum": ["code"]
+                  }
+                }
+              }
+            ],
+            "description": "Run TypeScript against Macro's SDK, as the routine owner."
+          },
+          {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/AgentStep",
+                "description": "Hand the run to a model or agent with instructions."
+              },
+              {
+                "type": "object",
+                "required": ["type"],
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "enum": ["agent"]
+                  }
+                }
+              }
+            ],
+            "description": "Hand the run to a model or agent with instructions."
+          }
+        ],
+        "description": "One step of a routine."
+      },
+      "RoutineTask": {
+        "oneOf": [
+          {
+            "$ref": "#/components/schemas/RoutineProgram",
+            "description": "Steps, run in order."
+          },
+          {
+            "$ref": "#/components/schemas/AgentTask",
+            "description": "A routine that is only an agent."
+          }
+        ],
+        "description": "A stored task's two forms, as the scheduler's API describes `task`:\n[`RoutineProgram::from_task`] reads them."
       },
       "RoutineTemplate": {
         "type": "object",
@@ -2005,7 +2321,7 @@
             "type": "string"
           },
           "task": {
-            "type": "object"
+            "$ref": "#/components/schemas/RoutineTask"
           },
           "trigger": {
             "$ref": "#/components/schemas/ActionTrigger"
@@ -2087,6 +2403,17 @@
             "type": "string",
             "format": "date-time",
             "description": "When the run counts as happening: its trigger's time."
+          },
+          "code_acts_as": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/CodeIdentity",
+                "description": "Who its code steps' writes were attributed to; absent when it had no\ncode steps, and on runs recorded before this was."
+              }
+            ]
           },
           "previous_at": {
             "type": ["string", "null"],
@@ -2234,7 +2561,7 @@
             "description": "Whether the action's runs are listed in Home and the Agents list."
           },
           "task": {
-            "type": "object"
+            "$ref": "#/components/schemas/RoutineTask"
           },
           "template_id": {
             "type": ["string", "null"],
@@ -2352,6 +2679,10 @@
         ],
         "description": "Live status update for a scheduled-action run, broadcast via the connection\ngateway to the owner. Clients use the typed resource to navigate to the run\ntranscript and the variant tag to toggle the running indicator. `chat_id`\nremains populated only for chat runs, for older clients.\n\nSerialized with a `type` tag (`started`/`stopped`) and delivered over the\nsingle `scheduled_action_update` message type on the gateway."
       },
+      "SdkFingerprint": {
+        "type": "string",
+        "description": "Identifies the SDK API code was type-checked against: its version and a\nhash of its declarations, e.g. `0.2.2+18cc1c19c35c`."
+      },
       "SetScheduledActionEnabled": {
         "type": "object",
         "required": ["enabled"],
@@ -2395,11 +2726,15 @@
           "steps": {
             "type": "array",
             "items": {
-              "type": "object"
+              "$ref": "#/components/schemas/RoutineStep"
             },
             "description": "Its steps, in the shape a routine's task holds them."
           }
         }
+      },
+      "StepId": {
+        "type": "string",
+        "description": "Names a step's output: a lowercase letter, then up to 31 lowercase\nletters, digits or underscores."
       },
       "StepKind": {
         "type": "string",

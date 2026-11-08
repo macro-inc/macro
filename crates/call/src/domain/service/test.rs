@@ -28,10 +28,12 @@ mod access;
 mod active_meetings;
 mod channel_startup;
 mod guest_chat;
+mod join;
 mod meeting_invites;
 mod meeting_participants;
 mod meeting_startup;
 mod orphan_rooms;
+mod recording;
 
 use crate::domain::meetings::GuestId;
 use crate::domain::models::{
@@ -116,6 +118,10 @@ impl CallRtcClient for MockRtcClient {
         Ok(())
     }
 
+    async fn remove_bot(&self, _room: &str, _bot_id: bot_id::BotId) -> anyhow::Result<()> {
+        Ok(())
+    }
+
     async fn create_room(&self, _room_name: &str) -> anyhow::Result<()> {
         Ok(())
     }
@@ -142,6 +148,34 @@ impl CallRtcClient for MockRtcClient {
         tokens
             .remove(&key)
             .unwrap_or_else(|| Ok(format!("default-token-{key}")))
+    }
+
+    async fn generate_named_token(
+        &self,
+        room_name: &str,
+        participant_identity: MacroUserIdStr<'_>,
+        _name: &str,
+    ) -> anyhow::Result<String> {
+        self.generate_token(room_name, participant_identity).await
+    }
+
+    async fn generate_program_token(
+        &self,
+        room_name: &str,
+        participant_identity: MacroUserIdStr<'_>,
+        _program: &str,
+        _name: Option<String>,
+    ) -> anyhow::Result<String> {
+        self.generate_token(room_name, participant_identity).await
+    }
+
+    async fn generate_bot_token(
+        &self,
+        _room_name: &str,
+        bot_id: bot_id::BotId,
+        _name: Option<String>,
+    ) -> anyhow::Result<String> {
+        Ok(format!("bot-token:{bot_id:?}"))
     }
 
     async fn build_voip_push_payloads<'a>(
@@ -191,6 +225,13 @@ impl CallRtcClient for MockRtcClient {
         &self,
         _room_name: &str,
     ) -> anyhow::Result<Option<Vec<crate::domain::meetings::MeetingRtcParticipant>>> {
+        Ok(None)
+    }
+
+    async fn list_live_participants(
+        &self,
+        _room_name: &str,
+    ) -> anyhow::Result<Option<Vec<crate::domain::models::LiveCallParticipant>>> {
         Ok(None)
     }
 
@@ -288,7 +329,23 @@ impl RecordingEventBroker {
     }
 
     fn events(&self) -> Vec<PublishedCallEvent> {
-        self.events.lock().unwrap().clone()
+        self.events
+            .lock()
+            .unwrap()
+            .iter()
+            .filter(|event| event.topic == "macro.calls")
+            .cloned()
+            .collect()
+    }
+
+    fn notifications(&self) -> Vec<PublishedCallEvent> {
+        self.events
+            .lock()
+            .unwrap()
+            .iter()
+            .filter(|event| event.topic == "macro.call_notifications")
+            .cloned()
+            .collect()
     }
 
     fn attempts(&self) -> usize {
@@ -403,6 +460,13 @@ impl NotificationIngress for StubNotificationIngress {
 struct StubRecordingStorage;
 
 impl crate::domain::ports::RecordingStorage for StubRecordingStorage {
+    async fn open_recording(
+        &self,
+        _recording_key: &str,
+    ) -> anyhow::Result<Option<crate::domain::ports::RecordingDownload>> {
+        unreachable!("recording download is not exercised by get_or_create_call tests")
+    }
+
     async fn presign_recording_url(&self, _recording_key: &str) -> anyhow::Result<String> {
         unreachable!("recording reads are not exercised by get_or_create_call tests")
     }
@@ -499,6 +563,10 @@ fn mock_get_or_create_repo_storing(
     repo.expect_find_active_call_for_user()
         .times(1)
         .returning(|_| Box::pin(async { Ok(None) }));
+    repo.expect_set_participant_client()
+        .times(1)
+        .withf(|_, _, client| client == "person")
+        .returning(|_, _, _| Box::pin(async { Ok(()) }));
     repo.expect_add_participant()
         .times(1)
         .returning(|call_id, user_id| {
@@ -527,11 +595,13 @@ type BaseGetOrCreateCallService<Cn, B = macro_event_broker::NoopMacroEventBroker
 >;
 
 fn build_get_or_create_service<B: MacroEventBroker + Clone, Cn: ConnectionService>(
-    repo: MockCallRepository,
+    mut repo: MockCallRepository,
     connection_service: Cn,
     event_broker: B,
     recording_enabled: bool,
 ) -> BaseGetOrCreateCallService<Cn, B> {
+    repo.expect_archive_call_if_program_only()
+        .returning(|_| Box::pin(async { Ok(None) }));
     let service: BaseGetOrCreateCallService<Cn> = CallServiceImpl::new(
         repo,
         MockRtcClient::new(),
@@ -688,6 +758,8 @@ async fn get_or_create_call_publishes_started_event() {
     .await
     .expect("call creation succeeds");
 
+    assert!(response.started);
+
     assert_eq!(response.call_id, STARTED_EVENT_CALL_ID);
     let events = broker.events();
     let [published] = events.as_slice() else {
@@ -721,13 +793,24 @@ async fn get_or_create_call_publishes_started_event() {
             },
         })
     );
+    // The joining creator also produces call.answered for their own devices.
+    let notifications = broker.notifications();
+    let started: Vec<_> = notifications
+        .iter()
+        .filter(|event| event.envelope["event_type"] == "call.started")
+        .collect();
+    assert_eq!(started.len(), 1);
+    assert_eq!(
+        started[0].envelope["metadata"]["call_id"],
+        json!(STARTED_EVENT_CALL_ID)
+    );
 }
 
 #[tokio::test]
 async fn get_or_create_call_race_loser_does_not_publish_started_event() {
     let broker = RecordingEventBroker::default();
 
-    get_or_create_call(
+    let response = get_or_create_call(
         GetOrCreateScenario::RaceLoses,
         STARTED_EVENT_CREATOR,
         broker.clone(),
@@ -736,6 +819,7 @@ async fn get_or_create_call_race_loser_does_not_publish_started_event() {
     .await
     .expect("race loser joins the winning call");
 
+    assert!(!response.started);
     assert!(broker.events().is_empty());
 }
 
@@ -743,7 +827,7 @@ async fn get_or_create_call_race_loser_does_not_publish_started_event() {
 async fn get_or_create_call_existing_call_does_not_publish_started_event() {
     let broker = RecordingEventBroker::default();
 
-    get_or_create_call(
+    let response = get_or_create_call(
         GetOrCreateScenario::ExistingCall,
         STARTED_EVENT_CREATOR,
         broker.clone(),
@@ -752,6 +836,7 @@ async fn get_or_create_call_existing_call_does_not_publish_started_event() {
     .await
     .expect("existing call can be joined");
 
+    assert!(!response.started);
     assert!(broker.events().is_empty());
 }
 
@@ -861,6 +946,8 @@ fn switching_repo(remaining: i64) -> MockCallRepository {
         .withf(|call_id| *call_id == SWITCHED_FROM_CALL_ID)
         .times(1)
         .returning(move |_| Box::pin(async move { Ok(remaining) }));
+    repo.expect_set_participant_client()
+        .returning(|_, _, _| Box::pin(async { Ok(()) }));
     repo.expect_add_participant()
         .withf(|call_id, _| *call_id == STARTED_EVENT_CALL_ID)
         .times(1)
@@ -876,11 +963,13 @@ fn switching_repo(remaining: i64) -> MockCallRepository {
 }
 
 async fn join_while_in_other_call(
-    repo: MockCallRepository,
+    mut repo: MockCallRepository,
 ) -> (
     crate::domain::models::CallTokenResponse,
     Vec<(String, String)>,
 ) {
+    repo.expect_archive_call_if_program_only()
+        .returning(|_| Box::pin(async { Ok(None) }));
     let rtc_client = MockRtcClient::new();
     let removed = rtc_client.removed.clone();
     let service: BaseGetOrCreateCallService<StubConnectionService> = CallServiceImpl::new(
@@ -967,7 +1056,9 @@ fn reconcile_repo(joined: DateTime<Utc>) -> MockCallRepository {
     repo
 }
 
-async fn reconcile(repo: MockCallRepository, rtc_client: MockRtcClient) {
+async fn reconcile(mut repo: MockCallRepository, rtc_client: MockRtcClient) {
+    repo.expect_archive_call_if_program_only()
+        .returning(|_| Box::pin(async { Ok(None) }));
     let service: BaseGetOrCreateCallService<StubConnectionService> = CallServiceImpl::new(
         repo,
         rtc_client,
@@ -1105,6 +1196,7 @@ fn egress_ended_rtc_client(egress_id: Option<&str>, file_url: Option<&str>) -> M
         id: "egress-ended-event-id".to_string(),
         room_name: None,
         participant_identity: None,
+        bot_identity: None,
         egress_id: egress_id.map(str::to_string),
         file_url: file_url.map(str::to_string),
         created_at: 1_775_000_000,
@@ -1131,6 +1223,7 @@ fn webhook_rtc_client(
         id: format!("{event_type}-event-id"),
         room_name: Some(ARCHIVED_EVENT_ROOM_NAME.to_string()),
         participant_identity: participant_identity.map(|email| user(email).into_owned()),
+        bot_identity: None,
         egress_id: None,
         file_url: None,
         created_at: 1_775_000_000,
@@ -1166,11 +1259,13 @@ fn build_webhook_service(
 }
 
 fn build_webhook_service_with_connection<Cn: ConnectionService>(
-    repo: MockCallRepository,
+    mut repo: MockCallRepository,
     rtc_client: MockCallRtcClient,
     connection_service: Cn,
     event_broker: RecordingEventBroker,
 ) -> impl CallService + messages::domain::service::guest_chat::GuestCallAuthorizer {
+    repo.expect_archive_call_if_program_only()
+        .returning(|_| Box::pin(async { Ok(None) }));
     let service: BaseWebhookCallService<Cn> = CallServiceImpl::new(
         repo,
         rtc_client,
@@ -1398,6 +1493,8 @@ async fn participant_joined_webhook_sends_call_answered_to_answering_user() {
             assert_eq!(room_name, ARCHIVED_EVENT_ROOM_NAME);
             Box::pin(async move { Ok(Some(active_call)) })
         });
+    repo.expect_set_participant_client()
+        .returning(|_, _, _| Box::pin(async { Ok(()) }));
     repo.expect_add_participant()
         .times(1)
         .returning(|call_id, participant_identity| {
@@ -1454,6 +1551,8 @@ async fn participant_joined_webhook_skips_call_answered_on_state_drift() {
     repo.expect_get_call_by_room_name()
         .times(1)
         .return_once(move |_| Box::pin(async move { Ok(Some(active_call)) }));
+    repo.expect_set_participant_client()
+        .returning(|_, _, _| Box::pin(async { Ok(()) }));
     repo.expect_add_participant()
         .times(1)
         .returning(|_, _| Box::pin(async { Err(AddParticipantError::UserAlreadyActive) }));
@@ -1505,6 +1604,16 @@ fn assert_recording_ready_event(event_broker: &RecordingEventBroker) {
         })
     );
     assert!(!published.envelope.to_string().contains(RECORDING_READY_KEY));
+    let notifications = event_broker.notifications();
+    assert_eq!(notifications.len(), 1);
+    assert_eq!(
+        notifications[0].envelope["event_type"],
+        "call.recording_ready"
+    );
+    assert_eq!(
+        notifications[0].envelope["metadata"],
+        json!({ "call_id": ARCHIVED_EVENT_CALL_ID })
+    );
 }
 
 #[tokio::test]
@@ -3045,7 +3154,7 @@ async fn summarize_call_publishes_record_summarized_event() {
         failing_broker,
     )
     .await;
-    assert_eq!(observed_failing_broker.attempts(), 1);
+    assert_eq!(observed_failing_broker.attempts(), 2);
     assert!(observed_failing_broker.events().is_empty());
 }
 
@@ -3083,7 +3192,7 @@ async fn spawned_summarization_publishes_record_summarized_event() {
     );
 
     service.spawn_summarize_call(SUMMARIZED_EVENT_CALL_ID);
-    wait_for_spawned_work(|| failing_broker.attempts() == 1).await;
+    wait_for_spawned_work(|| failing_broker.attempts() == 2).await;
     assert!(failing_broker.events().is_empty());
 }
 
@@ -4179,6 +4288,7 @@ async fn guest_webhook_events_reconcile_join_and_leave() {
             id: "evt".to_string(),
             room_name: Some(ARCHIVED_EVENT_ROOM_NAME.to_string()),
             participant_identity: None,
+            bot_identity: None,
             guest_identity: Some(guest_id),
             egress_id: None,
             file_url: None,
@@ -4239,6 +4349,7 @@ async fn mixed_call_archives_only_after_both_users_and_guests_leave() {
         id: "evt-user".to_string(),
         room_name: Some(ARCHIVED_EVENT_ROOM_NAME.to_string()),
         participant_identity: Some(user(ARCHIVED_EVENT_CREATOR).into_owned()),
+        bot_identity: None,
         guest_identity: None,
         egress_id: None,
         file_url: None,
@@ -4247,6 +4358,7 @@ async fn mixed_call_archives_only_after_both_users_and_guests_leave() {
     let guest_left = CallWebhookEvent {
         guest_identity: Some(guest_id),
         participant_identity: None,
+        bot_identity: None,
         id: "evt-guest".to_string(),
         ..user_left.clone()
     };
