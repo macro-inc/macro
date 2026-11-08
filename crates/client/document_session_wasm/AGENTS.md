@@ -9,6 +9,7 @@ TextFromView returns zero only for an exact accepted DOM edit; all other outcome
 include authoritative text or full view repair, including permission rejection,
 stale/non-text keys and malformed UTF-16. A cold `initialize` rebuilds only the
 view. ABI major 2 includes static type predicate flags and initialize markers.
+View effect kind 9 ends native composition before a bounded remote hold is painted.
 
 ## Start here
 

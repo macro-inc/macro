@@ -88,6 +88,8 @@ pub enum ViewEffect {
         /// Completion payload.
         reply: Reply,
     },
+    /// End the browser composition before applying a bounded remote hold.
+    EndComposition,
     /// Input or initialization failure.
     Error(SessionError),
 }
@@ -155,11 +157,29 @@ pub trait Surface: sealed::Sealed {
         Err(CommentRefusal::StagingFailed)
     }
     #[doc(hidden)]
+    fn composing(&self) -> bool;
+    #[doc(hidden)]
+    fn composition_changed(&self, before: &LoroDoc, after: &LoroDoc) -> bool;
+    #[doc(hidden)]
+    fn end_composition(
+        &mut self,
+        doc: &LoroDoc,
+        now: Now,
+        access: Access,
+        view: &mut Vec<ViewEffect>,
+    ) -> Result<(), SessionError>;
+    #[doc(hidden)]
     fn drop_binding(&mut self);
     #[doc(hidden)]
     fn take_resynced(&mut self) -> bool {
         false
     }
+}
+
+struct CompositionHold {
+    live: LoroDoc,
+    deadline: Millis,
+    frames: u32,
 }
 
 /// Sans-I/O document composition. All mutation enters through handle.
@@ -172,6 +192,7 @@ pub struct DocumentSession<S: Surface> {
     out: SessionOutput,
     sync_out: SyncOutput,
     comments: BTreeMap<RequestId, CommentMarkRequest>,
+    held: Option<CompositionHold>,
 }
 impl<S: Surface> DocumentSession<S> {
     /// Construct an unstarted session. Deliver Sync(Start), then a seed or storage result.
@@ -201,6 +222,7 @@ impl<S: Surface> DocumentSession<S> {
             out: SessionOutput::default(),
             sync_out: SyncOutput::default(),
             comments: BTreeMap::new(),
+            held: None,
         })
     }
     /// Immutable surface queries; never performs I/O.
@@ -228,6 +250,21 @@ impl<S: Surface> DocumentSession<S> {
             self.out.imports.clear();
         }
         self.out.io.clear();
+        if let Err(error) = self.release_composition(
+            now,
+            matches!(
+                &input,
+                SessionInput::Focus(false)
+                    | SessionInput::Sync(
+                        SyncInput::Stop(_)
+                            | SyncInput::Reset
+                            | SyncInput::Authorization(_)
+                            | SyncInput::Host(HostSignal::Hidden | HostSignal::PageHide)
+                    )
+            ),
+        ) {
+            self.out.view.push(ViewEffect::Error(error));
+        }
         let result = match input {
             SessionInput::Sync(input) => {
                 self.sync_input(now, input);
@@ -265,15 +302,35 @@ impl<S: Surface> DocumentSession<S> {
             }
             _ if self.sync.phase() == Phase::Stopped => Err(SessionError::NotReady),
             input => {
-                let before = self.doc.oplog_vv();
-                match self.surface.local(
-                    &self.doc,
+                let live = self.held.as_ref().map_or(&self.doc, |held| &held.live);
+                let before = live.oplog_vv();
+                let applied = self.surface.local(
+                    live,
                     input,
                     now,
                     self.access,
                     self.ready && self.sync.phase() == Phase::Running,
                     &mut self.out.view,
-                ) {
+                );
+                // Publish local CRDT operations immediately even while remote
+                // operations are excluded from the live editor document.
+                if let Some(held) = &self.held {
+                    match held.live.export(ExportMode::updates(&self.doc.oplog_vv())) {
+                        Ok(bytes) => {
+                            if let Err(error) = self.doc.import(&bytes) {
+                                self.out.view.push(ViewEffect::Error(error.into()));
+                            }
+                        }
+                        Err(_) => {
+                            self.out
+                                .view
+                                .push(ViewEffect::Error(SessionError::Configuration(
+                                    "composition local export failed",
+                                )))
+                        }
+                    }
+                }
+                match applied {
                     Ok(changed) => {
                         if changed || self.doc.oplog_vv() != before {
                             self.sync_input(now, SyncInput::LocalChanged);
@@ -291,11 +348,66 @@ impl<S: Surface> DocumentSession<S> {
         if let Err(error) = result {
             self.out.view.push(ViewEffect::Error(error));
         }
+        if let Err(error) = self.release_composition(now, false) {
+            self.out.view.push(ViewEffect::Error(error));
+        }
         if self.surface.take_resynced() {
             self.sync_input(now, SyncInput::ProjectionResynced);
         }
+        if let Some(held) = &self.held {
+            self.out.wake_at = Some(
+                self.out
+                    .wake_at
+                    .map_or(held.deadline, |wake| wake.min(held.deadline)),
+            );
+        }
         self.out.need_peer_ids = self.sync.needs_peer_ids();
         &self.out
+    }
+    fn release_composition(&mut self, now: Now, force: bool) -> Result<(), SessionError> {
+        let Some(held) = &self.held else {
+            return Ok(());
+        };
+        let capped = now.mono >= held.deadline || held.frames >= 64;
+        if self.surface.composing() && !capped && !force {
+            return Ok(());
+        }
+        if self.surface.composing() {
+            let span = tracing::info_span!(
+                "editor.composition.hold",
+                frames = held.frames,
+                elapsed_ms = now
+                    .mono
+                    .0
+                    .saturating_sub(held.deadline.0.saturating_sub(3000))
+            );
+            let _guard = span.enter();
+            if capped {
+                tracing::info!(name: "editor.composition.hold.cap", "composition hold cap reached");
+            }
+            self.out.view.push(ViewEffect::EndComposition);
+            self.surface
+                .end_composition(&held.live, now, self.access, &mut self.out.view)?;
+        }
+        let held = self.held.as_ref().ok_or(SessionError::NotReady)?;
+        let bytes = self
+            .doc
+            .export(ExportMode::updates(&held.live.oplog_vv()))
+            .map_err(|_| SessionError::Configuration("composition remote export failed"))?;
+        held.live.import_with(&bytes, "from-loro")?;
+        self.surface
+            .remote(&held.live, now, self.access, &mut self.out.view)?;
+        // Remote transforms and composition cleanup can generate local fixes.
+        let bytes = held
+            .live
+            .export(ExportMode::updates(&self.doc.oplog_vv()))
+            .map_err(|_| SessionError::Configuration("composition fixup export failed"))?;
+        self.doc.import(&bytes)?;
+        if let Some(mut held) = self.held.take() {
+            std::mem::swap(&mut self.doc, &mut held.live);
+        }
+        self.sync_input(now, SyncInput::LocalChanged);
+        Ok(())
     }
     fn sync_input(&mut self, now: Now, input: SyncInput) {
         let peer = self.doc.peer_id();
@@ -303,6 +415,7 @@ impl<S: Surface> DocumentSession<S> {
         let local_signal = matches!(input, SyncInput::LocalChanged | SyncInput::SetPresence(_));
         let mut doc = Adapter {
             doc: &mut self.doc,
+            held: &mut self.held,
             surface: &mut self.surface,
             now,
             access: self.access,
@@ -391,6 +504,7 @@ impl<S: Surface> DocumentSession<S> {
 
 struct Adapter<'a, S> {
     doc: &'a mut LoroDoc,
+    held: &'a mut Option<CompositionHold>,
     surface: &'a mut S,
     now: Now,
     access: Access,
@@ -436,14 +550,45 @@ impl<S: Surface> SyncDoc for Adapter<'_, S> {
         bytes: &[u8],
         origin: ImportOrigin,
     ) -> Result<Imported, ImportFailure> {
-        let result = import(self.doc, bytes).and_then(|result| {
+        let result = (|| {
+            if let Some(held) = self.held.as_mut() {
+                let result = import(self.doc, bytes)?;
+                if result.new_ops {
+                    held.frames = held.frames.saturating_add(1);
+                }
+                return Ok(result);
+            }
+            // Keep the subscribed live instance intact. SyncCore always receives
+            // the fully imported document, including WAL and acknowledgement state.
+            let probe = if self.ready && self.surface.composing() {
+                Some(
+                    lexical_loro::fork_doc(self.doc, self.doc.peer_id()).map_err(|error| {
+                        ImportFailure::Projection(rootcause::report!(error).into())
+                    })?,
+                )
+            } else {
+                None
+            };
+            if let Some(mut canonical) = probe {
+                let result = import(&canonical, bytes)?;
+                if result.changed && self.surface.composition_changed(self.doc, &canonical) {
+                    std::mem::swap(self.doc, &mut canonical);
+                    *self.held = Some(CompositionHold {
+                        live: canonical,
+                        deadline: Millis(self.now.mono.0.saturating_add(3000)),
+                        frames: 1,
+                    });
+                    return Ok(result);
+                }
+            }
+            let result = import(self.doc, bytes)?;
             if self.ready && result.changed {
                 self.surface
                     .remote(self.doc, self.now, self.access, self.view)
                     .map_err(|error| ImportFailure::Projection(rootcause::report!(error).into()))?;
             }
             Ok(result)
-        });
+        })();
         #[cfg(feature = "conformance")]
         self.imports.push((
             format!("{origin:?}"),
@@ -505,7 +650,11 @@ impl<S: Surface> SyncDoc for Adapter<'_, S> {
                 "pending replacement"
             )));
         }
+        if self.held.is_some() {
+            self.view.push(ViewEffect::EndComposition);
+        }
         self.surface.drop_binding();
+        *self.held = None;
         *self.doc = replacement;
         self.ready = false;
         Ok(())
@@ -565,6 +714,11 @@ impl<S: Surface> DocumentSession<S> {
 
 #[cfg(test)]
 impl DocumentSession<EditorSurface> {
+    pub(crate) fn test_snapshot(&self) -> Vec<u8> {
+        self.doc
+            .export(ExportMode::Snapshot)
+            .expect("test snapshot")
+    }
     pub(crate) fn fail_next_projection(&mut self) {
         self.surface.fail_next_remote = true;
     }
