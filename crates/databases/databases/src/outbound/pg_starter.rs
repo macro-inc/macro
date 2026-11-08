@@ -3,8 +3,8 @@
 
 #[cfg(test)]
 mod test;
-use models_databases::position::{PositionError, keys_between};
-use models_databases::{ColumnId, DatabaseId, OptionId, RowId};
+use databases_types::position::{PositionError, keys_between};
+use databases_types::{ColumnId, DatabaseId, OptionId, RowId};
 use models_properties::DataType;
 use models_properties::EntityReference;
 use models_properties::service::property_option::PropertyOptionValue;
@@ -249,7 +249,7 @@ where
             title_column_id,
             stage_column_id,
             &stage_options,
-            models_databases::views::written_at(),
+            databases_types::views::written_at(),
         )?;
         views::insert_view(&mut *transaction, &table_view).await?;
         views::insert_view(&mut *transaction, &board).await?;

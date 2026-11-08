@@ -7,7 +7,7 @@
 mod test;
 
 use chrono::{DateTime, NaiveDate, Utc};
-use models_databases::{
+use databases_types::{
     CellValue, CellWrite, ColumnId, ColumnKind, DateRange, EntityKind, EntityRef, OptionRef, RowId,
 };
 use serde_json::{Map, Value};

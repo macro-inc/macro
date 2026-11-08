@@ -6,7 +6,7 @@ use databases::domain::{
     models::{ColumnId, ColumnProtection, OpBatch, TableDetail},
     provisioning::ProvisionedColumn,
 };
-use models_databases::{
+use databases_types::{
     CellValue, CellWrite, ColumnChange, DatabaseOp, OptionRef, RowChanges, RowsChange, ViewChange,
     views::RequestedLayout,
 };

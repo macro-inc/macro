@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use models_databases::{DatabaseOp, OpResult, TakenId};
+use databases_types::{DatabaseOp, OpResult, TakenId};
 
 use crate::domain::models::{CommittedChange, OpBatch, OpRefusal};
 use serde::Serialize;

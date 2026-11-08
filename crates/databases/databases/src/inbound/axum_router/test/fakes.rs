@@ -6,6 +6,7 @@ use std::sync::{Arc, Mutex};
 use axum::Router;
 use axum::routing::post;
 
+use databases_types::{ColumnKind, OpResult};
 use entity_access::domain::models::{
     AccessError, AccessLevel, BotAccessScope, BotId, CallChannelInfo, EditAccessLevel,
     EntityAccessReceipt, EntityPermission, EntityType, OwnerAccessLevel, RequiredPermission,
@@ -18,7 +19,6 @@ use macro_authorization::{
 };
 use macro_user_id::lowercased::Lowercase;
 use macro_user_id::user_id::{MacroUserId, MacroUserIdStr};
-use models_databases::{ColumnKind, OpResult};
 use models_permissions::share_permission::{SharePermissionV2, UpdateSharePermissionRequestV2};
 use rootcause::Report;
 use uuid::Uuid;

@@ -6,11 +6,11 @@ mod test;
 
 use databases::domain::models::{DatabaseError, Viewer};
 use databases::domain::ports::CreatorAccess;
+use databases_types::{DatabaseId, TableId};
 use entity_access::domain::models::{
     EditAccessLevel, EntityAccessReceipt, EntityType, RequiredPermission,
 };
 use macro_user_id::user_id::MacroUserIdStr;
-use models_databases::{DatabaseId, TableId};
 use serde_json::Value;
 
 use crate::domain::mapping::{WebhookColumn, rows_from_payload};

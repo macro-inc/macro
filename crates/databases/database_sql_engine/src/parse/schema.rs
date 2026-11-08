@@ -1,6 +1,6 @@
 //! Schema statements executed by the server through the databases service.
 use super::{Identifier, TableName};
-use models_databases::ColumnKind;
+use databases_types::ColumnKind;
 
 /// One schema edit. Names are resolved against the caller's visible catalog.
 #[derive(Debug, Clone, PartialEq)]

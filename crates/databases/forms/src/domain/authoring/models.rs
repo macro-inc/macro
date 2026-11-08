@@ -1,6 +1,6 @@
 //! Typed authoring intents and saved outcomes, shared by tools and domain services.
-use models_databases::views::{Conjunction, FilterTest, SetOperator};
-use models_databases::{ColumnId, ColumnKind, OptionId};
+use databases_types::views::{Conjunction, FilterTest, SetOperator};
+use databases_types::{ColumnId, ColumnKind, OptionId};
 use models_forms::{
     BookingTarget, Form, FormLayout, FormQuestionId, FormSectionId, FormSource, QuestionOption,
     Widget,
@@ -322,7 +322,7 @@ pub enum Change {
         /// Existing gate.
         section_id: FormSectionId,
         /// Nonempty AND/OR tree referencing earlier questions' columns.
-        rules: models_databases::views::FilterGroup,
+        rules: databases_types::views::FilterGroup,
     },
     /// Set or clear when a questions section is shown, using saved
     /// column/option ids from ReadForm. A skipped section's questions are
@@ -332,7 +332,7 @@ pub enum Change {
         section_id: FormSectionId,
         /// Nonempty AND/OR tree referencing earlier sections' question
         /// columns; null makes the section always shown.
-        show_when: Option<models_databases::views::FilterGroup>,
+        show_when: Option<databases_types::views::FilterGroup>,
     },
     /// Replace the final booking destination after authorized Scheduling validation.
     SetBookingTarget {

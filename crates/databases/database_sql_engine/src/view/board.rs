@@ -5,9 +5,9 @@ mod test;
 
 use std::collections::HashMap;
 
-use models_databases::RowId;
-use models_databases::position::Position;
-use models_databases::views::{
+use databases_types::RowId;
+use databases_types::position::Position;
+use databases_types::views::{
     CardPosition, DatabaseView, Lane, LaneKey, ViewLayout, ViewProblem, arrange_lane,
 };
 use serde::{Deserialize, Serialize};

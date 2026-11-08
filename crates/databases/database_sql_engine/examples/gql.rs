@@ -21,7 +21,7 @@
 
 mod common;
 
-use models_databases::{ColumnId, DatabaseId, OptionId, RowId, TableId};
+use databases_types::{ColumnId, DatabaseId, OptionId, RowId, TableId};
 use std::collections::HashMap;
 use std::io::{self, BufRead, Write};
 
@@ -34,12 +34,12 @@ use database_sql_engine::catalog::{
 use database_sql_engine::fold::{Bin, Cell, Row};
 use database_sql_engine::run::{OpsSink, Page, RowSource, run};
 use database_sql_engine::split::GqlQuery;
-use filter_ast::Expr;
-use item_filters::ast::properties::{PropertiesLiteral, PropertyMatchValue};
-use models_databases::{
+use databases_types::{
     CellValue, CellWrite, DatabaseOp, OpResult, OptionRef, RowChanges, RowsChange, RowsResult,
     TableVersion,
 };
+use filter_ast::Expr;
+use item_filters::ast::properties::{PropertiesLiteral, PropertyMatchValue};
 use serde::Deserialize;
 use serde_json::{Value as Json, json};
 use uuid::Uuid;
@@ -358,7 +358,7 @@ fn row_from_item(item: &Json) -> Row {
                 };
                 date("rangeStart")
                     .zip(date("rangeEnd"))
-                    .map(|(start, end)| Cell::DateRange(models_databases::DateRange { start, end }))
+                    .map(|(start, end)| Cell::DateRange(databases_types::DateRange { start, end }))
             }
             "GraphqlSelectOptionPropertyValue" => Some(Cell::Options(
                 value["optionIds"]

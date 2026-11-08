@@ -1,5 +1,5 @@
 use chrono::{TimeZone, Utc};
-use models_databases::{ColumnId, DatabaseId, TableId};
+use databases_types::{ColumnId, DatabaseId, TableId};
 
 use uuid::Uuid;
 
@@ -892,7 +892,7 @@ fn a_type_change_binds_the_column_and_its_type() {
         Query::AlterColumnType(AlterColumnTypeQuery {
             table: DEALS,
             column: AMOUNT,
-            to: models_databases::ColumnKind::Text,
+            to: databases_types::ColumnKind::Text,
         })
     );
 }

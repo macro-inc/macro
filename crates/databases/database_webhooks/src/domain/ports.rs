@@ -1,8 +1,8 @@
 //! What the webhooks service needs, and what it offers.
 
 use databases::domain::models::{DatabaseError, Viewer};
+use databases_types::{CellWrite, DatabaseId, RowId, TableId};
 use entity_access::domain::models::{EditAccessLevel, EntityAccessReceipt};
-use models_databases::{CellWrite, DatabaseId, RowId, TableId};
 use serde_json::Value;
 
 use crate::domain::mapping::WebhookColumn;

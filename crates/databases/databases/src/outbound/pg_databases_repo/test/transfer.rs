@@ -63,11 +63,11 @@ async fn an_import_records_initial_values_in_history(pool: PgPool) {
             BTreeMap::from([
                 (
                     columns[0].id,
-                    models_databases::CellValue::Text(request.rows[0][0].clone()),
+                    databases_types::CellValue::Text(request.rows[0][0].clone()),
                 ),
                 (
                     columns[1].id,
-                    models_databases::CellValue::Text("00123".into()),
+                    databases_types::CellValue::Text("00123".into()),
                 ),
             ])
         } else {

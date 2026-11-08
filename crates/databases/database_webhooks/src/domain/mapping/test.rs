@@ -1,5 +1,5 @@
 use chrono::{TimeZone, Utc};
-use models_databases::{CellValue, EntityKind, EntityRef, OptionRef, RowId};
+use databases_types::{CellValue, EntityKind, EntityRef, OptionRef, RowId};
 use serde_json::json;
 use uuid::Uuid;
 
@@ -61,8 +61,8 @@ fn meetings() -> Vec<WebhookColumn> {
             id: ACCOUNT,
             name: "Account".to_string(),
             kind: Some(ColumnKind::Relation {
-                database: models_databases::DatabaseId::from_uuid(Uuid::from_u128(100)),
-                table: models_databases::TableId::from_uuid(Uuid::from_u128(101)),
+                database: databases_types::DatabaseId::from_uuid(Uuid::from_u128(100)),
+                table: databases_types::TableId::from_uuid(Uuid::from_u128(101)),
             }),
         },
         WebhookColumn {

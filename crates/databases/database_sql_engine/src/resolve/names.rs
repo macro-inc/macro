@@ -2,7 +2,7 @@
 //! when nothing matches. A [`Scope`] is the relations a `SELECT` reads and
 //! the keys it hands out for their columns.
 
-use models_databases::{ColumnId, TableId};
+use databases_types::{ColumnId, TableId};
 use uuid::Uuid;
 
 use crate::catalog::{Catalog, Column, ColumnKind, EntityKind, Table};

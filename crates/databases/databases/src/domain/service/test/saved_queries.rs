@@ -1,5 +1,5 @@
 use super::*;
-use models_databases::MAX_STATEMENT_LENGTH;
+use databases_types::MAX_STATEMENT_LENGTH;
 
 #[test]
 fn a_query_definition_is_stored_as_versioned_json() {

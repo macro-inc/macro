@@ -13,10 +13,10 @@ use entity_access::domain::models::{
 use macro_user_id::user_id::MacroUserIdStr;
 
 use super::*;
-use models_databases::views::{
+use databases_types::views::{
     Conjunction, FilterCondition, FilterGroup, FilterNode, FilterTest, SetOperator,
 };
-use models_databases::{ColumnId, ColumnKind, EntityKind, OptionId, TableId};
+use databases_types::{ColumnId, ColumnKind, EntityKind, OptionId, TableId};
 use uuid::Uuid;
 
 use crate::domain::models::{

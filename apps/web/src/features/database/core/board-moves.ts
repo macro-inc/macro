@@ -1,6 +1,6 @@
 /**
  * A dragged card as the `move_card` op names it and as it shows before the
- * answer; placement mirrors `models_databases::views::lanes::place_card`.
+ * answer; placement mirrors `databases_types::views::lanes::place_card`.
  */
 
 import type { CardPosition } from '@service-storage/generated/schemas/cardPosition';

@@ -7,7 +7,7 @@
 #[cfg(test)]
 mod test;
 
-use models_databases::OptionId;
+use databases_types::OptionId;
 use serde::{Deserialize, Serialize};
 use specta::Type;
 use uuid::Uuid;

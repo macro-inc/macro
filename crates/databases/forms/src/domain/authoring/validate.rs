@@ -2,11 +2,11 @@
 #[cfg(test)]
 mod test;
 use super::models::*;
-use models_databases::views::{
+use databases_types::views::{
     FilterCondition, FilterGroup, FilterNode, FilterTest, SchemaColumn, ViewLayout, ViewQuery,
     check,
 };
-use models_databases::{ColumnId, ColumnKind, OptionId};
+use databases_types::{ColumnId, ColumnKind, OptionId};
 use models_forms::{
     FormLayout, FormQuestionId, FormSection, FormSectionId, QuestionLayout, QuestionOption,
 };
@@ -231,7 +231,7 @@ pub fn prepare(draft: &Draft, existing: &[Column]) -> Result<Prepared, Authoring
                                             "Numeric option labels must be finite numbers.",
                                         )
                                     })?;
-                                    models_databases::cast::number_label(value)
+                                    databases_types::cast::number_label(value)
                                 } else {
                                     option.label.trim().to_string()
                                 };

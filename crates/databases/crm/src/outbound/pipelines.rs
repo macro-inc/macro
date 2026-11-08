@@ -8,10 +8,10 @@ use crate::domain::pipelines::{
 };
 use chrono::{DateTime, Utc};
 use databases::domain::provisioning::DatabaseStorageProvisioner;
+use databases_types::OptionId;
+use databases_types::{ColumnId, DatabaseId, RowId, TableId};
 use entity_access::domain::telemetry::span_count;
 use entity_access_db_utils::{AccessLevel, EntityAccessSourceType, EntityType};
-use models_databases::OptionId;
-use models_databases::{ColumnId, DatabaseId, RowId, TableId};
 use models_permissions::share_permission::channel_share_permission::{
     ChannelSharePermission, UpdateChannelSharePermission,
 };

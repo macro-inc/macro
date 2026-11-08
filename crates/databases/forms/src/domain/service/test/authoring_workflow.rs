@@ -1196,13 +1196,13 @@ async fn crdt_merge_refuses_to_strand_a_concurrently_added_screening_rule() {
         title: "Screening".into(),
         description: String::new(),
         message: "Name required".into(),
-        rules: models_databases::views::FilterGroup {
-            conjunction: models_databases::views::Conjunction::And,
-            conditions: vec![models_databases::views::FilterNode::Condition(
-                models_databases::views::FilterCondition {
+        rules: databases_types::views::FilterGroup {
+            conjunction: databases_types::views::Conjunction::And,
+            conditions: vec![databases_types::views::FilterNode::Condition(
+                databases_types::views::FilterCondition {
                     column,
-                    test: models_databases::views::FilterTest::Presence {
-                        operator: models_databases::views::PresenceOperator::IsNotEmpty,
+                    test: databases_types::views::FilterTest::Presence {
+                        operator: databases_types::views::PresenceOperator::IsNotEmpty,
                     },
                 },
             )],

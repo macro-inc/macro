@@ -4,7 +4,7 @@
 mod test;
 
 use chrono::{DateTime, Utc};
-use models_databases::{DatabaseId, TableId};
+use databases_types::{DatabaseId, TableId};
 use sqlx::PgPool;
 use uuid::Uuid;
 

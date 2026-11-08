@@ -11,7 +11,7 @@ use crate::{
     },
     run::{Outcome, OutcomeColumn, RunError, result_columns},
 };
-use models_databases::{MAX_STATEMENT_LENGTH, RowId};
+use databases_types::{MAX_STATEMENT_LENGTH, RowId};
 use std::collections::BTreeSet;
 use uuid::Uuid;
 

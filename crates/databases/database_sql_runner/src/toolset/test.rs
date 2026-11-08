@@ -14,12 +14,12 @@ use std::sync::{Arc, Mutex};
 
 use ai_toolset::schema::generate_validated_input_schema;
 use ai_toolset::{AsyncTool, RequestContext, ServiceContext};
-use entity_access::domain::models::AccessLevel;
-use models_databases::position::Position;
-use models_databases::{
+use databases_types::position::Position;
+use databases_types::{
     CellValue, CellWrite, ColumnId, ColumnResult, DatabaseId, DatabaseOp, OpResult, OptionId,
     OptionRef, RowChanges, RowId, RowsChange, RowsResult, TableId,
 };
+use entity_access::domain::models::AccessLevel;
 use models_properties::service::property_value::PropertyValue;
 use models_properties::shared::DataType;
 use uuid::Uuid;

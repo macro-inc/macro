@@ -2,8 +2,8 @@
 //! answers pass every gate and the response is saved, and only while the
 //! saved row still passes the form as it is now.
 
+use databases_types::{CellValue, OptionRef};
 use entity_access::domain::models::ViewAccessLevel;
-use models_databases::{CellValue, OptionRef};
 use models_forms::{BookingEventTypeId, BookingProfileId, BookingTarget, UnlockedBooking};
 use serde_json::json;
 

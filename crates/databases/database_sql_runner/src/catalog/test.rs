@@ -6,9 +6,9 @@ use database_sql_engine::catalog::{
 use databases::domain::models::{
     Column, ColumnConfig, ColumnDetail, Database, DatabaseDetail, Table, TableDetail, TableVersion,
 };
+use databases_types::position::Position;
+use databases_types::{ColumnId, DatabaseId, OptionId, TableId};
 use entity_access::domain::models::AccessLevel;
-use models_databases::position::Position;
-use models_databases::{ColumnId, DatabaseId, OptionId, TableId};
 use models_properties::service::property_definition::PropertyDefinition;
 use models_properties::service::property_definition_with_options::PropertyDefinitionWithOptions;
 use models_properties::service::property_option::PropertyOption;

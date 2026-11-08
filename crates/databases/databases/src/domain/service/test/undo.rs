@@ -1,11 +1,11 @@
 //! Undoing one's own change over the fakes: guarded against later edits by
 //! others, and redone by undoing the undo.
 
-use models_databases::views::{
+use databases_types::views::{
     Conjunction, FilterCondition, FilterGroup, FilterNode, FilterTest, Lane, LaneKey, NewView,
     NumberOperator, RequestedLayout, ViewId, ViewLayout, ViewQuery,
 };
-use models_databases::{EntityKind, EntityRef, RowChange};
+use databases_types::{EntityKind, EntityRef, RowChange};
 
 use super::*;
 use crate::domain::journal::{SkippedCell, UndoOutcome, UndoRefusal};

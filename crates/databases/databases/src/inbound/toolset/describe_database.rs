@@ -4,8 +4,8 @@ use ai_toolset::{
     AsyncTool, RequestContext, ServiceContext, ToolAnnotated, ToolAnnotations, ToolResult,
 };
 use async_trait::async_trait;
+use databases_types::DatabaseId;
 use entity_access::domain::ports::EntityAccessService;
-use models_databases::DatabaseId;
 use schemars::JsonSchema;
 use serde::Deserialize;
 

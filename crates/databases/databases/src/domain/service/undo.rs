@@ -3,7 +3,7 @@
 
 use std::collections::BTreeMap;
 
-use models_databases::{DatabaseOp, RowChanges, RowsChange, ViewChange};
+use databases_types::{DatabaseOp, RowChanges, RowsChange, ViewChange};
 
 use super::*;
 use crate::domain::journal::{self, Current, Guarded, UndoOutcome};
@@ -142,7 +142,7 @@ where
         schema: &journal::SchemaImage,
         table: TableId,
         inverse: &journal::ChangeInverse,
-    ) -> Result<BTreeMap<RowId, BTreeMap<ColumnId, models_databases::CellValue>>, DatabaseError>
+    ) -> Result<BTreeMap<RowId, BTreeMap<ColumnId, databases_types::CellValue>>, DatabaseError>
     {
         let mut named: Vec<RowId> = inverse
             .restored_rows

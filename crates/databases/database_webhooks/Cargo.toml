@@ -27,7 +27,7 @@ macro_authorization = { workspace = true, optional = true, features = ["axum"] }
 macro_user_id = { workspace = true }
 macro_uuid = { workspace = true }
 model_error_response = { workspace = true, optional = true }
-models_databases = { workspace = true }
+databases_types = { workspace = true }
 rand = { workspace = true }
 rootcause = { workspace = true }
 serde = { workspace = true }

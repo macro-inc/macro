@@ -1,10 +1,10 @@
 //! A small, retry-safe first database. Blueprint and provisioning policy live here.
 
 use chrono::{DateTime, Utc};
+use databases_types::OptionId;
+use databases_types::position::{Position, PositionError, key_between};
+use databases_types::views::{Lane, LaneKey, ViewLayout, ViewQuery};
 use macro_event_broker::MacroEventBroker;
-use models_databases::OptionId;
-use models_databases::position::{Position, PositionError, key_between};
-use models_databases::views::{Lane, LaneKey, ViewLayout, ViewQuery};
 use serde::Serialize;
 
 use super::events::{Attribution, DatabaseCreatedMetadata, DatabaseMacroEvent};

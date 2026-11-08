@@ -4,7 +4,7 @@
 #[cfg(test)]
 mod test;
 
-use models_databases::ColumnKind;
+use databases_types::ColumnKind;
 use serde::{Deserialize, Serialize};
 
 /// How a question is asked. Each column kind takes a few, the first its

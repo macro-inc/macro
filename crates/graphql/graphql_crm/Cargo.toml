@@ -20,6 +20,6 @@ workspace-hack = { version = "0.1", path = "../../workspace-hack" }
 
 [dev-dependencies]
 chrono = { workspace = true }
-models_databases = { workspace = true }
+databases_types = { workspace = true }
 serde_json = { workspace = true }
 tokio = { workspace = true, features = ["macros", "rt"] }

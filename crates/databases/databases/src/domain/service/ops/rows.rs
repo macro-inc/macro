@@ -1,8 +1,8 @@
 //! The row ops: inserting, updating and deleting a table's rows, their cells
 //! checked against the columns as earlier ops leave them.
 
-use models_databases::views::LaneKey;
-use models_databases::{RowChanges, RowsChange, TakenId};
+use databases_types::views::LaneKey;
+use databases_types::{RowChanges, RowsChange, TakenId};
 
 use super::{MAX_WRITTEN_ROWS, Place, Planner, refuse, refuse_taken};
 use crate::domain::catalog::StorageTable;

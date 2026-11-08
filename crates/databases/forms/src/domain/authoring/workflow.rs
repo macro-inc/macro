@@ -13,11 +13,11 @@ use databases::domain::{
     models::{OpBatch, Viewer},
     ports::DatabasesService,
 };
+use databases_types::{ColumnChange, DatabaseOp, NewColumn, NewOption};
 use entity_access::domain::models::{
     EditAccessLevel, Entity, EntityAccessReceipt, EntityType, OwnerAccessLevel, RequiredPermission,
     ViewAccessLevel,
 };
-use models_databases::{ColumnChange, DatabaseOp, NewColumn, NewOption};
 use models_forms::{FormAccess, FormId, FormLayout};
 use std::sync::Arc;
 
@@ -55,7 +55,7 @@ fn entity(id: impl ToString, entity_type: EntityType) -> Entity {
         entity_type,
     }
 }
-fn managed(snapshot: &Snapshot) -> Vec<models_databases::ColumnId> {
+fn managed(snapshot: &Snapshot) -> Vec<databases_types::ColumnId> {
     snapshot
         .form
         .submitted_column_id
@@ -189,7 +189,7 @@ impl<
                     ops,
                     base_versions: [(
                         snapshot.form.table_id,
-                        models_databases::TableVersion(snapshot.table_version),
+                        databases_types::TableVersion(snapshot.table_version),
                     )]
                     .into(),
                 },

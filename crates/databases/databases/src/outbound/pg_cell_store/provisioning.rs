@@ -1,7 +1,7 @@
 use super::*;
 use crate::domain::provisioning::{DatabaseStorageProvisioner, StorageBlueprint};
 use crate::outbound::pg_databases_repo::insert_column;
-use models_databases::position::key_between;
+use databases_types::position::key_between;
 use properties::domain::database_cell_writer::DatabaseCellWriter;
 
 impl<Properties> DatabaseStorageProvisioner for PgCellStore<Properties>
@@ -33,9 +33,8 @@ where
             "INSERT INTO database_tables (id, database_id, name, position) VALUES ($1, $2, 'Records', $3)",
             database.table_id.into_uuid(), database.id.into_uuid(), position.as_str(),
         ).execute(&mut **transaction).await?;
-        let positions =
-            models_databases::position::keys_between(None, None, database.columns.len())
-                .map_err(PgDatabasesRepoError::from)?;
+        let positions = databases_types::position::keys_between(None, None, database.columns.len())
+            .map_err(PgDatabasesRepoError::from)?;
         for (column, position) in database.columns.iter().zip(positions) {
             let definition = self
                 .properties

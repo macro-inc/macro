@@ -12,8 +12,8 @@ use databases::domain::{
     ports::DatabasesService,
     view_rows::{ViewRowsError, ViewRowsRepository},
 };
+use databases_types::views::{ViewProblem, ViewQuery};
 use entity_access::domain::models::{EntityAccessReceipt, ViewAccessLevel};
-use models_databases::views::{ViewProblem, ViewQuery};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 

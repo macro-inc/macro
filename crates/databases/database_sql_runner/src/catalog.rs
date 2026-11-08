@@ -12,7 +12,7 @@ use databases::domain::catalog;
 use databases::domain::models::{
     ColumnConfig, ColumnDetail, DatabaseDetail, DatabaseId, TableDetail, TableId,
 };
-use models_databases::OptionId;
+use databases_types::OptionId;
 use uuid::Uuid;
 
 /// What one statement can see: the viewer's databases in detail, and the

@@ -3,9 +3,9 @@ use std::sync::Mutex;
 
 use chrono::{TimeZone, Utc};
 use databases::domain::models::{ColumnId, DatabaseId, OptionId, RowId, TableId, TableVersion};
+use databases_types::DateRange;
 use entity_access::domain::models::AccessLevel;
 use macro_user_id::{cow_str::CowLike, user_id::MacroUserIdStr};
-use models_databases::DateRange;
 
 use super::*;
 use crate::domain::{
@@ -66,7 +66,7 @@ fn overview(record_type: PipelineRecordType) -> PipelineOverview {
             field("Revenue", FieldKind::Number),
             field(
                 "Proposal",
-                FieldKind::Entity(models_databases::EntityKind::Document),
+                FieldKind::Entity(databases_types::EntityKind::Document),
             ),
         ],
         version: TableVersion(1),

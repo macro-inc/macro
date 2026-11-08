@@ -8,10 +8,10 @@ mod inputs;
 use async_graphql::{Context, ErrorExtensions, ID, SimpleObject};
 use database_sql_runner::view_rows::ViewPageError;
 use databases::domain::{models::DatabaseError, view_rows::ViewRowsError};
+use databases_types::DatabaseId;
 use entity_kind::EntityType;
 use graphql_common::{parse_id, require_authenticated_user};
 use graphql_soup::{GraphqlSoupDatabaseRow, GraphqlSoupEntity, SoupEntityEdges};
-use models_databases::DatabaseId;
 
 pub use context::DatabaseRowsGraphqlContext;
 pub use inputs::DatabaseViewRowsInput;

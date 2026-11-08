@@ -2,7 +2,7 @@
 //! names that belong to its table, with its table's columns, even when two
 //! reads name one table.
 
-use models_databases::{CellValue, CellWrite, DatabaseOp, RowsChange};
+use databases_types::{CellValue, CellWrite, DatabaseOp, RowsChange};
 use models_properties::service::property_value::PropertyValue;
 use uuid::Uuid;
 

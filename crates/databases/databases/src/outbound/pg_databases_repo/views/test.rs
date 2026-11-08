@@ -1,4 +1,4 @@
-use models_databases::views::LaneKey;
+use databases_types::views::LaneKey;
 use uuid::Uuid;
 
 use super::{lane_of, stored_lane};

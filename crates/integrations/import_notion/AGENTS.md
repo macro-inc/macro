@@ -32,7 +32,7 @@ maps a data source onto Macro database columns and cells
 ## Boundaries
 
 - Depends on: `pipedream_mcp` (`ConnectionStore`, `ConnectedAppProxy`),
-  `models_databases` (the column and cell vocabulary).
+  `databases_types` (the column and cell vocabulary).
 - Used by: `import`.
 
 ## Checks

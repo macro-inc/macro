@@ -1,8 +1,8 @@
 //! A form's layout: which of its table's columns it asks, in what sections
 //! and order, how, and where it stops a respondent. Replaced as one document.
 
-use models_databases::ColumnId;
-use models_databases::views::FilterGroup;
+use databases_types::ColumnId;
+use databases_types::views::FilterGroup;
 use serde::{Deserialize, Serialize};
 
 use crate::ids::{BookingEventTypeId, BookingProfileId, FormQuestionId, FormSectionId};

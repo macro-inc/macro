@@ -15,7 +15,7 @@ use crate::domain::journal::{
 use crate::domain::models::{
     ChangeId, ColumnId, CommittedChange, DatabaseId, RowId, TableId, TableVersion,
 };
-use models_databases::position::Position;
+use databases_types::position::Position;
 
 /// Record a batch's journal entries, answering each one's id.
 pub(crate) async fn record(

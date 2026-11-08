@@ -22,9 +22,9 @@ pub use self::error::ResolveError;
 pub use self::names::{ROW_ID, ROW_POSITION};
 use crate::catalog::{Catalog, Table, TableSource};
 use crate::parse::{self, Statement};
-use models_databases::ColumnKind as OpColumnKind;
-use models_databases::cast::{Cast, CastKind, Contents, cast};
-use models_databases::{DateRange, OptionId, TableId};
+use databases_types::ColumnKind as OpColumnKind;
+use databases_types::cast::{Cast, CastKind, Contents, cast};
+use databases_types::{DateRange, OptionId, TableId};
 
 pub use crate::parse::{AggregateFunction, ComparisonOperator, Direction, JoinKind};
 
