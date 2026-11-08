@@ -2446,6 +2446,15 @@ async fn run_server() -> anyhow::Result<()> {
             entity_access_service.clone(),
             authorization_state.clone(),
         ),
+        initiative_activity_state:
+            project::inbound::axum_router::InitiativeActivityRouterState::new(
+                Arc::new(project::domain::history::InitiativeHistory::new(
+                    activity::outbound::pg_activity_repo::PgActivityRepo::new(readonly_db.clone()),
+                    entity_access_service.clone(),
+                )),
+                entity_access_service.clone(),
+                authorization_state.clone(),
+            ),
         sql_state: database_sql_runner::inbound::axum_router::SqlRouterState::new(
             sql_service,
             authorization_state.clone(),

@@ -40,3 +40,5 @@ workspace-hack = { version = "0.1", path = "../../workspace-hack" }
 
 [dev-dependencies]
 macro_db_migrator = { workspace = true }
+model_user = { workspace = true }
+tower = { workspace = true, features = ["util"] }

@@ -50,19 +50,17 @@ impl<R: ComposedMemoryRepo> MemoryService for MemoryServiceImpl<R> {
         let team = format!("# Current team profiles\n{}", profiles.join("\n"));
         Ok(Some(agent_prompts::compose(&[&activity, &explicit, &team])))
     }
-}
 
-impl<R: ComposedMemoryRepo> MemoryServiceImpl<R> {
     /// Private memory is always read as the authenticated caller.
     #[tracing::instrument(skip_all, err)]
-    pub async fn explicit(&self, user: &MacroUserIdStr<'_>) -> Result<ExplicitMemory> {
+    async fn explicit(&self, user: &MacroUserIdStr<'_>) -> Result<ExplicitMemory> {
         self.repo.enroll(user).await?;
         self.repo.explicit(user).await
     }
 
     /// Only this user-invoked operation writes explicit memory. Generation never does.
     #[tracing::instrument(skip_all, err)]
-    pub async fn update_memory(
+    async fn update_memory(
         &self,
         user: MacroUserIdStr<'static>,
         revision: i64,
@@ -82,7 +80,7 @@ impl<R: ComposedMemoryRepo> MemoryServiceImpl<R> {
 
     /// Professional activity is visible only to its owner and current teammates.
     #[tracing::instrument(skip_all, err)]
-    pub async fn get_user_activity(
+    async fn get_user_activity(
         &self,
         caller: MacroUserIdStr<'static>,
         user: MacroUserIdStr<'static>,
@@ -104,7 +102,9 @@ impl<R: ComposedMemoryRepo> MemoryServiceImpl<R> {
         }
         self.repo.activity(&user, start, end).await
     }
+}
 
+impl<R: ComposedMemoryRepo> MemoryServiceImpl<R> {
     /// Await the complete daily generation and its atomic commit. Retries of a
     /// completed day are no-ops; concurrent jobs cannot overwrite newer output.
     #[tracing::instrument(skip_all, fields(date = %date), err)]
