@@ -18,6 +18,8 @@ pub struct StateRef<'state> {
     #[cfg(feature = "foreign-nodes")]
     pub(crate) native_projection: Option<&'state crate::foreign::projection::NativeProjection>,
     #[cfg(feature = "foreign-nodes")]
+    pub(crate) foreign_projections: Option<&'state crate::foreign::ReadProjections<'state>>,
+    #[cfg(feature = "foreign-nodes")]
     pub(crate) source_records: Option<&'state crate::state::NodeMap>,
     #[cfg(feature = "foreign-nodes")]
     pub(crate) retired_records: Option<&'state crate::state::NodeMap>,
@@ -863,6 +865,8 @@ impl<'state> StateRef<'state> {
         StateRef {
             #[cfg(feature = "foreign-nodes")]
             native_projection: self.native_projection,
+            #[cfg(feature = "foreign-nodes")]
+            foreign_projections: self.foreign_projections,
             #[cfg(feature = "foreign-nodes")]
             foreign_native_calls: self.foreign_native_calls,
             #[cfg(feature = "foreign-nodes")]
