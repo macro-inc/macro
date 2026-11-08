@@ -1,9 +1,4 @@
 import { readFileSync } from 'node:fs';
-import { beforeAll, expect, test } from 'vitest';
-import {
-  EditorSession,
-  initSync,
-} from '../../../../apps/web/src/lib/core/document-session/wasm/document_session_wasm.js';
 import {
   ABI_MAJOR,
   Access,
@@ -14,9 +9,14 @@ import {
 } from '@macro-inc/collaboration/session/abi.generated';
 import { emptyInput } from '@macro-inc/collaboration/session/input';
 import { decodeOutput } from '@macro-inc/collaboration/session/output';
+import { beforeAll, expect, test } from 'vitest';
+import {
+  EditorSession,
+  initSync,
+} from '../../../../apps/web/src/lib/core/document-session/wasm/document_session_wasm.js';
 import { Mirror } from './mirror';
-import { SessionPort } from './session-port';
 import type { ViewSink } from './port';
+import { SessionPort } from './session-port';
 
 beforeAll(() =>
   initSync({

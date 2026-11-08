@@ -1,6 +1,7 @@
 import { expect, test } from 'vitest';
 import { Mirror, NO_KEY } from './mirror';
 import type { TypeRow } from './types';
+
 const types: TypeRow[] = [
   { index: 0, name: 'root', kind: 'element' },
   { index: 1, name: 'paragraph', kind: 'element' },

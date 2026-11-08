@@ -1,19 +1,19 @@
 import {
+  ClipboardMsg,
   EditorInputMsg,
   FLAG_HANDLED,
-  ClipboardMsg,
+  type IQueryMsg,
+  type ISelectionMsg,
+  ListenerTableMsg,
   QueryMsg,
   QueryReplyMsg,
   SelectionMsg,
-  type IQueryMsg,
-  ListenerTableMsg,
   SessionInputMsg,
   TypeTableMsg,
-  type ISelectionMsg,
 } from '@macro-inc/collaboration/session/abi.generated';
 import type { SessionExecutor } from '@macro-inc/collaboration/session/executor';
-import { decodeOutput } from '@macro-inc/collaboration/session/output';
 import { emptyInput } from '@macro-inc/collaboration/session/input';
+import { decodeOutput } from '@macro-inc/collaboration/session/output';
 import type { EditorSession } from '@macro-inc/collaboration/session/wasm';
 import type { EditorPort, TextFromView, ViewSink } from './port';
 import type { TypeRow, ViewSelection } from './types';

@@ -6,6 +6,7 @@
 import { convertText, importLineBreak, isBlockDOM } from './html-text';
 import type { DraftConversion, NodeViewRegistry } from './registry';
 import type { JsonObject } from './types';
+
 function element(
   type: string,
   children: readonly JsonObject[],

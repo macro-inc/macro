@@ -145,6 +145,7 @@ function target(
   }
   if (granularity === 'character' && selection.kind === 'range') {
     const node = view.node(selection.anchor.key);
+    // biome-ignore lint/suspicious/noControlCharactersInRegex: The character-deletion fast path deliberately includes every ASCII code unit.
     if (node && /^[\x00-\x7f]*$/.test(node.text)) return none;
   }
   const dom = view.root.ownerDocument.getSelection();

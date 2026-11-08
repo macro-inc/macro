@@ -135,7 +135,7 @@ if (input.relay) {
 		observations.push(observe(docs[event.peer]));
 	}
 	console.log(JSON.stringify(observations));
-	mirrors.forEach((mirror) => mirror.dispose());
+	mirrors.forEach((mirror) => { mirror.dispose(); });
 	process.exit(0);
 }
 if (!input.runs) throw new Error("missing differential runs");

@@ -1,6 +1,6 @@
-import type { Component, Accessor } from 'solid-js';
+import type { Accessor, Component } from 'solid-js';
 import type { EditorView } from './editor-view';
-import type { JsonObject, ViewNode, TypeFlags } from './types';
+import type { JsonObject, TypeFlags, ViewNode } from './types';
 
 export interface ElementDOMSlot {
   readonly element: HTMLElement;

@@ -1,5 +1,5 @@
-import type { EditorView } from './editor-view';
 import { createViewCommand } from './commands';
+import type { EditorView } from './editor-view';
 import { createDOMRange, readSelection, resolvePoint } from './selection';
 import type { Point, ViewSelection } from './types';
 

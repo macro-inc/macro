@@ -4,10 +4,10 @@
  * Retargeted from Lexical 0.45.0 nodes: 0cfcc169296723e07de2396cd42ea3434b5b79ed.
  */
 import {
-  NodeViewRegistry,
-  themeClass,
   type NodeView,
+  NodeViewRegistry,
   type RenderContext,
+  themeClass,
 } from '../registry';
 import type { ViewNode } from '../types';
 

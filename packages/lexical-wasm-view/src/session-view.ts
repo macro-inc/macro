@@ -1,12 +1,12 @@
 import {
-  SessionExecutor,
   type ExecutorOptions,
+  SessionExecutor,
 } from '@macro-inc/collaboration/session/executor';
 import type { EditorSession } from '@macro-inc/collaboration/session/wasm';
 import { EditorView, type ViewOptions } from './view/editor-view';
-import { SessionPort } from './view/session-port';
-import type { NodeViewRegistry } from './view/registry';
 import type { ViewSink } from './view/port';
+import type { NodeViewRegistry } from './view/registry';
+import { SessionPort } from './view/session-port';
 
 /** Connect the view to the existing I/O executor after the host loads WASM. */
 export async function mountSessionView(

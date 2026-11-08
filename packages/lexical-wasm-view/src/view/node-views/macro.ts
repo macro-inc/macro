@@ -1,10 +1,10 @@
-import { themeClass } from '../registry';
 import type { Component } from 'solid-js';
 import type {
   DecoratorProps,
   NodeViewRegistry,
   RenderContext,
 } from '../registry';
+import { themeClass } from '../registry';
 import type { ViewNode } from '../types';
 
 export const macroDecoratorTypes = [

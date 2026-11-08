@@ -1,18 +1,19 @@
 // @vitest-environment jsdom
-import { expect, test } from 'vitest';
+
+import { CodeHighlightNode, CodeNode } from '@lexical/code';
 import { createHeadlessEditor } from '@lexical/headless';
 import { $generateNodesFromDOM } from '@lexical/html';
-import { HeadingNode, QuoteNode } from '@lexical/rich-text';
-import { ListNode, ListItemNode } from '@lexical/list';
-import { LinkNode, AutoLinkNode } from '@lexical/link';
-import { TableNode, TableRowNode, TableCellNode } from '@lexical/table';
-import { CodeNode, CodeHighlightNode } from '@lexical/code';
+import { AutoLinkNode, LinkNode } from '@lexical/link';
+import { ListItemNode, ListNode } from '@lexical/list';
 import { MarkNode } from '@lexical/mark';
+import { HeadingNode, QuoteNode } from '@lexical/rich-text';
+import { TableCellNode, TableNode, TableRowNode } from '@lexical/table';
 import {
   $isElementNode,
   type LexicalNode,
   type SerializedLexicalNode,
 } from 'lexical';
+import { expect, test } from 'vitest';
 import { importHTML } from './html-import';
 
 const baseCases = [

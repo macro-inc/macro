@@ -48,95 +48,99 @@ export default function RustMarkdownEditor(props: {
   createEffect(() => runtime()?.view.setEditable(permissions.canEdit()));
   onMount(() => {
     fireAndForget(
-      flow.task('session.init', async () => {
-        flow.span.setAttr('document.id', documentId());
-        const module = await flow.task('wasm.init', (span) =>
-          loadDocumentSession(span)
-        );
-        const element = root;
-        if (abort.signal.aborted || !element) return;
-        const authorization = createEditorAuthorization(
-          documentId(),
-          props.context
-        );
-        const showError = (value: unknown) => {
-          const failure =
-            value instanceof Error ? value : new Error('Editor session failed');
-          rejectReady?.(failure);
-          if (!abort.signal.aborted) {
-            setError(failure);
-            Telemetry.error(failure, { surface: 'rust-editor.session' });
-          }
-        };
-        await flow.task('state.load', async () => {
-          const mounted = await createRustEditorSession({
-            module,
-            root: element,
-            registry: createBuiltinRegistry(),
-            view: {
-              namespace: 'block-md-main',
-              parentSpan: flow.span,
-              editable: permissions.canEdit(),
-              preset: 'rich',
-              theme,
-              onError: showError,
-            },
-            documentId: documentId(),
-            user: authorization.user,
-            access: authorization.access,
-            authorization: authorization.auth,
-            viewEngine:
-              isIOS || isSafari || isPlatform('ios') ? 2 : isFirefox ? 3 : 1,
-            viewOs:
-              isIOS || isPlatform('ios')
-                ? 2
-                : isAndroid || isPlatform('android')
-                  ? 3
-                  : isAppleDevice
-                    ? 1
-                    : 0,
-            span: flow.span,
-            onStatus(status) {
-              if (abort.signal.aborted) return;
-              state.session.setStatus(
-                status.code === 1
-                  ? SyncSourceStatus.Connected
-                  : status.code === 0
-                    ? SyncSourceStatus.Connecting
-                    : SyncSourceStatus.Disconnected
-              );
-            },
-          });
-          if (abort.signal.aborted) {
-            await mounted.close();
-            return;
-          }
-          setRuntime(mounted);
-          await new Promise<void>((resolve, reject) => {
-            rejectReady = reject;
-            if (mounted.view.node(0)) {
-              resolve();
+      flow
+        .task('session.init', async () => {
+          flow.span.setAttr('document.id', documentId());
+          const module = await flow.task('wasm.init', (span) =>
+            loadDocumentSession(span)
+          );
+          const element = root;
+          if (abort.signal.aborted || !element) return;
+          const authorization = createEditorAuthorization(
+            documentId(),
+            props.context
+          );
+          const showError = (value: unknown) => {
+            const failure =
+              value instanceof Error
+                ? value
+                : new Error('Editor session failed');
+            rejectReady?.(failure);
+            if (!abort.signal.aborted) {
+              setError(failure);
+              Telemetry.error(failure, { surface: 'rust-editor.session' });
+            }
+          };
+          await flow.task('state.load', async () => {
+            const mounted = await createRustEditorSession({
+              module,
+              root: element,
+              registry: createBuiltinRegistry(),
+              view: {
+                namespace: 'block-md-main',
+                parentSpan: flow.span,
+                editable: permissions.canEdit(),
+                preset: 'rich',
+                theme,
+                onError: showError,
+              },
+              documentId: documentId(),
+              user: authorization.user,
+              access: authorization.access,
+              authorization: authorization.auth,
+              viewEngine:
+                isIOS || isSafari || isPlatform('ios') ? 2 : isFirefox ? 3 : 1,
+              viewOs:
+                isIOS || isPlatform('ios')
+                  ? 2
+                  : isAndroid || isPlatform('android')
+                    ? 3
+                    : isAppleDevice
+                      ? 1
+                      : 0,
+              span: flow.span,
+              onStatus(status) {
+                if (abort.signal.aborted) return;
+                state.session.setStatus(
+                  status.code === 1
+                    ? SyncSourceStatus.Connected
+                    : status.code === 0
+                      ? SyncSourceStatus.Connecting
+                      : SyncSourceStatus.Disconnected
+                );
+              },
+            });
+            if (abort.signal.aborted) {
+              await mounted.close();
               return;
             }
-            releaseCommit = mounted.view.onCommit((commit) => {
-              if (commit.fullReconcile) {
-                releaseCommit?.();
+            setRuntime(mounted);
+            await new Promise<void>((resolve, reject) => {
+              rejectReady = reject;
+              if (mounted.view.node(0)) {
                 resolve();
+                return;
               }
+              releaseCommit = mounted.view.onCommit((commit) => {
+                if (commit.fullReconcile) {
+                  releaseCommit?.();
+                  resolve();
+                }
+              });
             });
+            if (!abort.signal.aborted) props.onReady?.();
+            if (props.autoFocus && !isTouchDevice() && !abort.signal.aborted)
+              mounted.view.focus();
           });
-          if (!abort.signal.aborted) props.onReady?.();
-          if (props.autoFocus && !isTouchDevice() && !abort.signal.aborted)
-            mounted.view.focus();
-        });
-      }).catch((failure: unknown) => {
-        if (!abort.signal.aborted)
-          setError(
-            failure instanceof Error
-              ? failure
-              : new Error('Editor could not open')
-          );
-      }),
+        })
+        .catch((failure: unknown) => {
+          if (!abort.signal.aborted)
+            setError(
+              failure instanceof Error
+                ? failure
+                : new Error('Editor could not open')
+            );
+        }),
       'rust-editor.open'
     );
   });
