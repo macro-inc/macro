@@ -45,10 +45,10 @@ import {
 } from 'solid-js';
 import { callDetailSearch } from '../call-route';
 import { CallRecordingBody } from '../component/CallRecording/CallRecordingBody';
+import { CallRecordingRoot } from '../component/CallRecording/CallRecordingRoot';
 import { CallTranscriptButton } from '../component/CallRecording/CallTranscriptButton';
 import { CallSidePanelSections } from '../component/sidepanel/CallSidePanelSections';
 import type { CallTranscriptTarget } from '../constants';
-import { RecordingViewProvider } from '../context/recording-view';
 import { callRecordingDownloadSource } from '../queries/recording-download';
 
 import { CallDetailMobileHeader } from './CallDetailMobileHeader';
@@ -187,11 +187,9 @@ export function CallDetailActions(props: {
 /** Keep side-panel state alive across call-record query updates. */
 export function CallDetailRoot(props: ParentProps<{ callId: string }>) {
   return (
-    <RecordingViewProvider callId={props.callId}>
-      <SidePanel.Root floating persistKey={`call:${props.callId}`}>
-        {props.children}
-      </SidePanel.Root>
-    </RecordingViewProvider>
+    <CallRecordingRoot callId={props.callId}>
+      {props.children}
+    </CallRecordingRoot>
   );
 }
 

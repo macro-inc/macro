@@ -12,7 +12,7 @@ import { getDisplayName, tryMacroId } from '@core/user';
 import { createScrollIntentTracker } from '@core/util/scroll-intent';
 import PhoneCallIcon from '@icon/system/regular/phone-call.svg';
 import type { CallRecord } from '@service-call/client';
-import { Button, Tabs } from '@ui';
+import { Button, Layer, Tabs } from '@ui';
 import {
   createEffect,
   createMemo,
@@ -47,6 +47,7 @@ import {
   shouldCoalesceSeekGenerationBump,
 } from './call-recording-utils';
 
+const TRANSCRIPT_WIDTH_PX = 360;
 export function CallRecordingBody(props: {
   record: CallRecord;
   callId: string;
@@ -242,7 +243,14 @@ export function CallRecordingBody(props: {
                 headerToggle={props.headerToggle ?? false}
                 floating
               >
-                <div class="flex h-full min-h-0">
+                <div
+                  class="relative flex h-full min-h-0"
+                  style={{
+                    'padding-right': view.transcriptOpen()
+                      ? `${TRANSCRIPT_WIDTH_PX + 2 * SidePanel.FLOATING_INSET_PX}px`
+                      : undefined,
+                  }}
+                >
                   <div class="relative flex h-full min-h-0 min-w-0 flex-1 flex-col overflow-hidden @container/call-column">
                     <SidePanel.HeaderActions>
                       <HeaderActionGroup label={t('calls.detailActions')}>
@@ -455,22 +463,31 @@ export function CallRecordingBody(props: {
                     </Show>
                   </div>
                   <Show when={view.transcriptOpen()}>
-                    <aside
-                      aria-label={t('calls.detailTranscript')}
-                      class="flex h-full min-h-0 w-[360px] shrink-0 flex-col border-l border-edge-muted"
-                    >
-                      <CallTranscript
-                        transcript={record().transcript}
-                        channelId={record().channelId}
-                        record={record()}
-                        timelineStartMs={timelineStartMs()}
-                        durationSeconds={recordingDuration()}
-                        activeSequenceNum={activeSequenceNum()}
-                        videoSeekGeneration={videoSeekGeneration()}
-                        onSeekToSeconds={seekToSeconds}
-                        messages={messages()}
-                      />
-                    </aside>
+                    <Layer offset={1}>
+                      <aside
+                        aria-label={t('calls.detailTranscript')}
+                        class="absolute z-split-panel-chrome flex min-h-0 flex-col overflow-hidden rounded-xl border border-edge-frame bg-surface p-2 shadow-xl"
+                        style={{
+                          top: `${SidePanel.FLOATING_INSET_PX}px`,
+                          right: `${SidePanel.FLOATING_INSET_PX}px`,
+                          bottom: `${SidePanel.FLOATING_INSET_PX}px`,
+                          width: `${TRANSCRIPT_WIDTH_PX}px`,
+                        }}
+                      >
+                        <CallTranscript
+                          transcript={record().transcript}
+                          channelId={record().channelId}
+                          record={record()}
+                          timelineStartMs={timelineStartMs()}
+                          durationSeconds={recordingDuration()}
+                          activeSequenceNum={activeSequenceNum()}
+                          videoSeekGeneration={videoSeekGeneration()}
+                          onSeekToSeconds={seekToSeconds}
+                          messages={messages()}
+                          syncSurface="inset"
+                        />
+                      </aside>
+                    </Layer>
                   </Show>
                 </div>
               </SidePanel.Layout>

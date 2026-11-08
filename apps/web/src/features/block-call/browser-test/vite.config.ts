@@ -12,6 +12,23 @@ export default defineConfig({
       name: 'recording-view-fixture-adapters',
       enforce: 'pre',
       resolveId(source, importer) {
+        if (
+          importer?.endsWith('/side-panel/SidePanel.tsx') &&
+          [
+            '@core/block',
+            '@app/preferences/use-preference',
+            '@core/hotkey/hotkeys',
+            '../split-layout/layoutUtils',
+            '../split-layout/components/SplitHeader',
+            '../split-layout/components/HeaderIsland',
+            '@core/component/Resize/Resize',
+          ].includes(source)
+        )
+          return resolve(
+            'src/features/block-call/browser-test/view-adapters.tsx'
+          );
+        if (source === '@components/app/side-panel')
+          return resolve('src/components/app/side-panel/SidePanel.tsx');
         if (!importer?.includes('/features/block-call/')) return;
         if (
           [
@@ -19,7 +36,6 @@ export default defineConfig({
             '../use-call-again',
             '@app/features/chat/ChatWithAgentButton',
             '@property/tags',
-            '@components/app/side-panel',
             '@core/component/CustomScrollbar',
             '@channel/Call/chat/CallChatHistory',
             '@channel/Message',

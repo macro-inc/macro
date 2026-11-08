@@ -48,6 +48,7 @@ vi.mock('@components/app/HeaderActionGroup', () => ({
 }));
 vi.mock('@components/app/side-panel', () => ({
   SidePanel: {
+    Root: (props: { children: JSX.Element }) => props.children,
     HeaderActions: () => null,
     Layout: (props: { children: JSX.Element }) => (
       <div data-testid="panel-layout">{props.children}</div>

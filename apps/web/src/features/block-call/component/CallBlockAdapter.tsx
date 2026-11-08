@@ -5,7 +5,6 @@ import {
   type CallTranscriptTarget,
   URL_PARAMS,
 } from '@block-call/constants';
-import { SidePanel } from '@components/app/side-panel';
 import { useBlockId } from '@core/block';
 import { DocumentBlockContainer } from '@core/component/DocumentBlockContainer';
 import { createMethodRegistration } from '@core/orchestrator';
@@ -14,8 +13,8 @@ import { useCallRecordQuery } from '@queries/call/call';
 import { useSearchParams } from '@solidjs/router';
 import { createEffect, createSignal, on, Show } from 'solid-js';
 import { callDetailSearch } from '../call-route';
-import { RecordingViewProvider } from '../context/recording-view';
 import { CallRecordingBody } from './CallRecording/CallRecordingBody';
+import { CallRecordingRoot } from './CallRecording/CallRecordingRoot';
 import { CallRecordingSplitHeader } from './CallRecording/CallRecordingSplitHeader';
 import { CallSidePanelSections } from './sidepanel/CallSidePanelSections';
 
@@ -129,23 +128,21 @@ export function CallBlockAdapter(props: CallBlockProps) {
       <div class="h-full flex flex-col @container">
         <Show when={callRecord.isPending ? undefined : callRecord.data}>
           {(data) => (
-            <RecordingViewProvider callId={callId}>
-              <SidePanel.Root floating persistKey={`call:${callId}`}>
-                <CallSidePanelSections record={data()} callId={callId} />
-                <div class="flex size-full min-h-0 min-w-0 flex-col overflow-hidden @container">
-                  <CallRecordingSplitHeader record={data()} />
-                  <CallRecordingBody
-                    record={data()}
-                    callId={callId}
-                    transcriptTarget={transcriptTarget()}
-                    messageTarget={messageTarget()?.id}
-                    messageTargetRequestKey={messageTarget()?.requestKey}
-                    onClearMessageTarget={clearMessageTarget}
-                    headerToggle
-                  />
-                </div>
-              </SidePanel.Root>
-            </RecordingViewProvider>
+            <CallRecordingRoot callId={callId}>
+              <CallSidePanelSections record={data()} callId={callId} />
+              <div class="flex size-full min-h-0 min-w-0 flex-col overflow-hidden @container">
+                <CallRecordingSplitHeader record={data()} />
+                <CallRecordingBody
+                  record={data()}
+                  callId={callId}
+                  transcriptTarget={transcriptTarget()}
+                  messageTarget={messageTarget()?.id}
+                  messageTargetRequestKey={messageTarget()?.requestKey}
+                  onClearMessageTarget={clearMessageTarget}
+                  headerToggle
+                />
+              </div>
+            </CallRecordingRoot>
           )}
         </Show>
       </div>

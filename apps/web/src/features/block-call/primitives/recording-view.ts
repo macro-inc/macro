@@ -18,6 +18,7 @@ export function createRecordingView(canDock: Accessor<boolean>) {
     setContentTab,
     canDock,
     transcriptOpen,
+    closeTranscript: () => setRequestedOpen(false),
     toggleTranscript,
   };
 }

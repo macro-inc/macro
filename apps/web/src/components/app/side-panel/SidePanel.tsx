@@ -87,6 +87,7 @@ function Root(
     defaultOpen?: boolean;
     persistKey?: string;
     floating?: boolean;
+    onOpenChange?: (open: boolean) => void;
   }>
 ) {
   const splitPanel = useSplitPanel();
@@ -118,7 +119,10 @@ function Root(
   const isOpen = () => (isOverlayMode() ? isOverlayOpen() : isWideOpen());
   const setIsOpen = (next: boolean | ((prev: boolean) => boolean)) => {
     const setter = isOverlayMode() ? setIsOverlayOpen : setIsWideOpen;
-    setter(typeof next === 'function' ? next : () => next);
+    const open = typeof next === 'function' ? next(isOpen()) : next;
+    if (open === isOpen()) return;
+    setter(open);
+    props.onOpenChange?.(open);
   };
   const toggle = () => setIsOpen((prev) => !prev);
 
@@ -923,5 +927,6 @@ export const SidePanel = {
   CountTitle,
   Card,
   FLOATING_CLEARANCE_PX,
+  FLOATING_INSET_PX,
 };
 export { useSidePanel };

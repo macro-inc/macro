@@ -1,4 +1,9 @@
-import type { JSX, ParentProps } from 'solid-js';
+import {
+  createContext,
+  createSignal,
+  type JSX,
+  type ParentProps,
+} from 'solid-js';
 
 export const useCallContextOptional = () => undefined;
 export const useCallAgain = () => ({
@@ -14,10 +19,23 @@ export const CustomScrollbar = () => null;
 export const getDisplayName = () => 'Guest';
 export const tryMacroId = () => undefined;
 export const CallRecordingSummarySection = () => <p>Stored summary fixture</p>;
-export const useSidePanel = () => undefined;
-export const SidePanel = {
-  Layout: (props: ParentProps) => props.children,
-  HeaderActions: () => null,
+export const useMaybeBlockAliasedName = () => undefined;
+export const usePreference = (_key: string, options: { default: boolean }) =>
+  createSignal(options.default);
+export const useSplitPanel = () => undefined;
+export const registerHotkey = () => {};
+export const SplitHeaderRight = (props: ParentProps) => props.children;
+export const HeaderIsland = (props: ParentProps) => props.children;
+export const ResizeZoneContext = createContext({
+  size: () => window.innerWidth,
+});
+export const Resize = {
+  Zone: (props: ParentProps) => (
+    <ResizeZoneContext.Provider value={{ size: () => window.innerWidth }}>
+      <div class="size-full">{props.children}</div>
+    </ResizeZoneContext.Provider>
+  ),
+  Panel: (props: ParentProps) => <div class="size-full">{props.children}</div>,
 };
 export const CallDiscussionHistory = (props: {
   render: (source: {

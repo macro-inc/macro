@@ -20,6 +20,19 @@ describe('recording view navigation', () => {
     });
   });
 
+  it('closes the requested transcript even while the pane is narrow', () => {
+    createRoot((dispose) => {
+      const [wide, setWide] = createSignal(true);
+      const view = createRecordingView(wide);
+      view.toggleTranscript();
+      setWide(false);
+      view.closeTranscript();
+      setWide(true);
+      expect(view.transcriptOpen()).toBe(false);
+      expect(view.contentTab()).toBe('summary');
+      dispose();
+    });
+  });
   it('keeps the panel out of narrow panes while retaining reading tab navigation', () => {
     createRoot((dispose) => {
       const [wide, setWide] = createSignal(false);

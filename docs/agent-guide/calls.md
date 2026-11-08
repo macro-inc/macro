@@ -51,11 +51,15 @@ stored Markdown, not generated client-side sections.
 The full-width top bar stays above the content, with the standard details toggle.
 Details opens in the existing floating popover below the header, without
 Transcript/Details tabs. On touch it uses the standard details drawer.
-The separate Transcript button directly after Share toggles a right-hand transcript
-panel and stays pressed while open. Opening it changes an active Transcript reading
-tab to Summary; choosing the Transcript tab again remains possible. The button and
-panel are hidden on touch and below 960px of call-pane width; use the reading tab
-there.
+The separate Transcript button directly after Share toggles a 360px floating card
+and stays pressed while open. The card has rounded corners, an edge and shadow,
+12px insets from the content pane's top/right/bottom, and padded transcript rows.
+It uses the next Layer surface depth, with an inset Sync surface, in both themes.
+The recording leaves room on the right so the card covers no content. Opening
+Transcript closes Details, and opening Details closes Transcript. Opening Transcript
+changes an active Transcript reading tab to Summary; choosing the Transcript tab
+again remains possible. The button and card are hidden on touch and below 960px
+of call-pane width; use the reading tab there.
 Transcript rows show speaker identity and recording time; click a row to seek.
 The active line has a waveform. Playback follows the transcript until the user
 scrolls away; Sync to video sits on an opaque floating pill above pinned or phone

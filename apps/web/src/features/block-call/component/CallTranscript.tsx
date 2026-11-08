@@ -50,6 +50,7 @@ export function CallTranscript(props: {
   manualScrollGeneration?: number;
   /** Place resynchronization immediately above the host's playback bar. */
   syncTarget?: HTMLElement;
+  syncSurface?: 'surface' | 'inset';
 }) {
   const [scrollRef, setScrollRef] = createSignal<HTMLElement>();
   const viewport = () => props.scrollElement ?? scrollRef();
@@ -208,7 +209,13 @@ export function CallTranscript(props: {
   });
 
   const syncButton = () => (
-    <div class="pointer-events-auto rounded-full border border-edge-muted bg-surface shadow-menu">
+    <div
+      class="pointer-events-auto rounded-full border border-edge-muted shadow-menu"
+      classList={{
+        'bg-inset': props.syncSurface === 'inset',
+        'bg-surface': props.syncSurface !== 'inset',
+      }}
+    >
       <Button
         variant="secondary"
         size="sm"
