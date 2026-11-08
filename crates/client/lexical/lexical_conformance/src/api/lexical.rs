@@ -443,8 +443,14 @@ pub(crate) fn call(r: &mut Replayer, tx: &mut Transaction<'_>, op: &Value) -> Re
             r.node(tx.view(), key)
         }
         "lexical.$getNodeByKey" => {
-            let key = key_arg(r, a.first().ok_or_else(|| fail("key argument"))?)?;
-            if view.contains(key) {
+            let key = match a.first() {
+                Some(value) if value.get("$nodeKey").is_some() => {
+                    Some(tagged_key(value, "$nodeKey")?)
+                }
+                Some(Value::String(key)) => r.bindings.key(key)?,
+                _ => None,
+            };
+            if let Some(key) = key.filter(|key| view.contains(*key)) {
                 r.node(view, key)
             } else {
                 Ok(Value::Null)
