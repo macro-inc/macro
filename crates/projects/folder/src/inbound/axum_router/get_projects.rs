@@ -3,13 +3,13 @@
 use axum::{Json, extract::State};
 use entity_access::domain::ports::EntityAccessService;
 use macro_authorization::{MacroAuthorizationExtractor, MacroAuthorizationService, UserOrInternal};
-use model::{project::response::GetProjectsResponse, response::TypedSuccessResponse};
+use shared_types::{project::response::GetProjectsResponse, response::TypedSuccessResponse};
 
 use super::ProjectRouterState;
 use crate::domain::{models::ProjectError, ports::ProjectService};
 
 /// Successful pending-project list response.
-pub type PendingProjectsResponse = TypedSuccessResponse<Vec<model::project::PendingProject>>;
+pub type PendingProjectsResponse = TypedSuccessResponse<Vec<shared_types::project::PendingProject>>;
 
 /// List projects visible to the authenticated user.
 #[utoipa::path(
@@ -18,8 +18,8 @@ pub type PendingProjectsResponse = TypedSuccessResponse<Vec<model::project::Pend
     path = "/projects",
     responses(
         (status = 200, body = GetProjectsResponse),
-        (status = 401, body = model::response::GenericErrorResponse),
-        (status = 500, body = model::response::GenericErrorResponse),
+        (status = 401, body = shared_types::response::GenericErrorResponse),
+        (status = 500, body = shared_types::response::GenericErrorResponse),
     )
 )]
 #[tracing::instrument(
@@ -53,8 +53,8 @@ where
     path = "/projects/pending",
     responses(
         (status = 200, body = inline(PendingProjectsResponse)),
-        (status = 401, body = model::response::GenericErrorResponse),
-        (status = 500, body = model::response::GenericErrorResponse),
+        (status = 401, body = shared_types::response::GenericErrorResponse),
+        (status = 500, body = shared_types::response::GenericErrorResponse),
     )
 )]
 #[tracing::instrument(

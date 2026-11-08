@@ -12,7 +12,7 @@ use email::inbound::axum::api_types::DraftEditPrecondition;
 use email::inbound::axum::axum_impls::EmailLinkExtractor;
 use email::inbound::axum::send_router::{SendMessageError, refuse_program_send};
 use macro_authorization::{MacroAuthorizationExtractor, UserOrInternal};
-use model::response::ErrorResponse;
+use shared_types::response::ErrorResponse;
 use sqlx_core::types::chrono::{DateTime, Utc};
 use thiserror::Error;
 use utoipa::ToSchema;

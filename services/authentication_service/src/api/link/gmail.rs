@@ -8,9 +8,9 @@ use axum::{
 use calendar_events::domain::models::google_calendar_scope_parameter;
 use macro_authorization::{AccountHolderOrInternal, MacroAuthorizationExtractor};
 use macro_middleware::tracking::ClientIp;
-use model::response::ErrorResponse;
 use roles_and_permissions::domain::model::PermissionId;
 use serde_utils::urlencode::UrlEncoded;
+use shared_types::response::ErrorResponse;
 use tracing::Level;
 use url::Url;
 

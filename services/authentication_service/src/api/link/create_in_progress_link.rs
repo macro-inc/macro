@@ -6,7 +6,7 @@ use axum::{
 };
 use macro_authorization::{AccountHolderOrInternal, MacroAuthorizationExtractor};
 use macro_middleware::tracking::ClientIp;
-use model::response::ErrorResponse;
+use shared_types::response::ErrorResponse;
 
 use crate::api::context::{ApiContext, AuthorizationService};
 

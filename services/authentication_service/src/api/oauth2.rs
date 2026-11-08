@@ -32,7 +32,7 @@ use axum::{
     http::StatusCode,
     response::{IntoResponse, Response},
 };
-use model::response::ErrorResponse;
+use shared_types::response::ErrorResponse;
 use tower_cookies::Cookies;
 
 pub(in crate::api) fn format_redirect_uri(provider: &str) -> String {

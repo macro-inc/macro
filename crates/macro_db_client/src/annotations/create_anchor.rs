@@ -1,9 +1,9 @@
 use anyhow::Result;
-use model::annotations::create::{
+use shared_types::annotations::create::{
     CreateUnthreadedAnchorRequest, CreateUnthreadedAnchorResponse,
     CreateUnthreadedPdfAnchorRequest, PdfHighlightAnchorRequest,
 };
-use model::annotations::{Anchor, PdfAnchor, PdfHighlightAnchor, PdfHighlightRect};
+use shared_types::annotations::{Anchor, PdfAnchor, PdfHighlightAnchor, PdfHighlightRect};
 use sqlx::{Pool, Postgres, Transaction, query_as, query_scalar};
 use uuid::Uuid;
 

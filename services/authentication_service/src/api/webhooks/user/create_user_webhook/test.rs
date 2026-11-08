@@ -6,10 +6,10 @@ use std::sync::{
 use crate::service::signup_policy::SignupPolicy;
 use axum::http::StatusCode;
 use macro_user_id::email::Email;
-use model::authentication::webhooks::{
+use serde_json::Value;
+use shared_types::authentication::webhooks::{
     Event, EventInfo, FusionAuthUserWebhook, User as FusionAuthWebhookUser,
 };
-use serde_json::Value;
 
 use macro_user_id::user_id::MacroUserIdStr;
 

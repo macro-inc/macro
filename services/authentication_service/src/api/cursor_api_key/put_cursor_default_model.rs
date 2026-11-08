@@ -39,8 +39,8 @@ pub struct PutCursorDefaultModelRequest {
     responses(
         (status = 200, body = CursorApiKeyStatus),
         (status = 401, body = String),
-        (status = 403, body = model::response::ErrorResponse),
-        (status = 409, body = model::response::ErrorResponse),
+        (status = 403, body = shared_types::response::ErrorResponse),
+        (status = 409, body = shared_types::response::ErrorResponse),
     )
 )]
 #[tracing::instrument(skip(ctx, user_context), err, fields(user_id = %user_context.authorization.macro_user_id))]

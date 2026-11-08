@@ -8,8 +8,8 @@ use axum::{
 use crate::api::context::{ApiContext, AuthorizationService};
 
 use macro_authorization::{MacroAuthorizationExtractor, UserOrInternal};
-use model::authentication::user::GetUserInfo;
-use model::response::ErrorResponse;
+use shared_types::authentication::user::GetUserInfo;
+use shared_types::response::ErrorResponse;
 
 /// Gets the calling user's info
 #[utoipa::path(

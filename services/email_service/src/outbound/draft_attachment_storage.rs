@@ -3,8 +3,8 @@ use email::domain::{
     draft_attachments::{AttachmentError, DraftAttachmentStorage},
     models::AttachmentDraft,
 };
-use model::document::FileTypeExt;
 use model_file_type::{ContentType, FileType};
+use shared_types::document::FileTypeExt;
 use std::str::FromStr;
 
 pub struct DraftAttachmentS3 {

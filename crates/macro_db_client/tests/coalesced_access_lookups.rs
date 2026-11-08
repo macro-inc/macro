@@ -15,7 +15,7 @@ use macro_db_client::{
     call_record::get::get_accessible_call_ids,
     item_access::get_accessible_items::get_user_accessible_items,
 };
-use model::item::UserAccessibleItem;
+use shared_types::item::UserAccessibleItem;
 use sqlx::{
     PgPool,
     postgres::{PgConnectOptions, PgPoolOptions},

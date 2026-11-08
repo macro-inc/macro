@@ -1,5 +1,5 @@
 use anyhow::Result;
-use model::citations::{DocumentReference, DocumentTextPart};
+use shared_types::citations::{DocumentReference, DocumentTextPart};
 use sqlx::{Pool, Postgres};
 
 #[tracing::instrument(skip(db))]

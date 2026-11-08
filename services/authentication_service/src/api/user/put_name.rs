@@ -9,9 +9,9 @@ use macro_db_client::user::update_user_name::update_user_name;
 use crate::api::context::{ApiContext, AuthorizationService};
 
 use macro_authorization::{MacroAuthorizationExtractor, UserOrInternal};
-use model::response::EmptyResponse;
-use model::response::ErrorResponse;
-use model::user::PutUserNameQueryParams;
+use shared_types::response::EmptyResponse;
+use shared_types::response::ErrorResponse;
+use shared_types::user::PutUserNameQueryParams;
 
 /// Sets the name of a particular user
 #[utoipa::path(

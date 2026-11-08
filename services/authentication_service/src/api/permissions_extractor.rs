@@ -7,7 +7,7 @@ use axum::{
     response::{IntoResponse, Response},
 };
 use macro_authorization::{MacroAuthorizationExtractor, MacroAuthorizationState, UserOrInternal};
-use model::response::ErrorResponse;
+use shared_types::response::ErrorResponse;
 use sqlx::PgPool;
 
 use crate::api::context::AuthorizationService;

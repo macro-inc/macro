@@ -9,7 +9,6 @@ use email::domain::models::{ContactInfo, ParsedLabel, ParsedMessage};
 use macro_user_id::user_id::MacroUserIdStr;
 use macro_uuid::Uuid;
 use messages::domain::models::{Message, MessageParent, MessageThread, ThreadState};
-use model::document::DocumentBasic;
 use model_owner::Owner;
 use models_properties::{
     DataType, EntityType as PropertyEntityType, PropertyOwner,
@@ -18,6 +17,7 @@ use models_properties::{
 };
 use properties::{EntityPropertyInfo, PropertyOptionInfo};
 use serde_json::json;
+use shared_types::document::DocumentBasic;
 use system_properties::SystemPropertyKey;
 use trigger_context::{
     CallSnapshot, CallStartedSnapshot, ChannelType, ContextMessage, ContextPerson, ContextThread,

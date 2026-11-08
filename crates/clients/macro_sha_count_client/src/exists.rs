@@ -1,7 +1,7 @@
 use anyhow::Context;
 use redis::AsyncCommands;
 
-use model::document::SaveBomPart;
+use shared_types::document::SaveBomPart;
 
 use super::SHA_COUNT_KEY_PREFIX;
 

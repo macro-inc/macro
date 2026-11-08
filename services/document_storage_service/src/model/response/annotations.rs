@@ -1,5 +1,5 @@
-use model::annotations::Anchor;
 use serde::Serialize;
+use shared_types::annotations::Anchor;
 use utoipa::ToSchema;
 
 #[derive(Serialize, ToSchema)]

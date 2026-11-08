@@ -2,8 +2,8 @@ use std::io::Write;
 
 use clap::Parser;
 use macro_user_id::user_id::MacroUserIdStr;
-use model::document::{DocumentMetadata, FileType};
 use model_owner::Owner;
+use shared_types::document::{DocumentMetadata, FileType};
 use tempfile::NamedTempFile;
 
 use crate::Cli;

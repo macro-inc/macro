@@ -5,8 +5,8 @@ use sqlx::{Pool, Postgres};
 use tracing::instrument;
 
 use crate::{model::request::documents::save::SaveDocumentRequest, service};
-use model::document::response::DocumentResponseMetadata;
-use model::document::{DocumentBasic, DocumentMetadata, FileType};
+use shared_types::document::response::DocumentResponseMetadata;
+use shared_types::document::{DocumentBasic, DocumentMetadata, FileType};
 
 /// Saves a document to the database and updates all other necessary items with the new document
 /// In the event of an error, returns status code, error message and optional document id/document

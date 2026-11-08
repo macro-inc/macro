@@ -2,7 +2,7 @@ use document_sub_type::DocumentSubType;
 use model_owner::Owner;
 use sqlx::{Pool, Postgres};
 
-use model::document::{DocumentMetadata, FileType};
+use shared_types::document::{DocumentMetadata, FileType};
 
 /// Gets the document ids for a user.
 /// TODO: needs to be cached

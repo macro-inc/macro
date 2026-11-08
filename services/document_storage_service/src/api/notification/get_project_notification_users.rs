@@ -4,7 +4,7 @@ use axum::extract::State;
 use axum::response::Response;
 use axum::{extract::Path, http::StatusCode, response::IntoResponse};
 use macro_authorization::{InternalOnly, MacroAuthorizationExtractor};
-use model::response::GenericErrorResponse;
+use shared_types::response::GenericErrorResponse;
 use sqlx::PgPool;
 
 #[derive(serde::Deserialize)]

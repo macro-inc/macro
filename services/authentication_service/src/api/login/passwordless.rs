@@ -17,7 +17,7 @@ use crate::{
     service::user::email_code_signup::email_code_signup_data,
 };
 use fusionauth::error::FusionAuthClientError;
-use model::authentication::login::{
+use shared_types::authentication::login::{
     request::PasswordlessRequest,
     response::{PasswordlessStartedResponse, SsoRequiredResponse},
 };

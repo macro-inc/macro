@@ -6,7 +6,7 @@ use axum::{
     response::{IntoResponse, Redirect, Response},
 };
 use macro_middleware::tracking::ClientIp;
-use model::response::{EmptyResponse, ErrorResponse};
+use shared_types::response::{EmptyResponse, ErrorResponse};
 
 #[derive(serde::Deserialize)]
 pub struct Params {

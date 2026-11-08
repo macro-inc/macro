@@ -3,9 +3,9 @@ use axum::extract::{Query, State};
 use axum::{http::StatusCode, response::IntoResponse};
 use macro_authorization::{MacroAuthorizationExtractor, UserOrInternal};
 use macro_db_client::recents::deleted::{MAX_TRASH_PAGE_SIZE, TrashPosition};
-use model::item::Item;
-use model::response::{GenericErrorResponse, GenericResponse, TypedSuccessResponse};
 use models_pagination::{Base64Str, Cursor, CursorVal, CursorWithValAndFilter, DeletedAt};
+use shared_types::item::Item;
+use shared_types::response::{GenericErrorResponse, GenericResponse, TypedSuccessResponse};
 use sqlx::PgPool;
 use utoipa::ToSchema;
 

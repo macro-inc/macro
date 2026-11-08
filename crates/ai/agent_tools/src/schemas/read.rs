@@ -2,9 +2,9 @@
 use crate::serde_utils::deserialize_permissive_datetime_opt;
 use ai_toolset::schema::PhantomTool;
 use chrono::{DateTime, Utc};
-use model::chat::ChatHistory;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
+use shared_types::chat::ChatHistory;
 
 #[derive(Debug, JsonSchema, Serialize, Clone)]
 #[serde(rename_all = "camelCase")]

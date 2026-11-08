@@ -22,8 +22,8 @@ use entity_access::domain::{
     models::{EntityType, ViewAccessLevel},
     ports::EntityAccessService,
 };
-use model::document::FileType;
 use model_owner::CreationPrincipal;
+use shared_types::document::FileType;
 use uuid::Uuid;
 
 /// How long one CSV download may take, body included.

@@ -13,9 +13,9 @@ use crate::domain::word_document::WordDocumentFiles;
 use anyhow::Context;
 use aws_sdk_s3::primitives::ByteStream;
 use futures::{StreamExt, TryStreamExt};
-use model::document::FileType;
 use pptx_engine::zip::{WriteData, Writer};
 use s3_key::build_cloud_storage_bucket_document_key;
+use shared_types::document::FileType;
 use sqlx::PgPool;
 
 const PPTX_MIME: &str = "application/vnd.openxmlformats-officedocument.presentationml.presentation";

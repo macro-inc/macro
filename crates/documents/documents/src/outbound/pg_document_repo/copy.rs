@@ -1,8 +1,8 @@
-use model::document::{
+use model_owner::Owner;
+use shared_types::document::{
     BomPart, DocumentMetadata, IDWithTimeStamps, SaveBomPart, VersionIDWithTimeStamps,
     VersionIDWithTimeStampsNoSha,
 };
-use model_owner::Owner;
 use sqlx::{Postgres, Transaction};
 
 /// Copies a given docx document (Document + DocumentBom + BomParts).

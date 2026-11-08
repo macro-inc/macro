@@ -9,8 +9,8 @@ use crate::api::context::{ApiContext, AuthorizationService};
 
 use macro_authorization::{MacroAuthorizationExtractor, UserOrInternal};
 use macro_db_client::user::update_profile_picture::get_profile_pictures;
-use model::response::ErrorResponse;
-use model::user::ProfilePictures;
+use shared_types::response::ErrorResponse;
+use shared_types::user::ProfilePictures;
 use utoipa::ToSchema;
 
 #[derive(Default, Debug, serde::Serialize, serde::Deserialize, ToSchema)]

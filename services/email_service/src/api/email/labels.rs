@@ -46,7 +46,7 @@ pub(crate) fn settings_error(
     (
         status,
         headers,
-        axum::Json(model::response::ErrorResponse {
+        axum::Json(shared_types::response::ErrorResponse {
             message: error.to_string().into(),
         }),
     )

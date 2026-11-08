@@ -11,7 +11,7 @@ use axum::{
 };
 use connection_gateway_client::ConnectionGatewayClient;
 use macro_authorization::{MacroAuthorizationExtractor, UserOrInternal};
-use model::{
+use shared_types::{
     annotations::{
         AnnotationIncrementalUpdate,
         edit::{EditAnchorRequest, EditAnchorResponse},

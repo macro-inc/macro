@@ -1,5 +1,5 @@
 use super::*;
-use model::item::Item;
+use shared_types::item::Item;
 use sqlx::{Pool, Postgres};
 
 const OWNER: &str = "macro|large@example.com";

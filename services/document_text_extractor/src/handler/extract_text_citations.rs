@@ -16,7 +16,7 @@ use lambda_runtime::{
     tracing::{self},
 };
 
-use model::citations::{DocumentReference, TextReference, UserPdfRect};
+use shared_types::citations::{DocumentReference, TextReference, UserPdfRect};
 const DELIMETER: char = '\n';
 const NPARTS_PER_ID: i32 = 4;
 struct TextPart {
@@ -163,7 +163,7 @@ pub async fn extract_text_from_document(
     let document_id = document_key.document_id().expect("document key has id");
 
     let file_type = if document_key.is_converted_pdf() {
-        Some(model::document::FileType::Pdf)
+        Some(shared_types::document::FileType::Pdf)
     } else if document_key.is_temp() {
         None
     } else {
@@ -174,7 +174,7 @@ pub async fn extract_text_from_document(
     };
 
     match file_type {
-        Some(model::document::FileType::Pdf) => {}
+        Some(shared_types::document::FileType::Pdf) => {}
         _ => {
             tracing::info!(file_type=?file_type, "skipping non-pdf file for extraction");
             return Ok(None);

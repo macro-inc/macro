@@ -8,9 +8,9 @@ use entity_access::{
     inbound::axum_extractors::ProjectAccessLevelExtractor,
 };
 use macro_authorization::{MacroAuthorizationExtractor, MacroAuthorizationService, UserOrInternal};
-use model::project::BasicProject;
-use model::response::{GenericSuccessResponse, SuccessResponse, TypedSuccessResponse};
 use serde::{Deserialize, Serialize};
+use shared_types::project::BasicProject;
+use shared_types::response::{GenericSuccessResponse, SuccessResponse, TypedSuccessResponse};
 use tracing::Instrument;
 use utoipa::ToSchema;
 
@@ -54,8 +54,8 @@ pub type ProjectDeleteResponse = TypedSuccessResponse<ProjectDeleteResponseData>
     params(("id" = String, Path, description = "ID of the project")),
     responses(
         (status = 200, body = inline(ProjectDeleteResponse)),
-        (status = 401, body = model::response::GenericErrorResponse),
-        (status = 500, body = model::response::GenericErrorResponse),
+        (status = 401, body = shared_types::response::GenericErrorResponse),
+        (status = 500, body = shared_types::response::GenericErrorResponse),
     )
 )]
 #[tracing::instrument(
@@ -103,9 +103,9 @@ where
     params(("id" = String, Path, description = "ID of the project")),
     responses(
         (status = 200, body = SuccessResponse),
-        (status = 401, body = model::response::GenericErrorResponse),
-        (status = 404, body = model::response::GenericErrorResponse),
-        (status = 500, body = model::response::GenericErrorResponse),
+        (status = 401, body = shared_types::response::GenericErrorResponse),
+        (status = 404, body = shared_types::response::GenericErrorResponse),
+        (status = 500, body = shared_types::response::GenericErrorResponse),
     )
 )]
 #[tracing::instrument(

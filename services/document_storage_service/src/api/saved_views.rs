@@ -5,9 +5,9 @@ use axum::response::{IntoResponse, Response};
 use axum::routing::{delete, patch, post};
 use axum::{Router, routing::get};
 use macro_authorization::{MacroAuthorizationExtractor, UserOrInternal};
-use model::response::ErrorResponse;
 use saved_views::domain::Error as DomainError;
 use saved_views::{ExcludedDefaultViewStorage, PgViewStorage};
+use shared_types::response::ErrorResponse;
 
 pub use saved_views::{ExcludedDefaultView, View, ViewPatch};
 use serde::{Deserialize, Serialize};

@@ -9,7 +9,7 @@ use axum::{
     http::{HeaderMap, StatusCode},
     response::{IntoResponse, Json, Response},
 };
-use model::response::ErrorResponse;
+use shared_types::response::ErrorResponse;
 use stripe_inbox::domain::service::ReceiveError;
 
 use crate::api::context::ApiContext;

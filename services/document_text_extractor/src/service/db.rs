@@ -5,7 +5,7 @@ mod get_document_file_type;
 use lambda_runtime::tracing;
 #[allow(unused_imports)]
 use mockall::automock;
-use model::document::FileType;
+use shared_types::document::FileType;
 
 #[cfg(not(test))]
 pub use DBClient as DB;
@@ -13,7 +13,7 @@ pub use DBClient as DB;
 #[cfg(test)]
 pub use MockDBClient as DB;
 
-use model::citations::TextReference;
+use shared_types::citations::TextReference;
 
 /// Whether extracted text was stored for a document.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

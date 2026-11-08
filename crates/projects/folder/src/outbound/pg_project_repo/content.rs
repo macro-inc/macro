@@ -1,9 +1,9 @@
 use document_sub_type::DocumentSubType;
-use model::chat::Chat;
-use model::document::{BasicDocument, BasicDocumentSubType};
-use model::item::Item;
-use model::project::Project;
 use model_owner::Owner;
+use shared_types::chat::Chat;
+use shared_types::document::{BasicDocument, BasicDocumentSubType};
+use shared_types::item::Item;
+use shared_types::project::Project;
 use sqlx::PgPool;
 use system_properties::{StatusOption, SystemPropertyKey};
 

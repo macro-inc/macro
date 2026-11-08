@@ -9,11 +9,11 @@ use entity_access::domain::models::{
     EditAccessLevel, EntityAccessReceipt, OwnerAccessLevel, ViewAccessLevel,
 };
 use macro_user_id::user_id::MacroUserIdStr;
-use model::chat::Chat;
 use model_owner::Owner;
 use models_permissions::share_permission::access_level::AccessLevel;
 use models_permissions::share_permission::team_share::TeamShareFacts;
 use models_permissions::share_permission::{SharePermissionV2, TeamLinkShareDefault};
+use shared_types::chat::Chat;
 
 /// Repository trait for low-level chat data access.
 pub trait ChatRepo: Send + Sync + 'static {
@@ -178,7 +178,7 @@ pub trait ChatService: Send + Sync + 'static {
     fn get_metadata(
         &self,
         entity_access_receipt: EntityAccessReceipt<ViewAccessLevel>,
-    ) -> impl std::future::Future<Output = Result<model::chat::Chat>> + Send;
+    ) -> impl std::future::Future<Output = Result<shared_types::chat::Chat>> + Send;
 
     /// Copy a chat and its messages, returning the new chat ID.
     fn copy_chat(

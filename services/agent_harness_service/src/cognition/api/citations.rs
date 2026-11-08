@@ -10,7 +10,7 @@ use macro_authorization::{
     OptionalMacroAuthorizationExtractor, UserOrInternalService, UserOrInternalServiceAuthorization,
 };
 use macro_db_client::dcs::get_part_by_id::get_part_by_id;
-use model::citations::DocumentTextPart;
+use shared_types::citations::DocumentTextPart;
 use sqlx::PgPool;
 
 pub fn router() -> Router<ApiContext> {

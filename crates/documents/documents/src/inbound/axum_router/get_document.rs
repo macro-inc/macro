@@ -12,7 +12,7 @@ use models_permissions::share_permission::access_level::ViewAccessLevel;
 use super::{DocumentRouterState, Params};
 use crate::domain::models::DocumentError;
 use crate::domain::ports::DocumentService;
-use model::response::TypedSuccessResponse;
+use shared_types::response::TypedSuccessResponse;
 
 use crate::domain::response::{GetDocumentResponse, GetDocumentResponseData};
 

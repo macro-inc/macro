@@ -3,13 +3,13 @@ use crate::history::upsert_user_history;
 use crate::share_permission::create::{create_document_permission, create_project_permission};
 use macro_user_id::cow_str::CowLike;
 use macro_user_id::user_id::MacroUserIdStr;
-use model::document::{BasicDocument, FileType};
-use model::document::{ID, SaveBomPart, VersionID};
-use model::project::Project;
 use model_entity::EntityType;
 use model_owner::Owner;
 use models_permissions::share_permission::SharePermissionV2;
 use models_permissions::share_permission::access_level::AccessLevel;
+use shared_types::document::{BasicDocument, FileType};
+use shared_types::document::{ID, SaveBomPart, VersionID};
+use shared_types::project::Project;
 use sqlx::{Postgres, Transaction};
 
 /// Creates a project under a transaction and does not commit the transaction

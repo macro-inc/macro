@@ -11,7 +11,7 @@ use entity_access::{
     inbound::axum_extractors::DocumentAccessExtractor,
 };
 use macro_authorization::MacroAuthorizationService;
-use model::document::DocumentBasic;
+use shared_types::document::DocumentBasic;
 
 /// Read current Markdown or extracted file text with the document's view receipt.
 #[utoipa::path(

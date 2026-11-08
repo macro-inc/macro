@@ -7,7 +7,7 @@ use email::domain::message_labels::{
     MAX_MESSAGE_LABEL_BATCH, MessageLabelChange, MessageLabelError, StageFailure,
 };
 use macro_authorization::{MacroAuthorizationExtractor, UserOrInternal};
-use model::response::ErrorResponse;
+use shared_types::response::ErrorResponse;
 use std::borrow::Cow;
 use utoipa::ToSchema;
 use uuid::Uuid;

@@ -946,7 +946,6 @@ microsoft_graph_url = { path = "crates/platform/service_urls/microsoft_graph_url
 microsoft_login_page_url = { path = "crates/platform/service_urls/microsoft_login_page_url" }
 microsoft_login_url = { path = "crates/platform/service_urls/microsoft_login_url" }
 mobile_welcome_email_db_client = { path = "crates/accounts/mobile_welcome_email_db_client" }
-model = { path = "crates/types/model" }
 model_entity = { path = "crates/types/model_entity" }
 model_error_response = { path = "crates/types/model_error_response" }
 model_file_type = { path = "crates/types/model_file_type" }
@@ -1022,6 +1021,7 @@ service_url = { path = "crates/platform/service_urls/service_url" }
 ses_client = { path = "crates/aws/ses_client" }
 share_permission_db_utils = { path = "crates/entities/share_permission_db_utils" }
 shared_entity_registry = { path = "crates/entities/shared_entity_registry" }
+shared_types = { path = "crates/types/shared_types" }
 shown_text = { path = "crates/ai/shown_text" }
 single_flight = { path = "crates/platform/single_flight" }
 skills = { path = "crates/agents/skills", default-features = false }

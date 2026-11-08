@@ -6,7 +6,7 @@ use entity_access::{
     inbound::axum_extractors::{ProjectAccessLevelExtractor, ProjectBodyAccessLevelExtractorV2},
 };
 use macro_authorization::{MacroAuthorizationExtractor, MacroAuthorizationService, UserOrInternal};
-use model::{
+use shared_types::{
     project::{BasicProject, request::PatchProjectRequestV2},
     response::{GenericSuccessResponse, SuccessResponse},
 };
@@ -24,8 +24,8 @@ use crate::domain::{models::ProjectError, ports::ProjectService};
     request_body = PatchProjectRequestV2,
     responses(
         (status = 200, body = SuccessResponse),
-        (status = 401, body = model::response::GenericErrorResponse),
-        (status = 500, body = model::response::GenericErrorResponse),
+        (status = 401, body = shared_types::response::GenericErrorResponse),
+        (status = 500, body = shared_types::response::GenericErrorResponse),
     )
 )]
 #[tracing::instrument(

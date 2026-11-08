@@ -2,7 +2,7 @@ use std::collections::HashSet;
 
 use document_sub_type::DocumentSubType;
 use macro_user_id::user_id::MacroUserIdStr;
-use model::document::{
+use shared_types::document::{
     DocumentPreviewData, DocumentPreviewDataSubType, DocumentPreviewV2, WithDocumentId,
 };
 use system_properties::{StatusOption, SystemPropertyKey};

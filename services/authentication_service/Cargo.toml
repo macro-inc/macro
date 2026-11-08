@@ -156,7 +156,7 @@ maud = { version = "0.27.0" }
 mobile_welcome_email_db_client = { workspace = true }
 models_email = { workspace = true }
 mockall = { workspace = true }
-model = { workspace = true }
+shared_types = { workspace = true }
 model_entity = { workspace = true }
 models_permissions = { workspace = true }
 native_app_service = { workspace = true }

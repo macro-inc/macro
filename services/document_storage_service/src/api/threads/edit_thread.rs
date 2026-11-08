@@ -9,13 +9,13 @@ use entity_access::inbound::axum_extractors::ProjectBodyAccessLevelExtractorV2;
 use entity_access::inbound::axum_extractors::ThreadAccessLevelExtractor;
 use macro_authorization::{MacroAuthorizationExtractor, UserOrInternal};
 use macro_db_client::share_permission::edit::edit_thread_permission;
-use model::response::{
-    ErrorResponse, GenericErrorResponse, GenericSuccessResponse, SuccessResponse,
-};
-use model::thread::EmailThreadPermission;
 use models_permissions::share_permission::access_level::{
     AccessLevel, EditAccessLevel, OwnerAccessLevel,
 };
+use shared_types::response::{
+    ErrorResponse, GenericErrorResponse, GenericSuccessResponse, SuccessResponse,
+};
+use shared_types::thread::EmailThreadPermission;
 
 #[derive(serde::Deserialize)]
 pub struct ThreadParams {

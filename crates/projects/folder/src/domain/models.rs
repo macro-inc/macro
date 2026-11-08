@@ -1,12 +1,12 @@
 //! Domain-owned project models.
 
 use macro_user_id::user_id::MacroUserIdStr;
-use model::folder::FileSystemNode;
-use model::project::Project;
 use model_entity::{Entity, EntityType};
 use model_owner::Owner;
 use models_permissions::share_permission::team_share::AuthorizedTeamShareCommand;
 use models_permissions::share_permission::{SharePermissionV2, UpdateSharePermissionRequestV2};
+use shared_types::folder::FileSystemNode;
+use shared_types::project::Project;
 
 /// Arguments for atomically creating a project and its access metadata.
 #[derive(Debug, Clone)]

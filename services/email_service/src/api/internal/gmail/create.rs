@@ -6,7 +6,7 @@ use axum::{
 };
 use email::domain::backfill_jobs::BackfillCreateError;
 use macro_authorization::{InternalOnly, MacroAuthorizationExtractor};
-use model::response::ErrorResponse;
+use shared_types::response::ErrorResponse;
 use sqlx::types::Uuid;
 use utoipa::ToSchema;
 

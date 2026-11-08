@@ -38,7 +38,7 @@ macro_env_var = { workspace = true }
 macro_middleware = { workspace = true }
 macro_queues = { workspace = true }
 macro_uuid = { workspace = true }
-model = { workspace = true }
+shared_types = { workspace = true }
 s3_key = { workspace = true }
 nix = { version = "0.29.0", features = ["process", "signal"] }
 rs-libreoffice-bindings = { git = "https://github.com/macro-inc/rs-libreoffice-bindings", rev = "056a40ddfac1d9650be30b9f0b4b934e9266c7dc" }

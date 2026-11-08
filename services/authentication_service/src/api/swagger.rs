@@ -12,7 +12,7 @@ use gtm_invite::inbound::axum_router::dto::{
     CreateGtmInviteLinkRequest, GtmInviteLink, GtmInviteLinkList, GtmInviteLinkStatus,
     GtmInviteOffer, GtmInviteOfferStatus, PublicGtmInviteLink, RedeemGtmInviteLinkRequest,
 };
-use model::authentication::login::request::{AppleLoginRequest, PasswordRequest};
+use shared_types::authentication::login::request::{AppleLoginRequest, PasswordRequest};
 use system_status::domain::models::{CurrentSystemStatus, StatusUpdate, SystemStatus};
 use system_status::inbound::axum_router::SystemStatusHistory;
 use teams::domain::model::{
@@ -64,12 +64,12 @@ use crate::api::{
     email, github_pull_requests, health, jwt, link, login, logout, merge, mobile_welcome_email,
     oauth, oauth2, permissions, session, user,
 };
-use model::authentication::login::response::SsoRequiredResponse;
-use model::authentication::{
+use shared_types::authentication::login::response::SsoRequiredResponse;
+use shared_types::authentication::{
     login::request::PasswordlessRequest, permission::Permission, user::GetUserInfo,
 };
-use model::response::{EmptyResponse, ErrorResponse, UserTokensResponse};
-use model::user::{
+use shared_types::response::{EmptyResponse, ErrorResponse, UserTokensResponse};
+use shared_types::user::{
     Language, ProfilePictureQueryParams, ProfilePictures, PutUserNameQueryParams, UserLanguage,
     UserName, UserNames, UserProfilePicture,
 };

@@ -1,7 +1,7 @@
 use std::future::Future;
 
 use documents::domain::models::DocumentError;
-use model::document::DocumentBasic;
+use shared_types::document::DocumentBasic;
 
 /// Document metadata lookup needed by the upload finalization use case.
 pub trait DocumentUploadMetadataPort: Send + Sync {

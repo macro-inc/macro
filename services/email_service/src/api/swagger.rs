@@ -43,7 +43,6 @@ use ::email::inbound::axum::thread_labels_router::{
 use ::email::inbound::axum::thread_project_router::{
     UpdateThreadProjectRequest, UpdateThreadProjectResponse,
 };
-use model::response::EmptyResponse;
 use models_email::api::link::SyncStatus;
 use models_email::api::refresh::{BackfillStatus, RefreshEmailEvent};
 use models_email::api::settings::Settings;
@@ -55,6 +54,7 @@ use models_email::email::service::thread::{PreviewView, PreviewViewStandardLabel
 use models_email::service::label::Label;
 use models_email::service::message::ParsedMessage;
 use models_email::service::thread::ThreadPreviewCursor;
+use shared_types::response::EmptyResponse;
 use utoipa::OpenApi;
 
 #[derive(OpenApi)]

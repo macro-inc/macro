@@ -13,7 +13,7 @@ use axum::{
 use fusionauth::FusionAuthClient;
 use jsonwebtoken::{Algorithm, EncodingKey, Header, encode};
 use macro_auth::{constant::MACRO_REFRESH_TOKEN_HEADER, middleware::decode_jwt::JwtValidationArgs};
-use model::response::UserTokensResponse;
+use shared_types::response::UserTokensResponse;
 use tower::{ServiceBuilder, ServiceExt};
 use tower_cookies::CookieManagerLayer;
 use wiremock::{

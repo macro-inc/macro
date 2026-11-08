@@ -5,7 +5,7 @@ use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
 use email::domain::mailbox::lifecycle::InboxActor;
 use macro_authorization::{MacroAuthorizationExtractor, UserOrInternal};
-use model::response::{EmptyResponse, ErrorResponse};
+use shared_types::response::{EmptyResponse, ErrorResponse};
 use uuid::Uuid;
 
 /// Removes a linked inbox.

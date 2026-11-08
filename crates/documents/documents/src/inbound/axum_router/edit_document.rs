@@ -9,9 +9,9 @@ use entity_access::inbound::axum_extractors::{
     DocumentAccessExtractor, ProjectBodyAccessLevelExtractorV2,
 };
 use macro_authorization::MacroAuthorizationService;
-use model::document::DocumentBasic;
-use model::response::GenericSuccessResponse;
 use models_permissions::share_permission::access_level::EditAccessLevel;
+use shared_types::document::DocumentBasic;
+use shared_types::response::GenericSuccessResponse;
 
 use super::{DocumentRouterState, Params};
 use crate::domain::models::{DocumentError, EditDocumentServiceArgs};

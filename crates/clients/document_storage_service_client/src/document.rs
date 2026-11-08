@@ -2,21 +2,21 @@ use crate::constants::MACRO_INTERNAL_USER_ID_HEADER_KEY;
 
 use super::DocumentStorageServiceClient;
 use anyhow::Result;
-use model::document::list::ListDocumentsWithAccessResponse;
-use model::document::response::{
-    CreateDocumentRequest, CreateDocumentResponse, EMAIL_ATTACHMENT_NOT_FOUND_CODE,
-};
-use model::document::{
-    DocumentBasic, FileType,
-    response::{GetDocumentResponse, LocationResponseData, LocationResponseV3},
-};
-use model::document_storage_service_internal::{
-    GetDocumentsMetadataRequest, GetDocumentsMetadataResponse, InitializeStarterDocsResponse,
-    StarterDocHowToGuide,
-};
 use models_permissions::share_permission::access_level::AccessLevel;
 use reqwest::StatusCode;
 use serde::{Deserialize, Serialize};
+use shared_types::document::list::ListDocumentsWithAccessResponse;
+use shared_types::document::response::{
+    CreateDocumentRequest, CreateDocumentResponse, EMAIL_ATTACHMENT_NOT_FOUND_CODE,
+};
+use shared_types::document::{
+    DocumentBasic, FileType,
+    response::{GetDocumentResponse, LocationResponseData, LocationResponseV3},
+};
+use shared_types::document_storage_service_internal::{
+    GetDocumentsMetadataRequest, GetDocumentsMetadataResponse, InitializeStarterDocsResponse,
+    StarterDocHowToGuide,
+};
 
 #[cfg(test)]
 mod test;

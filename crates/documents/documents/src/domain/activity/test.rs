@@ -1,8 +1,8 @@
 use ::activity::{Action, activity_id};
 use chrono::{TimeZone as _, Utc};
 use macro_user_id::user_id::MacroUserIdStr;
-use model::document::FileType;
 use model_entity::EntityType;
+use shared_types::document::FileType;
 use uuid::Uuid;
 
 use macro_event_broker::Event;

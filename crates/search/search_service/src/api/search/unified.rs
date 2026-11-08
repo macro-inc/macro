@@ -12,13 +12,13 @@ use axum::{
     response::Json,
 };
 use macro_authorization::{MacroAuthorizationExtractor, UserOrInternal};
-use model::response::ErrorResponse;
 use models_search::unified::{
     UnifiedSearchRequest, UnifiedSearchResponse, UnifiedSearchResponseItem,
 };
 use opensearch_client::search::unified::{
     SplitUnifiedSearchResponse, SplitUnifiedSearchResponseValues,
 };
+use shared_types::response::ErrorResponse;
 use std::cmp::Ordering;
 
 /// Perform a search through all items

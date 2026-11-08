@@ -4,7 +4,7 @@ use axum::extract::{Path, State};
 use axum::response::{IntoResponse, Json, Response};
 use email::domain::mailbox::lifecycle::InboxActor;
 use macro_authorization::{MacroAuthorizationExtractor, UserOrInternal};
-use model::response::ErrorResponse;
+use shared_types::response::ErrorResponse;
 use utoipa::ToSchema;
 use uuid::Uuid;
 

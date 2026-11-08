@@ -1,4 +1,4 @@
-use model::document::{BomPart, SaveBomPart};
+use shared_types::document::{BomPart, SaveBomPart};
 
 /// Saves the bom parts to the db under the documents bom id
 #[tracing::instrument(skip(db, bom_parts))]

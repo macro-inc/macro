@@ -14,10 +14,10 @@ use entity_access::domain::{
     models::{EditAccessLevel, EntityType},
     ports::EntityAccessService,
 };
-use model::document::{DocumentBasic, FileType};
 use models_permissions::share_permission::access_level::AccessLevel;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
+use shared_types::document::{DocumentBasic, FileType};
 
 use super::DocumentToolContext;
 

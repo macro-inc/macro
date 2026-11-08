@@ -10,7 +10,7 @@ use axum::{
     response::{IntoResponse, Response},
 };
 use macro_authorization::{InternalOnly, MacroAuthorizationExtractor};
-use model::response::{EmptyResponse, ErrorResponse};
+use shared_types::response::{EmptyResponse, ErrorResponse};
 
 #[cfg(test)]
 mod test;

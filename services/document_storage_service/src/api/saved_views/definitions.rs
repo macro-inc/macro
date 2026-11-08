@@ -16,10 +16,10 @@ use axum::response::{IntoResponse, Response};
 use axum::routing::{get, put};
 use chrono::{DateTime, Utc};
 use macro_authorization::{MacroAuthorizationExtractor, MacroAuthorizationState, UserOrInternal};
-use model::response::ErrorResponse;
 use saved_views::View;
 use saved_views::domain::{Cursor, Error, SavedViewApi, ShareChange, Update};
 use serde::{Deserialize, Serialize};
+use shared_types::response::ErrorResponse;
 use utoipa::{IntoParams, ToSchema};
 use uuid::Uuid;
 

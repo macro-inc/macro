@@ -8,7 +8,7 @@ use axum::{
     response::{IntoResponse, Response},
 };
 use macro_authorization::{InternalOnly, MacroAuthorizationExtractor};
-use model::response::ErrorResponse;
+use shared_types::response::ErrorResponse;
 use stripe_inbox::domain::model::{Consumer, OrderingKey};
 use stripe_inbox::domain::ports::Replayed;
 

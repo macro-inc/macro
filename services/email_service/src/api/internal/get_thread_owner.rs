@@ -5,7 +5,7 @@ use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
 use email::domain::message_reads::ThreadOwnerError;
 use macro_authorization::{InternalOnly, MacroAuthorizationExtractor};
-use model::response::ErrorResponse;
+use shared_types::response::ErrorResponse;
 use uuid::Uuid;
 
 #[tracing::instrument(skip(ctx))]

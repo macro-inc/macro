@@ -8,7 +8,7 @@ use axum::{
 };
 use entity_access::inbound::axum_extractors::DocumentAccessExtractor;
 use macro_authorization::{MacroAuthorizationExtractor, UserOrInternal};
-use model::{document::DocumentBasic, response::GenericErrorResponse};
+use shared_types::{document::DocumentBasic, response::GenericErrorResponse};
 
 use models_permissions::share_permission::access_level::ViewAccessLevel;
 use serde::Deserialize;

@@ -20,7 +20,7 @@ use crate::{
 };
 use fusionauth::error::FusionAuthClientError;
 
-use model::response::{ErrorResponse, UserTokensResponse};
+use shared_types::response::{ErrorResponse, UserTokensResponse};
 
 #[derive(serde::Deserialize)]
 pub struct Params {

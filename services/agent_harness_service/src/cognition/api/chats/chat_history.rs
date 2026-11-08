@@ -7,8 +7,8 @@ use axum::{
 };
 use entity_access::inbound::axum_extractors::ChatAccessLevelExtractor;
 use macro_db_client::chat_history::get_chat_history;
-use model::chat::ChatHistory;
 use models_permissions::share_permission::access_level::ViewAccessLevel;
+use shared_types::chat::ChatHistory;
 use sqlx::PgPool;
 
 /// Retrieves chat history for a specific chat ID

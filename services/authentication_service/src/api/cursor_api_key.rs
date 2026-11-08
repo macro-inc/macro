@@ -94,7 +94,7 @@ impl axum::response::IntoResponse for CursorApiKeyError {
         // be safe to return, and none of them names the value that failed.
         (
             status,
-            axum::Json(model::response::ErrorResponse {
+            axum::Json(shared_types::response::ErrorResponse {
                 message: self.to_string().into(),
             }),
         )

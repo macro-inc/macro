@@ -6,7 +6,7 @@ use axum::{
     response::{IntoResponse, Response},
 };
 use macro_authorization::{InternalOnly, MacroAuthorizationExtractor};
-use model::{
+use shared_types::{
     authentication::webhooks::populate_jwt::{PopulateJwtWebhook, PopulateJwtWebhookResponse},
     user::UserInfoWithMacroUserId,
 };

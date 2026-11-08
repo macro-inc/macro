@@ -12,8 +12,8 @@ use messages::domain::{
     ports::MessageError,
     service::MessageWrite,
 };
-use model::document::{DocumentBasic, FileType};
 use models_permissions::share_permission::access_level::AccessLevel;
+use shared_types::document::{DocumentBasic, FileType};
 use uuid::Uuid;
 
 use super::models::DocumentError;

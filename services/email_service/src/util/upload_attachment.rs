@@ -6,14 +6,14 @@ use document_storage_service_client::document::CreateDocumentInternalError;
 use email_api_client_core::models::EmailApiError;
 use macro_user_id::lowercased::Lowercase;
 use macro_user_id::user_id::{MacroUserId, MacroUserIdStr};
-use model::document::response::{CreateDocumentRequest, CreateDocumentResponse};
-use model::document::{FileTypeExt, MAX_DOCUMENT_NAME_GRAPHEMES};
 use model_file_type::FileType;
 use models_email::service::attachment::{
     AttachmentSfs, AttachmentUploadArgs, AttachmentUploadMetadata,
 };
 use models_email::service::link;
 use sha2::{Digest, Sha256};
+use shared_types::document::response::{CreateDocumentRequest, CreateDocumentResponse};
+use shared_types::document::{FileTypeExt, MAX_DOCUMENT_NAME_GRAPHEMES};
 use static_file_service_client::StaticFileServiceClient;
 use std::str::FromStr;
 use std::sync::Arc;

@@ -5,10 +5,10 @@ use email_api_client_core::service::EmailApiClientServiceImpl;
 use email_api_client_outbound::GmailApiClientRepository;
 use email_service::outbound::email_api::StaticTokenSource;
 use email_service::util::upload_attachment::determine_file_metadata;
-use model::document::response::CreateDocumentRequest;
 use models_email::email::service::link::Link;
 use models_email::service::attachment::AttachmentUploadMetadata;
 use sha2::{Digest, Sha256};
+use shared_types::document::response::CreateDocumentRequest;
 use sqlx::PgPool;
 use tracing::instrument;
 

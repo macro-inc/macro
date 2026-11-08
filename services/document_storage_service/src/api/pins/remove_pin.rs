@@ -8,10 +8,10 @@ use axum::{
     response::IntoResponse,
 };
 use macro_authorization::{MacroAuthorizationExtractor, UserOrInternal};
-use model::response::{
+use serde::Deserialize;
+use shared_types::response::{
     GenericErrorResponse, GenericResponse, GenericSuccessResponse, SuccessResponse,
 };
-use serde::Deserialize;
 
 #[derive(Deserialize)]
 pub struct Params {

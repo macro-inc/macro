@@ -7,7 +7,6 @@ use item_filters::{
     ChannelFilters, ChatFilters, DocumentFilters, EmailFilters, EntityFilters, NotificationFilters,
     ProjectFilters, PropertyFilter, SharedEmailFilter, TaskFilters,
 };
-use model::{document::FileType, response::EmptyResponse};
 use models_search::channel::{
     ChannelSearchRequest, ChannelSearchResponse, ChannelSearchResponseItem, ChannelSearchResult,
     SimpleChannelSearchReponseItem, SimpleChannelSearchResponse,
@@ -28,6 +27,7 @@ use models_search::unified::{
     SimpleUnifiedSearchResponse, SimpleUnifiedSearchResponseItem, UnifiedSearchRequest,
     UnifiedSearchResponse, UnifiedSearchResponseItem,
 };
+use shared_types::{document::FileType, response::EmptyResponse};
 
 use models_search::project::{
     ProjectSearchMetadata, ProjectSearchRequest, ProjectSearchResponse, ProjectSearchResponseItem,

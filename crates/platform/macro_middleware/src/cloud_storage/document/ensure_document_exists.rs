@@ -5,8 +5,8 @@ use axum::{
     middleware::Next,
     response::Response,
 };
-use model::document::DocumentBasic;
 use serde::Deserialize;
+use shared_types::document::DocumentBasic;
 use sqlx::{PgPool, Pool, Postgres};
 
 #[derive(Deserialize)]

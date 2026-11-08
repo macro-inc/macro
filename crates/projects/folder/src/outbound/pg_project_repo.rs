@@ -17,12 +17,12 @@ use std::collections::HashMap;
 
 use entity_registry::BotFacts;
 use entity_registry_db_utils::{NewEntityRecord, OwnedEntityRegistrar, RegisteredEntityType};
-use model::project::{
+use model_owner::Owner;
+use models_permissions::share_permission::{LinkShare, TeamLinkShareDefault};
+use shared_types::project::{
     BasicProject, Project, ProjectPreviewData, ProjectPreviewV2, ProjectWithUploadRequest,
     WithProjectId,
 };
-use model_owner::Owner;
-use models_permissions::share_permission::{LinkShare, TeamLinkShareDefault};
 use sqlx::{PgPool, Postgres, Transaction};
 
 use crate::domain::models::{
@@ -306,7 +306,7 @@ impl<B: BotFacts + 'static> ProjectRepo for PgProjectRepo<B> {
     async fn get_project_children(
         &self,
         project_id: &str,
-    ) -> Result<Vec<model::item::Item>, Self::Err> {
+    ) -> Result<Vec<shared_types::item::Item>, Self::Err> {
         content::get_project_children(&self.pool, project_id).await
     }
 
@@ -478,7 +478,7 @@ impl<B: BotFacts + 'static> ProjectRepo for PgProjectRepo<B> {
     async fn upload_folder(
         &self,
         args: UploadFolderRepoArgs,
-    ) -> Result<model::folder::UploadFolderWithIdsResponse, Self::Err> {
+    ) -> Result<shared_types::folder::UploadFolderWithIdsResponse, Self::Err> {
         let mut transaction = self.pool.begin().await?;
         let result = upload_folder::upload_folder(&mut transaction, &self.registrar, args).await?;
         transaction.commit().await?;

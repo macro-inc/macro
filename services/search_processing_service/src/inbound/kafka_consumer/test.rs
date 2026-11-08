@@ -47,7 +47,6 @@ use macro_event_topics::{
     MacroEmailTopic, MacroProjectsTopic, MacroPropertiesTopic, Topic as _,
 };
 use macro_user_id::user_id::MacroUserIdStr;
-use model::document::FileType;
 use model_owner::Owner;
 use models_properties::{
     DataType, EntityType, PropertyOwner, service::property_option::PropertyOptionValue,
@@ -57,6 +56,7 @@ use properties::domain::events::{
     PropertyCreatedMetadata, PropertyDeletedMetadata, PropertyOptionCreatedMetadata,
     PropertyOptionDeletedMetadata, PropertyOptionUpdatedMetadata, PropertyTopicEvent,
 };
+use shared_types::document::FileType;
 use uuid::Uuid;
 
 use messages::domain::models::MessageParent;

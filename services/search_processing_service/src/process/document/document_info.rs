@@ -1,5 +1,5 @@
 use anyhow::Context;
-use model::document::DocumentMetadata;
+use shared_types::document::DocumentMetadata;
 
 use super::SearchExtractorMessage;
 use crate::outbound::document_email::is_email_attachment;

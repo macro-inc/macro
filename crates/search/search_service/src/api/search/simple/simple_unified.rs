@@ -18,7 +18,6 @@ use crm::domain::auth::CrmTeamReceipt;
 use entity_access::domain::models::MemberTeamRole;
 use macro_authorization::{MacroAuthorizationExtractor, MacroUserAuthentication, UserOrInternal};
 use macro_user_id::{lowercased::Lowercase, user_id::MacroUserId};
-use model::{response::ErrorResponse, user::UserContext};
 use models_opensearch::SearchEntityType;
 use models_search::unified::SearchEntityFilters;
 use models_search::{
@@ -32,6 +31,7 @@ use opensearch_client::search::documents::{
 };
 use opensearch_client::search::model::SearchHit;
 use opensearch_client::search::unified::UnifiedSearchArgs;
+use shared_types::{response::ErrorResponse, user::UserContext};
 use std::collections::HashSet;
 use tracing::Instrument as _;
 use uuid::Uuid;

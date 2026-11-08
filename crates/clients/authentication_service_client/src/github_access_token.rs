@@ -1,6 +1,6 @@
 use crate::AuthServiceClient;
 use crate::error::{AuthServiceClientError, GenericErrorResponse};
-use model::authentication::github_token::GithubAccessToken;
+use shared_types::authentication::github_token::GithubAccessToken;
 
 impl AuthServiceClient {
     /// The user's GitHub token from their account link. `None` when they
