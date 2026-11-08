@@ -778,3 +778,85 @@ fn application_command_admission_rejects_stale_generations_and_applies_typed_pol
         .is::<lexical_rich_nodes::heading::HeadingNode>(first));
     assert_eq!(core.state().view().text_content(NodeKey::ROOT), "typed");
 }
+
+#[test]
+fn application_enter_clears_empty_typing_style_without_a_generic_keydown_listener() {
+    let builder = macro_document_model::surface::preset_builder_with_mode(
+        macro_document_model::EditorType::MarkdownSync,
+        EditorMode::ViewAttached,
+    );
+    let mut editor = document_session::with_session_plugins(builder, 1)
+        .build()
+        .expect("surface");
+    assert!(editor
+        .listener_table()
+        .levels(CommandKind::KeyDown)
+        .is_none());
+    let (key, _) = editor
+        .update(|tx| {
+            let p = tx.create(Paragraph::default())?;
+            let text = tx.create_text("bold")?;
+            tx.append(p, &[text.key()])?;
+            tx.append(NodeKey::ROOT, &[p.key()])?;
+            let mut range = RangeSelection::collapsed(Point::text(text, Utf16Offset(4)));
+            range.format = TextFormat::BOLD;
+            range.style = "color: red".into();
+            tx.set_selection(Some(Selection::Range(range)))?;
+            Ok(text.key())
+        })
+        .expect("seed");
+    let input = editor_input::input(
+        wire::EditorInputMsg::EditorApplication {
+            name: "group-b.key".into(),
+            json: "null".into(),
+            generation: key.generation(),
+            selection: wire::SelectionMsg {
+                kind: 0,
+                anchor: wire::PointMsg {
+                    key: 0,
+                    offset: 0,
+                    _type: 1,
+                },
+                focus: wire::PointMsg {
+                    key: 0,
+                    offset: 0,
+                    _type: 1,
+                },
+                nodes: vec![],
+                table: 0,
+                dirty: false,
+            },
+            keyboard: true,
+            key: "Enter".into(),
+            mods: 0,
+            code: 13,
+        },
+        key.generation(),
+    )
+    .expect("key envelope");
+    let mut core = EditorCore::new(
+        editor,
+        CoreConfig {
+            history: None,
+            editable: true,
+            diff: DiffOptions::default(),
+            track_text_content: false,
+        },
+    );
+    core.apply(input, HistoryTime(1)).expect("enter");
+    let blocks = core
+        .state()
+        .view()
+        .children_keys(NodeKey::ROOT)
+        .expect("blocks");
+    assert_eq!(blocks.len(), 2);
+    assert_eq!(core.state().view().text_content(blocks[0]), "bold");
+    assert_eq!(core.state().view().text_content(blocks[1]), "");
+    let range = core
+        .state()
+        .selection()
+        .and_then(Selection::as_range)
+        .expect("range");
+    assert_eq!(range.format, TextFormat::empty());
+    assert_eq!(range.style.as_ref(), "");
+}

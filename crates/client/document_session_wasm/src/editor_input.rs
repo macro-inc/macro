@@ -252,22 +252,28 @@ pub(crate) fn input(msg: wire::EditorInputMsg, generation: u32) -> Result<Input,
             if mods > 63 {
                 return Err(BoundaryError::Invalid("application key flags"));
             }
+            let event = keyboard.then(|| KeyEvent {
+                key: logical.into(),
+                code: code.to_string().into(),
+                shift: mods & 1 != 0,
+                alt: mods & 2 != 0,
+                ctrl: mods & 4 != 0,
+                meta: mods & 8 != 0,
+                repeat: mods & 16 != 0,
+                is_composing: mods & 32 != 0,
+            });
             // The application surface owns its append-only group decoder registration.
-            let command = macro_document_model::surface::decode_command(&name, &json, generation)?
-                .ok_or(BoundaryError::Invalid("application command name"))?;
+            let command = macro_document_model::surface::decode_command(
+                &name,
+                &json,
+                generation,
+                event.as_ref(),
+            )?
+            .ok_or(BoundaryError::Invalid("application command name"))?;
             let selection = selection(&s, generation)?;
-            if keyboard {
+            if let Some(event) = event {
                 Input::KeyDown {
-                    event: KeyEvent {
-                        key: logical.into(),
-                        code: code.to_string().into(),
-                        shift: mods & 1 != 0,
-                        alt: mods & 2 != 0,
-                        ctrl: mods & 4 != 0,
-                        meta: mods & 8 != 0,
-                        repeat: mods & 16 != 0,
-                        is_composing: mods & 32 != 0,
-                    },
+                    event,
                     routed: Some(command),
                     routed_prevent_default: true,
                     selection,

@@ -18,14 +18,20 @@ pub fn decode_command(
     name: &str,
     json: &str,
     generation: u32,
+    event: Option<&lexical_model::KeyEvent>,
 ) -> crate::ModelResult<Option<lexical_model::Command>> {
-    type Decoder = fn(&str, &str, u32) -> crate::ModelResult<Option<lexical_model::Command>>;
+    type Decoder = fn(
+        &str,
+        &str,
+        u32,
+        Option<&lexical_model::KeyEvent>,
+    ) -> crate::ModelResult<Option<lexical_model::Command>>;
     let decoders: &[Decoder] = &[
         // WP-58 Group B application commands.
         crate::plugins_group_b::decode_command,
     ];
     for decode in decoders {
-        if let Some(command) = decode(name, json, generation)? {
+        if let Some(command) = decode(name, json, generation, event)? {
             return Ok(Some(command));
         }
     }

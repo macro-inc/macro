@@ -1,6 +1,7 @@
 //! Structure, list, table, media, clipboard and link model plugins.
 use lexical_model::*;
 
+mod keyboard;
 mod structure;
 
 /// Surface block conversion supported by the node-transform plugin.
@@ -49,7 +50,7 @@ pub fn register(builder: EditorBuilder, ty: crate::EditorType) -> EditorBuilder 
     );
     let builder =
         lexical_rich_nodes::normalize_triple_click::register_normalize_triple_click(builder);
-    structure::register(builder)
+    keyboard::register(structure::register(builder))
 }
 
 #[cfg(test)]
@@ -57,7 +58,24 @@ mod test;
 
 /// Decode a named application command into an immutable typed model payload.
 /// Unknown namespaces remain available to the other surface plugin groups.
-pub fn decode_command(name: &str, json: &str, _generation: u32) -> Result<Option<Command>, Error> {
+pub fn decode_command(
+    name: &str,
+    json: &str,
+    _generation: u32,
+    event: Option<&KeyEvent>,
+) -> Result<Option<Command>, Error> {
+    if name == "group-b.key" {
+        let event = event.ok_or(Error::Invariant("application keyboard facts"))?;
+        let command = match event.key.as_ref() {
+            "Enter" => KeyCommand::Enter,
+            "Tab" => KeyCommand::Tab,
+            _ => return Err(Error::Invariant("application keyboard command")),
+        };
+        return Ok(Some(Command::Key {
+            command,
+            event: Some(event.clone()),
+        }));
+    }
     if name == NODE_TRANSFORM.name() {
         let kind: BlockKind = serde_json::from_str(json)?;
         return Ok(Some(Command::Extension(ExtensionCommand::new(
