@@ -174,7 +174,7 @@ pub struct DraftedRoutine {
 pub struct DraftCreated {
     /// What kind of item.
     #[schema(inline)]
-    pub entity_type: model_entity::EntityType,
+    pub entity_type: entity_kind::EntityType,
     /// Its id.
     pub entity_id: String,
     /// Whether the drafted routine uses it. One it doesn't use was made for

@@ -43,11 +43,11 @@ async fn a_drafts_latest_check_by_its_owner_is_its_answer(pool: PgPool) {
 
     let stranger = MacroUserIdStr::try_from_email("stranger@example.com").unwrap();
     let database = CreatedItem {
-        entity_type: model_entity::EntityType::Database,
+        entity_type: entity_kind::EntityType::Database,
         entity_id: "bug-log".into(),
     };
     let folder = CreatedItem {
-        entity_type: model_entity::EntityType::Project,
+        entity_type: entity_kind::EntityType::Project,
         entity_id: "reports".into(),
     };
     assert!(
