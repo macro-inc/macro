@@ -110,6 +110,11 @@ export class EditorView implements ViewSink {
   private lastOps = 0;
   private paintFrame: number | null = null;
   private revisionValue = 0;
+  private documentRevisionValue = 0;
+  /** Content revision for drags; selection-only commits keep the source valid. */
+  get documentRevision(): number {
+    return this.documentRevisionValue;
+  }
   get revision(): number {
     return this.revisionValue;
   }
@@ -636,6 +641,7 @@ export class EditorView implements ViewSink {
     selectionChanged: boolean,
     tags: readonly string[] = []
   ): void {
+    if (diff.mutations.size || diff.fullReconcile) this.documentRevisionValue++;
     if (diff.mutations.size || selectionChanged || diff.fullReconcile)
       this.revisionValue++;
     for (const [type, listeners] of this.mutations) {

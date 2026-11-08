@@ -68,7 +68,7 @@ export class DragAccess {
         ? selection.keys
         : [node.key];
     view.port.selectionFromView({ kind: 'node', keys });
-    const formats = view.clipboard.formats();
+    const formats = view.clipboard.formats(2);
     event.dataTransfer.setData('text/plain', formats.plain);
     event.dataTransfer.setData('text/html', formats.html);
     event.dataTransfer.setData('application/x-lexical-editor', formats.lexical);
@@ -79,7 +79,7 @@ export class DragAccess {
     });
     event.dataTransfer.setData(MIME, payload);
     event.dataTransfer.effectAllowed = 'copyMove';
-    active = { source: view, keys, payload, revision: view.revision };
+    active = { source: view, keys, payload, revision: view.documentRevision };
     view.runViewCommand('DragStart', event, 'after');
   }
   point(event: DragEvent): Point | null {
@@ -129,7 +129,7 @@ export class DragAccess {
       if (
         !point ||
         !drag.source.isMounted ||
-        drag.source.revision !== drag.revision
+        drag.source.documentRevision !== drag.revision
       )
         return;
       const request: InternalDrop = {

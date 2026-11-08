@@ -33,7 +33,7 @@ export class ClipboardAccess {
     private readonly view: EditorView,
     private readonly port: EditorPort
   ) {}
-  formats(kind: 0 | 1 = 0) {
+  formats(kind: 0 | 1 | 2 = 0) {
     return this.port.clipboard(kind);
   }
   async paste(
