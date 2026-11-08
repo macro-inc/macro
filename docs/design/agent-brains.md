@@ -222,7 +222,8 @@ persisted persona or the Claude turn environment.
 Public MCP keeps JWT bearer authentication and additionally accepts the same
 user-key authorizer as other API-key routes, including revocation and scope
 checks. A key resolves only its owner; client actor claims do not change it.
-The backend `ai-code-mode` policy explicitly enables agent teammates using the
-team-agent repository's account facts. Ordinary users retain their existing
-per-user flag behavior. No client-provided agent marker enables code mode,
-and enabling the tool surface grants no extra account permissions.
+Code mode is on for every public MCP client but ChatGPT, so teammates need no
+special selection. Code execution attributes a teammate key's writes to the
+teammate's own account using the team-agent repository's account facts; no
+client-provided agent marker changes attribution, and the code-mode surface
+grants no extra account permissions.

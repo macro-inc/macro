@@ -4,7 +4,6 @@ mod analytics;
 mod markdown_images;
 #[cfg(test)]
 mod test;
-mod tool_mode_cache;
 mod tool_response;
 mod tool_service;
 
@@ -32,13 +31,11 @@ use rmcp::transport::streamable_http_server::{
 };
 use secretsmanager_client::LocalOrRemoteSecret;
 use std::sync::Arc;
-use tool_mode_cache::CachedToolMode;
 use tool_service::{AuthenticatedToolService, CodeModeSurface};
 
-/// User-scoped code execution and the flag that offers it.
+/// User-scoped code execution.
 pub struct PublicCodeMode {
     pub service: Arc<dyn agent_code_mode::domain::UserCodeMode>,
-    pub selector: Arc<dyn agent_inmem::domain::tool_mode::ToolModeSelector>,
 }
 
 /// Browser-based MCP clients Macro has vetted, whose users skip the consent
@@ -94,7 +91,6 @@ pub async fn router(
             tools: Arc::new(agent_code_mode::inbound::toolset::user_toolset()),
             service: code_mode.service,
             cognition: tool_context.cognition_tool_context.service.clone(),
-            selector: Arc::new(CachedToolMode::new(code_mode.selector)),
         })
     });
     // Create the MCP service with authenticated tool handler

@@ -95,8 +95,7 @@ The transport requires `config.hosts.mcp`, parsed from the canonical
 `OVERRIDE_MCP_SERVICE_URL` service base. The bridge appends `/mcp` once;
 there is no gateway-derived default or fallback. In-process
 adapters retain the key; the model, subprocess environment and tool schemas do
-not receive it. Backend `ai-code-mode` explicitly includes team-agent accounts
-resolved by the server; ordinary users keep their existing rollout policy.
+not receive it. The public MCP lists code mode for every client but ChatGPT.
 Permissions, budget admission and the persona's charter still apply.
 
 The gateway credential may be the same value as the Macro user API key.

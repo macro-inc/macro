@@ -117,10 +117,10 @@ Pulumi stacks; they do not host extra agent processes.
   context).
 - `src/public_mcp.rs` + `src/public_mcp/`: public workspace MCP and OAuth;
   reuses the harness tool context with JWT bearer or standard user API-key
-  authentication. Teammates and ordinary users with `ai-code-mode` get only
-  `ExecuteCode`/`DescribeCodeTools`/`ReadCodeDocs` on
-  `tools/list` (`tool_service.rs`); hidden native tools stay callable. The flag
-  is cached per user (`tool_mode_cache.rs`).
+  authentication. Wherever the harness can run code, every client but ChatGPT
+  gets only `ExecuteCode`/`DescribeCodeTools`/`ReadCodeDocs` on `tools/list`
+  (`tool_service.rs`); hidden native tools stay callable. ChatGPT gets the
+  direct tools: its plugin directory refuses generic executors.
   `src/code_mode/connected_apps.rs` serves a running execution's
   `macro.connectedApps` through the in-process egress service.
   Code execution's destination list in `src/code_mode.rs` also includes the
@@ -381,11 +381,11 @@ unclaimed retries and recreated guests receive fresh credentials through the
 transient `PersonaEnrollment` payload, installed mode 0600 before pairing claim.
 
 Public MCP accepts JWT bearer or the standard revocable user API key. Compose
-`UserApiKeyAuthorizer` at startup; key requests run only as their owner. The
-`ai-code-mode` selector includes teammates through `TeamAgentRepository` server
-facts even without PostHog configuration; ordinary users keep their existing
-flag policy. No request header may assert teammate status. Brain clients require
-all three code-mode tools and reject unavailable deployments explicitly.
+`UserApiKeyAuthorizer` at startup; key requests run only as their owner. Code
+execution attributes a teammate's key calls to its own account, resolved from
+`TeamAgentRepository` server facts (`public_mcp/agent_accounts.rs`); no request
+header may assert teammate status. Brain clients require all three code-mode
+tools and reject unavailable deployments explicitly.
 
 Hosted computer screen and account-control requests require the operator-derived
 `FleetAttachment` after the existing rollout and shared Read/Use authorization;

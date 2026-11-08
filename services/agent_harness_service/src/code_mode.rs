@@ -70,7 +70,7 @@ impl ExecutionCredentials for RunCredentials {
 /// client's name where available. Public runs use the caller's permissions
 /// without a session owner gate.
 pub struct UserRunCredentials {
-    pub teammates: Arc<dyn agent_inmem::domain::tool_mode::AgentAccounts>,
+    pub teammates: Arc<dyn crate::public_mcp::agent_accounts::AgentAccounts>,
     pub signer: MacroApiTokenSigner,
     pub correlations: agent_correlation::outbound::PgCorrelationRepository,
     pub endpoints: SdkEndpoints,

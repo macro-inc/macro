@@ -761,30 +761,8 @@ async fn run() -> anyhow::Result<()> {
             .map_err(|error| anyhow::anyhow!("invalid feature flag configuration: {error}"))
         })
         .transpose()?;
-    // Teammates explicitly get ai-code-mode from server account facts;
-    // ordinary users keep their current PostHog rollout (or standard tools).
-    let ordinary_mode: Arc<dyn agent_inmem::domain::tool_mode::ToolModeSelector> =
-        match &feature_flags {
-            Some(flags) => Arc::new(agent_inmem::domain::tool_mode::FlaggedToolMode::new(
-                flags.clone(),
-            )),
-            None => Arc::new(agent_inmem::domain::tool_mode::StandardTools),
-        };
-    let code_mode_selector: Option<Arc<dyn agent_inmem::domain::tool_mode::ToolModeSelector>> =
-        code_runner.as_ref().map(|_| {
-            let selector: Arc<dyn agent_inmem::domain::tool_mode::ToolModeSelector> =
-                Arc::new(agent_inmem::domain::tool_mode::AgentToolMode::new(
-                    public_mcp::agent_accounts::Accounts(
-                        team_agents::outbound::pg_team_agents_repo::PgTeamAgentsRepo::new(
-                            pool.clone(),
-                        ),
-                    ),
-                    ordinary_mode,
-                ));
-            selector
-        });
-    let public_code_mode = match (&code_runner, &code_mode_selector) {
-        (Some((_, public, _, _)), Some(selector)) => Some(public_mcp::PublicCodeMode {
+    let public_code_mode = match &code_runner {
+        Some((_, public, _, _)) => Some(public_mcp::PublicCodeMode {
             service: Arc::new(agent_code_mode::domain::UserCodeModeService::new(
                 Arc::new(public.clone()),
                 Arc::new(code_mode::UserRunCredentials {
@@ -804,9 +782,8 @@ async fn run() -> anyhow::Result<()> {
                     endpoints: code_mode::sdk_endpoints()?,
                 }),
             )),
-            selector: Arc::clone(selector),
         }),
-        _ => None,
+        None => None,
     };
     let public_mcp_router = public_mcp::router(
         &config,
@@ -967,9 +944,6 @@ async fn run() -> anyhow::Result<()> {
 
     let mut inmem_engine =
         RigTurnEngine::new(pool.clone(), tool_context.clone()).with_gate(owner_tool_gate);
-    if let Some(selector) = &code_mode_selector {
-        inmem_engine = inmem_engine.with_tool_mode(Arc::clone(selector));
-    }
     // `auto-skills` decides, per user, whether a turn loads the user's skills
     // its request needs, and whether code-mode turns load the SDK areas a
     // request needs instead of carrying every area's guidance.
