@@ -37,9 +37,10 @@ impl Context {
             .version
             .checked_add(1)
             .ok_or_else(|| fail("API version overflow"))?;
-        if self.replay.version == 1 {
-            self.replay.states.insert(0, tx.committed_state().clone());
-        }
+        self.replay
+            .states
+            .entry(self.replay.committed_version)
+            .or_insert_with(|| tx.committed_state().clone());
         self.previous_selections = self.replay.selection_values.clone();
         self.replay.record_owner =
             Some((self.replay.committed_version, tx.committed_state().clone()));
