@@ -7,8 +7,10 @@ Never import them from production crates or bundles.
 
 ## Start here
 
+- `src/debug.rs`: actual export-entry and editor-facade lifetime counters; raw WASM must pass through instrument_exports before crossing measurements.
 - `src/compat.rs`: model-derived format flags and one WASM-instance key counter for shim host allocation/reset; Tier C handles retain their isolated counters.
 - `src/lib.rs`: isolated `CoreHandle`, JSON transaction boundary and build identity.
+- `examples/instrument_exports/main.rs`: native export counter postprocessor; run after bindgen/wasm-opt and never optimize afterward. Preserve internal indices and keep the reserved counter helper unwrapped so generated raw ABI types stay accurate.
 - `src/rich.rs` and `src/rich/input.rs`: rich profile, history, markdown and explicit
   package operations for the external differential harness.
 - `src/command.rs`: text/paragraph commands and explicit host-resolved view inputs.
@@ -31,6 +33,7 @@ Never import them from production crates or bundles.
 ## Checks
 
 - `TMPDIR=/home/wolf/tmp cargo test -p lexical_conformance_wasm -j4`
+- `TMPDIR=/home/wolf/tmp cargo test -p lexical_conformance_wasm --example instrument_exports -j4` (Bun executes actual synthetic WASM exports)
 - `TMPDIR=/home/wolf/tmp cargo clippy -p lexical_conformance_wasm --all-targets -j4 -- -D warnings`
 - `TMPDIR=/home/wolf/tmp cargo check -p lexical_conformance_wasm --target wasm32-unknown-unknown -j4`
 - `cargo tree --workspace -i lexical_conformance_wasm -e normal`: only itself.

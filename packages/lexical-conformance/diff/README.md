@@ -81,3 +81,12 @@ For an identical paired caret bounds error, S1 D-13 permits upstream's empty
 recovery publication versus Rust's absent commit. The comparator accepts this
 only when every upstream commit array is empty and Rust's JSON, selection, text
 and live keys equal the previous snapshot. Nonempty recovery metadata fails.
+
+The build postprocesses each optimized artifact with the native
+`instrument_exports` example. Forwarding wrappers count actual export entries,
+including imported function exports, raw allocator calls and trapping frees;
+internal calls retain their original indices. Do not optimize after this step.
+`debug.test.ts` verifies the resulting Node/web counters and editor-facade
+lifetimes. Reset starts a new crossing interval; observations count their own
+entry. These counters do not yet implement boundary-byte accounting or the full
+WP-54 EditorHandle contract.

@@ -12,6 +12,7 @@ use input::Input;
 /// Isolated rich editor, history and markdown registry; no host callbacks or I/O.
 #[wasm_bindgen]
 pub struct RichHandle {
+    _lifetime: debug::LiveEditor,
     editor: Editor,
     history: History,
     transformers: Transformers,
@@ -60,6 +61,7 @@ impl RichHandle {
             tx.select_start(p)
         })?;
         Ok(Self {
+            _lifetime: debug::LiveEditor::new(),
             editor,
             history: History::new(HistoryConfig::default(), HistoryTime(0)),
             transformers: Transformers::new(transformers()),

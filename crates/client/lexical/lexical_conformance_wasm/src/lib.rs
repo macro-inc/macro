@@ -5,6 +5,8 @@ use lexical_model::*;
 use serde::Deserialize;
 use serde_json::{Value, json};
 use wasm_bindgen::prelude::*;
+mod debug;
+pub use debug::{debug_crossings, debug_live_editors, debug_reset_counters};
 mod compat;
 pub use compat::text_format_flags;
 #[cfg(feature = "js-nodes")]
@@ -39,6 +41,7 @@ pub fn upstream_version() -> String {
 /// Raw model transactions for the upstream text/paragraph profile.
 #[wasm_bindgen]
 pub struct CoreHandle {
+    _lifetime: debug::LiveEditor,
     editor: Editor,
     #[cfg(feature = "js-nodes")]
     view_editor: Editor,
@@ -100,6 +103,7 @@ impl CoreHandle {
         #[cfg(feature = "js-nodes")]
         let view_editor = editor.create_conformance_peer(EditorMode::ViewAttached)?;
         Ok(Self {
+            _lifetime: debug::LiveEditor::new(),
             editor,
             #[cfg(feature = "js-nodes")]
             view_editor,

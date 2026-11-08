@@ -119,6 +119,20 @@ export function buildWasm() {
       '-o',
       path.join(out, 'lexical_conformance_wasm_bg.wasm'),
     ]);
+    // Run last: wrappers mark actual exports, preserving internal model calls.
+    run('cargo', [
+      'run',
+      '-p',
+      'lexical_conformance_wasm',
+      '--example',
+      'instrument_exports',
+      '-j4',
+      '--',
+      '--input',
+      path.join(out, 'lexical_conformance_wasm_bg.wasm'),
+      '--output',
+      path.join(out, 'lexical_conformance_wasm_bg.wasm'),
+    ]);
     writeFileSync(
       path.join(out, 'package.json'),
       JSON.stringify({
