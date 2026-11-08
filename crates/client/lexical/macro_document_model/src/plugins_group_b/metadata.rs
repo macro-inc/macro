@@ -55,10 +55,17 @@ impl Plugin for Metadata {
             // The source schedules a follow-up even when another update upgraded metadata.
             // Avoid a redundant identity-only state write once the value is current.
             if current.get("version").and_then(Value::as_f64) != Some(DOCUMENT_VERSION) {
-                let mut metadata = current.as_ref().clone();
-                metadata["version"] = json!(DOCUMENT_VERSION);
+                let mut metadata = current
+                    .as_object()
+                    .cloned()
+                    .ok_or(Error::Invariant("document metadata object"))?;
+                metadata.insert("version".into(), lexical_model::js_number(DOCUMENT_VERSION));
                 tx.add_tag(UpdateTag::HistoryMerge);
-                tx.set_state(NodeKey::ROOT, &DOCUMENT_METADATA, Arc::new(metadata))?;
+                tx.set_state(
+                    NodeKey::ROOT,
+                    &DOCUMENT_METADATA,
+                    Arc::new(Value::Object(metadata)),
+                )?;
             }
         }
         Ok(())
