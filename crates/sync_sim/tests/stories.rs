@@ -35,3 +35,6 @@ mod rebased_pending;
 
 #[path = "stories/storage_capabilities.rs"]
 mod storage_capabilities;
+
+#[path = "stories/failed_persistence.rs"]
+mod failed_persistence;

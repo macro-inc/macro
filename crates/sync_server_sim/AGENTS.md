@@ -69,3 +69,5 @@ runtime effects. Presence comparisons include exact native timestamps, including
 tombstones. For C0's unobservable local-delete clocks, only clock inputs are
 recovered from wire timestamps. Runtime enumeration order must retain exact live
 socket membership. Read-only Room diagnostics expose no mutable Loro handle.
+- `src/persistence_test.rs` checks failed first writes versus durable pending/failed
+  archive writes, same-time log identities and actual cold replay after cache invalidation.
