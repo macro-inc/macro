@@ -97,3 +97,5 @@ Reviewed Linear/Jira imports also register read-only tracker connections in ever
 host. `src/import_trackers.rs` creates stable-id tasks via ordinary markdown and
 projects via `InitiativeServiceImpl::create_imported`, with Macro AI attribution;
 project, parent and label writes pass through the owning property services.
+
+Attach the already resolved sync client to the supplied Lexical facade before distributing it to tool contexts; hosts reuse that configured client for sibling callers.

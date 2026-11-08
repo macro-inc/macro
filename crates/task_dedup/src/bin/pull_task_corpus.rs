@@ -339,7 +339,8 @@ async fn main() -> Result<()> {
         .await
         .context("failed to connect to database")?;
     let ctx = Arc::new(Ctx {
-        lexical: LexicalClient::from_env(internal_api_secret_key, lexical_service_url)?,
+        lexical: LexicalClient::from_env(internal_api_secret_key, lexical_service_url)?
+            .with_sync_from_env()?,
         recorder: NoopRecorder,
     });
 

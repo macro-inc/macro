@@ -126,3 +126,5 @@ Lexical client startup requires `LEXICAL_ROUTE_MODES`; see the
 - Negotiate Mail cache profiles through `x-macro-mail-cache-profile` (CORS-enabled HTTP) and `mailCacheProfile` (WebSocket connection init); preserve authenticated connection data and default unknown capabilities to v2.
 
 - The HTTP boundary validates agent correlation; activity consumption restores Kafka envelope attribution before materialization.
+
+Inject the existing shared SyncServiceClient into the Lexical facade so native document exports retain the host credential and tracing configuration.
