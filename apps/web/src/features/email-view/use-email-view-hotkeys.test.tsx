@@ -12,6 +12,7 @@ import { render } from '@solidjs/testing-library';
 import { createSignal } from 'solid-js';
 import { afterEach, expect, it, vi } from 'vitest';
 import type { EmailTab } from './constants';
+import { registerGoToSentHotkey } from './go-to-sent';
 import { useEmailViewHotkeys } from './use-email-view-hotkeys';
 
 afterEach(() => setActiveScope('global'));
@@ -25,6 +26,9 @@ function press(key: string, init: KeyboardEventInit = {}) {
 
 function setup(initialTab: EmailTab = 'noise') {
   const goHome = vi.fn(() => true);
+  const goToTasks = vi.fn(() => true);
+  const openSent = vi.fn(() => true);
+  const goToToday = vi.fn(() => true);
   const openCreateMenu = vi.fn(() => true);
   const [tab, setTab] = createSignal<EmailTab>(initialTab);
   let pushUndo!: ReturnType<typeof useMutationUndoContext>['pushUndo'];
@@ -61,6 +65,21 @@ function setup(initialTab: EmailTab = 'noise') {
         registrationType: 'add',
       });
     registerHome();
+    registerHotkey({
+      hotkey: 't',
+      scopeId: GO_TO_COMMAND_SCOPE,
+      description: 'Go to Tasks',
+      keyDownHandler: goToTasks,
+      registrationType: 'add',
+    });
+    registerGoToSentHotkey(openSent);
+    const [attachCalendar, calendarScope] = useHotkeyDOMScope('calendar-split');
+    registerHotkey({
+      hotkey: 't',
+      scopeId: calendarScope,
+      description: 'Go to today',
+      keyDownHandler: goToToday,
+    });
     useEmailViewHotkeys({
       scopeId: emailScope,
       enabled: () => true,
@@ -77,6 +96,7 @@ function setup(initialTab: EmailTab = 'noise') {
           <div ref={attachReader} tabIndex={0} data-testid="reader" />
         </div>
         <button type="button">Elsewhere</button>
+        <div ref={attachCalendar} tabIndex={0} data-testid="calendar" />
       </div>
     );
   }
@@ -86,7 +106,16 @@ function setup(initialTab: EmailTab = 'noise') {
       <Harness />
     </MutationUndoProvider>
   ));
-  return { view, goHome, openCreateMenu, tab, pushUndo: () => pushUndo };
+  return {
+    view,
+    goHome,
+    goToTasks,
+    openSent,
+    goToToday,
+    openCreateMenu,
+    tab,
+    pushUndo: () => pushUndo,
+  };
 }
 
 it('goes to email tabs with g sequences only while Email is focused', () => {
@@ -151,7 +180,8 @@ it('undoes once while z is held', () => {
 });
 
 it('works from the reading pane, where Escape stays with the reader', () => {
-  const { view, openCreateMenu, tab, pushUndo } = setup('archived');
+  const { view, openCreateMenu, openSent, goToTasks, tab, pushUndo } =
+    setup('archived');
   const undo = vi.fn();
   pushUndo()({ undo });
   view.getByTestId('reader').focus();
@@ -164,5 +194,40 @@ it('works from the reading pane, where Escape stays with the reader', () => {
   expect(undo).toHaveBeenCalledOnce();
   press('g');
   press('t');
-  expect(tab()).toBe('sent');
+  expect(goToTasks).toHaveBeenCalledOnce();
+  expect(openSent).not.toHaveBeenCalled();
+  expect(tab()).toBe('archived');
+});
+
+it('opens Tasks with g t from Email and from Calendar', () => {
+  const { view, goToTasks, goToToday, openSent, tab } = setup();
+
+  view.getByTestId('email').focus();
+  press('g');
+  press('t');
+  expect(goToTasks).toHaveBeenCalledOnce();
+  expect(tab()).toBe('noise');
+
+  view.getByTestId('calendar').focus();
+  press('g');
+  press('t');
+  expect(goToTasks).toHaveBeenCalledTimes(2);
+  expect(goToToday).not.toHaveBeenCalled();
+  expect(openSent).not.toHaveBeenCalled();
+});
+
+it('opens Sent with g s from Email and from Calendar', () => {
+  const { view, openSent, goToTasks, tab } = setup();
+
+  view.getByTestId('email').focus();
+  press('g');
+  press('s');
+  expect(openSent).toHaveBeenCalledOnce();
+  expect(tab()).toBe('noise');
+
+  view.getByTestId('calendar').focus();
+  press('g');
+  press('s');
+  expect(openSent).toHaveBeenCalledTimes(2);
+  expect(goToTasks).not.toHaveBeenCalled();
 });

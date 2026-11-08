@@ -9,16 +9,14 @@ import { onCleanup } from 'solid-js';
 import { DEFAULT_EMAIL_TAB, EMAIL_TABS, type EmailTab } from './constants';
 
 /**
- * Mail-client "go to" keys (g then i for Signal, as in other mail clients).
- * While Email is focused they take the letters' app-wide meanings; elsewhere
- * the letters keep them (g t is still Tasks). Reminders has no letter so
- * `g h` still reaches Home.
+ * Mail-client "go to" keys while Email is focused (g then i for Signal).
+ * They replace the app-wide letter only inside Email. `g t` is Tasks from
+ * every view, and `g s` is Sent from every view. Reminders and Favorites
+ * have no letter, so `g h` still reaches Home.
  */
 const EMAIL_GO_TO_TABS = [
   ['i', 'important'],
   ['o', 'noise'],
-  ['s', 'favorites'],
-  ['t', 'sent'],
   ['d', 'drafts'],
   ['e', 'archived'],
   ['a', 'all'],

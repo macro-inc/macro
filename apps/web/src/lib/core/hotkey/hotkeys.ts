@@ -771,8 +771,10 @@ export function useHotKeyRoot() {
           ['cmd', 'ctrl', 'opt', 'shift'].includes(key)
         )
       ) {
-        // if we're in a command scope, any non-modifier input should jettison us back to closest DOM scope
-        activateClosestDOMScope();
+        // The follow-up belongs to the leader. Return to the view, and do not
+        // run that view's own binding for this key (Calendar t is today).
+        if (!commandScopeActivated) activateClosestDOMScope();
+        break;
       }
 
       if (commandCaptured || commandScopeActivated) {

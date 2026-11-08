@@ -8,6 +8,10 @@ import { useActivityFeedFlag } from '@app/features/activity/use-activity-feed-fl
 import { useCalendarUiFlag } from '@app/features/calendar/hooks/use-calendar-ui-flag';
 import { calendarPath } from '@app/features/calendar-view/calendar-url';
 import { CALENDAR_VIEW_ID } from '@app/features/calendar-view/types';
+import {
+  registerGoToSentHotkey,
+  sentMailSearch,
+} from '@app/features/email-view/go-to-sent';
 import { requestSearchFocus } from '@app/features/next-soup/soup-view/search-controllers';
 import { useRecentViewFlag } from '@app/features/next-soup/use-recent-view-flag';
 import {
@@ -215,7 +219,7 @@ const [goToHotkeyVisible, setGoToHotkeyVisible] = createSignal(false);
 /**
  * True while the "g" leader awaits a destination, so nav buttons can show
  * their destination key. Any key in the GoTo scope leaves it, including a
- * view's own GoTo command (Email's g s), so the hints clear with it.
+ * view's own GoTo command (Email's g i), so the hints clear with it.
  */
 export const isGoToLeaderActive = () =>
   goToHotkeyVisible() && activeScope() === GO_TO_COMMAND_SCOPE;
@@ -290,7 +294,27 @@ export const GoToHotkeys = () => {
     registrationType: 'add',
   });
 
-  // These two register in the 'global' scope, which outlives this component, so
+  const openSent = (e?: KeyboardEvent) => {
+    e?.preventDefault();
+    if (goToHotkeyVisible()) {
+      resetGoToHotkeysState();
+      debounceResetHotkeysState.clear();
+    }
+
+    const search = sentMailSearch();
+    openWithSplit(sidebarContent('mail'), {
+      preferNewSplit: !!e?.shiftKey,
+      // Land on Sent itself. Resuming would reopen the last mailbox tab or thread.
+      resume: false,
+      mergeHistory: false,
+      allowDuplicate: true,
+      referredFrom: 'hotkey',
+      ...(search ? { search } : {}),
+    });
+  };
+  const sentHotkey = registerGoToSentHotkey(openSent);
+
+  // These register in scopes that outlive this component, so
   // dispose them on unmount. Otherwise a remount (e.g. crossing the mobile
   // breakpoint) leaks: the 'add' leader stacks duplicate handlers and the
   // token-only invite command accumulates in the registry. The per-link nav
@@ -298,6 +322,7 @@ export const GoToHotkeys = () => {
   onCleanup(() => {
     inviteHotkey.dispose();
     leaderHotkey.dispose();
+    sentHotkey.dispose();
   });
 
   // When the go to command scope is active, we want to prevent
@@ -317,7 +342,7 @@ export const GoToHotkeys = () => {
 
     if (
       context.activeScopeId !== GO_TO_COMMAND_SCOPE ||
-      // The sidebar's letters and those a focused view adds (Email's g s).
+      // The sidebar's letters and those a focused view adds (Email's g i).
       getRunnableHotkeys(GO_TO_COMMAND_SCOPE).has(context.pressedKeysString)
     ) {
       return false;

@@ -7,6 +7,7 @@ export default {
   files: 'Files',
   documents: 'Documents',
   email: 'Email',
+  sent: 'Sent',
   chat: 'Chat',
   channels: 'Channels',
   tasks: 'Tasks',

@@ -57,10 +57,12 @@ use provider consent. Most functionality needs a connected account. Search is `C
 
 Mail-client keys work in the list, the reading pane, and the open thread while
 Email is focused: `s` star, `z` undo the last action, and `g` then a letter
-for a tab (`i` Signal, `o` Noise, `s` Favorites, `t` Sent, `d` Drafts, `e`
-Archived, `a` All). These letters replace the app-wide `g` targets only inside
-Email (`g t` is still Tasks elsewhere); `g h` still goes Home. `Escape` in a
-list with nothing selected returns to Signal; in the reading pane it first
+for a tab (`i` Signal, `o` Noise, `d` Drafts, `e` Archived, `a` All). These
+letters replace the app-wide `g` targets only inside Email. `g t` opens Tasks
+from Email, Calendar, and every other view. `g s` opens Sent from any view,
+including when Email is not focused. `g h` still goes Home. Favorites has no
+go-to letter. `Escape` in a list with nothing selected returns to Signal; in
+the reading pane it first
 hands the keyboard back to the list. `?` lists every shortcut for the focused
 view. `Shift+M` mutes the selected rows or the open thread, and `S` and
 `Shift+M` also work on a thread opened in its own split. In a thread, `O` opens

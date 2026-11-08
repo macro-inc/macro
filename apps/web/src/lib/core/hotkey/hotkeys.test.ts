@@ -1,3 +1,4 @@
+import { GO_TO_COMMAND_SCOPE } from '@app/constants/hotkeys';
 import { Telemetry } from '@macro-inc/observability';
 import { createRoot } from 'solid-js';
 import { afterEach, describe, expect, test, vi } from 'vitest';
@@ -139,6 +140,49 @@ describe('key events without a key', () => {
 
     expect(errors).toEqual([]);
     expect(keyDownHandler).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('go-to follow-up keys', () => {
+  function press(key: string) {
+    document.dispatchEvent(
+      new KeyboardEvent('keydown', { key, bubbles: true })
+    );
+    document.dispatchEvent(new KeyboardEvent('keyup', { key, bubbles: true }));
+  }
+
+  test('do not run the focused view binding', () => {
+    const today = vi.fn(() => true);
+    createRoot((dispose) => {
+      disposers.push(dispose);
+      useHotKeyRoot();
+      registerScope({
+        parentScopeId: 'global',
+        scopeId: 'calendar-split',
+        type: 'dom',
+      });
+      scopes.push('calendar-split');
+      registerHotkey({
+        hotkey: 'g',
+        scopeId: 'global',
+        description: 'Go to',
+        keyDownHandler: () => true,
+        activateCommandScopeId: GO_TO_COMMAND_SCOPE,
+        registrationType: 'add',
+      });
+      registerHotkey({
+        hotkey: 't',
+        scopeId: 'calendar-split',
+        description: 'Go to today',
+        keyDownHandler: today,
+      });
+      setActiveScope('calendar-split');
+    });
+
+    press('g');
+    press('t');
+
+    expect(today).not.toHaveBeenCalled();
   });
 });
 

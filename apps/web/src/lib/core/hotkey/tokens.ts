@@ -138,6 +138,7 @@ export const TOKENS = {
       documents: 'sidebar.goTo.documents',
       markdownDocuments: 'sidebar.goTo.markdownDocuments',
       tasks: 'sidebar.goTo.tasks',
+      sent: 'sidebar.goTo.sent',
       reminders: 'sidebar.goTo.reminders',
       channels: 'sidebar.goTo.channels',
       calls: 'sidebar.goTo.calls',
