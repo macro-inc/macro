@@ -7,7 +7,7 @@ Never import them from production crates or bundles.
 
 ## Start here
 
-- `src/corpus.rs`: I/O-free route adapters with deterministic host inputs and content-free errors; real dev data stays in the external corpus cache.
+- `src/corpus.rs`: I/O-free route adapters with deterministic host inputs and content-free errors; server composers use macro_document_composers' portable source-wire API; real dev data stays in the external corpus cache.
 - `src/gate.rs`: actual Macro gate comparison with explicit deterministic constructor inputs.
 - `src/lib.rs`: isolated `CoreHandle`, JSON transaction boundary and build identity.
 - `src/rich.rs` and `src/rich/input.rs`: rich profile, history, markdown and explicit

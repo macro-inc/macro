@@ -11824,6 +11824,7 @@ dependencies = [
  "lexical_markdown",
  "lexical_model",
  "lexical_rich_nodes",
+ "macro_document_composers",
  "macro_document_model",
  "regress",
  "serde",
