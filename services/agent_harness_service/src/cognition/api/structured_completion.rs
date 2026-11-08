@@ -2,7 +2,7 @@ use crate::cognition::api::context::{ApiContext, DcsAuthorizationService, DcsCha
 use crate::cognition::api::tool_selection::{service_tools, structured_completion_prompt};
 use crate::cognition::model::stream::ToolSet;
 use crate::cognition::service::structured_completion::{ToolFreeCompletionError, ToolFreeRequest};
-use agent::structured_output::DynamicSchema;
+use agent::structured_output::{CompletionThinking, DynamicSchema};
 use agent::types::{ChatMessage, ChatMessageContent, Role};
 use agent::{AgentLoop, StreamAccumulator};
 use ai_billing::inbound::admission::admission_status;
@@ -32,6 +32,10 @@ pub struct StructuredCompletionRequest {
     pub additional_instructions: Option<String>,
     #[serde(default)]
     pub toolset: ToolSet,
+    /// How much the model may think first; `low` answers faster. Applies to
+    /// completions without tools.
+    #[serde(default)]
+    pub thinking: CompletionThinking,
 }
 
 #[derive(Debug, Serialize, Deserialize, ToSchema)]
@@ -141,6 +145,7 @@ pub async fn structured_completion(
                     system_prompt,
                     prompt: request.prompt,
                     schema: request.output_schema,
+                    thinking: request.thinking,
                 },
             )
             .await

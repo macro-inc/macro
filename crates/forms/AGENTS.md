@@ -62,7 +62,8 @@ service.
   owner only); its database stays where it is. The move bumps the old and new
   folder's `updatedAt`, as document and chat moves do. The folder's inherited
   grants on the form reach the database through form access, like any form
-  grant.
+  grant. Trashing the folder returns the form to the root without those grants
+  (`PgFormsRepo::unfile_from_projects`, through projects' `FiledItemsUnfiler`).
 - `POST /forms` attributes the creation to the SDK token's `agent_id` (code
   mode), like the native tool, so channel delivery shares a poll an agent
   posts; access checks still run as the plain user.

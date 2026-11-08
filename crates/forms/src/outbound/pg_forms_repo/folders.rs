@@ -60,3 +60,39 @@ pub(super) async fn move_form(
     transaction.commit().await?;
     Ok(true)
 }
+
+/// Return the forms filed directly in any of `project_ids` to the root,
+/// trashed or not, dropping the grants each inherited from its folder and the
+/// folders above.
+#[tracing::instrument(skip(pool), err)]
+pub(super) async fn unfile_from_projects(
+    pool: &PgPool,
+    project_ids: &[String],
+) -> Result<(), PgFormsRepoError> {
+    let mut transaction = pool.begin().await?;
+    // The team-share guard comes before any row lock, as its writer requires.
+    team_share::acquire_guard(&mut transaction).await?;
+    let unfiled = sqlx::query!(
+        r#"
+        UPDATE forms AS current
+        SET project_id = NULL, updated_at = now()
+        FROM forms AS previous
+        WHERE previous.id = current.id AND previous.project_id = ANY($1)
+        RETURNING current.id, previous.project_id AS "project_id!"
+        "#,
+        project_ids,
+    )
+    .fetch_all(&mut *transaction)
+    .await?;
+    for row in unfiled {
+        drop_project_grants(
+            &mut transaction,
+            &row.id,
+            EntityType::Form,
+            &Uuid::parse_str(&row.project_id)?,
+        )
+        .await?;
+    }
+    transaction.commit().await?;
+    Ok(())
+}

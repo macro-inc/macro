@@ -106,6 +106,40 @@ async fn a_trashed_form_stays_where_it_was_and_a_purged_folder_frees_a_form(pool
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn trashing_its_folder_returns_a_form_to_the_root_without_its_grants(pool: PgPool) {
+    let table = insert_table(&pool).await;
+    shared_folders(&pool).await;
+    let repo = PgFormsRepo::new(pool.clone());
+    let form = form_over(&table);
+    repo.create_form(&form, &layout_over(&table), false)
+        .await
+        .unwrap();
+    repo.move_form(form.id, Some(SUBFOLDER)).await.unwrap();
+
+    repo.unfile_from_projects(&[FOLDER.to_string()])
+        .await
+        .unwrap();
+    assert_eq!(
+        repo.forms_by_ids(&[form.id]).await.unwrap()[0]
+            .project_id
+            .as_deref(),
+        Some(SUBFOLDER)
+    );
+
+    repo.unfile_from_projects(&[SUBFOLDER.to_string()])
+        .await
+        .unwrap();
+    assert_eq!(
+        repo.forms_by_ids(&[form.id]).await.unwrap()[0].project_id,
+        None
+    );
+    assert_eq!(
+        grants(&pool, form.id).await,
+        vec![(OWNER.to_string(), None)]
+    );
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn moving_a_form_marks_the_folders_it_left_and_joined_edited(pool: PgPool) {
     let table = insert_table(&pool).await;
     shared_folders(&pool).await;

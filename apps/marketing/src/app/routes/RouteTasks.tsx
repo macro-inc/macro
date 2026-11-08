@@ -90,6 +90,7 @@ export function RouteTasks() {
       <div class="tasks-page">
         <ProductHero
           cta="tasks_hero_get_started"
+          tutorial="tasks"
           product="Tasks"
           title={['Task tracking without', 'the busywork.']}
           description={[

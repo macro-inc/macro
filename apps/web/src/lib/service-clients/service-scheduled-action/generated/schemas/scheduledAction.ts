@@ -8,12 +8,12 @@
 
 import type { ActionKind } from './actionKind';
 import type { ActionTrigger } from './actionTrigger';
+import type { RoutineTask } from './routineTask';
 import type { RunVisibility } from './runVisibility';
 import type { ScheduledActionClaimed } from './scheduledActionClaimed';
 import type { ScheduledActionEventActivatedAt } from './scheduledActionEventActivatedAt';
 import type { ScheduledActionId } from './scheduledActionId';
 import type { ScheduledActionNextRunAt } from './scheduledActionNextRunAt';
-import type { ScheduledActionTask } from './scheduledActionTask';
 import type { ScheduledActionTemplateId } from './scheduledActionTemplateId';
 
 export interface ScheduledAction {
@@ -21,6 +21,8 @@ export interface ScheduledAction {
   /** Independent of execution bookkeeping in `updated_at`. */
   configuration_revision: number;
   created_at: string;
+  /** What the routine is for, in the owner's words; empty when unset. */
+  description?: string;
   /** When false, automatic dispatch skips this action. `run_now` remains
 available regardless. */
   enabled: boolean;
@@ -38,7 +40,7 @@ rather than failing to parse. */
   owner: string;
   /** Whether the action's runs are listed in Home and the Agents list. */
   run_visibility: RunVisibility;
-  task: ScheduledActionTask;
+  task: RoutineTask;
   /** The shared template this routine was activated from, if any. */
   template_id?: ScheduledActionTemplateId;
   trigger: ActionTrigger;

@@ -454,16 +454,17 @@ export function ChannelsRail(props: ChannelsRailProps) {
     channelsById().get(channelId) ??
     referencedChannels().find((channel) => channel.id === channelId);
 
+  const favoriteChannels = createMemo(() =>
+    favoriteChannelIds().flatMap((id) => channelById(id) ?? [])
+  );
   const activityChannels = createMemo(() => {
     if (!sectionsEnabled()) return allChannels();
-    return deduplicateChannels([
-      allChannels(),
-      favoriteChannelIds().flatMap((id) => channelById(id) ?? []),
-    ]);
+    return deduplicateChannels([allChannels(), favoriteChannels()]);
   });
   const channelActivity = useChannelRailActivity(
     activityChannels,
-    channelCalls
+    channelCalls,
+    favoriteChannels
   );
 
   const isLabelOpen = (labelId: string) =>
