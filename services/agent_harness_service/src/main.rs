@@ -731,13 +731,15 @@ async fn run() -> anyhow::Result<()> {
     let (http_listening, http_ready) = tokio::sync::watch::channel(false);
     let scheduling_runtime = scheduling::build(
         scheduling::config::Config::from_env()?,
-        pool.clone(),
         std::net::SocketAddr::from(([127, 0, 0, 1], config.port)),
-        routine_code,
-        routine_drafts::ModelDrafts::new(Arc::clone(&recorder)),
         http_ready,
-        Arc::clone(&notifications),
-        lexical.clone(),
+        scheduling::SchedulingDependencies {
+            db: pool.clone(),
+            code: routine_code,
+            drafter: routine_drafts::ModelDrafts::new(Arc::clone(&recorder)),
+            notifications: Arc::clone(&notifications),
+            lexical: lexical.clone(),
+        },
     )
     .await?;
     let scheduling_router = scheduling_runtime.router.clone();

@@ -89,17 +89,29 @@ impl SchedulingRuntime {
     }
 }
 
+/// Host-owned services shared with routine scheduling.
+pub struct SchedulingDependencies<Ingress> {
+    pub db: sqlx::PgPool,
+    pub code: Option<crate::routine_code::SdkRoutineCode>,
+    pub drafter: crate::routine_drafts::ModelDrafts,
+    pub notifications: Arc<Ingress>,
+    pub lexical: lexical_client::LexicalClient,
+}
+
 /// Compose routine scheduling and event workers alongside the harness API.
 pub async fn build<Ingress: notification::domain::service::NotificationIngress>(
     config: Config,
-    db: sqlx::PgPool,
     harness_address: std::net::SocketAddr,
-    code: Option<crate::routine_code::SdkRoutineCode>,
-    drafter: crate::routine_drafts::ModelDrafts,
     ready: tokio::sync::watch::Receiver<bool>,
-    notifications: Arc<Ingress>,
-    lexical: lexical_client::LexicalClient,
+    dependencies: SchedulingDependencies<Ingress>,
 ) -> Result<SchedulingRuntime> {
+    let SchedulingDependencies {
+        db,
+        code,
+        drafter,
+        notifications,
+        lexical,
+    } = dependencies;
     let environment = config.environment;
     let lifecycle = ServiceLifecycle::default();
 
