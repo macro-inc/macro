@@ -26,6 +26,9 @@ node types, immutable snapshots, transactional tree editing, update processing, 
 
 ## Boundaries
 
+- Keep parse_editor_state strict; parse_editor_state_report exposes partial state and its diagnostic only to hosts that choose a logging error policy.
+- Preserve optional StateValue inner identity and imported undefined text fields through paragraph exports.
+
 - Use Error::invariant for runtime diagnostic context; static and owned messages display verbatim and share the Invariant classification.
 - Use NodeType::create_default for context-dependent constructors; default_node and flag probes remain pure data.
 - Pure Rust model; no network, database, runtime or browser dependencies.
