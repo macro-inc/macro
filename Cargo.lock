@@ -20261,6 +20261,7 @@ dependencies = [
  "macro_env_var",
  "macro_sync_service_jwt",
  "postcard",
+ "proptest",
  "rand 0.9.4",
  "rand_chacha 0.9.0",
  "serde",

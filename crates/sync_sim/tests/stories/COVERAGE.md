@@ -95,3 +95,14 @@ ClockSkew facts define the signed clock spread for strict expiry deadlines.
 `idle_presence::late_data_quiescence_republishes_before_observing_presence` retains
 literal157: a positive receiver clock can expire the entry-time selection before
 late data ACKs drain. One fixed fresh-publication phase follows preliminary idle.
+
+- `adoption_snapshot`: full246, changed shared-snapshot cover or exact source row
+  selection cannot relabel adopted WAL payloads; actual ACK/cold VV stay strict.
+
+Account-switch workload contracts: `account_drain` runs actual old-user drainage
+before switching, and rejects a real ReadOnly parked row without deleting it.
+Undrained switches retain the earlier isolation coverage, not writable convergence.
+The generator's explicit assertions and real regression seed remain in T0.
+
+- `idle_orphans`: full quiet-window counterexample, fixed real Visible rescan before
+  capture, exact retained row/snapshot metadata remains checked.

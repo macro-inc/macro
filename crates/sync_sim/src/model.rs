@@ -551,6 +551,11 @@ pub enum Step {
         /// Signed offset.
         wall_offset_ms: i64,
     },
+    /// Assert current-user browser WAL is drained before a generated account switch.
+    AssertProfileDrained {
+        /// Browser whose actual retained rows are checked without mutation.
+        profile: ProfileName,
+    },
     /// Change browser user; subsequent opens use that user.
     SignIn {
         /// Browser.

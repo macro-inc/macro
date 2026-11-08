@@ -37,6 +37,7 @@ Native in-memory room capabilities and the golden Worker transcript corpus.
 - A closing socket stays listed until the runtime completes its close callback.
 - D1 claims may replace only the system author; missing-peer insertion never
   replaces an existing owner. D1 writes survive DO output-gate rollback.
+- Record Worker goldens with the workspace Loro pin; verify old/new native replay, real legacy interoperability and repeated exact recordings before refreshing encoded snapshots.
 - Re-record comparison is byte-exact except the documented time/UUID and
   awareness normalization. Under the S6 native comparison ruling (2026-11-07),
   native Loro envelopes allow export-derived lengths/chunks to differ while
@@ -49,7 +50,8 @@ Native in-memory room capabilities and the golden Worker transcript corpus.
 - `fork_durable` opens an isolated cold view; `take_completed_puts` and
   `take_delivery_proofs` expose success/generation evidence without changing port effects.
   Durable generations share immutable value/snapshot buffers; writes replace leaves,
-  and public reads/dumps return owned copies. Confirming an older generation must
+  and public reads/dumps return owned copies. Deserialize typed reads from borrowed
+  immutable values so raw-byte arrays need no intermediate JSON clone. Confirming an older generation must
   preserve its exact pre-overwrite content through cold recovery.
   `take_queued_sends` and `take_completed_closes` distinguish successful runtime
   actions from failed attempts.

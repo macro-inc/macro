@@ -1,6 +1,6 @@
 //! Deterministic in-memory implementations of every room capability.
 //! CS-60/CS-56: futures and errors stay on the calling thread, like Worker ports.
-use serde::{Serialize, de::DeserializeOwned};
+use serde::{Deserialize, Serialize, de::DeserializeOwned};
 use serde_json::{Value, json};
 use std::{
     cell::RefCell,
@@ -386,7 +386,7 @@ impl SimPorts {
             .data
             .values
             .get(key)
-            .map(|value| serde_json::from_value(value.as_ref().clone()))
+            .map(|value| T::deserialize(value.as_ref()))
             .transpose()
             .map_err(|e| SimError::Failure(e.to_string()))
     }
@@ -672,7 +672,7 @@ impl RoomStorage for SimPorts {
             .iter()
             .filter_map(|(key, value)| {
                 key.strip_prefix("o/").map(|id| {
-                    serde_json::from_value(value.as_ref().clone())
+                    Vec::<u8>::deserialize(value.as_ref())
                         .map(|update| PendingOperation {
                             id: OperationId::new(id.into()),
                             update,

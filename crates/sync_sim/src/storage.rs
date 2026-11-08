@@ -5,6 +5,9 @@ use rand::Rng;
 use serde::Serialize;
 use std::collections::{BTreeMap, BTreeSet};
 
+mod history;
+use history::SharedStoreImage;
+
 /// Durable rows and covering snapshots retained across tab/process lifetimes.
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize)]
 pub struct StoreImage {
@@ -27,7 +30,7 @@ pub(crate) struct Completion {
 }
 struct DurableWrite {
     at: u64,
-    before: StoreImage,
+    before: SharedStoreImage,
     appended: Option<(SessionId, WalSeq)>,
 }
 /// One browser's durable store, outstanding transactions and live/frozen leases.
@@ -238,7 +241,10 @@ impl SimStorage {
                 let result = if let Some(failure) = failure {
                     Err(failure)
                 } else {
-                    let before = self.durable.clone();
+                    let before = SharedStoreImage::capture(
+                        &self.durable,
+                        self.recent.last().map(|write| &write.before),
+                    );
                     let count = self.apply(&write.op, profile, &mut facts);
                     let appended = match &write.op {
                         StorageOp::WalAppend { owner, record, .. } => Some((*owner, record.seq)),
@@ -292,7 +298,8 @@ impl SimStorage {
             from,
             to,
             first_seq,
-            ..
+            covers: expected_cover,
+            expected,
         } = op
         else {
             return None;
@@ -310,14 +317,24 @@ impl SimStorage {
             .filter(|(owner, _)| *from == WalOwner::Session(*owner))
             .map(|(_, seq)| seq)
             .unwrap_or(WalSeq(0));
-        let count = self
+        // The core reserved IDs and retained payloads from the loaded cover.
+        // A replacement snapshot can change selection in either direction.
+        if covers != *expected_cover {
+            return Some(StorageFailure::Other);
+        }
+        let selected = self
             .durable
             .entries
             .iter()
             .filter(|((row_doc, owner, seq), row)| {
                 row_doc == doc && owner == from && (!row.delivered || *seq > covers)
             })
-            .count();
+            .map(|(_, row)| row)
+            .collect::<Vec<_>>();
+        if !selected.is_empty() && !selected.iter().copied().eq(expected.iter()) {
+            return Some(StorageFailure::Other);
+        }
+        let count = selected.len();
         for offset in 0..count {
             let Ok(offset) = u64::try_from(offset) else {
                 return Some(StorageFailure::Other);
@@ -407,6 +424,7 @@ impl SimStorage {
                 to,
                 first_seq,
                 covers: _,
+                expected: _,
             } => {
                 let covers = self
                     .durable
@@ -518,9 +536,10 @@ impl SimStorage {
                 .map(|(key, _)| key.clone())
                 .collect::<Vec<_>>();
             let cutoff = now.saturating_sub(window.0);
+            let mut restore = None;
             while self.recent.last().is_some_and(|write| write.at >= cutoff) {
                 if let Some(write) = self.recent.pop() {
-                    self.durable = write.before;
+                    restore = Some(write.before);
                     if let Some((session, seq)) = write.appended {
                         facts.push(Fact::WalWriteLost {
                             profile: profile.clone(),
@@ -529,6 +548,9 @@ impl SimStorage {
                         });
                     }
                 }
+            }
+            if let Some(image) = restore {
+                self.durable = image.into_owned();
             }
             let mut lost = BTreeMap::<_, Vec<_>>::new();
             for key in delivered_before {
