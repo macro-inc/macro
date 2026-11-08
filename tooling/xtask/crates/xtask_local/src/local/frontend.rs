@@ -234,22 +234,26 @@ pub fn build_static(stage: &Stage, instance: &Instance, mode: Mode) -> Result<()
                     dist.display()
                 );
             }
-            let mut cached = None;
-            stage.run_step("Caching frontend bundle", || {
-                cached = Some(bundle_cache::store(&key, &dist)?);
-                Ok(())
-            })?;
-            let cached = cached.context("frontend bundle was not cached")?;
-            // Pruning never picks the newest bundle, but recheck under the
-            // lock rather than stage from an entry that went away.
-            let reading = content_key::read_lock(&cached)
-                .with_context(|| format!("locking {}", cached.display()))?;
-            anyhow::ensure!(
-                cached.join("index.html").exists(),
-                "frontend bundle {} was removed before it could be staged",
-                cached.display()
-            );
-            (cached, reading)
+            // The read lock is taken after the store's install lock is released.
+            // Another checkout would have to store a cache's worth of newer
+            // bundles in that gap for this one to be pruned, but if it is gone,
+            // store it again from `dist/`, which this checkout's lock still holds.
+            let mut stored = None;
+            for _ in 0..2 {
+                let mut cached = None;
+                stage.run_step("Caching frontend bundle", || {
+                    cached = Some(bundle_cache::store(&key, &dist)?);
+                    Ok(())
+                })?;
+                let cached = cached.context("frontend bundle was not cached")?;
+                let reading = content_key::read_lock(&cached)
+                    .with_context(|| format!("locking {}", cached.display()))?;
+                if cached.join("index.html").exists() {
+                    stored = Some((cached, reading));
+                    break;
+                }
+            }
+            stored.context("the cached frontend bundle was pruned before it could be staged")?
         }
     };
     stage.run_step("Staging frontend bundle", || {
