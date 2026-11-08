@@ -342,6 +342,19 @@ impl Callback {
         };
         CURRENT.set(&frame, body)
     }
+    pub(super) fn nodes(
+        &self,
+        tx: &Transaction<'_>,
+        keys: &[NodeKey],
+    ) -> Result<Vec<Value>, Error> {
+        keys.iter()
+            .map(|key| {
+                self.context
+                    .node(tx, *key)
+                    .map_err(|error| Error::invariant(error.to_string()))
+            })
+            .collect()
+    }
     pub(super) fn node_mutation(
         &self,
         tx: &mut Transaction<'_>,

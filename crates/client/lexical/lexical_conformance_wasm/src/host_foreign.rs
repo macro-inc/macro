@@ -1,4 +1,4 @@
-//! Mutable foreign text methods over the exact current callback lease.
+//! Mutable foreign node methods over the exact current callback lease.
 use crate::host_callbacks::Callback;
 use lexical_model::*;
 use serde_json::{Value, json};
@@ -24,7 +24,13 @@ impl ForeignNode {
             | ForeignHook::CheckSpliceText.bit()
             | ForeignHook::CoerceDetail.bit()
             | ForeignHook::CoerceMode.bit()
-            | ForeignHook::CoerceFormat.bit();
+            | ForeignHook::CoerceFormat.bit()
+            | ForeignHook::Remove.bit()
+            | ForeignHook::ResetOnCopy.bit()
+            | ForeignHook::Splice.bit()
+            | ForeignHook::Append.bit()
+            | ForeignHook::SetIndent.bit()
+            | ForeignHook::UpdateFromJson.bit();
         if let Some(hook) = ForeignHook::ALL
             .iter()
             .find(|hook| mask & !supported & hook.bit() != 0)
@@ -75,17 +81,94 @@ impl ForeignNode {
         hook: ForeignHook,
         args: Vec<Value>,
     ) -> Override<Result<(), Error>> {
+        self.invoke_with(tx, key, hook, |_, _| Ok(args))
+    }
+    fn invoke_with(
+        &self,
+        tx: &mut Transaction<'_>,
+        key: NodeKey,
+        hook: ForeignHook,
+        args: impl FnOnce(&Callback, &Transaction<'_>) -> Result<Vec<Value>, Error>,
+    ) -> Override<Result<(), Error>> {
         if self.overrides.load(Ordering::SeqCst) & hook.bit() == 0 {
             return Override::Inherit;
         }
         let callback = { self.callback.lock().expect("foreign dispatcher").clone() };
         Override::Value(match callback {
-            Some(callback) => callback.node_mutation(tx, key, hook, args),
+            Some(callback) => {
+                args(&callback, tx).and_then(|args| callback.node_mutation(tx, key, hook, args))
+            }
             None => Err(Error::Invariant("foreign dispatcher is not installed")),
         })
     }
 }
 impl ForeignHooks for ForeignNode {
+    fn remove(
+        &self,
+        tx: &mut Transaction<'_>,
+        key: NodeKey,
+        preserve_empty_parent: bool,
+    ) -> Override<Result<(), Error>> {
+        self.invoke(
+            tx,
+            key,
+            ForeignHook::Remove,
+            vec![json!(preserve_empty_parent)],
+        )
+    }
+    fn reset_on_copy(
+        &self,
+        tx: &mut Transaction<'_>,
+        key: NodeKey,
+        original: NodeKey,
+    ) -> Override<Result<(), Error>> {
+        self.invoke_with(tx, key, ForeignHook::ResetOnCopy, |callback, tx| {
+            callback.nodes(tx, &[original])
+        })
+    }
+    fn splice(
+        &self,
+        tx: &mut Transaction<'_>,
+        key: NodeKey,
+        start: ChildIndex,
+        delete_count: u32,
+        nodes: &[NodeKey],
+    ) -> Override<Result<(), Error>> {
+        self.invoke_with(tx, key, ForeignHook::Splice, |callback, tx| {
+            Ok(vec![
+                json!(start.0),
+                json!(delete_count),
+                Value::Array(callback.nodes(tx, nodes)?),
+            ])
+        })
+    }
+    fn append(
+        &self,
+        tx: &mut Transaction<'_>,
+        key: NodeKey,
+        nodes: &[NodeKey],
+    ) -> Override<Result<(), Error>> {
+        self.invoke_with(tx, key, ForeignHook::Append, |callback, tx| {
+            callback.nodes(tx, nodes)
+        })
+    }
+    fn set_indent(
+        &self,
+        tx: &mut Transaction<'_>,
+        key: NodeKey,
+        indent: u32,
+    ) -> Override<Result<(), Error>> {
+        self.invoke(tx, key, ForeignHook::SetIndent, vec![json!(indent)])
+    }
+    fn update_from_json(
+        &self,
+        tx: &mut Transaction<'_>,
+        key: NodeKey,
+        json: &SerializedNode,
+    ) -> Override<Result<(), Error>> {
+        self.invoke(tx, key, ForeignHook::UpdateFromJson, vec![json!(json)])
+    }
+
     fn coerce_text_content(
         &self,
         tx: &mut Transaction<'_>,
