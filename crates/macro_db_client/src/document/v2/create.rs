@@ -2,7 +2,7 @@ use crate::history::{upsert_item_last_accessed_timestamp, upsert_user_history_ti
 use crate::share_permission::create::create_document_permission;
 use document_sub_type::DocumentSubType;
 use entity_kind::EntityType;
-use macro_user_id::cow_str::CowLike;
+use macro_user_id::cowlike::CowLike;
 use macro_user_id::user_id::MacroUserIdStr;
 use permissions_types::share_permission::SharePermissionV2;
 use permissions_types::share_permission::access_level::AccessLevel;

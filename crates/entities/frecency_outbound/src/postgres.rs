@@ -9,7 +9,7 @@ use frecency_core::{
     ports::{AggregateFrecencyStorage, EventRecordStorage, UnprocessedEventsRepo},
 };
 use item_filters::ast::EntityFilterAst;
-use macro_user_id::{cow_str::CowLike, error::ParseErr, user_id::MacroUserIdStr};
+use macro_user_id::{cowlike::CowLike, error::ParseErr, user_id::MacroUserIdStr};
 use sqlx::{PgPool, Postgres, QueryBuilder, Row, pool::PoolConnection, prelude::FromRow};
 use std::{borrow::Cow, collections::VecDeque, str::FromStr};
 use thiserror::Error;

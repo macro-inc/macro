@@ -1,7 +1,7 @@
 //! Postgres adapter for agent teammate accounts.
 
 use chrono::{DateTime, Utc};
-use macro_user_id::cow_str::CowLike;
+use macro_user_id::cowlike::CowLike;
 use macro_user_id::user_id::MacroUserIdStr;
 use sqlx::PgPool;
 use uuid::Uuid;

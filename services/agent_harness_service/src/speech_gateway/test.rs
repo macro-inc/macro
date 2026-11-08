@@ -5,7 +5,7 @@ use ai_billing::domain::admission::AdmissionFuture;
 use ai_usage::UsageEvent;
 use base64::{Engine, engine::general_purpose::STANDARD};
 use jsonwebtoken::{DecodingKey, Validation};
-use macro_user_id::{cow_str::CowLike, user_id::MacroUserIdStr};
+use macro_user_id::{cowlike::CowLike, user_id::MacroUserIdStr};
 use team_agents::domain::voice::VoiceProvider;
 use tokio_tungstenite::connect_async;
 use uuid::Uuid;

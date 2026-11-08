@@ -1,6 +1,6 @@
 use feature_flags::outbound::fake::FakeFeatureFlags;
 use feature_flags::{FlagSnapshot, FlagValue};
-use macro_user_id::cow_str::CowLike;
+use macro_user_id::cowlike::CowLike;
 
 use super::*;
 

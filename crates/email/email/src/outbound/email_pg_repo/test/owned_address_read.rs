@@ -17,7 +17,7 @@ use item_filters::NotificationState;
 use item_filters::SharedEmailFilter;
 use item_filters::ast::email::{AttachmentKind, SubjectQuery};
 use item_filters::ast::properties::{PropertiesLiteral, PropertyMatchValue};
-use macro_user_id::cow_str::CowLike;
+use macro_user_id::cowlike::CowLike;
 use std::collections::HashMap;
 
 const CALLER: &str = "macro|u0@owned.test";

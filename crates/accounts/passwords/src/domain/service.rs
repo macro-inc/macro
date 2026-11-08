@@ -652,7 +652,7 @@ impl PasswordService {
                 GranteeKind::User => {
                     let recipient = Actor {
                         user_id: macro_user_id::user_id::MacroUserIdStr::parse_from_str(&grant.id)
-                            .map(macro_user_id::cow_str::CowLike::into_owned)
+                            .map(macro_user_id::cowlike::CowLike::into_owned)
                             .map_err(|_| Error::Invalid)?,
                     };
                     if !self.repository.is_human(&recipient.user_id).await?

@@ -2,7 +2,7 @@ use contacts_core::{
     models::{contact::ContactName, page::MAX_CONTACT_PAGE_SIZE},
     ports::ContactNameReader,
 };
-use macro_user_id::{cow_str::CowLike, user_id::MacroUserIdStr};
+use macro_user_id::{cowlike::CowLike, user_id::MacroUserIdStr};
 use non_empty::NonEmpty;
 use rootcause::{Report, prelude::*};
 use sqlx::PgPool;

@@ -16,7 +16,7 @@ where
 }
 
 use anyhow::Context;
-use macro_user_id::{cow_str::CowLike, user_id::MacroUserIdStr};
+use macro_user_id::{cowlike::CowLike, user_id::MacroUserIdStr};
 use permissions_types::share_permission::access_level::AccessLevel;
 use permissions_types::share_permission::{LinkShare, TeamLinkShareDefault};
 use sqlx::{Executor, PgPool, Postgres};

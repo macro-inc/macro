@@ -1,7 +1,7 @@
 use super::*;
 #[test]
 fn owner_and_grants_are_scoped_to_the_team_and_permission() {
-    use macro_user_id::{cow_str::CowLike, user_id::MacroUserIdStr};
+    use macro_user_id::{cowlike::CowLike, user_id::MacroUserIdStr};
     let owner = MacroUserIdStr::parse_from_str("macro|owner@example.test")
         .expect("valid fixture")
         .into_owned();
@@ -59,7 +59,7 @@ fn owner_and_grants_are_scoped_to_the_team_and_permission() {
 #[path = "fakes.rs"]
 pub(crate) mod fakes;
 use fakes::*;
-use macro_user_id::{cow_str::CowLike, user_id::MacroUserIdStr};
+use macro_user_id::{cowlike::CowLike, user_id::MacroUserIdStr};
 use std::sync::atomic::Ordering;
 
 #[tokio::test]

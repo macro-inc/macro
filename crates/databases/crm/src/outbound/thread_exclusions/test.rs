@@ -1,6 +1,6 @@
 use super::*;
 use feature_flags::{FlagSnapshot, FlagValue, outbound::fake::FakeFeatureFlags};
-use macro_user_id::cow_str::CowLike;
+use macro_user_id::cowlike::CowLike;
 
 #[tokio::test]
 async fn writes_require_an_explicit_enabled_flag_and_fail_closed() {

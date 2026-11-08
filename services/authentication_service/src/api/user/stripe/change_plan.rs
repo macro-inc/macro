@@ -4,7 +4,7 @@ use entity_access::domain::{
     ports::EntityAccessService,
 };
 use macro_authorization::{MacroAuthorizationExtractor, UserOrInternal};
-use macro_user_id::cow_str::CowLike;
+use macro_user_id::cowlike::CowLike;
 use serde::{Deserialize, Serialize};
 use team_id::TeamId;
 use teams::domain::{model::SetTeamMemberPlanError, team_repo::TeamService};

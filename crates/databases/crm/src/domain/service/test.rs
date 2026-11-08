@@ -13,7 +13,7 @@ use crate::outbound::no_op_resolver::NoOpCompanyMetadataResolver;
 use entity_access::domain::models::{
     BotId, BotReceiptScope, Entity, EntityAccessReceipt, EntityPermission, EntityType, TeamRole,
 };
-use macro_user_id::{cow_str::CowLike, user_id::MacroUserIdStr};
+use macro_user_id::{cowlike::CowLike, user_id::MacroUserIdStr};
 use serde_json::json;
 use std::sync::{Arc, Mutex};
 

@@ -1,4 +1,4 @@
-use cow_str::CowLike;
+use cowlike::CowLike;
 use entity_kind::EntityType;
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
 use macro_user_id::user_id::MacroUserIdStr;

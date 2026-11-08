@@ -3,7 +3,7 @@
 use ai_billing::domain::{EntitlementSource, PlanTier, SubscriptionScope};
 use chrono::{DateTime, Utc};
 use hosted_runtimes::domain::rollout::ComputerRollout;
-use macro_user_id::{cow_str::CowLike, user_id::MacroUserIdStr};
+use macro_user_id::{cowlike::CowLike, user_id::MacroUserIdStr};
 use teams::domain::model::ScheduledSeatPlan;
 
 use super::subscription_plan::PlanChangeError;

@@ -15,7 +15,7 @@ use axum::{
     routing::{get, post},
 };
 use axum_extra::either::Either5;
-use cow_str::CowLike;
+use cowlike::CowLike;
 use email::{
     domain::{
         models::{EmailErr, PreviewView},

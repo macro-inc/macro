@@ -13,7 +13,7 @@ use ai_billing::outbound::stripe_gateway::{
 };
 use analytics_client::{AnalyticsClient, MetaActionSource, MetaUserData};
 use gtm_invite::domain::ports::GtmInviteService;
-use macro_user_id::cow_str::CowLike;
+use macro_user_id::cowlike::CowLike;
 use macro_user_id::user_id::MacroUserIdStr;
 use roles_and_permissions::domain::model::SubscriptionStatus as RoleStatus;
 use roles_and_permissions::domain::port::UserRolesAndPermissionsService;

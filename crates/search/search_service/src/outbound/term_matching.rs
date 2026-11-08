@@ -7,7 +7,7 @@ use std::{
 };
 
 use feature_flags::FeatureFlags;
-use macro_user_id::{cow_str::CowLike, user_id::MacroUserIdStr};
+use macro_user_id::{cowlike::CowLike, user_id::MacroUserIdStr};
 use tokio::time::Instant;
 use tracing::Instrument;
 

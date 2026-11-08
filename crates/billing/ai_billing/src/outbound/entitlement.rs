@@ -5,7 +5,7 @@ use crate::domain::{
     BillingError, BillingTeam, Entitlement, EntitlementSource, PayerScope, PlanTier, Result,
     TeamSeats,
 };
-use macro_user_id::cow_str::CowLike;
+use macro_user_id::cowlike::CowLike;
 use macro_user_id::user_id::MacroUserIdStr;
 use macro_uuid::Uuid;
 use roles_and_permissions::domain::port::UserRolesAndPermissionsService;

@@ -1,6 +1,6 @@
 //! Bounded reads of the viewer's contact graph, including the viewer themselves.
 
-use macro_user_id::{cow_str::CowLike, user_id::MacroUserIdStr};
+use macro_user_id::{cowlike::CowLike, user_id::MacroUserIdStr};
 
 /// Maximum number of contact IDs in one page.
 pub const MAX_CONTACT_PAGE_SIZE: u16 = 500;

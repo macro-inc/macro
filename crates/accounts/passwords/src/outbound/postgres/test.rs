@@ -1,7 +1,7 @@
 use super::*;
 use chrono::Utc;
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
-use macro_user_id::{cow_str::CowLike, user_id::MacroUserIdStr};
+use macro_user_id::{cowlike::CowLike, user_id::MacroUserIdStr};
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn metadata_grants_intents_folders_and_deletion_are_team_isolated(pool: PgPool) {

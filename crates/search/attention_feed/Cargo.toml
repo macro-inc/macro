@@ -11,7 +11,7 @@ inbound = ["entity_access/inbound"]
 # Adapters over the services that own the feeds' data.
 outbound = [
   "dep:activity",
-  "dep:cow_str",
+  "dep:cowlike",
   "dep:email",
   "dep:soup_types",
   "dep:soup",
@@ -25,7 +25,7 @@ activity = { workspace = true, features = ["realtime"], optional = true }
 async-stream = { workspace = true }
 base64 = { workspace = true }
 chrono = { workspace = true, features = ["serde"] }
-cow_str = { workspace = true, optional = true }
+cowlike = { workspace = true, optional = true }
 email = { workspace = true, features = ["ports"], optional = true }
 email_thread_id = { workspace = true }
 entity_access = { workspace = true, features = ["ports"] }

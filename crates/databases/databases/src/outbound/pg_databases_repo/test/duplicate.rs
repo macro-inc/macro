@@ -10,7 +10,7 @@ use entity_access::domain::models::{
     AccessLevel, Entity, EntityAccessReceipt, EntityPermission, EntityType, ViewAccessLevel,
 };
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
-use macro_user_id::{cow_str::CowLike, user_id::MacroUserIdStr};
+use macro_user_id::{cowlike::CowLike, user_id::MacroUserIdStr};
 use properties_types::service::property_value::PropertyValue;
 use properties_types::shared::{EntityReference, EntityType as PropertyEntityType};
 use sqlx::PgPool;

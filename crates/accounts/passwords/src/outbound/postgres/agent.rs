@@ -8,7 +8,7 @@ use crate::domain::agent::{
         IntentAgent, NewRequest, PendingRequest, RequestOutcome,
     },
 };
-use macro_user_id::{cow_str::CowLike, user_id::MacroUserIdStr};
+use macro_user_id::{cowlike::CowLike, user_id::MacroUserIdStr};
 use sqlx::PgConnection;
 
 const UNDELIVERED_BATCH: i64 = 100;

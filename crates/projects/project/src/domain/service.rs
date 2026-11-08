@@ -20,7 +20,7 @@ use entity_access::domain::models::{
     EntityType, OwnerAccessLevel, ViewAccessLevel,
 };
 use entity_access::domain::telemetry::{SOURCE_ID_COUNT_FIELD, observe_source_ids, span_count};
-use macro_user_id::cow_str::CowLike;
+use macro_user_id::cowlike::CowLike;
 use macro_user_id::user_id::MacroUserIdStr;
 use permissions_types::share_permission::SharePermissionV2;
 use permissions_types::share_permission::team_share::{

@@ -7,7 +7,7 @@ use std::{collections::HashSet, ops::Deref};
 
 use entity_kind::EntityType;
 use macro_user_id::{
-    cow_str::CowLike,
+    cowlike::CowLike,
     email::{EmailStr, ReadEmailParts},
     lowercased::Lowercase,
     user_id::{MacroUserId, MacroUserIdStr},

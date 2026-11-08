@@ -6,7 +6,7 @@ mod test;
 use std::borrow::Cow;
 
 use macro_event_broker::MacroEventBroker;
-use macro_user_id::cow_str::CowLike as _;
+use macro_user_id::cowlike::CowLike as _;
 use rootcause::Report;
 use rootcause::prelude::ResultExt as _;
 

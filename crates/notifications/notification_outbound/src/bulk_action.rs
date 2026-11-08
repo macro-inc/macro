@@ -4,7 +4,7 @@
 use std::str::FromStr;
 
 use chrono::{DateTime, Utc};
-use macro_user_id::{cow_str::CowLike, user_id::MacroUserIdStr};
+use macro_user_id::{cowlike::CowLike, user_id::MacroUserIdStr};
 use rootcause::Report;
 use sqlx::PgPool;
 use uuid::Uuid;

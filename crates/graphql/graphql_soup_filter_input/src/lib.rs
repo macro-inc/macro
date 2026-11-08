@@ -41,7 +41,7 @@ use item_filters::{
         properties::{EntityRefId, PropertiesLiteral, PropertyEntityType, PropertyMatchValue},
     },
 };
-use macro_user_id::{cow_str::CowLike, email::EmailStr, user_id::MacroUserIdStr};
+use macro_user_id::{cowlike::CowLike, email::EmailStr, user_id::MacroUserIdStr};
 use model_file_type::FileType;
 use model_owner::Owner;
 use notification_state::graphql::GraphqlNotificationState;

@@ -1,6 +1,6 @@
 use super::*;
 use crate::domain::{ExecutionRecord, ExecutionStatus};
-use macro_user_id::cow_str::CowLike;
+use macro_user_id::cowlike::CowLike;
 use serde_json::{Value, json};
 use std::{
     collections::HashMap,

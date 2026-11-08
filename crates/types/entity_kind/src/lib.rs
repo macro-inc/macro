@@ -3,7 +3,7 @@
 //! Please avoid writing real business logic in this crate unless it is applicable specifically to only the
 //! types that exist inside this crate.
 
-use cow_str::CowLike;
+use cowlike::CowLike;
 use serde::{Deserialize, Serialize};
 use std::{borrow::Cow, str::FromStr};
 pub use strum::ParseError;

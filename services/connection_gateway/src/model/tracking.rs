@@ -1,6 +1,6 @@
 //! Types for tracking entity connections and actions
 
-use cow_str::CowLike;
+use cowlike::CowLike;
 use entity_kind::Entity;
 use serde::{Deserialize, Serialize};
 use std::borrow::Cow;

@@ -10,7 +10,7 @@ use crate::{
     },
 };
 use chrono::{DateTime, Utc};
-use macro_user_id::cow_str::CowLike;
+use macro_user_id::cowlike::CowLike;
 use std::{collections::HashMap, sync::Arc};
 use tokio::task::JoinHandle;
 use tracing::Level;

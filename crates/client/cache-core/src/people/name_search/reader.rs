@@ -7,7 +7,7 @@ use crate::{
     },
     value::{CacheValue, EntityKey, Record},
 };
-use macro_user_id::{cow_str::CowLike, email::ReadEmailParts, user_id::MacroUserIdStr};
+use macro_user_id::{cowlike::CowLike, email::ReadEmailParts, user_id::MacroUserIdStr};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::collections::HashSet;

@@ -2,7 +2,7 @@ use super::*;
 use crate::domain::ExecutionRecord;
 use ai_toolset::actor::ToolActor;
 use entity_access::domain::models::EntityType;
-use macro_user_id::cow_str::CowLike;
+use macro_user_id::cowlike::CowLike;
 use std::sync::Mutex;
 
 struct Store(Mutex<Option<ExecutionRecord>>);

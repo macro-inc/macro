@@ -24,7 +24,7 @@ hexagonal architecture pattern.
 ## Boundaries
 
 - Depends on: `entity_access` (ports), `macro_authorization` (inbound),
-  `entity_kind`, `cow_str`.
+  `entity_kind`, `cowlike`.
 - Used by: `graphql_favorite`, `agent_tools`, `complete_graph`, `soup`,
   `document_storage_service`, `authentication_service`.
 

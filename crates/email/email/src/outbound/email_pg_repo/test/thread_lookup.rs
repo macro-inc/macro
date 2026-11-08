@@ -3,7 +3,7 @@ use entity_access::domain::models::{
     AccessLevel, Entity, EntityAccessAuth, EntityAccessReceipt, EntityPermission, EntityType,
     ViewAccessLevel,
 };
-use macro_user_id::cow_str::CowLike;
+use macro_user_id::cowlike::CowLike;
 
 const GMAIL: Uuid = uuid::uuid!("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa");
 const OUTLOOK: Uuid = uuid::uuid!("0a000000-0000-0000-0000-000000000001");

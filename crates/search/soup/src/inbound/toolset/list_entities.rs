@@ -40,7 +40,7 @@ use soup_types::{
 };
 use uuid::Uuid;
 
-use cow_str::CowLike;
+use cowlike::CowLike;
 use std::collections::HashMap;
 use std::sync::Arc;
 

@@ -235,7 +235,7 @@ impl AgentRepository for FakeAgents {
             .map(|((_, agent), row)| {
                 (
                     MacroUserIdStr::parse_from_str(agent)
-                        .map(macro_user_id::cow_str::CowLike::into_owned)
+                        .map(macro_user_id::cowlike::CowLike::into_owned)
                         .unwrap(),
                     row.clone(),
                 )
@@ -441,7 +441,7 @@ impl AgentRepository for FakeAgents {
                 (record.metadata.team_id == team && manageable).then(|| PendingRequest {
                     record,
                     agent: MacroUserIdStr::parse_from_str(agent)
-                        .map(macro_user_id::cow_str::CowLike::into_owned)
+                        .map(macro_user_id::cowlike::CowLike::into_owned)
                         .unwrap(),
                     row: row.clone(),
                 })
@@ -472,7 +472,7 @@ impl AgentRepository for FakeAgents {
             .map(|((_, agent), row)| {
                 (
                     MacroUserIdStr::parse_from_str(agent)
-                        .map(macro_user_id::cow_str::CowLike::into_owned)
+                        .map(macro_user_id::cowlike::CowLike::into_owned)
                         .unwrap(),
                     row.clone(),
                 )

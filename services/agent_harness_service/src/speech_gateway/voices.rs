@@ -6,7 +6,7 @@ use std::time::{Duration, Instant};
 use ai_usage::{AiFeature, UsageContext};
 use base64::{Engine, engine::general_purpose::STANDARD};
 use futures::{SinkExt, StreamExt};
-use macro_user_id::cow_str::CowLike;
+use macro_user_id::cowlike::CowLike;
 use macro_user_id::user_id::MacroUserIdStr;
 use serde::Deserialize;
 use team_agents::domain::models::TeamAgentError;

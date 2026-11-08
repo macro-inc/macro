@@ -15,7 +15,7 @@ axum = [
 ai_tools = ["dep:ai_toolset", "dep:async-trait", "dep:schemars", "dep:serde", "ports"]
 default = ["ai_tools", "outbound", "ports"]
 outbound = [
-  "dep:cow_str",
+  "dep:cowlike",
   "dep:documents",
   "dep:email",
   "dep:filter_ast",
@@ -60,7 +60,7 @@ macro_authorization = { workspace = true, features = [
 utoipa = { workspace = true, features = ["chrono"], optional = true }
 
 # Outbound dependencies
-cow_str = { workspace = true, optional = true }
+cowlike = { workspace = true, optional = true }
 documents = { workspace = true, features = ["ports"], optional = true }
 email = { workspace = true, optional = true }
 filter_ast = { workspace = true, optional = true }

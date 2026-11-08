@@ -1,7 +1,7 @@
 #[allow(unused_imports)]
 use super::*;
 use crate::user::get_user_name::get_user_names_with_email;
-use macro_user_id::cow_str::CowLike;
+use macro_user_id::cowlike::CowLike;
 use macro_user_id::user_id::MacroUserId;
 use non_empty::NonEmpty;
 use sqlx::{Pool, Postgres};

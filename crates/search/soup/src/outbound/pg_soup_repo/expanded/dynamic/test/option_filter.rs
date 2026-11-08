@@ -11,7 +11,7 @@ use item_filters::ast::{
     project::ProjectLiteral,
     properties::{EntityRefId, PropertiesLiteral, PropertyEntityType, PropertyMatchValue},
 };
-use macro_user_id::cow_str::CowLike;
+use macro_user_id::cowlike::CowLike;
 use pagination_types::{Identify, Query, SimpleSortMethod};
 use serde_json::{Value, json};
 use std::collections::BTreeSet;

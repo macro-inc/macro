@@ -26,7 +26,7 @@ use macro_authorization::{
     AccountHolderOrInternal, InternalOnly, MacroAuthorizationExtractor, MacroAuthorizationService,
     MacroAuthorizationState,
 };
-use macro_user_id::cow_str::CowLike;
+use macro_user_id::cowlike::CowLike;
 use macro_user_id::user_id::MacroUserIdStr;
 use model_error_response::ErrorResponse;
 use serde::Deserialize;

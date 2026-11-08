@@ -1,6 +1,6 @@
 use super::*;
 use entity_access::domain::models::{AccessError, AccessLevel, Entity};
-use macro_user_id::{cow_str::CowLike, lowercased::Lowercase, user_id::MacroUserId};
+use macro_user_id::{cowlike::CowLike, lowercased::Lowercase, user_id::MacroUserId};
 use std::sync::atomic::{AtomicUsize, Ordering};
 
 fn receipt(key: &entity_kind::Entity<'static>) -> EntityAccessReceipt<ViewAccessLevel> {

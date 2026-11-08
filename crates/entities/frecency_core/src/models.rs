@@ -1,6 +1,6 @@
 //! This crate provides the utilities to compute aggregate frecency scores from some input event
 use chrono::{DateTime, Utc};
-use cow_str::CowLike;
+use cowlike::CowLike;
 use entity_kind::Entity;
 use item_filters::ast::EntityFilterAst;
 use macro_user_id::{error::ParseErr, user_id::MacroUserIdStr};

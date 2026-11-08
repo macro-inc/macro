@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use entity_access::domain::ports::EntityAccessService as _;
-use macro_user_id::cow_str::CowLike;
+use macro_user_id::cowlike::CowLike;
 use macro_user_id::user_id::MacroUserIdStr;
 use properties_types::DataType;
 use properties_types::service::property_option::PropertyOptionValue;
