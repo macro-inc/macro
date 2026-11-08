@@ -3,14 +3,7 @@ import { MobileDrawer } from '@components/app/mobile/MobileDrawer';
 import { isMobile } from '@core/mobile/isMobile';
 import XIcon from '@icon/system/regular/x.svg';
 import { Button, cn, Tabs } from '@ui';
-import {
-  createEffect,
-  createSignal,
-  type JSX,
-  on,
-  onCleanup,
-  Show,
-} from 'solid-js';
+import { createEffect, createSignal, type JSX, on, onCleanup } from 'solid-js';
 
 export type CallPanelTab = 'chat' | 'participants' | 'work';
 
@@ -18,8 +11,6 @@ export type CallPanelTab = 'chat' | 'participants' | 'work';
 export function CallChatPanel(props: {
   id: string;
   open: boolean;
-  /** Animate only an explicit panel toggle, not the initial call view. */
-  animate?: boolean;
   onClose: () => void;
   activeTab: CallPanelTab;
   onTabChange: (tab: CallPanelTab) => void;
@@ -89,11 +80,7 @@ export function CallChatPanel(props: {
         aria-label={t('calls.panel')}
         hidden={isMobile() || !props.open}
         inert={isMobile() || !props.open}
-        class={cn(
-          'absolute top-1 inset-x-2 bottom-2 z-30 w-auto max-w-none min-h-0 flex-col overflow-hidden rounded-2xl border border-edge-muted bg-surface-2 @min-[800px]/call:static @min-[800px]/call:w-full @min-[800px]/call:h-full',
-          props.animate !== false &&
-            'transition-[opacity,translate,display] transition-discrete duration-200 ease-out starting:opacity-0 starting:translate-x-3 motion-reduce:transition-none'
-        )}
+        class="absolute top-2 right-0 bottom-2 z-20 w-full max-w-90 min-h-0 flex-col overflow-hidden rounded-lg border border-edge-muted bg-surface-2 transition-[opacity,translate,display] transition-discrete duration-200 ease-out starting:opacity-0 starting:translate-x-3 motion-reduce:transition-none @min-[800px]/call:static @min-[800px]/call:h-full @min-[800px]/call:max-w-none"
         classList={{
           flex: !isMobile() && props.open,
           'opacity-0 translate-x-3 pointer-events-none': !props.open,
@@ -107,7 +94,7 @@ export function CallChatPanel(props: {
           forceMount
           aria-hidden={!sheetOpen()}
           inert={!sheetOpen()}
-          targetHeight={64}
+          targetHeight={80}
           class="data-closed:hidden motion-reduce:duration-0!"
         >
           <MobileDrawer.Handle />
@@ -125,23 +112,18 @@ export function CallChatPanel(props: {
         <div class="flex h-14 shrink-0 items-center justify-between gap-2 px-3">
           <Tabs<CallPanelTab>
             aria-label={t('calls.panel')}
-            fullWidth={isMobile()}
-            size={isMobile() ? 'lg' : 'md'}
-            touch="inset"
             value={props.activeTab}
             onChange={props.onTabChange}
             options={[
               {
                 value: 'chat',
-                label: t('calls.chat'),
+                label: props.discussionLabel ?? t('calls.chat'),
                 disabled: !props.chatAvailable,
               },
               {
                 value: 'participants',
                 label: t('calls.participants'),
-                count: isMobile()
-                  ? props.participantCount.toLocaleString(formatLocale())
-                  : undefined,
+                count: props.participantCount.toLocaleString(formatLocale()),
               },
               ...(props.work
                 ? [
@@ -154,17 +136,15 @@ export function CallChatPanel(props: {
                 : []),
             ]}
           />
-          <Show when={!isMobile()}>
-            <Button
-              variant="ghost"
-              size="icon-sm"
-              aria-label={t('calls.closePanel')}
-              tooltip={t('calls.closePanel')}
-              onClick={props.onClose}
-            >
-              <XIcon class="size-4" />
-            </Button>
-          </Show>
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            aria-label={t('calls.closePanel')}
+            tooltip={t('calls.closePanel')}
+            onClick={props.onClose}
+          >
+            <XIcon class="size-4" />
+          </Button>
         </div>
         <section
           aria-label={t('calls.chat')}

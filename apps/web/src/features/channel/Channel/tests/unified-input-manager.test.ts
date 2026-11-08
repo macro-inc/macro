@@ -23,23 +23,6 @@ describe('createUnifiedInputManager', () => {
     });
   });
 
-  it('distinguishes the default discussion from an explicit reply to the same root', () => {
-    createRoot((dispose) => {
-      const manager = createUnifiedInputManager({ defaultThreadId: root.id });
-      expect(manager.replyTarget()?.threadId).toBe(root.id);
-      expect(manager.isReplying()).toBe(false);
-
-      manager.bindReply(root);
-      expect(manager.replyTarget()?.threadId).toBe(root.id);
-      expect(manager.isReplying()).toBe(true);
-
-      manager.closeReply();
-      expect(manager.replyTarget()?.threadId).toBe(root.id);
-      expect(manager.isReplying()).toBe(false);
-      dispose();
-    });
-  });
-
   it('binds a root message as a root-bound pointer', () => {
     createRoot((dispose) => {
       const manager = createUnifiedInputManager();

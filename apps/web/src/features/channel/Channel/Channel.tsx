@@ -10,7 +10,6 @@ import { t } from '@app/lib/i18n';
 import { beginInteraction, usePending } from '@app/observability/flow';
 import { startUiOperation } from '@app/observability/ui-operation';
 import { createActivityTracker } from '@channel/activity-tracker';
-import { CallChatEmptyState } from '@channel/Call/chat/components/CallChatEmptyState';
 import { useStartChannelCall } from '@channel/Call/use-start-channel-call';
 import { DebugSuspense } from '@channel/DebugSuspense';
 import {
@@ -1007,8 +1006,6 @@ export function Channel(props: ChannelProps) {
                                             }
                                           >
                                             <ChannelThread
-                                              repliesAsRoots={isPanelRoot()}
-                                              hideRail={isPanelRoot()}
                                               rootSlot={
                                                 isCallRow()
                                                   ? () => (
@@ -1151,9 +1148,13 @@ export function Channel(props: ChannelProps) {
                                                 m().thread.reply_count === 0
                                               }
                                             >
-                                              <div class="pointer-events-none absolute inset-0">
-                                                <CallChatEmptyState />
-                                              </div>
+                                              <p class="pointer-events-none absolute inset-0 flex items-center justify-center px-6 text-center text-sm text-ink-muted">
+                                                {t('calls.callThreadEmpty', {
+                                                  channel:
+                                                    channel()?.name ??
+                                                    t('calls.thisChannel'),
+                                                })}
+                                              </p>
                                             </Show>
                                           </div>
                                         );
@@ -1222,11 +1223,6 @@ export function Channel(props: ChannelProps) {
                         </DebugSuspense>
                       </Show>
                       <ChannelInputContainer
-                        class={
-                          callPanel
-                            ? 'px-(--message-padding-x) touch:px-(--message-padding-x)'
-                            : undefined
-                        }
                         ref={(el) => {
                           attachInputRef(el);
                           composerTarget(el);
@@ -1280,10 +1276,9 @@ export function Channel(props: ChannelProps) {
                                   (messageById().get(threadId)?.thread
                                     .reply_count ?? 0) > 0
                                 }
-                                replying={unifiedInput.isReplying()}
-                                placeholder={
-                                  callPanel && !unifiedInput.isReplying()
-                                    ? 'Message this call…'
+                                pinnedLabel={
+                                  threadId === callPanel?.rootId
+                                    ? () => t('calls.replyingInCallThread')
                                     : undefined
                                 }
                                 onNavigateToTarget={() =>

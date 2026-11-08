@@ -173,7 +173,6 @@ function Fixture() {
                                       <CallChatPanel
                                         id="fixture-call-panel"
                                         open={panelOpen()}
-                                        animate={false}
                                         onClose={() => setPanelOpen(false)}
                                         activeTab={panelTab()}
                                         onTabChange={setPanelTab}

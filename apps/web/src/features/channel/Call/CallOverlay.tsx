@@ -6,7 +6,6 @@ import {
 import { t } from '@app/lib/i18n';
 import { beginInteraction } from '@app/observability/flow';
 import { FloatRegion } from '@components/app/mobile/float-regions/FloatRegion';
-import { DEFAULT_SIDE_PANEL_WIDTH } from '@components/app/side-panel/sizing';
 import { Resize } from '@core/component/Resize';
 import type { ResizeZoneCtx } from '@core/component/Resize/types';
 import { UserIcon } from '@core/component/UserIcon';
@@ -115,11 +114,10 @@ export function CallOverlay(props: {
     props.sharedWithTeam ?? callCtx.isSharedWithTeam();
   const [panelOpen, setPanelOpen] = createSignal(false);
   const [panelMounted, setPanelMounted] = createSignal(false);
-  const [animatePanel, setAnimatePanel] = createSignal(false);
   const [selectedTab, setSelectedTab] = createSignal<CallPanelTab>('chat');
   const [focusChatOnOpen, setFocusChatOnOpen] = createSignal(true);
   const [resizeContext, setResizeContext] = createSignal<ResizeZoneCtx>();
-  const [panelWidth, setPanelWidth] = createSignal(DEFAULT_SIDE_PANEL_WIDTH);
+  const [panelWidth, setPanelWidth] = createSignal(360);
   const [sidebarMount, setSidebarMount] = createSignal<HTMLDivElement>();
   const [overlayMount, setOverlayMount] = createSignal<HTMLDivElement>();
   const widePanel = () => !isMobile() && (resizeContext()?.size() ?? 0) >= 800;
@@ -147,7 +145,6 @@ export function CallOverlay(props: {
     createSignal<HTMLDivElement>();
   const panelToggleSize = createElementSize(panelToggleFrame);
   const closePanel = () => {
-    setAnimatePanel(true);
     setPanelOpen(false);
     panelButton?.focus();
   };
@@ -156,7 +153,6 @@ export function CallOverlay(props: {
       () => props.discussion?.opensByDefault() ?? false,
       (opensByDefault) => {
         if (!opensByDefault) return;
-        setAnimatePanel(false);
         setFocusChatOnOpen(false);
         setPanelMounted(true);
         setPanelOpen(true);
@@ -165,7 +161,6 @@ export function CallOverlay(props: {
   );
   const togglePanel = () => {
     if (panelOpen()) return closePanel();
-    setAnimatePanel(true);
     setFocusChatOnOpen(true);
     setPanelMounted(true);
     setPanelOpen(true);
@@ -481,7 +476,7 @@ export function CallOverlay(props: {
       <FloatRegion region="dock" priority={100} active={isMobile} />
       <div
         ref={setOverlayMount}
-        class="relative min-h-0 flex-1 overflow-hidden px-3 pb-3 mobile:px-0 mobile:pb-0"
+        class="relative min-h-0 flex-1 overflow-hidden"
       >
         <Resize.Zone
           direction="horizontal"
@@ -492,7 +487,7 @@ export function CallOverlay(props: {
             // Hidden resize panels reset their left offset; keep chat at the right edge.
             '[&>[data-resize-panel]:has(>[data-call-sidebar])]:left-auto! [&>[data-resize-panel]:has(>[data-call-sidebar])]:right-0',
             !isMobile() &&
-              animatePanel() && [
+              panelMounted() && [
                 '[&>[data-resize-panel]]:transition-[width] [&>[data-resize-panel]]:duration-200 [&>[data-resize-panel]]:ease-out [&>[data-resize-panel]]:motion-reduce:transition-none',
                 '[&>[role=separator]]:transition-[left] [&>[role=separator]]:duration-200 [&>[role=separator]]:ease-out [&>[role=separator]]:motion-reduce:transition-none',
                 '[&:has(>[role=separator]:active)>*]:transition-none',
@@ -918,7 +913,7 @@ export function CallOverlay(props: {
             id="call-sidebar"
             minSize={280}
             maxSize={480}
-            target={{ kind: 'px', px: DEFAULT_SIDE_PANEL_WIDTH }}
+            target={{ kind: 'px', px: 360 }}
             redistributionPreferredSize={panelWidth()}
             onSizeChangeEnd={setPanelWidth}
             hidden={() => !widePanel() || !panelOpen()}
@@ -931,7 +926,6 @@ export function CallOverlay(props: {
           <CallChatPanel
             id={panelId}
             open={panelOpen()}
-            animate={animatePanel()}
             onClose={closePanel}
             activeTab={activeTab()}
             onTabChange={(tab) => {

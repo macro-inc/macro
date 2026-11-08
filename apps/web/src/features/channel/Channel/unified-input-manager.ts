@@ -77,7 +77,6 @@ export function createUnifiedInputManager(options?: {
   };
 
   return {
-    isReplying: () => boundReplyTarget() !== undefined,
     replyTarget,
     bindReply,
     closeReply,

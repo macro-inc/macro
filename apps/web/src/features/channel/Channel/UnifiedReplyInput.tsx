@@ -1,4 +1,4 @@
-import { Show } from 'solid-js';
+import { type JSX, Show } from 'solid-js';
 import { InputFlag } from '../Input';
 import type { MessageData } from '../Message';
 import { SenderName } from '../Message/SenderName';
@@ -25,9 +25,8 @@ export function UnifiedReplyInput(props: {
    * reads "Replying to thread"; otherwise it names the message's sender.
    */
   threadHasReplies: () => boolean;
-  /** A default discussion destination is not an explicit reply. */
-  replying?: boolean;
-  placeholder?: string;
+  /** Names a thread the input is pinned to, which can't be dismissed. */
+  pinnedLabel?: () => JSX.Element;
   onNavigateToTarget: () => void;
   onExit: () => void;
 }) {
@@ -36,25 +35,35 @@ export function UnifiedReplyInput(props: {
       data-keep-keyboard
       class="relative w-full flex flex-col items-center gap-1"
     >
-      <Show when={props.replying !== false}>
-        <InputFlag
-          label={
-            <Show
-              when={!props.threadHasReplies() && props.getTargetMessage()}
-              keyed
-              fallback="Replying to thread"
-            >
-              {(target) => (
-                <>
-                  Replying to <SenderName message={target} />
-                </>
-              )}
-            </Show>
-          }
-          dismissLabel="Stop replying"
-          onActivate={() => props.onNavigateToTarget()}
-          onDismiss={() => props.onExit()}
-        />
+      <Show
+        when={props.pinnedLabel}
+        fallback={
+          <InputFlag
+            label={
+              <Show
+                when={!props.threadHasReplies() && props.getTargetMessage()}
+                keyed
+                fallback="Replying to thread"
+              >
+                {(target) => (
+                  <>
+                    Replying to <SenderName message={target} />
+                  </>
+                )}
+              </Show>
+            }
+            dismissLabel="Stop replying"
+            onActivate={() => props.onNavigateToTarget()}
+            onDismiss={() => props.onExit()}
+          />
+        }
+      >
+        {(label) => (
+          <InputFlag
+            label={label()()}
+            onActivate={() => props.onNavigateToTarget()}
+          />
+        )}
       </Show>
       <ThreadReplyChannelInput
         parent={{ type: 'channel', id: props.channelId }}
@@ -65,8 +74,6 @@ export function UnifiedReplyInput(props: {
         setReplyInputHandle={props.state.setReplyInputHandle}
         focusRequest={props.state.replyInputFocusRequest}
         host="unified"
-        mode={props.replying === false ? 'channel' : 'reply'}
-        placeholder={props.placeholder}
         collapsible
         onExit={() => props.onExit()}
       />
