@@ -373,7 +373,7 @@ pub fn email_link_error(error: sqlx::Error) -> DocumentError {
 ///
 /// Callers should try unlocked reuse first. This lock is only needed when a
 /// concurrent import might insert the first document for this key.
-#[tracing::instrument(skip(transaction), err)]
+#[tracing::instrument(skip(transaction))]
 pub async fn reuse_email_document(
     transaction: &mut sqlx::Transaction<'_, sqlx::Postgres>,
     owner: &str,
