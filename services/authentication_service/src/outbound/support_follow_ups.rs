@@ -29,7 +29,7 @@ impl PgSupportFollowUps {
 
     /// Queue a follow-up for a channel. Scheduling the same channel again keeps
     /// the first row and its message id.
-    #[tracing::instrument(skip(self), err)]
+    #[tracing::instrument(skip(self, user_id), err)]
     pub async fn schedule(
         &self,
         channel_id: Uuid,

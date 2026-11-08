@@ -81,7 +81,7 @@ Channel messages, reactions, typing, and catch-up reads live only on the
 `/messages/channel/{id}` routes. The `/channels/{id}` router keeps channel metadata,
 membership, lists, inbox activity, attachments, and the bot webhook. The channel bot
 webhook, the agent's `SendChannelMessage` tool, the Macro AI reply loop, and the
-support-channel welcome message post through the shared `MessageCommands`. Channel
+support-channel welcome and follow-up messages post through the shared `MessageCommands`. Channel
 reads filter `comms_messages` and `comms_attachments` by the parent columns; the legacy
 `channel_id` columns are written only by the transition trigger until the schema-drop
 migration removes them.
