@@ -36,3 +36,31 @@ impl ExplicitReplyExtractor for LexicalExplicitReplyExtractor {
             }))
     }
 }
+
+#[cfg(test)]
+mod test {
+    use super::*;
+    use lexical_client::test_utils::FakeLexical;
+
+    #[tokio::test]
+    async fn explicit_replies_use_the_selected_route_in_every_mode() {
+        for mode in ["http", "in_process", "shadow"] {
+            let backend = FakeLexical::new(
+                "",
+                vec![("POST", "/extract-reply", serde_json::json!({"reply":null}))],
+            )
+            .await;
+            let extractor =
+                LexicalExplicitReplyExtractor::new(backend.client(&format!("snapshot={mode}")));
+            assert!(
+                extractor
+                    .extract_explicit_reply("plain text")
+                    .await
+                    .unwrap()
+                    .is_none()
+            );
+            assert_eq!(backend.requests().len(), usize::from(mode != "in_process"));
+            assert_eq!(backend.raw_reads(), 0);
+        }
+    }
+}
