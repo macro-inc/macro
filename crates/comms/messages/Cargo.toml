@@ -36,6 +36,7 @@ schema = ["channel_sender/schema", "dep:utoipa", "activity/schema", "message_par
 test-utils = ["dep:mockall", "ports"]
 
 [dependencies]
+message_id = { workspace = true }
 activity = { workspace = true }
 ai_toolset = { workspace = true, optional = true }
 async-trait = { workspace = true, optional = true }

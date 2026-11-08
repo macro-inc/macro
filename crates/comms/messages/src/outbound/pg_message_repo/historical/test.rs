@@ -1,5 +1,6 @@
 use chrono::{DateTime, Duration, Utc};
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
+use message_id::MessageId;
 use sqlx::PgPool;
 use uuid::Uuid;
 
@@ -148,7 +149,10 @@ async fn body_patch_is_guarded_silent_and_transactional(pool: PgPool) {
         tx.commit().await.unwrap();
     }
     let stored = repo
-        .get(&MessageParent::Channel(channel_id), rows[0].id)
+        .get(
+            &MessageParent::Channel(channel_id),
+            MessageId::from_uuid(rows[0].id),
+        )
         .await
         .unwrap()
         .unwrap();
@@ -228,7 +232,11 @@ async fn roots_replies_attribution_and_order_across_batches(pool: PgPool) {
     .await
     .unwrap();
 
-    let hydrated = repo.get(&parent, root.id).await.unwrap().unwrap();
+    let hydrated = repo
+        .get(&parent, MessageId::from_uuid(root.id))
+        .await
+        .unwrap()
+        .unwrap();
     assert_eq!(hydrated.imported_author.unwrap().name, "Archive Author");
     assert_eq!(hydrated.sender_id, root.sender);
     assert!(hydrated.bot_profile.is_some());
@@ -284,7 +292,10 @@ async fn reactions_mentions_are_unique_and_have_no_live_effects(pool: PgPool) {
     .await
     .unwrap();
     let hydrated = repo
-        .get(&MessageParent::Channel(channel_id), root.id)
+        .get(
+            &MessageParent::Channel(channel_id),
+            MessageId::from_uuid(root.id),
+        )
         .await
         .unwrap()
         .unwrap();
@@ -366,10 +377,13 @@ async fn rejects_foreign_missing_reply_and_deleted_roots(pool: PgPool) {
             .await;
         assert!(matches!(result, Err(MessageError::Invalid(_))));
         assert!(
-            repo.get(&MessageParent::Channel(channel_id), new_root.id)
-                .await
-                .unwrap()
-                .is_none()
+            repo.get(
+                &MessageParent::Channel(channel_id),
+                MessageId::from_uuid(new_root.id)
+            )
+            .await
+            .unwrap()
+            .is_none()
         );
     }
     repo.delete_thread(&MessageParent::Channel(first_channel), root.id)
@@ -476,9 +490,14 @@ async fn existing_id_is_a_conflict_without_partial_writes_or_overwrite(pool: PgP
         Err(MessageError::Conflict)
     ));
     let parent = MessageParent::Channel(channel_id);
-    assert!(repo.get(&parent, new_root.id).await.unwrap().is_none());
+    assert!(
+        repo.get(&parent, MessageId::from_uuid(new_root.id))
+            .await
+            .unwrap()
+            .is_none()
+    );
     assert_eq!(
-        repo.get(&parent, original.id)
+        repo.get(&parent, MessageId::from_uuid(original.id))
             .await
             .unwrap()
             .unwrap()
@@ -498,7 +517,7 @@ async fn existing_id_is_a_conflict_without_partial_writes_or_overwrite(pool: PgP
         ))
     ));
     assert!(
-        repo.get(&parent, conflicting_mention.id)
+        repo.get(&parent, MessageId::from_uuid(conflicting_mention.id))
             .await
             .unwrap()
             .is_none()

@@ -163,7 +163,7 @@ async fn project_discussions_use_shared_parent_lifecycle_checks(pool: PgPool) {
             .is_some()
     );
     assert!(
-        repo.get(&parent, reply.id)
+        repo.get(&parent, MessageId::from_uuid(reply.id))
             .await
             .unwrap()
             .unwrap()
@@ -200,7 +200,12 @@ async fn project_discussions_use_shared_parent_lifecycle_checks(pool: PgPool) {
         service.post(receipt(id), input("too late", None)).await,
         Err(MessageError::NotFound)
     ));
-    assert!(repo.get(&parent, active.id).await.unwrap().is_some());
+    assert!(
+        repo.get(&parent, MessageId::from_uuid(active.id))
+            .await
+            .unwrap()
+            .is_some()
+    );
     assert!(repo.thread(&parent, active.id).await.unwrap().is_some());
 }
 

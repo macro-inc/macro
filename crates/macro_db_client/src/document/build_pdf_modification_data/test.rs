@@ -52,9 +52,12 @@ async fn deleted_bodies_are_not_exported_but_root_location_survives(pool: PgPool
     use messages::domain::{models::MessageParent, ports::MessageRepository};
     let repo = messages::outbound::pg_message_repo::PgMessageRepository::new(pool.clone());
     let parent = MessageParent::parse("document", "document-with-comments").unwrap();
-    repo.delete(&parent, uuid::Uuid::from_u128(1))
-        .await
-        .unwrap();
+    repo.delete(
+        &parent,
+        message_id::MessageId::from_uuid(uuid::Uuid::from_u128(1)),
+    )
+    .await
+    .unwrap();
     let data = get_complete_pdf_modification_data(&pool, "document-with-comments", None)
         .await
         .unwrap();

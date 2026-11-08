@@ -8,6 +8,7 @@ use mention_utils::parse::{
     ParsedUserMention, ParsedXmlText, PlainTextFormatter, TextSegment, XmlFormatter,
 };
 use mention_utils::serialize::ExternalLink;
+use message_id::MessageId;
 use std::collections::HashMap;
 use std::fmt::Formatter;
 use std::sync::Arc;
@@ -489,7 +490,11 @@ impl<R: MessageRepository, E: MessageEventPublisher> GuestChatService<R, E> {
 
     async fn thread_senders(&self, call_id: Uuid) -> Result<HashMap<Uuid, String>, MessageError> {
         let parent = MessageParent::Call(call_id);
-        let root = self.messages.repo.get(&parent, call_id).await?;
+        let root = self
+            .messages
+            .repo
+            .get(&parent, MessageId::from_uuid(call_id))
+            .await?;
         let replies = self.messages.repo.replies(&parent, call_id).await?;
         Ok(root
             .iter()
@@ -557,7 +562,11 @@ impl<R: MessageRepository, E: MessageEventPublisher> GuestChatApi for GuestChatS
         if state.deleted_at.is_some() {
             return Err(MessageError::NotFound);
         }
-        let root = self.messages.repo.get(&parent, call_id).await?;
+        let root = self
+            .messages
+            .repo
+            .get(&parent, MessageId::from_uuid(call_id))
+            .await?;
         let replies = self.messages.repo.replies(&parent, call_id).await?;
         let messages: Vec<_> = root
             .into_iter()
@@ -614,7 +623,7 @@ impl<R: MessageRepository, E: MessageEventPublisher> GuestChatApi for GuestChatS
         let root = self
             .messages
             .repo
-            .get(&parent, call_id)
+            .get(&parent, MessageId::from_uuid(call_id))
             .await?
             .ok_or(MessageError::NotFound)?;
         let replies = self.messages.repo.replies(&parent, call_id).await?;
@@ -696,7 +705,7 @@ impl<R: MessageRepository, E: MessageEventPublisher> GuestChatApi for GuestChatS
             .repo
             .edit(
                 &parent,
-                id,
+                MessageId::from_uuid(id),
                 EditMessage {
                     content: self.rewrite_guest_quotes(call_id, &input.content).await?,
                     mentions: vec![],
@@ -736,7 +745,11 @@ impl<R: MessageRepository, E: MessageEventPublisher> GuestChatApi for GuestChatS
         if current.sender_id != actor {
             return Err(MessageError::Forbidden);
         }
-        let message = self.messages.repo.delete(&parent, id).await?;
+        let message = self
+            .messages
+            .repo
+            .delete(&parent, MessageId::from_uuid(id))
+            .await?;
         self.messages
             .publish_message(
                 actor,
@@ -770,7 +783,13 @@ impl<R: MessageRepository, E: MessageEventPublisher> GuestChatApi for GuestChatS
         let ReactionResult { message, changed } = self
             .messages
             .repo
-            .react(&parent, id, actor.as_ref(), &emoji, add)
+            .react(
+                &parent,
+                MessageId::from_uuid(id),
+                actor.as_ref(),
+                &emoji,
+                add,
+            )
             .await?;
         if changed {
             self.messages
