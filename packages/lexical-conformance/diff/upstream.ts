@@ -132,13 +132,14 @@ export class Upstream {
     vi.advanceTimersByTime(oracleClock - performance.now());
     resetRandomKey();
     const onError = (e: Error) => {
-      const caret =
-        /^\$getTextNodeOffset: invalid offset (\d+) for size \d+ at key /.exec(
+      // S1 D-11: compare the always-on offset error with Rust's typed error.
+      const offset =
+        /^\$getTextNodeOffset: invalid offset (\d+) for size \d+ at key \S+$/.exec(
           e.message
         );
       this.errors.push(
-        caret
-          ? new Error(`UTF-16 offset Utf16Offset(${caret[1]}) is out of range`)
+        offset
+          ? new Error(`UTF-16 offset Utf16Offset(${offset[1]}) is out of range`)
           : e
       );
     };
@@ -330,7 +331,25 @@ export class Upstream {
       { discrete: true }
     );
     await vi.runAllTimersAsync();
-    return capture(this.editor, this.update, this.errors[0]?.message ?? null);
+    const result = capture(
+      this.editor,
+      this.update,
+      this.errors[0]?.message ?? null
+    );
+    // An upstream failed-update recovery publishes an empty listener event.
+    // S1 D-11's atomic Rust rejection has no Commit; validate the recovery
+    // event is empty before representing both as the same rejected operation.
+    if (
+      /^UTF-16 offset Utf16Offset\(\d+\) is out of range$/.test(
+        result.error ?? ''
+      ) &&
+      result.commit
+    ) {
+      if (Object.values(result.commit).some((values) => values.length !== 0))
+        throw new Error('D-11 rejection emitted nonempty commit data');
+      result.commit = null;
+    }
+    return result;
   }
   dispose() {
     for (const fn of this.disposeListeners) fn();

@@ -97,6 +97,25 @@ fn api_node_handles_remain_usable_after_the_shared_counter_resets()
         &json!({"fn":"lexical.$getNodeByKey","args":[key]}),
     )?;
     assert_eq!(selected, text);
+    let paragraph = tx.create(Paragraph::default())?.key();
+    tx.append(paragraph, &[crate::replay::node_key(&text)?])?;
+    tx.append(NodeKey::ROOT, &[paragraph])?;
+    let parents = api::call(
+        &mut replayer,
+        &mut tx,
+        &json!({
+            "fn":"LexicalNode.getParentKeys", "this":text, "args":[]
+        }),
+    )?;
+    assert_eq!(parents[0], crate::replay::key_value(paragraph));
+    let parent = api::call(
+        &mut replayer,
+        &mut tx,
+        &json!({
+            "fn":"lexical.$getNodeByKey", "args":[parents[0]]
+        }),
+    )?;
+    assert_eq!(crate::replay::node_key(&parent)?, paragraph);
     Ok(())
 }
 

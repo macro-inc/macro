@@ -6,13 +6,263 @@
   ],
   "entries": [
     {
+      "file": "packages/lexical-html/src/__tests__/unit/LexicalHtml.test.ts",
+      "test": "HTML > [Lexical -> HTML]: Default selection (undefined) should serialize entire editor state",
+      "status": "xfail",
+      "reason": "not-ported",
+      "reviewedBy": "coding-agent",
+      "decision": "GOALS corpus drive round 3 exact capability ledger; S4 §2.6; packages/lexical-html/src/index.ts:241",
+      "note": "The replay facade does not yet bridge configured HTML exporters and in-transaction selections to the owned HTML exporter. This unsupported API is not a model verdict. Pinned upstream: packages/lexical-html/src/index.ts:241.",
+      "failure": "op 5: call 0: unmapped API: @lexical/html.$generateHtmlFromNodes"
+    },
+    {
+      "file": "packages/lexical-html/src/__tests__/unit/LexicalHtml.test.ts",
+      "test": "HTML > [Lexical -> HTML]: Empty editor state",
+      "status": "xfail",
+      "reason": "not-ported",
+      "reviewedBy": "coding-agent",
+      "decision": "GOALS corpus drive round 3 exact capability ledger; S4 §2.6; packages/lexical-html/src/index.ts:241",
+      "note": "The replay facade does not yet bridge configured HTML exporters and in-transaction selections to the owned HTML exporter. This unsupported API is not a model verdict. Pinned upstream: packages/lexical-html/src/index.ts:241.",
+      "failure": "op 6 read: call 0: unmapped API: @lexical/html.$generateHtmlFromNodes"
+    },
+    {
+      "file": "packages/lexical-html/src/__tests__/unit/LexicalHtml.test.ts",
+      "test": "HTML > [Lexical -> HTML]: Nested ordered list numbering (Regression #7207)",
+      "status": "xfail",
+      "reason": "not-ported",
+      "reviewedBy": "coding-agent",
+      "decision": "GOALS corpus drive round 3 exact capability ledger; S4 §2.6; packages/lexical-html/src/index.ts:241",
+      "note": "The replay facade does not yet bridge configured HTML exporters and in-transaction selections to the owned HTML exporter. This unsupported API is not a model verdict. Pinned upstream: packages/lexical-html/src/index.ts:241.",
+      "failure": "op 6 read: call 0: unmapped API: @lexical/html.$generateHtmlFromNodes"
+    },
+    {
+      "file": "packages/lexical-html/src/__tests__/unit/LexicalHtml.test.ts",
+      "test": "HTML > [Lexical -> HTML]: Use provided selection",
+      "status": "xfail",
+      "reason": "not-ported",
+      "reviewedBy": "coding-agent",
+      "decision": "GOALS corpus drive round 3 exact capability ledger; S4 §2.6; packages/lexical-html/src/index.ts:241",
+      "note": "The replay facade does not yet bridge configured HTML exporters and in-transaction selections to the owned HTML exporter. This unsupported API is not a model verdict. Pinned upstream: packages/lexical-html/src/index.ts:241.",
+      "failure": "op 5: call 0: unmapped API: @lexical/html.$generateHtmlFromNodes"
+    },
+    {
+      "file": "packages/lexical-markdown/src/__tests__/unit/LexicalMarkdown.test.ts",
+      "test": "Markdown > Enter key triggers > should create a code block with language when ```javascript is typed and Enter is pressed",
+      "status": "xfail",
+      "reason": "not-ported",
+      "reviewedBy": "coding-agent",
+      "decision": "GOALS corpus drive round 3 exact capability ledger; S4 §2.6; packages/lexical-markdown/src/MarkdownShortcuts.ts:439",
+      "note": "The replay facade does not yet install markdown shortcut listeners, composition/Enter host facts and listener follow-up transactions. The standalone markdown engine is present; its registration bridge is not. Pinned upstream: packages/lexical-markdown/src/MarkdownShortcuts.ts:439.",
+      "failure": "unmapped plugin registration: \"@lexical/markdown.registerMarkdownShortcuts\""
+    },
+    {
+      "file": "packages/lexical-markdown/src/__tests__/unit/LexicalMarkdown.test.ts",
+      "test": "Markdown > Enter key triggers > should create an empty code block when ``` is typed and Enter is pressed",
+      "status": "xfail",
+      "reason": "not-ported",
+      "reviewedBy": "coding-agent",
+      "decision": "GOALS corpus drive round 3 exact capability ledger; S4 §2.6; packages/lexical-markdown/src/MarkdownShortcuts.ts:439",
+      "note": "The replay facade does not yet install markdown shortcut listeners, composition/Enter host facts and listener follow-up transactions. The standalone markdown engine is present; its registration bridge is not. Pinned upstream: packages/lexical-markdown/src/MarkdownShortcuts.ts:439.",
+      "failure": "unmapped plugin registration: \"@lexical/markdown.registerMarkdownShortcuts\""
+    },
+    {
+      "file": "packages/lexical-markdown/src/__tests__/unit/LexicalMarkdown.test.ts",
+      "test": "Markdown > Enter key triggers > should transform heading on Enter when a line was inserted at once (no trailing space listener trigger)",
+      "status": "xfail",
+      "reason": "not-ported",
+      "reviewedBy": "coding-agent",
+      "decision": "GOALS corpus drive round 3 exact capability ledger; S4 §2.6; packages/lexical-markdown/src/MarkdownShortcuts.ts:439",
+      "note": "The replay facade does not yet install markdown shortcut listeners, composition/Enter host facts and listener follow-up transactions. The standalone markdown engine is present; its registration bridge is not. Pinned upstream: packages/lexical-markdown/src/MarkdownShortcuts.ts:439.",
+      "failure": "unmapped plugin registration: \"@lexical/markdown.registerMarkdownShortcuts\""
+    },
+    {
+      "file": "packages/lexical-markdown/src/__tests__/unit/LexicalMarkdown.test.ts",
+      "test": "Markdown > composition-end trigger characters (#7026) > applies inline code when compositionend commits the trigger as a multi-character chunk",
+      "status": "xfail",
+      "reason": "not-ported",
+      "reviewedBy": "coding-agent",
+      "decision": "GOALS corpus drive round 3 exact capability ledger; S4 §2.6; packages/lexical-markdown/src/MarkdownShortcuts.ts:439",
+      "note": "The replay facade does not yet install markdown shortcut listeners, composition/Enter host facts and listener follow-up transactions. The standalone markdown engine is present; its registration bridge is not. Pinned upstream: packages/lexical-markdown/src/MarkdownShortcuts.ts:439.",
+      "failure": "unmapped plugin registration: \"@lexical/markdown.registerMarkdownShortcuts\""
+    },
+    {
+      "file": "packages/lexical-markdown/src/__tests__/unit/LexicalMarkdown.test.ts",
+      "test": "Markdown > composition-end trigger characters (#7026) > applies inline code when the closing backtick is committed via compositionend",
+      "status": "xfail",
+      "reason": "not-ported",
+      "reviewedBy": "coding-agent",
+      "decision": "GOALS corpus drive round 3 exact capability ledger; S4 §2.6; packages/lexical-markdown/src/MarkdownShortcuts.ts:439",
+      "note": "The replay facade does not yet install markdown shortcut listeners, composition/Enter host facts and listener follow-up transactions. The standalone markdown engine is present; its registration bridge is not. Pinned upstream: packages/lexical-markdown/src/MarkdownShortcuts.ts:439.",
+      "failure": "unmapped plugin registration: \"@lexical/markdown.registerMarkdownShortcuts\""
+    },
+    {
+      "file": "packages/lexical-markdown/src/__tests__/unit/LexicalMarkdown.test.ts",
+      "test": "Markdown > should remove leading node and execute transform if replace does not return false",
+      "status": "xfail",
+      "reason": "not-ported",
+      "reviewedBy": "coding-agent",
+      "decision": "GOALS corpus drive round 3 exact capability ledger; S4 §2.6; packages/lexical-markdown/src/MarkdownShortcuts.ts:439",
+      "note": "The replay facade does not yet install markdown shortcut listeners, composition/Enter host facts and listener follow-up transactions. The standalone markdown engine is present; its registration bridge is not. Pinned upstream: packages/lexical-markdown/src/MarkdownShortcuts.ts:439.",
+      "failure": "unmapped plugin registration: \"@lexical/markdown.registerMarkdownShortcuts\""
+    },
+    {
+      "file": "packages/lexical-markdown/src/__tests__/unit/LexicalMarkdown.test.ts",
+      "test": "markdown Safari compatibility (issue #8012) > correctly captures code span content",
+      "status": "xfail",
+      "reason": "not-ported",
+      "reviewedBy": "coding-agent",
+      "decision": "GOALS corpus drive round 3 exact capability ledger; S4 §2.6; packages/lexical-markdown/src/__tests__/unit/LexicalMarkdown.test.ts:2292",
+      "note": "This fixture creates a second independent editor. Replay currently owns one configured editor and rejects the second explicitly; supporting multiple editor identities and callback contexts remains unimplemented. Pinned upstream: packages/lexical-markdown/src/__tests__/unit/LexicalMarkdown.test.ts:2292.",
+      "failure": "unimplemented multiple editors"
+    },
+    {
+      "file": "packages/lexical-playground/__tests__/unit/LayoutContainerNode.test.ts",
+      "test": "LayoutContainerNode HTML serialization > exportDOM > exports with inline grid-template-columns style",
+      "status": "xfail",
+      "reason": "not-ported",
+      "reviewedBy": "coding-agent",
+      "decision": "GOALS corpus drive round 3 exact capability ledger; S4 §2.6; packages/lexical-playground/src/nodes/LayoutContainerNode.ts:67",
+      "note": "The playground-specific LayoutContainerNode class and its DOM export configuration are not registered in the replay model. No replacement class or fabricated DOM output is substituted. Pinned upstream: packages/lexical-playground/src/nodes/LayoutContainerNode.ts:67.",
+      "failure": "unsupported configured class reference layout-container"
+    },
+    {
+      "file": "packages/lexical-react/src/__tests__/unit/useLexicalCharacterLimit.test.ts",
+      "test": "LexicalNodeHelpers tests > merge > merges an overflow node (left overflow selected)",
+      "status": "xfail",
+      "reason": "not-ported",
+      "reviewedBy": "coding-agent",
+      "decision": "GOALS corpus drive round 3 exact capability ledger; S4 §2.6; packages/lexical-react/src/shared/useCharacterLimit.ts:265",
+      "note": "This React character-limit helper merges overflow wrappers and relocates both selection endpoints. Its replay adapter is not implemented; importing OverflowNode alone does not implement this helper. Pinned upstream: packages/lexical-react/src/shared/useCharacterLimit.ts:265.",
+      "failure": "op 11: call 3: unmapped API: @lexical/react/shared/useCharacterLimit.$mergePrevious"
+    },
+    {
+      "file": "packages/lexical-react/src/__tests__/unit/useLexicalCharacterLimit.test.ts",
+      "test": "LexicalNodeHelpers tests > merge > merges an overflow node (left-right overflow selected)",
+      "status": "xfail",
+      "reason": "not-ported",
+      "reviewedBy": "coding-agent",
+      "decision": "GOALS corpus drive round 3 exact capability ledger; S4 §2.6; packages/lexical-react/src/shared/useCharacterLimit.ts:265",
+      "note": "This React character-limit helper merges overflow wrappers and relocates both selection endpoints. Its replay adapter is not implemented; importing OverflowNode alone does not implement this helper. Pinned upstream: packages/lexical-react/src/shared/useCharacterLimit.ts:265.",
+      "failure": "op 10: call 3: unmapped API: @lexical/react/shared/useCharacterLimit.$mergePrevious"
+    },
+    {
+      "file": "packages/lexical-selection/src/__tests__/unit/$sliceSelectedTextNodeContent.test.ts",
+      "test": "$sliceSelectedTextNodeContent > clone > can slice a node from both sides",
+      "status": "xfail",
+      "reason": "not-ported",
+      "reviewedBy": "coding-agent",
+      "decision": "GOALS corpus drive round 3 exact capability ledger; S4 §2.6; packages/lexical-selection/src/lexical-node.ts:44",
+      "note": "The clone mode returns an ephemeral node object with the same key and a separate raw text record during a read. Replay has no ephemeral node-record identity bridge; the pure selected-text slice helper cannot substitute for these clone observations. Pinned upstream: packages/lexical-selection/src/lexical-node.ts:44.",
+      "failure": "op 5 read: call 15: unmapped API: @lexical/selection.$sliceSelectedTextNodeContent"
+    },
+    {
+      "file": "packages/lexical-selection/src/__tests__/unit/$sliceSelectedTextNodeContent.test.ts",
+      "test": "$sliceSelectedTextNodeContent > clone > clones only with partial selection (first node)",
+      "status": "xfail",
+      "reason": "not-ported",
+      "reviewedBy": "coding-agent",
+      "decision": "GOALS corpus drive round 3 exact capability ledger; S4 §2.6; packages/lexical-selection/src/lexical-node.ts:44",
+      "note": "The clone mode returns an ephemeral node object with the same key and a separate raw text record during a read. Replay has no ephemeral node-record identity bridge; the pure selected-text slice helper cannot substitute for these clone observations. Pinned upstream: packages/lexical-selection/src/lexical-node.ts:44.",
+      "failure": "op 5 read: call 17: unmapped API: @lexical/selection.$sliceSelectedTextNodeContent"
+    },
+    {
+      "file": "packages/lexical-selection/src/__tests__/unit/$sliceSelectedTextNodeContent.test.ts",
+      "test": "$sliceSelectedTextNodeContent > clone > clones only with partial selection (last node)",
+      "status": "xfail",
+      "reason": "not-ported",
+      "reviewedBy": "coding-agent",
+      "decision": "GOALS corpus drive round 3 exact capability ledger; S4 §2.6; packages/lexical-selection/src/lexical-node.ts:44",
+      "note": "The clone mode returns an ephemeral node object with the same key and a separate raw text record during a read. Replay has no ephemeral node-record identity bridge; the pure selected-text slice helper cannot substitute for these clone observations. Pinned upstream: packages/lexical-selection/src/lexical-node.ts:44.",
+      "failure": "op 5 read: call 17: unmapped API: @lexical/selection.$sliceSelectedTextNodeContent"
+    },
+    {
+      "file": "packages/lexical-selection/src/__tests__/unit/$sliceSelectedTextNodeContent.test.ts",
+      "test": "$sliceSelectedTextNodeContent > clone > does not clone with full selection (both nodes)",
+      "status": "xfail",
+      "reason": "not-ported",
+      "reviewedBy": "coding-agent",
+      "decision": "GOALS corpus drive round 3 exact capability ledger; S4 §2.6; packages/lexical-selection/src/lexical-node.ts:44",
+      "note": "The clone mode returns an ephemeral node object with the same key and a separate raw text record during a read. Replay has no ephemeral node-record identity bridge; the pure selected-text slice helper cannot substitute for these clone observations. Pinned upstream: packages/lexical-selection/src/lexical-node.ts:44.",
+      "failure": "op 5 read: call 17: unmapped API: @lexical/selection.$sliceSelectedTextNodeContent"
+    },
+    {
+      "file": "packages/lexical-table/src/__tests__/unit/LexicalTableNode.test.tsx",
+      "test": "LexicalTableNode tests > hasHorizontalScroll={false} > TableNode.exportDOM() with range selection",
+      "status": "xfail",
+      "reason": "not-ported",
+      "reviewedBy": "coding-agent",
+      "decision": "GOALS corpus drive round 3 exact capability ledger; S4 §2.6; packages/lexical-table/src/LexicalTableUtils.ts:40",
+      "note": "The replay facade lacks the table-dimensions factory bridge used by this range-selection DOM-export fixture. The Rust table factory exists; this exact unsupported facade call remains visible. Pinned upstream: packages/lexical-table/src/LexicalTableUtils.ts:40.",
+      "failure": "op 11: call 0: unmapped API: @lexical/table.$createTableNodeWithDimensions"
+    },
+    {
+      "file": "packages/lexical-table/src/__tests__/unit/LexicalTableSelection.test.tsx",
+      "test": "table selection > regression #7076 > $patchStyleText applies styles to empty table cells",
+      "status": "xfail",
+      "reason": "not-ported",
+      "reviewedBy": "coding-agent",
+      "decision": "GOALS corpus drive round 3 exact capability ledger; S4 §2.6; packages/lexical-table/src/LexicalTableUtils.ts:1040",
+      "note": "The replay facade lacks table-map value objects and the downstream table-selection/style-edit bridge. The Rust table geometry exists; its structured JS return and selection handles are not fabricated. Pinned upstream: packages/lexical-table/src/LexicalTableUtils.ts:1040.",
+      "failure": "op 4: call 29: unmapped API: @lexical/table.$computeTableMapSkipCellCheck"
+    },
+    {
+      "file": "packages/lexical-table/src/__tests__/unit/LexicalTableSelection.test.tsx",
+      "test": "table selection > regression #7076 > $patchStyleText works on a TableSelection",
+      "status": "xfail",
+      "reason": "not-ported",
+      "reviewedBy": "coding-agent",
+      "decision": "GOALS corpus drive round 3 exact capability ledger; S4 §2.6; packages/lexical-table/src/LexicalTableUtils.ts:1040",
+      "note": "The replay facade lacks table-map value objects and the downstream table-selection/style-edit bridge. The Rust table geometry exists; its structured JS return and selection handles are not fabricated. Pinned upstream: packages/lexical-table/src/LexicalTableUtils.ts:1040.",
+      "failure": "op 4: call 29: unmapped API: @lexical/table.$computeTableMapSkipCellCheck"
+    },
+    {
+      "file": "packages/lexical-table/src/__tests__/unit/LexicalTableSelection.test.tsx",
+      "test": "table selection > regression #7140 > selection points to missing nodes after deleting table rows",
+      "status": "xfail",
+      "reason": "not-ported",
+      "reviewedBy": "coding-agent",
+      "decision": "GOALS corpus drive round 3 exact capability ledger; S4 §2.6; packages/lexical-table/src/LexicalTableUtils.ts:1040",
+      "note": "The replay facade lacks table-map value objects and the downstream table-selection/style-edit bridge. The Rust table geometry exists; its structured JS return and selection handles are not fabricated. Pinned upstream: packages/lexical-table/src/LexicalTableUtils.ts:1040.",
+      "failure": "op 4: call 29: unmapped API: @lexical/table.$computeTableMapSkipCellCheck"
+    },
+    {
+      "file": "packages/lexical/src/__tests__/unit/LexicalEditor.test.tsx",
+      "test": "LexicalEditor tests > parseEditorState() > node selection > Parses the text content of the editor state",
+      "status": "xfail",
+      "reason": "reconciler-internal",
+      "reviewedBy": "coding-agent",
+      "decision": "GOALS corpus drive round 3 exact capability ledger; S4 §2.6; packages/lexical/src/nodes/LexicalRootNode.ts:27",
+      "note": "The test inspects the private root.__cachedText cache, including null/stale cache states. Replay does not expose raw cache storage and does not substitute freshly computed text. Pinned upstream: packages/lexical/src/nodes/LexicalRootNode.ts:27.",
+      "failure": "op 12 read: call 1: unmapped node property __cachedText"
+    },
+    {
+      "file": "packages/lexical/src/__tests__/unit/LexicalEditor.test.tsx",
+      "test": "LexicalEditor tests > parseEditorState() > range selection > Parses the text content of the editor state",
+      "status": "xfail",
+      "reason": "reconciler-internal",
+      "reviewedBy": "coding-agent",
+      "decision": "GOALS corpus drive round 3 exact capability ledger; S4 §2.6; packages/lexical/src/nodes/LexicalRootNode.ts:27",
+      "note": "The test inspects the private root.__cachedText cache, including null/stale cache states. Replay does not expose raw cache storage and does not substitute freshly computed text. Pinned upstream: packages/lexical/src/nodes/LexicalRootNode.ts:27.",
+      "failure": "op 12 read: call 1: unmapped node property __cachedText"
+    },
+    {
+      "file": "packages/lexical/src/__tests__/unit/LexicalEditor.test.tsx",
+      "test": "LexicalEditor tests > reconciles state without root element",
+      "status": "xfail",
+      "reason": "not-ported",
+      "reviewedBy": "coding-agent",
+      "decision": "GOALS corpus drive round 3 exact capability ledger; S4 §2.6; packages/lexical/src/__tests__/unit/LexicalEditor.test.tsx:3145",
+      "note": "This development-only test reads the private editor._editorState property directly. Replay supports the public getEditorState API but does not expose this private editor property bridge. Pinned upstream: packages/lexical/src/__tests__/unit/LexicalEditor.test.tsx:3145.",
+      "failure": "op 6 call: unmapped property _editorState"
+    },
+    {
       "file": "packages/lexical/src/__tests__/unit/LexicalEditorState.test.ts",
       "test": "LexicalEditorState tests > constructor",
       "status": "xfail",
       "reason": "not-ported",
       "reviewedBy": "coding-agent",
-      "decision": "S1 \u00a74 built-in factory table: $createRootNode is n/a (root always exists)",
-      "note": "Missing capability: lexical/nodes/LexicalRootNode.$createRootNode. No model mismatch is masked; this exact unsupported diagnostic must still occur.",
+      "decision": "S1 §4 built-in factory table: $createRootNode is n/a (root always exists)",
+      "note": "Missing capability: lexical/nodes/LexicalRootNode.$createRootNode. No model mismatch is masked; this exact unsupported diagnostic must still occur. Pinned upstream: packages/lexical/src/nodes/LexicalRootNode.ts:105.",
       "failure": "op 4 call: unmapped API: lexical/nodes/LexicalRootNode.$createRootNode"
     },
     {
@@ -21,8 +271,8 @@
       "status": "xfail",
       "reason": "not-ported",
       "reviewedBy": "coding-agent",
-      "decision": "WORKPLAN WP-13; S1 \u00a714 extension installation",
-      "note": "Missing capability: lexical.defineExtension. No model mismatch is masked; this exact unsupported diagnostic must still occur.",
+      "decision": "WORKPLAN WP-13; S1 §14 extension installation",
+      "note": "Missing capability: lexical.defineExtension. No model mismatch is masked; this exact unsupported diagnostic must still occur. Pinned upstream: packages/lexical/src/extension-core/defineExtension.ts:54.",
       "failure": "op 0 call: unmapped API: lexical.defineExtension"
     },
     {
@@ -31,8 +281,8 @@
       "status": "xfail",
       "reason": "not-ported",
       "reviewedBy": "coding-agent",
-      "decision": "WORKPLAN WP-13; S1 \u00a714 extension installation",
-      "note": "Missing capability: lexical.defineExtension. No model mismatch is masked; this exact unsupported diagnostic must still occur.",
+      "decision": "WORKPLAN WP-13; S1 §14 extension installation",
+      "note": "Missing capability: lexical.defineExtension. No model mismatch is masked; this exact unsupported diagnostic must still occur. Pinned upstream: packages/lexical/src/extension-core/defineExtension.ts:54.",
       "failure": "op 0 call: unmapped API: lexical.defineExtension"
     },
     {
@@ -41,8 +291,8 @@
       "status": "xfail",
       "reason": "not-ported",
       "reviewedBy": "coding-agent",
-      "decision": "WORKPLAN WP-13; S1 \u00a714 extension installation",
-      "note": "Missing capability: lexical.defineExtension. No model mismatch is masked; this exact unsupported diagnostic must still occur.",
+      "decision": "WORKPLAN WP-13; S1 §14 extension installation",
+      "note": "Missing capability: lexical.defineExtension. No model mismatch is masked; this exact unsupported diagnostic must still occur. Pinned upstream: packages/lexical/src/extension-core/defineExtension.ts:54.",
       "failure": "op 0 call: unmapped API: lexical.defineExtension"
     },
     {
@@ -51,8 +301,8 @@
       "status": "xfail",
       "reason": "not-ported",
       "reviewedBy": "coding-agent",
-      "decision": "WORKPLAN WP-13; S1 \u00a714 extension installation",
-      "note": "Missing capability: lexical.defineExtension. No model mismatch is masked; this exact unsupported diagnostic must still occur.",
+      "decision": "WORKPLAN WP-13; S1 §14 extension installation",
+      "note": "Missing capability: lexical.defineExtension. No model mismatch is masked; this exact unsupported diagnostic must still occur. Pinned upstream: packages/lexical/src/extension-core/defineExtension.ts:54.",
       "failure": "op 0 call: unmapped API: lexical.defineExtension"
     },
     {
@@ -61,8 +311,8 @@
       "status": "xfail",
       "reason": "genmap",
       "reviewedBy": "coding-agent",
-      "decision": "S1 \u00a75.1 persistent NodeMap; S4 \u00a72.6 genmap",
-      "note": "Upstream GenMap is replaced by the persistent map; its private clone helper has no port.",
+      "decision": "S1 §5.1 persistent NodeMap; S4 §2.6 genmap",
+      "note": "Upstream GenMap is replaced by the persistent map; its private clone helper has no port. Pinned upstream: packages/lexical/src/LexicalGenMap.ts:23.",
       "failure": "op 0 call: unmapped API: lexical/LexicalGenMap.cloneMap"
     },
     {
@@ -71,9 +321,9 @@
       "status": "xfail",
       "reason": "dev-only-invariant",
       "reviewedBy": "coding-agent",
-      "decision": "S4 \u00a71.3 item 4 / \u00a71.7 devOutcome; S1 D-11",
-      "note": "DEV/production invariant policy needs its explicit normalization implementation; trace is not silently rewritten.",
-      "failure": "unimplemented declared normalization: [\"devOutcome\"]"
+      "decision": "S4 §1.3 item 4 / §1.7 devOutcome; S1 D-11",
+      "note": "DEV and production outcomes differ for restoreSelection=false cross-parent moves. Replay rejects the declared devOutcome policy rather than silently choosing or ignoring the exception. Pinned upstream: packages/lexical/src/__tests__/unit/LexicalNode.test.ts:1801.",
+      "failure": "unimplemented declared normalization: devOutcome"
     },
     {
       "file": "packages/lexical/src/__tests__/unit/LexicalNode.test.ts",
@@ -81,9 +331,9 @@
       "status": "xfail",
       "reason": "dev-only-invariant",
       "reviewedBy": "coding-agent",
-      "decision": "S4 \u00a71.3 item 4 / \u00a71.7 devOutcome; S1 D-11",
-      "note": "DEV/production invariant policy needs its explicit normalization implementation; trace is not silently rewritten.",
-      "failure": "unimplemented declared normalization: [\"devOutcome\"]"
+      "decision": "S4 §1.3 item 4 / §1.7 devOutcome; S1 D-11",
+      "note": "DEV and production outcomes differ for restoreSelection=false cross-parent moves. Replay rejects the declared devOutcome policy rather than silently choosing or ignoring the exception. Pinned upstream: packages/lexical/src/__tests__/unit/LexicalNode.test.ts:1801.",
+      "failure": "unimplemented declared normalization: devOutcome"
     },
     {
       "file": "packages/lexical/src/__tests__/unit/LexicalNodeState.test.ts",
@@ -91,9 +341,9 @@
       "status": "xfail",
       "reason": "dev-only-invariant",
       "reviewedBy": "coding-agent",
-      "decision": "S4 \u00a71.3 item 4 / \u00a71.7 devOutcome; S1 D-11",
-      "note": "DEV/production invariant policy needs its explicit normalization implementation; trace is not silently rewritten.",
-      "failure": "unimplemented declared normalization: [\"devOutcome\"]"
+      "decision": "S4 §1.3 item 4 / §1.7 devOutcome; S1 D-11",
+      "note": "DEV and production outcomes differ for restoreSelection=false cross-parent moves. Replay rejects the declared devOutcome policy rather than silently choosing or ignoring the exception. Pinned upstream: packages/lexical/src/__tests__/unit/LexicalNode.test.ts:1801.",
+      "failure": "unimplemented declared normalization: devOutcome"
     },
     {
       "file": "packages/lexical/src/__tests__/unit/LexicalNodeState.test.ts",
@@ -101,9 +351,19 @@
       "status": "xfail",
       "reason": "dev-only-invariant",
       "reviewedBy": "coding-agent",
-      "decision": "S4 \u00a71.3 item 4 / \u00a71.7 devOutcome; S1 D-11",
-      "note": "DEV/production invariant policy needs its explicit normalization implementation; trace is not silently rewritten.",
-      "failure": "unimplemented declared normalization: [\"devOutcome\"]"
+      "decision": "S4 §1.3 item 4 / §1.7 devOutcome; S1 D-11",
+      "note": "DEV and production outcomes differ for restoreSelection=false cross-parent moves. Replay rejects the declared devOutcome policy rather than silently choosing or ignoring the exception. Pinned upstream: packages/lexical/src/__tests__/unit/LexicalNode.test.ts:1801.",
+      "failure": "unimplemented declared normalization: devOutcome"
+    },
+    {
+      "file": "packages/lexical/src/__tests__/unit/LexicalReconciler.test.ts",
+      "test": "LexicalReconciler > Should allow overriding direction of root node children when root node has direction",
+      "status": "xfail",
+      "reason": "reconciler-internal",
+      "reviewedBy": "coding-agent",
+      "decision": "GOALS corpus drive round 3 exact capability ledger; S4 §2.6; packages/lexical/src/LexicalReconciler.ts:399",
+      "note": "This API reads the DOM reconciler direction cache. It is a view observation rather than the stored model direction. Pinned upstream: packages/lexical/src/LexicalReconciler.ts:399.",
+      "failure": "op 5: call 2: unmapped API: lexical/LexicalReconciler.$getReconciledDirection"
     },
     {
       "file": "packages/lexical/src/__tests__/unit/LexicalReconciler.test.ts",
@@ -111,8 +371,18 @@
       "status": "xfail",
       "reason": "reconciler-internal",
       "reviewedBy": "coding-agent",
-      "decision": "S1 \u00a70 model/view boundary; S4 \u00a72.6 reconciler-internal",
-      "note": "DOM reconciliation API is outside the sans-I/O model: unmapped API: lexical/LexicalReconciler.$getReconciledDirection",
+      "decision": "S1 §0 model/view boundary; S4 §2.6 reconciler-internal",
+      "note": "DOM reconciliation API is outside the sans-I/O model: unmapped API: lexical/LexicalReconciler.$getReconciledDirection Pinned upstream: packages/lexical/src/LexicalReconciler.ts:399.",
+      "failure": "op 5: call 2: unmapped API: lexical/LexicalReconciler.$getReconciledDirection"
+    },
+    {
+      "file": "packages/lexical/src/__tests__/unit/LexicalReconciler.test.ts",
+      "test": "LexicalReconciler > Should not set direction of root node children if root node has direction",
+      "status": "xfail",
+      "reason": "reconciler-internal",
+      "reviewedBy": "coding-agent",
+      "decision": "GOALS corpus drive round 3 exact capability ledger; S4 §2.6; packages/lexical/src/LexicalReconciler.ts:399",
+      "note": "This API reads the DOM reconciler direction cache. It is a view observation rather than the stored model direction. Pinned upstream: packages/lexical/src/LexicalReconciler.ts:399.",
       "failure": "op 5: call 2: unmapped API: lexical/LexicalReconciler.$getReconciledDirection"
     },
     {
@@ -121,9 +391,39 @@
       "status": "xfail",
       "reason": "reconciler-internal",
       "reviewedBy": "coding-agent",
-      "decision": "S1 \u00a70 model/view boundary; S4 \u00a72.6 reconciler-internal",
-      "note": "DOM reconciliation API is outside the sans-I/O model: unmapped API: lexical/LexicalReconciler.$getReconciledDirection",
+      "decision": "S1 §0 model/view boundary; S4 §2.6 reconciler-internal",
+      "note": "DOM reconciliation API is outside the sans-I/O model: unmapped API: lexical/LexicalReconciler.$getReconciledDirection Pinned upstream: packages/lexical/src/LexicalReconciler.ts:399.",
       "failure": "op 5: call 2: unmapped API: lexical/LexicalReconciler.$getReconciledDirection"
+    },
+    {
+      "file": "packages/lexical/src/__tests__/unit/LexicalReconciler.test.ts",
+      "test": "LexicalReconciler > Should update root children when root node direction changes",
+      "status": "xfail",
+      "reason": "reconciler-internal",
+      "reviewedBy": "coding-agent",
+      "decision": "GOALS corpus drive round 3 exact capability ledger; S4 §2.6; packages/lexical/src/LexicalReconciler.ts:399",
+      "note": "This API reads the DOM reconciler direction cache. It is a view observation rather than the stored model direction. Pinned upstream: packages/lexical/src/LexicalReconciler.ts:399.",
+      "failure": "op 5: call 2: unmapped API: lexical/LexicalReconciler.$getReconciledDirection"
+    },
+    {
+      "file": "packages/lexical/src/__tests__/unit/LexicalSerialization.test.ts",
+      "test": "LexicalSerialization tests > serializes and deserializes from JSON",
+      "status": "xfail",
+      "reason": "d6-highlight",
+      "reviewedBy": "coding-agent",
+      "decision": "GOALS corpus drive round 3 exact capability ledger; S4 §2.6; packages/lexical-code-core/src/CodeHighlightNode.ts:160",
+      "note": "D6 tolerates stored legacy highlight nodes but creates no syntax-highlight records. This explicit legacy factory is unmapped; the serialization fixture is kept as an exact D6 factory boundary. Pinned upstream: packages/lexical-code-core/src/CodeHighlightNode.ts:160.",
+      "failure": "op 4: call 68: unmapped API: @lexical/code.$createCodeHighlightNode"
+    },
+    {
+      "file": "packages/lexical/src/__tests__/unit/LexicalUtils.test.ts",
+      "test": "LexicalUtils tests > $onUpdate > added fn runs after update, original onUpdate, and prior calls to $onUpdate",
+      "status": "xfail",
+      "reason": "not-ported",
+      "reviewedBy": "coding-agent",
+      "decision": "GOALS corpus drive round 3 exact capability ledger; S4 §2.6; packages/lexical/src/__tests__/unit/LexicalUtils.test.ts:464",
+      "note": "This fixture requires onUpdate callback registration and exact deferred callback ordering with $onUpdate. The replay update-options bridge rejects this callback option explicitly. Pinned upstream: packages/lexical/src/__tests__/unit/LexicalUtils.test.ts:464.",
+      "failure": "unsupported update option: onUpdate"
     },
     {
       "file": "packages/lexical/src/__tests__/unit/LexicalUtils.test.ts",
@@ -132,8 +432,18 @@
       "reason": "not-ported",
       "reviewedBy": "coding-agent",
       "decision": "S1 API inventory: $onUpdate n/a; code runs after commit; WORKPLAN WP-13 callbacks",
-      "note": "Missing capability: lexical.$onUpdate. No model mismatch is masked; this exact unsupported diagnostic must still occur.",
+      "note": "Missing capability: lexical.$onUpdate. No model mismatch is masked; this exact unsupported diagnostic must still occur. Pinned upstream: packages/lexical/src/LexicalUtils.ts:1531.",
       "failure": "op 4 call: unmapped API: lexical.$onUpdate"
+    },
+    {
+      "file": "packages/lexical/src/__tests__/unit/LexicalUtils.test.ts",
+      "test": "LexicalUtils tests > $onUpdate > deferred even when there are no dirty nodes",
+      "status": "xfail",
+      "reason": "not-ported",
+      "reviewedBy": "coding-agent",
+      "decision": "GOALS corpus drive round 3 exact capability ledger; S4 §2.6; packages/lexical/src/__tests__/unit/LexicalUtils.test.ts:434",
+      "note": "This fixture requires onUpdate callback registration and exact deferred callback ordering with $onUpdate. The replay update-options bridge rejects this callback option explicitly. Pinned upstream: packages/lexical/src/__tests__/unit/LexicalUtils.test.ts:434.",
+      "failure": "unsupported update option: onUpdate"
     },
     {
       "file": "packages/lexical/src/__tests__/unit/LexicalUtils.test.ts",
@@ -141,9 +451,19 @@
       "status": "xfail",
       "reason": "not-ported",
       "reviewedBy": "coding-agent",
-      "decision": "S1 \u00a71 NodeKey allocation is private to node creation; no standalone raw-key factory",
-      "note": "Missing capability: lexical/LexicalUtils.generateRandomKey. No model mismatch is masked; this exact unsupported diagnostic must still occur.",
+      "decision": "S1 §1 NodeKey allocation is private to node creation; no standalone raw-key factory",
+      "note": "Missing capability: lexical/LexicalUtils.generateRandomKey. No model mismatch is masked; this exact unsupported diagnostic must still occur. Pinned upstream: packages/lexical/src/LexicalUtils.ts:123.",
       "failure": "op 4 call: unmapped API: lexical/LexicalUtils.generateRandomKey"
+    },
+    {
+      "file": "packages/lexical/src/__tests__/unit/LexicalUtils.test.ts",
+      "test": "LexicalUtils tests > getCachedTypeToNodeMap",
+      "status": "xfail",
+      "reason": "not-ported",
+      "reviewedBy": "coding-agent",
+      "decision": "GOALS corpus drive round 3 exact capability ledger; S4 §2.6; packages/lexical/src/LexicalUtils.ts:2116",
+      "note": "This test inspects the JS editor-state type-index cache and returned Map identities. Replay does not expose this private cache/Map bridge; public typed node queries remain separate. Pinned upstream: packages/lexical/src/LexicalUtils.ts:2116.",
+      "failure": "op 5 call: unmapped API: lexical/LexicalUtils.getCachedTypeToNodeMap"
     },
     {
       "file": "packages/lexical/src/__tests__/unit/LexicalUtils.test.ts",
@@ -151,9 +471,29 @@
       "status": "xfail",
       "reason": "not-ported",
       "reviewedBy": "coding-agent",
-      "decision": "S1 \u00a71 NodeKey allocation is private to node creation; no standalone raw-key factory",
-      "note": "Missing capability: lexical/LexicalUtils.generateRandomKey. No model mismatch is masked; this exact unsupported diagnostic must still occur.",
+      "decision": "S1 §1 NodeKey allocation is private to node creation; no standalone raw-key factory",
+      "note": "Missing capability: lexical/LexicalUtils.generateRandomKey. No model mismatch is masked; this exact unsupported diagnostic must still occur. Pinned upstream: packages/lexical/src/LexicalUtils.ts:119.",
       "failure": "op 5 call: unmapped API: lexical/LexicalUtils.generateRandomKey"
+    },
+    {
+      "file": "packages/lexical/src/nodes/__tests__/unit/LexicalElementNode.test.tsx",
+      "test": "LexicalElementNode tests > exportJSON() > serializes the same way without a root element",
+      "status": "xfail",
+      "reason": "not-ported",
+      "reviewedBy": "coding-agent",
+      "decision": "GOALS corpus drive round 3 exact capability ledger; S4 §2.6; packages/lexical/src/nodes/__tests__/unit/LexicalElementNode.test.tsx:162",
+      "note": "This fixture creates a second independent editor. Replay currently owns one configured editor and rejects the second explicitly; supporting multiple editor identities and callback contexts remains unimplemented. Pinned upstream: packages/lexical/src/nodes/__tests__/unit/LexicalElementNode.test.tsx:162.",
+      "failure": "unimplemented multiple editors"
+    },
+    {
+      "file": "packages/lexical/src/nodes/__tests__/unit/LexicalElementNode.test.tsx",
+      "test": "LexicalElementNode tests > splice > Nested elements: Delete selected with previous element (selection moves to the next)",
+      "status": "xfail",
+      "reason": "reconciler-internal",
+      "reviewedBy": "coding-agent",
+      "decision": "GOALS corpus drive round 3 exact capability ledger; S4 §2.6; packages/lexical/src/nodes/__tests__/unit/LexicalElementNode.test.tsx:566",
+      "note": "The attached-editor fixture observes selection refreshed from DOM between updates: the previous commit retains element key 9, while the next callback resolves text key 10. Replay has no recorded DOM-selection refresh at that boundary; strict identity comparison remains enabled. Pinned upstream: packages/lexical/src/nodes/__tests__/unit/LexicalElementNode.test.tsx:566.",
+      "failure": "op 19: call 6: \"get:key\": strict key allocation mismatch: 10 != 9"
     },
     {
       "file": "packages/lexical/src/nodes/__tests__/unit/LexicalLineBreakNode.test.ts",
@@ -161,8 +501,8 @@
       "status": "xfail",
       "reason": "reconciler-internal",
       "reviewedBy": "coding-agent",
-      "decision": "S1 \u00a70 model/view boundary; S4 \u00a72.6 reconciler-internal",
-      "note": "DOM reconciliation API is outside the sans-I/O model: unmapped API: Node.updateDOM",
+      "decision": "S1 §0 model/view boundary; S4 §2.6 reconciler-internal",
+      "note": "DOM reconciliation API is outside the sans-I/O model: unmapped API: Node.updateDOM Pinned upstream: packages/lexical/src/nodes/LexicalLineBreakNode.ts:50.",
       "failure": "op 4: call 1: unmapped API: Node.updateDOM"
     },
     {
@@ -171,8 +511,18 @@
       "status": "xfail",
       "reason": "not-ported",
       "reviewedBy": "coding-agent",
-      "decision": "S1 \u00a74 built-in factory table: $createRootNode is n/a (root always exists)",
-      "note": "Missing capability: lexical/nodes/LexicalRootNode.$createRootNode. No model mismatch is masked; this exact unsupported diagnostic must still occur.",
+      "decision": "S1 §4 built-in factory table: $createRootNode is n/a (root always exists)",
+      "note": "Missing capability: lexical/nodes/LexicalRootNode.$createRootNode. No model mismatch is masked; this exact unsupported diagnostic must still occur. Pinned upstream: packages/lexical/src/nodes/LexicalRootNode.ts:105.",
+      "failure": "op 4: call 0: unmapped API: lexical/nodes/LexicalRootNode.$createRootNode"
+    },
+    {
+      "file": "packages/lexical/src/nodes/__tests__/unit/LexicalRootNode.test.ts",
+      "test": "LexicalRootNode tests > RootNode is not selected when all children are removed with no selection",
+      "status": "xfail",
+      "reason": "not-ported",
+      "reviewedBy": "coding-agent",
+      "decision": "GOALS corpus drive round 3 exact capability ledger; S4 §2.6; packages/lexical/src/nodes/LexicalRootNode.ts:105",
+      "note": "S1 built-in factory policy marks $createRootNode n/a: the Rust root already exists. Replay rejects the explicit standalone root factory. Pinned upstream: packages/lexical/src/nodes/LexicalRootNode.ts:105.",
       "failure": "op 4: call 0: unmapped API: lexical/nodes/LexicalRootNode.$createRootNode"
     },
     {
@@ -181,8 +531,8 @@
       "status": "xfail",
       "reason": "not-ported",
       "reviewedBy": "coding-agent",
-      "decision": "S1 \u00a74 built-in factory table: $createRootNode is n/a (root always exists)",
-      "note": "Missing capability: lexical/nodes/LexicalRootNode.$createRootNode. No model mismatch is masked; this exact unsupported diagnostic must still occur.",
+      "decision": "S1 §4 built-in factory table: $createRootNode is n/a (root always exists)",
+      "note": "Missing capability: lexical/nodes/LexicalRootNode.$createRootNode. No model mismatch is masked; this exact unsupported diagnostic must still occur. Pinned upstream: packages/lexical/src/nodes/LexicalRootNode.ts:105.",
       "failure": "op 4: call 0: unmapped API: lexical/nodes/LexicalRootNode.$createRootNode"
     },
     {
@@ -191,8 +541,8 @@
       "status": "xfail",
       "reason": "not-ported",
       "reviewedBy": "coding-agent",
-      "decision": "S1 \u00a74 built-in factory table: $createRootNode is n/a (root always exists)",
-      "note": "Missing capability: lexical/nodes/LexicalRootNode.$createRootNode. No model mismatch is masked; this exact unsupported diagnostic must still occur.",
+      "decision": "S1 §4 built-in factory table: $createRootNode is n/a (root always exists)",
+      "note": "Missing capability: lexical/nodes/LexicalRootNode.$createRootNode. No model mismatch is masked; this exact unsupported diagnostic must still occur. Pinned upstream: packages/lexical/src/nodes/LexicalRootNode.ts:105.",
       "failure": "op 4: call 0: unmapped API: lexical/nodes/LexicalRootNode.$createRootNode"
     },
     {
@@ -201,8 +551,8 @@
       "status": "xfail",
       "reason": "not-ported",
       "reviewedBy": "coding-agent",
-      "decision": "S1 \u00a74 built-in factory table: $createRootNode is n/a (root always exists)",
-      "note": "Missing capability: lexical/nodes/LexicalRootNode.$createRootNode. No model mismatch is masked; this exact unsupported diagnostic must still occur.",
+      "decision": "S1 §4 built-in factory table: $createRootNode is n/a (root always exists)",
+      "note": "Missing capability: lexical/nodes/LexicalRootNode.$createRootNode. No model mismatch is masked; this exact unsupported diagnostic must still occur. Pinned upstream: packages/lexical/src/nodes/LexicalRootNode.ts:105.",
       "failure": "op 4: call 0: unmapped API: lexical/nodes/LexicalRootNode.$createRootNode"
     },
     {
@@ -211,8 +561,8 @@
       "status": "xfail",
       "reason": "not-ported",
       "reviewedBy": "coding-agent",
-      "decision": "S1 \u00a74 built-in factory table: $createRootNode is n/a (root always exists)",
-      "note": "Missing capability: lexical/nodes/LexicalRootNode.$createRootNode. No model mismatch is masked; this exact unsupported diagnostic must still occur.",
+      "decision": "S1 §4 built-in factory table: $createRootNode is n/a (root always exists)",
+      "note": "Missing capability: lexical/nodes/LexicalRootNode.$createRootNode. No model mismatch is masked; this exact unsupported diagnostic must still occur. Pinned upstream: packages/lexical/src/nodes/LexicalRootNode.ts:105.",
       "failure": "op 4: call 0: unmapped API: lexical/nodes/LexicalRootNode.$createRootNode"
     },
     {
@@ -221,8 +571,8 @@
       "status": "xfail",
       "reason": "not-ported",
       "reviewedBy": "coding-agent",
-      "decision": "S1 \u00a74 built-in factory table: $createRootNode is n/a (root always exists)",
-      "note": "Missing capability: lexical/nodes/LexicalRootNode.$createRootNode. No model mismatch is masked; this exact unsupported diagnostic must still occur.",
+      "decision": "S1 §4 built-in factory table: $createRootNode is n/a (root always exists)",
+      "note": "Missing capability: lexical/nodes/LexicalRootNode.$createRootNode. No model mismatch is masked; this exact unsupported diagnostic must still occur. Pinned upstream: packages/lexical/src/nodes/LexicalRootNode.ts:105.",
       "failure": "op 4: call 0: unmapped API: lexical/nodes/LexicalRootNode.$createRootNode"
     },
     {
@@ -231,8 +581,8 @@
       "status": "xfail",
       "reason": "not-ported",
       "reviewedBy": "coding-agent",
-      "decision": "S1 \u00a74 built-in factory table: $createRootNode is n/a (root always exists)",
-      "note": "Missing capability: lexical/nodes/LexicalRootNode.$createRootNode. No model mismatch is masked; this exact unsupported diagnostic must still occur.",
+      "decision": "S1 §4 built-in factory table: $createRootNode is n/a (root always exists)",
+      "note": "Missing capability: lexical/nodes/LexicalRootNode.$createRootNode. No model mismatch is masked; this exact unsupported diagnostic must still occur. Pinned upstream: packages/lexical/src/nodes/LexicalRootNode.ts:105.",
       "failure": "op 4: call 0: unmapped API: lexical/nodes/LexicalRootNode.$createRootNode"
     },
     {
@@ -241,8 +591,8 @@
       "status": "xfail",
       "reason": "not-ported",
       "reviewedBy": "coding-agent",
-      "decision": "S1 \u00a74 built-in factory table: $createRootNode is n/a (root always exists)",
-      "note": "Missing capability: lexical/nodes/LexicalRootNode.$createRootNode. No model mismatch is masked; this exact unsupported diagnostic must still occur.",
+      "decision": "S1 §4 built-in factory table: $createRootNode is n/a (root always exists)",
+      "note": "Missing capability: lexical/nodes/LexicalRootNode.$createRootNode. No model mismatch is masked; this exact unsupported diagnostic must still occur. Pinned upstream: packages/lexical/src/nodes/LexicalRootNode.ts:105.",
       "failure": "op 4: call 0: unmapped API: lexical/nodes/LexicalRootNode.$createRootNode"
     },
     {
@@ -251,9 +601,19 @@
       "status": "xfail",
       "reason": "not-ported",
       "reviewedBy": "coding-agent",
-      "decision": "S1 \u00a74 built-in factory table: $createRootNode is n/a (root always exists)",
-      "note": "Missing capability: lexical/nodes/LexicalRootNode.$createRootNode. No model mismatch is masked; this exact unsupported diagnostic must still occur.",
+      "decision": "S1 §4 built-in factory table: $createRootNode is n/a (root always exists)",
+      "note": "Missing capability: lexical/nodes/LexicalRootNode.$createRootNode. No model mismatch is masked; this exact unsupported diagnostic must still occur. Pinned upstream: packages/lexical/src/nodes/LexicalRootNode.ts:105.",
       "failure": "op 4: call 0: unmapped API: lexical/nodes/LexicalRootNode.$createRootNode"
+    },
+    {
+      "file": "packages/lexical/src/nodes/__tests__/unit/LexicalTextNode.test.tsx",
+      "test": "LexicalTextNode tests > root.getTextContent() > writable nodes",
+      "status": "xfail",
+      "reason": "reconciler-internal",
+      "reviewedBy": "coding-agent",
+      "decision": "GOALS corpus drive round 3 exact capability ledger; S4 §2.6; packages/lexical/src/nodes/LexicalRootNode.ts:27",
+      "note": "The test inspects the private root.__cachedText cache, including null/stale cache states. Replay does not expose raw cache storage and does not substitute freshly computed text. Pinned upstream: packages/lexical/src/nodes/LexicalRootNode.ts:27.",
+      "failure": "op 13 read: call 1: unmapped node property __cachedText"
     }
   ]
 }

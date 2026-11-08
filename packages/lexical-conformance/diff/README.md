@@ -58,7 +58,14 @@ normalization.
 
 `patches/cascade-count.patch` is S4's prescribed `divergence-cascade-guard`:
 it disables only the upstream long-run cascade guard in this disposable oracle.
-Other console errors fail the run. The recorder's hooks and fixtures are separate.
+S1 D-11 also keeps the error-mode `$getTextNodeOffset` guard enabled in this
+release oracle, matching Rust's always-on guard. The Vite transform changes only
+that call from `devInvariant` to `invariant` and checks its pinned source shape.
+Its numeric offset is rendered with Rust's typed error spelling; the full state,
+selection and identities still compare exactly. The oracle validates that its
+failed-update recovery listener contains empty arrays before representing it as
+no commit, matching Rust's atomic rejection. Nonempty recovery data fails. Other console
+errors fail the run. The recorder's hooks and fixtures are separate.
 
 This is WP-07 v0: raw transactions for text, paragraphs, line breaks, tabs,
 formatting and view inputs. EditorCore/session encoding (WP-14), rich nodes,
