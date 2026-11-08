@@ -39,10 +39,12 @@ links still work. A failed load shows Retry.
 
 ### Saved call detail
 
-On desktop the header keeps the breadcrumb, Ask Macro, combined Share/copy-link
-control, and side-panel toggle. The channel appears above the title, with the
-start/end time range, participant avatars, and Call again below. The existing
-tag picker sits below the title metadata and uses the call's property tags. The recording
+On desktop the header keeps the breadcrumb, the call's More menu, Ask Macro,
+combined Share/copy-link control, and side-panel toggle. Calls and Drive use the
+same More menu for call actions, including rename, recording download and delete.
+The channel appears above the title, with the
+start/end time range, participant avatars, and Call again below.
+The existing tag picker sits below the title metadata and uses the call's property tags. The recording
 precedes the stored summary and read-only Call chat. Summary headings are the
 stored Markdown, not generated client-side sections.
 

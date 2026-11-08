@@ -1,15 +1,27 @@
 import { ViewShell } from '@app/components/view-shell';
+import {
+  ChatWithAgentIcon,
+  openChatWithAgent,
+} from '@app/features/chat/ChatWithAgentButton';
+import { buildEntityData } from '@app/features/entity/utils/buildEntityData';
 import { useAnalytics } from '@app/lib/analytics/analytics-context';
 import { t } from '@app/lib/i18n';
 import { createSearchParams } from '@app/lib/split-router';
 import { usePending } from '@app/observability/flow';
 import { SidePanel } from '@components/app/side-panel';
+import { SplitFileMenu } from '@components/app/split-layout/components/SplitFileMenu';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { getPermissions } from '@core/component/SharePermissions';
-import { ShareTrigger } from '@core/component/TopBar/ShareButton';
+import {
+  getShareDrawerRecipientInput,
+  ShareTrigger,
+} from '@core/component/TopBar/ShareButton';
 import { useShareModal } from '@core/component/TopBar/shareModal';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
+import { createFileDownload } from '@core/util/createFileDownload';
 import { fireAndForget } from '@core/util/fireAndForget';
+import ShareIcon from '@icon/share.svg';
+import DownloadIcon from '@icon/system/regular/download-simple.svg';
 import PhoneCallIcon from '@icon/system/regular/phone-call.svg';
 import SpinnerIcon from '@icon/system/regular/spinner.svg';
 import { useCallRecordQuery } from '@queries/call/call';
@@ -35,6 +47,7 @@ import { callDetailSearch } from '../call-route';
 import { CallRecordingBody } from '../component/CallRecording/CallRecordingBody';
 import { CallSidePanelSections } from '../component/sidepanel/CallSidePanelSections';
 import type { CallTranscriptTarget } from '../constants';
+import { callRecordingDownloadSource } from '../queries/recording-download';
 
 import { CallDetailMobileHeader } from './CallDetailMobileHeader';
 
@@ -58,6 +71,85 @@ export function useCallDetail(callId: Accessor<string>) {
   };
 
   return { query, data };
+}
+
+function CallDetailMoreMenu(props: { data: CallDetailData }) {
+  const download = createFileDownload(() =>
+    callRecordingDownloadSource(props.data.record, props.data.name)
+  );
+  const openShare = useShareModal(() => ({
+    id: props.data.record.callId,
+    blockAlias: 'call',
+    itemType: 'call',
+    name: props.data.name,
+    userPermissions: getPermissions(
+      props.data.record.userAccessLevel ?? undefined
+    ),
+    owner: props.data.record.createdBy,
+  }));
+  return (
+    <div class="shrink-0">
+      <SplitFileMenu
+        id={props.data.record.callId}
+        itemType="call"
+        entityKind="call"
+        name={props.data.name}
+        permissions={getPermissions(
+          props.data.record.userAccessLevel ?? undefined
+        )}
+        entity={buildEntityData({
+          id: props.data.record.callId,
+          name: props.data.name,
+          blockName: 'call',
+          channelId: props.data.record.channelId,
+          isActive: props.data.record.isActive,
+          status: props.data.record.status ?? undefined,
+        })}
+        ops={[
+          { op: 'rename' },
+          ...(props.data.record.recordingUrl
+            ? [
+                {
+                  group: 'file' as const,
+                  label: t('entityActions.download'),
+                  icon: DownloadIcon,
+                  action: () =>
+                    fireAndForget(download.start(), 'call-recording-download'),
+                },
+              ]
+            : []),
+          { op: 'delete' },
+        ]}
+        tools={[
+          {
+            get label() {
+              return t('channelComposer.askMacro');
+            },
+            icon: ChatWithAgentIcon,
+            action: () =>
+              fireAndForget(
+                openChatWithAgent({
+                  type: 'document',
+                  id: props.data.record.callId,
+                  name: props.data.name,
+                  fileType: 'call',
+                }),
+                'call-detail'
+              ),
+          },
+          {
+            get label() {
+              return t('entityActions.share');
+            },
+            icon: ShareIcon,
+            action: openShare,
+            focusTarget: getShareDrawerRecipientInput,
+            group: 'sharing',
+          },
+        ]}
+      />
+    </div>
+  );
 }
 
 export function CallDetailActions(props: {
@@ -267,6 +359,9 @@ export function CallDetailView(props: {
                       </div>
                     </>
                   )}
+                </Show>
+                <Show when={detail.data()}>
+                  {(data) => <CallDetailMoreMenu data={data()} />}
                 </Show>
                 <Show when={detail.data()}>
                   {(data) => (

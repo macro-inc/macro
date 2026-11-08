@@ -37,6 +37,18 @@ vi.mock('@app/components/view-shell', () => ({ ViewShell: {} }));
 vi.mock('@app/features/chat/ChatWithAgentButton', () => ({
   ChatWithAgentButton: () => null,
 }));
+vi.mock('@components/app/split-layout/components/SplitFileMenu', () => ({
+  SplitFileMenu: () => null,
+}));
+vi.mock('@core/util/createFileDownload', () => ({
+  createFileDownload: () => ({ start: vi.fn() }),
+}));
+vi.mock('@app/features/entity/utils/buildEntityData', () => ({
+  buildEntityData: vi.fn(),
+}));
+vi.mock('../queries/recording-download', () => ({
+  callRecordingDownloadSource: vi.fn(),
+}));
 vi.mock('@components/app/split-layout/layoutUtils', () => ({
   useSplitPanelOrThrow: () => ({}),
 }));
