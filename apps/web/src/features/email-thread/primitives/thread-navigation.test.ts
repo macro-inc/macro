@@ -19,6 +19,8 @@ it('registers reply-all for the latest or selected message and ignores an empty 
   const state = navigationWithList(['first', 'last']);
   const handlers = state.handlers();
   try {
+    expect(handlers?.replyToFocusedMessage()).toBe(true);
+    expect(state.context.replyRequest.replyType()).toBe('reply');
     expect(handlers?.replyAllToFocusedMessage?.()).toBe(true);
     expect(state.context.replyRequest.messageId()).toBe('last');
     expect(state.context.replyRequest.replyType()).toBe('reply-all');
