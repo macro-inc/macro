@@ -8,11 +8,11 @@ use async_graphql::{
 };
 use entity_access::domain::telemetry::span_count;
 use futures::{StreamExt, stream};
-use initiative::domain::{
+use macro_user_id::user_id::MacroUserIdStr;
+use project::domain::{
     models::InitiativeDetail,
     reads::{InitiativePageRow, InitiativeRead},
 };
-use macro_user_id::user_id::MacroUserIdStr;
 use tokio::sync::OnceCell;
 use tracing::Instrument;
 use uuid::Uuid;

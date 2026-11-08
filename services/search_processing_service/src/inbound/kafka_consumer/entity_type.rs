@@ -57,8 +57,8 @@ impl EntityType {
         use calendar_events::domain::events::CalendarMacroEvent;
         use channels::domain::broker_events::ChannelMacroEvent;
         use documents::domain::events::DocumentMacroEvent;
+        use folder::domain::events::ProjectMacroEvent;
         use messages::outbound::broker::MessageMacroEvent;
-        use projects::domain::events::ProjectMacroEvent;
         use properties::domain::events::PropertyMacroEvent;
 
         match self {

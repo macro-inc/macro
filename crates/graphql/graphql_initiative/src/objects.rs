@@ -2,8 +2,8 @@
 
 use async_graphql::{ID, SimpleObject};
 use graphql_permission::GraphqlEntityAccessLevel;
-use initiative::domain::reads::InitiativeTasksPage;
 use models_permissions::share_permission::SharePermissionV2;
+use project::domain::reads::InitiativeTasksPage;
 
 use crate::inputs::GraphqlInitiativeLinkShare;
 

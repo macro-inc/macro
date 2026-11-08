@@ -12,7 +12,7 @@ graphql_common = { workspace = true }
 graphql_permission = { workspace = true }
 graphql_properties = { workspace = true }
 graphql_soup = { workspace = true }
-initiative = { workspace = true, features = ["ports"] }
+project = { workspace = true, features = ["ports"] }
 macro_user_id = { workspace = true }
 models_permissions = { workspace = true }
 model_entity = { workspace = true }

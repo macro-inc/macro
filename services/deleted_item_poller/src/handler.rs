@@ -8,6 +8,7 @@ use anyhow::Context;
 use aws_lambda_events::eventbridge::EventBridgeEvent;
 use chat::domain::events::{ChatMacroEvent, ChatPermanentlyDeletedMetadata};
 use documents::domain::events::{DocumentMacroEvent, DocumentPurgedMetadata};
+use folder::domain::events::{ProjectMacroEvent, ProjectPermanentlyDeletedMetadata};
 use futures::{StreamExt, future::join_all};
 use lambda_runtime::{
     Error, LambdaEvent,
@@ -17,7 +18,6 @@ use macro_db_client::document::get_all_documents::{ExpiredDocument, get_document
 use macro_db_client::projects::ProjectToDelete;
 use macro_event_broker::MacroEventBroker;
 use model_owner::Owner;
-use projects::domain::events::{ProjectMacroEvent, ProjectPermanentlyDeletedMetadata};
 
 /// How many expired documents one run purges, and in what steps.
 #[derive(Clone, Copy, Debug)]

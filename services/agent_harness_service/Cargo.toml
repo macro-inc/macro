@@ -123,7 +123,7 @@ import = { workspace = true }
 import_notion = { workspace = true }
 import_linear = { workspace = true }
 import_jira = { workspace = true }
-initiative = { workspace = true, features = ["messages", "postgres"] }
+project = { workspace = true, features = ["messages", "postgres"] }
 jev_classifier = { workspace = true, features = ["decisions", "outbound"] }
 jsonwebtoken = { workspace = true }
 kafka_util = { workspace = true }
@@ -170,7 +170,7 @@ pipedream_mcp = { workspace = true }
 png = { workspace = true }
 prompt = { workspace = true }
 properties = { workspace = true, features = ["outbound"] }
-projects = { workspace = true, features = ["outbound", "ports"] }
+folder = { workspace = true, features = ["outbound", "ports"] }
 rdkafka = { workspace = true }
 readonly_pool = { workspace = true }
 rate_limit = { workspace = true }

@@ -1,9 +1,9 @@
 use super::*;
 use crate::domain::ports::{InitiativeParentFacts, InitiativeParentReader};
 use crate::domain::service::{MessageService, MessageView, MessageWrite};
-use ::initiative::domain::lookup::{InitiativeLookup, InitiativeReader};
-use ::initiative::domain::models::InitiativeId;
-use ::initiative::outbound::PgInitiativeRepo;
+use ::project::domain::lookup::{InitiativeLookup, InitiativeReader};
+use ::project::domain::models::InitiativeId;
+use ::project::outbound::PgInitiativeRepo;
 use entity_access::domain::models::{
     AccessLevel, Entity, EntityAccessReceipt, EntityPermission, EntityType, RequiredPermission,
 };

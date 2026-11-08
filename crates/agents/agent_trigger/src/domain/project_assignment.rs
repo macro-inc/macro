@@ -7,11 +7,11 @@ use entity_access::domain::{
     models::{AccessError, BotAccessScope, EntityAccessReceipt, EntityType, RequiredPermission},
     ports::EntityAccessService,
 };
-use initiative::domain::{
+use models_properties::{EntityType as PropertyEntityType, service::property_value::PropertyValue};
+use project::domain::{
     events::InitiativeEventActor,
     models::{InitiativeError, InitiativeId},
 };
-use models_properties::{EntityType as PropertyEntityType, service::property_value::PropertyValue};
 use properties::domain::events::EntityPropertyUpdatedMetadata;
 use properties::{EditReceipt, PropertiesErr, PropertiesService, ViewReceipt};
 use system_properties::{SystemPropertiesService, SystemPropertyKey};

@@ -468,7 +468,7 @@ impl KnownPeople for RoutinePeople {
 /// still a task, from the domains that own each kind.
 struct RoutineLiveItems {
     documents: documents::outbound::pg_document_repo::PgDocumentRepo<PgBotsRepo>,
-    projects: projects::outbound::pg_project_repo::PgProjectRepo<PgBotsRepo>,
+    projects: folder::outbound::pg_project_repo::PgProjectRepo<PgBotsRepo>,
     chats: chat::outbound::postgres::PgChatRepo<PgBotsRepo>,
 }
 
@@ -476,7 +476,7 @@ impl LiveItems for RoutineLiveItems {
     async fn live(&self, item: &routine_program::EntityValue) -> Result<bool, rootcause::Report> {
         use chat::domain::ports::ChatRepo as _;
         use documents::domain::ports::DocumentRepo as _;
-        use projects::domain::ports::ProjectRepo as _;
+        use folder::domain::ports::ProjectRepo as _;
         use routine_program::EntityKind;
         let id = item.id.as_str();
         match item.kind {
@@ -592,7 +592,7 @@ pub async fn build<Ingress: notification::domain::service::NotificationIngress>(
                 db.clone(),
                 registrar.clone(),
             ),
-            projects: projects::outbound::pg_project_repo::PgProjectRepo::new(
+            projects: folder::outbound::pg_project_repo::PgProjectRepo::new(
                 db.clone(),
                 registrar.clone(),
             ),

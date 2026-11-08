@@ -137,14 +137,6 @@ use github_pull_requests::inbound::changes_router::{
     ChangedFileDto, ChangesetDto, ChangesetSourceDto, FileChangeKindDto, GitRefDto,
     GithubPullRequestChangesPatchResponse, GithubPullRequestChangesResponse,
 };
-use initiative::domain::models::{
-    CreateInitiativeRequest, InitialPropertyValue, InitiativeDetail, InitiativeId, InitiativeList,
-    InitiativeSummary, UpdateInitiativeRequest,
-};
-use initiative::domain::reads::{
-    InitiativePage, InitiativePageRow, InitiativePropertySnapshot, InitiativeSort,
-};
-use initiative::inbound::axum_router::description::InitiativeDescription;
 use model::document::response::{
     CreateDocumentRequest, CreateDocumentResponse, CreateDocumentResponseData,
     DocumentResponseMetadata,
@@ -211,6 +203,14 @@ use models_soup::email_thread::{
 };
 use models_soup::foreign_entity::SoupForeignEntity;
 use models_soup::project::SoupProject;
+use project::domain::models::{
+    CreateInitiativeRequest, InitialPropertyValue, InitiativeDetail, InitiativeId, InitiativeList,
+    InitiativeSummary, UpdateInitiativeRequest,
+};
+use project::domain::reads::{
+    InitiativePage, InitiativePageRow, InitiativePropertySnapshot, InitiativeSort,
+};
+use project::inbound::axum_router::description::InitiativeDescription;
 use projects_hex::inbound::axum_router::delete_project::{
     ProjectDeleteResponse, ProjectDeleteResponseData,
 };
@@ -624,15 +624,15 @@ use email_policy::EmailPolicySchemas;
         reminders::inbound::axum_router::set_email_followup_handler,
         reminders::inbound::axum_router::email_collection::list_email_reminders_handler,
         // initiatives
-        initiative::inbound::axum_router::list::list_initiatives_handler,
-        initiative::inbound::axum_router::page::page_initiatives_handler,
-        initiative::inbound::axum_router::description::get_initiative_description_handler,
-        initiative::inbound::axum_router::create::create_initiative_handler,
-        initiative::inbound::axum_router::get::get_initiative_handler,
-        initiative::inbound::axum_router::activity::get_initiative_activity_handler,
-        initiative::inbound::axum_router::update::update_initiative_handler,
-        initiative::inbound::axum_router::delete::delete_initiative_handler,
-        initiative::inbound::axum_router::appearance::set_initiative_appearance,
+        project::inbound::axum_router::list::list_initiatives_handler,
+        project::inbound::axum_router::page::page_initiatives_handler,
+        project::inbound::axum_router::description::get_initiative_description_handler,
+        project::inbound::axum_router::create::create_initiative_handler,
+        project::inbound::axum_router::get::get_initiative_handler,
+        project::inbound::axum_router::activity::get_initiative_activity_handler,
+        project::inbound::axum_router::update::update_initiative_handler,
+        project::inbound::axum_router::delete::delete_initiative_handler,
+        project::inbound::axum_router::appearance::set_initiative_appearance,
         // databases
         database_sql_runner::inbound::axum_router::query_databases_handler,
         databases::inbound::axum_router::list_databases_handler,
@@ -1011,9 +1011,9 @@ use email_policy::EmailPolicySchemas;
             InitiativeId,
             InitiativeSummary,
             InitiativeDetail,
-            initiative::domain::history::InitiativeActivityPage,
-            initiative::domain::history::InitiativeActivityRecord,
-            initiative::domain::history::InitiativeActivityCursor,
+            project::domain::history::InitiativeActivityPage,
+            project::domain::history::InitiativeActivityRecord,
+            project::domain::history::InitiativeActivityCursor,
             InitiativeList,
             InitiativePage,
             InitiativePageRow,

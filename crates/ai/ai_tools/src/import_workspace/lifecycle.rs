@@ -1,9 +1,9 @@
 //! Host adapter for physical app-entity lifecycle facts. No viewer is involved.
 use databases::domain::{models::DatabaseId, ports::DatabaseLifecycleReads};
 use documents::domain::ports::DocumentLifecycleReads;
+use folder::domain::ports::ProjectLifecycleReads;
 use import::domain::ports::ImportedTarget;
-use initiative::domain::{models::InitiativeId, ports::InitiativeLifecycleReads};
-use projects::domain::ports::ProjectLifecycleReads;
+use project::domain::{models::InitiativeId, ports::InitiativeLifecycleReads};
 
 #[cfg(test)]
 mod test;

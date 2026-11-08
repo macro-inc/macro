@@ -2,7 +2,7 @@
 
 use super::*;
 use collab_surface::outbound::{PgCollabSurfaceService, pg_collab_surface_service};
-use initiative::{
+use project::{
     domain::{
         history::InitiativeHistory, resources::InitiativeResources, service::InitiativeServiceImpl,
     },
@@ -52,7 +52,7 @@ pub fn build_initiative_tool_context(
         resources.clone(),
     )
     .with_event_publisher(Arc::new(
-        initiative::outbound::event_publisher::BrokerInitiativeEventPublisher::new(
+        project::outbound::event_publisher::BrokerInitiativeEventPublisher::new(
             event_broker.clone(),
         ),
     ));

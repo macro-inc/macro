@@ -12,7 +12,6 @@ use call::domain::{models::CallRecordPreview, ports::CallRepository};
 use channels::domain::{models::ChannelType as StoredChannelType, ports::ChannelRepo};
 use document_storage_service_client::DocumentStorageServiceClient;
 use entity_access::domain::models::EntityAccessReceipt;
-use initiative::domain::{lookup::InitiativeReader, models::InitiativeId};
 use lexical_client::LexicalClient;
 use lexical_client::parse_markdown::ExtractedExplicitReply;
 use macro_uuid::Uuid;
@@ -24,6 +23,7 @@ use messages::domain::{
     ports::CrmParentReader,
     service::MessageView,
 };
+use project::domain::{lookup::InitiativeReader, models::InitiativeId};
 use trigger_context::{
     AgentRequest, ChannelType, CommentAnchor, ContextAttachment, ContextMessage, ContextPerson,
     ContextThread, DiscussionContext, DiscussionSurface, MarkedPassage, ReplyTarget,
