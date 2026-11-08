@@ -40,4 +40,5 @@ workspace-hack = { version = "0.1", path = "../workspace-hack" }
 chat_message = { workspace = true }
 
 [dev-dependencies]
+message_id = { workspace = true }
 messages = { workspace = true, features = ["outbound", "annotations"] }

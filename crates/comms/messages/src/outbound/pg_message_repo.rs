@@ -1,6 +1,7 @@
 use crate::domain::{mentions::MessageReferenceKind, models::*, ports::*};
 use channel_sender::ChannelSender;
 use chrono::{DateTime, Utc};
+use message_id::MessageId;
 use serde::Deserialize;
 use sqlx::{PgPool, Postgres, Transaction, types::Json};
 use std::collections::HashMap;
@@ -639,7 +640,12 @@ impl MessageRepository for PgMessageRepository {
         exists.map_err(database_error)
     }
 
-    async fn get(&self, parent: &MessageParent, id: Uuid) -> Result<Option<Message>, MessageError> {
+    async fn get(
+        &self,
+        parent: &MessageParent,
+        id: MessageId,
+    ) -> Result<Option<Message>, MessageError> {
+        let id = id.into_uuid();
         let rows = sqlx::query_scalar!(
             r#"SELECT to_jsonb(m) AS "message!: Json<StoredMessage>" FROM comms_messages m
                WHERE id = $1 AND parent_entity_type = $2 AND parent_entity_id = $3"#,
@@ -697,9 +703,10 @@ impl MessageRepository for PgMessageRepository {
     async fn preceding(
         &self,
         parent: &MessageParent,
-        message_id: Uuid,
+        message_id: MessageId,
         limit: u16,
     ) -> Result<Vec<Message>, MessageError> {
+        let message_id = message_id.into_uuid();
         let rows = sqlx::query_scalar!(
             r#"SELECT to_jsonb(m) AS "message!: Json<StoredMessage>"
                FROM comms_messages m
@@ -836,9 +843,10 @@ impl MessageRepository for PgMessageRepository {
     async fn edit(
         &self,
         parent: &MessageParent,
-        id: Uuid,
+        id: MessageId,
         command: EditMessage,
     ) -> Result<Message, MessageError> {
+        let id = id.into_uuid();
         let mut tx = self.pool.begin().await.map_err(database_error)?;
         let actor = Self::lock_message(&mut tx, parent, id).await?;
         // Attachment-only patches keep the message unedited, as the channel writer did.
@@ -866,7 +874,8 @@ impl MessageRepository for PgMessageRepository {
         Ok(message)
     }
 
-    async fn delete(&self, parent: &MessageParent, id: Uuid) -> Result<Message, MessageError> {
+    async fn delete(&self, parent: &MessageParent, id: MessageId) -> Result<Message, MessageError> {
+        let id = id.into_uuid();
         let mut tx = self.pool.begin().await.map_err(database_error)?;
         Self::lock_message(&mut tx, parent, id).await?;
         sqlx::query!("UPDATE comms_messages SET content = '', deleted_at = now(), updated_at = now() WHERE id = $1", id)
@@ -879,11 +888,12 @@ impl MessageRepository for PgMessageRepository {
     async fn react(
         &self,
         parent: &MessageParent,
-        id: Uuid,
+        id: MessageId,
         user: &str,
         emoji: &str,
         add: bool,
     ) -> Result<ReactionResult, MessageError> {
+        let id = id.into_uuid();
         let mut tx = self.pool.begin().await.map_err(database_error)?;
         Self::lock_message(&mut tx, parent, id).await?;
         let result = if add {
@@ -926,7 +936,8 @@ impl MessageRepository for PgMessageRepository {
             .await
     }
 
-    async fn parent_of(&self, id: Uuid) -> Result<Option<MessageParent>, MessageError> {
+    async fn parent_of(&self, id: MessageId) -> Result<Option<MessageParent>, MessageError> {
+        let id = id.into_uuid();
         let row = sqlx::query!(
             "SELECT parent_entity_type, parent_entity_id FROM comms_messages
              WHERE id = $1 AND deleted_at IS NULL",

@@ -125,6 +125,7 @@ workspace-members = [
     # Leaf id crates built with it stay light the same way.
     "team_id",
     "thread_id",
+    "message_id",
     "email_thread_id",
     "form_id",
     "channel_id",

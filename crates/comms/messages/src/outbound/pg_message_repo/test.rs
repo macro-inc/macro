@@ -85,7 +85,7 @@ async fn shared_reads_preserve_system_and_deleted_bot_profiles(pool: PgPool) {
         input.triggered_via = Some("Claude Code".to_owned());
         let message = repo.create(input).await.unwrap();
         let read = repo
-            .get(&message.parent, message.id)
+            .get(&message.parent, MessageId::from_uuid(message.id))
             .await
             .unwrap()
             .unwrap();
@@ -127,7 +127,10 @@ async fn thread_identity_tombstones_and_parent_isolation(pool: PgPool) {
             .await
             .is_err()
     );
-    let deleted = repo.delete(&parent, root.id).await.unwrap();
+    let deleted = repo
+        .delete(&parent, MessageId::from_uuid(root.id))
+        .await
+        .unwrap();
     assert!(deleted.deleted_at.is_some());
     let page = repo
         .timeline(
@@ -191,7 +194,11 @@ async fn a_deleted_discussion_reads_back_as_a_root_tombstone_without_replies(poo
     repo.delete_thread(&parent, root.id).await.unwrap();
     // Deleting a root reads the message back after the teardown to answer the
     // caller; that read is the tombstone, not the live root it started from.
-    let tombstone = repo.get(&parent, root.id).await.unwrap().unwrap();
+    let tombstone = repo
+        .get(&parent, MessageId::from_uuid(root.id))
+        .await
+        .unwrap()
+        .unwrap();
     assert!(tombstone.deleted_at.is_some());
     assert!(tombstone.content.is_empty());
     assert!(repo.replies(&parent, root.id).await.unwrap().is_empty());
@@ -316,25 +323,49 @@ async fn reactions_attachments_and_resolution_use_shared_message_data(pool: PgPo
     let root = repo.create(create).await.unwrap();
     assert_eq!(root.attachments.len(), 1);
     let added = repo
-        .react(&root.parent, root.id, USER, "👍", true)
+        .react(
+            &root.parent,
+            MessageId::from_uuid(root.id),
+            USER,
+            "👍",
+            true,
+        )
         .await
         .unwrap();
     assert!(added.changed);
     let reacted = repo
-        .react(&root.parent, root.id, USER, "👍", true)
+        .react(
+            &root.parent,
+            MessageId::from_uuid(root.id),
+            USER,
+            "👍",
+            true,
+        )
         .await
         .unwrap();
     assert!(!reacted.changed);
     assert_eq!(reacted.message.reactions.len(), 1);
     assert_eq!(reacted.message.reactions[0].users, vec![USER]);
     let removed = repo
-        .react(&root.parent, root.id, USER, "👍", false)
+        .react(
+            &root.parent,
+            MessageId::from_uuid(root.id),
+            USER,
+            "👍",
+            false,
+        )
         .await
         .unwrap();
     assert!(removed.changed);
     assert!(removed.message.reactions.is_empty());
     let removed_again = repo
-        .react(&root.parent, root.id, USER, "👍", false)
+        .react(
+            &root.parent,
+            MessageId::from_uuid(root.id),
+            USER,
+            "👍",
+            false,
+        )
         .await
         .unwrap();
     assert!(!removed_again.changed);
@@ -359,7 +390,10 @@ async fn reactions_attachments_and_resolution_use_shared_message_data(pool: PgPo
         attachments: Some(vec![]),
         nonce: None,
     };
-    let edited = repo.edit(&root.parent, root.id, edit).await.unwrap();
+    let edited = repo
+        .edit(&root.parent, MessageId::from_uuid(root.id), edit)
+        .await
+        .unwrap();
     assert_eq!(edited.content, "edited");
     assert!(edited.attachments.is_empty());
     assert!(edited.edited_at.is_some());
@@ -497,7 +531,9 @@ async fn pdf_root_tombstone_keeps_anchor_and_thread_deletion_removes_placeable(p
     .unwrap();
     assert_eq!(saved.root_id, root.id);
     assert_eq!(saved.x, 0.2);
-    repo.delete(&root.parent, root.id).await.unwrap();
+    repo.delete(&root.parent, MessageId::from_uuid(root.id))
+        .await
+        .unwrap();
     assert_eq!(
         repo.thread(&root.parent, root.id)
             .await
@@ -746,7 +782,9 @@ async fn agent_context_stays_in_the_document_thread_and_omits_tombstones(pool: P
         .create(command("message-doc-a", Some(root.id), "removed"))
         .await
         .unwrap();
-    repo.delete(&root.parent, deleted.id).await.unwrap();
+    repo.delete(&root.parent, MessageId::from_uuid(deleted.id))
+        .await
+        .unwrap();
     repo.create(command("message-doc-a", None, "unrelated discussion"))
         .await
         .unwrap();
@@ -760,7 +798,10 @@ async fn agent_context_stays_in_the_document_thread_and_omits_tombstones(pool: P
     repo.create(command("message-doc-a", Some(root.id), "later response"))
         .await
         .unwrap();
-    let history = repo.preceding(&root.parent, reply.id, 10).await.unwrap();
+    let history = repo
+        .preceding(&root.parent, MessageId::from_uuid(reply.id), 10)
+        .await
+        .unwrap();
     assert_eq!(
         history
             .iter()
@@ -771,7 +812,7 @@ async fn agent_context_stays_in_the_document_thread_and_omits_tombstones(pool: P
     assert!(
         repo.preceding(
             &MessageParent::parse("document", "message-doc-b").unwrap(),
-            reply.id,
+            MessageId::from_uuid(reply.id),
             10
         )
         .await
@@ -780,7 +821,7 @@ async fn agent_context_stays_in_the_document_thread_and_omits_tombstones(pool: P
     );
     repo.delete_thread(&root.parent, root.id).await.unwrap();
     assert!(
-        repo.preceding(&root.parent, reply.id, 10)
+        repo.preceding(&root.parent, MessageId::from_uuid(reply.id), 10)
             .await
             .unwrap()
             .is_empty()
@@ -803,7 +844,7 @@ async fn replacement_attachments_preserve_retained_ids_and_remove_only_missing_i
     let edited = repo
         .edit(
             &message.parent,
-            message.id,
+            MessageId::from_uuid(message.id),
             EditMessage {
                 notification_policy: Default::default(),
                 content: "same attachment".into(),
@@ -819,7 +860,7 @@ async fn replacement_attachments_preserve_retained_ids_and_remove_only_missing_i
     let removed = repo
         .edit(
             &message.parent,
-            message.id,
+            MessageId::from_uuid(message.id),
             EditMessage {
                 notification_policy: Default::default(),
                 content: "removed attachment".into(),
@@ -1004,7 +1045,9 @@ async fn both_parents_use_bounded_previews_and_bidirectional_windows(pool: PgPoo
                 expected
             );
         }
-        repo.delete(&parent, roots[0].id).await.unwrap();
+        repo.delete(&parent, MessageId::from_uuid(roots[0].id))
+            .await
+            .unwrap();
         let empty_root = repo
             .timeline(
                 &parent,
@@ -1036,7 +1079,9 @@ async fn both_parents_use_bounded_previews_and_bidirectional_windows(pool: PgPoo
             assert_eq!(page.items[0].message.id, roots[0].id);
             assert!(page.items[0].message.deleted_at.is_some());
         }
-        repo.delete(&parent, root).await.unwrap();
+        repo.delete(&parent, MessageId::from_uuid(root))
+            .await
+            .unwrap();
         let page = repo
             .timeline(
                 &parent,
@@ -1179,7 +1224,11 @@ async fn client_supplied_ids_are_kept_and_never_reused(pool: PgPool) {
     ));
     let parent = MessageParent::parse("document", "message-doc-a").unwrap();
     assert_eq!(
-        repo.get(&parent, id).await.unwrap().unwrap().content,
+        repo.get(&parent, MessageId::from_uuid(id))
+            .await
+            .unwrap()
+            .unwrap()
+            .content,
         "first"
     );
 }
@@ -1299,12 +1348,26 @@ async fn parent_of_names_only_a_live_message_parent(pool: PgPool) {
         .unwrap();
 
     assert_eq!(
-        repo.parent_of(reply.id).await.unwrap(),
+        repo.parent_of(MessageId::from_uuid(reply.id))
+            .await
+            .unwrap(),
         Some(parent.clone())
     );
-    repo.delete(&parent, reply.id).await.unwrap();
-    assert_eq!(repo.parent_of(reply.id).await.unwrap(), None);
-    assert_eq!(repo.parent_of(Uuid::now_v7()).await.unwrap(), None);
+    repo.delete(&parent, MessageId::from_uuid(reply.id))
+        .await
+        .unwrap();
+    assert_eq!(
+        repo.parent_of(MessageId::from_uuid(reply.id))
+            .await
+            .unwrap(),
+        None
+    );
+    assert_eq!(
+        repo.parent_of(MessageId::from_uuid(Uuid::now_v7()))
+            .await
+            .unwrap(),
+        None
+    );
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
@@ -1523,12 +1586,17 @@ async fn concurrent_first_call_messages_share_one_thread(pool: PgPool) {
     );
     assert_eq!(repo.replies(&parent, call_id).await.unwrap().len(), 1);
     assert!(
-        repo.get(&MessageParent::Call(Uuid::from_u128(7)), call_id)
-            .await
-            .unwrap()
-            .is_none()
+        repo.get(
+            &MessageParent::Call(Uuid::from_u128(7)),
+            MessageId::from_uuid(call_id)
+        )
+        .await
+        .unwrap()
+        .is_none()
     );
-    repo.delete(&parent, call_id).await.unwrap();
+    repo.delete(&parent, MessageId::from_uuid(call_id))
+        .await
+        .unwrap();
     let after_delete = repo
         .create(call_message(call_id, "After the first message was deleted"))
         .await
@@ -1560,7 +1628,7 @@ async fn guests_and_members_share_the_persisted_call_discussion(pool: PgPool) {
     assert_eq!(root.id, call_id);
     assert_eq!(reply.thread_id, Some(call_id));
     let stored = repo
-        .get(&MessageParent::Call(call_id), call_id)
+        .get(&MessageParent::Call(call_id), MessageId::from_uuid(call_id))
         .await
         .unwrap()
         .unwrap();
@@ -1634,7 +1702,11 @@ async fn verify_call_chat_archive(pool: PgPool, call_id: Uuid) {
     tx.commit().await.unwrap();
     assert!(repo.parent_exists(&parent).await.unwrap());
     assert_eq!(
-        repo.get(&parent, call_id).await.unwrap().unwrap().content,
+        repo.get(&parent, MessageId::from_uuid(call_id))
+            .await
+            .unwrap()
+            .unwrap()
+            .content,
         "Persistent chat"
     );
     repo.create(call_message(call_id, "Archived reply"))
@@ -1645,7 +1717,12 @@ async fn verify_call_chat_archive(pool: PgPool, call_id: Uuid) {
         .await
         .unwrap();
     assert!(!repo.parent_exists(&parent).await.unwrap());
-    assert!(repo.get(&parent, call_id).await.unwrap().is_none());
+    assert!(
+        repo.get(&parent, MessageId::from_uuid(call_id))
+            .await
+            .unwrap()
+            .is_none()
+    );
     assert!(repo.thread(&parent, call_id).await.unwrap().is_none());
     let mention_count = sqlx::query_scalar!(
         "SELECT count(*) FROM comms_entity_mentions WHERE source_entity_type = 'message' AND source_entity_id = $1",
@@ -1703,7 +1780,9 @@ async fn retrying_first_call_message_cannot_append_it_twice(pool: PgPool) {
                 .is_none()
         );
     }
-    repo.delete(&parent, call_id).await.unwrap();
+    repo.delete(&parent, MessageId::from_uuid(call_id))
+        .await
+        .unwrap();
     let deleted = repo
         .get_by_client_message_id(&parent, &actor, client_message_id)
         .await
@@ -1749,6 +1828,11 @@ async fn imported_call_discussion_needs_no_native_session(pool: PgPool) {
         .await
         .unwrap();
     assert!(!repo.parent_exists(&parent).await.unwrap());
-    assert!(repo.get(&parent, call_id).await.unwrap().is_none());
+    assert!(
+        repo.get(&parent, MessageId::from_uuid(call_id))
+            .await
+            .unwrap()
+            .is_none()
+    );
     assert!(repo.replies(&parent, call_id).await.unwrap().is_empty());
 }

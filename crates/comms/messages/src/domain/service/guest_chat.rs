@@ -118,7 +118,11 @@ impl<R: MessageRepository, E: MessageEventPublisher> GuestChatApi for GuestChatS
         if state.deleted_at.is_some() {
             return Err(MessageError::NotFound);
         }
-        let root = self.messages.repo.get(&parent, call_id).await?;
+        let root = self
+            .messages
+            .repo
+            .get(&parent, MessageId::from_uuid(call_id))
+            .await?;
         let replies = self.messages.repo.replies(&parent, call_id).await?;
         Ok(GuestChatPage {
             messages: root

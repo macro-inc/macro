@@ -214,6 +214,7 @@ members = [
   "crates/types/id_newtype",
   "crates/types/macro_sync_service_jwt",
   "crates/types/maybe_send",
+  "crates/types/message_id",
   "crates/types/message_parent",
   "crates/types/model_owner",
   "crates/types/models_databases",
@@ -837,6 +838,7 @@ mcp_service_url = { path = "crates/platform/service_urls/mcp_service_url" }
 mcp_toolset = { path = "crates/ai/mcp_toolset" }
 memory = { path = "crates/ai/memory" }
 mention_utils = { path = "crates/comms/mention_utils" }
+message_id = { path = "crates/types/message_id" }
 message_parent = { path = "crates/types/message_parent" }
 messages = { path = "crates/comms/messages" }
 mobile_welcome_email_db_client = { path = "crates/accounts/mobile_welcome_email_db_client" }

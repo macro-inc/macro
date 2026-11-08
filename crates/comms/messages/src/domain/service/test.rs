@@ -54,7 +54,7 @@ impl MessageRepository for Repo {
     async fn preceding(
         &self,
         _: &MessageParent,
-        _: Uuid,
+        _: MessageId,
         _: u16,
     ) -> Result<Vec<Message>, MessageError> {
         unimplemented!()
@@ -77,7 +77,12 @@ impl MessageRepository for Repo {
     async fn parent_exists(&self, _: &MessageParent) -> Result<bool, MessageError> {
         Ok(true)
     }
-    async fn get(&self, parent: &MessageParent, id: Uuid) -> Result<Option<Message>, MessageError> {
+    async fn get(
+        &self,
+        parent: &MessageParent,
+        message_id: MessageId,
+    ) -> Result<Option<Message>, MessageError> {
+        let id = message_id.into_uuid();
         if self.concurrent_create && self.creates.lock().unwrap().is_empty() {
             return Ok(None);
         }
@@ -102,7 +107,8 @@ impl MessageRepository for Repo {
         if self.client_message_id == Some(client_message_id)
             && self.message.sender_id.as_ref() == actor.as_ref()
         {
-            self.get(parent, self.message.id).await
+            self.get(parent, MessageId::from_uuid(self.message.id))
+                .await
         } else {
             Ok(None)
         }
@@ -176,7 +182,7 @@ impl MessageRepository for Repo {
     async fn edit(
         &self,
         _: &MessageParent,
-        _: Uuid,
+        _: MessageId,
         command: EditMessage,
     ) -> Result<Message, MessageError> {
         let mut message = self.message.clone();
@@ -185,9 +191,17 @@ impl MessageRepository for Repo {
         self.edits.lock().unwrap().push(command);
         Ok(message)
     }
-    async fn delete(&self, parent: &MessageParent, id: Uuid) -> Result<Message, MessageError> {
+    async fn delete(
+        &self,
+        parent: &MessageParent,
+        message_id: MessageId,
+    ) -> Result<Message, MessageError> {
+        let id = message_id.into_uuid();
         self.deletes.lock().unwrap().push(id);
-        let mut message = self.get(parent, id).await?.ok_or(MessageError::NotFound)?;
+        let mut message = self
+            .get(parent, MessageId::from_uuid(id))
+            .await?
+            .ok_or(MessageError::NotFound)?;
         message.deleted_at = Some(Utc::now());
         message.content.clear();
         Ok(message)
@@ -195,7 +209,7 @@ impl MessageRepository for Repo {
     async fn react(
         &self,
         _: &MessageParent,
-        _: Uuid,
+        _: MessageId,
         _: &str,
         _: &str,
         _: bool,
@@ -1349,7 +1363,7 @@ impl MessageRepository for StrictRepo {
     async fn preceding(
         &self,
         parent: &MessageParent,
-        id: Uuid,
+        id: MessageId,
         limit: u16,
     ) -> Result<Vec<Message>, MessageError> {
         self.inner.preceding(parent, id, limit).await
@@ -1364,7 +1378,11 @@ impl MessageRepository for StrictRepo {
     async fn parent_exists(&self, _: &MessageParent) -> Result<bool, MessageError> {
         Ok(self.parent_exists)
     }
-    async fn get(&self, parent: &MessageParent, id: Uuid) -> Result<Option<Message>, MessageError> {
+    async fn get(
+        &self,
+        parent: &MessageParent,
+        id: MessageId,
+    ) -> Result<Option<Message>, MessageError> {
         self.inner.get(parent, id).await
     }
     async fn get_by_client_message_id(
@@ -1397,18 +1415,18 @@ impl MessageRepository for StrictRepo {
     async fn edit(
         &self,
         parent: &MessageParent,
-        id: Uuid,
+        id: MessageId,
         command: EditMessage,
     ) -> Result<Message, MessageError> {
         self.inner.edit(parent, id, command).await
     }
-    async fn delete(&self, parent: &MessageParent, id: Uuid) -> Result<Message, MessageError> {
+    async fn delete(&self, parent: &MessageParent, id: MessageId) -> Result<Message, MessageError> {
         self.inner.delete(parent, id).await
     }
     async fn react(
         &self,
         parent: &MessageParent,
-        id: Uuid,
+        id: MessageId,
         user: &str,
         emoji: &str,
         add: bool,
