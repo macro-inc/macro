@@ -466,7 +466,7 @@ export function CallRecordingBody(props: {
                     <Layer offset={1}>
                       <aside
                         aria-label={t('calls.detailTranscript')}
-                        class="absolute z-split-panel-chrome flex min-h-0 flex-col overflow-hidden rounded-xl border border-edge-frame bg-surface p-2 shadow-xl"
+                        class="absolute z-split-panel-chrome flex min-h-0 flex-col overflow-hidden rounded-xl border border-edge-frame bg-surface shadow-xl"
                         style={{
                           top: `${SidePanel.FLOATING_INSET_PX}px`,
                           right: `${SidePanel.FLOATING_INSET_PX}px`,

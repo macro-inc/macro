@@ -243,7 +243,7 @@ export function CallTranscript(props: {
         }}
       >
         <Show when={!props.hideHeader}>
-          <h3 class="px-4 py-3 text-sm font-semibold">
+          <h3 class="px-3 py-3 text-sm font-semibold">
             {t('calls.detailTranscript')}
           </h3>
         </Show>

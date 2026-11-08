@@ -30,7 +30,7 @@ The live call UI belongs to `features/channel/Call`, not this feature.
 - Use FloatRegion ownership for phone playback instead of changing global dock state.
 - Use the standard SidePanel drawer for phone details, with the same content as desktop.
 - Place the Transcript header action after Share, hide it on touch and below 960px, and switch the reading tab to Summary only when opening that panel.
-- Float the 360px Transcript card inside Layer offset={1}, with SidePanel's 12px insets, padded bg-surface content and a bg-inset Sync surface; reserve its width plus both insets on the right.
+- Float the 360px Transcript card inside Layer offset={1}, with SidePanel's 12px insets, bg-surface content with one 12px inner inset and a bg-inset Sync surface; reserve its width plus both insets on the right.
 - Keep Transcript mounted when Details opens over it; closing Details must preserve transcript scrolling, follow state and its pressed button.
 
 ## Checks

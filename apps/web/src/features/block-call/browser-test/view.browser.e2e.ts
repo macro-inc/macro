@@ -138,7 +138,7 @@ for (const theme of ['light', 'dark']) {
       expect(overlap).toBe(true);
       if (process.env.CALL_PLAYBACK_SCREENSHOT_DIR)
         await page.screenshot({
-          path: `${process.env.CALL_PLAYBACK_SCREENSHOT_DIR}/d48-${theme}-${width}-both.png`,
+          path: `${process.env.CALL_PLAYBACK_SCREENSHOT_DIR}/d49-${theme}-${width}-both.png`,
         });
       await page
         .getByRole('button', { name: 'Hide details', exact: true })
@@ -163,7 +163,13 @@ for (const theme of ['light', 'dark']) {
           background: style.backgroundColor,
           pageBackground: getComputedStyle(document.body).backgroundColor,
           shadow: style.boxShadow,
-          padding: style.padding,
+          headingInset:
+            element.querySelector('h3')!.getBoundingClientRect().left -
+            card.left -
+            parseFloat(style.borderLeftWidth) +
+            parseFloat(
+              getComputedStyle(element.querySelector('h3')!).paddingLeft
+            ),
         };
       });
       expect(geometry.width).toBe(360);
@@ -175,10 +181,10 @@ for (const theme of ['light', 'dark']) {
       expect(geometry.background).not.toBe('rgba(0, 0, 0, 0)');
       expect(geometry.background).not.toBe(geometry.pageBackground);
       expect(geometry.shadow).not.toBe('none');
-      expect(geometry.padding).not.toBe('0px');
+      expect(geometry.headingInset).toBe(12);
       if (process.env.CALL_PLAYBACK_SCREENSHOT_DIR)
         await page.screenshot({
-          path: `${process.env.CALL_PLAYBACK_SCREENSHOT_DIR}/d48-${theme}-${width}-transcript.png`,
+          path: `${process.env.CALL_PLAYBACK_SCREENSHOT_DIR}/d49-${theme}-${width}-transcript.png`,
         });
 
       // Seek first so the fixture has an active row, then scroll away from it.
