@@ -138,3 +138,5 @@ Decode indexed JS inputs through host_input/safe.rs: catch getters/proxies/itera
 EditorHandle::read_state hosts associated-editor reads of retained versions through the same guarded owned peer. Preserve opaque body returns and throws without inspecting properties, and route nested reads through CURRENT rather than a leased Session. This explicit API does not provide editor-less EditorState.read semantics.
 
 isInline is the first hosted pure predicate: use the owned read peer and JS truthiness inside a fallible ForeignReadOperation. Opaque throws defer to the operation boundary; stop later callbacks/writes/caches before returning the original value. This private JS adapter is supported only through scoped host entry points; direct unscoped model predicate reads cannot invoke JS. Text and line-break inline flags remain fixed non-hooks.
+
+canBeEmpty shares the scoped predicate/error adapter. Child removal happens before the parent predicate; a thrown predicate must preserve that earlier detach and stop subsequent empty-parent cleanup, matching the pinned native algorithm.

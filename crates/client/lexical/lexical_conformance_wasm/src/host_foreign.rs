@@ -21,6 +21,7 @@ impl ForeignNode {
     }
     fn check_supported(mask: u64) -> Result<(), Error> {
         let supported = ForeignHook::IsInline.bit()
+            | ForeignHook::CanBeEmpty.bit()
             | ForeignHook::CoerceTextContent.bit()
             | ForeignHook::CheckSpliceText.bit()
             | ForeignHook::CoerceDetail.bit()
@@ -132,10 +133,8 @@ impl ForeignNode {
             None => Err(Error::Invariant("foreign dispatcher is not installed")),
         })
     }
-}
-impl ForeignHooks for ForeignNode {
-    fn is_inline(&self, node: NodeView<'_>, _data: &ForeignData) -> Override<bool> {
-        if self.overrides.load(Ordering::SeqCst) & ForeignHook::IsInline.bit() == 0 {
+    fn predicate(&self, node: NodeView<'_>, hook: ForeignHook) -> Override<bool> {
+        if self.overrides.load(Ordering::SeqCst) & hook.bit() == 0 {
             return Override::Inherit;
         }
         // This private adapter is reachable only through the fallible host ABI.
@@ -145,9 +144,10 @@ impl ForeignHooks for ForeignNode {
         }
         let callback = { self.callback.lock().expect("foreign dispatcher").clone() };
         let result = match callback {
-            Some(callback) => node.state.snapshot_for_foreign_read().and_then(|snapshot| {
-                callback.predicate(&snapshot, node.key, ForeignHook::IsInline)
-            }),
+            Some(callback) => node
+                .state
+                .snapshot_for_foreign_read()
+                .and_then(|snapshot| callback.predicate(&snapshot, node.key, hook)),
             None => Err(Error::Invariant("foreign dispatcher is not installed")),
         };
         match result {
@@ -162,6 +162,14 @@ impl ForeignHooks for ForeignNode {
                 }
             }
         }
+    }
+}
+impl ForeignHooks for ForeignNode {
+    fn is_inline(&self, node: NodeView<'_>, _data: &ForeignData) -> Override<bool> {
+        self.predicate(node, ForeignHook::IsInline)
+    }
+    fn can_be_empty(&self, node: NodeView<'_>, _data: &ForeignData) -> Override<bool> {
+        self.predicate(node, ForeignHook::CanBeEmpty)
     }
 
     fn adjust_export_json(
@@ -460,7 +468,8 @@ mod test {
         assert!(node.ready());
         assert!(node.set_mask(ForeignHook::CoerceMode.bit(), true).is_err());
         assert!(ForeignNode::new(ForeignHook::IsInline.bit()).is_ok());
-        assert!(ForeignNode::new(ForeignHook::CanBeEmpty.bit()).is_err());
+        assert!(ForeignNode::new(ForeignHook::CanBeEmpty.bit()).is_ok());
+        assert!(ForeignNode::new(ForeignHook::AfterClone.bit()).is_err());
         assert!(ForeignNode::new(1u64 << 63).is_err());
         Ok(())
     }
