@@ -297,17 +297,20 @@ impl<'state> StateRef<'state> {
         }
         Some(key)
     }
-    /// Descendant by index.
+    /// First descendant of the indexed child, or the last descendant past the end.
     pub fn descendant_by_index(
         self,
         key: impl Into<NodeKey>,
         index: ChildIndex,
     ) -> Option<NodeKey> {
         let key = key.into();
-        let child = self
-            .child_at_index(key, index)
-            .or_else(|| self.last_child(key))?;
-        self.first_descendant(child).or(Some(child))
+        if index.0 >= self.children_size(key) {
+            let child = self.last_child(key)?;
+            self.last_descendant(child).or(Some(child))
+        } else {
+            let child = self.child_at_index(key, index)?;
+            self.first_descendant(child).or(Some(child))
+        }
     }
     /// Post-order within shared ancestry: descendants precede their ancestors.
     pub fn is_before(self, a: impl Into<NodeKey>, b: impl Into<NodeKey>) -> Result<bool, Error> {
