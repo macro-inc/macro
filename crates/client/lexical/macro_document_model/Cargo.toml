@@ -5,6 +5,7 @@ edition = "2024"
 publish = false
 
 [dependencies]
+lexical_loro.workspace = true
 rand_chacha.workspace = true
 chrono-tz.workspace = true
 url.workspace = true
