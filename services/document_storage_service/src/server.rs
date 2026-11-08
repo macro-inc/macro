@@ -1472,6 +1472,16 @@ async fn run_server() -> anyhow::Result<()> {
         ),
     );
     let admission = macro_agent_tool_context.admission.clone();
+    // The pipeline entry and CSV routes run through the same workflows the
+    // agent's pipeline tools use.
+    let pipeline_workflows = macro_agent_tool_context
+        .pipeline_tool_context
+        .service
+        .clone();
+    let crm_transfer = macro_agent_tool_context
+        .crm_transfer_tool_context
+        .service
+        .clone();
     let editing_worker = Arc::new(
         documents_hex::outbound::editing_worker_client::ReqwestEditingWorkerClient::from_url(
             AiEditingWorkerUrl::new()?.to_string(),
@@ -2573,6 +2583,11 @@ async fn run_server() -> anyhow::Result<()> {
         pipeline_state: crm::inbound::pipelines::PipelineRouterState {
             service: pipeline_service,
             access: entity_access_service.clone(),
+            authorization: authorization_state.clone(),
+        },
+        pipeline_workflow_state: crm::inbound::pipeline_workflows::PipelineWorkflowRouterState {
+            workflows: pipeline_workflows,
+            transfer: crm_transfer,
             authorization: authorization_state.clone(),
         },
         crm_state: crm::inbound::axum_router::CrmRouterState {

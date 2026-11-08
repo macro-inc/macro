@@ -220,6 +220,13 @@ pub(crate) type DssPipelineState = crm::inbound::pipelines::PipelineRouterState<
     AuthorizationService,
 >;
 
+pub(crate) type DssPipelineWorkflowState =
+    crm::inbound::pipeline_workflows::PipelineWorkflowRouterState<
+        ai_tools::ToolPipelineWorkflows,
+        ai_tools::ToolCrmTransferService,
+        AuthorizationService,
+    >;
+
 pub(crate) type DssCrmState = crm::inbound::axum_router::CrmRouterState<
     DssCrmService,
     DssCrmStageService,
@@ -1039,6 +1046,7 @@ pub(crate) struct ApiContext {
     pub crm_state: DssCrmState,
     pub owned_purge_state: DssOwnedPurgeState,
     pub pipeline_state: DssPipelineState,
+    pub pipeline_workflow_state: DssPipelineWorkflowState,
 }
 
 env_var! {

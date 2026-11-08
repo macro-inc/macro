@@ -83,7 +83,8 @@ export class User extends PropertiedEntity<UserName> implements Mentionable {
   }
 
   /**
-   * Open (or create) your direct-message channel with this user.
+   * Open (or create) your 1:1 direct-message channel with this user. For a
+   * group DM, use `macro.channels.private(users)`.
    *
    * @returns The DM `Channel`.
    */
