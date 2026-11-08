@@ -27,6 +27,9 @@ fn replaced_objects_retain_values_and_identity_through_reads_suspend_and_reactiv
     assert_eq!(tx.focus_at(old_slot)?.offset(), 1);
     assert!(tx.range_is_backward_at(old_slot)?);
     let snapshot = tx.view().snapshot_for_foreign_read()?;
+    assert!(snapshot.contains_selection_identity(&original));
+    assert!(snapshot.clone().contains_selection_identity(&replacement));
+    assert!(!snapshot.contains_selection_identity(&ForeignSelectionIdentity::default()));
     snapshot.with_read_transaction(tx.committed_state(), |peer| -> Result<(), Error> {
         assert_eq!(peer.foreign_selection_slot(&original), Some(old_slot));
         assert_eq!(
@@ -34,6 +37,16 @@ fn replaced_objects_retain_values_and_identity_through_reads_suspend_and_reactiv
             Some(replacement.clone())
         );
         assert_eq!(peer.anchor_at(old_slot)?.offset(), 3);
+        let owned = peer.detach_selection(Selection::Range(RangeSelection::at_root()));
+        let owned = peer
+            .foreign_selection_identity(owned)
+            .expect("owned identity");
+        assert!(!snapshot.contains_selection_identity(&owned));
+        assert!(
+            peer.view()
+                .snapshot_for_foreign_read()?
+                .contains_selection_identity(&owned)
+        );
         Ok(())
     })??;
     let pending = tx.suspend();

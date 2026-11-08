@@ -10,13 +10,13 @@ Development-only schema-2 fixture interpreter for the pinned upstream oracle.
 - `src/config.rs`: strict host/provenance and constructor-reference validation.
 - `src/replay.rs`: operation ordering, identities and callback tapes.
 - `src/replay/bindings.rs`: shared owned handle/key bindings, host ID allocation and published snapshot pins; return clones before any model or host call.
-- `src/replay/selections.rs`: shared mutable-frame selection identities and activation revisions; no model call executes under its lock.
+- `src/replay/selections.rs`: shared selection objects with transaction-local slot caches and activation revisions; no model call executes under its lock.
 - `src/replay/carets.rs`: shared caret metadata and owned single-consumption cursors; move cursors out before model traversal.
 - `src/replay/records.rs`: shared record identities for independent callback frames; guards cover owned map operations only.
 - `src/api/`: explicit dispatch to model APIs, including caret object identity and metadata.
 - `src/api.rs`: shared fixture/WASM call entry point; `build.rs` derives its sorted API index from dispatcher match arms with syn.
 - `src/api/context.rs`: host-owned fixture handles, suspended-call selection bookkeeping, publication/discard and explicit state release.
-- `src/api/context/callbacks.rs`: weak callback capability with independent mutable dispatcher frames and pure raw-field peers; exact update provenance authorizes reads through publication, while mutable dispatch stops before it. Pure raw reads grant no indexed API or selection dispatch.
+- `src/api/context/callbacks.rs`: weak callback capability with independent mutable dispatcher frames and owned scoped read peers; exact update provenance authorizes reads through publication, while mutable dispatch stops before it. The read scope shares owned value identities, keeps peer slot metadata local and grants no source transaction access.
 - `src/api/session.rs`: owned editor/pending-update boundary and published host version; with_context preserves preconfigured weak callback registrations; calls and flushes suspend without publishing, while failed commits discard model writes and pending handles.
 - `src/snapshot.rs`: full observable-state comparison.
 - `tests/replay_wasm.rs`: complete embedded corpus in wasm-bindgen-test via `just lexical-replay-wasm`.
@@ -115,3 +115,5 @@ CallbackContext::selection encodes an existing active or detached transaction sl
 Synchronize selection slot bindings by model object tokens before/after dispatch and when encoding callback selections. Reuse tokens when hydrating host values, including read frames and explicit reactivation; never infer replacement identity solely from the resettable selection_replacements counter or snapshot old values after callbacks.
 
 Share selection IDs, tokens and owned values across dispatch frames, but keep slot caches and activation revisions local to each transaction frame. Resolve handles through the invoking transaction token and lazily hydrate saved detached values; never decode a peer selection using another frame's slot index. Mutable nested callbacks share their exact frame; owned read peers require a separate frame.
+
+Use CallbackContext::with_read_scope for a whole pure callback, keeping one guarded owned peer across indexed calls. Reject command, tag and scheduling effects at the dispatcher boundary. Save only newly allocated, locally created selection values at scope exit, including error exits; never overwrite inherited captured values. Read peers never hydrate saved tokens absent from their capture; mutable frames may hydrate them after the read ends. Inherited selection object writes and absent cross-scope values currently reject until ancestor synchronization is implemented; full JS pure-hook hosting remains unfinished.

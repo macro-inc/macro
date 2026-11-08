@@ -142,3 +142,5 @@ Give runtime ForeignHooks text setters the current mutable transaction and owner
 Toggle text directionless/unmergeable bits directly on the writable detail field, clearing absent-detail export state; do not call the virtual set_detail hook or Tab's forbidden setter. toggle_format remains virtual through set_format.
 
 Development selection identities use pointer tokens with no retained model data. Retire replaced objects into detached slots before callbacks; preserve tokens across suspend/read captures, explicit reactivation and removeText restoration. In-place point/format/normalization updates preserve tokens. Native replace installs a cloned RangeSelection after structural edits; NodeSelection stays the original object.
+
+Use ForeignReadSnapshot::contains_selection_identity to distinguish inherited selection objects from newly owned peer values; never infer that distinction from transaction-local slot indices.

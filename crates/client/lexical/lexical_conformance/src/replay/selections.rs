@@ -24,8 +24,18 @@ struct Frame {
     slots: Vec<Option<SelectionSlot>>,
     active: Option<usize>,
     revision: u64,
+    read: bool,
 }
 impl SelectionBindings {
+    pub fn fork_read(&self) -> Self {
+        Self {
+            objects: self.objects.clone(),
+            frame: Arc::new(Mutex::new(Frame {
+                read: true,
+                ..Frame::default()
+            })),
+        }
+    }
     fn objects(&self) -> Result<MutexGuard<'_, Objects>> {
         self.objects
             .lock()
@@ -100,6 +110,9 @@ impl SelectionBindings {
         let slot = match tx.foreign_selection_slot(&identity) {
             Some(slot) => slot,
             None => {
+                if self.frame()?.read {
+                    return Err(fail("selection value is absent from this read capture"));
+                }
                 let value = self
                     .objects()?
                     .values
@@ -152,6 +165,9 @@ impl SelectionBindings {
             .iter()
             .map(|selection| selection.as_ref().map(Selection::snapshot_for_foreign_read))
             .collect())
+    }
+    pub fn len(&self) -> Result<usize> {
+        Ok(self.objects()?.identities.len())
     }
     pub fn save_value(&self, id: usize, value: Option<Selection>) -> Result<()> {
         *self

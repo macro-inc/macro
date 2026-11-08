@@ -5,8 +5,8 @@ use serde_json::{Value, json};
 use std::sync::Arc;
 mod arguments;
 mod callbacks;
-pub use callbacks::CallbackContext;
 use callbacks::Frames;
+pub use callbacks::{CallbackContext, CallbackRead};
 
 /// Shared dispatch and fixture-value encoding across suspended host calls.
 ///
@@ -150,6 +150,16 @@ impl Context {
             return Err(crate::replay::ReplayError::NoActiveEditor);
         }
         self.frames.validate(tx)?;
+        self.dispatch(tx, id, args, receiver)
+    }
+
+    fn dispatch(
+        &mut self,
+        tx: &mut Transaction<'_>,
+        id: u32,
+        args: Value,
+        receiver: Option<Value>,
+    ) -> Result<Value> {
         let _arguments = match (
             super::index()
                 .get(id as usize)
@@ -189,6 +199,16 @@ impl Context {
             return Err(crate::replay::ReplayError::NoActiveEditor);
         }
         self.frames.validate(tx)?;
+        self.dispatch_native(tx, id, args, receiver)
+    }
+
+    fn dispatch_native(
+        &mut self,
+        tx: &mut Transaction<'_>,
+        id: u32,
+        args: Value,
+        receiver: Value,
+    ) -> Result<Value> {
         let method = super::index()
             .get(id as usize)
             .and_then(|name| name.strip_prefix("LexicalNode."))
