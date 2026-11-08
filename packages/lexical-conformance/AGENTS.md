@@ -54,3 +54,5 @@ The upstream source is downloaded by checksum into this worktree's `target/`.
 The debug suite validates model-derived host hook aliases against pinned upstream base classes and checks their boundary bytes; full callsite derivation and per-hook hosting remain separate gates.
 
 The WASM builder marks generated inline-JS snippets as ESM independently of the Node entry point's CommonJS boundary. Keep the snippets directory with the generated bindings when copying an artifact; the Node loader uses require(esm).
+
+Set CARGO_BUILD_JOBS to limit the shared optimized WASM builder and its instrumenter; both honor that value (default 4). Use a lower limit on loaded hosts without changing optimization or instrumentation.
