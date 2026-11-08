@@ -15,7 +15,7 @@ use crate::domain::{
         ChannelReferenceSharePermissions, ChannelRepo, ChannelService, CommentParentAccess,
     },
 };
-use bot_id::{BotId, cowlike::CowLike};
+use bot_id::{BotId, cow_str::CowLike};
 use channel_id::ChannelId;
 use channel_sender::ChannelSender;
 use entity_access::domain::models::{

@@ -7,7 +7,7 @@ use crm::domain::pipelines::{
 };
 use databases::domain::models::{Column, ColumnDetail, ColumnId, DatabaseId, RowId, TableId};
 use entity_access::domain::models::AccessLevel;
-use macro_user_id::{cowlike::CowLike, user_id::MacroUserIdStr};
+use macro_user_id::{cow_str::CowLike, user_id::MacroUserIdStr};
 use models_databases::position::key_between;
 use models_properties::{
     DataType,

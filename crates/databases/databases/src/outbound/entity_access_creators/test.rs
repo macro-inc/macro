@@ -7,7 +7,7 @@ use entity_access::domain::models::{AccessLevel, EntityPermission};
 use entity_access::domain::service::EntityAccessServiceImpl;
 use entity_access_outbound::PgAccessRepository;
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
-use macro_user_id::cowlike::CowLike;
+use macro_user_id::cow_str::CowLike;
 use properties::outbound::properties_pg_repo::PropertiesPgRepo;
 use sqlx::PgPool;
 use uuid::Uuid;

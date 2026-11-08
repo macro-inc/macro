@@ -6,7 +6,7 @@ use super::*;
 use chrono::Utc;
 use item_filters::ChatFilters;
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
-use macro_user_id::{cowlike::CowLike, user_id::MacroUserIdStr};
+use macro_user_id::{cow_str::CowLike, user_id::MacroUserIdStr};
 use model_entity::EntityType;
 use std::collections::VecDeque;
 

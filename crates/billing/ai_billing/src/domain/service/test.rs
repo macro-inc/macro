@@ -10,7 +10,7 @@ use crate::domain::ports::{
     ResolvedReload, SettlementOutcome,
 };
 use chrono::TimeZone;
-use macro_user_id::cowlike::CowLike;
+use macro_user_id::cow_str::CowLike;
 use macro_uuid::Uuid;
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};

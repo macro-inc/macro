@@ -1,6 +1,6 @@
 //! Query for the users who can see a CRM company or contact.
 
-use macro_user_id::{cowlike::CowLike, user_id::MacroUserIdStr};
+use macro_user_id::{cow_str::CowLike, user_id::MacroUserIdStr};
 use model_entity::EntityType;
 use sqlx::PgPool;
 use uuid::Uuid;

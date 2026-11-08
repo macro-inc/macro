@@ -1,5 +1,5 @@
 use super::*;
-use macro_user_id::cowlike::CowLike;
+use macro_user_id::cow_str::CowLike;
 use models_properties::{EntityType, shared::entity_reference::EntityReference};
 
 fn viewer() -> MacroUserIdStr<'static> {

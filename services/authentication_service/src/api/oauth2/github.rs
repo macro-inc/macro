@@ -5,7 +5,7 @@ use axum::{
     response::{Html, IntoResponse, Redirect, Response},
 };
 use github::domain::{models::GithubError, ports::GithubLinkService};
-use macro_user_id::{cowlike::CowLike, user_id::MacroUserId};
+use macro_user_id::{cow_str::CowLike, user_id::MacroUserId};
 use model::response::ErrorResponse;
 use tower_cookies::Cookies;
 

@@ -23,7 +23,7 @@ use entity_access::domain::models::{
     EntityPermission, EntityType as AccessEntityType, ViewAccessLevel,
 };
 use macro_event_broker::{EventBrokerError, MacroEvent, MacroEventBroker};
-use macro_user_id::{cowlike::CowLike, user_id::MacroUserIdStr};
+use macro_user_id::{cow_str::CowLike, user_id::MacroUserIdStr};
 use models_properties::service::property_change_source::{GithubAccount, PropertyChangeSource};
 use models_properties::{
     DataType, EntityType, PropertyOwner,

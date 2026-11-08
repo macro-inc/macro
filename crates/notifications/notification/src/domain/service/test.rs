@@ -32,7 +32,7 @@ use crate::domain::service::{
     NotificationReaderService, PlatformArnConfig,
 };
 use chrono::Utc;
-use macro_user_id::cowlike::CowLike;
+use macro_user_id::cow_str::CowLike;
 use macro_user_id::user_id::MacroUserIdStr;
 use model_entity::{Entity, EntityType};
 use rate_limit::domain::models::RateLimitOk;

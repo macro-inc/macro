@@ -1,6 +1,6 @@
 //! This module provides strongly typed guaranteed that its inner contents are lowercased unicode characters
 
-use crate::cowlike::{ArcCowStr, CowLike};
+use crate::cow_str::{ArcCowStr, CowLike};
 use std::sync::Arc;
 
 /// The lowercase struct upholds the invariant that its contents are guaranteed to be

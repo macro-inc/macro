@@ -1,6 +1,6 @@
 //! Job-first locking, execution fencing and durable queue recovery.
 
-use macro_user_id::cowlike::CowLike;
+use macro_user_id::cow_str::CowLike;
 
 use crate::domain::ports::{ExecutionRepo, ImportRepo};
 

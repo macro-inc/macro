@@ -2,7 +2,7 @@
 
 use std::sync::Arc;
 
-use cowlike::CowLike;
+use cow_str::CowLike;
 use email::domain::ports::EmailService;
 use model_entity::{Entity, EntityType};
 use models_soup::item::SoupItem;

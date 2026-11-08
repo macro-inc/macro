@@ -13,7 +13,7 @@ use crate::domain::{
 };
 use entity_access_db_utils::{EntityAccessSourceType, delete_source_grants, team_share};
 use macro_user_id::{
-    cowlike::CowLike,
+    cow_str::CowLike,
     email::{Email, ReadEmailParts},
     lowercased::Lowercase,
     user_id::MacroUserIdStr,

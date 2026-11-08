@@ -34,7 +34,7 @@ use macro_authorization::{
     ValidatedIdentity,
 };
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
-use macro_user_id::{cowlike::CowLike, user_id::MacroUserIdStr};
+use macro_user_id::{cow_str::CowLike, user_id::MacroUserIdStr};
 use sqlx::PgPool;
 use std::sync::Arc;
 use tower::ServiceExt;

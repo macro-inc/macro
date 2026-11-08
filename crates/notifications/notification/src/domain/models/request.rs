@@ -7,7 +7,7 @@ use crate::domain::models::{
     mobile::{self, MessageAttributes},
     queue_message::EmailCreateBundle,
 };
-use cowlike::CowLike;
+use cow_str::CowLike;
 use itertools::Itertools;
 use macro_user_id::user_id::MacroUserIdStr;
 use model_entity::Entity;

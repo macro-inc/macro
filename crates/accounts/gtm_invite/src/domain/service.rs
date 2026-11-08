@@ -4,7 +4,7 @@
 mod test;
 
 use chrono::Utc;
-use macro_user_id::{cowlike::CowLike, email::Email, user_id::MacroUserIdStr};
+use macro_user_id::{cow_str::CowLike, email::Email, user_id::MacroUserIdStr};
 use uuid::Uuid;
 
 use crate::domain::{

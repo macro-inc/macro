@@ -3,7 +3,7 @@ use crate::domain::models::{
     AllowanceDecision, AutoReloadThresholds, BillingError, Entitlement, PayerScope, PlanTier,
     UsageSnapshot,
 };
-use macro_user_id::{cowlike::CowLike, user_id::MacroUserIdStr};
+use macro_user_id::{cow_str::CowLike, user_id::MacroUserIdStr};
 use macro_uuid::Uuid;
 use std::collections::HashMap;
 use std::sync::Mutex;

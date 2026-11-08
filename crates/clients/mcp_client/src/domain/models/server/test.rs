@@ -2,7 +2,7 @@ use super::*;
 use crate::domain::models::MacroUserIdStr;
 use crate::outbound::guarded_http::{AddressPolicy, McpHttp};
 use axum::{Router, routing::post};
-use macro_user_id::cowlike::CowLike;
+use macro_user_id::cow_str::CowLike;
 use tokio::sync::Notify;
 
 /// A store the unauthenticated connect path never touches.

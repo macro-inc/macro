@@ -5,7 +5,7 @@ use std::ops::Deref;
 
 use entity_access_db_utils::team_share::direct_level;
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
-use macro_user_id::cowlike::CowLike;
+use macro_user_id::cow_str::CowLike;
 use model_entity::EntityType;
 use models_permissions::share_permission::access_level::AccessLevel;
 use models_permissions::share_permission::team_share::{

@@ -1,7 +1,7 @@
 //! Module defines the [Email] and methods to parse it from a string
 use crate::{
     byte_range::ByteRange,
-    cowlike::{ArcCowStr, CowLike},
+    cow_str::{ArcCowStr, CowLike},
     error::ParseErr,
     lowercased::Lowercase,
 };

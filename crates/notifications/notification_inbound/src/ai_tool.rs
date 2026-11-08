@@ -14,7 +14,7 @@ use ai_toolset::{
 };
 use ai_toolset::{ToolAnnotated, ToolAnnotations};
 use async_trait::async_trait;
-use cowlike::CowLike;
+use cow_str::CowLike;
 use macro_user_id::user_id::MacroUserIdStr;
 use model_entity::{Entity, EntityType};
 use models_pagination::CreatedAt;

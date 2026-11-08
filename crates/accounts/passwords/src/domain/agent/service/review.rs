@@ -59,7 +59,7 @@ impl ReviewQuery {
         let after = cursor
             .map(|cursor| {
                 MacroUserIdStr::parse_from_str(&cursor)
-                    .map(macro_user_id::cowlike::CowLike::into_owned)
+                    .map(macro_user_id::cow_str::CowLike::into_owned)
             })
             .transpose()
             .map_err(|_| AgentError::Invalid)?;

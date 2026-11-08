@@ -9,7 +9,7 @@
 use super::*;
 use crate::outbound::email_pg_repo::db_types::ThreadPreviewCursorDbRow;
 use crate::outbound::email_pg_repo::dynamic::TeamReadTuning;
-use macro_user_id::cowlike::CowLike;
+use macro_user_id::cow_str::CowLike;
 
 const TEAM_GAMMA_ID: &str = "e0000003-0000-0000-0000-000000000003";
 const TEAM_DELTA_ID: &str = "e0000004-0000-0000-0000-000000000004";

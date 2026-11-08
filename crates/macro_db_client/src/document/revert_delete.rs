@@ -80,7 +80,7 @@ pub async fn revert_delete_document(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use macro_user_id::cowlike::CowLike;
+    use macro_user_id::cow_str::CowLike;
     use sqlx::{Pool, Postgres};
 
     #[sqlx::test(fixtures(path = "../../fixtures", scripts("basic_user_with_document")))]

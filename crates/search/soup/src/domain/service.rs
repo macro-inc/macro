@@ -18,7 +18,7 @@ use channels::domain::{
     models::{GetChannelsRequest, GetThreadReplyRowsRequest},
     ports::ChannelListService,
 };
-use cowlike::CowLike;
+use cow_str::CowLike;
 use crm::domain::{
     auth::CrmTeamReceipt, companies_repo::CrmCompanyListSort, contact_listing::CrmContactListQuery,
     service::CrmService,

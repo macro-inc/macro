@@ -12,7 +12,7 @@
 //! service composes it without the computer service.
 
 use hosted_runtimes::domain::agent::ComputerAgents;
-use macro_user_id::cowlike::CowLike;
+use macro_user_id::cow_str::CowLike;
 use macro_user_id::user_id::MacroUserIdStr;
 use uuid::Uuid;
 

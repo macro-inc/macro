@@ -3,7 +3,7 @@
 
 use super::*;
 use crate::domain::models::{DynamicSort, grouping::ItemGroupingInfo};
-use cowlike::CowLike;
+use cow_str::CowLike;
 use item_filters::{
     NotificationState,
     ast::{

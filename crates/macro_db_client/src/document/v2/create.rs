@@ -1,7 +1,7 @@
 use crate::history::{upsert_item_last_accessed_timestamp, upsert_user_history_timestamp};
 use crate::share_permission::create::create_document_permission;
 use document_sub_type::DocumentSubType;
-use macro_user_id::cowlike::CowLike;
+use macro_user_id::cow_str::CowLike;
 use macro_user_id::user_id::MacroUserIdStr;
 use model::document::DocumentMetadata;
 use model::document::FileType;
