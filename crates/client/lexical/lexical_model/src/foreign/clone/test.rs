@@ -176,3 +176,137 @@ fn sliced_text_export_clones_with_an_owned_unsliced_source() -> Result<(), Error
     assert!(ForeignCloneContext::capture().is_none());
     Ok(())
 }
+
+#[test]
+fn an_inherited_native_clone_normalizes_its_fields_without_dropping_foreign_fields()
+-> Result<(), Error> {
+    #[derive(Clone, Debug, Default, PartialEq, serde::Serialize, serde::Deserialize)]
+    struct NativeClone {
+        language: String,
+    }
+    impl NodeType for NativeClone {
+        const TYPE: &'static str = "native-clone";
+        type Kind = ElementKind;
+        impl_default_node!();
+        fn after_clone(&self) -> Option<Self> {
+            Some(Self {
+                language: "javascript".into(),
+            })
+        }
+    }
+    impl ElementNode for NativeClone {
+        element_node_base!();
+    }
+    struct Inherit;
+    impl ForeignHooks for Inherit {}
+    let mut editor = Editor::builder(EditorMode::Headless)
+        .node::<NativeClone>()
+        .foreign_node(ForeignNodeType {
+            type_name: "native-clone-child".into(),
+            class_name: "NativeCloneChild".into(),
+            kind: NodeKind::Element,
+            extends: Some("native-clone"),
+            required_state: vec![],
+            hooks: Arc::new(Inherit),
+        })
+        .build()
+        .expect("editor");
+    let mut tx = editor.transaction();
+    let key = tx.create_foreign(
+        "native-clone-child",
+        serde_json::from_str(r#"{"language":"js","marker":"keep"}"#).expect("fields"),
+    )?;
+    tx.append(NodeKey::ROOT, &[key])?;
+    tx.commit()?;
+    let previous = editor.state().clone();
+    let mut tx = editor.transaction();
+    tx.set_indent(key, 1)?;
+    assert_eq!(
+        tx.foreign_data(key).expect("payload").fields["language"],
+        "javascript"
+    );
+    assert_eq!(
+        tx.foreign_data(key).expect("payload").fields["marker"],
+        "keep"
+    );
+    assert_eq!(
+        tx.foreign_data(key)
+            .expect("payload")
+            .fields
+            .keys()
+            .map(String::as_str)
+            .collect::<Vec<_>>(),
+        ["language", "marker"]
+    );
+    assert_eq!(tx.export_json(key)?["type"], "native-clone-child");
+    assert_eq!(tx.export_json(key)?["language"], "javascript");
+    assert_eq!(
+        previous
+            .view()
+            .foreign_data(key)
+            .expect("old payload")
+            .fields["language"],
+        "js"
+    );
+    tx.commit()?;
+    Ok(())
+}
+
+#[test]
+fn invalid_clone_fields_fail_before_installing_a_writable_payload() -> Result<(), Error> {
+    #[derive(Clone, Debug, Default, PartialEq, serde::Serialize, serde::Deserialize)]
+    struct Native {
+        label: String,
+    }
+    impl NodeType for Native {
+        const TYPE: &'static str = "checked-native-clone";
+        type Kind = ElementKind;
+        impl_default_node!();
+    }
+    impl ElementNode for Native {
+        element_node_base!();
+    }
+    struct Invalid;
+    impl ForeignHooks for Invalid {
+        fn after_clone(
+            &self,
+            _: NodeKey,
+            _: NodeKey,
+            _: &ForeignData,
+        ) -> Override<Option<ForeignData>> {
+            Override::Value(Some(ForeignData {
+                fields: serde_json::from_str(r#"{"label":42}"#).expect("fields"),
+            }))
+        }
+    }
+    let mut editor = Editor::builder(EditorMode::Headless)
+        .node::<Native>()
+        .foreign_node(ForeignNodeType {
+            type_name: "invalid-native-clone".into(),
+            class_name: "InvalidNativeClone".into(),
+            kind: NodeKind::Element,
+            extends: Some("checked-native-clone"),
+            required_state: vec![],
+            hooks: Arc::new(Invalid),
+        })
+        .build()
+        .expect("editor");
+    let mut tx = editor.transaction();
+    let key = tx.create_foreign(
+        "invalid-native-clone",
+        serde_json::from_str(r#"{"label":"before"}"#).expect("fields"),
+    )?;
+    tx.append(NodeKey::ROOT, &[key])?;
+    tx.commit()?;
+    let mut tx = editor.transaction();
+    let operation = ForeignReadOperation::begin()?;
+    let result = tx.set_indent(key, 2);
+    assert!(operation.finish(result).is_err());
+    assert_eq!(
+        tx.foreign_data(key).expect("original fields").fields["label"],
+        "before"
+    );
+    assert_eq!(tx.element_data(key).expect("original base").indent, 0);
+    assert!(ForeignCloneContext::capture().is_none());
+    Ok(())
+}
