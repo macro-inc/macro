@@ -2,7 +2,7 @@
 
 `LexicalClient` keeps the typed lexical-service API and chooses execution at
 startup. Production composition roots read `LEXICAL_ROUTE_MODES` through
-`MacroConfig`; env-only bootstrap tools use `LexicalClient::from_env(...)?.with_sync_from_env().await?`. Reuse
+`MacroConfig`; env-only bootstrap tools use `LexicalClient::from_env(...)?.with_sync_from_env()?`. Reuse
 configured clients (or clones) rather than loading configuration in handlers.
 `LexicalClient::new` explicitly constructs an all-HTTP client for isolated use.
 
@@ -40,10 +40,11 @@ fixture/replayer comparisons are unchanged.
 Local adapters call macro_document_model and macro_document_composers, running
 CPU work in spawn_blocking under the captured route span. Document exports use
 an injected RawDocumentSource, implemented by SyncServiceClient. Composition
-roots call with_sync_from_env().await once, or supply an already resolved source
-through with_document_source. Non-HTTP markdown mode requires SYNC_SERVICE_AUTH_KEY
-and ENVIRONMENT through MacroConfig; remote secret references resolve through the
-existing SecretsManager adapter. SyncServiceUrl provides the typed URL and its
+roots reuse their existing SyncServiceClient through with_document_source, preserving
+their existing credential resolution. Hosts without a sync client call
+with_sync_from_env once. Non-HTTP markdown mode then requires the resolved
+SYNC_SERVICE_AUTH_KEY value through MacroConfig; it is passed opaquely, never
+interpreted as a secret reference. Secret resolution belongs to the host. SyncServiceUrl provides the typed URL and its
 local OVERRIDE_SYNC_SERVICE_URL override. No credentials are loaded in handlers.
 HTTP-only configuration does not require this extra source.
 

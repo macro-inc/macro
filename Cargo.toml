@@ -242,10 +242,6 @@ macro_config = { path = "crates/macro_config" }
 macro_tower_layers = { path = "crates/macro_tower_layers" }
 macro_service_urls = { path = "crates/macro_service_urls" }
 sync_service_client = { path = "crates/sync_service_client" }
-macro_env = { path = "crates/macro_env" }
-remote_env_var = { path = "crates/remote_env_var" }
-macro_aws_config = { path = "crates/macro_aws_config" }
-secretsmanager_client = { path = "crates/secretsmanager_client" }
 macro_document_model = { path = "crates/client/lexical/macro_document_model", default-features = false }
 phf = { version = "0.13.1", features = ["macros"] }
 lexical_html = { path = "crates/client/lexical/lexical_html" }

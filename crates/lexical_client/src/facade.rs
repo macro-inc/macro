@@ -47,23 +47,13 @@ impl LexicalClient {
     }
     /// Configure local document exports once at startup using MacroConfig and typed URLs.
     /// HTTP-only clients do not load or require the sync credential.
-    pub async fn with_sync_from_env(self) -> Result<Self> {
+    pub fn with_sync_from_env(self) -> Result<Self> {
         if self.modes.mode(crate::RouteGroup::Markdown) == crate::RouteMode::Http {
             return Ok(self);
         }
         let config: crate::raw_document::RawDocumentConfig = macro_config::ConfigLoader::load()?;
-        let config = if matches!(config.environment, macro_env::Environment::Local) {
-            config
-        } else {
-            let aws = Box::pin(macro_aws_config::get_macro_aws_config()).await;
-            let secrets = secretsmanager_client::SecretsManager::new(
-                aws_sdk_secretsmanager::Client::new(&aws),
-            );
-            let environment = config.environment;
-            Box::pin(config.resolve_remote_secrets(environment, &secrets)).await?
-        };
         let source = sync_service_client::SyncServiceClient::new(
-            config.sync_service_auth_key.as_ref().to_owned(),
+            config.sync_service_auth_key,
             macro_service_urls::SyncServiceUrl::new()?.to_string(),
         );
         Ok(self.with_document_source(std::sync::Arc::new(source)))

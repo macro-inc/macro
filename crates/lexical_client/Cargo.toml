@@ -28,11 +28,6 @@ chrono = { workspace = true }
 sync_service_client = { workspace = true }
 macro_service_urls = { workspace = true }
 async-trait = { workspace = true }
-macro_env = { workspace = true }
-remote_env_var = { workspace = true }
-macro_aws_config = { workspace = true }
-secretsmanager_client = { workspace = true }
-aws-sdk-secretsmanager = { workspace = true }
 tokio = { workspace = true }
 thiserror = { workspace = true }
 tracing = { workspace = true }
