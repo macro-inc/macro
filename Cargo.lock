@@ -566,6 +566,7 @@ dependencies = [
  "ai_billing",
  "ai_chat",
  "ai_editing_worker_url",
+ "ai_projection_types",
  "ai_projections",
  "ai_toolset",
  "ai_usage",
@@ -675,7 +676,6 @@ dependencies = [
  "model_error_response",
  "model_notifications",
  "model_owner",
- "models_ai_projection",
  "models_dcs",
  "models_permissions",
  "non_empty",
@@ -1409,9 +1409,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "ai_projection_types"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "workspace-hack",
+]
+
+[[package]]
 name = "ai_projections"
 version = "0.1.0"
 dependencies = [
+ "ai_projection_types",
  "anyhow",
  "aws-sdk-sqs",
  "axum",
@@ -1424,7 +1433,6 @@ dependencies = [
  "macro_user_id",
  "model_error_response",
  "model_user",
- "models_ai_projection",
  "rootcause",
  "serde",
  "serde_json",
@@ -14002,14 +14010,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "models_ai_projection"
-version = "0.1.0"
-dependencies = [
- "serde",
- "workspace-hack",
-]
-
-[[package]]
 name = "models_bulk_upload"
 version = "0.1.0"
 dependencies = [
@@ -20166,11 +20166,11 @@ dependencies = [
 name = "sqs_client"
 version = "0.1.0"
 dependencies = [
+ "ai_projection_types",
  "anyhow",
  "aws-sdk-sqs",
  "chrono",
  "futures",
- "models_ai_projection",
  "models_email",
  "opentelemetry",
  "s3_key",

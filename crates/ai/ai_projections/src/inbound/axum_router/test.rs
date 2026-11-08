@@ -102,7 +102,7 @@ impl AiProjectionService for MockService {
 
     async fn materialize(
         &self,
-        _message: models_ai_projection::AiProjectionQueueMessage,
+        _message: ai_projection_types::AiProjectionQueueMessage,
     ) -> Result<(), AiProjectionError> {
         Ok(())
     }

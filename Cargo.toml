@@ -644,6 +644,7 @@ ai_admission = { path = "crates/billing/ai_admission" }
 ai_billing = { path = "crates/billing/ai_billing" }
 ai_chat = { path = "crates/comms/ai_chat", default-features = false }
 ai_editing_worker_url = { path = "crates/platform/service_urls/ai_editing_worker_url" }
+ai_projection_types = { path = "crates/types/ai_projection_types" }
 ai_projections = { path = "crates/ai/ai_projections" }
 ai_toolset = { path = "crates/ai/ai_toolset" }
 ai_usage = { path = "crates/billing/ai_usage" }
@@ -852,7 +853,6 @@ model_file_type = { path = "crates/types/model_file_type" }
 model_notifications = { path = "crates/notifications/model_notifications" }
 model_owner = { path = "crates/types/model_owner" }
 model_user = { path = "crates/types/model_user" }
-models_ai_projection = { path = "crates/types/models_ai_projection" }
 models_bulk_upload = { path = "crates/types/models_bulk_upload" }
 models_databases = { path = "crates/types/models_databases" }
 models_dcs = { path = "crates/types/models_dcs" }

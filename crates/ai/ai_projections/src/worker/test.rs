@@ -1,5 +1,5 @@
+use ai_projection_types::AiProjectionQueueMessage;
 use aws_sdk_sqs::types::Message;
-use models_ai_projection::AiProjectionQueueMessage;
 
 use super::parse_message;
 

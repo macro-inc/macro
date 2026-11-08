@@ -34,7 +34,7 @@ regenerated on demand or when cold.
 
 ## Boundaries
 
-- Depends on: `models_ai_projection`, and (behind `agent`) `agent_tools`,
+- Depends on: `ai_projection_types`, and (behind `agent`) `agent_tools`,
   `ai_toolset`, `agent`, `ai_usage`.
 - Used by: `document_cognition_service` (inbound/outbound/agent) and
   `ai_projections_refresh_handler` (the scheduled refresh lambda).

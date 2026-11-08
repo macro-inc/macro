@@ -5,7 +5,7 @@ publish = false
 version = "0.1.0"
 
 [features]
-ai_projection = ["dep:models_ai_projection"]
+ai_projection = ["dep:ai_projection_types"]
 chat = []
 convert = ["shared_types"]
 default = [
@@ -39,7 +39,7 @@ anyhow = { workspace = true }
 aws-sdk-sqs = { workspace = true }
 chrono = { workspace = true, optional = true }
 shared_types = { workspace = true, optional = true }
-models_ai_projection = { workspace = true, optional = true }
+ai_projection_types = { workspace = true, optional = true }
 s3_key = { workspace = true }
 models_email = { workspace = true, optional = true }
 serde = { workspace = true }

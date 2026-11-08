@@ -27,7 +27,7 @@ path = "src/scheduling_openapi.rs"
 [dependencies]
 agent_correlation = { workspace = true, features = ["http", "postgres"] }
 universal_input = { workspace = true }
-models_ai_projection = { workspace = true }
+ai_projection_types = { workspace = true }
 activity = { workspace = true, features = ["outbound", "schema"] }
 agent_loop = { workspace = true, features = ["debug-messages"] }
 agent-client-protocol = { workspace = true }

@@ -1,6 +1,6 @@
 //! SQS-backed implementation of the [`AiProjectionQueue`] outbound port.
 
-use models_ai_projection::AiProjectionQueueMessage;
+use ai_projection_types::AiProjectionQueueMessage;
 use sqs_client::SQS;
 
 use crate::domain::{ai_projection_queue::AiProjectionQueue, model::AiProjectionError};

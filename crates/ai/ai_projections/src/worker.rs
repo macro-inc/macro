@@ -4,8 +4,8 @@
 #[cfg(test)]
 mod test;
 
+use ai_projection_types::AiProjectionQueueMessage;
 use anyhow::Context;
-use models_ai_projection::AiProjectionQueueMessage;
 use sqs_worker::SQSWorker;
 
 use crate::domain::ai_projection_service::AiProjectionService;
