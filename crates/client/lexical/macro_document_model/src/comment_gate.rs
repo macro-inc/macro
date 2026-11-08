@@ -8,7 +8,9 @@ fn without_identity(node: &mut Value) {
         for name in ["id", "peerId", "sharedPeerIds", "local"] {
             state.remove(name);
         }
-        if state.is_empty() && let Some(object) = node.as_object_mut() {
+        if state.is_empty()
+            && let Some(object) = node.as_object_mut()
+        {
             object.remove("$");
         }
     }

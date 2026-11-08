@@ -12,8 +12,8 @@ import {
 } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { excludePrivateFixtures, privateFixtureNames } from './privacy';
 import { recordedFiles, removeRecordedFiles } from './files';
+import { excludePrivateFixtures, privateFixtureNames } from './privacy';
 
 const pkg = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const root = path.resolve(pkg, '../..');
