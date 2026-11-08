@@ -81,11 +81,11 @@ Pulumi stacks; they do not host extra agent processes.
   token carries the routine id, which the events its writes produce keep, so
   they never start routines.
   Routine suggestions (`src/scheduling/routine_suggestions.rs`) read the
-  newest mail through email_service's internal recent-messages route and the
-  person's inboxes from MacroDB, on the free tier's model metered as the
-  non-billable `RoutineSuggestions`, gated on `enable-routine-suggestions`.
-  `scheduling.rs` runs their sweep every 10 minutes on the worker tracker;
-  reads never generate.
+  newest 100 messages (labels, 500-character snippets) through
+  email_service's internal recent-messages route and the person's connected
+  Pipedream apps; their hidden sessions run on the free tier's model, gated
+  on `enable-routine-suggestions`. `scheduling.rs` sweeps suggestion
+  sessions a stopped process left open every minute.
   A routine's code steps are checked together, one file each; the owner's
   time zone for `run.timezone` comes from their primary calendar
   (`CalendarTimeZones`).

@@ -72,27 +72,32 @@ each run.
   whether a check passed and kept a draft's answer. `DraftContext` still
   accepts and ignores the `workspace` older web clients send.
 - `src/domain/suggestions.rs` + `src/inbound/suggestion_router.rs`: routine
-  suggestions, `GET /scheduled-actions/suggestions` (only what is stored),
-  `POST .../suggestions/refresh` (generate now, in the background, as
-  onboarding does) and `.../suggestions/{id}/dismiss`. Reading never
-  generates: it records `seen_at`, and the host's sweep
-  (`RoutineSuggestionService::sweep`, every 10 minutes in the harness) looks
-  at people who read them in the last `ACTIVE_FOR`, each at most every
-  `CHECK_EVERY` (`take_checks`, `SKIP LOCKED` across replicas), and calls
-  `GenerateSuggestions::generate_for` for the flagged ones that are due:
-  none yet, a week old, inboxes, tools or routines changed (a fingerprint),
-  or 15 minutes after a failure. `generate_for` is the whole generation, so
-  another trigger (such as a routine) needs only to call it. A generation
-  reads the person's newest mail from the provider and their workspace (a
-  fixed dry-run code step, `suggestions/signals.ts`) and has AI
-  (`SuggestionModel`, the harness's `scheduling/routine_suggestions.rs`) pick
-  catalog routines with knob values, or describe a request the drafter
-  writes on accept. `suggestions/decode.rs` is the trust boundary: only
-  offered catalog keys, bounded one-line knob values that fit their knob,
-  and one-line requests survive; `safeDefault` comes from the catalog, never
-  from AI. One generation claims the person's row, so a late result from an
-  older one is dropped. `pg_suggestion_repo.rs` keeps dismissed rows so "not
-  interested" outlives each generation.
+  suggestions, the Draft pattern. `POST /scheduled-actions/suggestions/generate`
+  (onboarding calls it once the inbox connects) starts the person's one
+  generation ever: hidden background sessions of the in-process Macro agent,
+  as the person, at most three at once, each for some surfaces
+  (`SuggestionLayout`). Each brief (`suggestions/prompt.rs`) holds the
+  routines guide, the catalog for its surfaces, what was dismissed, and the
+  newest 100 messages and connected apps inside `<untrusted>` tags (angle
+  brackets in the data are swapped so it can't close them). A session hands
+  back each suggestion through `macro.routines.suggest`
+  (`POST /scheduled-actions/suggestions`), which only the person's own open
+  suggestion session may call (`routine_suggestion_session`, found from the
+  request's code-mode invocation like a draft's check; anything else is 403
+  `NotSuggesting`). `suggestions/decode.rs` is the trust boundary: a catalog
+  key with knob values that fit their knob, or a drafted routine that passes
+  saving's checks, kept switched off and never acting as the user; a one-line
+  reason naming no address; the session's surfaces. A session that keeps
+  nothing is retried once; then Macro's templates fill in. `GET
+  /scheduled-actions/suggestions?surface=` never generates: per surface,
+  AI's suggestions best first, then catalog routines marked `suggest` as
+  Macro's templates (stable ids, `template_id`) to `PER_SURFACE`, skipping
+  dismissed (permanent, `.../{id}/dismiss` for either kind) and saved ones
+  (`scheduled_action.suggestion_id`). `onByDefault` marks at most two safe
+  catalog picks AI rated likely kept. The sweep deletes sessions a stopped
+  process left open. Spans: `routine.suggestions.generate`, `.session`,
+  `.suggest`; log events `routine_suggestions.generated`, `.suggested`,
+  `.dismissed`, `.saved`.
 - `src/domain/code_upgrade.rs`: before a run uses code checked against an
   older version (SDK or `StepContext`), it is checked again, and rewritten by
   a model only if that fails (once per routine and version,
