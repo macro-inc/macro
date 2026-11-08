@@ -108,6 +108,8 @@ threads, tab changes, and reopening; check composer geometry in the browser, not
 Set `CALL_FULL_HOST=true` for the real CallOverlay host, Work gating against
 `origin/main`, and desktop toggle geometry; only call media and Work transport
 boundaries are substituted. No hosted account data is accessed.
+The full host also covers 3–6-person pinning geometry, mounted tracks, solo self-view
+placement, and the real floating-player/popover controls with synthetic media.
 Verify call-panel changes in the full call host and browser-test harnesses with
 screenshots; list signed-in call checks separately instead of blocking on authentication.
 Initialize browser fixtures with the app's `data-touch-device` root attribute and

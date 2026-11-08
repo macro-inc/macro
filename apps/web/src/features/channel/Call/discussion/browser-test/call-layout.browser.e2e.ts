@@ -144,3 +144,42 @@ test('call self view floats only in Auto and fills the stage when alone', async 
     }
   }
 });
+
+test('pinning matrix hides and restores participants without detaching tracks', async ({
+  page,
+}, testInfo) => {
+  test.skip(
+    process.env.CALL_FULL_HOST !== 'true' || testInfo.project.name === 'phone'
+  );
+  for (const layout of ['auto', 'speaker', 'sidebar']) {
+    await page.goto(
+      `/src/features/channel/Call/discussion/browser-test/call-overlay.html?count=3&layout=${layout}&media=on&share=remote&view=messages&work=off`
+    );
+    const camera = page
+      .locator('[data-call-participant="macro|member@example.com"]')
+      .last();
+    await expect(camera).toBeVisible();
+    const tracks = await page
+      .locator('canvas[data-fixture-track]')
+      .elementHandles();
+    await page.getByRole('button', { name: 'More', exact: true }).click();
+    const toggle = page.getByRole('menuitemcheckbox', {
+      name: 'Hide participants',
+      exact: true,
+    });
+    await toggle.click();
+    await expect(camera).not.toBeVisible();
+    for (const track of tracks)
+      expect(await track.evaluate((element) => element.isConnected)).toBe(true);
+    await toggle.click();
+    await expect(camera).toBeVisible();
+    await page.keyboard.press('Escape');
+    const edge = await page
+      .getByRole('button', { name: 'Hide participants', exact: true })
+      .boundingBox();
+    const strip = await camera.boundingBox();
+    if (layout === 'sidebar')
+      expect(edge!.x + edge!.width).toBeLessThanOrEqual(strip!.x);
+    else expect(edge!.y + edge!.height).toBeLessThanOrEqual(strip!.y);
+  }
+});

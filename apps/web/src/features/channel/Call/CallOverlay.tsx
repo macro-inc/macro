@@ -662,6 +662,13 @@ export function CallOverlay(props: {
                               : t('calls.hideParticipants'),
                             placement: layout() === 'sidebar' ? 'left' : 'top',
                           }}
+                          style={
+                            hideParticipants()
+                              ? undefined
+                              : sideStrip()
+                                ? { right: 'calc(9rem + 1rem)' }
+                                : { bottom: 'calc(6rem + 1rem)' }
+                          }
                           class={cn(
                             'absolute z-20 rounded-full border border-edge-muted bg-surface/70 text-ink opacity-0 pointer-events-none group-hover/share:opacity-100 group-hover/share:pointer-events-auto group-focus-within/share:opacity-100 group-focus-within/share:pointer-events-auto focus-visible:opacity-100 focus-visible:pointer-events-auto',
                             layout() === 'sidebar'

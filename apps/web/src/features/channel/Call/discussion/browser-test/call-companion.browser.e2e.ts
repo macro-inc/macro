@@ -145,9 +145,13 @@ test('companion controls open reactions from the unchanged call popover header',
     header
   );
   const bounds = await popup.boundingBox();
+  const row = await controls
+    .getByRole('button', { name: 'Unmute microphone' })
+    .boundingBox();
   for (const button of await controls.locator('button').all()) {
     const box = await button.boundingBox();
     expect(box!.x).toBeGreaterThanOrEqual(bounds!.x);
     expect(box!.x + box!.width).toBeLessThanOrEqual(bounds!.x + bounds!.width);
+    expect(box!.y).toBe(row!.y);
   }
 });

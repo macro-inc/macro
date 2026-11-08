@@ -133,7 +133,7 @@ export function CallControlBar(props: {
           !props.unframed && (isMobile() ? 'island' : 'menu-surface'),
           'mx-auto flex w-fit max-w-full items-center justify-center text-ink',
           props.unframed
-            ? 'flex-wrap gap-2 p-1.5'
+            ? 'flex-wrap gap-2 py-2'
             : cn('gap-2 rounded-full', isMobile() ? 'p-1.5' : 'p-2')
         )}
       >

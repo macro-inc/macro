@@ -135,7 +135,7 @@ When it ends the line says how long it lasted. The join card remains above the
 composer while the viewer is outside the call, independent of scroll position.
 
 In the call, the panel opens on desktop and tablet, closed on phones. Its first tab is **Chat**.
-On phones, Chat and Participants fill the shared sheet's tab row; Participants keeps the attendee count. The sheet opens at 64% height. It shows the channel up to the call's row, opened on the call-specific chat illustration at the default 192px size and “Start the conversation.” when the thread is empty
+On phones, Chat and Participants fill the shared sheet's tab row; Participants keeps the attendee count. The sheet opens at 65% height. It shows the channel up to the call's row, opened on the call-specific chat illustration at the default 192px size and “Start the conversation.” when the thread is empty
 and at the newest message otherwise. The composer shares the messages' horizontal inset
 in both docked and overlay panels while keeping its bottom spacing. The composer opens as a plain message input bound to the call discussion. Reply
 mode appears only after choosing Reply on a message; closing or sending that reply
@@ -481,7 +481,7 @@ for 60 seconds, the call ends automatically.
 
 ### Pinning call tiles on desktop
 
-Hover or keyboard-focus a participant, your own view, or a shared screen to reveal Pin. Clicking the tile also pins it. The pinned tile takes the stage, with everyone else and active shares in the strip; your own view stays anchored unless pinned. A share normally occupies the stage when nobody is pinned. Hover the pinned tile for Unpin, or click it again. Switching directly to another tile replaces the pin. Pinning uses Speaker placement unless Sidebar is selected and never changes the saved Layout choice. If the pinned person leaves or the shared screen ends, the pin clears and does not return on reconnection. Pin actions record `call.pin` interactions. On phones, hold a tile for the anchored Pin/Unpin menu; plain taps do not pin. The selected tile lifts above a dimmed stage. A pinned person fills the top, with everyone else including you in one row below. The Unpin pill stays visible on phones. Moving the touch cancels the hold; Escape or touching outside dismisses the menu.
+Hover or keyboard-focus a participant, your own view, or a shared screen to reveal Pin. Clicking the tile also pins it. The pinned tile takes the stage, with everyone else, including your own view, and active shares in the strip. A share normally occupies the stage when nobody is pinned. Hover the pinned tile for Unpin, or click it again. Switching directly to another tile replaces the pin. Pinning uses Speaker placement unless Sidebar is selected and never changes the saved Layout choice. If the pinned person leaves or the shared screen ends, the pin clears and does not return on reconnection. Pin actions record `call.pin` interactions. On phones, hold a tile for the anchored Pin/Unpin menu; plain taps do not pin. The selected tile lifts above a dimmed stage. A pinned person fills the top, with everyone else including you in one row below. The Unpin pill stays visible on phones. Moving the touch cancels the hold; Escape or touching outside dismisses the menu.
 
 On supported desktop browsers, hover or focus a remote person's tile for Volume,
 beside Pin. The slider changes only that person's microphone playback for you,
