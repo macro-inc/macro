@@ -118,9 +118,20 @@ impl Context {
 
     /// Release a state and its host-owned handles after that state is collected.
     /// A host must retain a state while any of its JS handles remain reachable.
+    /// Defer collection while an update borrows that committed or pending version.
     pub fn release_version(&mut self, version: u64) -> Result<()> {
         if self.scope != Scope::Idle && self.replay.version == version {
             return Err(fail("cannot release the active API version"));
+        }
+        if self
+            .replay
+            .record_owner
+            .as_ref()
+            .is_some_and(|(owner, _)| *owner == version)
+        {
+            return Err(fail(
+                "cannot release the committed version borrowed by an API update",
+            ));
         }
         self.replay.states.remove(&version);
         self.replay

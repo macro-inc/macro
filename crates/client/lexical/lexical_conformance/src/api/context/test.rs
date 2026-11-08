@@ -74,7 +74,12 @@ fn encoded_handles_survive_suspension_and_keep_committed_fields() -> Result<()> 
     );
     assert_eq!(host.read_field(&mut tx, recaptured_id, "__text")?, "a");
     assert!(host.release_version(2).is_err());
+    assert!(host.release_version(1).is_err());
+    assert_eq!(host.read_field(&mut tx, recaptured_id, "__text")?, "a");
+    drop(tx);
+    host.discard_update()?;
     host.release_version(1)?;
+    let mut tx = editor.transaction();
     assert!(host.read_field(&mut tx, recaptured_id, "__text").is_err());
     Ok(())
 }
