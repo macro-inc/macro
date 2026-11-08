@@ -39,6 +39,8 @@ pub struct Sim {
     peers: BTreeSet<u64>,
     presence: Option<BTreeMap<ClientName, BTreeMap<String, serde_json::Value>>>,
     presence_clock_ready_at: u64,
+    presence_retired_at: Option<u64>,
+    presence_skew_bounds: (i64, i64),
     scheduled_generation: BTreeMap<DocIx, u64>,
     ack_callbacks: BTreeMap<(DocIx, String), std::collections::VecDeque<u64>>,
     prefixes: BTreeMap<(ProfileName, String, doc_sync_core::WalOwner), doc_sync_core::WalSeq>,
@@ -68,6 +70,8 @@ impl Sim {
             peers: BTreeSet::new(),
             presence: None,
             presence_clock_ready_at: 0,
+            presence_retired_at: None,
+            presence_skew_bounds: (0, 0),
             scheduled_generation: BTreeMap::new(),
             ack_callbacks: BTreeMap::new(),
             prefixes: BTreeMap::new(),
@@ -163,6 +167,22 @@ impl Sim {
         }
     }
     fn emit(&mut self, fact: Fact) {
+        match &fact {
+            Fact::ClockSkew { wall_offset_ms, .. }
+                if wall_offset_ms.unsigned_abs()
+                    <= self.config.session.presence_timeout.0.unsigned_abs() / 2 =>
+            {
+                self.presence_skew_bounds.0 = self.presence_skew_bounds.0.min(*wall_offset_ms);
+                self.presence_skew_bounds.1 = self.presence_skew_bounds.1.max(*wall_offset_ms);
+            }
+            Fact::Crashed { .. } | Fact::Closed { .. } => {
+                self.presence_retired_at = Some(self.clock.now);
+            }
+            Fact::PeerAssigned { purpose, .. } if purpose == "reset" => {
+                self.presence_retired_at = Some(self.clock.now);
+            }
+            _ => {}
+        }
         self.events.push(Event {
             at: self.clock.now(),
             fact,

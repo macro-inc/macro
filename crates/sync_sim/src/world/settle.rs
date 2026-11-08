@@ -74,32 +74,6 @@ impl Sim {
             self.input(name, *session, SyncInput::Host(HostSignal::Online))?;
             self.input(name, *session, SyncInput::Host(HostSignal::Visible))?;
         }
-        // A bounded backward clock adjustment must catch its last possible
-        // published timestamp before the explicit healing resend. Keep offsets
-        // unchanged and use the ordinary executor; never repair LWW wire bytes.
-        self.advance(
-            self.presence_clock_ready_at
-                .min(deadline)
-                .saturating_sub(self.clock.now),
-        );
-        for (name, session, selection) in live {
-            self.input(
-                &name,
-                session,
-                SyncInput::SetPresence(selection.map(loro::LoroValue::from)),
-            )?;
-        }
-        // The heal's selection updates coalesce and traverse the calm network before
-        // the first presence snapshot. The heartbeat hold ignores later refreshes.
-        let presence_batch = self
-            .config
-            .session
-            .wal
-            .coalesce
-            .0
-            .saturating_add(self.net.profile.latency.1.0.saturating_mul(2))
-            .max(100);
-        self.advance(presence_batch.min(deadline.saturating_sub(self.clock.now)));
         let heartbeat = self.config.session.heartbeat.interval.0.max(1);
         let mut presence_barriers = [Direction::ToServer, Direction::ToClient].into_iter();
         let mut presence_lifetimes = None;
@@ -110,13 +84,29 @@ impl Sim {
                 self.clients
                     .iter()
                     .filter(|(_, client)| client.alive)
-                    .map(|(name, client)| (name.clone(), client.session, client.connection_id()))
+                    .map(|(name, client)| {
+                        (
+                            name.clone(),
+                            client.session,
+                            client.connection_id(),
+                            client.doc.loro.peer_id(),
+                            client.presence_key.clone(),
+                        )
+                    })
                     .collect::<Vec<_>>(),
                 self.presence_route_epochs(),
             );
-            if self.presence.is_none() && presence_lifetimes.as_ref() != Some(&lifetimes) {
+            if self.presence.is_none()
+                && (presence_lifetimes.as_ref() != Some(&lifetimes)
+                    || self.clock.now < self.presence_expiry_ready_at())
+            {
                 presence_lifetimes = Some(lifetimes);
                 presence_barriers = [Direction::ToServer, Direction::ToClient].into_iter();
+                self.resend_healing_presence(deadline)?;
+                if self.clock.now == deadline {
+                    break;
+                }
+                continue;
             }
             // Core/storage/control work drains independently of periodic traffic.
             let idle = !self.clock.has_non_periodic()
@@ -199,6 +189,55 @@ impl Sim {
             busy,
             queued_non_periodic: self.clock.has_non_periodic(),
         });
+        Ok(())
+    }
+    fn presence_expiry_ready_at(&self) -> u64 {
+        self.presence_retired_at
+            .map(|at| {
+                at.saturating_add(self.config.session.presence_timeout.0.unsigned_abs())
+                    .saturating_add(
+                        self.presence_skew_bounds
+                            .1
+                            .abs_diff(self.presence_skew_bounds.0),
+                    )
+                    .saturating_add(self.net.max_latency)
+                    .saturating_add(1)
+            })
+            .unwrap_or(0)
+    }
+
+    fn resend_healing_presence(&mut self, deadline: u64) -> Result<(), Failure> {
+        // Old keys may legitimately survive their source until TTL. Wait the
+        // fixed observed retirement/skew/latency budget before the first healing
+        // publication, without consulting expected views or changing wire clocks.
+        let ready = self
+            .presence_expiry_ready_at()
+            .max(self.presence_clock_ready_at);
+        self.advance(ready.min(deadline).saturating_sub(self.clock.now));
+        let live = self
+            .clients
+            .iter()
+            .filter(|(_, client)| client.alive)
+            .map(|(name, client)| (name.clone(), client.session, client.selection))
+            .collect::<Vec<_>>();
+        for (name, session, selection) in live {
+            self.input(
+                &name,
+                session,
+                SyncInput::SetPresence(selection.map(loro::LoroValue::from)),
+            )?;
+        }
+        // A replaced peer needs its own explicit selection publication even if
+        // the session and connection survive, or periodic refresh is disabled.
+        let batch = self
+            .config
+            .session
+            .wal
+            .coalesce
+            .0
+            .saturating_add(self.net.profile.latency.1.0.saturating_mul(2))
+            .max(100);
+        self.advance(batch.min(deadline.saturating_sub(self.clock.now)));
         Ok(())
     }
 }

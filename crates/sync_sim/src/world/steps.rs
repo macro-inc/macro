@@ -241,12 +241,12 @@ impl Sim {
                 client,
                 wall_offset_ms,
             } => {
-                if let Some(client) = self.clients.get_mut(&client) {
+                if let Some(peer) = self.clients.get_mut(&client) {
                     let bounded = self.config.session.presence_timeout.0.unsigned_abs() / 2;
-                    if client.skew.unsigned_abs() <= bounded
+                    if peer.skew.unsigned_abs() <= bounded
                         && wall_offset_ms.unsigned_abs() <= bounded
                     {
-                        let backwards = client.skew.saturating_sub(wall_offset_ms);
+                        let backwards = peer.skew.saturating_sub(wall_offset_ms);
                         if backwards > 0 {
                             self.presence_clock_ready_at = self.presence_clock_ready_at.max(
                                 self.clock
@@ -256,7 +256,11 @@ impl Sim {
                             );
                         }
                     }
-                    client.skew = wall_offset_ms;
+                    peer.skew = wall_offset_ms;
+                    self.emit(Fact::ClockSkew {
+                        client,
+                        wall_offset_ms,
+                    });
                 }
             }
             Step::SignIn { profile, user } => {
