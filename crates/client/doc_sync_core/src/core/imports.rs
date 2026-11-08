@@ -333,6 +333,43 @@ impl SyncCore {
         replayed
     }
 
+    pub(super) fn resume_server_backed_gaps(&mut self, doc: &impl SyncDoc, out: &mut SyncOutput) {
+        if self.phase != Phase::Running || self.reset.is_some() || self.rebase_due.is_some() {
+            return;
+        }
+        let local = doc.oplog_vv();
+        let mut resumed = Vec::new();
+        for entry in &mut self.wal.entries {
+            if entry.park != Some(ParkReason::Gap) {
+                continue;
+            }
+            let Ok(meta) = loro::LoroDoc::decode_import_blob_meta(&entry.bytes, true) else {
+                continue;
+            };
+            // W-2's permanent Gap requires parents that no store holds. A
+            // successful server import/ACK can disprove that early inference.
+            // Require both actual local row coverage and server-held parents;
+            // local history alone is never server delivery proof for this row.
+            if local.includes_vv(&meta.partial_end_vv)
+                && meta
+                    .start_frontiers
+                    .iter()
+                    .all(|id| self.server_vv.get(&id.peer).copied().unwrap_or(0) > id.counter)
+            {
+                entry.park = None;
+                self.rows_after_gap.remove(&entry.seq);
+                resumed.push(entry.seq);
+            }
+        }
+        for seq in resumed {
+            self.event(
+                "wal.gap.resolved",
+                vec![("seq", AttrValue::U64(seq.0))],
+                out,
+            );
+        }
+    }
+
     pub(super) fn import(
         &mut self,
         bytes: &[u8],

@@ -8,6 +8,7 @@ impl SyncCore {
             self.resume_reset(now, doc, out);
         }
         self.replay_assistance(now, doc, out);
+        self.resume_server_backed_gaps(doc, out);
         self.push_rows(now, out);
         self.push_assist(now, out);
         self.advance_reset(now, out);

@@ -92,3 +92,8 @@ replacement keeps the original document and its pending-history status.
 Record server evidence from checksum-valid bytes of actually ACKed own-push rows;
 the sender receives no broadcast echo. Never infer that proof from local document VV
 or unpushed rows, so periodic foreign scans cannot resend already confirmed history.
+
+Correct premature Gap parking only with validated retained-row coverage in the local
+oplog and server evidence for every required parent frontier, while Running outside
+reset/rebase. This disproves the earlier missing-store inference; it does not prove
+row delivery. Genuinely missing parents stay parked until TTL and never get pushed.

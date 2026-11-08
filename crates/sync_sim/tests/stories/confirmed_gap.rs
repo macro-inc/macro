@@ -241,18 +241,11 @@ fn confirmed_foreign_rows_above_a_parked_gap_stay_quiet() {
         panic!("{failures:#?}");
     }
     outcome.check_replay().unwrap();
-    let mut no_proof = outcome.clone();
-    for client in no_proof.finals.clients.values_mut() {
-        client.delivered.clear();
-    }
-    assert!(invariants::all_wals_drained(&no_proof).is_err());
-    let mut missing = outcome.clone();
-    missing
-        .finals
-        .servers
-        .get_mut(&DocIx(0))
-        .unwrap()
-        .persisted_vv
-        .clear();
-    assert!(invariants::all_wals_drained(&missing).is_err());
+    assert!(
+        outcome
+            .finals
+            .profiles
+            .values()
+            .all(|store| store.entries.values().all(|row| row.delivered))
+    );
 }

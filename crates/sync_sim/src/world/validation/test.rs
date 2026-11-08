@@ -325,3 +325,103 @@ fn legacy_adoption_never_exempts_another_documents_prefix_regression() {
     assert_eq!(sim.failures[0].invariant, "durable_prefix_monotone");
     assert!(sim.failures[0].detail.contains(second.as_str()));
 }
+
+#[test]
+fn actual_delivery_above_a_true_gap_requires_both_core_and_cold_proof() {
+    use doc_sync_core::{UnixMillis, WalRecord};
+    let mut sim = Sim::new(SimConfig::calm(239));
+    let donor = sim
+        .register_external(OpenSpec::form("donor", "old"))
+        .unwrap();
+    let other = sim
+        .register_external(OpenSpec::form("independent", "other"))
+        .unwrap();
+    let history = loro::LoroDoc::new();
+    history.set_peer_id(donor.peer).unwrap();
+    history.get_map("fields").insert("1", 11).unwrap();
+    history.commit();
+    let before = history.oplog_vv();
+    history.get_map("fields").insert("1", 12).unwrap();
+    history.commit();
+    let tail = history.export(loro::ExportMode::updates(&before)).unwrap();
+    sim.external_versions(
+        &ClientName("donor".into()),
+        crate::document::vv(&history.oplog_vv()),
+    )
+    .unwrap();
+    let independent = loro::LoroDoc::new();
+    independent.set_peer_id(other.peer).unwrap();
+    independent.get_map("fields").insert("2", 22).unwrap();
+    independent.commit();
+    sim.external_versions(
+        &ClientName("independent".into()),
+        crate::document::vv(&independent.oplog_vv()),
+    )
+    .unwrap();
+    let rows = vec![
+        WalRecord {
+            seq: WalSeq(2),
+            created_at: UnixMillis(sim.clock.wall(0)),
+            user: UserKey("user-0".into()),
+            foreign: false,
+            quarantined: false,
+            bytes: tail,
+        },
+        WalRecord {
+            seq: WalSeq(3),
+            created_at: UnixMillis(sim.clock.wall(0)),
+            user: UserKey("user-0".into()),
+            foreign: false,
+            quarantined: false,
+            bytes: independent.export(loro::ExportMode::all_updates()).unwrap(),
+        },
+    ];
+    let key: doc_sync_core::SyncDocId = "00000000-0000-7000-8000-000000000001".parse().unwrap();
+    let mut store = SimStorage::new(StorageProfile::fast());
+    for record in rows {
+        store.durable.entries.insert(
+            (key.clone(), WalOwner::Legacy, record.seq),
+            StoredWalRecord {
+                record,
+                delivered: false,
+            },
+        );
+    }
+    sim.profiles.insert(ProfileName("browser".into()), store);
+    let outcome = sim.run(&[
+        Step::Open(OpenSpec::form("recovery", "browser")),
+        Step::Run(Millis(2_000)),
+    ]);
+    assert!(
+        outcome.per_step_failures.is_empty(),
+        "{:?}",
+        outcome.per_step_failures
+    );
+    let recovered = &outcome.finals.clients[&ClientName("recovery".into())];
+    assert!(recovered.parked.iter().any(|(_, reason)| reason == "Gap"));
+    assert!(!recovered.delivered.is_empty());
+    assert_eq!(
+        outcome.finals.servers[&DocIx(0)].deep_value["fields"]["2"],
+        22
+    );
+    invariants::all_wals_drained(&outcome).unwrap();
+    invariants::no_acked_edit_lost(&outcome).unwrap();
+    let mut no_proof = outcome.clone();
+    no_proof
+        .finals
+        .clients
+        .get_mut(&ClientName("recovery".into()))
+        .unwrap()
+        .delivered
+        .clear();
+    assert!(invariants::all_wals_drained(&no_proof).is_err());
+    let mut no_cold_proof = outcome.clone();
+    no_cold_proof
+        .finals
+        .servers
+        .get_mut(&DocIx(0))
+        .unwrap()
+        .persisted_vv
+        .clear();
+    assert!(invariants::all_wals_drained(&no_cold_proof).is_err());
+}
