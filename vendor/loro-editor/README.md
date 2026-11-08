@@ -8,7 +8,7 @@ Registry archive SHA-256: `7e533c1688430aa4fcdd933f00861e331c169a4158ee6d27d054e
 The MIT license is retained from that exact upstream revision. Upstream agent
 guidance is retained as UPSTREAM-AGENTS.md. Optional author metadata, registry
 cache markers, standalone lockfiles and the redundant unnormalized manifest are
-omitted. The exact upstream dev-utils helper is restored as a development-only
+omitted. Trailing whitespace is trimmed in Encoding.md. The exact upstream dev-utils helper is restored as a development-only
 dependency for standalone tracker tests; it is absent from production dependency trees.
 
 Local runtime change: assign each dense text-tracker update range through a
