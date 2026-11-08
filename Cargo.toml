@@ -4,11 +4,11 @@ resolver = "2"
 exclude = ["vendor"]
 
 members = [
-  "crates/client/document_session",
-  "crates/client/document_session_wasm",
   "crates/macro_document_composers",
   "crates/client/mention_date",
   "crates/client/lexical/macro_document_model",
+  "crates/client/document_session",
+  "crates/client/document_session_wasm",
   "crates/client/lexical/lexical_loro",
   "crates/client/lexical/lexical_model",
   "crates/client/lexical/lexical_html",
@@ -240,7 +240,6 @@ ignored = ["quick-xml", "rand_chacha"]
 [workspace.dependencies]
 lexical_html = { path = "crates/client/lexical/lexical_html" }
 lexical_markdown = { path = "crates/client/lexical/lexical_markdown" }
-document_session = { path = "crates/client/document_session" }
 lexical_loro = { path = "crates/client/lexical/lexical_loro" }
 macro_document_composers = { path = "crates/macro_document_composers" }
 trigger_context = { path = "crates/trigger_context" }
@@ -250,6 +249,7 @@ macro_tower_layers = { path = "crates/macro_tower_layers" }
 macro_service_urls = { path = "crates/macro_service_urls" }
 sync_service_client = { path = "crates/sync_service_client" }
 macro_document_model = { path = "crates/client/lexical/macro_document_model", default-features = false }
+document_session = { path = "crates/client/document_session" }
 phf = { version = "0.13.1", features = ["macros"] }
 lexical_model = { path = "crates/client/lexical/lexical_model" }
 lexical_rich_nodes = { path = "crates/client/lexical/lexical_rich_nodes" }
@@ -403,6 +403,8 @@ log = "0.4.26"
 logos = "0.16"
 lol_html = "2.4.0"
 loro = "=1.17.1"
+# Preserve the existing server encoder while editor/session clients use1.17.1.
+loro_server = { package = "loro", path = "vendor/loro-server/loro" }
 loro-internal = "=1.17.1"
 lru = "0.16"
 md-5 = "0.10.6"
@@ -438,6 +440,7 @@ prost = "0.14"
 prost-build = "0.14"
 protox = "0.10"
 quote = "1"
+syn = { version = "2", features = ["full", "visit"] }
 rand = "0.9.0"
 xxhash-rust = { version = "0.8.15", features = ["xxh3"] }
 ratatui = "0.29"
@@ -649,6 +652,32 @@ codegen-units = 1
 inherits = "release"
 lto = "fat"
 codegen-units = 1
+
+# S8 T0 retains exact frame bytes and canonical port evidence across hundreds
+# of worlds. Optimize the simulation and JSON tree traversal in tests only;
+# production profiles and assertion coverage stay unchanged.
+[profile.test.package.sync_sim]
+opt-level = 2
+
+[profile.test.package.serde_json]
+opt-level = 2
+
+[profile.test.package.sync_server_sim]
+opt-level = 2
+
+[profile.test.package.sync_server_core]
+opt-level = 2
+
+[profile.test.package.doc_sync_core]
+opt-level = 2
+
+# Native replay repeatedly validates large snapshot checksums and hashes exact
+# trace bytes. Keep the measured byte-hashing hot path optimized in tests while
+# preserving debug/overflow checks and every production profile.
+[profile.test.package.xxhash-rust]
+opt-level = 2
+debug-assertions = true
+overflow-checks = true
 
 # The complete session includes native Loro; keep its single browser artifact small.
 [profile.document-session-wasm]

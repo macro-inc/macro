@@ -13,10 +13,14 @@ use rand_chacha::ChaCha8Rng;
 use std::collections::{BTreeMap, BTreeSet};
 use sync_server_sim::transcript::ServerInput;
 
+mod editor;
+pub mod external;
 mod inputs;
 mod outputs;
+mod router;
+mod settle;
 mod steps;
-mod validation;
+pub(crate) mod validation;
 
 /// A whole single-threaded world driven only by seed and literal script.
 pub struct Sim {
@@ -27,17 +31,24 @@ pub struct Sim {
     servers: BTreeMap<DocIx, SimServer>,
     profiles: BTreeMap<ProfileName, SimStorage>,
     clients: BTreeMap<ClientName, SimClient>,
+    external: BTreeMap<ClientName, external::ExternalPeer>,
+    routers: BTreeMap<ProfileName, router::Host>,
     events: Vec<Event>,
     server_ports: Vec<ServerPort>,
     failures: Vec<Failure>,
     stats: RunStats,
     peers: BTreeSet<u64>,
     presence: Option<BTreeMap<ClientName, BTreeMap<String, serde_json::Value>>>,
+    presence_clock_ready_at: u64,
+    presence_retired_at: Option<u64>,
+    presence_skew_bounds: (i64, i64),
     scheduled_generation: BTreeMap<DocIx, u64>,
     ack_callbacks: BTreeMap<(DocIx, String), std::collections::VecDeque<u64>>,
     prefixes: BTreeMap<(ProfileName, String, doc_sync_core::WalOwner), doc_sync_core::WalSeq>,
     budget_hit: bool,
-    tokens: BTreeMap<String, Access>,
+    prefix_event: usize,
+    current_step: Option<usize>,
+    tokens: BTreeMap<String, model::TokenGrant>,
     chatter_tails: BTreeMap<(SessionId, SessionId), u64>,
 }
 impl Sim {
@@ -51,25 +62,39 @@ impl Sim {
             servers: BTreeMap::new(),
             profiles: BTreeMap::new(),
             clients: BTreeMap::new(),
+            external: BTreeMap::new(),
+            routers: BTreeMap::new(),
             events: Vec::new(),
             server_ports: Vec::new(),
             failures: Vec::new(),
             stats: RunStats::default(),
             peers: BTreeSet::new(),
             presence: None,
+            presence_clock_ready_at: 0,
+            presence_retired_at: None,
+            presence_skew_bounds: (0, 0),
             scheduled_generation: BTreeMap::new(),
             ack_callbacks: BTreeMap::new(),
             prefixes: BTreeMap::new(),
             budget_hit: false,
+            prefix_event: 0,
+            current_step: None,
             tokens: BTreeMap::new(),
             chatter_tails: BTreeMap::new(),
         };
+        if sim.config.session.transport == TransportKind::Routed && sim.config.documents < 2 {
+            sim.fail(Failure::new(
+                "router_configuration",
+                "routed worlds require at least two documents",
+            ));
+        }
         for index in 0..sim.config.documents.max(1) {
             let doc = DocIx(index);
             let now = SimServer::now(sim.clock.wall(0), 0);
             match SimServer::new(
                 doc,
                 sim.config.fields,
+                sim.config.surfaces.contains(&doc),
                 sim.config.seeds.get(&doc).unwrap_or(&SeedDocument::Empty),
                 sim.config.server_storage_latency,
                 now,
@@ -94,7 +119,9 @@ impl Sim {
     }
     /// Run every transition and retain failures instead of panicking; then observe quiet time.
     pub fn run(mut self, script: &[Step]) -> Outcome {
-        for step in script {
+        for (index, step) in script.iter().enumerate() {
+            self.current_step = Some(index);
+            self.stats.steps += 1;
             if let Err(error) = self.step(step.clone()) {
                 self.fail(error)
             }
@@ -102,6 +129,7 @@ impl Sim {
                 self.validate();
             }
         }
+        self.current_step = None;
         let finals = self.finals();
         let quiet_start = self.events.len();
         self.advance(self.config.budgets.quiet.0);
@@ -117,6 +145,7 @@ impl Sim {
             self.fail(Failure::new("canonical_log", error));
             Vec::new()
         });
+        self.stats.observe(&self.events, &finals);
         let trace_hash = self.trace(&event_bytes, &finals, &finals_after_quiet);
         Outcome {
             config: self.config.clone(),
@@ -131,13 +160,30 @@ impl Sim {
             trace_hash,
             stats: self.stats,
             per_step_failures: self.failures,
+            external_clients: self.external.keys().cloned().collect(),
             pending_adapters: vec![
-                "document_session / lexical_model / lexical_loro editor projection and undo".into(),
+                "remaining editor command/story producers and undo removal attribution".into(),
                 "macro_document_model comment-only gate and lexical-service parity".into(),
             ],
         }
     }
     fn emit(&mut self, fact: Fact) {
+        match &fact {
+            Fact::ClockSkew { wall_offset_ms, .. }
+                if wall_offset_ms.unsigned_abs()
+                    <= self.config.session.presence_timeout.0.unsigned_abs() / 2 =>
+            {
+                self.presence_skew_bounds.0 = self.presence_skew_bounds.0.min(*wall_offset_ms);
+                self.presence_skew_bounds.1 = self.presence_skew_bounds.1.max(*wall_offset_ms);
+            }
+            Fact::Crashed { .. } | Fact::Closed { .. } => {
+                self.presence_retired_at = Some(self.clock.now);
+            }
+            Fact::PeerAssigned { purpose, .. } if purpose == "reset" => {
+                self.presence_retired_at = Some(self.clock.now);
+            }
+            _ => {}
+        }
         self.events.push(Event {
             at: self.clock.now(),
             fact,
@@ -146,6 +192,9 @@ impl Sim {
     fn fail(&mut self, mut failure: Failure) {
         if failure.at.is_none() {
             failure.at = Some(self.clock.now())
+        }
+        if failure.step.is_none() {
+            failure.step = self.current_step;
         }
         self.failures.push(failure);
     }
@@ -229,10 +278,13 @@ impl Sim {
             let kind = client.spec.kind;
             let ids = (0..16).map(|_| self.peer(kind)).collect::<Vec<_>>();
             if let Some(client) = self.clients.get_mut(name) {
-                client
-                    .core
-                    .add_peer_ids(ids)
-                    .map_err(|error| Failure::new("peer_supply", error))?;
+                client.core.add_peers(
+                    ids,
+                    doc_sync_core::Now {
+                        mono: doc_sync_core::Millis(self.clock.now),
+                        wall: doc_sync_core::UnixMillis(self.clock.wall(client.skew)),
+                    },
+                )?;
             }
         }
         let Some(client) = self.clients.get_mut(name) else {
@@ -243,10 +295,18 @@ impl Sim {
             wall: doc_sync_core::UnixMillis(self.clock.wall(client.skew)),
         };
         let (out, facts) = client.handle(input, now);
+        self.stats.wal_max_depth = self
+            .stats
+            .wal_max_depth
+            .max(u64::try_from(client.core.wal().entries.len()).unwrap_or(u64::MAX));
+        let failures = std::mem::take(&mut client.failures);
         let generation = client.generation;
         self.stats.handles = self.stats.handles.saturating_add(1);
         for fact in facts {
             self.emit(fact);
+        }
+        for failure in failures {
+            self.fail(failure);
         }
         if let Some(at) = out.wake_at {
             self.schedule(at.0, Pending::Wake(name.clone(), session, generation));

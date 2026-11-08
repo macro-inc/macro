@@ -23,11 +23,36 @@ impl SimDoc {
     }
     pub fn edit(&mut self, op: &AbstractOp, fields: u16, wall: i64) -> Result<(), Failure> {
         match op {
+            AbstractOp::Editor(_) => {
+                return Err(Failure::new(
+                    "editor_surface",
+                    "editor input on a generic document",
+                ));
+            }
             AbstractOp::FormSet { field, value } => {
                 self.loro
                     .get_map("fields")
                     .insert(&(field % fields.max(1)).to_string(), i64::from(*value))
                     .map_err(|e| Failure::new("form_set", e))?;
+            }
+            AbstractOp::FormText { field, bytes, salt } => {
+                let length = usize::try_from(*bytes)
+                    .unwrap_or(usize::MAX)
+                    .min(4 * 1_024 * 1_024);
+                let mut text = String::with_capacity(length);
+                for block in 0..length.div_ceil(8) {
+                    let hash = xxhash_rust::xxh3::xxh3_64_with_seed(
+                        &u64::try_from(block).unwrap_or(u64::MAX).to_le_bytes(),
+                        u64::from(*salt),
+                    );
+                    for byte in hash.to_le_bytes().into_iter().take(length - text.len()) {
+                        text.push(char::from(33 + byte % 94));
+                    }
+                }
+                self.loro
+                    .get_map("fields")
+                    .insert(&(field % fields.max(1)).to_string(), text)
+                    .map_err(|error| Failure::new("form_text", error))?;
             }
             AbstractOp::FormMove { from, to } => {
                 let list = self.loro.get_movable_list("order");
@@ -78,6 +103,9 @@ impl SyncDoc for SimDoc {
     }
     fn oplog_vv(&self) -> loro::VersionVector {
         self.loro.oplog_vv()
+    }
+    fn oplog_frontiers(&self) -> loro::Frontiers {
+        self.loro.oplog_frontiers()
     }
     fn import_remote(
         &mut self,
@@ -175,6 +203,33 @@ pub(crate) fn seed_snapshots(
     wall: i64,
     spec: &crate::SeedDocument,
 ) -> Result<SeedSnapshots, Failure> {
+    if let crate::SeedDocument::Editor(state) = spec {
+        let editor =
+            document_session::default_editor_builder(lexical_model::EditorMode::Headless, peer)
+                .initial_state(
+                    serde_json::from_value(state.clone())
+                        .map_err(|error| Failure::new("editor_seed", error))?,
+                )
+                .build()
+                .map_err(|error| Failure::new("editor_seed", error))?;
+        let doc =
+            lexical_loro::new_doc(peer).map_err(|error| Failure::new("editor_seed", error))?;
+        lexical_loro::LoroProjection::initialize(
+            &doc,
+            editor.state(),
+            &lexical_loro::PlainPolicy,
+            wall / 1000,
+        )
+        .map_err(|error| Failure::new("editor_seed", error))?;
+        return Ok(SeedSnapshots {
+            server: doc
+                .export(loro::ExportMode::Snapshot)
+                .map_err(|error| Failure::new("editor_seed", error))?,
+            local: None,
+            s3: None,
+            vv: vv(&doc.oplog_vv()),
+        });
+    }
     let mut doc = SimDoc::new(peer)?;
     for index in 0..fields.max(1) {
         doc.loro
@@ -187,6 +242,7 @@ pub(crate) fn seed_snapshots(
     let mut local = None;
     let mut s3 = None;
     match spec {
+        crate::SeedDocument::Editor(_) => unreachable!("handled editor seed"),
         crate::SeedDocument::Empty => {}
         crate::SeedDocument::Form(writes) => {
             seed_fields(&mut doc, writes, fields, wall)?;

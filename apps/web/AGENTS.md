@@ -975,6 +975,13 @@ Brotli bytes. The cap may tighten; WP-59 measures real startup cost. Its
 main-thread loader is lazy. Keep one model WASM preload: Loro for flag-off builds,
 document_session_wasm when documentSessionPreload is selected. Do not preload both.
 
+Resolve `rust-editor-model` before constructing the document body owner in both
+block and Drive loaders; keep SessionExecutor/EditorView imports lazy and the
+flag-off CollabProvider path intact. Keep the selected model for that open
+session and reopen after a flag change. Reuse account/epoch-fenced metadata for
+flagged browser offline opens; fetch fresh reconnect credentials and invalidate
+that epoch before logout clearing.
+
 ## macOS desktop runtime: Chromium (CEF)
 `tauri/desktop-cef` builds the shipped macOS app with Chromium in its own Cargo
 workspace. The macOS release DMG builds this workspace; iOS, Android, Linux,

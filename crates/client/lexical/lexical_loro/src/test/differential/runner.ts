@@ -1,16 +1,16 @@
 // Execute the real mirror; do not duplicate its diff/container implementation here.
 import {
+	type ContainerID,
 	Cursor,
+	isContainer,
 	LoroDoc,
-	LoroMap,
 	LoroList,
+	LoroMap,
 	LoroMovableList,
 	LoroText,
-	isContainer,
-	type ContainerID,
 } from "loro-crdt";
-import { Mirror } from "../../../../../../../packages/loro-mirror/src/index";
 import { MARKDOWN_LORO_SCHEMA } from "../../../../../../../packages/lexical-core/markdown-loro-schema";
+import { Mirror } from "../../../../../../../packages/loro-mirror/src/index";
 
 type State = ReturnType<Mirror<typeof MARKDOWN_LORO_SCHEMA>["getState"]>;
 type Run = { snapshot?: number[]; states: State[]; updates?: number[][] };
@@ -72,7 +72,8 @@ if (input.pair) {
 	if (
 		catalog.workspaces.catalog["loro-crdt"] !== "1.17.1" ||
 		installed.version !== "1.17.1" ||
-		sync.packages["node_modules/loro-crdt"].version !== "1.17.1" ||
+		// The server retains its deployed Loro bytes; the portable client is 1.17.1.
+		sync.packages["node_modules/loro-crdt"].version !== "1.16.3" ||
 		!cargo.includes('loro = "=1.17.1"') ||
 		!rustLock.includes('name = "loro"\nversion = "1.17.1"') ||
 		!bunLock.includes('"loro-crdt": "1.17.1"') ||
@@ -134,7 +135,7 @@ if (input.relay) {
 		observations.push(observe(docs[event.peer]));
 	}
 	console.log(JSON.stringify(observations));
-	mirrors.forEach((mirror) => mirror.dispose());
+	mirrors.forEach((mirror) => { mirror.dispose(); });
 	process.exit(0);
 }
 if (!input.runs) throw new Error("missing differential runs");

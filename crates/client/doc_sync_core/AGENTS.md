@@ -17,6 +17,8 @@ identities come from callers; transport and durable storage run outside this cra
   Never infer poison from an absent ack or advance a durable prefix over parked rows.
 - `Connection` handles socket generations, heartbeat and backoff; `RouterCore`
   multiplexes independently authorized routes on one physical socket.
+- `push_in_flight` and `is_delivered` expose read-only own-WAL diagnostics, including
+  acknowledgements above a prefix blocked by parked rows; hosts never mutate them.
 - `PeerSupply` validates host-generated peers; never generate identities here.
 - `PresenceBackend` is the clock-injected port; `SyncCore` installs
   `ProtocolPresence` over `sync_protocol::presence` by default. It retains Loro
@@ -54,6 +56,7 @@ identities come from callers; transport and durable storage run outside this cra
   resets and probes. Use `allocate_comment_peer` before staging a comment fork.
 - `SyncDoc::probe_import` receives a fresh supplied peer; set it before importing
   the server snapshot into the throwaway document. Never mutate the live document.
+- Capture `SyncDoc::oplog_frontiers` at the existing seed/convergence/reset confirmation points; version-vector peer heads can name collected history, and persistence must never advance the confirmed cutoff to current local edits.
 - Presence expiry is a wall timestamp from the port; the core translates it to
   the monotonic timer using the latest host-supplied `Now`.
 - A timed-out adoption remains correlated until its transaction result arrives:
@@ -69,6 +72,51 @@ timestamps plus controlled storage and socket completions. Tests named
 Consume due own/assist retry timers once; reconnect or authorization inputs drive
 blocked pushes. Never return an already-consumed retry as the next wake.
 
+Only arm a due rebase wake while Running, synchronized and without an own push;
+blocked work resumes on the next eligible input. Replay acknowledged rows already
+covered by a shallow snapshot as no-ops after checksum/VV verification, so collected
+history cannot cause repeated rebases. Never skip an unacknowledged row this way.
+
+Preserve the pending local coalesce range when adoption replay completes; replaying
+other owners never advances the local logged vector over an unappended edit.
+
+Retire server-confirmed foreign rows from an outstanding own push; preserve its
+message identity and every still-unconfirmed row until their ack or timeout.
+
+Retain acknowledged assist bytes until local VV coverage proves they imported,
+including across reset failure, replacement and pending dependencies; the server
+excludes the sender from broadcasts. Do not reload rows covered by server evidence.
+Queue assistance only with write authority; retained unsent assistance stays inactive
+while read-only and resumes after regrant without changing other owners' durable rows.
+
+Clear the old document's pending-import flag only after successful replacement,
+before WAL/assistance replay can establish new pending dependencies; failed
+replacement keeps the original document and its pending-history status.
+
+Record server evidence from checksum-valid bytes of actually ACKed own-push rows;
+the sender receives no broadcast echo. Never infer that proof from local document VV
+or unpushed rows, so periodic foreign scans cannot resend already confirmed history.
+
+Correct premature Gap parking only with validated retained-row coverage in the local
+oplog and server evidence for every required parent frontier, while Running outside
+reset/rebase and without an outstanding own push. Preserve batch eligibility until
+its ACK or timeout, then retry gap recovery. This disproves the earlier missing-store inference; it does not prove
+row delivery. Genuinely missing parents stay parked until TTL and never get pushed.
 `PrepareComment` releases `CommentReady` only after a fresh catch-up and W-1
 checks. `ProjectionResynced` charges the shared recovery budget without fetching
 a network snapshot; sessions attempt local recovery before `ImportFailed`.
+
+Adoption rejects a changed snapshot-derived cover or exact source selection atomically: the loaded selection
+must match the core's reserved sequences and retained payload order. Reload after
+failed adoption/orphan reads through the ordinary retry timer; never reuse stale
+adoption payload reservations or change other owners' retained bytes.
+Keep scheduled load retries busy until the real reload completes.
+
+
+When reset/rebase retains unacknowledged own rows, request complete retained server
+history with the existing empty-VV RequestSince. Build and validate server history
+plus checksum-valid WAL in a fresh document, requiring coverage of the old live VV
+and every imported row before replacement. Keep the live document and rows on any
+failure; never substitute a shallow server snapshot before private rows replay.
+ReadOnly parking takes precedence over NeedsRebase; Poison and Gap retain their
+diagnostics. Regrant resumes the same retained bytes through the ordinary push.

@@ -16,13 +16,14 @@ pub(crate) struct Delivery {
     pub packet: Packet,
     pub kind: FrameKind,
     pub corrupted: bool,
+    pub frames: u16,
 }
 pub(crate) type LinkKey = (ClientName, SessionId, u32);
 pub(crate) struct Link {
     pub socket: Option<WebSocketId>,
     pub open: bool,
     pub doc: DocIx,
-    pub grant: Access,
+    pub claims: Option<crate::model::TokenGrant>,
     pub token_valid: bool,
     pub tails: [u64; 2],
     pub up: Reassembler,
@@ -40,9 +41,14 @@ struct DropRule {
 /// Browser-like ordered socket links, including independent generations.
 pub struct SimNetwork {
     pub(crate) links: BTreeMap<LinkKey, Link>,
+    pub(crate) router_frames: BTreeMap<(LinkKey, Direction, String), Vec<Vec<u8>>>,
     pub(crate) partitions: BTreeSet<ClientName>,
     pub(crate) offline: BTreeSet<ClientName>,
     pub(crate) profile: NetProfile,
+    pub(crate) max_latency: u64,
+    // Exact open generations that actually lost partition/offline traffic.
+    // Keep this evidence across an explicit Heal until settlement consumes it.
+    pub(crate) partition_losses: BTreeSet<LinkKey>,
     drops: Vec<DropRule>,
     corrupt: BTreeSet<(ClientName, Direction)>,
 }
@@ -51,9 +57,12 @@ impl SimNetwork {
     pub fn new(profile: NetProfile) -> Self {
         Self {
             links: BTreeMap::new(),
+            router_frames: BTreeMap::new(),
             partitions: BTreeSet::new(),
             offline: BTreeSet::new(),
+            max_latency: profile.latency.0.0.max(profile.latency.1.0),
             profile,
+            partition_losses: BTreeSet::new(),
             drops: Vec::new(),
             corrupt: BTreeSet::new(),
         }
@@ -87,7 +96,13 @@ impl SimNetwork {
             NetStep::CorruptNext { client, direction } => {
                 self.corrupt.insert((client, direction));
             }
-            NetStep::Profile(profile) => self.profile = profile,
+            NetStep::Profile(profile) => {
+                self.max_latency = self
+                    .max_latency
+                    .max(profile.latency.0.0)
+                    .max(profile.latency.1.0);
+                self.profile = profile;
+            }
         }
         None
     }
@@ -126,6 +141,13 @@ impl SimNetwork {
         *frames = sync_protocol::framing::into_frames(&corrupt[1..], chunk);
         true
     }
+    pub(crate) fn record_partition_loss(&mut self, key: &LinkKey) {
+        if self.links.get(key).is_some_and(|link| link.open)
+            && (self.partitions.contains(&key.0) || self.offline.contains(&key.0))
+        {
+            self.partition_losses.insert(key.clone());
+        }
+    }
     pub(crate) fn transit(
         &mut self,
         key: &LinkKey,
@@ -135,6 +157,7 @@ impl SimNetwork {
         rng: &mut impl Rng,
     ) -> Transit {
         if self.partitions.contains(&key.0) || self.offline.contains(&key.0) {
+            self.record_partition_loss(key);
             return Transit::Dropped;
         }
         if self.profile.break_per_frame > 0.0
@@ -217,16 +240,33 @@ fn corrupt_update(frame: &[u8], direction: Direction) -> Option<Vec<u8>> {
         } else {
             return None;
         }
-    } else if let Ok(sync_protocol::FromRemote::RemoteUpdate { .. }) =
-        sync_protocol::FromRemote::deserialize(bytes)
-    {
-        sync_protocol::FromRemote::RemoteUpdate {
-            update: SliceWrapper::from_cooked(&corrupt),
-        }
-        .serialize(&mut result)
-        .ok()?;
     } else {
-        return None;
+        let message = match sync_protocol::FromRemote::deserialize(bytes).ok()? {
+            sync_protocol::FromRemote::RemoteUpdate { .. } => {
+                sync_protocol::FromRemote::RemoteUpdate {
+                    update: SliceWrapper::from_cooked(&corrupt),
+                }
+            }
+            sync_protocol::FromRemote::RemoteSnapshot { .. } => {
+                sync_protocol::FromRemote::RemoteSnapshot {
+                    snapshot: SliceWrapper::from_cooked(&corrupt),
+                }
+            }
+            sync_protocol::FromRemote::RemoteUpdateSince { vv, .. } => {
+                sync_protocol::FromRemote::RemoteUpdateSince {
+                    update: SliceWrapper::from_cooked(&corrupt),
+                    vv,
+                }
+            }
+            sync_protocol::FromRemote::RemoteInitialSync { awareness, .. } => {
+                sync_protocol::FromRemote::RemoteInitialSync {
+                    snapshot: SliceWrapper::from_cooked(&corrupt),
+                    awareness,
+                }
+            }
+            _ => return None,
+        };
+        message.serialize(&mut result).ok()?;
     }
     Some(result)
 }

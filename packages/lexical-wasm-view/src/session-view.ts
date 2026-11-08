@@ -16,9 +16,12 @@ export async function mountSessionView(
   session: Omit<ExecutorOptions<EditorSession>, 'view'>
 ) {
   let view: EditorView | undefined;
+  let disposed = false;
+  let closing: Promise<void> | undefined;
   const pending: Parameters<ViewSink['apply']>[] = [];
   const sink: ViewSink = {
     apply(...output) {
+      if (disposed) return;
       if (view) view.apply(...output);
       else pending.push(output);
     },
@@ -46,15 +49,18 @@ export async function mountSessionView(
       view,
       port,
       executor,
-      async close() {
-        try {
-          await executor.close();
-        } finally {
-          mounted.dispose();
-        }
+      close() {
+        if (closing) return closing;
+        disposed = true;
+        view = undefined;
+        pending.length = 0;
+        mounted.dispose();
+        closing = executor.close();
+        return closing;
       },
     };
   } catch (error) {
+    disposed = true;
     const failed = view;
     view = undefined;
     failed?.dispose();

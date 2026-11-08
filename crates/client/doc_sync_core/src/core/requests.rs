@@ -22,6 +22,7 @@ impl SyncCore {
         self.since.push_back(SinceRequest {
             vv: vv.clone(),
             expired: false,
+            recovery_deadline: None,
         });
         self.convergence = Some(Convergence {
             attempt,
@@ -61,6 +62,13 @@ impl SyncCore {
             return;
         };
         if request.expired {
+            return;
+        }
+        if request.recovery_deadline.is_some() {
+            if let Some(ResetState::AwaitingHistory { rebase }) = self.reset {
+                self.reset = Some(ResetState::Awaiting { rebase });
+                self.reset_snapshot(update, now, doc, out);
+            }
             return;
         }
         let Some(convergence) = self.convergence.take() else {
@@ -104,7 +112,7 @@ impl SyncCore {
             }
         } else {
             self.has_converged = true;
-            self.confirmed_base = doc.oplog_vv().get_frontiers();
+            self.confirmed_base = doc.oplog_frontiers();
             if convergence.rerun {
                 self.request_since(1, now, doc, out);
             } else {
@@ -359,7 +367,12 @@ impl SyncCore {
             .is_some_and(|p| p.deadline <= now.mono)
         {
             if let Some(request) = self.convergence.take() {
-                if let Some(entry) = self.since.iter_mut().rev().find(|e| !e.expired) {
+                if let Some(entry) = self
+                    .since
+                    .iter_mut()
+                    .rev()
+                    .find(|e| !e.expired && e.recovery_deadline.is_none())
+                {
                     entry.expired = true;
                 }
                 if request.attempt < self.config.converge.max_attempts {
@@ -385,6 +398,12 @@ impl SyncCore {
             }
         });
         let mut reset_timed_out = false;
+        for request in &mut self.since {
+            if !request.expired && request.recovery_deadline.is_some_and(|at| at <= now.mono) {
+                request.expired = true;
+                reset_timed_out = true;
+            }
+        }
         for waiter in &mut self.snapshots {
             if !waiter.expired && waiter.deadline <= now.mono {
                 waiter.expired = true;

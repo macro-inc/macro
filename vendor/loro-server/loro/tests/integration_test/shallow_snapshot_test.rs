@@ -1,0 +1,1023 @@
+use std::{
+    borrow::Cow,
+    sync::{atomic::AtomicBool, Arc},
+};
+
+use super::gen_action;
+use loro::{
+    cursor::CannotFindRelativePosition, ContainerID, ContainerType, ExpandType, ExportMode,
+    Frontiers, LoroDoc, LoroValue, StyleConfig, StyleConfigMap, ID,
+};
+
+/// Byte-level scan of an exported blob. Only used for *absence* checks, and
+/// even those are best-effort: state KV blocks may be LZ4-compressed, which can
+/// hide a retained secret from this scan. The authoritative leak assertions
+/// decode the exported state structurally — see the tests in
+/// `loro-internal/src/encoding/shallow_snapshot.rs`.
+fn bytes_contain(haystack: &[u8], needle: &str) -> bool {
+    haystack
+        .windows(needle.len())
+        .any(|w| w == needle.as_bytes())
+}
+
+#[test]
+fn state_only_at_concurrent_frontiers_excludes_later_ops() -> anyhow::Result<()> {
+    let doc = LoroDoc::new();
+    doc.set_peer_id(0)?;
+    doc.set_detached_editing(true);
+
+    doc.get_list("list").insert(0, "Counter")?;
+    let list_frontiers = doc.oplog_frontiers();
+
+    doc.checkout(&Frontiers::default())?;
+    let tree = doc.get_tree("tree");
+    tree.enable_fractional_index(0);
+    let root = tree.create(None)?;
+    let mut target_frontiers = list_frontiers;
+    target_frontiers.merge_with_greater(&doc.state_frontiers());
+    let target_frontiers = doc
+        .minimize_frontiers(&target_frontiers)
+        .expect("target frontiers should be reachable");
+
+    doc.checkout(&target_frontiers)?;
+    let expected = doc.get_deep_value();
+
+    doc.get_tree("tree").create(Some(root))?;
+    let latest = doc.get_deep_value();
+    assert_ne!(expected, latest);
+
+    let bytes = doc.export(ExportMode::state_only(Some(&target_frontiers)))?;
+    let new_doc = LoroDoc::new();
+    new_doc.import(&bytes)?;
+
+    assert_eq!(new_doc.get_deep_value(), expected);
+    Ok(())
+}
+
+#[test]
+fn test_gc() -> anyhow::Result<()> {
+    let doc = LoroDoc::new();
+    doc.set_peer_id(1)?;
+    gen_action(&doc, 123, 32);
+    doc.commit();
+    let frontiers = doc.oplog_frontiers();
+    gen_action(&doc, 123, 10);
+    doc.commit();
+    let shallow_bytes = doc.export(loro::ExportMode::shallow_snapshot(&frontiers));
+
+    let new_doc = LoroDoc::new();
+    new_doc.import(&shallow_bytes.unwrap())?;
+    assert_eq!(doc.get_deep_value(), new_doc.get_deep_value());
+    Ok(())
+}
+
+#[test]
+fn test_shallow_1() -> anyhow::Result<()> {
+    let doc = LoroDoc::new();
+    doc.set_peer_id(1)?;
+    doc.get_text("text").insert(0, "1")?;
+    doc.get_text("text").insert(0, "2")?;
+    doc.get_text("text").insert(0, "3")?;
+    doc.commit();
+    let frontiers = doc.oplog_frontiers();
+    doc.get_text("text").insert(3, "4")?;
+    doc.commit();
+    let shallow_bytes = doc.export(loro::ExportMode::shallow_snapshot(&frontiers));
+
+    let new_doc = LoroDoc::new();
+    new_doc.import(&shallow_bytes.unwrap())?;
+    assert_eq!(doc.get_deep_value(), new_doc.get_deep_value());
+    Ok(())
+}
+
+#[test]
+fn test_checkout_to_text_that_were_created_before_gc() -> anyhow::Result<()> {
+    let doc = LoroDoc::new();
+    doc.set_peer_id(1)?;
+    doc.get_text("text").insert(0, "0")?;
+    doc.get_text("text").insert(0, "1")?;
+    doc.get_text("text").insert(0, "2")?;
+    doc.get_text("text").insert(1, "3")?;
+    doc.commit();
+    let frontiers = doc.oplog_frontiers();
+    doc.get_text("text").delete(0, 3)?;
+    let bytes = doc.export(loro::ExportMode::shallow_snapshot(&frontiers));
+    let new_doc = LoroDoc::new();
+    new_doc.import(&bytes.unwrap())?;
+    new_doc.checkout(&frontiers)?;
+    assert_eq!(new_doc.get_text("text").to_string(), *"2310");
+    Ok(())
+}
+
+#[test]
+fn test_checkout_to_list_that_were_created_before_gc() -> anyhow::Result<()> {
+    let doc = LoroDoc::new();
+    doc.set_peer_id(1)?;
+    doc.get_list("list").insert(0, 0)?;
+    doc.get_list("list").insert(1, 1)?;
+    doc.get_list("list").insert(2, 2)?;
+    doc.get_list("list").insert(1, 3)?;
+    doc.commit();
+    let frontiers = doc.oplog_frontiers();
+    doc.get_list("list").delete(0, 3)?;
+    let bytes = doc.export(loro::ExportMode::shallow_snapshot(&frontiers));
+    let new_doc = LoroDoc::new();
+    new_doc.import(&bytes.unwrap())?;
+    new_doc.checkout(&frontiers)?;
+    assert_eq!(
+        new_doc.get_list("list").to_vec(),
+        vec![0.into(), 3.into(), 1.into(), 2.into()]
+    );
+    Ok(())
+}
+
+#[test]
+fn test_checkout_to_movable_list_that_were_created_before_gc() -> anyhow::Result<()> {
+    let doc = LoroDoc::new();
+    doc.set_peer_id(1)?;
+    doc.get_movable_list("list").insert(0, 0)?;
+    doc.get_movable_list("list").insert(1, 1)?;
+    doc.get_movable_list("list").insert(2, 2)?;
+    doc.get_movable_list("list").insert(1, 3)?;
+    doc.commit();
+    let frontiers = doc.oplog_frontiers();
+    doc.get_movable_list("list").delete(0, 3)?;
+    let bytes = doc.export(loro::ExportMode::shallow_snapshot(&frontiers));
+    let new_doc = LoroDoc::new();
+    new_doc.import(&bytes.unwrap())?;
+    new_doc.checkout(&frontiers)?;
+    assert_eq!(
+        new_doc.get_movable_list("list").to_vec(),
+        vec![0.into(), 3.into(), 1.into(), 2.into()]
+    );
+    Ok(())
+}
+
+#[test]
+fn shallow_on_the_given_version_when_feasible() -> anyhow::Result<()> {
+    let doc = LoroDoc::new();
+    doc.set_peer_id(1)?;
+    gen_action(&doc, 123, 64);
+    doc.commit();
+    let bytes = doc.export(loro::ExportMode::shallow_snapshot_since(ID::new(1, 31)));
+    let new_doc = LoroDoc::new();
+    new_doc.import(&bytes.unwrap())?;
+    assert_eq!(new_doc.shallow_since_vv().get(&1).copied().unwrap(), 31);
+    Ok(())
+}
+
+#[test]
+fn export_snapshot_on_a_shallow_doc() -> anyhow::Result<()> {
+    let doc = LoroDoc::new();
+    doc.set_peer_id(1)?;
+    gen_action(&doc, 123, 32);
+    doc.commit();
+
+    // Get the current frontiers
+    let frontiers = doc.oplog_frontiers();
+    let old_value = doc.get_deep_value();
+    gen_action(&doc, 123, 32);
+    doc.commit();
+
+    // Export using shallowSnapshot mode
+    let bytes = doc.export(loro::ExportMode::shallow_snapshot(&frontiers));
+
+    // Import into a new document
+    let shallow_doc = LoroDoc::new();
+    shallow_doc.import(&bytes.unwrap())?;
+    assert_eq!(shallow_doc.shallow_since_vv().get(&1).copied().unwrap(), 31);
+    let new_snapshot = shallow_doc.export(loro::ExportMode::Snapshot);
+
+    let new_doc = LoroDoc::new();
+    new_doc.import(&new_snapshot.unwrap())?;
+    assert_eq!(new_doc.shallow_since_vv().get(&1).copied().unwrap(), 31);
+    assert_eq!(new_doc.get_deep_value(), doc.get_deep_value());
+    new_doc.checkout(&frontiers)?;
+    assert_eq!(new_doc.get_deep_value(), old_value);
+    new_doc.checkout_to_latest();
+    assert_eq!(new_doc.get_deep_value(), doc.get_deep_value());
+    Ok(())
+}
+
+#[test]
+fn export_snapshot_on_shallow_doc_with_small_tail_updates() -> anyhow::Result<()> {
+    let doc = LoroDoc::new();
+    doc.set_peer_id(1)?;
+    gen_action(&doc, 123, 32);
+    doc.commit();
+
+    let shallow_frontiers = doc.oplog_frontiers();
+    let shallow_value = doc.get_deep_value();
+    gen_action(&doc, 456, 4);
+    doc.commit();
+    let latest_value = doc.get_deep_value();
+
+    let shallow_bytes = doc.export(loro::ExportMode::shallow_snapshot(&shallow_frontiers))?;
+    let shallow_doc = LoroDoc::new();
+    shallow_doc.import(&shallow_bytes)?;
+
+    let snapshot_from_shallow = shallow_doc.export(loro::ExportMode::Snapshot)?;
+    let restored = LoroDoc::new();
+    restored.import(&snapshot_from_shallow)?;
+
+    assert!(restored.is_shallow());
+    assert_eq!(restored.shallow_since_frontiers(), shallow_frontiers);
+    assert_eq!(restored.get_deep_value(), latest_value);
+    restored.checkout(&shallow_frontiers)?;
+    assert_eq!(restored.get_deep_value(), shallow_value);
+    Ok(())
+}
+
+#[test]
+fn export_snapshot_on_shallow_doc_with_large_tail_updates() -> anyhow::Result<()> {
+    let doc = LoroDoc::new();
+    doc.set_peer_id(1)?;
+    let text = doc.get_text("text");
+    text.insert(0, &"a".repeat(64))?;
+    doc.commit();
+
+    let shallow_frontiers = doc.oplog_frontiers();
+    let shallow_value = doc.get_deep_value();
+    let shallow_bytes = doc.export(ExportMode::shallow_snapshot(&shallow_frontiers))?;
+
+    let shallow_doc = LoroDoc::new();
+    shallow_doc.import(&shallow_bytes)?;
+    let text = shallow_doc.get_text("text");
+    text.delete(0, text.len_unicode())?;
+    text.insert(0, &format!("{}{}", "b".repeat(64), "c".repeat(64)))?;
+    shallow_doc.commit();
+    assert!(shallow_doc.len_ops() > 16);
+    let latest_value = shallow_doc.get_deep_value();
+
+    let snapshot_from_shallow = shallow_doc.export(ExportMode::Snapshot)?;
+    let restored = LoroDoc::new();
+    restored.import(&snapshot_from_shallow)?;
+
+    assert!(restored.is_shallow());
+    assert_eq!(restored.shallow_since_frontiers(), shallow_frontiers);
+    assert_eq!(restored.get_deep_value(), latest_value);
+    restored.checkout(&shallow_frontiers)?;
+    assert_eq!(restored.get_deep_value(), shallow_value);
+    restored.checkout_to_latest();
+    assert_eq!(restored.get_deep_value(), latest_value);
+    Ok(())
+}
+
+#[test]
+fn test_richtext_gc() -> anyhow::Result<()> {
+    let doc = LoroDoc::new();
+    doc.set_peer_id(1)?;
+    let text = doc.get_text("text");
+    text.insert(0, "1")?; // 0
+    text.insert(0, "2")?; // 1
+    text.insert(0, "3")?; // 2
+    text.mark(0..2, "bold", "value")?; // 3, 4
+    doc.commit();
+    text.insert(3, "456")?; // 5, 6, 7
+    let bytes = doc.export(loro::ExportMode::shallow_snapshot_since(ID::new(1, 3)));
+    let new_doc = LoroDoc::new();
+    new_doc.import(&bytes.unwrap())?;
+    new_doc.checkout(&Frontiers::from(ID::new(1, 4)))?;
+    assert_eq!(new_doc.get_text("text").to_string(), "321");
+    new_doc.checkout_to_latest();
+    assert_eq!(new_doc.get_text("text").to_string(), "321456");
+    Ok(())
+}
+
+#[test]
+fn import_updates_depend_on_shallow_history_should_raise_error() -> anyhow::Result<()> {
+    let doc = LoroDoc::new();
+    doc.set_peer_id(1)?;
+    gen_action(&doc, 123, 4);
+    doc.commit();
+    let doc2 = doc.fork();
+    doc2.get_text("text").insert(0, "1")?;
+    doc2.commit();
+    gen_action(&doc, 123, 2);
+    doc.commit();
+    let shallow_snapshot = doc.export(loro::ExportMode::shallow_snapshot(&doc.oplog_frontiers()));
+    doc.get_text("hello").insert(0, "world").unwrap();
+    doc2.import(
+        &doc.export(loro::ExportMode::Updates {
+            from: Cow::Borrowed(&doc2.oplog_vv()),
+        })
+        .unwrap(),
+    )
+    .unwrap();
+
+    let new_doc = LoroDoc::new();
+    new_doc.import(&shallow_snapshot.unwrap()).unwrap();
+
+    let ran = Arc::new(AtomicBool::new(false));
+    let ran_clone = ran.clone();
+    let _sub = new_doc.subscribe_root(Arc::new(move |e| {
+        ran_clone.store(true, std::sync::atomic::Ordering::Relaxed);
+        assert!(e.events.len() == 1);
+        match e.events[0].diff {
+            loro::event::Diff::Text(_) => {}
+            _ => {
+                unreachable!()
+            }
+        }
+    }));
+    let result = new_doc.import(
+        &doc2
+            .export(loro::ExportMode::updates_owned(new_doc.oplog_vv()))
+            .unwrap(),
+    );
+    assert!(result.is_err());
+    // But updates from doc should be fine ("hello": "world")
+    assert_eq!(new_doc.get_text("hello").to_string(), *"world");
+    assert!(ran.load(std::sync::atomic::Ordering::Relaxed));
+    Ok(())
+}
+
+#[test]
+fn the_vv_on_shallow_doc() -> anyhow::Result<()> {
+    let doc = LoroDoc::new();
+    gen_action(&doc, 0, 10);
+    doc.commit();
+    let snapshot = doc.export(loro::ExportMode::shallow_snapshot(&doc.oplog_frontiers()));
+    let new_doc = LoroDoc::new();
+    new_doc.import(&snapshot.unwrap()).unwrap();
+    assert!(!new_doc.shallow_since_vv().is_empty());
+    assert_eq!(new_doc.oplog_vv(), new_doc.state_vv());
+    assert_eq!(new_doc.oplog_vv(), doc.state_vv());
+    assert_eq!(new_doc.oplog_frontiers(), doc.oplog_frontiers());
+    assert_eq!(new_doc.oplog_frontiers(), new_doc.state_frontiers());
+    assert_eq!(new_doc.get_deep_value(), doc.get_deep_value());
+
+    gen_action(&doc, 0, 10);
+    doc.commit();
+    let bytes = doc.export(ExportMode::all_updates());
+    new_doc.import(&bytes.unwrap()).unwrap();
+    assert_eq!(new_doc.oplog_vv(), new_doc.state_vv());
+    assert_eq!(new_doc.oplog_vv(), doc.state_vv());
+    assert_eq!(new_doc.oplog_frontiers(), doc.oplog_frontiers());
+    assert_eq!(new_doc.oplog_frontiers(), new_doc.state_frontiers());
+    assert_eq!(new_doc.get_deep_value(), doc.get_deep_value());
+
+    Ok(())
+}
+
+#[test]
+fn no_event_when_exporting_shallow_snapshot() -> anyhow::Result<()> {
+    let doc = LoroDoc::new();
+    doc.set_peer_id(1)?;
+    gen_action(&doc, 0, 10);
+    doc.commit();
+    let _id = doc.subscribe_root(Arc::new(|_diff| {
+        panic!("should not emit event");
+    }));
+    let _snapshot = doc.export(loro::ExportMode::shallow_snapshot_since(ID::new(1, 3)));
+    Ok(())
+}
+
+#[test]
+fn test_cursor_that_cannot_be_found_when_exporting_shallow_snapshot() -> anyhow::Result<()> {
+    let doc = LoroDoc::new();
+    doc.set_peer_id(1)?;
+    doc.get_text("text").insert(0, "Hello world")?;
+    let c = doc
+        .get_text("text")
+        .get_cursor(3, loro::cursor::Side::Left)
+        .unwrap();
+    doc.get_text("text").delete(0, 5)?;
+    doc.commit();
+    let snapshot = doc.export(loro::ExportMode::shallow_snapshot(&doc.oplog_frontiers()));
+    let new_doc = LoroDoc::new();
+    new_doc.import(&snapshot.unwrap())?;
+    let result = new_doc.get_cursor_pos(&c);
+    match result {
+        Ok(v) => {
+            dbg!(v);
+            unreachable!()
+        }
+        Err(CannotFindRelativePosition::HistoryCleared) => {}
+        Err(x) => {
+            dbg!(x);
+            unreachable!()
+        }
+    }
+    Ok(())
+}
+
+#[test]
+fn test_cursor_that_can_be_found_when_exporting_shallow_snapshot() -> anyhow::Result<()> {
+    let doc = LoroDoc::new();
+    doc.set_peer_id(1)?;
+    doc.get_text("text").insert(0, "Hello world")?;
+    doc.commit();
+    let c = doc
+        .get_text("text")
+        .get_cursor(3, loro::cursor::Side::Left)
+        .unwrap();
+    doc.get_text("text").delete(0, 5)?;
+    doc.commit();
+    let snapshot = doc.export(loro::ExportMode::shallow_snapshot_since(ID::new(1, 10)));
+    let new_doc = LoroDoc::new();
+    new_doc.import(&snapshot.unwrap())?;
+    let result = new_doc.get_cursor_pos(&c);
+    match result {
+        Ok(v) => {
+            assert_eq!(v.current.pos, 0);
+        }
+        Err(x) => {
+            dbg!(x);
+            unreachable!()
+        }
+    }
+    Ok(())
+}
+
+#[test]
+fn test_export_shallow_snapshot_from_shallow_doc() -> anyhow::Result<()> {
+    // Create and populate the original document
+    let doc = LoroDoc::new();
+    doc.set_peer_id(1)?;
+    gen_action(&doc, 123, 32);
+    doc.commit();
+
+    // Get the current frontiers and create some more actions
+    let frontiers = doc.oplog_frontiers();
+    gen_action(&doc, 123, 32);
+    doc.commit();
+
+    // Export using shallowSnapshot mode
+    let shallow_bytes = doc.export(loro::ExportMode::shallow_snapshot(&frontiers))?;
+
+    // Import into a new document
+    let shallow_doc = LoroDoc::new();
+    shallow_doc.import(&shallow_bytes)?;
+
+    // Attempt to export a shallow snapshot from the shallow document
+    // using frontiers before its shallow version
+    let result = shallow_doc.export(loro::ExportMode::shallow_snapshot_since(ID::new(1, 16)));
+
+    // The export should fail because the requested frontiers are before the shallow version
+    assert!(result.is_err());
+
+    if let Err(e) = result {
+        assert!(matches!(e, loro::LoroEncodeError::FrontiersNotFound(..)));
+    } else {
+        panic!("Expected an error, but got Ok");
+    }
+
+    Ok(())
+}
+
+/// Regression for a branch-specific import bug on `feat/diff-text-lca-review`.
+///
+/// The incoming change is generated normally after a retained post-root
+/// change, then the public JSON-update fixture adds its shallow-boundary
+/// ancestor as a redundant dependency. This is valid causal history, but ordinary
+/// local commits canonicalize redundant frontier ids and cannot create it.
+/// Import must use its boundary-aware guard: checkout's conservative guard
+/// rejects any mixed dependency set that directly touches the shallow root.
+#[test]
+fn shallow_doc_accepts_cross_peer_op_whose_deps_include_boundary() -> anyhow::Result<()> {
+    let source = LoroDoc::new();
+    source.set_peer_id(9)?;
+    source.get_text("t").insert(0, "r")?;
+    source.commit();
+    source.get_text("t").insert(1, "o")?;
+    source.commit();
+    let shallow_root = source.oplog_frontiers();
+    let boundary = shallow_root
+        .as_single()
+        .expect("fixture must have one shallow-boundary id");
+
+    source.set_peer_id(1)?;
+    source.get_text("t").insert(2, " retained")?;
+    source.commit();
+    let retained = source
+        .oplog_frontiers()
+        .as_single()
+        .expect("fixture must have one retained post-root dependency");
+    let before_incoming = source.oplog_vv();
+
+    let shallow = source.export(ExportMode::shallow_snapshot(&shallow_root))?;
+    let s = LoroDoc::new();
+    s.import(&shallow)?;
+    assert!(
+        !s.shallow_since_vv().is_empty(),
+        "test setup must produce a real shallow trim"
+    );
+    assert_eq!(s.shallow_since_frontiers(), shallow_root);
+    assert!(
+        s.get_change(ID::new(9, 0)).is_none(),
+        "trimmed history must be absent"
+    );
+    assert!(
+        s.get_change(retained).is_some(),
+        "additional dependency must be retained"
+    );
+
+    let incoming = source.fork();
+    incoming.set_peer_id(2)?;
+    let incoming_text = incoming.get_text("t");
+    incoming_text.insert(incoming_text.len_unicode(), " Y")?;
+    incoming.commit();
+    let incoming_id = incoming
+        .oplog_frontiers()
+        .as_single()
+        .expect("incoming change must have one id");
+    let mut update = incoming
+        .export_json_updates_without_peer_compression(&before_incoming, &incoming.oplog_vv());
+    assert_eq!(update.changes.len(), 1);
+    let actual_deps = &mut update.changes[0].deps;
+    assert_eq!(actual_deps.as_slice(), &[retained]);
+    actual_deps.push(boundary);
+
+    assert!(actual_deps.contains(&boundary));
+    assert!(actual_deps.contains(&retained));
+    assert!(actual_deps.len() >= 2);
+    assert_ne!(actual_deps.as_slice(), &[boundary]);
+
+    s.import_json_updates(update).expect(
+        "shallow doc should accept an update depending on the boundary and retained history",
+    );
+    let imported = s
+        .get_change(incoming_id)
+        .expect("the incoming change must be added to the oplog");
+    assert_eq!(imported.deps.len(), 2);
+    assert_ne!(imported.deps, shallow_root);
+    assert!(imported.deps.contains(&boundary));
+    assert!(imported.deps.contains(&retained));
+    assert_eq!(s.get_deep_value(), incoming.get_deep_value());
+    assert!(s.get_text("t").to_string().ends_with(" Y"));
+
+    Ok(())
+}
+
+/// Shallow snapshots are documented as a content-redaction mechanism: exporting at the
+/// current frontiers is supposed to drop the trimmed history, leaving only the live state.
+/// The value of a rich-text style op whose whole range has been deleted must be dropped
+/// just like deleted character content is.
+///
+/// Regression test contributed in <https://github.com/loro-dev/loro/pull/1057> by @nightscape.
+#[test]
+fn shallow_snapshot_drops_deleted_text_and_dead_style_values() -> anyhow::Result<()> {
+    const SECRET_STYLE_VALUE: &str = "SECRET-STYLE-VALUE-e5f1";
+    const SECRET_TEXT: &str = "SECRET-TEXT-a7b2";
+
+    let doc = LoroDoc::new();
+    doc.set_peer_id(1)?;
+    let text = doc.get_text("text");
+    text.insert(0, SECRET_TEXT)?;
+    let len = SECRET_TEXT.chars().count();
+    text.mark(
+        0..len,
+        "comment",
+        LoroValue::String(SECRET_STYLE_VALUE.into()),
+    )?;
+    doc.commit();
+
+    text.delete(0, len)?;
+    doc.commit();
+
+    // Both secrets are unreachable through every read API.
+    assert_eq!(text.to_string(), "");
+    let live_state = format!("{:?}", doc.get_deep_value());
+    assert!(!live_state.contains(SECRET_TEXT));
+    assert!(!live_state.contains(SECRET_STYLE_VALUE));
+
+    let shallow = doc.export(ExportMode::shallow_snapshot(&doc.oplog_frontiers()))?;
+
+    assert!(
+        !bytes_contain(&shallow, SECRET_TEXT),
+        "deleted text content must not survive a shallow snapshot"
+    );
+    assert!(
+        !bytes_contain(&shallow, SECRET_STYLE_VALUE),
+        "style value of a fully deleted range must not survive a shallow snapshot"
+    );
+
+    // Re-export from the imported shallow doc (the reuse-existing-root-bytes path)
+    // must stay clean and importable.
+    let imported = LoroDoc::new();
+    imported.import(&shallow)?;
+    let reexported = imported.export(ExportMode::shallow_snapshot(&imported.oplog_frontiers()))?;
+    assert!(
+        !bytes_contain(&reexported, SECRET_STYLE_VALUE),
+        "style value must not survive re-export of an imported shallow snapshot"
+    );
+    let imported_again = LoroDoc::new();
+    imported_again.import(&reexported)?;
+    assert_eq!(imported_again.get_deep_value(), doc.get_deep_value());
+
+    Ok(())
+}
+
+/// An empty both-expand style pair still captures future inserts, so its value is
+/// live data: redacting it would diverge from full-history replicas. It must be
+/// kept, and both replicas must agree after typing into the collapsed range.
+#[test]
+fn shallow_snapshot_keeps_live_both_expand_style_value() -> anyhow::Result<()> {
+    fn cfg() -> StyleConfigMap {
+        let mut map = StyleConfigMap::new();
+        map.insert(
+            "hl".into(),
+            StyleConfig {
+                expand: ExpandType::Both,
+            },
+        );
+        map
+    }
+
+    let a = LoroDoc::new();
+    a.set_peer_id(1)?;
+    a.config_text_style(cfg());
+    let ta = a.get_text("text");
+    ta.insert(0, "abcd")?;
+    ta.mark(1..3, "hl", LoroValue::String("BOTH-EXPAND-VALUE".into()))?;
+    a.commit();
+    ta.delete(1, 2)?;
+    a.commit();
+
+    let bytes = a.export(ExportMode::shallow_snapshot(&a.oplog_frontiers()))?;
+
+    // The value's survival is asserted semantically below: after typing into
+    // the collapsed range, the shallow replica must re-apply it.
+    let b = LoroDoc::new();
+    b.config_text_style(cfg());
+    b.import(&bytes)?;
+
+    // Typing into the collapsed range picks the style back up on both replicas.
+    let vv = a.oplog_vv();
+    ta.insert(1, "x")?;
+    a.commit();
+    b.import(&a.export(ExportMode::updates(&vv))?)?;
+
+    let rendered_a = format!("{:?}", ta.get_richtext_value());
+    let rendered_b = format!("{:?}", b.get_text("text").get_richtext_value());
+    assert_eq!(rendered_a, rendered_b);
+    assert!(rendered_b.contains("BOTH-EXPAND-VALUE"));
+    Ok(())
+}
+
+/// A style that is alive at the requested shallow root and only dies in the
+/// retained tail must keep its value: the imported doc can check out back to the
+/// root and must render it. Re-exporting at the tip then drops it.
+#[test]
+fn shallow_snapshot_keeps_style_alive_at_root_and_redacts_on_reexport() -> anyhow::Result<()> {
+    let doc = LoroDoc::new();
+    doc.set_peer_id(1)?;
+    let text = doc.get_text("text");
+    text.insert(0, "hello")?;
+    text.mark(0..5, "comment", LoroValue::String("KEEP-ME-42".into()))?;
+    doc.commit();
+    let root_frontiers = doc.oplog_frontiers();
+    text.delete(0, 5)?;
+    doc.commit();
+
+    // The value's retention is asserted semantically below: the imported doc
+    // checks out back to the root and must render the style.
+    let bytes = doc.export(ExportMode::shallow_snapshot(&root_frontiers))?;
+
+    let imported = LoroDoc::new();
+    imported.import(&bytes)?;
+    assert_eq!(imported.get_text("text").to_string(), "");
+    imported.checkout(&root_frontiers)?;
+    let styled = format!("{:?}", imported.get_text("text").get_richtext_value());
+    assert!(styled.contains("KEEP-ME-42"));
+    imported.checkout_to_latest();
+
+    // At the imported doc's tip the pair is dead, so a re-export rooted there
+    // must drop the value.
+    let reexported = imported.export(ExportMode::shallow_snapshot(&imported.oplog_frontiers()))?;
+    assert!(!bytes_contain(&reexported, "KEEP-ME-42"));
+    Ok(())
+}
+
+/// When the retained-op count exceeds the threshold the export also carries the
+/// encoded latest state, which contains the same dead anchors and must be
+/// redacted with the same pair set.
+#[test]
+fn shallow_snapshot_with_latest_state_bytes_redacts_dead_style_values() -> anyhow::Result<()> {
+    let doc = LoroDoc::new();
+    doc.set_peer_id(1)?;
+    let text = doc.get_text("text");
+    text.insert(0, "secret")?;
+    text.mark(
+        0..6,
+        "comment",
+        LoroValue::String("SECRET-STYLE-9d3c".into()),
+    )?;
+    doc.commit();
+    text.delete(0, 6)?;
+    doc.commit();
+    let start = doc.oplog_frontiers();
+
+    // Make the latest text state differ from the root state so its entry
+    // survives `remove_same` and must be redacted via the whitelist, and push
+    // the retained-op count above the no-latest-state threshold.
+    text.insert(0, "later")?;
+    let list = doc.get_list("filler");
+    for i in 0..300 {
+        list.push(i)?;
+    }
+    doc.commit();
+
+    let bytes = doc.export(ExportMode::shallow_snapshot(&start))?;
+    assert!(!bytes_contain(&bytes, "SECRET-STYLE-9d3c"));
+
+    let imported = LoroDoc::new();
+    imported.import(&bytes)?;
+    assert_eq!(imported.get_deep_value(), doc.get_deep_value());
+    Ok(())
+}
+
+#[test]
+fn state_only_snapshot_redacts_dead_style_values() -> anyhow::Result<()> {
+    let doc = LoroDoc::new();
+    doc.set_peer_id(1)?;
+    let text = doc.get_text("text");
+    text.insert(0, "abc")?;
+    text.mark(0..3, "comment", LoroValue::String("SECRET-SO-77".into()))?;
+    doc.commit();
+    text.delete(0, 3)?;
+    doc.commit();
+
+    let f = doc.oplog_frontiers();
+    let bytes = doc.export(ExportMode::state_only(Some(&f)))?;
+    assert!(!bytes_contain(&bytes, "SECRET-SO-77"));
+
+    let imported = LoroDoc::new();
+    imported.import(&bytes)?;
+    assert_eq!(imported.get_text("text").to_string(), "");
+    Ok(())
+}
+
+/// Dead pairs of every non-both expand kind are redacted, and typing at the
+/// collapsed position behaves identically on the exporter and the shallow
+/// replica afterwards.
+#[test]
+fn shallow_snapshot_redacts_dead_styles_for_all_non_both_expands() -> anyhow::Result<()> {
+    for expand in [ExpandType::After, ExpandType::Before, ExpandType::None] {
+        let cfg = || {
+            let mut map = StyleConfigMap::new();
+            map.insert("hl".into(), StyleConfig { expand });
+            map
+        };
+
+        let a = LoroDoc::new();
+        a.set_peer_id(1)?;
+        a.config_text_style(cfg());
+        let ta = a.get_text("text");
+        ta.insert(0, "abcd")?;
+        ta.mark(1..3, "hl", LoroValue::String("SECRET-EXP-11".into()))?;
+        a.commit();
+        ta.delete(1, 2)?;
+        a.commit();
+
+        let bytes = a.export(ExportMode::shallow_snapshot(&a.oplog_frontiers()))?;
+        assert!(
+            !bytes_contain(&bytes, "SECRET-EXP-11"),
+            "expand={expand:?}: dead style value must be redacted"
+        );
+
+        let b = LoroDoc::new();
+        b.config_text_style(cfg());
+        b.import(&bytes)?;
+
+        let vv = a.oplog_vv();
+        ta.insert(1, "x")?;
+        a.commit();
+        b.import(&a.export(ExportMode::updates(&vv))?)?;
+        assert_eq!(
+            format!("{:?}", ta.get_richtext_value()),
+            format!("{:?}", b.get_text("text").get_richtext_value()),
+            "expand={expand:?}"
+        );
+    }
+    Ok(())
+}
+
+/// The forward-replay fast path (attached doc at latest) and the checkout
+/// path (detached doc) must produce shallow snapshots that are semantically
+/// identical: both import to the same state with the same shallow metadata.
+/// They are not required to be byte-identical.
+#[test]
+fn shallow_export_forward_replay_matches_checkout_path() -> anyhow::Result<()> {
+    let doc = LoroDoc::new();
+    doc.set_peer_id(1)?;
+
+    // Phase 1 (before the shallow root F): content on every container type,
+    // plus an accessed-but-op-less root container and a text whose content is
+    // deleted before F — these are the cases where the replay doc's store can
+    // diverge from the live store.
+    doc.get_map("map").insert("a", 1)?;
+    doc.get_list("list").insert(0, "l0")?;
+    doc.get_text("text").insert(0, "hello")?;
+    let movable = doc.get_movable_list("movable");
+    movable.insert(0, "m0")?;
+    movable.insert(1, "m1")?;
+    let tree = doc.get_tree("tree");
+    tree.enable_fractional_index(0);
+    let root = tree.create(loro::TreeParentId::Root)?;
+    tree.create(root)?;
+    let _accessed_but_empty = doc.get_text("empty_text");
+    doc.get_text("text").delete(0, 2)?;
+    doc.commit();
+    let f = doc.oplog_frontiers();
+
+    // Phase 2 (after F): one big-atom insert pushes the tail past both the
+    // 256-op overlay threshold and the 65536-op forward-replay gate
+    // (`MIN_RETAINED_OPS_FOR_FORWARD_ROOT_STATE` in
+    // loro-internal/src/encoding/shallow_snapshot.rs), so the attached export
+    // really exercises the fast path with a latest-state overlay. A big-atom
+    // insert keeps the test cheap: 70k atomic ops in a single change.
+    doc.get_text("text").insert(3, &"y".repeat(70_000))?;
+    doc.get_map("map").insert("b", 2)?;
+    doc.get_list("list").insert(1, "l1")?;
+    doc.get_text("text").insert(3, " world")?;
+    movable.mov(0, 1)?;
+    doc.commit();
+
+    // Fast path: attached, state at latest -> forward replay.
+    let fast = doc.export(ExportMode::shallow_snapshot(&f))?;
+    // Checkout path: detach at an older version so state_frontiers differs
+    // from the latest frontiers.
+    doc.checkout(&Frontiers::default())?;
+    let old = doc.export(ExportMode::shallow_snapshot(&f))?;
+    doc.checkout_to_latest();
+
+    // Full metadata and retained history must match, not just the state.
+    let fast_meta = LoroDoc::decode_import_blob_meta(&fast, false)?;
+    let old_meta = LoroDoc::decode_import_blob_meta(&old, false)?;
+    assert_eq!(fast_meta.mode, old_meta.mode);
+    assert_eq!(fast_meta.start_frontiers, f);
+    assert_eq!(old_meta.start_frontiers, f);
+    assert_eq!(fast_meta.change_num, old_meta.change_num);
+    assert_eq!(
+        format!("{:?}", fast_meta.partial_start_vv),
+        format!("{:?}", old_meta.partial_start_vv)
+    );
+    assert_eq!(
+        format!("{:?}", fast_meta.partial_end_vv),
+        format!("{:?}", old_meta.partial_end_vv)
+    );
+
+    let fast_doc = LoroDoc::new();
+    fast_doc.import(&fast)?;
+    let old_doc = LoroDoc::new();
+    old_doc.import(&old)?;
+
+    assert_eq!(fast_doc.get_deep_value(), doc.get_deep_value(), "forward");
+    assert_eq!(old_doc.get_deep_value(), doc.get_deep_value(), "checkout");
+    assert_eq!(fast_doc.get_deep_value(), old_doc.get_deep_value());
+    assert_eq!(fast_doc.shallow_since_frontiers(), f);
+    assert_eq!(old_doc.shallow_since_frontiers(), f);
+    assert_eq!(fast_doc.len_changes(), old_doc.len_changes());
+    assert_eq!(fast_doc.len_ops(), old_doc.len_ops());
+    assert_eq!(fast_doc.oplog_vv(), old_doc.oplog_vv());
+    assert_eq!(fast_doc.oplog_frontiers(), old_doc.oplog_frontiers());
+
+    let vv_pairs = |d: &LoroDoc| {
+        let mut pairs: Vec<(u64, i32)> = d
+            .shallow_since_vv()
+            .iter()
+            .map(|(peer, counter)| (*peer, *counter))
+            .collect();
+        pairs.sort_unstable();
+        pairs
+    };
+    assert_eq!(vv_pairs(&fast_doc), vv_pairs(&old_doc));
+    assert!(fast_doc.is_shallow() && old_doc.is_shallow());
+    // The accessed-but-op-less root container must survive both paths. Check
+    // existence BEFORE materializing it: `get_text` would create the root on
+    // access and prove nothing.
+    for (name, d) in [("forward", &fast_doc), ("checkout", &old_doc)] {
+        assert!(d.is_shallow(), "{name}");
+        assert!(
+            d.has_container(&ContainerID::new_root("empty_text", ContainerType::Text)),
+            "{name}: op-less root container must survive the shallow export"
+        );
+        assert_eq!(d.get_text("empty_text").to_string(), "", "{name}");
+    }
+
+    Ok(())
+}
+
+/// A root container deleted before the shallow root must stay deleted in the
+/// exported root state: the forward-replay path mirrors the live doc's
+/// deleted-root set, so the replay doc's flush drops the empty entry instead
+/// of resurrecting it.
+///
+/// Covers deleted-before-F and deleted-after-F, each with and without the
+/// latest-state overlay (>256 tail ops).
+#[test]
+fn shallow_export_deleted_root_containers_match_checkout_path() -> anyhow::Result<()> {
+    for with_overlay in [false, true] {
+        // `doomed_before` is deleted before F; `doomed_after` is deleted after
+        // F but has content at F that must survive in the root state.
+        let doc = LoroDoc::new();
+        doc.set_peer_id(1)?;
+        doc.get_text("doomed_before").insert(0, "secret")?;
+        doc.get_text("doomed_after").insert(0, "at-f-content")?;
+        doc.get_map("kept").insert("before", 1)?;
+        doc.commit();
+        doc.delete_root_container(ContainerID::new_root("doomed_before", ContainerType::Text));
+        doc.commit();
+        let f = doc.oplog_frontiers();
+
+        // The forward-replay gate (`MIN_RETAINED_OPS_FOR_FORWARD_ROOT_STATE`
+        // in loro-internal/src/encoding/shallow_snapshot.rs) requires >= 65536
+        // retained ops, which always implies an overlay; the no-overlay case
+        // below therefore exercises the checkout path's absolute semantics,
+        // and the overlay case exercises fast-path vs checkout-path parity.
+        // The big-atom variant keeps the test cheap: 70k atomic ops in a
+        // single change.
+        if with_overlay {
+            doc.get_text("kept_text").insert(0, &"t".repeat(70_000))?;
+        } else {
+            for i in 0..4 {
+                doc.get_map("kept").insert(&format!("k{i}"), i as i64)?;
+            }
+        }
+        doc.commit();
+        doc.delete_root_container(ContainerID::new_root("doomed_after", ContainerType::Text));
+        doc.commit();
+
+        let fast = doc.export(ExportMode::shallow_snapshot(&f))?;
+        doc.checkout(&Frontiers::default())?;
+        let slow = doc.export(ExportMode::shallow_snapshot(&f))?;
+        doc.checkout_to_latest();
+
+        let fast_doc = LoroDoc::from_snapshot(&fast)?;
+        let slow_doc = LoroDoc::from_snapshot(&slow)?;
+        assert_eq!(
+            fast_doc.get_deep_value(),
+            slow_doc.get_deep_value(),
+            "with_overlay={with_overlay}"
+        );
+        // Imported docs don't carry the source's deleted-root display config
+        // (both export paths behave the same here): a root deleted after F
+        // replays to an empty value and shows up as such, while the live doc
+        // hides it. A root deleted before F must not appear at all.
+        let live = doc.get_deep_value();
+        let live_map = live.as_map().unwrap();
+        let fast_latest = fast_doc.get_deep_value();
+        let fast_map = fast_latest.as_map().unwrap();
+        for (k, v) in live_map.iter() {
+            assert_eq!(
+                fast_map.get(k),
+                Some(v),
+                "with_overlay={with_overlay} key {k}"
+            );
+        }
+        assert_eq!(fast_map.len(), live_map.len() + 1);
+        if !with_overlay {
+            // The retained tail replays the deletion's clear ops, so the root
+            // ends up empty at the latest version.
+            assert_eq!(
+                fast_map.get("doomed_after"),
+                Some(&LoroValue::String("".into())),
+            );
+        }
+        assert!(
+            !fast_map.contains_key("doomed_before"),
+            "with_overlay={with_overlay}: root deleted before F must not be resurrected"
+        );
+
+        // The root state at F must still render the after-F-deleted content:
+        // check out both imported docs to F and compare.
+        fast_doc.checkout(&f)?;
+        slow_doc.checkout(&f)?;
+        assert_eq!(fast_doc.get_deep_value(), slow_doc.get_deep_value());
+        if !with_overlay {
+            assert_eq!(
+                fast_doc.get_text("doomed_after").to_string(),
+                "at-f-content",
+                "root state must keep content deleted after F"
+            );
+        }
+        // NOTE: with the overlay, a checkout back to F on the imported doc
+        // doubles the after-F-deleted content on BOTH paths — a pre-existing
+        // overlay/checkout quirk reproduced on the base commit, unrelated to
+        // the forward-replay path.
+        assert!(
+            !fast_doc
+                .get_deep_value()
+                .as_map()
+                .unwrap()
+                .contains_key("doomed_before"),
+            "with_overlay={with_overlay}: root deleted before F must not be resurrected"
+        );
+        fast_doc.checkout_to_latest();
+        slow_doc.checkout_to_latest();
+
+        // Same retained history and shallow metadata.
+        let fast_meta = LoroDoc::decode_import_blob_meta(&fast, false)?;
+        let slow_meta = LoroDoc::decode_import_blob_meta(&slow, false)?;
+        assert_eq!(fast_meta.start_frontiers, slow_meta.start_frontiers);
+        assert_eq!(fast_meta.change_num, slow_meta.change_num);
+        assert_eq!(fast_doc.len_changes(), slow_doc.len_changes());
+        assert_eq!(fast_doc.len_ops(), slow_doc.len_ops());
+        assert_eq!(fast_doc.oplog_vv(), slow_doc.oplog_vv());
+        assert_eq!(fast_doc.oplog_vv(), doc.oplog_vv());
+    }
+
+    Ok(())
+}

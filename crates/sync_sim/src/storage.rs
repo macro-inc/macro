@@ -5,6 +5,9 @@ use rand::Rng;
 use serde::Serialize;
 use std::collections::{BTreeMap, BTreeSet};
 
+mod history;
+use history::SharedStoreImage;
+
 /// Durable rows and covering snapshots retained across tab/process lifetimes.
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize)]
 pub struct StoreImage {
@@ -27,7 +30,7 @@ pub(crate) struct Completion {
 }
 struct DurableWrite {
     at: u64,
-    before: StoreImage,
+    before: SharedStoreImage,
     appended: Option<(SessionId, WalSeq)>,
 }
 /// One browser's durable store, outstanding transactions and live/frozen leases.
@@ -38,6 +41,7 @@ pub struct SimStorage {
     pub(crate) user: String,
     pub(crate) seeded_docs: BTreeSet<SyncDocId>,
     recent: Vec<DurableWrite>,
+    pub(crate) corruptions: Vec<(SyncDocId, WalOwner, WalSeq)>,
     next_id: u64,
     tails: BTreeMap<SyncDocId, u64>,
     latency: (crate::Millis, crate::Millis),
@@ -47,10 +51,15 @@ pub struct SimStorage {
     quota: Option<u64>,
     written: u64,
     uncertain: u8,
+    retention: doc_sync_core::Millis,
 }
 impl SimStorage {
     /// Empty profile with independent storage and leases.
     pub fn new(profile: StorageProfile) -> Self {
+        Self::with_retention(profile, WalPolicy::default().ttl)
+    }
+    /// Empty profile with the host's explicit orphan retention policy.
+    pub fn with_retention(profile: StorageProfile, retention: doc_sync_core::Millis) -> Self {
         Self {
             durable: StoreImage::default(),
             pending: BTreeMap::new(),
@@ -58,6 +67,7 @@ impl SimStorage {
             user: "user-0".into(),
             seeded_docs: BTreeSet::new(),
             recent: Vec::new(),
+            corruptions: Vec::new(),
             next_id: 0,
             tails: BTreeMap::new(),
             latency: profile.latency,
@@ -67,11 +77,31 @@ impl SimStorage {
             quota: None,
             written: 0,
             uncertain: 0,
+            retention,
         }
     }
     /// Inspect committed state only.
     pub fn image(&self) -> &StoreImage {
         &self.durable
+    }
+    // During healed settlement there is no rollback. Any newly completed write
+    // can change the next orphan load's selection, even if no client lifetime changes.
+    pub(crate) fn completed_writes(&self) -> usize {
+        self.recent.len()
+    }
+    /// Conservative cache eviction, distinct from a core-requested corrupt snapshot delete.
+    /// Returns false while any undelivered WAL row still needs this document's cache.
+    pub fn evict_snapshot(&mut self, doc: &SyncDocId) -> bool {
+        if self
+            .durable
+            .entries
+            .iter()
+            .any(|((key, _, _), row)| key == doc && !row.delivered)
+        {
+            return false;
+        }
+        self.durable.snapshots.remove(doc);
+        true
     }
     /// Change adapter failure behavior; never mutate client state directly.
     pub fn fault(&mut self, fault: StorageFault) {
@@ -95,8 +125,9 @@ impl SimStorage {
                 }
             }
             StorageFault::CorruptRow => {
-                if let Some(row) = self.durable.entries.values_mut().next() {
+                if let Some((key, row)) = self.durable.entries.iter_mut().next() {
                     row.record.bytes = vec![0];
+                    self.corruptions.push(key.clone());
                 }
             }
             StorageFault::Uncertain { next } => self.uncertain = next,
@@ -118,7 +149,13 @@ impl SimStorage {
         self.pending.insert(id, write);
         (id, at)
     }
-    fn load(&self, doc: &SyncDocId, owner: SessionId, user: &UserKey) -> LocalState {
+    fn load(
+        &self,
+        doc: &SyncDocId,
+        owner: SessionId,
+        user: &UserKey,
+        wall: UnixMillis,
+    ) -> LocalState {
         let mut orphaned: BTreeMap<WalOwner, Vec<StoredWalRecord>> = BTreeMap::new();
         let mut assist: BTreeMap<WalOwner, Vec<StoredWalRecord>> = BTreeMap::new();
         for ((row_doc, row_owner, _), row) in &self.durable.entries {
@@ -129,9 +166,20 @@ impl SimStorage {
                 WalOwner::Session(id) => self.leases.contains(&(doc.clone(), *id)),
                 WalOwner::Legacy => false,
             };
-            // Expired other-user rows are returned only as orphan metadata so the
-            // core may request TTL cleanup; it must never import their bytes.
-            if leased && row.record.user == *user && !row.delivered {
+            // S7 O-2 permits only expired orphan metadata from other users for TTL
+            // cleanup. Never expose their payload, unexpired rows or leased rows.
+            if row.record.user != *user {
+                let before = wall
+                    .0
+                    .saturating_sub(i64::try_from(self.retention.0).unwrap_or(i64::MAX));
+                if !leased && !row.delivered && row.record.created_at.0 < before {
+                    let mut metadata = row.clone();
+                    metadata.record.bytes.clear();
+                    orphaned.entry(*row_owner).or_default().push(metadata);
+                }
+                continue;
+            }
+            if leased && !row.delivered {
                 assist.entry(*row_owner).or_default().push(row.clone());
             } else if !leased {
                 orphaned.entry(*row_owner).or_default().push(row.clone());
@@ -159,6 +207,7 @@ impl SimStorage {
         token: u64,
         profile: &ProfileName,
         now: u64,
+        wall: UnixMillis,
     ) -> Option<Completion> {
         let write = self.pending.remove(&token)?;
         let mut facts = Vec::new();
@@ -167,7 +216,7 @@ impl SimStorage {
                 let result = if std::mem::take(&mut self.fail_load) {
                     Err(StorageFailure::Unavailable)
                 } else {
-                    Ok(self.load(doc, *owner, user))
+                    Ok(self.load(doc, *owner, user, wall))
                 };
                 StorageEvent::Loaded {
                     id: write.id,
@@ -197,7 +246,10 @@ impl SimStorage {
                 let result = if let Some(failure) = failure {
                     Err(failure)
                 } else {
-                    let before = self.durable.clone();
+                    let before = SharedStoreImage::capture(
+                        &self.durable,
+                        self.recent.last().map(|write| &write.before),
+                    );
                     let count = self.apply(&write.op, profile, &mut facts);
                     let appended = match &write.op {
                         StorageOp::WalAppend { owner, record, .. } => Some((*owner, record.seq)),
@@ -251,7 +303,8 @@ impl SimStorage {
             from,
             to,
             first_seq,
-            ..
+            covers: expected_cover,
+            expected,
         } = op
         else {
             return None;
@@ -269,14 +322,24 @@ impl SimStorage {
             .filter(|(owner, _)| *from == WalOwner::Session(*owner))
             .map(|(_, seq)| seq)
             .unwrap_or(WalSeq(0));
-        let count = self
+        // The core reserved IDs and retained payloads from the loaded cover.
+        // A replacement snapshot can change selection in either direction.
+        if covers != *expected_cover {
+            return Some(StorageFailure::Other);
+        }
+        let selected = self
             .durable
             .entries
             .iter()
             .filter(|((row_doc, owner, seq), row)| {
                 row_doc == doc && owner == from && (!row.delivered || *seq > covers)
             })
-            .count();
+            .map(|(_, row)| row)
+            .collect::<Vec<_>>();
+        if !selected.is_empty() && !selected.iter().copied().eq(expected.iter()) {
+            return Some(StorageFailure::Other);
+        }
+        let count = selected.len();
         for offset in 0..count {
             let Ok(offset) = u64::try_from(offset) else {
                 return Some(StorageFailure::Other);
@@ -337,15 +400,28 @@ impl SimStorage {
                     .and_then(|snapshot| snapshot.covers)
                     .filter(|(id, _)| id == owner)
                     .map(|(_, seq)| seq);
+                let mut removed = Vec::new();
                 self.durable
                     .entries
                     .retain(|(row_doc, row_owner, seq), row| {
-                        !(row_doc == doc
+                        let prune = row_doc == doc
                             && *row_owner == WalOwner::Session(*owner)
                             && seq <= through
                             && covers.is_some_and(|cover| *seq <= cover)
-                            && row.delivered)
+                            && row.delivered;
+                        if prune {
+                            removed.push(*seq);
+                        }
+                        !prune
                     });
+                if !removed.is_empty() {
+                    facts.push(Fact::WalPruned {
+                        profile: profile.clone(),
+                        doc: doc.clone(),
+                        owner: *owner,
+                        seqs: removed,
+                    });
+                }
             }
             StorageOp::WalAdopt {
                 doc,
@@ -353,6 +429,7 @@ impl SimStorage {
                 to,
                 first_seq,
                 covers: _,
+                expected: _,
             } => {
                 let covers = self
                     .durable
@@ -371,8 +448,10 @@ impl SimStorage {
                     .cloned()
                     .collect();
                 let mut map = Vec::new();
+                let mut removed = Vec::new();
                 for key in keys {
                     if let Some(mut row) = self.durable.entries.remove(&key) {
+                        removed.push(key.2);
                         if row.delivered && key.2 <= covers {
                             continue;
                         }
@@ -391,6 +470,8 @@ impl SimStorage {
                 let count = u32::try_from(map.len()).unwrap_or(u32::MAX);
                 facts.push(Fact::WalAdopted {
                     profile: profile.clone(),
+                    doc: doc.clone(),
+                    removed,
                     from: *from,
                     to: *to,
                     map,
@@ -411,6 +492,7 @@ impl SimStorage {
                 });
                 facts.push(Fact::WalExpired {
                     profile: profile.clone(),
+                    doc: doc.clone(),
                     owner: *from,
                     seqs,
                 });
@@ -434,7 +516,12 @@ impl SimStorage {
                 );
             }
             StorageOp::SnapshotDelete { doc } => {
-                self.durable.snapshots.remove(doc);
+                if self.durable.snapshots.remove(doc).is_some() {
+                    facts.push(Fact::SnapshotDeleted {
+                        profile: profile.clone(),
+                        doc: doc.clone(),
+                    });
+                }
             }
             StorageOp::Load { .. } | StorageOp::LoadOrphans { .. } => {}
         }
@@ -446,10 +533,18 @@ impl SimStorage {
         self.tails.clear();
         let mut facts = Vec::new();
         if let CrashMode::PowerLoss { window } = mode {
+            let delivered_before = self
+                .durable
+                .entries
+                .iter()
+                .filter(|(_, row)| row.delivered)
+                .map(|(key, _)| key.clone())
+                .collect::<Vec<_>>();
             let cutoff = now.saturating_sub(window.0);
+            let mut restore = None;
             while self.recent.last().is_some_and(|write| write.at >= cutoff) {
                 if let Some(write) = self.recent.pop() {
-                    self.durable = write.before;
+                    restore = Some(write.before);
                     if let Some((session, seq)) = write.appended {
                         facts.push(Fact::WalWriteLost {
                             profile: profile.clone(),
@@ -459,6 +554,29 @@ impl SimStorage {
                     }
                 }
             }
+            if let Some(image) = restore {
+                self.durable = image.into_owned();
+            }
+            let mut lost = BTreeMap::<_, Vec<_>>::new();
+            for key in delivered_before {
+                if !self
+                    .durable
+                    .entries
+                    .get(&key)
+                    .is_some_and(|row| row.delivered)
+                {
+                    lost.entry((key.0, key.1)).or_default().push(key.2);
+                }
+            }
+            facts.extend(
+                lost.into_iter()
+                    .map(|((doc, owner), seqs)| Fact::WalDeliveryLost {
+                        profile: profile.clone(),
+                        doc,
+                        owner,
+                        seqs,
+                    }),
+            );
         }
         facts
     }

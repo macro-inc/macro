@@ -4,6 +4,121 @@ use doc_sync_core::*;
 use document_session::*;
 use lexical_model::*;
 #[test]
+fn macro_session_opens_persisted_task_lists_and_projects_typing() {
+    use std::sync::Arc;
+    let context = macro_document_model::DocumentContext {
+        clock: macro_document_model::NodeClock(Arc::new(|| 1794052800000)),
+        random: macro_document_model::NodeRandom(Arc::new({
+            let next = std::sync::atomic::AtomicU8::new(7);
+            move |size| vec![next.fetch_add(1, std::sync::atomic::Ordering::Relaxed); size]
+        })),
+        host: macro_document_model::NodeHost::default(),
+        keys: KeySource::default(),
+        editor_created: None,
+    };
+    let snapshot =
+        macro_document_model::snapshot::markdown_to_loro_snapshot("- todo", &context).unwrap();
+    let config = wire::SessionConfigMsg {
+        doc: "macro-list-fixture".into(),
+        session: "00000000-0000-0000-0000-000000000001".into(),
+        user: "fixture-user".into(),
+        peers: vec![7, 8, 9],
+        access: wire::Access::Edit,
+        transport: wire::Transport::None,
+        durable: false,
+        chatter: false,
+        headless: false,
+        view_engine: 1,
+        view_os: 0,
+        token: String::new(),
+        traceparent: String::new(),
+        coalesce: 25,
+        snapshot_interval: 0,
+        observed: vec![],
+    };
+    let mut machine = machine::Machine::create_macro(
+        generated::ABI_MAJOR,
+        &bytes(&config).unwrap(),
+        0.0,
+        1794052800000.0,
+    )
+    .unwrap();
+    machine.sync(SyncInput::Start, 0.0, None).unwrap();
+    machine
+        .sync(
+            SyncInput::Seed {
+                kind: SeedKind::Optimistic,
+                snapshot: snapshot.clone(),
+            },
+            1.0,
+            None,
+        )
+        .unwrap();
+    let machine::Session::Editor(session) = &machine.session else {
+        panic!("editor")
+    };
+    assert!(
+        session
+            .last_output()
+            .view
+            .iter()
+            .any(|effect| matches!(effect, ViewEffect::Initialize(_))),
+        "{:?}",
+        session
+            .last_output()
+            .view
+            .iter()
+            .filter_map(|effect| if let ViewEffect::Error(error) = effect {
+                Some(error.to_string())
+            } else {
+                None
+            })
+            .collect::<Vec<_>>()
+    );
+    assert!(!session
+        .last_output()
+        .view
+        .iter()
+        .any(|effect| matches!(effect, ViewEffect::Error(_))));
+    assert_eq!(
+        session.surface().state().root_text_content().as_ref(),
+        "todo"
+    );
+    let key = session
+        .surface()
+        .state()
+        .view()
+        .all_text_nodes(NodeKey::ROOT)
+        .next()
+        .unwrap();
+    let selection = ViewSelection::Range {
+        anchor: Point::text(key, Utf16Offset(5)),
+        focus: Point::text(key, Utf16Offset(5)),
+        resolution_dirty: false,
+    };
+    machine
+        .editor(
+            Input::TextFromView {
+                key,
+                text: "todo!".into(),
+                anchor: Some(Utf16Offset(5)),
+                focus: Some(Utf16Offset(5)),
+                composition_end: false,
+                composition_data: None,
+                selection,
+            },
+            2.0,
+        )
+        .unwrap();
+    let machine::Session::Editor(session) = &machine.session else {
+        panic!("editor")
+    };
+    assert_eq!(
+        session.surface().state().root_text_content().as_ref(),
+        "todo!"
+    );
+}
+#[test]
 fn literal_session_abi_opens_types_and_coalesces_a_single_text_input() {
     let config = wire::SessionConfigMsg {
         doc: "fixture-document".into(),
@@ -554,4 +669,39 @@ fn targeted_key_input_preserves_consuming_model_listener_precedence() {
             .format,
         TextFormat::empty()
     );
+}
+
+#[test]
+fn adoption_boundary_preserves_the_exact_loaded_selection() {
+    let expected = StoredWalRecord {
+        delivered: true,
+        record: WalRecord {
+            seq: WalSeq(9_007_199_254_740_993),
+            created_at: UnixMillis(-17),
+            user: UserKey("fixture-user".into()),
+            foreign: true,
+            quarantined: true,
+            bytes: vec![0, 255, 1],
+        },
+    };
+    let op = StorageOp::WalAdopt {
+        doc: "fixture-document".parse().unwrap(),
+        from: WalOwner::Legacy,
+        to: codec::session("00000000-0000-0000-0000-000000000001").unwrap(),
+        first_seq: WalSeq(11),
+        covers: WalSeq(7),
+        expected: vec![expected],
+    };
+    let encoded = storage::encode(&op, false);
+    let decoded = wire::StorageOpMsg::deserialize(&bytes(&encoded).unwrap()).unwrap();
+    assert_eq!(decoded.kind, 5);
+    assert_eq!(decoded.seq, 11);
+    assert_eq!(decoded.through, 7);
+    assert_eq!(decoded.expected.len(), 1);
+    let row = &decoded.expected[0];
+    assert_eq!(row.seq, 9_007_199_254_740_993);
+    assert_eq!(row.created_at, -17);
+    assert_eq!(row.user, "fixture-user");
+    assert!(row.delivered && row.foreign && row.quarantined);
+    assert_eq!(row.bytes, [0, 255, 1]);
 }

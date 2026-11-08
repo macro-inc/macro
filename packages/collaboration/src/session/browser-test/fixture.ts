@@ -36,6 +36,7 @@ function op(
     snapshot: new Uint8Array(),
     coversOwner: '',
     coversSeq: 0n,
+    expected: [],
     ...extra,
   };
 }

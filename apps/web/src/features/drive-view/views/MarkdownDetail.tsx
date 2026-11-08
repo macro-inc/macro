@@ -109,7 +109,7 @@ function MarkdownDetailContent(props: {
       documentId={props.documentId}
       kind={props.kind}
       state={state}
-      documentSource={{ type: 'sync', source: props.data.source }}
+      documentSource={props.data.connection}
       permissions={props.data.permissions}
       persistedName={persistedName()}
       fallbackName={props.fallbackName}
@@ -134,7 +134,11 @@ function MarkdownDetailContent(props: {
             />
             <MarkdownDocumentContent
               hotkeyScope={panel.splitHotkeyScope}
-              doInitialSync={props.data.doInitialSync}
+              doInitialSync={
+                props.data.connection.type === 'sync'
+                  ? props.data.connection.doInitialSync
+                  : undefined
+              }
               loadCachedSnapshot={() =>
                 loadMarkdownCachedSnapshot(props.documentId)
               }
@@ -154,7 +158,9 @@ export function MarkdownDetail(props: MarkdownDetailProps) {
       entityType="md"
       label={props.kind === 'task' ? 'task' : 'document'}
       load={loadMarkdownDocument}
-      dispose={(data) => data.source.cleanup()}
+      dispose={(data) => {
+        if (data.connection.type === 'sync') data.connection.source.cleanup();
+      }}
     >
       {(data) => (
         <MarkdownDetailContent

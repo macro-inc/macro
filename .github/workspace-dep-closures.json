@@ -5484,8 +5484,11 @@
       "crates/client/lexical/lexical_markdown",
       "crates/client/lexical/lexical_model",
       "crates/client/lexical/lexical_rich_nodes",
+      "crates/client/lexical/macro_document_model",
+      "crates/client/mention_date",
       "crates/cowlike",
       "crates/document_id",
+      "crates/lexical_node_id",
       "crates/macro_user_id",
       "crates/sync_doc_id",
       "crates/sync_protocol"
@@ -15191,6 +15194,7 @@
     ],
     "sync_sim": [
       "crates/client/doc_sync_core",
+      "crates/client/document_session",
       "crates/client/lexical/lexical_html",
       "crates/client/lexical/lexical_loro",
       "crates/client/lexical/lexical_markdown",

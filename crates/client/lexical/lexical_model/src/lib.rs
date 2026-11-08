@@ -81,4 +81,8 @@ pub use core::*;
 #[path = "event/test.rs"]
 mod event_test;
 
+#[cfg(feature = "foreign-nodes")]
+mod foreign;
+#[cfg(feature = "foreign-nodes")]
+pub use foreign::*;
 mod opaque;

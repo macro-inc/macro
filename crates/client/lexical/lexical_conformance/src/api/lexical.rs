@@ -79,6 +79,24 @@ pub(crate) fn call(r: &mut Replayer, tx: &mut Transaction<'_>, op: &Value) -> Re
         })));
     }
     match name {
+        "lexical.nodeStatesAreEquivalent" | "lexical/LexicalNodeState.nodeStatesAreEquivalent" => {
+            let state = |value: Option<&Value>| -> Result<Option<NodeState>> {
+                let Some(value) =
+                    value.filter(|value| !value.is_null() && value.get("$undef").is_none())
+                else {
+                    return Ok(None);
+                };
+                let record = value
+                    .get("$nodeState")
+                    .ok_or_else(|| fail("NodeState argument"))?;
+                super::properties::with_captured_record(r, tx, record, |node| {
+                    Ok(node.node_state().cloned())
+                })
+            };
+            let left = state(a.first())?;
+            let right = state(a.get(1))?;
+            Ok(json!(NodeState::equivalent(left.as_ref(), right.as_ref())))
+        }
         "@lexical/utils.$firstToLastIterator" | "@lexical/utils.$lastToFirstIterator" => {
             let parent = node_key(a.first().ok_or_else(|| fail("iterator parent"))?)?;
             let cursor = if name.ends_with("$firstToLastIterator") {
@@ -86,9 +104,7 @@ pub(crate) fn call(r: &mut Replayer, tx: &mut Transaction<'_>, op: &Value) -> Re
             } else {
                 lexical_rich_nodes::utils::last_to_first(&view, parent)
             };
-            let id = r.iterators.len();
-            r.iterators.push(None);
-            r.child_iterators.insert(id, cursor);
+            let id = r.carets.iterator(IteratorValue::Children(cursor))?;
             Ok(json!({"$iteratorValue":id}))
         }
         "@lexical/list/formatList.$handleIndent" => {
@@ -120,9 +136,7 @@ pub(crate) fn call(r: &mut Replayer, tx: &mut Transaction<'_>, op: &Value) -> Re
                 .iter()
                 .map(|pair| pair[1].clone())
                 .collect();
-            let id = r.iterators.len();
-            r.iterators.push(None);
-            r.value_iterators.insert(id, values);
+            let id = r.carets.iterator(IteratorValue::Values(values))?;
             Ok(json!({"$iteratorValue":id}))
         }
         "@lexical/code-core.$createCodeNode" => {
@@ -364,16 +378,14 @@ pub(crate) fn call(r: &mut Replayer, tx: &mut Transaction<'_>, op: &Value) -> Re
             nodes.into_iter().map(|key| r.node(view, key)).collect()
         }
         "lexical.$getRoot" => r.node(view, NodeKey::ROOT),
-        "lexical.$getSelection" => Ok(r.selection(tx)),
+        "lexical.$getSelection" => r.selection(tx),
         "lexical.$createRangeSelection" | "lexical.$createNodeSelection" => {
             let selection = if short == "$createRangeSelection" {
                 Selection::Range(RangeSelection::at_root())
             } else {
                 Selection::Node(NodeSelection::new())
             };
-            let id = r.selections.len();
-            r.selections.push(tx.detach_selection(selection));
-            r.selection_values.push(None);
+            let id = r.selections.push(tx.detach_selection(selection))?;
             Ok(
                 json!({"$selection":id,"kind":if short == "$createRangeSelection" {"range"} else {"node"}}),
             )
@@ -390,16 +402,20 @@ pub(crate) fn call(r: &mut Replayer, tx: &mut Transaction<'_>, op: &Value) -> Re
             a.first()
                 .and_then(|v| v.get("$selection"))
                 .and_then(Value::as_u64)
-                .and_then(|id| r.selections.get(id as usize))
-                .and_then(|slot| tx.selection_at(*slot).ok().flatten())
+                .map(|id| r.selections.try_slot(id as usize))
+                .transpose()?
+                .flatten()
+                .and_then(|slot| tx.selection_at(slot).ok().flatten())
                 .is_some_and(Selection::is_range)
         )),
         "lexical.$isNodeSelection" => Ok(json!(
             a.first()
                 .and_then(|v| v.get("$selection"))
                 .and_then(Value::as_u64)
-                .and_then(|id| r.selections.get(id as usize))
-                .and_then(|slot| tx.selection_at(*slot).ok().flatten())
+                .map(|id| r.selections.try_slot(id as usize))
+                .transpose()?
+                .flatten()
+                .and_then(|slot| tx.selection_at(slot).ok().flatten())
                 .is_some_and(Selection::is_node)
         )),
         "lexical.$createTextNode" | "lexical/nodes/LexicalTextNode.$createTextNode" => {
@@ -407,7 +423,7 @@ pub(crate) fn call(r: &mut Replayer, tx: &mut Transaction<'_>, op: &Value) -> Re
                 None => String::new(),
                 Some(value) if value.get("$undef").is_some() => String::new(),
                 Some(value) if value.get("$nodeKey").is_some() => {
-                    key_index(&value["$nodeKey"])?.to_string()
+                    tagged_key(value, "$nodeKey")?.to_string()
                 }
                 Some(value) => string(value)?.to_owned(),
             };
@@ -483,7 +499,7 @@ pub(crate) fn call(r: &mut Replayer, tx: &mut Transaction<'_>, op: &Value) -> Re
                 _ => view.is_token_or_segmented(key),
             }))
         }
-        "lexical/LexicalNormalization.$normalizeSelection" => {
+        "lexical.$normalizeSelection" | "lexical/LexicalNormalization.$normalizeSelection" => {
             let value = a.first().ok_or_else(|| fail("selection argument"))?;
             let slot = slot_arg(r, value)?;
             tx.normalize_selection_at(slot)?;
@@ -491,7 +507,7 @@ pub(crate) fn call(r: &mut Replayer, tx: &mut Transaction<'_>, op: &Value) -> Re
         }
         "lexical.$selectAll" => {
             tx.select_all(None)?;
-            Ok(r.selection(tx))
+            r.selection(tx)
         }
         "lexical.$insertNodes" => {
             let nodes = node_args(a.first().ok_or_else(|| fail("nodes argument"))?)?;
@@ -513,35 +529,24 @@ pub(crate) fn call(r: &mut Replayer, tx: &mut Transaction<'_>, op: &Value) -> Re
         )),
         "LexicalEditor.getEditorState" => {
             let state = tx.committed_state();
-            let version = (r.editor_id, r.committed_version);
-            let id = if let Some(id) = r.saved_editor_states.get(&version) {
-                *id
-            } else {
-                r.saved_states.push(state.clone());
-                let id = r.saved_states.len() - 1;
-                r.saved_editor_states.insert(version, id);
-                id
-            };
+            let id = r
+                .bindings
+                .published_editor_state(r.editor_id, r.committed_version, state)?;
             Ok(json!({"$snapshot":id}))
         }
         "LexicalEditor.toJSON" => Ok(json!({"editorState":tx.committed_state().to_json()?})),
         "lexical/LexicalUtils.getEditorStateTextContent" => {
             let id =
                 integer(&a.first().ok_or_else(|| fail("editor state"))?["$snapshot"])? as usize;
-            Ok(json!(
-                r.saved_states
-                    .get(id)
-                    .ok_or_else(|| fail("state handle"))?
-                    .root_text_content()
-            ))
+            Ok(json!(r.saved_state(id)?.root_text_content()))
         }
         "lexical/LexicalUtils.getTextDirection" => {
             Ok(serde_json::to_value(text_direction(str_arg(a, 0)?))?)
         }
-        "lexical/LexicalUtils.$getCompositionKey" => Ok(tx
-            .composition_key()
-            .map_or_else(|| Value::Null, |key| json!({"$nodeKey":key.index()}))),
-        "lexical/LexicalUtils.$setCompositionKey" => {
+        "lexical.$getCompositionKey" | "lexical/LexicalUtils.$getCompositionKey" => {
+            Ok(tx.composition_key().map_or_else(|| Value::Null, key_value))
+        }
+        "lexical.$setCompositionKey" | "lexical/LexicalUtils.$setCompositionKey" => {
             let key = match a.first() {
                 Some(v) if !v.is_null() => Some(key_arg(r, v)?),
                 _ => None,
@@ -552,10 +557,7 @@ pub(crate) fn call(r: &mut Replayer, tx: &mut Transaction<'_>, op: &Value) -> Re
         "EditorState.toJSON" => {
             let id = integer(&receiver["$snapshot"])? as usize;
             Ok(super::wire::exported_object(serde_json::to_value(
-                r.saved_states
-                    .get(id)
-                    .ok_or_else(|| fail("state handle"))?
-                    .to_json()?,
+                r.saved_state(id)?.to_json()?,
             )?))
         }
         "iter" => {
@@ -574,22 +576,18 @@ pub(crate) fn call(r: &mut Replayer, tx: &mut Transaction<'_>, op: &Value) -> Re
     }
 }
 pub(crate) fn key_arg(r: &Replayer, value: &Value) -> Result<NodeKey> {
-    if let Some(key) = value.get("$nodeKey") {
-        return key_index(key);
+    if value.get("$nodeKey").is_some() {
+        return tagged_key(value, "$nodeKey");
     }
     if value.get("$node").is_some() {
         return node_key(value);
     }
-    r.keys
-        .get(string(value)?)
-        .copied()
+    r.bindings
+        .key(string(value)?)?
         .ok_or_else(|| fail(format!("unknown key argument: {value}")))
 }
 pub(crate) fn slot_arg(r: &Replayer, value: &Value) -> Result<SelectionSlot> {
-    r.selections
-        .get(integer(&value["$selection"])? as usize)
-        .copied()
-        .ok_or_else(|| fail("selection handle"))
+    r.selections.slot(integer(&value["$selection"])? as usize)
 }
 pub(crate) fn node_args(value: &Value) -> Result<Vec<NodeKey>> {
     value

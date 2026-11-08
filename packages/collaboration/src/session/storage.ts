@@ -1,5 +1,6 @@
 import type { DBSchema } from 'idb';
 import { RecoverableDatabase } from '../collab/recoverable-database';
+import { snapshotWriteLock } from '../collab/snapshot-store';
 import {
   Failure,
   type ILocalStateMsg,
@@ -50,7 +51,7 @@ function failure(error: unknown): Failure {
   }
   return Failure.Unavailable;
 }
-function record(row: WalRow): IWalRecordMsg {
+function record(row: WalRow, legacyUser: string): IWalRecordMsg {
   if (
     !(row.update instanceof Uint8Array) ||
     !Number.isFinite(row.createdAt) ||
@@ -60,7 +61,8 @@ function record(row: WalRow): IWalRecordMsg {
   return {
     seq: row.seq ?? BigInt(row.id ?? 0),
     createdAt: BigInt(row.createdAt),
-    user: row.user ?? '',
+    // Only unowned v1 rows predate user attribution. Never relabel a session row.
+    user: row.user ?? (row.owner === undefined ? legacyUser : ''),
     foreign: row.foreign ?? false,
     quarantined: row.quarantined ?? false,
     delivered: row.delivered,
@@ -94,7 +96,10 @@ export class StorageAdapter {
     readonly doc: string,
     readonly owner: string,
     readonly user: string,
-    private readonly locks: Pick<LockManager, 'query'> = navigator.locks
+    private readonly locks: Pick<
+      LockManager,
+      'query' | 'request'
+    > = navigator.locks
   ) {}
 
   execute(op: IStorageOpMsg): Promise<StorageResult> {
@@ -102,6 +107,20 @@ export class StorageAdapter {
       try {
         if (op.doc !== this.doc || (op.owner && op.owner !== this.owner))
           throw new DOMException('Storage scope mismatch', 'DataError');
+        const guarded = () =>
+          this.locks.request(snapshotWriteLock(this.doc), () => this.apply(op));
+        if ((op.kind === 5 || op.kind === 6) && op.from)
+          return await this.locks.request(
+            ownerLock(this.doc, op.from),
+            { ifAvailable: true },
+            async (lock): Promise<StorageResult> =>
+              lock
+                ? guarded()
+                : op.kind === 5
+                  ? { kind: 'adopted', adopted: -1, failure: Failure.Other }
+                  : { kind: 'done', ok: false, failure: Failure.Other }
+          );
+        if ([0, 1, 4, 5, 8, 9].includes(op.kind)) return await guarded();
         return await this.apply(op);
       } catch (error) {
         const code = failure(error);
@@ -130,7 +149,7 @@ export class StorageAdapter {
     while (cursor) {
       const row = cursor.value;
       if (row.owner === this.owner) {
-        const r = record(row);
+        const r = record(row, this.user);
         this.keys.set(r.seq, cursor.primaryKey);
       } else {
         const live = !!row.owner && held.has(ownerLock(this.doc, row.owner));
@@ -147,7 +166,7 @@ export class StorageAdapter {
             group = { owner, records: [] };
             target.set(owner, group);
           }
-          group.records.push(record(row));
+          group.records.push(record(row, this.user));
         }
       }
       cursor = await cursor.continue();
@@ -259,6 +278,20 @@ export class StorageAdapter {
       await tx.done;
       return { kind: 'done', ok: true, failure: Failure.None };
     }
+    let pruneCover = 0n;
+    if (op.kind === 4 || op.kind === 5) {
+      const snapshot = await this.snapshots.transaction(
+        'snapshots',
+        'readonly'
+      );
+      const row = await snapshot.store.get(this.doc);
+      await snapshot.done;
+      pruneCover = row?.covers?.owner === this.owner ? row.covers.seq : 0n;
+      const covers =
+        op.from && row?.covers?.owner === op.from ? row.covers.seq : 0n;
+      if (op.kind === 5 && covers !== op.through)
+        return { kind: 'adopted', adopted: -1, failure: Failure.Other };
+    }
     const tx = await this.wal.transaction('updates', 'readwrite');
     const done = tx.done;
     const changes: [bigint, number | undefined][] = [];
@@ -292,12 +325,51 @@ export class StorageAdapter {
             right = b.row.seq ?? BigInt(b.id);
           return left < right ? -1 : left > right ? 1 : 0;
         });
+        if (op.kind === 5) {
+          const selected = rows.filter(
+            ({ row, id }) =>
+              (row.owner ?? '') === op.from &&
+              (!row.delivered || (row.seq ?? BigInt(id)) > op.through)
+          );
+          const same =
+            selected.length === op.expected.length &&
+            selected.every(({ row }, index) => {
+              const actual = record(row, this.user);
+              const expected = op.expected[index];
+              return (
+                expected !== undefined &&
+                actual.seq === expected.seq &&
+                actual.createdAt === expected.createdAt &&
+                actual.user === expected.user &&
+                actual.foreign === expected.foreign &&
+                actual.quarantined === expected.quarantined &&
+                actual.delivered === expected.delivered &&
+                actual.bytes.length === expected.bytes.length &&
+                actual.bytes.every((byte, i) => byte === expected.bytes[i])
+              );
+            });
+          const occupied = selected.some((_, offset) => {
+            const seq = op.seq + BigInt(offset);
+            return (
+              seq > 0xffff_ffff_ffff_ffffn ||
+              rows.some(
+                ({ row }) => row.owner === this.owner && row.seq === seq
+              )
+            );
+          });
+          if ((selected.length > 0 && !same) || occupied) {
+            tx.abort();
+            await done.catch(() => undefined);
+            return { kind: 'adopted', adopted: -1, failure: Failure.Other };
+          }
+        }
         for (const { row, id } of rows) {
           if (
             op.kind === 4 &&
             row.owner === this.owner &&
             row.seq !== undefined &&
             row.seq <= op.through &&
+            row.seq <= pruneCover &&
             row.delivered
           ) {
             await tx.store.delete(id);
@@ -311,7 +383,7 @@ export class StorageAdapter {
           )
             await tx.store.delete(id);
           if (op.kind === 5 && (row.owner ?? '') === op.from) {
-            if (row.owner && row.user !== this.user)
+            if (record(row, this.user).user !== this.user)
               throw new DOMException('Foreign user adoption', 'DataError');
             if (row.delivered && (row.seq ?? BigInt(id)) <= op.through)
               await tx.store.delete(id);

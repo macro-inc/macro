@@ -24,6 +24,7 @@ impl Sim {
                         continue;
                     };
                     let profile = client.spec.profile.clone();
+                    let wall_offset = client.skew;
                     if let StorageOp::WalAppend { owner, record, .. } = &op {
                         self.emit(Fact::WalAppendIssued {
                             client: name.clone(),
@@ -36,6 +37,15 @@ impl Sim {
                     }
                     let now = self.clock.now;
                     if let Some(store) = self.profiles.get_mut(&profile) {
+                        if !store
+                            .leases
+                            .contains(&(crate::storage::document(&op).clone(), session))
+                        {
+                            return Err(Failure::new(
+                                "storage_lease",
+                                "storage effect preceded its session lease grant",
+                            ));
+                        }
                         let (token, at) = store.issue(
                             PendingWrite {
                                 client: name.clone(),
@@ -46,10 +56,15 @@ impl Sim {
                             now,
                             &mut self.rng,
                         );
-                        self.schedule(at, Pending::Storage(profile, token));
+                        self.schedule(at, Pending::Storage(profile, token, wall_offset));
                     }
                 }
                 IoEffect::FetchToken { attempt, .. } => {
+                    self.emit(Fact::TokenRequested {
+                        client: name.clone(),
+                        session,
+                        attempt,
+                    });
                     let Some(client) = self.clients.get_mut(name) else {
                         continue;
                     };
@@ -60,7 +75,10 @@ impl Sim {
                     let event = if failed {
                         TokenEvent::Failed { attempt }
                     } else {
-                        self.tokens.insert(token.clone(), access);
+                        self.tokens.insert(
+                            token.clone(),
+                            crate::model::TokenGrant::issue(client, self.clock.wall(0)),
+                        );
                         TokenEvent::Fetched {
                             attempt,
                             token: doc_sync_core::SyncToken::new(token),
@@ -84,13 +102,10 @@ impl Sim {
                     let Some(client) = self.clients.get_mut(name) else {
                         continue;
                     };
-                    let valid = !std::mem::take(&mut client.expire_token)
-                        && self.tokens.contains_key(token.expose_secret());
-                    let grant = self
-                        .tokens
-                        .get(token.expose_secret())
-                        .copied()
-                        .unwrap_or(Access::Read);
+                    let claims = self.tokens.get(token.expose_secret()).cloned();
+                    let valid = claims.as_ref().is_some_and(|claims| {
+                        claims.doc == client.doc_id && claims.issued_by == session
+                    });
                     let key = (name.clone(), session, conn.0);
                     self.net.links.insert(
                         key,
@@ -98,7 +113,7 @@ impl Sim {
                             socket: None,
                             open: false,
                             doc: client.spec.doc,
-                            grant,
+                            claims,
                             token_valid: valid,
                             tails: [0, 0],
                             up: Reassembler::default(),
@@ -115,6 +130,10 @@ impl Sim {
                     self.schedule(at, Pending::Connect(name.clone(), session, conn.0));
                 }
                 IoEffect::SocketSend { conn, frame } => {
+                    if self.clients.get(name).is_some_and(|client| client.routed) {
+                        self.router_send(name, frame)?;
+                        continue;
+                    }
                     let key = (name.clone(), session, conn.0);
                     let (kind, message) = if let Some(link) = self.net.links.get_mut(&key) {
                         let message = link
@@ -153,6 +172,15 @@ impl Sim {
                     }
                 }
                 IoEffect::ChatterPost(message) => {
+                    match &message {
+                        ChatterMessage::Update(bytes) => {
+                            self.external_native_chatter(name, false, bytes)
+                        }
+                        ChatterMessage::Awareness(bytes) => {
+                            self.external_native_chatter(name, true, bytes)
+                        }
+                        ChatterMessage::Closing(_) => {}
+                    }
                     let Some(client) = self.clients.get(name) else {
                         continue;
                     };
@@ -187,6 +215,11 @@ impl Sim {
                     }
                 }
                 IoEffect::Telemetry(record) => {
+                    let phase = match &record.kind {
+                        TelemetryKind::Start { .. } => TelemetryPhase::Start,
+                        TelemetryKind::Event { .. } => TelemetryPhase::Event,
+                        TelemetryKind::End { .. } => TelemetryPhase::End,
+                    };
                     let event_name = match record.kind {
                         TelemetryKind::Start { name } | TelemetryKind::Event { name } => {
                             name.to_string()
@@ -222,18 +255,31 @@ impl Sim {
                                 .into(),
                         });
                     }
-                    if event_name == "doc.sync.rebase" {
+                    if event_name == "doc.sync.rebase" && phase == TelemetryPhase::Start {
                         self.stats.rebases = self.stats.rebases.saturating_add(1);
                     }
                     self.emit(Fact::Telemetry {
+                        phase,
                         client: name.clone(),
                         name: event_name,
                         attributes,
                     });
                 }
-                IoEffect::RouteDetach { .. }
-                | IoEffect::RouteReconnect { .. }
-                | IoEffect::RouterConnect { .. } => {
+                IoEffect::RouteDetach { .. } => self.router_detach(name)?,
+                IoEffect::RouteReconnect { doc } => {
+                    let profile = self
+                        .clients
+                        .get(name)
+                        .map(|client| client.spec.profile.clone())
+                        .ok_or_else(|| {
+                            Failure::new("router_owner", "route reconnect without a client")
+                        })?;
+                    if let Some(host) = self.routers.get_mut(&profile) {
+                        host.authority.insert(doc.to_string(), name.clone());
+                    }
+                    self.router_input(&profile, doc_sync_core::RouterInput::Reconnect(doc))?;
+                }
+                IoEffect::RouterConnect { .. } => {
                     return Err(Failure::new(
                         "executor_contract",
                         "routed effect in a direct GenericSurface session",
@@ -254,6 +300,11 @@ impl Sim {
                     });
                 }
                 SyncEvent::Replaced => ready = true,
+                SyncEvent::CommentReady { .. }
+                    if self
+                        .clients
+                        .get(name)
+                        .is_some_and(|client| client.core.is_editor()) => {}
                 SyncEvent::CommentReady { .. } => {
                     return Err(Failure::new(
                         "comment_stage",
@@ -288,7 +339,7 @@ impl Sim {
                         doc_sync_core::Access::Read => Access::Read,
                     };
                     if let Some(client) = self.clients.get_mut(name) {
-                        client.spec.access = access;
+                        client.effective_access = access;
                     }
                     self.emit(Fact::AccessChanged {
                         client: name.clone(),
@@ -318,13 +369,18 @@ impl Sim {
                 }
             }
         }
-        if ready {
+        if ready
+            && !self
+                .clients
+                .get(name)
+                .is_some_and(|client| client.core.is_editor())
+        {
             self.input(name, session, SyncInput::Ready)?;
         }
         self.finish_close(name)?;
         Ok(())
     }
-    fn observe_push(
+    pub(super) fn observe_push(
         &mut self,
         name: &ClientName,
         session: SessionId,
@@ -335,8 +391,8 @@ impl Sim {
         {
             let ranges = updates
                 .iter()
-                .map(|update| spans(update.as_ref()))
-                .collect::<Result<Vec<_>, _>>()?
+                .filter_map(|update| spans(update.as_ref()).ok())
+                .collect::<Vec<_>>()
                 .into_iter()
                 .flatten()
                 .collect::<Vec<_>>();
@@ -347,24 +403,22 @@ impl Sim {
             let mut own_bytes = 0;
             let mut foreign_bytes = 0;
             for row in &client.core.wal().entries {
-                if client
-                    .core
-                    .wal()
-                    .delivered_through
-                    .is_some_and(|through| row.seq <= through)
-                    || row.superseded
-                {
+                if client.core.is_delivered(row.seq) || row.superseded {
                     continue;
                 }
-                if spans(&row.bytes).is_ok_and(|row_ranges| {
-                    row_ranges.iter().all(|row_range| {
-                        ranges.iter().any(|range| {
-                            range.peer == row_range.peer
-                                && range.start <= row_range.start
-                                && range.end >= row_range.end
+                if updates
+                    .iter()
+                    .any(|bytes| bytes.as_ref() == row.bytes.as_ref())
+                    || spans(&row.bytes).is_ok_and(|row_ranges| {
+                        row_ranges.iter().all(|row_range| {
+                            ranges.iter().any(|range| {
+                                range.peer == row_range.peer
+                                    && range.start <= row_range.start
+                                    && range.end >= row_range.end
+                            })
                         })
                     })
-                }) {
+                {
                     rows.push((doc_sync_core::WalOwner::Session(session), row.seq));
                     if row.foreign {
                         foreign_bytes += u64::try_from(row.bytes.len()).unwrap_or(0);
@@ -382,15 +436,19 @@ impl Sim {
                     if doc != &client.core_doc_id() || row.delivered {
                         continue;
                     }
-                    if spans(&row.record.bytes).is_ok_and(|row_ranges| {
-                        row_ranges.iter().all(|row_range| {
-                            ranges.iter().any(|range| {
-                                range.peer == row_range.peer
-                                    && range.start <= row_range.start
-                                    && range.end >= row_range.end
+                    if updates
+                        .iter()
+                        .any(|bytes| bytes.as_ref() == row.record.bytes.as_slice())
+                        || spans(&row.record.bytes).is_ok_and(|row_ranges| {
+                            row_ranges.iter().all(|row_range| {
+                                ranges.iter().any(|range| {
+                                    range.peer == row_range.peer
+                                        && range.start <= row_range.start
+                                        && range.end >= row_range.end
+                                })
                             })
                         })
-                    }) {
+                    {
                         rows.push((*owner, *seq));
                         foreign_bytes += u64::try_from(row.record.bytes.len()).unwrap_or(0);
                     }
@@ -414,8 +472,12 @@ impl Sim {
         kind: FrameKind,
         packet: Packet,
     ) {
+        if self.router_profile(&key).is_some() {
+            self.transmit_router_frame(key, direction, kind, packet);
+            return;
+        }
         let Packet::Binary(frame) = packet else {
-            self.transmit_frame(key, direction, kind, packet, false);
+            self.transmit_frame(key, direction, kind, packet, false, 1);
             return;
         };
         let index = usize::from(direction == Direction::ToClient);
@@ -427,7 +489,58 @@ impl Sim {
         if !final_chunk {
             return;
         }
-        let mut frames = std::mem::take(&mut link.frames[index]);
+        let frames = std::mem::take(&mut link.frames[index]);
+        self.transmit_message(key, direction, frames, None);
+    }
+    fn transmit_router_frame(
+        &mut self,
+        key: LinkKey,
+        direction: Direction,
+        kind: FrameKind,
+        packet: Packet,
+    ) {
+        let Packet::Binary(bytes) = &packet else {
+            self.transmit_frame(key, direction, kind, packet, false, 1);
+            return;
+        };
+        let inner = match direction {
+            Direction::ToServer => match sync_protocol::ToRouter::deserialize(bytes) {
+                Ok(sync_protocol::ToRouter::RouterFrame { doc_id, payload }) => {
+                    Some((doc_id.to_owned(), payload.iter().collect::<Vec<_>>()))
+                }
+                _ => None,
+            },
+            Direction::ToClient => match sync_protocol::FromRouter::deserialize(bytes) {
+                Ok(sync_protocol::FromRouter::RouterDocFrame { doc_id, payload }) => {
+                    Some((doc_id.to_owned(), payload.iter().collect::<Vec<_>>()))
+                }
+                _ => None,
+            },
+        };
+        let Some((doc, frame)) = inner else {
+            self.transmit_frame(key, direction, kind, packet, false, 1);
+            return;
+        };
+        let final_chunk = frame.first() == Some(&1);
+        let identity = (key.clone(), direction, doc.clone());
+        self.net
+            .router_frames
+            .entry(identity.clone())
+            .or_default()
+            .push(frame);
+        if final_chunk {
+            let frames = self.net.router_frames.remove(&identity).unwrap_or_default();
+            self.transmit_message(key, direction, frames, Some(doc));
+        }
+    }
+    fn transmit_message(
+        &mut self,
+        key: LinkKey,
+        direction: Direction,
+        mut frames: Vec<Vec<u8>>,
+        route: Option<String>,
+    ) {
+        let index = usize::from(direction == Direction::ToClient);
         let message = frames
             .iter()
             .flat_map(|frame| frame.iter().skip(1).copied())
@@ -457,17 +570,43 @@ impl Sim {
         }
         let corrupted = self.net.corrupt_message(&key, direction, &mut frames);
         let copies = if duplicate { 2 } else { 1 };
+        let fragments = u16::try_from(frames.len()).unwrap_or(u16::MAX);
         for _ in 0..copies {
+            if fragments > 1 {
+                self.stats.multi_frame_messages += 1;
+            }
             let drop = (frames.len() > 1
                 && hostile.drop_frame > 0.0
                 && self.rng.random_bool(hostile.drop_frame.clamp(0.0, 1.0)))
             .then(|| self.rng.random_range(0..frames.len()));
             for (index, frame) in frames.iter().enumerate() {
-                let packet = Packet::Binary(frame.clone());
-                if drop == Some(index) {
-                    self.frame_fact(&key, direction, kind, &packet, "Dropped");
+                let bytes = if let Some(doc) = &route {
+                    let mut bytes = Vec::new();
+                    let result = match direction {
+                        Direction::ToServer => sync_protocol::ToRouter::RouterFrame {
+                            doc_id: doc,
+                            payload: bebop::SliceWrapper::Raw(frame),
+                        }
+                        .serialize(&mut bytes),
+                        Direction::ToClient => sync_protocol::FromRouter::RouterDocFrame {
+                            doc_id: doc,
+                            payload: bebop::SliceWrapper::Raw(frame),
+                        }
+                        .serialize(&mut bytes),
+                    };
+                    if let Err(error) = result {
+                        self.fail(Failure::new("router_encode", error));
+                        return;
+                    }
+                    bytes
                 } else {
-                    self.transmit_frame(key.clone(), direction, kind, packet, corrupted);
+                    frame.clone()
+                };
+                let packet = Packet::Binary(bytes);
+                if drop == Some(index) {
+                    self.frame_fact(&key, direction, kind, &packet, "Dropped", fragments);
+                } else {
+                    self.transmit_frame(key.clone(), direction, kind, packet, corrupted, fragments);
                 }
             }
         }
@@ -479,14 +618,17 @@ impl Sim {
         kind: FrameKind,
         packet: Packet,
         corrupted: bool,
+        fragments: u16,
     ) {
         let transit = self
             .net
             .transit(&key, direction, kind, self.clock.now, &mut self.rng);
         match transit {
-            Transit::Dropped => self.frame_fact(&key, direction, kind, &packet, "Dropped"),
+            Transit::Dropped => {
+                self.frame_fact(&key, direction, kind, &packet, "Dropped", fragments)
+            }
             Transit::Broken => {
-                self.frame_fact(&key, direction, kind, &packet, "Lost");
+                self.frame_fact(&key, direction, kind, &packet, "Lost", fragments);
                 if let Err(error) = self.break_link(&key, 1006) {
                     self.fail(error);
                 }
@@ -496,6 +638,7 @@ impl Sim {
                     packet,
                     kind,
                     corrupted,
+                    frames: fragments,
                 };
                 let event = if direction == Direction::ToServer {
                     Pending::Up(key.0.clone(), key.1, key.2, delivery.clone())
@@ -513,6 +656,7 @@ impl Sim {
         kind: FrameKind,
         packet: &Packet,
         fate: &str,
+        frames: u16,
     ) {
         let bytes = match packet {
             Packet::Binary(bytes) => bytes.len(),
@@ -525,7 +669,7 @@ impl Sim {
             direction,
             kind,
             bytes: u32::try_from(bytes).unwrap_or(u32::MAX),
-            frames: 1,
+            frames,
             fate: fate.into(),
         });
     }

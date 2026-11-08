@@ -197,7 +197,13 @@ impl SyncCore {
             .is_some_and(|p| p.id.as_str() == id)
         {
             if let Some(push) = self.assist_push.take() {
-                self.assist.drain(..push.count);
+                let confirmed = self.assist.drain(..push.count).collect::<Vec<_>>();
+                for row in confirmed {
+                    // Delivery proof and local import are separate: a reset
+                    // can defer importing these acknowledged bytes.
+                    self.server_evidence(&row.record.bytes, now, out);
+                    self.assist_replay.push(row.record.bytes);
+                }
             }
             self.assist_retry = None;
             return;
@@ -226,6 +232,16 @@ impl SyncCore {
         let Some(push) = self.push.take() else {
             return;
         };
+        for entry in &self.wal.entries {
+            if push.rows.contains(&entry.seq)
+                && entry.park.is_none_or(|p| p == ParkReason::NeedsRebase)
+                && let Ok(meta) = loro::LoroDoc::decode_import_blob_meta(&entry.bytes, true)
+            {
+                // The sender receives no broadcast echo. Its actual ACKed bytes
+                // are server evidence too, including rows later seen via assist.
+                self.server_vv.merge(&meta.partial_end_vv);
+            }
+        }
         for entry in &mut self.wal.entries {
             if push.rows.contains(&entry.seq)
                 && entry.park.is_none_or(|p| p == ParkReason::NeedsRebase)
@@ -237,11 +253,15 @@ impl SyncCore {
                 }
             }
         }
+        self.mark_delivered_prefix(now, out);
+        self.delivery_confirmed(out);
+    }
+
+    fn delivery_confirmed(&mut self, out: &mut SyncOutput) {
         self.not_acked = 0;
         self.suspect_delay = Millis(5_000);
         self.waiting_for_fresh_ack = false;
         self.push_retry = None;
-        self.mark_delivered_prefix(now, out);
         if let Some(span) = self.outage_span.take() {
             self.end_span(span, "delivered", false, out);
         }
@@ -286,6 +306,19 @@ impl SyncCore {
             }
         }
         self.mark_delivered_prefix(now, out);
+        // A broadcast/catchup can prove a foreign row delivered before this
+        // socket receives its push ack. Keep only still-unconfirmed rows in
+        // flight, so retries and diagnostics cannot cross the delivered prefix.
+        if let Some(mut push) = self.push.take() {
+            push.rows.retain(|seq| !self.is_delivered(*seq));
+            if push.rows.is_empty() {
+                // Server evidence proves every row in this push persisted,
+                // completing delivery even if its redundant ack was lost.
+                self.delivery_confirmed(out);
+            } else {
+                self.push = Some(push);
+            }
+        }
     }
 
     fn mark_delivered_prefix(&mut self, now: Now, out: &mut SyncOutput) {
@@ -320,7 +353,8 @@ impl SyncCore {
     }
 
     pub(super) fn push_assist(&mut self, now: Now, out: &mut SyncOutput) {
-        if !self.can_push()
+        if self.phase != Phase::Running
+            || !self.can_push()
             || self.assist.is_empty()
             || self.assist_push.is_some()
             || self.assist_retry.is_some_and(|at| at > now.mono)

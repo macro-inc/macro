@@ -65,6 +65,8 @@ fn close_inside_the_coalesce_window_appends_before_stopped() {
         .iter()
         .position(|event| matches!(event.fact, Fact::Closed { .. }))
         .unwrap();
+    assert_eq!(outcome.stats.close_in_window, 1);
+    assert!(outcome.stats.wal_max_depth > 0);
     assert!(durable < closed);
     assert_eq!(
         outcome.finals.servers[&DocIx(0)].deep_value["fields"]["4"],
@@ -654,4 +656,259 @@ fn frozen_source_gate_blocks_new_legacy_requests() {
             .get("2")
             .is_none()
     );
+}
+
+#[test]
+fn collaborative_surface_uses_real_initialization_and_cold_recovery() {
+    let outcome = verify(
+        SimConfig {
+            surfaces: [DocIx(0)].into(),
+            ..SimConfig::calm(107)
+        },
+        &[
+            Step::Open(OpenSpec::form("a", "one")),
+            Step::Open(OpenSpec::form("b", "two")),
+            Step::Run(Millis(500)),
+            Step::Edit {
+                client: ClientName("a".into()),
+                op: AbstractOp::FormSet {
+                    field: 1,
+                    value: 42,
+                },
+            },
+            Step::Run(Millis(200)),
+            Step::Server(ServerStep::Hibernate),
+            Step::Edit {
+                client: ClientName("b".into()),
+                op: AbstractOp::FormSet {
+                    field: 2,
+                    value: 81,
+                },
+            },
+            Step::Settle,
+        ],
+    );
+    assert_eq!(
+        outcome.finals.servers[&DocIx(0)].deep_value["fields"]["2"],
+        81
+    );
+    assert!(outcome.finals.profiles.values().all(|store| {
+        store
+            .snapshots
+            .keys()
+            .all(|key| key.as_str().starts_with("surface:"))
+    }));
+    assert!(
+        outcome
+            .server_ports
+            .iter()
+            .any(|port| port.effect.operation == "storage.put"
+                && port.effect.value["key"] == "SURFACE_LIFECYCLE")
+    );
+}
+
+#[test]
+fn surface_revocation_is_permanent_and_leaves_document_rooms_live() {
+    let mut config = SimConfig {
+        documents: 2,
+        surfaces: [DocIx(0)].into(),
+        ..SimConfig::calm(109)
+    };
+    config.budgets.quiet = Millis(0);
+    let script = [
+        Step::Open(OpenSpec::form("a", "one")),
+        Step::Open(OpenSpec {
+            doc: DocIx(1),
+            ..OpenSpec::form("b", "two")
+        }),
+        Step::Run(Millis(500)),
+        Step::Edit {
+            client: ClientName("a".into()),
+            op: AbstractOp::FormSet {
+                field: 1,
+                value: 42,
+            },
+        },
+        Step::Run(Millis(200)),
+        Step::Server(ServerStep::SurfaceRevoke),
+        Step::Run(Millis(200)),
+        Step::Server(ServerStep::Hibernate),
+        Step::Net(NetStep::Break(ClientName("b".into()))),
+        Step::Run(Millis(500)),
+        Step::Edit {
+            client: ClientName("b".into()),
+            op: AbstractOp::FormSet {
+                field: 2,
+                value: 81,
+            },
+        },
+        Step::Open(OpenSpec::form("c", "three")),
+        Step::Run(Millis(1000)),
+    ];
+    let outcome = Sim::new(config.clone()).run(&script);
+    let repeated = Sim::new(config).run(&script);
+    assert_eq!(outcome.event_bytes, repeated.event_bytes);
+    assert_eq!(outcome.trace_hash, repeated.trace_hash);
+    invariants::per_step(&outcome).unwrap();
+    invariants::no_acked_edit_lost(&outcome).unwrap();
+    invariants::no_persisted_edit_lost(&outcome).unwrap();
+    assert!(outcome.events.iter().any(|event|
+        matches!(&event.fact, Fact::RequestBlocked { doc: DocIx(0), route } if route == "surface_connect")));
+    assert!(outcome.server_ports.iter().any(|port| port.doc == DocIx(0)
+        && port.effect.operation == "connections.close"
+        && port.effect.value["code"] == 1008));
+    assert!(!outcome.server_ports.iter().any(|port| port.doc == DocIx(1)
+        && port.effect.operation == "storage.put"
+        && port.effect.value["key"] == "SURFACE_LIFECYCLE"));
+    assert_eq!(
+        outcome.finals.servers[&DocIx(1)].deep_value["fields"]["2"],
+        81
+    );
+    assert_eq!(
+        outcome.finals.servers[&DocIx(0)].deep_value["fields"]["1"],
+        42
+    );
+}
+
+#[test]
+fn settlement_thaws_evicted_source_and_recovers_offline_edit() {
+    let config = SimConfig::calm(233);
+    let script = [
+        Step::Open(OpenSpec::form("a", "one")),
+        Step::Run(Millis(500)),
+        Step::Server(ServerStep::FreezeSource),
+        Step::Run(Millis(200)),
+        Step::Edit {
+            client: ClientName("a".into()),
+            op: AbstractOp::FormSet {
+                field: 3,
+                value: 57,
+            },
+        },
+        Step::Run(Millis(200)),
+        Step::Server(ServerStep::Evict {
+            close_sockets: true,
+        }),
+        Step::Settle,
+        Step::Server(ServerStep::HttpFormUpdate {
+            field: 4,
+            value: 91,
+        }),
+        Step::Settle,
+    ];
+    let outcome = verify(config, &script);
+    assert_eq!(
+        outcome.finals.servers[&DocIx(0)].deep_value["fields"]["3"],
+        57
+    );
+    assert_eq!(
+        outcome.finals.servers[&DocIx(0)].deep_value["fields"]["4"],
+        91
+    );
+    assert!(outcome.server_ports.iter().any(|port| {
+        port.effect.operation == "storage.put" && port.effect.value.to_string().contains("thawed")
+    }));
+}
+
+#[test]
+fn settle_waits_for_delayed_cached_input_before_the_heartbeat_hold() {
+    let mut config = SimConfig::calm(257);
+    config.budgets.quiet = Millis(0);
+    config.seeds.insert(
+        DocIx(0),
+        SeedDocument::Cached {
+            server: vec![(1, 42)],
+            s3: Some((vec![(1, 17)], Millis(30_000))),
+            local: None,
+        },
+    );
+    let heartbeat = config.session.heartbeat.interval.0;
+    let outcome = verify(
+        config,
+        &[Step::Open(OpenSpec::form("a", "one")), Step::Settle],
+    );
+    let settled = outcome
+        .events
+        .iter()
+        .find(|event| matches!(event.fact, Fact::Settled))
+        .unwrap();
+    assert!(
+        settled.at.0 >= 30_000 + heartbeat,
+        "early settlement {:?}",
+        settled.at
+    );
+    assert_eq!(
+        outcome.finals.servers[&DocIx(0)].deep_value["fields"]["1"],
+        42
+    );
+}
+
+#[test]
+fn coverage_close_window_does_not_join_an_older_session_edit() {
+    let outcome = verify(
+        SimConfig::calm(269),
+        &[
+            Step::Open(OpenSpec::form("a", "one")),
+            Step::Run(Millis(500)),
+            Step::Edit {
+                client: ClientName("a".into()),
+                op: AbstractOp::FormSet {
+                    field: 1,
+                    value: 42,
+                },
+            },
+            Step::Crash {
+                client: ClientName("a".into()),
+            },
+            Step::Reopen {
+                client: ClientName("a".into()),
+            },
+            Step::Close {
+                client: ClientName("a".into()),
+            },
+            Step::Settle,
+        ],
+    );
+    assert_eq!(outcome.stats.close_in_window, 0);
+}
+#[test]
+fn coverage_observes_granted_multi_edit_exposure_but_not_unused_outages() {
+    let outcome = verify(
+        SimConfig::calm(271),
+        &[
+            Step::Open(OpenSpec::form("b", "one")),
+            Step::Grant {
+                client: ClientName("b".into()),
+                access: Access::Read,
+                force_reconnect: false,
+            },
+            Step::Open(OpenSpec::form("a", "one")),
+            Step::Run(Millis(500)),
+            Step::Grant {
+                client: ClientName("b".into()),
+                access: Access::Edit,
+                force_reconnect: false,
+            },
+            Step::Settle,
+            Step::Server(ServerStep::D1Outage { ms: Millis(10) }),
+            Step::Server(ServerStep::StorageErrors { n: 2 }),
+            Step::Server(ServerStep::Heal),
+            Step::Settle,
+        ],
+    );
+    assert_eq!(
+        outcome.stats.multi_edit_tab_profiles,
+        1,
+        "accesses={:?}",
+        outcome
+            .events
+            .iter()
+            .filter(|event| matches!(
+                event.fact,
+                Fact::Opened { .. } | Fact::AccessChanged { .. } | Fact::SocketClose { .. }
+            ))
+            .collect::<Vec<_>>()
+    );
+    assert_eq!(outcome.stats.d1_outages, 0);
+    assert_eq!(outcome.stats.storage_outages, 0);
 }

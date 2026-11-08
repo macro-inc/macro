@@ -5,7 +5,7 @@ export default defineConfig({
   optimizeDeps: { esbuildOptions: { target: 'esnext' } },
   server: {
     host: '127.0.0.1',
-    port: 3076,
+    port: Number(process.env.LEXICAL_WASM_VIEW_TEST_PORT ?? 3076),
     strictPort: true,
     fs: { allow: ['../..'] },
   },

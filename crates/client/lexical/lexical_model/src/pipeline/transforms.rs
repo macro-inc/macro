@@ -2,13 +2,20 @@ use super::normalize::normalize_text_node;
 use crate::*;
 use std::mem;
 
-fn run(tx: &mut Transaction<'_>, key: NodeKey, composing: Option<NodeKey>) -> Result<(), Error> {
+fn run(
+    tx: &mut Transaction<'_>,
+    key: NodeKey,
+    composing: Option<NodeKey>,
+    #[cfg(feature = "foreign-nodes")] cache: &mut crate::foreign::runtime::TransformCache,
+) -> Result<(), Error> {
     if Some(key) == composing || !tx.is_attached(key) {
         return Ok(());
     }
     let Some(index) = tx.type_index(key) else {
         return Ok(());
     };
+    #[cfg(feature = "foreign-nodes")]
+    cache.prepare(tx, index);
     let transforms = tx.pending.registry.vtable(index).transforms.clone();
     for transform in transforms {
         if !tx.is_attached(key) {
@@ -16,10 +23,14 @@ fn run(tx: &mut Transaction<'_>, key: NodeKey, composing: Option<NodeKey>) -> Re
         }
         transform.run(tx, key)?;
     }
+    #[cfg(feature = "foreign-nodes")]
+    cache.run(tx, index, key)?;
     Ok(())
 }
 /// Leaves take priority; root finalizes every element batch in which it appears.
 pub(super) fn apply(tx: &mut Transaction<'_>) -> Result<(), Error> {
+    #[cfg(feature = "foreign-nodes")]
+    let mut cache = crate::foreign::runtime::TransformCache::default();
     let composing = tx.composition_key;
     let mut master_leaves = tx.dirty_leaves.clone();
     let mut master_elements = tx.dirty_elements.clone();
@@ -33,7 +44,13 @@ pub(super) fn apply(tx: &mut Transaction<'_>) -> Result<(), Error> {
                     tx.work.nodes_visited += 1;
                 }
                 normalize_text_node(tx, key)?;
-                run(tx, key, composing)?;
+                run(
+                    tx,
+                    key,
+                    composing,
+                    #[cfg(feature = "foreign-nodes")]
+                    &mut cache,
+                )?;
                 master_leaves.insert(key);
             }
             if !tx.dirty_leaves.is_empty() {
@@ -56,7 +73,13 @@ pub(super) fn apply(tx: &mut Transaction<'_>) -> Result<(), Error> {
             }
             master_elements.insert(key, intent);
             if intent == DirtyIntent::Intentional {
-                run(tx, key, composing)?;
+                run(
+                    tx,
+                    key,
+                    composing,
+                    #[cfg(feature = "foreign-nodes")]
+                    &mut cache,
+                )?;
             }
         }
         tx.transform_iterations += 1;

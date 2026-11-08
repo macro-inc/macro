@@ -6,7 +6,7 @@ use lexical_model::*;
 use loro::{LoroDoc, UndoManager};
 use std::sync::Arc;
 mod builder;
-pub use builder::default_editor_builder;
+pub use builder::{default_editor_builder, with_session_plugins};
 static PLAIN: PlainPolicy = PlainPolicy;
 
 /// Rebuildable editor configuration shared by live editors and comment forks.

@@ -37,7 +37,8 @@ pub(super) fn d6_collapse_code_highlight(
         }
     }
     let oracle_code = replay
-        .keys
+        .bindings
+        .keys()?
         .iter()
         .find_map(|(raw, key)| (*key == *code_key).then_some(raw.clone()))
         .ok_or_else(|| fail("D6 code identity must be recorded"))?;
@@ -98,9 +99,16 @@ pub(super) fn d6_collapse_code_highlight(
     }
     // Syntax highlighting can replace plain runs between snapshots. Retain
     // surviving handle bindings; drop only removed highlight-body aliases.
-    replay.keys.retain(|raw, key| {
-        *key == NodeKey::ROOT || *key == *code_key || oracle_keys.contains(raw.as_str())
-    });
+    let retained = replay
+        .bindings
+        .keys()?
+        .into_iter()
+        .filter_map(|(raw, key)| {
+            (key == NodeKey::ROOT || key == *code_key || oracle_keys.contains(raw.as_str()))
+                .then_some(raw)
+        })
+        .collect();
+    replay.bindings.retain_keys(&retained)?;
     let expected_json = code::project_json(&expected["json"])?;
     let actual_json = code::project_json(&raw_json)?;
     replay
@@ -138,7 +146,7 @@ pub(super) fn d6_collapse_code_highlight(
             } else {
                 return Err(fail("D6 selection outside code"));
             };
-            if replay.keys.get(&raw).is_some_and(|bound| *bound != key) {
+            if replay.bindings.key(&raw)?.is_some_and(|bound| bound != key) {
                 return Err(fail("D6 known selection key/path mismatch"));
             }
             point["key"] = json!(key.to_string());
@@ -176,10 +184,10 @@ pub(super) fn d6_collapse_code_highlight(
             let raw = if value.is_number() {
                 let binding = format!("$h:{value}");
                 let handle = replay
-                    .handles
-                    .get(&binding)
+                    .bindings
+                    .handle(&binding)?
                     .ok_or_else(|| fail("D6 missing body handle"))?;
-                let key = crate::replay::node_key(handle)?;
+                let key = crate::replay::node_key(&handle)?;
                 if !replay.d6_model_body.contains(&key) {
                     return Err(fail("D6 body handle is not code content"));
                 }

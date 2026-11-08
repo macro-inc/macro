@@ -23,9 +23,55 @@ pub struct Event {
     /// Observed fact, never a projected expectation.
     pub fact: Fact,
 }
+/// Telemetry instruction phase, preserving start versus scheduled-event evidence.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
+pub enum TelemetryPhase {
+    /// Span creation.
+    Start,
+    /// Point event.
+    Event,
+    /// Span completion.
+    End,
+}
 /// Semantic observations at client, transport, storage and server boundaries.
 #[derive(Clone, Debug, PartialEq, Serialize)]
 pub enum Fact {
+    /// Actual child-reported local peer growth; never inferred from a requested edit.
+    ExternalCommit {
+        /// Foreign peer name.
+        client: ClientName,
+        /// Document route.
+        doc: DocIx,
+        /// Newly created peer operation ranges.
+        spans: Vec<IdSpan>,
+    },
+    /// Exact row actually damaged by an injected storage fault, before any adoption.
+    WalCorrupted {
+        /// Durable storage namespace.
+        profile: ProfileName,
+        /// Document identity.
+        doc: doc_sync_core::SyncDocId,
+        /// Owner at corruption time.
+        owner: WalOwner,
+        /// Sequence at corruption time.
+        seq: WalSeq,
+    },
+    /// An actual token-fetch effect, before its scheduled completion.
+    TokenRequested {
+        /// Requesting client.
+        client: ClientName,
+        /// Requesting session.
+        session: SessionId,
+        /// Core attempt identity.
+        attempt: u32,
+    },
+    /// An actual applied client wall-clock offset, including its signed direction.
+    ClockSkew {
+        /// Client whose injected clock changed.
+        client: ClientName,
+        /// Offset relative to the world's fixed wall origin.
+        wall_offset_ms: i64,
+    },
     /// Partition state, so expiry queries can locate the precise virtual interval.
     Partition {
         /// Affected client.
@@ -182,6 +228,13 @@ pub enum Fact {
         /// Chatter-origin bytes.
         foreign: bool,
     },
+    /// A requested snapshot delete actually removed a stored snapshot.
+    SnapshotDeleted {
+        /// Durable profile.
+        profile: ProfileName,
+        /// Exact document key.
+        doc: doc_sync_core::SyncDocId,
+    },
     /// Browser durable completion.
     WalDurable {
         /// Profile.
@@ -204,6 +257,10 @@ pub enum Fact {
     WalAdopted {
         /// Profile.
         profile: ProfileName,
+        /// Exact source/target document identity.
+        doc: doc_sync_core::SyncDocId,
+        /// Source sequences actually removed, including covered delivered rows.
+        removed: Vec<WalSeq>,
         /// Previous owner.
         from: WalOwner,
         /// New owner.
@@ -215,6 +272,8 @@ pub enum Fact {
     WalExpired {
         /// Profile.
         profile: ProfileName,
+        /// Exact storage identity.
+        doc: doc_sync_core::SyncDocId,
         /// Owner.
         owner: WalOwner,
         /// Removed sequences.
@@ -325,6 +384,8 @@ pub enum Fact {
     },
     /// Core telemetry, retained verbatim with ordered attributes.
     Telemetry {
+        /// Actual instruction phase.
+        phase: TelemetryPhase,
         /// Client.
         client: ClientName,
         /// Event name.
@@ -418,6 +479,39 @@ pub enum Fact {
     SettleTimedOut {
         /// Real core busy reasons.
         busy: BTreeMap<ClientName, String>,
+        /// Scheduled non-periodic work remains even when every client is idle.
+        queued_non_periodic: bool,
+    },
+    /// Observed physical router socket transition, shared by a whole profile.
+    RouterSocket {
+        /// Browser/device sharing the connection.
+        profile: ProfileName,
+        /// Physical socket attempt.
+        connection: u32,
+        /// Whether the physical handshake succeeded.
+        open: bool,
+    },
+    /// Actual rollback of delivered flags/rows during the injected power-loss window.
+    WalDeliveryLost {
+        /// Durable profile.
+        profile: ProfileName,
+        /// Exact storage identity.
+        doc: doc_sync_core::SyncDocId,
+        /// Original owner, including legacy rows.
+        owner: doc_sync_core::WalOwner,
+        /// Delivered sequences that actually disappeared or lost their flag.
+        seqs: Vec<doc_sync_core::WalSeq>,
+    },
+    /// Actual deletion of delivered WAL rows covered by a durable snapshot.
+    WalPruned {
+        /// Durable profile.
+        profile: ProfileName,
+        /// Exact storage identity.
+        doc: doc_sync_core::SyncDocId,
+        /// Original owner.
+        owner: doc_sync_core::SessionId,
+        /// Removed sequences, distinguished from attempted prune requests.
+        seqs: Vec<doc_sync_core::WalSeq>,
     },
     /// Server lifecycle transition.
     Server {
@@ -428,6 +522,8 @@ pub enum Fact {
 /// Final state of one real client core/document.
 #[derive(Clone, Debug, PartialEq)]
 pub struct ClientFinal {
+    /// Actual rich-text model and independent persisted reconstruction, when present.
+    pub editor: Option<EditorFinal>,
     /// Whether a session remains live.
     pub alive: bool,
     /// Terminal connection reason, when closed by the core.
@@ -454,6 +550,10 @@ pub struct ClientFinal {
     pub wal_undelivered: usize,
     /// Every retained unacknowledged row, including parked rows.
     pub wal_total: usize,
+    /// Actual retained own rows confirmed delivered by the core, even above a parked gap.
+    pub delivered: Vec<WalSeq>,
+    /// Checksum-valid operation intervals retained in actual parked WAL rows.
+    pub parked_spans: BTreeMap<WalSeq, Vec<IdSpan>>,
     /// Actual parked rows.
     pub parked: Vec<(WalSeq, String)>,
     /// Public core status.
@@ -468,6 +568,20 @@ pub struct ClientFinal {
     pub presence_key: String,
     /// Wall-clock offset retained across settle.
     pub skew: i64,
+}
+/// Immutable observations from a real editor session.
+#[derive(Clone, Debug, PartialEq, Serialize)]
+pub struct EditorFinal {
+    /// Live model JSON with only policy-excluded local fields removed.
+    pub synced_json: serde_json::Value,
+    /// Independently reconstructed persisted editor tree.
+    pub reconstructed: serde_json::Value,
+    /// Actual durable selection cursor payload.
+    pub selection: Option<serde_json::Value>,
+    /// Real collaborative history availability.
+    pub can_undo: bool,
+    /// Real collaborative redo availability.
+    pub can_redo: bool,
 }
 /// Freshly loaded durable room state, alongside live room state.
 #[derive(Clone, Debug, PartialEq, Serialize)]
@@ -498,6 +612,60 @@ pub struct Finals {
 /// Runtime work counters; derived from observed transitions.
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize)]
 pub struct RunStats {
+    /// Literal script transitions executed.
+    pub steps: u64,
+    /// Edits skipped by actual client lifecycle or authority.
+    pub skipped_ops: u64,
+    /// Observed tab crashes.
+    pub crashes: u64,
+    /// Observed browser-process crashes.
+    pub profile_crashes: u64,
+    /// Observed Room activation crashes.
+    pub server_crashes: u64,
+    /// Socket generations opened after the first per session.
+    pub reconnects: u64,
+    /// Transitions to the real exhausted-retry state.
+    pub gave_up: u64,
+    /// Real corruption resets started.
+    pub resets: u64,
+    /// Imports that actually retained missing dependencies.
+    pub pending_imports: u64,
+    /// Real incremental catchup attempts.
+    pub converge_rounds: u64,
+    /// Acknowledgment frames dropped by the network.
+    pub acks_lost: u64,
+    /// Maximum actual retained client WAL length.
+    pub wal_max_depth: u64,
+    /// Completed adoption transactions with moved rows.
+    pub adoptions: u64,
+    /// Pushes carrying rows owned by another live session.
+    pub assisted_pushes: u64,
+    /// Completed durable chatter-origin rows.
+    pub foreign_rows: u64,
+    /// Observed messages requiring multiple fragments.
+    pub multi_frame_messages: u64,
+    /// Observed authority transitions.
+    pub access_changes: u64,
+    /// Virtual time spent inside Settle transitions.
+    pub settle_ms: u64,
+    /// Actual retained parked rows in live final clients.
+    pub parked_rows_at_end: u64,
+    /// Profiles with two writable tabs of one document simultaneously.
+    pub multi_edit_tab_profiles: u64,
+    /// Issued appends completing after their owning tab crashed.
+    pub late_commits_after_lock_release: u64,
+    /// Observed callback failures from a directory outage.
+    pub d1_outages: u64,
+    /// Observed callback failures from operation-log storage outages.
+    pub storage_outages: u64,
+    /// Observed graceful closes before a pending coalesce deadline.
+    pub close_in_window: u64,
+    /// Actual foreign bytes on real peer pushes.
+    pub foreign_bytes_pushed: u64,
+    /// Actual own bytes on real peer pushes.
+    pub own_bytes_pushed: u64,
+    /// Actual applied operation kinds, including selection.
+    pub ops_by_kind: BTreeMap<String, u64>,
     /// Scheduled events processed.
     pub events: u64,
     /// Real client handle calls.
@@ -522,6 +690,8 @@ pub struct ServerPort {
 /// Completed run, including failures and the quiet observation window.
 #[derive(Clone)]
 pub struct Outcome {
+    /// Foreign drivers require their caller-owned command/report transcript for replay.
+    pub external_clients: Vec<ClientName>,
     /// Reproduction configuration; scripts may override network/storage profiles.
     pub config: SimConfig,
     /// Reproduction seed.

@@ -8,8 +8,18 @@ impl Sim {
         match step {
             Step::Open(spec) => self.open(spec)?,
             Step::Run(duration) => self.advance(duration.0),
-            Step::Settle => self.settle()?,
+            Step::Settle => {
+                let start = self.clock.now;
+                self.settle()?;
+                self.stats.settle_ms = self
+                    .stats
+                    .settle_ms
+                    .saturating_add(self.clock.now.saturating_sub(start));
+            }
             Step::Edit { client: name, op } => {
+                if let AbstractOp::Editor(op) = op {
+                    return self.editor_edit(&name, op);
+                }
                 let Some(client) = self.clients.get_mut(&name) else {
                     self.emit(Fact::OpSkipped {
                         client: name,
@@ -19,8 +29,9 @@ impl Sim {
                 };
                 if !client.alive
                     || client.frozen
-                    || client.core.phase() != Phase::Running
-                    || (client.spec.access != Access::Edit && !matches!(op, AbstractOp::Select(_)))
+                    || !matches!(client.core.phase(), Phase::Running | Phase::Resetting)
+                    || (client.effective_access != Access::Edit
+                        && !matches!(op, AbstractOp::Select(_)))
                 {
                     self.emit(Fact::OpSkipped {
                         client: name,
@@ -32,15 +43,22 @@ impl Sim {
                 if let AbstractOp::Select(selection) = op {
                     client.selection = selection.map(|field| field % self.config.fields.max(1));
                     let value = client.selection.map(loro::LoroValue::from);
+                    self.emit(Fact::LocalOp {
+                        client: name.clone(),
+                        op: AbstractOp::Select(selection),
+                        spans: Vec::new(),
+                    });
                     self.input(&name, session, SyncInput::SetPresence(value))?;
                 } else {
-                    let before = client.doc.loro.oplog_vv();
-                    client
-                        .doc
-                        .edit(&op, self.config.fields, self.clock.wall(client.skew))?;
-                    let peer = client.doc.loro.peer_id();
+                    let before = client.core.version();
+                    client.core.edit_generic(
+                        &op,
+                        self.config.fields,
+                        self.clock.wall(client.skew),
+                    )?;
+                    let peer = client.core.peer_id();
                     let start = before.get(&peer).copied().unwrap_or(0);
-                    let end = client.doc.loro.oplog_vv().get(&peer).copied().unwrap_or(0);
+                    let end = client.core.version().get(&peer).copied().unwrap_or(0);
                     let spans = if end > start {
                         vec![IdSpan { peer, start, end }]
                     } else {
@@ -72,6 +90,7 @@ impl Sim {
                     }),
                     _ => {}
                 }
+                let fault = self.router_network_fault(fault);
                 if let Some(name) = self.net.fault(fault) {
                     self.break_client(&name, 1006)?;
                 }
@@ -92,9 +111,6 @@ impl Sim {
                     for fact in facts {
                         self.emit(fact);
                     }
-                }
-                if matches!(mode, CrashMode::PowerLoss { .. }) {
-                    self.prefixes.retain(|(scope, _, _), _| *scope != profile);
                 }
                 self.emit(Fact::ProfileCrashed { profile });
             }
@@ -119,15 +135,37 @@ impl Sim {
                 }
             }
             Step::Host { client, signal } => {
+                if let Some(profile) = self
+                    .clients
+                    .get(&client)
+                    .filter(|client| client.routed)
+                    .map(|client| client.spec.profile.clone())
+                {
+                    self.router_input(&profile, doc_sync_core::RouterInput::Host(signal))?;
+                }
                 if let Some(session) = self.clients.get(&client).map(|client| client.session) {
                     self.input(&client, session, SyncInput::Host(signal))?;
                 }
             }
             Step::Offline { client, offline } => {
+                let network = self.network_name(&client);
                 if offline {
+                    self.net.offline.insert(network);
                     self.net.offline.insert(client);
                 } else {
+                    self.net.offline.remove(&network);
                     self.net.offline.remove(&client);
+                    if let Some(profile) = self
+                        .clients
+                        .get(&client)
+                        .filter(|client| client.routed)
+                        .map(|client| client.spec.profile.clone())
+                    {
+                        self.router_input(
+                            &profile,
+                            doc_sync_core::RouterInput::Host(HostSignal::Online),
+                        )?;
+                    }
                     if let Some(session) = self.clients.get(&client).map(|client| client.session) {
                         self.input(&client, session, SyncInput::Host(HostSignal::Online))?;
                     }
@@ -149,9 +187,27 @@ impl Sim {
             }
             Step::Storage { profile, fault } => {
                 self.profiles
-                    .entry(profile)
-                    .or_insert_with(|| SimStorage::new(self.config.storage.clone()))
+                    .entry(profile.clone())
+                    .or_insert_with(|| {
+                        SimStorage::with_retention(
+                            self.config.storage.clone(),
+                            self.config.session.wal.ttl,
+                        )
+                    })
                     .fault(fault);
+                let corruptions = self
+                    .profiles
+                    .get_mut(&profile)
+                    .map(|store| std::mem::take(&mut store.corruptions))
+                    .unwrap_or_default();
+                for (doc, owner, seq) in corruptions {
+                    self.emit(Fact::WalCorrupted {
+                        profile: profile.clone(),
+                        doc,
+                        owner,
+                        seq,
+                    });
+                }
             }
             Step::Server(step) => self.server_step(step)?,
             Step::Grant {
@@ -190,8 +246,46 @@ impl Sim {
                 client,
                 wall_offset_ms,
             } => {
-                if let Some(client) = self.clients.get_mut(&client) {
-                    client.skew = wall_offset_ms;
+                if let Some(peer) = self.clients.get_mut(&client) {
+                    let bounded = self.config.session.presence_timeout.0.unsigned_abs() / 2;
+                    if peer.skew.unsigned_abs() <= bounded
+                        && wall_offset_ms.unsigned_abs() <= bounded
+                    {
+                        let backwards = peer.skew.saturating_sub(wall_offset_ms);
+                        if backwards > 0 {
+                            self.presence_clock_ready_at = self.presence_clock_ready_at.max(
+                                self.clock
+                                    .now
+                                    .saturating_add(backwards.unsigned_abs())
+                                    .saturating_add(1),
+                            );
+                        }
+                    }
+                    peer.skew = wall_offset_ms;
+                    self.emit(Fact::ClockSkew {
+                        client,
+                        wall_offset_ms,
+                    });
+                }
+            }
+            Step::AssertProfileDrained { profile } => {
+                let store = self
+                    .profiles
+                    .get(&profile)
+                    .ok_or_else(|| Failure::new("account_switch_drained", "unknown profile"))?;
+                let user = doc_sync_core::UserKey(store.user.clone());
+                let pending = store
+                    .durable
+                    .entries
+                    .iter()
+                    .filter(|(_, row)| row.record.user == user && !row.delivered)
+                    .map(|(key, _)| key.clone())
+                    .collect::<Vec<_>>();
+                if !pending.is_empty() {
+                    return Err(Failure::new(
+                        "account_switch_drained",
+                        format!("{profile:?}: current-user undelivered rows {pending:?}"),
+                    ));
                 }
             }
             Step::SignIn { profile, user } => {
@@ -234,7 +328,7 @@ impl Sim {
         }
         Ok(())
     }
-    fn open(&mut self, spec: OpenSpec) -> Result<(), Failure> {
+    pub(super) fn open(&mut self, spec: OpenSpec) -> Result<(), Failure> {
         if self
             .clients
             .get(&spec.client)
@@ -251,12 +345,28 @@ impl Sim {
             .parse()
             .map_err(|e| Failure::new("document_id", e))?;
         let session = SessionId(self.uuid());
+        let colors = [
+            doc_sync_core::PaletteColor::Red,
+            doc_sync_core::PaletteColor::Orange,
+            doc_sync_core::PaletteColor::Yellow,
+            doc_sync_core::PaletteColor::Lime,
+            doc_sync_core::PaletteColor::Green,
+            doc_sync_core::PaletteColor::Teal,
+            doc_sync_core::PaletteColor::Cyan,
+            doc_sync_core::PaletteColor::Blue,
+            doc_sync_core::PaletteColor::Violet,
+            doc_sync_core::PaletteColor::Purple,
+            doc_sync_core::PaletteColor::Pink,
+        ];
+        let color = colors[self.rng.random_range(0..colors.len())];
         let peer = self.peer(spec.kind);
         let supply = (0..16).map(|_| self.peer(spec.kind)).collect::<Vec<_>>();
         let profile = self
             .profiles
             .entry(spec.profile.clone())
-            .or_insert_with(|| SimStorage::new(self.config.storage.clone()));
+            .or_insert_with(|| {
+                SimStorage::with_retention(self.config.storage.clone(), self.config.session.wal.ttl)
+            });
         let user = profile.user.clone();
         let now = doc_sync_core::Now {
             mono: doc_sync_core::Millis(self.clock.now),
@@ -264,12 +374,20 @@ impl Sim {
         };
         let client = SimClient::new(
             spec.clone(),
-            doc_id,
-            session,
-            peer,
+            crate::client::Identity {
+                doc: doc_id,
+                session,
+                peer,
+                user: user.clone(),
+                color,
+            },
             supply,
-            user.clone(),
             now,
+            &self.config.session,
+            matches!(
+                self.config.seeds.get(&spec.doc),
+                Some(SeedDocument::Editor(_))
+            ),
         )?;
         let server = self
             .servers
@@ -337,10 +455,21 @@ impl Sim {
                 },
             )?;
         }
+        if self.clients.get(&name).is_some_and(|client| client.routed) {
+            self.router_attach(&name)?;
+        }
         Ok(())
     }
 
     fn break_client(&mut self, name: &ClientName, code: u16) -> Result<(), Failure> {
+        if let Some(profile) = self
+            .clients
+            .get(name)
+            .filter(|client| client.routed)
+            .map(|client| client.spec.profile.clone())
+        {
+            return self.router_break(&profile, code);
+        }
         let keys = self
             .net
             .links
@@ -354,6 +483,10 @@ impl Sim {
         Ok(())
     }
     fn crash_client(&mut self, name: &ClientName) -> Result<(), Failure> {
+        let routed = self.clients.get(name).is_some_and(|client| client.routed);
+        if routed {
+            self.router_detach(name)?;
+        }
         if let Some(client) = self.clients.get_mut(name) {
             client.alive = false;
             client.frozen = false;
@@ -363,7 +496,9 @@ impl Sim {
             }
         }
         self.clock.clear_client_wakes(name);
-        self.break_client(name, 1006)?;
+        if !routed {
+            self.break_client(name, 1006)?;
+        }
         self.emit(Fact::Crashed {
             client: name.clone(),
         });
@@ -425,6 +560,16 @@ impl Sim {
         }
         let session = client.session;
         let ai = client.spec.kind == ClientKind::AiWorker;
+        let opened = self.events.iter().rposition(|event| matches!(&event.fact, Fact::Opened { client, session: owner, .. } if client == name && *owner == session)).unwrap_or(self.events.len());
+        let session_events = &self.events[opened..];
+        let in_window = session_events.iter().rev().find_map(|event| match &event.fact {
+            Fact::LocalOp { client, spans, .. } if client == name && !spans.is_empty() => Some((event.at, spans)),
+            _ => None,
+        }).is_some_and(|(at, spans)| self.clock.now.saturating_sub(at.0) < self.config.session.wal.coalesce.0 &&
+            !session_events.iter().any(|event| matches!(&event.fact, Fact::WalAppendIssued { session: owner, spans: stored, .. } if *owner == session && spans.iter().all(|span| crate::invariants::ranges_cover(stored, span)))));
+        if in_window {
+            self.stats.close_in_window += 1;
+        }
         if ai {
             let request = client.request();
             self.input(name, session, SyncInput::Flush(request))?;
@@ -466,7 +611,7 @@ impl Sim {
         }
         Ok(())
     }
-    fn thaw(&mut self, name: &ClientName) -> Result<(), Failure> {
+    pub(super) fn thaw(&mut self, name: &ClientName) -> Result<(), Failure> {
         let Some(client) = self.clients.get_mut(name) else {
             return Ok(());
         };
@@ -481,7 +626,7 @@ impl Sim {
         }
         self.input(name, session, SyncInput::Tick)
     }
-    fn server_step(&mut self, step: ServerStep) -> Result<(), Failure> {
+    pub(super) fn server_step(&mut self, step: ServerStep) -> Result<(), Failure> {
         let documents = self.servers.keys().copied().collect::<Vec<_>>();
         for doc in documents {
             match &step {
@@ -562,7 +707,16 @@ impl Sim {
                         server.ports.set_faults(faults);
                     }
                 }
+                ServerStep::SurfaceRevoke => {
+                    if self.config.surfaces.contains(&doc) {
+                        self.server_input(doc, Input::SurfaceRevoke)?;
+                    }
+                }
                 ServerStep::FreezeSource => {
+                    // Source migration belongs to the legacy document route group.
+                    if self.config.surfaces.contains(&doc) {
+                        continue;
+                    }
                     let operation = self.uuid();
                     let body =
                         serde_json::to_vec(&serde_json::json!({ "operation_id": operation }))
@@ -600,6 +754,7 @@ impl Sim {
                     }
                 }
                 ServerStep::Heal => {
+                    self.clock.clear_directory_heals(doc);
                     if let Some(server) = self.servers.get_mut(&doc) {
                         server.storage_latency = self.config.server_storage_latency;
                         server.ports.set_faults(FaultSchedule::new());
@@ -613,111 +768,6 @@ impl Sim {
         self.emit(Fact::Server {
             operation: format!("{step:?}"),
         });
-        Ok(())
-    }
-    fn settle(&mut self) -> Result<(), Failure> {
-        self.net.heal();
-        for store in self.profiles.values_mut() {
-            store.fault(StorageFault::Heal);
-        }
-        self.server_step(ServerStep::Heal)?;
-        // Settlement provides a recovery session for durable rows left by Stop.
-        // Stop itself still closes without waiting for a server acknowledgement.
-        let closed = self
-            .clients
-            .values()
-            .filter(|client| !client.alive && client.stopped)
-            .map(|client| client.spec.clone())
-            .collect::<Vec<_>>();
-        for spec in closed {
-            self.open(spec)?;
-        }
-        let live = self
-            .clients
-            .iter()
-            .filter(|(_, client)| client.alive)
-            .map(|(name, client)| (name.clone(), client.session, client.selection))
-            .collect::<Vec<_>>();
-        for (name, session, selection) in live {
-            self.thaw(&name)?;
-            self.input(&name, session, SyncInput::Host(HostSignal::Online))?;
-            self.input(&name, session, SyncInput::Host(HostSignal::Visible))?;
-            self.input(
-                &name,
-                session,
-                SyncInput::SetPresence(selection.map(loro::LoroValue::from)),
-            )?;
-        }
-        let deadline = self.clock.now.saturating_add(self.config.budgets.settle.0);
-        // The heal's selection updates coalesce and traverse the calm network before
-        // the first presence snapshot. The heartbeat hold ignores later refreshes.
-        self.advance(100);
-        let mut held_since = None;
-        let mut settled_clients = BTreeSet::new();
-        while self.clock.now <= deadline && !self.budget_hit {
-            let idle = self
-                .clients
-                .values()
-                .filter(|client| {
-                    client.alive
-                        && !matches!(
-                            client.core.status().connection,
-                            doc_sync_core::ConnectionStatus::Closed(_)
-                        )
-                })
-                .all(|client| client.core.is_idle())
-                && self.profiles.values().all(|store| store.pending.is_empty())
-                && self.servers.values().all(|server| {
-                    server.pending_durable == 0
-                        && server.inbox.is_empty()
-                        && !server.ingress_scheduled
-                        && server.busy_until <= self.clock.now
-                });
-            for (name, client) in &self.clients {
-                if client.alive && client.core.is_idle() && settled_clients.insert(name.clone()) {
-                    self.events.push(Event {
-                        at: self.clock.now(),
-                        fact: Fact::ClientSettled {
-                            client: name.clone(),
-                            session: client.session,
-                        },
-                    });
-                }
-            }
-            if idle {
-                if held_since.is_none() {
-                    held_since = Some(self.clock.now);
-                    self.presence = Some(
-                        self.clients
-                            .iter()
-                            .filter(|(_, client)| client.alive)
-                            .map(|(name, client)| (name.clone(), client.remote.clone()))
-                            .collect(),
-                    );
-                }
-                if held_since.is_some_and(|since| self.clock.now.saturating_sub(since) >= 10_000) {
-                    self.emit(Fact::Settled);
-                    return Ok(());
-                }
-            } else {
-                held_since = None;
-            }
-            let limit = held_since
-                .map(|since: u64| since.saturating_add(10_000))
-                .unwrap_or(deadline)
-                .min(deadline);
-            if self.clock.now == deadline {
-                break;
-            }
-            self.advance_next(limit);
-        }
-        let busy = self
-            .clients
-            .iter()
-            .filter(|(_, client)| client.alive && !client.core.is_idle())
-            .map(|(name, client)| (name.clone(), format!("{:?}", client.core.busy())))
-            .collect();
-        self.emit(Fact::SettleTimedOut { busy });
         Ok(())
     }
 }

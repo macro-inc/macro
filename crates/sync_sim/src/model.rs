@@ -1,6 +1,6 @@
 //! Script inputs, immutable observations and deterministic configuration.
 use serde::Serialize;
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 
 /// Virtual milliseconds from the world's origin.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, PartialOrd, Ord, Serialize)]
@@ -28,12 +28,14 @@ pub struct IdSpan {
 }
 /// Explicit invariant failure; never a panic for a synchronization failure.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, thiserror::Error)]
-#[error("{invariant} at {at:?}: {detail}")]
+#[error("{invariant} at {at:?}, step{step:?}: {detail}")]
 pub struct Failure {
     /// Check that failed.
     pub invariant: String,
     /// Virtual occurrence time, if known.
     pub at: Option<Millis>,
+    /// Active literal-script step index; final-only queries may have none.
+    pub step: Option<usize>,
     /// Reproduction evidence.
     pub detail: String,
 }
@@ -42,6 +44,7 @@ impl Failure {
         Self {
             invariant: check.into(),
             at: None,
+            step: None,
             detail: detail.to_string(),
         }
     }
@@ -73,7 +76,7 @@ impl Access {
         }
     }
 }
-/// Literal open configuration for the GenericSurface client.
+/// Literal client identity and capability; the room seed selects its surface.
 #[derive(Clone, Debug)]
 pub struct OpenSpec {
     /// Reusable name within the script.
@@ -99,15 +102,26 @@ impl OpenSpec {
         }
     }
 }
-/// Shrinkable GenericSurface operations. Indices resolve modulo current content.
+/// Shrinkable generic and editor inputs. Indices resolve modulo current content.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize)]
 pub enum AbstractOp {
+    /// Input to a real document-session editor.
+    Editor(crate::EditorOp),
     /// Write a field in the shared form map.
     FormSet {
         /// Field index.
         field: u16,
         /// New integer value.
         value: u16,
+    },
+    /// Write deterministic incompressible text to exercise the real multi-frame path.
+    FormText {
+        /// Field index resolved against the current form.
+        field: u16,
+        /// Requested size, capped at4MiB at run time.
+        bytes: u32,
+        /// Literal content salt; no ambient randomness is used.
+        salt: u16,
     },
     /// Move one element in the form's ordered field list.
     FormMove {
@@ -193,9 +207,11 @@ impl Default for Budgets {
         }
     }
 }
-/// Initial GenericSurface field history; cached snapshots are ancestors of the server state.
+/// Initial form history or projected editor state; caches are server ancestors.
 #[derive(Clone, Debug, Default)]
 pub enum SeedDocument {
+    /// A rich-text document initialized through the real editor projection.
+    Editor(serde_json::Value),
     /// Empty fields and the configured ordered field list.
     #[default]
     Empty,
@@ -220,6 +236,10 @@ pub struct SimConfig {
     pub fields: u16,
     /// Number of independent documents (at least one).
     pub documents: u8,
+    /// Rooms using isolated collaborative-surface identity and lifecycle.
+    pub surfaces: BTreeSet<DocIx>,
+    /// Current-build client policies; Routed transport requires two documents.
+    pub session: crate::SessionDefaults,
     /// Per-document seed histories; omitted documents start empty.
     pub seeds: BTreeMap<DocIx, SeedDocument>,
     /// Network conditions.
@@ -243,6 +263,8 @@ impl SimConfig {
             fields: 8,
             documents: 1,
             seeds: BTreeMap::new(),
+            surfaces: BTreeSet::new(),
+            session: crate::SessionDefaults::production(),
             net: NetProfile::calm(),
             storage: StorageProfile::fast(),
             budgets: Budgets::default(),
@@ -250,6 +272,23 @@ impl SimConfig {
             server_storage_latency: Millis(2),
             per_step: true,
         }
+    }
+    /// A shared rich-text document over real document sessions.
+    pub fn editor(seed: u64) -> Self {
+        let mut config = Self::calm(seed);
+        config.seeds.insert(DocIx(0), SeedDocument::Editor(serde_json::json!({"root": {
+            "type": "root", "version": 1, "format": "", "indent": 0, "direction": null,
+            "children": [{"type": "paragraph", "version": 1, "format": "", "indent": 0, "direction": null,
+                "children": [{"type": "text", "version": 1, "text": "initial shared editor text", "format": 0, "detail": 0, "mode": "normal", "style": ""}]}]
+        }})));
+        config
+    }
+    /// Two documents over one shared physical router per tab profile.
+    pub fn routed(seed: u64) -> Self {
+        let mut config = Self::calm(seed);
+        config.documents = 2;
+        config.session.transport = doc_sync_core::TransportKind::Routed;
+        config
     }
 }
 /// One direction on a physical connection.
@@ -395,6 +434,8 @@ pub enum ServerStep {
         /// Put count.
         n: u8,
     },
+    /// Permanently revoke configured collaborative-surface rooms.
+    SurfaceRevoke,
     /// Freeze the document through the real source-migration use case.
     FreezeSource,
     /// An AI-range fork changes a GenericSurface field through the atomic HTTP use case.
@@ -524,6 +565,11 @@ pub enum Step {
         /// Signed offset.
         wall_offset_ms: i64,
     },
+    /// Assert current-user browser WAL is drained before a generated account switch.
+    AssertProfileDrained {
+        /// Browser whose actual retained rows are checked without mutation.
+        profile: ProfileName,
+    },
     /// Change browser user; subsequent opens use that user.
     SignIn {
         /// Browser.
@@ -533,4 +579,31 @@ pub enum Step {
     },
     /// Advance wall time without changing monotonic deadlines.
     AdvanceWall(Millis),
+}
+
+#[derive(Clone)]
+pub(crate) struct TokenGrant {
+    pub access: Access,
+    pub user: String,
+    pub doc: doc_sync_core::SyncDocId,
+    pub issued_by: doc_sync_core::SessionId,
+    pub expires_at: Option<usize>,
+}
+impl TokenGrant {
+    pub fn issue(client: &crate::SimClient, wall: i64) -> Self {
+        Self {
+            access: client.spec.access,
+            user: client.user.clone(),
+            doc: client.doc_id.clone(),
+            issued_by: client.session,
+            expires_at: client.doc_id.as_str().starts_with("surface:").then(|| {
+                usize::try_from(wall.saturating_div(1000).saturating_add(3600)).unwrap_or(0)
+            }),
+        }
+    }
+    pub fn expired(&self, wall: i64) -> bool {
+        self.expires_at.is_some_and(|expiry| {
+            i64::try_from(expiry).unwrap_or(i64::MAX) <= wall.saturating_div(1000)
+        })
+    }
 }

@@ -1,6 +1,24 @@
 //! The single per-node import policy and Macro search-text interface.
 use lexical_model::*;
 use std::borrow::Cow;
+/// Source exportJSON own-undefined fields; the mirror stores each absent value as null.
+pub fn own_undefined_fields(node_type: &str) -> &'static [String] {
+    #[derive(serde::Deserialize)]
+    #[serde(rename_all = "camelCase")]
+    struct Properties {
+        own_undefined: std::collections::BTreeMap<String, Vec<String>>,
+    }
+    static PROPERTIES: std::sync::OnceLock<Properties> = std::sync::OnceLock::new();
+    PROPERTIES
+        .get_or_init(|| {
+            serde_json::from_str(include_str!("wire-properties.json"))
+                .expect("valid generated wire property catalog")
+        })
+        .own_undefined
+        .get(node_type)
+        .map(Vec::as_slice)
+        .unwrap_or(&[])
+}
 /// NodeState fields retained by a TypeScript node's importJSON implementation.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum ImportedState {

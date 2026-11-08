@@ -7,7 +7,7 @@ use std::collections::BTreeMap;
 pub(crate) enum Pending {
     Wake(ClientName, SessionId, u64),
     Input(ClientName, SessionId, SyncInput),
-    Storage(ProfileName, u64),
+    Storage(ProfileName, u64, i64),
     Connect(ClientName, SessionId, u32),
     Close(ClientName, SessionId, u32, u16),
     Up(ClientName, SessionId, u32, crate::network::Delivery),
@@ -16,6 +16,15 @@ pub(crate) enum Pending {
     ServerDurable(DocIx, u64, u64, u64),
     Alarm(DocIx, u64),
     HealDirectory(DocIx),
+    RouterWake(ProfileName, u64),
+    RouterConnect(ProfileName, u32),
+    RouterClose(ProfileName, u32, u16),
+    RouterToken(
+        ProfileName,
+        doc_sync_core::SyncDocId,
+        doc_sync_core::TokenEvent,
+    ),
+    RouteConnect(ProfileName, String, u64, String),
 }
 /// One virtual clock and stable/seeded ordered event queue.
 pub struct SimClock {
@@ -69,6 +78,74 @@ impl SimClock {
     }
     pub(crate) fn next_at(&self) -> Option<u64> {
         self.queue.first_key_value().map(|((at, _, _), _)| *at)
+    }
+    /// Work that must drain before settlement, excluding explicitly periodic traffic.
+    /// Wake/alarm callbacks check state deadlines; core idleness and pending durable
+    /// counters independently cover their outstanding non-periodic operations.
+    pub(crate) fn has_non_periodic(&self) -> bool {
+        self.queue.values().any(|event| match event {
+            Pending::Wake(..) | Pending::RouterWake(..) | Pending::Alarm(..)
+                | Pending::ServerDurable(..) => false,
+            Pending::Up(_, _, _, delivery) | Pending::Down(_, _, _, delivery) => {
+                delivery.corrupted || !matches!(delivery.kind,
+                    crate::FrameKind::Awareness | crate::FrameKind::Ping | crate::FrameKind::Pong)
+            }
+            Pending::Input(_, _, input) => !matches!(input,
+                SyncInput::Tick | SyncInput::SetPresence(_) |
+                SyncInput::Chatter(doc_sync_core::ChatterMessage::Awareness(_))) &&
+                !matches!(input, SyncInput::Socket { event: doc_sync_core::SocketEvent::Text(text), .. } if text == "pong"),
+            Pending::Storage(..) | Pending::Connect(..) | Pending::Close(..)
+                | Pending::ServerReady(..) | Pending::HealDirectory(..)
+                | Pending::RouterConnect(..) | Pending::RouterClose(..)
+                | Pending::RouterToken(..) | Pending::RouteConnect(..) => true,
+        })
+    }
+    // A finite FIFO cutoff for publications already issued at the healing boundary.
+    // Periodic refreshes scheduled later are deliberately outside this barrier.
+    pub(crate) fn issued_presence_until(&self, direction: crate::Direction) -> Option<u64> {
+        self.queue
+            .iter()
+            .filter_map(|((at, _, _), pending)| {
+                let publication = match pending {
+                    Pending::Up(_, _, _, delivery) if direction == crate::Direction::ToServer => {
+                        delivery.kind == crate::FrameKind::Awareness
+                    }
+                    Pending::Down(_, _, _, delivery) if direction == crate::Direction::ToClient => {
+                        delivery.kind == crate::FrameKind::Awareness
+                    }
+                    Pending::Input(
+                        _,
+                        _,
+                        SyncInput::SetPresence(_)
+                        | SyncInput::Chatter(doc_sync_core::ChatterMessage::Awareness(_)),
+                    ) => true,
+                    _ => false,
+                };
+                publication.then_some(*at)
+            })
+            .max()
+    }
+    // Host failures are sampled at issue time. Complete existing failed token
+    // requests before the settlement Online nudge, preserving real core retry rules.
+    pub(crate) fn pending_token_failures_until(&self) -> Option<u64> {
+        self.queue
+            .iter()
+            .filter_map(|((at, _, _), pending)| {
+                matches!(
+                    pending,
+                    Pending::Input(
+                        _,
+                        _,
+                        SyncInput::Token(doc_sync_core::TokenEvent::Failed { .. })
+                    ) | Pending::RouterToken(_, _, doc_sync_core::TokenEvent::Failed { .. })
+                )
+                .then_some(*at)
+            })
+            .max()
+    }
+    pub(crate) fn clear_directory_heals(&mut self, doc: DocIx) {
+        self.queue
+            .retain(|_, event| !matches!(event, Pending::HealDirectory(key) if *key == doc));
     }
     pub(crate) fn clear_client_wakes(&mut self, client: &ClientName) {
         self.queue

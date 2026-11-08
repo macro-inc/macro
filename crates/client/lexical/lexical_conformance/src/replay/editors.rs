@@ -11,16 +11,11 @@ impl Replayer {
             } else {
                 editor.parse_editor_state(&serde_json::from_value(value)?)?
             };
-            let id = self.saved_states.len();
-            self.saved_states.push(state);
+            let id = self.bindings.save_state(state)?;
             json!({"$snapshot":id})
         } else {
             let id = integer(&args[0]["$snapshot"])? as usize;
-            let state = self
-                .saved_states
-                .get(id)
-                .ok_or_else(|| fail("state handle"))?
-                .clone();
+            let state = self.saved_state(id)?.clone();
             let mut tags = TagSet::default();
             if let Some(tag) = args[1]["tag"].as_str() {
                 tags.insert(tag.parse().map_err(|_| fail("tag"))?);
@@ -29,53 +24,59 @@ impl Replayer {
             if !self.causes.iter().any(|cause| cause == "setEditorState") {
                 self.causes.push(json!("setEditorState"));
             }
-            self.active_selection = None;
+            self.selections.set_active(None)?;
             undefined()
         };
         self.compare(op.get("ret").unwrap_or(&undefined()), &actual)
     }
-    pub(super) fn begin_slots(&mut self, tx: &mut Transaction<'_>, clone_active: bool) {
-        // A pointer identifies a live Rust record only. Discard dead temporary
-        // addresses before an allocator can reuse them in a later transaction.
-        // Handle identities remain bound, and new records get fresh identities.
-        self.records.retain(|(key, pointer), _| {
-            let matches = |view: StateRef<'_>| {
-                view.node(*key)
-                    .is_some_and(|node| std::ptr::from_ref(node.base()) as usize == *pointer)
-            };
-            matches(tx.view())
-                || matches(tx.committed_state().view())
-                || self
-                    .states
-                    .values()
-                    .chain(self.saved_states.iter())
-                    .any(|state| matches(state.view()))
-        });
-        let previous_active = self.active_selection;
-        if clone_active {
-            self.active_selection = None;
-        }
-        self.selections = self
-            .selection_values
+    pub(crate) fn begin_slots(
+        &mut self,
+        tx: &mut Transaction<'_>,
+        clone_active: bool,
+    ) -> Result<()> {
+        let states = self.bindings.snapshots()?;
+        let mut live = std::collections::HashSet::new();
+        for state in states
             .iter()
+            .map(EditorState::view)
+            .chain([tx.view(), tx.committed_state().view()])
+        {
+            for key in snapshot::keys(state.snapshot()) {
+                if let Some(node) = state.node(key) {
+                    live.insert((key, std::ptr::from_ref(node.base()) as usize));
+                }
+            }
+        }
+        self.record_ids.retain(&live)?;
+        let previous_active = self.selections.active()?.map(|active| active.id);
+        if clone_active {
+            self.selections.set_active(None)?;
+        }
+        let slots = self
+            .selections
+            .values()?
+            .into_iter()
             .enumerate()
             .map(|(id, s)| {
                 if !clone_active && previous_active == Some(id) {
                     SelectionSlot::Active
                 } else {
-                    s.clone()
-                        .map(|s| tx.detach_selection(s))
+                    s.map(|s| tx.detach_selection(s))
                         .unwrap_or(SelectionSlot::Active)
                 }
             })
             .collect();
+        self.selections.replace_slots(slots)
     }
-    pub(super) fn capture_slots(&mut self, tx: &Transaction<'_>) -> Result<()> {
-        self.selection_values = self
+    pub(crate) fn capture_slots(&mut self, tx: &Transaction<'_>) -> Result<()> {
+        self.bindings
+            .capture_retired_records(tx, self.editor_id, self.version)?;
+        let values = self
             .selections
-            .iter()
-            .map(|slot| tx.selection_at(*slot).map(|s| s.cloned()))
+            .slots()?
+            .into_iter()
+            .map(|slot| tx.selection_at(slot).map(|s| s.cloned()))
             .collect::<std::result::Result<_, _>>()?;
-        Ok(())
+        self.selections.replace_values(values)
     }
 }

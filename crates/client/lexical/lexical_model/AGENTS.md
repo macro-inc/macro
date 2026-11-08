@@ -9,6 +9,9 @@ node types, immutable snapshots, transactional tree editing, update processing, 
 
 - `src/lib.rs` exposes the model API.
 - `src/node.rs` defines node kinds, inheritance and dispatch.
+- `src/read/record.rs` owns borrowed records and ephemeral copies; `src/foreign/` owns development runtime hooks, registration and state codecs.
+- `src/foreign/records.rs` exposes collected records for raw host captures without restoring graph membership; capture_for_foreign_read copies fields without clone hooks or key allocation.
+- `src/foreign/read.rs` captures independent pure-callout inputs, including current native projections, active/previous/detached selection fields and composition; its independent read transaction rejects guarded writes, pipeline and publication before model hooks. Its point values can change without composition, dirtiness or memo side effects; hosts still own complete read-only ABI and JS object freezing.
 - `src/selection/caret.rs` implements directional caret range deletion.
 - `src/transaction.rs` owns writes; never mutate a committed snapshot.
 - `src/pipeline/` implements flush order, normalization, GC and view-attached caches.
@@ -32,16 +35,18 @@ node types, immutable snapshots, transactional tree editing, update processing, 
 - Preserve optional StateValue inner identity and imported undefined text fields through paragraph exports.
 
 - Use Error::invariant for runtime diagnostic context; static and owned messages display verbatim and share the Invariant classification.
-- Use NodeType::create_default for context-dependent constructors; default_node and flag probes remain pure data.
+- Use NodeType::create_default for context-dependent constructors; default_node and flag probes remain pure data for foreign projections; runtime foreign types without defaults reject create_resolved.
 - Pure Rust model; no network, database, runtime or browser dependencies.
 - Use CompositionEvent::Clear for Android ownership reset; it preserves text and
   restores anchor typing style without CompositionEnd semantics.
 - Client crate: keep it excluded from workspace-hack through `crates/client/*`.
+- Use `replace_selection` when a package allocates a new selection object; point mutations preserve the active object identity.
 - TableSelection::set changes keys while preserving point offsets/kinds and dirties only changed keys, retaining any existing dirty mark.
 - Text replacement uses upstream node-based removal across every block type; caret deletion has different shadow-root semantics.
 - Use base parent splices for sibling insertion and replacement; element append retains virtual splice dispatch.
 - Clamp element offsets during caret reads while retaining the stored selection points.
 - Node removal relocates affected points to adjacent sibling element boundaries without descending into their text.
+- Selection direction caches survive text-only edits; point setters and range clones invalidate them.
 - Selection slots, formatting and range edits preserve upstream active-versus-detached selection side effects.
 - Movement consumes explicit host points; `NoView` runs structural rules only.
 - Optional `model-segmentation` enables Unicode movement within text nodes; visual line boundaries still require host layout.
@@ -59,8 +64,14 @@ node types, immutable snapshots, transactional tree editing, update processing, 
 - EditorCore is sans-IO: host time, layout, clipboard and composition facts arrive as data; effects leave as values.
 - Failed hook rounds roll back early publications too; failed main inputs retain and report their early commits.
 
-- Reserved `foreign-nodes` exposes development-only peer editors and fresh seeded-state restoration (explicit key layout, validated selection, next allocator key) for the conformance facade; JS node hosting remains a later layer.
+- Dev-only `foreign-nodes` owns runtime node descriptors, own JSON fields, inherited hooks, conformance peers, seeded-state restoration, opaque editor/update identity markers and PendingUpdate suspend/resume; dropping a pending update discards it, and wrong-editor or stale-publication resumes reject.
+- Foreign records retain ForeignData; typed payload reads return None outside inherited native hooks. Native hooks use a private decoded parent projection, including native ancestry/capabilities; synchronize and suspend it before foreign callouts, refresh it afterward, and preserve subclass fields on writeback.
+- Runtime command registration deduplicates callback identity at each command/priority and snapshots each priority when reached; runtime transforms snapshot per type for each pipeline pass and follow build-time transforms. Unregister updates listener priorities immediately.
+- Foreign state values stay in unknown JSON slots; first read binds the codec without dirtying the record. Use codec equality/default omission only for bound keys, preserve raw unbound JSON, and let class declarations override a config's flat default. Release registration/binding guards before every host callback.
+- Clone hooks run before projected mutable access. Invalid native parent fields from infallible clones reject flush and publication; snapshots retain their previous values.
 
+- Accepted text splices acquire writable records even for unchanged content; equal set_text_content remains a no-op.
+- Raw element splices preserve surviving parent offsets; sibling insertion/removal APIs adjust their own source and destination endpoints.
 - Structural deletion and movement traverse directional carets before consuming host layout targets; direct child blocks are not adjacent block boundaries.
 - Block insertion compares captured writability when upstream checks node object identity.
 
@@ -83,6 +94,9 @@ node types, immutable snapshots, transactional tree editing, update processing, 
 - Node ordering is post-order within shared ancestry, including detached subtrees.
 - Node ancestry follows the kind trait's `Parent`, never Rust layout casts.
 - Keep key allocation outside rollback, and snapshots independent on first write.
+- Give owned captures of pending state a separate root-text memo; materialize native projections without clone hooks while retaining their source record identity. Preserve detached slot indices, holes and selection caches when capturing read inputs.
+- Use SharedKeyCounter::allocate_for_foreign_host for dev generateRandomKey; it shares allocation with editors without creating records or consuming commit identities.
+- Preserve source editor/update provenance through pure read peers; combine matches_origin with active callback checks, and keep plain editor-state captures originless.
 
 ## Tests
 
@@ -101,8 +115,6 @@ the intentional root dirty mark; cache-only writes do not add mutations.
 
 Generate command scripts with inline paragraph contents and block decorators at root; malformed nested paragraphs can legitimately reject insertion upstream. Check range-only command preconditions after decorator deletion enters NodeSelection, and validate selected node keys too.
 
-Generate inline paragraph contents and root-level block decorators; keep malformed nested-paragraph scripts as literal regressions instead of swallowing edit errors.
-
 Generated properties cover S4 P1–P13 for the core node subset. P5 follows S1 §8.6
 cache eligibility; P10 compares dirty records before cache writes per S1 §8.7.
 Exact history JSON identity (P11) uses headless mode: restoring view-attached
@@ -116,7 +128,7 @@ Collaborative callers opt into `opaque_unknown_types(true)`; strict import stays
 the default. Opaque records keep original type/version and own JSON, while framework
 links own children. Own export stays flat and overlays changed framework fields.
 
-Opaque future framework enum values round-trip unchanged; known node validation stays strict.
+Opaque future framework enum values round-trip unchanged. Apply source import rules to known fields; unknown element-format strings default through the source lookup.
 Copy only own fields when importing opaque elements; never recursively clone children.
 
 Expose immutable event names and the DirtyLeaves alias to boundary and post-commit adapters;

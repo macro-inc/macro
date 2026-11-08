@@ -52,12 +52,13 @@ export interface CommitInfo {
   readonly selectionChanged: boolean;
 }
 export interface ViewOptions {
-  readonly parentSpan?: Span;
   readonly namespace: string;
   readonly theme: EditorThemeClasses;
   readonly editable: boolean;
   readonly preset: 'rich' | 'plain';
   readonly onError: (error: unknown) => void;
+  /** Caller-owned loading span; never ended by the view. */
+  readonly parentSpan?: Span;
 }
 export class EditorView implements ViewSink {
   readonly mirror: Mirror;
@@ -180,7 +181,7 @@ export class EditorView implements ViewSink {
   ): EditorView {
     if (roots.has(root)) throw new Error('Editor root is already mounted');
     const span =
-      options.parentSpan?.span('editor.open') ?? Telemetry.span('editor.open');
+      options.parentSpan?.span('view.mount') ?? Telemetry.span('editor.open');
     try {
       return span.run(
         () => new EditorView(root, port, registry, options, span)
@@ -305,6 +306,10 @@ export class EditorView implements ViewSink {
     effects: IViewEffectMsg[] = []
   ): void {
     if (this.disposed) throw new Error('Diff applied to a disposed view');
+    for (const effect of effects) {
+      if (effect.kind === 2)
+        this.options.onError(new Error(effect.text || 'Editor session failed'));
+    }
     const initialize = effects.some((effect) => effect.kind === 8);
     const paste = effects.some(
       (effect) => effect.kind === 11 && effect.keys.includes('paste')

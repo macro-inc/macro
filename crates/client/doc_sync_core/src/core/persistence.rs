@@ -215,6 +215,15 @@ impl SyncCore {
                         self.seed(SeedKind::Remote, bytes, now, doc, out);
                     }
                 }
+                if matches!(
+                    pending.completion,
+                    StorageCompletion::Adopt { .. } | StorageCompletion::Orphans
+                ) {
+                    // A conditional adoption can reject a replaced snapshot.
+                    // Reload the real source selection instead of reusing stale
+                    // payload-to-sequence reservations.
+                    self.load_retry = Some(now.mono.after(self.config.converge.retry_delay));
+                }
                 if error == StorageFailure::Uncertain
                     && matches!(pending.completion, StorageCompletion::Append { .. })
                 {
@@ -358,6 +367,7 @@ impl SyncCore {
                     to: self.config.session,
                     first_seq: first,
                     covers,
+                    expected: orphan.records.clone(),
                 },
                 StorageCompletion::Adopt {
                     first,
@@ -369,9 +379,12 @@ impl SyncCore {
         }
         for owner in local.assist {
             for row in owner.records {
-                if row.record.user == self.config.user
+                if self.effective_access == Access::Edit
+                    && row.record.user == self.config.user
                     && !row.delivered
                     && !row.record.quarantined
+                    && !loro::LoroDoc::decode_import_blob_meta(&row.record.bytes, true)
+                        .is_ok_and(|meta| self.server_vv.includes_vv(&meta.partial_end_vv))
                     && !self.assist.iter().any(|r| {
                         r.record.seq == row.record.seq && r.record.bytes == row.record.bytes
                     })
