@@ -30,3 +30,5 @@ backends release their Rust facades through a finalizer. The lifetime tests forc
 GC and await that release event; explicit disposal is idempotent.
 
 The production view lives in `lexical-wasm-view`; DOM code belongs there.
+
+Captured-node identity is cached weakly per editor and version. Reachable nodes pin their Rust version; collection waits through active updates and cancels if a new node owner captures the version before publication. Full native node classes, foreign hosting and read scopes remain unfinished.

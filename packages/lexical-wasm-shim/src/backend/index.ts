@@ -11,7 +11,13 @@ export interface ShimBackend {
   commit(): CommitPacket;
   discard(): void;
   readField(handle: number, field: string): unknown;
+  ownNodeHandles(cache: object): void;
   releaseVersion(version: string): void;
+  collectVersion(
+    version: string,
+    unowned: () => boolean,
+    released: () => void
+  ): void;
   registerTransform(type: string, dispatch: (node: unknown) => unknown): number;
   registerListener(
     command: object,
