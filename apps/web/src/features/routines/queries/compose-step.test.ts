@@ -18,12 +18,6 @@ vi.mock('@core/constant/allBlocks', () => ({
 const context = {
   timezone: 'UTC',
   defaultModel: 'claude',
-  labels: [],
-  tags: [],
-  channels: [],
-  folders: [],
-  people: [],
-  agents: [],
   decisions: true,
   codeSteps: true,
 };
@@ -77,6 +71,9 @@ describe('adding one step with AI', () => {
       kind: 'code',
     });
 
+    expect(draftRoutine.mock.calls[0][0].context).not.toHaveProperty(
+      'workspace'
+    );
     expect(draftRoutine.mock.calls[0][0].draft).toEqual({
       type: 'add_step',
       description: 'post a summary',

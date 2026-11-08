@@ -14,8 +14,8 @@ separately before expanding it.
 
 ## Deployment order
 
-1. Build and publish a new **Ohio observability** AMI from
-   `infra/stacks/observability`; deploy it first. This adds
+1. Deploy the **Ohio observability** host first, with the Deploy Observability
+   workflow (see `infra/stacks/observability/README.md`, "Deploying"). This adds
    `https://otlp.macro-internal.com/api/v1/write` and
    `/loki/api/v1/push`, exact POST-only endpoints
    protected by HTTP Basic (`metrics`, existing OTLP token) over ALB TLS. It
@@ -62,7 +62,7 @@ separately before expanding it.
 5. Build the pinned collector image:
    `nix build ./infra/stacks/observability#database-collector --out-link result-database-collector`.
    Publish with
-   `python3 infra/stacks/observability/nixos/publish-image.py result-database-collector macro-observability-images-569036502058-us-east-1 --region us-east-1 --name-prefix macro-database-collector --role macro-observability-vmimport`.
+   `bun infra/stacks/observability/deploy/publish.ts result-database-collector macro-observability-images-569036502058-us-east-1 --region us-east-1 --name-prefix macro-database-collector --role macro-observability-vmimport`.
    The image is fixed; EC2 user data carries validated nonsecret settings only.
    AMI registration inherits the imported snapshot's minimum root volume size;
    the collector stack expands it to 12 GiB at launch.

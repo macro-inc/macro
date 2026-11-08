@@ -285,9 +285,18 @@ mod tests {
     #[test]
     fn mentions_prompt_writes_whole_days_as_local_dates_from_the_current_time() {
         let instructions = mentions::PROMPT.instructions.as_ref();
-        assert!(instructions.contains("bare local calendar date (`2025-12-01`)"));
+        assert!(instructions.contains("local calendar date (`2025-12-01`)"));
         assert!(instructions.contains("never midnight UTC"));
         assert!(instructions.contains("`<current_time>`"));
+    }
+
+    #[test]
+    fn mentions_prompt_shows_static_images_inline_never_as_document_mentions() {
+        let instructions = mentions::PROMPT.instructions.as_ref();
+        assert!(instructions.contains("a document mention of its id reads \"Deleted\""));
+        assert!(instructions.contains("<m-image>{\"url\":\"{url}\""));
+        assert!(instructions.contains("`image.toMarkdown()`"));
+        assert!(instructions.contains("\"blockName\":\"canvas\""));
     }
 
     #[test]

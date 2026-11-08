@@ -8,9 +8,9 @@
 import type { ActionConfigurationUpdateDescription } from './actionConfigurationUpdateDescription';
 import type { ActionConfigurationUpdateEnabled } from './actionConfigurationUpdateEnabled';
 import type { ActionConfigurationUpdateRunVisibility } from './actionConfigurationUpdateRunVisibility';
-import type { ActionConfigurationUpdateTask } from './actionConfigurationUpdateTask';
 import type { ActionKind } from './actionKind';
 import type { ActionTrigger } from './actionTrigger';
+import type { RoutineTask } from './routineTask';
 
 /**
  * Configuration replacement, the update body. Activation has its own endpoint, so
@@ -28,6 +28,6 @@ export interface ActionConfigurationUpdate {
   kind: ActionKind;
   name: string;
   run_visibility?: ActionConfigurationUpdateRunVisibility;
-  task: ActionConfigurationUpdateTask;
+  task: RoutineTask;
   trigger: ActionTrigger;
 }

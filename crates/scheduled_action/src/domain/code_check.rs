@@ -144,7 +144,7 @@ pub struct StarterRoutine {
     /// What someone asks for, with when it runs.
     pub request: String,
     /// Its steps, in the shape a routine's task holds them.
-    #[schema(value_type = Vec<Object>)]
+    #[schema(value_type = Vec<routine_program::Step>)]
     pub steps: Vec<Value>,
 }
 
