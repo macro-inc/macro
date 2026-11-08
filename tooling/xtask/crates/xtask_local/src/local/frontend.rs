@@ -184,6 +184,27 @@ pub fn static_dir(instance: &Instance) -> std::path::PathBuf {
 /// cookies, so it leaves this unset.
 const LOCAL_STACK_ENV: &str = "VITE_LOCAL_STACK";
 
+/// The `vite build` that [`build_static`] runs. Its env is part of the bundle
+/// cache key, so a bundle built with different settings, such as
+/// `VITE_LOCAL_STACK`, is never reused.
+fn static_build_command(mode: Mode) -> Command {
+    let mut cmd = Command::new("bun");
+    cmd.current_dir(app_dir())
+        .args(["run", "--bun", "build"])
+        .env("MODE", "development")
+        .env("NODE_ENV", "production")
+        .env("VITE_LOCAL_SERVERS", "ALL")
+        .env("VITE_LOCAL_BACKEND_ORIGIN", "same-origin")
+        .env("VITE_LOCAL_ONLY", "true");
+    if mode.spec().runs_local_infra {
+        cmd.env("VITE_AI_EDITING_WORKER_URL", "/ai-editing");
+    }
+    if mode == Mode::Local {
+        cmd.env(LOCAL_STACK_ENV, "true");
+    }
+    cmd
+}
+
 /// Build the app bundle for headless serving and stage it into the instance
 /// dir. The build mirrors `just build-dev`
 /// (dev-mode bundle, production optimizations), except the backend origin is
@@ -206,21 +227,7 @@ pub fn build_static(stage: &Stage, instance: &Instance, mode: Mode) -> Result<()
     // Held through staging: `dist/` is shared until it's copied out.
     let _build_lock = lock_checkout_build(stage)?;
     prepare_dependencies(stage)?;
-    let mut cmd = Command::new("bun");
-    cmd.current_dir(app_dir())
-        .args(["run", "--bun", "build"])
-        .env("MODE", "development")
-        .env("NODE_ENV", "production")
-        .env("VITE_LOCAL_SERVERS", "ALL")
-        .env("VITE_LOCAL_BACKEND_ORIGIN", "same-origin")
-        .env("VITE_LOCAL_ONLY", "true");
-    if mode.spec().runs_local_infra {
-        cmd.env("VITE_AI_EDITING_WORKER_URL", "/ai-editing");
-    }
-    // Part of the bundle cache key, like every `VITE_*` variable on `cmd`.
-    if mode == Mode::Local {
-        cmd.env(LOCAL_STACK_ENV, "true");
-    }
+    let mut cmd = static_build_command(mode);
     if stage.is_dry_run() {
         return stage.run("Building frontend bundle", &mut cmd);
     }

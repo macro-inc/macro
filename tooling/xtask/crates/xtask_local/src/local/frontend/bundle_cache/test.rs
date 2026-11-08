@@ -92,3 +92,32 @@ fn key_follows_sources_wasm_and_env_on_disk() {
     );
     let _ = std::fs::remove_dir_all(&dir);
 }
+
+/// A local stack's bundle takes the session-code handoff for SSO, and
+/// `run_dev`'s doesn't, so a bundle built without `VITE_LOCAL_STACK` must never
+/// be staged for a local stack, or the other way round.
+#[test]
+fn only_local_stack_bundles_carry_the_local_stack_flag_in_their_key() {
+    let flag = |cmd: &Command| {
+        cmd.get_envs()
+            .find(|(name, _)| *name == "VITE_LOCAL_STACK")
+            .and_then(|(_, value)| value)
+            .map(|value| value.to_string_lossy().into_owned())
+    };
+    let local = super::super::static_build_command(crate::local::Mode::Local);
+    assert_eq!(flag(&local).as_deref(), Some("true"));
+    assert_eq!(
+        flag(&super::super::static_build_command(crate::local::Mode::Dev)),
+        None
+    );
+
+    let dir = repo("local-stack");
+    let mut unflagged = super::super::static_build_command(crate::local::Mode::Local);
+    unflagged.env_remove("VITE_LOCAL_STACK");
+    assert_ne!(
+        key(&dir, &local).unwrap(),
+        key(&dir, &unflagged).unwrap(),
+        "VITE_LOCAL_STACK changes the bundle, so it changes the key"
+    );
+    let _ = std::fs::remove_dir_all(&dir);
+}
