@@ -105,6 +105,15 @@ pub enum RoutineActionStatus {
     Failed(RoutineFailureReason),
 }
 
+/// How much a session did, without what: for its opener's telemetry.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct RoutineActivity {
+    /// Tool calls the agent made, across every turn.
+    pub tool_calls: u32,
+    /// Turns the session ran.
+    pub turns: u32,
+}
+
 /// Why the action has not established completion.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
