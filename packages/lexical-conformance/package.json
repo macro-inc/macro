@@ -41,6 +41,7 @@
     "lib0": "0.2.117",
     "linkify-it": "5.0.2",
     "loro-crdt": "1.17.1",
+    "loro-crdt-legacy": "npm:loro-crdt@1.16.3",
     "nanoid": "5.1.5",
     "prettier": "3.8.1",
     "prettier-plugin-hermes-parser": "0.36.0",

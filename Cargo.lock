@@ -12646,6 +12646,7 @@ dependencies = [
  "lexical_model",
  "lexical_node_id",
  "lexical_rich_nodes",
+ "loro",
  "mention_date",
  "nom 8.0.0",
  "rand_chacha 0.9.0",

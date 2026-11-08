@@ -43,17 +43,20 @@ pub mod agent_context;
 /// Notion enhanced Markdown import.
 pub mod notion;
 
+/// Comment-only permission gate using the exact service registry.
+pub mod comment_gate;
+
 /// Ownership state, validation and local reconciliation plugin.
 pub mod peer;
-
-/// Durable identity helpers and plugin.
-pub use node_ids as ids;
 
 /// Plaintext, search, cognition and Markdown export projections.
 pub mod export;
 
-/// Comment-only permission gate using the exact service registry.
-pub mod comment_gate;
+/// Durable identity helpers and plugin.
+pub use node_ids as ids;
+
+/// Golden-seeded server snapshot conversion.
+pub mod snapshot;
 
 /// Collaborative content policy and draft preservation commands.
 pub mod sync;

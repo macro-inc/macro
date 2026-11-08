@@ -29,4 +29,5 @@ strum = { workspace = true }
 
 [dev-dependencies]
 sync_server_core.workspace = true
+loro.workspace = true
 sha2.workspace = true
