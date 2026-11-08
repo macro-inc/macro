@@ -8,7 +8,7 @@
       "Markdown",
       "should not select when importing \"> Hello\\n> world!\""
     ],
-    "recordedWith": "lexical-conformance@bc68c20bf6ae0904245c02fca91fef6e70d619761b7190bf54dd2e8381420f2f"
+    "recordedWith": "lexical-conformance@c2adcbe73f13b41da8cc436c2b7b7003f48fb453eebba81d97cd1ebe81928e80"
   },
   "tier": "A-rec",
   "partial": false,
