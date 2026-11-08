@@ -8,9 +8,9 @@
 //! decides how the remaining terms combine on document content.
 
 use macro_user_id::user_id::MacroUserIdStr;
-use models_search::{MatchType, TermMatching};
 use opensearch_client::search::documents::{DocumentTermMatching, MIN_TERMS_FOR_DYNAMIC_MATCHING};
 use search_cursor_types::CursorTermMatching;
+use search_types::{MatchType, TermMatching};
 
 use crate::TermMatchingRollout;
 use crate::api::search::simple::SearchError;

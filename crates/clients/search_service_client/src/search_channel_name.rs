@@ -4,10 +4,10 @@ impl SearchServiceClient {
     pub async fn search_channel_names(
         &self,
         user_id: &str,
-        body: models_search::channel::ChannelNameSearchRequest,
+        body: search_types::channel::ChannelNameSearchRequest,
         cursor: Option<String>,
         page_size: i64,
-    ) -> anyhow::Result<models_search::channel::ChannelNameSearchResponse> {
+    ) -> anyhow::Result<search_types::channel::ChannelNameSearchResponse> {
         let url = format!("{}/internal/search/channel/name", self.url);
         let mut query_params: Vec<(&str, String)> = vec![("page_size", page_size.to_string())];
         if let Some(cursor) = cursor {

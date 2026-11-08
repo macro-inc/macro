@@ -363,7 +363,7 @@ Quick Access (section 15) and agents through their list tools. That is the
 minimum.
 
 For full-text search, follow the `AGENTS.md` recipes in
-`crates/clients/opensearch_client` (index shapes), `crates/search/models_search`,
+`crates/clients/opensearch_client` (index shapes), `crates/search/search_types`,
 `crates/search/search_service` (queries), and `services/search_processing_service`
 (Kafka consumer and backfill). Agent sessions are the newest example.
 `crates/search/name_search` covers name-only search from Postgres. **Deploys never

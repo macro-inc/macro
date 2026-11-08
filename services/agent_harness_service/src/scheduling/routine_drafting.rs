@@ -10,12 +10,6 @@ use ai_usage::{AiFeature, UsageContext, UsageRecorder};
 use document_sub_type::DocumentSubType;
 use futures::StreamExt as _;
 use macro_user_id::user_id::MacroUserIdStr;
-use models_search::channel::ChannelNameSearchRequest;
-use models_search::unified::{
-    UnifiedSearchIndex, UnifiedSearchRequest, UnifiedSearchResponseItem,
-    entity_filters_from_include,
-};
-use models_search::{MatchType, SearchOn, TermMatching};
 use rootcause::compat::IntoRootcause as _;
 use scheduled_action::domain::drafts::finding::{
     DraftCall, DraftCallError, ItemKind, NameAnswer, NameAnswers, NameAsked, NameLookupError,
@@ -23,6 +17,12 @@ use scheduled_action::domain::drafts::finding::{
 };
 use scheduled_action::domain::ports::{DraftModel, NameLookups};
 use search_service_client::SearchServiceClient;
+use search_types::channel::ChannelNameSearchRequest;
+use search_types::unified::{
+    UnifiedSearchIndex, UnifiedSearchRequest, UnifiedSearchResponseItem,
+    entity_filters_from_include,
+};
+use search_types::{MatchType, SearchOn, TermMatching};
 
 #[cfg(test)]
 mod test;

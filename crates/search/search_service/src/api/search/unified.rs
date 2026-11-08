@@ -12,11 +12,11 @@ use axum::{
     response::Json,
 };
 use macro_authorization::{MacroAuthorizationExtractor, UserOrInternal};
-use models_search::unified::{
-    UnifiedSearchRequest, UnifiedSearchResponse, UnifiedSearchResponseItem,
-};
 use opensearch_client::search::unified::{
     SplitUnifiedSearchResponse, SplitUnifiedSearchResponseValues,
+};
+use search_types::unified::{
+    UnifiedSearchRequest, UnifiedSearchResponse, UnifiedSearchResponseItem,
 };
 use shared_types::response::ErrorResponse;
 use std::cmp::Ordering;
@@ -59,11 +59,11 @@ pub async fn handler(
     let crm_access = resolve_crm_team_receipt(&ctx, user_context, req.include_crm).await?;
 
     let document_name_term = match req.search_on {
-        models_search::SearchOn::Name | models_search::SearchOn::NameContent => {
+        search_types::SearchOn::Name | search_types::SearchOn::NameContent => {
             let trimmed = req.query.trim();
             (!trimmed.is_empty()).then(|| trimmed.to_string())
         }
-        models_search::SearchOn::Content => None,
+        search_types::SearchOn::Content => None,
     };
 
     let (results, next_cursor) =

@@ -14,7 +14,7 @@ lists what this group may depend on. `cargo x deps` reports edges that break it.
 | [`activity`](activity/AGENTS.md) | Shared infrastructure behind activity feeds, entity timelines, and attribution sorts across the product (Soup, Documents, Forms, Databases, Initiative, and more): one … |
 | [`attention_feed`](attention_feed/AGENTS.md) | The shared layer under Macro's attention feeds: Home's work feed (`crates/search/work_feed`) and the notifications inbox (`crates/notifications/notification_inbox`). |
 | [`item_filters`](item_filters/AGENTS.md) | Belongs to Search (Soup): typed filter DTOs for every entity type searchable in soup/search, plus the AST layer that expands them into a strict, logically-combinable … |
-| [`models_search`](models_search/AGENTS.md) | Part of the Search feature. |
+| [`search_types`](search_types/AGENTS.md) | Part of the Search feature. |
 | [`models_soup`](models_soup/AGENTS.md) | Part of the Soup feed (Home/Recent, the unified activity feed). |
 | [`name_search`](name_search/AGENTS.md) | Part of the Search feature. |
 | [`search_service`](search_service/AGENTS.md) | Part of the Search feature. |
