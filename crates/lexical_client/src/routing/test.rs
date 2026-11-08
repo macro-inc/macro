@@ -243,9 +243,8 @@ impl std::io::Write for TraceBuffer {
     }
 }
 
-#[tokio::test]
-async fn shadow_trace_stays_under_request_and_contains_metadata_only() -> Result<()> {
-    use tracing::instrument::WithSubscriber;
+#[test]
+fn shadow_trace_stays_under_request_and_contains_metadata_only() -> Result<()> {
     let buffer = TraceBuffer::default();
     let writer = buffer.clone();
     let subscriber = tracing_subscriber::fmt()
@@ -253,21 +252,24 @@ async fn shadow_trace_stays_under_request_and_contains_metadata_only() -> Result
         .with_span_events(tracing_subscriber::fmt::format::FmtSpan::CLOSE)
         .with_writer(move || writer.clone())
         .finish();
-    async {
-        let parent = tracing::info_span!("caller.request");
-        dispatch(
-            RouteMode::Shadow,
-            Route::Search,
-            Some("document-test"),
-            42,
-            async { Ok("private HTTP content".to_owned()) },
-            unavailable::<String>("search"),
-        )
-        .instrument(parent)
-        .await
-    }
-    .with_subscriber(subscriber)
-    .await?;
+    let runtime = tokio::runtime::Builder::new_current_thread()
+        .enable_all()
+        .build()?;
+    tracing::subscriber::with_default(subscriber, || {
+        runtime.block_on(async {
+            let parent = tracing::info_span!("caller.request");
+            dispatch(
+                RouteMode::Shadow,
+                Route::Search,
+                Some("document-test"),
+                42,
+                async { Ok("private HTTP content".to_owned()) },
+                unavailable::<String>("search"),
+            )
+            .instrument(parent)
+            .await
+        })
+    })?;
     let output = String::from_utf8(buffer.0.lock().expect("trace buffer").clone())?;
     assert!(!output.contains("private HTTP content"));
     let records: Vec<serde_json::Value> = output
@@ -277,7 +279,7 @@ async fn shadow_trace_stays_under_request_and_contains_metadata_only() -> Result
     let mismatch = records
         .iter()
         .find(|line| line["fields"]["message"] == "lexical shadow mismatch")
-        .expect("mismatch event");
+        .unwrap_or_else(|| panic!("missing mismatch event in {output}"));
     let parents: Vec<_> = mismatch["spans"]
         .as_array()
         .expect("span context")
