@@ -1496,6 +1496,7 @@ pub type ToolProjectService = projects::domain::service::ProjectServiceImpl<
     projects::domain::ports::UnavailableShaCounterPort,
     ToolEntityAccessManagementService,
     projects::domain::ports::UnavailableProjectSearchIndexer,
+    projects::domain::ports::UnavailableFiledItemsUnfiler,
     ToolEventBroker,
 >;
 
@@ -1533,6 +1534,7 @@ pub fn build_project_tool_context(
             entity_access_management::outbound::PgRepository::new(pool),
         ),
         projects::domain::ports::UnavailableProjectSearchIndexer,
+        projects::domain::ports::UnavailableFiledItemsUnfiler,
         None,
         macro_event_broker,
     );

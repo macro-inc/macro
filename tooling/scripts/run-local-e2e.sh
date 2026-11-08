@@ -2,9 +2,8 @@
 set -euo pipefail
 
 ROOT_DIR="$(\cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-# The local stack cross-compiles bundled C/C++ dependencies. The repository's
-# Nix shell supplies the matching Zig/cargo-zigbuild pair and target headers;
-# this wrapper only enters that shell. Xtask owns the E2E lifecycle itself.
+# The local stack builds with the repository's Nix shell, which supplies the
+# compiler and libraries the binaries link. This wrapper only enters that shell. Xtask owns the E2E lifecycle itself.
 if [[ -z "${IN_NIX_SHELL:-}" ]]; then
   if [[ "${LOCAL_E2E_NIX_REEXEC:-}" == "1" ]]; then
     echo "local E2E failed to enter the repository Nix development shell" >&2

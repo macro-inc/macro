@@ -5,7 +5,14 @@ import UserPlusIcon from '@icon/system/regular/user-plus.svg';
 import UsersThreeIcon from '@icon/system/regular/users-three.svg';
 import { useTeamQuery, useUserTeamsQuery } from '@queries/team/teams';
 import { pressHandlers } from '@ui';
-import { createSignal, type JSX, Show } from 'solid-js';
+import {
+  type Component,
+  type ComponentProps,
+  createSignal,
+  createUniqueId,
+  type JSX,
+  Show,
+} from 'solid-js';
 import { CreateTeamDialog, InviteToTeamDialog } from './Team';
 import { canInviteToTeam, isTeamAdminOrOwner } from './teamMemberPermissions';
 
@@ -35,7 +42,7 @@ function CreateTeamAction() {
   return (
     <>
       <ActionItem
-        icon={<UsersThreeIcon class="size-4" />}
+        icon={UsersThreeIcon}
         label={t('settingsNav.createTeam')}
         onPress={() => setOpen(true)}
       />
@@ -63,9 +70,9 @@ function InviteToTeamAction(props: { teamId: string }) {
   return (
     <Show when={canInvite()}>
       <ActionItem
-        icon={<UserPlusIcon class="size-4" />}
+        icon={UserPlusIcon}
         label={t('settingsNav.inviteTeam')}
-        rainbow
+        gradient
         onPress={() => setOpen(true)}
       />
       <InviteToTeamDialog
@@ -78,19 +85,51 @@ function InviteToTeamAction(props: { teamId: string }) {
   );
 }
 
+type SvgIcon = Component<ComponentProps<'svg'>>;
+
 function ActionItem(props: {
-  icon: JSX.Element;
+  icon: SvgIcon;
   label: string;
-  /** Paint the label in a rainbow gradient to draw the eye. */
-  rainbow?: boolean;
+  /** Paint the icon and label in a soft gradient to draw the eye. */
+  gradient?: boolean;
   onPress: () => void;
 }) {
+  const gradientId = createUniqueId();
   return (
     <ViewSidebar.Item {...pressHandlers(() => props.onPress())}>
-      <ViewSidebar.Icon>{props.icon}</ViewSidebar.Icon>
+      <ViewSidebar.Icon>
+        <Show when={props.gradient} fallback={<props.icon class="size-4" />}>
+          {/* Inline size: ViewSidebar.Icon sizes every child svg. */}
+          <svg
+            aria-hidden="true"
+            style={{ position: 'absolute', width: '0', height: '0' }}
+          >
+            <defs>
+              {/* Icons use a 24×24 viewBox; userSpaceOnUse keeps one sweep
+                  across every path instead of one per path. Stops go in
+                  style because presentation attributes can't resolve var(). */}
+              <linearGradient
+                id={gradientId}
+                gradientUnits="userSpaceOnUse"
+                x1="0"
+                y1="0"
+                x2="24"
+                y2="0"
+              >
+                <stop offset="0" style={{ 'stop-color': GRADIENT_STOPS[0] }} />
+                <stop offset="1" style={{ 'stop-color': GRADIENT_STOPS[1] }} />
+              </linearGradient>
+            </defs>
+          </svg>
+          <props.icon
+            class="size-4"
+            style={{ stroke: `url(#${gradientId})` }}
+          />
+        </Show>
+      </ViewSidebar.Icon>
       <span
         class="truncate font-medium"
-        style={props.rainbow ? RAINBOW_TEXT_STYLE : undefined}
+        style={props.gradient ? GRADIENT_TEXT_STYLE : undefined}
       >
         {props.label}
       </span>
@@ -99,21 +138,17 @@ function ActionItem(props: {
 }
 
 /**
- * Rainbow stops pulled toward the ink color: darker on the light sidebar and
- * lighter on the dark one, so every stop keeps the small label at 4.5:1 or
- * better on both sidebars.
+ * A restrained pink → violet → indigo sweep. The icon carries the first leg
+ * and the label picks up from there, so the two read as one gradient. Each hue
+ * is pulled 40% toward the ink color, which mutes it and keeps the small label
+ * at 4.5:1 or better on both the light and dark sidebars.
  */
-const RAINBOW_TEXT_STYLE: JSX.CSSProperties = {
-  'background-image': `linear-gradient(90deg, ${[
-    '#e5484d',
-    '#d97706',
-    '#30a46c',
-    '#0091ff',
-    '#8e4ec6',
-    '#d6409f',
-  ]
-    .map((hue) => `color-mix(in oklch, ${hue} 70%, var(--color-ink))`)
-    .join(', ')})`,
+const GRADIENT_STOPS = ['#d6409f', '#8e4ec6', '#3e63dd'].map(
+  (hue) => `color-mix(in oklch, ${hue} 60%, var(--color-ink))`
+);
+
+const GRADIENT_TEXT_STYLE: JSX.CSSProperties = {
+  'background-image': `linear-gradient(90deg, ${GRADIENT_STOPS.slice(1).join(', ')})`,
   'background-clip': 'text',
   '-webkit-background-clip': 'text',
   color: 'transparent',

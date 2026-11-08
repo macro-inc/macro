@@ -35,6 +35,183 @@ pub(super) fn target() -> ProviderCalendarTarget {
 pub(super) fn event(id: &str) -> Value {
     json!({"id":id,"@odata.etag":"W/\"1\"","iCalUId":format!("{id}@outlook"),"subject":"Meeting","type":"singleInstance","createdDateTime":"2026-01-01T10:00:00Z","lastModifiedDateTime":"2026-10-01T10:00:00Z","originalStartTimeZone":"Pacific Standard Time","start":{"dateTime":"2026-11-02T17:00:00.0000000","timeZone":"UTC"},"end":{"dateTime":"2026-11-02T18:00:00.0000000","timeZone":"UTC"},"isAllDay":false,"attendees":[]})
 }
+/// One instance as `GET /me/events/{id}/instances` returns it for `request`.
+/// With a `$select`, Graph returns only the named properties, besides `id`,
+/// annotations and what `$expand` names. Without one it returns its default
+/// properties, which leave out `originalStart`: every stored occurrence of
+/// the dev Outlook mailbox's series has no original start, which only
+/// happens when Graph sends none.
+pub(super) fn as_graph_returns(instance: &Value, request: &wiremock::Request) -> Value {
+    let query: Vec<(String, String)> = request.url.query_pairs().into_owned().collect();
+    let select: Option<Vec<&str>> = query
+        .iter()
+        .find(|(key, _)| key == "$select")
+        .map(|(_, value)| value.split(',').collect());
+    let expanded = query
+        .iter()
+        .any(|(key, value)| key == "$expand" && value.starts_with("singleValueExtendedProperties"));
+    let returned = instance
+        .as_object()
+        .unwrap()
+        .iter()
+        .filter(|(key, _)| match key.as_str() {
+            "id" => true,
+            "singleValueExtendedProperties" => expanded,
+            key if key.starts_with("@odata.") => true,
+            key => match &select {
+                Some(names) => names.contains(&key),
+                None => key != "originalStart",
+            },
+        })
+        .map(|(key, value)| (key.clone(), value.clone()))
+        .collect();
+    Value::Object(returned)
+}
+
+/// A series' `instances` endpoint that answers as Graph does (see
+/// [`as_graph_returns`]).
+pub(super) struct Instances(pub(super) Vec<Value>);
+
+impl wiremock::Respond for Instances {
+    fn respond(&self, request: &wiremock::Request) -> ResponseTemplate {
+        let value: Vec<_> = self
+            .0
+            .iter()
+            .map(|instance| as_graph_returns(instance, request))
+            .collect();
+        ResponseTemplate::new(200).set_body_json(json!({ "value": value }))
+    }
+}
+
+/// An instance of Graph's documented weekly "Review strategy for Q3" series
+/// (List instances, v1.0), with every default property of a v1.0 `event`.
+/// `day` is its date, `original_day` the date of the slot it fills.
+pub(super) fn documented_instance(id: &str, kind: &str, day: &str, original_day: &str) -> Value {
+    let mut value = json!({
+        "@odata.etag":"W/\"x3IAvB5fbUWf4XNcBFLNUwAAKuA3yQ==\"",
+        "id":id,
+        "createdDateTime":"2019-03-28T17:08:14.3474405Z",
+        "lastModifiedDateTime":"2019-04-02T20:17:49.6339342Z",
+        "changeKey":"x3IAvB5fbUWf4XNcBFLNUwAAKuA3yQ==",
+        "categories":[],
+        "transactionId":null,
+        "originalStartTimeZone":"Pacific Standard Time",
+        "originalEndTimeZone":"Pacific Standard Time",
+        "iCalUId":"040000008200E00074C5B7101A82E00807E3040F2C5F84B3B5E5D401000000000000000010000000F4A8D0BB2AA6DC4FA5B57C6A0DBF2E3A",
+        "reminderMinutesBeforeStart":15,
+        "isReminderOn":true,
+        "hasAttachments":false,
+        "subject":"Review strategy for Q3",
+        "bodyPreview":"",
+        "importance":"normal",
+        "sensitivity":"normal",
+    });
+    let rest = json!({
+        "originalStart":format!("{original_day}T20:30:00Z"),
+        "isAllDay":false,
+        "isCancelled":false,
+        "isOrganizer":false,
+        "responseRequested":true,
+        "seriesMasterId":"AAMkAGUzYRgWAAA=",
+        "showAs":"busy",
+        "type":kind,
+        "webLink":format!("https://outlook.office365.com/owa/?itemid={id}&exvsurl=1&path=/calendar/item"),
+        "onlineMeetingUrl":null,
+        "isOnlineMeeting":false,
+        "onlineMeetingProvider":"unknown",
+        "allowNewTimeProposals":true,
+        "isDraft":false,
+        "hideAttendees":false,
+        "recurrence":null,
+        "onlineMeeting":null,
+        "responseStatus":{"response":"accepted","time":"2019-04-02T20:20:00Z"},
+        "body":{"contentType":"html","content":"<html><body><p>Quarterly review</p></body></html>"},
+        "start":{"dateTime":format!("{day}T20:30:00.0000000"),"timeZone":"UTC"},
+        "end":{"dateTime":format!("{day}T21:00:00.0000000"),"timeZone":"UTC"},
+        "location":{"displayName":"Conference room","locationType":"default","uniqueIdType":"unknown"},
+        "locations":[{"displayName":"Conference room","locationType":"default","uniqueIdType":"unknown"}],
+        "attendees":[{
+            "type":"required",
+            "status":{"response":"accepted","time":"2019-04-02T20:20:00Z"},
+            "emailAddress":{"name":"Ada","address":"ada@example.com"}
+        }],
+        "organizer":{"emailAddress":{"name":"Olivia","address":"olivia@example.com"}}
+    });
+    for (key, property) in rest.as_object().unwrap() {
+        value[key.as_str()] = property.clone();
+    }
+    value
+}
+
+/// The series of Graph's documented List instances example, with the
+/// occurrences and the exception that response lists: its 15 April meeting
+/// moved to the 16th, with its own details.
+pub(super) fn documented_series() -> (Value, Vec<Value>) {
+    let mut master = documented_instance(
+        "AAMkAGUzYRgWAAA=",
+        "seriesMaster",
+        "2019-04-08",
+        "2019-04-08",
+    );
+    for property in ["originalStart", "seriesMasterId"] {
+        master.as_object_mut().unwrap().remove(property);
+    }
+    master["recurrence"] = json!({
+        "pattern":{"type":"weekly","interval":1,"month":0,"dayOfMonth":0,"daysOfWeek":["monday"],"firstDayOfWeek":"sunday","index":"first"},
+        "range":{"type":"endDate","startDate":"2019-04-08","endDate":"2019-04-29","recurrenceTimeZone":"Pacific Standard Time","numberOfOccurrences":0}
+    });
+    let mut moved = documented_instance(
+        "AAMkAGUzYAgI1sE1TatAAEYAAAAAlNFb2CNPe0ucP9you",
+        "exception",
+        "2019-04-16",
+        "2019-04-15",
+    );
+    moved["subject"] = json!("Review strategy for Q3 (moved)");
+    moved["bodyPreview"] = json!("Changing meeting from 4/15 to 4/16.");
+    moved["body"]["content"] =
+        json!("<html><body><p>Changing meeting from 4/15 to 4/16.</p></body></html>");
+    moved["location"]["displayName"] = json!("Board room");
+    moved["sensitivity"] = json!("private");
+    moved["showAs"] = json!("tentative");
+    moved["isReminderOn"] = json!(false);
+    moved["lastModifiedDateTime"] = json!("2019-04-03T09:12:00.1234567Z");
+    moved["attendees"][0]["emailAddress"] = json!({"name":"Grace","address":"grace@example.com"});
+    let instances = vec![
+        moved,
+        documented_instance(
+            "AAMkAGUzYAgI1ru1JMcAAEYAAAAAlNFb2CNPe0ucP9you",
+            "occurrence",
+            "2019-04-08",
+            "2019-04-08",
+        ),
+        documented_instance(
+            "AAMkAGUzYAgI1sa1do_AAEYAAAAAlNFb2CNPe0ucP9you",
+            "occurrence",
+            "2019-04-22",
+            "2019-04-22",
+        ),
+        documented_instance(
+            "AAMkAGUzYAgI1sw1n3PAAEYAAAAAlNFb2CNPe0ucP9you",
+            "occurrence",
+            "2019-04-29",
+            "2019-04-29",
+        ),
+    ];
+    (master, instances)
+}
+
+/// The window of Graph's documented List instances request.
+pub(super) fn april_2019() -> ProviderCalendarTarget {
+    let mut target = target();
+    target.range = OccurrenceRange {
+        starts_at: Utc.with_ymd_and_hms(2019, 4, 8, 9, 0, 0).unwrap(),
+        ends_at: Utc.with_ymd_and_hms(2019, 4, 30, 9, 0, 0).unwrap(),
+        start_date: "2019-04-08".parse().unwrap(),
+        end_date: "2019-04-30".parse().unwrap(),
+    };
+    target
+}
+
 /// `GET /me/mailboxSettings` as Graph documents it, with `time_zone` as the
 /// mailbox's zone, or without one when it is `None`. Its working hours keep a
 /// zone of their own.
@@ -238,7 +415,9 @@ fn windows_zones_and_moved_exceptions_preserve_the_original_occurrence() {
     exception["subject"] = json!("Moved meeting");
     exception["start"]["dateTime"] = json!("2026-11-03T18:00:00");
     exception["end"]["dateTime"] = json!("2026-11-03T19:00:00");
-    let upsert = normalize::projection(&target(), master, vec![exception]).unwrap();
+    let upsert = normalize::projection(&target(), master, vec![exception])
+        .unwrap()
+        .upsert;
     assert_eq!(
         upsert.occurrences[0].recurrence_id.as_deref(),
         Some("2026-11-02T17:00:00+00:00")
@@ -366,6 +545,7 @@ fn provider_restrictions_are_explicit_and_extra_popup_reminders_round_trip() {
     assert_eq!(
         normalize::projection(&target(), current, vec![])
             .unwrap()
+            .upsert
             .event
             .reminders,
         reminders
@@ -390,7 +570,9 @@ fn provider_restrictions_are_explicit_and_extra_popup_reminders_round_trip() {
     email_event["isReminderOn"] = email_reminder["isReminderOn"].clone();
     email_event["singleValueExtendedProperties"] =
         email_reminder["singleValueExtendedProperties"].clone();
-    let restored = normalize::projection(&target(), email_event, vec![]).unwrap();
+    let restored = normalize::projection(&target(), email_event, vec![])
+        .unwrap()
+        .upsert;
     assert_eq!(restored.event.reminders.overrides[0].method, "email");
 }
 
@@ -498,6 +680,7 @@ fn native_reminder_edits_supersede_macro_extra_reminders() {
     current["singleValueExtendedProperties"] = json!([{"id":PREFERENCES_ID,"value":json!({"nativeReminderOn":true,"nativeReminderMinutes":10,"reminders":{"useDefault":false,"overrides":[{"method":"popup","minutes":10},{"method":"popup","minutes":30}]}}).to_string()}]);
     let reminders = normalize::projection(&target(), current, vec![])
         .unwrap()
+        .upsert
         .event
         .reminders;
     assert_eq!(
@@ -514,7 +697,9 @@ fn custom_zones_do_not_poison_timed_calendar_pages_and_sequence_tracks_invitatio
     let mut value = event("custom");
     value["originalStartTimeZone"] = json!("tzone://Microsoft/Custom");
     value["singleValueExtendedProperties"] = json!([{"id":APPOINTMENT_SEQUENCE_ID,"value":"3"}]);
-    let projection = normalize::projection(&target(), value, vec![]).unwrap();
+    let projection = normalize::projection(&target(), value, vec![])
+        .unwrap()
+        .upsert;
     assert_eq!(projection.event.sequence, 3);
     assert!(
         matches!(projection.event.time,EventTime::Timed {time_zone:Some(ref zone),..} if zone=="Etc/UTC")
@@ -538,7 +723,9 @@ fn the_organizer_of_a_created_event_holds_it_while_guests_have_not_answered() {
         }
     ]);
 
-    let projection = normalize::projection(&target(), value, vec![]).unwrap();
+    let projection = normalize::projection(&target(), value, vec![])
+        .unwrap()
+        .upsert;
 
     assert_eq!(
         projection
@@ -637,6 +824,7 @@ fn automatic_decline_preferences_survive_reminder_edits_and_identical_retries() 
     current["singleValueExtendedProperties"] = body["singleValueExtendedProperties"].clone();
     let policy = normalize::projection(&target(), current.clone(), vec![])
         .unwrap()
+        .upsert
         .source
         .details()
         .automatic_decline
@@ -664,6 +852,7 @@ fn automatic_decline_preferences_survive_reminder_edits_and_identical_retries() 
         edited_reply["singleValueExtendedProperties"].clone();
     let edited_policy = normalize::projection(&target(), updated, vec![])
         .unwrap()
+        .upsert
         .source
         .details()
         .automatic_decline
@@ -688,6 +877,7 @@ fn automatic_decline_preferences_survive_reminder_edits_and_identical_retries() 
     assert_eq!(
         normalize::projection(&target(), current.clone(), vec![])
             .unwrap()
+            .upsert
             .source
             .details()
             .automatic_decline
@@ -698,6 +888,7 @@ fn automatic_decline_preferences_survive_reminder_edits_and_identical_retries() 
     assert!(
         normalize::projection(&target(), current.clone(), vec![])
             .unwrap()
+            .upsert
             .source
             .details()
             .automatic_decline
@@ -709,6 +900,7 @@ fn automatic_decline_preferences_survive_reminder_edits_and_identical_retries() 
         enabled_again["singleValueExtendedProperties"].clone();
     let new_policy = normalize::projection(&target(), current, vec![])
         .unwrap()
+        .upsert
         .source
         .details()
         .automatic_decline
@@ -802,7 +994,9 @@ fn an_imported_series_ended_by_its_organizer_reads_graphs_utc_alias() {
         instance["end"]["dateTime"] = json!(format!("{day}T11:30:00.0000000"));
         instance
     });
-    let upsert = normalize::projection(&target(), series, instances.to_vec()).unwrap();
+    let upsert = normalize::projection(&target(), series, instances.to_vec())
+        .unwrap()
+        .upsert;
     assert_eq!(upsert.occurrences.len(), 2);
 }
 
@@ -854,6 +1048,176 @@ async fn an_event_macro_cannot_read_names_the_rejected_field() {
     }
 }
 
+/// A daily meeting Graph holds at 10:00 in Los Angeles on each of the next
+/// three days, as `instances` lists it, organized by `organizer`. Its third
+/// meeting moved to 11:00 with a title of its own.
+pub(super) fn upcoming_series(
+    id: &str,
+    organizer: &str,
+    is_organizer: bool,
+) -> (Value, Vec<Value>) {
+    let days: Vec<_> = (1..=3)
+        .map(|n| Utc::now().date_naive() + chrono::Days::new(n))
+        .collect();
+    let at = |day: chrono::NaiveDate, hour: u32| {
+        day.and_hms_opt(hour, 0, 0)
+            .unwrap()
+            .and_local_timezone(chrono_tz::America::Los_Angeles)
+            .unwrap()
+            .to_utc()
+    };
+    let graph_time = |instant: chrono::DateTime<Utc>| json!({"dateTime":instant.format("%Y-%m-%dT%H:%M:%S.0000000").to_string(),"timeZone":"UTC"});
+    let instance = |instance_id: String, kind: &str, day: chrono::NaiveDate, hour: u32| {
+        let mut value = documented_instance(&instance_id, kind, "2019-04-08", "2019-04-08");
+        value["subject"] = json!("Daily standup");
+        value["iCalUId"] = json!(format!("{id}-uid"));
+        value["seriesMasterId"] = json!(id);
+        value["isOrganizer"] = json!(is_organizer);
+        value["organizer"] = json!({"emailAddress":{"name":"Organizer","address":organizer}});
+        value["start"] = graph_time(at(day, hour));
+        value["end"] = graph_time(at(day, hour) + chrono::Duration::minutes(30));
+        value["originalStart"] =
+            json!(at(day, 10).to_rfc3339_opts(chrono::SecondsFormat::Secs, true));
+        value
+    };
+    let mut master = instance(id.into(), "seriesMaster", days[0], 10);
+    for property in ["originalStart", "seriesMasterId"] {
+        master.as_object_mut().unwrap().remove(property);
+    }
+    master["recurrence"] = json!({
+        "pattern":{"type":"daily","interval":1,"month":0,"dayOfMonth":0,"firstDayOfWeek":"sunday","index":"first"},
+        "range":{"type":"numbered","startDate":days[0].to_string(),"endDate":"0001-01-01","recurrenceTimeZone":"Pacific Standard Time","numberOfOccurrences":3}
+    });
+    let mut instances: Vec<_> = days[..2]
+        .iter()
+        .map(|day| instance(format!("{id}-{day}"), "occurrence", *day, 10))
+        .collect();
+    let mut moved = instance(format!("{id}-{}", days[2]), "exception", days[2], 11);
+    moved["subject"] = json!("Daily standup, an hour later");
+    instances.push(moved);
+    (master, instances)
+}
+
+fn without_ids(mut upsert: CalendarEventUpsert) -> CalendarEventUpsert {
+    upsert.event.id = Uuid::nil();
+    for occurrence in &mut upsert.occurrences {
+        occurrence.event_id = Uuid::nil();
+    }
+    upsert
+}
+
+async fn serve_series(server: &MockServer, master: &Value, instances: Vec<Value>) {
+    let id = master["id"].as_str().unwrap();
+    Mock::given(method("GET"))
+        .and(path(format!("/v1.0/me/calendars/calendar/events/{id}")))
+        .respond_with(ResponseTemplate::new(200).set_body_json(master))
+        .mount(server)
+        .await;
+    Mock::given(method("GET"))
+        .and(path(format!("/v1.0/me/events/{id}/instances")))
+        .respond_with(Instances(instances))
+        .mount(server)
+        .await;
+}
+
+#[test]
+fn instances_select_every_default_event_property_and_the_original_start() {
+    let instance = documented_instance("instance", "occurrence", "2019-04-08", "2019-04-08");
+    let documented: std::collections::BTreeSet<_> = instance
+        .as_object()
+        .unwrap()
+        .keys()
+        .filter(|key| !key.starts_with("@odata."))
+        .map(String::as_str)
+        .collect();
+    let selected: std::collections::BTreeSet<_> = INSTANCE_PROPERTIES.iter().copied().collect();
+    assert_eq!(
+        selected, documented,
+        "instances select what Graph returns by default, plus originalStart, and nothing it does not document"
+    );
+}
+
+#[tokio::test]
+async fn a_series_reads_the_same_through_its_selected_instances_as_from_complete_ones() {
+    let (server, api) = setup().await;
+    let (master, instances) = documented_series();
+    serve_series(&server, &master, instances.clone()).await;
+    let target = april_2019();
+    let Ok(OutlookEventRefresh::Refreshed { upsert, skipped }) = api
+        .refresh_calendar_event("token", &target, "AAMkAGUzYRgWAAA=")
+        .await
+    else {
+        panic!("the documented series should be readable");
+    };
+    assert!(skipped.is_empty());
+    let complete = normalize::projection(&target, master, instances)
+        .unwrap()
+        .upsert;
+    assert_eq!(
+        without_ids(*upsert.clone()),
+        without_ids(complete),
+        "no property the normalizer reads is missing from the selection"
+    );
+    let moved = &upsert.overrides[0];
+    assert_eq!(moved.recurrence_id, "2019-04-15T20:30:00+00:00");
+    assert_eq!(
+        moved.title.as_deref(),
+        Some("Review strategy for Q3 (moved)")
+    );
+    assert_eq!(moved.location.as_deref(), Some("Board room"));
+    assert!(
+        upsert
+            .occurrences
+            .iter()
+            .all(|occurrence| occurrence.recurrence_id.as_ref() == Some(&occurrence.occurrence_key)),
+        "every occurrence is addressed by its original start"
+    );
+}
+
+#[test]
+fn an_exception_without_its_original_start_is_left_out_of_an_imported_series() {
+    let (master, mut instances) = documented_series();
+    // Graph's documented response, which selects no originalStart.
+    instances[0]
+        .as_object_mut()
+        .unwrap()
+        .remove("originalStart");
+    let projection = normalize::projection(&april_2019(), master, instances).unwrap();
+    assert_eq!(
+        projection.skipped,
+        vec![SkippedOccurrence {
+            provider_id: "AAMkAGUzYAgI1sE1TatAAEYAAAAAlNFb2CNPe0ucP9you".into(),
+            field: "instances.originalStart.missing".into(),
+        }]
+    );
+    assert!(projection.upsert.overrides.is_empty());
+    let days: Vec<_> = projection
+        .upsert
+        .occurrences
+        .iter()
+        .map(|occurrence| occurrence.occurrence_key.as_str())
+        .collect();
+    assert_eq!(
+        days,
+        [
+            "2019-04-08T20:30:00+00:00",
+            "2019-04-22T20:30:00+00:00",
+            "2019-04-29T20:30:00+00:00"
+        ],
+        "the rest of the series is imported"
+    );
+}
+
+#[test]
+fn an_original_start_macro_cannot_parse_rejects_the_series_at_its_own_field() {
+    let (master, mut instances) = documented_series();
+    instances[0]["originalStart"] = json!("2019-04-15");
+    assert_eq!(
+        normalize::projection(&april_2019(), master, instances).err(),
+        Some(Rejected::at("instances.originalStart"))
+    );
+}
+
 #[test]
 fn occurrence_preferences_override_or_inherit_series_reminders_and_decline_policy() {
     let policy = AutomaticDeclinePolicy {
@@ -875,8 +1239,9 @@ fn occurrence_preferences_override_or_inherit_series_reminders_and_decline_polic
     instance["type"] = json!("exception");
     instance["originalStart"] = json!("2026-11-02T17:00:00Z");
     instance["singleValueExtendedProperties"] = json!([]);
-    let inherited =
-        normalize::projection(&target(), master.clone(), vec![instance.clone()]).unwrap();
+    let inherited = normalize::projection(&target(), master.clone(), vec![instance.clone()])
+        .unwrap()
+        .upsert;
     assert_eq!(
         inherited.overrides[0].reminders.as_ref().unwrap(),
         &inherited.event.reminders
@@ -887,7 +1252,9 @@ fn occurrence_preferences_override_or_inherit_series_reminders_and_decline_polic
     instance["singleValueExtendedProperties"] = json!([{"id":PREFERENCES_ID,"value":json!({
         "nativeReminderOn":false,"reminders":{"useDefault":false,"overrides":[]},"automaticDecline":disabled,
     }).to_string()}]);
-    let overridden = normalize::projection(&target(), master, vec![instance]).unwrap();
+    let overridden = normalize::projection(&target(), master, vec![instance])
+        .unwrap()
+        .upsert;
     assert!(
         overridden.overrides[0]
             .reminders

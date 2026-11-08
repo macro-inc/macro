@@ -27,7 +27,12 @@ They share no HTTP: only MacroDB rows and `NOTIFY` (`external_chat`'s
   quarantine, deferral and the standalone message write. Senders are resolved
   first (`resolve_sender_in`): WhatsApp's from-me flag means the account's own
   identity; a LID-only sender takes its phone number from the account's roster
-  pair. Only what is still LID-only is quarantined. Each stored sender
+  pair. Only what is still LID-only is quarantined. A sender's name is the
+  newest one a message brought (`external_chat_person.display_name`; the
+  session fills a missing push name from its contact store); a roster read
+  names people still unnamed (`groups.rs` `name_people_in`), and
+  `GroupRepository::people` names the rest at read time (roster name, the
+  owner's chat with them, else their phone number). Each stored sender
   records a `whatsapp.ingest.person` span (chat kind, LID or not, paired,
   `message_named`, `person_created`, `person_named`; no names or addresses).
 - Structured content (`external_chat::domain::rich::RichContent`: poll, poll
@@ -49,7 +54,7 @@ They share no HTTP: only MacroDB rows and `NOTIFY` (`external_chat`'s
   `waiting_for_message` until a chat update brings one, and a direct chat (a
   saved contact, a looked-up number) is added `done`, made
   `waiting_for_phone` only by an anchor older than its adoption while nothing
-  was imported. The phone is never asked without that Import. Recording an anchor and adding a chat share a per-user advisory lock (`lock_anchors_in`), so a chat added while its first message is recorded still sees it. Saved contacts are chat-list rows with no activity. History
+  was imported. The phone is never asked without that Import. Saved contacts are chat-list rows with no activity. History
   messages skip the adoption-time boundary but only reach the account owner's
   own groups (`observed_bindings_in`).
 - `src/outbound/pg/lookups.rs`: phone-number lookups (`whatsapp_lookup`,
@@ -99,9 +104,6 @@ They share no HTTP: only MacroDB rows and `NOTIFY` (`external_chat`'s
 - Lock accounts before groups, then child rows; lock every group in a batch in UUID order. Pairing expiry locks affected accounts before pairing rows. Media completion takes the group lock before attachment/message writes.
 - Every session-service write takes the account row lock at the caller's
   `lease_epoch`; `ExternalChatError::Fenced` means stop the account now.
-- Adding a chat takes the account row exclusively, against those share-mode
-  fences: a chat-list update and an add running side by side could otherwise
-  each miss the other's write and leave the chat in `waiting_for_message`.
 - `dispatch_started_at` is written before submission. A dispatched send without
   an outcome becomes `unknown` on takeover and is never resent; a later echo
   with its `allocated_source_id` settles it.

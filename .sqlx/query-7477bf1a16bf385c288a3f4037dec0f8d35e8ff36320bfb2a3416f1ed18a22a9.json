@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO crm_personal_email_blocklist (team_id, user_id, domain) VALUES ($1, $2, $3) ON CONFLICT DO NOTHING",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "7477bf1a16bf385c288a3f4037dec0f8d35e8ff36320bfb2a3416f1ed18a22a9"
+}
