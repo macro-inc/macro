@@ -9,6 +9,7 @@ members = [
   "crates/client/lexical/lexical_loro",
   "crates/client/lexical/lexical_model",
   "crates/client/lexical/lexical_html",
+  "crates/client/lexical/lexical_markdown",
   "crates/client/lexical/lexical_conformance",
   "crates/client/lexical/lexical_rich_nodes",
   "crates/client/lexical/lexical_conformance_wasm",
@@ -234,6 +235,8 @@ members = [
 ignored = ["quick-xml", "rand_chacha", "lexical_node_id"]
 
 [workspace.dependencies]
+lexical_html = { path = "crates/client/lexical/lexical_html" }
+lexical_markdown = { path = "crates/client/lexical/lexical_markdown" }
 document_session = { path = "crates/client/document_session" }
 lexical_loro = { path = "crates/client/lexical/lexical_loro" }
 phf = { version = "0.13.1", features = ["macros"] }

@@ -33,7 +33,9 @@ impl ExportRegistry {
             .overrides
             .get(type_name)
             .or_else(|| self.entries.get(type_name))
-            .ok_or(crate::Error::UnregisteredNodeType { type_name })?;
+            .ok_or(crate::Error::UnregisteredNodeType {
+                type_name: type_name.to_owned(),
+            })?;
         export(ctx, key)
     }
 }

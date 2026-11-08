@@ -97,3 +97,6 @@ links own children. Own export stays flat and overlays changed framework fields.
 
 Opaque future framework enum values round-trip unchanged; known node validation stays strict.
 Copy only own fields when importing opaque elements; never recursively clone children.
+
+Expose immutable event names and the DirtyLeaves alias to boundary and post-commit adapters;
+keep typed event payload ownership in the plugin registry.

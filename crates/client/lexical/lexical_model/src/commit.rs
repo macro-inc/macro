@@ -17,11 +17,13 @@ pub enum Mutation {
     /// Present only in the old state.
     Destroyed,
 }
+/// Ordered dirty leaf identities borrowed by post-commit model plugins.
+pub type DirtyLeaves = IndexSet<NodeKey>;
 /// Dirty records and their observed changes, in processing order.
 #[derive(Clone, Debug, Default)]
 pub struct Changes {
     /// Leaf dirty marks.
-    pub dirty_leaves: IndexSet<NodeKey>,
+    pub dirty_leaves: DirtyLeaves,
     /// Element dirty marks and their intent.
     pub dirty_elements: IndexMap<NodeKey, DirtyIntent>,
     /// Changes computed before view cache writes.

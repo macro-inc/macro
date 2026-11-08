@@ -18,7 +18,7 @@ pub enum Error {
     #[error("unregistered HTML node type {type_name}")]
     UnregisteredNodeType {
         /// Registered model type name.
-        type_name: &'static str,
+        type_name: String,
     },
     /// An export callback returned an invalid structure.
     #[error("invalid HTML export: {0}")]

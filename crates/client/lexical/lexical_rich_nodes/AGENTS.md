@@ -41,3 +41,6 @@ in views.
 
 Port model assertions from upstream as explicit literal tests in sibling
 `test.rs` files. Keep the upstream mapping and view-only exclusions in README.md.
+
+Global matcher scans retain anchors on the original input and advance empty matches
+by JavaScript UTF-16 rules; reuse exec_from/find_all in portable consumers.
