@@ -229,7 +229,7 @@ async fn a_cursor_cannot_turn_dynamic_matching_on_for_a_request_that_did_not_ask
 #[tokio::test]
 async fn a_cursor_from_before_the_mode_was_carried_decides_per_page() {
     let legacy = r#"{"chat_name_cursor":"Done","content_cursor":{"NotDone":null},"project_name_cursor":"Done","crm_company_cursor":"Done","channel_name_cursor":"Done"}"#;
-    let cursor: models_search_cursor::SearchCursor =
+    let cursor: search_cursor_types::SearchCursor =
         serde_json::from_str(legacy).expect("legacy cursor decodes");
     let rollout = Rollout::new(true);
 

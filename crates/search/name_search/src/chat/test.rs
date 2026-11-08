@@ -1,7 +1,7 @@
 //! Tests for chat module
 
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
-use models_search_cursor::{SearchCursorOption, SearchMethodCursor};
+use search_cursor_types::{SearchCursorOption, SearchMethodCursor};
 use sqlx::{Pool, Postgres};
 use uuid::Uuid;
 

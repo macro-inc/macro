@@ -34,7 +34,7 @@ use crate::{
     },
 };
 use chrono::Utc;
-use models_search_cursor::{SearchCursorOption, SearchMethodCursor};
+use search_cursor_types::{SearchCursorOption, SearchMethodCursor};
 
 use opensearch_query_builder::*;
 use opensearch_types::{OpenSearchEntityType, SearchEntityType};

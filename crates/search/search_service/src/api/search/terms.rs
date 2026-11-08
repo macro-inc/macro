@@ -9,8 +9,8 @@
 
 use macro_user_id::user_id::MacroUserIdStr;
 use models_search::{MatchType, TermMatching};
-use models_search_cursor::CursorTermMatching;
 use opensearch_client::search::documents::{DocumentTermMatching, MIN_TERMS_FOR_DYNAMIC_MATCHING};
+use search_cursor_types::CursorTermMatching;
 
 use crate::TermMatchingRollout;
 use crate::api::search::simple::SearchError;

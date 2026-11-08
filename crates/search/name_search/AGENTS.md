@@ -31,7 +31,7 @@ highlighting.
 ## Boundaries
 
 - Depends on: `channels` (outbound feature), `opensearch_types`,
-  `models_search_cursor`.
+  `search_cursor_types`.
 - Used by: `search_service`.
 
 ## Checks

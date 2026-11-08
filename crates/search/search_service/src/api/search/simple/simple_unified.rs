@@ -22,7 +22,6 @@ use models_search::unified::SearchEntityFilters;
 use models_search::{
     MatchType, SearchOn, SimpleSearchResponse, TermMatching, unified::UnifiedSearchRequest,
 };
-use models_search_cursor::{SearchCursor, SearchCursorOption, SearchMethodCursor};
 use opensearch_client::search::agent_sessions::{AgentSessionSearchArgs, AgentSessionSearchMode};
 use opensearch_client::search::call_records::CallRecordSearchMode;
 use opensearch_client::search::documents::{
@@ -31,6 +30,7 @@ use opensearch_client::search::documents::{
 use opensearch_client::search::model::SearchHit;
 use opensearch_client::search::unified::UnifiedSearchArgs;
 use opensearch_types::SearchEntityType;
+use search_cursor_types::{SearchCursor, SearchCursorOption, SearchMethodCursor};
 use shared_types::{response::ErrorResponse, user::UserContext};
 use std::collections::HashSet;
 use tracing::Instrument as _;

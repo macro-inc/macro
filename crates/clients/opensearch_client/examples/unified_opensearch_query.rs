@@ -1,8 +1,8 @@
 use std::collections::HashSet;
 
-use models_search_cursor::SearchCursorOption;
 use opensearch_client::search::unified::{UnifiedEmailSearchArgs, UnifiedSearchArgs};
 use opensearch_types::OpenSearchEntityType;
+use search_cursor_types::SearchCursorOption;
 
 fn main() {
     let args = UnifiedSearchArgs {
