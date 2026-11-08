@@ -38,7 +38,10 @@ impl Sim {
         let input = match &op {
             EditorOp::Undo => EditorInput::Undo,
             EditorOp::Redo => EditorInput::Redo,
-            EditorOp::Type { .. }
+            EditorOp::SetBlock { .. }
+            | EditorOp::ToggleList { .. }
+            | EditorOp::InsertTable { .. }
+            | EditorOp::Type { .. }
             | EditorOp::Backspace { .. }
             | EditorOp::DeleteRange { .. }
             | EditorOp::SplitBlock { .. }

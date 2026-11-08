@@ -56,6 +56,29 @@ pub enum EditorOp {
         /// Selected block.
         at: Pos,
     },
+    /// Convert the current block with the rich-node package operation.
+    SetBlock {
+        /// Selected block.
+        at: Pos,
+        /// Paragraph, heading1–3, quote or code modulo six.
+        kind: u8,
+    },
+    /// Insert an ordered, unordered or check list through package commands.
+    ToggleList {
+        /// Selected block.
+        at: Pos,
+        /// List kind modulo three.
+        kind: u8,
+    },
+    /// Insert a bounded table through the real table operation.
+    InsertTable {
+        /// Insertion point.
+        at: Pos,
+        /// One to four rows after resolution.
+        rows: u8,
+        /// One to four columns after resolution.
+        cols: u8,
+    },
     /// Publish actual durable editor selection cursors.
     Select {
         /// Anchor.

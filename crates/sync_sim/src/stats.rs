@@ -44,6 +44,9 @@ impl RunStats {
                     let kind = match op {
                         AbstractOp::Editor(EditorOp::Type { .. }) => "Type",
                         AbstractOp::Editor(EditorOp::Select { .. }) => "EditorSelect",
+                        AbstractOp::Editor(EditorOp::SetBlock { .. }) => "SetBlock",
+                        AbstractOp::Editor(EditorOp::ToggleList { .. }) => "ToggleList",
+                        AbstractOp::Editor(EditorOp::InsertTable { .. }) => "InsertTable",
                         AbstractOp::Editor(EditorOp::Backspace { .. }) => "Backspace",
                         AbstractOp::Editor(EditorOp::DeleteRange { .. }) => "DeleteRange",
                         AbstractOp::Editor(EditorOp::SplitBlock { .. }) => "SplitBlock",

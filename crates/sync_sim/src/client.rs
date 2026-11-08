@@ -4,8 +4,10 @@ use crate::{
     *,
 };
 use doc_sync_core::*;
+pub(crate) mod application;
 pub(crate) mod commands;
 pub(crate) mod resolve;
+pub(crate) mod rich_commands;
 pub(crate) mod runtime;
 use std::collections::{BTreeMap, VecDeque};
 
