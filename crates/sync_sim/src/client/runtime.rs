@@ -1,13 +1,12 @@
 //! Real client ownership: either the lending GenericSurface host or a document session.
+use super::application::EditorRuntime;
 use super::*;
-use document_session::{
-    DocumentSession, EditorConfig, EditorSurface, SessionConfig, SessionInput, ViewEffect,
-};
+use document_session::{SessionInput, ViewEffect};
 use std::ops::Deref;
 
 pub(crate) enum Runtime {
     Generic { core: Box<SyncCore>, doc: SimDoc },
-    Editor(Box<DocumentSession<EditorSurface>>),
+    Editor(Box<EditorRuntime>),
 }
 impl Deref for Runtime {
     type Target = SyncCore;
@@ -22,6 +21,7 @@ pub(crate) struct Handled {
     pub out: SyncOutput,
     pub imports: Vec<(String, bool, Option<String>)>,
     pub errors: Vec<String>,
+    pub undo_applied: Vec<document_session::UndoObservation>,
 }
 impl Runtime {
     pub fn new(
@@ -36,24 +36,13 @@ impl Runtime {
         if editor {
             let mut peers = vec![peer];
             peers.extend(supply);
-            let config = SessionConfig {
-                sync: config,
-                peer_ids: peers,
-                peer_range: range,
-                surface: document_session::SurfaceConfig::Editor(EditorConfig {
-                    mode: if ai {
-                        lexical_model::EditorMode::Headless
-                    } else {
-                        lexical_model::EditorMode::ViewAttached
-                    },
-                    builder: std::sync::Arc::new(super::commands::builder),
-                    local_commands: super::commands::LOCAL_COMMANDS,
-                    ..EditorConfig::default()
-                }),
+            let mode = if ai {
+                lexical_model::EditorMode::Headless
+            } else {
+                lexical_model::EditorMode::ViewAttached
             };
-            DocumentSession::new(config, now)
+            EditorRuntime::new(config, peers, range, now, mode)
                 .map(|session| Self::Editor(Box::new(session)))
-                .map_err(|error| Failure::new("editor_configuration", error))
         } else {
             let mut peers = PeerSupply::new(range);
             peers
@@ -106,16 +95,21 @@ impl Runtime {
                     out,
                     imports: std::mem::take(&mut doc.imports),
                     errors: vec![],
+                    undo_applied: vec![],
                 }
             }
             Self::Editor(session) => Self::editor_handle(session, SessionInput::Sync(input), now),
         }
     }
-    pub fn editor_handle(
-        session: &mut DocumentSession<EditorSurface>,
-        input: SessionInput,
-        now: Now,
-    ) -> Handled {
+    pub fn editor_handle(session: &mut EditorRuntime, input: SessionInput, now: Now) -> Handled {
+        if let Err(error) = session.set_clock(now) {
+            return Handled {
+                out: SyncOutput::default(),
+                imports: vec![],
+                errors: vec![error.to_string()],
+                undo_applied: vec![],
+            };
+        }
         session.handle(now, input);
         let output = session.conformance_drain_output();
         Handled {
@@ -125,6 +119,7 @@ impl Runtime {
                 wake_at: output.wake_at,
             },
             imports: output.imports,
+            undo_applied: output.undo_applied,
             errors: output
                 .view
                 .into_iter()

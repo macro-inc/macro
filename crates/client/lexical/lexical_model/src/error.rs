@@ -261,6 +261,9 @@ pub enum Error {
     /// Json error.
     #[error("JSON error: {0}")]
     Json(#[from] serde_json::Error),
+    /// A typed owning-package callback failed inside an extension command.
+    #[error(transparent)]
+    Extension(Box<dyn std::error::Error + Send + Sync>),
 }
 
 /// Invalid editor configuration.
@@ -432,6 +435,7 @@ impl Error {
             Self::WriteAfterSetEditorState => "WriteAfterSetEditorState",
             Self::StateKeyCollision { .. } => "StateKeyCollision",
             Self::Json(..) => "Json",
+            Self::Extension(..) => "Extension",
         }
     }
 }

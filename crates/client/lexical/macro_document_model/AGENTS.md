@@ -41,6 +41,11 @@ The transformer layer uses the shared lexical_markdown engine; route adapters ar
 - Supply external document-link hostnames through MacroMarkdownOptions and retain typed package errors.
 - Keep this client crate excluded from workspace-hack.
 
+Canonicalize only top-level null unset table options, tablecell width and listitem
+checked in the sync policy, matching source exportJSON. Preserve backgroundColor:null,
+nested array nulls, unknown nulls and every nonnull value; never erase the underlying
+Loro fields.
+
 ## Checks
 
 - `TMPDIR=/home/wolf/tmp cargo test -p macro_document_model -j4`

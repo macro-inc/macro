@@ -200,21 +200,45 @@ pub(crate) fn seed_snapshots(
     wall: i64,
     spec: &crate::SeedDocument,
 ) -> Result<SeedSnapshots, Failure> {
+    if let crate::SeedDocument::StoredEditor(state) = spec {
+        let doc = lexical_loro::new_doc(peer)
+            .map_err(|error| Failure::new("stored_editor_seed", error))?;
+        let root = state
+            .get("root")
+            .ok_or_else(|| Failure::new("stored_editor_seed", "missing root"))?;
+        lexical_loro::mirror::set_state(&doc, root)
+            .map_err(|error| Failure::new("stored_editor_seed", error))?;
+        return Ok(SeedSnapshots {
+            server: doc
+                .export(loro::ExportMode::Snapshot)
+                .map_err(|error| Failure::new("stored_editor_seed", error))?,
+            local: None,
+            s3: None,
+            vv: vv(&doc.oplog_vv()),
+        });
+    }
     if let crate::SeedDocument::Editor(state) = spec {
-        let editor =
-            document_session::default_editor_builder(lexical_model::EditorMode::Headless, peer)
-                .initial_state(
-                    serde_json::from_value(state.clone())
-                        .map_err(|error| Failure::new("editor_seed", error))?,
-                )
-                .build()
-                .map_err(|error| Failure::new("editor_seed", error))?;
+        let editor = crate::client::application::builder(
+            lexical_model::EditorMode::Headless,
+            peer,
+            std::sync::Arc::new(std::sync::atomic::AtomicU64::new(
+                u64::try_from(wall).map_err(|error| Failure::new("editor_seed_clock", error))?,
+            )),
+            0,
+            Some(8),
+        )
+        .initial_state(
+            serde_json::from_value(state.clone())
+                .map_err(|error| Failure::new("editor_seed", error))?,
+        )
+        .build()
+        .map_err(|error| Failure::new("editor_seed", error))?;
         let doc =
             lexical_loro::new_doc(peer).map_err(|error| Failure::new("editor_seed", error))?;
         lexical_loro::LoroProjection::initialize(
             &doc,
             editor.state(),
-            &lexical_loro::PlainPolicy,
+            &macro_document_model::sync::MACRO_SYNC_POLICY,
             wall / 1000,
         )
         .map_err(|error| Failure::new("editor_seed", error))?;
@@ -239,7 +263,9 @@ pub(crate) fn seed_snapshots(
     let mut local = None;
     let mut s3 = None;
     match spec {
-        crate::SeedDocument::Editor(_) => unreachable!("handled editor seed"),
+        crate::SeedDocument::Editor(_) | crate::SeedDocument::StoredEditor(_) => {
+            unreachable!("handled editor seed")
+        }
         crate::SeedDocument::Empty => {}
         crate::SeedDocument::Form(writes) => {
             seed_fields(&mut doc, writes, fields, wall)?;

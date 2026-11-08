@@ -6,14 +6,19 @@ use lexical_model::*;
 use loro::{LoroDoc, UndoManager};
 use std::sync::Arc;
 mod builder;
-pub use builder::default_editor_builder;
+pub use builder::{default_editor_builder, register_editor_commands};
 static PLAIN: PlainPolicy = PlainPolicy;
+
+/// Annotation constructor supplied by the editor's application registry.
+pub type CommentNodeFactory = fn(&mut Transaction<'_>, Vec<String>) -> Result<NodeKey, Error>;
 
 /// Rebuildable editor configuration shared by live editors and comment forks.
 #[derive(Clone)]
 pub struct EditorConfig {
     /// Registry and plugins, built anew for every document instance.
     pub builder: Arc<dyn Fn(EditorMode, u64) -> EditorBuilder + Send + Sync>,
+    /// Create an annotation wrapper inside the isolated staging transaction.
+    pub comment_node: CommentNodeFactory,
     /// Application projection exclusions.
     pub policy: &'static dyn SyncPolicy,
     /// Live model mode; comment staging always uses Headless.
@@ -29,6 +34,7 @@ impl Default for EditorConfig {
     fn default() -> Self {
         Self {
             builder: Arc::new(default_editor_builder),
+            comment_node: lexical_rich_nodes::mark::create_mark_node,
             policy: &PLAIN,
             mode: EditorMode::ViewAttached,
             view_host: ViewHost {
@@ -54,6 +60,8 @@ pub struct EditorSurface {
     pub(crate) resynced: bool,
     item_started: Option<HistoryTime>,
     availability: HistoryAvailability,
+    #[cfg(feature = "conformance")]
+    pub(crate) undo_applied: Vec<crate::UndoObservation>,
     cursor: Option<lexical_loro::SelectionCursors>,
     #[cfg(test)]
     pub(crate) fail_next_remote: bool,
@@ -74,15 +82,22 @@ impl EditorSurface {
             resynced: false,
             item_started: None,
             availability: HistoryAvailability::default(),
+            #[cfg(feature = "conformance")]
+            undo_applied: Vec::new(),
             cursor: None,
             #[cfg(test)]
             fail_next_remote: false,
         })
     }
     pub(crate) fn builder(config: &EditorConfig, mode: EditorMode, peer: u64) -> EditorBuilder {
-        (config.builder)(mode, peer)
+        let builder = (config.builder)(mode, peer)
             .view_host(config.view_host)
-            .opaque_unknown_types(true)
+            .opaque_unknown_types(true);
+        if mode == EditorMode::Headless {
+            builder.plugin(builder::RestoreModelSelection)
+        } else {
+            builder
+        }
     }
     fn core(editor: Editor) -> EditorCore {
         EditorCore::new(
@@ -132,8 +147,11 @@ impl EditorSurface {
         self.projection = None;
         self.undo = None;
         let has_root = crate::generic::root(doc, "root").is_some();
+        let mut cleanup = false;
         let state = if has_root {
-            lexical_loro::reconstruct_state(doc, self.config.policy)?
+            let initial = lexical_loro::reconstruct_initial_state(doc, self.config.policy)?;
+            cleanup = initial.has_transparent_wrappers && access == Access::Edit;
+            initial.state
         } else {
             SerializedEditorState { root: serde_json::json!({"type":"root","version":1,"children":[],"direction":null,"format":"","indent":0}).as_object().cloned().ok_or(SessionError::Configuration("empty root must be an object"))? }
         };
@@ -162,13 +180,17 @@ impl EditorSurface {
             }));
             return Ok(());
         }
-        let mut projection = if has_root {
+        let mut projection = if cleanup {
+            let state = lexical_loro::synced_json(self.core.state(), self.config.policy)?;
+            lexical_loro::mirror::set_synced_state(doc, &state, self.config.policy)?;
+            LoroProjection::attach(doc, self.core.state(), self.config.policy)?
+        } else if has_root {
             LoroProjection::attach(doc, base, self.config.policy)?
         } else {
             LoroProjection::initialize(doc, base, self.config.policy, now.wall.0 / 1000)?
         };
         if let Some(output) = initial {
-            if access == Access::Edit {
+            if access == Access::Edit && !cleanup {
                 projection.local_commit(doc, &output.commits, LOCAL_ORIGIN, now.wall.0 / 1000)?;
             }
             // Read/comment-only editors may retain unsynced hook fields (S11 §4.6).
@@ -388,6 +410,8 @@ impl EditorSurface {
                 None
             };
             let _guard = span.as_ref().map(tracing::Span::enter);
+            #[cfg(feature = "conformance")]
+            let before_undo = crate::observation::visible_ids(doc);
             let changed = {
                 let phase = span
                     .as_ref()
@@ -399,6 +423,15 @@ impl EditorSurface {
                 span.record("history.applied", changed);
             }
             if changed {
+                #[cfg(feature = "conformance")]
+                {
+                    let removed = match (before_undo, crate::observation::visible_ids(doc)) {
+                        (Ok(before), Ok(after)) => Ok(before.difference(&after).copied().collect()),
+                        (Err(error), _) | (_, Err(error)) => Err(error.to_string()),
+                    };
+                    self.undo_applied
+                        .push(crate::UndoObservation { redo, removed });
+                }
                 let phase = span
                     .as_ref()
                     .map(|_| tracing::info_span!("editor.history.apply"));
@@ -583,19 +616,27 @@ impl EditorSurface {
             let anchor = projection.point(doc, self.core.state(), &cursors.anchor);
             let focus = projection.point(doc, self.core.state(), &cursors.focus);
             if let (Some(anchor), Some(focus)) = (anchor, focus) {
+                let input = if self.config.mode == EditorMode::Headless {
+                    Input::Command {
+                        command: Command::Extension(ExtensionCommand::new(
+                            &builder::RESTORE_MODEL_SELECTION,
+                            RangeSelection::new(anchor, focus),
+                        )),
+                        selection: ViewSelection::KeepModel,
+                    }
+                } else {
+                    Input::SelectionFromView {
+                        selection: ViewSelection::Range {
+                            anchor,
+                            focus,
+                            resolution_dirty: false,
+                        },
+                        change: None,
+                    }
+                };
                 let output = self
                     .core
-                    .apply(
-                        Input::SelectionFromView {
-                            selection: ViewSelection::Range {
-                                anchor,
-                                focus,
-                                resolution_dirty: false,
-                            },
-                            change: None,
-                        },
-                        HistoryTime(now.mono.0),
-                    )
+                    .apply(input, HistoryTime(now.mono.0))
                     .map_err(|error| SessionError::Model(error.error))?;
                 Self::output(output, view);
                 // SelectionFromView says the host already installed its input. Here it
@@ -619,3 +660,6 @@ impl EditorSurface {
         Ok(changed)
     }
 }
+
+#[cfg(test)]
+mod selection_test;

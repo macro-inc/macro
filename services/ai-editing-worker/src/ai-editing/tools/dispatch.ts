@@ -1,10 +1,9 @@
 import { type Span, Telemetry } from '@macro-inc/observability';
 import { type LanguageModel, tool } from 'ai';
 import { z } from 'zod';
+import type { Writer } from '../../editing-workspace';
 import type { coder } from '../agents';
 import type { LexicalSession } from '../ai-toolkit';
-import type { AwarenessSource } from '../awareness';
-import type { Doc } from '../doc';
 import type { DocumentOpQueueParams } from '../queue';
 import type { TokenTracker } from '../token-tracker';
 import { numberLines, serializeWithXml } from '../utils';
@@ -13,6 +12,8 @@ import {
   type SnippetPair,
   snippetsToRecord,
 } from './run-code';
+
+export type { Writer } from '../../editing-workspace';
 
 export type { UsageEntry } from '../token-tracker';
 export { TokenTracker } from '../token-tracker';
@@ -206,12 +207,6 @@ function xmlWindow(
   }
   return numbered.slice(lo, hi + 1).join('\n');
 }
-
-export type Writer = {
-  doc: Doc;
-  awarenessSource: AwarenessSource;
-  release: () => void;
-};
 
 /** Per-edit timing recorded by dispatch: the writer's window and when each of
  *  its `runCode` calls executed. */

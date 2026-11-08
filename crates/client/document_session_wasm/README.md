@@ -27,7 +27,7 @@ filter. Native builds keep their normal tracing levels. Size changes must retain
 the model, projection and session keystroke work-counter checks.
 
 Run `just -f apps/web/justfile build-document-session-wasm` to build glue and the
-optimized binary, then enforce the 8 MB raw and 1,107,000-byte Brotli gates. Nix
+optimized binary, then enforce the 8 MB raw and provisional 1,130,000-byte Brotli gates. Nix
 uses the same size profile and Binaryen convergence pass. No SIMD override is
 needed. The flag-off application continues to preload Loro; the session package
 is emitted as an optional asset and initialized lazily.

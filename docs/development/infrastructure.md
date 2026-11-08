@@ -126,7 +126,10 @@ specifically:
 
 Deployment builds use the filtered source in `nix/cloud-storage.nix`, rather than
 an entire checkout. Include any new `include_str!` or `include_bytes!` assets in
-its source filter. Assets generated from JavaScript are built in their own
+its source filter. Preserve vendored path dependencies in `rootDepsSrc`: workspace
+closures omit them and dummy sources replace their library targets. Run
+`nix build --no-link .#checks.x86_64-linux.pruned-deploy-src-vendored-patches`
+to verify the real vendored sources survive the overlay. Assets generated from JavaScript are built in their own
 derivation instead: the `code-mode-assets` package bundles the SDK from the Nix
 `node_modules`, and every crane build of `crates/code_mode_assets` reads it
 through `CODE_MODE_ASSETS_DIR`; Rust CI exports the same variable before cargo,

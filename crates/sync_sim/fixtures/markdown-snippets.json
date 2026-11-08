@@ -1,0 +1,5 @@
+[
+  "# Pasted heading\n\nA **bold** and *italic* 🦀 paragraph.\n",
+  "- first\n- second\n\n> quoted\n",
+  "A [link](https://example.invalid/path) and `inline code`.\n"
+]

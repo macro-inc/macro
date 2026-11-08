@@ -24,6 +24,7 @@ feature exports owned HTML; browser DOM import and layout stay in views.
 - Emit temporary table-cell wire keys until enclosing table export removes them.
 - Keep block-only registration separate from opt-in transforms and plugins.
 - Preserve missing, null and array table colWidths in JSON; geometry treats missing and null as no widths.
+- Use table::register_table_behavior for application registries that already own table nodes; register_table installs both.
 - Keep physical grid coordinates separate from span coordinates; the physical column count comes from the last row.
 - Keep DOM geometry behind TableView and apply returned observer effects in the host.
 - Table span reads retain map-time writable identity; frozen cells use captured fields, live cells read current fields.
@@ -36,6 +37,7 @@ feature exports owned HTML; browser DOM import and layout stay in views.
 - Register LinkNode before AutoLink; autolink changes are transactional `AUTO_LINK_CHANGED` events.
 - Keep shared Match/Matcher and pinned linkify-it patterns in `utils`; regenerate the oracle corpus with the documented script.
 - Legacy JS regexes match UTF-16 code units with `find_from_ucs2`.
+- Show regex source and flags in matcher Debug output; keep compiled VM internals out of diagnostics.
 
 ## Checks
 

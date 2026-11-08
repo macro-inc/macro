@@ -71,3 +71,27 @@ mod account_drain;
 
 #[path = "stories/editor_basic.rs"]
 mod editor_basic;
+
+#[path = "stories/quiet_adoption.rs"]
+mod quiet_adoption;
+
+#[path = "stories/editor_undo.rs"]
+mod editor_undo;
+
+#[path = "stories/editor_commands.rs"]
+mod editor_commands;
+
+#[path = "stories/editor_rich.rs"]
+mod editor_rich;
+
+#[path = "stories/editor_cursor.rs"]
+mod editor_cursor;
+
+#[path = "stories/editor_markdown.rs"]
+mod editor_markdown;
+
+#[path = "stories/editor_drafts.rs"]
+mod editor_drafts;
+
+#[path = "stories/editor_shortcuts.rs"]
+mod editor_shortcuts;

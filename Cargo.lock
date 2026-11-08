@@ -6614,6 +6614,7 @@ dependencies = [
  "lexical_model",
  "lexical_rich_nodes",
  "loro 1.17.1",
+ "macro_document_model",
  "proptest",
  "rootcause",
  "serde",
@@ -12444,8 +12445,6 @@ dependencies = [
 [[package]]
 name = "loro-internal"
 version = "1.17.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7e533c1688430aa4fcdd933f00861e331c169a4158ee6d27d054e0558892d447"
 dependencies = [
  "append-only-bytes",
  "arref",
@@ -20319,8 +20318,11 @@ dependencies = [
  "document_session",
  "futures",
  "lexical_loro",
+ "lexical_markdown",
  "lexical_model",
+ "lexical_rich_nodes",
  "loro 1.17.1",
+ "macro_document_model",
  "macro_env_var",
  "macro_sync_service_jwt",
  "postcard",

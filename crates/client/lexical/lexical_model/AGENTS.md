@@ -34,6 +34,7 @@ node types, immutable snapshots, transactional tree editing, update processing, 
 - Require equivalent NodeState on both text neighbors before normalization merges them, including absent versus populated state.
 - Preserve optional StateValue inner identity and imported undefined text fields through paragraph exports.
 
+- Preserve owning-package extension callback errors in Error::Extension; never classify them as unrelated model failures.
 - Use Error::invariant for runtime diagnostic context; static and owned messages display verbatim and share the Invariant classification.
 - Use NodeType::create_default for context-dependent constructors; default_node and flag probes remain pure data for foreign projections; runtime foreign types without defaults reject create_resolved.
 - Pure Rust model; no network, database, runtime or browser dependencies.
@@ -54,7 +55,7 @@ node types, immutable snapshots, transactional tree editing, update processing, 
 - Typed selection-change and application commands use immutable plugins and transactional extension state.
 - Caret cursors compute successors before returning items; keep the construction-time first step.
 - Commands visit registered listeners only; external dispatch flushes between levels, inline dispatch does not.
-- Hooks share one follow-up transaction per round and stop at 99 rounds; extension state rolls back with updates.
+- Hooks share one follow-up transaction per round; conditional hooks then run isolated transactions and discard false results, including early flushes. Keep the shared 99-round guard and roll back extension state with updates.
 - `StateRef::export_text_slice` exports changed clipboard text through ephemeral clone and export hooks without mutating snapshots.
 - `Transaction::restore_editor_state` clones snapshot records, preserves composition and staged dirty sets, and permits further writes; `set_editor_state` seals instead.
 - Publish event-only commits without advancing the history merge clock; history records only document or selection changes.
