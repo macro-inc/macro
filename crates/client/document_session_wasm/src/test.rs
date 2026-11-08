@@ -735,7 +735,7 @@ fn application_command_admission_rejects_stale_generations_and_applies_typed_pol
         generation: key.generation(),
         selection: wire::SelectionMsg {
             kind: 2,
-            anchor: point.clone(),
+            anchor: point,
             focus: point,
             nodes: vec![],
             table: 0,

@@ -17,7 +17,9 @@ Composition kind 2 clears ownership without admitting DOM text; the view owns
 Android event timing and the 30 ms re-clear. Cold EditorCommand b=1 clears
 composition at the supplied selection before executing the command in one input;
 b=0 preserves composition. EditorKeyDown carries the layout target through
-normal KeyDown listener dispatch before the routed deletion.
+normal KeyDown listener dispatch before the routed deletion. Primitive keyDown
+inputs dispatch recognized key-specific listeners after generic KeyDown without
+claiming the browser default unless a handler consumes it.
 
 Application command envelopes carry the mirror generation and an optional
 keyboard event; reject stale generations before decoding typed surface commands.
