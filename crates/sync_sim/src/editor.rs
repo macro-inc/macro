@@ -86,6 +86,13 @@ pub enum EditorOp {
         /// Corpus index modulo four; index three is the large input.
         snippet: u8,
     },
+    /// Type one S8 shortcut sequence at the start of a live block in a browser tab.
+    MarkdownShortcut {
+        /// Text-bearing block in document order.
+        block: u16,
+        /// Heading, bullet list, quote or triple backticks modulo four.
+        shortcut: u8,
+    },
     /// Publish actual durable editor selection cursors.
     Select {
         /// Anchor.
