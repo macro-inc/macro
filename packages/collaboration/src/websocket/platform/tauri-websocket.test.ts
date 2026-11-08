@@ -73,53 +73,53 @@ afterEach(() => {
 });
 
 describe('TauriWebSocketWrapper', () => {
-  it.each([
-    'receive',
-    'send',
-  ] as const)('records one %s failure without recording URLs, payloads, or provider errors', async (operation) => {
-    vi.spyOn(console, 'log').mockImplementation(() => {});
-    vi.spyOn(console, 'error').mockImplementation(() => {});
-    const socket = new TauriWebSocketWrapper(
-      'wss://dss.test/ws?token=private-token'
-    );
-    const events = track(socket);
-    plugin.connects[0].resolve(7);
-    await Promise.resolve();
-    const closed = new Promise<void>((resolve) =>
-      socket.addEventListener('close', () => resolve())
-    );
-    if (operation === 'receive') {
-      plugin.connects[0].args.onMessage.onmessage?.({
-        seq: 1,
-        message: 'private provider error',
-      });
-    } else {
-      vi.mocked(invoke).mockRejectedValueOnce(
-        new Error('private provider error')
+  it.each(['receive', 'send'] as const)(
+    'records one %s failure without recording URLs, payloads, or provider errors',
+    async (operation) => {
+      vi.spyOn(console, 'log').mockImplementation(() => {});
+      vi.spyOn(console, 'error').mockImplementation(() => {});
+      const socket = new TauriWebSocketWrapper(
+        'wss://dss.test/ws?token=private-token'
       );
-      socket.send('private payload');
-    }
-    await closed;
-    plugin.connects[0].args.onMessage.onmessage?.({
-      seq: 2,
-      message: 'duplicate error',
-    });
+      const events = track(socket);
+      plugin.connects[0].resolve(7);
+      await Promise.resolve();
+      const closed = new Promise<void>((resolve) =>
+        socket.addEventListener('close', () => resolve())
+      );
+      if (operation === 'receive') {
+        plugin.connects[0].args.onMessage.onmessage?.({
+          seq: 1,
+          message: 'private provider error',
+        });
+      } else {
+        vi.mocked(invoke).mockRejectedValueOnce(
+          new Error('private provider error')
+        );
+        socket.send('private payload');
+      }
+      await closed;
+      plugin.connects[0].args.onMessage.onmessage?.({
+        seq: 2,
+        message: 'duplicate error',
+      });
 
-    expect(events).toEqual(['open', 'error', 'close:1006']);
-    expect(telemetry.start.mock.calls).toEqual([
-      ['websocket.transport.failure'],
-    ]);
-    expect(telemetry.setAttr.mock.calls).toEqual([
-      ['websocket.transport', 'tauri'],
-      ['websocket.socket_id', 7],
-      ['websocket.operation', operation],
-      ['websocket.outcome', 'closed'],
-    ]);
-    expect(telemetry.error.mock.calls).toEqual([
-      [operation === 'send' ? 'Send failed' : 'Receive failed'],
-    ]);
-    expect(telemetry.end).toHaveBeenCalledOnce();
-  });
+      expect(events).toEqual(['open', 'error', 'close:1006']);
+      expect(telemetry.start.mock.calls).toEqual([
+        ['websocket.transport.failure'],
+      ]);
+      expect(telemetry.setAttr.mock.calls).toEqual([
+        ['websocket.transport', 'tauri'],
+        ['websocket.socket_id', 7],
+        ['websocket.operation', operation],
+        ['websocket.outcome', 'closed'],
+      ]);
+      expect(telemetry.error.mock.calls).toEqual([
+        [operation === 'send' ? 'Send failed' : 'Receive failed'],
+      ]);
+      expect(telemetry.end).toHaveBeenCalledOnce();
+    }
+  );
 
   it('handles a disconnect replayed after the WebView resumes', async () => {
     vi.spyOn(console, 'log').mockImplementation(() => {});
