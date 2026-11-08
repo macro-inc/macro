@@ -87,7 +87,7 @@ scanned AS (
                        ELSE false
                    END AS visible
             FROM (
-                SELECT e.id, e.actor_id, e.action, e.action_payload, e.subject_id,
+                SELECT e.id, e.agent_correlation_id, e.actor_id, e.action, e.action_payload, e.subject_id,
                        e.entity_type, e.entity_id, e.occurred_at,
                        -- Only these id columns are uuids; a malformed id
                        -- must hide its row, not fail the page.
@@ -121,7 +121,7 @@ boundary AS (
     LIMIT 1
 )
 (
-    SELECT s.id AS "id!", s.actor_id AS "actor_id!", s.action AS "action!",
+    SELECT s.id AS "id!", s.agent_correlation_id, s.actor_id AS "actor_id!", s.action AS "action!",
            s.action_payload, s.subject_id AS "subject_id!",
            s.entity_type AS "entity_type!", s.entity_id AS "entity_id!",
            s.occurred_at AS "occurred_at!", false AS "is_boundary!"
@@ -134,6 +134,6 @@ boundary AS (
     LIMIT $4
 )
 UNION ALL
-SELECT b.id, b.actor_id, b.action, b.action_payload, b.subject_id, b.entity_type,
+SELECT b.id, b.agent_correlation_id, b.actor_id, b.action, b.action_payload, b.subject_id, b.entity_type,
        b.entity_id, b.occurred_at, true
 FROM boundary b

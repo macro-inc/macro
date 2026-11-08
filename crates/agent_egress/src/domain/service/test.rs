@@ -70,6 +70,15 @@ impl SessionAuthority for StubSessions {
             .clone()
             .map_err(|()| EgressError::Unauthenticated("unknown session token"))
     }
+
+    async fn authorize_session(
+        &self,
+        _session: AgentSessionId,
+    ) -> Result<SessionGrant, EgressError> {
+        self.0
+            .clone()
+            .map_err(|()| EgressError::Unauthenticated("unknown session"))
+    }
 }
 
 /// How the spy answers a slug it is asked about.
@@ -177,6 +186,7 @@ impl McpCredentials for SpyCredentials {
         &self,
         owner: &MacroUserIdStr<'static>,
         agent: BotId,
+        _session: uuid::Uuid,
         destination: &McpDestination,
     ) -> Result<McpResolution, EgressError> {
         self.agents.lock().expect("lock").push(agent);
@@ -1308,6 +1318,9 @@ struct RecordingApprovals {
         )>,
     >,
     withdrawn: Mutex<Vec<serde_json::Value>>,
+    held_in_process: Mutex<Vec<crate::domain::approval::InProcessCall>>,
+    /// How an in-process hold is answered; nobody answering expires it.
+    answer: Mutex<Option<agent_runtime_protocol::domain::tool_approval::ToolApprovalStatus>>,
 }
 
 impl OwnerApprovals for RecordingApprovals {
@@ -1329,6 +1342,19 @@ impl OwnerApprovals for RecordingApprovals {
     ) -> Result<(), EgressError> {
         self.withdrawn.lock().unwrap().push(request_id.clone());
         Ok(())
+    }
+
+    async fn hold_in_process(
+        &self,
+        call: crate::domain::approval::InProcessCall,
+    ) -> Result<agent_runtime_protocol::domain::tool_approval::ToolApprovalStatus, EgressError>
+    {
+        self.held_in_process.lock().unwrap().push(call);
+        Ok(self
+            .answer
+            .lock()
+            .unwrap()
+            .unwrap_or(agent_runtime_protocol::domain::tool_approval::ToolApprovalStatus::Expired))
     }
 }
 

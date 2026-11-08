@@ -28,8 +28,11 @@ export function ArtifactFrame(props: {
   interactive: boolean;
   /** Mount even offscreen, for renders that must capture every artifact. */
   eager?: boolean;
+  /** A navigation key pressed while focus is inside the frame. */
+  onKey?: (key: string) => void;
 }) {
   let host!: HTMLDivElement;
+  let frame: HTMLIFrameElement | undefined;
   const artifacts = useArtifactLibrary();
   const [size, setSize] = createSignal({ width: 0, height: 0 });
   const [visible, setVisible] = createSignal(!!props.eager);
@@ -77,6 +80,15 @@ export function ArtifactFrame(props: {
   };
 
   onMount(() => {
+    const forwardKey = (event: MessageEvent) => {
+      if (!frame || event.source !== frame.contentWindow) return;
+
+      const key: unknown = event.data?.macroArtifactKey;
+      if (typeof key === 'string') props.onKey?.(key);
+    };
+    window.addEventListener('message', forwardKey);
+    onCleanup(() => window.removeEventListener('message', forwardKey));
+
     const sizes = new ResizeObserver(([entry]) => {
       if (!entry) return;
       setSize({
@@ -107,7 +119,7 @@ export function ArtifactFrame(props: {
         }
       >
         <Show when={visible() ? mounted() : undefined} keyed>
-          {(frame) => {
+          {(mount) => {
             let element: HTMLIFrameElement | undefined;
             let loads = 0;
             let announced = 0;
@@ -133,9 +145,12 @@ export function ArtifactFrame(props: {
                 sandbox={ARTIFACT_SANDBOX}
                 allow=""
                 referrerPolicy="no-referrer"
-                srcdoc={frame.content}
+                srcdoc={mount.content}
                 tabIndex={props.interactive ? 0 : -1}
-                ref={element}
+                ref={(iframe) => {
+                  element = iframe;
+                  frame = iframe;
+                }}
                 onLoad={() => {
                   // The message and the load event can arrive in either order.
                   loads += 1;

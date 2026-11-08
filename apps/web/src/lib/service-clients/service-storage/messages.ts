@@ -48,9 +48,13 @@ export type MessageListPage = Omit<
   import('./generated/schemas/messagePage').MessagePage,
   'items'
 > & { items: MessageListItem[] };
+export type CallEntryStatus =
+  import('./generated/schemas/callEntryStatus').CallEntryStatus;
 export type MessageTimelineEntry =
   | { type: 'message'; message: MessageListItem }
-  | { type: 'activity'; activity: TimelineActivity };
+  | { type: 'activity'; activity: TimelineActivity }
+  /** A channel call and its thread; the root message's id is the call id. */
+  | { type: 'call'; message: MessageListItem; status: CallEntryStatus };
 /** Messages and the parent's activity in one server-ordered, newest-first list. */
 export type MessageTimelinePage = Omit<
   import('./generated/schemas/messageTimelinePage').MessageTimelinePage,
@@ -70,7 +74,11 @@ import type { MessageTimelineQuery } from './generated/schemas/messageTimelineQu
 function isKnownEntry(
   entry: MessageTimelineEntry | { type: string }
 ): entry is MessageTimelineEntry {
-  return entry.type === 'message' || entry.type === 'activity';
+  return (
+    entry.type === 'message' ||
+    entry.type === 'activity' ||
+    entry.type === 'call'
+  );
 }
 
 function path(parent: MessageParent) {

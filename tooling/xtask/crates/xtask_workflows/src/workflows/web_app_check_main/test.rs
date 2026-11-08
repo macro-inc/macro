@@ -72,8 +72,8 @@ fn filters(yaml: &str) -> (&str, &str) {
         .and_then(|rest| rest.split("id: filter").next())
         .expect("path-check filters");
     filters
-        .split_once("codegen_changed:")
-        .expect("should_run block, then codegen_changed block")
+        .split_once("codegen_inputs:")
+        .expect("should_run block, then the code generation inputs")
 }
 
 /// A job's rendered YAML, from its id up to the next job's id. Slicing by id
@@ -170,15 +170,26 @@ fn sdk_and_documentation_changes_run_their_checks() {
     assert!(should_run.contains("packages/sdk/**"));
     assert!(should_run.contains("packages/sdk-docs/**"));
     let typescript = job(&yaml, "typescript", "generated-code");
-    assert!(typescript.contains("name: Install SDK Documentation Dependencies"));
-    assert!(typescript.contains("name: Check SDK Documentation"));
-    assert!(typescript.contains("working-directory: packages/sdk-docs"));
+    let install = typescript
+        .find("name: Install SDK Documentation Dependencies")
+        .expect("SDK documentation dependencies install");
+    let checks = typescript
+        .find("- name: Run checks\n")
+        .expect("parallel checks step");
+    assert!(
+        install < checks,
+        "the SDK documentation's dependencies install first"
+    );
+    assert!(typescript.contains("check 'Check SDK Documentation' 'packages/sdk-docs'"));
+    assert!(typescript.contains("check 'Check Code Mode SDK' 'packages/code-mode-sdk'"));
 }
 
 #[test]
 fn typecheck_compiles_no_rust() {
     let yaml = web_app_check_main().to_string().expect("workflow yaml");
-    let typescript = job(&yaml, "typescript", "generated-code");
+    // The Nix seed's cache shares sccache's name; that's not a compile.
+    let typescript =
+        job(&yaml, "typescript", "generated-code").replace("seed-cache: sccache-ci", "");
     for rust in ["gen-api", "cargo", "sccache", "just gen-"] {
         assert!(
             !typescript.contains(rust),
@@ -268,10 +279,6 @@ fn codegen_filter_covers_every_input_of_the_generated_code_job() {
     let yaml = web_app_check_main().to_string().expect("workflow yaml");
     let (_, codegen) = filters(&yaml);
     for path in [
-        "'crates/**/*.rs'",
-        "'services/**/*.rs'",
-        "'Cargo.toml'",
-        "'Cargo.lock'",
         "'apps/web/scripts/generate-api-schema.ts'",
         "'apps/web/scripts/services.ts'",
         "'packages/sdk/**'",
@@ -279,9 +286,22 @@ fn codegen_filter_covers_every_input_of_the_generated_code_job() {
     ] {
         assert!(
             codegen.contains(path),
-            "codegen_changed must include {path}: {codegen}"
+            "the code generation filters must include {path}: {codegen}"
         );
     }
+    let path_check = job(&yaml, "path-check", "android-native-check");
+    for needle in [
+        "utoipa|ToSchema|IntoParams|specta|schemars|JsonSchema",
+        "-- Cargo.toml Cargo.lock",
+        "for revision in HEAD \"$base\"",
+        "-- 'crates/*.rs' 'services/*.rs'",
+    ] {
+        assert!(path_check.contains(needle), "{needle}: {path_check}");
+    }
+    assert!(
+        !path_check.contains("grep -q"),
+        "grep -q closes the pipe early, and pipefail reads that as no match: {path_check}"
+    );
     let generated = job(&yaml, "generated-code", "biome-check");
     assert!(generated.contains("needs.path-check.outputs.codegen_changed == 'true'"));
 }
@@ -360,31 +380,102 @@ fn build_job_uses_remote_sccache_and_wasm_cache() {
     );
 }
 
-#[test]
-fn test_job_runs_signup_browser_tests_after_vitest() {
-    let yaml = web_app_check_main().to_string().expect("workflow yaml");
-    // The job and its vitest step are both named "Test"; slice from the job.
-    let start = yaml.find("name: Test\n").expect("Test job");
+/// The Test legs, up to the next job.
+fn test_job(yaml: &str) -> &str {
+    let start = yaml
+        .find("name: Test (${{ matrix.shard }}/6)")
+        .expect("Test job");
+    let end = yaml[start..]
+        .find("name: Functional Tests\n")
+        .map_or(yaml.len(), |offset| start + offset);
+    &yaml[start..end]
+}
+
+fn browser_job(yaml: &str) -> &str {
+    let start = yaml
+        .find("name: Browser Tests\n")
+        .expect("Browser Tests job");
     let end = yaml[start..]
         .find("name: Cycles Import Check")
         .map_or(yaml.len(), |offset| start + offset);
-    let test_job = &yaml[start..end];
+    &yaml[start..end]
+}
+
+fn functional_job(yaml: &str) -> &str {
+    let start = yaml
+        .find("name: Functional Tests\n")
+        .expect("Functional Tests job");
+    let end = yaml[start..]
+        .find("name: Browser Tests\n")
+        .map_or(yaml.len(), |offset| start + offset);
+    &yaml[start..end]
+}
+
+#[test]
+fn test_job_shards_vitest_after_building_its_wasm() {
+    let yaml = web_app_check_main().to_string().expect("workflow yaml");
+    let test_job = test_job(&yaml);
     let wasm = test_job
         .find("just build-agent-fold-wasm")
         .expect("build WASM before the test setup hook");
-    let vitest = test_job.find("bun run test").expect("vitest step");
+    let vitest = test_job
+        .find("bun run test --shard=${{ matrix.shard }}/6")
+        .expect("vitest step runs one shard");
     assert!(wasm < vitest, "cold WASM compilation precedes Vitest");
-    let browser = test_job
-        .find("just test-signup-browser")
-        .expect("sign-up browser step");
     assert!(
-        vitest < browser,
-        "browser tests run after vitest: {test_job}"
+        test_job.contains("fail-fast: false"),
+        "a failing shard must not hide the others' failures: {test_job}"
     );
     assert!(
-        test_job.contains("playwright: 'true'"),
-        "the Test job installs Playwright's Chromium: {test_job}"
+        test_job.contains(&format!("WASM_PKG_CACHE_DIR: {}", vars::WASM_PKG_CACHE_DIR)),
+        "unchanged wasm packages are reused: {test_job}"
     );
+}
+
+#[test]
+fn browser_suites_build_the_wasm_they_load_first() {
+    let yaml = web_app_check_main().to_string().expect("workflow yaml");
+    let functional = functional_job(&yaml);
+    let wasm = functional.find("just build-wasm").expect("wasm packages");
+    let suite = functional
+        .find("bun run test:functional")
+        .expect("functional suite");
+    assert!(
+        wasm < suite,
+        "the bundle imports every package: {functional}"
+    );
+    assert!(
+        functional.contains("playwright: 'true'"),
+        "the job installs Playwright's Chromium: {functional}"
+    );
+
+    let browser = browser_job(&yaml);
+    let wasm = browser
+        .find("just build-agent-fold-wasm")
+        .expect("agent-fold package");
+    for suite in [
+        "just test-signup-browser",
+        "just test-i18n-browser",
+        "just test-database-browser",
+        "just test-calendar-details-browser",
+    ] {
+        let at = browser
+            .find(suite)
+            .unwrap_or_else(|| panic!("{suite} runs: {browser}"));
+        assert!(wasm < at, "{suite} needs the package: {browser}");
+    }
+    assert!(
+        browser.contains("playwright: 'true'"),
+        "the job installs Playwright's Chromium: {browser}"
+    );
+}
+
+/// A browser suite that isn't required could fail without blocking a merge.
+#[test]
+fn status_check_requires_the_browser_jobs() {
+    let yaml = web_app_check_main().to_string().expect("workflow yaml");
+    assert!(yaml.contains(r#"[[ "${{ needs.functional.result }}" == "failure" ]]"#));
+    assert!(yaml.contains(r#"[[ "${{ needs.browser.result }}" == "failure" ]]"#));
 }
 
 /// The event details fixture replaces the calendar query modules with preview
@@ -408,11 +499,7 @@ fn calendar_details_browser_tests_run_when_the_replaced_queries_change() {
     ] {
         assert!(calendar.contains(path), "{path} runs the suite: {calendar}");
     }
-    let start = yaml.find("name: Test\n").expect("Test job");
-    let end = yaml[start..]
-        .find("name: Cycles Import Check")
-        .map_or(yaml.len(), |offset| start + offset);
-    let step = yaml[start..end]
+    let step = browser_job(&yaml)
         .split("- name: Calendar Event Details Browser Tests")
         .nth(1)
         .and_then(|rest| rest.split("- name:").next())
@@ -427,11 +514,7 @@ fn calendar_details_browser_tests_run_when_the_replaced_queries_change() {
 #[test]
 fn test_job_keeps_vitest_module_cache_on_the_cache_volume() {
     let yaml = web_app_check_main().to_string().expect("workflow yaml");
-    let start = yaml.find("name: Test\n").expect("Test job");
-    let end = yaml[start..]
-        .find("name: Cycles Import Check")
-        .map_or(yaml.len(), |offset| start + offset);
-    let test_job = &yaml[start..end];
+    let test_job = test_job(&yaml);
     let mounted = format!("  {}\n", vars::VITEST_MODULE_CACHE_VOLUME_DIR);
     assert!(
         test_job.contains(&mounted),
@@ -656,5 +739,353 @@ fn ios_gate_status_and_comment_scenarios() {
         "iOS gate scenarios failed:\n{}\n{}",
         String::from_utf8_lossy(&output.stdout),
         String::from_utf8_lossy(&output.stderr)
+    );
+}
+
+fn build_job(yaml: &str) -> &str {
+    yaml.split("\n  build:\n")
+        .nth(1)
+        .and_then(|rest| rest.split("\n  ios-native-check:").next())
+        .expect("build job")
+}
+
+/// A failed preview must not read as a failed build or block a merge, and a
+/// `[no preview]` title or a fork skips it.
+#[test]
+fn preview_steps_follow_the_build_and_cannot_fail_it() {
+    let yaml = web_app_check_main().to_string().expect("workflow yaml");
+    let build = build_job(&yaml);
+    let build_at = build.find("just build-dev").expect("bundle");
+    let deploy_at = build.find("scripts/preview/deploy.ts").expect("deploy");
+    assert!(
+        build_at < deploy_at,
+        "the deploy reuses the bundle: {build}"
+    );
+    assert!(
+        build.contains("--skip-build"),
+        "the deploy must not rebuild: {build}"
+    );
+    for name in [
+        "Configure AWS Credentials",
+        "Get or create preview ID",
+        "Validate bucket name",
+        "Deploy to S3",
+        "Comment on PR",
+    ] {
+        let step = build
+            .split(&format!("name: {name}"))
+            .nth(1)
+            .and_then(|rest| rest.split("\n    - ").next())
+            .unwrap_or_else(|| panic!("{name} step: {build}"));
+        assert!(step.contains("continue-on-error: true"), "{name}: {step}");
+        assert!(step.contains("[no preview]"), "{name}: {step}");
+        assert!(step.contains("web_artifact_changed"), "{name}: {step}");
+        assert!(step.contains("head.repo.full_name"), "{name}: {step}");
+    }
+}
+
+/// A job that hits its timeout reports `cancelled`, so the required check must
+/// not pass on a generated code job that never finished.
+#[test]
+fn status_check_rejects_a_cancelled_generated_code_job() {
+    let yaml = web_app_check_main().to_string().expect("workflow yaml");
+    assert!(yaml.contains(r#"[[ "${{ needs.generated-code.result }}" == "cancelled" ]]"#));
+}
+
+/// The checks run at once, and the step still fails, naming the check, when any
+/// one of them fails; every check's output is printed either way.
+#[test]
+fn typecheck_runs_its_checks_together_and_fails_on_any() {
+    let run = |checks: &[(&str, &str, &str)]| {
+        let root = tempfile::tempdir().expect("temporary checkout");
+        for (_, directory, _) in checks {
+            std::fs::create_dir_all(root.path().join(directory)).expect("check directory");
+        }
+        let output = std::process::Command::new("bash")
+            .arg("-eo")
+            .arg("pipefail")
+            .arg("-c")
+            .arg(typecheck_script(checks))
+            .current_dir(root.path())
+            .env("RUNNER_TEMP", root.path())
+            .output()
+            .expect("run the Typecheck script");
+        (
+            output.status.success(),
+            String::from_utf8_lossy(&output.stdout).into_owned(),
+        )
+    };
+
+    let (passed, log) = run(&[
+        ("Check Types", "apps/web", "echo types ok"),
+        ("Check Editing Worker", "services/worker", "echo worker ok"),
+    ]);
+    assert!(passed, "{log}");
+    assert!(
+        log.contains("::group::Check Types (exit 0)\ntypes ok\n::endgroup::"),
+        "{log}"
+    );
+    assert!(log.contains("worker ok"), "{log}");
+
+    let (passed, log) = run(&[
+        ("Check Types", "apps/web", "sleep 1; echo types ok"),
+        ("Check Floating Promises", ".", "echo lint failed; exit 3"),
+        ("Check Editing Worker", "services/worker", "echo worker ok"),
+    ]);
+    assert!(!passed, "{log}");
+    assert!(
+        log.contains("::error::Check Floating Promises failed with exit code 3"),
+        "{log}"
+    );
+    assert!(
+        log.contains("types ok") && log.contains("worker ok"),
+        "{log}"
+    );
+}
+
+#[test]
+fn every_former_typecheck_step_still_runs() {
+    let yaml = web_app_check_main().to_string().expect("workflow yaml");
+    let typescript = job(&yaml, "typescript", "generated-code");
+    for (name, directory, command) in [
+        ("Check Types", "apps/web", "bun run type-check"),
+        (
+            "Check Floating Promises",
+            ".",
+            "bun run lint:oxlint --quiet",
+        ),
+        (
+            "Check Functional Test Types",
+            "apps/web",
+            "--project tests/functional/tsconfig.json",
+        ),
+        (
+            "Check Collaboration Package Types",
+            "packages/collaboration",
+            "bun run type-check",
+        ),
+        (
+            "Check Lexical Service Types",
+            "services/lexical-service",
+            "bun run check",
+        ),
+        (
+            "Test Lexical Service Endpoints",
+            "services/lexical-service",
+            "bun test src",
+        ),
+        (
+            "Check SDK Documentation",
+            "packages/sdk-docs",
+            "bun run type-check && bun run test",
+        ),
+        (
+            "Check Editing Worker",
+            "services/ai-editing-worker",
+            "bun run type-check",
+        ),
+        (
+            "Check Code Mode SDK",
+            "packages/code-mode-sdk",
+            "bun run type-check && bun run test",
+        ),
+    ] {
+        let line = typescript
+            .lines()
+            .find(|line| line.contains(&format!("check '{name}' '{directory}' ")))
+            .unwrap_or_else(|| panic!("{name} must run in {directory}: {typescript}"));
+        assert!(
+            line.contains(command),
+            "{name} must run `{command}`: {line}"
+        );
+    }
+}
+
+#[test]
+fn path_check_fetches_no_blobs_up_front() {
+    let yaml = web_app_check_main().to_string().expect("workflow yaml");
+    let path_check = job(&yaml, "path-check", "android-native-check");
+    assert!(path_check.contains("filter: blob:none"), "{path_check}");
+    assert!(
+        path_check.contains("sparse-checkout: '.github'"),
+        "{path_check}"
+    );
+}
+
+/// PR jobs write the seed, so the job holding the preview's AWS credentials
+/// doesn't read it.
+#[test]
+fn web_jobs_restore_the_nix_seed_except_the_build() {
+    let yaml = web_app_check_main().to_string().expect("workflow yaml");
+    for (id, next) in [
+        ("typescript", "generated-code"),
+        ("generated-code", "biome-check"),
+        ("biome-check", "test"),
+        ("test", "functional"),
+        ("functional", "browser"),
+        ("browser", "cycles"),
+        ("cycles", "build"),
+    ] {
+        let job = job(&yaml, id, next);
+        assert!(
+            job.contains("seed-cache: sccache-ci"),
+            "{id} restores the Nix seed: {job}"
+        );
+    }
+    let build = build_job(&yaml);
+    assert!(!build.contains("seed-cache"), "{build}");
+    assert!(
+        build.contains("aws-access-key-id"),
+        "Build holds the preview credentials"
+    );
+}
+
+/// Runs the schema detection step in a blobless clone, as path-check checks
+/// out. `files` are written in a commit on top of a base commit. With
+/// `break_blobs`, origin loses those files' blobs, so fetching them fails.
+fn detect_schema_changes_in_blobless_clone(
+    files: &[(&str, &str)],
+    break_blobs: bool,
+) -> (bool, String) {
+    use std::process::Command;
+
+    let root = tempfile::tempdir().expect("temporary directory");
+    let git = |dir: &std::path::Path, args: &[&str]| {
+        let output = Command::new("git")
+            .args(args)
+            .current_dir(dir)
+            .env("GIT_CONFIG_GLOBAL", "/dev/null")
+            .env("GIT_CONFIG_NOSYSTEM", "1")
+            .env("GIT_AUTHOR_NAME", "test")
+            .env("GIT_AUTHOR_EMAIL", "test@example.com")
+            .env("GIT_COMMITTER_NAME", "test")
+            .env("GIT_COMMITTER_EMAIL", "test@example.com")
+            .output()
+            .expect("run git");
+        assert!(
+            output.status.success(),
+            "git {args:?}: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+        String::from_utf8_lossy(&output.stdout).trim().to_string()
+    };
+
+    let source = root.path().join("source");
+    std::fs::create_dir_all(source.join("crates/server/src")).expect("source tree");
+    git(&source, &["init", "-q"]);
+    std::fs::write(source.join("Cargo.toml"), "[workspace]\n").expect("manifest");
+    std::fs::write(
+        source.join("crates/server/src/lib.rs"),
+        "pub fn serve() {}\n",
+    )
+    .expect("lib");
+    git(&source, &["add", "-A"]);
+    git(&source, &["commit", "-q", "-m", "base"]);
+    for (path, contents) in files {
+        let path = source.join(path);
+        std::fs::create_dir_all(path.parent().expect("parent")).expect("file directory");
+        std::fs::write(path, contents).expect("changed file");
+    }
+    git(&source, &["add", "-A"]);
+    git(&source, &["commit", "-q", "-m", "change"]);
+
+    let origin = root.path().join("origin.git");
+    git(
+        root.path(),
+        &[
+            "clone",
+            "-q",
+            "--bare",
+            source.to_str().expect("path"),
+            origin.to_str().expect("path"),
+        ],
+    );
+    git(&origin, &["config", "uploadpack.allowFilter", "true"]);
+    git(
+        &origin,
+        &["config", "uploadpack.allowAnySHA1InWant", "true"],
+    );
+    let url = format!("file://{}", origin.display());
+    let checkout = root.path().join("checkout");
+    git(
+        root.path(),
+        &[
+            "clone",
+            "-q",
+            "--filter=blob:none",
+            "--no-checkout",
+            "--depth=1",
+            &url,
+            checkout.to_str().expect("path"),
+        ],
+    );
+    if break_blobs {
+        for (path, _) in files {
+            let blob = git(&origin, &["rev-parse", &format!("HEAD:{path}")]);
+            std::fs::remove_file(origin.join("objects").join(&blob[..2]).join(&blob[2..]))
+                .expect("remove the blob from origin");
+        }
+    }
+
+    let output_file = root.path().join("github_output");
+    let output = Command::new("bash")
+        .arg("-c")
+        .arg(DETECT_SCHEMA_CHANGES)
+        .current_dir(&checkout)
+        .env("CODEGEN_INPUTS", "false")
+        .env("GITHUB_OUTPUT", &output_file)
+        .env("GIT_CONFIG_GLOBAL", "/dev/null")
+        .env("GIT_CONFIG_NOSYSTEM", "1")
+        .output()
+        .expect("run schema detection");
+    let outputs = std::fs::read_to_string(&output_file).unwrap_or_default();
+    (
+        output.status.success(),
+        format!(
+            "{outputs}{}{}",
+            String::from_utf8_lossy(&output.stdout),
+            String::from_utf8_lossy(&output.stderr)
+        ),
+    )
+}
+
+#[test]
+fn schema_detection_reads_blobs_on_demand_and_fails_when_it_cannot() {
+    let schema_file = [(
+        "crates/server/src/api.rs",
+        "#[derive(utoipa::ToSchema)]\npub struct Reply;\n",
+    )];
+
+    let (passed, log) = detect_schema_changes_in_blobless_clone(&schema_file, false);
+    assert!(
+        passed && log.contains("codegen_changed=true"),
+        "a new file naming a schema item: {log}"
+    );
+
+    let (passed, log) = detect_schema_changes_in_blobless_clone(
+        &[("crates/server/src/lib.rs", "pub fn serve() { listen() }\n")],
+        false,
+    );
+    assert!(
+        passed && log.contains("codegen_changed=false"),
+        "no schema item: {log}"
+    );
+
+    let (passed, log) = detect_schema_changes_in_blobless_clone(
+        &[(
+            "Cargo.toml",
+            "[workspace]\n[workspace.dependencies]\nutoipa = \"5\"\n",
+        )],
+        false,
+    );
+    assert!(
+        passed && log.contains("codegen_changed=true"),
+        "a schema crate's version: {log}"
+    );
+
+    let (passed, log) = detect_schema_changes_in_blobless_clone(&schema_file, true);
+    assert!(
+        !passed && !log.contains("codegen_changed="),
+        "a failed blob fetch must fail the step: {log}"
     );
 }

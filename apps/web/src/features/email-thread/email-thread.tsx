@@ -118,7 +118,6 @@ export function EmailThread(props: EmailThreadProps) {
           <InlineFetchedEntityTagsPill
             entityId={props.threadId()}
             entityType="THREAD"
-            class="bg-surface-2"
             showAddButton
           />
         </Suspense>

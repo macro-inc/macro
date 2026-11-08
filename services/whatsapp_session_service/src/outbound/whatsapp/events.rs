@@ -17,7 +17,7 @@ use whatsapp_linked::domain::events::{
     MessageAnchor, MessageKind, Receipt, ReceiptState, Target,
 };
 use whatsapp_linked::domain::jid::PhoneNumber;
-use whatsapp_linked::domain::models::Identity;
+use whatsapp_linked::domain::models::{GroupInfo as Roster, Identity};
 use whatsmeow::Event;
 use whatsmeow::download::{DownloadableMessage, MediaType};
 use whatsmeow::proto::wa_common::MessageKey;
@@ -266,6 +266,94 @@ pub async fn complete_sender(
     };
     sender.alternate_jid = alternate.as_ref().and_then(person);
     Ok(())
+}
+
+/// What the account's contact store calls someone: the WhatsApp name it
+/// last saw for either address (live messages, push-name history syncs),
+/// else the owner's address-book name, else a verified business name.
+pub async fn contact_name(
+    contacts: &dyn ContactStore,
+    identity: &Identity,
+) -> Result<Option<String>, StoreError> {
+    let mut found = vec![];
+    for jid in [
+        Some(identity.jid.as_str()),
+        identity.alternate_jid.as_deref(),
+    ]
+    .into_iter()
+    .flatten()
+    {
+        if let Ok(jid) = jid.parse::<Jid>()
+            && let Some(contact) = contacts.get_contact(&jid).await?
+        {
+            found.push(contact);
+        }
+    }
+    Ok(best_contact_name(&found))
+}
+
+/// The best name among contact records: own WhatsApp name, then address
+/// book, then business name. `-` is WhatsApp's no-name.
+fn best_contact_name(contacts: &[ContactInfo]) -> Option<String> {
+    let pick = |name: fn(&ContactInfo) -> &str| {
+        contacts
+            .iter()
+            .map(name)
+            .map(str::trim)
+            .find(|name| !name.is_empty() && *name != "-")
+            .map(str::to_owned)
+    };
+    pick(|contact| &contact.push_name)
+        .or_else(|| pick(|contact| &contact.full_name))
+        .or_else(|| pick(|contact| &contact.first_name))
+        .or_else(|| pick(|contact| &contact.business_name))
+}
+
+/// Names a message sender who came without a WhatsApp name (history pages
+/// usually carry none) by [`contact_name`]. `true` when it named them.
+pub async fn complete_sender_name(
+    contacts: &dyn ContactStore,
+    event: &mut InboundEvent,
+) -> Result<bool, StoreError> {
+    let InboundKind::Message(message) = &mut event.kind else {
+        return Ok(false);
+    };
+    if message.sender.display_name.is_some() {
+        return Ok(false);
+    }
+    message.sender.display_name = contact_name(contacts, &message.sender).await?;
+    Ok(message.sender.display_name.is_some())
+}
+
+/// Completes the names WhatsApp's group metadata leaves out (it has none
+/// for LID participants) from the account's contacts, as for senders.
+pub fn complete_participant_names(contacts: &HashMap<Jid, ContactInfo>, group: &mut Roster) {
+    for participant in &mut group.participants {
+        let identity = &mut participant.identity;
+        if identity.display_name.is_some() {
+            continue;
+        }
+        let found: Vec<ContactInfo> = [
+            Some(identity.jid.as_str()),
+            identity.alternate_jid.as_deref(),
+        ]
+        .into_iter()
+        .flatten()
+        .filter_map(|jid| contacts.get(&jid.parse::<Jid>().ok()?).cloned())
+        .collect();
+        identity.display_name = best_contact_name(&found);
+    }
+}
+
+/// Whether the event is a message whose sender has a name.
+pub fn sender_named(event: &InboundEvent) -> bool {
+    matches!(&event.kind, InboundKind::Message(message) if message.sender.display_name.is_some())
+}
+
+/// A WhatsApp name as messages carry it; `-` means none.
+fn push_name(name: &str) -> Option<String> {
+    let name = name.trim();
+    (!name.is_empty() && name != "-").then(|| name.to_owned())
 }
 
 fn person(jid: &Jid) -> Option<String> {
@@ -722,7 +810,7 @@ fn inbound_message(
     let sender = Identity {
         jid: author.to_owned(),
         alternate_jid: person(&info.sender_alt),
-        display_name: (!info.push_name.is_empty()).then(|| info.push_name.clone()),
+        display_name: push_name(&info.push_name),
     };
     let revision_text = content.revision.to_string();
     let mentions = content

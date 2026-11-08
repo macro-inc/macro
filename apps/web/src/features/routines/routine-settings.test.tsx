@@ -34,12 +34,6 @@ vi.mock('@app/features/agents-view/primitives/open-page', () => ({
 vi.mock('@core/context/user', () => ({
   useUserId: () => () => 'macro|owner@example.com',
 }));
-vi.mock('./queries/routine-target-display', () => ({
-  createRoutineTargetDisplay: () => ({
-    targetLabel: () => 'Sonnet 5.5',
-    targetModel: () => undefined,
-  }),
-}));
 vi.mock('./queries/routine-sources', () => ({
   createRoutineListSource: (): RoutineListSource => ({
     routines: () => [
@@ -61,6 +55,15 @@ vi.mock('./queries/routine-sources', () => ({
   }),
 }));
 
+vi.stubGlobal(
+  'ResizeObserver',
+  class {
+    observe() {}
+    unobserve() {}
+    disconnect() {}
+  }
+);
+
 afterEach(() => {
   cleanup();
   vi.clearAllMocks();
@@ -81,18 +84,16 @@ describe('routine settings', () => {
     });
   });
 
-  it('opens the composer and the created routine from Create', () => {
+  it('opens the composer from Create', () => {
     render(() => <RoutineSettings />);
     expect(screen.getAllByRole('heading', { name: 'Routines' })).toHaveLength(
       1
     );
     fireEvent.click(screen.getByRole('button', { name: 'Create Routine' }));
     expect(mocks.close).toHaveBeenCalledOnce();
-    const content = mocks.popoverSplit.mock.calls[0][0];
-    expect(content).toMatchObject({ type: 'component', id: 'routine-compose' });
-    content.params.onCreated('created');
-    expect(mocks.openAgentsPage).toHaveBeenCalledWith(layout, 'routines', {
-      routineId: 'created',
+    expect(mocks.popoverSplit).toHaveBeenCalledWith({
+      type: 'component',
+      id: 'routine-compose',
     });
   });
 });

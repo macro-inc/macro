@@ -12,7 +12,6 @@ entity_access = { path = "../entity_access", default-features = false, features 
 sqlx = { workspace = true }
 tokio = { workspace = true, features = ["macros", "rt-multi-thread", "sync", "time"] }
 tokio-util = { workspace = true, features = ["rt"] }
-tracing = { workspace = true }
 uuid = { workspace = true }
 whatsapp_fake_server = { path = "../whatsapp_fake_server" }
 external_chat = { path = "../external_chat", features = ["outbound"] }
