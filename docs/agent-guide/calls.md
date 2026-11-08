@@ -282,9 +282,10 @@ call without gaining access to the channel.
 
 The join screen, in-call participant tiles, and incoming direct-call badges use
 profile pictures; initials are the fallback when no photo is available.
-In-call participant tiles fill their grid cell but are never wider than 16:9,
-so a wide window centers them instead of cropping cameras; check a single remote
-participant in a wide window and at phone width.
+In-call grid tiles fill their cell but are never wider than 16:9. A staged camera
+or screen retains its track's aspect ratio; pinning uses the same fixed-size
+strip as Speaker or Sidebar, without remounting tracks. Unpin restores the
+selected layout. Check landscape and portrait cameras, shares, and 3–6 people.
 Participants with the LiveKit `macro.program` attribute show an **Agent** badge
 beside their name on video tiles, screen shares, and in the Participants list,
 including on phones.

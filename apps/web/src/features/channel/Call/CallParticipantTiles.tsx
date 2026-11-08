@@ -57,8 +57,17 @@ function VideoTag(props: {
   );
 }
 
+function trackAspectRatio(track: Track | undefined) {
+  const settings = track?.mediaStreamTrack?.getSettings?.();
+  return settings?.width && settings.height
+    ? settings.width / settings.height
+    : 16 / 9;
+}
+
 function ParticipantTileWrapper(props: {
   isSpeaking: boolean;
+  stage?: boolean;
+  aspectRatio?: number;
   participantId?: string;
   children: JSXElement;
   isConnecting?: boolean;
@@ -115,6 +124,15 @@ function ParticipantTileWrapper(props: {
             openMenu();
           }}
           data-call-tile=""
+          data-call-stage={props.stage ? '' : undefined}
+          style={
+            props.stage
+              ? {
+                  width: `min(100cqw,calc(100cqh * ${props.aspectRatio ?? 16 / 9}))`,
+                  height: `min(100cqh,calc(100cqw / ${props.aspectRatio ?? 16 / 9}))`,
+                }
+              : undefined
+          }
           data-call-participant={props.participantId}
           class={cn(
             'group/tile relative isolate flex h-full w-[min(100cqw,calc(100cqh*16/9))] items-center justify-center rounded-lg overflow-hidden bg-panel border border-edge-muted',
@@ -262,6 +280,7 @@ export function LocalParticipantTile(props: {
   userId: string | undefined;
   fallbackName: string | undefined;
   isProgram: boolean;
+  stage?: boolean;
   avatarSize?: 'sm' | 'md';
   class?: string;
   isPinned?: boolean;
@@ -271,6 +290,8 @@ export function LocalParticipantTile(props: {
   return (
     <ParticipantTileWrapper
       isSpeaking={props.isSpeaking}
+      stage={props.stage}
+      aspectRatio={trackAspectRatio(props.track)}
       participantId={props.identity ?? props.userId}
       isConnecting={props.isConnecting}
       class={props.class}
@@ -315,6 +336,7 @@ export function LocalParticipantTile(props: {
 
 export function ParticipantTile(props: {
   participant: RemoteParticipant;
+  stage?: boolean;
   avatarSize?: 'sm' | 'md';
   filmstrip?: boolean;
   sidebar?: boolean;
@@ -348,6 +370,8 @@ export function ParticipantTile(props: {
   return (
     <ParticipantTileWrapper
       isSpeaking={isSpeaking()}
+      stage={props.stage}
+      aspectRatio={trackAspectRatio(cameraTrack())}
       participantId={props.participant.identity}
       isPinned={props.isPinned}
       onTogglePin={props.onTogglePin}
@@ -362,7 +386,7 @@ export function ParticipantTile(props: {
       hidden={props.hidden}
       class={cn(
         'min-w-0',
-        props.filmstrip && 'max-w-36',
+        props.filmstrip && 'max-w-36 h-auto aspect-video self-center',
         props.sidebar && 'h-auto aspect-video shrink-0',
         props.hidden && 'hidden'
       )}
@@ -377,7 +401,10 @@ export function ParticipantTile(props: {
           />
         }
       >
-        <TrackView track={cameraTrack()} />
+        <TrackView
+          track={cameraTrack()}
+          fit={props.stage ? 'contain' : 'cover'}
+        />
       </Show>
 
       <VideoTag
@@ -421,6 +448,9 @@ export function ScreenShareTile(props: {
   return (
     <ParticipantTileWrapper
       isSpeaking={false}
+      stage={!props.inStrip}
+      class={props.inStrip ? 'h-auto aspect-video self-center' : undefined}
+      aspectRatio={trackAspectRatio(screenTrack())}
       participantId={props.participant.identity}
       isPinned={props.isPinned}
       onTogglePin={props.onTogglePin}
@@ -468,6 +498,8 @@ export function LocalScreenShareTile(props: {
   return (
     <ParticipantTileWrapper
       isSpeaking={false}
+      stage={!props.inStrip}
+      class={props.inStrip ? 'h-auto aspect-video self-center' : undefined}
       isPinned={props.isPinned}
       pinName={t('calls.yourScreen')}
       pinEnabled={props.pinEnabled}
