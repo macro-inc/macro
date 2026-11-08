@@ -17,6 +17,7 @@ impl SyncPolicy for MacroSyncPolicy {
                 "rowStriping",
             ],
             Some("tablecell") => &["width"],
+            Some("listitem") => &["checked"],
             _ => &[],
         };
         for field in fields {
