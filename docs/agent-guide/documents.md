@@ -1,5 +1,21 @@
 # Documents
 
+The experimental `rust-editor-model` flag selects the document body model in
+both block and Drive detail entry points. Set `VITE_ENABLE_RUST_EDITOR_MODEL`
+to `true` or `false` on an isolated local stack, then reopen the document after
+changing it. The selected model remains stable while that document is open.
+Off uses the existing LexicalMarkdown collaboration path. On initializes the
+session WASM lazily on the main thread and connects EditorView to SessionPort.
+
+For local verification, open and type, disconnect/reconnect with pending edits,
+then close and reopen the document offline after its local snapshot is durable.
+Keep the app shell open for the offline navigation; the app has no asset-caching
+service worker. Confirm the same account retains its edits and logout/account
+switch cannot expose or synchronize another account's private rows. Use a private
+headless Chromium process and find `editor.open` with its `wasm.init`,
+`state.load` and `view.reconcile` phases in local Tempo. Do not use the shared
+browser or enable a remote rollout as part of this check.
+
 For DSS sync rollout checks, use PostHog flag `sync-via-gateway` (dev and
 production) and recreate document sessions after the client receives the updated
 flag. A reload can initially read PostHog's cached value; open sessions do not

@@ -1,3 +1,4 @@
+import { rustEditorModel } from '@core/constant/featureFlags';
 import 'fake-indexeddb/auto';
 import { render } from '@solidjs/testing-library';
 import { QueryClientProvider } from '@tanstack/solid-query';
@@ -404,5 +405,39 @@ describe('stored-file document open context', () => {
     expect(invalidated).toHaveBeenCalled();
     expect(authorization.isCurrent()).toBe(false);
     expect(authorization.canWrite()).toBe(false);
+  });
+});
+
+describe('flagged browser offline document ownership', () => {
+  it('reopens the cached browser body without a remote load', async () => {
+    const previous = rustEditorModel.override;
+    rustEditorModel.override = true;
+    mocks.native = false;
+    mocks.restore.mockResolvedValue(entry);
+    try {
+      await expectCachedOpen(fetchSyncDocumentOpenContext('doc-1'));
+      expect(mocks.bundle).not.toHaveBeenCalled();
+    } finally {
+      rustEditorModel.override = previous;
+    }
+  });
+
+  it('does not reuse another account cache when reopening offline', async () => {
+    const previous = rustEditorModel.override;
+    rustEditorModel.override = true;
+    mocks.native = false;
+    queryClient.setQueryData(authKeys.userInfo.queryKey, {
+      id: 'viewer-b',
+      authenticated: true,
+    });
+    mocks.bundle.mockRejectedValue(new Error('Offline'));
+    try {
+      const result = await fetchSyncDocumentOpenContext('doc-1');
+      expect(result.isErr()).toBe(true);
+      expect(mocks.bundle).toHaveBeenCalledTimes(1);
+      expect(mocks.snapshot).not.toHaveBeenCalled();
+    } finally {
+      rustEditorModel.override = previous;
+    }
   });
 });
