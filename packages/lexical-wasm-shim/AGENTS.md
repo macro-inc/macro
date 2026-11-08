@@ -7,6 +7,7 @@ The package is being assembled; the full lexical export surface is not ready.
 
 ## Start here
 
+- `src/index.ts`, `src/editor.ts` and `src/nodes/`: native facade foundation over the backend; foreign construction and the complete export surface remain unfinished.
 - `src/backend/conformance.ts`: the only backend and the only runtime WASM import.
 - `src/backend/index.ts`: model boundary; packet types come from Rust generation.
 - `scripts/derive-hooks.ts`: checksum-pinned upstream AST inventory versus the actual model hook enum; generates `src/hooks.generated.ts`.
@@ -27,7 +28,7 @@ The package is being assembled; the full lexical export surface is not ready.
 
 ## Checks
 
-- In this package: `TMPDIR=/home/wolf/tmp CARGO_BUILD_JOBS=4 bun run test`, `bun run check`.
+- In this package: `TMPDIR=/home/wolf/tmp CARGO_BUILD_JOBS=2 bun run test`, `bun run check`.
 - `bun install --frozen-lockfile`, `just check`.
 - Tests execute the real optimized web WASM artifact; never replace the model with a mock.
 
@@ -90,3 +91,5 @@ Use hosting-scalars.test.ts for owned-peer getIndent/getTextContent reads and ex
 Exercise clone staging, original-version reads, native copyNode fresh keys, read guards, opaque throws and retry in hosting-clone.test.ts. Class construction/opaque custom fields remain part of the full facade.
 
 Use hosting-extract.test.ts for child/selection/destination dispatch and native markdown extraction with selection identity, native super and opaque failure/retry. These backend literals do not replace full subclass acceptance.
+
+Keep native node graph methods on the active runtime; captured raw fields and is() use their original record keys. Save the actual state handle at publication for historical toJSON. Editor-less reads expose state helpers without an active editor. Native constructor field accessors currently read captured versions; writable fields and explicit older-native-prototype dispatch still require their model bridges.
