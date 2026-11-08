@@ -22,7 +22,10 @@ import type {
   ThreadStore,
 } from '../comments/commentType';
 
+import type { RustMarkdownRuntime } from '../component/RustMarkdownEditor';
+
 type MdData = {
+  nativeRuntime?: RustMarkdownRuntime;
   editor?: LexicalEditor;
   /** Durable nodeId <-> nodeKey mapping for the main editor (from the nodeId plugin). */
   mapping?: NodeIdMappings;

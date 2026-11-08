@@ -6,6 +6,10 @@ to `true` or `false` on an isolated local stack, then reopen the document after
 changing it. The selected model remains stable while that document is open.
 Off uses the existing LexicalMarkdown collaboration path. On initializes the
 session WASM lazily on the main thread and connects EditorView to SessionPort.
+Both engines use the same Notebook layout, title, document properties, discussion
+and body loading/placeholder chrome. Copy as markdown and downloads use the
+selected body engine. Verify engine parity before treating the flagged path as
+ready; native menus and anchored comments also require their view installers.
 
 For local verification, open and type, disconnect/reconnect with pending edits,
 then close and reopen the document offline after its local snapshot is durable.
