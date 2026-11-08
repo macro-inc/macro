@@ -198,12 +198,17 @@ fn native_super_json_update_keeps_nested_text_setter_dispatch() -> Result<(), Er
         }
         fn coerce_text_content(
             &self,
-            _: NodeView<'_>,
-            _: &ForeignData,
+            tx: &mut Transaction<'_>,
+            key: NodeKey,
             requested: &str,
-        ) -> Override<Result<String, Error>> {
+        ) -> Override<Result<(), Error>> {
             self.setters.fetch_add(1, Ordering::SeqCst);
-            Override::Value(Ok(requested.to_uppercase()))
+            Override::Value(
+                tx.with_foreign_native(key, ForeignHook::CoerceTextContent, |tx| {
+                    tx.text(key)?.set_text_content(&requested.to_uppercase())?;
+                    Ok(())
+                }),
+            )
         }
     }
     let updates = Arc::new(AtomicUsize::new(0));

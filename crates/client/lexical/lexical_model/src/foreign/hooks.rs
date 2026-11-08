@@ -36,6 +36,8 @@ pub struct ForeignNodeType {
 
 /// Development-only polymorphic model hooks.
 /// Each default explicitly delegates to the registered parent.
+/// Runtime text setters own the complete mutable operation. Their inherited
+/// native TextNode coercion hooks remain pure and run only on native fallback.
 pub trait ForeignHooks: Send + Sync + 'static {
     /// Runtime counterpart of `is_inline`.
     fn is_inline(&self, _node: NodeView<'_>, _data: &ForeignData) -> Override<bool> {
@@ -304,55 +306,57 @@ pub trait ForeignHooks: Send + Sync + 'static {
     ) -> Override<Result<(), Error>> {
         Override::Inherit
     }
-    /// Runtime counterpart of `coerce_text_content`.
+    /// Runtime `setTextContent` override; owns the complete operation.
+    /// Unlike native TextNode coercion, this may call getWritable or native-super.
     /// Upstream host method: `setTextContent`.
     fn coerce_text_content(
         &self,
-        _node: NodeView<'_>,
-        _data: &ForeignData,
+        _tx: &mut Transaction<'_>,
+        _key: NodeKey,
         _requested: &str,
-    ) -> Override<Result<String, Error>> {
+    ) -> Override<Result<(), Error>> {
         Override::Inherit
     }
-    /// Runtime counterpart of `check_splice_text`.
+    /// Runtime `spliceText` override; owns the write and selection movement.
     /// Upstream host method: `spliceText`.
     fn check_splice_text(
         &self,
-        _node: NodeView<'_>,
-        _data: &ForeignData,
+        _tx: &mut Transaction<'_>,
+        _key: NodeKey,
         _range: Range<Utf16Offset>,
         _insert: &str,
-    ) -> Override<Result<SpliceText, Error>> {
+        _move_selection: bool,
+    ) -> Override<Result<(), Error>> {
         Override::Inherit
     }
-    /// Runtime counterpart of `coerce_detail`.
+    /// Runtime `setDetail` override; owns the complete operation.
     /// Upstream host method: `setDetail`.
     fn coerce_detail(
         &self,
-        _node: NodeView<'_>,
-        _data: &ForeignData,
+        _tx: &mut Transaction<'_>,
+        _key: NodeKey,
         _requested: TextDetail,
-    ) -> Override<Result<Option<TextDetail>, Error>> {
+    ) -> Override<Result<(), Error>> {
         Override::Inherit
     }
-    /// Runtime counterpart of `coerce_mode`.
+    /// Runtime `setMode` override; owns the complete operation.
     /// Upstream host method: `setMode`.
     fn coerce_mode(
         &self,
-        _node: NodeView<'_>,
-        _data: &ForeignData,
+        _tx: &mut Transaction<'_>,
+        _key: NodeKey,
         _requested: TextMode,
-    ) -> Override<Result<Option<TextMode>, Error>> {
+    ) -> Override<Result<(), Error>> {
         Override::Inherit
     }
-    /// Runtime counterpart of `coerce_format`.
+    /// Runtime `setFormat` override; owns the complete operation.
     /// Upstream host method: `setFormat`.
     fn coerce_format(
         &self,
-        _node: NodeView<'_>,
-        _data: &ForeignData,
+        _tx: &mut Transaction<'_>,
+        _key: NodeKey,
         _requested: TextFormat,
-    ) -> Override<Result<Option<TextFormat>, Error>> {
+    ) -> Override<Result<(), Error>> {
         Override::Inherit
     }
 }

@@ -12,6 +12,7 @@ pub use hooks::{ForeignData, ForeignHook, ForeignHooks, ForeignNodeType, Overrid
 pub(crate) mod dispatch;
 pub(crate) mod payload;
 pub(crate) mod registry;
+pub(crate) mod text;
 
 pub(crate) mod projection;
 
