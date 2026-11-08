@@ -1,4 +1,4 @@
-use database_sql::catalog::{Catalog, Column, ColumnKind, Table as QueryTable, TableSource};
+use database_sql_engine::catalog::{Catalog, Column, ColumnKind, Table as QueryTable, TableSource};
 use models_databases::views::{
     Conjunction, FilterCondition, FilterGroup, FilterNode, FilterTest, NumberOperator,
     SortDirection, SortKey, ViewQuery,
@@ -52,7 +52,7 @@ async fn pages(pool: &PgPool, table: &QueryTable, view: &ViewQuery) -> Vec<RowId
     .fetch_one(pool)
     .await
     .unwrap();
-    let query = database_sql::compile_table_query(
+    let query = database_sql_engine::compile_table_query(
         table.id,
         view,
         &Catalog {
@@ -116,7 +116,7 @@ async fn filters_and_sorting_precede_every_page_with_stable_ties_and_nulls_last(
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn changed_versions_cannot_continue_an_old_page(pool: PgPool) {
     let (table, _) = page_fixture(&pool).await;
-    let query = database_sql::compile_table_query(
+    let query = database_sql_engine::compile_table_query(
         table.id,
         &ViewQuery::default(),
         &Catalog {
@@ -587,7 +587,7 @@ async fn checkbox_dates_and_links_keep_the_existing_cell_semantics(pool: PgPool)
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn select_and_entity_pages_preserve_option_rank_membership_and_empty_sets(pool: PgPool) {
-    use database_sql::catalog::{EntityKind, SelectOption};
+    use database_sql_engine::catalog::{EntityKind, SelectOption};
     use models_databases::{OptionId, views::SetOperator};
     use models_properties::shared::{EntityReference, EntityType};
     let (mut table, rows) = page_fixture(&pool).await;

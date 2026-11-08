@@ -553,7 +553,9 @@ async fn undoing_an_input_edit_or_a_removal_derives_the_formula_again(pool: PgPo
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn a_batch_of_only_derivations_backfills_every_row_and_bumps_the_table(pool: PgPool) {
-    use database_sql::catalog::{Column as QueryColumn, ColumnKind as QueryKind, TableSource};
+    use database_sql_engine::catalog::{
+        Column as QueryColumn, ColumnKind as QueryKind, TableSource,
+    };
 
     use crate::domain::derivation::Derivation;
     let orders = orders(&pool).await;
@@ -597,7 +599,7 @@ async fn a_batch_of_only_derivations_backfills_every_row_and_bumps_the_table(poo
         kind: QueryKind::Number,
         formula,
     };
-    let query_table = database_sql::catalog::Table {
+    let query_table = database_sql_engine::catalog::Table {
         id: table,
         database_id: orders.guests.database_id,
         database: "Offsite".into(),

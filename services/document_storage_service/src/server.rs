@@ -1773,7 +1773,7 @@ async fn run_server() -> anyhow::Result<()> {
 
     // SQL predicates and follow-up reads use the primary, matching the catalog
     // versions and writes; replica lag must not select stale rows for an edit.
-    let sql_service = databases_sql::DatabasesSql::new(
+    let sql_service = database_sql_runner::DatabasesSql::new(
         databases_service.clone(),
         entity_access_service.clone(),
         primary_entity_soup.clone(),
@@ -2391,7 +2391,7 @@ async fn run_server() -> anyhow::Result<()> {
             entity_access_service.as_ref().clone(),
         ),
         graphql_database_rows_context: graphql_databases::DatabaseRowsGraphqlContext::new(
-            databases_sql::view_rows::DatabaseViewRows::new(
+            database_sql_runner::view_rows::DatabaseViewRows::new(
                 databases_service.clone(),
                 databases::outbound::pg_view_rows::PgViewRows::new(db.clone()),
             ),
@@ -2433,7 +2433,7 @@ async fn run_server() -> anyhow::Result<()> {
             entity_access_service.clone(),
             authorization_state.clone(),
         ),
-        sql_state: databases_sql::inbound::axum_router::SqlRouterState::new(
+        sql_state: database_sql_runner::inbound::axum_router::SqlRouterState::new(
             sql_service,
             authorization_state.clone(),
         ),

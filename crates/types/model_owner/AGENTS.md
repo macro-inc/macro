@@ -27,7 +27,7 @@ ownership. A typed owner reference (`Owner`/`OwnerType`) for Macro entities
 
 - Depends on: `bot_id`, `macro_user_id`.
 - Used by: nearly every domain crate with typed ownership — `agent_session`,
-  `agent_trigger`, `bots`, `channels`, `databases_sql`, `documents`,
+  `agent_trigger`, `bots`, `channels`, `database_sql_runner`, `documents`,
   `entity_access`, `entity_registry`, `model`, `model_notifications`,
   `models_permissions`, `models_soup`, `projects`, `scheduled_action`,
   `soup`, `teams`, and more.

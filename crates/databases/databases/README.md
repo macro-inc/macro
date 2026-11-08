@@ -133,8 +133,8 @@ and cells. The core storage adapter purges its journal in the same transaction.
    copy's history starts empty.
 
 SQL lives outside this crate. The browser compiles statements with the
-`database_sql` engine and posts the ops it emits; agents run the same engine
-through the `databases_sql` adapter, which reads through Soup and writes
+`database_sql_engine` engine and posts the ops it emits; agents run the same engine
+through the `database_sql_runner` adapter, which reads through Soup and writes
 through `apply_ops`.
 
 ## Review map

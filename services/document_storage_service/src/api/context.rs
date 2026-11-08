@@ -676,7 +676,7 @@ pub(crate) type DatabasesServiceType =
     PgDatabasesService<GatewayTableEventPublisher, DssEventBroker, EntityAccessService>;
 
 /// HTTP SQL queries over the same database, access and Soup services.
-pub(crate) type DssSqlState = databases_sql::inbound::axum_router::SqlRouterState<
+pub(crate) type DssSqlState = database_sql_runner::inbound::axum_router::SqlRouterState<
     DatabasesServiceType,
     EntityAccessService,
     DssSoupService,

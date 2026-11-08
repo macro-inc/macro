@@ -61,7 +61,7 @@ postgres = [
 ]
 
 [dependencies]
-database_sql = { workspace = true }
+database_sql_engine = { workspace = true }
 activity = { workspace = true }
 ai_toolset = { workspace = true, optional = true }
 anyhow = { workspace = true, optional = true }

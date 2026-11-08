@@ -82,6 +82,9 @@ use collab_surface::domain::models::SurfaceState;
 use collab_surface::inbound::axum_router::{
     CollabSurfaceResponse, CollabSurfaceTokenResponse, EnsureCollabSurfaceRequest,
 };
+use database_sql_runner::inbound::axum_router::{
+    SaveQueryChart as DatabaseSaveQueryChart, SaveQueryRequest as DatabaseSaveQueryRequest,
+};
 use databases::domain::journal::{
     ColumnChangeKind as DatabaseColumnChangeKind, RowChangeKind as DatabaseRowChangeKind,
     RowHistoryEntry as DatabaseRowHistoryEntry, SkippedCell as DatabaseSkippedCell,
@@ -109,9 +112,6 @@ use databases::inbound::axum_router::views::ViewPositionsResponse as DatabaseVie
 use databases::inbound::axum_router::{CreateDatabaseRequest, duplicate::DuplicateDatabaseRequest};
 use databases::outbound::gateway_event_publisher::{
     AwarenessRelay as DatabaseAwarenessRelay, TableChanged as DatabaseTableChanged,
-};
-use databases_sql::inbound::axum_router::{
-    SaveQueryChart as DatabaseSaveQueryChart, SaveQueryRequest as DatabaseSaveQueryRequest,
 };
 use document_sub_type::DocumentSubType;
 use documents_hex::inbound::axum_router::{
@@ -563,7 +563,7 @@ use utoipa::OpenApi;
         initiative::inbound::axum_router::update::update_initiative_handler,
         initiative::inbound::axum_router::delete::delete_initiative_handler,
         // databases
-        databases_sql::inbound::axum_router::query_databases_handler,
+        database_sql_runner::inbound::axum_router::query_databases_handler,
         databases::inbound::axum_router::list_databases_handler,
         databases::inbound::starter_router::ensure_starter_handler,
         databases::inbound::axum_router::create_database_handler,
@@ -578,7 +578,7 @@ use utoipa::OpenApi;
         databases::inbound::axum_router::duplicate::duplicate_database_handler,
         databases::inbound::axum_router::sharing::get_permissions_handler,
         databases::inbound::axum_router::sharing::update_permissions_handler,
-        databases_sql::inbound::axum_router::save_query_handler,
+        database_sql_runner::inbound::axum_router::save_query_handler,
         databases::inbound::axum_router::saved_queries::get_query_handler,
         databases::inbound::axum_router::casts::column_casts_handler,
         databases::inbound::axum_router::casts::column_conversion_handler,

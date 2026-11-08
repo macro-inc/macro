@@ -359,7 +359,7 @@ fn design_file_readers_are_available_in_every_host_with_their_guidance() {
 }
 
 /// Document answers get the one SQL tool, not a read-only twin: the access
-/// they run over refuses the writes (see `databases_sql`'s view-only tests).
+/// they run over refuses the writes (see `database_sql_runner`'s view-only tests).
 #[test]
 fn document_answers_expose_discovery_and_the_one_query_tool() {
     let tools = database_read_only_tools();

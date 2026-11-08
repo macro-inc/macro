@@ -57,7 +57,7 @@ contacts = { workspace = true, features = [
 ] }
 crm = { workspace = true, default-features = true }
 databases = { workspace = true, features = ["ai_tools", "entity_mutation", "gateway", "postgres"] }
-databases_sql = { workspace = true, features = ["ai_tools"] }
+database_sql_runner = { workspace = true, features = ["ai_tools"] }
 documents = { workspace = true, default-features = true, features = ["ai_tools", "attachment", "purge"] }
 email = { workspace = true, features = ["ai_schema", "ai_tools", "axum", "outbound", "s3", "sqs"] }
 email_service_client = { workspace = true }

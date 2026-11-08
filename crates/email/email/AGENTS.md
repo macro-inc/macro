@@ -38,7 +38,7 @@ tools — hexagonal, heavily feature-gated.
   `calendar_events` (optional, feature `calendar_invitations`), `sqs_client`
   (optional, feature `sqs`; it must not depend back on this crate).
 - Used by: many crates and services, including `ai_tools`, `graphql_email`,
-  `teams`, `databases_sql`, `attention_feed`, `calendar_service`, `email_service`,
+  `teams`, `database_sql_runner`, `attention_feed`, `calendar_service`, `email_service`,
   `email_scheduled_handler`, `search_processing_service`.
 
 ## Recipes

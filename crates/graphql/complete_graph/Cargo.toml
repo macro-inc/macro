@@ -67,7 +67,7 @@ calendar_event_id = { workspace = true }
 bot_id = { workspace = true }
 crm = { workspace = true, features = ["ports"] }
 databases = { workspace = true, features = ["ports"] }
-databases_sql = { workspace = true }
+database_sql_runner = { workspace = true }
 models_databases = { workspace = true }
 activity = { workspace = true, features = ["realtime"] }
 attention_feed = { workspace = true, features = ["inbound"] }

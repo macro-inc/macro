@@ -865,7 +865,7 @@ fn check_formula(
     own: Option<ColumnId>,
     formula: &Formula,
 ) -> Result<FormulaType, DatabaseError> {
-    database_sql::formula::check(&catalog::engine_table(entry, ""), own, formula)
+    database_sql_engine::formula::check(&catalog::engine_table(entry, ""), own, formula)
         .map_err(|reason| place.refuse(reason))
 }
 

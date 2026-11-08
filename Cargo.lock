@@ -646,8 +646,8 @@ dependencies = [
  "cursor_api_key",
  "cursor_cloud_agents",
  "database_env_vars",
+ "database_sql_runner",
  "databases",
- "databases_sql",
  "document_cognition_service_url",
  "document_storage_service_client",
  "document_storage_service_url",
@@ -1285,8 +1285,8 @@ dependencies = [
  "connection_gateway_url",
  "contacts",
  "crm",
+ "database_sql_runner",
  "databases",
- "databases_sql",
  "dateparser",
  "document_cognition_service_url",
  "document_storage_service_url",
@@ -5122,8 +5122,8 @@ dependencies = [
  "calendar_events",
  "chrono",
  "crm",
+ "database_sql_runner",
  "databases",
- "databases_sql",
  "email",
  "email_thread_id",
  "entity_access",
@@ -6360,7 +6360,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "database_sql"
+name = "database_sql_engine"
 version = "0.1.0"
 dependencies = [
  "chrono",
@@ -6389,10 +6389,52 @@ dependencies = [
 ]
 
 [[package]]
+name = "database_sql_runner"
+version = "0.1.0"
+dependencies = [
+ "ai_toolset",
+ "anyhow",
+ "async-trait",
+ "axum",
+ "base64 0.22.1",
+ "bot_id",
+ "chrono",
+ "contacts_core",
+ "database_sql_engine",
+ "databases",
+ "email",
+ "entity_access",
+ "filter_ast",
+ "item_filters",
+ "macro_authorization",
+ "macro_user_id",
+ "model_error_response",
+ "model_owner",
+ "models_databases",
+ "models_grouping",
+ "models_pagination",
+ "models_properties",
+ "models_soup",
+ "rootcause",
+ "schemars 1.2.1",
+ "serde",
+ "serde_json",
+ "sha2 0.10.9",
+ "soup",
+ "thiserror 2.0.18",
+ "tokio",
+ "tower 0.5.3",
+ "tracing",
+ "utoipa",
+ "uuid",
+ "workspace-hack",
+]
+
+[[package]]
 name = "database_sql_wasm"
 version = "0.1.0"
 dependencies = [
- "database_sql",
+ "database_sql_engine",
 ]
 
 [[package]]
@@ -6440,7 +6482,7 @@ dependencies = [
  "clap",
  "connection_gateway_client",
  "database_env_vars",
- "database_sql",
+ "database_sql_engine",
  "entity_access",
  "entity_access_db_utils",
  "entity_access_outbound",
@@ -6472,48 +6514,6 @@ dependencies = [
  "tower 0.5.3",
  "tracing",
  "url",
- "utoipa",
- "uuid",
- "workspace-hack",
-]
-
-[[package]]
-name = "databases_sql"
-version = "0.1.0"
-dependencies = [
- "ai_toolset",
- "anyhow",
- "async-trait",
- "axum",
- "base64 0.22.1",
- "bot_id",
- "chrono",
- "contacts_core",
- "database_sql",
- "databases",
- "email",
- "entity_access",
- "filter_ast",
- "item_filters",
- "macro_authorization",
- "macro_user_id",
- "model_error_response",
- "model_owner",
- "models_databases",
- "models_grouping",
- "models_pagination",
- "models_properties",
- "models_soup",
- "rootcause",
- "schemars 1.2.1",
- "serde",
- "serde_json",
- "sha2 0.10.9",
- "soup",
- "thiserror 2.0.18",
- "tokio",
- "tower 0.5.3",
- "tracing",
  "utoipa",
  "uuid",
  "workspace-hack",
@@ -7032,9 +7032,9 @@ dependencies = [
  "connection_gateway_url",
  "contacts",
  "crm",
+ "database_sql_runner",
  "database_webhooks",
  "databases",
- "databases_sql",
  "dictation",
  "document_sub_type",
  "documents",
@@ -9815,8 +9815,8 @@ version = "0.1.0"
 dependencies = [
  "async-graphql",
  "chrono",
+ "database_sql_runner",
  "databases",
- "databases_sql",
  "entity_access",
  "futures",
  "graphql_common",

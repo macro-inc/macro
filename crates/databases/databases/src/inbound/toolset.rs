@@ -531,7 +531,7 @@ fn tool_columns(columns: Vec<ColumnDetail>) -> Vec<ToolColumn> {
         .into_iter()
         .map(|column| {
             let formula = column.column.formula().map(|formula| {
-                database_sql::formula::render_named(formula, &|id| {
+                database_sql_engine::formula::render_named(formula, &|id| {
                     names
                         .iter()
                         .find(|(candidate, _)| *candidate == id)

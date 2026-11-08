@@ -341,7 +341,7 @@ fn should_run_includes_fold_wasm_inputs() {
         "fold wasm path dep must rebuild the web artifact: {should_run}"
     );
     assert!(
-        should_run.contains("crates/databases/database_sql/**"),
+        should_run.contains("crates/databases/database_sql_engine/**"),
         "SQL engine wasm source must rebuild the web artifact: {should_run}"
     );
 }

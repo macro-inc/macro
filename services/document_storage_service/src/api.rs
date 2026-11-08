@@ -342,7 +342,7 @@ fn api_router(state: ApiContext) -> Router {
         .nest(
             "/databases",
             databases::inbound::axum_router::databases_router(state.databases_state.clone())
-                .merge(databases_sql::inbound::axum_router::sql_router(
+                .merge(database_sql_runner::inbound::axum_router::sql_router(
                     state.sql_state.clone(),
                 ))
                 .merge(databases::inbound::starter_router::starter_router(

@@ -34,9 +34,9 @@ use contacts::outbound::gateway::ConnectionGatewayNotifier;
 use contacts::outbound::ingress::SqsContactsQueue;
 use contacts::outbound::repository::DbContactsRepository;
 use crm::inbound::toolset::CrmToolContext;
+use database_sql_runner::toolset::DatabasesSqlToolContext;
+use database_sql_runner::{DatabasesSql, ViewOnlyAccess};
 use databases::inbound::toolset::DatabasesToolContext;
-use databases_sql::toolset::DatabasesSqlToolContext;
-use databases_sql::{DatabasesSql, ViewOnlyAccess};
 use documents::{
     domain::ports::{TaskPropertiesPort, credited_task_edit_receipt, task_property_edit_receipt},
     inbound::toolset::DocumentToolContext,

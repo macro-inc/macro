@@ -107,7 +107,7 @@ channel_labels = { workspace = true, features = [
   "postgres",
 ] }
 crm = { workspace = true, default-features = true }
-databases_sql = { workspace = true, features = ["inbound"] }
+database_sql_runner = { workspace = true, features = ["inbound"] }
 databases = { workspace = true, features = [
   "entity_mutation",
   "gateway",

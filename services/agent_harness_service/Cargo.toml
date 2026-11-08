@@ -81,7 +81,7 @@ cursor_api_key = { workspace = true }
 cursor_cloud_agents = { workspace = true }
 database_env_vars = { workspace = true }
 databases = { workspace = true, features = ["ai_tools", "gateway", "postgres"] }
-databases_sql = { workspace = true, features = ["ai_tools"] }
+database_sql_runner = { workspace = true, features = ["ai_tools"] }
 document_storage_service_client = { workspace = true }
 documents = { workspace = true, default-features = true, features = ["ai_tools", "attachment", "outbound", "ports"] }
 doppler-config = { workspace = true }

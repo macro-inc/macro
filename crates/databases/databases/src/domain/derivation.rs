@@ -9,9 +9,9 @@ mod test;
 
 use std::collections::HashMap;
 
-use database_sql::catalog::{Column, Table};
-use database_sql::fold::Cell;
-use database_sql::formula;
+use database_sql_engine::catalog::{Column, Table};
+use database_sql_engine::fold::Cell;
+use database_sql_engine::formula;
 use models_databases::{ColumnId, Formula};
 use models_properties::service::property_value::PropertyValue;
 use uuid::Uuid;

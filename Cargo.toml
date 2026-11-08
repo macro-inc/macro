@@ -76,11 +76,11 @@ members = [
   "crates/comms/messages",
   "crates/comms/slack_integration",
   "crates/databases/crm",
-  "crates/databases/database_sql",
+  "crates/databases/database_sql_engine",
+  "crates/databases/database_sql_runner",
   "crates/databases/database_sql_wasm",
   "crates/databases/database_webhooks",
   "crates/databases/databases",
-  "crates/databases/databases_sql",
   "crates/databases/forms",
   "crates/databases/properties_inbound",
   "crates/databases/properties_service",
@@ -706,10 +706,10 @@ cursor_api_key = { path = "crates/agents/cursor_api_key" }
 cursor_cloud_agents = { path = "crates/agents/cursor_cloud_agents" }
 database_env_vars = { path = "crates/platform/database_env_vars" }
 database_id = { path = "crates/types/database_id" }
-database_sql = { path = "crates/databases/database_sql" }
+database_sql_engine = { path = "crates/databases/database_sql_engine" }
+database_sql_runner = { path = "crates/databases/database_sql_runner" }
 database_webhooks = { path = "crates/databases/database_webhooks" }
 databases = { path = "crates/databases/databases" }
-databases_sql = { path = "crates/databases/databases_sql" }
 decode_jwt = { path = "crates/platform/decode_jwt" }
 dictation = { path = "crates/ai/dictation" }
 document_cognition_service_url = { path = "crates/platform/service_urls/document_cognition_service_url" }

@@ -168,9 +168,11 @@ pub fn storage_schema_columns(columns: &[ColumnEntry]) -> Vec<SchemaColumn> {
 
 /// The table as the SQL engine's catalog has it, so a view, a fold or a
 /// formula reads its columns as a statement would.
-pub fn engine_table(entry: &StorageTable, database: &str) -> database_sql::catalog::Table {
-    use database_sql::catalog::{Column, ColumnKind as EngineKind, SelectOption, TableSource};
-    database_sql::catalog::Table {
+pub fn engine_table(entry: &StorageTable, database: &str) -> database_sql_engine::catalog::Table {
+    use database_sql_engine::catalog::{
+        Column, ColumnKind as EngineKind, SelectOption, TableSource,
+    };
+    database_sql_engine::catalog::Table {
         id: entry.table.id,
         database_id: entry.table.database_id,
         database: database.to_owned(),

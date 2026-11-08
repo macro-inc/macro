@@ -23,7 +23,7 @@ adapters are `crates/comms/contacts_outbound`.
 ## Boundaries
 
 - Depends on: `macro_user_id`.
-- Used by: `teams` (backfill on team join), `channels`, `databases_sql`, the
+- Used by: `teams` (backfill on team join), `channels`, `database_sql_runner`, the
   adapter crates, and through the `contacts` facade the composition roots and
   `ai_tools`.
 
