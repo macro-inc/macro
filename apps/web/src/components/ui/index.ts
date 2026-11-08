@@ -115,7 +115,9 @@ export {
   createInlineRename,
   type InlineRename,
   RenameInput,
+  type RenameInputProps,
   RenameTitle,
+  type RenameTitleProps,
 } from './components/InlineRename';
 export type {
   InputClassOptions,

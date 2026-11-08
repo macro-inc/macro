@@ -143,12 +143,7 @@ export function createInlineRename<Target, Failure>(options: {
   };
 }
 
-/**
- * The text field of an inline rename. It takes the typography of the title it
- * replaces and opens focused with the name selected. Mount it only while
- * `rename.isRenaming(target)`.
- */
-export function RenameInput<Target>(props: {
+export type RenameInputProps<Target> = {
   rename: InlineRename<Target>;
   'aria-label': string;
   placeholder?: string;
@@ -158,7 +153,16 @@ export function RenameInput<Target>(props: {
   /** Placement only. */
   class?: string;
   onSubmit?: () => void;
-}): JSX.Element {
+};
+
+/**
+ * The text field of an inline rename. It takes the typography of the title it
+ * replaces and opens focused with the name selected. Mount it only while
+ * `rename.isRenaming(target)`.
+ */
+export function RenameInput<Target>(
+  props: RenameInputProps<Target>
+): JSX.Element {
   const errorId = createUniqueId();
   let input: HTMLInputElement | undefined;
   // Enter and Escape give focus back here when the rename restores it nowhere:
@@ -249,14 +253,7 @@ export function RenameInput<Target>(props: {
   );
 }
 
-/**
- * An entity title that renames in place. Double-click starts editing a
- * compact title (a header, tab or row, where a click already means something);
- * a page heading, which is only ever edited, starts on click. F2 starts
- * editing from the keyboard either way, and a Rename menu item calls
- * `rename.begin` itself.
- */
-export function RenameTitle<Target>(props: {
+export type RenameTitleProps<Target> = {
   rename: InlineRename<Target>;
   target: Target;
   startOn: 'click' | 'double-click';
@@ -267,7 +264,27 @@ export function RenameTitle<Target>(props: {
   maxLength?: number;
   /** Typography and placement of the title. */
   class?: string;
-}): JSX.Element {
+};
+
+/**
+ * An entity title that renames in place. Double-click starts editing a
+ * compact title (a header, tab or row, where a click already means something);
+ * a page heading, which is only ever edited, starts on click. F2 starts
+ * editing from the keyboard either way, and a Rename menu item calls
+ * `rename.begin` itself.
+ *
+ * @do Start a rename from a menu item only after the menu has closed and
+ * handed focus back, or the returning focus blurs the field and saves it.
+ * @do Return a `ResultAsync` that fails when the save fails, so the old name
+ * comes back with a toast.
+ * @do Use `validate` for names the surface refuses (duplicates), which keep
+ * the field open with the reason.
+ * @dont Build a one-off rename input, dialog or Save button for a title.
+ * @dont Toast a rename failure yourself as well; the field reports it.
+ */
+export function RenameTitle<Target>(
+  props: RenameTitleProps<Target>
+): JSX.Element {
   const name = () => props.rename.displayName(props.target);
   const begin = (event: Event) => {
     if (props.readOnly) return;

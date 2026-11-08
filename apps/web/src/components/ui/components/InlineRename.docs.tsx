@@ -118,6 +118,7 @@ export default defineDoc({
     'Renames an entity title in place, with one behaviour everywhere: double-click (a page heading: click), F2 or a Rename menu item opens the field with the name selected; Enter and blur commit, Escape restores, an empty or unchanged name is a no-op, a refused name keeps the field open with the reason, and a commit shows the new name at once and puts the old one back with a toast if the rename fails.',
   status: 'stable',
   exports: ['createInlineRename', 'RenameTitle', 'RenameInput'],
+  propTypes: ['RenameTitleProps', 'RenameInputProps'],
   import: "import { createInlineRename, RenameInput, RenameTitle } from '@ui';",
   demos: [
     {
