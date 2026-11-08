@@ -150,3 +150,5 @@ Retain the current selection token and memo in immutable committed state clones;
 Invoke selection_transform through its public guarded transaction entry point for explicit host calls; read-only peers must reject before callbacks. The flush pipeline uses the same vtable entry and reevaluates live focus after the anchor hook.
 
 Use needs_flush for a development host's implicit pre-commit pipeline pass; preserve the model dirty_since_flush predicate across suspension and keep explicit flush semantics unchanged.
+
+ForeignReadSnapshot::is_originless_capture_of compares the exact canonical records and selection identity, including native projection sources. Compare selection values, memo and order too. Save ForeignReadContext metadata without pinning pending records before cache writes; pair an authorized publication state only under a ForeignReadLease and have the host check its exact installed lease on derived reads. Pairing alone grants no dispatcher authority.

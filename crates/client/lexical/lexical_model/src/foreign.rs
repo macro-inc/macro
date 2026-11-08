@@ -3,7 +3,7 @@ pub(crate) mod native;
 mod pending;
 pub use pending::{ForeignEditorIdentity, ForeignUpdateIdentity, PendingUpdate};
 mod read;
-pub use read::{ForeignReadSnapshot, ForeignRecordIdentity};
+pub use read::{ForeignReadContext, ForeignReadLease, ForeignReadSnapshot, ForeignRecordIdentity};
 pub(crate) use read::{ReadOrigin, ReadOriginRef, ReadProjections, RecordIdentityMarker};
 
 mod hooks;

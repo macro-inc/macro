@@ -162,6 +162,7 @@ impl<'editor> Transaction<'editor> {
                 Some(crate::foreign::ReadOriginRef {
                     editor: &self.editor.suspend_owner,
                     update: &self.foreign_update,
+                    lease: None,
                 })
             },
             state: &self.pending,
