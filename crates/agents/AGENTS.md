@@ -42,7 +42,7 @@ lists what this group may depend on. `cargo x deps` reports edges that break it.
 | [`harnessd_protocol`](harnessd_protocol/AGENTS.md) | The wire types of `harnessd`, the agent sign-in daemon on a Macro computer: JSON lines the control plane writes to `harnessd` over `Fleet::exec`, and the lines it … |
 | [`harnesses`](harnesses/AGENTS.md) | Belongs to agent sessions: registration for user-run agent harnesses (macrod), called machines in the product. |
 | [`hosted_runtimes`](hosted_runtimes/AGENTS.md) | Macro computers: hosted VMs a team buys, each running macrod so it shows up in Settings → Runtimes like a paired machine. |
-| [`macrod`](macrod/AGENTS.md) (package `coding_agent_worker`) | Part of agent sessions: `macrod`, the agent harness daemon operators run on their own machine — serves a registered harness's agent sessions, bridges the local ACP … |
+| [`macrod`](macrod/AGENTS.md) (package `macrod`) | Part of agent sessions: `macrod`, the agent harness daemon operators run on their own machine — serves a registered harness's agent sessions, bridges the local ACP … |
 | [`routine_program`](routine_program/AGENTS.md) | Routines: the typed program a routine runs. |
 | [`routines`](routines/AGENTS.md) | Part of the agent sessions feature. |
 | [`scheduled_action`](scheduled_action/AGENTS.md) | Serves agent sessions' automations ("routines"): the reusable domain and adapters for scheduled and event-triggered agent automations — cron-style schedules plus … |

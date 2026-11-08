@@ -312,7 +312,7 @@ appear in Home or Recent; say so in the PR.
 - **Parent:** a `MessageParent` variant in `crates/comms/messages/src/domain/models.rs`
   and a migration widening the parent-type CHECK (two-step, section 2). The
   compiler then walks you through `crates/comms/messages`, `agent_trigger`,
-  `agent_harness`, `agent_session`, `channel_bots`, and `coding_agent_worker`.
+  `agent_harness`, `agent_session`, `channel_bots`, and `macrod`.
   The discussion-parent authorization in `crates/comms/messages/src/domain/service.rs`
   ends in a `Forbidden` arm.
 - **Not caught by the compiler:** the zod enum in

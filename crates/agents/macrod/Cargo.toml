@@ -1,6 +1,6 @@
 [package]
 edition = "2024"
-name = "coding_agent_worker"
+name = "macrod"
 publish = false
 version = "0.1.0"
 

@@ -657,7 +657,7 @@
       guestBinaryDefinitions = [
         {
           pname = "macrod";
-          packageName = "coding_agent_worker";
+          packageName = "macrod";
         }
         {
           pname = "harnessd";
