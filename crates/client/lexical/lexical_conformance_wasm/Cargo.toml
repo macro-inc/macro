@@ -24,3 +24,9 @@ serde_json = { workspace = true, features = ["preserve_order"] }
 
 [build-dependencies]
 serde_json.workspace = true
+
+[dev-dependencies]
+clap.workspace = true
+rootcause.workspace = true
+wasm-encoder.workspace = true
+wasmparser.workspace = true

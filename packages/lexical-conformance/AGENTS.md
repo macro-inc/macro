@@ -11,6 +11,7 @@ The upstream source is downloaded by checksum into this worktree's `target/`.
 - `record/membrane.ts`: attribution, identity, callback tapes and commit capture.
 - `record/replay-js.ts`: independent interpreter; never executes original test bodies.
 - `record/schema.ts`: schema 2 shared with the Rust fixture reader.
+- `diff/debug.test.ts`: actual optimized export crossings, allocator/free traps and editor-facade lifetimes.
 - `diff/compat.test.ts`: real Node/web WASM compatibility constants and per-instance key stream checks.
 - `diff/README.md`: WP-07 raw-model WASM loader and Tier C text/paragraph harness.
 - `record/initial.ts`: partial-state key layout and selection restoration.

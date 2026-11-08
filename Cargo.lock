@@ -9836,6 +9836,7 @@ dependencies = [
  "allocator-api2 0.2.21",
  "equivalent",
  "foldhash 0.1.5",
+ "serde",
 ]
 
 [[package]]
@@ -11767,15 +11768,19 @@ dependencies = [
 name = "lexical_conformance_wasm"
 version = "0.1.0"
 dependencies = [
+ "clap",
  "lexical_markdown",
  "lexical_model",
  "lexical_rich_nodes",
  "regress",
+ "rootcause",
  "serde",
  "serde-wasm-bindgen",
  "serde_json",
  "thiserror 2.0.18",
  "wasm-bindgen",
+ "wasm-encoder",
+ "wasmparser",
 ]
 
 [[package]]
@@ -21981,6 +21986,7 @@ dependencies = [
  "hashbrown 0.15.5",
  "indexmap 2.14.0",
  "semver",
+ "serde",
 ]
 
 [[package]]

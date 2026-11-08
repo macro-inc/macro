@@ -519,6 +519,8 @@ zune-core = "0.5"
 zune-jpeg = { version = "0.5", default-features = false, features = ["std"] }
 # worker-build (see services/sync-service/wrangler.toml) refuses to build against
 # anything older than 0.2.123, so keep this floor above that.
+wasm-encoder = { version = "0.244", features = ["wasmparser"] }
+wasmparser = "0.244"
 wasm-bindgen = "0.2.123"
 wasm-bindgen-futures = "0.4"
 wasm-bindgen-test = "0.3"
