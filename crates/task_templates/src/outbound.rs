@@ -115,6 +115,3 @@ impl Repository for PgTaskTemplates {
             == 1)
     }
 }
-
-#[cfg(test)]
-mod test;

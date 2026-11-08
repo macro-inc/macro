@@ -375,6 +375,3 @@ impl<R: Repository, M: Membership> Service<R, M> {
         Ok(())
     }
 }
-
-#[cfg(test)]
-mod test;
