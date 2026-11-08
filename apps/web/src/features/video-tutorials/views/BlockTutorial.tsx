@@ -1,3 +1,4 @@
+import { getNativeMobilePlatform } from '@core/util/platform';
 import { Match, Show, Switch } from 'solid-js';
 import { TUTORIALS, type Tutorial } from '../catalog';
 import {
@@ -13,6 +14,16 @@ import {
   createTutorialState,
   type TutorialState,
 } from '../primitives/create-tutorial-state';
+
+/**
+ * A block's tutorial, once its video is in the catalog. The iOS and Android
+ * apps show none. This is about what the native app ships, not layout, so
+ * mobile web at phone width keeps its tutorials.
+ */
+function tutorialFor(id: TutorialId): Tutorial | undefined {
+  if (getNativeMobilePlatform()) return undefined;
+  return TUTORIALS[id];
+}
 
 /**
  * "Have questions about Macro CRM? Talk to us in your support channel." under
@@ -106,7 +117,7 @@ function Entry(props: {
  */
 export function TutorialRow(props: { tutorial: TutorialId }) {
   return (
-    <Show when={TUTORIALS[props.tutorial]}>
+    <Show when={tutorialFor(props.tutorial)}>
       {(tutorial) => <Entry tutorial={tutorial()} variant="row" />}
     </Show>
   );
@@ -115,7 +126,7 @@ export function TutorialRow(props: { tutorial: TutorialId }) {
 /** The entry as a button, centered in a block's empty state. */
 export function TutorialPill(props: { tutorial: TutorialId; class?: string }) {
   return (
-    <Show when={TUTORIALS[props.tutorial]}>
+    <Show when={tutorialFor(props.tutorial)}>
       {(tutorial) => (
         <Entry tutorial={tutorial()} variant="pill" class={props.class} />
       )}
@@ -132,7 +143,7 @@ export function TutorialSidebarItem(props: {
   named?: boolean;
 }) {
   return (
-    <Show when={TUTORIALS[props.tutorial]}>
+    <Show when={tutorialFor(props.tutorial)}>
       {(tutorial) => (
         <Entry tutorial={tutorial()} variant="sidebar" named={props.named} />
       )}
@@ -141,4 +152,4 @@ export function TutorialSidebarItem(props: {
 }
 
 /** Whether a block has a tutorial video yet (for layouts that reserve space). */
-export const hasTutorial = (id: TutorialId) => TUTORIALS[id] !== undefined;
+export const hasTutorial = (id: TutorialId) => tutorialFor(id) !== undefined;
