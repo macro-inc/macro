@@ -30,6 +30,44 @@ pub trait TaskTargetValidator: Send + Sync + 'static {
     ) -> impl Future<Output = Result<()>> + Send;
 }
 
+/// Whether a routine's owner can use the item an entity knob names: it
+/// exists, is of the knob's kind, and they can open it. `async_trait` keeps
+/// it object-safe; validation and the runner hold it as `Arc<dyn KnobEntities>`.
+#[async_trait::async_trait]
+pub trait KnobEntities: Send + Sync + 'static {
+    /// `Ok(false)` when it is gone or out of reach; `Err` only when that
+    /// couldn't be found out.
+    async fn usable(
+        &self,
+        owner: &MacroUserIdStr<'static>,
+        item: &routine_program::EntityValue,
+    ) -> Result<bool, Report>;
+}
+
+/// Compositions that can't look items up: every entity knob is refused.
+pub struct NoKnobEntities;
+
+#[async_trait::async_trait]
+impl KnobEntities for NoKnobEntities {
+    async fn usable(
+        &self,
+        _owner: &MacroUserIdStr<'static>,
+        _item: &routine_program::EntityValue,
+    ) -> Result<bool, Report> {
+        Err(rootcause::report!(
+            "this scheduler cannot check the items routines use"
+        ))
+    }
+}
+
+/// Whether a person is a Macro user, for entity knobs that name a person.
+pub trait KnownPeople: Send + Sync + 'static {
+    fn exists(
+        &self,
+        user: &MacroUserIdStr<'_>,
+    ) -> impl Future<Output = Result<bool, Report>> + Send;
+}
+
 pub trait ScheduledActionRepo: Send + Sync + 'static {
     fn create_action(
         &self,

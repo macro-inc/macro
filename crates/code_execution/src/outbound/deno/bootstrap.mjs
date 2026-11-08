@@ -135,7 +135,20 @@ try {
   if (unattended) {
     if (typeof main !== "function") throw new Error("Export an async main(context: StepContext) function.");
     // Never the credential, hosts or trace context: only the SDK and the step's inputs.
-    value = await main({...unattended.arguments, macro});
+    const args = {...unattended.arguments, macro};
+    // A routine's entity knob arrives as its item marked `$entity`; code gets
+    // the SDK's handle for it, never the id (routine_program's `EntityKind`).
+    if (args.knobs) {
+      const namespaces = {channel: macro.channels, document: macro.documents, project: macro.projects, database: macro.databases, user: macro.users};
+      args.knobs = Object.fromEntries(Object.entries(args.knobs).map(([name, knob]) => {
+        const item = knob?.$entity;
+        if (!item) return [name, knob];
+        const namespace = namespaces[item.type];
+        if (!namespace) throw new Error(`Knob ${name} names a ${item.type}, which code can't use.`);
+        return [name, namespace.byId(item.id)];
+      }));
+    }
+    value = await main(args);
   } else {
     const session = context.sessionId ? macro.agentSessions.byId(context.sessionId) : undefined;
     const execution = session && context.executionId ? session.codeExecutions.byId(context.executionId) : undefined;

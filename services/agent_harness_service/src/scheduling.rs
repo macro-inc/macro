@@ -15,6 +15,7 @@ use macro_authorization::{
     MacroAuthorizationState, PgUserApiKeyAuthorizationRepo, PgUserApiKeyAuthorizer,
 };
 use macro_service_urls::{ConnectionGatewayUrl, LexicalServiceUrl};
+use macro_user_id::user_id::MacroUserIdStr;
 pub mod config;
 mod routine_analytics;
 mod routine_run_notifications;
@@ -27,7 +28,8 @@ use scheduled_action::domain::event_runs::{
 };
 use scheduled_action::domain::models::CreatedItem;
 use scheduled_action::domain::ports::{
-    DraftHandBacks, RequestSessions, ScheduledActionDispatcher, SessionCreations,
+    DraftHandBacks, KnobEntities, KnownPeople, RequestSessions, ScheduledActionDispatcher,
+    SessionCreations,
 };
 use scheduled_action::domain::program_runner::ProgramRunner;
 use scheduled_action::domain::service::ScheduledActionServiceImpl;
@@ -46,6 +48,7 @@ use scheduled_action::outbound::conn_gateway_live_updates::ConnGatewayLiveUpdate
 use scheduled_action::outbound::event_access::EventAccessAdapter;
 use scheduled_action::outbound::event_content::EventContentAdapter;
 use scheduled_action::outbound::inprocess_executor::InProcessExecutor;
+use scheduled_action::outbound::knob_entities::KnobEntityAccess;
 use scheduled_action::outbound::pg_code_upgrades::PgCodeUpgrades;
 use scheduled_action::outbound::pg_draft_hand_backs::PgDraftHandBacks;
 use scheduled_action::outbound::pg_event_run_repo::PgEventRunRepo;
@@ -125,6 +128,16 @@ impl RequestSessions for CorrelationSessions {
     }
 }
 
+/// People an entity knob may name: Macro users, as notifications find them.
+struct RoutinePeople(notification::outbound::user_existence_checker::DbUserExistenceChecker);
+
+impl KnownPeople for RoutinePeople {
+    async fn exists(&self, user: &MacroUserIdStr<'_>) -> Result<bool, rootcause::Report> {
+        use notification::domain::models::email_notification_digest::ports::UserExistenceChecker as _;
+        self.0.user_exists(user.clone()).await
+    }
+}
+
 /// Scheduling routes and workers owned by the harness process.
 pub struct SchedulingRuntime {
     pub router: Router,
@@ -176,6 +189,14 @@ pub async fn build<Ingress: notification::domain::service::NotificationIngress>(
     let access = Arc::new(EntityAccessServiceImpl::new(PgAccessRepository::new(
         db.clone(),
     )));
+    // The items routines' entity knobs name, checked as the owner on save
+    // and before each code step that uses one.
+    let knob_entities: Arc<dyn KnobEntities> = Arc::new(KnobEntityAccess::new(
+        access.as_ref().clone(),
+        RoutinePeople(
+            notification::outbound::user_existence_checker::DbUserExistenceChecker::new(db.clone()),
+        ),
+    ));
     let event_access = Arc::new(EventAccessAdapter::new(
         access.as_ref().clone(),
         PgGithubInstallationClaims::new(db.clone()),
@@ -249,7 +270,8 @@ pub async fn build<Ingress: notification::domain::service::NotificationIngress>(
             Arc::new(TargetRunner::new(Arc::clone(&sessions))),
             Arc::clone(&event_content),
         )
-        .with_code(Arc::clone(&code), Arc::clone(&upgrades)),
+        .with_code(Arc::clone(&code), Arc::clone(&upgrades))
+        .with_knob_entities(Arc::clone(&knob_entities)),
     );
     let dispatcher_executor = InProcessExecutor::new(
         Arc::clone(&repo),
@@ -401,7 +423,7 @@ pub async fn build<Ingress: notification::domain::service::NotificationIngress>(
         )
         .with_event_management_enabled(config.event_routines_enabled)
         .with_conditions_enabled(conditions_enabled)
-        .with_target_validation(TargetValidation::new(sessions))
+        .with_target_validation(TargetValidation::new(sessions).with_knob_entities(knob_entities))
         .with_draft_hand_backs(
             hand_backs,
             Arc::new(CorrelationSessions(
