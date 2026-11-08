@@ -54,7 +54,7 @@ struct Catalog<'a> {
     lists: BTreeMap<&'a str, Vec<&'a str>>,
 }
 static CATALOG: LazyLock<Catalog<'static>> = LazyLock::new(|| {
-    serde_json::from_str(include_str!("catalog.json"))
+    serde_json::from_str(include_str!("transformers/catalog.json"))
         .expect("generated source transformer metadata")
 });
 #[derive(Debug)]

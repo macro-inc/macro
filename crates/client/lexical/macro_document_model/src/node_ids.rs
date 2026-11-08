@@ -178,7 +178,9 @@ impl Plugin for NodeIdPlugin {
         COMMANDS
     }
     fn handle(&self, tx: &mut Transaction<'_>, command: &Command) -> crate::ModelResult<Handled> {
-        if let Command::InsertClipboardNodes { nodes, .. } = command { prepare_clipboard_nodes(tx, nodes)?; }
+        if let Command::InsertClipboardNodes { nodes, .. } = command {
+            prepare_clipboard_nodes(tx, nodes)?;
+        }
         Ok(Handled::No)
     }
     fn after_commit(&self, tx: &mut Transaction<'_>, commit: &Commit) -> crate::ModelResult<()> {

@@ -243,27 +243,53 @@ fn loaded_ids_and_stored_highlights_survive_initial_hooks_and_clipboard_clears_r
 fn clipboard_invalidation_runs_before_lower_handlers_without_consuming_insert() -> Result<()> {
     struct Insert;
     impl Plugin for Insert {
-        fn name(&self) -> &'static str { "clipboard-insert" }
+        fn name(&self) -> &'static str {
+            "clipboard-insert"
+        }
         fn commands(&self) -> &[CommandRegistration] {
-            const COMMANDS: &[CommandRegistration] = &[CommandRegistration { command: CommandKind::InsertClipboardNodes, priority: CommandPriority::Normal, placement: Placement::After }]; COMMANDS
+            const COMMANDS: &[CommandRegistration] = &[CommandRegistration {
+                command: CommandKind::InsertClipboardNodes,
+                priority: CommandPriority::Normal,
+                placement: Placement::After,
+            }];
+            COMMANDS
         }
         fn handle(&self, tx: &mut Transaction<'_>, command: &Command) -> ModelResult<Handled> {
             if let Command::InsertClipboardNodes { nodes, .. } = command {
-                for node in nodes { assert!(get_id(tx.view(), *node)?.is_none()); }
+                for node in nodes {
+                    assert!(get_id(tx.view(), *node)?.is_none());
+                }
                 tx.append(NodeKey::ROOT, nodes)?;
                 return Ok(Handled::Yes);
             }
             Ok(Handled::No)
         }
     }
-    let mut editor = NodeIdPlugin::register(export_builder(), &["paragraph"], None, [9; 32]).plugin(Insert).build()?;
+    let mut editor = NodeIdPlugin::register(export_builder(), &["paragraph"], None, [9; 32])
+        .plugin(Insert)
+        .build()?;
     let (pasted, _) = editor.update(|tx| {
         let pasted = tx.create(Paragraph::default())?;
-        set_id(tx, pasted.key(), Some(LexicalNodeId::try_new("clipboard-id").expect("id")))?;
-        assert_eq!(tx.dispatch(&Command::InsertClipboardNodes { nodes: vec![pasted.key()], selection: SelectionSlot::Active })?, Handled::Yes);
+        set_id(
+            tx,
+            pasted.key(),
+            Some(LexicalNodeId::try_new("clipboard-id").expect("id")),
+        )?;
+        assert_eq!(
+            tx.dispatch(&Command::InsertClipboardNodes {
+                nodes: vec![pasted.key()],
+                selection: SelectionSlot::Active
+            })?,
+            Handled::Yes
+        );
         Ok(pasted.key())
     })?;
     assert!(editor.state().view().is_attached(pasted));
-    assert_ne!(get_id(editor.state().view(), pasted)?.expect("fresh pasted id").as_str(), "clipboard-id");
+    assert_ne!(
+        get_id(editor.state().view(), pasted)?
+            .expect("fresh pasted id")
+            .as_str(),
+        "clipboard-id"
+    );
     Ok(())
 }
