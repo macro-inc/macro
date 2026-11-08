@@ -1082,7 +1082,11 @@ fn bring_up_infra(
         std::thread::spawn(move || stage.run("Starting FusionAuth", &mut fa))
     });
     // LocalStack is ready within seconds, long before OpenSearch: poll its API
-    // and provision S3/SQS/DynamoDB while compose waits on the rest.
+    // and provision S3/SQS/DynamoDB while compose waits on the rest. Compose
+    // also waits for LocalStack's healthcheck, so once it returns the lane
+    // takes one last look instead of polling on (a cold machine may spend
+    // minutes pulling images before the container exists).
+    let (infra_done, infra_done_rx) = std::sync::mpsc::channel::<()>();
     let localstack_lane = {
         let instance = instance.clone();
         let stage = stage.background();
@@ -1091,7 +1095,9 @@ fn bring_up_infra(
                 "http://localhost:{}/_localstack/health",
                 instance.port(Port::LocalStack)
             );
-            wait_http(&stage, "Waiting for LocalStack", &health)?;
+            stage.run_step("Waiting for LocalStack", || {
+                wait_localstack(&health, &infra_done_rx)
+            })?;
             stage.run_step("Provisioning LocalStack", || {
                 localstack::provision(&instance)
             })
@@ -1100,6 +1106,7 @@ fn bring_up_infra(
     let mut up = compose_cmd(instance, env);
     up.arg("up").arg("-d").arg("--wait").args(waited);
     let infra = stage.run("Starting infra (docker compose up -d --wait)", &mut up);
+    let _ = infra_done.send(());
     let fusionauth_started = fusionauth_start.map(|handle| {
         handle
             .join()
@@ -1558,19 +1565,29 @@ fn ensure_external_resources(stage: &Stage, instance: &Instance) -> Result<()> {
     })
 }
 
-fn wait_http(stage: &Stage, label: &str, url: &str) -> Result<()> {
-    let ca = proxy::curl_ca_args(url);
-    let ca_flags = ca
-        .iter()
-        .map(|arg| format!("'{arg}'"))
-        .collect::<Vec<_>>()
-        .join(" ");
-    let script = format!(
-        "for i in $(seq 1 600); do curl -fsS {ca_flags} --max-time 3 {url} >/dev/null 2>&1 && exit 0; sleep 0.2; done; echo 'not ready: {url}'; exit 1"
-    );
-    let mut cmd = Command::new("bash");
-    cmd.arg("-lc").arg(script);
-    stage.run(label, &mut cmd)
+/// Poll LocalStack until it answers, or until `compose_done` says compose's
+/// own wait has finished and one last look still finds it down.
+fn wait_localstack(url: &str, compose_done: &std::sync::mpsc::Receiver<()>) -> Result<()> {
+    let answers = || {
+        Command::new("curl")
+            .args(["-fsS", "--max-time", "3", "-o", "/dev/null"])
+            .arg(url)
+            .stderr(std::process::Stdio::null())
+            .status()
+            .is_ok_and(|status| status.success())
+    };
+    loop {
+        if answers() {
+            return Ok(());
+        }
+        match compose_done.recv_timeout(std::time::Duration::from_millis(200)) {
+            Err(std::sync::mpsc::RecvTimeoutError::Timeout) => {}
+            Ok(()) | Err(std::sync::mpsc::RecvTimeoutError::Disconnected) => {
+                anyhow::ensure!(answers(), "LocalStack is not answering at {url}");
+                return Ok(());
+            }
+        }
+    }
 }
 
 /// `cargo x build-services`.
