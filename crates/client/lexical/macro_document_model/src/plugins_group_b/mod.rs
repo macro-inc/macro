@@ -93,6 +93,8 @@ mod media_test;
 #[cfg(test)]
 mod movement_test;
 #[cfg(test)]
+mod table_test;
+#[cfg(test)]
 mod test;
 #[cfg(test)]
 mod text_paste_test;
@@ -105,6 +107,9 @@ pub fn decode_command(
     generation: u32,
     event: Option<&KeyEvent>,
 ) -> Result<Option<Command>, Error> {
+    if let Some(command) = table::decode(name, json, generation)? {
+        return Ok(Some(command));
+    }
     if let Some(command) = movement::decode(name, json, generation)? {
         return Ok(Some(command));
     }
