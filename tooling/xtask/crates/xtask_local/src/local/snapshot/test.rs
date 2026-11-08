@@ -104,3 +104,29 @@ fn exists_requires_a_matching_manifest() {
 
     let _ = std::fs::remove_dir_all(&dir);
 }
+
+/// A save that crashed before its manifest leaves a temp dir; once it is
+/// older than the cutoff, pruning removes it like any unused snapshot.
+#[test]
+fn pruning_removes_an_old_temp_dir_without_a_manifest() {
+    let root = std::env::temp_dir().join(format!("snapshot-prune-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&root);
+    let old = root.join(".tmp-abandoned-1");
+    let fresh = root.join(".tmp-in-progress-2");
+    for dir in [&old, &fresh] {
+        std::fs::create_dir_all(dir).unwrap();
+        std::fs::write(dir.join("postgres.tar.gz"), "partial").unwrap();
+    }
+    let month_ago =
+        std::time::SystemTime::now() - std::time::Duration::from_secs(30 * 24 * 60 * 60);
+    std::fs::File::open(&old)
+        .unwrap()
+        .set_modified(month_ago)
+        .unwrap();
+
+    prune_unused(&root, "current-key");
+
+    assert!(!old.exists(), "the abandoned temp dir is pruned");
+    assert!(fresh.exists(), "a recent one is left alone");
+    std::fs::remove_dir_all(&root).unwrap();
+}

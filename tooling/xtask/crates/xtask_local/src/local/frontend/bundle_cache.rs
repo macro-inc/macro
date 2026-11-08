@@ -209,14 +209,17 @@ pub fn copy_tree(from: &Path, to: &Path) -> Result<()> {
     Ok(())
 }
 
-/// Remove entries unused for [`UNUSED_DAYS`], then the least recently used
-/// beyond [`MAX_ENTRIES`]. Best effort: a failure only leaves disk in use.
+/// When an entry was last used: its `index.html`'s mtime, or the directory's
+/// own for one without it (the temp dir of a store that crashed).
 fn last_used(entry: &Path) -> Option<std::time::SystemTime> {
     std::fs::metadata(entry.join("index.html"))
+        .or_else(|_| std::fs::metadata(entry))
         .and_then(|meta| meta.modified())
         .ok()
 }
 
+/// Remove entries unused for [`UNUSED_DAYS`], then the least recently used
+/// beyond [`MAX_ENTRIES`]. Best effort: a failure only leaves disk in use.
 fn prune(root: &Path, keep: &str) {
     let Ok(entries) = std::fs::read_dir(root) else {
         return;
@@ -228,9 +231,7 @@ fn prune(root: &Path, keep: &str) {
         .filter(|entry| entry.file_type().is_ok_and(|kind| kind.is_dir()))
         .filter_map(|entry| {
             let path = entry.path();
-            let modified = last_used(&path)
-                .or_else(|| entry.metadata().and_then(|meta| meta.modified()).ok())?;
-            Some((modified, path))
+            Some((last_used(&path)?, path))
         })
         .collect();
     used.sort_by(|a, b| b.0.cmp(&a.0));

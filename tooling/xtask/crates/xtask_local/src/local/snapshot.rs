@@ -295,8 +295,11 @@ fn mark_used(dir: &std::path::Path) {
         .and_then(|file| file.set_modified(std::time::SystemTime::now()));
 }
 
+/// When a snapshot was last used: its manifest's mtime, or the directory's own
+/// for one without a manifest (the temp dir of a save that crashed).
 fn last_used(snapshot: &std::path::Path) -> Option<std::time::SystemTime> {
     std::fs::metadata(snapshot.join("manifest.json"))
+        .or_else(|_| std::fs::metadata(snapshot))
         .and_then(|meta| meta.modified())
         .ok()
 }
@@ -315,9 +318,7 @@ fn prune_unused(root: &std::path::Path, keep: &str) {
         if entry.file_name() == keep || !is_dir {
             continue;
         }
-        let used =
-            last_used(&path).or_else(|| entry.metadata().and_then(|meta| meta.modified()).ok());
-        let unused = used
+        let unused = last_used(&path)
             .and_then(|used| used.elapsed().ok())
             .is_some_and(|age| age > max_age);
         if unused {
