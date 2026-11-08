@@ -20,6 +20,8 @@ pub enum DirtyIntent {
 /// Pending state, published only by commit. Allocated keys are never rewound.
 pub struct Transaction<'editor> {
     #[cfg(feature = "foreign-nodes")]
+    pub(crate) foreign_update: Arc<()>,
+    #[cfg(feature = "foreign-nodes")]
     pub(crate) native_projection: Option<crate::foreign::projection::NativeProjection>,
     pub(crate) extensions: crate::extension::Extensions,
     pub(crate) events: Vec<PluginEvent>,
@@ -56,6 +58,8 @@ impl<'editor> Transaction<'editor> {
             ..UpdateOptions::default()
         };
         Self {
+            #[cfg(feature = "foreign-nodes")]
+            foreign_update: Arc::new(()),
             #[cfg(feature = "foreign-nodes")]
             native_projection: None,
             extensions: editor.extensions.clone(),

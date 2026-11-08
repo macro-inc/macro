@@ -248,9 +248,7 @@ fn first_seen_committed_root_and_its_writable_record_have_distinct_versions() ->
 #[test]
 fn nested_host_frames_share_encoded_handles_and_published_snapshot_identity() -> Result<()> {
     struct Hooks {
-        bindings: crate::replay::Bindings,
-        records: crate::replay::RecordIdentities,
-        selections: crate::replay::SelectionBindings,
+        callback: CallbackContext,
         seen: std::sync::Arc<std::sync::Mutex<Vec<Value>>>,
     }
     impl ForeignHooks for Hooks {
@@ -262,39 +260,28 @@ fn nested_host_frames_share_encoded_handles_and_published_snapshot_identity() ->
             _: bool,
         ) -> Override<std::result::Result<NodeKey, Error>> {
             let result = (|| -> Result<()> {
-                let mut child = Context {
-                    replay: Replayer {
-                        bindings: self.bindings.clone(),
-                        selections: self.selections.clone(),
-                        record_ids: self.records.clone(),
-                        record_owner: Some((0, tx.committed_state().clone())),
-                        version: 1,
-                        in_callback: true,
-                        ..Replayer::default()
-                    },
-                    scope: Scope::Updating,
-                    ..Context::default()
-                };
                 let latest = super::super::index()
                     .binary_search(&"LexicalNode.getLatest")
                     .expect("latest") as u32;
                 assert_eq!(
-                    child.call(tx, latest, json!([]), Some(json!({"$h":0})))?,
+                    self.callback
+                        .call(tx, latest, json!([]), Some(json!({"$h":0})))?,
                     json!({"$h":0})
                 );
                 let create = super::super::index()
                     .binary_search(&"lexical.$createTextNode")
                     .expect("create") as u32;
-                let text = child.call(tx, create, json!(["nested"]), None)?;
+                let text = self.callback.call(tx, create, json!(["nested"]), None)?;
                 assert_eq!(text, json!({"$h":2,"key":"3","type":"text","ver":1}));
                 let append = super::super::index()
                     .binary_search(&"LexicalNode.append")
                     .expect("append") as u32;
-                child.call(tx, append, json!([text.clone()]), Some(json!({"$h":1})))?;
+                self.callback
+                    .call(tx, append, json!([text.clone()]), Some(json!({"$h":1})))?;
                 let state = super::super::index()
                     .binary_search(&"LexicalEditor.getEditorState")
                     .expect("state") as u32;
-                let state = child.call(tx, state, json!([]), None)?;
+                let state = self.callback.call(tx, state, json!([]), None)?;
                 assert_eq!(state, json!({"$state":3}));
                 self.seen.lock().expect("log").extend([text, state]);
                 Ok(())
@@ -315,9 +302,7 @@ fn nested_host_frames_share_encoded_handles_and_published_snapshot_identity() ->
             extends: Some("paragraph"),
             required_state: vec![],
             hooks: std::sync::Arc::new(Hooks {
-                bindings: host.replay.bindings.clone(),
-                records: host.replay.record_ids.clone(),
-                selections: host.replay.selections.clone(),
+                callback: host.callbacks(),
                 seen: seen.clone(),
             }),
         })
@@ -380,5 +365,154 @@ fn nested_host_frames_share_encoded_handles_and_published_snapshot_identity() ->
     drop(tx);
     host.discard_update()?;
     host.release_version(1)?;
+    Ok(())
+}
+
+#[test]
+fn weak_callback_context_checks_scope_editor_and_does_not_retain_snapshots() -> Result<()> {
+    use std::sync::{
+        Arc,
+        atomic::{AtomicUsize, Ordering},
+    };
+    struct Hooks {
+        _callback: CallbackContext,
+        drops: Arc<AtomicUsize>,
+    }
+    impl ForeignHooks for Hooks {}
+    impl Drop for Hooks {
+        fn drop(&mut self) {
+            self.drops.fetch_add(1, Ordering::SeqCst);
+        }
+    }
+    let mut host = Context::default();
+    let callback = host.callbacks();
+    let drops = Arc::new(AtomicUsize::new(0));
+    let mut editor = Editor::builder(EditorMode::Headless)
+        .foreign_node(ForeignNodeType {
+            type_name: "weak-paragraph".into(),
+            class_name: "WeakParagraph".into(),
+            kind: NodeKind::Element,
+            extends: Some("paragraph"),
+            required_state: vec![],
+            hooks: Arc::new(Hooks {
+                _callback: callback.clone(),
+                drops: drops.clone(),
+            }),
+        })
+        .build()
+        .expect("editor");
+    let mut peer = editor.create_conformance_peer(EditorMode::Headless)?;
+    let create = super::super::index()
+        .binary_search(&"lexical.$createTextNode")
+        .expect("create") as u32;
+    let mut tx = editor.transaction();
+    assert!(matches!(
+        callback.call(&mut tx, create, json!(["outside"]), None),
+        Err(crate::replay::ReplayError::NoActiveEditor)
+    ));
+    host.begin_update(&mut tx)?;
+    let mut other = peer.transaction();
+    assert_eq!(
+        callback
+            .call(&mut other, create, json!(["wrong"]), None)
+            .expect_err("other editor")
+            .to_string(),
+        "callback transaction belongs to another editor"
+    );
+    assert_eq!(
+        host.call(&mut other, create, json!(["wrong"]), None)
+            .expect_err("other editor")
+            .to_string(),
+        "callback transaction belongs to another editor"
+    );
+    assert_eq!(
+        host.read_field(&mut other, 0, "__text")
+            .expect_err("other editor field")
+            .to_string(),
+        "callback transaction belongs to another editor"
+    );
+    drop(other);
+    let pending = tx.suspend();
+    let mut fresh = editor.transaction();
+    assert_eq!(
+        callback
+            .call(&mut fresh, create, json!(["fresh"]), None)
+            .expect_err("other update")
+            .to_string(),
+        "callback transaction belongs to another update"
+    );
+    assert_eq!(
+        host.call(&mut fresh, create, json!(["fresh"]), None)
+            .expect_err("other update")
+            .to_string(),
+        "callback transaction belongs to another update"
+    );
+    assert_eq!(
+        host.finish_update(&fresh)
+            .expect_err("other update")
+            .to_string(),
+        "callback transaction belongs to another update"
+    );
+    assert_eq!(
+        host.read_field(&mut fresh, 0, "__text")
+            .expect_err("other update field")
+            .to_string(),
+        "callback transaction belongs to another update"
+    );
+    drop(fresh);
+    let mut tx = editor.resume(pending)?;
+    assert_eq!(
+        callback.call(&mut tx, create, json!(["pending"]), None)?,
+        json!({"$h":0,"key":"1","type":"text","ver":1})
+    );
+    drop(tx);
+    host.discard_update()?;
+    assert!(host.replay.decode(&json!({"$h":0})).is_err());
+    let mut other = peer.transaction();
+    assert_eq!(
+        host.begin_update(&mut other)
+            .expect_err("bound editor")
+            .to_string(),
+        "API context belongs to another editor"
+    );
+    drop(other);
+    let mut tx = editor.transaction();
+    host.begin_update(&mut tx)?;
+    assert_eq!(
+        callback.call(&mut tx, create, json!(["next"]), None)?,
+        json!({"$h":1,"key":"2","type":"text","ver":2})
+    );
+    host.finish_update(&tx)?;
+    assert!(matches!(
+        callback.call(&mut tx, create, json!(["publishing"]), None),
+        Err(crate::replay::ReplayError::NoActiveEditor)
+    ));
+    let commit = tx.commit()?;
+    host.publish(commit.next.clone())?;
+    drop(commit);
+    let mut tx = editor.transaction();
+    assert!(matches!(
+        callback.call(&mut tx, create, json!(["idle"]), None),
+        Err(crate::replay::ReplayError::NoActiveEditor)
+    ));
+    drop(tx);
+    assert_eq!(
+        host.read_field(&mut peer.transaction(), 1, "__text")
+            .expect_err("idle other editor field")
+            .to_string(),
+        "API context belongs to another editor"
+    );
+    drop(editor);
+    drop(peer);
+    assert_eq!(drops.load(Ordering::SeqCst), 0);
+    drop(host);
+    assert_eq!(drops.load(Ordering::SeqCst), 1);
+    let mut editor = Editor::builder(EditorMode::Headless)
+        .build()
+        .expect("probe");
+    assert!(matches!(
+        callback.call(&mut editor.transaction(), create, json!(["freed"]), None),
+        Err(crate::replay::ReplayError::NoActiveEditor)
+    ));
     Ok(())
 }

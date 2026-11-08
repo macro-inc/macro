@@ -6,7 +6,7 @@ use serde_json::Value;
 include!(concat!(env!("OUT_DIR"), "/api_index.rs"));
 
 mod context;
-pub use context::Context;
+pub use context::{CallbackContext, Context};
 mod session;
 pub use session::Session;
 

@@ -2,14 +2,18 @@
 use crate::replay::{Replayer, Result, fail, integer, node_key, tagged_key};
 use lexical_model::{EditorState, NodeKey, Selection, Transaction};
 use serde_json::{Value, json};
+use std::sync::Arc;
+mod callbacks;
+pub use callbacks::CallbackContext;
+use callbacks::Frames;
 
 /// Shared dispatch and fixture-value encoding across suspended host calls.
 ///
 /// This owns identities and immutable published states, never a parallel editor
 /// model. Transactions and their suspend/resume lifecycle belong to the host.
-#[derive(Default)]
 pub struct Context {
     replay: Replayer,
+    frames: Arc<Frames>,
     scope: Scope,
     previous_selections: Vec<Option<Selection>>,
 }
@@ -22,12 +26,31 @@ enum Scope {
     Publishing,
 }
 
+impl Default for Context {
+    fn default() -> Self {
+        let replay = Replayer::default();
+        let frames = Arc::new(Frames::new(&replay));
+        Self {
+            replay,
+            frames,
+            scope: Scope::Idle,
+            previous_selections: Vec::new(),
+        }
+    }
+}
+
 impl Context {
+    /// Capture a weak callback capability before registering foreign hooks.
+    pub fn callbacks(&self) -> CallbackContext {
+        CallbackContext::new(&self.frames)
+    }
+
     /// Start bookkeeping for a newly opened transaction.
     pub fn begin_update(&mut self, tx: &mut Transaction<'_>) -> Result<()> {
         if self.scope != Scope::Idle {
             return Err(fail("an API update is already active"));
         }
+        self.frames.bind_owner(tx)?;
         self.replay.version = self
             .replay
             .version
@@ -51,6 +74,7 @@ impl Context {
             .bindings
             .bind_key("root".into(), NodeKey::ROOT)?;
         self.replay.in_callback = true;
+        self.frames.begin(&self.replay, tx)?;
         self.scope = Scope::Updating;
         Ok(())
     }
@@ -60,7 +84,9 @@ impl Context {
         if self.scope != Scope::Updating {
             return Err(fail("no API update is active"));
         }
+        self.frames.validate(tx)?;
         self.replay.capture_slots(tx)?;
+        self.frames.finish()?;
         self.replay.in_callback = false;
         self.scope = Scope::Publishing;
         Ok(())
@@ -75,6 +101,7 @@ impl Context {
         self.replay.committed_version = self.replay.version;
         self.replay.record_owner = None;
         self.previous_selections.clear();
+        self.frames.end()?;
         self.scope = Scope::Idle;
         Ok(self.replay.version)
     }
@@ -84,6 +111,7 @@ impl Context {
         if self.scope == Scope::Idle {
             return Err(fail("no API update is active"));
         }
+        self.frames.end()?;
         self.scope = Scope::Idle;
         self.replay.in_callback = false;
         self.replay.record_owner = None;
@@ -104,6 +132,7 @@ impl Context {
         if self.scope != Scope::Updating {
             return Err(crate::replay::ReplayError::NoActiveEditor);
         }
+        self.frames.validate(tx)?;
         let result = super::call_by_id(&mut self.replay, tx, id, args, receiver)?;
         self.encode(result)
     }
@@ -115,6 +144,11 @@ impl Context {
         handle: u32,
         field: &str,
     ) -> Result<Value> {
+        if self.scope == Scope::Idle {
+            self.frames.bind_owner(tx)?;
+        } else {
+            self.frames.validate(tx)?;
+        }
         let receiver = self.replay.decode(&json!({"$h":handle}))?;
         let value = super::properties::get(&mut self.replay, tx, &receiver, field)?;
         self.encode(value)
