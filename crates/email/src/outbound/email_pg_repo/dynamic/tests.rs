@@ -2039,6 +2039,14 @@ fn test_build_query_keeps_preview_pick_after_limit_when_candidates_are_discarded
             "folder",
             super::query::debug_build_query_sql(&trash, &unfiltered),
         ),
+        (
+            "viewed-updated sort",
+            super::query::debug_build_query_sql_with_sort(
+                &all,
+                &unfiltered,
+                models_pagination::SimpleSortMethod::ViewedUpdated,
+            ),
+        ),
     ] {
         assert!(
             sql.contains("AND EXISTS (SELECT 1 FROM email_messages m WHERE m.thread_id = t.id"),

@@ -201,7 +201,8 @@ fn push_source_scope(
 /// is then picked while the thread is scanned, and that pick both filters
 /// the candidate and supplies its preview, replacing the candidate EXISTS
 /// and a second pick after the LIMIT. With several links, or branches that
-/// sort their whole candidate set (team, shared, project, folders), most
+/// sort their whole candidate set (team, shared, project, folders, or a
+/// view-history sort), most
 /// candidates are discarded, and fetching their previews costs more than
 /// the second pick saves.
 fn picks_preview_in_candidates(view: &PreviewView, params: &QueryParams) -> bool {
@@ -211,6 +212,7 @@ fn picks_preview_in_candidates(view: &PreviewView, params: &QueryParams) -> bool
         && params.project_scope.is_none()
         && params.team_id.is_none()
         && params.link_ids.len() == 1
+        && !sort_uses_view_history(&params.sort_method_str)
 }
 
 /// Pushes the latest message of `t` that the view and filter accept, as
