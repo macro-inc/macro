@@ -67,6 +67,16 @@ afterEach(() => {
   motionStyles.remove();
 });
 
+async function chooseFromSettings(item: string) {
+  fireEvent.keyDown(
+    screen.getByRole('button', { name: 'Invite link settings' }),
+    { key: 'Enter' }
+  );
+  fireEvent.keyDown(await screen.findByRole('menuitem', { name: item }), {
+    key: 'Enter',
+  });
+}
+
 describe('TeamInviteLinkSection', () => {
   it('creates the first link for anyone who may invite', () => {
     render(() => <TeamInviteLinkSection teamId="team-1" canManage={false} />);
@@ -74,7 +84,9 @@ describe('TeamInviteLinkSection', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Create link' }));
 
     expect(link.create).toHaveBeenCalledWith({ teamId: 'team-1' });
-    expect(screen.queryByRole('button', { name: 'Reset link' })).toBeNull();
+    expect(
+      screen.queryByRole('button', { name: 'Invite link settings' })
+    ).toBeNull();
   });
 
   it('copies the join page for an existing link', async () => {
@@ -89,7 +101,9 @@ describe('TeamInviteLinkSection', () => {
       ])
     );
     expect(link.create).not.toHaveBeenCalled();
-    expect(screen.queryByRole('button', { name: 'Turn off' })).toBeNull();
+    expect(
+      screen.queryByRole('button', { name: 'Invite link settings' })
+    ).toBeNull();
   });
 
   it('offers a retry, not a reset, when the link never loaded', () => {
@@ -107,7 +121,7 @@ describe('TeamInviteLinkSection', () => {
     link.token = 'abc-123';
     render(() => <TeamInviteLinkSection teamId="team-1" canManage />);
 
-    fireEvent.click(screen.getByRole('button', { name: 'Reset link' }));
+    await chooseFromSettings('Reset link');
     expect(link.create).not.toHaveBeenCalled();
 
     const dialog = await screen.findByRole('dialog');
@@ -123,7 +137,8 @@ describe('TeamInviteLinkSection', () => {
     link.token = 'abc-123';
     render(() => <TeamInviteLinkSection teamId="team-1" canManage />);
 
-    fireEvent.click(screen.getByRole('button', { name: 'Turn off' }));
+    await chooseFromSettings('Turn off');
+    expect(link.remove).not.toHaveBeenCalled();
     const dialog = await screen.findByRole('dialog');
     const confirm = [...dialog.querySelectorAll('button')].find(
       (button) => button.textContent === 'Turn off'

@@ -43,6 +43,7 @@ import type {
   GetUserActivityParams,
   HttpSendChatMessageRequest,
   ImportSource,
+  ListSkillsParams,
   McpAuthCallbackParams,
   MemoryErrorBody,
   MemoryResponse,
@@ -69,6 +70,9 @@ import type {
   SendConfirmedEmailBody,
   ServerResponse,
   SetPricingRequest,
+  SkillContentResponse,
+  SkillErrorBody,
+  SkillsResponse,
   StartAuthRequest,
   StartAuthResponse,
   StopChatStreamError,
@@ -3564,6 +3568,154 @@ export const getBatchPreview = async (
     status: res.status,
     headers: res.headers,
   } as getBatchPreviewResponse;
+};
+
+/**
+ * @summary List the caller's skills, or search them by name when `query` is given.
+Built-in skills are included.
+ */
+export type listSkillsResponse200 = {
+  data: SkillsResponse;
+  status: 200;
+};
+
+export type listSkillsResponse400 = {
+  data: SkillErrorBody;
+  status: 400;
+};
+
+export type listSkillsResponse401 = {
+  data: void;
+  status: 401;
+};
+
+export type listSkillsResponse500 = {
+  data: SkillErrorBody;
+  status: 500;
+};
+
+export type listSkillsResponse502 = {
+  data: SkillErrorBody;
+  status: 502;
+};
+
+export type listSkillsResponseSuccess = listSkillsResponse200 & {
+  headers: Headers;
+};
+export type listSkillsResponseError = (
+  | listSkillsResponse400
+  | listSkillsResponse401
+  | listSkillsResponse500
+  | listSkillsResponse502
+) & {
+  headers: Headers;
+};
+
+export type listSkillsResponse =
+  | listSkillsResponseSuccess
+  | listSkillsResponseError;
+
+export const getListSkillsUrl = (params?: ListSkillsParams) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : value.toString());
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/skills?${stringifiedParams}`
+    : `/skills`;
+};
+
+export const listSkills = async (
+  params?: ListSkillsParams,
+  options?: RequestInit
+): Promise<listSkillsResponse> => {
+  const res = await fetch(getListSkillsUrl(params), {
+    ...options,
+    method: 'GET',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: listSkillsResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as listSkillsResponse;
+};
+
+/**
+ * @summary Read one skill's complete instructions: a skill document the caller can
+view, or a built-in skill.
+ */
+export type readSkillResponse200 = {
+  data: SkillContentResponse;
+  status: 200;
+};
+
+export type readSkillResponse401 = {
+  data: void;
+  status: 401;
+};
+
+export type readSkillResponse404 = {
+  data: SkillErrorBody;
+  status: 404;
+};
+
+export type readSkillResponse500 = {
+  data: SkillErrorBody;
+  status: 500;
+};
+
+export type readSkillResponse503 = {
+  data: SkillErrorBody;
+  status: 503;
+};
+
+export type readSkillResponseSuccess = readSkillResponse200 & {
+  headers: Headers;
+};
+export type readSkillResponseError = (
+  | readSkillResponse401
+  | readSkillResponse404
+  | readSkillResponse500
+  | readSkillResponse503
+) & {
+  headers: Headers;
+};
+
+export type readSkillResponse =
+  | readSkillResponseSuccess
+  | readSkillResponseError;
+
+export const getReadSkillUrl = (id: string) => {
+  return `/skills/${id}`;
+};
+
+export const readSkill = async (
+  id: string,
+  options?: RequestInit
+): Promise<readSkillResponse> => {
+  const res = await fetch(getReadSkillUrl(id), {
+    ...options,
+    method: 'GET',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: readSkillResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as readSkillResponse;
 };
 
 /**

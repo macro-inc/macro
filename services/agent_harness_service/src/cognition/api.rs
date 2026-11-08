@@ -119,6 +119,15 @@ fn api_router(api_context: ApiContext) -> Router {
         authorization_state.clone(),
     );
 
+    let skill_state = skills::inbound::axum_router::SkillRouterState::new(
+        api_context
+            .tool_service_context
+            .skill_tool_context
+            .service
+            .clone(),
+        authorization_state.clone(),
+    );
+
     let internal_router = Router::new()
         .nest("/chats", chats::router(api_context.clone()))
         .nest("/stream", stream::router())
@@ -181,6 +190,7 @@ fn api_router(api_context: ApiContext) -> Router {
         .merge(activity::inbound::axum_router::activity_router(
             activity_state,
         ))
+        .merge(skills::inbound::axum_router::skills_router(skill_state))
         .merge(mcp_client::inbound::mcp_router(mcp_state.clone()))
         .merge(pipedream_mcp::inbound::pipedream_mcp_router(
             api_context.pipedream_state.clone(),

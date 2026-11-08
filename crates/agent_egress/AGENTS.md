@@ -73,7 +73,8 @@ agent, and session. The bot
 never comes from the request. `MacroApiTokenSigner::mint_for_agent` callers
 (code mode) choose the claim themselves, plus an optional signed `agent_via`
 client label (public MCP code mode signs the MCP client's name); `mint_for`
-signs none of these claims.
+signs none of these claims. `mint_for_routine` signs the routine whose run the
+token acts for (and optionally an agent; `None` writes as the owner).
 
 ## Gotchas
 

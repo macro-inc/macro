@@ -1975,6 +1975,84 @@ export type SharePermissionV2 = {
 };
 
 /**
+ * A skill's complete instructions.
+ */
+export type SkillContentResponse = {
+    /**
+     * Whether this is a built-in skill, with no document behind it.
+     */
+    builtIn: boolean;
+    /**
+     * The skill's full markdown instructions.
+     */
+    content: string;
+    /**
+     * The skill's id.
+     */
+    id: string;
+    /**
+     * The skill's name.
+     */
+    name: string;
+};
+
+/**
+ * Machine-readable failure of a skill request.
+ */
+export type SkillErrorBody = {
+    /**
+     * Stable failure code.
+     */
+    code: string;
+    /**
+     * Explanation without backend diagnostics.
+     */
+    error: string;
+};
+
+/**
+ * One skill the caller can read.
+ */
+export type SkillListing = {
+    /**
+     * Whether this is a built-in skill, with no document behind it.
+     */
+    builtIn: boolean;
+    /**
+     * When to use the skill, when it says.
+     */
+    description?: string | null;
+    /**
+     * The skill document's id, or a built-in skill's well-known id.
+     */
+    id: string;
+    /**
+     * The skill's name.
+     */
+    name: string;
+    /**
+     * When the skill document was last updated; built-in skills have none.
+     */
+    updatedAt?: string | null;
+};
+
+/**
+ * How search terms are matched against skill names.
+ */
+export type SkillsMatchType = 'partial' | 'exact';
+
+/**
+ * The skills matching a listing or search, most recently updated first,
+ * built-in skills last.
+ */
+export type SkillsResponse = {
+    /**
+     * The matching skills.
+     */
+    skills: Array<SkillListing>;
+};
+
+/**
  * Metadata for one staged Slack channel.
  */
 export type SlackChannelMeta = {
@@ -4224,6 +4302,95 @@ export type GetBatchPreviewResponses = {
 };
 
 export type GetBatchPreviewResponse2 = GetBatchPreviewResponses[keyof GetBatchPreviewResponses];
+
+export type ListSkillsData = {
+    body?: never;
+    path?: never;
+    query?: {
+        /**
+         * Words from the skill's name, matched as one adjacent phrase. Omit to
+         * list the 100 most recently updated skills.
+         */
+        query?: string;
+        /**
+         * How `query` is matched; `partial` when omitted.
+         */
+        matchType?: SkillsMatchType;
+    };
+    url: '/skills';
+};
+
+export type ListSkillsErrors = {
+    /**
+     * Blank query
+     */
+    400: SkillErrorBody;
+    /**
+     * Unauthorized
+     */
+    401: unknown;
+    /**
+     * Listing failed
+     */
+    500: SkillErrorBody;
+    /**
+     * Search failed
+     */
+    502: SkillErrorBody;
+};
+
+export type ListSkillsError = ListSkillsErrors[keyof ListSkillsErrors];
+
+export type ListSkillsResponses = {
+    /**
+     * Matching skills, most recently updated first
+     */
+    200: SkillsResponse;
+};
+
+export type ListSkillsResponse = ListSkillsResponses[keyof ListSkillsResponses];
+
+export type ReadSkillData = {
+    body?: never;
+    path: {
+        /**
+         * The skill's id
+         */
+        id: string;
+    };
+    query?: never;
+    url: '/skills/{id}';
+};
+
+export type ReadSkillErrors = {
+    /**
+     * Unauthorized
+     */
+    401: unknown;
+    /**
+     * No skill the caller can view has this id
+     */
+    404: SkillErrorBody;
+    /**
+     * Reading failed
+     */
+    500: SkillErrorBody;
+    /**
+     * Access check unavailable
+     */
+    503: SkillErrorBody;
+};
+
+export type ReadSkillError = ReadSkillErrors[keyof ReadSkillErrors];
+
+export type ReadSkillResponses = {
+    /**
+     * The skill's instructions
+     */
+    200: SkillContentResponse;
+};
+
+export type ReadSkillResponse = ReadSkillResponses[keyof ReadSkillResponses];
 
 export type SendChatMessageData = {
     body: HttpSendChatMessageRequest;

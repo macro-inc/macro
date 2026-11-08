@@ -183,7 +183,7 @@ fn code_mode_starts_agents_through_the_sdk_instead_of_dispatch_tools() {
         assert!(!prompt.contains(name), "{name}");
     }
     assert!(tools.toolset.tools.contains_key("ListAgentUpdates"));
-    assert!(prompt.contains("macro.agents.list()"));
+    assert!(prompt.contains("macro.agents.coding()"));
     assert!(prompt.contains("macro.agentSessions.createManaged"));
     assert!(
         !tools_for(AiHost::AgentSession)
@@ -211,6 +211,32 @@ fn code_mode_manages_bots_through_the_sdk_but_keeps_the_credential_card() {
         );
     }
     assert!(tools.toolset.tools.contains_key("IssueBotCredential"));
+}
+
+#[test]
+fn code_mode_reads_and_edits_office_and_design_files_through_the_sdk() {
+    let tools = tools_for_agent_code_mode();
+    for name in [
+        "ReadPresentation",
+        "EditPresentation",
+        "ReadWordDocument",
+        "EditWordDocument",
+        "ReadDesign",
+        "ReadPhotoshopDocument",
+        "ReadIllustratorDocument",
+    ] {
+        assert!(!tools.toolset.tools.contains_key(name), "{name}");
+        assert!(
+            !tools.deferred.iter().any(|tool| tool.name == name),
+            "{name}"
+        );
+    }
+    assert!(
+        tools_for(AiHost::AgentSession)
+            .toolset
+            .tools
+            .contains_key("EditPresentation")
+    );
 }
 
 #[test]
@@ -751,6 +777,15 @@ fn code_mode_retains_direct_lifecycles_and_hides_sdk_methods_from_lazy_discovery
         "ContentSearch",
         "DiscoverConnectors",
         "ConnectMcpServer",
+        "ReadCanvas",
+        "EditCanvas",
+        "ApplyCanvasEdits",
+        "ReadSpreadsheet",
+        "CalculateSpreadsheet",
+        "EditSpreadsheet",
+        "ListSkills",
+        "SearchSkills",
+        "ReadSkill",
     ] {
         assert!(standard.toolset.tools.contains_key(name), "{name}");
         assert!(sdk.tools.contains_key(name), "{name}");
@@ -759,15 +794,7 @@ fn code_mode_retains_direct_lifecycles_and_hides_sdk_methods_from_lazy_discovery
     }
     for name in [
         "CreateDocument",
-        "ListSkills",
-        "SearchSkills",
-        "ReadSkill",
-        "EditSpreadsheet",
-        "ReadCanvas",
         "RenderCanvas",
-        "ApplyCanvasEdits",
-        "EditCanvas",
-        "EditPresentation",
         "Subagent",
         "SearchTools",
         "LoadTools",

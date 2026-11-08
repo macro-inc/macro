@@ -230,7 +230,10 @@ pub(crate) type DssCrmState = crm::inbound::axum_router::CrmRouterState<
 pub(crate) type DssSoupService = SoupImpl<
     PgSoupRepo,
     FrecencyQueryServiceImpl<FrecencyPgStorage>,
-    ReadonlyEmailPreviewAdapter<DssEmailService>,
+    crate::service::email_previews::ConsistentEmailPreviewReader<
+        ReadonlyEmailPreviewAdapter<DssEmailService>,
+        ReadonlyEmailPreviewAdapter<DssEmailService>,
+    >,
     ChannelListServiceImpl<PgChannelsRepo, PgChannelsRepo, FrecencyPgStorage>,
     call::domain::service::CallRecordQueryServiceImpl<call::outbound::pg_call_repo::PgCallRepo>,
     DssCrmService,
@@ -478,6 +481,7 @@ pub(crate) type ProjectService = ProjectServiceImpl<
     ShaCountAdapter,
     EntityAccessManagementService,
     SqsProjectSearchIndexer<DssEventBroker>,
+    crate::outbound::filed_items::FiledItemsUnfilerAdapter,
     DssEventBroker,
 >;
 

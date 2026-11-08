@@ -17,6 +17,10 @@ import {
 } from '../messages/thread';
 import { entitySearch } from '../search/options';
 import { EntityAccess } from '../sharing/access';
+import {
+  type SharePermissionOptions,
+  sharePermissionBody,
+} from '../sharing/permissions';
 import { User } from '../users/user';
 import { CallConnection, type JoinOptions } from './connection';
 import { callAdmissionError } from './errors';
@@ -281,6 +285,21 @@ export class CallRecord extends FavoritableEntity<CallRecordDetail> {
         body: {
           sharePermission: { teamShareAccessLevel: shared ? 'view' : null },
         },
+      }),
+    );
+  }
+
+  /**
+   * Change who can open the call: the link share and its access level, and
+   * channel grants. Omitted fields are left as they are; requires edit access
+   * (channel membership). `teamShareAccessLevel` only accepts `view` or `null`,
+   * and once the call is archived only its creator may change it.
+   */
+  async updateSharePermissions(options: SharePermissionOptions): Promise<void> {
+    await this.mutate((c) =>
+      c.storage.editCallRecord({
+        path: { call_id: this.id },
+        body: { sharePermission: sharePermissionBody(options) },
       }),
     );
   }

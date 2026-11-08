@@ -1,4 +1,29 @@
 export default {
+  email: 'Email',
+  editContactEmail: 'Add contact email',
+  addEmail: 'Add email',
+  contactEmailPlaceholder: 'person@example.com',
+  saveContact: 'Save',
+  savingContact: 'Saving…',
+  cancel: 'Cancel',
+  company: 'Company',
+  loadingCompanies: 'Loading companies…',
+  retryContact: 'Retry',
+  addCompany: 'Add company',
+  editContactCompany: 'Change contact company',
+  noCompany: 'No company',
+  goToCompany: 'Go to company',
+  searchCompanies: 'Search companies…',
+  contactEditFailed: 'Could not save this change. Try again.',
+  contactEmailConflict:
+    'This email is already associated with another contact in this team.',
+  contactEditConflict:
+    'This change conflicts with an existing record or an archived company.',
+  contactEditUnavailable:
+    'This contact or company is no longer available to edit.',
+  contactEditInvalid:
+    'This change is unavailable. Check the value and try again.',
+
   navigation: 'CRM navigation',
   collapseSidebar: 'Collapse CRM sidebar',
   expandSidebar: 'Expand CRM sidebar',
@@ -35,6 +60,12 @@ export default {
   pipelineTrackCompanies: 'Companies',
   pipelineTrackContacts: 'Contacts',
   pipelineTrackGeneric: 'Generic',
+  pipelineTrackCompaniesDescription:
+    'One row per company, for deals, accounts, or partners.',
+  pipelineTrackContactsDescription:
+    'One row per person, for hiring, outreach, or follow-ups.',
+  pipelineTrackGenericDescription:
+    'Rows you name yourself, not linked to a company or contact.',
   addEntry: 'Add entry',
   customerContact: 'Customer / Contact',
   searchCustomerContact: 'Search customers and contacts...',
@@ -53,4 +84,42 @@ export default {
     'Could not save requirements. Your selections are kept; try again.',
   savingRequirements: 'Saving…',
   saveRequirements: 'Save requirements',
+  privacyTeamTitle: 'Team blacklist',
+  privacyPersonalTitle: 'My blacklist',
+  privacyTeamDescription:
+    'These domains are excluded from everyone’s CRM email contributions. Any member can add a domain; only admins can remove one.',
+  privacyPersonalDescription:
+    'These domains are excluded from your contributions. Teammates can still contribute their copies of the same conversation.',
+  privacyDomainDescription:
+    'Subdomains are included. A blocked participant excludes the entire email thread. Existing companies stay visible.',
+  privacyNoDomains: 'No domains blocked.',
+  privacyRemove: 'Remove',
+  privacyRemoveDomain: 'Remove {{domain}}',
+  privacyTeamDomainLabel: 'Domain to block for the team',
+  privacyPersonalDomainLabel: 'Domain to block for my emails',
+  privacyDomainPlaceholder: 'example.com',
+  privacyAddDomain: 'Add domain',
+  privacyLoadFailed: 'Email settings could not be loaded.',
+  privacyLoading: 'Loading email settings…',
+  privacyRetry: 'Retry',
+  privacyContributionTitle: 'Your email contribution',
+  privacyAvailability:
+    'Everyone on your team can use CRM and manage companies without sharing their email.',
+  privacyConnect: 'Connect your email first',
+  privacyShared: 'Your eligible emails are shared with your team.',
+  privacyNotShared: 'Your emails are not contributing to CRM.',
+  privacyOn: 'Sharing on',
+  privacyOff: 'Sharing off',
+  privacyConsentDescription:
+    'Opting in shares the full content of all available past and future emails from this mailbox with your team, except blocked threads. Review both blacklists below first. Blocking a domain also hides previously shared matching threads. Stopping sharing withdraws your email contributions; companies and contacts remain.',
+  privacyStop: 'Stop sharing my emails',
+  privacyShare: 'Share my emails with CRM',
+  privacyBanner: 'Your emails aren’t contributing to CRM.',
+  privacyReview: 'Review and opt in',
+  privacyDialogTitle: 'Contribute your emails to CRM',
+  privacyClose: 'Close',
+  privacyCompanySettings: 'Email contribution settings',
+  privacyCompanyDescription:
+    'Manage your mailbox contribution and excluded domains. Email exclusions preserve company and contact records.',
+  privacyUpdateFailed: 'Could not update CRM email settings',
 };

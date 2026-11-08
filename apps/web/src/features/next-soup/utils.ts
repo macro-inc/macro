@@ -98,7 +98,6 @@ import { hydrateChannelNotificationSelection } from '@queries/channel/notificati
 import { queryClient } from '@queries/client';
 import { updateEmailThreadState } from '@queries/email/cache-cleanup';
 import {
-  archiveEmailThread,
   archiveEmailThreads,
   type EmailArchiveDisposition,
 } from '@queries/email/integration';
@@ -1014,68 +1013,6 @@ function getEntitySplitContent(entity: EntityData) {
         return { type: entity.type, id: entity.id };
       })
   );
-}
-
-async function _archiveEmail(
-  id: string,
-  options: { archive: boolean; optimisticallyExclude?: boolean }
-) {
-  await queryClient.cancelQueries({ queryKey: queryKeys.all.email });
-
-  const previousEmail = queryClient.getQueriesData<{
-    pages: { items: EntityData[] }[];
-  }>({
-    queryKey: queryKeys.all.email,
-  });
-
-  const current = getSoupEntityById(id);
-  const soupTxn = options.optimisticallyExclude
-    ? removeSoupEntities(new Set([id]))
-    : optimisticUpdateSoupEntity({
-        tag: 'emailThread',
-        data: { id, inboxVisible: false },
-        frecency_score: current?.frecency_score ?? 0,
-      });
-
-  // Optimistic update for email queries
-  const applyEmailOptimistic = (data?: {
-    pages: { items: EntityData[] }[];
-  }) => {
-    if (!data) return data;
-
-    return {
-      ...data,
-      pages: data.pages.map((page) => ({
-        ...page,
-        items: options.optimisticallyExclude
-          ? page.items.filter((item) => item.id !== id)
-          : page.items.map((item) =>
-              item.id === id ? { ...item, inboxVisible: false } : item
-            ),
-      })),
-    };
-  };
-
-  for (const [key, data] of previousEmail) {
-    queryClient.setQueryData(key, applyEmailOptimistic(data));
-  }
-
-  let disposition: EmailArchiveDisposition | undefined;
-  try {
-    disposition = await archiveEmailThread({ value: options.archive, id });
-  } catch (_err) {
-    soupTxn.rollback();
-    for (const [key, data] of previousEmail) {
-      queryClient.setQueryData(key, data);
-    }
-  } finally {
-    if (disposition !== 'queued') {
-      await Promise.all([
-        queryClient.invalidateQueries({ queryKey: queryKeys.all.email }),
-        invalidateSoupEntity(id),
-      ]);
-    }
-  }
 }
 
 type TrashEmailsHandle = {
