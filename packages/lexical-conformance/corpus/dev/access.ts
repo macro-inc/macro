@@ -1,7 +1,8 @@
 import { execFileSync } from 'node:child_process';
+import jwt from 'jsonwebtoken';
 
 export function devSecret(
-  key: 'DATABASE_URL' | 'SYNC_SERVICE_AUTH_KEY'
+  key: 'DATABASE_URL' | 'DOCUMENT_PERMISSION_JWT'
 ): string {
   try {
     return execFileSync(
@@ -72,3 +73,21 @@ export function database() {
 }
 
 export const syncUrl = 'https://sync-service-dev3.macroverse.workers.dev';
+
+export function documentToken(
+  documentId: string,
+  key: string,
+  now = Math.floor(Date.now() / 1000)
+): string {
+  return jwt.sign(
+    {
+      user_id: 'lexical-corpus-dev',
+      document_id: documentId,
+      access_level: 'admin',
+      exp: now + 60,
+      iss: 'document_storage_service',
+    },
+    key,
+    { algorithm: 'HS256', noTimestamp: true }
+  );
+}

@@ -12,18 +12,18 @@ bun packages/lexical-conformance/corpus/dev/run.ts scan
 bun test packages/lexical-conformance/corpus/dev/scan.test.ts
 ```
 
-The collector reads `DATABASE_URL` and `SYNC_SERVICE_AUTH_KEY` from Doppler's
-`cloud-storage-service/dev` config. The latter must match the deployed dev
-sync-service's internal key. Missing credentials or HTTP 401/403 stop collection.
+The collector reads `DATABASE_URL` and `DOCUMENT_PERMISSION_JWT` from Doppler's
+`cloud-storage-service/dev` config. It signs a per-document HS256 JWT with a
+60-second expiry, document_storage_service issuer and admin access, and sends it
+as a Bearer token. The internal service key does not authorize this dev route. Missing credentials or HTTP 401/403 stop collection.
 It never uses a production config or accepts a configurable sync-service host.
 The dev URL matches `infra/packages/shared/src/service_urls.ts`.
 
-SQL executes in read-only transactions with timeouts and keyset pagination.
-Sources are live Markdown documents, ready collaborative surfaces, and chat or
-channel messages containing serialized Lexical roots. A coarse message text
-filter is followed by JSON/root validation; arbitrary message prose is not a
-Lexical document. Sync-service requests are GET-only, refuse redirects, and run
-serially at most four per second. Error response bodies are never printed.
+SQL executes in read-only transactions with timeouts. The query returns ids only
+for at most 2,000 live Markdown documents, ordered by most recently updated and
+then id. This is a bounded dev document sample, not a complete dev inventory.
+Sync-service requests are GET-only, refuse redirects, and run serially at most
+four per second. Error response bodies are never printed.
 
 Only `/home/wolf/tmp/lexical-port/corpus` may hold pulled documents. The cache
 directory has mode 0700; AES-256-GCM files and the local random key have mode
