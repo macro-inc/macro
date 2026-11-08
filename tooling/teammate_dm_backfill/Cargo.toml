@@ -12,7 +12,7 @@ path = "src/main.rs"
 anyhow = { workspace = true }
 channels = { workspace = true, features = ["ports"] }
 channels_outbound = { workspace = true }
-database_env_vars = { workspace = true }
+datastore_env_vars = { workspace = true }
 macro_entrypoint = { workspace = true }
 macro_user_id = { workspace = true }
 sqlx = { workspace = true }

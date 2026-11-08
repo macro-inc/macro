@@ -757,9 +757,9 @@ dependencies = [
  "crm",
  "cursor_api_key",
  "cursor_cloud_agents",
- "database_env_vars",
  "database_sql_runner",
  "databases",
+ "datastore_env_vars",
  "document_cognition_service_url",
  "document_storage_service_client",
  "document_storage_service_url",
@@ -1218,7 +1218,7 @@ dependencies = [
  "connection_gateway_client",
  "connection_gateway_url",
  "crm",
- "database_env_vars",
+ "datastore_env_vars",
  "document_storage_service_client",
  "document_storage_service_url",
  "entity_access",
@@ -2478,7 +2478,7 @@ dependencies = [
  "crm",
  "cursor_api_key",
  "cursor_cloud_agents",
- "database_env_vars",
+ "datastore_env_vars",
  "decode_jwt",
  "document_cognition_service_url",
  "document_storage_service_client",
@@ -5815,7 +5815,7 @@ dependencies = [
  "axum",
  "connection_gateway_url",
  "contacts",
- "database_env_vars",
+ "datastore_env_vars",
  "doppler-config",
  "http-body-util",
  "macro_auth",
@@ -5877,7 +5877,7 @@ dependencies = [
  "aws-sdk-s3",
  "aws-sdk-sqs",
  "axum",
- "database_env_vars",
+ "datastore_env_vars",
  "docx_engine",
  "doppler-config",
  "futures",
@@ -6629,15 +6629,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a4ae5f15dda3c708c0ade84bfee31ccab44a3da4f88015ed22f63732abe300c8"
 
 [[package]]
-name = "database_env_vars"
-version = "0.1.0"
-dependencies = [
- "macro_env_var",
- "tracing",
- "workspace-hack",
-]
-
-[[package]]
 name = "database_id"
 version = "0.1.0"
 dependencies = [
@@ -6776,8 +6767,8 @@ dependencies = [
  "chrono",
  "clap",
  "connection_gateway_client",
- "database_env_vars",
  "database_sql_engine",
+ "datastore_env_vars",
  "entity_access",
  "entity_access_db_utils",
  "entity_access_outbound",
@@ -6828,6 +6819,15 @@ dependencies = [
  "s3_client",
  "sns_client",
  "tokio",
+ "tracing",
+ "workspace-hack",
+]
+
+[[package]]
+name = "datastore_env_vars"
+version = "0.1.0"
+dependencies = [
+ "macro_env_var",
  "tracing",
  "workspace-hack",
 ]
@@ -8709,7 +8709,7 @@ dependencies = [
  "bot_id",
  "cached",
  "clap",
- "database_env_vars",
+ "datastore_env_vars",
  "entity_access",
  "futures",
  "macro_db_migrator",
@@ -15570,7 +15570,7 @@ dependencies = [
  "axum",
  "chrono",
  "connection_gateway_url",
- "database_env_vars",
+ "datastore_env_vars",
  "doppler-config",
  "email_formatting",
  "hmac 0.12.1",
@@ -20654,7 +20654,7 @@ dependencies = [
  "channels",
  "channels_outbound",
  "chrono",
- "database_env_vars",
+ "datastore_env_vars",
  "entity_access",
  "entity_access_outbound",
  "import",
@@ -22274,7 +22274,7 @@ dependencies = [
  "anyhow",
  "channels",
  "channels_outbound",
- "database_env_vars",
+ "datastore_env_vars",
  "macro_entrypoint",
  "macro_user_id",
  "sqlx",
@@ -24483,7 +24483,7 @@ dependencies = [
  "aws-sdk-kms",
  "axum",
  "chrono",
- "database_env_vars",
+ "datastore_env_vars",
  "doppler-config",
  "external_chat",
  "futures",

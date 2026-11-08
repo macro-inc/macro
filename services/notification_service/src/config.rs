@@ -6,7 +6,7 @@
 //! environments, surfacing any missing or mistyped values at CI time.
 
 use anyhow::Context;
-use database_env_vars::{DatabaseUrl, RedisUri};
+use datastore_env_vars::{DatabaseUrl, RedisUri};
 use macro_auth::InternalApiKey;
 use macro_env::Environment;
 use macro_env_var::{env_var, env_vars, maybe_env_vars};

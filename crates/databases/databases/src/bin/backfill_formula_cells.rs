@@ -7,8 +7,8 @@ use std::time::Instant;
 
 use anyhow::Context as _;
 use clap::Parser;
-use database_env_vars::DatabaseUrl;
 use databases::backfill::{backfill_table, tables_with_formulas};
+use datastore_env_vars::DatabaseUrl;
 use macro_entrypoint::MacroEntrypoint;
 use sqlx::postgres::PgPoolOptions;
 
