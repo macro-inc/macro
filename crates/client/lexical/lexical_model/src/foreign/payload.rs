@@ -49,6 +49,7 @@ impl Transaction<'_> {
         type_name: &str,
         fields: SerializedNode,
     ) -> Result<NodeKey, Error> {
+        self.guard_write()?;
         let index = self.view().state.registry.get_or_err(type_name)?.index;
         if self
             .view()

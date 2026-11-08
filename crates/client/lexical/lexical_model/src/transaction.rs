@@ -22,6 +22,10 @@ pub struct Transaction<'editor> {
     #[cfg(feature = "foreign-nodes")]
     pub(crate) foreign_update: Arc<()>,
     #[cfg(feature = "foreign-nodes")]
+    pub(crate) foreign_read_only: bool,
+    #[cfg(feature = "foreign-nodes")]
+    pub(crate) foreign_previous_selection: Option<Selection>,
+    #[cfg(feature = "foreign-nodes")]
     pub(crate) native_projection: Option<crate::foreign::projection::NativeProjection>,
     pub(crate) extensions: crate::extension::Extensions,
     pub(crate) events: Vec<PluginEvent>,
@@ -61,6 +65,10 @@ impl<'editor> Transaction<'editor> {
             #[cfg(feature = "foreign-nodes")]
             foreign_update: Arc::new(()),
             #[cfg(feature = "foreign-nodes")]
+            foreign_read_only: false,
+            #[cfg(feature = "foreign-nodes")]
+            foreign_previous_selection: None,
+            #[cfg(feature = "foreign-nodes")]
             native_projection: None,
             extensions: editor.extensions.clone(),
             events: vec![],
@@ -93,11 +101,18 @@ impl<'editor> Transaction<'editor> {
     }
     /// Borrow the pending state, including uncommitted edits.
     pub fn view(&self) -> StateRef<'_> {
+        let previous_selection = self.editor.state.selection();
+        #[cfg(feature = "foreign-nodes")]
+        let previous_selection = if self.foreign_read_only {
+            self.foreign_previous_selection.as_ref()
+        } else {
+            previous_selection
+        };
         StateRef {
             #[cfg(feature = "foreign-nodes")]
             native_projection: self.native_projection.as_ref(),
             state: &self.pending,
-            previous_selection: self.editor.state.selection(),
+            previous_selection,
             composition_key: self.composition_key,
         }
     }
@@ -270,6 +285,7 @@ impl<'editor> Transaction<'editor> {
     }
     /// Create a detached node, applying its direct registered replacement.
     pub fn create<Node: NodeType>(&mut self, node: Node) -> Result<Id<Node>, Error> {
+        self.guard_write()?;
         let original = self.create_exact(node)?;
         let index = self
             .type_index(original)
@@ -298,6 +314,7 @@ impl<'editor> Transaction<'editor> {
     }
     /// Create without applying a replacement.
     pub fn create_exact<Node: NodeType>(&mut self, node: Node) -> Result<Id<Node>, Error> {
+        self.guard_write()?;
         let index = self
             .pending
             .registry
@@ -316,6 +333,7 @@ impl<'editor> Transaction<'editor> {
         node: Node,
         base: BaseData,
     ) -> Result<Id<Node>, Error> {
+        self.guard_write()?;
         let index = self
             .pending
             .registry
@@ -367,6 +385,7 @@ impl<'editor> Transaction<'editor> {
     }
     /// Create a registered type's final replacement from its default constructor.
     pub fn create_resolved<Node: NodeType>(&mut self) -> Result<NodeKey, Error> {
+        self.guard_write()?;
         let index = self
             .pending
             .registry
@@ -390,6 +409,7 @@ impl<'editor> Transaction<'editor> {
         key: impl Into<NodeKey>,
         skip_reset: bool,
     ) -> Result<NodeKey, Error> {
+        self.guard_write()?;
         let key = key.into();
         let original = self
             .view()
@@ -450,6 +470,7 @@ impl<'editor> Transaction<'editor> {
         state_key: &'static StateKey<ValueType>,
         value: ValueType,
     ) -> Result<(), Error> {
+        self.guard_write()?;
         let key = key.into();
         self.get_state(key, state_key)?;
         let slot = self.writable(key)?;
@@ -466,6 +487,7 @@ impl<'editor> Transaction<'editor> {
         state_key: &'static StateKey<ValueType>,
         update: impl FnOnce(&ValueType) -> ValueType,
     ) -> Result<(), Error> {
+        self.guard_write()?;
         let key = key.into();
         let previous = self.get_state(key, state_key)?;
         let next = update(&previous);
@@ -480,6 +502,7 @@ impl<'editor> Transaction<'editor> {
         key: impl Into<NodeKey>,
         json: &SerializedNode,
     ) -> Result<(), Error> {
+        self.guard_write()?;
         let key = key.into();
         #[cfg(feature = "foreign-nodes")]
         if let Some(result) = crate::foreign::dispatch::update_override(self, key, json) {
@@ -511,6 +534,7 @@ impl<'editor> Transaction<'editor> {
         import: JsonImport,
         raw: bool,
     ) -> Result<(), Error> {
+        self.guard_write()?;
         let index = self.type_index(key).ok_or(Error::NodeNotFound(key))?;
         let layout = self.pending.registry.registered(index).state_layout.clone();
         #[cfg(feature = "foreign-nodes")]
@@ -656,6 +680,7 @@ impl<'editor> Transaction<'editor> {
     }
     /// Import a node and recursively append its serialized children.
     pub fn import_node(&mut self, json: &SerializedNode) -> Result<NodeKey, Error> {
+        self.guard_write()?;
         let name = json
             .get("type")
             .and_then(serde_json::Value::as_str)
