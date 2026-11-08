@@ -115,6 +115,10 @@ pub(crate) fn call(
         }
         "isAttached" => return Ok(json!(view.is_attached(key))),
         "getLatest" => return r.node(view, key),
+        "getWritable" => {
+            tx.mark_dirty(key)?;
+            return r.node(tx.view(), key);
+        }
         "getChildrenSize" => return Ok(json!(view.children_size(key))),
         "getIndexWithinParent" => {
             return Ok(json!(

@@ -403,6 +403,7 @@ prost = "0.14"
 prost-build = "0.14"
 protox = "0.10"
 quote = "1"
+syn = { version = "2", features = ["full", "visit"] }
 rand = "0.9.0"
 ratatui = "0.29"
 # uses vendored to fix lambda builds failing.

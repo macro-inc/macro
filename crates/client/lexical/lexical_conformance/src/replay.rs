@@ -490,15 +490,7 @@ impl Replayer {
         validate_operation(op)?;
         match string(&op["op"])? {
             "call" => {
-                let selection = tx.selection().cloned();
-                let replacements = tx.selection_replacements();
-                let result = crate::api::lexical::call(self, tx, op);
-                if replacements != tx.selection_replacements()
-                    && let Some(id) = self.active_selection.take()
-                    && let Some(selection) = selection
-                {
-                    self.selections[id] = tx.detach_selection(selection);
-                }
+                let result = crate::api::call(self, tx, op);
                 if let Some(expected) = op.get("throws") {
                     match result {
                         Ok(value) => {

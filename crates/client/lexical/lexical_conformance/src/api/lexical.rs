@@ -434,7 +434,7 @@ pub(crate) fn call(r: &mut Replayer, tx: &mut Transaction<'_>, op: &Value) -> Re
                 _ => view.is_token_or_segmented(key),
             }))
         }
-        "lexical/LexicalNormalization.$normalizeSelection" => {
+        "lexical.$normalizeSelection" | "lexical/LexicalNormalization.$normalizeSelection" => {
             let value = a.first().ok_or_else(|| fail("selection argument"))?;
             let slot = slot_arg(r, value)?;
             tx.normalize_selection_at(slot)?;
@@ -492,10 +492,10 @@ pub(crate) fn call(r: &mut Replayer, tx: &mut Transaction<'_>, op: &Value) -> Re
         "lexical/LexicalUtils.getTextDirection" => {
             Ok(serde_json::to_value(text_direction(str_arg(a, 0)?))?)
         }
-        "lexical/LexicalUtils.$getCompositionKey" => {
+        "lexical.$getCompositionKey" | "lexical/LexicalUtils.$getCompositionKey" => {
             Ok(tx.composition_key().map_or_else(|| Value::Null, key_value))
         }
-        "lexical/LexicalUtils.$setCompositionKey" => {
+        "lexical.$setCompositionKey" | "lexical/LexicalUtils.$setCompositionKey" => {
             let key = match a.first() {
                 Some(v) if !v.is_null() => Some(key_arg(r, v)?),
                 _ => None,
