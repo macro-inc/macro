@@ -74,11 +74,38 @@ pub fn run(stage: &Stage, target: Target) -> Result<()> {
             .join("debug")
             .join(svc.cargo_bin);
         let dest = ws.join(target.debug_dir()).join(svc.cargo_bin);
-        std::fs::copy(&built, &dest)
-            .with_context(|| format!("copying {} to {}", built.display(), dest.display()))?;
+        replace_running_binary(&built, &dest)?;
     }
 
     Ok(())
+}
+
+/// Copies `built` over `dest` without writing into it: while a container runs
+/// `dest`, opening it for writing fails with "Text file busy". The copy goes to
+/// a sibling file that is renamed over `dest`, so the running process keeps the
+/// old inode and the next start picks up the new one. The copy keeps the built
+/// file's mtime, which is what the reload check compares, and is skipped when
+/// `dest` already is that build.
+fn replace_running_binary(built: &Path, dest: &Path) -> Result<()> {
+    let built_meta =
+        std::fs::metadata(built).with_context(|| format!("reading {}", built.display()))?;
+    let built_mtime = built_meta.modified()?;
+    if let Ok(dest_meta) = std::fs::metadata(dest)
+        && dest_meta.len() == built_meta.len()
+        && dest_meta.modified().ok() == Some(built_mtime)
+    {
+        return Ok(());
+    }
+    let staging = dest.with_extension("new");
+    std::fs::copy(built, &staging)
+        .with_context(|| format!("copying {} to {}", built.display(), staging.display()))?;
+    std::fs::File::options()
+        .write(true)
+        .open(&staging)
+        .and_then(|file| file.set_modified(built_mtime))
+        .with_context(|| format!("setting the mtime of {}", staging.display()))?;
+    std::fs::rename(&staging, dest)
+        .with_context(|| format!("replacing {} with {}", dest.display(), staging.display()))
 }
 
 /// Where a `--no-default-features` service builds. Under `target/` so it is

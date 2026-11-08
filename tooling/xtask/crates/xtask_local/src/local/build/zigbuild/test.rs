@@ -68,3 +68,51 @@ fn isolated_target_dirs_do_not_collide() {
         .collect();
     assert_eq!(dirs.len(), isolated_services().count());
 }
+
+/// Another instance from the same checkout may be running the binary. Copying
+/// into it fails with "Text file busy"; replacing it must not.
+#[test]
+fn replacing_a_binary_works_while_it_runs() {
+    let dir = tempfile::tempdir().unwrap();
+    let sleep = Command::new("sh")
+        .args(["-c", "command -v sleep"])
+        .output()
+        .unwrap();
+    let sleep = PathBuf::from(String::from_utf8(sleep.stdout).unwrap().trim());
+    let dest = dir.path().join("service");
+    // Copied by a child so this process never holds a write descriptor on it:
+    // another test forking meanwhile would inherit one and make the exec below
+    // fail with the very error under test.
+    assert!(
+        Command::new("cp")
+            .arg(&sleep)
+            .arg(&dest)
+            .status()
+            .unwrap()
+            .success()
+    );
+    // Writable like a cargo output; the Nix store copy is read-only.
+    std::fs::set_permissions(
+        &dest,
+        <std::fs::Permissions as std::os::unix::fs::PermissionsExt>::from_mode(0o755),
+    )
+    .unwrap();
+    // Nix's `sleep` is the coreutils multi-call binary, which dispatches on
+    // argv[0]; as `service` it would exit at once and free the file.
+    let mut running = std::os::unix::process::CommandExt::arg0(&mut Command::new(&dest), "sleep")
+        .arg("30")
+        .spawn()
+        .unwrap();
+
+    let error = std::fs::copy(&sleep, &dest).unwrap_err();
+    assert_eq!(error.raw_os_error(), Some(libc::ETXTBSY));
+
+    let rebuilt = dir.path().join("rebuilt");
+    std::fs::write(&rebuilt, b"new build").unwrap();
+    let replaced = replace_running_binary(&rebuilt, &dest);
+    running.kill().unwrap();
+    running.wait().unwrap();
+    replaced.unwrap();
+    assert_eq!(std::fs::read(&dest).unwrap(), b"new build");
+    assert_eq!(std::fs::read_dir(dir.path()).unwrap().count(), 2);
+}

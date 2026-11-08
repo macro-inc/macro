@@ -161,6 +161,9 @@ pub fn generate(
     if mode.spec().runs_local_infra && !instance.is_default() {
         set_external_networks_and_volumes(&mut value, instance);
     }
+    if !instance.is_default() {
+        set_external_project_networks(&mut value, instance);
+    }
 
     let yaml = serde_yaml::to_string(&value).context("rendering override yaml")?;
     let path = instance
@@ -541,6 +544,30 @@ fn set_external_networks_and_volumes(value: &mut Value, instance: &Instance) {
             .collect(),
         ),
     );
+}
+
+/// Make the networks the base compose files define for each project external, so
+/// they sit on the instance's allocated subnet instead of drawing from Docker's
+/// small default pool. External also means an existing instance keeps the
+/// networks it has: Compose never compares or recreates them.
+fn set_external_project_networks(value: &mut Value, instance: &Instance) {
+    let root = value.as_mapping_mut().expect("compose root is a mapping");
+    let networks = root
+        .entry("networks".into())
+        .or_insert_with(|| Value::Mapping(serde_yaml::Mapping::new()))
+        .as_mapping_mut()
+        .expect("compose networks is a mapping");
+    for (key, name) in [
+        ("services", instance.network_services()),
+        ("auth-internal", instance.network_auth_internal()),
+    ] {
+        let mut network = serde_yaml::Mapping::new();
+        // The base files' `driver: bridge` conflicts with `external`.
+        network.insert("driver".into(), reset_null());
+        network.insert("external".into(), true.into());
+        network.insert("name".into(), name.into());
+        networks.insert(key.into(), Value::Mapping(network));
+    }
 }
 
 /// `!reset null`.

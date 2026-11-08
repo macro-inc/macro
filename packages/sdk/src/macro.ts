@@ -299,9 +299,13 @@ export {
   AgentInvocation,
 } from './entities/agent-sessions/activity';
 export type {
+  AgentSessionUpdate,
+  AgentSessionUpdates,
   ArchiveCause,
   AutoArchiveOverrides,
   FoldedAgentSessionLog,
+  LinkedTask,
+  PendingToolApproval,
   SessionAutoArchive,
 } from './entities/agent-sessions/agent-session';
 export type { CodeResult } from './entities/agent-sessions/code-execution';
