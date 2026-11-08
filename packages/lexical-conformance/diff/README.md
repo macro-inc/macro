@@ -6,8 +6,14 @@ Vitest version:
 ```sh
 bun install --cwd packages/lexical-conformance --frozen-lockfile
 \cd packages/lexical-conformance
-STEPS=10000 bunx vitest run --config diff/vitest.config.mts
+STEPS=10000 bunx vitest run --config diff/vitest.config.mts --exclude 'diff/collab/**'
+bunx vitest run --config diff/collab.config.mts
 ```
+
+Run the collaboration suite with its dedicated configuration: its Macro node
+registrations and Loro aliases must share the installed production modules. The
+Tier C configuration aliases the pinned source tree and cannot host those same
+container identities. Both configurations keep all comparisons strict.
 
 The fixed seeds are 73129, 19088743 and 1592639710. `STEPS` counts generated
 commands per seed; `DIFF_SEED` and `DIFF_PATH` replay one run. Every generated
