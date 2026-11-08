@@ -92,8 +92,9 @@ impl ForeignReadSnapshot {
     /// The original committed state supplies editor-state reads; pending reads,
     /// previous selection and composition come from this capture. The peer has
     /// its own key allocator, runtime, extensions and listeners. This is a model
-    /// primitive: the host must also guard command/tag/event/publication ABI
-    /// entry points and implement upstream's read-only selection semantics.
+    /// primitive: flush and publication reject before model callbacks. The host
+    /// must also guard command/tag/event ABI entry points and implement JS object
+    /// freezing and selection value synchronization.
     pub fn with_read_transaction<T>(
         &self,
         committed: &EditorState,

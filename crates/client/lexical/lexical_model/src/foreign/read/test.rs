@@ -1,6 +1,68 @@
 use super::*;
 
 #[test]
+fn read_only_peers_reject_pipeline_and_publication_before_callbacks_or_commit_ids()
+-> Result<(), Error> {
+    use std::sync::atomic::{AtomicUsize, Ordering};
+    struct Hooks(Arc<AtomicUsize>);
+    impl ForeignHooks for Hooks {
+        fn selection_transform(
+            &self,
+            _: &mut Transaction<'_>,
+            _: NodeKey,
+        ) -> Override<Result<(), Error>> {
+            self.0.fetch_add(1, Ordering::SeqCst);
+            Override::Value(Ok(()))
+        }
+    }
+    let calls = Arc::new(AtomicUsize::new(0));
+    let mut editor = Editor::builder(EditorMode::Headless)
+        .foreign_node(ForeignNodeType {
+            type_name: "read-text".into(),
+            class_name: "ReadText".into(),
+            kind: NodeKind::Text,
+            extends: Some("text"),
+            required_state: vec![],
+            hooks: Arc::new(Hooks(calls.clone())),
+        })
+        .build()
+        .expect("editor");
+    let mut tx = editor.transaction();
+    let paragraph = tx.create(Paragraph::default())?.key();
+    let text = tx.create_foreign("read-text", SerializedNode::new())?;
+    tx.text(text)?.set_text_content("pending")?;
+    tx.append(paragraph, &[text])?;
+    tx.append(NodeKey::ROOT, &[paragraph])?;
+    tx.text(text)?
+        .select(Some(Utf16Offset(2)), Some(Utf16Offset(2)))?;
+    let snapshot = tx.view().snapshot_for_foreign_read()?;
+    snapshot.with_read_transaction(tx.committed_state(), |peer| -> Result<(), Error> {
+        let publication = peer.editor.suspend_version;
+        assert!(matches!(peer.flush(), Err(Error::ForeignReadOnly)));
+        assert!(matches!(
+            peer.flush_with(FlushMode::NormalizeOnly),
+            Err(Error::ForeignReadOnly)
+        ));
+        assert_eq!(calls.load(Ordering::SeqCst), 0);
+        assert!(matches!(peer.commit_phase(), Err(Error::ForeignReadOnly)));
+        assert_eq!(peer.editor.suspend_version, publication);
+        assert!(peer.committed_state().is_empty_state());
+        peer.sealed = true;
+        assert!(matches!(peer.flush(), Err(Error::ForeignReadOnly)));
+        assert!(matches!(peer.commit_phase(), Err(Error::ForeignReadOnly)));
+        assert_eq!(peer.editor.suspend_version, publication);
+        assert_eq!(calls.load(Ordering::SeqCst), 0);
+        assert_eq!(peer.text_content(text), "pending");
+        assert_eq!(peer.editor.keys.next_commit()?, CommitId(1));
+        Ok(())
+    })??;
+    assert!(tx.committed_state().is_empty_state());
+    assert_eq!(tx.text_content(text), "pending");
+    assert_eq!(calls.load(Ordering::SeqCst), 0);
+    Ok(())
+}
+
+#[test]
 fn read_only_point_values_change_without_composition_dirty_or_cache_side_effects()
 -> Result<(), Error> {
     // LexicalSelection.ts Point.set and RangeSelection.isBackward keep value
