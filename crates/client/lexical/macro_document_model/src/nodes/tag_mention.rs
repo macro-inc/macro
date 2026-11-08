@@ -51,3 +51,9 @@ impl DecoratorNode for TagMentionNode {
     }
 }
 impl SearchText for TagMentionNode {}
+
+impl lexical_markdown::MarkdownText for TagMentionNode {
+    fn markdown_text(&self) -> Option<&str> {
+        self.name.as_ref().map(String::as_str)
+    }
+}

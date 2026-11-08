@@ -80,3 +80,9 @@ pub fn append_watermark_node_to_last(
     tx.insert_after(last, node, true)?;
     Ok(Some(node))
 }
+
+impl lexical_markdown::MarkdownText for WatermarkNode {
+    fn markdown_text(&self) -> Option<&str> {
+        self.content.as_ref().map(|value| value.as_str())
+    }
+}

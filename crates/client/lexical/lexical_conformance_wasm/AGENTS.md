@@ -7,6 +7,7 @@ Never import them from production crates or bundles.
 
 ## Start here
 
+- `src/gate.rs`: actual Macro gate comparison with explicit deterministic constructor inputs.
 - `src/lib.rs`: isolated `CoreHandle`, JSON transaction boundary and build identity.
 - `src/rich.rs` and `src/rich/input.rs`: rich profile, history, markdown and explicit
   package operations for the external differential harness.

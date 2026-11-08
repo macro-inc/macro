@@ -3,6 +3,9 @@ use std::borrow::Cow;
 /// A document-model operation failed.
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
+    /// Loro snapshot or projection failure.
+    #[error(transparent)]
+    Loro(#[from] lexical_loro::ProjectionError),
     /// Transactional core model failure.
     #[error(transparent)]
     Model(#[from] lexical_model::Error),
