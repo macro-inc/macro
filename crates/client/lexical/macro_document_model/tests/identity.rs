@@ -293,3 +293,33 @@ fn clipboard_invalidation_runs_before_lower_handlers_without_consuming_insert() 
     );
     Ok(())
 }
+
+#[test]
+fn empty_current_peer_disables_transforms_and_bulk_ownership_but_empty_id_regenerates() -> Result<()>
+{
+    let mut editor = PeerIdPlugin::register(
+        export_builder(),
+        &["paragraph"],
+        PeerIdState {
+            peer_id: Some(String::new()),
+        },
+    )
+    .extension_state(NodeRandom(std::sync::Arc::new(|size| vec![0; size])))
+    .build()?;
+    let (p, _) = editor.update(|tx| {
+        let p = tx.create(Paragraph::default())?;
+        tx.append(NodeKey::ROOT, &[p.key()])?;
+        tx.set_state(p, &ID_STATE, Some(String::new()))?;
+        assert_eq!(assert_id(tx, p.key(), 8)?.as_str(), "uuuuuuuu");
+        Ok(p.key())
+    })?;
+    assert_eq!(get_peer_id(editor.state().view(), p)?, None);
+    assert_eq!(get_local(editor.state().view(), p)?, None);
+    editor.update(|tx| {
+        set_peer_id(tx, p, "owner".into())?;
+        update_all_ownership(tx, Some(""), Some(p))?;
+        assert_eq!(get_local(tx.view(), p)?, None);
+        Ok(())
+    })?;
+    Ok(())
+}
