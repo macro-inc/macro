@@ -381,7 +381,6 @@ export {
 export { ChannelAccessRequest } from './entities/channels/access-request';
 export { ChannelActivity } from './entities/channels/activity';
 export { ChannelPicture } from './entities/channels/picture';
-export { ChatGeneration, ChatMessage } from './entities/chats/generation';
 export type {
   ConnectedAppKind,
   ConnectedToolResult,

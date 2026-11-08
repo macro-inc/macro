@@ -164,7 +164,6 @@ export const calendarBacklog =
 export const cognitionExcluded = [
   'addMcpServer',
   'browsePipedreamMcpCatalog',
-  'callTool',
   'completePipedreamMcpConnect',
   'completePipedreamMcpConnection',
   'createPipedreamMcpToken',
@@ -182,7 +181,6 @@ export const cognitionExcluded = [
   'mcpAuthCallback',
   'mcpOauthClientMetadata',
   'recoverPipedreamMcpConnection',
-  'rejectToolCall',
   // Channel discovery shares the app-only import workflow below.
   'discoverHandler',
   'runImportHandler',
@@ -203,9 +201,11 @@ export const cognitionExcluded = [
   'startMcpAuth',
   'updateMcpServer',
   'updatePipedreamMcpConnection',
-  'updateToolCall',
-  'updateToolResponse',
   'upsertAiProjection',
+  // Legacy AI chats are read-only: sending always answers 410, and only the
+  // web app stops a stream it started before sending was retired.
+  'sendChatMessage',
+  'stopChatStream',
 ] as const satisfies readonly (keyof CognitionSdk)[];
 
 export const cognitionBacklog =

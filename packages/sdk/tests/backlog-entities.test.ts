@@ -470,63 +470,6 @@ test('team slug lookup validates the actual document response rather than trusti
   );
 });
 
-test('chat send receipts expose a scoped response message and cancellation never retries', async () => {
-  const requests: Request[] = [];
-  globalThis.fetch = Object.assign(
-    async (input: RequestInfo | URL) => {
-      const request = input instanceof Request ? input : new Request(input);
-      requests.push(request);
-      if (request.url.endsWith('/stop'))
-        return Response.json({ error: 'forbidden' }, { status: 403 });
-      if (request.method === 'GET')
-        return Response.json({
-          chat: {
-            messages: [
-              {
-                id: 'response-1',
-                content: 'Hello',
-                role: 'assistant',
-                attachments: [],
-              },
-            ],
-          },
-        });
-      return Response.json({
-        chat_id: 'chat-1',
-        message_id: 'response-1',
-        stream_id: 'stream-1',
-      });
-    },
-    { preconnect: originalFetch.preconnect },
-  );
-  const macro = new Macro({
-    token: 'token',
-    hosts: { cognition: 'https://ai.test' },
-  });
-  const generation = await macro.chats.byId('chat-1').send({
-    content: 'Hello',
-    model: 'model',
-    toolset: { type: 'none' },
-    attachments: [{ type: 'document', entity: macro.documents.byId('doc-1') }],
-  });
-  expect(generation.chat.id).toBe('chat-1');
-  expect(generation.message.id).toBe('response-1');
-  expect(await generation.message.content()).toBe('Hello');
-  expect(await requests[0].json()).toEqual({
-    chat_id: 'chat-1',
-    content: 'Hello',
-    model: 'model',
-    toolset: { type: 'none' },
-    attachments: [{ entity_id: 'doc-1', entity_type: 'document' }],
-  });
-  await expect(generation.stop()).rejects.toBeInstanceOf(MacroApiError);
-  expect(requests).toHaveLength(3);
-  expect(await requests[2].json()).toEqual({
-    chat_id: 'chat-1',
-    stream_id: 'stream-1',
-  });
-});
-
 test('pipeline view positions use the pipeline route and reject foreign handles before a request', async () => {
   const requests: Request[] = [];
   const positions: CardPosition[] = [
