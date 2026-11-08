@@ -333,6 +333,8 @@ impl TextMut<'_, '_> {
         }
         let mut value = self.data().text.as_str().to_owned();
         value.replace_range(start..end, insert);
+        // TextNode.spliceText obtains a writable record even for identical text.
+        self.tx.writable(self.key)?;
         self.set_text_content(&value)?;
         if move_selection {
             let offset = range.start + TextBuffer::new(insert).utf16_len();
@@ -350,8 +352,11 @@ impl TextMut<'_, '_> {
         let end = self.data().text.utf16_len();
         let anchor = anchor.unwrap_or(end);
         let focus = focus.unwrap_or(end);
-        self.data().text.byte_offset(anchor)?;
-        self.data().text.byte_offset(focus)?;
+        for offset in [anchor, focus] {
+            if offset > end {
+                return Err(Error::Utf16OffsetOutOfRange(offset));
+            }
+        }
         self.tx
             .select_points(Point::text(self.key, anchor), Point::text(self.key, focus))
     }
@@ -422,23 +427,9 @@ impl TextMut<'_, '_> {
                     .set_style(&data.style)?
                     .set_detail(data.detail)?;
                 self.tx.writable(part)?.state = state.clone();
-                if i == 0 && parent.is_some() {
-                    self.tx.replace(original, part, false)?;
-                } else if parent.is_some() {
-                    self.tx.insert_after(
-                        *parts
-                            .last()
-                            .ok_or(Error::Invariant("missing split predecessor"))?,
-                        part,
-                        true,
-                    )?;
-                }
                 part
             };
             parts.push(part);
-        }
-        if was_composing {
-            self.tx.composition_key = parts.last().copied();
         }
         if let (Some(Selection::Range(previous)), Some(Selection::Range(mut range))) =
             (&original_selection, self.tx.pending.selection.clone())
@@ -476,7 +467,16 @@ impl TextMut<'_, '_> {
                     break;
                 }
             }
+            range.invalidate_changed_direction();
             self.tx.pending.selection = Some(Selection::Range(range));
+        }
+        if let (Some(parent), Some(index)) = (parent, insertion_index) {
+            if data.is_segmented() {
+                self.tx.splice(parent, index, 0, &parts)?;
+                self.tx.remove(original, false)?;
+            } else {
+                self.tx.splice(parent, index, 1, &parts)?;
+            }
         }
         if let (
             Some(parent),
@@ -524,7 +524,11 @@ impl TextMut<'_, '_> {
                     };
                 }
             }
+            range.invalidate_changed_direction();
             self.tx.pending.selection = Some(Selection::Range(range));
+        }
+        if was_composing {
+            self.tx.composition_key = parts.last().copied();
         }
         Ok(parts)
     }
@@ -564,6 +568,7 @@ impl TextMut<'_, '_> {
                     }
                 }
             }
+            range.invalidate_changed_direction();
         }
         if self.tx.composition_key == Some(target) {
             self.tx.composition_key = Some(self.key);

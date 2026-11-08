@@ -17,11 +17,14 @@ pub(crate) fn append_nodes_to_html<C: DomRenderConfig>(
     } else {
         None
     };
+    let sliced_state = sliced
+        .as_deref()
+        .map(|text| ctx.state.view().with_text_slice(key, text))
+        .transpose()?;
     let local = ExportCtx {
-        state: ctx.state,
+        state: sliced_state.as_ref().unwrap_or(ctx.state),
         theme: ctx.theme,
         selection: ctx.selection,
-        text_override: sliced.as_deref(),
     };
     let output = exporter
         .config
@@ -72,8 +75,15 @@ pub(crate) fn append_nodes_to_html<C: DomRenderConfig>(
             HtmlNode::Fragment(nodes) => parent.extend(nodes),
             node => parent.push(node),
         }
-        if !is_fragment && let Some(after) = output.after {
-            after(&local, parent, index)?;
+        if let Some(after) = output.after {
+            if is_fragment {
+                // Upstream runs the callback on the detached, emptied fragment.
+                // Its replacement cannot affect children already moved to the parent.
+                let mut detached = vec![HtmlNode::Fragment(Vec::new())];
+                after(&local, &mut detached, 0)?;
+            } else {
+                after(&local, parent, index)?;
+            }
         }
     } else {
         parent.extend(fragment);

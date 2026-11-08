@@ -21,19 +21,30 @@ node types, immutable snapshots, transactional tree editing, update processing, 
 - `src/test/proptest.rs` checks generated scripts against independent link, cache, JSON, mutation and view-diff invariants.
 - `benches/node_map.rs` measures isolated writes and full keystrokes at three document sizes; read `benches/README.md` before interpreting timings.
 - `src/json.rs` preserves export order and JavaScript number serialization.
+- Reuse `json::js_string` and `json::js_to_number` for JSON boundary coercions; JSON.stringify is a different operation.
 - `src/style/css.rs` is the shared ordered JavaScript CSS parser for selections and HTML export.
 
 ## Boundaries
 
+- Keep parse_editor_state strict; parse_editor_state_report exposes partial state and its diagnostic only to hosts that choose a logging error policy.
+- Require equivalent NodeState on both text neighbors before normalization merges them, including absent versus populated state.
+- Preserve optional StateValue inner identity and imported undefined text fields through paragraph exports.
+
 - Use Error::invariant for runtime diagnostic context; static and owned messages display verbatim and share the Invariant classification.
+- Use NodeType::create_default for context-dependent constructors; default_node and flag probes remain pure data.
 - Pure Rust model; no network, database, runtime or browser dependencies.
 - Client crate: keep it excluded from workspace-hack through `crates/client/*`.
-- Direct splice/append moves preserve source element offsets for explicit package remapping; insert-before/after and replace adjust source offsets.
 - Use `replace_selection` when a package allocates a new selection object; point mutations preserve the active object identity.
 - TableSelection::set changes keys while preserving point offsets/kinds and dirties only changed keys, retaining any existing dirty mark.
+- Text replacement uses upstream node-based removal across every block type; caret deletion has different shadow-root semantics.
+- Use base parent splices for sibling insertion and replacement; element append retains virtual splice dispatch.
+- Clamp element offsets during caret reads while retaining the stored selection points.
+- Node removal relocates affected points to adjacent sibling element boundaries without descending into their text.
 - Selection slots, formatting and range edits preserve upstream active-versus-detached selection side effects.
 - Movement consumes explicit host points; `NoView` runs structural rules only.
 - Optional `model-segmentation` enables Unicode movement within text nodes; visual line boundaries still require host layout.
+- Read SharedKeyCounter::last_allocated when a host must observe temporary allocations without retaining nodes.
+- Borrow committed leaf identities through DirtyLeaves; selected tabs remain atomic during range replacement.
 - Stage plugin notifications with `emit`; consume typed events from a successful Commit, never call host callbacks inside transforms.
 - Typed selection-change and application commands use immutable plugins and transactional extension state.
 - Caret cursors compute successors before returning items; keep the construction-time first step.
@@ -41,11 +52,15 @@ node types, immutable snapshots, transactional tree editing, update processing, 
 - Hooks share one follow-up transaction per round and stop at 99 rounds; extension state rolls back with updates.
 - `StateRef::export_text_slice` exports changed clipboard text through ephemeral clone and export hooks without mutating snapshots.
 - `Transaction::restore_editor_state` clones snapshot records, preserves composition and staged dirty sets, and permits further writes; `set_editor_state` seals instead.
+- Publish event-only commits without advancing the history merge clock; history records only document or selection changes.
 - History restores snapshots without rerunning transforms; diffs compare descendant map entries even when ancestor records are shared.
 - EditorCore is sans-IO: host time, layout, clipboard and composition facts arrive as data; effects leave as values.
 - Failed hook rounds roll back early publications too; failed main inputs retain and report their early commits.
 
-- Reserved `foreign-nodes` exposes a development-only peer editor for the conformance facade; JS node hosting remains a later layer.
+- Reserved `foreign-nodes` exposes development-only peer editors and fresh seeded-state restoration (explicit key layout, validated selection, next allocator key) for the conformance facade; JS node hosting remains a later layer.
+
+- Structural deletion and movement traverse directional carets before consuming host layout targets; direct child blocks are not adjacent block boundaries.
+- Block insertion compares captured writability when upstream checks node object identity.
 
 ## Checks
 
@@ -63,6 +78,7 @@ node types, immutable snapshots, transactional tree editing, update processing, 
 
 - Text positions are UTF-16 code units; allow interior selection offsets but reject edits that split surrogate pairs.
 - Text insertion checks the adjacent text node's insertion edge before reusing it; tabs and entity boundaries require a new plain text node.
+- Node ordering is post-order within shared ancestry, including detached subtrees.
 - Node ancestry follows the kind trait's `Parent`, never Rust layout casts.
 - Keep key allocation outside rollback, and snapshots independent on first write.
 
@@ -78,24 +94,25 @@ literal exported bytes. `selection/*/test.rs` and `selection/test.rs` port expli
 upstream selection examples, including the §18.5 `remove_text` fixture, detached-slot
 side effects, UTF-16 boundaries, formatting, block deletion and host movement.
 
-Element text-cache changes retain intentional dirty marks after mutation reporting. Direct splice retains parent element offsets and dirties its boundary siblings even for an empty splice; sibling insertion adjusts parent offsets separately. `test/recorder_regressions.rs` covers these distinctions, detached/segmented composing splits, merge offsets and transient selections.
-
 Root text-cache reconciliation clones its record after mutation reporting and retains
 the intentional root dirty mark; cache-only writes do not add mutations.
+
+Generate command scripts with inline paragraph contents and block decorators at root; malformed nested paragraphs can legitimately reject insertion upstream. Check range-only command preconditions after decorator deletion enters NodeSelection, and validate selected node keys too.
 
 Generated properties cover S4 P1–P13 for the core node subset. P5 follows S1 §8.6
 cache eligibility; P10 compares dirty records before cache writes per S1 §8.7.
 Exact history JSON identity (P11) uses headless mode: restoring view-attached
 snapshots can reconcile cached element defaults, as the upstream literal guard
-demonstrates. P14 awaits the markdown crate. Persist shrinking seeds in
+demonstrates. Place P14 markdown round-trip properties in lexical_markdown. Persist shrinking seeds in
 `proptest-regressions/`. Keep the decorator count in sync with record insertion
 and removal; opaque text hooks rule out the local root-text proof.
 
+Cache range direction only when upstream calls isBackward in a write context; invalidate it on endpoint changes and selection-object cloning, while preserving it through text-only trimming.
 Collaborative callers opt into `opaque_unknown_types(true)`; strict import stays
 the default. Opaque records keep original type/version and own JSON, while framework
 links own children. Own export stays flat and overlays changed framework fields.
 
-Opaque future framework enum values round-trip unchanged; known node validation stays strict.
+Opaque future framework enum values round-trip unchanged. Apply source import rules to known fields; unknown element-format strings default through the source lookup.
 Copy only own fields when importing opaque elements; never recursively clone children.
 
 Expose immutable event names and the DirtyLeaves alias to boundary and post-commit adapters;

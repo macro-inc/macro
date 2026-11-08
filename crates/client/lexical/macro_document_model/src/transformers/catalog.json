@@ -1,0 +1,1948 @@
+{
+  "catalog": [
+    {
+      "name": "I_DATABASE_QUERY_BLOCK",
+      "builtin": false,
+      "type": "element",
+      "dependencies": [
+        "database-query",
+        "unknown-mention"
+      ],
+      "regExp": {
+        "source": "^<m-db-query>(.*?)<\\/m-db-query>$",
+        "flags": "",
+        "matcher": "RegExp"
+      },
+      "conversionOnly": false,
+      "triggerOnEnter": false,
+      "hasReplace": true
+    },
+    {
+      "name": "I_DATABASE_QUERY",
+      "builtin": false,
+      "type": "text-match",
+      "dependencies": [
+        "database-query",
+        "unknown-mention"
+      ],
+      "regExp": {
+        "source": "<m-db-query>(.*?)<\\/m-db-query>",
+        "flags": "",
+        "matcher": "RegExp"
+      },
+      "importRegExp": {
+        "source": "<m-db-query>(.*?)<\\/m-db-query>",
+        "flags": "",
+        "matcher": "RegExp"
+      },
+      "conversionOnly": false,
+      "triggerOnEnter": false,
+      "hasReplace": true
+    },
+    {
+      "name": "I_SNAPSHOT_NODE",
+      "builtin": false,
+      "type": "text-match",
+      "dependencies": [
+        "snapshot",
+        "unknown-mention"
+      ],
+      "regExp": {
+        "source": "<m-snapshot>(.*?)<\\/m-snapshot>",
+        "flags": "",
+        "matcher": "RegExp"
+      },
+      "importRegExp": {
+        "source": "<m-snapshot>(.*?)<\\/m-snapshot>",
+        "flags": "",
+        "matcher": "RegExp"
+      },
+      "conversionOnly": false,
+      "triggerOnEnter": false,
+      "hasReplace": true
+    },
+    {
+      "name": "I_PASTE_NODE",
+      "builtin": false,
+      "type": "element",
+      "dependencies": [
+        "paste",
+        "unknown-mention"
+      ],
+      "regExp": {
+        "source": "<m-paste>(.*?)<\\/m-paste>",
+        "flags": "",
+        "matcher": "RegExp"
+      },
+      "conversionOnly": false,
+      "triggerOnEnter": false,
+      "hasReplace": true
+    },
+    {
+      "name": "I_HTML_RENDER",
+      "builtin": false,
+      "type": "text-match",
+      "dependencies": [
+        "html-render",
+        "unknown-mention"
+      ],
+      "regExp": {
+        "source": "<m-html-render>(.*?)<\\/m-html-render>",
+        "flags": "",
+        "matcher": "RegExp"
+      },
+      "importRegExp": {
+        "source": "<m-html-render>(.*?)<\\/m-html-render>",
+        "flags": "",
+        "matcher": "RegExp"
+      },
+      "conversionOnly": false,
+      "triggerOnEnter": false,
+      "hasReplace": true
+    },
+    {
+      "name": "PRESERVE_LINES",
+      "builtin": false,
+      "type": "element",
+      "dependencies": [
+        "paragraph"
+      ],
+      "regExp": {
+        "source": "^[ ​]$",
+        "flags": "",
+        "matcher": "RegExp"
+      },
+      "conversionOnly": true,
+      "triggerOnEnter": false,
+      "hasReplace": true
+    },
+    {
+      "name": "VIDEO_LINK",
+      "builtin": false,
+      "type": "element",
+      "dependencies": [
+        "video"
+      ],
+      "regExp": {
+        "source": "^(?:\\[([^\\]]*\\.(?:mp4|webm|ogg|mov|avi|mkv|m4v)[^\\]]*)\\]\\((https?:\\/\\/(?:[\\w.-]+\\.)?static-file-service\\.macro\\.com\\/file\\/[^)\\s]+)(?:\\s\"([^\"]*)\"\\s*)?\\)|\\[([^\\]]*)\\]\\(([^)\\s?#]*\\.(?:mp4|webm|ogg|mov|avi|mkv|m4v)(?:[?#][^)\\s]*)?)(?:\\s\"([^\"]*)\"\\s*)?\\))\\s*$",
+        "flags": "i",
+        "matcher": "RegExp"
+      },
+      "conversionOnly": false,
+      "triggerOnEnter": false,
+      "hasReplace": true
+    },
+    {
+      "name": "LINK_XML",
+      "builtin": false,
+      "type": "text-match",
+      "dependencies": [
+        "link",
+        "unlinked-text",
+        "unknown-mention"
+      ],
+      "regExp": {
+        "source": "<m-link>(.*?)<\\/m-link>",
+        "flags": "s",
+        "matcher": "RegExp"
+      },
+      "importRegExp": {
+        "source": "<m-link>(.*?)<\\/m-link>",
+        "flags": "s",
+        "matcher": "RegExp"
+      },
+      "conversionOnly": false,
+      "triggerOnEnter": false,
+      "hasReplace": true
+    },
+    {
+      "name": "MARK_XML",
+      "builtin": false,
+      "type": "text-match",
+      "dependencies": [
+        "mark"
+      ],
+      "regExp": {
+        "source": "<mark>(.*?)<\\/mark>",
+        "flags": "s",
+        "matcher": "RegExp"
+      },
+      "importRegExp": {
+        "source": "<mark>(.*?)<\\/mark>",
+        "flags": "s",
+        "matcher": "RegExp"
+      },
+      "conversionOnly": false,
+      "triggerOnEnter": false,
+      "hasReplace": true
+    },
+    {
+      "name": "SEARCH_MATCH",
+      "builtin": false,
+      "type": "text-match",
+      "dependencies": [
+        "search-match"
+      ],
+      "regExp": {
+        "source": "<macro_em>(.*?)<\\/macro_em>",
+        "flags": "s",
+        "matcher": "RegExp"
+      },
+      "importRegExp": {
+        "source": "<macro_em>(.*?)<\\/macro_em>",
+        "flags": "s",
+        "matcher": "RegExp"
+      },
+      "conversionOnly": false,
+      "triggerOnEnter": false,
+      "hasReplace": true
+    },
+    {
+      "name": "HR",
+      "builtin": false,
+      "type": "element",
+      "dependencies": [
+        "horizontalrule"
+      ],
+      "regExp": {
+        "source": "^(---|\\*\\*\\*|___)\\s?$",
+        "flags": "",
+        "matcher": "RegExp"
+      },
+      "conversionOnly": false,
+      "triggerOnEnter": false,
+      "hasReplace": true
+    },
+    {
+      "name": "I_VIDEO",
+      "builtin": false,
+      "type": "element",
+      "dependencies": [
+        "video",
+        "unknown-mention"
+      ],
+      "regExp": {
+        "source": "^<m-video>(.*?)<\\/m-video>\\s*$",
+        "flags": "",
+        "matcher": "RegExp"
+      },
+      "conversionOnly": false,
+      "triggerOnEnter": false,
+      "hasReplace": true
+    },
+    {
+      "name": "I_IMAGE_CONSTRAINED",
+      "builtin": false,
+      "type": "element",
+      "dependencies": [
+        "image",
+        "unknown-mention"
+      ],
+      "regExp": {
+        "source": "^\\s*<m-image>(.*?)<\\/m-image>\\s*$",
+        "flags": "",
+        "matcher": "RegExp"
+      },
+      "conversionOnly": false,
+      "triggerOnEnter": false,
+      "hasReplace": true
+    },
+    {
+      "name": "IMAGE",
+      "builtin": false,
+      "type": "element",
+      "dependencies": [
+        "image"
+      ],
+      "regExp": {
+        "source": "!\\[([^\\]]*)\\]\\(([^)\\s]+)(?:\\s\"([^\"]*)\"\\s*)?\\)$",
+        "flags": "",
+        "matcher": "RegExp"
+      },
+      "conversionOnly": false,
+      "triggerOnEnter": false,
+      "hasReplace": true
+    },
+    {
+      "name": "LIST_ITEM_IMAGE_INTERNAL",
+      "builtin": false,
+      "type": "text-match",
+      "dependencies": [
+        "image",
+        "listitem"
+      ],
+      "regExp": {
+        "source": "$^",
+        "flags": "",
+        "matcher": "RegExp"
+      },
+      "conversionOnly": false,
+      "triggerOnEnter": false,
+      "hasReplace": false
+    },
+    {
+      "name": "I_USER_MENTION",
+      "builtin": false,
+      "type": "text-match",
+      "dependencies": [
+        "user-mention",
+        "unknown-mention"
+      ],
+      "regExp": {
+        "source": "<m-user-mention>(.*?)<\\/m-user-mention>",
+        "flags": "",
+        "matcher": "RegExp"
+      },
+      "importRegExp": {
+        "source": "<m-user-mention>(.*?)<\\/m-user-mention>",
+        "flags": "",
+        "matcher": "RegExp"
+      },
+      "conversionOnly": false,
+      "triggerOnEnter": false,
+      "hasReplace": true
+    },
+    {
+      "name": "I_GROUP_MENTION",
+      "builtin": false,
+      "type": "text-match",
+      "dependencies": [
+        "group-mention",
+        "unknown-mention"
+      ],
+      "regExp": {
+        "source": "<m-group-mention>(.*?)<\\/m-group-mention>",
+        "flags": "",
+        "matcher": "RegExp"
+      },
+      "importRegExp": {
+        "source": "<m-group-mention>(.*?)<\\/m-group-mention>",
+        "flags": "",
+        "matcher": "RegExp"
+      },
+      "conversionOnly": false,
+      "triggerOnEnter": false,
+      "hasReplace": true
+    },
+    {
+      "name": "I_DOCUMENT_MENTION",
+      "builtin": false,
+      "type": "text-match",
+      "dependencies": [
+        "document-mention",
+        "unknown-mention"
+      ],
+      "regExp": {
+        "source": "<m-document-mention>(.*?)<\\/m-document-mention>",
+        "flags": "",
+        "matcher": "RegExp"
+      },
+      "importRegExp": {
+        "source": "<m-document-mention>(.*?)<\\/m-document-mention>",
+        "flags": "",
+        "matcher": "RegExp"
+      },
+      "conversionOnly": false,
+      "triggerOnEnter": false,
+      "hasReplace": true
+    },
+    {
+      "name": "I_DOCUMENT_CARD",
+      "builtin": false,
+      "type": "element",
+      "dependencies": [
+        "document-card",
+        "unknown-mention"
+      ],
+      "regExp": {
+        "source": "<m-document-card>(.*?)<\\/m-document-card>",
+        "flags": "",
+        "matcher": "RegExp"
+      },
+      "conversionOnly": false,
+      "triggerOnEnter": false,
+      "hasReplace": true
+    },
+    {
+      "name": "I_PR_MENTION",
+      "builtin": false,
+      "type": "text-match",
+      "dependencies": [
+        "pr-mention",
+        "unknown-mention"
+      ],
+      "regExp": {
+        "source": "<m-pr-mention>(.*?)<\\/m-pr-mention>",
+        "flags": "",
+        "matcher": "RegExp"
+      },
+      "importRegExp": {
+        "source": "<m-pr-mention>(.*?)<\\/m-pr-mention>",
+        "flags": "",
+        "matcher": "RegExp"
+      },
+      "conversionOnly": false,
+      "triggerOnEnter": false,
+      "hasReplace": true
+    },
+    {
+      "name": "I_BOOKING_LINK_MENTION",
+      "builtin": false,
+      "type": "text-match",
+      "dependencies": [
+        "booking-link-mention",
+        "unknown-mention"
+      ],
+      "regExp": {
+        "source": "<m-booking-link-mention>(.*?)<\\/m-booking-link-mention>",
+        "flags": "",
+        "matcher": "RegExp"
+      },
+      "importRegExp": {
+        "source": "<m-booking-link-mention>(.*?)<\\/m-booking-link-mention>",
+        "flags": "",
+        "matcher": "RegExp"
+      },
+      "conversionOnly": false,
+      "triggerOnEnter": false,
+      "hasReplace": true
+    },
+    {
+      "name": "I_AGENT_SESSION_CARD",
+      "builtin": false,
+      "type": "element",
+      "dependencies": [
+        "agent-session-mention"
+      ],
+      "regExp": {
+        "source": "$^",
+        "flags": "",
+        "matcher": "RegExp"
+      },
+      "conversionOnly": false,
+      "triggerOnEnter": false,
+      "hasReplace": true
+    },
+    {
+      "name": "I_AGENT_SESSION_MENTION",
+      "builtin": false,
+      "type": "text-match",
+      "dependencies": [
+        "agent-session-mention",
+        "unknown-mention"
+      ],
+      "regExp": {
+        "source": "<m-agent-session-mention>(.*?)<\\/m-agent-session-mention>",
+        "flags": "",
+        "matcher": "RegExp"
+      },
+      "importRegExp": {
+        "source": "<m-agent-session-mention>(.*?)<\\/m-agent-session-mention>",
+        "flags": "",
+        "matcher": "RegExp"
+      },
+      "conversionOnly": false,
+      "triggerOnEnter": false,
+      "hasReplace": true
+    },
+    {
+      "name": "I_CONTACT_MENTION",
+      "builtin": false,
+      "type": "text-match",
+      "dependencies": [
+        "contact-mention",
+        "unknown-mention"
+      ],
+      "regExp": {
+        "source": "<m-contact-mention>(.*?)<\\/m-contact-mention>",
+        "flags": "",
+        "matcher": "RegExp"
+      },
+      "importRegExp": {
+        "source": "<m-contact-mention>(.*?)<\\/m-contact-mention>",
+        "flags": "",
+        "matcher": "RegExp"
+      },
+      "conversionOnly": false,
+      "triggerOnEnter": false,
+      "hasReplace": true
+    },
+    {
+      "name": "I_DATE_MENTION",
+      "builtin": false,
+      "type": "text-match",
+      "dependencies": [
+        "date-mention",
+        "unknown-mention"
+      ],
+      "regExp": {
+        "source": "<m-date-mention>(.*?)<\\/m-date-mention>",
+        "flags": "",
+        "matcher": "RegExp"
+      },
+      "importRegExp": {
+        "source": "<m-date-mention>(.*?)<\\/m-date-mention>",
+        "flags": "",
+        "matcher": "RegExp"
+      },
+      "conversionOnly": false,
+      "triggerOnEnter": false,
+      "hasReplace": true
+    },
+    {
+      "name": "I_AWAIT_NODE",
+      "builtin": false,
+      "type": "text-match",
+      "dependencies": [
+        "await",
+        "unknown-mention"
+      ],
+      "regExp": {
+        "source": "<m-await>(.*?)<\\/m-await>",
+        "flags": "",
+        "matcher": "RegExp"
+      },
+      "importRegExp": {
+        "source": "<m-await>(.*?)<\\/m-await>",
+        "flags": "",
+        "matcher": "RegExp"
+      },
+      "conversionOnly": false,
+      "triggerOnEnter": false,
+      "hasReplace": true
+    },
+    {
+      "name": "I_MAGIC_CHIP",
+      "builtin": false,
+      "type": "element",
+      "dependencies": [
+        "magic-chip",
+        "unknown-mention"
+      ],
+      "regExp": {
+        "source": "<m-magic-chip>(.*?)<\\/m-magic-chip>",
+        "flags": "",
+        "matcher": "RegExp"
+      },
+      "conversionOnly": false,
+      "triggerOnEnter": false,
+      "hasReplace": true
+    },
+    {
+      "name": "I_AGENT_ACTIVITY",
+      "builtin": false,
+      "type": "element",
+      "dependencies": [
+        "agent-activity",
+        "unknown-mention"
+      ],
+      "regExp": {
+        "source": "<m-agent-activity>(.*?)<\\/m-agent-activity>",
+        "flags": "s",
+        "matcher": "RegExp"
+      },
+      "conversionOnly": false,
+      "triggerOnEnter": false,
+      "hasReplace": true
+    },
+    {
+      "name": "I_REPLY_TARGET_NODE",
+      "builtin": false,
+      "type": "element",
+      "dependencies": [
+        "reply-target",
+        "unknown-mention"
+      ],
+      "regExp": {
+        "source": "^<m-reply-target>(.*?)<\\/m-reply-target>$",
+        "flags": "s",
+        "matcher": "RegExp"
+      },
+      "conversionOnly": false,
+      "triggerOnEnter": false,
+      "hasReplace": true
+    },
+    {
+      "name": "I_AGENT_CONTEXT",
+      "builtin": false,
+      "type": "element",
+      "dependencies": [
+        "agent-context",
+        "unknown-mention"
+      ],
+      "regExp": {
+        "source": "^<m-agent-context>(.*?)<\\/m-agent-context>$",
+        "flags": "s",
+        "matcher": "RegExp"
+      },
+      "conversionOnly": false,
+      "triggerOnEnter": false,
+      "hasReplace": true
+    },
+    {
+      "name": "I_TABLE_NODE",
+      "builtin": false,
+      "type": "element",
+      "dependencies": [
+        "table",
+        "tablerow",
+        "tablecell"
+      ],
+      "regExp": {
+        "source": "<m-table((?:\\s+[\\w-]+=\"[^\"]*\")*)\\s*>(.*?)<\\/m-table>",
+        "flags": "",
+        "matcher": "RegExp"
+      },
+      "conversionOnly": false,
+      "triggerOnEnter": false,
+      "hasReplace": true
+    },
+    {
+      "name": "HTML_BLOCKQUOTE",
+      "builtin": false,
+      "type": "multiline-element",
+      "dependencies": [
+        "quote"
+      ],
+      "regExpStart": {
+        "source": "^\\s*<blockquote\\b[^>]*>\\s*(.*)$",
+        "flags": "i",
+        "matcher": "RegExp"
+      },
+      "regExpEnd": {
+        "source": "^(.*?)\\s*<\\/blockquote>\\s*$",
+        "flags": "i",
+        "matcher": "RegExp"
+      },
+      "conversionOnly": false,
+      "triggerOnEnter": false,
+      "hasReplace": true
+    },
+    {
+      "name": "I_MACRO_QUOTE",
+      "builtin": false,
+      "type": "element",
+      "dependencies": [
+        "classed-block",
+        "unknown-mention"
+      ],
+      "regExp": {
+        "source": "<m-email-thread-embed>(.*?)<\\/m-email-thread-embed>",
+        "flags": "",
+        "matcher": "RegExp"
+      },
+      "conversionOnly": false,
+      "triggerOnEnter": false,
+      "hasReplace": true
+    },
+    {
+      "name": "I_EQUATION_NODE",
+      "builtin": false,
+      "type": "text-match",
+      "dependencies": [
+        "equation",
+        "unknown-mention"
+      ],
+      "regExp": {
+        "source": "<m-katex-equation>(.*?)<\\/m-katex-equation>",
+        "flags": "",
+        "matcher": "RegExp"
+      },
+      "importRegExp": {
+        "source": "<m-katex-equation>(.*?)<\\/m-katex-equation>",
+        "flags": "",
+        "matcher": "RegExp"
+      },
+      "conversionOnly": false,
+      "triggerOnEnter": false,
+      "hasReplace": true
+    },
+    {
+      "name": "I_THEME_MENTION",
+      "builtin": false,
+      "type": "text-match",
+      "dependencies": [
+        "theme-mention",
+        "unknown-mention"
+      ],
+      "regExp": {
+        "source": "<m-theme-mention>(.*?)<\\/m-theme-mention>",
+        "flags": "",
+        "matcher": "RegExp"
+      },
+      "importRegExp": {
+        "source": "<m-theme-mention>(.*?)<\\/m-theme-mention>",
+        "flags": "",
+        "matcher": "RegExp"
+      },
+      "conversionOnly": false,
+      "triggerOnEnter": false,
+      "hasReplace": true
+    },
+    {
+      "name": "I_TAG_MENTION",
+      "builtin": false,
+      "type": "text-match",
+      "dependencies": [
+        "tag-mention",
+        "unknown-mention"
+      ],
+      "regExp": {
+        "source": "<m-tag>(.*?)<\\/m-tag>",
+        "flags": "",
+        "matcher": "RegExp"
+      },
+      "importRegExp": {
+        "source": "<m-tag>(.*?)<\\/m-tag>",
+        "flags": "",
+        "matcher": "RegExp"
+      },
+      "conversionOnly": false,
+      "triggerOnEnter": false,
+      "hasReplace": true
+    },
+    {
+      "name": "I_CONNECT_APP",
+      "builtin": false,
+      "type": "text-match",
+      "dependencies": [
+        "connect-app",
+        "unknown-mention"
+      ],
+      "regExp": {
+        "source": "<m-connect-app>(.*?)<\\/m-connect-app>",
+        "flags": "",
+        "matcher": "RegExp"
+      },
+      "importRegExp": {
+        "source": "<m-connect-app>(.*?)<\\/m-connect-app>",
+        "flags": "",
+        "matcher": "RegExp"
+      },
+      "conversionOnly": false,
+      "triggerOnEnter": false,
+      "hasReplace": true
+    },
+    {
+      "name": "I_ACCOUNT_MANAGER_REQUEST",
+      "builtin": false,
+      "type": "text-match",
+      "dependencies": [
+        "account-manager-request",
+        "unknown-mention"
+      ],
+      "regExp": {
+        "source": "<m-account-manager-request>(.*?)<\\/m-account-manager-request>",
+        "flags": "",
+        "matcher": "RegExp"
+      },
+      "importRegExp": {
+        "source": "<m-account-manager-request>(.*?)<\\/m-account-manager-request>",
+        "flags": "",
+        "matcher": "RegExp"
+      },
+      "conversionOnly": false,
+      "triggerOnEnter": false,
+      "hasReplace": true
+    },
+    {
+      "name": "I_WATERMARK",
+      "builtin": false,
+      "type": "element",
+      "dependencies": [
+        "watermark",
+        "unknown-mention"
+      ],
+      "regExp": {
+        "source": "<m-watermark>(.*?)<\\/m-watermark>",
+        "flags": "",
+        "matcher": "RegExp"
+      },
+      "conversionOnly": false,
+      "triggerOnEnter": false,
+      "hasReplace": true
+    },
+    {
+      "name": "HTML_TEXT_FORMAT_EXPORTER",
+      "builtin": false,
+      "type": "text-match",
+      "dependencies": [],
+      "regExp": {
+        "source": "$a",
+        "flags": "",
+        "matcher": "RegExp"
+      },
+      "conversionOnly": false,
+      "triggerOnEnter": false,
+      "hasReplace": false
+    },
+    {
+      "name": "HTML_TEXT_FORMAT_IMPORTER_0",
+      "builtin": false,
+      "type": "text-match",
+      "dependencies": [],
+      "regExp": {
+        "source": "<u>(.*?)<\\/u>",
+        "flags": "i",
+        "matcher": "RegExp"
+      },
+      "importRegExp": {
+        "source": "<u>(.*?)<\\/u>",
+        "flags": "i",
+        "matcher": "RegExp"
+      },
+      "conversionOnly": false,
+      "triggerOnEnter": false,
+      "hasReplace": true
+    },
+    {
+      "name": "HTML_TEXT_FORMAT_IMPORTER_1",
+      "builtin": false,
+      "type": "text-match",
+      "dependencies": [],
+      "regExp": {
+        "source": "<sup>(.*?)<\\/sup>",
+        "flags": "i",
+        "matcher": "RegExp"
+      },
+      "importRegExp": {
+        "source": "<sup>(.*?)<\\/sup>",
+        "flags": "i",
+        "matcher": "RegExp"
+      },
+      "conversionOnly": false,
+      "triggerOnEnter": false,
+      "hasReplace": true
+    },
+    {
+      "name": "HTML_TEXT_FORMAT_IMPORTER_2",
+      "builtin": false,
+      "type": "text-match",
+      "dependencies": [],
+      "regExp": {
+        "source": "<sub>(.*?)<\\/sub>",
+        "flags": "i",
+        "matcher": "RegExp"
+      },
+      "importRegExp": {
+        "source": "<sub>(.*?)<\\/sub>",
+        "flags": "i",
+        "matcher": "RegExp"
+      },
+      "conversionOnly": false,
+      "triggerOnEnter": false,
+      "hasReplace": true
+    },
+    {
+      "name": "HEADING",
+      "builtin": true,
+      "type": "element",
+      "dependencies": [
+        "heading"
+      ],
+      "regExp": {
+        "source": "^(#{1,6})\\s",
+        "flags": "",
+        "matcher": "RegExp"
+      },
+      "conversionOnly": false,
+      "triggerOnEnter": true,
+      "hasReplace": true
+    },
+    {
+      "name": "QUOTE",
+      "builtin": true,
+      "type": "element",
+      "dependencies": [
+        "quote"
+      ],
+      "regExp": {
+        "source": "^>\\s",
+        "flags": "",
+        "matcher": "RegExp"
+      },
+      "conversionOnly": false,
+      "triggerOnEnter": true,
+      "hasReplace": true
+    },
+    {
+      "name": "CODE",
+      "builtin": true,
+      "type": "multiline-element",
+      "dependencies": [
+        "code"
+      ],
+      "regExpStart": {
+        "source": "^([ \\t]*`{3,})([\\w-]+)?[ \\t]?",
+        "flags": "",
+        "matcher": "RegExp"
+      },
+      "regExpEnd": {
+        "source": "^[ \\t]*`{3,}$",
+        "flags": "",
+        "matcher": "RegExp",
+        "optional": true
+      },
+      "conversionOnly": false,
+      "triggerOnEnter": false,
+      "hasReplace": true
+    },
+    {
+      "name": "INLINE_CODE",
+      "builtin": true,
+      "type": "text-format",
+      "dependencies": [],
+      "conversionOnly": false,
+      "triggerOnEnter": false,
+      "hasReplace": false
+    },
+    {
+      "name": "BOLD_ITALIC_STAR",
+      "builtin": true,
+      "type": "text-format",
+      "dependencies": [],
+      "conversionOnly": false,
+      "triggerOnEnter": false,
+      "hasReplace": false
+    },
+    {
+      "name": "BOLD_ITALIC_UNDERSCORE",
+      "builtin": true,
+      "type": "text-format",
+      "dependencies": [],
+      "conversionOnly": false,
+      "triggerOnEnter": false,
+      "hasReplace": false
+    },
+    {
+      "name": "BOLD_STAR",
+      "builtin": true,
+      "type": "text-format",
+      "dependencies": [],
+      "conversionOnly": false,
+      "triggerOnEnter": false,
+      "hasReplace": false
+    },
+    {
+      "name": "BOLD_UNDERSCORE",
+      "builtin": true,
+      "type": "text-format",
+      "dependencies": [],
+      "conversionOnly": false,
+      "triggerOnEnter": false,
+      "hasReplace": false
+    },
+    {
+      "name": "HIGHLIGHT",
+      "builtin": true,
+      "type": "text-format",
+      "dependencies": [],
+      "conversionOnly": false,
+      "triggerOnEnter": false,
+      "hasReplace": false
+    },
+    {
+      "name": "ITALIC_STAR",
+      "builtin": true,
+      "type": "text-format",
+      "dependencies": [],
+      "conversionOnly": false,
+      "triggerOnEnter": false,
+      "hasReplace": false
+    },
+    {
+      "name": "ITALIC_UNDERSCORE",
+      "builtin": true,
+      "type": "text-format",
+      "dependencies": [],
+      "conversionOnly": false,
+      "triggerOnEnter": false,
+      "hasReplace": false
+    },
+    {
+      "name": "STRIKETHROUGH",
+      "builtin": true,
+      "type": "text-format",
+      "dependencies": [],
+      "conversionOnly": false,
+      "triggerOnEnter": false,
+      "hasReplace": false
+    },
+    {
+      "name": "LINK",
+      "builtin": true,
+      "type": "text-match",
+      "dependencies": [
+        "link"
+      ],
+      "regExp": {
+        "source": "(?:\\[([^[\\]]*(?:\\[[^[\\]]*\\][^[\\]]*)*)\\])(?:\\((?:([^()\\s]+)(?:\\s\"((?:[^\"]*\\\\\")*[^\"]*)\"\\s*)?)\\))$",
+        "flags": "",
+        "matcher": "RegExp"
+      },
+      "importRegExp": {
+        "source": "(?:\\[(.+?)\\])(?:\\((?:([^()\\s]+)(?:\\s\"((?:[^\"]*\\\\\")*[^\"]*)\"\\s*)?)\\))",
+        "flags": "",
+        "matcher": "RegExp"
+      },
+      "conversionOnly": false,
+      "triggerOnEnter": false,
+      "trigger": ")",
+      "hasReplace": true
+    },
+    {
+      "name": "MACRO_ORDERED_LIST",
+      "builtin": false,
+      "type": "element",
+      "dependencies": [
+        "list",
+        "listitem"
+      ],
+      "regExp": {
+        "source": "^(\\s*)(\\d{1,})\\.\\s",
+        "flags": "",
+        "matcher": "RegExp"
+      },
+      "conversionOnly": false,
+      "triggerOnEnter": true,
+      "hasReplace": true
+    },
+    {
+      "name": "MACRO_CHECK_LIST",
+      "builtin": false,
+      "type": "element",
+      "dependencies": [
+        "list",
+        "listitem"
+      ],
+      "regExp": {
+        "source": "^(\\s*)(?:[-*+]\\s)?\\s?(\\[(\\s|x)?\\])\\s",
+        "flags": "i",
+        "matcher": "RegExp"
+      },
+      "conversionOnly": false,
+      "triggerOnEnter": true,
+      "hasReplace": true
+    },
+    {
+      "name": "MACRO_UNORDERED_LIST",
+      "builtin": false,
+      "type": "element",
+      "dependencies": [
+        "list",
+        "listitem"
+      ],
+      "regExp": {
+        "source": "^(\\s*)[-*+]\\s",
+        "flags": "",
+        "matcher": "RegExp"
+      },
+      "conversionOnly": false,
+      "triggerOnEnter": true,
+      "hasReplace": true
+    },
+    {
+      "name": "ESCAPED_AUTO_LINK",
+      "builtin": false,
+      "type": "text-match",
+      "dependencies": [
+        "unlinked-text"
+      ],
+      "regExp": {
+        "source": "(?:)",
+        "flags": "",
+        "matcher": "EscapedAutoLinkRegExp"
+      },
+      "importRegExp": {
+        "source": "(?:)",
+        "flags": "",
+        "matcher": "EscapedAutoLinkRegExp"
+      },
+      "conversionOnly": true,
+      "triggerOnEnter": false,
+      "hasReplace": true
+    },
+    {
+      "name": "AUTO_LINK",
+      "builtin": false,
+      "type": "text-match",
+      "dependencies": [
+        "link"
+      ],
+      "regExp": {
+        "source": "(?:)",
+        "flags": "",
+        "matcher": "AutoLinkRegExp"
+      },
+      "importRegExp": {
+        "source": "(?:)",
+        "flags": "",
+        "matcher": "AutoLinkRegExp"
+      },
+      "conversionOnly": true,
+      "triggerOnEnter": false,
+      "hasReplace": true
+    },
+    {
+      "name": "I_CURSOR_SYSTEM_NOTIFICATION",
+      "builtin": false,
+      "type": "multiline-element",
+      "dependencies": [
+        "system-notification"
+      ],
+      "regExpStart": {
+        "source": "^<system\\\\?_notification((?:\\s+([A-Za-z_\\\\][\\w.:\\\\-]*)\\s*=\\s*\"((?:<m-link>.*?<\\/m-link>|[^\"])*)\")*)\\s*>",
+        "flags": "",
+        "matcher": "RegExp"
+      },
+      "regExpEnd": {
+        "source": "<\\/system\\\\?_notification>\\s*$",
+        "flags": "",
+        "matcher": "RegExp"
+      },
+      "conversionOnly": false,
+      "triggerOnEnter": false,
+      "hasReplace": true
+    },
+    {
+      "name": "UNKNOWN_MENTION",
+      "builtin": false,
+      "type": "text-match",
+      "dependencies": [
+        "unknown-mention"
+      ],
+      "regExp": {
+        "source": "<(m-[a-zA-Z0-9_-]+)>(.*?)<\\/\\1>",
+        "flags": "s",
+        "matcher": "RegExp"
+      },
+      "importRegExp": {
+        "source": "<(m-[a-zA-Z0-9_-]+)>(.*?)<\\/\\1>",
+        "flags": "s",
+        "matcher": "RegExp"
+      },
+      "conversionOnly": false,
+      "triggerOnEnter": false,
+      "hasReplace": true
+    },
+    {
+      "name": "UNLINKED_TEXT",
+      "builtin": false,
+      "type": "text-match",
+      "dependencies": [
+        "link",
+        "unlinked-text",
+        "unknown-mention"
+      ],
+      "regExp": {
+        "source": "<m-link>(.*?)<\\/m-link>",
+        "flags": "s",
+        "matcher": "RegExp"
+      },
+      "importRegExp": {
+        "source": "<m-link>(.*?)<\\/m-link>",
+        "flags": "s",
+        "matcher": "RegExp"
+      },
+      "conversionOnly": false,
+      "triggerOnEnter": false,
+      "hasReplace": true
+    },
+    {
+      "name": "LIST_ITEM_IMAGE_EXTERNAL",
+      "builtin": false,
+      "type": "text-match",
+      "dependencies": [
+        "image",
+        "listitem"
+      ],
+      "regExp": {
+        "source": "$^",
+        "flags": "",
+        "matcher": "RegExp"
+      },
+      "conversionOnly": false,
+      "triggerOnEnter": false,
+      "hasReplace": false
+    },
+    {
+      "name": "BR_TAG_TO_LINE_BREAK",
+      "builtin": false,
+      "type": "text-match",
+      "dependencies": [
+        "linebreak"
+      ],
+      "regExp": {
+        "source": "<br\\s*\\/?>",
+        "flags": "i",
+        "matcher": "RegExp"
+      },
+      "importRegExp": {
+        "source": "<br\\s*\\/?>",
+        "flags": "i",
+        "matcher": "RegExp"
+      },
+      "conversionOnly": true,
+      "triggerOnEnter": false,
+      "hasReplace": true
+    },
+    {
+      "name": "E_TABLE_NODE",
+      "builtin": false,
+      "type": "element",
+      "dependencies": [
+        "table",
+        "tablerow",
+        "tablecell"
+      ],
+      "regExp": {
+        "source": "^(?:\\|)(.+)(?:\\|)\\s?$",
+        "flags": "",
+        "matcher": "RegExp"
+      },
+      "conversionOnly": false,
+      "triggerOnEnter": false,
+      "hasReplace": true
+    },
+    {
+      "name": "E_USER_MENTION",
+      "builtin": false,
+      "type": "element",
+      "dependencies": [
+        "user-mention"
+      ],
+      "regExp": {
+        "source": "$^",
+        "flags": "",
+        "matcher": "RegExp"
+      },
+      "conversionOnly": false,
+      "triggerOnEnter": false,
+      "hasReplace": true
+    },
+    {
+      "name": "E_GROUP_MENTION",
+      "builtin": false,
+      "type": "element",
+      "dependencies": [
+        "group-mention"
+      ],
+      "regExp": {
+        "source": "$^",
+        "flags": "",
+        "matcher": "RegExp"
+      },
+      "conversionOnly": false,
+      "triggerOnEnter": false,
+      "hasReplace": true
+    },
+    {
+      "name": "E_PASTE_NODE",
+      "builtin": false,
+      "type": "element",
+      "dependencies": [
+        "paste"
+      ],
+      "regExp": {
+        "source": "$^",
+        "flags": "",
+        "matcher": "RegExp"
+      },
+      "conversionOnly": false,
+      "triggerOnEnter": false,
+      "hasReplace": true
+    },
+    {
+      "name": "E_DOCUMENT_MENTION",
+      "builtin": false,
+      "type": "element",
+      "dependencies": [
+        "document-mention"
+      ],
+      "regExp": {
+        "source": "$^",
+        "flags": "",
+        "matcher": "RegExp"
+      },
+      "conversionOnly": false,
+      "triggerOnEnter": false,
+      "hasReplace": true
+    },
+    {
+      "name": "E_DOCUMENT_CARD",
+      "builtin": false,
+      "type": "element",
+      "dependencies": [
+        "document-card"
+      ],
+      "regExp": {
+        "source": "$^",
+        "flags": "",
+        "matcher": "RegExp"
+      },
+      "conversionOnly": false,
+      "triggerOnEnter": false,
+      "hasReplace": true
+    },
+    {
+      "name": "E_PR_MENTION",
+      "builtin": false,
+      "type": "element",
+      "dependencies": [
+        "pr-mention"
+      ],
+      "regExp": {
+        "source": "$^",
+        "flags": "",
+        "matcher": "RegExp"
+      },
+      "conversionOnly": false,
+      "triggerOnEnter": false,
+      "hasReplace": true
+    },
+    {
+      "name": "E_BOOKING_LINK_MENTION",
+      "builtin": false,
+      "type": "element",
+      "dependencies": [
+        "booking-link-mention"
+      ],
+      "regExp": {
+        "source": "$^",
+        "flags": "",
+        "matcher": "RegExp"
+      },
+      "conversionOnly": false,
+      "triggerOnEnter": false,
+      "hasReplace": true
+    },
+    {
+      "name": "E_AGENT_SESSION_MENTION",
+      "builtin": false,
+      "type": "element",
+      "dependencies": [
+        "agent-session-mention"
+      ],
+      "regExp": {
+        "source": "$^",
+        "flags": "",
+        "matcher": "RegExp"
+      },
+      "conversionOnly": false,
+      "triggerOnEnter": false,
+      "hasReplace": true
+    },
+    {
+      "name": "E_CONTACT_MENTION",
+      "builtin": false,
+      "type": "element",
+      "dependencies": [
+        "contact-mention"
+      ],
+      "regExp": {
+        "source": "$^",
+        "flags": "",
+        "matcher": "RegExp"
+      },
+      "conversionOnly": false,
+      "triggerOnEnter": false,
+      "hasReplace": true
+    },
+    {
+      "name": "E_DATE_MENTION",
+      "builtin": false,
+      "type": "element",
+      "dependencies": [
+        "date-mention"
+      ],
+      "regExp": {
+        "source": "$^",
+        "flags": "",
+        "matcher": "RegExp"
+      },
+      "conversionOnly": false,
+      "triggerOnEnter": false,
+      "hasReplace": true
+    },
+    {
+      "name": "E_REPLY_TARGET_NODE",
+      "builtin": false,
+      "type": "element",
+      "dependencies": [
+        "reply-target"
+      ],
+      "regExp": {
+        "source": "$^",
+        "flags": "",
+        "matcher": "RegExp"
+      },
+      "conversionOnly": false,
+      "triggerOnEnter": false,
+      "hasReplace": true
+    },
+    {
+      "name": "E_TAG_MENTION",
+      "builtin": false,
+      "type": "element",
+      "dependencies": [
+        "tag-mention"
+      ],
+      "regExp": {
+        "source": "$^",
+        "flags": "",
+        "matcher": "RegExp"
+      },
+      "conversionOnly": false,
+      "triggerOnEnter": false,
+      "hasReplace": true
+    },
+    {
+      "name": "E_MULTILINE_BLOCK_EQUATION_NODE",
+      "builtin": false,
+      "type": "multiline-element",
+      "dependencies": [
+        "equation"
+      ],
+      "regExpStart": {
+        "source": "^(.*)\\$\\$\\s*$",
+        "flags": "",
+        "matcher": "RegExp"
+      },
+      "regExpEnd": {
+        "source": "^(.*\\$\\$)(.*)$",
+        "flags": "",
+        "matcher": "RegExp"
+      },
+      "conversionOnly": false,
+      "triggerOnEnter": false,
+      "hasReplace": true
+    },
+    {
+      "name": "E_BLOCK_EQUATION_NODE",
+      "builtin": false,
+      "type": "text-match",
+      "dependencies": [
+        "equation"
+      ],
+      "regExp": {
+        "source": "\\$\\$(.*?)\\$\\$",
+        "flags": "",
+        "matcher": "RegExp"
+      },
+      "importRegExp": {
+        "source": "\\$\\$(.*?)\\$\\$",
+        "flags": "",
+        "matcher": "RegExp"
+      },
+      "conversionOnly": false,
+      "triggerOnEnter": false,
+      "hasReplace": true
+    },
+    {
+      "name": "E_INLINE_EQUATION_NODE",
+      "builtin": false,
+      "type": "text-match",
+      "dependencies": [
+        "equation"
+      ],
+      "regExp": {
+        "source": "(?<!\\$)\\$(?!\\s)[^\\n$]*?(?:[a-zA-Z\\\\=+\\-*/^][^\\n$]*?)(?<!\\s)\\$(?!\\$|\\d)",
+        "flags": "",
+        "matcher": "RegExp"
+      },
+      "importRegExp": {
+        "source": "(?<!\\$)\\$(?!\\s)[^\\n$]*?(?:[a-zA-Z\\\\=+\\-*/^][^\\n$]*?)(?<!\\s)\\$(?!\\$|\\d)",
+        "flags": "",
+        "matcher": "RegExp"
+      },
+      "conversionOnly": false,
+      "triggerOnEnter": false,
+      "hasReplace": true
+    },
+    {
+      "name": "E_WATERMARK",
+      "builtin": false,
+      "type": "element",
+      "dependencies": [
+        "watermark"
+      ],
+      "regExp": {
+        "source": "$^",
+        "flags": "",
+        "matcher": "RegExp"
+      },
+      "conversionOnly": false,
+      "triggerOnEnter": false,
+      "hasReplace": true
+    },
+    {
+      "name": "E_SNAPSHOT_NODE",
+      "builtin": false,
+      "type": "element",
+      "dependencies": [
+        "snapshot"
+      ],
+      "regExp": {
+        "source": "$^",
+        "flags": "",
+        "matcher": "RegExp"
+      },
+      "conversionOnly": false,
+      "triggerOnEnter": false,
+      "hasReplace": true
+    },
+    {
+      "name": "HTML_ENTITY_0",
+      "builtin": false,
+      "type": "text-match",
+      "dependencies": [],
+      "regExp": {
+        "source": "&amp;",
+        "flags": "i",
+        "matcher": "RegExp"
+      },
+      "importRegExp": {
+        "source": "&amp;",
+        "flags": "i",
+        "matcher": "RegExp"
+      },
+      "conversionOnly": true,
+      "triggerOnEnter": false,
+      "hasReplace": true
+    },
+    {
+      "name": "HTML_ENTITY_1",
+      "builtin": false,
+      "type": "text-match",
+      "dependencies": [],
+      "regExp": {
+        "source": "&nbsp;",
+        "flags": "i",
+        "matcher": "RegExp"
+      },
+      "importRegExp": {
+        "source": "&nbsp;",
+        "flags": "i",
+        "matcher": "RegExp"
+      },
+      "conversionOnly": true,
+      "triggerOnEnter": false,
+      "hasReplace": true
+    },
+    {
+      "name": "HTML_ENTITY_2",
+      "builtin": false,
+      "type": "text-match",
+      "dependencies": [],
+      "regExp": {
+        "source": "&lt;",
+        "flags": "i",
+        "matcher": "RegExp"
+      },
+      "importRegExp": {
+        "source": "&lt;",
+        "flags": "i",
+        "matcher": "RegExp"
+      },
+      "conversionOnly": true,
+      "triggerOnEnter": false,
+      "hasReplace": true
+    },
+    {
+      "name": "HTML_ENTITY_3",
+      "builtin": false,
+      "type": "text-match",
+      "dependencies": [],
+      "regExp": {
+        "source": "&gt;",
+        "flags": "i",
+        "matcher": "RegExp"
+      },
+      "importRegExp": {
+        "source": "&gt;",
+        "flags": "i",
+        "matcher": "RegExp"
+      },
+      "conversionOnly": true,
+      "triggerOnEnter": false,
+      "hasReplace": true
+    },
+    {
+      "name": "HTML_ENTITY_4",
+      "builtin": false,
+      "type": "text-match",
+      "dependencies": [],
+      "regExp": {
+        "source": "&quot;",
+        "flags": "i",
+        "matcher": "RegExp"
+      },
+      "importRegExp": {
+        "source": "&quot;",
+        "flags": "i",
+        "matcher": "RegExp"
+      },
+      "conversionOnly": true,
+      "triggerOnEnter": false,
+      "hasReplace": true
+    },
+    {
+      "name": "HTML_ENTITY_5",
+      "builtin": false,
+      "type": "text-match",
+      "dependencies": [],
+      "regExp": {
+        "source": "&copy;",
+        "flags": "i",
+        "matcher": "RegExp"
+      },
+      "importRegExp": {
+        "source": "&copy;",
+        "flags": "i",
+        "matcher": "RegExp"
+      },
+      "conversionOnly": true,
+      "triggerOnEnter": false,
+      "hasReplace": true
+    },
+    {
+      "name": "HTML_ENTITY_6",
+      "builtin": false,
+      "type": "text-match",
+      "dependencies": [],
+      "regExp": {
+        "source": "&reg;",
+        "flags": "i",
+        "matcher": "RegExp"
+      },
+      "importRegExp": {
+        "source": "&reg;",
+        "flags": "i",
+        "matcher": "RegExp"
+      },
+      "conversionOnly": true,
+      "triggerOnEnter": false,
+      "hasReplace": true
+    },
+    {
+      "name": "HTML_ENTITY_7",
+      "builtin": false,
+      "type": "text-match",
+      "dependencies": [],
+      "regExp": {
+        "source": "&trade;",
+        "flags": "i",
+        "matcher": "RegExp"
+      },
+      "importRegExp": {
+        "source": "&trade;",
+        "flags": "i",
+        "matcher": "RegExp"
+      },
+      "conversionOnly": true,
+      "triggerOnEnter": false,
+      "hasReplace": true
+    },
+    {
+      "name": "LIST_ITEM_IMAGE_ALL",
+      "builtin": false,
+      "type": "text-match",
+      "dependencies": [
+        "image",
+        "listitem"
+      ],
+      "regExp": {
+        "source": "$^",
+        "flags": "",
+        "matcher": "RegExp"
+      },
+      "conversionOnly": false,
+      "triggerOnEnter": false,
+      "hasReplace": false
+    },
+    {
+      "name": "ORDERED_LIST_ENTER",
+      "builtin": false,
+      "type": "element",
+      "dependencies": [
+        "list",
+        "listitem"
+      ],
+      "regExp": {
+        "source": "^(\\s*)(\\d{1,})\\.$",
+        "flags": "",
+        "matcher": "RegExp"
+      },
+      "conversionOnly": false,
+      "triggerOnEnter": true,
+      "hasReplace": true
+    },
+    {
+      "name": "BR_TAG_TO_SPACE",
+      "builtin": false,
+      "type": "text-match",
+      "dependencies": [],
+      "regExp": {
+        "source": "<br\\s*\\/?>",
+        "flags": "i",
+        "matcher": "RegExp"
+      },
+      "importRegExp": {
+        "source": "<br\\s*\\/?>",
+        "flags": "i",
+        "matcher": "RegExp"
+      },
+      "conversionOnly": true,
+      "triggerOnEnter": false,
+      "hasReplace": true
+    }
+  ],
+  "lists": {
+    "internal": [
+      "I_DATABASE_QUERY_BLOCK",
+      "I_DATABASE_QUERY",
+      "I_SNAPSHOT_NODE",
+      "I_PASTE_NODE",
+      "I_HTML_RENDER",
+      "PRESERVE_LINES",
+      "VIDEO_LINK",
+      "LINK_XML",
+      "MARK_XML",
+      "SEARCH_MATCH",
+      "HR",
+      "I_VIDEO",
+      "I_IMAGE_CONSTRAINED",
+      "IMAGE",
+      "LIST_ITEM_IMAGE_INTERNAL",
+      "I_USER_MENTION",
+      "I_GROUP_MENTION",
+      "I_DOCUMENT_MENTION",
+      "I_DOCUMENT_CARD",
+      "I_PR_MENTION",
+      "I_BOOKING_LINK_MENTION",
+      "I_AGENT_SESSION_CARD",
+      "I_AGENT_SESSION_MENTION",
+      "I_CONTACT_MENTION",
+      "I_DATE_MENTION",
+      "I_AWAIT_NODE",
+      "I_MAGIC_CHIP",
+      "I_AGENT_ACTIVITY",
+      "I_REPLY_TARGET_NODE",
+      "I_AGENT_CONTEXT",
+      "I_TABLE_NODE",
+      "HTML_BLOCKQUOTE",
+      "I_MACRO_QUOTE",
+      "I_EQUATION_NODE",
+      "I_THEME_MENTION",
+      "I_TAG_MENTION",
+      "I_CONNECT_APP",
+      "I_ACCOUNT_MANAGER_REQUEST",
+      "I_WATERMARK",
+      "HTML_TEXT_FORMAT_EXPORTER",
+      "HTML_TEXT_FORMAT_IMPORTER_0",
+      "HTML_TEXT_FORMAT_IMPORTER_1",
+      "HTML_TEXT_FORMAT_IMPORTER_2",
+      "HEADING",
+      "QUOTE",
+      "CODE",
+      "INLINE_CODE",
+      "BOLD_ITALIC_STAR",
+      "BOLD_ITALIC_UNDERSCORE",
+      "BOLD_STAR",
+      "BOLD_UNDERSCORE",
+      "HIGHLIGHT",
+      "ITALIC_STAR",
+      "ITALIC_UNDERSCORE",
+      "STRIKETHROUGH",
+      "LINK",
+      "MACRO_ORDERED_LIST",
+      "MACRO_CHECK_LIST",
+      "MACRO_UNORDERED_LIST",
+      "ESCAPED_AUTO_LINK",
+      "AUTO_LINK",
+      "I_CURSOR_SYSTEM_NOTIFICATION",
+      "UNKNOWN_MENTION"
+    ],
+    "external": [
+      "UNLINKED_TEXT",
+      "I_DATABASE_QUERY_BLOCK",
+      "I_DATABASE_QUERY",
+      "HR",
+      "MARK_XML",
+      "VIDEO_LINK",
+      "I_VIDEO",
+      "IMAGE",
+      "LIST_ITEM_IMAGE_EXTERNAL",
+      "BR_TAG_TO_LINE_BREAK",
+      "E_TABLE_NODE",
+      "HTML_BLOCKQUOTE",
+      "E_USER_MENTION",
+      "E_GROUP_MENTION",
+      "E_PASTE_NODE",
+      "I_DOCUMENT_MENTION",
+      "E_DOCUMENT_MENTION",
+      "I_DOCUMENT_CARD",
+      "E_DOCUMENT_CARD",
+      "I_PR_MENTION",
+      "I_BOOKING_LINK_MENTION",
+      "I_AGENT_SESSION_MENTION",
+      "E_PR_MENTION",
+      "E_BOOKING_LINK_MENTION",
+      "E_AGENT_SESSION_MENTION",
+      "E_CONTACT_MENTION",
+      "E_DATE_MENTION",
+      "E_REPLY_TARGET_NODE",
+      "E_TAG_MENTION",
+      "I_CONNECT_APP",
+      "E_MULTILINE_BLOCK_EQUATION_NODE",
+      "E_BLOCK_EQUATION_NODE",
+      "E_INLINE_EQUATION_NODE",
+      "E_WATERMARK",
+      "E_SNAPSHOT_NODE",
+      "HTML_ENTITY_0",
+      "HTML_ENTITY_1",
+      "HTML_ENTITY_2",
+      "HTML_ENTITY_3",
+      "HTML_ENTITY_4",
+      "HTML_ENTITY_5",
+      "HTML_ENTITY_6",
+      "HTML_ENTITY_7",
+      "HTML_TEXT_FORMAT_EXPORTER",
+      "HTML_TEXT_FORMAT_IMPORTER_0",
+      "HTML_TEXT_FORMAT_IMPORTER_1",
+      "HTML_TEXT_FORMAT_IMPORTER_2",
+      "HEADING",
+      "QUOTE",
+      "CODE",
+      "INLINE_CODE",
+      "BOLD_ITALIC_STAR",
+      "BOLD_ITALIC_UNDERSCORE",
+      "BOLD_STAR",
+      "BOLD_UNDERSCORE",
+      "HIGHLIGHT",
+      "ITALIC_STAR",
+      "ITALIC_UNDERSCORE",
+      "STRIKETHROUGH",
+      "LINK",
+      "MACRO_ORDERED_LIST",
+      "MACRO_CHECK_LIST",
+      "MACRO_UNORDERED_LIST",
+      "ESCAPED_AUTO_LINK",
+      "AUTO_LINK",
+      "UNKNOWN_MENTION"
+    ],
+    "all": [
+      "I_DATABASE_QUERY_BLOCK",
+      "I_DATABASE_QUERY",
+      "I_SNAPSHOT_NODE",
+      "I_PASTE_NODE",
+      "I_HTML_RENDER",
+      "E_PASTE_NODE",
+      "PRESERVE_LINES",
+      "VIDEO_LINK",
+      "LINK_XML",
+      "MARK_XML",
+      "SEARCH_MATCH",
+      "HR",
+      "I_VIDEO",
+      "I_IMAGE_CONSTRAINED",
+      "IMAGE",
+      "LIST_ITEM_IMAGE_ALL",
+      "BR_TAG_TO_LINE_BREAK",
+      "I_TABLE_NODE",
+      "E_TABLE_NODE",
+      "HTML_BLOCKQUOTE",
+      "E_SNAPSHOT_NODE",
+      "I_USER_MENTION",
+      "E_USER_MENTION",
+      "I_GROUP_MENTION",
+      "E_GROUP_MENTION",
+      "I_DOCUMENT_MENTION",
+      "E_DOCUMENT_MENTION",
+      "I_DOCUMENT_CARD",
+      "E_DOCUMENT_CARD",
+      "I_PR_MENTION",
+      "I_BOOKING_LINK_MENTION",
+      "I_AGENT_SESSION_CARD",
+      "I_AGENT_SESSION_MENTION",
+      "E_AGENT_SESSION_MENTION",
+      "E_PR_MENTION",
+      "E_BOOKING_LINK_MENTION",
+      "I_CONTACT_MENTION",
+      "E_CONTACT_MENTION",
+      "I_DATE_MENTION",
+      "E_DATE_MENTION",
+      "I_AWAIT_NODE",
+      "I_MAGIC_CHIP",
+      "I_AGENT_ACTIVITY",
+      "I_REPLY_TARGET_NODE",
+      "I_AGENT_CONTEXT",
+      "I_MACRO_QUOTE",
+      "I_EQUATION_NODE",
+      "I_THEME_MENTION",
+      "I_TAG_MENTION",
+      "I_CONNECT_APP",
+      "I_ACCOUNT_MANAGER_REQUEST",
+      "I_WATERMARK",
+      "E_WATERMARK",
+      "E_TAG_MENTION",
+      "E_MULTILINE_BLOCK_EQUATION_NODE",
+      "E_BLOCK_EQUATION_NODE",
+      "E_INLINE_EQUATION_NODE",
+      "HTML_ENTITY_0",
+      "HTML_ENTITY_1",
+      "HTML_ENTITY_2",
+      "HTML_ENTITY_3",
+      "HTML_ENTITY_4",
+      "HTML_ENTITY_5",
+      "HTML_ENTITY_6",
+      "HTML_ENTITY_7",
+      "HTML_TEXT_FORMAT_EXPORTER",
+      "HTML_TEXT_FORMAT_IMPORTER_0",
+      "HTML_TEXT_FORMAT_IMPORTER_1",
+      "HTML_TEXT_FORMAT_IMPORTER_2",
+      "HEADING",
+      "QUOTE",
+      "CODE",
+      "INLINE_CODE",
+      "BOLD_ITALIC_STAR",
+      "BOLD_ITALIC_UNDERSCORE",
+      "BOLD_STAR",
+      "BOLD_UNDERSCORE",
+      "HIGHLIGHT",
+      "ITALIC_STAR",
+      "ITALIC_UNDERSCORE",
+      "STRIKETHROUGH",
+      "LINK",
+      "MACRO_ORDERED_LIST",
+      "MACRO_CHECK_LIST",
+      "MACRO_UNORDERED_LIST",
+      "ESCAPED_AUTO_LINK",
+      "AUTO_LINK",
+      "I_CURSOR_SYSTEM_NOTIFICATION",
+      "UNKNOWN_MENTION"
+    ],
+    "custom": [
+      "HTML_TEXT_FORMAT_EXPORTER",
+      "HTML_TEXT_FORMAT_IMPORTER_0",
+      "HTML_TEXT_FORMAT_IMPORTER_1",
+      "HTML_TEXT_FORMAT_IMPORTER_2",
+      "HEADING",
+      "QUOTE",
+      "CODE",
+      "INLINE_CODE",
+      "BOLD_ITALIC_STAR",
+      "BOLD_ITALIC_UNDERSCORE",
+      "BOLD_STAR",
+      "BOLD_UNDERSCORE",
+      "HIGHLIGHT",
+      "ITALIC_STAR",
+      "ITALIC_UNDERSCORE",
+      "STRIKETHROUGH",
+      "LINK",
+      "MACRO_ORDERED_LIST",
+      "MACRO_CHECK_LIST",
+      "MACRO_UNORDERED_LIST"
+    ]
+  }
+}

@@ -5,13 +5,17 @@ edition = "2024"
 publish = false
 
 [dependencies]
-lexical_model = { workspace = true }
+macro_document_composers.workspace = true
+macro_document_model = { workspace = true }
+lexical_model = { workspace = true, features = ["foreign-nodes"] }
 lexical_rich_nodes = { workspace = true }
+lexical_markdown = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true, features = ["preserve_order"] }
 thiserror = { workspace = true }
 
 [dev-dependencies]
+wasm-bindgen-test = { workspace = true }
 libtest-mimic = { workspace = true }
 
 [[test]]

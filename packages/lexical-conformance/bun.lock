@@ -36,7 +36,8 @@
         "lexical": "0.45.0",
         "lib0": "0.2.117",
         "linkify-it": "5.0.2",
-        "loro-crdt": "1.16.3",
+        "loro-crdt": "1.17.1",
+        "loro-crdt-legacy": "npm:loro-crdt@1.16.3",
         "nanoid": "5.1.5",
         "prettier": "3.8.1",
         "prettier-plugin-hermes-parser": "0.36.0",
@@ -534,7 +535,9 @@
 
     "lodash.merge": ["lodash.merge@4.6.2", "", {}, "sha512-0KpjqXRVvrYyCsX1swR/XTK0va6VQkQM6MNo7PqW77ByjAhoARA8EfrP1N4+KlKj8YS0ZUCtRT/YUuhyYDujIQ=="],
 
-    "loro-crdt": ["loro-crdt@1.16.3", "", {}, "sha512-0FP3TsPTCIVLg7fbjh7cJTt3evpbFD/KRfnd4k9R3ZuDTzl83nuiYK/8LRxQ35xKzcHAcvMowoL9pecNDw1bkw=="],
+    "loro-crdt": ["loro-crdt@1.17.1", "", {}, "sha512-83hWRYG6eMMpPezm+yXWlOqCuUsC0BYY1MVCPW9x2zlikgkHhL7GC7Q6JFH+Hjvauyn287Q1MiwTuRW0lUOUag=="],
+
+    "loro-crdt-legacy": ["loro-crdt@1.16.3", "", {}, "sha512-0FP3TsPTCIVLg7fbjh7cJTt3evpbFD/KRfnd4k9R3ZuDTzl83nuiYK/8LRxQ35xKzcHAcvMowoL9pecNDw1bkw=="],
 
     "lru-cache": ["lru-cache@11.5.3", "", {}, "sha512-U4N8FgzmWxc8k1VH8Kr6lQg18U7Fjvby6wXHVRX/ZZ7IwWbRMgrRbP0Wrb5q5NVinryp4SQampHKdvtecItxUg=="],
 

@@ -172,3 +172,32 @@ fn upstream_restoring_snapshot_reconciles_existing_element_caches() -> Result<()
     );
     Ok(())
 }
+
+#[test]
+fn root_deletion_preserves_the_insertion_boundary_after_a_decorator() -> Result<(), Error> {
+    let mut editor = Editor::builder(EditorMode::Headless)
+        .node::<Opaque>()
+        .build()
+        .expect("registry");
+    editor.update(|tx| {
+        let outer = tx.create(Paragraph::default())?;
+        let inner = tx.create(Paragraph::default())?;
+        let decoration = tx.create(Opaque {})?;
+        let empty = tx.create(Paragraph::default())?;
+        tx.append(inner, &[decoration.key(), empty.key()])?;
+        tx.append(outer, &[inner.key()])?;
+        tx.append(NodeKey::ROOT, &[outer.key()])?;
+        tx.set_selection(Some(Selection::Range(RangeSelection::at_root())))
+    })?;
+    for _ in 0..2 {
+        editor.update(|tx| tx.delete_character(EditDirection::Forward, ModifyTarget::NoView))?;
+    }
+    editor.update(|tx| tx.insert_line_break(false))?;
+    let state = editor.state();
+    let root = state.children_keys(NodeKey::ROOT)?;
+    assert_eq!(root.len(), 2);
+    let children = state.children_keys(root[0])?;
+    assert_eq!(children.len(), 1);
+    assert!(state.is_line_break(children[0]));
+    Ok(())
+}

@@ -112,7 +112,7 @@ fn base_tree_operations_and_paragraph_creation_keep_links_and_typing_style() -> 
         tx.try_range_at(SelectionSlot::Active)
             .expect("range")
             .anchor,
-        Point::text(c, Utf16Offset(1))
+        Point::element(p, ChildIndex(2))
     );
     let parent = tx.create_parent_element(a)?;
     assert!(tx.is::<Paragraph>(parent));
@@ -196,6 +196,7 @@ fn remove_complete_text_span_across_token_collapses_into_paragraph_s1_18_5() -> 
     })?;
     editor.update(|tx| {
         tx.set_selection(Some(Selection::Range(RangeSelection {
+            cached_direction: None,
             dirty: false,
             anchor: Point::text(leading, Utf16Offset(0)),
             focus: Point::text(token, tx.text_content_size(token)),
@@ -279,7 +280,7 @@ fn no_op_sibling_move_keeps_an_end_of_parent_caret_in_range() -> Result<(), Erro
         .select(Some(ChildIndex(2)), Some(ChildIndex(2)))?;
     tx.insert_before(b, a, true)?;
     assert_eq!(tx.children_keys(p)?, vec![a.key(), b.key()]);
-    assert_eq!(tx.anchor()?, Point::element(p, ChildIndex(2)));
+    assert_eq!(tx.anchor()?, Point::text(b, Utf16Offset(1)));
     Ok(())
 }
 

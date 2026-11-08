@@ -279,6 +279,7 @@ pub(super) fn from_view(
                 buffer.byte_offset(*offset)?;
             }
         }
+        range.invalidate_changed_direction();
         tx.set_selection(Some(Selection::Range(range)))?;
     }
     Ok(())

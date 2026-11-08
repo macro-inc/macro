@@ -1,5 +1,4 @@
 //! CommonMark delimiter processing over UTF-16 units.
-use crate::util::is_js_whitespace;
 use crate::{matcher::*, util::*, *};
 use lexical_model::*;
 use std::collections::HashMap;
@@ -29,7 +28,7 @@ fn flanking(text: &[u16], i: usize, n: usize, left: bool) -> bool {
         (before, after)
     };
     primary.is_some_and(|c| {
-        !is_js_whitespace(c)
+        !is_js_whitespace_unit(c)
             && (!is_punctuation(c) || secondary.is_none_or(is_punctuation_or_space))
     })
 }

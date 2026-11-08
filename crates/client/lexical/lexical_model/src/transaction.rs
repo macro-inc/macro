@@ -44,7 +44,10 @@ pub struct Transaction<'editor> {
 }
 impl<'editor> Transaction<'editor> {
     pub(crate) fn new(editor: &'editor mut Editor) -> Self {
-        let pending = editor.state.pending();
+        let mut pending = editor.state.pending();
+        if let Some(Selection::Range(range)) = &mut pending.selection {
+            range.clear_direction_cache();
+        }
         let composition_key = editor.composition_key;
         let options = UpdateOptions {
             tags: editor.carried_tags.clone(),
@@ -323,11 +326,8 @@ impl<'editor> Transaction<'editor> {
             .registry
             .resolve_replacements(index)
             .ok_or(Error::Invariant("invalid type index"))?;
-        let data = (self.pending.registry.vtable(index).default_data)().ok_or(Error::NoDefault(
-            self.pending.registry.registered(index).type_name,
-        ))?;
-        let base = (self.pending.registry.vtable(index).initial_base)(data.as_any())?;
-        self.insert_record(index, data, base)
+        let create = self.pending.registry.vtable(index).default_create;
+        create(self)
     }
     /// Copy payload and properties into a detached node with no children.
     /// s2: ID-05, ID-06
@@ -474,7 +474,13 @@ impl<'editor> Transaction<'editor> {
                         .get("text")
                         .and_then(serde_json::Value::as_str)
                         .unwrap_or_default();
-                    let format = TextFormat::from_bits_retain(number("format"));
+                    let format_type = json.get("format").and_then(serde_json::Value::as_str);
+                    let parsed_format =
+                        format_type.and_then(|value| value.parse::<TextFormatType>().ok());
+                    let format = parsed_format.map_or_else(
+                        || TextFormat::from_bits_retain(number("format")),
+                        TextFormatType::flag,
+                    );
                     let detail = TextDetail::from_bits_retain(number("detail"));
                     let mode = json
                         .get("mode")
@@ -518,20 +524,15 @@ impl<'editor> Transaction<'editor> {
                     };
                     data.absent =
                         AbsentKeys::from_json(json, &["text", "format", "detail", "mode", "style"]);
+                    if format_type.is_some() && parsed_format.is_none() {
+                        data.absent.insert(AbsentKeys::FORMAT);
+                    }
                 }
                 Some(NodeKind::Element) => {
                     let format = json
                         .get("format")
-                        .map(|value| {
-                            serde_json::from_value(value.clone()).or_else(|error| {
-                                if opaque {
-                                    Ok(Default::default())
-                                } else {
-                                    Err(error)
-                                }
-                            })
-                        })
-                        .transpose()?
+                        .and_then(serde_json::Value::as_str)
+                        .and_then(|value| value.parse::<ElementFormat>().ok())
                         .unwrap_or_default();
                     let direction = json
                         .get("direction")
@@ -619,6 +620,9 @@ impl<'editor> Transaction<'editor> {
         self.guard_write()?;
         self.selection_dirty = selection.is_some();
         let selection = selection.map(|mut selection| {
+            if let Selection::Range(range) = &mut selection {
+                range.invalidate_changed_direction();
+            }
             selection.set_dirty(true);
             selection
         });

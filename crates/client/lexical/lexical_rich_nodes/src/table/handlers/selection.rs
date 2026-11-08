@@ -89,8 +89,8 @@ pub fn fix_range_selection_for_tables(
         return Ok(RangeFix::None);
     };
     let (ta, tf) = (
-        find_table_node(tx.view(), r.anchor.key()),
-        find_table_node(tx.view(), r.focus.key()),
+        find_cell_node(tx.view(), r.anchor.key()).and_then(|c| find_table_node(tx.view(), c.key())),
+        find_cell_node(tx.view(), r.focus.key()).and_then(|c| find_table_node(tx.view(), c.key())),
     );
     let backward = r.is_backward(tx.view())?;
     if let Some(table) = tf

@@ -101,3 +101,10 @@ pub struct Inconsistency {
 }
 #[cfg(test)]
 mod test;
+
+/// Frozen Markdown ancestor.
+pub mod golden;
+/// Snapshot schema reconciliation.
+pub mod mirror;
+/// Server snapshot generation.
+pub mod snapshot;

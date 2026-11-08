@@ -70,7 +70,7 @@ pub(in crate::node) fn linebreak<Node: LineBreakNode>() -> NodeVTable {
         project: project_linebreak::<Node>,
         project_mut: project_linebreak_mut::<Node>,
         probe: || Node::flag_probe().map(|n| Arc::new(n) as Arc<dyn AnyNodeData>),
-        default_data: || Node::default_node().map(|n| Arc::new(n) as Arc<dyn AnyNodeData>),
+        default_create: Node::create_default,
         import_exact: |tx, json| tx.create_exact(Node::import_json(json)?).map(|id| id.key()),
         import: Node::import,
         update: |data, json| {
