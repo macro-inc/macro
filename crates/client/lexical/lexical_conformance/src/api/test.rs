@@ -212,3 +212,61 @@ fn raw_framework_fields_expose_links_and_distinguish_element_and_text_properties
     );
     Ok(())
 }
+
+#[test]
+fn foreign_link_ancestry_does_not_route_core_methods_through_a_native_payload_cast()
+-> Result<(), crate::replay::ReplayError> {
+    struct Hooks;
+    impl ForeignHooks for Hooks {}
+    let mut editor = Editor::builder(EditorMode::Headless)
+        .node::<lexical_rich_nodes::link::LinkNode>()
+        .foreign_node(ForeignNodeType {
+            type_name: "custom-link".into(),
+            class_name: "CustomLink".into(),
+            kind: NodeKind::Element,
+            extends: Some("link"),
+            required_state: vec![],
+            hooks: std::sync::Arc::new(Hooks),
+        })
+        .build()
+        .expect("editor");
+    let mut r = Replayer::default();
+    let mut tx = editor.transaction();
+    let link = tx.create_foreign(
+        "custom-link",
+        json!({"url":"https://example.test"})
+            .as_object()
+            .expect("object")
+            .clone(),
+    )?;
+    let text = tx.create_text("hello")?.key();
+    tx.append(link, &[text])?;
+    let node = r.node(tx.view(), link)?;
+    assert!(tx.is::<lexical_rich_nodes::link::LinkNode>(link));
+    assert!(tx.get::<lexical_rich_nodes::link::LinkNode>(link).is_none());
+    assert_eq!(
+        api::call(
+            &mut r,
+            &mut tx,
+            &json!({"fn":"LexicalNode.getType","this":node,"args":[]})
+        )?,
+        "custom-link"
+    );
+    assert_eq!(
+        api::call(
+            &mut r,
+            &mut tx,
+            &json!({"fn":"LexicalNode.getTextContent","this":node,"args":[]})
+        )?,
+        "hello"
+    );
+    assert_eq!(
+        api::call(
+            &mut r,
+            &mut tx,
+            &json!({"fn":"LexicalNode.isInline","this":node,"args":[]})
+        )?,
+        true
+    );
+    Ok(())
+}

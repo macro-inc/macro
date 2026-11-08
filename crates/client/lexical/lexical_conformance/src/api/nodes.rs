@@ -17,7 +17,9 @@ pub(crate) fn call(
         .as_ref()
         .map(EditorState::view)
         .unwrap_or(tx.view());
-    if view.is::<lexical_rich_nodes::link::LinkNode>(key)
+    if view
+        .get::<lexical_rich_nodes::link::LinkNode>(key)
+        .is_some()
         && let Some(result) = super::rich::link_method(view, key, method, a)?
     {
         return Ok(result);
