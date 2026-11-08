@@ -39,10 +39,13 @@ const useCommentsContext = (
       // Activating a thread selects its mark, and a selected mark keeps its
       // thread active, so releasing the thread releases the mark too.
       if (threadId === null) {
-        state.editor.md.editor?.dispatchCommand(
-          MARK_SELECTED_COMMENT_COMMAND,
-          []
-        );
+        const nativeComments = state.editor.md.nativeRuntime?.editing?.comments;
+        if (nativeComments) nativeComments.select(undefined);
+        else
+          state.editor.md.editor?.dispatchCommand(
+            MARK_SELECTED_COMMENT_COMMAND,
+            []
+          );
       }
     },
     setThreadHeight,
@@ -111,7 +114,10 @@ export const CommentMargin = (props: { wideEnough: boolean }) => {
       const target = e.target;
       if (!(target instanceof Node) || !app.contains(target)) return;
       if (marginRef.contains(target)) return;
-      if (state.editor.md.editor?.getRootElement()?.contains(target)) return;
+      const editorRoot =
+        state.editor.md.nativeRuntime?.view.root ??
+        state.editor.md.editor?.getRootElement();
+      if (editorRoot?.contains(target)) return;
       commentsContext.setActiveThread(null);
     };
     document.addEventListener('pointerdown', onPointerDown, true);

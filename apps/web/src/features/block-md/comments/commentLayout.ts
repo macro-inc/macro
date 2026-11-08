@@ -161,6 +161,12 @@ export function createCommentLayout() {
         registerInternalLayoutShiftListener(md.editor, updateMarkPositions),
         registerEditorWidthObserver(md.editor, updateMarkPositions)
       );
+    } else if (md.nativeRuntime) {
+      const view = md.nativeRuntime.view;
+      onCleanup(view.onCommit(throttledUpdate));
+      // Native commits move anchors; embeds and column changes also resize
+      // the body between commits. Measure both without querying model state.
+      marginResizeObserver.observe(view.root);
     }
   });
 
