@@ -26,6 +26,7 @@ The upstream source is downloaded by checksum into this worktree's `target/`.
 - A failed upstream test, transparency check or self-replay cannot become A-rec.
 - The recorder owns index.json and upstream/; preserve independently generated fuzz/ artifacts during regeneration and exclude them from recorder file-set checks.
 - Keep unsupported cases in `fixtures/index.json` with a reason; never silently omit them.
+- Scope HTML oracle DOM constructors to each call; keep other corpus routes headless and restore host globals.
 - Keep real dev corpus content only in `/home/wolf/tmp/lexical-port/corpus`; never log it or include it in fixtures, reports or CI artifacts.
 
 ## Checks

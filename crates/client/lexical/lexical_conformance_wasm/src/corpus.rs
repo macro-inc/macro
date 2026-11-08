@@ -43,6 +43,13 @@ fn context() -> DocumentContext {
 fn convert(route: &str, input: &Value) -> Result<Value, CorpusError> {
     let context = context();
     match route {
+        "html" => Ok(serde_json::to_value(
+            macro_document_model::html::markdown_to_html(
+                &field::<String>(input, "markdown")?,
+                &macro_document_model::html::MarkdownToHtmlOptions::default(),
+                &context,
+            )?,
+        )?),
         "snapshot/state" => Ok(
             json!({"snapshot": lexical_loro::snapshot::raw_state_to_loro_snapshot(input.get("state").ok_or(CorpusError::Input)?, Some(lexical_loro::golden::MARKDOWN_GOLDEN)).map_err(macro_document_model::Error::from)?}),
         ),
@@ -73,32 +80,28 @@ fn convert(route: &str, input: &Value) -> Result<Value, CorpusError> {
             )?,
         )?),
         "agent-context" => Ok(json!(
-            macro_document_model::agent_context::compose_agent_context_prompt(input, &context)?
+            macro_document_composers::wire::compose_source_context(input, &context)?
         )),
         "agent-announcement" => Ok(json!(
-            macro_document_model::agent_reply::compose_agent_session_announcement(
+            macro_document_composers::compose_agent_session_announcement(
                 &serde_json::from_value(input.clone())?,
                 &context
             )?
         )),
-        "agent-chat-reply" => Ok(json!(
-            macro_document_model::agent_reply::compose_agent_chat_reply(
-                &serde_json::from_value(input.clone())?,
-                &context
-            )?
-        )),
+        "agent-chat-reply" => Ok(json!(macro_document_composers::compose_agent_chat_reply(
+            &serde_json::from_value(input.clone())?,
+            &context
+        )?)),
         "agent-connection-prompt" => Ok(json!(
-            macro_document_model::agent_reply::compose_agent_connection_prompt(
+            macro_document_composers::compose_agent_connection_prompt(
                 &serde_json::from_value(input.clone())?,
                 &context
             )?
         )),
-        "image-markdown" => Ok(json!(
-            macro_document_model::markdown::compose_image_markdown(
-                &serde_json::from_value(input.clone())?,
-                &context
-            )?
-        )),
+        "image-markdown" => Ok(json!(macro_document_composers::wire::compose_source_image(
+            &serde_json::from_value(input.clone())?,
+            &context
+        )?)),
         "xml" => Ok(json!(macro_document_model::xml::to_xml(&field(
             input, "state"
         )?)?)),

@@ -70,6 +70,8 @@ const snapshots = await import(
   root + 'packages/lexical-core/markdown-loro-snapshot.ts'
 );
 const notion = await import(root + 'packages/lexical-core/notion-markdown.ts');
+const html = await import(root + 'services/lexical-service/src/lib/html.ts');
+const { parseHTML } = await import('linkedom');
 const { LoroDoc } = await import('loro-crdt');
 
 export function snapshotValue(value: unknown): unknown {
@@ -91,6 +93,32 @@ export async function oracle(
   try {
     let value: unknown;
     switch (route) {
+      case 'html':
+        {
+          // Match WP-31's source oracle host. The source helper installs the
+          // document/window; node exporters also need these DOM constructors.
+          const { window } = parseHTML(
+            '<!doctype html><html><body></body></html>'
+          );
+          const previous = {
+            HTMLElement: globalThis.HTMLElement,
+            DocumentFragment: globalThis.DocumentFragment,
+            Text: globalThis.Text,
+            Node: globalThis.Node,
+          };
+          Object.assign(globalThis, {
+            HTMLElement: window.HTMLElement,
+            DocumentFragment: window.DocumentFragment,
+            Text: window.Text,
+            Node: window.Node,
+          });
+          try {
+            value = html.markdownToHtml(String(input.markdown));
+          } finally {
+            Object.assign(globalThis, previous);
+          }
+        }
+        break;
       case 'plaintext':
         value = conversions.toPlaintext(input.state);
         break;

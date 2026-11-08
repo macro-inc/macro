@@ -180,7 +180,12 @@ try {
     }
     if (object(internal) && typeof internal.ok === 'string') {
       const markdown = internal.ok;
-      for (const route of ['mentions', 'extract-reply', 'snapshot/markdown'])
+      for (const route of [
+        'mentions',
+        'extract-reply',
+        'snapshot/markdown',
+        'html',
+      ])
         await compare(route, { markdown }, record.id);
       await compare('agent-context', { promptMarkdown: markdown }, record.id);
       await compare(
@@ -217,6 +222,7 @@ try {
         'mentions',
         'extract-reply',
         'snapshot/markdown',
+        'html',
         'agent-context',
         'agent-chat-reply',
         'agent-announcement',
@@ -308,7 +314,7 @@ try {
       syntheticDocuments: records.length - devDocuments,
       routes,
       gateKinds,
-      skipped: { htmlNotYetPorted: records.length },
+      skipped: {},
       masks: {},
       identityPolicy: strictIdentity ? 'strict' : 'report-only',
       traceparent: trace.traceparent(),
