@@ -6,6 +6,7 @@ mod keyboard;
 mod metadata;
 pub use metadata::{DOCUMENT_METADATA, DOCUMENT_VERSION};
 mod structure;
+mod table;
 
 /// Surface block conversion supported by the node-transform plugin.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Deserialize)]
@@ -53,9 +54,11 @@ pub fn register(builder: EditorBuilder, ty: crate::EditorType) -> EditorBuilder 
     );
     let builder =
         lexical_rich_nodes::normalize_triple_click::register_normalize_triple_click(builder);
-    metadata::register(diff::register(keyboard::register(structure::register(
-        builder,
-    ))))
+    let builder = structure::register(builder);
+    let builder = keyboard::register(builder);
+    let builder = table::register(builder);
+    let builder = diff::register(builder);
+    metadata::register(builder)
 }
 
 #[cfg(test)]

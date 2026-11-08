@@ -9,7 +9,7 @@ export function registerNativeDocumentMetadata(
 ): () => void {
   const check = () => {
     const root = view.node(0);
-    if (!root || !onVersionError) return;
+    if (!root || !root.stateJSON || !onVersionError) return;
     const state: unknown = JSON.parse(root.stateJSON);
     if (!state || typeof state !== 'object' || !('documentMetadata' in state))
       return;
