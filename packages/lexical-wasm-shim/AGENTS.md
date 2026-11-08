@@ -72,3 +72,5 @@ Exercise pure exportJSON against the real WASM read peer, including nested expor
 Cover node-result conversion with opaque top-level/nested getter and proxy throws, then verify mutable reentry and disposal. Return conversion must stay inside the callback frame and preserve null/undefined behavior.
 
 Verify attached foreign exports at commit, previous/current selections, opaque conversion rollback and ViewAttached writable-handle/cache identity. Unrelated originless captures and derived captures after preparation must reject.
+
+Verify input getter/proxy exceptions for calls, native super, construction and update tags, followed by usable calls and disposal. Preserve lazy input access and the differential suite's prefix-byte observations.
