@@ -14,6 +14,8 @@ mod metadata;
 pub use metadata::{DOCUMENT_METADATA, DOCUMENT_VERSION};
 mod structure;
 mod table;
+mod theme;
+pub use theme::parse_pasted_theme;
 
 /// Surface block conversion supported by the node-transform plugin.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Deserialize)]
