@@ -102,6 +102,8 @@ clients and real `sync_server_core::Room` callbacks over `sync_server_sim` ports
 - Same seed/script must yield byte-identical canonical event logs. Borrow sorted
   JSON during trace serialization and read per-step core diagnostics directly;
   preserve exact event/port bytes, hash encoding and invariant predicates.
+  Deserialize recorded server frames and pending payloads from borrowed JSON;
+  return owned byte vectors without cloning intermediate JSON arrays.
 - `SIM_SEED=197 cargo test -p sync_sim --test replay -- --nocapture` runs the
   explicit replay story; only this CLI test host reads SIM_SEED. Use Outcome::replay
   for an arbitrary stored script and compare_replay for first-difference evidence.

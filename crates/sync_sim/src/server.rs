@@ -5,6 +5,7 @@ use crate::{
 };
 use bebop::{Record, SliceWrapper};
 use futures::FutureExt;
+use serde::Deserialize;
 use std::{
     collections::{BTreeMap, VecDeque},
     time::Duration,
@@ -577,7 +578,7 @@ impl SimServer {
             .storage_dump()
             .iter()
             .filter(|(key, _)| key.starts_with("o/"))
-            .filter_map(|(_, value)| serde_json::from_value::<Vec<u8>>(value.clone()).ok())
+            .filter_map(|(_, value)| Vec::<u8>::deserialize(value).ok())
             .any(|bytes| {
                 spans(&bytes).is_ok_and(|ranges| {
                     ranges
