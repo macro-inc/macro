@@ -70828,7 +70828,7 @@
     "owners": [
       {
         "file": "crates/client/lexical/lexical_model/src/plugin.rs",
-        "line": 139,
+        "line": 162,
         "ignored": false,
         "test": "dispatch"
       }
@@ -70960,7 +70960,7 @@
     "owners": [
       {
         "file": "crates/client/lexical/lexical_model/src/plugin.rs",
-        "line": 139,
+        "line": 162,
         "ignored": false,
         "test": "dispatch"
       }
@@ -85153,7 +85153,7 @@
     "owners": [
       {
         "file": "crates/client/lexical/lexical_model/src/read.rs",
-        "line": 715,
+        "line": 675,
         "ignored": false,
         "test": "text_content"
       }
@@ -85914,7 +85914,7 @@
     "owners": [
       {
         "file": "crates/client/lexical/lexical_model/src/node.rs",
-        "line": 183,
+        "line": 189,
         "ignored": false,
         "test": "as_parent"
       }
@@ -85940,7 +85940,7 @@
     "owners": [
       {
         "file": "crates/client/lexical/lexical_model/src/node.rs",
-        "line": 183,
+        "line": 189,
         "ignored": false,
         "test": "as_parent"
       }
@@ -85966,7 +85966,7 @@
     "owners": [
       {
         "file": "crates/client/lexical/lexical_model/src/node.rs",
-        "line": 183,
+        "line": 189,
         "ignored": false,
         "test": "as_parent"
       }
@@ -86108,7 +86108,7 @@
     "owners": [
       {
         "file": "crates/client/lexical/lexical_model/src/node.rs",
-        "line": 183,
+        "line": 189,
         "ignored": false,
         "test": "as_parent"
       }
@@ -86978,7 +86978,7 @@
     "owners": [
       {
         "file": "crates/client/lexical/lexical_model/src/node.rs",
-        "line": 183,
+        "line": 189,
         "ignored": false,
         "test": "as_parent"
       }
@@ -87004,7 +87004,7 @@
     "owners": [
       {
         "file": "crates/client/lexical/lexical_model/src/node.rs",
-        "line": 183,
+        "line": 189,
         "ignored": false,
         "test": "as_parent"
       }
@@ -88590,7 +88590,7 @@
     "owners": [
       {
         "file": "crates/client/lexical/lexical_model/src/transaction.rs",
-        "line": 609,
+        "line": 824,
         "ignored": false,
         "test": "composition_key"
       }
@@ -88616,7 +88616,7 @@
     "owners": [
       {
         "file": "crates/client/lexical/lexical_model/src/node.rs",
-        "line": 310,
+        "line": 316,
         "ignored": false,
         "test": "as_parent"
       }
@@ -91006,7 +91006,7 @@
       },
       {
         "file": "crates/client/lexical/lexical_model/src/state.rs",
-        "line": 91,
+        "line": 103,
         "ignored": false,
         "test": "root_text_content"
       }
@@ -91647,7 +91647,7 @@
     "owners": [
       {
         "file": "crates/client/lexical/lexical_model/src/node.rs",
-        "line": 399,
+        "line": 405,
         "ignored": false,
         "test": "as_parent"
       }
@@ -91673,7 +91673,7 @@
     "owners": [
       {
         "file": "crates/client/lexical/lexical_model/src/node.rs",
-        "line": 399,
+        "line": 405,
         "ignored": false,
         "test": "as_parent"
       }
@@ -94310,7 +94310,7 @@
     "owners": [
       {
         "file": "crates/client/lexical/lexical_model/src/node/builtin.rs",
-        "line": 303,
+        "line": 309,
         "ignored": false,
         "test": "class_name"
       }
@@ -98242,7 +98242,7 @@
       },
       {
         "file": "crates/client/lexical/lexical_model/src/key.rs",
-        "line": 135,
+        "line": 153,
         "ignored": false,
         "test": "new_unchecked"
       }
@@ -99553,13 +99553,13 @@
     "owners": [
       {
         "file": "crates/client/lexical/lexical_model/src/transaction.rs",
-        "line": 119,
+        "line": 199,
         "ignored": false,
         "test": "mark_dirty"
       },
       {
         "file": "crates/client/lexical/lexical_model/src/transaction.rs",
-        "line": 190,
+        "line": 288,
         "ignored": false,
         "test": "get_mut"
       }
@@ -100870,7 +100870,7 @@
     "owners": [
       {
         "file": "crates/client/lexical/lexical_model/src/transaction.rs",
-        "line": 119,
+        "line": 199,
         "ignored": false,
         "test": "mark_dirty"
       }
@@ -102180,7 +102180,7 @@
     "owners": [
       {
         "file": "crates/client/lexical/lexical_model/src/transaction.rs",
-        "line": 190,
+        "line": 288,
         "ignored": false,
         "test": "get_mut"
       }
@@ -103490,7 +103490,7 @@
     "owners": [
       {
         "file": "crates/client/lexical/lexical_model/src/transaction.rs",
-        "line": 336,
+        "line": 464,
         "ignored": false,
         "test": "copy_node"
       }
@@ -103534,7 +103534,7 @@
     "owners": [
       {
         "file": "crates/client/lexical/lexical_model/src/transaction.rs",
-        "line": 336,
+        "line": 464,
         "ignored": false,
         "test": "copy_node"
       }
@@ -104846,8 +104846,8 @@
     "tests": [],
     "owners": [
       {
-        "file": "crates/client/lexical/lexical_model/src/read.rs",
-        "line": 81,
+        "file": "crates/client/lexical/lexical_model/src/read/record.rs",
+        "line": 43,
         "ignored": false,
         "test": "to_owned"
       }
@@ -106131,7 +106131,7 @@
     "owners": [
       {
         "file": "crates/client/lexical/lexical_model/src/registry.rs",
-        "line": 262,
+        "line": 280,
         "ignored": false,
         "test": "replace"
       }
@@ -107445,7 +107445,7 @@
     "owners": [
       {
         "file": "crates/client/lexical/lexical_model/src/registry.rs",
-        "line": 262,
+        "line": 280,
         "ignored": false,
         "test": "replace"
       }
@@ -115616,7 +115616,7 @@
     "owners": [
       {
         "file": "crates/client/lexical/lexical_model/src/plugin.rs",
-        "line": 200,
+        "line": 224,
         "ignored": false,
         "test": "run_after_commit"
       }
@@ -116916,7 +116916,7 @@
     "owners": [
       {
         "file": "crates/client/lexical/lexical_model/src/editor.rs",
-        "line": 132,
+        "line": 144,
         "ignored": false,
         "test": "update"
       }
@@ -120828,7 +120828,7 @@
     "owners": [
       {
         "file": "crates/client/lexical/lexical_model/src/editor.rs",
-        "line": 132,
+        "line": 144,
         "ignored": false,
         "test": "update"
       }
@@ -141164,7 +141164,7 @@
     "owners": [
       {
         "file": "crates/client/lexical/lexical_model/src/node_state.rs",
-        "line": 75,
+        "line": 78,
         "ignored": false,
         "test": "new"
       }
@@ -141190,7 +141190,7 @@
     "owners": [
       {
         "file": "crates/client/lexical/lexical_model/src/node_state.rs",
-        "line": 75,
+        "line": 78,
         "ignored": false,
         "test": "new"
       }
@@ -141216,7 +141216,7 @@
     "owners": [
       {
         "file": "crates/client/lexical/lexical_model/src/read.rs",
-        "line": 762,
+        "line": 722,
         "ignored": false,
         "test": "get_state"
       }
@@ -141242,7 +141242,7 @@
     "owners": [
       {
         "file": "crates/client/lexical/lexical_model/src/read.rs",
-        "line": 762,
+        "line": 722,
         "ignored": false,
         "test": "get_state"
       }
@@ -141268,13 +141268,13 @@
     "owners": [
       {
         "file": "crates/client/lexical/lexical_model/src/transaction.rs",
-        "line": 370,
+        "line": 524,
         "ignored": false,
         "test": "set_state"
       },
       {
         "file": "crates/client/lexical/lexical_model/src/transaction.rs",
-        "line": 386,
+        "line": 544,
         "ignored": false,
         "test": "update_state"
       }
@@ -141300,13 +141300,13 @@
     "owners": [
       {
         "file": "crates/client/lexical/lexical_model/src/read.rs",
-        "line": 762,
+        "line": 722,
         "ignored": false,
         "test": "get_state"
       },
       {
         "file": "crates/client/lexical/lexical_model/src/transaction.rs",
-        "line": 370,
+        "line": 524,
         "ignored": false,
         "test": "set_state"
       }
@@ -141332,7 +141332,7 @@
     "owners": [
       {
         "file": "crates/client/lexical/lexical_model/src/read.rs",
-        "line": 788,
+        "line": 763,
         "ignored": false,
         "test": "state_change"
       }
@@ -141358,7 +141358,7 @@
     "owners": [
       {
         "file": "crates/client/lexical/lexical_model/src/node_state.rs",
-        "line": 353,
+        "line": 479,
         "ignored": false,
         "test": "export"
       }
@@ -141384,7 +141384,7 @@
     "owners": [
       {
         "file": "crates/client/lexical/lexical_model/src/node_state.rs",
-        "line": 294,
+        "line": 402,
         "ignored": false,
         "test": "import"
       }
@@ -142736,7 +142736,7 @@
     "owners": [
       {
         "file": "crates/client/lexical/lexical_model/src/node_state.rs",
-        "line": 294,
+        "line": 402,
         "ignored": false,
         "test": "import"
       }
@@ -142818,7 +142818,7 @@
     "owners": [
       {
         "file": "crates/client/lexical/lexical_model/src/node_state.rs",
-        "line": 219,
+        "line": 321,
         "ignored": false,
         "test": "equivalent"
       }
@@ -142844,7 +142844,7 @@
     "owners": [
       {
         "file": "crates/client/lexical/lexical_model/src/node_state.rs",
-        "line": 219,
+        "line": 321,
         "ignored": false,
         "test": "equivalent"
       }
@@ -148183,7 +148183,7 @@
     "owners": [
       {
         "file": "crates/client/lexical/lexical_model/src/registry.rs",
-        "line": 86,
+        "line": 89,
         "ignored": false,
         "test": "get"
       }
@@ -150811,7 +150811,7 @@
     "owners": [
       {
         "file": "crates/client/lexical/lexical_model/src/registry.rs",
-        "line": 86,
+        "line": 89,
         "ignored": false,
         "test": "get"
       }
@@ -152128,12 +152128,6 @@
         "line": 17,
         "ignored": false,
         "test": "class_name"
-      },
-      {
-        "file": "crates/client/lexical/lexical_model/src/registry.rs",
-        "line": 305,
-        "ignored": false,
-        "test": "build"
       }
     ]
   },
