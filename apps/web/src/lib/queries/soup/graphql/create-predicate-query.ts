@@ -17,6 +17,7 @@ import type { CacheHost } from '../../../graphql-cache/host/types';
 import {
   type CacheRevision,
   type EntityFilterCacheArgs,
+  type LiveQueryUpdate,
   parseCacheRevision,
 } from '../../../graphql-cache/protocol';
 import { createHiddenDeferral } from '../../visible-refresh';
@@ -55,6 +56,21 @@ export type PredicateQueryStatus =
   | 'ready'
   | 'unsupported'
   | 'error';
+function changesSnapshot<T>(
+  previous: LiveQuerySnapshot<T> | undefined,
+  result: LiveQueryUpdate,
+  orderChanged: boolean
+): boolean {
+  return (
+    !previous ||
+    orderChanged ||
+    result.upserts.length > 0 ||
+    result.patches.length > 0 ||
+    previous.optimistic !== result.optimistic ||
+    !arrayEquals(previous.retainedKeys, result.retainedKeys)
+  );
+}
+
 /**
  * Binds one cache-engine maintained view for `createSoupLiveQuery`. Owns
  * subscription, coalescing, generation recovery, and keyed Solid rows.
@@ -212,14 +228,7 @@ export function createPredicateQuery<T extends object>(options: {
                   const previous = data();
                   // Patched rows update in place; republishing an identical
                   // snapshot would rerun every list derivation for nothing.
-                  if (
-                    !previous ||
-                    orderChanged ||
-                    result.upserts.length > 0 ||
-                    result.patches.length > 0 ||
-                    previous.optimistic !== result.optimistic ||
-                    !arrayEquals(previous.retainedKeys, result.retainedKeys)
-                  )
+                  if (changesSnapshot(previous, result, orderChanged))
                     setData({
                       keys,
                       records: orderedRows,
