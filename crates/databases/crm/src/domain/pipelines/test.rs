@@ -1,5 +1,5 @@
 use super::*;
-use models_properties::DataType;
+use properties_types::DataType;
 
 #[test]
 fn creation_is_private_unless_requested_otherwise() {

@@ -9,11 +9,11 @@ use databases::domain::models::{
 use databases_types::position::Position;
 use databases_types::{ColumnId, DatabaseId, OptionId, TableId};
 use entity_access::domain::models::AccessLevel;
-use models_properties::service::property_definition::PropertyDefinition;
-use models_properties::service::property_definition_with_options::PropertyDefinitionWithOptions;
-use models_properties::service::property_option::PropertyOption;
-use models_properties::service::property_option::PropertyOptionValue;
-use models_properties::shared::{DataType, PropertyOwner};
+use properties_types::service::property_definition::PropertyDefinition;
+use properties_types::service::property_definition_with_options::PropertyDefinitionWithOptions;
+use properties_types::service::property_option::PropertyOption;
+use properties_types::service::property_option::PropertyOptionValue;
+use properties_types::shared::{DataType, PropertyOwner};
 use uuid::Uuid;
 
 use super::schema;
@@ -144,7 +144,7 @@ fn details_become_the_schema_the_engine_builds_its_catalog_from() {
                             display_name: "Owner".into(),
                             data_type: DataType::Entity,
                             is_multi_select: false,
-                            specific_entity_type: Some(models_properties::EntityType::User),
+                            specific_entity_type: Some(properties_types::EntityType::User),
                             created_at: Utc::now(),
                             updated_at: Utc::now(),
                             is_system: false,

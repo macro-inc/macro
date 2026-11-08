@@ -19,7 +19,7 @@ use crm::domain::{
 };
 use entity_access::domain::models::{EditAccessLevel, ViewAccessLevel};
 use item_filters::ast::{crm_association::CrmAssociation as Record, document::DocumentLiteral};
-use models_properties::EntityType as PropertyEntityType;
+use properties_types::EntityType as PropertyEntityType;
 
 const USER: &str = "macro|test@example.com";
 const COMPANY: Uuid = Uuid::from_u128(0xc0);

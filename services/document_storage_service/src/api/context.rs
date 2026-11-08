@@ -128,8 +128,6 @@ use macro_authorization::{
 };
 use macro_env_var::env_var;
 use macro_sha_count_client::Redis;
-use models_properties::service::property_change_source::PropertyChangeSource;
-use models_properties::service::property_value::PropertyValue;
 use notification::domain::service::SqsNotificationIngress;
 use notification_outbound::queue::SqsQueue;
 use opensearch_client::OpensearchClient;
@@ -149,6 +147,8 @@ use properties::{
     NotificationServiceImpl, PermissionServiceImpl, PropertiesPgRepo, PropertiesServiceImpl,
 };
 use properties_inbound::axum_router::PropertiesRouterState;
+use properties_types::service::property_change_source::PropertyChangeSource;
+use properties_types::service::property_value::PropertyValue;
 use readonly_pool::ReadOnlyPool;
 use reminders::{
     inbound::axum_router::RemindersRouterState, outbound::pg_reminders_repo::PgRemindersRepo,
@@ -387,7 +387,7 @@ impl TaskPropertiesPort for TaskPropertiesAdapter {
                 &access,
                 SystemPropertyKey::STATUS_UUID,
                 Some(
-                    models_properties::api::requests::SetPropertyValue::SelectOption {
+                    properties_types::api::requests::SetPropertyValue::SelectOption {
                         option_id: status_option.uuid(),
                     },
                 ),
@@ -403,7 +403,7 @@ impl TaskPropertiesPort for TaskPropertiesAdapter {
         principal: &model_owner::CreationPrincipal,
         entity_id: &str,
         property_definition_id: uuid::Uuid,
-        value: Option<models_properties::api::requests::SetPropertyValue>,
+        value: Option<properties_types::api::requests::SetPropertyValue>,
     ) -> anyhow::Result<()> {
         use properties::PropertiesService as _;
 

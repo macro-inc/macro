@@ -4,7 +4,7 @@
 //! permission outbound adapter. They are inlined here so this crate does not
 //! depend on the monolithic db client crates.
 
-use models_properties::EntityType;
+use properties_types::EntityType;
 use sqlx::{Pool, Postgres};
 use uuid::Uuid;
 

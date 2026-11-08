@@ -355,7 +355,7 @@ impl SoupService for CountingSoupService {
         &self,
         _user_id: MacroUserIdStr<'a>,
     ) -> Result<
-        Vec<models_properties::service::property_definition_with_options::PropertyDefinitionWithOptions>,
+        Vec<properties_types::service::property_definition_with_options::PropertyDefinitionWithOptions>,
         soup::domain::models::SoupErr,
     >{
         Err(test_soup_err())

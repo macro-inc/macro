@@ -4,7 +4,7 @@
 use std::collections::BTreeSet;
 
 use call::domain::models::CallPeople;
-use models_properties::EntityType;
+use properties_types::EntityType;
 use sqlx::PgPool;
 use system_properties::{CrmRecordLink, SystemPropertiesService};
 use uuid::Uuid;

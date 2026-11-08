@@ -7,8 +7,8 @@ use crate::domain::ports::{MockNotificationService, MockPermissionService, Prope
 use crate::domain::service::PropertiesService;
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
 use macro_user_id::user_id::MacroUserIdStr;
-use models_properties::EntityType;
-use models_properties::service::property_value::PropertyValue;
+use properties_types::EntityType;
+use properties_types::service::property_value::PropertyValue;
 use sqlx::{Pool, Postgres};
 use std::sync::Arc;
 use system_properties::SystemPropertyKey;
@@ -780,7 +780,7 @@ async fn seed_select_options(
         .map(|id| {
             (
                 *id,
-                models_properties::service::property_option::PropertyOptionValue::String(
+                properties_types::service::property_option::PropertyOptionValue::String(
                     id.to_string(),
                 ),
             )
@@ -1161,7 +1161,7 @@ async fn seed_option(pool: &Pool<Postgres>, def_id: Uuid, value: &str) -> Uuid {
         .create_property_option(
             def_id,
             0,
-            models_properties::service::property_option::PropertyOptionValue::String(
+            properties_types::service::property_option::PropertyOptionValue::String(
                 value.to_string(),
             ),
             None,

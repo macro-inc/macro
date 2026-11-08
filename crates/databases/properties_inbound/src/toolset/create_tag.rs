@@ -4,11 +4,11 @@ use ai_toolset::{AsyncTool, RequestContext, ServiceContext, ToolCallError, ToolR
 use ai_toolset::{ToolAnnotated, ToolAnnotations};
 use async_trait::async_trait;
 use entity_access::domain::ports::EntityAccessService;
-use models_properties::api::{AddPropertyOptionRequest, AddStringOptionRequest};
-use models_properties::service::property_option::PropertyOptionValue;
-use models_properties::service::tag_sets::TagScope;
 use properties::domain::model::TagScope as DomainTagScope;
 use properties::domain::service::PropertiesService;
+use properties_types::api::{AddPropertyOptionRequest, AddStringOptionRequest};
+use properties_types::service::property_option::PropertyOptionValue;
+use properties_types::service::tag_sets::TagScope;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;

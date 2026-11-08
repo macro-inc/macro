@@ -11,8 +11,6 @@ mod transfer;
 
 use std::collections::HashMap;
 
-use models_properties::service::property_value::PropertyValue;
-use models_properties::{EntityReference, EntityType};
 use properties::domain::database_cell_writer::DatabaseCellWriter;
 use properties::domain::database_definition_writer::{
     DatabaseDefinitionWriter, NewDatabaseDefinition,
@@ -22,6 +20,8 @@ use properties::domain::database_option_writer::{
 };
 use properties::domain::model::UpdatePropertyOptionOutcome;
 use properties::domain::ports::PropertiesRepo;
+use properties_types::service::property_value::PropertyValue;
+use properties_types::{EntityReference, EntityType};
 use sqlx::{PgPool, Postgres, Transaction};
 
 use crate::domain::journal::{Before, JournalActor, RowImage, cell_value, row_cells};

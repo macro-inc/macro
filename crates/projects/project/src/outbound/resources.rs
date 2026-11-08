@@ -8,8 +8,8 @@ use entity_access::domain::{
     ports::EntityAccessService,
 };
 use macro_user_id::user_id::MacroUserIdStr;
-use models_properties::service::property_value::PropertyValue;
 use properties::{PropertiesErr, PropertiesService};
+use properties_types::service::property_value::PropertyValue;
 use std::{collections::HashMap, sync::Arc};
 use system_properties::{StatusOption, SystemPropertiesService, SystemPropertyKey};
 

@@ -13,8 +13,8 @@ use databases_types::{
     NewOption, OptionId, OptionRef, PropertyId, RowChange, RowChanges, RowId, RowsChange,
     TableChange, TableId, TableVersion, ViewChange,
 };
-use models_properties::service::property_option::PropertyOptionValue;
-use models_properties::service::property_value::PropertyValue;
+use properties_types::service::property_option::PropertyOptionValue;
+use properties_types::service::property_value::PropertyValue;
 use uuid::Uuid;
 
 use super::*;
@@ -646,7 +646,7 @@ fn a_type_change_is_undone_by_the_old_type_with_the_old_definition_and_cells() {
         definition: Some(NewDefinition {
             id: Uuid::from_u128(0xe8),
             name: "Extra guests".into(),
-            data_type: models_properties::shared::DataType::String,
+            data_type: properties_types::shared::DataType::String,
             is_multi_select: false,
             specific_entity_type: None,
             options: Vec::new(),

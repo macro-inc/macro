@@ -153,7 +153,7 @@ model_file_type = { workspace = true }
 model_notifications = { workspace = true }
 email_types = { workspace = true }
 pagination_types = { workspace = true, features = ["axum"] }
-models_properties = { workspace = true }
+properties_types = { workspace = true }
 rand = { workspace = true }
 redis = { workspace = true, features = [
   "cluster-async",

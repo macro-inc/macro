@@ -1,7 +1,7 @@
 use entity_access::domain::ports::EntityAccessService;
 use macro_user_id::user_id::MacroUserIdStr;
-use models_properties::PropertyOwner;
-use models_properties::api::CreatePropertyScope;
+use properties_types::PropertyOwner;
+use properties_types::api::CreatePropertyScope;
 use uuid::Uuid;
 
 use properties::domain::error::PropertiesErr;

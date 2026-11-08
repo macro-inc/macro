@@ -259,8 +259,8 @@ mod entity_type_aliases {
         let entity_ref = tool.entity_ref.expect("entity_ref should be set");
         assert!(matches!(entity_ref.entity_type, ToolEntityType::Thread));
         assert_eq!(
-            models_properties::EntityType::from(entity_ref.entity_type),
-            models_properties::EntityType::Thread
+            properties_types::EntityType::from(entity_ref.entity_type),
+            properties_types::EntityType::Thread
         );
     }
 }

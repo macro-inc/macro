@@ -860,7 +860,6 @@ model_file_type = { path = "crates/types/model_file_type" }
 model_notifications = { path = "crates/notifications/model_notifications" }
 model_owner = { path = "crates/types/model_owner" }
 model_user = { path = "crates/types/model_user" }
-models_properties = { path = "crates/types/models_properties" }
 models_search = { path = "crates/search/models_search" }
 models_search_cursor = { path = "crates/types/models_search_cursor" }
 models_sfs = { path = "crates/types/models_sfs" }
@@ -892,6 +891,7 @@ project_id = { path = "crates/types/project_id" }
 projects_hex = { package = "folder", path = "crates/projects/folder" }
 properties = { path = "crates/databases/properties", default-features = false }
 properties_inbound = { path = "crates/databases/properties_inbound", default-features = false }
+properties_types = { path = "crates/types/properties_types" }
 psd_engine = { path = "crates/engines/psd_engine" }
 rate_limit = { path = "crates/platform/rate_limit" }
 readonly_pool = { path = "crates/platform/readonly_pool" }

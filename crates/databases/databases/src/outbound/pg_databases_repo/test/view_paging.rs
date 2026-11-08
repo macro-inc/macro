@@ -3,7 +3,7 @@ use databases_types::views::{
     Conjunction, FilterCondition, FilterGroup, FilterNode, FilterTest, NumberOperator,
     SortDirection, SortKey, ViewQuery,
 };
-use models_properties::service::property_value::PropertyValue;
+use properties_types::service::property_value::PropertyValue;
 
 use super::*;
 use crate::domain::view_rows::{ViewRowsError, ViewRowsRepository};
@@ -141,7 +141,7 @@ async fn formula_fixture(pool: &PgPool) -> (QueryTable, Vec<RowId>) {
     use crate::domain::derivation::Derivation;
     use crate::domain::models::{ColumnConfig, NewDefinition};
     use databases_types::{Formula, Operator};
-    use models_properties::DataType;
+    use properties_types::DataType;
     let (repo, table, _) = fixture(pool).await;
     let [price, qty, due, total, double, ratio, follow_up] =
         [(); 7].map(|_| macro_uuid::generate_uuid_v7());
@@ -589,7 +589,7 @@ async fn checkbox_dates_and_links_keep_the_existing_cell_semantics(pool: PgPool)
 async fn select_and_entity_pages_preserve_option_rank_membership_and_empty_sets(pool: PgPool) {
     use database_sql_engine::catalog::{EntityKind, SelectOption};
     use databases_types::{OptionId, views::SetOperator};
-    use models_properties::shared::{EntityReference, EntityType};
+    use properties_types::shared::{EntityReference, EntityType};
     let (mut table, rows) = page_fixture(&pool).await;
     let first = OptionId::from_uuid(Uuid::from_u128(201));
     let second = OptionId::from_uuid(Uuid::from_u128(202));
@@ -892,7 +892,7 @@ async fn date_comparisons_preserve_sub_microsecond_precision(pool: PgPool) {
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn date_ranges_sort_by_start_then_end_and_filter_by_day_like_the_engine(pool: PgPool) {
     use databases_types::views::DateRangeOperator;
-    use models_properties::shared::DateRange;
+    use properties_types::shared::DateRange;
     let (mut table, rows) = page_fixture(&pool).await;
     table.columns[0].kind = ColumnKind::DateRange;
     let range = |start: &str, end: &str| {

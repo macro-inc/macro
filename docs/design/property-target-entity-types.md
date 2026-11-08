@@ -44,8 +44,8 @@ properties domain resolves document subtype
 1. **Entity property targets use canonical entity types externally.** A task is targeted as `DOCUMENT`; task-ness comes from document subtype.
 2. **The properties domain receives regular typed entity-access receipts.** Clients never provide receipts; inbound adapters mint them.
 3. **Task/document classification is domain policy.** Inbound GraphQL, REST, and tool adapters must not inspect document subtype or choose the internal storage namespace.
-4. **Document subtype lookup is an outbound fact.** Add a repository/port capability that can resolve document subtypes in batches; the domain maps those facts to internal `models_properties::EntityType::{Document, Task}`.
-5. **Keep `models_properties::EntityType::Task` internally.** Existing rows, task initialization, task relationships, grouping, indexing, notifications, and permission side effects continue using it.
+4. **Document subtype lookup is an outbound fact.** Add a repository/port capability that can resolve document subtypes in batches; the domain maps those facts to internal `properties_types::EntityType::{Document, Task}`.
+5. **Keep `properties_types::EntityType::Task` internally.** Existing rows, task initialization, task relationships, grouping, indexing, notifications, and permission side effects continue using it.
 6. **Separate target types from referenced-entity types.** The current `GraphqlPropertyEntityType`/generated `EntityType` is used both for the entity receiving a property and for entities stored inside property values. Introduce a target-only transport type without `TASK`. Keep the existing internal/reference type in this iteration so Parent Task/Subtasks and property-definition constraints are not redesigned accidentally.
 7. **Use one resolution path for reads and writes.** Fixing only `set_entity_property` would recreate the mismatch in the opposite direction.
 8. **Do not add `Task` to `entity_kind::EntityType`.** Tasks remain canonical documents.
@@ -92,7 +92,7 @@ Add a private/domain model such as:
 ```rust
 struct ResolvedPropertySubject {
     canonical_entity: entity_kind::OwnedEntity,
-    storage_entity_type: models_properties::EntityType,
+    storage_entity_type: properties_types::EntityType,
 }
 ```
 
@@ -145,7 +145,7 @@ Change the service boundary to return canonical keys. Options, in preferred orde
 2. A map keyed by `entity_kind::OwnedEntity`.
 3. A vector aligned with the input receipts, if that is clearer for all callers.
 
-Keep `EntityPropertiesKey` with `models_properties::EntityType::Task` inside the repository boundary. During bulk reads, retain a canonical-to-internal mapping, query with internal keys, then map results back to canonical keys before returning.
+Keep `EntityPropertiesKey` with `properties_types::EntityType::Task` inside the repository boundary. During bulk reads, retain a canonical-to-internal mapping, query with internal keys, then map results back to canonical keys before returning.
 
 ## Transport contracts
 
@@ -195,7 +195,7 @@ Keep value-level `EntityReference.entity_type` separate so this change does not 
 
 Likely files:
 
-- `crates/types/models_properties/src/api/**`
+- `crates/types/properties_types/src/api/**`
 - `crates/databases/properties_inbound/src/axum_router/extract.rs`
 - `crates/databases/properties_inbound/src/axum_router/entities.rs`
 - `crates/databases/properties_service/**` and DSS OpenAPI composition as required

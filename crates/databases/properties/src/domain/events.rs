@@ -11,10 +11,10 @@ use chrono::{DateTime, Utc};
 use macro_event_broker::{Event, MacroEvent, TopicEvent};
 use macro_event_topics::MacroPropertiesTopic;
 use macro_user_id::user_id::MacroUserIdStr;
-use models_properties::service::property_change_source::PropertyChangeSource;
-use models_properties::service::property_option::PropertyOptionValue;
-use models_properties::service::property_value::PropertyValue;
-use models_properties::{DataType, EntityType, PropertyOwner};
+use properties_types::service::property_change_source::PropertyChangeSource;
+use properties_types::service::property_option::PropertyOptionValue;
+use properties_types::service::property_value::PropertyValue;
+use properties_types::{DataType, EntityType, PropertyOwner};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 

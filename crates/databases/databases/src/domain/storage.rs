@@ -2,7 +2,7 @@
 
 use std::collections::HashMap;
 
-use models_properties::service::property_value::PropertyValue;
+use properties_types::service::property_value::PropertyValue;
 use serde::{Deserialize, Serialize};
 
 use super::models::{

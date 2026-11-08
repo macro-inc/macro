@@ -1,8 +1,8 @@
 //! Transactional composition for database-owned schema creation.
 
-use models_properties::service::property_definition_with_options::PropertyDefinitionWithOptions;
-use models_properties::service::property_option::PropertyOptionValue;
-use models_properties::{DataType, EntityType};
+use properties_types::service::property_definition_with_options::PropertyDefinitionWithOptions;
+use properties_types::service::property_option::PropertyOptionValue;
+use properties_types::{DataType, EntityType};
 use uuid::Uuid;
 
 /// Definition input owned by the properties domain.

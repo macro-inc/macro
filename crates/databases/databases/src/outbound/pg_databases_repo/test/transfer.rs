@@ -1,5 +1,5 @@
-use models_properties::service::property_value::PropertyValue;
 use properties::outbound::properties_pg_repo::PropertiesPgRepo;
+use properties_types::service::property_value::PropertyValue;
 use std::collections::BTreeMap;
 
 use super::*;

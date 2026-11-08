@@ -9,9 +9,9 @@ use graphql_soup::{
 };
 use macro_user_id::user_id::MacroUserIdStr;
 use model_owner::Owner;
-use models_properties::service::property_definition_with_options::PropertyDefinitionWithOptions;
 use models_soup::{initiative::SoupInitiative, item::SoupItem};
 use pagination_types::{Paginated, PaginatedCursor, SimpleSortMethod};
+use properties_types::service::property_definition_with_options::PropertyDefinitionWithOptions;
 use soup::domain::{
     models::{
         EnrichedSoupItem, GroupedSortRequest, IntoSoupReqAst, SoupErr, SoupPropertiesField,

@@ -23,7 +23,7 @@ use entity_access::domain::{
     ports::EntityAccessService,
 };
 use macro_user_id::user_id::MacroUserIdStr;
-use models_properties::shared::DataType;
+use properties_types::shared::DataType;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
@@ -408,7 +408,7 @@ pub struct ToolColumn {
     /// Never invent an id.
     #[serde(skip_serializing_if = "Option::is_none")]
     #[schemars(with = "Option<String>")]
-    pub specific_entity_type: Option<models_properties::shared::EntityType>,
+    pub specific_entity_type: Option<properties_types::shared::EntityType>,
     /// Whether the column holds several values. Multi-valued cells are written
     /// as lists (`['a', 'b']`) and tested with `HAS`.
     pub is_multi_select: bool,

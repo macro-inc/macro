@@ -1,7 +1,7 @@
 //! Which task property changes a routine watches, without asking a model.
 
 use macro_uuid::Uuid;
-use models_properties::service::property_value::PropertyValue;
+use properties_types::service::property_value::PropertyValue;
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 

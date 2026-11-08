@@ -53,7 +53,6 @@ use item_filters::ast::{
     github_pull_request::GithubPullRequestLiteral,
 };
 use macro_user_id::user_id::MacroUserIdStr;
-use models_properties::service::property_definition_with_options::PropertyDefinitionWithOptions;
 use models_soup::{
     comms::{SoupChannel, SoupChannelThread},
     crm_company::SoupCrmCompany,
@@ -65,6 +64,7 @@ use pagination_types::{
     Base64Str, Cursor, CursorVal, Frecency, FrecencyValue, Identify, NotifiedAt, Paginate,
     PaginateOn, Paginated, Query, SimpleSortMethod, SortOn, TouchedByMe,
 };
+use properties_types::service::property_definition_with_options::PropertyDefinitionWithOptions;
 use serde::Serialize;
 use std::cmp::Ordering;
 use std::collections::HashMap;

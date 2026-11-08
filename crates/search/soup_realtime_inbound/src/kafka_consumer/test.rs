@@ -1031,7 +1031,7 @@ fn initiative_lifecycle_and_properties_refresh_the_soup_entity() {
 
 #[test]
 fn moving_a_task_between_projects_refreshes_the_task_and_both_projects() {
-    use models_properties::{service::property_value::PropertyValue, shared::EntityReference};
+    use properties_types::{service::property_value::PropertyValue, shared::EntityReference};
     use system_properties::SystemPropertyKey;
 
     let project = |id: &str| {

@@ -1,6 +1,6 @@
 use super::*;
 use crate::domain::ports::{MockNotificationService, MockPermissionService, MockPropertiesRepo};
-use models_properties::EntityReference;
+use properties_types::EntityReference;
 
 fn assignment(references: Vec<EntityReference>) -> Option<SetPropertyValue> {
     Some(SetPropertyValue::MultiEntityReference { references })

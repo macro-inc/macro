@@ -4,9 +4,9 @@
 //! them as read-only metadata properties.
 
 use document_sub_type::DocumentSubType;
-use models_properties::service::document_metadata::DocumentMetadata;
-use models_properties::service::project_metadata::ProjectMetadata;
-use models_properties::service::thread_metadata::ThreadMetadata;
+use properties_types::service::document_metadata::DocumentMetadata;
+use properties_types::service::project_metadata::ProjectMetadata;
+use properties_types::service::thread_metadata::ThreadMetadata;
 use sqlx::{Pool, Postgres};
 use std::collections::HashMap;
 use uuid::Uuid;

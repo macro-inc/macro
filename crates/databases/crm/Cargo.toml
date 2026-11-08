@@ -9,7 +9,7 @@ ai_tools = [
   "dep:ai_toolset",
   "dep:async-trait",
   "dep:macro_user_id",
-  "dep:models_properties",
+  "dep:properties_types",
   "dep:properties",
   "dep:schemars",
   "entity_access/ports",
@@ -32,7 +32,7 @@ call_link = [
   "dep:call",
   "dep:kafka_util",
   "dep:macro_event_broker",
-  "dep:models_properties",
+  "dep:properties_types",
   "dep:rdkafka",
   "dep:rootcause",
   "dep:sqlx",
@@ -49,13 +49,13 @@ outbound = [
   "dep:tracing-opentelemetry",
   "dep:entity_access_db_utils",
   "dep:macro_user_id",
-  "dep:models_properties",
+  "dep:properties_types",
   "dep:properties",
   "dep:sqlx",
   "dep:unfurl",
   "ports",
 ]
-ports = ["dep:bot_id", "dep:csv", "dep:databases", "dep:futures", "dep:databases_types", "dep:permissions_types", "dep:models_properties", "dep:macro_user_id", "dep:macro_uuid", "dep:rootcause", "dep:utoipa", "dep:properties", "entity_access/ports"]
+ports = ["dep:bot_id", "dep:csv", "dep:databases", "dep:futures", "dep:databases_types", "dep:permissions_types", "dep:properties_types", "dep:macro_user_id", "dep:macro_uuid", "dep:rootcause", "dep:utoipa", "dep:properties", "entity_access/ports"]
 # Read-only CRM search (name/domain). Pulls only sqlx + ports — no
 # unfurl/axum — so search consumers stay lightweight.
 search = ["dep:sqlx", "ports"]
@@ -90,7 +90,7 @@ tokio = { workspace = true, optional = true }
 ai_toolset = { workspace = true, optional = true }
 async-trait = { workspace = true, optional = true }
 macro_user_id = { workspace = true, optional = true }
-models_properties = { workspace = true, optional = true }
+properties_types = { workspace = true, optional = true }
 properties = { workspace = true, features = [
   "ports",
 ], optional = true }

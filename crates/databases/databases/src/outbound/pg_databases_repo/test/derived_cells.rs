@@ -6,7 +6,7 @@ use databases_types::{
     CellValue, CellWrite, ColumnChange, ColumnKind, DatabaseOp, Formula, NewColumn, OpResult,
     Operator, RowChange, RowChanges, RowsChange, RowsResult,
 };
-use models_properties::service::property_value::PropertyValue;
+use properties_types::service::property_value::PropertyValue;
 
 use super::apply_ops::{Guests, cells, edit, guests, service, version, viewer};
 use super::journal::{WOLF, edit_as, insert_guests, person, wedding};

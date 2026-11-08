@@ -3,8 +3,8 @@ use std::sync::Arc;
 use entity_access::domain::ports::EntityAccessService as _;
 use macro_user_id::cow_str::CowLike;
 use macro_user_id::user_id::MacroUserIdStr;
-use models_properties::DataType;
-use models_properties::service::property_option::PropertyOptionValue;
+use properties_types::DataType;
+use properties_types::service::property_option::PropertyOptionValue;
 
 use super::{ToolEntityAccessService, ToolPropertiesService};
 

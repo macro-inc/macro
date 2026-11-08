@@ -1,6 +1,6 @@
 use async_graphql::{Context, Enum, ID, Object, SimpleObject, Union, dataloader::DataLoader};
 use graphql_common::GraphqlPropertyEntityType;
-use models_properties::service::{
+use properties_types::service::{
     entity_property_with_definition::EntityPropertyWithDefinition, property_value::PropertyValue,
 };
 
@@ -33,18 +33,18 @@ pub enum GraphqlPropertyDataType {
 
 impl GraphqlPropertyDataType {
     /// Construct a GraphQL data type from the properties-domain model.
-    pub fn new(data_type: models_properties::DataType) -> Self {
+    pub fn new(data_type: properties_types::DataType) -> Self {
         match data_type {
-            models_properties::DataType::Boolean => Self::Boolean,
-            models_properties::DataType::Date => Self::Date,
-            models_properties::DataType::DateRange => Self::DateRange,
-            models_properties::DataType::Number => Self::Number,
-            models_properties::DataType::String => Self::String,
-            models_properties::DataType::SelectNumber => Self::SelectNumber,
-            models_properties::DataType::SelectString => Self::SelectString,
-            models_properties::DataType::Tag => Self::Tag,
-            models_properties::DataType::Entity => Self::Entity,
-            models_properties::DataType::Link => Self::Link,
+            properties_types::DataType::Boolean => Self::Boolean,
+            properties_types::DataType::Date => Self::Date,
+            properties_types::DataType::DateRange => Self::DateRange,
+            properties_types::DataType::Number => Self::Number,
+            properties_types::DataType::String => Self::String,
+            properties_types::DataType::SelectNumber => Self::SelectNumber,
+            properties_types::DataType::SelectString => Self::SelectString,
+            properties_types::DataType::Tag => Self::Tag,
+            properties_types::DataType::Entity => Self::Entity,
+            properties_types::DataType::Link => Self::Link,
         }
     }
 }
@@ -258,7 +258,7 @@ pub struct GraphqlPropertyEntityReference {
 
 impl GraphqlPropertyEntityReference {
     /// Construct a GraphQL entity reference from its properties-domain model.
-    pub fn new(value: &models_properties::EntityReference) -> Self {
+    pub fn new(value: &properties_types::EntityReference) -> Self {
         Self {
             entity_id: value.entity_id.clone(),
             entity_type: GraphqlPropertyEntityType::new(value.entity_type),

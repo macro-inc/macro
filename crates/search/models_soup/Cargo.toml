@@ -17,7 +17,7 @@ macro_user_id = { workspace = true }
 entity_kind = { workspace = true }
 model_owner = { workspace = true }
 pagination_types = { workspace = true }
-models_properties = { workspace = true }
+properties_types = { workspace = true }
 serde = { workspace = true }
 soup_property = { workspace = true }
 serde_json = { workspace = true }

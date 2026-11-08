@@ -216,7 +216,7 @@ pagination_types = { workspace = true, features = [
   "axum",
 ] }
 permissions_types = { workspace = true }
-models_properties = { workspace = true }
+properties_types = { workspace = true }
 models_soup = { workspace = true, features = ["schema"] }
 notification = { workspace = true, default-features = true }
 notification_outbound = { workspace = true }

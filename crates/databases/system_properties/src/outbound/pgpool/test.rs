@@ -1,6 +1,6 @@
 //! Tests for system properties PostgreSQL repository.
 
-use models_properties::EntityType;
+use properties_types::EntityType;
 
 use super::*;
 use crate::domain::model::{PropertyRow, SystemPropertyKey};

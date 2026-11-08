@@ -4,7 +4,7 @@ use std::collections::HashSet;
 use std::fmt;
 use std::sync::LazyLock;
 
-use models_properties::service::property_change_source::{GithubAccount, PropertyChangeSource};
+use properties_types::service::property_change_source::{GithubAccount, PropertyChangeSource};
 use regex::Regex;
 use serde::Deserialize;
 

@@ -28,14 +28,14 @@ use item_filters::{
         properties::{PropertiesLiteral, PropertyMatchValue},
     },
 };
-use models_properties::DataType;
-use models_properties::service::property_value::PropertyValue;
-use models_properties::service::tag_sets::{AppliedTag, CallerTagSets, TagFilter, TagMatch};
 use models_soup::{
     SoupProperty, agent_session::AgentSessionArchiveCause, document::SoupDocumentSubType,
     item::SoupItem,
 };
 use pagination_types::{SimpleSortMethod, TypeEraseCursor};
+use properties_types::DataType;
+use properties_types::service::property_value::PropertyValue;
+use properties_types::service::tag_sets::{AppliedTag, CallerTagSets, TagFilter, TagMatch};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;

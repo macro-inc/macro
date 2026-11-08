@@ -11,7 +11,7 @@ broker = ["dep:macro_event_broker", "dep:macro_event_topics", "ports"]
 default = []
 delivery = [
   "dep:properties",
-  "dep:models_properties",
+  "dep:properties_types",
   "dep:connection_gateway_client",
   "dep:entity_kind",
   "dep:model_notifications",
@@ -62,7 +62,7 @@ entity_kind = { workspace = true, optional = true }
 model_notifications = { workspace = true, optional = true }
 model_owner = { workspace = true, optional = true }
 pagination_types = { workspace = true }
-models_properties = { workspace = true, optional = true }
+properties_types = { workspace = true, optional = true }
 properties = { workspace = true, features = ["ports"], optional = true }
 notification = { workspace = true, default-features = true, optional = true }
 rootcause = { workspace = true, optional = true }

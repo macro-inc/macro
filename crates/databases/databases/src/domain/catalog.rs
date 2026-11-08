@@ -7,10 +7,10 @@ use databases_types::cast::{Cast, CastKind, Contents, TARGETS, cast};
 use databases_types::property::{DataType as StoredDataType, OptionValue, stored_cast_kind};
 use databases_types::views::{SchemaColumn, ValueKind};
 use databases_types::{ColumnKind, EntityKind, OptionId};
-use models_properties::service::property_definition_with_options::PropertyDefinitionWithOptions;
-use models_properties::service::property_option::PropertyOptionValue;
-use models_properties::shared::{DataType, PropertyOwner};
 use permissions_types::share_permission::access_level::AccessLevel;
+use properties_types::service::property_definition_with_options::PropertyDefinitionWithOptions;
+use properties_types::service::property_option::PropertyOptionValue;
+use properties_types::shared::{DataType, PropertyOwner};
 
 use crate::domain::models::{
     Column, Database, DatabaseId, DatabaseView, PropertyDefinitionId, Table, TableId, grant_writes,
@@ -263,7 +263,7 @@ pub struct PropertyType {
     /// Whether a cell holds several values.
     pub is_multi_select: bool,
     /// What a reference column points at; `None` for a relation.
-    pub specific_entity_type: Option<models_properties::EntityType>,
+    pub specific_entity_type: Option<properties_types::EntityType>,
     /// Whether the column relates rows of another table.
     pub relation: bool,
 }
@@ -440,8 +440,8 @@ pub fn cast_targets(
 
 /// What a reference column points at, as ops name it; `None` for rows of
 /// another table, which a column holds as relations.
-pub fn entity_kind(entity_type: models_properties::EntityType) -> Option<EntityKind> {
-    use models_properties::EntityType as Stored;
+pub fn entity_kind(entity_type: properties_types::EntityType) -> Option<EntityKind> {
+    use properties_types::EntityType as Stored;
     Some(match entity_type {
         Stored::User => EntityKind::User,
         Stored::Document => EntityKind::Document,
@@ -460,8 +460,8 @@ pub fn entity_kind(entity_type: models_properties::EntityType) -> Option<EntityK
 }
 
 /// The properties system's name for what a reference points at.
-pub fn entity_type(kind: EntityKind) -> models_properties::EntityType {
-    use models_properties::EntityType as Stored;
+pub fn entity_type(kind: EntityKind) -> properties_types::EntityType {
+    use properties_types::EntityType as Stored;
     match kind {
         EntityKind::User => Stored::User,
         EntityKind::Document => Stored::Document,

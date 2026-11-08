@@ -26,9 +26,9 @@ use messages::domain::{
     },
     models::MessageParent,
 };
-use models_properties::EntityType as PropertyEntityType;
-use models_properties::service::property_change_source::PropertyChangeSource;
 use properties::domain::events::PropertyTopicEvent;
+use properties_types::EntityType as PropertyEntityType;
+use properties_types::service::property_change_source::PropertyChangeSource;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use system_properties::SystemPropertyKey;

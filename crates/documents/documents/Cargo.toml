@@ -154,7 +154,7 @@ system_skills = { workspace = true }
 shared_types = { workspace = true }
 entity_kind = { workspace = true }
 permissions_types = { workspace = true }
-models_properties = { workspace = true }
+properties_types = { workspace = true }
 rootcause = { workspace = true }
 s3_key = { workspace = true }
 

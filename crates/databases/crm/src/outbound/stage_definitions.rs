@@ -4,16 +4,16 @@ use std::sync::Arc;
 
 use entity_access::domain::models::MemberTeamRole;
 use macro_user_id::user_id::MacroUserIdStr;
-use models_properties::api::{
-    CreatePropertyDefinitionRequest, CreatePropertyScope, PropertyDataType, SelectStringOption,
-};
-use models_properties::service::property_definition_with_options::PropertyDefinitionWithOptions;
-use models_properties::service::property_option::{PropertyOption, PropertyOptionValue};
-use models_properties::{DataType, PropertyOwner};
 use properties::domain::model::{
     PropertyOptionInsert, PropertyOptionReplacePlan, PropertyOptionRewrite,
 };
 use properties::{PropertiesErr, PropertiesService};
+use properties_types::api::{
+    CreatePropertyDefinitionRequest, CreatePropertyScope, PropertyDataType, SelectStringOption,
+};
+use properties_types::service::property_definition_with_options::PropertyDefinitionWithOptions;
+use properties_types::service::property_option::{PropertyOption, PropertyOptionValue};
+use properties_types::{DataType, PropertyOwner};
 use uuid::Uuid;
 
 use crate::domain::{

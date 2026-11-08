@@ -1,7 +1,7 @@
 use super::*;
 use crate::domain::models::{CastVerdict, ColumnConversion, ConvertedCell};
 use databases_types::{EntityKind, EntityRef, RowChange};
-use models_properties::shared::EntityReference;
+use properties_types::shared::EntityReference;
 
 fn version(world: &Shared) -> TableVersion {
     world.lock().unwrap().tables[0].version

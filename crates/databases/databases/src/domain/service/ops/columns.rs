@@ -7,12 +7,12 @@ use std::collections::{HashMap, HashSet};
 use databases_types::cast::{Cast, Contents, cast};
 use databases_types::position::{key_between, keys_between};
 use databases_types::{ColumnKind, Formula, FormulaType, NewColumn, NewOption, TakenId};
-use models_properties::api::is_valid_hex_color;
-use models_properties::service::property_definition::PropertyDefinition;
-use models_properties::service::property_definition_with_options::PropertyDefinitionWithOptions;
-use models_properties::service::property_option::{PropertyOption, PropertyOptionValue};
-use models_properties::service::property_value::PropertyValue;
-use models_properties::shared::{DataType, PropertyOwner};
+use properties_types::api::is_valid_hex_color;
+use properties_types::service::property_definition::PropertyDefinition;
+use properties_types::service::property_definition_with_options::PropertyDefinitionWithOptions;
+use properties_types::service::property_option::{PropertyOption, PropertyOptionValue};
+use properties_types::service::property_value::PropertyValue;
+use properties_types::shared::{DataType, PropertyOwner};
 
 use super::super::column_types::{ConvertedCell, Converter, is_empty};
 use super::super::views::{views_without_column, views_without_tests_of};

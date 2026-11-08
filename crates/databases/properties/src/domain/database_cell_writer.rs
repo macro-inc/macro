@@ -1,8 +1,8 @@
 //! Transactional composition for database rows' cells, so a batch of writes
 //! commits or rolls back as one.
 
-use models_properties::service::property_value::PropertyValue;
-use models_properties::{EntityReference, EntityType};
+use properties_types::service::property_value::PropertyValue;
+use properties_types::{EntityReference, EntityType};
 use uuid::Uuid;
 
 /// The transaction a database's writes share. The option and cell writers

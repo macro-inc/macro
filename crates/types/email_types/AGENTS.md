@@ -8,7 +8,7 @@ thread/message API types, DB row types, and Gmail API response shapes.
 ## Start here
 
 - `src/email/mod.rs` → `api`, `db`, `service`: the three-layer email model
-  split (API-facing, DB row, service-layer), mirroring `models_properties`.
+  split (API-facing, DB row, service-layer), mirroring `properties_types`.
 - `src/gmail.rs` + `src/gmail/`: Gmail API response types — `contacts.rs`,
   `filters.rs`, `history.rs`, `inbox_sync.rs`, `labels.rs`, `gmail_ops.rs`,
   `operations.rs`.

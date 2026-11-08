@@ -18,8 +18,8 @@ use messages::domain::{
     models::{MessageAttribution, MessageParent, PostMessage, PostMessageNotificationPolicy},
     service::MessageWrite,
 };
-use models_properties::{EntityType, service::property_value::PropertyValue};
 use properties::domain::events::EntityPropertyUpdatedMetadata;
+use properties_types::{EntityType, service::property_value::PropertyValue};
 use system_properties::SystemPropertyKey;
 
 mod project_context;

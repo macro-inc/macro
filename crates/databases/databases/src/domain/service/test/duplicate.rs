@@ -351,7 +351,7 @@ async fn a_viewer_duplicates_every_table_column_view_and_row_into_a_database_the
     );
     assert_eq!(
         sam_cells[&relation.property_definition_id],
-        PropertyValue::EntityRef(vec![models_properties::EntityReference {
+        PropertyValue::EntityRef(vec![properties_types::EntityReference {
             entity_id: keynote.id.to_string(),
             entity_type: PropertyEntityType::DatabaseRow,
             specific_message_id: None,

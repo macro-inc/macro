@@ -10,12 +10,12 @@ use macro_user_id::user_id::MacroUserIdStr;
 use macro_uuid::Uuid;
 use messages::domain::models::{Message, MessageParent, MessageThread, ThreadState};
 use model_owner::Owner;
-use models_properties::{
+use properties::{EntityPropertyInfo, PropertyOptionInfo};
+use properties_types::{
     DataType, EntityType as PropertyEntityType, PropertyOwner,
     service::{property_option::PropertyOptionValue, property_value::PropertyValue},
     shared::EntityReference,
 };
-use properties::{EntityPropertyInfo, PropertyOptionInfo};
 use serde_json::json;
 use shared_types::document::DocumentBasic;
 use system_properties::SystemPropertyKey;

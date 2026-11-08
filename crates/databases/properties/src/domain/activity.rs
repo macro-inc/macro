@@ -13,8 +13,8 @@ use ::activity::{
     Ingest, InitiativeTaskChange, PropertyChange, event_time,
 };
 use macro_user_id::user_id::MacroUserIdStr;
-use models_properties::EntityType as PropertyEntityType;
-use models_properties::service::property_value::PropertyValue;
+use properties_types::EntityType as PropertyEntityType;
+use properties_types::service::property_value::PropertyValue;
 use system_properties::SystemPropertyKey;
 use uuid::Uuid;
 

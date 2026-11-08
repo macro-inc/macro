@@ -14,9 +14,9 @@ use crate::{
 };
 use item_filters::ast::EntityFilterAst;
 use macro_user_id::user_id::MacroUserIdStr;
-use models_properties::service::property_definition_with_options::PropertyDefinitionWithOptions;
 use models_soup::{SoupProperty, item::SoupItem};
 use pagination_types::{Identify, SortOn};
+use properties_types::service::property_definition_with_options::PropertyDefinitionWithOptions;
 use readonly_pool::ReadOnlyPool;
 use system_properties::SystemPropertyKey;
 
@@ -436,7 +436,7 @@ pub(crate) async fn populate_properties(
     // viewer's tags.
     let (row_refs, entity_refs): (Vec<_>, Vec<_>) = entity_refs
         .into_iter()
-        .partition(|reference| reference.entity_type == models_properties::EntityType::DatabaseRow);
+        .partition(|reference| reference.entity_type == properties_types::EntityType::DatabaseRow);
     let property_ids = SystemPropertyKey::all_system_property_keys();
     let mut properties_map =
         properties::outbound::entity_properties_get_query::get_bulk_entity_properties_values_filtered(

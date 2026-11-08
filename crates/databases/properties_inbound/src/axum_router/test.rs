@@ -493,12 +493,12 @@ async fn malformed_typed_path_is_rejected_before_missing_authentication() {
 
 fn multi_select_def(
     id: Uuid,
-) -> models_properties::service::property_definition::PropertyDefinition {
-    models_properties::service::property_definition::PropertyDefinition {
+) -> properties_types::service::property_definition::PropertyDefinition {
+    properties_types::service::property_definition::PropertyDefinition {
         id,
-        owner: models_properties::PropertyOwner::System,
+        owner: properties_types::PropertyOwner::System,
         display_name: "Tags".to_string(),
-        data_type: models_properties::DataType::SelectString,
+        data_type: properties_types::DataType::SelectString,
         is_multi_select: true,
         specific_entity_type: None,
         created_at: chrono::Utc::now(),
@@ -594,13 +594,13 @@ async fn bulk_options_across_entities_skips_denied_and_applies_granted() {
 /// A tag definition owned by `owner`, for the promote/merge endpoint tests.
 fn tag_def(
     id: Uuid,
-    owner: models_properties::PropertyOwner,
-) -> models_properties::service::property_definition::PropertyDefinition {
-    models_properties::service::property_definition::PropertyDefinition {
+    owner: properties_types::PropertyOwner,
+) -> properties_types::service::property_definition::PropertyDefinition {
+    properties_types::service::property_definition::PropertyDefinition {
         id,
         owner,
         display_name: "Tags".to_string(),
-        data_type: models_properties::DataType::Tag,
+        data_type: properties_types::DataType::Tag,
         is_multi_select: true,
         specific_entity_type: None,
         created_at: chrono::Utc::now(),
@@ -615,12 +615,12 @@ fn tag_option(
     property_definition_id: Uuid,
     value: &str,
     color: &str,
-) -> models_properties::service::property_option::PropertyOption {
-    models_properties::service::property_option::PropertyOption {
+) -> properties_types::service::property_option::PropertyOption {
+    properties_types::service::property_option::PropertyOption {
         id,
         property_definition_id,
         display_order: 0,
-        value: models_properties::service::property_option::PropertyOptionValue::String(
+        value: properties_types::service::property_option::PropertyOptionValue::String(
             value.to_string(),
         ),
         color: Some(color.to_string()),
@@ -650,7 +650,7 @@ fn tag_promotion_repo(
         Box::pin(async move {
             Ok(Some(tag_def(
                 personal_definition_id,
-                models_properties::PropertyOwner::User {
+                properties_types::PropertyOwner::User {
                     user_id: VALID_USER_ID.to_string(),
                 },
             )))
@@ -662,7 +662,7 @@ fn tag_promotion_repo(
                 Ok(properties::domain::model::GetOrCreateTagDefinitionResult {
                     definition: tag_def(
                         team_definition_id,
-                        models_properties::PropertyOwner::Team {
+                        properties_types::PropertyOwner::Team {
                             team_id: Uuid::from_u128(0x7EA3),
                         },
                     ),
@@ -797,7 +797,7 @@ async fn promote_tag_without_a_team_is_forbidden() {
         Box::pin(async move {
             Ok(Some(tag_def(
                 personal_definition_id,
-                models_properties::PropertyOwner::User {
+                properties_types::PropertyOwner::User {
                     user_id: VALID_USER_ID.to_string(),
                 },
             )))
@@ -840,14 +840,14 @@ fn managed_router(
 
 fn select_def(
     id: Uuid,
-    owner: models_properties::PropertyOwner,
+    owner: properties_types::PropertyOwner,
     display_name: &str,
-) -> models_properties::service::property_definition::PropertyDefinition {
-    models_properties::service::property_definition::PropertyDefinition {
+) -> properties_types::service::property_definition::PropertyDefinition {
+    properties_types::service::property_definition::PropertyDefinition {
         id,
         owner,
         display_name: display_name.to_string(),
-        data_type: models_properties::DataType::SelectString,
+        data_type: properties_types::DataType::SelectString,
         is_multi_select: false,
         specific_entity_type: None,
         created_at: chrono::Utc::now(),
@@ -858,7 +858,7 @@ fn select_def(
 }
 
 fn repo_with_definition(
-    definition: models_properties::service::property_definition::PropertyDefinition,
+    definition: properties_types::service::property_definition::PropertyDefinition,
 ) -> MockPropertiesRepo {
     let mut repo = MockPropertiesRepo::new();
     let by_id = definition.clone();
@@ -909,7 +909,7 @@ async fn writes_to_a_managed_team_definition_are_forbidden() {
     let team_id = Uuid::from_u128(0x7EA3);
     let definition = select_def(
         definition_id,
-        models_properties::PropertyOwner::Team { team_id },
+        properties_types::PropertyOwner::Team { team_id },
         MANAGED_NAME,
     );
     let option_body = serde_json::json!({
@@ -960,19 +960,19 @@ async fn the_guard_only_covers_team_definitions_with_a_managed_name() {
     let user = MacroUserIdStr::try_from(VALID_USER_ID.to_string()).expect("valid user id");
     let cases = [
         (
-            models_properties::PropertyOwner::User {
+            properties_types::PropertyOwner::User {
                 user_id: VALID_USER_ID.to_string(),
             },
             MANAGED_NAME,
             true,
         ),
         (
-            models_properties::PropertyOwner::Team { team_id },
+            properties_types::PropertyOwner::Team { team_id },
             "Region",
             true,
         ),
         (
-            models_properties::PropertyOwner::Team { team_id },
+            properties_types::PropertyOwner::Team { team_id },
             MANAGED_NAME,
             false,
         ),

@@ -15,7 +15,7 @@ use crate::domain::journal::{JournalPlan, RestoredRow};
 use crate::domain::models::{
     Column, ColumnConfig, DatabaseView, NewDefinition, Write, Writes, WritesOutcome,
 };
-use models_properties::service::property_definition_with_options::PropertyDefinitionWithOptions;
+use properties_types::service::property_definition_with_options::PropertyDefinitionWithOptions;
 
 /// Most rows a duplicate copies; a larger database is refused rather than
 /// read whole into memory.
@@ -70,7 +70,7 @@ impl Remap {
             PropertyValue::EntityRef(references) => PropertyValue::EntityRef(
                 references
                     .iter()
-                    .map(|reference| models_properties::EntityReference {
+                    .map(|reference| properties_types::EntityReference {
                         entity_id: Uuid::parse_str(&reference.entity_id)
                             .map(|id| self.id(id).to_string())
                             .unwrap_or_else(|_| reference.entity_id.clone()),
@@ -146,7 +146,7 @@ fn plan(
     // each shared one the duplicator may not bind, keeping its values.
     let owned = |definition: &PropertyDefinitionWithOptions| {
         definition.definition.owner
-            == models_properties::shared::PropertyOwner::Database {
+            == properties_types::shared::PropertyOwner::Database {
                 database_id: source.database.id.into_uuid(),
             }
             || !source.bindable.contains(&definition.definition.id)
@@ -574,7 +574,7 @@ where
         let mut bindable = HashSet::new();
         for definition in definitions.values() {
             let shared = definition.definition.owner
-                != models_properties::shared::PropertyOwner::Database {
+                != properties_types::shared::PropertyOwner::Database {
                     database_id: database.id.into_uuid(),
                 };
             if shared

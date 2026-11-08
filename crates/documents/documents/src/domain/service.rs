@@ -8,9 +8,6 @@ mod tests;
 use crate::domain::ports::sync::DocumentSyncPort;
 use entity_access_management::domain::ports::EntityAccessManagementService;
 use entity_kind::EntityType;
-use models_properties::EntityReference;
-use models_properties::api::SetPropertyValue;
-use models_properties::service::property_change_source::PropertyChangeSource;
 use permissions_types::share_permission::team_share::{
     AuthorizedTeamShareCommand, TeamShareLevel, TeamSharePolicyError, TeamShareRequest,
     authorize_team_share,
@@ -18,6 +15,9 @@ use permissions_types::share_permission::team_share::{
 use permissions_types::share_permission::{
     LinkShare, SharePermissionV2, UpdateSharePermissionRequestV2,
 };
+use properties_types::EntityReference;
+use properties_types::api::SetPropertyValue;
+use properties_types::service::property_change_source::PropertyChangeSource;
 use std::borrow::Cow;
 use std::str::FromStr;
 use std::time::{SystemTime, UNIX_EPOCH};
@@ -2336,7 +2336,7 @@ impl<
                     value: SetPropertyValue::MultiEntityReference {
                         references: vec![EntityReference {
                             entity_id: user.as_ref().to_string(),
-                            entity_type: models_properties::EntityType::User,
+                            entity_type: properties_types::EntityType::User,
                             specific_message_id: None,
                         }],
                     },

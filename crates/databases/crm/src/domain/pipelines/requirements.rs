@@ -8,7 +8,7 @@ use databases_types::{
     ViewChange, ViewId,
     views::{RequestedLayout, ViewLayout},
 };
-use models_properties::{DataType, service::property_option::PropertyOptionValue};
+use properties_types::{DataType, service::property_option::PropertyOptionValue};
 use std::collections::{BTreeMap, HashSet};
 
 /// Fields required when a deal enters a particular option of a stage column.

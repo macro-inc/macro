@@ -11,8 +11,8 @@ use entity_access::domain::models::{
 };
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
 use macro_user_id::{cow_str::CowLike, user_id::MacroUserIdStr};
-use models_properties::service::property_value::PropertyValue;
-use models_properties::shared::{EntityReference, EntityType as PropertyEntityType};
+use properties_types::service::property_value::PropertyValue;
+use properties_types::shared::{EntityReference, EntityType as PropertyEntityType};
 use sqlx::PgPool;
 
 use super::apply_ops::{cells, edit, guests, insert_named_user, service, viewer};

@@ -11,8 +11,8 @@ use databases_types::{
     OpResult, OptionId, OptionRef, RowsChange, RowsResult, TableChange, TableResult, TakenId,
     ViewChange, ViewResult,
 };
-use models_properties::service::property_option::PropertyOptionValue;
-use models_properties::service::property_value::PropertyValue;
+use properties_types::service::property_option::PropertyOptionValue;
+use properties_types::service::property_value::PropertyValue;
 
 use super::apply_ops::{cells, edit, guests, service, version, viewer};
 use super::*;

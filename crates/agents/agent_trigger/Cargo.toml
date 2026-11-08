@@ -41,7 +41,7 @@ macro_uuid = { workspace = true }
 messages = { workspace = true, features = ["broker", "ports"] }
 properties = { workspace = true }
 project = { workspace = true, features = ["ports"] }
-models_properties = { workspace = true }
+properties_types = { workspace = true }
 system_properties = { workspace = true }
 rootcause = { workspace = true }
 # Domain vocabulary: channel-parent trigger events keep the channel-only post

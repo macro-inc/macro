@@ -2,9 +2,9 @@
 //! column's type and options as the ops before them leave those.
 
 use databases_types::{CellValue, CellWrite, OptionId, OptionRef};
-use models_properties::service::property_definition_with_options::PropertyDefinitionWithOptions;
-use models_properties::service::property_value::PropertyValue;
-use models_properties::shared::{DataType, EntityReference};
+use properties_types::service::property_definition_with_options::PropertyDefinitionWithOptions;
+use properties_types::service::property_value::PropertyValue;
+use properties_types::shared::{DataType, EntityReference};
 
 use super::super::column_types::is_complete_url;
 use super::super::{option_label_key, takes_options};
@@ -103,7 +103,7 @@ impl Planner {
                 Ok(Some(PropertyValue::Date(*date)))
             }
             CellValue::DateRange(range) if data_type == DataType::DateRange => {
-                models_properties::shared::DateRange::new(range.start, range.end)
+                properties_types::shared::DateRange::new(range.start, range.end)
                     .map(|range| Some(PropertyValue::DateRange(range)))
                     .map_err(|_| place.refuse("a date range cannot end before it starts"))
             }
@@ -176,7 +176,7 @@ impl Planner {
                     });
                     references.push(EntityReference {
                         entity_id: row.to_string(),
-                        entity_type: models_properties::EntityType::DatabaseRow,
+                        entity_type: properties_types::EntityType::DatabaseRow,
                         specific_message_id: None,
                     });
                 }

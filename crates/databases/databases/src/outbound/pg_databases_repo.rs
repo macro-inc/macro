@@ -22,10 +22,10 @@ use databases_types::position::{Position, PositionError, key_between};
 use uuid::Uuid;
 
 use macro_user_id::user_id::MacroUserIdStr;
-use models_properties::DataType;
 use properties::domain::database_definition_writer::{
     DatabaseDefinitionWriter, NewDatabaseDefinition,
 };
+use properties_types::DataType;
 use sqlx::{PgPool, Postgres, Transaction};
 
 use entity_access_db_utils::{AccessLevel, EntityAccessSourceType};

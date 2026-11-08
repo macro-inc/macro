@@ -10,7 +10,7 @@ use std::{
 
 use async_graphql::{EmptyMutation, EmptySubscription, Schema};
 use macro_user_id::user_id::MacroUserIdStr;
-use models_properties::service::entity_property_with_definition::EntityPropertyWithDefinition;
+use properties_types::service::entity_property_with_definition::EntityPropertyWithDefinition;
 use uuid::Uuid;
 
 use super::*;
@@ -24,20 +24,20 @@ impl EntityPropertyReader for TestReader {
         &self,
         user_id: &MacroUserIdStr<'static>,
         scope: GraphqlPropertyDefinitionScope,
-        for_entity_type: Option<models_properties::EntityType>,
+        for_entity_type: Option<properties_types::EntityType>,
     ) -> Result<Vec<PropertyDefinition>, rootcause::Report> {
         assert_eq!(user_id.as_ref(), "macro|viewer@macro.com");
         assert_eq!(scope, GraphqlPropertyDefinitionScope::System);
         assert_eq!(
             for_entity_type,
-            Some(models_properties::EntityType::Initiative)
+            Some(properties_types::EntityType::Initiative)
         );
         let now = chrono::Utc::now();
         Ok(vec![PropertyDefinition {
             id: Uuid::from_u128(1),
             owner: PropertyOwner::System,
             display_name: "Status".to_owned(),
-            data_type: models_properties::DataType::SelectString,
+            data_type: properties_types::DataType::SelectString,
             is_multi_select: false,
             specific_entity_type: None,
             created_at: now,

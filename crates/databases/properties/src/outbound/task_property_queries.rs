@@ -2,9 +2,9 @@
 
 use std::collections::HashSet;
 
-use models_properties::EntityReference;
-use models_properties::EntityType;
-use models_properties::service::{entity_property::EntityProperty, property_value::PropertyValue};
+use properties_types::EntityReference;
+use properties_types::EntityType;
+use properties_types::service::{entity_property::EntityProperty, property_value::PropertyValue};
 use sqlx::{PgConnection, Pool, Postgres};
 use system_properties::SystemPropertyKey;
 use uuid::Uuid;

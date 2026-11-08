@@ -4,7 +4,7 @@ use std::marker::PhantomData;
 
 use async_graphql::{Context, Enum, ID, Object, SimpleObject, Union, dataloader::DataLoader};
 use graphql_common::{GraphqlPropertyEntityType, parse_id};
-use models_properties::{
+use properties_types::{
     PropertyOwner,
     service::{
         property_definition::PropertyDefinition,

@@ -3,8 +3,8 @@
 use super::{entity_properties_get_query, entity_property_queries, property_option_queries};
 use chrono::Datelike;
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
-use models_properties::service::property_value::PropertyValue;
-use models_properties::{DataType, EntityReference, EntityType};
+use properties_types::service::property_value::PropertyValue;
+use properties_types::{DataType, EntityReference, EntityType};
 use sqlx::{Pool, Postgres};
 use uuid::Uuid;
 

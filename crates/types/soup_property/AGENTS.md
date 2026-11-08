@@ -8,7 +8,7 @@ needs only this type, not the whole Soup DTO crate.
 
 ## Boundaries
 
-- Depends on: `models_properties`.
+- Depends on: `properties_types`.
 - Used by: `models_soup` (re-exports it as `models_soup::SoupProperty`),
   `models_search`.
 

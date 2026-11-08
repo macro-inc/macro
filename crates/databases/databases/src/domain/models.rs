@@ -6,10 +6,10 @@ use std::collections::HashMap;
 use bot_id::BotId;
 use chrono::{DateTime, Utc};
 use macro_user_id::user_id::MacroUserIdStr;
-use models_properties::service::property_option::PropertyOptionValue;
-use models_properties::service::property_value::PropertyValue;
-use models_properties::shared::DataType;
 use permissions_types::share_permission::access_level::AccessLevel;
+use properties_types::service::property_option::PropertyOptionValue;
+use properties_types::service::property_value::PropertyValue;
+use properties_types::shared::DataType;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
@@ -27,7 +27,7 @@ pub use databases_types::{
 use crate::domain::derivation::Derivation;
 use crate::domain::journal::{JournalPlan, RestoredRow};
 
-/// Identifier of a `models_properties` property definition bound as a column.
+/// Identifier of a `properties_types` property definition bound as a column.
 pub type PropertyDefinitionId = Uuid;
 
 /// A database: a named collection of tables, owned and shared as one entity.
@@ -151,7 +151,7 @@ impl Column {
     /// The name the placement goes by: its own, else its definition's.
     pub fn name<'a>(
         &'a self,
-        definition: &'a models_properties::service::property_definition_with_options::PropertyDefinitionWithOptions,
+        definition: &'a properties_types::service::property_definition_with_options::PropertyDefinitionWithOptions,
     ) -> &'a str {
         self.display_name
             .as_deref()
@@ -181,8 +181,8 @@ pub struct ColumnCast {
     /// Whether the target holds several values.
     pub is_multi_select: bool,
     /// The target's entity kind, for a reference column.
-    #[schema(required = true, value_type = Option<models_properties::EntityType>)]
-    pub specific_entity_type: Option<models_properties::EntityType>,
+    #[schema(required = true, value_type = Option<properties_types::EntityType>)]
+    pub specific_entity_type: Option<properties_types::EntityType>,
     /// Whether the target is a relation to another table's rows.
     pub relation: bool,
     /// Whether the values convert.
@@ -315,7 +315,7 @@ pub struct InferColumnType {
     /// Requested first-value type: string, number, or entity.
     pub data_type: DataType,
     /// Required when the inferred type is an entity reference.
-    pub specific_entity_type: Option<models_properties::EntityType>,
+    pub specific_entity_type: Option<properties_types::EntityType>,
     /// Version of the schema used to interpret the first value.
     pub base_version: TableVersion,
 }
@@ -356,7 +356,7 @@ pub struct NewDefinition {
     /// Whether a cell holds several values.
     pub is_multi_select: bool,
     /// What a reference column points at.
-    pub specific_entity_type: Option<models_properties::EntityType>,
+    pub specific_entity_type: Option<properties_types::EntityType>,
     /// Its options, in order.
     pub options: Vec<(OptionId, PropertyOptionValue)>,
 }
@@ -1016,7 +1016,7 @@ pub struct ColumnDetail {
     pub sql_name: String,
     /// The bound definition (name, type, options).
     pub definition:
-        models_properties::service::property_definition_with_options::PropertyDefinitionWithOptions,
+        properties_types::service::property_definition_with_options::PropertyDefinitionWithOptions,
     /// Whether SQL may write this column.
     pub writable: bool,
     /// Whether the definition belongs to something beyond this database (a
@@ -1039,7 +1039,7 @@ impl ColumnDetail {
 
     /// The Macro entity kind the column references; a relation references
     /// rows of a table instead.
-    pub fn entity_type(&self) -> Option<models_properties::EntityType> {
+    pub fn entity_type(&self) -> Option<properties_types::EntityType> {
         if self.column.is_relation() {
             return None;
         }

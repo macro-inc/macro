@@ -1,4 +1,4 @@
-# models_properties
+# properties_types
 
 ## What it is
 
@@ -44,7 +44,7 @@ split into three layers plus a `shared` layer used by all of them.
 
 ## Checks
 
-- `cargo test -p models_properties` (`SQLX_OFFLINE` unset).
+- `cargo test -p properties_types` (`SQLX_OFFLINE` unset).
 
 ## Gotchas
 

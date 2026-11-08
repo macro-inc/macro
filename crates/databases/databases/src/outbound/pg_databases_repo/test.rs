@@ -275,12 +275,12 @@ async fn a_new_database_starts_with_a_title_column_that_infers_its_type(pool: Pg
     assert_eq!(definitions.len(), 1);
     let title = &definitions[0].definition;
     assert_eq!(title.display_name, "Name");
-    assert_eq!(title.data_type, models_properties::DataType::String);
+    assert_eq!(title.data_type, properties_types::DataType::String);
     assert!(!title.is_multi_select);
     assert_eq!(title.specific_entity_type, None);
     assert_eq!(
         title.owner,
-        models_properties::shared::PropertyOwner::Database {
+        properties_types::shared::PropertyOwner::Database {
             database_id: database.id.into_uuid()
         }
     );

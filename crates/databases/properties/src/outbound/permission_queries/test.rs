@@ -1,7 +1,7 @@
 use super::*;
 use crate::outbound::{entity_properties_get_query, entity_property_queries};
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
-use models_properties::service::property_value::PropertyValue;
+use properties_types::service::property_value::PropertyValue;
 
 const OWNER: &str = "macro|user1@test.com";
 const DESCRIPTION_DEFINITION: Uuid = Uuid::from_u128(0x8888_8888_8888_8888_8888_8888_8888_8888);

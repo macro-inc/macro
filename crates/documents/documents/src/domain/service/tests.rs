@@ -163,7 +163,7 @@ impl TaskPropertiesPort for TestTaskPropertiesPort {
         &self,
         _access: &EntityAccessReceipt<EditAccessLevel>,
         _credited_user: Option<&macro_user_id::user_id::MacroUserIdStr<'static>>,
-        _source: Option<&models_properties::service::property_change_source::PropertyChangeSource>,
+        _source: Option<&properties_types::service::property_change_source::PropertyChangeSource>,
         _status: &str,
     ) -> anyhow::Result<()> {
         Ok(())
@@ -174,7 +174,7 @@ impl TaskPropertiesPort for TestTaskPropertiesPort {
         _principal: &CreationPrincipal,
         _entity_id: &str,
         _property_definition_id: uuid::Uuid,
-        _value: Option<models_properties::api::requests::SetPropertyValue>,
+        _value: Option<properties_types::api::requests::SetPropertyValue>,
     ) -> anyhow::Result<()> {
         Ok(())
     }
@@ -2801,7 +2801,7 @@ impl TaskPropertiesPort for RecordingTaskPropertiesPort {
         &self,
         _access: &EntityAccessReceipt<EditAccessLevel>,
         _credited_user: Option<&macro_user_id::user_id::MacroUserIdStr<'static>>,
-        _source: Option<&models_properties::service::property_change_source::PropertyChangeSource>,
+        _source: Option<&properties_types::service::property_change_source::PropertyChangeSource>,
         _status: &str,
     ) -> anyhow::Result<()> {
         Ok(())
@@ -2840,7 +2840,7 @@ async fn default_task_properties_assign_the_acting_user_and_never_a_team_bot() {
     let assigned_to_user = SetPropertyValue::MultiEntityReference {
         references: vec![EntityReference {
             entity_id: "macro|user@user.com".to_string(),
-            entity_type: models_properties::EntityType::User,
+            entity_type: properties_types::EntityType::User,
             specific_message_id: None,
         }],
     };

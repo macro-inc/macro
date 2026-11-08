@@ -40,7 +40,7 @@ they need.
 ## Boundaries
 
 - Depends on (by feature): `entity_access` (ports/inbound), `model` (annotations),
-  `properties`/`models_properties`/`model_notifications`/`notification`
+  `properties`/`properties_types`/`model_notifications`/`notification`
   (delivery), `initiative` (outbound), `macro_event_broker`/`macro_event_topics`
   (broker).
 - Used by: `agent_harness`, `agent_session`, `agent_trigger`, `agent_tools`, `bots`,

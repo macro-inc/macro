@@ -4,8 +4,8 @@
 mod test;
 
 use anyhow::Context as _;
-use models_properties::service::{entity_property::EntityProperty, property_value::PropertyValue};
-use models_properties::{EntityReference, EntityType};
+use properties_types::service::{entity_property::EntityProperty, property_value::PropertyValue};
+use properties_types::{EntityReference, EntityType};
 use sqlx::{PgExecutor, Pool, Postgres};
 use uuid::Uuid;
 

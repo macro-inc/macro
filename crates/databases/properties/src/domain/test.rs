@@ -24,8 +24,8 @@ use entity_access::domain::models::{
 };
 use macro_event_broker::{EventBrokerError, MacroEvent, MacroEventBroker};
 use macro_user_id::{cow_str::CowLike, user_id::MacroUserIdStr};
-use models_properties::service::property_change_source::{GithubAccount, PropertyChangeSource};
-use models_properties::{
+use properties_types::service::property_change_source::{GithubAccount, PropertyChangeSource};
+use properties_types::{
     DataType, EntityType, PropertyOwner,
     api::{
         AddNumberOptionRequest, AddPropertyOptionRequest, AddStringOptionRequest,
@@ -1499,9 +1499,9 @@ async fn test_set_status_complete_through_general_property_mutation() {
         Box::pin(async {
             Ok(Some(PropertyDefinition {
                 id: SystemPropertyKey::STATUS_UUID,
-                owner: models_properties::PropertyOwner::System,
+                owner: properties_types::PropertyOwner::System,
                 display_name: "Status".to_string(),
-                data_type: models_properties::DataType::SelectString,
+                data_type: properties_types::DataType::SelectString,
                 is_multi_select: false,
                 specific_entity_type: None,
                 created_at: chrono::Utc::now(),
@@ -1549,7 +1549,7 @@ async fn test_set_status_complete_through_general_property_mutation() {
             &edit_receipt("e1", EntityType::Document),
             SystemPropertyKey::STATUS_UUID,
             Some(
-                models_properties::api::requests::SetPropertyValue::SelectOption {
+                properties_types::api::requests::SetPropertyValue::SelectOption {
                     option_id: StatusOption::COMPLETED_UUID,
                 },
             ),
@@ -1574,9 +1574,9 @@ async fn test_set_status_complete_through_general_property_mutation() {
 // task relationship (Parent Task / Subtasks) unit tests
 // ============================================================================
 
-fn parent_task_value(parent_id: Uuid) -> models_properties::api::requests::SetPropertyValue {
-    models_properties::api::requests::SetPropertyValue::EntityReference {
-        reference: models_properties::shared::EntityReference {
+fn parent_task_value(parent_id: Uuid) -> properties_types::api::requests::SetPropertyValue {
+    properties_types::api::requests::SetPropertyValue::EntityReference {
+        reference: properties_types::shared::EntityReference {
             entity_type: EntityType::Task,
             entity_id: parent_id.to_string(),
             specific_message_id: None,
@@ -1584,11 +1584,11 @@ fn parent_task_value(parent_id: Uuid) -> models_properties::api::requests::SetPr
     }
 }
 
-fn subtasks_value(subtask_ids: &[Uuid]) -> models_properties::api::requests::SetPropertyValue {
-    models_properties::api::requests::SetPropertyValue::MultiEntityReference {
+fn subtasks_value(subtask_ids: &[Uuid]) -> properties_types::api::requests::SetPropertyValue {
+    properties_types::api::requests::SetPropertyValue::MultiEntityReference {
         references: subtask_ids
             .iter()
-            .map(|id| models_properties::shared::EntityReference {
+            .map(|id| properties_types::shared::EntityReference {
                 entity_type: EntityType::Task,
                 entity_id: id.to_string(),
                 specific_message_id: None,
@@ -2332,7 +2332,7 @@ async fn entity_property_event_delete_permission_failure_publishes_nothing() {
 
     repo.expect_lookup_entity_property().returning(move |_| {
         Box::pin(async move {
-            Ok(Some(models_properties::EntityPropertyReference {
+            Ok(Some(properties_types::EntityPropertyReference {
                 entity_id: "other-entity".to_string(),
                 entity_type: EntityType::Document,
                 property_definition_id: Uuid::from_u128(0xA1),
@@ -2364,7 +2364,7 @@ async fn entity_property_event_delete_uses_lookup_snapshot_and_requested_id() {
 
     repo.expect_lookup_entity_property().returning(move |_| {
         Box::pin(async move {
-            Ok(Some(models_properties::EntityPropertyReference {
+            Ok(Some(properties_types::EntityPropertyReference {
                 entity_id: "doc1".to_string(),
                 entity_type: EntityType::Document,
                 property_definition_id,
@@ -2407,7 +2407,7 @@ async fn entity_property_event_delete_repository_failure_publishes_nothing() {
     let mut repo = MockPropertiesRepo::new();
     repo.expect_lookup_entity_property().return_once(|_| {
         Box::pin(async {
-            Ok(Some(models_properties::EntityPropertyReference {
+            Ok(Some(properties_types::EntityPropertyReference {
                 entity_id: "doc1".to_string(),
                 entity_type: EntityType::Document,
                 property_definition_id: Uuid::from_u128(0xE721),
@@ -2437,7 +2437,7 @@ async fn entity_property_event_required_property_failure_publishes_nothing() {
     let mut repo = MockPropertiesRepo::new();
     repo.expect_lookup_entity_property().return_once(move |_| {
         Box::pin(async move {
-            Ok(Some(models_properties::EntityPropertyReference {
+            Ok(Some(properties_types::EntityPropertyReference {
                 entity_id: task_id.to_string(),
                 entity_type: EntityType::Task,
                 property_definition_id: SystemPropertyKey::STATUS_UUID,
@@ -2595,9 +2595,9 @@ async fn check_notifications(test_case: NotificationTestCase) {
                 if existing.is_empty() {
                     Box::pin(async { Ok(None) })
                 } else {
-                    let refs: Vec<models_properties::shared::EntityReference> = existing
+                    let refs: Vec<properties_types::shared::EntityReference> = existing
                         .iter()
-                        .map(|id| models_properties::shared::EntityReference {
+                        .map(|id| properties_types::shared::EntityReference {
                             entity_type: EntityType::User,
                             entity_id: id.clone(),
                             specific_message_id: None,
@@ -2765,10 +2765,10 @@ async fn test_handle_task_assignees_property_calls_both_handlers() {
     ];
 
     let value = Some(
-        models_properties::api::requests::SetPropertyValue::MultiEntityReference {
+        properties_types::api::requests::SetPropertyValue::MultiEntityReference {
             references: assignees
                 .iter()
-                .map(|id| models_properties::shared::EntityReference {
+                .map(|id| properties_types::shared::EntityReference {
                     entity_type: EntityType::User,
                     entity_id: id.to_string(),
                     specific_message_id: None,
@@ -2834,9 +2834,9 @@ async fn test_handle_task_assignees_property_clearing_assignees() {
 fn multi_select_definition(id: Uuid, is_multi_select: bool) -> PropertyDefinition {
     PropertyDefinition {
         id,
-        owner: models_properties::PropertyOwner::System,
+        owner: properties_types::PropertyOwner::System,
         display_name: "Tags".to_string(),
-        data_type: models_properties::DataType::SelectString,
+        data_type: properties_types::DataType::SelectString,
         is_multi_select,
         specific_entity_type: None,
         created_at: chrono::Utc::now(),
@@ -3071,9 +3071,9 @@ async fn canonical_document_task_write_uses_task_storage_type() {
         Box::pin(async {
             Ok(Some(PropertyDefinition {
                 id: SystemPropertyKey::STATUS_UUID,
-                owner: models_properties::PropertyOwner::System,
+                owner: properties_types::PropertyOwner::System,
                 display_name: "Status".to_string(),
-                data_type: models_properties::DataType::SelectString,
+                data_type: properties_types::DataType::SelectString,
                 is_multi_select: false,
                 specific_entity_type: None,
                 created_at: chrono::Utc::now(),
@@ -3118,7 +3118,7 @@ async fn canonical_document_task_write_uses_task_storage_type() {
             &receipt,
             SystemPropertyKey::STATUS_UUID,
             Some(
-                models_properties::api::requests::SetPropertyValue::SelectOption {
+                properties_types::api::requests::SetPropertyValue::SelectOption {
                     option_id: StatusOption::COMPLETED_UUID,
                 },
             ),
@@ -3144,9 +3144,9 @@ async fn canonical_document_task_assignee_write_grants_permissions() {
         Box::pin(async {
             Ok(Some(PropertyDefinition {
                 id: SystemPropertyKey::ASSIGNEES_UUID,
-                owner: models_properties::PropertyOwner::System,
+                owner: properties_types::PropertyOwner::System,
                 display_name: "Assignees".to_string(),
-                data_type: models_properties::DataType::Entity,
+                data_type: properties_types::DataType::Entity,
                 is_multi_select: true,
                 specific_entity_type: Some(EntityType::User),
                 created_at: chrono::Utc::now(),
@@ -3197,8 +3197,8 @@ async fn canonical_document_task_assignee_write_grants_permissions() {
             &receipt,
             SystemPropertyKey::ASSIGNEES_UUID,
             Some(
-                models_properties::api::requests::SetPropertyValue::MultiEntityReference {
-                    references: vec![models_properties::EntityReference::new(
+                properties_types::api::requests::SetPropertyValue::MultiEntityReference {
+                    references: vec![properties_types::EntityReference::new(
                         assignee.as_ref(),
                         EntityType::User,
                     )],
@@ -3234,9 +3234,9 @@ async fn user_scoped_bot_assignee_write_notifies_as_the_acting_user() {
         Box::pin(async {
             Ok(Some(PropertyDefinition {
                 id: SystemPropertyKey::ASSIGNEES_UUID,
-                owner: models_properties::PropertyOwner::System,
+                owner: properties_types::PropertyOwner::System,
                 display_name: "Assignees".to_string(),
-                data_type: models_properties::DataType::Entity,
+                data_type: properties_types::DataType::Entity,
                 is_multi_select: true,
                 specific_entity_type: Some(EntityType::User),
                 created_at: chrono::Utc::now(),
@@ -3288,8 +3288,8 @@ async fn user_scoped_bot_assignee_write_notifies_as_the_acting_user() {
             &bot_access,
             SystemPropertyKey::ASSIGNEES_UUID,
             Some(
-                models_properties::api::requests::SetPropertyValue::MultiEntityReference {
-                    references: vec![models_properties::EntityReference::new(
+                properties_types::api::requests::SetPropertyValue::MultiEntityReference {
+                    references: vec![properties_types::EntityReference::new(
                         assignee.as_ref(),
                         EntityType::User,
                     )],

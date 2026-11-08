@@ -6,8 +6,8 @@ use entity_access::domain::models::{
 };
 use macro_user_id::user_id::MacroUserIdStr;
 use macro_uuid::Uuid;
-use models_properties::shared::EntityReference;
 use project::domain::events::InitiativeEventActor;
+use properties_types::shared::EntityReference;
 
 fn user() -> MacroUserIdStr<'static> {
     MacroUserIdStr::try_from_email("assigner@example.com").unwrap()

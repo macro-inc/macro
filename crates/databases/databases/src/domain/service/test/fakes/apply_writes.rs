@@ -457,7 +457,7 @@ pub(super) fn apply_in_world(
                             && cells.values().any(|value| {
                                 matches!(value,
                         PropertyValue::EntityRef(references) if references.iter().any(|reference|
-                            reference.entity_type == models_properties::EntityType::DatabaseRow
+                            reference.entity_type == properties_types::EntityType::DatabaseRow
                             && rows.iter().any(|row| row.to_string() == reference.entity_id)))
                             })
                     })

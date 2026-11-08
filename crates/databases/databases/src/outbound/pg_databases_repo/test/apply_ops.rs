@@ -16,10 +16,10 @@ use entity_access_outbound::PgAccessRepository;
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
 use macro_event_broker::NoopMacroEventBroker;
 use macro_user_id::{cow_str::CowLike, user_id::MacroUserIdStr};
-use models_properties::service::property_option::PropertyOptionValue;
-use models_properties::service::property_value::PropertyValue;
-use models_properties::shared::{DataType, EntityReference, EntityType as PropertyEntityType};
 use properties::outbound::properties_pg_repo::PropertiesPgRepo;
+use properties_types::service::property_option::PropertyOptionValue;
+use properties_types::service::property_value::PropertyValue;
+use properties_types::shared::{DataType, EntityReference, EntityType as PropertyEntityType};
 use sqlx::PgPool;
 use uuid::Uuid;
 

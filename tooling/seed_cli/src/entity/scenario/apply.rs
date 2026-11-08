@@ -24,8 +24,8 @@ use email_types::email::service::thread::Thread;
 use entity_access_db_utils::{AccessLevel, EntityAccessSourceType, EntityType};
 use macro_db_client::document::v2::create::CreateDocumentArgs;
 use macro_user_id::user_id::MacroUserIdStr;
-use models_properties::service::property_value::PropertyValue;
 use permissions_types::share_permission::{LinkShare, SharePermissionV2};
+use properties_types::service::property_value::PropertyValue;
 use shared_types::document::FileType;
 use shared_types::item::ShareableItemType;
 use uuid::Uuid;
@@ -778,7 +778,7 @@ async fn seed_tasks(ctx: &SeedCliContext, spec: &ScenarioSpec) -> anyhow::Result
         properties::outbound::entity_property_queries::upsert_entity_property(
             &ctx.db.pool(),
             &document_id,
-            models_properties::EntityType::Task,
+            properties_types::EntityType::Task,
             system_properties::SystemPropertyKey::STATUS_UUID,
             Some(PropertyValue::SelectOption(vec![status.uuid()])),
         )
@@ -791,16 +791,16 @@ async fn seed_tasks(ctx: &SeedCliContext, spec: &ScenarioSpec) -> anyhow::Result
         };
         let references = assignees
             .iter()
-            .map(|assignee| models_properties::EntityReference {
+            .map(|assignee| properties_types::EntityReference {
                 entity_id: spec.user_id(assignee),
-                entity_type: models_properties::EntityType::User,
+                entity_type: properties_types::EntityType::User,
                 specific_message_id: None,
             })
             .collect();
         properties::outbound::entity_property_queries::upsert_entity_property(
             &ctx.db.pool(),
             &document_id,
-            models_properties::EntityType::Task,
+            properties_types::EntityType::Task,
             system_properties::SystemPropertyKey::ASSIGNEES_UUID,
             Some(PropertyValue::EntityRef(references)),
         )

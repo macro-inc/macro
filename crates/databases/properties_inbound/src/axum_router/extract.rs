@@ -24,7 +24,7 @@ use macro_authorization::{
     OptionalMacroAuthorizationExtractor, UserOrInternal, UserOrInternalService,
 };
 use macro_user_id::user_id::MacroUserIdStr;
-use models_properties::api::PropertyTargetEntityType;
+use properties_types::api::PropertyTargetEntityType;
 
 use super::{PropertiesRouterState, properties_err_status};
 use properties::domain::error::PropertiesErr;

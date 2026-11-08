@@ -28,7 +28,7 @@ entity_kind = { workspace = true }
 import_notion = { workspace = true }
 import_tracker = { workspace = true }
 databases_types = { workspace = true }
-models_properties = { workspace = true }
+properties_types = { workspace = true }
 properties = { workspace = true, features = [
   "ports",
 ] }

@@ -2,7 +2,7 @@
 //! that a refused batch writes nothing.
 
 use databases_types::{ColumnKind, RowChange};
-use models_properties::shared::EntityReference;
+use properties_types::shared::EntityReference;
 
 use super::*;
 

@@ -156,7 +156,7 @@ async fn a_relation_write_moves_only_the_table_holding_the_cell() {
     assert_eq!(
         cell(&world, row_id, relation_column.property_definition_id),
         Some(PropertyValue::EntityRef(vec![
-            models_properties::EntityReference {
+            properties_types::EntityReference {
                 entity_id: keynote_row.to_string(),
                 entity_type: PropertyEntityType::DatabaseRow,
                 specific_message_id: None,

@@ -2,12 +2,12 @@ use crate::api::context::SearchHandlerState;
 use crate::api::search::simple::SearchError;
 use indexmap::IndexMap;
 use macro_user_id::user_id::MacroUserIdStr;
-use models_properties::{EntityReference, EntityType};
 use models_search::chat::{
     ChatMessageSearchResult, ChatSearchResponseItem, ChatSearchResponseItemWithMetadata,
 };
 use models_soup::SoupProperty;
 use opensearch_client::search::model::SearchGotoContent;
+use properties_types::{EntityReference, EntityType};
 use sqlx::types::Uuid;
 use std::collections::HashMap;
 use system_properties::SystemPropertyKey;

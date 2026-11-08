@@ -1,5 +1,5 @@
 use super::*;
-use models_properties::shared::PropertyOwner;
+use properties_types::shared::PropertyOwner;
 
 impl<Repository, Definitions, Cells, Events, Access, Broker>
     DatabasesServiceImpl<Repository, Definitions, Cells, Events, Access, Broker>

@@ -9,7 +9,7 @@ use databases_types::views::{
     ViewLayout, ViewPosition, ViewQuery, arrange_lane, check, check_lane, place_card,
 };
 use databases_types::{ColumnId, OptionId, TakenId, ViewChange};
-use models_properties::service::property_value::PropertyValue;
+use properties_types::service::property_value::PropertyValue;
 
 use super::{Place, Planner, refuse, refuse_taken};
 use crate::domain::catalog::{StorageTable, storage_schema_columns};

@@ -13,7 +13,7 @@ use database_sql_engine::catalog::{Column, Table};
 use database_sql_engine::fold::Cell;
 use database_sql_engine::formula;
 use databases_types::{ColumnId, Formula};
-use models_properties::service::property_value::PropertyValue;
+use properties_types::service::property_value::PropertyValue;
 use uuid::Uuid;
 
 use crate::domain::catalog::{self, StorageTable};

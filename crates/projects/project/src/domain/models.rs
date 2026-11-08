@@ -118,7 +118,7 @@ pub struct InitialPropertyValue {
     /// Property definition to set.
     pub property_definition_id: Uuid,
     /// Value, validated by the properties service like any other property write.
-    pub value: models_properties::api::requests::SetPropertyValue,
+    pub value: properties_types::api::requests::SetPropertyValue,
 }
 
 /// Create-initiative HTTP body.

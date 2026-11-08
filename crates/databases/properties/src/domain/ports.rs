@@ -9,16 +9,16 @@ use std::pin::Pin;
 use document_sub_type::DocumentSubType;
 use entity_access::domain::models::EntityType as AccessEntityType;
 use macro_user_id::user_id::MacroUserIdStr;
-use models_properties::service::document_metadata::DocumentMetadata;
-use models_properties::service::entity_property::EntityProperty;
-use models_properties::service::entity_property_with_definition::EntityPropertyWithDefinition;
-use models_properties::service::project_metadata::ProjectMetadata;
-use models_properties::service::property_definition::PropertyDefinition;
-use models_properties::service::property_definition_with_options::PropertyDefinitionWithOptions;
-use models_properties::service::property_option::{PropertyOption, PropertyOptionValue};
-use models_properties::service::property_value::PropertyValue;
-use models_properties::service::thread_metadata::ThreadMetadata;
-use models_properties::{DataType, EntityPropertyReference, EntityReference, EntityType};
+use properties_types::service::document_metadata::DocumentMetadata;
+use properties_types::service::entity_property::EntityProperty;
+use properties_types::service::entity_property_with_definition::EntityPropertyWithDefinition;
+use properties_types::service::project_metadata::ProjectMetadata;
+use properties_types::service::property_definition::PropertyDefinition;
+use properties_types::service::property_definition_with_options::PropertyDefinitionWithOptions;
+use properties_types::service::property_option::{PropertyOption, PropertyOptionValue};
+use properties_types::service::property_value::PropertyValue;
+use properties_types::service::thread_metadata::ThreadMetadata;
+use properties_types::{DataType, EntityPropertyReference, EntityReference, EntityType};
 use uuid::Uuid;
 
 use super::model::{

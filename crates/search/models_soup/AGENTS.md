@@ -27,7 +27,7 @@ model.
 
 - Depends on: `call`, `channels`, `crm`, `document_sub_type`, `doppleganger`,
   `email`, `macro_user_id`, `model`, `entity_kind`, `model_owner`,
-  `pagination_types`, `models_properties`.
+  `pagination_types`, `properties_types`.
 - Used by: `agent_tools`, `complete_graph`, `database_sql_runner`, `graphql_initiative`,
   `graphql_soup`, `models_search`, `search_service`, `skills`, `soup`,
   `soup_filter_projection`, `attention_feed`.

@@ -12,17 +12,17 @@ use std::collections::HashMap;
 
 use entity_access::domain::models::{EntityAccessReceipt, MemberTeamRole};
 use macro_user_id::user_id::MacroUserIdStr;
-use models_properties::EntityType;
-use models_properties::api::requests::SetPropertyValue;
-use models_properties::api::{
+use properties_types::EntityType;
+use properties_types::api::requests::SetPropertyValue;
+use properties_types::api::{
     AddPropertyOptionRequest, CreatePropertyDefinitionRequest, UpdatePropertyOptionRequest,
 };
-use models_properties::service::entity_property_with_definition::EntityPropertyWithDefinition;
-use models_properties::service::property_change_source::PropertyChangeSource;
-use models_properties::service::property_definition::PropertyDefinition;
-use models_properties::service::property_definition_with_options::PropertyDefinitionWithOptions;
-use models_properties::service::property_option::PropertyOption;
-use models_properties::service::property_value::PropertyValue;
+use properties_types::service::entity_property_with_definition::EntityPropertyWithDefinition;
+use properties_types::service::property_change_source::PropertyChangeSource;
+use properties_types::service::property_definition::PropertyDefinition;
+use properties_types::service::property_definition_with_options::PropertyDefinitionWithOptions;
+use properties_types::service::property_option::PropertyOption;
+use properties_types::service::property_value::PropertyValue;
 use system_properties::SystemPropertyKey;
 use uuid::Uuid;
 

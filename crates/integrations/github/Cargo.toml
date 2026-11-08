@@ -90,7 +90,7 @@ uuid = { workspace = true }
 
 fusionauth = { workspace = true, optional = true }
 macro_user_id = { workspace = true }
-models_properties = { workspace = true }
+properties_types = { workspace = true }
 macro_uuid = { workspace = true }
 redis = { workspace = true, features = ["aio", "tokio-comp"], optional = true }
 tokio = { workspace = true, features = ["sync"], optional = true }

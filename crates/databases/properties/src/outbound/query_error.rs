@@ -1,6 +1,6 @@
 //! Typed failures of the property queries that transactional writers compose.
 
-use models_properties::db::error::DbConversionError;
+use properties_types::db::error::DbConversionError;
 
 /// A property query failed; a caller's transaction is to be dropped.
 #[derive(Debug, thiserror::Error)]

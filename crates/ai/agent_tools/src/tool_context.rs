@@ -65,11 +65,11 @@ use macro_event_broker::{
     NoopMacroEventBroker,
 };
 use macro_user_id::user_id::MacroUserIdStr;
-use models_properties::service::property_change_source::PropertyChangeSource;
-use models_properties::service::property_value::PropertyValue;
 use notification::domain::service::SqsNotificationIngress;
 use notification_inbound::ai_tool::NotificationToolContext;
 use properties_inbound::toolset::PropertiesToolContext;
+use properties_types::service::property_change_source::PropertyChangeSource;
+use properties_types::service::property_value::PropertyValue;
 use skills::inbound::toolset::SkillToolContext;
 use soup::{domain::service::SoupImpl, inbound::toolset::SoupToolContext};
 use std::sync::Arc;
@@ -788,7 +788,7 @@ impl TaskPropertiesPort for NoOpTaskProperties {
         _principal: &model_owner::CreationPrincipal,
         _entity_id: &str,
         _property_definition_id: uuid::Uuid,
-        _value: Option<models_properties::api::requests::SetPropertyValue>,
+        _value: Option<properties_types::api::requests::SetPropertyValue>,
     ) -> anyhow::Result<()> {
         Ok(())
     }
@@ -864,7 +864,7 @@ impl TaskPropertiesPort for TaskPropertiesAdapter {
                 &access,
                 system_properties::SystemPropertyKey::STATUS_UUID,
                 Some(
-                    models_properties::api::requests::SetPropertyValue::SelectOption {
+                    properties_types::api::requests::SetPropertyValue::SelectOption {
                         option_id: status_option.uuid(),
                     },
                 ),
@@ -880,7 +880,7 @@ impl TaskPropertiesPort for TaskPropertiesAdapter {
         principal: &model_owner::CreationPrincipal,
         entity_id: &str,
         property_definition_id: uuid::Uuid,
-        value: Option<models_properties::api::requests::SetPropertyValue>,
+        value: Option<properties_types::api::requests::SetPropertyValue>,
     ) -> anyhow::Result<()> {
         use properties::PropertiesService as _;
 
@@ -1851,7 +1851,7 @@ impl ToolEntityCreator {
         properties: &import::domain::ports::ImportedTaskProperties,
         roster: &[MacroUserIdStr<'static>],
     ) {
-        use models_properties::api::requests::SetPropertyValue;
+        use properties_types::api::requests::SetPropertyValue;
         use system_properties::SystemPropertyKey;
 
         let principal = Self::creation_principal(user);
@@ -1931,9 +1931,9 @@ impl ToolEntityCreator {
             else {
                 return;
             };
-            let reference = models_properties::EntityReference::new(
+            let reference = properties_types::EntityReference::new(
                 assignee.as_ref().to_string(),
-                models_properties::EntityType::User,
+                properties_types::EntityType::User,
             );
             if let Err(e) = self
                 .task_properties

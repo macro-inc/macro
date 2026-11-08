@@ -15,11 +15,11 @@ use entity_access::domain::{
     service::EntityAccessServiceImpl,
 };
 use entity_access_outbound::PgAccessRepository;
-use models_properties::{api::requests::SetPropertyValue, service::property_value::PropertyValue};
 use properties::{
     PermissionServiceImpl, PropertiesPgRepo, PropertiesService, PropertiesServiceImpl,
     domain::model::TaskAssignedNotification,
 };
+use properties_types::{api::requests::SetPropertyValue, service::property_value::PropertyValue};
 use std::sync::Arc;
 use system_properties::{
     PgSystemPropertiesRepository, StatusOption, SystemPropertiesServiceImpl, SystemPropertyKey,

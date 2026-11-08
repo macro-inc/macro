@@ -69,7 +69,7 @@ across different entity IDs.
 ## Wire representations
 
 The event types directly reuse `DataType`, `EntityType`, `PropertyOwner`,
-`PropertyValue`, and `PropertyOptionValue` from `models_properties`. Their serde
+`PropertyValue`, and `PropertyOptionValue` from `properties_types`. Their serde
 representations are public wire-contract dependencies. Changes to those model
 representations must therefore be treated as changes to the Kafka contract, not
 as crate-internal refactors.
@@ -86,7 +86,7 @@ The current representations include:
 - `PropertyValue` as a `type`/`value` object. Its type names are `Boolean`,
   `Number`, `String`, `Date`, `SelectOption`, `EntityReference`, and `Link`.
   Select options, entity references, and links use arrays as defined by
-  `models_properties`, including for single-select values.
+  `properties_types`, including for single-select values.
 
 Consumers should use these exact representations rather than independently
 normalizing enum names or tagged-union shapes.

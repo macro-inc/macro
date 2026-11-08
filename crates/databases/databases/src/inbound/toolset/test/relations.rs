@@ -8,7 +8,7 @@ fn relation_schema_names_the_target_table() {
     column.definition.definition.data_type = DataType::Entity;
     column.definition.definition.is_multi_select = false;
     column.definition.definition.specific_entity_type =
-        Some(models_properties::shared::EntityType::User);
+        Some(properties_types::shared::EntityType::User);
     column.column.config = Some(ColumnConfig::Link {
         database_id: DATABASE_ID,
         table_id: TableId::from_uuid(target),

@@ -1,6 +1,6 @@
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
-use models_properties::service::property_option::PropertyOptionValue;
-use models_properties::shared::PropertyOwner;
+use properties_types::service::property_option::PropertyOptionValue;
+use properties_types::shared::PropertyOwner;
 use sqlx::PgPool;
 
 use uuid::Uuid;

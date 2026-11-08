@@ -9,9 +9,9 @@ use async_trait::async_trait;
 use email::domain::ports::EmailService;
 use item_filters::{EmailFilters, EntityFilters};
 use macro_user_id::user_id::MacroUserIdStr;
-use models_properties::service::tag_sets::{TagFilter, TagMatch};
 use models_search::channel::ChannelNameSearchRequest;
 use models_search::unified::{UnifiedSearchRequest, UnifiedSearchResponseItem};
+use properties_types::service::tag_sets::{TagFilter, TagMatch};
 use schemars::JsonSchema;
 use serde::Deserialize;
 

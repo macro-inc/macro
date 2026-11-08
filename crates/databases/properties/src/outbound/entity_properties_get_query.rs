@@ -2,12 +2,12 @@
 
 use std::collections::{HashMap, HashSet};
 
-use models_properties::service::entity_property::EntityProperty;
-use models_properties::service::entity_property_with_definition::EntityPropertyWithDefinition;
-use models_properties::service::property_definition::PropertyDefinition;
-use models_properties::service::property_option::PropertyOptionValue;
-use models_properties::service::property_value::PropertyValue;
-use models_properties::{DataType, EntityPropertyReference, EntityReference, EntityType};
+use properties_types::service::entity_property::EntityProperty;
+use properties_types::service::entity_property_with_definition::EntityPropertyWithDefinition;
+use properties_types::service::property_definition::PropertyDefinition;
+use properties_types::service::property_option::PropertyOptionValue;
+use properties_types::service::property_value::PropertyValue;
+use properties_types::{DataType, EntityPropertyReference, EntityReference, EntityType};
 use sqlx::{Pool, Postgres};
 use uuid::Uuid;
 
@@ -156,7 +156,7 @@ pub async fn get_entity_properties(
 
         result.push(EntityPropertyInfo {
             property_definition_id: row.property_definition_id,
-            owner: models_properties::PropertyOwner::from_optional_ids(
+            owner: properties_types::PropertyOwner::from_optional_ids(
                 row.team_id,
                 row.user_id,
                 row.database_id,
@@ -199,7 +199,7 @@ struct EntityPropertyRow {
 fn row_to_entity_property_with_definition(
     row: EntityPropertyRow,
 ) -> anyhow::Result<EntityPropertyWithDefinition> {
-    let owner = models_properties::PropertyOwner::from_optional_ids(
+    let owner = properties_types::PropertyOwner::from_optional_ids(
         row.definition_team_id,
         row.definition_user_id,
         row.definition_database_id,
@@ -264,7 +264,7 @@ fn sort_properties_by_display_name(properties: &mut [EntityPropertyWithDefinitio
 /// Validates and cleans select option values by deduplicating and filtering invalid IDs
 fn validate_and_clean_select_option_value(
     property: &mut EntityPropertyWithDefinition,
-    options: &[models_properties::service::property_option::PropertyOption],
+    options: &[properties_types::service::property_option::PropertyOption],
 ) {
     let Some(PropertyValue::SelectOption(option_ids)) = &property.value else {
         return;

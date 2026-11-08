@@ -1,6 +1,6 @@
 //! Domain error types for properties.
 
-use models_properties::service::property_option::PropertyOption;
+use properties_types::service::property_option::PropertyOption;
 use thiserror::Error;
 
 /// A stored property value cannot be decoded or used for the requested mutation.

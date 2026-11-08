@@ -147,40 +147,40 @@ pub enum GraphqlPropertyEntityType {
 
 impl GraphqlPropertyEntityType {
     /// Construct a GraphQL property entity type from its properties-domain model.
-    pub fn new(value: models_properties::EntityType) -> Self {
+    pub fn new(value: properties_types::EntityType) -> Self {
         match value {
-            models_properties::EntityType::CalendarEvent => Self::CalendarEvent,
-            models_properties::EntityType::CallRecord => Self::CallRecord,
-            models_properties::EntityType::Channel => Self::Channel,
-            models_properties::EntityType::Chat => Self::Chat,
-            models_properties::EntityType::Company => Self::Company,
-            models_properties::EntityType::DatabaseRow => Self::DatabaseRow,
-            models_properties::EntityType::Contact => Self::Contact,
-            models_properties::EntityType::Document => Self::Document,
-            models_properties::EntityType::Initiative => Self::Initiative,
-            models_properties::EntityType::Project => Self::Project,
-            models_properties::EntityType::Task => Self::Task,
-            models_properties::EntityType::Thread => Self::Thread,
-            models_properties::EntityType::User => Self::User,
+            properties_types::EntityType::CalendarEvent => Self::CalendarEvent,
+            properties_types::EntityType::CallRecord => Self::CallRecord,
+            properties_types::EntityType::Channel => Self::Channel,
+            properties_types::EntityType::Chat => Self::Chat,
+            properties_types::EntityType::Company => Self::Company,
+            properties_types::EntityType::DatabaseRow => Self::DatabaseRow,
+            properties_types::EntityType::Contact => Self::Contact,
+            properties_types::EntityType::Document => Self::Document,
+            properties_types::EntityType::Initiative => Self::Initiative,
+            properties_types::EntityType::Project => Self::Project,
+            properties_types::EntityType::Task => Self::Task,
+            properties_types::EntityType::Thread => Self::Thread,
+            properties_types::EntityType::User => Self::User,
         }
     }
 
     /// Convert this GraphQL entity type into its properties-domain model.
-    pub fn into_model(self) -> models_properties::EntityType {
+    pub fn into_model(self) -> properties_types::EntityType {
         match self {
-            Self::CalendarEvent => models_properties::EntityType::CalendarEvent,
-            Self::CallRecord => models_properties::EntityType::CallRecord,
-            Self::Channel => models_properties::EntityType::Channel,
-            Self::Chat => models_properties::EntityType::Chat,
-            Self::Company => models_properties::EntityType::Company,
-            Self::DatabaseRow => models_properties::EntityType::DatabaseRow,
-            Self::Contact => models_properties::EntityType::Contact,
-            Self::Document => models_properties::EntityType::Document,
-            Self::Initiative => models_properties::EntityType::Initiative,
-            Self::Project => models_properties::EntityType::Project,
-            Self::Task => models_properties::EntityType::Task,
-            Self::Thread => models_properties::EntityType::Thread,
-            Self::User => models_properties::EntityType::User,
+            Self::CalendarEvent => properties_types::EntityType::CalendarEvent,
+            Self::CallRecord => properties_types::EntityType::CallRecord,
+            Self::Channel => properties_types::EntityType::Channel,
+            Self::Chat => properties_types::EntityType::Chat,
+            Self::Company => properties_types::EntityType::Company,
+            Self::DatabaseRow => properties_types::EntityType::DatabaseRow,
+            Self::Contact => properties_types::EntityType::Contact,
+            Self::Document => properties_types::EntityType::Document,
+            Self::Initiative => properties_types::EntityType::Initiative,
+            Self::Project => properties_types::EntityType::Project,
+            Self::Task => properties_types::EntityType::Task,
+            Self::Thread => properties_types::EntityType::Thread,
+            Self::User => properties_types::EntityType::User,
         }
     }
 }

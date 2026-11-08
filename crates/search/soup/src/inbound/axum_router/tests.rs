@@ -241,7 +241,7 @@ impl SoupService for MockSoup {
         &self,
         _user_id: MacroUserIdStr<'a>,
     ) -> Result<
-        Vec<models_properties::service::property_definition_with_options::PropertyDefinitionWithOptions>,
+        Vec<properties_types::service::property_definition_with_options::PropertyDefinitionWithOptions>,
         SoupErr,
     >{
         Err(SoupErr::SoupDbErr(anyhow::anyhow!("Not implemented")))

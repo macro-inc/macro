@@ -16,7 +16,7 @@ fn an_infer_type_request_takes_camel_case_and_an_optional_entity_type() {
     assert_eq!(entity.data_type, DataType::Entity);
     assert_eq!(
         entity.specific_entity_type,
-        Some(models_properties::EntityType::User)
+        Some(properties_types::EntityType::User)
     );
     assert_eq!(entity.base_version, TableVersion(5));
 

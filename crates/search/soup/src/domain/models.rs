@@ -1176,7 +1176,7 @@ fn map_properties_to_call(expr: &Expr<PropertiesLiteral>) -> Expr<CallLiteral> {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CrmPropertyEdge {
     /// The entity type the property row is stored under.
-    pub entity_type: models_properties::EntityType,
+    pub entity_type: properties_types::EntityType,
     /// The entity id the property row is stored under.
     pub entity_id: String,
 }

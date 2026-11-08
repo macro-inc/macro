@@ -29,7 +29,7 @@ use item_filters::ast::{
     document::DocumentLiteral, initiative::InitiativeLiteral, project::ProjectLiteral,
 };
 use macro_user_id::email::EmailStr;
-use models_properties::EntityType as PropertyEntityType;
+use properties_types::EntityType as PropertyEntityType;
 use std::collections::BTreeSet;
 
 #[cfg(test)]

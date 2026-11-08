@@ -15,8 +15,8 @@ use crate::{
 };
 use chrono::{DateTime, Utc};
 use entity_kind::{Entity, EntityType};
-use models_properties::{EntityReference, EntityType as PropertiesEntityType};
 use pagination_types::{Identify, SimpleSortMethod, SortOn};
+use properties_types::{EntityReference, EntityType as PropertiesEntityType};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 

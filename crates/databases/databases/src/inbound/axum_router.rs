@@ -45,7 +45,7 @@ use macro_authorization::{
     MacroAuthorizationExtractor, MacroAuthorizationService, MacroAuthorizationState, UserOrInternal,
 };
 use model_error_response::ErrorResponse;
-use models_properties::shared::DataType;
+use properties_types::shared::DataType;
 use serde::{Deserialize, Serialize};
 
 use crate::domain::models::{
@@ -383,7 +383,7 @@ pub struct InferColumnTypeRequest {
     pub data_type: DataType,
     /// Required entity category for ENTITY.
     #[serde(default)]
-    pub specific_entity_type: Option<models_properties::EntityType>,
+    pub specific_entity_type: Option<properties_types::EntityType>,
     /// Table version used when interpreting the first value.
     pub base_version: TableVersion,
 }

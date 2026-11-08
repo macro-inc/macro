@@ -2,10 +2,10 @@ use chrono::{TimeZone, Utc};
 use databases::domain::models::{
     Column, ColumnConfig, ColumnDetail, Database, DatabaseDetail, Table, TableDetail,
 };
-use models_properties::service::property_definition::PropertyDefinition;
-use models_properties::service::property_definition_with_options::PropertyDefinitionWithOptions;
-use models_properties::service::property_option::{PropertyOption, PropertyOptionValue};
-use models_properties::shared::PropertyOwner;
+use properties_types::service::property_definition::PropertyDefinition;
+use properties_types::service::property_definition_with_options::PropertyDefinitionWithOptions;
+use properties_types::service::property_option::{PropertyOption, PropertyOptionValue};
+use properties_types::shared::PropertyOwner;
 use std::sync::{Arc, Mutex};
 
 use databases::domain::models::{DatabaseError, OpRefusal, QueryDefinition, TableVersion};
@@ -16,8 +16,8 @@ use databases_types::{
 };
 use entity_access::domain::models::AccessLevel;
 use item_filters::ast::database_row::DatabaseRowLiteral;
-use models_properties::service::property_value::PropertyValue;
-use models_properties::shared::{DataType, EntityReference, EntityType as PropertyEntityType};
+use properties_types::service::property_value::PropertyValue;
+use properties_types::shared::{DataType, EntityReference, EntityType as PropertyEntityType};
 use uuid::Uuid;
 
 use super::*;
@@ -227,7 +227,7 @@ pub(crate) fn world() -> Shared {
                                     display_name: "Contact".into(),
                                     data_type: DataType::Entity,
                                     is_multi_select: false,
-                                    specific_entity_type: Some(models_properties::EntityType::User),
+                                    specific_entity_type: Some(properties_types::EntityType::User),
                                     created_at: Utc::now(),
                                     updated_at: Utc::now(),
                                     is_system: false,

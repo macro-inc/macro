@@ -49,13 +49,13 @@ use macro_event_topics::{
 };
 use macro_user_id::user_id::MacroUserIdStr;
 use model_owner::Owner;
-use models_properties::{
-    DataType, EntityType, PropertyOwner, service::property_option::PropertyOptionValue,
-};
 use properties::domain::events::{
     EntityPropertiesClearedMetadata, EntityPropertyDeletedMetadata, EntityPropertyUpdatedMetadata,
     PropertyCreatedMetadata, PropertyDeletedMetadata, PropertyOptionCreatedMetadata,
     PropertyOptionDeletedMetadata, PropertyOptionUpdatedMetadata, PropertyTopicEvent,
+};
+use properties_types::{
+    DataType, EntityType, PropertyOwner, service::property_option::PropertyOptionValue,
 };
 use shared_types::document::FileType;
 use uuid::Uuid;

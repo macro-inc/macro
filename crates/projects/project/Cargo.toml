@@ -37,7 +37,7 @@ bot_id = { workspace = true, optional = true }
 schemars = { workspace = true, optional = true }
 properties = { workspace = true, optional = true }
 system_properties = { workspace = true, optional = true }
-models_properties = { workspace = true }
+properties_types = { workspace = true }
 activity = { workspace = true }
 axum = { workspace = true, optional = true }
 chrono = { workspace = true, features = ["serde"] }

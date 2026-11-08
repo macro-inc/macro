@@ -23,11 +23,11 @@ edge.
 
 - Owns: GraphQL types/resolvers for property definitions and values.
 - Not here: property storage, selectable-option management, and filter
-  evaluation → `crates/databases/properties`, `crates/types/models_properties`.
+  evaluation → `crates/databases/properties`, `crates/types/properties_types`.
 
 ## Boundaries
 
-- Depends on: `properties` (ports only), `models_properties`, `entity_access`,
+- Depends on: `properties` (ports only), `properties_types`, `entity_access`,
   `graphql_common` (re-exports its filter-expr types).
 - Used by: `complete_graph`, `graphql_initiative`, `graphql_crm`.
 

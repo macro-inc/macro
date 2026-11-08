@@ -5,7 +5,7 @@ use std::collections::{BTreeMap, HashMap};
 
 use databases::domain::storage::StorageRow;
 use databases_types::ColumnId;
-use models_properties::service::property_value::PropertyValue;
+use properties_types::service::property_value::PropertyValue;
 use uuid::Uuid;
 
 use super::{

@@ -1,6 +1,6 @@
 use super::*;
 use macro_user_id::cow_str::CowLike;
-use models_properties::{EntityType, shared::entity_reference::EntityReference};
+use properties_types::{EntityType, shared::entity_reference::EntityReference};
 
 fn viewer() -> MacroUserIdStr<'static> {
     MacroUserIdStr::parse_from_str("macro|me@example.com")

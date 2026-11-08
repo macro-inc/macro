@@ -2,7 +2,7 @@
 
 use super::*;
 use crate::domain::ports::DatabaseStorage;
-use models_properties::service::property_value::PropertyValue;
+use properties_types::service::property_value::PropertyValue;
 
 fn batch(database_id: DatabaseId, writes: Vec<Write>) -> Writes {
     Writes {

@@ -19,7 +19,7 @@ use databases_types::{
     CellValue, ChangeId, ColumnId, ColumnKind, DatabaseId, DatabaseOp, DateRange, EntityRef,
     OptionId, OptionRef, RowId, TableId, TableVersion,
 };
-use models_properties::service::property_value::PropertyValue;
+use properties_types::service::property_value::PropertyValue;
 use serde::{Deserialize, Serialize};
 
 pub use entries::{entries, reads};
@@ -467,9 +467,10 @@ pub fn cell_value(value: &PropertyValue) -> Option<CellValue> {
                 .collect(),
         ),
         PropertyValue::EntityRef(references) => {
-            if references.iter().all(|reference| {
-                reference.entity_type == models_properties::EntityType::DatabaseRow
-            }) && !references.is_empty()
+            if references
+                .iter()
+                .all(|reference| reference.entity_type == properties_types::EntityType::DatabaseRow)
+                && !references.is_empty()
             {
                 CellValue::Rows(
                     references

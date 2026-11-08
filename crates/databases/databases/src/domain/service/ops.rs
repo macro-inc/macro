@@ -17,7 +17,7 @@ use databases_types::{
     RowChanges, RowsChange, RowsResult, TableChange, TableResult, TakenId, VersionedTable,
     ViewChange, ViewResult,
 };
-use models_properties::service::property_definition_with_options::PropertyDefinitionWithOptions;
+use properties_types::service::property_definition_with_options::PropertyDefinitionWithOptions;
 
 use super::*;
 use crate::domain::catalog::{ColumnEntry, StorageTable};
@@ -455,7 +455,7 @@ where
 fn shared_beyond(definition: &PropertyDefinitionWithOptions, database_id: DatabaseId) -> bool {
     !matches!(
         definition.definition.owner,
-        models_properties::shared::PropertyOwner::Database { database_id: owner }
+        properties_types::shared::PropertyOwner::Database { database_id: owner }
             if DatabaseId::from_uuid(owner) == database_id
     )
 }

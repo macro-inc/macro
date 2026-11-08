@@ -42,7 +42,7 @@ macro_uuid = { workspace = true, optional = true }
 entity_kind = { workspace = true, optional = true }
 model_notifications = { workspace = true, optional = true }
 permissions_types = { workspace = true, optional = true }
-models_properties = { workspace = true }
+properties_types = { workspace = true }
 notification = { workspace = true, default-features = true, optional = true }
 schemars = { workspace = true, optional = true }
 serde = { workspace = true }

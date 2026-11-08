@@ -32,14 +32,14 @@ use entity_access::domain::{
     ports::{AccessiblePipelines, EntityAccessService},
 };
 use macro_user_id::user_id::MacroUserIdStr;
-use models_properties::EntityType as PropertyEntityType;
-use models_properties::service::property_value::PropertyValue;
 use permissions_types::share_permission::{
     SharePermissionV2, UpdateSharePermissionRequestV2,
     channel_share_permission::{
         ChannelSharePermission, UpdateChannelSharePermission, UpdateOperation,
     },
 };
+use properties_types::EntityType as PropertyEntityType;
+use properties_types::service::property_value::PropertyValue;
 use serde::{Deserialize, Serialize};
 use std::{collections::HashMap, sync::Arc};
 use uuid::Uuid;

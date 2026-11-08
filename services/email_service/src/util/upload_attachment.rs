@@ -383,7 +383,7 @@ async fn set_email_attachment_properties(
 fn email_attachment_property(p: &AttachmentUploadArgs) -> EmailAttachmentProperty<'static> {
     EmailAttachmentProperty {
         source: Some(SourceEntity {
-            entity_type: models_properties::EntityType::Thread,
+            entity_type: properties_types::EntityType::Thread,
             entity_id: p.attachment_metadata.thread_db_id.to_string(),
             specific_message_id: Some(p.attachment_metadata.message_db_id),
         }),

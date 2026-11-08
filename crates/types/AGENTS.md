@@ -49,7 +49,7 @@ lists what this group may depend on. `cargo x deps` reports edges that break it.
 | `opensearch_types` |  |
 | [`pagination_types`](pagination_types/AGENTS.md) | Shared infrastructure. |
 | [`permissions_types`](permissions_types/AGENTS.md) | Part of entity sharing/permissions, used across nearly every feature. |
-| [`models_properties`](models_properties/AGENTS.md) | Part of the custom-properties feature (custom fields on documents, CRM records, and other entities). |
+| [`properties_types`](properties_types/AGENTS.md) | Part of the custom-properties feature (custom fields on documents, CRM records, and other entities). |
 | `models_search_cursor` |  |
 | `models_sfs` |  |
 | `models_team` |  |

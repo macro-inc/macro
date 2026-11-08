@@ -632,7 +632,7 @@ async fn moving_a_card_to_a_persons_lane_makes_them_its_person() {
     assert_eq!(
         cell(&seeded.world, alex, definition),
         Some(PropertyValue::EntityRef(vec![
-            models_properties::shared::EntityReference {
+            properties_types::shared::EntityReference {
                 entity_id: "macro|sam@macro.com".into(),
                 entity_type: PropertyEntityType::User,
                 specific_message_id: None,

@@ -1,6 +1,6 @@
 //! Soup property model - simplified property representation for the Soup API.
 
-use models_properties::service::{
+use properties_types::service::{
     entity_property_with_definition::EntityPropertyWithDefinition,
     property_definition::PropertyDefinition, property_value::PropertyValue,
 };

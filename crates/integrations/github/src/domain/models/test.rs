@@ -1,5 +1,5 @@
 use super::*;
-use models_properties::service::property_change_source::{GithubAccount, PropertyChangeSource};
+use properties_types::service::property_change_source::{GithubAccount, PropertyChangeSource};
 
 // ---------------------------------------------------------------------------
 // MacroTaskId::from_short_uuid

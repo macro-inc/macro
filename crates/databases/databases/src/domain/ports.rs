@@ -8,9 +8,9 @@ use entity_access::domain::models::{
     AccessLevel, EditAccessLevel, EntityAccessReceipt, OwnerAccessLevel, ViewAccessLevel,
 };
 use macro_user_id::user_id::MacroUserIdStr;
-use models_properties::service::property_definition_with_options::PropertyDefinitionWithOptions;
-use models_properties::service::property_option::PropertyOptionValue;
-use models_properties::service::property_value::PropertyValue;
+use properties_types::service::property_definition_with_options::PropertyDefinitionWithOptions;
+use properties_types::service::property_option::PropertyOptionValue;
+use properties_types::service::property_value::PropertyValue;
 
 use crate::domain::journal::{
     ChangeRecord, JournalActor, JournaledRowChange, RowHistoryEntry, TableChanges, UndoOutcome,
@@ -297,9 +297,9 @@ pub trait ColumnDefinitionStore: Send + Sync + 'static {
         &self,
         database_id: DatabaseId,
         name: &str,
-        data_type: models_properties::DataType,
+        data_type: properties_types::DataType,
         is_multi_select: bool,
-        specific_entity_type: Option<models_properties::EntityType>,
+        specific_entity_type: Option<properties_types::EntityType>,
         options: &[PropertyOptionValue],
     ) -> impl Future<Output = Result<PropertyDefinitionWithOptions, Self::Error>> + Send;
 

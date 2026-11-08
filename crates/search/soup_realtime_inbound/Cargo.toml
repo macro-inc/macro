@@ -19,7 +19,7 @@ macro_user_id = { workspace = true }
 messages = { workspace = true, features = ["broker"] }
 entity_kind = { workspace = true }
 model_owner = { workspace = true }
-models_properties = { workspace = true }
+properties_types = { workspace = true }
 folder = { workspace = true, features = ["service"] }
 properties = { workspace = true, features = ["ports"] }
 rdkafka = { workspace = true }

@@ -74,7 +74,7 @@ model_error_response = { workspace = true, optional = true }
 model_owner = { workspace = true }
 grouping_types = { workspace = true }
 pagination_types = { workspace = true }
-models_properties = { workspace = true }
+properties_types = { workspace = true }
 models_soup = { workspace = true }
 non_empty = { workspace = true }
 properties = { workspace = true }

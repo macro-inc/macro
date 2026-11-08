@@ -455,7 +455,7 @@ impl DocumentService for FakeDocumentService {
         &self,
         _entity_access_receipt: EntityAccessReceipt<entity_access::domain::models::EditAccessLevel>,
         _credited_user: Option<MacroUserIdStr<'static>>,
-        _source: Option<models_properties::service::property_change_source::PropertyChangeSource>,
+        _source: Option<properties_types::service::property_change_source::PropertyChangeSource>,
         _status: &str,
     ) -> Result<(), DocumentError> {
         panic!("unexpected update_task_status call")

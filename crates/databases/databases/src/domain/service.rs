@@ -26,9 +26,9 @@ use entity_access::domain::models::{
     OwnerAccessLevel, RequiredPermission, ViewAccessLevel,
 };
 use macro_event_broker::MacroEventBroker;
-use models_properties::service::property_option::PropertyOptionValue;
-use models_properties::service::property_value::PropertyValue;
-use models_properties::shared::DataType;
+use properties_types::service::property_option::PropertyOptionValue;
+use properties_types::service::property_value::PropertyValue;
+use properties_types::shared::DataType;
 use tracing::Level;
 use uuid::Uuid;
 

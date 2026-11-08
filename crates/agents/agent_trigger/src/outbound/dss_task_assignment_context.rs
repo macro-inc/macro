@@ -7,11 +7,11 @@ use document_sub_type::DocumentSubType;
 use entity_access::domain::models::{EntityAccessReceipt, EntityType, ViewAccessLevel};
 use lexical_client::{LexicalClient, parse_markdown::MarkdownTarget};
 use messages::domain::service::MessageWrite;
-use models_properties::{
+use properties::{EntityPropertyInfo, PropertiesErr, PropertiesService, ViewReceipt};
+use properties_types::{
     EntityType as PropertyEntityType,
     service::{property_option::PropertyOptionValue, property_value::PropertyValue},
 };
-use properties::{EntityPropertyInfo, PropertiesErr, PropertiesService, ViewReceipt};
 use system_properties::SystemPropertyKey;
 
 use crate::domain::task_assignment::{TaskAssignmentContext, TaskBrief};

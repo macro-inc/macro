@@ -2,7 +2,7 @@ use super::*;
 use crate::domain::transfer::{
     DatabaseTransferRepo, DatabaseTransferService, ImportFingerprint, ImportOutcome, ImportTable,
 };
-use models_properties::service::property_value::PropertyValue;
+use properties_types::service::property_value::PropertyValue;
 use sha2::{Digest, Sha256};
 
 /// Most columns one import creates.

@@ -548,7 +548,7 @@ async fn undoing_a_move_into_a_persons_lane_hands_the_card_back_to_its_person() 
     assert_eq!(
         cell(&seeded.world, alex, definition),
         Some(PropertyValue::EntityRef(vec![
-            models_properties::shared::EntityReference {
+            properties_types::shared::EntityReference {
                 entity_id: "macro|ana@macro.com".into(),
                 entity_type: PropertyEntityType::User,
                 specific_message_id: None,

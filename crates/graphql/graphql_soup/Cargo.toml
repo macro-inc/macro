@@ -49,4 +49,4 @@ soup_realtime_core = { workspace = true }
 
 [dev-dependencies]
 model_owner = { workspace = true }
-models_properties = { workspace = true }
+properties_types = { workspace = true }

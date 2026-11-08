@@ -22,9 +22,9 @@ use entity_access::domain::models::{
 use entity_access::domain::ports::EntityAccessService;
 use macro_user_id::user_id::MacroUserIdStr;
 use model_owner::{CreationPrincipal, Owner};
-use models_properties::service::property_change_source::PropertyChangeSource;
 use permissions_types::share_permission::SharePermissionV2;
 use permissions_types::share_permission::team_share::{AuthorizedTeamShareCommand, TeamShareFacts};
+use properties_types::service::property_change_source::PropertyChangeSource;
 use shared_types::document::{ContentType, DocumentBasic, DocumentMetadata, FileType};
 
 use super::content::DocumentContent;
@@ -413,7 +413,7 @@ pub trait TaskPropertiesPort: Send + Sync + 'static {
         principal: &CreationPrincipal,
         entity_id: &str,
         property_definition_id: uuid::Uuid,
-        value: Option<models_properties::api::requests::SetPropertyValue>,
+        value: Option<properties_types::api::requests::SetPropertyValue>,
     ) -> impl Future<Output = anyhow::Result<()>> + Send;
 
     /// Copy all task property values from one task to another.

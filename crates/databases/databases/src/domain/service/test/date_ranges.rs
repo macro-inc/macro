@@ -85,7 +85,7 @@ async fn a_range_cell_is_stored_as_a_property_range_and_a_backwards_one_is_refus
     assert_eq!(
         seeded.world.lock().unwrap().cells[&seeded.row_id][&definition],
         PropertyValue::DateRange(
-            models_properties::shared::DateRange::new(march.start, march.end).unwrap()
+            properties_types::shared::DateRange::new(march.start, march.end).unwrap()
         )
     );
 

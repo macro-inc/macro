@@ -5,8 +5,8 @@ use entity_access::domain::models::{EntityAccessReceipt, EntityPermission, ViewA
 use entity_access::domain::ports::EntityAccessService;
 use futures::{StreamExt, stream};
 use macro_user_id::user_id::MacroUserIdStr;
-use models_properties::service::entity_property_with_definition::EntityPropertyWithDefinition;
-use models_properties::service::{
+use properties_types::service::entity_property_with_definition::EntityPropertyWithDefinition;
+use properties_types::service::{
     property_definition::PropertyDefinition, property_option::PropertyOption,
 };
 use rootcause::markers::{Cloneable, Dynamic};
@@ -40,7 +40,7 @@ pub trait EntityPropertyReader: Send + Sync + 'static {
         &self,
         user_id: &MacroUserIdStr<'static>,
         scope: GraphqlPropertyDefinitionScope,
-        for_entity_type: Option<models_properties::EntityType>,
+        for_entity_type: Option<properties_types::EntityType>,
     ) -> impl Future<Output = Result<Vec<PropertyDefinition>, rootcause::Report>> + Send;
 
     /// Read options after the properties service verifies definition visibility.
@@ -73,7 +73,7 @@ impl EntityPropertyReader for NoOpEntityPropertyReader {
         &self,
         _user_id: &MacroUserIdStr<'static>,
         _scope: GraphqlPropertyDefinitionScope,
-        _for_entity_type: Option<models_properties::EntityType>,
+        _for_entity_type: Option<properties_types::EntityType>,
     ) -> Result<Vec<PropertyDefinition>, rootcause::Report> {
         Err(rootcause::report!("property reader is not configured"))
     }
@@ -154,7 +154,7 @@ where
         &self,
         user_id: &MacroUserIdStr<'static>,
         scope: GraphqlPropertyDefinitionScope,
-        for_entity_type: Option<models_properties::EntityType>,
+        for_entity_type: Option<properties_types::EntityType>,
     ) -> Result<Vec<PropertyDefinition>, rootcause::Report> {
         let team = match scope {
             GraphqlPropertyDefinitionScope::Team | GraphqlPropertyDefinitionScope::All => {
@@ -293,7 +293,7 @@ impl<R: EntityPropertyReader> EntityPropertiesLoader<R> {
     pub(crate) async fn definitions(
         &self,
         scope: GraphqlPropertyDefinitionScope,
-        for_entity_type: Option<models_properties::EntityType>,
+        for_entity_type: Option<properties_types::EntityType>,
     ) -> Result<Vec<PropertyDefinition>, rootcause::Report> {
         self.reader
             .get_definitions(&self.user_id, scope, for_entity_type)
