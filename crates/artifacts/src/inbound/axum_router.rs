@@ -187,6 +187,13 @@ struct DocumentIdPath {
     document_id: String,
 }
 
+/// A version route's number. Named, so routes nested under DSS's
+/// `/{version}` prefix, which carry that extra parameter, still extract.
+#[derive(Deserialize)]
+struct VersionPath {
+    number: i32,
+}
+
 /// Load the artifact document the access extractors read.
 async fn load_artifact_document<Service, EntityAccess, Authorization>(
     State(state): State<ArtifactsRouterState<Service, EntityAccess, Authorization>>,
@@ -830,7 +837,7 @@ where
 pub async fn get_version_handler<Service, EntityAccess, Authorization>(
     State(state): State<ArtifactsRouterState<Service, EntityAccess, Authorization>>,
     access: DocumentAccessExtractor<ViewAccessLevel, EntityAccess, Authorization>,
-    Path((_document_id, number)): Path<(String, i32)>,
+    Path(VersionPath { number }): Path<VersionPath>,
 ) -> Result<Json<ArtifactVersionResponse>, ArtifactError>
 where
     Service: ArtifactService,
@@ -868,7 +875,7 @@ pub async fn restore_handler<Service, EntityAccess, Authorization>(
     State(state): State<ArtifactsRouterState<Service, EntityAccess, Authorization>>,
     access: DocumentAccessExtractor<EditAccessLevel, EntityAccess, Authorization>,
     caller: MacroAuthorizationExtractor<Authorization, AnyPrincipal>,
-    Path((_document_id, number)): Path<(String, i32)>,
+    Path(VersionPath { number }): Path<VersionPath>,
 ) -> Result<(StatusCode, Json<ArtifactVersionResponse>), ArtifactError>
 where
     Service: ArtifactService,
