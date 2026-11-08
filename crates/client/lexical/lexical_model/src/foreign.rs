@@ -1,6 +1,8 @@
 //! Development-only runtime node hosting and suspended updates.
 mod pending;
 pub use pending::PendingUpdate;
+mod read;
+pub use read::ForeignReadSnapshot;
 
 mod hooks;
 pub use hooks::{ForeignData, ForeignHooks, ForeignNodeType, Override};
