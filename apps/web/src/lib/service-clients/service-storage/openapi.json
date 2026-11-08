@@ -19791,6 +19791,153 @@
         }
       }
     },
+    "/initiatives/page": {
+      "get": {
+        "tags": ["initiative"],
+        "summary": "Page the initiatives the caller can view, filtered by name and canonical properties,\nwith each row's properties and progress over the tasks the caller can view.",
+        "operationId": "page_initiatives",
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "description": "Maximum rows, between one and one hundred; defaults to fifty.",
+            "required": false,
+            "schema": {
+              "type": ["integer", "null"],
+              "format": "int32",
+              "minimum": 0
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "description": "Opaque continuation returned by the previous page.",
+            "required": false,
+            "schema": {
+              "type": ["string", "null"]
+            }
+          },
+          {
+            "name": "query",
+            "in": "query",
+            "description": "Case-insensitive name substring.",
+            "required": false,
+            "schema": {
+              "type": ["string", "null"]
+            }
+          },
+          {
+            "name": "status",
+            "in": "query",
+            "description": "Required status option id.",
+            "required": false,
+            "schema": {
+              "type": ["string", "null"],
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "priority",
+            "in": "query",
+            "description": "Required priority option id.",
+            "required": false,
+            "schema": {
+              "type": ["string", "null"],
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "assignee",
+            "in": "query",
+            "description": "Required assignee user id.",
+            "required": false,
+            "schema": {
+              "type": ["string", "null"]
+            }
+          },
+          {
+            "name": "dueAfter",
+            "in": "query",
+            "description": "Inclusive due-date lower bound.",
+            "required": false,
+            "schema": {
+              "type": ["string", "null"],
+              "format": "date-time"
+            }
+          },
+          {
+            "name": "dueBefore",
+            "in": "query",
+            "description": "Inclusive due-date upper bound.",
+            "required": false,
+            "schema": {
+              "type": ["string", "null"],
+              "format": "date-time"
+            }
+          },
+          {
+            "name": "sort",
+            "in": "query",
+            "description": "Sort key; defaults to updated time.",
+            "required": false,
+            "schema": {
+              "$ref": "#/components/schemas/InitiativeSort"
+            }
+          },
+          {
+            "name": "descending",
+            "in": "query",
+            "description": "Descending order; defaults to true for updated time.",
+            "required": false,
+            "schema": {
+              "type": ["boolean", "null"]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InitiativePage"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid credentials",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/initiatives/{initiative_id}": {
       "get": {
         "tags": ["initiative"],
@@ -20006,6 +20153,76 @@
           },
           "422": {
             "description": "Name exceeds the maximum length",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/initiatives/{initiative_id}/description": {
+      "get": {
+        "tags": ["initiative"],
+        "summary": "Read the description of an initiative the caller can view.",
+        "operationId": "get_initiative_description",
+        "parameters": [
+          {
+            "name": "initiative_id",
+            "in": "path",
+            "description": "Initiative identifier.",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InitiativeDescription"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid credentials",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
             "content": {
               "application/json": {
                 "schema": {
@@ -43306,6 +43523,17 @@
           }
         }
       },
+      "InitiativeDescription": {
+        "type": "object",
+        "description": "An initiative's description.",
+        "required": ["markdown"],
+        "properties": {
+          "markdown": {
+            "type": "string",
+            "description": "GitHub-flavored markdown; empty while no one has opened or written it."
+          }
+        }
+      },
       "InitiativeDetail": {
         "type": "object",
         "description": "Full initiative returned to a caller, including members, tasks, and share state.",
@@ -43427,6 +43655,102 @@
             "description": "Initiatives the caller can view."
           }
         }
+      },
+      "InitiativePage": {
+        "type": "object",
+        "description": "One authorized project collection page.",
+        "required": ["initiatives"],
+        "properties": {
+          "initiatives": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/InitiativePageRow"
+            },
+            "description": "Rows in requested order."
+          },
+          "nextCursor": {
+            "type": ["string", "null"],
+            "description": "Continuation, absent when exhausted."
+          }
+        }
+      },
+      "InitiativePageRow": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/InitiativeSummary",
+            "description": "Existing initiative identity and timestamps."
+          },
+          {
+            "type": "object",
+            "required": [
+              "userAccessLevel",
+              "properties",
+              "taskCount",
+              "completedTaskCount"
+            ],
+            "properties": {
+              "completedTaskCount": {
+                "type": "integer",
+                "format": "int32",
+                "description": "Number of visible tasks whose status is completed.",
+                "minimum": 0
+              },
+              "properties": {
+                "$ref": "#/components/schemas/InitiativePropertySnapshot",
+                "description": "Canonical property values."
+              },
+              "taskCount": {
+                "type": "integer",
+                "format": "int32",
+                "description": "Number of associated tasks the caller may view.",
+                "minimum": 0
+              },
+              "userAccessLevel": {
+                "$ref": "#/components/schemas/AccessLevel",
+                "description": "Verified effective access for the caller."
+              }
+            }
+          }
+        ],
+        "description": "A project row with caller-specific permissions, properties and visible task progress."
+      },
+      "InitiativePropertySnapshot": {
+        "type": "object",
+        "description": "Snapshot of canonical property values, never a second writable store.",
+        "required": ["assignees", "completed"],
+        "properties": {
+          "assignees": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Assigned user ids, independent of sharing membership."
+          },
+          "completed": {
+            "type": "boolean",
+            "description": "Whether the canonical task status represents completion."
+          },
+          "dueDate": {
+            "type": ["string", "null"],
+            "format": "date-time",
+            "description": "Due timestamp, or unset."
+          },
+          "priority": {
+            "type": ["string", "null"],
+            "format": "uuid",
+            "description": "Priority option id, or unset."
+          },
+          "status": {
+            "type": ["string", "null"],
+            "format": "uuid",
+            "description": "Status option id, or unset."
+          }
+        }
+      },
+      "InitiativeSort": {
+        "type": "string",
+        "description": "Supported collection ordering. Every ordering uses id as its final tie breaker.",
+        "enum": ["updated", "name", "due"]
       },
       "InitiativeSummary": {
         "type": "object",
