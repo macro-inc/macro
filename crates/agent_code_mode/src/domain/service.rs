@@ -205,6 +205,14 @@ pub fn covered_by_code_sdk(name: &str, user_tool: bool) -> bool {
             "ReadContent"
                 | "ReadMetadata"
                 | "EditDocument"
+                | "ReadCanvas"
+                | "EditCanvas"
+                | "ApplyCanvasEdits"
+                // macro.documents.spreadsheet(document).read(), calculate()
+                // and applyEdits().
+                | "ReadSpreadsheet"
+                | "CalculateSpreadsheet"
+                | "EditSpreadsheet"
                 | "RenameDocument"
                 | "MoveToProject"
                 | "MoveToTrash"
@@ -268,6 +276,10 @@ pub fn covered_by_code_sdk(name: &str, user_tool: bool) -> bool {
                 | "ListForms"
                 | "SetFormAccess"
                 | "CreateSkill"
+                // macro.documents.skills() and SystemSkill.content().
+                | "ListSkills"
+                | "SearchSkills"
+                | "ReadSkill"
                 | "Decide"
                 | "GenerateObject"
                 // macro.documents.upload(), which sends the bytes through Macro.
@@ -288,7 +300,7 @@ pub fn covered_by_code_sdk(name: &str, user_tool: bool) -> bool {
                 | "DeleteBot"
                 | "GetBotWebhooks"
                 | "ManageBotChannelAccess"
-                // macro.agents.list() and macro.agentSessions.createManaged.
+                // macro.agents.coding() and macro.agentSessions.createManaged.
                 | "ListCodingAgents"
                 | "DispatchCodingAgent"
                 // macro.connectedApps.discover and .addServer.
@@ -321,6 +333,16 @@ pub fn covered_by_code_sdk(name: &str, user_tool: bool) -> bool {
                 // document.copy(), database.duplicate() and project.rename().
                 | "DuplicateItem"
                 | "RenameItem"
+                // Document.readPresentation, editPresentation and copyPresentation.
+                | "ReadPresentation"
+                | "EditPresentation"
+                // Document.readWord and editWord.
+                | "ReadWordDocument"
+                | "EditWordDocument"
+                // Document.readDesign, readPhotoshop and readIllustrator.
+                | "ReadDesign"
+                | "ReadPhotoshopDocument"
+                | "ReadIllustratorDocument"
         )
 }
 

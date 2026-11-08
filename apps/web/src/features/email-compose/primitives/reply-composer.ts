@@ -357,22 +357,23 @@ export function createReplyComposer(
   });
 
   const savedDraftThreadId = session.threadId;
-  observeDraftIdentity(
-    props.drafts,
+  observeDraftIdentity({
+    storage: props.drafts,
     session,
-    props.notices,
-    () => {
+    notices: props.notices,
+    recover: () => {
       if (scheduleBlocked() || schedule.state().type === 'scheduled') return;
       if (props.drafts.retryDraft) {
         void retryDraft().catch(props.notices.reportError);
       } else
         detachFromObsoleteDraft(
           'save-rejected',
+          persistence.unsavedEdits(editVersion),
           'Saving your edits as a new draft.'
         );
     },
-    handleAlreadySent,
-    async () => {
+    onAlreadySent: handleAlreadySent,
+    onConfirmed: async () => {
       if (
         sendLocked() ||
         schedule.state().type === 'scheduled' ||
@@ -384,18 +385,13 @@ export function createReplyComposer(
       if (draftId && session.serverConfirmed())
         await attachmentPersistence.upload(draftId);
     },
-    (local) => {
-      const edit = persistence.acknowledgedEdit(local);
-      if (edit !== undefined)
-        persistedEditVersion = Math.max(persistedEditVersion, edit);
-    }
-  );
+    onAcknowledged: (local) => persistence.acknowledged(local),
+  });
   const persistedInboxId = session.inboxId;
   const [movingInbox, setMovingInbox] = createSignal(false);
   let draftTransfer: ReturnType<typeof createDraftTransfer> | undefined;
   let identityVersion = 0;
   let editVersion = 0;
-  let persistedEditVersion = 0;
   const lifecycle = props.draftLifecycle.observe({
     draftId: () => (session.serverConfirmed() ? savedDraftId() : undefined),
     threadId: savedDraftThreadId,
@@ -765,8 +761,7 @@ export function createReplyComposer(
     try {
       if (!draft) {
         await persistence.remove({ inboxId, completingThread });
-        if (generation === identityVersion)
-          persistedEditVersion = Math.max(persistedEditVersion, revision);
+        if (generation === identityVersion) persistence.saved(revision);
         return;
       }
       if (!currentThread) {
@@ -788,8 +783,7 @@ export function createReplyComposer(
         completingThread,
       });
       if (generation !== identityVersion || !saved) return;
-      if (saved.persistence !== 'queued')
-        persistedEditVersion = Math.max(persistedEditVersion, revision);
+      if (saved.persistence !== 'queued') persistence.saved(revision);
       return saved.draftId;
     } catch (error) {
       if (generation === identityVersion)
@@ -851,7 +845,10 @@ export function createReplyComposer(
     },
     setPending: setRestoring,
     restore: (draft, change, restoredPersistence, local, attachments) => {
-      persistence.restored(local);
+      persistence.restored(local, {
+        edit: editVersion,
+        persistence: restoredPersistence,
+      });
       setDraftGeneration(draft.draft_generation ?? 0);
       session.dispatch({
         type: 'seeded',
@@ -1609,12 +1606,10 @@ export function createReplyComposer(
 
   const detachFromObsoleteDraft = (
     reason: KeptAsNewDraftReason,
+    unsavedEdits: number,
     message: string
   ) => {
-    recordKeptAsNewDraft(reason, {
-      draftId: session.draftId(),
-      unacknowledgedEdits: editVersion - persistedEditVersion,
-    });
+    recordKeptAsNewDraft(reason, { draftId: session.draftId(), unsavedEdits });
     identityVersion += 1;
     autosave.cancel();
     session.dispatch({ type: 'reset' });
@@ -1623,7 +1618,6 @@ export function createReplyComposer(
     attachmentLinks.detach();
     schedule.detach();
     setTerminalState(undefined);
-    persistedEditVersion = 0;
     props.notices.feedback.alert(message);
     if (omittedAttachments) {
       props.notices.feedback.alert(
@@ -1670,9 +1664,11 @@ export function createReplyComposer(
           return;
 
         if (state.type === 'scheduled') {
-          if (editVersion > persistedEditVersion) {
+          const unsavedEdits = persistence.unsavedEdits(editVersion);
+          if (unsavedEdits > 0) {
             detachFromObsoleteDraft(
               'scheduled-elsewhere',
+              unsavedEdits,
               'This email was scheduled in another tab. Your newer text was kept as a new draft.'
             );
             return;
@@ -1710,9 +1706,14 @@ export function createReplyComposer(
         // Only a confirmed schedule makes a delivery "the scheduled email"; any
         // other draft was sent from another tab or device.
         const wasScheduled = schedule.state().type === 'scheduled';
-        if (editVersion > persistedEditVersion) {
+        const unsavedEdits = persistence.unsavedEdits(
+          editVersion,
+          state.type === 'sent' ? state.sentCopy : undefined
+        );
+        if (unsavedEdits > 0) {
           detachFromObsoleteDraft(
             state.type === 'sent' ? 'sent-elsewhere' : 'changed-elsewhere',
+            unsavedEdits,
             state.type !== 'sent'
               ? 'The draft changed elsewhere. Your newer text was kept as a new draft.'
               : wasScheduled

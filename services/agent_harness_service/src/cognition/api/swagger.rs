@@ -100,6 +100,8 @@ use utoipa::OpenApi;
             image_generation_api::generate_image_handler,
             web_search::inbound::axum_router::search_handler,
             web_search::inbound::axum_router::fetch_handler,
+            skills::inbound::axum_router::list_skills_handler,
+            skills::inbound::axum_router::read_skill_handler,
             database_query::generate_database_query,
             memory_api::get_memory_handler,
             import_api::get_state_handler,
@@ -222,6 +224,11 @@ use utoipa::OpenApi;
                 web_search::domain::models::WebFetch,
                 web_search::domain::models::WebFetchResponse,
                 web_search::inbound::axum_router::WebErrorBody,
+                skills::inbound::axum_router::SkillsMatchType,
+                skills::inbound::axum_router::SkillListing,
+                skills::inbound::axum_router::SkillsResponse,
+                skills::inbound::axum_router::SkillContentResponse,
+                skills::inbound::axum_router::SkillErrorBody,
                 agent::structured_output::DynamicSchema,
 
                 // Memory
