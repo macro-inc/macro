@@ -49,25 +49,33 @@ fn encoded_handles_survive_suspension_and_keep_committed_fields() -> Result<()> 
     host.finish_update(&tx)?;
     let commit = tx.commit()?;
     assert_eq!(host.publish(commit.next)?, 1);
+    host.release_version(1)?;
     let mut tx = editor.transaction();
     host.begin_update(&mut tx)?;
-    let new_text = host.call(&mut tx, writable, json!([]), Some(json!({"$h":0})))?;
+    assert!(host.read_field(&mut tx, 0, "__text").is_err());
+    let get_by_key = super::super::index()
+        .binary_search(&"lexical.$getNodeByKey")
+        .expect("get node") as u32;
+    let recaptured = host.call(&mut tx, get_by_key, json!(["1"]), None)?;
+    assert_eq!(recaptured["ver"], 1);
+    let recaptured_id = recaptured["$h"].as_u64().expect("handle") as u32;
+    let new_text = host.call(&mut tx, writable, json!([]), Some(recaptured.clone()))?;
     assert_eq!(new_text["key"], "1");
     assert_eq!(new_text["ver"], 2);
     assert_ne!(new_text["$h"], 0);
     assert_eq!(
-        host.call(&mut tx, writable, json!([]), Some(json!({"$h":0})))?,
+        host.call(&mut tx, writable, json!([]), Some(recaptured.clone()))?,
         json!({"$h":new_text["$h"]})
     );
     host.call(&mut tx, set, json!(["b"]), Some(new_text))?;
     assert_eq!(
-        host.call(&mut tx, content, json!([]), Some(json!({"$h":0})))?,
+        host.call(&mut tx, content, json!([]), Some(recaptured))?,
         "b"
     );
-    assert_eq!(host.read_field(&mut tx, 0, "__text")?, "a");
+    assert_eq!(host.read_field(&mut tx, recaptured_id, "__text")?, "a");
     assert!(host.release_version(2).is_err());
     host.release_version(1)?;
-    assert!(host.read_field(&mut tx, 0, "__text").is_err());
+    assert!(host.read_field(&mut tx, recaptured_id, "__text").is_err());
     Ok(())
 }
 
