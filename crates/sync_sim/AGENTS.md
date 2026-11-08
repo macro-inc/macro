@@ -61,6 +61,13 @@ clients and real `sync_server_core::Room` callbacks over `sync_server_sim` ports
   projection, undo and document; never keep a shadow core or mutable document copy.
 - Capture live synced editor JSON and independently reconstructed persisted JSON.
   Compare both per step and in finals; include editor finals in replay/hash evidence.
+  Exempt projection consistency only after an actual injected-write receipt for the
+  exact client session incarnation. Keep all healthy projection, convergence and
+  loss checks; reopening never inherits an exemption.
+  Record visible successful projection resync errors with actual imported spans;
+  unexplained errors still fail per-step and final checks. Match an earlier fault
+  receipt on the same document, or its exact author incarnation still observing
+  that bad write. Never accept an armed configuration or arbitrary error text.
   Remaining M2 command/story and comment-gate producers are listed in COVERAGE.md.
 - Headless inputs always use KeepModel. Install resolved selection through the
   registered model-selection-only command, then dispatch the actual command in

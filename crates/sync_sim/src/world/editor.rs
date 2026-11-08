@@ -125,6 +125,11 @@ impl Sim {
             mono: doc_sync_core::Millis(self.clock.now),
             wall: doc_sync_core::UnixMillis(self.clock.wall(client.skew)),
         };
+        if matches!(op, Some(EditorOp::Type { .. }))
+            && self.config.faulty_editor_clients.contains(name)
+        {
+            session.inject_wrong_type_on_next_local_projection();
+        }
         let handled = Runtime::editor_handle(session, SessionInput::Editor(input), now);
         let peer = session.peer_id();
         let start = before.get(&peer).copied().unwrap_or(0);

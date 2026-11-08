@@ -370,16 +370,24 @@ pub fn no_transient_quarantine(outcome: &Outcome) -> Result<(), Failure> {
 }
 /// Outdated imports and reconnect storms must not become terminal corruption failures.
 pub fn no_spurious_terminal(outcome: &Outcome) -> Result<(), Failure> {
-    let corruption = outcome.script.iter().any(|step| {
-        matches!(
-            step,
-            Step::Storage {
-                fault: StorageFault::CorruptRow | StorageFault::CorruptSnapshot,
-                ..
-            } | Step::Net(NetStep::CorruptNext { .. })
-                | Step::Server(ServerStep::CorruptSnapshot)
-        )
+    // S8 §8.1 permits terminal corruption after an actually faulty build. An
+    // armed configuration alone is not evidence: require its emitted Loro write.
+    let faulty_projection = outcome.events.iter().any(|event| {
+        matches!(&event.fact,
+        Fact::ProjectionFaultWrite { start, end, previous, written, .. }
+            if end > start && previous != written)
     });
+    let corruption = faulty_projection
+        || outcome.script.iter().any(|step| {
+            matches!(
+                step,
+                Step::Storage {
+                    fault: StorageFault::CorruptRow | StorageFault::CorruptSnapshot,
+                    ..
+                } | Step::Net(NetStep::CorruptNext { .. })
+                    | Step::Server(ServerStep::CorruptSnapshot)
+            )
+        });
     let terminal = outcome.finals.clients.values()
         .any(|client| client.terminal.as_deref() == Some("Corrupt"))
         || outcome.events.iter().any(|event| matches!(&event.fact,

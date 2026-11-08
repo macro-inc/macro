@@ -31,6 +31,14 @@ impl Outcome {
         ] {
             writeln!(out, "    config.{field} = {value};").expect("String write");
         }
+        for client in &self.config.faulty_editor_clients {
+            writeln!(
+                out,
+                "    config.faulty_editor_clients.insert(ClientName({:?}.into()));",
+                client.0
+            )
+            .expect("String write");
+        }
         for doc in &self.config.surfaces {
             writeln!(out, "    config.surfaces.insert(DocIx({}));", doc.0).expect("String write");
         }

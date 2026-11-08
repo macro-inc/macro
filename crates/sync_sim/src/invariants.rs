@@ -39,6 +39,7 @@ pub const ALL_INVARIANTS: &[(&str, Invariant)] = &[
     ("all_docs_equal", all_docs_equal),
     ("editor_states_equal", editor_states_equal),
     ("projection_consistent", projection_consistent),
+    ("projection_recovery_visible", projection_recovery_visible),
     ("no_acked_edit_lost", no_acked_edit_lost),
     ("no_persisted_edit_lost", no_persisted_edit_lost),
     ("no_edit_lost_without_crash", no_edit_lost_without_crash),
@@ -90,9 +91,69 @@ pub fn editor_states_equal(outcome: &Outcome) -> Result<(), Failure> {
     }
     Ok(())
 }
+// A recovery diagnostic remains an error unless its actual imported interval
+// contains an earlier injected write on the same route, or the exact author
+// incarnation still observes its own bad write. Healthy checks never skip.
+pub(crate) fn projection_recovery_explained(
+    events: &[Event],
+    client: &ClientName,
+    session: doc_sync_core::SessionId,
+    doc: DocIx,
+    spans: &[IdSpan],
+    vv: &Vv,
+) -> bool {
+    events.iter().any(|event| matches!(&event.fact,
+        Fact::ProjectionFaultWrite { client: producer, session: epoch, doc: route, peer, start, end, previous, written, .. }
+            if *route == doc && end > start && previous != written
+                && (ranges_cover(spans, &IdSpan { peer: *peer, start: *start, end: *end })
+                    || (producer == client && *epoch == session && vv.get(peer).copied().unwrap_or(0) >= *end))))
+}
+/// Recovered visible projection errors require exact observed injected operation evidence.
+pub fn projection_recovery_visible(outcome: &Outcome) -> Result<(), Failure> {
+    for (index, event) in outcome.events.iter().enumerate() {
+        if let Fact::ProjectionRecovered {
+            client,
+            session,
+            doc,
+            spans,
+            vv,
+            ..
+        } = &event.fact
+            && !projection_recovery_explained(
+                &outcome.events[..index],
+                client,
+                *session,
+                *doc,
+                spans,
+                vv,
+            )
+        {
+            return Err(Failure::new(
+                "projection_recovery_visible",
+                "projection recovery without an imported injected span",
+            ));
+        }
+    }
+    Ok(())
+}
+// Fault ruling: only an observed injection into this exact incarnation exempts
+// subsequent projection checks. This never filters convergence/loss or old failures.
+pub(crate) fn projection_faulted(
+    events: &[Event],
+    client: &ClientName,
+    session: doc_sync_core::SessionId,
+    doc: DocIx,
+) -> bool {
+    events.iter().any(|event| matches!(&event.fact,
+        Fact::ProjectionFaultWrite { client: name, session: epoch, doc: route, start, end, previous, written, .. }
+            if name == client && *epoch == session && *route == doc && end > start && previous != written))
+}
 /// Every captured live model agrees with reconstruction from its actual Loro document.
 pub fn projection_consistent(outcome: &Outcome) -> Result<(), Failure> {
     for (name, client) in &outcome.finals.clients {
+        if projection_faulted(&outcome.events, name, client.session, client.doc) {
+            continue;
+        }
         if client.alive
             && client.terminal.is_none()
             && matches!(

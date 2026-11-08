@@ -11,6 +11,10 @@ mod editor;
 pub use editor::*;
 mod session;
 pub use session::*;
+#[cfg(feature = "test-faults")]
+mod test_faults;
+#[cfg(feature = "test-faults")]
+pub use test_faults::ProjectionFaultWrite;
 mod comments;
 mod surfaces;
 pub use comments::*;
