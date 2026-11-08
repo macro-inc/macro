@@ -129,9 +129,9 @@ pub fn parse_pasted_theme(text: &str) -> Result<Option<Map<String, Value>>, Erro
             return Ok(None);
         };
         if colors.values().any(|value| {
-            !value
+            value
                 .as_str()
-                .is_some_and(|value| !lexical_model::js_trim(value).is_empty())
+                .is_none_or(|value| lexical_model::js_trim(value).is_empty())
         }) {
             return Ok(None);
         }
@@ -155,9 +155,9 @@ pub fn parse_pasted_theme(text: &str) -> Result<Option<Map<String, Value>>, Erro
     };
     for prefix in ['a', 'b', 'c'] {
         for index in 0..5 {
-            if !tokens
+            if tokens
                 .get(&format!("{prefix}{index}"))
-                .is_some_and(|value| color(value).is_some())
+                .is_none_or(|value| color(value).is_none())
             {
                 return Ok(None);
             }

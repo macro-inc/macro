@@ -128,6 +128,7 @@ export function transfer(
     kind: 'file',
     type: file.type,
     getAsFile: () => file,
+    getAsFileSystemHandle: async () => null,
     getAsString() {},
     webkitGetAsEntry: () => null,
   }));

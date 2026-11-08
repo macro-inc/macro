@@ -148,7 +148,7 @@ fn enter(tx: &mut Transaction<'_>, event: Option<&KeyEvent>) -> Result<Handled, 
     let anchor = tx.top_level_element(range.anchor.key())?;
     let focus = tx.top_level_element(range.focus.key())?;
     if let Some(block) = anchor.filter(|key| {
-        tx.is::<HeadingNode>(*key) && tx.text_content(*key) != "" && Some(*key) == focus
+        tx.is::<HeadingNode>(*key) && !tx.text_content(*key).is_empty() && Some(*key) == focus
     }) {
         if at_start(tx, &range, true, false) {
             let p = tx.create(Paragraph::default())?;

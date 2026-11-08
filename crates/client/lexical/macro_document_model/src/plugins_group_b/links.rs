@@ -85,15 +85,15 @@ impl Plugin for Links {
                 let Some(text) = payload.get("text/plain") else {
                     return Ok(Handled::No);
                 };
-                if !tx
+                if tx
                     .selection()
                     .and_then(Selection::as_range)
-                    .is_some_and(|range| !range.is_collapsed())
+                    .is_none_or(|range| range.is_collapsed())
                 {
                     return Ok(Handled::No);
                 }
-                if !find_next_auto_link_match(text, AutoLinkMode::Protocol)
-                    .is_some_and(|found| found.index == 0)
+                if find_next_auto_link_match(text, AutoLinkMode::Protocol)
+                    .is_none_or(|found| found.index != 0)
                 {
                     return Ok(Handled::No);
                 }
