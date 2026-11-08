@@ -15,7 +15,7 @@ const page = readFileSync(
 
 it('gives the current macrod setup steps', () => {
   for (const step of [
-    'crates/coding_agent_worker/install/install.sh',
+    'crates/agents/macrod/install/install.sh',
     '**Quickstart**',
     '**Claude Code in herdr**',
     '**Create and pair**',

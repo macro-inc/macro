@@ -66,7 +66,7 @@ read it before changing behaviour.
 
 - Owns: computer rows, hosts, outbox, timers, lifecycle, size catalog.
 - Not here: harness rows and pairing → `crates/agents/harnesses`; the subscription's
-  seat logic → `crates/accounts/teams`; macrod enrollment → `crates/coding_agent_worker`.
+  seat logic → `crates/accounts/teams`; macrod enrollment → `crates/agents/macrod`.
 - Sizes are this crate's own; do not reuse `agent_harness`'s `SandboxSize`.
 
 ## Boundaries

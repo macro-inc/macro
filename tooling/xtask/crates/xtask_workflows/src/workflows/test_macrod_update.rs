@@ -2,7 +2,7 @@
 //! Linux, macOS, and Windows.
 //!
 //! Each job builds macrod twice from the checkout, as two fake release tags,
-//! and runs `crates/coding_agent_worker/e2e/` against a local release mirror:
+//! and runs `crates/agents/macrod/e2e/` against a local release mirror:
 //! the hot handoff and its negative cases plus the shell installer on Linux
 //! and macOS, and the launcher layout plus `install.ps1` on Windows. Nothing
 //! is published. Runs on pull requests that touch macrod, and on demand.
@@ -15,13 +15,13 @@ use crate::workflows::{runners, steps, vars};
 #[cfg(test)]
 mod test;
 
-const E2E: &str = "crates/coding_agent_worker/e2e";
+const E2E: &str = "crates/agents/macrod/e2e";
 const V1: &str = "v2000.1.1.1";
 const V2: &str = "v2000.1.1.2";
 
 /// Files whose change makes `PR CI` call this workflow.
 pub const PATHS: &[RepoGlob<'static>] = &[
-    xtask_paths::repo_glob!("crates/coding_agent_worker/**"),
+    xtask_paths::repo_glob!("crates/agents/macrod/**"),
     xtask_paths::repo_glob!(".github/workflows/test_macrod_update.yml"),
 ];
 

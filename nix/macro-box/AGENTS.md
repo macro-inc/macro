@@ -386,7 +386,7 @@ existing credentials: no new pairing and no Claude login.
   agent-stopped's failure count, against local git repositories.
 - `nix build .#checks.x86_64-linux.macro-box-claude-agent-acp` runs ACP
   `initialize` against the adapter. Evaluation fails when its version differs
-  from macrod's pin in `crates/coding_agent_worker/src/tui/agent_catalog/claude_code.rs`;
+  from macrod's pin in `crates/agents/macrod/src/tui/agent_catalog/claude_code.rs`;
   run `claude-agent-acp/lock.sh` after changing the pin.
 - `nix build .#macro-box-claude-code`: keeps nixpkgs' binary patching, wrapper
   and version check. `_claude-code.nix` pins the minimum version required by

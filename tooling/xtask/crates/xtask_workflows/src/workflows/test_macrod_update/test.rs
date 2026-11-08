@@ -18,6 +18,6 @@ fn runs_the_end_to_end_tests_on_every_platform() {
     assert!(
         PATHS
             .iter()
-            .any(|path| path.as_str() == "crates/coding_agent_worker/**")
+            .any(|path| path.as_str() == "crates/agents/macrod/**")
     );
 }

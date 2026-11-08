@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Re-resolve package-lock.json for the ACP adapter version macrod pins in
-# crates/coding_agent_worker/src/tui/agent_catalog/claude_code.rs.
+# crates/agents/macrod/src/tui/agent_catalog/claude_code.rs.
 set -euo pipefail
 
 here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
