@@ -2292,6 +2292,7 @@ dependencies = [
  "non_empty",
  "notification",
  "onboarding",
+ "pipedream_mcp",
  "rand 0.9.4",
  "rate_limit",
  "redis",

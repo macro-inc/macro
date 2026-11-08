@@ -579,6 +579,7 @@ fn spawn_human_signup_content(ctx: &ApiContext, user_id: &str, email: &str) {
         let document_storage_service_client = ctx.document_storage_service_client.clone();
         let channel_service = ctx.channel_service.clone();
         let channel_messages = ctx.channel_messages.clone();
+        let support_follow_ups = ctx.support_follow_ups.clone();
         let entity_access_service = ctx.entity_access_service.clone();
         let favorites_service = ctx.favorites_service.clone();
         let user_id = user_id.clone();
@@ -639,14 +640,23 @@ fn spawn_human_signup_content(ctx: &ApiContext, user_id: &str, email: &str) {
 
             let welcome_gateway =
                 AuthorizedSupportChannelMessages::new(channel_messages, entity_access_service);
-            let _ = post_support_channel_welcome(&welcome_gateway, &channel.id, owner_id)
-                .await
-                .inspect(|_| {
-                    tracing::info!(channel_id=%channel.id, "posted Macro support welcome message");
-                })
-                .inspect_err(|e| {
-                    tracing::error!(error=?e, channel_id=%channel.id, "failed to post Macro support welcome message");
-                });
+            let welcomed =
+                post_support_channel_welcome(&welcome_gateway, &channel.id, owner_id.clone())
+                    .await
+                    .inspect(|_| {
+                        tracing::info!(channel_id=%channel.id, "posted Macro support welcome message");
+                    })
+                    .inspect_err(|e| {
+                        tracing::error!(error=?e, channel_id=%channel.id, "failed to post Macro support welcome message");
+                    });
+
+            // The follow-up only goes where the welcome did. `schedule` logs
+            // its own failure, which leaves this user without one.
+            if welcomed.is_ok()
+                && let Some(follow_ups) = support_follow_ups
+            {
+                let _ = follow_ups.schedule(&channel.id, &owner_id).await;
+            }
         }
         .in_current_span()
     });

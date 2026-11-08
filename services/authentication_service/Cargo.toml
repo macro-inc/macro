@@ -155,6 +155,7 @@ native_app_service = { path = "../../crates/native_app_service" }
 non_empty = { path = "../../crates/non_empty" }
 notification = { path = "../../crates/notification" }
 onboarding = { path = "../../crates/onboarding" }
+pipedream_mcp = { path = "../../crates/pipedream_mcp" }
 rand = { workspace = true }
 rate_limit = { path = "../../crates/rate_limit" }
 redis = { workspace = true }

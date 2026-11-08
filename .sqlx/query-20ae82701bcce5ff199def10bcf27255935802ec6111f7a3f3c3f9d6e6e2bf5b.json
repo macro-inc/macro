@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            UPDATE support_follow_ups\n            SET claimed_until = NOW() + INTERVAL '1 minute'\n            WHERE channel_id = $1\n              AND (claimed_until IS NULL OR claimed_until < NOW())\n            RETURNING message_id\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "message_id",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "20ae82701bcce5ff199def10bcf27255935802ec6111f7a3f3c3f9d6e6e2bf5b"
+}

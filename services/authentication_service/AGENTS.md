@@ -82,6 +82,24 @@ key issuance, and account merge/link flows.
 API-token exchange preserves verified incoming agent attribution; query/body
 inputs cannot select an agent, and ordinary user credentials remain unattributed.
 
+## Support channel follow-up
+
+- After the welcome posts, `src/service/user/support_channel_follow_up.rs`
+  reads the PostHog flag `support-channel-follow-up` (`control` or `test`),
+  records `$feature_flag_called` for either group, since server-side flag reads
+  record no exposure, and queues a `support_follow_ups` row for `test`. Without
+  `POSTHOG_API_KEY`, or with the flag off, nothing is queued.
+- Each replica's worker sends a queued follow-up 30 seconds after the user
+  finishes onboarding (`user_onboarding.completed_at`), or five minutes after
+  the welcome, from a support team member who must stay a channel member.
+  The question depends on what the user set up: inbox, a team they created,
+  or connected tools. Once anyone has posted in the channel it is skipped, and
+  after an hour it is dropped.
+- A claim leases the row for a minute, and the post reuses the row's message id
+  through `post_from_event`, so a retried or interrupted send never posts twice.
+- PostHog events: `support_follow_up_sent` (`segment`, `trigger`,
+  `seconds_after_welcome`) and `support_follow_up_skipped` (`reason`).
+
 ## Agent accounts
 
 - An agent can do everything a person can, including inviting other agents. Do
