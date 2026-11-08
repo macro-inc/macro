@@ -214,7 +214,7 @@ export function CallMediaControls(props: {
                 </span>
               }
             >
-              <ShareAudioLabel sharing={call.isScreenSharing()} />
+              <ShareAudioLabel />
             </Dropdown.CheckboxItem>
           </Dropdown.Group>
         }
@@ -222,7 +222,7 @@ export function CallMediaControls(props: {
           <MobileDrawer.Section>
             <ToggleSwitch
               size="md"
-              label={<ShareAudioLabel sharing={call.isScreenSharing()} />}
+              label={<ShareAudioLabel />}
               aria-label="Share audio"
               labelClass="order-first flex-1"
               class="min-h-11 w-full px-3 py-2.5 text-sm"
@@ -477,18 +477,11 @@ function BackgroundTile(props: {
   );
 }
 
-function ShareAudioLabel(props: { sharing: boolean }) {
+function ShareAudioLabel() {
   return (
     <span class="flex min-w-0 flex-1 items-center gap-2">
       <SpeakerIcon class="size-4 shrink-0" />
-      <span class="flex-1 text-left">
-        <span class="block">Share audio</span>
-        <span class="block text-xs text-ink-muted">
-          {props.sharing
-            ? 'Stop sharing to change this'
-            : 'Sound from the tab or screen you share'}
-        </span>
-      </span>
+      <span class="flex-1 text-left">Share audio</span>
     </span>
   );
 }
