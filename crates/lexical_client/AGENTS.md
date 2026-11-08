@@ -33,7 +33,7 @@ read or render document content.
 
 ## Boundaries
 
-- Depends on: `agent_fold`, `messages`, `trigger_context`, `macro_config`.
+- Depends on: `macro_document_model`, `macro_document_composers`, the sync client, `agent_fold`, `messages`, `trigger_context`, and `macro_config`.
 - Used by: `documents`, `collab_surface`, `email`, `ai_tools`, `agent_harness`,
   `agent_trigger`, `channel_bots`, `image_generation`,
   `lexical_mention_extractor`, `memory`, `skills`, `task_dedup`.

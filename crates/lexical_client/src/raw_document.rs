@@ -20,8 +20,7 @@ impl RawDocumentSource for SyncServiceClient {
 #[derive(macro_config::MacroConfig)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 pub(crate) struct RawDocumentConfig {
-    pub(crate) sync_service_auth_key: remote_env_var::LocalOrRemoteSecret<String>,
-    pub(crate) environment: macro_env::Environment,
+    pub(crate) sync_service_auth_key: String,
 }
 
 /// Local document export was selected without its live document source.

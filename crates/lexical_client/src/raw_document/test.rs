@@ -1,25 +1,42 @@
 use super::*;
-use remote_env_var::SecretManager;
+use axum::{Json, Router, http::HeaderMap, routing::get};
 use std::sync::Arc;
 
-struct FakeSecrets;
-impl SecretManager for FakeSecrets {
-    type Err = std::io::Error;
-    async fn get_secret_value<T: AsRef<str> + Send>(&self, name: T) -> Result<Arc<str>, Self::Err> {
-        assert_eq!(name.as_ref(), "sync-key-reference");
-        Ok(Arc::from("resolved-test-key"))
-    }
-}
 #[tokio::test]
-async fn remote_startup_resolves_the_sync_secret_instead_of_sending_its_name() {
+async fn live_source_preserves_the_hosts_resolved_credential() {
     let config: RawDocumentConfig = serde_json::from_value(serde_json::json!({
-        "ENVIRONMENT":"dev", "SYNC_SERVICE_AUTH_KEY":"sync-key-reference"
+        "SYNC_SERVICE_AUTH_KEY":"resolved-test-credential",
     }))
     .unwrap();
-    let environment = config.environment;
-    let resolved = config
-        .resolve_remote_secrets(environment, &FakeSecrets)
-        .await
-        .unwrap();
-    assert_eq!(resolved.sync_service_auth_key.as_ref(), "resolved-test-key");
+    let app = Router::new().route("/document/document-test/raw", get(|headers: HeaderMap| async move {
+        assert_eq!(headers.get("x-internal-auth-key").unwrap(), "resolved-test-credential");
+        Json(serde_json::json!({"root":{"type":"root","version":1,"children":[{"type":"paragraph","version":1,"children":[{"type":"text","version":1,"text":"Hello"}]}]}}))
+    }));
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let address = listener.local_addr().unwrap();
+    let (shutdown, stop) = tokio::sync::oneshot::channel();
+    let server = tokio::spawn(async move {
+        axum::serve(listener, app)
+            .with_graceful_shutdown(async {
+                let _ = stop.await;
+            })
+            .await
+            .unwrap();
+    });
+    let source = SyncServiceClient::new(config.sync_service_auth_key, format!("http://{address}"));
+    let client = crate::LexicalClient::new("test-key".into(), "http://127.0.0.1:1".into())
+        .with_route_modes("markdown=in_process".parse().unwrap())
+        .with_document_source(Arc::new(source));
+    assert_eq!(
+        client
+            .get_markdown(
+                "document-test",
+                crate::parse_markdown::MarkdownTarget::Internal
+            )
+            .await
+            .unwrap(),
+        "Hello"
+    );
+    shutdown.send(()).unwrap();
+    server.await.unwrap();
 }
