@@ -16,6 +16,27 @@ pub(super) fn source(step: &Step) -> String {
             spec.access,
             spec.kind
         ),
+        Step::Edit {
+            client: name,
+            op: AbstractOp::Editor(op),
+        } => {
+            let operation = match op {
+                EditorOp::Type { at, text } => format!(
+                    "EditorOp::Type {{ at: Pos {{ block: {}, offset: {} }}, text: {:?}.into() }}",
+                    at.block, at.offset, text
+                ),
+                EditorOp::Select { from, to } => format!(
+                    "EditorOp::Select {{ from: Pos {{ block: {}, offset: {} }}, to: Pos {{ block: {}, offset: {} }} }}",
+                    from.block, from.offset, to.block, to.offset
+                ),
+                EditorOp::Undo => "EditorOp::Undo".into(),
+                EditorOp::Redo => "EditorOp::Redo".into(),
+            };
+            format!(
+                "Step::Edit {{ client: {}, op: AbstractOp::Editor({operation}) }}",
+                client(name)
+            )
+        }
         Step::Edit { client: name, op } => format!(
             "Step::Edit {{ client: {}, op: AbstractOp::{op:?} }}",
             client(name)

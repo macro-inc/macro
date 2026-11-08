@@ -171,8 +171,11 @@ impl SyncCore {
         self.presence_due = Some(now.mono);
         self.flush_presence(now, doc, out);
         self.load_orphans(now, out);
-        if matches!(self.reset, Some(ResetState::Awaiting { .. })) {
-            self.request_snapshot(SnapshotPurpose::Reset, now, out);
+        if matches!(
+            self.reset,
+            Some(ResetState::Awaiting { .. } | ResetState::AwaitingHistory { .. })
+        ) {
+            self.request_reset_snapshot(now, out);
         }
     }
 
@@ -566,10 +569,83 @@ impl SyncCore {
         {
             return;
         }
-        self.reset = Some(ResetState::Awaiting { rebase });
+        self.reset = Some(if self.has_private_rows() {
+            ResetState::AwaitingHistory { rebase }
+        } else {
+            ResetState::Awaiting { rebase }
+        });
         if self.connection.synced() {
-            self.request_snapshot(SnapshotPurpose::Reset, now, out);
+            self.request_reset_snapshot(now, out);
         }
+    }
+
+    fn has_private_rows(&self) -> bool {
+        self.wal
+            .entries
+            .iter()
+            .any(|entry| !entry.foreign && !entry.superseded && !self.is_delivered(entry.seq))
+    }
+
+    fn request_reset_snapshot(&mut self, now: Now, out: &mut SyncOutput) {
+        if matches!(self.reset, Some(ResetState::Awaiting { .. })) {
+            self.request_snapshot(SnapshotPurpose::Reset, now, out);
+            return;
+        }
+        if self
+            .since
+            .iter()
+            .any(|request| !request.expired && request.recovery_deadline.is_some())
+        {
+            return;
+        }
+        // A shallow server snapshot can collect the dependencies of private rows.
+        // Ask for retained history through the existing protocol, never grant write
+        // access to drain revoked rows and never discard the live private document.
+        let vv = loro::VersionVector::default().encode();
+        self.since.push_back(SinceRequest {
+            vv: vv.clone(),
+            expired: false,
+            recovery_deadline: Some(now.mono.after(self.config.timeouts.snapshot)),
+        });
+        self.send(
+            sync_protocol::FromPeer::PeerRequestSince {
+                vv: SliceWrapper::from_cooked(&vv),
+            },
+            out,
+        );
+    }
+
+    fn recovery_snapshot(
+        &self,
+        bytes: &[u8],
+        peer: u64,
+        doc: &impl SyncDoc,
+    ) -> Option<(Vec<u8>, loro::Frontiers)> {
+        let recovered = loro::LoroDoc::new();
+        recovered.set_peer_id(peer).ok()?;
+        let mut required = doc.oplog_vv();
+        if !bytes.is_empty() {
+            let meta = loro::LoroDoc::decode_import_blob_meta(bytes, true).ok()?;
+            required.merge(&meta.partial_end_vv);
+            recovered.import(bytes).ok()?;
+        }
+        let confirmed_base = recovered.oplog_frontiers();
+        for entry in &self.wal.entries {
+            if entry.superseded || matches!(entry.park, Some(ParkReason::Poison)) {
+                continue;
+            }
+            // Validate every retained row before it can contribute recovery history.
+            let meta = loro::LoroDoc::decode_import_blob_meta(&entry.bytes, true).ok()?;
+            required.merge(&meta.partial_end_vv);
+            recovered.import(&entry.bytes).ok()?;
+        }
+        // Coverage is required even for acknowledged/private history below a
+        // snapshot root. A partial server export is never permission to lose it.
+        if !recovered.oplog_vv().includes_vv(&required) {
+            return None;
+        }
+        let snapshot = recovered.export(loro::ExportMode::snapshot()).ok()?;
+        Some((snapshot, confirmed_base))
     }
 
     pub(super) fn reset_snapshot(
@@ -597,13 +673,24 @@ impl SyncCore {
         let Some(ResetState::WaitingPeer { snapshot, .. }) = self.reset.take() else {
             return;
         };
+        let (snapshot, confirmed_base) = if self.has_private_rows() {
+            let Some((recovered, confirmed_base)) = self.recovery_snapshot(&snapshot, peer, doc)
+            else {
+                self.finish_reset(false, rebase, now, out);
+                return;
+            };
+            (recovered, Some(confirmed_base))
+        } else {
+            (snapshot, None)
+        };
         self.clear_presence(now, out);
         match doc.replace(&snapshot, peer) {
             Ok(()) => {
                 // The old document's dependency queue was replaced. WAL replay
                 // below can introduce pending history belonging to the new one.
                 self.pending_import = false;
-                self.confirmed_base = doc.oplog_vv().get_frontiers();
+                self.confirmed_base =
+                    confirmed_base.unwrap_or_else(|| doc.oplog_vv().get_frontiers());
                 self.registered_peers.retain(|p| *p != peer);
                 self.registered_peers.insert(0, peer);
                 self.presence_key = Some(self.local_presence_key(peer));

@@ -14578,6 +14578,11 @@
     ],
     "sync_sim": [
       "crates/client/doc_sync_core",
+      "crates/client/document_session",
+      "crates/client/lexical/lexical_html",
+      "crates/client/lexical/lexical_loro",
+      "crates/client/lexical/lexical_model",
+      "crates/client/lexical/lexical_rich_nodes",
       "crates/cowlike",
       "crates/document_id",
       "crates/macro_sync_service_jwt",

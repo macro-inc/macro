@@ -1,7 +1,9 @@
 //! Deterministic, dev-only simulation of the real synchronization cores.
 #![deny(missing_docs)]
 
+mod editor;
 mod facts;
+pub use editor::*;
 /// Shrinkable GenericSurface script generation and reproducible seeded coverage.
 pub mod generate;
 mod replay;

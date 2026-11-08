@@ -109,3 +109,10 @@ Adoption rejects a changed snapshot-derived cover or exact source selection atom
 must match the core's reserved sequences and retained payload order. Reload after
 failed adoption/orphan reads through the ordinary retry timer; never reuse stale
 adoption payload reservations or change other owners' retained bytes.
+When reset/rebase retains unacknowledged own rows, request complete retained server
+history with the existing empty-VV RequestSince. Build and validate server history
+plus checksum-valid WAL in a fresh document, requiring coverage of the old live VV
+and every imported row before replacement. Keep the live document and rows on any
+failure; never substitute a shallow server snapshot before private rows replay.
+ReadOnly parking takes precedence over NeedsRebase; Poison and Gap retain their
+diagnostics. Regrant resumes the same retained bytes through the ordinary push.

@@ -43,14 +43,23 @@ including raw server-port bytes. `first.rs.inc` and `second.rs.inc` contain the 
 | receiver lifecycle expiry;104 | lifecycle::receiver_crashed_before_source_has_no_stale_live_presence_obligation; removing receiver death still fails |
 | power loss;R-6 | lifecycle::power_loss_window_reports_exact_lost_writes |
 
-## Pending editor/session producers
+## Editor session foundation
 
-The approved scope uses GenericSurface/Loro directly. `document_session`,
-`lexical_model`, `lexical_loro`, and `macro_document_model` integration remains pending:
+`editor_basic` exercises real DocumentSession clients, concurrent astral/combining
+text, UTF-16 surrogate-boundary resolution, durable append/crash/adoption and a
+headless AI peer with real model selection. Every case runs all queries and exact
+replay. Negative mutations reject changed editor JSON and missing observations.
+Live synced JSON and independent persisted reconstruction are compared per step
+and at settlement; sharedPeerIds remains synced, only policy-local data is excluded.
+
+## Remaining M2 producers
+
+Real document_session/lexical_model/lexical_loro editor clients are integrated.
+Remaining application/editor producers:
 collaborative undo after a remote edit; reset-budget closure driven by a faulty editor
 projection; stripping abandoned draft comment marks; restoration of editor cursors
 through remote edits; real Markdown corpus paste; comment-only gate verdict parity;
-editor projection/JSON equality; undo/backspace generator floors. Existing core unit
+undo removal attribution and undo/backspace generator floors. Existing core unit
 reset-budget tests do not establish faulty-editor integration.
 
 Executor-only unit rows remain in their existing adapters/core suites: IDB abort retry

@@ -76,7 +76,7 @@ impl Access {
         }
     }
 }
-/// Literal open configuration for the GenericSurface client.
+/// Literal client identity and capability; the room seed selects its surface.
 #[derive(Clone, Debug)]
 pub struct OpenSpec {
     /// Reusable name within the script.
@@ -102,9 +102,11 @@ impl OpenSpec {
         }
     }
 }
-/// Shrinkable GenericSurface operations. Indices resolve modulo current content.
+/// Shrinkable generic and editor inputs. Indices resolve modulo current content.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize)]
 pub enum AbstractOp {
+    /// Input to a real document-session editor.
+    Editor(crate::EditorOp),
     /// Write a field in the shared form map.
     FormSet {
         /// Field index.
@@ -205,9 +207,11 @@ impl Default for Budgets {
         }
     }
 }
-/// Initial GenericSurface field history; cached snapshots are ancestors of the server state.
+/// Initial form history or projected editor state; caches are server ancestors.
 #[derive(Clone, Debug, Default)]
 pub enum SeedDocument {
+    /// A rich-text document initialized through the real editor projection.
+    Editor(serde_json::Value),
     /// Empty fields and the configured ordered field list.
     #[default]
     Empty,
@@ -268,6 +272,16 @@ impl SimConfig {
             server_storage_latency: Millis(2),
             per_step: true,
         }
+    }
+    /// A shared rich-text document over real document sessions.
+    pub fn editor(seed: u64) -> Self {
+        let mut config = Self::calm(seed);
+        config.seeds.insert(DocIx(0), SeedDocument::Editor(serde_json::json!({"root": {
+            "type": "root", "version": 1, "format": "", "indent": 0, "direction": null,
+            "children": [{"type": "paragraph", "version": 1, "format": "", "indent": 0, "direction": null,
+                "children": [{"type": "text", "version": 1, "text": "initial shared editor text", "format": 0, "detail": 0, "mode": "normal", "style": ""}]}]
+        }})));
+        config
     }
     /// Two documents over one shared physical router per tab profile.
     pub fn routed(seed: u64) -> Self {

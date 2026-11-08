@@ -38,6 +38,7 @@ node types, immutable snapshots, transactional tree editing, update processing, 
 - Use NodeType::create_default for context-dependent constructors; default_node and flag probes remain pure data for foreign projections; runtime foreign types without defaults reject create_resolved.
 - Pure Rust model; no network, database, runtime or browser dependencies.
 - Client crate: keep it excluded from workspace-hack through `crates/client/*`.
+- Use `replace_selection` when a package allocates a new selection object; point mutations preserve the active object identity.
 - TableSelection::set changes keys while preserving point offsets/kinds and dirties only changed keys, retaining any existing dirty mark.
 - Text replacement uses upstream node-based removal across every block type; caret deletion has different shadow-root semantics.
 - Use base parent splices for sibling insertion and replacement; element append retains virtual splice dispatch.
@@ -112,8 +113,6 @@ the intentional root dirty mark; cache-only writes do not add mutations.
 
 Generate command scripts with inline paragraph contents and block decorators at root; malformed nested paragraphs can legitimately reject insertion upstream. Check range-only command preconditions after decorator deletion enters NodeSelection, and validate selected node keys too.
 
-Generate inline paragraph contents and root-level block decorators; keep malformed nested-paragraph scripts as literal regressions instead of swallowing edit errors.
-
 Generated properties cover S4 P1–P13 for the core node subset. P5 follows S1 §8.6
 cache eligibility; P10 compares dirty records before cache writes per S1 §8.7.
 Exact history JSON identity (P11) uses headless mode: restoring view-attached
@@ -127,7 +126,7 @@ Collaborative callers opt into `opaque_unknown_types(true)`; strict import stays
 the default. Opaque records keep original type/version and own JSON, while framework
 links own children. Own export stays flat and overlays changed framework fields.
 
-Opaque future framework enum values round-trip unchanged; known node validation stays strict.
+Opaque future framework enum values round-trip unchanged. Apply source import rules to known fields; unknown element-format strings default through the source lookup.
 Copy only own fields when importing opaque elements; never recursively clone children.
 
 Expose immutable event names and the DirtyLeaves alias to boundary and post-commit adapters;

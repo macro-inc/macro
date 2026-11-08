@@ -42,6 +42,10 @@ impl RunStats {
                 }
                 Fact::LocalOp { op, .. } => {
                     let kind = match op {
+                        AbstractOp::Editor(EditorOp::Type { .. }) => "Type",
+                        AbstractOp::Editor(EditorOp::Select { .. }) => "EditorSelect",
+                        AbstractOp::Editor(EditorOp::Undo) => "Undo",
+                        AbstractOp::Editor(EditorOp::Redo) => "Redo",
                         AbstractOp::FormSet { .. } => "FormSet",
                         AbstractOp::FormMove { .. } => "FormMove",
                         AbstractOp::FormText { .. } => "FormText",

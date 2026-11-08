@@ -90,7 +90,7 @@ impl Sim {
                             name.clone(),
                             client.session,
                             client.connection_id(),
-                            client.doc.loro.peer_id(),
+                            client.core.peer_id(),
                             client.presence_key.clone(),
                         )
                     })
@@ -245,14 +245,16 @@ impl Sim {
             .clients
             .iter()
             .filter(|(_, client)| client.alive)
-            .map(|(name, client)| (name.clone(), client.session, client.selection))
+            .map(|(name, client)| {
+                (
+                    name.clone(),
+                    client.session,
+                    client.core.presence_selection(client.selection),
+                )
+            })
             .collect::<Vec<_>>();
         for (name, session, selection) in live {
-            self.input(
-                &name,
-                session,
-                SyncInput::SetPresence(selection.map(loro::LoroValue::from)),
-            )?;
+            self.input(&name, session, SyncInput::SetPresence(selection))?;
         }
         // A replaced peer needs its own explicit selection publication even if
         // the session and connection survive, or periodic refresh is disabled.
