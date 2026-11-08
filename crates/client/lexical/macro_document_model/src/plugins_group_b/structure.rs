@@ -30,7 +30,7 @@ pub(super) fn single_line(builder: EditorBuilder) -> EditorBuilder {
             Ok(())
         })
 }
-fn needs_caret(state: &impl Read, key: NodeKey) -> bool {
+pub(super) fn needs_caret(state: &impl Read, key: NodeKey) -> bool {
     state.is::<CodeNode>(key)
         || state.is::<TableNode>(key)
         || state.is_decorator(key) && !state.is_inline(key)
