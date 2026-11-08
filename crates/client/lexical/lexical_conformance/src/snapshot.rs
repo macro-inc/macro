@@ -2,6 +2,8 @@
 use crate::replay::{Replayer, Result, fail, string};
 use lexical_model::*;
 use serde_json::{Value, json};
+mod code;
+mod d6;
 pub(crate) fn keys(state: &EditorState) -> Vec<NodeKey> {
     (0..=state.max_key().index())
         .map(|index| {
@@ -42,7 +44,7 @@ pub(crate) fn selection(state: &EditorState) -> Result<Value> {
         }
     })
 }
-fn expected_key(replay: &Replayer, value: &Value) -> Result<String> {
+fn expected_key(replay: &mut Replayer, value: &Value) -> Result<String> {
     if value.is_number() {
         let handle = replay
             .handles
@@ -55,13 +57,26 @@ fn expected_key(replay: &Replayer, value: &Value) -> Result<String> {
     } else {
         string(value)?
     };
-    replay
-        .keys
-        .get(raw)
-        .map(ToString::to_string)
-        .ok_or_else(|| fail(format!("unknown snapshot key {raw}")))
+    if let Some(key) = replay.keys.get(raw) {
+        return Ok(key.to_string());
+    }
+    // Removed temporary nodes have no public handle or node-map entry. Their
+    // numeric identity remains observable in dirty sets. Resolve only an actual
+    // allocation in the fixture's shared namespace, preserving the bijection.
+    if let (Ok(index), Some(last)) = (raw.parse::<u32>(), replay.key_counter.last_allocated())
+        && index > 0
+        && index <= last.index()
+    {
+        let key = NodeKey::from_parts(KeyParts {
+            generation: last.generation(),
+            index,
+        });
+        replay.bind_key(raw, key)?;
+        return Ok(key.to_string());
+    }
+    Err(fail(format!("unknown snapshot key {raw}")))
 }
-fn canonical_selection(replay: &Replayer, value: &mut Value) -> Result<()> {
+fn canonical_selection(replay: &mut Replayer, value: &mut Value) -> Result<()> {
     if let Some(object) = value.as_object_mut() {
         for (key, child) in object {
             if ["key", "tableKey", "anchorCellKey", "focusCellKey"].contains(&key.as_str()) {
@@ -129,6 +144,15 @@ pub(crate) fn compare(
     {
         return Err(fail("dirty field set mismatch"));
     }
+    if replay.d6_collapse_code_highlight
+        && replay.code_prism_registered
+        && state
+            .view()
+            .children(NodeKey::ROOT)
+            .any(|key| state.view().has_language_field(key))
+    {
+        return d6::d6_collapse_code_highlight(replay, expected, state, commit);
+    }
     let actual_keys = keys(state);
     let expected_keys = expected["nodeMapKeys"]
         .as_array()
@@ -143,11 +167,19 @@ pub(crate) fn compare(
     for (expected, actual) in expected_keys.iter().zip(&actual_keys) {
         replay.bind_key(string(expected)?, *actual)?;
     }
-    let actual_json = serde_json::to_value(state.to_json()?)?;
+    let raw_json = serde_json::to_value(state.to_json()?)?;
+    let (expected_json, actual_json) = if replay.code_highlight {
+        (
+            code::project_json(&expected["json"])?,
+            code::project_json(&raw_json)?,
+        )
+    } else {
+        (expected["json"].clone(), raw_json.clone())
+    };
     replay
-        .compare(&expected["json"], &actual_json)
+        .compare(&expected_json, &actual_json)
         .map_err(|e| fail(format!("snapshot JSON: {e}")))?;
-    if to_js_json_string(&expected["json"]) != to_js_json_string(&actual_json) {
+    if to_js_json_string(&expected_json) != to_js_json_string(&actual_json) {
         return Err(fail(format!(
             "snapshot JSON property order mismatch: {} != {}",
             expected["json"], actual_json
@@ -155,13 +187,19 @@ pub(crate) fn compare(
     }
     let mut expected_selection = expected["selection"].clone();
     canonical_selection(replay, &mut expected_selection)?;
+    let mut actual_selection = selection(state)?;
+    if replay.code_highlight {
+        code::project_selection(&mut expected_selection, &expected["json"], state)?;
+        code::project_selection(&mut actual_selection, &raw_json, state)?;
+    }
     replay
-        .compare(&expected_selection, &selection(state)?)
+        .compare(&expected_selection, &actual_selection)
         .map_err(|e| fail(format!("snapshot selection: {e}")))?;
     replay
         .compare(&expected["text"], &json!(state.root_text_content()))
         .map_err(|e| fail(format!("snapshot text: {e}")))?;
     if let Some(commit) = commit {
+        bind_transient_keys(replay, expected, commit)?;
         replay.compare(
             &expected["tags"],
             &json!(
@@ -237,12 +275,88 @@ pub(crate) fn compare(
         actual_elements.sort();
         replay
             .compare(&json!(elements), &json!(actual_elements))
-            .map_err(|e| fail(format!("dirty elements: {e}")))?;
+            .map_err(|e| {
+                fail(format!(
+                    "dirty elements: {e}; expected {elements:?}, actual {actual_elements:?}"
+                ))
+            })?;
     }
     for extra in ["markdown", "history"] {
         if expected.get(extra).is_some() {
             return Err(fail(format!("unmapped snapshot observable: {extra}")));
         }
+    }
+    Ok(())
+}
+
+// Records created and normalized away in one update have no live node-map row
+// or returned handle. They still participate in the exact key bijection.
+fn bind_transient_keys(replay: &mut Replayer, expected: &Value, commit: &Commit) -> Result<()> {
+    let mut raw = std::collections::BTreeSet::new();
+    for value in expected["dirty"]["leaves"]
+        .as_array()
+        .ok_or_else(|| fail("dirty leaves"))?
+        .iter()
+        .chain(
+            expected["normalized"]
+                .as_array()
+                .ok_or_else(|| fail("normalized"))?,
+        )
+        .chain(
+            expected["dirty"]["elements"]
+                .as_array()
+                .ok_or_else(|| fail("dirty elements"))?
+                .iter()
+                .map(|entry| &entry[0]),
+        )
+    {
+        if value.is_number() {
+            expected_key(replay, value)?;
+            continue;
+        }
+        let key = if value.get("$key").is_some() {
+            string(&value["raw"])?
+        } else {
+            string(value)?
+        };
+        if !replay.keys.contains_key(key) {
+            if key
+                .parse::<u32>()
+                .ok()
+                .zip(replay.key_counter.last_allocated())
+                .is_none_or(|(index, last)| index == 0 || index > last.index())
+            {
+                return Err(fail(format!("unknown snapshot key {key}")));
+            }
+            raw.insert(key.to_owned());
+        }
+    }
+    let mut actual = std::collections::BTreeSet::new();
+    for key in commit
+        .changes
+        .dirty_leaves
+        .iter()
+        .chain(commit.changes.dirty_elements.keys())
+        .chain(&commit.normalized)
+    {
+        if !replay.keys.values().any(|known| known == key) {
+            actual.insert(*key);
+        }
+    }
+    if raw.len() != actual.len() {
+        return Err(fail("transient key count mismatch"));
+    }
+    let mut raw = raw
+        .into_iter()
+        .map(|raw| {
+            raw.parse::<u32>()
+                .map(|number| (number, raw))
+                .map_err(|_| fail("transient numeric key"))
+        })
+        .collect::<Result<Vec<_>>>()?;
+    raw.sort_by_key(|(number, _)| *number);
+    for ((_, raw), key) in raw.into_iter().zip(actual) {
+        replay.bind_key(&raw, key)?;
     }
     Ok(())
 }

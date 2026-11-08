@@ -157,7 +157,7 @@ fn remove_empty_overflow(tx: &mut Transaction<'_>, node: Id<OverflowNode>) -> Re
     Ok(())
 }
 
-pub(crate) fn configured_builder(nodes: &[String], attached: bool) -> EditorBuilder {
+pub(crate) fn configured_builder(nodes: &[String], attached: bool) -> Result<EditorBuilder, Error> {
     let mut builder = Editor::builder(if attached {
         EditorMode::ViewAttached
     } else {
@@ -192,10 +192,11 @@ pub(crate) fn configured_builder(nodes: &[String], attached: bool) -> EditorBuil
             "code-highlight" => builder.node::<lexical_rich_nodes::code::CodeHighlightNode>(),
             "mark" => builder.node::<lexical_rich_nodes::mark::MarkNode>(),
             "hashtag" => builder.node::<lexical_rich_nodes::hashtag::HashtagNode>(),
-            _ => builder,
+            "root" | "paragraph" | "text" | "tab" | "linebreak" | "artificial" => builder,
+            _ => macro_document_model::register_supported_node(builder, node)?,
         };
     }
-    builder
+    Ok(builder)
 }
 
 #[cfg(test)]

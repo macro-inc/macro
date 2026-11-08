@@ -27,7 +27,8 @@ fn upstream_moves_column_forward_with_widths_and_persistent_previous_state() -> 
             Some(JsNumber(200.0)),
             Some(JsNumber(300.0)),
             Some(JsNumber(400.0)),
-        ]);
+        ])
+        .into();
         Ok(table)
     })?;
     let previous = editor.state().clone();
@@ -50,7 +51,11 @@ fn upstream_moves_column_forward_with_widths_and_persistent_previous_state() -> 
         ]
     );
     assert_eq!(
-        view.get::<TableNode>(table).expect("table").col_widths,
+        view.get::<TableNode>(table)
+            .expect("table")
+            .col_widths
+            .as_ref()
+            .cloned(),
         Some(vec![
             Some(JsNumber(200.0)),
             Some(JsNumber(300.0)),
@@ -151,7 +156,7 @@ fn logical_insertions_inherit_headers_move_selection_and_grow_widths() -> Result
     let row = tx.first_child_or_err(table)?;
     let cell = cell_id(tx.view(), tx.first_child_or_err(row)?)?;
     tx.get_mut::<TableNode>(table)?.col_widths =
-        Some(vec![Some(JsNumber(100.0)), Some(JsNumber(200.0))]);
+        Some(vec![Some(JsNumber(100.0)), Some(JsNumber(200.0))]).into();
     let selected = Selection::Table(TableSelection::new(table.key(), cell.key(), cell.key()));
     tx.set_selection(Some(selected))?;
     let inserted = insert_table_row_at_selection(&mut tx, false)?.expect("row");
@@ -166,7 +171,11 @@ fn logical_insertions_inherit_headers_move_selection_and_grow_widths() -> Result
     let new = insert_table_column_at_selection(&mut tx, false)?.expect("column");
     assert_eq!(TableNode::column_count(tx.view(), table), 3);
     assert_eq!(
-        tx.get::<TableNode>(table).expect("table").col_widths,
+        tx.get::<TableNode>(table)
+            .expect("table")
+            .col_widths
+            .as_ref()
+            .cloned(),
         Some(vec![
             Some(JsNumber(100.0)),
             Some(JsNumber(100.0)),
@@ -267,7 +276,8 @@ fn logical_deletions_remove_only_selected_axes_and_all_row_selection_removes_tab
         Some(JsNumber(10.0)),
         Some(JsNumber(20.0)),
         Some(JsNumber(30.0)),
-    ]);
+    ])
+    .into();
     tx.set_selection(Some(Selection::Table(TableSelection::new(
         table.key(),
         middle.key(),
@@ -276,7 +286,11 @@ fn logical_deletions_remove_only_selected_axes_and_all_row_selection_removes_tab
     delete_table_column_at_selection(&mut tx)?;
     assert_eq!(TableNode::column_count(tx.view(), table), 2);
     assert_eq!(
-        tx.get::<TableNode>(table).expect("table").col_widths,
+        tx.get::<TableNode>(table)
+            .expect("table")
+            .col_widths
+            .as_ref()
+            .cloned(),
         Some(vec![Some(JsNumber(10.0)), Some(JsNumber(30.0))])
     );
     let cell = cell_id(tx.view(), tx.first_child_or_err(rows[1])?)?;
@@ -346,5 +360,27 @@ fn merge_and_unmerge_preserve_headers_and_interior_cell_content() -> Result<()> 
     );
     unmerge_cell_node(&mut tx, a)?;
     assert!(is_simple_table(tx.view(), table));
+    Ok(())
+}
+
+#[test]
+fn unmerge_uses_only_the_anchor_cell_when_focus_is_outside_the_table() -> Result<()> {
+    let mut editor = Editor::builder(EditorMode::Headless)
+        .node::<TableNode>()
+        .node::<TableRowNode>()
+        .node::<TableCellNode>()
+        .build()
+        .expect("editor");
+    let mut tx = editor.transaction();
+    let paragraph = tx.create(Paragraph::default())?;
+    let table = create_table_node_with_dimensions(&mut tx, 1, 1, IncludeHeaders::All(false))?;
+    tx.append(NodeKey::ROOT, &[paragraph.key(), table.key()])?;
+    let row = tx.first_child_or_err(table)?;
+    let cell = tx.first_child_or_err(row)?;
+    let point = Point::element(cell, ChildIndex(0));
+    let range = RangeSelection::new(point, Point::element(paragraph, ChildIndex(0)));
+    tx.set_selection(Some(Selection::Range(range.clone())))?;
+    unmerge_cell(&mut tx)?;
+    assert_eq!(tx.selection(), Some(&Selection::Range(range)));
     Ok(())
 }

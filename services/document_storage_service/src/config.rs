@@ -96,6 +96,8 @@ maybe_env_vars! {
 #[derive(macro_config::MacroConfig)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 pub struct Config {
+    /// Validated lexical execution modes, loaded once at startup.
+    pub lexical_route_modes: lexical_client::RouteModes,
     /// Required PostHog project key for backend feature flags.
     pub posthog_api_key: PosthogApiKey,
     /// PostHog host (optional)

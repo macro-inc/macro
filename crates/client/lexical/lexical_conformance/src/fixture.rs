@@ -11,7 +11,7 @@ pub struct Fixture {
     pub source: Source,
     /// Recorder classification.
     pub tier: String,
-    /// Partial traces are never accepted.
+    /// Whether the trace starts from the explicit initial state.
     pub partial: bool,
     /// Declared normalizations only.
     pub normalize: Vec<String>,
@@ -21,7 +21,7 @@ pub struct Fixture {
     pub outcome_differs: Vec<Value>,
     /// Top-level editor configuration.
     pub config: Value,
-    /// Initial state must be null in schema 2.
+    /// Null initial state or a complete explicit seed and key layout.
     pub initial: Value,
     /// Concrete operation tree.
     pub trace: Vec<Value>,

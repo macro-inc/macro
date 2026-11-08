@@ -78,13 +78,44 @@ fn invalid_align(v: &Option<String>) -> bool {
     !matches!(v.as_deref(), Some("middle" | "bottom"))
 }
 
+/// Stored column widths, retaining JavaScript undefined separately from null.
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+#[serde(untagged)]
+pub enum ColumnWidths {
+    /// No stored property; JSON.stringify omits it.
+    #[default]
+    #[serde(skip)]
+    Undefined,
+    /// Explicit stored null; exportJSON preserves it.
+    Null,
+    /// Stored widths, including empty arrays and null slots.
+    Values(Vec<Option<JsNumber>>),
+}
+impl ColumnWidths {
+    fn is_undefined(&self) -> bool {
+        matches!(self, Self::Undefined)
+    }
+    /// Width array for geometry; null and undefined both have no dimensions.
+    pub fn as_ref(&self) -> Option<&Vec<Option<JsNumber>>> {
+        match self {
+            Self::Values(widths) => Some(widths),
+            Self::Undefined | Self::Null => None,
+        }
+    }
+}
+impl From<Option<Vec<Option<JsNumber>>>> for ColumnWidths {
+    fn from(widths: Option<Vec<Option<JsNumber>>>) -> Self {
+        widths.map_or(Self::Undefined, Self::Values)
+    }
+}
+
 /// Upstream TableNode payload; tree links belong to the core model.
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct TableNode {
-    /// Optional column widths; null slots preserve out-of-range insertion behavior.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub col_widths: Option<Vec<Option<JsNumber>>>,
+    /// Column widths; missing, null and arrays retain their stored wire meaning.
+    #[serde(default, skip_serializing_if = "ColumnWidths::is_undefined")]
+    pub col_widths: ColumnWidths,
     /// Number of frozen columns; omitted at zero.
     #[serde(
         default,

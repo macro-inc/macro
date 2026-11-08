@@ -37,6 +37,19 @@ pub(crate) fn validate_config(config: &Value) -> Result<()> {
             .as_object()
             .ok_or_else(|| fail("invalid nodeClasses"))?;
         for (kind, reference) in classes {
+            let symbol = string(&reference["$fn"])?;
+            if symbol.starts_with("@macro-inc/lexical-core/") {
+                // Macro constructor graph aliases are catalogued by the source recorder.
+                if reference.as_object().is_none_or(|object| object.len() != 1)
+                    || crate::api::wire::class_reference(symbol) != Some(kind.as_str())
+                    || !config["nodes"]
+                        .as_array()
+                        .is_some_and(|nodes| nodes.contains(&Value::String(kind.clone())))
+                {
+                    return Err(fail("invalid Macro class reference"));
+                }
+                continue;
+            }
             let expected = match kind.as_str() {
                 "root" => "RootNode",
                 "paragraph" => "ParagraphNode",
@@ -121,49 +134,7 @@ pub(crate) fn validate_config(config: &Value) -> Result<()> {
     if !config["editable"].is_boolean() || !config["rootElement"].is_boolean() {
         return Err(fail("invalid editor host config"));
     }
-    if !config["replacements"].as_array().is_some_and(Vec::is_empty)
-        || !config["plugins"].as_array().is_some_and(Vec::is_empty)
-    {
-        return Err(fail("unimplemented configured replacement/plugin"));
-    }
-    for node in config["nodes"]
-        .as_array()
-        .ok_or_else(|| fail("missing configured nodes"))?
-    {
-        if ![
-            "root",
-            "text",
-            "linebreak",
-            "tab",
-            "paragraph",
-            "artificial",
-            "heading",
-            "list",
-            "listitem",
-            "quote",
-            "code",
-            "table",
-            "tablecell",
-            "tablerow",
-            "hashtag",
-            "code-highlight",
-            "autolink",
-            "link",
-            "overflow",
-            "test_block",
-            "test_segmented",
-            "test_exclude_from_copy_block",
-            "test_decorator",
-            "test_inline_block",
-            "test_shadow_root",
-            "test_text",
-            "mark",
-        ]
-        .contains(&string(node)?)
-        {
-            return Err(fail(format!("unimplemented configured class {node}")));
-        }
-    }
+    super::replay::protocol::validate_config(config)?;
     // Theme, namespace, editability and root attachment are host inputs. The
     // interpreter executes no DOM path; view APIs fail rather than using a fake.
     Ok(())

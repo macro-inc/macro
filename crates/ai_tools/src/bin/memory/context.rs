@@ -28,6 +28,10 @@ pub async fn build_tool_service_context(
         recorder,
         // No authentication service here: a linked GitHub account is not read.
         None,
+        lexical_client::LexicalClient::from_env(
+            macro_auth::InternalApiKey::new()?.to_string(),
+            macro_service_urls::LexicalServiceUrl::new()?.to_string(),
+        )?,
     )
     .await
 }

@@ -47,6 +47,7 @@ fn test_node_flags_text_and_overflow_transform_match_the_oracle_classes() -> Res
 #[test]
 fn duplicate_configured_constructor_is_registered_once_like_upstream() {
     let editor = configured_builder(&["overflow".to_owned(), "overflow".to_owned()], false)
+        .expect("supported constructor")
         .build()
         .expect("upstream constructor registry deduplicates the same class");
     assert_eq!(editor.state().node_count(), 1);

@@ -19,9 +19,6 @@ impl NodeType for CodeHighlightNode {
     const TYPE: &'static str = "code-highlight";
     type Kind = TextKind;
     impl_default_node!();
-    fn static_transform() -> Option<TransformFn<Self>> {
-        Some(code_highlight_orphan_transform)
-    }
 }
 impl TextNode for CodeHighlightNode {
     text_node_base!();

@@ -9,17 +9,14 @@ pub struct ExportCtx<'a> {
     pub theme: &'a EditorTheme,
     /// Optional selection to export.
     pub selection: Option<&'a Selection>,
-    pub(crate) text_override: Option<&'a str>,
 }
 impl ExportCtx<'_> {
     /// Selected text for the current text node, or its full stored content.
     pub fn text(&self, key: NodeKey) -> &str {
-        self.text_override.unwrap_or_else(|| {
-            self.state
-                .view()
-                .text(key)
-                .map_or("", |data| data.text.as_str())
-        })
+        self.state
+            .view()
+            .text(key)
+            .map_or("", |data| data.text.as_str())
     }
 }
 /// Run after appending the node; callbacks may replace or remove it among siblings.

@@ -1,6 +1,6 @@
 //! Markdown metadata stored on model-owned nodes.
 use crate::Result;
-use crate::util::is_js_whitespace;
+use crate::util::is_js_whitespace_unit;
 use lexical_model::*;
 use serde_json::Value;
 /// Original unordered list marker; reset when copying a list.
@@ -42,7 +42,7 @@ pub fn parse_markdown_hard_line_break(line: &str) -> Option<(String, String)> {
         && stripped
             .encode_utf16()
             .last()
-            .is_some_and(|c| !is_js_whitespace(c))
+            .is_some_and(|c| !is_js_whitespace_unit(c))
     {
         Some((stripped.into(), " ".repeat(count)))
     } else {
@@ -68,7 +68,7 @@ pub fn create_markdown_line_break_node(
                 .any(|k| {
                     tx.text_content(k)
                         .encode_utf16()
-                        .any(|c| !is_js_whitespace(c))
+                        .any(|c| !is_js_whitespace_unit(c))
                 });
             if has_content {
                 tx.text(last)?.set_text_content("")?;

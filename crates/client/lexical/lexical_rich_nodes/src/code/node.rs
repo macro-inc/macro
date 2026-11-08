@@ -74,10 +74,14 @@ pub fn create_code_node(
     language: Option<&str>,
     theme: Option<&str>,
 ) -> crate::Result<Id<CodeNode>> {
-    let mut code = CodeNode::default();
-    code.set_language(language);
-    code.set_theme(theme);
-    Ok(tx.create(code)?)
+    let key = tx.create_resolved::<CodeNode>()?;
+    let code = tx.view().cast::<CodeNode>(key).ok_or(Error::Invariant(
+        "code factory replacement has no CodeNode projection",
+    ))?;
+    let mut payload = tx.get_mut::<CodeNode>(code)?;
+    payload.set_language(language);
+    payload.set_theme(theme);
+    Ok(code)
 }
 /// Test CodeNode ancestry, including application subclasses.
 pub fn is_code_node(state: &impl Read, key: NodeKey) -> bool {

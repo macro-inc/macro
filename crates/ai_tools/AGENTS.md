@@ -79,6 +79,9 @@ edit capability but calls no nested model and emits no additional model charge; 
 
 - `src/memory.rs` wires private memory tools and read-only research; `src/bin/memory.rs` runs awaited one-user generation.
 
+Lexical client startup requires `LEXICAL_ROUTE_MODES`; see the
+[route-switch configuration](../lexical_client/README.md).
+
 ## Checks
 
 - `cargo test -p ai_tools` (`SQLX_OFFLINE` unset).
@@ -94,3 +97,5 @@ Reviewed Linear/Jira imports also register read-only tracker connections in ever
 host. `src/import_trackers.rs` creates stable-id tasks via ordinary markdown and
 projects via `InitiativeServiceImpl::create_imported`, with Macro AI attribution;
 project, parent and label writes pass through the owning property services.
+
+Attach the already resolved sync client to the supplied Lexical facade before distributing it to tool contexts; hosts reuse that configured client for sibling callers.

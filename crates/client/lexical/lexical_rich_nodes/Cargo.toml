@@ -4,7 +4,12 @@ version = "0.1.0"
 edition = "2024"
 publish = false
 
+[features]
+default = []
+html = ["dep:lexical_html"]
+
 [dependencies]
+lexical_html = { workspace = true, optional = true }
 bitflags = { workspace = true }
 lexical_model = { workspace = true }
 regress = { workspace = true }

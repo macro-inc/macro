@@ -21,7 +21,7 @@ fn attributes_styles_classes_and_text_match_linkedom_literals() {
     img.append(HtmlNode::Text("ignored".into()));
     assert_eq!(
         inner_html(&[HtmlNode::Element(img)]),
-        "<IMG src=\"x&y\" width=\"20\">"
+        "<IMG src=\"x&y\" width=\"20\">ignored</IMG>"
     );
 }
 #[test]

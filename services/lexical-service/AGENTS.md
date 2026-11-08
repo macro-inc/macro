@@ -18,6 +18,7 @@ comment/markdown rendering. Production runs on ECS behind the gateway at
   `comment-only-change.ts`,
   `image-markdown.ts`, `agent-context.ts`, `agent-announcement.ts`,
   `extract-reply.ts`, `mentions.ts`).
+- `src/lib/comment-only-change.ts`: exports the existing normalization for the dev corpus observer; keep the production gate comparison unchanged.
 - `src/lib/`: conversion logic the endpoints call into (`editor.ts`,
   `markdown.ts`, `html.ts`, `comment-only-change.ts`, `comment-mark.ts`,
   `sync-service.ts` client, `schemas.ts`).
@@ -46,6 +47,8 @@ comment/markdown rendering. Production runs on ECS behind the gateway at
 - `bun run check` (`tsc --noEmit --project tsconfig.check.json`).
 - `bun run plaintext|search|cognition <document-id>` against the local stack's
   `lexical_service` (port 8096) to sanity-check an endpoint end to end.
+
+- The synchronous HTML shim installs and restores HTMLElement, DocumentFragment, Text and Node alongside the DOM so list and table export guards work in headless mode.
 
 ## Gotchas
 

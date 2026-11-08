@@ -151,3 +151,64 @@ fn partial_selection_does_not_slice_token_or_segmented_text() -> Result<()> {
     );
     Ok(())
 }
+
+#[derive(Clone, Debug, Default, PartialEq, serde::Serialize, serde::Deserialize)]
+struct UndefinedText {}
+impl NodeType for UndefinedText {
+    const TYPE: &'static str = "undefined-text";
+    type Kind = DecoratorKind;
+    impl_default_node!();
+}
+impl DecoratorNode for UndefinedText {
+    decorator_node_base!();
+    fn text_content<'s>(&self, _: DecoratorView<'s>) -> std::borrow::Cow<'s, str> {
+        "undefined".into()
+    }
+}
+impl MarkdownText for UndefinedText {
+    fn markdown_text(&self) -> Option<&str> {
+        None
+    }
+}
+
+#[test]
+fn explicit_blocks_and_raw_undefined_decorators_export_without_writes() -> Result<()> {
+    let mut editor = Editor::builder(EditorMode::Headless)
+        .node::<UndefinedText>()
+        .node_trait::<UndefinedText, dyn MarkdownText>(|node| node)
+        .build()
+        .expect("editor");
+    let ((first, second), _) = editor.update(|tx| {
+        let first = tx.create(Paragraph::default())?;
+        let second = tx.create(Paragraph::default())?;
+        let a = tx.create_text("first")?;
+        let undefined = tx.create(UndefinedText {})?;
+        let b = tx.create_text("second")?;
+        tx.append(first, &[a.key(), undefined.key()])?;
+        tx.append(second, &[b.key()])?;
+        tx.append(NodeKey::ROOT, &[first.key(), second.key()])?;
+        Ok((first.key(), second.key()))
+    })?;
+    let before = editor.state().to_json()?;
+    let transformers = Transformers::default();
+    assert_eq!(
+        convert_nodes_to_markdown_string(
+            editor.state(),
+            &transformers,
+            &[second],
+            &Default::default()
+        )?,
+        "second"
+    );
+    assert_eq!(
+        convert_nodes_to_markdown_string(
+            editor.state(),
+            &transformers,
+            &[second, first],
+            &Default::default()
+        )?,
+        "second\n\nfirst"
+    );
+    assert_eq!(editor.state().to_json()?, before);
+    Ok(())
+}

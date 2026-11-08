@@ -1,0 +1,253 @@
+[
+  {
+    "name": "reverse-and-update",
+    "tag": "p",
+    "ops": [
+      [
+        "attr",
+        "a",
+        "1"
+      ],
+      [
+        "attr",
+        "b",
+        "2"
+      ],
+      [
+        "attr",
+        "a",
+        "3"
+      ],
+      [
+        "attr",
+        "c",
+        "&<\" "
+      ]
+    ],
+    "html": "<p c=\"&<&quot; \" b=\"2\" a=\"3\"></p>"
+  },
+  {
+    "name": "empty-attrs",
+    "tag": "p",
+    "ops": [
+      [
+        "attr",
+        "id",
+        ""
+      ],
+      [
+        "attr",
+        "class",
+        ""
+      ],
+      [
+        "attr",
+        "style",
+        ""
+      ],
+      [
+        "attr",
+        "contenteditable",
+        ""
+      ],
+      [
+        "attr",
+        "disabled",
+        ""
+      ],
+      [
+        "attr",
+        "data-empty",
+        ""
+      ]
+    ],
+    "html": "<p data-empty=\"\" disabled contenteditable></p>"
+  },
+  {
+    "name": "style-order",
+    "tag": "p",
+    "ops": [
+      [
+        "style",
+        "color",
+        "red"
+      ],
+      [
+        "style",
+        "padding",
+        "1px"
+      ],
+      [
+        "style",
+        "color",
+        "blue"
+      ],
+      [
+        "removeStyle",
+        "padding"
+      ],
+      [
+        "style",
+        "marginLeft",
+        "2px"
+      ]
+    ],
+    "html": "<p style=\"color:blue;margin-left:2px\"></p>"
+  },
+  {
+    "name": "raw-style",
+    "tag": "p",
+    "ops": [
+      [
+        "attr",
+        "style",
+        "color: red; padding: 1px; x: url(a:b)"
+      ],
+      [
+        "style",
+        "color",
+        "blue"
+      ],
+      [
+        "style",
+        "--Foo",
+        "0"
+      ]
+    ],
+    "html": "<p style=\"color:blue;padding:1px;x:url(a:b);--foo:0\"></p>"
+  },
+  {
+    "name": "verbatim-classes",
+    "tag": "p",
+    "ops": [
+      [
+        "class",
+        "x y"
+      ],
+      [
+        "class",
+        "z"
+      ],
+      [
+        "class",
+        "x y"
+      ],
+      [
+        "attr",
+        "class",
+        "a  b a﻿c"
+      ],
+      [
+        "class",
+        "d e"
+      ],
+      [
+        "class",
+        "f"
+      ]
+    ],
+    "html": "<p class=\"a b c d e f\"></p>"
+  },
+  {
+    "name": "text-escapes",
+    "tag": "p",
+    "ops": [
+      [
+        "text",
+        "<&> \"'😀"
+      ]
+    ],
+    "html": "<p>&lt;&amp;&gt;&#160;\"'😀</p>"
+  },
+  {
+    "name": "case-void",
+    "tag": "IMG",
+    "ops": [
+      [
+        "attr",
+        "tabIndex",
+        "-1"
+      ],
+      [
+        "attr",
+        "src",
+        "a&b"
+      ],
+      [
+        "text",
+        "ignored"
+      ]
+    ],
+    "html": "<IMG src=\"a&b\" tabIndex=\"-1\">ignored</IMG>"
+  },
+  {
+    "name": "style-empty",
+    "tag": "p",
+    "ops": [
+      [
+        "style",
+        "x",
+        ""
+      ],
+      [
+        "style",
+        "y",
+        "0"
+      ],
+      [
+        "removeStyle",
+        "y"
+      ]
+    ],
+    "html": "<p style=\"x:\"></p>"
+  },
+  {
+    "name": "css-capitals",
+    "tag": "p",
+    "ops": [
+      [
+        "style",
+        "XMLHttpRequest",
+        "x"
+      ],
+      [
+        "style",
+        "msTransition",
+        "y"
+      ],
+      [
+        "style",
+        "--myValue",
+        "z"
+      ]
+    ],
+    "html": "<p style=\"xml-http-request:x;ms-transition:y;--my-value:z\"></p>"
+  },
+  {
+    "name": "bare-bool",
+    "tag": "input",
+    "ops": [
+      [
+        "attr",
+        "checked",
+        ""
+      ],
+      [
+        "attr",
+        "readonly",
+        ""
+      ],
+      [
+        "attr",
+        "value",
+        ""
+      ],
+      [
+        "attr",
+        "aria-hidden",
+        "false"
+      ]
+    ],
+    "html": "<input aria-hidden=\"false\" value=\"\" readonly checked>"
+  }
+]

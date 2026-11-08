@@ -2,16 +2,22 @@
 
 ## What it is
 
-Belongs to Documents: the Rust-side HTTP client for `lexical_service`, plus
-a parser for Lexical's markdown subset, used by any backend crate that needs
-to read or render document content.
+Belongs to Documents: the Rust-side route-switch facade and HTTP transport for
+`lexical_service`, with typed requests and responses for backend callers that
+read or render document content.
 
 ## Start here
 
-- `src/lib.rs`: `LexicalClient::new` — builds the `reqwest::Client`, sets the
-  internal-access header, and trusts the checked-in local CA for local HTTPS.
-- `src/parse_markdown.rs` (+ `src/parse_markdown/test.rs`): markdown → Lexical
-  node tree parsing.
+- `src/facade.rs`: typed `LexicalClient` API; configure clients once at startup.
+- `src/routing.rs` (+ `src/routing/test.rs`): strict MacroConfig modes, execution
+  policy, comparison and content-free route/shadow spans.
+- `src/lib.rs`: retained HTTP transport, internal-access header and local CA.
+- `routing/snapshot.rs`: separate raw and structural snapshot metrics with request-proven generated fields and ancestry/container checks.
+- `in_process.rs`: blocking model adapters with explicit clock and entropy.
+- `raw_document.rs`: live sync-source port and startup configuration.
+- `test_utils.rs` (`test-utils` feature): hand-written HTTP/raw-source boundaries for caller mode tests; responses stay authored in each test.
+- `README.md`: route groups, provisioning and startup wiring.
+- `src/parse_markdown.rs` (+ `src/parse_markdown/test.rs`): typed lexical-service HTTP operations.
 - `src/types.rs`: the Lexical node/document types shared with the service.
 - `src/notion.rs`: `notion_to_loro_snapshot` (`POST /snapshot/notion`) and its
   hand-copied request types; keep them in step with
@@ -19,15 +25,16 @@ to read or render document content.
 
 ## Scope
 
-- Owns: the Rust-side HTTP client for `lexical_service` and markdown parsing
-  into Lexical's node shape.
+- Owns: execution policy, route/shadow spans, retained HTTP transport and typed
+  service request/response models. Pure document transformations belong to
+  `macro_document_model`; in_process.rs supplies only host/wire adapters.
 - Not here: the service itself, or the frontend's own Lexical node
   implementations (`apps/web`) — those are kept in sync by hand, not shared
   code.
 
 ## Boundaries
 
-- Depends on: `agent_fold`, `messages`, `trigger_context`.
+- Depends on: `macro_document_model`, `macro_document_composers`, the sync client, `agent_fold`, `messages`, `trigger_context`, and `macro_config`.
 - Used by: `documents`, `collab_surface`, `email`, `ai_tools`, `agent_harness`,
   `agent_trigger`, `channel_bots`, `image_generation`,
   `lexical_mention_extractor`, `memory`, `skills`, `task_dedup`.

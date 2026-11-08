@@ -116,3 +116,123 @@ fn sanitize_url_rejects_unsupported_protocols_and_retains_relative_paths() {
     assert_eq!(sanitize_url("/path"), "/path");
     assert_eq!(sanitize_url("example.com"), "https://example.com");
 }
+
+#[test]
+fn line_break_before_link_selects_its_first_text() -> Result<()> {
+    let mut editor = Editor::builder(EditorMode::Headless)
+        .node::<LinkNode>()
+        .build()
+        .expect("editor");
+    let ((paragraph, text), _) = editor.update(|tx| {
+        let paragraph = tx.create(Paragraph::default())?;
+        let link = create_link_node(tx, "/", LinkAttributes::default())?;
+        let text = tx.create_text("link")?;
+        tx.append(link, &[text.key()])?;
+        tx.append(paragraph, &[link.key()])?;
+        tx.append(NodeKey::ROOT, &[paragraph.key()])?;
+        tx.select_start(paragraph)?;
+        Ok((paragraph, text))
+    })?;
+    editor.update(|tx| tx.insert_line_break(false))?;
+    let state = editor.state();
+    assert!(state.is_line_break(state.children_keys(paragraph)?[0]));
+    let range = state
+        .selection()
+        .and_then(Selection::as_range)
+        .expect("range");
+    assert_eq!(range.anchor, Point::text(text, Utf16Offset(0)));
+    assert_eq!(range.focus, range.anchor);
+    Ok(())
+}
+
+#[test]
+fn replacing_the_first_protected_tab_rejects_a_detached_selection_cycle() -> Result<()> {
+    let mut editor = Editor::builder(EditorMode::Headless)
+        .node::<LinkNode>()
+        .build()
+        .expect("editor");
+    editor.update(|tx| {
+        let paragraph = tx.create(Paragraph::default())?;
+        let link = create_link_node(tx, "/", LinkAttributes::default())?;
+        let tab = tx.create(Tab {})?;
+        tx.append(link, &[tab.key()])?;
+        tx.append(paragraph, &[link.key()])?;
+        tx.append(NodeKey::ROOT, &[paragraph.key()])?;
+        tx.set_selection(Some(Selection::Range(RangeSelection::new(
+            Point::text(tab, Utf16Offset(0)),
+            Point::text(tab, Utf16Offset(1)),
+        ))))
+    })?;
+    let previous = editor.state().to_json()?;
+    assert!(editor.update(|tx| tx.insert_text("x")).is_err());
+    assert_eq!(editor.state().to_json()?, previous);
+    Ok(())
+}
+
+#[test]
+fn replacing_a_protected_tab_after_text_can_advance_the_receiver() -> Result<()> {
+    let mut editor = Editor::builder(EditorMode::Headless)
+        .node::<LinkNode>()
+        .build()
+        .expect("editor");
+    editor.update(|tx| {
+        let paragraph = tx.create(Paragraph::default())?;
+        let link = create_link_node(tx, "/", LinkAttributes::default())?;
+        let text = tx.create_text("a")?;
+        let tab = tx.create(Tab {})?;
+        tx.append(link, &[text.key(), tab.key()])?;
+        tx.append(paragraph, &[link.key()])?;
+        tx.append(NodeKey::ROOT, &[paragraph.key()])?;
+        tx.set_selection(Some(Selection::Range(RangeSelection::new(
+            Point::text(tab, Utf16Offset(0)),
+            Point::text(tab, Utf16Offset(1)),
+        ))))
+    })?;
+    editor.update(|tx| tx.insert_text("x"))?;
+    assert_eq!(editor.state().root_text_content().as_ref(), "ax");
+    Ok(())
+}
+
+#[test]
+fn deleting_a_whole_segment_removes_its_empty_link_parent() -> Result<()> {
+    let mut editor = Editor::builder(EditorMode::Headless)
+        .node::<LinkNode>()
+        .build()
+        .expect("editor");
+    let ((segment, tail), _) = editor.update(|tx| {
+        let paragraph = tx.create(Paragraph::default())?;
+        let link = create_link_node(tx, "/", LinkAttributes::default())?;
+        let segment = tx.create_text("segment")?;
+        tx.text(segment)?.set_mode(TextMode::Segmented)?;
+        let tail = tx.create_text("tail")?;
+        tx.append(link, &[segment.key()])?;
+        tx.append(paragraph, &[link.key(), tail.key()])?;
+        tx.append(NodeKey::ROOT, &[paragraph.key()])?;
+        tx.select_end(segment)?;
+        Ok((segment, tail))
+    })?;
+    editor.update(|tx| {
+        tx.delete_character(
+            EditDirection::Backward,
+            ModifyTarget::View {
+                anchor: Point::text(segment, Utf16Offset(6)),
+                focus: Point::text(segment, Utf16Offset(7)),
+                resolution_dirty: false,
+                is_backward_in_dom: true,
+            },
+        )
+    })?;
+    assert_eq!(editor.state().root_text_content().as_ref(), "tail");
+    let paragraph = editor.state().first_child_or_err(NodeKey::ROOT)?;
+    assert_eq!(editor.state().children_keys(paragraph)?, vec![tail.key()]);
+    assert_eq!(
+        editor
+            .state()
+            .selection()
+            .and_then(Selection::as_range)
+            .expect("range")
+            .anchor,
+        Point::text(tail, Utf16Offset(0))
+    );
+    Ok(())
+}

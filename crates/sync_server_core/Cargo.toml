@@ -5,9 +5,11 @@ edition = "2024"
 publish = false
 
 [features]
+in-process-gate = ["dep:macro_document_model"]
 openapi = ["dep:utoipa"]
 
 [dependencies]
+macro_document_model = { workspace = true, optional = true, default-features = false }
 loro.workspace = true
 bebop.workspace = true
 rootcause.workspace = true

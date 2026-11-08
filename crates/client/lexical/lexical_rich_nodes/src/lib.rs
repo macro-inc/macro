@@ -50,3 +50,7 @@ pub mod mark;
 pub mod offset;
 
 pub mod clipboard;
+
+/// Portable HTML exporters, enabled independently of the model.
+#[cfg(feature = "html")]
+pub mod html;

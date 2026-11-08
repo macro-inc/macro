@@ -28,7 +28,7 @@ fn splice_and_sibling_insertion_keep_distinct_selection_rules() -> Result<(), Er
         assert_eq!(tx.anchor()?, Point::element(p, ChildIndex(1)));
         let d = tx.create_text("d")?;
         tx.insert_before(c, d, true)?;
-        assert_eq!(tx.anchor()?, Point::element(p, ChildIndex(2)));
+        assert_eq!(tx.anchor()?, Point::text(a, Utf16Offset(0)));
         Ok(())
     })?;
     Ok(())

@@ -1,0 +1,721 @@
+//! Endpoint mirror: IDs and time facts preserve wire spelling before rendering.
+//! Generated from trigger_context by corpus/composer-wire.ts; do not edit.
+use serde::{Deserialize, Serialize};
+use serde_json::Value;
+/// What happened to call the agent, and everything it needs to know about it.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(tag = "kind", rename_all = "snake_case")]
+pub enum TriggerContext {
+    /// A mention opened the session.
+    Mentioned(DiscussionContext),
+    /// A further message in the discussion of a session that is already running.
+    FollowUp(FollowUpContext),
+    /// A message in the agent's private conversation with the person, who
+    /// reads the reply there as it is written. Earlier turns are the
+    /// session's own history, so the discussion carries no channel activity.
+    Conversation(DiscussionContext),
+    /// The agent was assigned a task.
+    TaskAssigned(TaskAssignedContext),
+    /// Someone opened the session from the composer. Their prompt arrives
+    /// separately, through the session itself.
+    Requested(RequestedContext),
+    /// Another agent handed this one a task.
+    Dispatched(DispatchedContext),
+    /// A routine fired.
+    Routine(RoutineContext),
+}
+
+/// What kind of channel a discussion is in.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ChannelType {
+    /// Anyone in the organization can join.
+    Public,
+    /// Invited members only.
+    Private,
+    /// A conversation between two people.
+    DirectMessage,
+    /// A team's channel.
+    Team,
+}
+
+/// A person or bot, as a reader would name them.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ContextPerson {
+    /// Stable identity: a Macro user id or a bot id.
+    pub id: String,
+    /// Display name, or the email when the user set none.
+    pub name: String,
+    /// Absent for bots and imported authors.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[serde(deserialize_with = "crate::wire::non_null_option")]
+    pub email: Option<String>,
+}
+
+/// A file attached to a context message.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ContextAttachment {
+    /// What was attached, such as `static/image`, `static/video`, or `document`.
+    pub entity_type: String,
+    /// Its id. For a static file, the file id used in `/file/{id}`.
+    pub entity_id: String,
+    /// Where the agent can fetch it. Only static files have one, filled in by
+    /// the harness from its static file service address.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[serde(deserialize_with = "crate::wire::non_null_option")]
+    pub url: Option<String>,
+}
+
+/// A message the agent may read.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ContextMessage {
+    /// Message id.
+    pub id: String,
+    /// Who wrote it.
+    pub author: ContextPerson,
+    /// Body, in internal markdown.
+    pub content: String,
+    /// When it was posted.
+    pub posted_at: String,
+    /// Files attached to this message. Empty is omitted on the wire.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[serde(deserialize_with = "crate::wire::non_null_option")]
+    pub attachments: Option<Vec<ContextAttachment>>,
+}
+
+/// Messages of one discussion, oldest first.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ContextThread {
+    /// Root message of the discussion.
+    pub root_id: String,
+    /// Live messages, the root first when it is included.
+    pub messages: Vec<ContextMessage>,
+    /// Whether some messages of the discussion were left out.
+    pub messages_omitted: bool,
+}
+
+/// The discussion a message was posted in.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct DiscussionContext {
+    /// Where the discussion lives.
+    pub surface: DiscussionSurface,
+    /// The message that called the agent.
+    pub prompt_message_id: String,
+    /// Who posted it.
+    pub sender: ContextPerson,
+    /// Set when `sender` is an agent handing the discussion on for a person.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[serde(deserialize_with = "crate::wire::non_null_option")]
+    pub agent_request: Option<AgentRequest>,
+    /// What the message answers.
+    pub reply_target: ReplyTarget,
+    /// The message's own discussion, from its root through the message.
+    /// Absent for a top-level channel message.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[serde(deserialize_with = "crate::wire::non_null_option")]
+    pub thread: Option<ContextThread>,
+    /// Other recent channel activity, grouped by discussion, oldest first.
+    /// For a top-level channel message this is the primary context and ends
+    /// with the message. Empty off channels.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[serde(deserialize_with = "crate::wire::non_null_option")]
+    pub channel: Option<Vec<ContextThread>>,
+}
+
+/// An agent's message asking another agent for something on a person's behalf.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct AgentRequest {
+    /// The person the asking agent acts for, who owns the work it starts.
+    pub on_behalf_of: ContextPerson,
+    /// Agent-to-agent handoffs since a person last wrote in the discussion,
+    /// this one included.
+    pub hops: usize,
+}
+
+/// Where a discussion lives. Each carries its name, so the agent is never
+/// handed a bare id.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(tag = "type", rename_all = "snake_case")]
+pub enum DiscussionSurface {
+    /// A channel.
+    Channel {
+        /// Channel id.
+        id: String,
+        /// Channel name; direct messages have none.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        #[serde(deserialize_with = "crate::wire::non_null_option")]
+        name: Option<String>,
+        /// Public, private, direct message, or team.
+        channel_type: ChannelType,
+    },
+    /// A comment thread on a document.
+    DocumentComment {
+        /// Document id.
+        id: String,
+        /// Document name.
+        name: String,
+        /// Where in the document the thread sits, when it is anchored.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        #[serde(deserialize_with = "crate::wire::non_null_option")]
+        anchor: Option<CommentAnchor>,
+    },
+    /// A comment thread on a project.
+    ProjectComment {
+        /// Project id.
+        id: String,
+        /// Project name.
+        name: String,
+    },
+    /// A comment thread on a CRM company.
+    CrmCompanyComment {
+        /// Company id.
+        id: String,
+        /// Company name.
+        name: String,
+    },
+    /// A comment thread on a CRM contact.
+    CrmContactComment {
+        /// Contact id.
+        id: String,
+        /// Contact name.
+        name: String,
+    },
+    /// The chat of a call.
+    CallChat {
+        /// Call id.
+        id: String,
+        /// Call title.
+        title: String,
+    },
+}
+
+/// What a message answers. Without this the agent has to guess which of the
+/// surrounding messages "fix this" means.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(tag = "kind", rename_all = "snake_case")]
+pub enum ReplyTarget {
+    /// The author quote-replied to one message.
+    Quote {
+        /// The quoted message.
+        message_id: String,
+        /// The discussion holding the quoted message.
+        thread_id: String,
+        /// The one-line preview the quote renders.
+        preview: String,
+        /// The quoted message in full. Absent when it lives in another
+        /// conversation or could not be read.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        #[serde(deserialize_with = "crate::wire::non_null_option")]
+        message: Option<Box<ContextMessage>>,
+    },
+    /// The message was posted as a reply in a discussion.
+    Thread {
+        /// Root of that discussion.
+        root_id: String,
+    },
+    /// The message was posted at the top level of a channel and replies to
+    /// no particular message.
+    None,
+}
+
+/// Where in a document a comment thread sits. An annotation id alone names a
+/// location the agent has no way to resolve, so the text it covers travels
+/// with it.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(tag = "type", rename_all = "snake_case")]
+pub enum CommentAnchor {
+    /// A cell or rectangular range in a native spreadsheet.
+    Spreadsheet {
+        /// Stable sheet identity within the workbook.
+        sheet_id: String,
+        /// Sheet name when the discussion was created.
+        sheet_name: String,
+        /// A1 cell or range, such as B4 or B4:C9.
+        range: String,
+    },
+    /// A comment mark in a markdown document.
+    Mark {
+        /// Lexical mark the thread is attached to.
+        mark_id: String,
+        /// The marked text as it read when the comment was posted. Absent on
+        /// threads anchored before snapshots were captured.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        #[serde(deserialize_with = "crate::wire::non_null_option")]
+        marked_text: Option<String>,
+        /// The mark as the document reads now. Absent when the document no
+        /// longer carries it or the lookup failed.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        #[serde(deserialize_with = "crate::wire::non_null_option")]
+        current: Option<MarkedPassage>,
+    },
+    /// A highlight on a PDF.
+    PdfHighlight {
+        /// Highlight annotation the thread is attached to.
+        anchor_id: String,
+        /// The text the highlight covers. Absent when the highlight carries none.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        #[serde(deserialize_with = "crate::wire::non_null_option")]
+        marked_text: Option<String>,
+    },
+    /// A point pinned on a PDF page, which covers no text.
+    PdfPin {
+        /// Pin annotation the thread is attached to.
+        anchor_id: String,
+    },
+}
+
+/// A comment mark resolved against the live document.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct MarkedPassage {
+    /// The text the mark covers.
+    pub marked_text: String,
+    /// The block or blocks containing the mark, windowed around it.
+    pub surrounding_text: String,
+}
+
+/// A message for a session that is already running.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct FollowUpContext {
+    /// How the message reached this agent.
+    pub addressed_by: AddressedBy,
+    /// The discussion it was posted in.
+    pub discussion: DiscussionContext,
+}
+
+/// How a follow-up was attributed to the agent.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum AddressedBy {
+    /// The message mentions the agent.
+    Mention,
+    /// The message quote-replies to the agent, without a mention.
+    ExplicitReply,
+    /// A model judged the message was meant for the agent.
+    Inferred,
+}
+
+/// A task handed to the agent.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct TaskAssignedContext {
+    /// The task as it reads now.
+    pub task: TaskSnapshot,
+    /// Who assigned it.
+    pub assigned_by: ContextPerson,
+    /// When.
+    pub assigned_at: String,
+    /// The agent's own discussion on the task, where it answers.
+    pub discussion_id: String,
+}
+
+/// A task, read under the assigner's access.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct TaskSnapshot {
+    /// Task id.
+    pub id: String,
+    /// Title.
+    pub title: String,
+    /// Description, in internal markdown.
+    pub markdown: String,
+    /// Status option name.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[serde(deserialize_with = "crate::wire::non_null_option")]
+    pub status: Option<String>,
+    /// Priority option name.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[serde(deserialize_with = "crate::wire::non_null_option")]
+    pub priority: Option<String>,
+    /// Due date.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[serde(deserialize_with = "crate::wire::non_null_option")]
+    pub due: Option<String>,
+    /// Everyone assigned, people and agents.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[serde(deserialize_with = "crate::wire::non_null_option")]
+    pub assignees: Option<Vec<ContextPerson>>,
+    /// The task's project, only when the assigner can see it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[serde(deserialize_with = "crate::wire::non_null_option")]
+    pub project: Option<ProjectRef>,
+}
+
+/// A project, by name.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ProjectRef {
+    /// Project id.
+    pub id: String,
+    /// Project name.
+    pub name: String,
+}
+
+/// A session opened from the composer.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct RequestedContext {
+    /// Who opened it.
+    pub requested_by: ContextPerson,
+    /// When.
+    pub requested_at: String,
+    /// Repository the requester picked.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[serde(deserialize_with = "crate::wire::non_null_option")]
+    pub repo_url: Option<String>,
+}
+
+/// A task handed over by another agent.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct DispatchedContext {
+    /// The user whose authority the work runs under.
+    pub dispatched_by: ContextPerson,
+    /// When.
+    pub dispatched_at: String,
+    /// The agent that handed it over.
+    pub from_bot: Option<String>,
+    /// The session that handed it over, when it was one.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[serde(deserialize_with = "crate::wire::non_null_option")]
+    pub from_session: Option<String>,
+    /// Repository chosen for the work.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[serde(deserialize_with = "crate::wire::non_null_option")]
+    pub repo_url: Option<String>,
+}
+
+/// A routine run.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct RoutineContext {
+    /// The routine's id.
+    pub routine_id: String,
+    /// The routine's name.
+    pub name: String,
+    /// Whose routine it is.
+    pub owner: ContextPerson,
+    /// What the routine asks for, as its owner wrote it.
+    pub instructions: String,
+    /// Everything that makes it run.
+    pub triggers: Vec<RoutineTrigger>,
+    /// What made it fire this time.
+    pub firing: RoutineFiring,
+}
+
+/// One of the ways a routine runs.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(tag = "type", rename_all = "snake_case")]
+pub enum RoutineTrigger {
+    /// A cron schedule.
+    Schedule {
+        /// The cron expression.
+        cron: String,
+        /// The timezone it is read in.
+        timezone: String,
+    },
+    /// A single run at an exact time.
+    Once {
+        /// When it runs.
+        at: String,
+    },
+    /// Events it watches.
+    Events {
+        /// The event names, such as `email.message_received`.
+        events: Vec<String>,
+        /// Only these entities, when the routine narrows to some.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        #[serde(deserialize_with = "crate::wire::non_null_option")]
+        entity_ids: Option<Vec<String>>,
+        /// Which GitHub deliveries, for the `github` event.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        #[serde(deserialize_with = "crate::wire::non_null_option")]
+        github: Option<GithubWatch>,
+        /// Exact payload tests a GitHub delivery must pass, as a
+        /// reader would state them.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        #[serde(deserialize_with = "crate::wire::non_null_option")]
+        payload_match: Option<Vec<String>>,
+        /// A yes/no question the event's content must answer yes to.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        #[serde(deserialize_with = "crate::wire::non_null_option")]
+        condition: Option<String>,
+    },
+}
+
+/// The GitHub deliveries a routine watches. Empty lists match everything.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct GithubWatch {
+    /// GitHub event names, such as `workflow_run`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[serde(deserialize_with = "crate::wire::non_null_option")]
+    pub events: Option<Vec<String>>,
+    /// Payload actions, such as `completed`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[serde(deserialize_with = "crate::wire::non_null_option")]
+    pub actions: Option<Vec<String>>,
+    /// Repositories, as `owner/name`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[serde(deserialize_with = "crate::wire::non_null_option")]
+    pub repositories: Option<Vec<String>>,
+    /// Whether deliveries caused by bots also run it.
+    pub include_bots: bool,
+}
+
+/// What made a routine fire.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(tag = "type", rename_all = "snake_case")]
+pub enum RoutineFiring {
+    /// Its schedule came due.
+    Scheduled {
+        /// When the run was due.
+        scheduled_for: String,
+        /// The schedule, as the routine states it.
+        schedule: String,
+    },
+    /// Its owner started it by hand.
+    Manual {
+        /// When they started it.
+        requested_at: String,
+    },
+    /// An event it watches happened.
+    Event {
+        /// The event. Boxed: it carries whole discussions and documents.
+        event: Box<RoutineEvent>,
+        /// The routine's yes/no questions this event was checked against;
+        /// it answered yes to at least one. Empty when the routine asks none.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        #[serde(deserialize_with = "crate::wire::non_null_option")]
+        conditions: Option<Vec<String>>,
+    },
+}
+
+/// The GitHub pull request event behind a change.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct PullRequestChange {
+    /// The pull request's URL.
+    pub url: String,
+    /// The GitHub login behind the change: whoever merged it, on a merge.
+    pub github_login: String,
+}
+
+/// The event a routine fired on, one variant per event it can watch.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(tag = "event", rename_all = "snake_case")]
+pub enum RoutineEvent {
+    /// A document was created.
+    DocumentCreated {
+        /// The document.
+        document: DocumentSnapshot,
+    },
+    /// A document was edited.
+    DocumentUpdated {
+        /// The document as it reads now.
+        document: DocumentSnapshot,
+    },
+    /// A document was deleted.
+    DocumentDeleted {
+        /// Document id.
+        id: String,
+        /// Its name.
+        name: String,
+    },
+    /// A task was created.
+    TaskCreated {
+        /// The task.
+        task: TaskSnapshot,
+    },
+    /// A task's status changed.
+    TaskStatusChanged {
+        /// The task as it reads now.
+        task: TaskSnapshot,
+        /// The pull request event that changed it, when one did.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        #[serde(deserialize_with = "crate::wire::non_null_option")]
+        pull_request: Option<PullRequestChange>,
+    },
+    /// A task's priority changed.
+    TaskPriorityChanged {
+        /// The task as it reads now.
+        task: TaskSnapshot,
+    },
+    /// Another of a task's properties changed. The event does not record
+    /// which one.
+    TaskPropertyChanged {
+        /// The task as it reads now.
+        task: TaskSnapshot,
+    },
+    /// An email arrived.
+    EmailReceived {
+        /// The email.
+        email: EmailSnapshot,
+    },
+    /// A channel was created.
+    ChannelCreated {
+        /// Channel id.
+        id: String,
+        /// Channel name.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        #[serde(deserialize_with = "crate::wire::non_null_option")]
+        name: Option<String>,
+    },
+    /// A message was posted in a channel.
+    ChannelMessagePosted {
+        /// The discussion it was posted in.
+        discussion: DiscussionContext,
+    },
+    /// Someone was mentioned in a channel.
+    ChannelMentioned {
+        /// The discussion the mention was posted in.
+        discussion: DiscussionContext,
+    },
+    /// A channel message was edited.
+    ChannelMessagePatched {
+        /// The discussion, with the message as it reads now.
+        discussion: DiscussionContext,
+    },
+    /// Something was attached to a channel message.
+    ChannelMessageAttachmentCreated {
+        /// The discussion holding the message.
+        discussion: DiscussionContext,
+        /// What was attached, such as a document.
+        entity_type: String,
+        /// Its id.
+        entity_id: String,
+    },
+    /// A call the routine's owner started began.
+    CallStarted {
+        /// The call as it stands at the start.
+        call: CallStartedSnapshot,
+    },
+    /// A call the routine's owner joined ended.
+    CallEnded {
+        /// The call.
+        call: CallSnapshot,
+    },
+    /// Macro's GitHub App received a delivery.
+    Github {
+        /// The delivery.
+        delivery: GithubDelivery,
+    },
+}
+
+/// A delivery from Macro's GitHub App.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct GithubDelivery {
+    /// The GitHub event, such as `workflow_run`.
+    pub event: String,
+    /// Its action, such as `completed`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[serde(deserialize_with = "crate::wire::non_null_option")]
+    pub action: Option<String>,
+    /// The repository, as `owner/name`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[serde(deserialize_with = "crate::wire::non_null_option")]
+    pub repository: Option<String>,
+    /// The GitHub login that caused it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[serde(deserialize_with = "crate::wire::non_null_option")]
+    pub sender: Option<String>,
+    /// GitHub's payload without its API links. Absent when it was too large
+    /// to carry. Untrusted.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub payload: Option<Value>,
+}
+
+/// A call that just started, read under the routine owner's access.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct CallStartedSnapshot {
+    /// Call id.
+    pub id: String,
+    /// The call's name, when it has one.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[serde(deserialize_with = "crate::wire::non_null_option")]
+    pub title: Option<String>,
+    /// The channel the call is in; absent for meetings outside one.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[serde(deserialize_with = "crate::wire::non_null_option")]
+    pub channel_id: Option<String>,
+    /// That channel's name.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[serde(deserialize_with = "crate::wire::non_null_option")]
+    pub channel_name: Option<String>,
+    /// When it started.
+    pub started_at: String,
+    /// Who started it.
+    pub started_by: ContextPerson,
+    /// Everyone who has joined so far, people and guests.
+    pub participants: Vec<ContextPerson>,
+}
+
+/// An ended call, read under the routine owner's access.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct CallSnapshot {
+    /// Call id.
+    pub id: String,
+    /// The call's name, when it has one.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[serde(deserialize_with = "crate::wire::non_null_option")]
+    pub title: Option<String>,
+    /// The channel the call was held in; absent for meetings outside one.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[serde(deserialize_with = "crate::wire::non_null_option")]
+    pub channel_id: Option<String>,
+    /// That channel's name.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[serde(deserialize_with = "crate::wire::non_null_option")]
+    pub channel_name: Option<String>,
+    /// When it started.
+    pub started_at: String,
+    /// When it ended.
+    pub ended_at: String,
+    /// Everyone who joined, people and guests.
+    pub participants: Vec<ContextPerson>,
+    /// AI summary of the call, once one has been written.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[serde(deserialize_with = "crate::wire::non_null_option")]
+    pub summary: Option<String>,
+    /// What was said, oldest first.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[serde(deserialize_with = "crate::wire::non_null_option")]
+    pub transcript: Option<Vec<TranscriptLine>>,
+    /// Whether the end of the transcript was left out.
+    pub transcript_omitted: bool,
+}
+
+/// One stretch of speech in a call transcript.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct TranscriptLine {
+    /// Who spoke, as a reader would name them. Attributed by audio track, so
+    /// people sharing a device share a speaker.
+    pub speaker: String,
+    /// What they said.
+    pub text: String,
+    /// When they started speaking.
+    pub at: String,
+}
+
+/// A document, read under the routine owner's access.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct DocumentSnapshot {
+    /// Document id.
+    pub id: String,
+    /// Name.
+    pub name: String,
+    /// File type, such as md or pdf.
+    pub file_type: String,
+    /// Text content, bounded. Absent for documents with no readable text.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[serde(deserialize_with = "crate::wire::non_null_option")]
+    pub text: Option<String>,
+}
+
+/// An email, read under the routine owner's access.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct EmailSnapshot {
+    /// Thread id.
+    pub thread_id: String,
+    /// Subject line.
+    pub subject: String,
+    /// Sender, as the email names them.
+    pub from: String,
+    /// Recipients.
+    pub to: Vec<String>,
+    /// When it arrived.
+    pub received_at: String,
+    /// Body as plain text, bounded.
+    pub body: String,
+}

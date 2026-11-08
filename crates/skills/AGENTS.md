@@ -51,3 +51,6 @@ instructions an agent follows when the skill is referenced in its input.
 ## Related
 
 - Skill: `create-ai-tool`, `cloud-storage-hexagonal-architecture`
+
+Lexical caller mode checks use hand-written `lexical_client/test-utils` boundaries;
+verify HTTP call counts and independent raw-source reads in all three modes.

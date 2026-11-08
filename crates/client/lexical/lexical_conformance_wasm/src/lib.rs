@@ -1,10 +1,16 @@
-//! Development-only transaction facade for Tier C text/paragraph conformance.
+//! Development-only raw-model facades for core and rich differential conformance.
 //! WP-14 adds EditorCore and the session codec; WP-54 adds the foreign-node shim.
 #![deny(missing_docs)]
 use lexical_model::*;
 use serde::Deserialize;
 use serde_json::{Value, json};
 use wasm_bindgen::prelude::*;
+mod corpus;
+pub use corpus::corpus_route;
+mod gate;
+pub use gate::gate_compare;
+mod rich;
+pub use rich::RichHandle;
 mod command;
 mod snapshot;
 use command::Command;
@@ -18,6 +24,10 @@ enum BoundaryError {
     Model(#[from] Error),
     #[error(transparent)]
     Json(#[from] serde_json::Error),
+    #[error(transparent)]
+    Rich(#[from] lexical_rich_nodes::Error),
+    #[error(transparent)]
+    Markdown(#[from] lexical_markdown::Error),
 }
 
 /// Pinned upstream version shared with the recorder.
