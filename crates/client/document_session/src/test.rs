@@ -2095,3 +2095,5 @@ fn event_only_commits_preserve_the_typing_history_group() {
     assert_eq!(session.surface().state().view().text_content(key), "a😀b");
     assert!(!session.surface().history().can_undo);
 }
+
+mod ime;

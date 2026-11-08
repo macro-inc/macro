@@ -73,6 +73,7 @@ mod wasm {
                     | "formatted"
                     | "restore"
                     | "elapsed_ms"
+                    | "frames"
             ) {
                 self.0.push(wire::AttrMsg {
                     key: field.name().into(),
@@ -151,7 +152,20 @@ mod wasm {
             }
         }
         fn record_follows_from(&self, _span: &Id, _follows: &Id) {}
-        fn event(&self, _event: &tracing::Event<'_>) {}
+        fn event(&self, event: &tracing::Event<'_>) {
+            STATE.with(|state| {
+                let mut state = state.borrow_mut();
+                if let Some(span) = state.stack.last().copied() {
+                    state.messages.push(message(
+                        span,
+                        0,
+                        1,
+                        event.metadata().name().into(),
+                        vec![],
+                    ));
+                }
+            });
+        }
         fn enter(&self, id: &Id) {
             STATE.with(|s| s.borrow_mut().stack.push(id.into_u64()));
         }

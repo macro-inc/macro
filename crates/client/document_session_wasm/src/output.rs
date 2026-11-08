@@ -86,6 +86,9 @@ pub(crate) fn encode(
                     generic::flatten(v, String::new(), &mut m.values);
                 }
             }
+            ViewEffect::EndComposition => {
+                m.kind = 9;
+            }
             ViewEffect::Error(error) => {
                 flags |= 16;
                 m.kind = 2;
