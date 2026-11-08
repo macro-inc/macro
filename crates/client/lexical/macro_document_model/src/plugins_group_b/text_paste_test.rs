@@ -129,7 +129,7 @@ fn app_paste_checks_host_aliases_params_and_uses_the_authored_mention_clock() ->
         tx.select_start(p)
     })?;
     let mut payload = ClipboardPayload::default();
-    payload.data.insert("text/plain".into(), "https://macro.com/app/agents/00000000-0000-0000-0000-000000000001?a=first&referral_code=omit&a=last".into());
+    payload.data.insert("text/plain".into(), "https://macro.com/app/agents/00000000-0000-0000-0000-000000000001?a=first&referral_code=omit&__proto__=ignored&a=last".into());
     payload.data.insert(
         "application/x-macro-text-paste".into(),
         json!({"hostname":"tauri.localhost","nativeHost":true}).to_string(),
