@@ -81,7 +81,8 @@ layer over the recorded composite. Controls auto-dismiss after idle playback and
 return on movement, focus or tap; pause, control hover and open menus keep them
 visible. Speed uses a dropdown, and volume opens a vertical slider above the mute
 button on hover or focus. Clicking the icon still toggles mute. Both sliders keep
-white thumbs across themes.
+white thumbs across themes. Dragging the volume thumb, clicking its track, and
+arrow keys update native volume immediately without closing the popover.
 
 Phones use separate Back, title-menu, and Details header islands. The player
 comes before identity, then Summary/Transcript/Chat tabs with the real chat count.

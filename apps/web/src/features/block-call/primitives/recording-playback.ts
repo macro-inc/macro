@@ -84,6 +84,10 @@ export function createRecordingPlayback(
         audibleVolume = element.volume;
         element.muted = false;
       }
+      // Controlled sliders read back during the same pointer event, before the
+      // browser dispatches volumechange.
+      setVolumeLevel(element.volume);
+      setMuted(element.muted);
     },
     setRate: (value: number) => {
       const element = video();

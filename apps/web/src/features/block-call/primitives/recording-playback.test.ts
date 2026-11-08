@@ -35,7 +35,7 @@ describe('recording playback', () => {
       return createRecordingPlayback(() => video);
     });
     playback.setVolume(0.4);
-    video.dispatchEvent(new Event('volumechange'));
+    // Drag callbacks read controlled state before native volumechange fires.
     expect(playback.volume()).toBe(0.4);
     playback.setVolume(0);
     video.dispatchEvent(new Event('volumechange'));
@@ -46,6 +46,8 @@ describe('recording playback', () => {
     expect(video.muted).toBe(true);
     playback.setVolume(0.6);
     expect(video.muted).toBe(false);
+    expect(playback.volume()).toBe(0.6);
+    expect(playback.muted()).toBe(false);
     playback.setVolume(5);
     expect(video.volume).toBe(1);
     playback.setVolume(-1);
