@@ -50,8 +50,8 @@ session editor, builder and test module declarations; Macro sync policy;
 Loro version differential runner; persisted simulation seeds; dependency
 hashes; regenerated WASM declarations; size script and S4 budget rows.
 Both command-builder helpers, test modules and regression seeds remain.
-Macro source own-undefined aliases canonicalize to their source null form on
-both sides, preserving strict comparisons and all underlying Loro values.
+Macro source own-undefined fields use null at storage boundaries and retain
+omitted canonical editor aliases, preserving strict comparisons and Loro values.
 The application session supplies its matching CommentNode constructor.
 Dependency hashes use the incoming values provisionally, pending actual
 post-merge install verification.
@@ -81,7 +81,7 @@ Conflict inventory for this merge:
 | crates/client/document_session_wasm/README.md | Retain provisional cap and startup measurement wording. |
 | crates/client/lexical/lexical_loro/AGENTS.md | Combine policy boundaries and document source-null canonicalization. |
 | crates/client/lexical/lexical_loro/src/test/differential/runner.ts | Preserve current editor and frozen server version checks. |
-| crates/client/lexical/macro_document_model/src/sync.rs | Use catalog-driven source nulls consistently on model and persisted reads. |
+| crates/client/lexical/macro_document_model/src/sync.rs | Separate catalog-driven wire nulls from canonical editor aliases. |
 | crates/sync_sim/tests/random_sessions.regressions-2 | Retain both saved cases. |
 | docs/design/lexical-port/S4-tests.md | Retain precise provisional cap and startup follow-up. |
 | nix-support/node_modules-hashes.json | Incoming values provisionally; actual install verification pending. |
@@ -93,3 +93,13 @@ Focused validation and the restarted full matrix use separate evidence under
 `/home/wolf/tmp/integration3-preview-merge/` and
 `/home/wolf/tmp/integration3-with-plugins/`. Passing focused checks are retained
 as same-commit evidence; interrupted earlier commands are not credited.
+
+
+The first merged mixed-version run exposed a storage/export boundary mismatch.
+Storage encoding now restores source-undefined fields as null only at writes;
+canonical editor JSON keeps its original precise omission rules. Initialization,
+local diffs, new subtrees and full sync all use storage encoders. Read and attach
+comparisons remain strict, and the TS comparator is unchanged. Three literal
+null/table tests pass, including raw storage, canonical export and no-op full-sync
+VV checks. Current and legacy mixed-version suites each pass9/9 after the fix.
+The earlier full T0 remains a recorded failure and will be rerun on this correction.

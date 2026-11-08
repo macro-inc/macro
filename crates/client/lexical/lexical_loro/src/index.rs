@@ -210,7 +210,7 @@ impl LoroProjection {
         doc.set_record_timestamp(false);
         schema::initialize_map(
             &root,
-            &synced_json(state, policy)?.root,
+            &storage_node(state.view(), NodeKey::ROOT, policy)?,
             schema::MapSchema::Node,
         )?;
         doc.commit_with(

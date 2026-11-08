@@ -30,8 +30,8 @@ fn reconcile(map: &LoroMap, new: &SerializedNode, policy: Option<&dyn SyncPolicy
     let mut before = Cow::Borrowed(before.as_object().ok_or_else(|| schema_error("node"))?);
     let mut new_fields = Cow::Borrowed(new);
     if let Some(policy) = policy {
-        mask_local(before.to_mut(), policy);
-        mask_local(new_fields.to_mut(), policy);
+        mask_local_state(before.to_mut(), policy);
+        storage_fields(new_fields.to_mut(), policy);
     }
     schema::diff_map(
         map,
@@ -159,7 +159,11 @@ fn reconcile_children(
             continue;
         }
         let map = list.insert_container(index, LoroMap::new())?;
-        schema::initialize_map(&map, own, schema::MapSchema::Node)?;
+        let mut stored = Cow::Borrowed(own);
+        if let Some(policy) = policy {
+            storage_tree(stored.to_mut(), policy);
+        }
+        schema::initialize_map(&map, &stored, schema::MapSchema::Node)?;
         live.insert(index, (id(node).map(str::to_owned), usize::MAX));
     }
     for node in new {
