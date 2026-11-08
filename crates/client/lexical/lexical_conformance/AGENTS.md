@@ -85,3 +85,7 @@ JSON null distinctly from the fixture encoding for undefined.
 Session::finish_noop closes an unchanged suspended update without a model commit,
 retaining detached API value objects. It must reject selection, composition,
 extension, event, reconciliation and queued-work effects; tags alone may close.
+
+Session::commit_prepared encodes artifacts against the upcoming host version before
+model publication. Preparation errors invalidate pending handles and retain the
+last committed host version; already published preceding transitions are retained.

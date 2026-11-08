@@ -151,9 +151,31 @@ impl Transaction<'_> {
         self.commit_phase()
     }
     pub(crate) fn commit_phase(&mut self) -> Result<Commit, Error> {
+        self.commit_phase_prepared(|_| Ok(()))
+            .map(|(commit, ())| commit)
+    }
+
+    /// Prepare a development host artifact before publishing pending model effects.
+    /// A preparation error drops this update; previously published preceding commits
+    /// remain published, and allocated keys/commit IDs are never reused.
+    #[cfg(feature = "foreign-nodes")]
+    pub fn commit_foreign<T, E: From<Error>>(
+        mut self,
+        prepare: impl FnOnce(&Commit) -> Result<T, E>,
+    ) -> Result<(Commit, T), E> {
+        if self.dirty_since_flush {
+            self.flush()?;
+        }
+        self.commit_phase_prepared(prepare)
+    }
+
+    fn commit_phase_prepared<T, E: From<Error>>(
+        &mut self,
+        prepare: impl FnOnce(&Commit) -> Result<T, E>,
+    ) -> Result<(Commit, T), E> {
         #[cfg(feature = "foreign-nodes")]
         if self.foreign_read_only {
-            return Err(Error::ForeignReadOnly);
+            return Err(Error::ForeignReadOnly.into());
         }
         let next_id = self.editor.keys.next_commit()?;
         let prev = self.editor.state.clone();
@@ -215,29 +237,20 @@ impl Transaction<'_> {
         if let Some(selection) = &mut self.pending.selection {
             selection.set_dirty(false);
         }
-        if dirty || selection_changed {
-            self.editor.state = self.pending.clone();
-        }
-        self.editor.carried_tags = if !dirty && selection_changed {
-            self.options.tags.clone()
-        } else {
-            TagSet::default()
-        };
         let composition_changed = self.editor.composition_key != self.composition_key;
-        self.editor.composition_key = self.composition_key;
-        self.editor.extensions = self.extensions.clone();
-        #[cfg(feature = "foreign-nodes")]
-        {
-            self.editor.suspend_version = next_id;
-        }
-        Ok(Commit {
+        let next = if dirty || selection_changed {
+            self.pending.clone()
+        } else {
+            prev.clone()
+        };
+        let commit = Commit {
             default_prevented: self.default_prevented,
             following: vec![],
             follow_up_error: None,
             events: std::mem::take(&mut self.events),
             id: next_id,
             prev,
-            next: self.editor.state.clone(),
+            next,
             changes,
             tags: self.options.tags.clone(),
             normalized: self.normalized.clone(),
@@ -248,7 +261,23 @@ impl Transaction<'_> {
             preceding: self.preceding.take(),
             #[cfg(feature = "bench-counters")]
             work: std::mem::take(&mut self.work),
-        })
+        };
+        let artifact = prepare(&commit)?;
+        if dirty || selection_changed {
+            self.editor.state = self.pending.clone();
+        }
+        self.editor.carried_tags = if !dirty && selection_changed {
+            self.options.tags.clone()
+        } else {
+            TagSet::default()
+        };
+        self.editor.composition_key = self.composition_key;
+        self.editor.extensions = self.extensions.clone();
+        #[cfg(feature = "foreign-nodes")]
+        {
+            self.editor.suspend_version = next_id;
+        }
+        Ok((commit, artifact))
     }
 }
 

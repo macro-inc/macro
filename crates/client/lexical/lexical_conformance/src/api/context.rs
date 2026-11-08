@@ -45,6 +45,13 @@ impl Context {
         self.replay.committed_version
     }
 
+    pub(super) fn publishing_version(&self) -> Result<u64> {
+        if self.scope != Scope::Publishing {
+            return Err(fail("finish the API update before preparation"));
+        }
+        Ok(self.replay.version)
+    }
+
     /// Capture a weak callback capability before registering foreign hooks.
     pub fn callbacks(&self) -> CallbackContext {
         CallbackContext::new(&self.frames)

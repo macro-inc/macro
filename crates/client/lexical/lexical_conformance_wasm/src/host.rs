@@ -182,16 +182,17 @@ impl EditorHandle {
         debug::json_payload(&Value::Bool(finished));
         Ok(finished)
     }
-    /// Publish and encode the flat diff, changed core records and mutation metadata.
+    /// Encode the flat diff and host metadata before publishing pending model effects.
     pub fn commit(&self) -> Result<Vec<u8>, JsValue> {
-        let packet = self.with_callback_session(|session| {
-            let commit = session.commit()?;
-            Ok(HostCommitPacket::from_commit(
-                &commit,
-                session.committed_version(),
-            )?)
+        let buffer = self.with_callback_session(|session| {
+            let (_, buffer) = session.commit_prepared(|commit, version| {
+                let packet = HostCommitPacket::from_commit(commit, version)?;
+                postcard::to_stdvec(&packet).map_err(|error| {
+                    lexical_conformance::replay::ReplayError::Mismatch(error.to_string())
+                })
+            })?;
+            Ok(buffer)
         })?;
-        let buffer = postcard::to_stdvec(&packet).map_err(debug::error)?;
         debug::returned_bytes(&buffer);
         Ok(buffer)
     }
