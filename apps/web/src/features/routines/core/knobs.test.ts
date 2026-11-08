@@ -131,3 +131,45 @@ describe('knob values', () => {
     });
   });
 });
+
+describe('entity knobs', () => {
+  const bugs: Knob = {
+    type: 'entity',
+    name: 'bugs',
+    label: 'Channel to post in',
+    entity_types: ['channel'],
+    value: { type: 'channel', id: 'channel-1' },
+  };
+
+  it('take only an item of a kind they allow', () => {
+    const other = { type: 'channel' as const, id: 'channel-2' };
+    expect(knobValueProblem(bugs, other)).toBeUndefined();
+    expect(knobValueProblem(bugs, { type: 'document', id: 'doc-1' })).toBe(
+      'Pick a channel.'
+    );
+    expect(knobValueProblem(bugs, 'bug-reports')).toBe('Pick a channel.');
+    expect(withKnobValue([bugs], 'bugs', other)).toEqual([
+      { ...bugs, value: other },
+    ]);
+    expect(withKnobValue([bugs], 'bugs', 'bug-reports')).toEqual([bugs]);
+  });
+
+  it('round-trip, including a starter’s knob with nothing picked', () => {
+    const unpicked = { ...bugs, name: 'next', value: null };
+    const stored = [
+      {
+        type: 'code' as const,
+        title: 'Post bugs',
+        source: 'export async function main() {}',
+        knobs: [bugs, unpicked],
+        sentence: 'Post open bugs in {bugs}, then {next}.',
+      },
+    ];
+    const steps = stepsFromWire(stored);
+    expect(steps?.[0]).toMatchObject({ knobs: [bugs, unpicked] });
+    expect(stepsToWire(steps!)).toEqual(stored);
+    expect(
+      sentenceText('Post open bugs in {bugs}, then {next}.', [bugs, unpicked])
+    ).toBe('Post open bugs in the chosen channel, then a channel.');
+  });
+});

@@ -178,7 +178,10 @@ test('an entity knob takes the handle of the item it names and sends its id', as
             name: 'bugs',
             label: 'Channel to post in',
             entity_types: ['channel'],
-            value: { type: 'channel', entity: macro.channels.byId('channel-1') },
+            value: {
+              type: 'channel',
+              entity: macro.channels.byId('channel-1'),
+            },
           },
           { type: 'number', name: 'days', label: 'Days', value: 7 },
         ],

@@ -7,9 +7,9 @@
  */
 
 import type { KnobName } from './knobName';
-import type { RoutineKnobEntity } from './routineKnobEntity';
 import type { RoutineKnobEntityType } from './routineKnobEntityType';
 import type { RoutineKnobOneOfOnethreeType } from './routineKnobOneOfOnethreeType';
+import type { RoutineKnobOneOfOnethreeValue } from './routineKnobOneOfOnethreeValue';
 
 /**
  * One of the owner's items the code uses, such as the channel it posts
@@ -24,6 +24,5 @@ export type RoutineKnobOneOfOnethree = {
   /** How the code reads it: `knobs.<name>`. */
   name: KnobName;
   type: RoutineKnobOneOfOnethreeType;
-  /** The item picked. */
-  value: RoutineKnobEntity;
+  value?: RoutineKnobOneOfOnethreeValue;
 };

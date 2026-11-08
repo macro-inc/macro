@@ -2411,7 +2411,7 @@
           {
             "type": "object",
             "description": "One of the owner's items the code uses, such as the channel it posts\nin, which the owner swaps by picking another. The code gets an SDK\nhandle for it, never its id.",
-            "required": ["name", "label", "entity_types", "value", "type"],
+            "required": ["name", "label", "entity_types", "type"],
             "properties": {
               "entity_types": {
                 "type": "array",
@@ -2433,8 +2433,15 @@
                 "enum": ["entity"]
               },
               "value": {
-                "$ref": "#/components/schemas/RoutineKnobEntity",
-                "description": "The item picked."
+                "oneOf": [
+                  {
+                    "type": "null"
+                  },
+                  {
+                    "$ref": "#/components/schemas/RoutineKnobEntity",
+                    "description": "The item picked; none yet in a starter, which its owner picks\nbefore saving."
+                  }
+                ]
               }
             }
           }

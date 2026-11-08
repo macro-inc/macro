@@ -119,6 +119,7 @@ export * from './routineKnobOneOfOneone';
 export * from './routineKnobOneOfOneoneType';
 export * from './routineKnobOneOfOnethree';
 export * from './routineKnobOneOfOnethreeType';
+export * from './routineKnobOneOfOnethreeValue';
 export * from './routineKnobOneOfSeven';
 export * from './routineKnobOneOfSevenType';
 export * from './routineKnobOneOfThree';

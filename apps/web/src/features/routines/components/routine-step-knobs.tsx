@@ -11,6 +11,7 @@ import {
   type SentencePart,
   sentenceParts,
 } from '../core/knobs';
+import { KnobEntityControl } from './routine-knob-entity';
 import { menuMount } from './routine-search-menu';
 
 type KnobChange = (name: string, value: Knob['value']) => void;
@@ -87,7 +88,8 @@ export function KnobSettings(props: { knobs: Knob[]; onKnob: KnobChange }) {
 
 /**
  * One knob's value: on/off flips in place, a choice opens a menu that saves
- * the option picked, and the rest open an editor.
+ * the option picked, an item opens the entity picker, and the rest open an
+ * editor.
  */
 function KnobControl(props: {
   knob: Knob;
@@ -99,6 +101,15 @@ function KnobControl(props: {
     >
       <Match when={props.knob.type === 'choice' && props.knob}>
         {(knob) => <KnobChoiceMenu knob={knob()} onChange={props.onChange} />}
+      </Match>
+      <Match when={props.knob.type === 'entity' && props.knob}>
+        {(knob) => (
+          <KnobEntityControl
+            knob={knob()}
+            class={VALUE}
+            onChange={props.onChange}
+          />
+        )}
       </Match>
       <Match when={props.knob.type === 'boolean' && props.knob}>
         {(knob) => (

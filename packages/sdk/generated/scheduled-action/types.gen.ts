@@ -715,10 +715,7 @@ export type RoutineKnob = {
      */
     name: KnobName;
     type: 'entity';
-    /**
-     * The item picked.
-     */
-    value: RoutineKnobEntity;
+    value?: null | RoutineKnobEntity;
 };
 
 /**
