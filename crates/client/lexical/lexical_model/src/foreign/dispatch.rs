@@ -371,10 +371,7 @@ pub(crate) fn vtable(definition: ForeignNodeType) -> NodeVTable {
             ForeignHook::CoerceTextContent,
             data,
             node,
-            |hooks, fields, node| match hooks.coerce_text_content(node, fields, requested) {
-                Override::Inherit => Override::Inherit,
-                Override::Value(value) => Override::Value(value.map(Cow::Owned)),
-            },
+            |_, _, _| Override::Inherit,
             |parent, data, node| (parent.coerce_text_content)(data, node, requested),
         )
     };
@@ -383,7 +380,7 @@ pub(crate) fn vtable(definition: ForeignNodeType) -> NodeVTable {
             ForeignHook::CheckSpliceText,
             data,
             node,
-            |hooks, fields, node| hooks.check_splice_text(node, fields, range.clone(), insert),
+            |_, _, _| Override::Inherit,
             |parent, data, node| (parent.check_splice_text)(data, node, range.clone(), insert),
         )
     };
@@ -392,7 +389,7 @@ pub(crate) fn vtable(definition: ForeignNodeType) -> NodeVTable {
             ForeignHook::CoerceDetail,
             data,
             node,
-            |hooks, fields, node| hooks.coerce_detail(node, fields, requested),
+            |_, _, _| Override::Inherit,
             |parent, data, node| (parent.coerce_detail)(data, node, requested),
         )
     };
@@ -401,7 +398,7 @@ pub(crate) fn vtable(definition: ForeignNodeType) -> NodeVTable {
             ForeignHook::CoerceMode,
             data,
             node,
-            |hooks, fields, node| hooks.coerce_mode(node, fields, requested),
+            |_, _, _| Override::Inherit,
             |parent, data, node| (parent.coerce_mode)(data, node, requested),
         )
     };
@@ -410,7 +407,7 @@ pub(crate) fn vtable(definition: ForeignNodeType) -> NodeVTable {
             ForeignHook::CoerceFormat,
             data,
             node,
-            |hooks, fields, node| hooks.coerce_format(node, fields, requested),
+            |_, _, _| Override::Inherit,
             |parent, data, node| (parent.coerce_format)(data, node, requested),
         )
     };

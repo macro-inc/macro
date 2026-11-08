@@ -244,17 +244,22 @@ fn runtime_static_transform_participates_in_the_model_fixpoint() -> Result<(), E
 }
 
 #[test]
-fn runtime_text_coercion_runs_before_the_framework_text_write() -> Result<(), Error> {
+fn runtime_text_override_owns_the_native_framework_write() -> Result<(), Error> {
     struct Hooks(Arc<AtomicU32>);
     impl ForeignHooks for Hooks {
         fn coerce_text_content(
             &self,
-            _node: NodeView<'_>,
-            _data: &ForeignData,
+            tx: &mut Transaction<'_>,
+            key: NodeKey,
             requested: &str,
-        ) -> Override<Result<String, Error>> {
+        ) -> Override<Result<(), Error>> {
             self.0.fetch_add(1, Ordering::SeqCst);
-            Override::Value(Ok(requested.to_uppercase()))
+            Override::Value(
+                tx.with_foreign_native(key, ForeignHook::CoerceTextContent, |tx| {
+                    tx.text(key)?.set_text_content(&requested.to_uppercase())?;
+                    Ok(())
+                }),
+            )
         }
     }
     let calls = Arc::new(AtomicU32::new(0));
@@ -632,20 +637,26 @@ fn runtime_text_splice_does_not_dispatch_the_set_text_content_override() -> Resu
     impl ForeignHooks for Hooks {
         fn coerce_text_content(
             &self,
-            _: NodeView<'_>,
-            _: &ForeignData,
+            tx: &mut Transaction<'_>,
+            key: NodeKey,
             requested: &str,
-        ) -> Override<Result<String, Error>> {
+        ) -> Override<Result<(), Error>> {
             self.setter.fetch_add(1, Ordering::SeqCst);
-            Override::Value(Ok(requested.to_uppercase()))
+            Override::Value(
+                tx.with_foreign_native(key, ForeignHook::CoerceTextContent, |tx| {
+                    tx.text(key)?.set_text_content(&requested.to_uppercase())?;
+                    Ok(())
+                }),
+            )
         }
         fn check_splice_text(
             &self,
-            _: NodeView<'_>,
-            _: &ForeignData,
+            _: &mut Transaction<'_>,
+            _: NodeKey,
             _: std::ops::Range<Utf16Offset>,
             _: &str,
-        ) -> Override<Result<SpliceText, Error>> {
+            _: bool,
+        ) -> Override<Result<(), Error>> {
             self.splice.fetch_add(1, Ordering::SeqCst);
             Override::Inherit
         }

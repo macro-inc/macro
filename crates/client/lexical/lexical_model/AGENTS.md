@@ -136,3 +136,5 @@ Native-super currently selects the nearest registered native ancestor. Explicit 
 Track foreign captured-record identity with immutable marker tokens that do not retain records or affect writability; copy-on-write slot clones receive fresh markers. Resolve materialized read identities through source aliases, and never substitute payload-copy addresses for source identity.
 
 Hide typed native projections while invoking pure foreign hooks, but retain the lexical projection stack for owned read captures; nested native predicates and sibling hooks must capture all pending projected payload fields with their original source identities.
+
+Give runtime ForeignHooks text setters the current mutable transaction and ownership of the whole operation; Override::Value does not trigger a second framework write. Native TextNode coercion stays pure on fallback. Run the write guard before callbacks, and consume native-super bypass before walking any runtime ancestors.

@@ -137,6 +137,16 @@ impl TextMut<'_, '_> {
     /// s2: TX-08
     pub fn set_text_content(&mut self, text: &str) -> Result<&mut Self, Error> {
         self.tx.guard_write()?;
+        #[cfg(feature = "foreign-nodes")]
+        if let Some(result) = crate::foreign::text::override_operation(
+            self.tx,
+            self.key,
+            ForeignHook::CoerceTextContent,
+            |hooks, tx| hooks.coerce_text_content(tx, self.key, text),
+        ) {
+            result?;
+            return Ok(self);
+        }
         let slot = self
             .tx
             .view()
@@ -169,6 +179,16 @@ impl TextMut<'_, '_> {
     /// Set format through the node's coercion hook.
     pub fn set_format(&mut self, value: TextFormat) -> Result<&mut Self, Error> {
         self.tx.guard_write()?;
+        #[cfg(feature = "foreign-nodes")]
+        if let Some(result) = crate::foreign::text::override_operation(
+            self.tx,
+            self.key,
+            ForeignHook::CoerceFormat,
+            |hooks, tx| hooks.coerce_format(tx, self.key, value),
+        ) {
+            result?;
+            return Ok(self);
+        }
         let slot = self
             .tx
             .view()
@@ -202,6 +222,16 @@ impl TextMut<'_, '_> {
     /// Set detail through the node's coercion hook.
     pub fn set_detail(&mut self, value: TextDetail) -> Result<&mut Self, Error> {
         self.tx.guard_write()?;
+        #[cfg(feature = "foreign-nodes")]
+        if let Some(result) = crate::foreign::text::override_operation(
+            self.tx,
+            self.key,
+            ForeignHook::CoerceDetail,
+            |hooks, tx| hooks.coerce_detail(tx, self.key, value),
+        ) {
+            result?;
+            return Ok(self);
+        }
         let slot = self
             .tx
             .view()
@@ -235,6 +265,16 @@ impl TextMut<'_, '_> {
     /// Set mode through the node's coercion hook.
     pub fn set_mode(&mut self, value: TextMode) -> Result<&mut Self, Error> {
         self.tx.guard_write()?;
+        #[cfg(feature = "foreign-nodes")]
+        if let Some(result) = crate::foreign::text::override_operation(
+            self.tx,
+            self.key,
+            ForeignHook::CoerceMode,
+            |hooks, tx| hooks.coerce_mode(tx, self.key, value),
+        ) {
+            result?;
+            return Ok(self);
+        }
         let slot = self
             .tx
             .view()
@@ -301,6 +341,18 @@ impl TextMut<'_, '_> {
         move_selection: bool,
     ) -> Result<&mut Self, Error> {
         self.tx.guard_write()?;
+        #[cfg(feature = "foreign-nodes")]
+        if let Some(result) = crate::foreign::text::override_operation(
+            self.tx,
+            self.key,
+            ForeignHook::CheckSpliceText,
+            |hooks, tx| {
+                hooks.check_splice_text(tx, self.key, range.clone(), insert, move_selection)
+            },
+        ) {
+            result?;
+            return Ok(self);
+        }
         let slot = self
             .tx
             .view()
