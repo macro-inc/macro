@@ -60,3 +60,36 @@ The production WASM compiled and declarations were regenerated. Raw size is
 6,782,069 bytes; Brotli size is **1,552,476 bytes**. The unchanged provisional
 1,130,000-byte gate therefore **fails by 422,476 bytes**. No size tuning or cap
 increase was applied. Focused session and Lexical tests are running at two jobs.
+
+
+Preview merge commit: `2563ee6a13`. The preview orchestrator was notified
+immediately after commit. Frozen install passed (1,932 installs across 1,895
+packages). Client production feature graph excludes composers, server crates,
+Tokio, axum, SQLx, workspace-hack and Loro development utilities.
+
+Conflict inventory for this merge:
+
+| Path | Resolution |
+| --- | --- |
+| apps/web/AGENTS.md | Retain incoming provisional cap and startup measurement guidance. |
+| apps/web/scripts/document-session-size.ts | Keep exact 1,130,000-byte cap and incoming provisional-budget comment. |
+| crates/client/doc_sync_core/AGENTS.md | Remove duplicate whitespace; retain recovery rules. |
+| crates/client/document_session/AGENTS.md | Retain cursor, IME, supplied annotation factory and both builder APIs. |
+| crates/client/document_session/src/editor.rs | Export both builder helpers; retain undo observations, handled state and test faults. |
+| crates/client/document_session/src/editor/builder.rs | Compose session identity tracking over the shared command helper once. |
+| crates/client/document_session/src/test.rs | Retain annotation, IME and presence modules. |
+| crates/client/document_session_wasm/README.md | Retain provisional cap and startup measurement wording. |
+| crates/client/lexical/lexical_loro/AGENTS.md | Combine policy boundaries and document source-null canonicalization. |
+| crates/client/lexical/lexical_loro/src/test/differential/runner.ts | Preserve current editor and frozen server version checks. |
+| crates/client/lexical/macro_document_model/src/sync.rs | Use catalog-driven source nulls consistently on model and persisted reads. |
+| crates/sync_sim/tests/random_sessions.regressions-2 | Retain both saved cases. |
+| docs/design/lexical-port/S4-tests.md | Retain precise provisional cap and startup follow-up. |
+| nix-support/node_modules-hashes.json | Incoming values provisionally; actual install verification pending. |
+| packages/collaboration/AGENTS.md | Retain timer rearming and legacy-storage rules. |
+| packages/collaboration/src/session/wasm.generated.d.ts | Regenerate from the actual merged production build. |
+| packages/lexical-conformance/diff/README.md | Retain independent profiles and native prebuild guidance. |
+
+Focused validation and the restarted full matrix use separate evidence under
+`/home/wolf/tmp/integration3-preview-merge/` and
+`/home/wolf/tmp/integration3-with-plugins/`. Passing focused checks are retained
+as same-commit evidence; interrupted earlier commands are not credited.
