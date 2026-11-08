@@ -165,6 +165,36 @@ export type AiAdmissionErrorBody = {
 };
 
 /**
+ * A routine to check, as the create body takes it.
+ */
+export type CheckRoutineRequest = {
+    /**
+     * What a routine draft's session created for the routine to use, such as
+     * the database it writes to; kept with its draft for the person to see.
+     */
+    created?: Array<CreatedItem>;
+    routine: ActionConfiguration;
+};
+
+/**
+ * A code step that doesn't type-check.
+ */
+export type CheckedStepProblems = {
+    /**
+     * Its place among the routine's steps, from zero.
+     */
+    index: number;
+    /**
+     * What the type checker reports, first problems first.
+     */
+    problems: Array<string>;
+    /**
+     * Its title.
+     */
+    title: string;
+};
+
+/**
  * Who a routine's code steps write as.
  */
 export type CodeIdentity = 'agent' | 'owner';
@@ -247,6 +277,22 @@ export type ConditionResult = {
 };
 
 /**
+ * Something a routine draft's session created for the routine to use, such
+ * as the database it writes to: it exists whether or not the routine is
+ * saved.
+ */
+export type CreatedItem = {
+    /**
+     * Its id.
+     */
+    entityId: string;
+    /**
+     * What kind of item.
+     */
+    entityType: 'user' | 'chat' | 'channel' | 'channel_message' | 'document' | 'project' | 'email_thread' | 'calendar_event' | 'team' | 'call' | 'foreign_entity' | 'static_file' | 'crm_company' | 'crm_contact' | 'crm_pipeline' | 'reminder' | 'skill' | 'agent_session' | 'scheduled_action' | 'initiative' | 'database' | 'database_row' | 'form' | 'external_chat';
+};
+
+/**
  * What AI drafted, or why it couldn't.
  */
 export type Draft = (DraftedRoutine & {
@@ -254,12 +300,14 @@ export type Draft = (DraftedRoutine & {
 }) | (DraftedStep & {
     outcome: 'step';
 }) | {
+    created?: Array<DraftCreated>;
     message: string;
     outcome: 'failed';
 };
 
 /**
- * What the drafter may write, and the person's workspace by name and id.
+ * What the drafter may write. It looks up the items the person's words
+ * name itself, with their access.
  */
 export type DraftContext = {
     /**
@@ -280,7 +328,26 @@ export type DraftContext = {
      * IANA time zone schedules are written in, e.g. `America/New_York`.
      */
     timezone: string;
-    workspace?: Workspace;
+};
+
+/**
+ * Something a draft's session created. It exists whether or not the draft
+ * is saved.
+ */
+export type DraftCreated = {
+    /**
+     * Its id.
+     */
+    entityId: string;
+    /**
+     * What kind of item.
+     */
+    entityType: 'user' | 'chat' | 'channel' | 'channel_message' | 'document' | 'project' | 'email_thread' | 'calendar_event' | 'team' | 'call' | 'foreign_entity' | 'static_file' | 'crm_company' | 'crm_contact' | 'crm_pipeline' | 'reminder' | 'skill' | 'agent_session' | 'scheduled_action' | 'initiative' | 'database' | 'database_row' | 'form' | 'external_chat';
+    /**
+     * Whether the drafted routine uses it. One it doesn't use was made for
+     * nothing, or is the routine's own work done early.
+     */
+    used: boolean;
 };
 
 /**
@@ -313,6 +380,11 @@ export type DraftRoutineRequest = {
  * A drafted routine.
  */
 export type DraftedRoutine = {
+    /**
+     * What AI created while drafting, such as the database the routine
+     * writes to. These exist whether or not the routine is saved.
+     */
+    created: Array<DraftCreated>;
     name: string;
     /**
      * Steps whose code still fails the type checker.
@@ -330,6 +402,11 @@ export type DraftedRoutine = {
  * A drafted step.
  */
 export type DraftedStep = {
+    /**
+     * What AI created while drafting the step. These exist whether or not
+     * the step is saved.
+     */
+    created: Array<DraftCreated>;
     /**
      * What the type checker still finds in its code.
      */
@@ -461,14 +538,6 @@ export type InProgressExecution = {
 export type KnobName = string;
 
 /**
- * An item and its name.
- */
-export type NamedItem = {
-    id: string;
-    name: string;
-};
-
-/**
  * `path` walks objects by key; `*` steps into every element of an array and
  * a number into one. Give exactly one test. `notIn` also passes when the
  * path finds nothing.
@@ -516,6 +585,30 @@ export type PropertySelector = {
      * add. Any change to the property matches when empty.
      */
     values?: Array<string>;
+};
+
+/**
+ * What saving a routine would find wrong, without saving it: the answer to
+ * `POST /scheduled-actions/check`.
+ */
+export type RoutineCheck = {
+    /**
+     * Whether saving it would succeed: no problems and no failing steps.
+     */
+    ok: boolean;
+    /**
+     * Why saving it would fail, other than its code, for its author.
+     */
+    problems: Array<string>;
+    /**
+     * The routine as saving would store it: code steps named and the SDK
+     * their code checks against stamped.
+     */
+    routine: ActionConfiguration;
+    /**
+     * Code steps that don't type-check against Macro's SDK.
+     */
+    steps: Array<CheckedStepProblems>;
 };
 
 /**
@@ -966,48 +1059,6 @@ export type UpgradeOutcome = 'running' | 'checked' | 'rewritten' | 'needs_update
  */
 export type VariableFill = 'activator' | 'shared' | 'choice';
 
-/**
- * The items AI may name in a draft. They are data for the model; saving
- * checks every id the draft uses.
- */
-export type Workspace = {
-    /**
-     * Agents a step may hand the run to.
-     */
-    agents?: Array<WorkspaceAgent>;
-    channels?: Array<NamedItem>;
-    /**
-     * Projects.
-     */
-    folders?: Array<NamedItem>;
-    /**
-     * Email label names.
-     */
-    labels?: Array<string>;
-    people?: Array<NamedItem>;
-    /**
-     * Tag options, by the property definition they belong to.
-     */
-    tags?: Array<WorkspaceTag>;
-};
-
-/**
- * An agent and its bot id.
- */
-export type WorkspaceAgent = {
-    botId: string;
-    name: string;
-};
-
-/**
- * A tag: one option of a property.
- */
-export type WorkspaceTag = {
-    definitionId: string;
-    label: string;
-    optionId: string;
-};
-
 export type ScheduledActionHealthData = {
     body?: never;
     path?: never;
@@ -1071,6 +1122,29 @@ export type CreateScheduledActionResponses = {
 };
 
 export type CreateScheduledActionResponse = CreateScheduledActionResponses[keyof CreateScheduledActionResponses];
+
+export type CheckScheduledActionData = {
+    body: CheckRoutineRequest;
+    path?: never;
+    query?: never;
+    url: '/scheduled-actions/check';
+};
+
+export type CheckScheduledActionErrors = {
+    400: string;
+    401: string;
+    403: string;
+    500: string;
+    503: string;
+};
+
+export type CheckScheduledActionError = CheckScheduledActionErrors[keyof CheckScheduledActionErrors];
+
+export type CheckScheduledActionResponses = {
+    200: RoutineCheck;
+};
+
+export type CheckScheduledActionResponse = CheckScheduledActionResponses[keyof CheckScheduledActionResponses];
 
 export type RoutineCodeStartersData = {
     body?: never;

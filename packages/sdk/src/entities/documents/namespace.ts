@@ -4,10 +4,10 @@ import type { MacroClient } from '../../utils/client';
 import type { EmailAttachment } from '../email/attachment';
 import type { Project } from '../projects/project';
 import type { SearchOpts } from '../search/options';
+import { Spreadsheet } from '../spreadsheets/spreadsheet';
 import type { Team } from '../teams/team';
 import { User } from '../users/user';
 import { Document } from './document';
-import { Spreadsheet } from './spreadsheet';
 import { SystemSkill } from './system-skill';
 
 /** One skill found by {@link DocumentNamespace.skills}. */
@@ -40,6 +40,7 @@ function toBlob(content: FileContent): Blob {
  *
  * Change the text of an existing Markdown document or task body in place, with `document.edit(instructions)` in code or the `EditDocument` tool where code isn't available. Never recreate the document or upload its Markdown to change its text. PDF, Word and other uploaded files can't be edited this way.
  *
+ * When a program already holds the exact new Markdown, as an integration syncing from another system does, read `document.contentWithRevision()` and write with `document.setContent(markdown, {expectedRevision})`: the write lands only if nobody changed the document since the read, and throws `DocumentChangedError` otherwise, so read again and reapply instead of overwriting.
  * ## Uploaded Office and design files
  *
  * Edit an uploaded Word file with `readWord()` then `editWord(operations)`, and a PowerPoint deck with `readPresentation()` then `editPresentation(operations)` (or `copyPresentation()` for a new deck): both address paragraphs, slides and shapes by the ids the read reports. Read Figma, Photoshop and Illustrator files with `readDesign()`, `readPhotoshop()` and `readIllustrator()`; they can't be edited. Never rebuild these files from `bytes()`.
