@@ -31,7 +31,7 @@ adapters are `crates/comms/contacts_outbound`.
 
 - Depends on: `macro_user_id`, `subsequence_match`.
 - Used by: `graphql_contacts` (paged directory reads), `complete_graph`,
-  `teams` (backfill on team join), `channels`, `databases_sql`, the
+  `teams` (backfill on team join), `channels`, `database_sql_runner`, the
   adapter crates, and through the `contacts` facade the composition roots and
   `ai_tools`.
 

@@ -1,6 +1,6 @@
 /**
  * Tool renderers for the Macro Databases toolsets: QueryDatabase and
- * SaveDatabaseQuery from `crates/databases/databases_sql/src/toolset`, the rest from
+ * SaveDatabaseQuery from `crates/databases/database_sql_runner/src/toolset`, the rest from
  * `crates/databases/databases/src/inbound/toolset`.
  */
 

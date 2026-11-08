@@ -52,7 +52,7 @@ export type DatabaseSqlSourceFailure = Extract<
   { kind: 'fetch' | 'rejected' | 'scope-changed' }
 >;
 
-/** Where rows come from. Mirrors `database_sql::run::RowSource`. */
+/** Where rows come from. Mirrors `database_sql_engine::run::RowSource`. */
 export interface RowSource {
   /**
    * One page of a `soup` or `people` query, from `cursor` (the start when

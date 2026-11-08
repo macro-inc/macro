@@ -2,8 +2,8 @@
 
 use std::{future::Future, pin::Pin, sync::Arc};
 
+use database_sql_runner::view_rows::{ViewRowsPage, ViewRowsRequest, ViewRowsService};
 use databases::domain::{models::Viewer, receipt::database_receipt};
-use databases_sql::view_rows::{ViewRowsPage, ViewRowsRequest, ViewRowsService};
 use entity_access::domain::{models::ViewAccessLevel, ports::EntityAccessService};
 use graphql_soup::SoupItemDataLoader;
 use macro_user_id::user_id::MacroUserIdStr;

@@ -6,7 +6,7 @@ use std::sync::LazyLock;
 use agent::types::AssistantMessagePart;
 use ai_toolset::ToolKind;
 use ai_toolset::schema::generate_validated_input_schema;
-use databases_sql::toolset::{QueryDatabase, SaveDatabaseQuery};
+use database_sql_runner::toolset::{QueryDatabase, SaveDatabaseQuery};
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 
@@ -103,7 +103,7 @@ struct QueryDatabaseReceipt {
     statement: ReceiptStatement,
 }
 
-/// The kinds of `databases_sql::SqlStatement`, which is serialize-only.
+/// The kinds of `database_sql_runner::SqlStatement`, which is serialize-only.
 #[derive(Deserialize)]
 #[serde(tag = "kind", rename_all = "camelCase")]
 enum ReceiptStatement {

@@ -8,7 +8,7 @@ publish = false
 async-graphql = { workspace = true, features = ["dataloader", "chrono"] }
 chrono = { workspace = true }
 databases = { workspace = true, features = ["ports", "view_rows"] }
-databases_sql = { workspace = true }
+database_sql_runner = { workspace = true }
 entity_access = { workspace = true, features = ["ports"] }
 futures = { workspace = true }
 graphql_common = { workspace = true }
