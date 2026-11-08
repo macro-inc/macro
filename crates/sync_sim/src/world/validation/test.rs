@@ -425,3 +425,28 @@ fn actual_delivery_above_a_true_gap_requires_both_core_and_cold_proof() {
         .clear();
     assert!(invariants::all_wals_drained(&no_cold_proof).is_err());
 }
+
+#[test]
+fn settlement_drains_an_issued_router_token_failure_through_the_real_route() {
+    let mut config = SimConfig::routed(257);
+    config.net.connect_latency = (Millis(10), Millis(10));
+    let mut sim = Sim::new(config);
+    sim.apply_step(Step::Open(OpenSpec::form("a", "browser")))
+        .unwrap();
+    sim.apply_step(Step::TokenFetchFail {
+        client: ClientName("a".into()),
+        n: 1,
+    })
+    .unwrap();
+    sim.advance(10);
+    let failed_at = sim
+        .clock
+        .pending_token_failures_until()
+        .expect("actual issued router token failure");
+    assert!(failed_at > sim.clock.now);
+    sim.apply_step(Step::Settle).unwrap();
+    let outcome = sim.run(&[]);
+    invariants::check_all(&outcome).unwrap();
+    let initial_at = outcome.events.iter().find_map(|event| matches!(&event.fact, Fact::Frame { client, kind: FrameKind::InitialSync, fate, .. } if client.0 == "a" && fate == "Delivered").then_some(event.at.0)).unwrap();
+    assert!(initial_at > failed_at);
+}

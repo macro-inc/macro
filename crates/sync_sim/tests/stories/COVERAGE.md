@@ -72,3 +72,10 @@ parked intervals and parking metadata separately; both mutations must fail edit 
 
 `gap_parent::adopted_history_with_a_server_parent_survives_cold_recovery` retains
 literal414 and checks actual delivery after the server supplies an adopted row's parent.
+
+Settlement publication boundaries: lifecycle tests cover delayed issued selections,
+bounded backward clocks, and overlapping one-millisecond refreshes on direct and
+routed links with deferred server callbacks. `presence_snapshot` retains literal359
+and requires the first snapshot to survive later heartbeat hold restarts. `faults`
+and the routed native unit complete immutable issued token failures before healing
+Online, preserving the real core's pending-attempt retry policy.

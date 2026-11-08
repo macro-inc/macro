@@ -22,6 +22,16 @@ pub(super) struct Host {
     sockets: BTreeMap<String, (u64, DocIx, WebSocketId)>,
 }
 impl Sim {
+    pub(super) fn presence_route_epochs(&self) -> Vec<(ProfileName, String, u64)> {
+        self.routers
+            .iter()
+            .flat_map(|(profile, host)| {
+                host.sockets
+                    .iter()
+                    .map(|(doc, (epoch, _, _))| (profile.clone(), doc.clone(), *epoch))
+            })
+            .collect()
+    }
     pub(super) fn router_profile(&self, key: &LinkKey) -> Option<ProfileName> {
         self.routers
             .iter()

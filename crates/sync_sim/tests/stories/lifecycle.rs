@@ -356,3 +356,119 @@ fn receiver_crashed_before_source_has_no_stale_live_presence_obligation() {
         .retain(|event| !matches!(&event.fact, Fact::Crashed { client } if client.0 == "receiver"));
     assert!(invariants::presence_expires(&live_receiver).is_err());
 }
+
+#[test]
+fn first_presence_snapshot_waits_for_the_issued_publications_to_arrive() {
+    let config = SimConfig::calm(241);
+    verify(
+        config,
+        &[
+            Step::Open(OpenSpec::form("a", "one")),
+            Step::Open(OpenSpec::form("b", "two")),
+            Step::Run(Millis(500)),
+            Step::Net(NetStep::Profile(NetProfile {
+                latency: (Millis(1_000), Millis(1_000)),
+                ..NetProfile::calm()
+            })),
+            Step::Edit {
+                client: ClientName("a".into()),
+                op: AbstractOp::Select(Some(1)),
+            },
+            Step::Edit {
+                client: ClientName("b".into()),
+                op: AbstractOp::Select(Some(2)),
+            },
+            Step::Run(Millis(26)),
+            Step::Settle,
+        ],
+    );
+}
+
+#[test]
+fn bounded_backward_clock_keeps_offsets_and_resends_after_lww_time_catches_up() {
+    let outcome = verify(
+        SimConfig::calm(251),
+        &[
+            Step::Open(OpenSpec::form("a", "one")),
+            Step::Open(OpenSpec::form("b", "two")),
+            Step::Run(Millis(5_000)),
+            Step::ClockSkew {
+                client: ClientName("b".into()),
+                wall_offset_ms: -2_488,
+            },
+            Step::Edit {
+                client: ClientName("a".into()),
+                op: AbstractOp::Select(Some(1)),
+            },
+            Step::Edit {
+                client: ClientName("b".into()),
+                op: AbstractOp::Select(Some(2)),
+            },
+            Step::Settle,
+        ],
+    );
+    assert_eq!(outcome.finals.clients[&ClientName("b".into())].skew, -2_488);
+}
+
+#[test]
+fn overlapping_periodic_refreshes_do_not_extend_the_healing_barrier() {
+    let mut config = SimConfig::calm(263);
+    config.session.presence_refresh = Some(doc_sync_core::Millis(1));
+    config.session.wal.coalesce = doc_sync_core::Millis(1);
+    config.session.heartbeat.interval = doc_sync_core::Millis(100);
+    config.budgets.quiet = Millis(100);
+    config.budgets.settle = Millis(5_000);
+    verify(
+        config,
+        &[
+            Step::Open(OpenSpec::form("a", "one")),
+            Step::Open(OpenSpec::form("b", "two")),
+            Step::Run(Millis(500)),
+            Step::Edit {
+                client: ClientName("a".into()),
+                op: AbstractOp::Select(Some(1)),
+            },
+            Step::Edit {
+                client: ClientName("b".into()),
+                op: AbstractOp::Select(Some(2)),
+            },
+            Step::Settle,
+        ],
+    );
+}
+
+#[test]
+fn routed_healing_barriers_drain_deferred_callbacks_with_overlapping_refreshes() {
+    let mut config = SimConfig::routed(269);
+    config.session.presence_refresh = Some(doc_sync_core::Millis(1));
+    config.session.wal.coalesce = doc_sync_core::Millis(1);
+    config.session.heartbeat.interval = doc_sync_core::Millis(100);
+    config.budgets.quiet = Millis(100);
+    config.budgets.settle = Millis(5_000);
+    verify(
+        config,
+        &[
+            Step::Open(OpenSpec::form("a", "one")),
+            Step::Open(OpenSpec::form("b", "two")),
+            Step::Run(Millis(500)),
+            Step::Server(ServerStep::DelayStorage(Millis(200))),
+            Step::Edit {
+                client: ClientName("a".into()),
+                op: AbstractOp::FormSet {
+                    field: 0,
+                    value: 11,
+                },
+            },
+            Step::Edit {
+                client: ClientName("a".into()),
+                op: AbstractOp::Select(Some(1)),
+            },
+            Step::Edit {
+                client: ClientName("b".into()),
+                op: AbstractOp::Select(Some(2)),
+            },
+            Step::Run(Millis(20)),
+            Step::Settle,
+        ],
+    );
+}
