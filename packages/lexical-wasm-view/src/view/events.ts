@@ -7,6 +7,7 @@ import {
   CommandCode,
   EditorInputMsg,
 } from '@macro-inc/collaboration/session/abi.generated';
+import { textLeaf } from './dom';
 import { DragAccess } from './drag';
 import type { EditorView } from './editor-view';
 import { readSelection, resolvePoint, sameSelection } from './selection';
@@ -72,7 +73,7 @@ export function shouldPreventDefaultAndInsertText(
     const node = view.node(anchor.key),
       props = node?.textProps;
     if (node && props) {
-      const dom = view.getElementByKey(node.key)?.firstChild;
+      const dom = textLeaf(view.getElementByKey(node.key));
       if (domSelection?.anchorNode !== dom) facts |= 2;
       const parent = node.parent === null ? null : view.node(node.parent);
       const nodeFlags = view.flags(node);
@@ -226,7 +227,7 @@ export function registerEvents(view: EditorView): {
       view.port.composition(
         1,
         pending.key,
-        view.getElementByKey(pending.key)?.firstChild?.nodeValue ?? '',
+        textLeaf(view.getElementByKey(pending.key))?.nodeValue ?? '',
         selection.kind === 'range' ? selection.anchor.offset : 0,
         selection.kind === 'range' ? selection.focus.offset : 0,
         pending.data
@@ -365,7 +366,7 @@ export function registerEvents(view: EditorView): {
       view.port.composition(
         1,
         pending.key,
-        view.getElementByKey(pending.key)?.firstChild?.nodeValue ?? '',
+        textLeaf(view.getElementByKey(pending.key))?.nodeValue ?? '',
         selection.kind === 'range' ? selection.anchor.offset : 0,
         selection.kind === 'range' ? selection.focus.offset : 0,
         pending.data
@@ -401,7 +402,7 @@ export function registerEvents(view: EditorView): {
       pendingEnd = { key, data: event.data };
       return;
     }
-    const dom = view.getElementByKey(key)?.firstChild;
+    const dom = textLeaf(view.getElementByKey(key));
     const selection = readSelection(view);
     view.port.composition(
       1,

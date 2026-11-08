@@ -194,7 +194,7 @@ test('lists, tables, links, stored code highlights and marks render from real WA
   await expect(page.locator('#editor mark')).toHaveText('Marked');
   await expect(page.locator('#editor code')).toHaveText('const n = 1;');
   await expect(
-    page.locator('#editor p span').filter({ hasText: /^Bold$/ })
+    page.locator('#editor p strong').filter({ hasText: /^Bold$/ })
   ).toHaveCSS('font-weight', '700');
   expect(
     await page
@@ -470,3 +470,76 @@ test('drag lifecycle carries internal keys to the application move handler', asy
   expect(drag.caret).toBe(false);
   expect(await page.evaluate(() => window.fixture.text())).toBe('a');
 });
+
+test('stored links follow upstream protocol filtering and formatted text keeps nested semantics', async ({
+  page,
+}) => {
+  await page.evaluate(() => {
+    const text = (value: string, format = 0) => ({
+      type: 'text',
+      version: 1,
+      text: value,
+      format,
+      detail: 0,
+      mode: 'normal',
+      style: '',
+    });
+    const urls = [
+      'java\tscript:alert(1)',
+      'java\nscript:alert(1)',
+      'ftp://example.com',
+      'javascript:alert(1)',
+      'https://example.com',
+      'mailto:user@example.com',
+      'example.com',
+    ];
+    window.fixture.setState(
+      JSON.stringify({
+        root: {
+          type: 'root',
+          version: 1,
+          children: [
+            {
+              type: 'paragraph',
+              version: 1,
+              children: [
+                ...urls.map((url) => ({
+                  type: 'link',
+                  version: 1,
+                  url,
+                  children: [text(url)],
+                })),
+                text('nested', 17),
+              ],
+            },
+          ],
+        },
+      })
+    );
+  });
+  const links = page.locator('#editor a');
+  await expect(links).toHaveCount(7);
+  expect(
+    await links.evaluateAll((nodes) =>
+      nodes.map((node) => node.getAttribute('href'))
+    )
+  ).toEqual([
+    'https://java\tscript:alert(1)',
+    'https://java\nscript:alert(1)',
+    'about:blank',
+    'about:blank',
+    'https://example.com',
+    'mailto:user@example.com',
+    'https://example.com',
+  ]);
+  await expect(page.locator('#editor code > strong')).toHaveText('nested');
+  await page.evaluate(() => {
+    const leaf = document.querySelector('#editor code > strong')?.firstChild;
+    if (!leaf) throw new Error('Missing nested leaf');
+    document.getSelection()?.setBaseAndExtent(leaf, 6, leaf, 6);
+  });
+  await page.keyboard.type('!');
+  await expect(page.locator('#editor code > strong')).toHaveText('nested!');
+  expect(await page.evaluate(() => window.fixture.errors)).toEqual([]);
+});
+

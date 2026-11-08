@@ -3,6 +3,7 @@
  * MIT licensed. Retargeted LexicalSelection.ts DOM point resolution and
  * unchanged-selection early return, Lexical 0.45.0, 0cfcc169296723e07de2396cd42ea3434b5b79ed.
  */
+import { textLeaf } from './dom';
 import type { EditorView } from './editor-view';
 import type { Point, ViewSelection } from './types';
 
@@ -16,7 +17,7 @@ export function resolvePoint(
   const node = view.node(key);
   if (!node) return null;
   if (node.kind === 'text') {
-    const text = view.getElementByKey(key)?.firstChild;
+    const text = textLeaf(view.getElementByKey(key));
     const textOffset =
       dom.nodeType === 3 ? offset : offset === 0 ? 0 : node.text.length;
     if (
@@ -96,10 +97,10 @@ export function domPoint(
   const dom = view.getElementByKey(point.key);
   const record = view.node(point.key);
   if (!dom || !record) return null;
-  if (point.type === 'text')
-    return dom.firstChild
-      ? { node: dom.firstChild, offset: point.offset }
-      : null;
+  if (point.type === 'text') {
+    const leaf = textLeaf(dom);
+    return leaf ? {node: leaf, offset: point.offset} : null;
+  }
   const slot = view.slot(point.key);
   if (!slot) return null;
   const nextKey = record.children[point.offset];
