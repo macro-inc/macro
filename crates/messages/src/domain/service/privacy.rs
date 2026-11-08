@@ -35,7 +35,15 @@ impl<R: MessageRepository, E: MessageEventPublisher> MessageService<R, E> {
         self
     }
 
-    #[tracing::instrument(skip_all, err)]
+    #[tracing::instrument(
+        skip_all,
+        err,
+        fields(
+            ephemeral = tracing::field::Empty,
+            private = tracing::field::Empty,
+            forked_private_thread = false,
+        )
+    )]
     pub(super) async fn post_visibility(
         &self,
         access: &EntityAccessReceipt<MessageWrite>,
@@ -49,6 +57,9 @@ impl<R: MessageRepository, E: MessageEventPublisher> MessageService<R, E> {
             }
             None => false,
         };
+        let span = tracing::Span::current();
+        span.record("ephemeral", ephemeral);
+        span.record("private", false);
         // A call's canonical thread is created atomically by its first post.
         // It is always shared, so privacy must not require that root to exist.
         if matches!(parent_from_receipt(access)?, MessageParent::Call(_)) {
@@ -64,11 +75,13 @@ impl<R: MessageRepository, E: MessageEventPublisher> MessageService<R, E> {
                 .active_thread(access.auth(), &parent_from_receipt(access)?, root)
                 .await?;
             if !state.visibility.is_public() || !ephemeral {
+                span.record("private", !state.visibility.is_public());
                 return Ok(state.visibility);
             }
             // Mentioning an ephemeral agent in a shared thread starts a separate
             // private thread without changing the shared thread's audience.
             input.thread_id = None;
+            span.record("forked_private_thread", true);
         }
         if !ephemeral {
             return Ok(MessageVisibility::Public);
@@ -87,6 +100,7 @@ impl<R: MessageRepository, E: MessageEventPublisher> MessageService<R, E> {
                 bots.push(sender);
             }
         }
+        span.record("private", true);
         Ok(MessageVisibility::Private {
             user_id: user.to_string(),
             bot_ids: bots
