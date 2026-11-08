@@ -1,6 +1,7 @@
 use super::*;
 use crate::network::{Delivery, kind};
 use bebop::Record;
+use serde::Deserialize;
 use sync_server_core::domain::socket::WebSocketId;
 use sync_server_sim::ports::Effect;
 
@@ -499,7 +500,7 @@ impl Sim {
             if effect.operation != "send" {
                 continue;
             }
-            let frame = serde_json::from_value::<Vec<u8>>(effect.value["frame"].clone())
+            let frame = Vec::<u8>::deserialize(&effect.value["frame"])
                 .map_err(|error| Failure::new("queued_send", error))?;
             if let Some(message) = frame.get(1..)
                 && let Ok(sync_protocol::FromRemote::RemoteUpdateAck { id }) =
@@ -530,7 +531,7 @@ impl Sim {
                 });
             }
             if effect.operation == "send" {
-                let frame = serde_json::from_value::<Vec<u8>>(effect.value["frame"].clone())
+                let frame = Vec::<u8>::deserialize(&effect.value["frame"])
                     .map_err(|e| Failure::new("server_frame", e))?;
                 let message = frame.get(1..).unwrap_or_default();
                 if let Ok(sync_protocol::FromRemote::RemoteUpdateAck { id }) =
@@ -557,7 +558,7 @@ impl Sim {
             if effect.operation == "send" || effect.operation == "send_text" {
                 let socket = effect.value["socket"].as_str().unwrap_or("");
                 if effect.operation == "send" {
-                    let frame = serde_json::from_value::<Vec<u8>>(effect.value["frame"].clone())
+                    let frame = Vec::<u8>::deserialize(&effect.value["frame"])
                         .map_err(|error| Failure::new("server_frame", error))?;
                     if self.router_server_frame(socket, &frame)? {
                         continue;
@@ -574,9 +575,8 @@ impl Sim {
                     .map(|(key, _)| key.clone());
                 if let Some(key) = key {
                     let (packet, category) = if effect.operation == "send" {
-                        let frame =
-                            serde_json::from_value::<Vec<u8>>(effect.value["frame"].clone())
-                                .map_err(|e| Failure::new("server_frame", e))?;
+                        let frame = Vec::<u8>::deserialize(&effect.value["frame"])
+                            .map_err(|e| Failure::new("server_frame", e))?;
                         let link = self
                             .net
                             .links

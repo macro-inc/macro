@@ -263,6 +263,26 @@ impl Sim {
                     });
                 }
             }
+            Step::AssertProfileDrained { profile } => {
+                let store = self
+                    .profiles
+                    .get(&profile)
+                    .ok_or_else(|| Failure::new("account_switch_drained", "unknown profile"))?;
+                let user = doc_sync_core::UserKey(store.user.clone());
+                let pending = store
+                    .durable
+                    .entries
+                    .iter()
+                    .filter(|(_, row)| row.record.user == user && !row.delivered)
+                    .map(|(key, _)| key.clone())
+                    .collect::<Vec<_>>();
+                if !pending.is_empty() {
+                    return Err(Failure::new(
+                        "account_switch_drained",
+                        format!("{profile:?}: current-user undelivered rows {pending:?}"),
+                    ));
+                }
+            }
             Step::SignIn { profile, user } => {
                 if let Some(store) = self.profiles.get_mut(&profile) {
                     store.user = user;

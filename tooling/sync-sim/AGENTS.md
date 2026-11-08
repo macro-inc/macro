@@ -27,6 +27,8 @@ by native clients. No shipped package depends on this directory.
   server closes fail explicitly; router/fault/reconnect lifecycle is native-only.
 - WAL handoffs copy actually observed committed rows into the receiving adapter.
   They do not establish shared browser ABI, database identity or async Web Lock parity.
+  Legacy rows have no user identity and are attributed to the importing current user
+  per S7 O-2; these handoffs do not establish mixed-account cache convergence.
 - GenericMirror tests do not establish Lexical editor, selection or AI-binding parity.
 
 ## Checks

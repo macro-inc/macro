@@ -104,3 +104,8 @@ row delivery. Genuinely missing parents stay parked until TTL and never get push
 `PrepareComment` releases `CommentReady` only after a fresh catch-up and W-1
 checks. `ProjectionResynced` charges the shared recovery budget without fetching
 a network snapshot; sessions attempt local recovery before `ImportFailed`.
+
+Adoption rejects a changed snapshot-derived cover or exact source selection atomically: the loaded selection
+must match the core's reserved sequences and retained payload order. Reload after
+failed adoption/orphan reads through the ordinary retry timer; never reuse stale
+adoption payload reservations or change other owners' retained bytes.
