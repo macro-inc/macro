@@ -99,3 +99,116 @@ fn api_node_handles_remain_usable_after_the_shared_counter_resets()
     assert_eq!(selected, text);
     Ok(())
 }
+
+#[test]
+fn raw_framework_fields_expose_links_and_distinguish_element_and_text_properties()
+-> Result<(), crate::replay::ReplayError> {
+    let mut editor = Editor::builder(EditorMode::Headless)
+        .build()
+        .expect("editor");
+    let mut r = Replayer::default();
+    let mut tx = editor.transaction();
+    let p = tx.create(Paragraph::default())?.key();
+    tx.update_from_json(p, json!({"format":"right","indent":2,"direction":"rtl","textFormat":2,"textStyle":"font-weight: bold;","style":"margin: 0;"}).as_object().expect("object"))?;
+    tx.element(p)?.set_style("margin: 0;")?;
+    let a = tx.import_node(json!({"type":"text","version":1,"text":"a","format":1,"detail":2,"mode":"token","style":"color: red;","$":{"role":"one"}}).as_object().expect("object"))?;
+    let b = tx.import_node(json!({"type":"text","version":1,"text":"b","format":0,"detail":0,"mode":"normal","style":"","$":{"role":"two"}}).as_object().expect("object"))?;
+    tx.append(p, &[a, b])?;
+    tx.append(NodeKey::ROOT, &[p])?;
+    let p_node = r.node(tx.view(), p)?;
+    let a_node = r.node(tx.view(), a)?;
+    let b_node = r.node(tx.view(), b)?;
+    assert_eq!(
+        api::properties::get(&mut r, &mut tx, &p_node, "__first")?,
+        crate::replay::key_value(a)
+    );
+    assert_eq!(
+        api::properties::get(&mut r, &mut tx, &p_node, "__last")?,
+        crate::replay::key_value(b)
+    );
+    assert_eq!(api::properties::get(&mut r, &mut tx, &p_node, "__size")?, 2);
+    assert_eq!(
+        api::properties::get(&mut r, &mut tx, &p_node, "__indent")?,
+        2
+    );
+    assert_eq!(
+        api::properties::get(&mut r, &mut tx, &p_node, "__dir")?,
+        "rtl"
+    );
+    assert_eq!(
+        api::properties::get(&mut r, &mut tx, &p_node, "__format")?,
+        3
+    );
+    assert_eq!(
+        api::properties::get(&mut r, &mut tx, &p_node, "__style")?,
+        "margin: 0;"
+    );
+    assert_eq!(
+        api::properties::get(&mut r, &mut tx, &p_node, "__textFormat")?,
+        2
+    );
+    assert_eq!(
+        api::properties::get(&mut r, &mut tx, &p_node, "__textStyle")?,
+        "font-weight: bold;"
+    );
+    assert_eq!(
+        api::properties::get(&mut r, &mut tx, &a_node, "__parent")?,
+        crate::replay::key_value(p)
+    );
+    assert_eq!(
+        api::properties::get(&mut r, &mut tx, &a_node, "__prev")?,
+        serde_json::Value::Null
+    );
+    assert_eq!(
+        api::properties::get(&mut r, &mut tx, &a_node, "__next")?,
+        crate::replay::key_value(b)
+    );
+    assert_eq!(
+        api::properties::get(&mut r, &mut tx, &b_node, "__prev")?,
+        crate::replay::key_value(a)
+    );
+    assert_eq!(
+        api::properties::get(&mut r, &mut tx, &a_node, "__format")?,
+        1
+    );
+    assert_eq!(
+        api::properties::get(&mut r, &mut tx, &a_node, "__detail")?,
+        2
+    );
+    assert_eq!(api::properties::get(&mut r, &mut tx, &a_node, "__mode")?, 1);
+    assert_eq!(
+        api::properties::get(&mut r, &mut tx, &a_node, "__style")?,
+        "color: red;"
+    );
+    assert_eq!(
+        api::properties::get(&mut r, &mut tx, &p_node, "__state")?,
+        json!({"$undef":true})
+    );
+    let a_state = api::properties::get(&mut r, &mut tx, &a_node, "__state")?;
+    let b_state = api::properties::get(&mut r, &mut tx, &b_node, "__state")?;
+    assert_eq!(
+        api::call(
+            &mut r,
+            &mut tx,
+            &json!({"fn":"lexical.nodeStatesAreEquivalent","args":[a_state,a_state]})
+        )?,
+        true
+    );
+    assert_eq!(
+        api::call(
+            &mut r,
+            &mut tx,
+            &json!({"fn":"lexical.nodeStatesAreEquivalent","args":[a_state,b_state]})
+        )?,
+        false
+    );
+    assert_eq!(
+        api::call(
+            &mut r,
+            &mut tx,
+            &json!({"fn":"lexical.nodeStatesAreEquivalent","args":[{"$undef":true},null]})
+        )?,
+        true
+    );
+    Ok(())
+}

@@ -74,7 +74,33 @@ pub(crate) fn get(
         let node = view.node_or_err(key)?;
         return match name {
             "__parent" => Ok(view.parent(key).map_or(Value::Null, key_value)),
+            "__prev" => Ok(node.prev().map_or(Value::Null, key_value)),
+            "__next" => Ok(node.next().map_or(Value::Null, key_value)),
             "__key" => Ok(key_value(key)),
+            "__first" => Ok(view
+                .element_data(key)?
+                .first_child()
+                .map_or(Value::Null, key_value)),
+            "__last" => Ok(view
+                .element_data(key)?
+                .last_child()
+                .map_or(Value::Null, key_value)),
+            "__size" => Ok(json!(view.element_data(key)?.children_size())),
+            "__indent" => Ok(json!(view.element_data(key)?.indent)),
+            "__dir" => Ok(serde_json::to_value(view.element_data(key)?.direction)?),
+            "__textFormat" => Ok(json!(view.element_data(key)?.text_format.bits())),
+            "__textStyle" => Ok(json!(view.element_data(key)?.text_style)),
+            "__detail" => Ok(json!(view.text_data(key)?.detail.bits())),
+            "__mode" => Ok(json!(match view.text_data(key)?.mode {
+                TextMode::Normal => 0,
+                TextMode::Token => 1,
+                TextMode::Segmented => 2,
+            })),
+            "__state" => Ok(if node.node_state().is_some() {
+                json!({"$nodeState":receiver})
+            } else {
+                undefined()
+            }),
             "__target" | "__rel" | "__title" => {
                 let link = view.get_or_err::<lexical_rich_nodes::link::LinkNode>(key)?;
                 Ok(json!(match name {
@@ -90,8 +116,16 @@ pub(crate) fn get(
             )),
             "__type" => Ok(json!(node.type_name())),
             "__text" => Ok(json!(view.text_data(key)?.text.as_str())),
-            "__format" => Ok(json!(view.text_data(key)?.format.bits())),
-            "__style" => Ok(json!(view.text_data(key)?.style)),
+            "__format" => Ok(json!(match node.base() {
+                BaseData::Text(data) => data.format.bits(),
+                BaseData::Element(data) => data.format.bits(),
+                _ => return Err(fail("node has no format field")),
+            })),
+            "__style" => Ok(json!(match node.base() {
+                BaseData::Text(data) => &data.style,
+                BaseData::Element(data) => &data.style,
+                _ => return Err(fail("node has no style field")),
+            })),
             _ => Err(fail(format!("unmapped node property {name}"))),
         };
     }

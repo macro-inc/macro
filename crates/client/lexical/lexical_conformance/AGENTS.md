@@ -55,6 +55,7 @@ Development-only schema-2 fixture interpreter for the pinned upstream oracle.
 ## Gotchas
 
 - Preserve callback argument/order checks, versioned handles, exact errors and JSON property order.
+- Read raw framework fields from the captured record without virtual accessors; element format is numeric alignment and text format is a bitset. NodeState equivalence delegates to the model, including lazy foreign codecs.
 - Retain key generations in internal node/key handle values after shared-counter resets; visible keys stay decimal strings.
 - Retain committed snapshots while their host handles are reachable; release their handles and saved-state pins together, without reusing record identities.
 - Defer host version collection until any update borrowing that committed or pending version ends.
