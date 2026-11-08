@@ -8,7 +8,7 @@ import {
 	FromPeer,
 	FromRemote,
 	InitializeFromSnapshotRequest,
-} from "../bebop/generated/schema";
+} from "../../../crates/sync_protocol/bebop/generated/schema";
 import {
 	createTestWebSocket,
 	getTokenForDocument,
