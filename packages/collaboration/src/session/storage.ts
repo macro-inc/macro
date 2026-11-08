@@ -51,7 +51,7 @@ function failure(error: unknown): Failure {
   }
   return Failure.Unavailable;
 }
-function record(row: WalRow): IWalRecordMsg {
+function record(row: WalRow, legacyUser: string): IWalRecordMsg {
   if (
     !(row.update instanceof Uint8Array) ||
     !Number.isFinite(row.createdAt) ||
@@ -61,7 +61,8 @@ function record(row: WalRow): IWalRecordMsg {
   return {
     seq: row.seq ?? BigInt(row.id ?? 0),
     createdAt: BigInt(row.createdAt),
-    user: row.user ?? '',
+    // Only unowned v1 rows predate user attribution. Never relabel a session row.
+    user: row.user ?? (row.owner === undefined ? legacyUser : ''),
     foreign: row.foreign ?? false,
     quarantined: row.quarantined ?? false,
     delivered: row.delivered,
@@ -148,7 +149,7 @@ export class StorageAdapter {
     while (cursor) {
       const row = cursor.value;
       if (row.owner === this.owner) {
-        const r = record(row);
+        const r = record(row, this.user);
         this.keys.set(r.seq, cursor.primaryKey);
       } else {
         const live = !!row.owner && held.has(ownerLock(this.doc, row.owner));
@@ -165,7 +166,7 @@ export class StorageAdapter {
             group = { owner, records: [] };
             target.set(owner, group);
           }
-          group.records.push(record(row));
+          group.records.push(record(row, this.user));
         }
       }
       cursor = await cursor.continue();
@@ -333,7 +334,7 @@ export class StorageAdapter {
           const same =
             selected.length === op.expected.length &&
             selected.every(({ row }, index) => {
-              const actual = record(row);
+              const actual = record(row, this.user);
               const expected = op.expected[index];
               return (
                 expected !== undefined &&
@@ -382,7 +383,7 @@ export class StorageAdapter {
           )
             await tx.store.delete(id);
           if (op.kind === 5 && (row.owner ?? '') === op.from) {
-            if (row.owner && row.user !== this.user)
+            if (record(row, this.user).user !== this.user)
               throw new DOMException('Foreign user adoption', 'DataError');
             if (row.delivered && (row.seq ?? BigInt(id)) <= op.through)
               await tx.store.delete(id);

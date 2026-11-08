@@ -471,3 +471,31 @@ test('TTL cleanup cannot delete rows after their owner reacquires its lease', as
   expect(await db.countFromIndex('updates', 'scopeId', doc)).toBe(0);
   db.close();
 });
+
+test('a session row without a user cannot become current-user recovery history', async () => {
+  const db = await openDB('macro-document-wal', 1);
+  await db.add('updates', {
+    scopeId: doc,
+    owner: other,
+    seq: 1n,
+    update: new Uint8Array([1, 255]),
+    delivered: false,
+    createdAt: 1,
+  });
+  const adapter = new StorageAdapter(doc, owner, 'fixture-user', locks);
+  const loaded = await adapter.execute(op(0));
+  if (loaded.kind !== 'loaded' || !loaded.payload) throw new Error('load');
+  expect(
+    LocalStateMsg.decode(loaded.payload).orphans[0]?.records[0]?.user
+  ).toBe('');
+  expect(await adapter.execute(op(5, { from: other, seq: 1n }))).toEqual({
+    kind: 'adopted',
+    adopted: -1,
+    failure: Failure.Other,
+  });
+  const rows = await db.getAllFromIndex('updates', 'scopeId', doc);
+  expect(rows).toHaveLength(1);
+  expect(rows[0]).toMatchObject({ owner: other, seq: 1n });
+  expect(rows[0]?.user).toBeUndefined();
+  db.close();
+});
