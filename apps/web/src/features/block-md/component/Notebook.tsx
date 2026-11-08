@@ -226,8 +226,8 @@ export function Notebook(props: {
           } else if (markdownEditor) {
             markdownEditor.focus(undefined, { defaultSelection: 'rootStart' });
             return true;
-          } else if (md.nativeRuntime) {
-            md.nativeRuntime.view.focus();
+          } else if (md.nativeRuntime?.editing) {
+            md.nativeRuntime.editing?.focus.atStart();
             return true;
           }
           return false;
