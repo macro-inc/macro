@@ -6625,6 +6625,24 @@ dependencies = [
 ]
 
 [[package]]
+name = "document_session_wasm"
+version = "0.1.0"
+dependencies = [
+ "bebop",
+ "doc_sync_core",
+ "document_session",
+ "js-sys",
+ "lexical_loro",
+ "lexical_model",
+ "loro",
+ "rootcause",
+ "serde_json",
+ "sync_protocol",
+ "thiserror 2.0.18",
+ "wasm-bindgen",
+]
+
+[[package]]
 name = "document_storage_service"
 version = "0.1.0"
 dependencies = [

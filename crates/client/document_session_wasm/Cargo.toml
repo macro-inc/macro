@@ -1,0 +1,29 @@
+[package]
+name = "document_session_wasm"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[features]
+default = ["bebop-owned-all"]
+bebop-owned-all = []
+
+[dependencies]
+document_session.workspace = true
+doc_sync_core.workspace = true
+lexical_model.workspace = true
+lexical_loro.workspace = true
+loro.workspace = true
+sync_protocol.workspace = true
+wasm-bindgen.workspace = true
+js-sys.workspace = true
+bebop.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+rootcause.workspace = true
+
+[package.metadata.wasm-pack.profile.release]
+wasm-opt = ["-Oz"]

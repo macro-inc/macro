@@ -140,6 +140,10 @@ impl PartialEq for PluginEvent {
     }
 }
 impl PluginEvent {
+    /// Stable event name for host boundary adapters.
+    pub fn name(&self) -> &'static str {
+        self.name
+    }
     /// Read a payload only when the static key matches.
     pub fn payload<Event: Clone + fmt::Debug + Send + Sync + 'static>(
         &self,
