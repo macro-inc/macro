@@ -45,12 +45,16 @@ impl Context {
         CallbackContext::new(&self.frames)
     }
 
-    /// Start bookkeeping for a newly opened transaction.
-    pub fn begin_update(&mut self, tx: &mut Transaction<'_>) -> Result<()> {
+    pub(super) fn bind_editor(&self, tx: &Transaction<'_>) -> Result<()> {
         if self.scope != Scope::Idle {
             return Err(fail("an API update is already active"));
         }
-        self.frames.bind_owner(tx)?;
+        self.frames.bind_owner(tx)
+    }
+
+    /// Start bookkeeping for a newly opened transaction.
+    pub fn begin_update(&mut self, tx: &mut Transaction<'_>) -> Result<()> {
+        self.bind_editor(tx)?;
         self.replay.version = self
             .replay
             .version
