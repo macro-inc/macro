@@ -83,6 +83,7 @@ node types, immutable snapshots, transactional tree editing, update processing, 
 - Node ancestry follows the kind trait's `Parent`, never Rust layout casts.
 - Keep key allocation outside rollback, and snapshots independent on first write.
 - Give owned captures of pending state a separate root-text memo; materialize native projections without clone hooks while retaining their source record identity. Preserve detached slot indices, holes and selection caches when capturing read inputs.
+- Use SharedKeyCounter::allocate_for_foreign_host for dev generateRandomKey; it shares allocation with editors without creating records or consuming commit identities.
 - Preserve source editor/update provenance through pure read peers; combine matches_origin with active callback checks, and keep plain editor-state captures originless.
 
 ## Tests
