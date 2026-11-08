@@ -52,3 +52,28 @@ pub fn event_payload(
     }
     Ok(None)
 }
+
+/// Dispatch application bulk queries through append-only migration groups.
+pub fn query(
+    name: &str,
+    data: &serde_json::Value,
+    generation: u32,
+    state: &lexical_model::EditorState,
+) -> crate::ModelResult<Option<serde_json::Value>> {
+    type Query = fn(
+        &str,
+        &serde_json::Value,
+        u32,
+        &lexical_model::EditorState,
+    ) -> crate::ModelResult<Option<serde_json::Value>>;
+    let queries: &[Query] = &[
+        // WP-58 Group B bulk reads.
+        crate::plugins_group_b::query,
+    ];
+    for query in queries {
+        if let Some(reply) = query(name, data, generation, state)? {
+            return Ok(Some(reply));
+        }
+    }
+    Ok(None)
+}

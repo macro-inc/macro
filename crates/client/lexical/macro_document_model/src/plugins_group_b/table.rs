@@ -1,12 +1,16 @@
 //! Application table integrity, list-first Tab, row growth and scoped select-all.
 use super::*;
 mod actions;
+mod controls;
+mod resize;
+pub(super) use resize::query;
 mod list_grid;
 pub(super) use actions::decode;
+pub(super) use actions::event_payload;
 use lexical_rich_nodes::{list::ListItemNode, table::*};
 
 pub(super) fn register(builder: EditorBuilder) -> EditorBuilder {
-    actions::register(builder)
+    let builder = actions::register(builder)
         .node_trait::<TableNode, dyn CanSelectBefore>(|node| node)
         .table_selection_hooks(TableSelectionHooksImpl)
         .transform::<TableNode>(transforms::table_transform)
@@ -38,7 +42,8 @@ pub(super) fn register(builder: EditorBuilder) -> EditorBuilder {
             }
             Ok(())
         })
-        .plugin(Tables)
+        .plugin(Tables);
+    resize::register(builder)
 }
 struct Tables;
 impl Plugin for Tables {
