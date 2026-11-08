@@ -6,14 +6,22 @@ pub struct TsChild {
     child: Child,
     input: ChildStdin,
     output: BufReader<ChildStdout>,
+    expected_loro: &'static str,
     pub transcript: Vec<(String, String)>,
 }
 impl TsChild {
     pub fn spawn(seed: u32) -> Self {
         let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+        let lane = std::env::var("SYNC_SIM_TS_LORO").unwrap_or_else(|_| "current".into());
+        let expected_loro = match lane.as_str() {
+            "current" => "1.17.1",
+            "legacy" => "1.16.3",
+            _ => panic!("SYNC_SIM_TS_LORO must be current or legacy"),
+        };
         let mut child = Command::new("bun")
             .arg("tooling/sync-sim/ts-peer.ts")
             .arg(seed.to_string())
+            .arg(lane)
             .current_dir(root)
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
@@ -24,6 +32,7 @@ impl TsChild {
             input: child.stdin.take().unwrap(),
             output: BufReader::new(child.stdout.take().unwrap()),
             child,
+            expected_loro,
             transcript: vec![],
         }
     }
@@ -41,8 +50,8 @@ impl TsChild {
             .unwrap_or_else(|error| panic!("peer report: {error}: {line}"));
         assert_eq!(report.version, 1);
         assert_eq!(
-            report.loro_version, "1.16.3",
-            "branch-pinned web Loro changed"
+            report.loro_version, self.expected_loro,
+            "selected web Loro lane changed"
         );
         self.transcript.push((command, line));
         report
