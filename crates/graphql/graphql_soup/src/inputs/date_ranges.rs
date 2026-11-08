@@ -1,4 +1,4 @@
-use models_grouping::{PropertyBucketing, PropertyDateRange, PropertyDateRanges};
+use grouping_types::{PropertyBucketing, PropertyDateRange, PropertyDateRanges};
 
 /// Transform the selected DATE property into caller-defined ranges.
 /// Non-DATE values use the missing-value bucket.

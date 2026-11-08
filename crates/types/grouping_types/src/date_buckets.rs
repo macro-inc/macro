@@ -66,7 +66,7 @@ pub fn date_bucket_label(key: &str) -> &'static str {
 ///
 /// # Example
 /// ```
-/// use models_grouping::date_bucket_sql_key;
+/// use grouping_types::date_bucket_sql_key;
 /// let sql = date_bucket_sql_key("et.sort_ts");
 /// assert!(sql.contains("'today'"));
 /// ```

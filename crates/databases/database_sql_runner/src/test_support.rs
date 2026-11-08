@@ -24,13 +24,13 @@ use entity_access::domain::models::{
 };
 use entity_access::domain::ports::EntityAccessService;
 use filter_ast::Expr;
+use grouping_types::GroupByField;
 use item_filters::ast::EntityFilterAst;
 use item_filters::ast::database_row::DatabaseRowLiteral;
 use item_filters::ast::properties::{PropertiesLiteral, PropertyMatchValue};
 use macro_user_id::lowercased::Lowercase;
 use macro_user_id::user_id::{MacroUserId, MacroUserIdStr};
 use model_owner::Owner;
-use models_grouping::GroupByField;
 use models_pagination::Paginated;
 use models_properties::service::property_definition::PropertyDefinition;
 use models_properties::service::property_definition_with_options::PropertyDefinitionWithOptions;

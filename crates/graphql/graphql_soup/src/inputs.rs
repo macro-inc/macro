@@ -1,9 +1,9 @@
 use async_graphql::{Enum, ID};
 use graphql_common::{GraphqlPropertyEntityType, parse_id};
 use graphql_soup_filter_input::GraphqlEntityFilterAst;
+use grouping_types::{GroupByField, GroupingConfig};
 use item_filters::ast::{EntityFilterAst, properties::PropertyEntityType};
 use macro_user_id::user_id::MacroUserIdStr;
-use models_grouping::{GroupByField, GroupingConfig};
 
 /// Caller-defined property date-range inputs.
 mod date_ranges;
