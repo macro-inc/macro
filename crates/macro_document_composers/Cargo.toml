@@ -13,7 +13,7 @@ serde_json.workspace = true
 url.workspace = true
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
-trigger_context = { path = "../trigger_context" }
+trigger_context.workspace = true
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
 
 [dev-dependencies]
