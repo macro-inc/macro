@@ -14,7 +14,8 @@
     "loro-crdt": "catalog:",
     "@macro-inc/lexical-core": "workspace:*",
     "lexical": "catalog:",
-    "@lexical/list": "catalog:"
+    "@lexical/list": "catalog:",
+    "@lexical/markdown": "catalog:"
   },
   "devDependencies": {
     "@types/bun": "^1.3.14",

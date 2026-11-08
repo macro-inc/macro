@@ -7,26 +7,26 @@ export type EditorOp =
 	at: Pos,
 	/**  Literal text including astral and combining characters. */
 	text: string,
-} }) & { Backspace?: never; DeleteRange?: never; Format?: never; Indent?: never; InsertTable?: never; Outdent?: never; Select?: never; SetBlock?: never; SplitBlock?: never; ToggleList?: never } |
+} }) & { Backspace?: never; DeleteRange?: never; Format?: never; Indent?: never; InsertTable?: never; Outdent?: never; PasteMarkdown?: never; Select?: never; SetBlock?: never; SplitBlock?: never; ToggleList?: never } |
 /**  Delete preceding characters through real model segmentation. */
 ({ Backspace: {
 	/**  Current insertion point. */
 	at: Pos,
 	/**  Number of consecutive deletion commands. */
 	count: number,
-} }) & { DeleteRange?: never; Format?: never; Indent?: never; InsertTable?: never; Outdent?: never; Select?: never; SetBlock?: never; SplitBlock?: never; ToggleList?: never; Type?: never } |
+} }) & { DeleteRange?: never; Format?: never; Indent?: never; InsertTable?: never; Outdent?: never; PasteMarkdown?: never; Select?: never; SetBlock?: never; SplitBlock?: never; ToggleList?: never; Type?: never } |
 /**  Delete the selected range. */
 ({ DeleteRange: {
 	/**  Anchor. */
 	from: Pos,
 	/**  Focus. */
 	to: Pos,
-} }) & { Backspace?: never; Format?: never; Indent?: never; InsertTable?: never; Outdent?: never; Select?: never; SetBlock?: never; SplitBlock?: never; ToggleList?: never; Type?: never } |
+} }) & { Backspace?: never; Format?: never; Indent?: never; InsertTable?: never; Outdent?: never; PasteMarkdown?: never; Select?: never; SetBlock?: never; SplitBlock?: never; ToggleList?: never; Type?: never } |
 /**  Split the selected block through the paragraph command. */
 ({ SplitBlock: {
 	/**  Split position. */
 	at: Pos,
-} }) & { Backspace?: never; DeleteRange?: never; Format?: never; Indent?: never; InsertTable?: never; Outdent?: never; Select?: never; SetBlock?: never; ToggleList?: never; Type?: never } |
+} }) & { Backspace?: never; DeleteRange?: never; Format?: never; Indent?: never; InsertTable?: never; Outdent?: never; PasteMarkdown?: never; Select?: never; SetBlock?: never; ToggleList?: never; Type?: never } |
 /**  Toggle a format over the selected range. */
 ({ Format: {
 	/**  Anchor. */
@@ -35,31 +35,31 @@ export type EditorOp =
 	to: Pos,
 	/**  Bold, italic, code or strikethrough modulo four. */
 	format: number,
-} }) & { Backspace?: never; DeleteRange?: never; Indent?: never; InsertTable?: never; Outdent?: never; Select?: never; SetBlock?: never; SplitBlock?: never; ToggleList?: never; Type?: never } |
+} }) & { Backspace?: never; DeleteRange?: never; Indent?: never; InsertTable?: never; Outdent?: never; PasteMarkdown?: never; Select?: never; SetBlock?: never; SplitBlock?: never; ToggleList?: never; Type?: never } |
 /**  Indent the selected block. */
 ({ Indent: {
 	/**  Selected block. */
 	at: Pos,
-} }) & { Backspace?: never; DeleteRange?: never; Format?: never; InsertTable?: never; Outdent?: never; Select?: never; SetBlock?: never; SplitBlock?: never; ToggleList?: never; Type?: never } |
+} }) & { Backspace?: never; DeleteRange?: never; Format?: never; InsertTable?: never; Outdent?: never; PasteMarkdown?: never; Select?: never; SetBlock?: never; SplitBlock?: never; ToggleList?: never; Type?: never } |
 /**  Outdent the selected block. */
 ({ Outdent: {
 	/**  Selected block. */
 	at: Pos,
-} }) & { Backspace?: never; DeleteRange?: never; Format?: never; Indent?: never; InsertTable?: never; Select?: never; SetBlock?: never; SplitBlock?: never; ToggleList?: never; Type?: never } |
+} }) & { Backspace?: never; DeleteRange?: never; Format?: never; Indent?: never; InsertTable?: never; PasteMarkdown?: never; Select?: never; SetBlock?: never; SplitBlock?: never; ToggleList?: never; Type?: never } |
 /**  Convert the current block with the rich-node package operation. */
 ({ SetBlock: {
 	/**  Selected block. */
 	at: Pos,
 	/**  Paragraph, heading1–3, quote or code modulo six. */
 	kind: number,
-} }) & { Backspace?: never; DeleteRange?: never; Format?: never; Indent?: never; InsertTable?: never; Outdent?: never; Select?: never; SplitBlock?: never; ToggleList?: never; Type?: never } |
+} }) & { Backspace?: never; DeleteRange?: never; Format?: never; Indent?: never; InsertTable?: never; Outdent?: never; PasteMarkdown?: never; Select?: never; SplitBlock?: never; ToggleList?: never; Type?: never } |
 /**  Insert an ordered, unordered or check list through package commands. */
 ({ ToggleList: {
 	/**  Selected block. */
 	at: Pos,
 	/**  List kind modulo three. */
 	kind: number,
-} }) & { Backspace?: never; DeleteRange?: never; Format?: never; Indent?: never; InsertTable?: never; Outdent?: never; Select?: never; SetBlock?: never; SplitBlock?: never; Type?: never } |
+} }) & { Backspace?: never; DeleteRange?: never; Format?: never; Indent?: never; InsertTable?: never; Outdent?: never; PasteMarkdown?: never; Select?: never; SetBlock?: never; SplitBlock?: never; Type?: never } |
 /**  Insert a bounded table through the real table operation. */
 ({ InsertTable: {
 	/**  Insertion point. */
@@ -68,14 +68,21 @@ export type EditorOp =
 	rows: number,
 	/**  One to four columns after resolution. */
 	cols: number,
-} }) & { Backspace?: never; DeleteRange?: never; Format?: never; Indent?: never; Outdent?: never; Select?: never; SetBlock?: never; SplitBlock?: never; ToggleList?: never; Type?: never } |
+} }) & { Backspace?: never; DeleteRange?: never; Format?: never; Indent?: never; Outdent?: never; PasteMarkdown?: never; Select?: never; SetBlock?: never; SplitBlock?: never; ToggleList?: never; Type?: never } |
+/**  Paste one fixed source Markdown snippet through the package importer. */
+({ PasteMarkdown: {
+	/**  Current insertion point. */
+	at: Pos,
+	/**  Corpus index modulo four; index three is the large input. */
+	snippet: number,
+} }) & { Backspace?: never; DeleteRange?: never; Format?: never; Indent?: never; InsertTable?: never; Outdent?: never; Select?: never; SetBlock?: never; SplitBlock?: never; ToggleList?: never; Type?: never } |
 /**  Publish actual durable editor selection cursors. */
 ({ Select: {
 	/**  Anchor. */
 	from: Pos,
 	/**  Focus. */
 	to: Pos,
-} }) & { Backspace?: never; DeleteRange?: never; Format?: never; Indent?: never; InsertTable?: never; Outdent?: never; SetBlock?: never; SplitBlock?: never; ToggleList?: never; Type?: never } |
+} }) & { Backspace?: never; DeleteRange?: never; Format?: never; Indent?: never; InsertTable?: never; Outdent?: never; PasteMarkdown?: never; SetBlock?: never; SplitBlock?: never; ToggleList?: never; Type?: never } |
 /**  Collaborative undo. */
 "Undo" |
 /**  Collaborative redo. */

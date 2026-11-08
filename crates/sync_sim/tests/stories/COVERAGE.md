@@ -62,9 +62,9 @@ read-only and observes IDs before projection fixups, not inferred new op spans.
 
 Real document_session/lexical_model/lexical_loro editor clients are integrated.
 Remaining application/editor producers:
-reset-budget closure driven by a faulty editor projection; stripping abandoned draft comment marks; restoration of editor cursors
-through remote edits; real Markdown corpus paste; comment-only gate verdict parity;
-undo/backspace generator floors. Existing core unit
+reset-budget closure driven by a faulty editor projection; stripping abandoned draft
+comment marks; Markdown shortcuts; comment-only gate verdict parity; editor generation
+and observed undo/backspace floors. Existing core unit
 reset-budget tests do not establish faulty-editor integration.
 
 Executor-only unit rows remain in their existing adapters/core suites: IDB abort retry
@@ -133,14 +133,15 @@ paragraph splitting, formatting and indent/outdent through both tab and headless
 sessions. Every command must produce actual own spans; both replicas' synced JSON
 and independent reconstruction pass unchanged invariants and exact replay. A second
 literal checks repeated backspace follows the updated cursor across astral text.
-Rich package operations, application registry/gate and editor generator floors remain
-pending; these literals do not claim those producers.
+Real package block/list/table operations are covered below; comments/gate and
+editor generator floors remain pending.
 
 `editor_rich`: all six block forms preserve real application replacements and
 eight-character identities; all three headless list commands create TaskListNode;
 table behavior composes with the application-owned registry and preserves the
 requested rows/columns. Every story retains all invariants and exact replay.
-Markdown, comments/gate and generated editor floors remain pending.
+Markdown paste is covered below; shortcuts, comments/gate and generated editor
+floors remain pending.
 
 `mixed_versions::real_shipping_editor_workspace_interoperates_with_native_sessions_and_replays_exactly`
 uses the actual AI worker EditingWorkspace and upstream Lexical/loro-mirror over
@@ -157,3 +158,12 @@ interop remain outside this literal.
 insertion. Keep the actual original character cursor identity, strict projection,
 all invariants and twice-exact replay. Session repair uses a private model command;
 the core headless view-input guard remains intact.
+
+`editor_markdown`: each short corpus paste through real package importers in tab
+and headless sessions; the >1MB incompressible fenced paste produces one actual
+WAL row over900KB and multiple transport fragments. Exactly one update fragment
+is delivered before Hibernate and another afterward; complete code payload, strict
+projection, all invariants and exact replay remain checked. The actual shipping
+TS peer imports all three short snippets independently; native/editor/raw Loro/VV/WAL
+and twice-exact IPC checks remain. Compound heading-start source insertion is a
+separate known upstream stale-block case and is not covered by independent literals.

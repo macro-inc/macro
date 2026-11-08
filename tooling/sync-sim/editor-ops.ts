@@ -1,7 +1,10 @@
 // Abstract positions resolve only against the actual upstream editor state.
 
 import { $isListItemNode, type ListType } from '@lexical/list';
+import { $convertFromMarkdownString } from '@lexical/markdown';
+import { ALL_TRANSFORMERS } from '@macro-inc/lexical-core/transformers';
 import {
+  $createParagraphNode,
   $createRangeSelection,
   $getRoot,
   $isElementNode,
@@ -10,6 +13,10 @@ import {
   type LexicalNode,
   type TextFormatType,
 } from 'lexical';
+import largeSnippet from '../../crates/sync_sim/fixtures/large-paste.md' with {
+  type: 'text',
+};
+import shortSnippets from '../../crates/sync_sim/fixtures/markdown-snippets.json';
 import {
   $blockNode,
   $setBlockType,
@@ -123,6 +130,19 @@ export function edit(session: LexicalSession, op: EditorOp): void {
       Array.from({ length: (op.InsertTable.cols % 4) + 1 }, () => '')
     );
     block.insertAfter($table(rows));
+  } else if (op.PasteMarkdown !== undefined) {
+    const { selection } = range(op.PasteMarkdown.at, op.PasteMarkdown.at);
+    const saved = selection.clone();
+    const scratch = $createParagraphNode();
+    const index = op.PasteMarkdown.snippet % (shortSnippets.length + 1);
+    $convertFromMarkdownString(
+      shortSnippets[index] ?? largeSnippet,
+      ALL_TRANSFORMERS,
+      scratch
+    );
+    const nodes = scratch.getChildren();
+    $setSelection(saved);
+    saved.insertNodes(nodes);
   } else if (
     op.Backspace !== undefined ||
     op.Indent !== undefined ||

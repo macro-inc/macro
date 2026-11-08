@@ -79,6 +79,13 @@ pub enum EditorOp {
         /// One to four columns after resolution.
         cols: u8,
     },
+    /// Paste one fixed source Markdown snippet through the package importer.
+    PasteMarkdown {
+        /// Current insertion point.
+        at: Pos,
+        /// Corpus index modulo four; index three is the large input.
+        snippet: u8,
+    },
     /// Publish actual durable editor selection cursors.
     Select {
         /// Anchor.
@@ -90,4 +97,15 @@ pub enum EditorOp {
     Undo,
     /// Collaborative redo.
     Redo,
+}
+
+/// Shared committed corpus; the TS peer imports these same files.
+pub fn markdown_snippet(index: u8) -> &'static str {
+    static SHORT: std::sync::LazyLock<Vec<String>> = std::sync::LazyLock::new(|| {
+        serde_json::from_str(include_str!("../fixtures/markdown-snippets.json"))
+            .expect("committed Markdown corpus")
+    });
+    SHORT
+        .get(usize::from(index) % (SHORT.len() + 1))
+        .map_or(include_str!("../fixtures/large-paste.md"), String::as_str)
 }

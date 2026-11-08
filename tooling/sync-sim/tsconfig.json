@@ -12,7 +12,8 @@
     "skipLibCheck": true,
     "strict": true,
     "target": "ESNext",
-    "types": ["@types/bun", "@types/node"]
+    "types": ["@types/bun", "@types/node"],
+    "resolveJsonModule": true
   },
   "include": ["*.ts"]
 }
