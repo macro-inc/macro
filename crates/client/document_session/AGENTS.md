@@ -12,7 +12,10 @@ The host supplies identities and both clocks and executes the returned effects.
 - SyncCore owns WAL, catch-up, flush, reset, access and comment delivery policy.
 - Surface imports queue view effects in the same output as their sync input.
 - Use the supplied editor factory for live editors and headless comment forks.
-  Application registry/policy wiring belongs to macro_document_model (WP-28/29).
+  Supply its matching comment-node constructor for fresh-peer staging; the default
+  creates MarkNode. Application registry/policy wiring belongs to macro_document_model
+  (WP-28/29). Install register_editor_commands with application-owned node/identity
+  registration; default_editor_builder retains the standalone registry and identities.
 - Collaborative builders enable opaque unknown types and disable core snapshot history.
 - Deliver explicit Focus inputs when host focus changes; preserve logical selection on blur.
 - Loro owns undo with merge_interval 0; MergeTracker and injected time own grouping.

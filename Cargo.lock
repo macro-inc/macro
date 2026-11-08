@@ -6614,6 +6614,7 @@ dependencies = [
  "lexical_model",
  "lexical_rich_nodes",
  "loro 1.17.1",
+ "macro_document_model",
  "proptest",
  "rootcause",
  "serde",

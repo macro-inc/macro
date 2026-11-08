@@ -9,10 +9,16 @@ pub fn default_editor_builder(mode: EditorMode, peer: u64) -> EditorBuilder {
         .node::<link::LinkNode>()
         .node::<link::AutoLinkNode>()
         .node::<mark::MarkNode>();
-    table::register_table(builder, &table::TableConfig::default())
-        .extension_state(NodeIdIndex::default())
-        .plugin(RichCommands)
-        .plugin(NodeIds(peer))
+    register_editor_commands(
+        table::register_table(builder, &table::TableConfig::default())
+            .extension_state(NodeIdIndex::default()),
+    )
+    .plugin(NodeIds(peer))
+}
+
+/// Install editing commands without registering nodes or allocating node identities.
+pub fn register_editor_commands(builder: EditorBuilder) -> EditorBuilder {
+    builder.plugin(RichCommands)
 }
 
 pub(super) static ID: StateKey<String> = StateKey::new("id", |value| {
