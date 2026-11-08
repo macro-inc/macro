@@ -142,7 +142,7 @@ impl<'state> StateRef<'state> {
         }
         self.common_ancestor(a, b).map(|common| common.ancestor())
     }
-    /// Nodes between.
+    /// Upstream directional traversal, including ancestors crossed between nodes.
     pub fn nodes_between(
         self,
         a: impl Into<NodeKey>,
@@ -150,23 +150,70 @@ impl<'state> StateRef<'state> {
     ) -> Result<Vec<NodeKey>, Error> {
         let a = a.into();
         let b = b.into();
-        self.node_or_err(a)?;
-        self.node_or_err(b)?;
-        let order: Vec<_> = std::iter::once(NodeKey::ROOT)
-            .chain(self.descendants(NodeKey::ROOT).map(|(key, _)| key))
-            .collect();
-        let start = order
-            .iter()
-            .position(|key| *key == a)
-            .ok_or(Error::NoParent(a))?;
-        let end = order
-            .iter()
-            .position(|key| *key == b)
-            .ok_or(Error::NoParent(b))?;
-        Ok(order
-            .get(start.min(end)..=start.max(end))
-            .ok_or(Error::Invariant("document range"))?
-            .to_vec())
+        let forward = self.is_before(a, b)?;
+        let mut nodes = Vec::new();
+        let mut visited = crate::collections::IndexSet::default();
+        let mut current = Some(a);
+        while let Some(node) = current {
+            if visited.insert(node) {
+                nodes.push(node);
+            }
+            if node == b {
+                break;
+            }
+            let child = if self.is_element(node) {
+                if forward {
+                    self.first_child(node)
+                } else {
+                    self.last_child(node)
+                }
+            } else {
+                None
+            };
+            if child.is_some() {
+                current = child;
+                continue;
+            }
+            let sibling = if forward {
+                self.next_sibling(node)
+            } else {
+                self.prev_sibling(node)
+            };
+            if sibling.is_some() {
+                current = sibling;
+                continue;
+            }
+            let parent = self.parent_or_err(node)?;
+            if !visited.contains(&parent) {
+                nodes.push(parent);
+            }
+            if parent == b {
+                break;
+            }
+            let mut ancestor = parent;
+            loop {
+                let sibling = if forward {
+                    self.next_sibling(ancestor)
+                } else {
+                    self.prev_sibling(ancestor)
+                };
+                current = sibling;
+                let Some(parent) = self.parent(ancestor) else {
+                    break;
+                };
+                if sibling.is_none() && !visited.contains(&parent) {
+                    nodes.push(parent);
+                }
+                if sibling.is_some() {
+                    break;
+                }
+                ancestor = parent;
+            }
+        }
+        if !forward {
+            nodes.reverse();
+        }
+        Ok(nodes)
     }
     /// Adjacent node.
     pub fn adjacent_node(
