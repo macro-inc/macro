@@ -51,8 +51,8 @@ impl EntityType {
 
     fn topic(self) -> &'static str {
         use ::agent_session::domain::events::AgentSessionLifecycleMacroEvent;
+        use ::ai_chat::domain::events::ChatMacroEvent;
         use ::call::domain::events::CallMacroEvent;
-        use ::chat::domain::events::ChatMacroEvent;
         use ::email::domain::events::EmailMacroEvent;
         use calendar_events::domain::events::CalendarMacroEvent;
         use channels::domain::broker_events::ChannelMacroEvent;

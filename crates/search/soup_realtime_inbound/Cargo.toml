@@ -7,7 +7,7 @@ version = "0.1.0"
 [dependencies]
 call = { workspace = true }
 channels = { workspace = true }
-chat = { workspace = true }
+ai_chat = { workspace = true }
 documents = { workspace = true, features = ["service"] }
 email = { workspace = true }
 futures = { workspace = true }

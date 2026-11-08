@@ -1,6 +1,6 @@
 //! Maps chat lifecycle events to search-index actions and processes them.
 
-use ::chat::domain::events::{ChatMacroEvent, ChatTopicEvent};
+use ::ai_chat::domain::events::{ChatMacroEvent, ChatTopicEvent};
 use macro_event_broker::MacroEvent as _;
 use opensearch_client::OpensearchClient;
 use sqlx::PgPool;

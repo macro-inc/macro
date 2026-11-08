@@ -1,14 +1,14 @@
 use std::sync::{Arc, Mutex};
 
+use ::ai_chat::domain::events::{
+    ChatCopiedMetadata, ChatCreatedMetadata, ChatDeletedMetadata, ChatMessageDeletedMetadata,
+    ChatMessageRole, ChatMessageSentMetadata, ChatPermanentlyDeletedMetadata, ChatRestoredMetadata,
+    ChatTopicEvent, ChatUpdatedMetadata,
+};
 use ::call::domain::events::{
     CallArchiveReason, CallRecordArchivedMetadata, CallRecordDeletedMetadata,
     CallRecordSummarizedMetadata, CallRecordUpdatedMetadata, CallRecordingReadyMetadata,
     CallStartedMetadata, CallTopicEvent,
-};
-use ::chat::domain::events::{
-    ChatCopiedMetadata, ChatCreatedMetadata, ChatDeletedMetadata, ChatMessageDeletedMetadata,
-    ChatMessageRole, ChatMessageSentMetadata, ChatPermanentlyDeletedMetadata, ChatRestoredMetadata,
-    ChatTopicEvent, ChatUpdatedMetadata,
 };
 use ::email::domain::events::{
     EmailEventOrigin, EmailMacroEvent, EmailTopicEvent, LinkConnectedMetadata,

@@ -469,12 +469,12 @@ impl KnownPeople for RoutinePeople {
 struct RoutineLiveItems {
     documents: documents::outbound::pg_document_repo::PgDocumentRepo<PgBotsRepo>,
     projects: folder::outbound::pg_project_repo::PgProjectRepo<PgBotsRepo>,
-    chats: chat::outbound::postgres::PgChatRepo<PgBotsRepo>,
+    chats: ai_chat::outbound::postgres::PgChatRepo<PgBotsRepo>,
 }
 
 impl LiveItems for RoutineLiveItems {
     async fn live(&self, item: &routine_program::EntityValue) -> Result<bool, rootcause::Report> {
-        use chat::domain::ports::ChatRepo as _;
+        use ai_chat::domain::ports::ChatRepo as _;
         use documents::domain::ports::DocumentRepo as _;
         use folder::domain::ports::ProjectRepo as _;
         use routine_program::EntityKind;
@@ -496,7 +496,7 @@ impl LiveItems for RoutineLiveItems {
             },
             EntityKind::Chat => match self.chats.get_metadata(id).await {
                 Ok(chat) => Ok(chat.deleted_at.is_none()),
-                Err(chat::domain::models::ChatErr::NotFound) => Ok(false),
+                Err(ai_chat::domain::models::ChatErr::NotFound) => Ok(false),
                 Err(error) => Err(live_check_error(&error)),
             },
             // Deleted outright: the access check already found it gone.
@@ -596,7 +596,7 @@ pub async fn build<Ingress: notification::domain::service::NotificationIngress>(
                 db.clone(),
                 registrar.clone(),
             ),
-            chats: chat::outbound::postgres::PgChatRepo::new(db.clone(), registrar.clone()),
+            chats: ai_chat::outbound::postgres::PgChatRepo::new(db.clone(), registrar.clone()),
         },
     ));
     let event_access = Arc::new(EventAccessAdapter::new(
@@ -934,7 +934,7 @@ pub async fn build<Ingress: notification::domain::service::NotificationIngress>(
         routine_flags.clone(),
         RoutineBriefing {
             guide: agent_code_mode::domain::entity_guide("routines").unwrap_or_default(),
-            agent_model: chat::domain::models::FREE_MODEL.to_owned(),
+            agent_model: ai_chat::domain::models::FREE_MODEL.to_owned(),
             conditions: conditions_enabled,
         },
     ));
@@ -979,7 +979,7 @@ pub async fn build<Ingress: notification::domain::service::NotificationIngress>(
             suggestions::domain::prompt::SYMBOLS,
             suggestions::domain::prompt::FIELDS_OF,
         ))
-        .with_checker_model(chat::domain::models::FREE_MODEL.to_owned())
+        .with_checker_model(ai_chat::domain::models::FREE_MODEL.to_owned())
         // A reply suggestion shows who its email thread or channel message waits
         // on the person for, read when a session writes it.
         .with_reply_waits(Arc::new(ItemReplyWaits {
@@ -999,7 +999,7 @@ pub async fn build<Ingress: notification::domain::service::NotificationIngress>(
             routine_flags.clone(),
             GenerationAgent {
                 bot: bot_id::MACRO_NEW_BOT_ID,
-                model: chat::domain::models::FREE_MODEL.to_owned(),
+                model: ai_chat::domain::models::FREE_MODEL.to_owned(),
             },
             lifecycle.workers.clone(),
             lifecycle.stop_workers.clone(),

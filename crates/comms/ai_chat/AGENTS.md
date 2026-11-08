@@ -38,7 +38,7 @@ adapters, and lifecycle events. See `README.md` for the Kafka event schema.
 
 ## Checks
 
-- `cargo test -p chat` (`SQLX_OFFLINE` unset).
+- `cargo test -p ai_chat` (`SQLX_OFFLINE` unset).
 
 ## Gotchas
 

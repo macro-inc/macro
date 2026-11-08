@@ -265,7 +265,7 @@ fn live_check_errors_leave_out_a_stored_owner() {
         };
         sqlx::Error::Decode(Box::new(error))
     };
-    let chat = chat::domain::models::ChatErr::Unknown(anyhow::Error::from(decode()));
+    let chat = ai_chat::domain::models::ChatErr::Unknown(anyhow::Error::from(decode()));
     for report in [live_check_error(&decode()), live_check_error(&chat)] {
         let text = format!("{report:?} {report}");
         assert!(!text.contains("someone"), "{text}");
