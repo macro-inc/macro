@@ -40,6 +40,9 @@ pub enum SessionInput {
 /// Ordered effects from the last handle call.
 #[derive(Default)]
 pub struct SessionOutput {
+    /// Development-only actual undo/redo removals before projection repair.
+    #[cfg(feature = "conformance")]
+    pub undo_applied: Vec<crate::UndoObservation>,
     /// Development-only observations of actual sync events, including nested calls.
     #[cfg(feature = "conformance")]
     pub sync_events: Vec<SyncEvent>,
@@ -160,6 +163,11 @@ pub trait Surface: sealed::Sealed {
     fn take_resynced(&mut self) -> bool {
         false
     }
+    #[cfg(feature = "conformance")]
+    #[doc(hidden)]
+    fn take_undo_applied(&mut self) -> Vec<crate::UndoObservation> {
+        Vec::new()
+    }
 }
 
 /// Sans-I/O document composition. All mutation enters through handle.
@@ -222,6 +230,7 @@ impl<S: Surface> DocumentSession<S> {
         {
             self.out.sync_events.clear();
             self.out.imports.clear();
+            self.out.undo_applied.clear();
         }
         self.out.io.clear();
         let result = match input {
@@ -291,6 +300,10 @@ impl<S: Surface> DocumentSession<S> {
             self.sync_input(now, SyncInput::ProjectionResynced);
         }
         self.out.need_peer_ids = self.sync.needs_peer_ids();
+        #[cfg(feature = "conformance")]
+        self.out
+            .undo_applied
+            .extend(self.surface.take_undo_applied());
         &self.out
     }
     fn sync_input(&mut self, now: Now, input: SyncInput) {
@@ -537,6 +550,7 @@ impl<S: Surface> DocumentSession<S> {
             need_peer_ids: self.out.need_peer_ids,
             sync_events: std::mem::take(&mut self.out.sync_events),
             imports: std::mem::take(&mut self.out.imports),
+            undo_applied: std::mem::take(&mut self.out.undo_applied),
         }
     }
     /// Development-only native snapshot for the Tier C relay; never exposes a mutable handle.

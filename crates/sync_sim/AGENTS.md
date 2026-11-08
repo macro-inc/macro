@@ -221,3 +221,9 @@ snapshot checksum validation and exact trace hashing. Debug assertions and
 overflow checks stay enabled; production profiles and hash algorithms do not
 change. Prebuild before timing a warm T0 run and retain all256 shrinking cases,
 500 coverage seeds, every story/peer and every invariant.
+
+Record UndoApplied only when the real Loro UndoManager reports a change. Capture
+actual visible text-character and editor-node creation IDs immediately before and
+after undo/redo, before projection fixups; never infer removals from new operation
+spans or requested inputs. Keep ownership checks over both undo and redo, including
+foreign-removal negative mutations and a no-op-history control.

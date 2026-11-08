@@ -54,6 +54,8 @@ pub struct EditorSurface {
     pub(crate) resynced: bool,
     item_started: Option<HistoryTime>,
     availability: HistoryAvailability,
+    #[cfg(feature = "conformance")]
+    pub(crate) undo_applied: Vec<crate::UndoObservation>,
     cursor: Option<lexical_loro::SelectionCursors>,
     #[cfg(test)]
     pub(crate) fail_next_remote: bool,
@@ -74,6 +76,8 @@ impl EditorSurface {
             resynced: false,
             item_started: None,
             availability: HistoryAvailability::default(),
+            #[cfg(feature = "conformance")]
+            undo_applied: Vec::new(),
             cursor: None,
             #[cfg(test)]
             fail_next_remote: false,
@@ -388,6 +392,8 @@ impl EditorSurface {
                 None
             };
             let _guard = span.as_ref().map(tracing::Span::enter);
+            #[cfg(feature = "conformance")]
+            let before_undo = crate::observation::visible_ids(doc);
             let changed = {
                 let phase = span
                     .as_ref()
@@ -399,6 +405,15 @@ impl EditorSurface {
                 span.record("history.applied", changed);
             }
             if changed {
+                #[cfg(feature = "conformance")]
+                {
+                    let removed = match (before_undo, crate::observation::visible_ids(doc)) {
+                        (Ok(before), Ok(after)) => Ok(before.difference(&after).copied().collect()),
+                        (Err(error), _) | (_, Err(error)) => Err(error.to_string()),
+                    };
+                    self.undo_applied
+                        .push(crate::UndoObservation { redo, removed });
+                }
                 let phase = span
                     .as_ref()
                     .map(|_| tracing::info_span!("editor.history.apply"));

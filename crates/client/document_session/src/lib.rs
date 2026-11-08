@@ -17,3 +17,8 @@ pub use comments::*;
 
 #[cfg(test)]
 mod test;
+
+#[cfg(feature = "conformance")]
+mod observation;
+#[cfg(feature = "conformance")]
+pub use observation::UndoObservation;

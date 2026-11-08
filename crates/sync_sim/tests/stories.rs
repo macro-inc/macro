@@ -74,3 +74,6 @@ mod editor_basic;
 
 #[path = "stories/quiet_adoption.rs"]
 mod quiet_adoption;
+
+#[path = "stories/editor_undo.rs"]
+mod editor_undo;

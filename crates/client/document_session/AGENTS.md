@@ -41,12 +41,16 @@ successful binding. Validate complete generic batches before changing the live d
 - `src/generic/validate.rs`: semantic shadow validation before any native operation.
 - `src/generic/surface.rs`: native event collection and observed-path replacement handling.
 - `src/comments.rs`: fresh-peer mark staging and idempotent publication retries.
+- `src/observation.rs`: conformance-only text/node identities around real undo/redo.
 - `examples/collab.rs`: development-only native bridge for the four-peer differential.
 
 The `conformance` feature only enables read-only inspection and the development
 example. It is not an application API or a wire/session ABI.
 Conformance hosts can inspect immutable SyncCore diagnostics, actual sync/import
-observations and independent reconstructed editor state. Draining effects retains
+observations, actual undo/redo removals before projection repair, and independent
+reconstructed editor state. Missing/uninspectable identities invalidate conformance;
+record that failure without interrupting the real undo/recovery flow.
+Draining effects retains
 the pending timer; no mutable Loro document handle escapes.
 
 Run the current TS stack differential from the repository root:
