@@ -470,7 +470,13 @@ impl<'editor> Transaction<'editor> {
                         .get("text")
                         .and_then(serde_json::Value::as_str)
                         .unwrap_or_default();
-                    let format = TextFormat::from_bits_retain(number("format"));
+                    let format_type = json.get("format").and_then(serde_json::Value::as_str);
+                    let parsed_format =
+                        format_type.and_then(|value| value.parse::<TextFormatType>().ok());
+                    let format = parsed_format.map_or_else(
+                        || TextFormat::from_bits_retain(number("format")),
+                        TextFormatType::flag,
+                    );
                     let detail = TextDetail::from_bits_retain(number("detail"));
                     let mode = json
                         .get("mode")
@@ -506,12 +512,15 @@ impl<'editor> Transaction<'editor> {
                     };
                     data.absent =
                         AbsentKeys::from_json(json, &["text", "format", "detail", "mode", "style"]);
+                    if format_type.is_some() && parsed_format.is_none() {
+                        data.absent.insert(AbsentKeys::FORMAT);
+                    }
                 }
                 Some(NodeKind::Element) => {
                     let format = json
                         .get("format")
-                        .map(|value| serde_json::from_value(value.clone()))
-                        .transpose()?
+                        .and_then(serde_json::Value::as_str)
+                        .and_then(|value| value.parse::<ElementFormat>().ok())
                         .unwrap_or_default();
                     let direction = json
                         .get("direction")
