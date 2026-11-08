@@ -9,6 +9,9 @@ pub(crate) fn override_operation(
     hook: ForeignHook,
     mut invoke: impl FnMut(&dyn ForeignHooks, &mut Transaction<'_>) -> Override<Result<(), Error>>,
 ) -> Option<Result<(), Error>> {
+    if let Err(error) = ForeignReadOperation::check() {
+        return Some(Err(error));
+    }
     if tx.foreign_native_calls.consume(key, hook) {
         return None;
     }

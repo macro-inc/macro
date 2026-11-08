@@ -6,6 +6,9 @@ mod read;
 pub use read::{ForeignReadContext, ForeignReadLease, ForeignReadSnapshot, ForeignRecordIdentity};
 pub(crate) use read::{ReadOrigin, ReadOriginRef, ReadProjections, RecordIdentityMarker};
 
+mod failure;
+pub use failure::ForeignReadOperation;
+
 mod hooks;
 pub use hooks::{ForeignData, ForeignHook, ForeignHooks, ForeignNodeType, Override};
 

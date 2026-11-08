@@ -197,6 +197,8 @@ impl<'editor> Transaction<'editor> {
                 key,
                 &slot.data,
             );
+            #[cfg(feature = "foreign-nodes")]
+            ForeignReadOperation::check()?;
             #[cfg(not(feature = "foreign-nodes"))]
             let replacement = slot.data.after_clone();
             let record = Arc::make_mut(slot);
@@ -250,6 +252,8 @@ impl<'editor> Transaction<'editor> {
                 key,
                 &slot.data,
             );
+            #[cfg(feature = "foreign-nodes")]
+            ForeignReadOperation::check()?;
             #[cfg(not(feature = "foreign-nodes"))]
             let normalized = slot.data.after_clone();
             if let Some(data) = normalized {

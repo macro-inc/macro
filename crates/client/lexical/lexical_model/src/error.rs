@@ -4,6 +4,10 @@ use crate::{NodeKey, Utf16Offset};
 /// A failed model operation; the editor remains unchanged when an update fails.
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
+    /// A caught runtime read-hook error deferred to its fallible host boundary.
+    #[cfg(feature = "foreign-nodes")]
+    #[error(transparent)]
+    ForeignReadFailed(std::sync::Arc<Error>),
     /// A development read peer attempted a guarded model write.
     #[cfg(feature = "foreign-nodes")]
     #[error("Cannot use method in read-only mode.")]
@@ -355,6 +359,8 @@ impl Error {
     /// Stable variant name for cross-boundary error classification.
     pub fn kind(&self) -> &'static str {
         match self {
+            #[cfg(feature = "foreign-nodes")]
+            Self::ForeignReadFailed(error) => error.kind(),
             #[cfg(feature = "foreign-nodes")]
             Self::ForeignReadOnly => "ForeignReadOnly",
             #[cfg(feature = "foreign-nodes")]

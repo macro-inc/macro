@@ -47,7 +47,8 @@ fn read_hook<Value>(
             .state
             .foreign_native_calls
             .is_some_and(|calls| calls.consume(node.key, hook));
-        while let Some(current) = entry.filter(|_| !bypass) {
+        while let Some(current) = entry.filter(|_| !bypass && ForeignReadOperation::check().is_ok())
+        {
             let Some(definition) = &current.foreign else {
                 break;
             };
@@ -77,6 +78,7 @@ fn mutate<Value>(
     mut invoke: impl FnMut(&dyn ForeignHooks, &mut Transaction<'_>) -> Override<Result<Value, Error>>,
     inherit: impl FnOnce(&NodeVTable, &mut Transaction<'_>) -> Result<Value, Error>,
 ) -> Result<Value, Error> {
+    ForeignReadOperation::check()?;
     let registry = tx.pending.registry.clone();
     let index = tx.type_index(key).ok_or(Error::NodeNotFound(key))?;
     let mut entry = registry.node(index);
@@ -159,6 +161,7 @@ pub(crate) fn vtable(definition: ForeignNodeType) -> NodeVTable {
         Ok(())
     };
     table.import = |tx, json| {
+        ForeignReadOperation::check()?;
         let name = json
             .get("type")
             .and_then(serde_json::Value::as_str)
@@ -189,6 +192,13 @@ pub(crate) fn vtable(definition: ForeignNodeType) -> NodeVTable {
         )
     };
     table.is_inline = |data, node| {
+        // S1: text and line-break inline flags are fixed, never virtual.
+        if matches!(
+            node.state.kind(node.key),
+            Some(NodeKind::Text | NodeKind::LineBreak)
+        ) {
+            return true;
+        }
         read_hook(
             ForeignHook::IsInline,
             data,

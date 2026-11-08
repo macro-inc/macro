@@ -9,6 +9,16 @@ pub(crate) fn apply(tx: &mut Transaction<'_>) {
     // Reconciliation writes the root text cache through getWritable. Keep its
     // record identity distinct even though the cache itself lives on the state.
     if root_text_changed(tx)
+        && {
+            #[cfg(feature = "foreign-nodes")]
+            {
+                ForeignReadOperation::check().is_ok()
+            }
+            #[cfg(not(feature = "foreign-nodes"))]
+            {
+                true
+            }
+        }
         && let Some(root) = tx.pending.nodes.get_mut(&NodeKey::ROOT)
     {
         Arc::make_mut(root);
@@ -21,6 +31,10 @@ pub(crate) fn apply(tx: &mut Transaction<'_>) {
         tx.dirty_elements.keys().copied().collect::<Vec<_>>()
     };
     for key in keys {
+        #[cfg(feature = "foreign-nodes")]
+        if ForeignReadOperation::check().is_err() {
+            return;
+        }
         if !tx.editor.state.nodes.contains_key(&key) || tx.is_root_or_shadow_root(key) {
             continue;
         }
@@ -34,6 +48,10 @@ pub(crate) fn apply(tx: &mut Transaction<'_>) {
         }) else {
             continue;
         };
+        #[cfg(feature = "foreign-nodes")]
+        if ForeignReadOperation::check().is_err() {
+            return;
+        }
         if tx
             .view()
             .element(key)
