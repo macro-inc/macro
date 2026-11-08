@@ -34,7 +34,7 @@ const SHARED_BUILD_FILES: &[&str] = &[
 
 /// When a build started and at which commit, so later edits can be told from
 /// ones already in the binary.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct BuildMark {
     pub head: String,
     pub started_unix: i64,
@@ -120,6 +120,8 @@ pub fn record_partial(
             .insert(svc.compose_name.to_owned(), mark.clone());
     }
     let graph = PackageGraph::load(repo)?;
+    // Services built together share a mark, so look its files up once.
+    let mut changed_since: HashMap<BuildMark, Vec<PathBuf>> = HashMap::new();
     let mut stale = Vec::new();
     for svc in all {
         if built.iter().any(|b| b.compose_name == svc.compose_name) {
@@ -129,8 +131,11 @@ pub fn record_partial(
             // Never built here, or built before this record existed.
             None => true,
             Some(since) => {
-                let changed = changed_files(repo, since)?;
-                graph.is_affected(svc.package, &changed)
+                if !changed_since.contains_key(since) {
+                    changed_since.insert(since.clone(), changed_files(repo, since)?);
+                }
+                let changed = changed_since.get(since).map_or(&[][..], Vec::as_slice);
+                graph.is_affected(svc.package, changed)
             }
         };
         if is_stale {

@@ -724,18 +724,23 @@ fn run_rebuild(
         recreate_aux_service_containers(stage, instance, env)?;
     }
     let reloaded = reload_changed_services(stage, mode, instance, env, target)?;
-    record_builds(instance, mode, mark, only);
+    record_builds(stage, instance, mode, mark, only);
     Ok(reloaded)
 }
 
 /// Record what each service was just built from, for [`staleness`]. A failure
-/// only loses the stale list, so it is reported, not raised.
+/// only loses the stale list, so it is reported, not raised. A dry run built
+/// nothing, so it records nothing.
 fn record_builds(
+    stage: &Stage,
     instance: &Instance,
     mode: Mode,
     mark: Result<staleness::BuildMark>,
     only: Option<&[&'static inventory::RustService]>,
 ) {
+    if stage.is_dry_run() {
+        return;
+    }
     let all: Vec<&inventory::RustService> = inventory::services_for_mode(mode).collect();
     let recorded = mark.and_then(|mark| match only {
         None => staleness::record_full(instance, &mark, all.iter().copied()),
@@ -932,7 +937,7 @@ fn prepare(
             // Not built here, so nothing to compare a later partial rebuild to.
             staleness::clear(instance);
         } else {
-            record_builds(instance, mode, mark, None);
+            record_builds(stage, instance, mode, mark, None);
         }
         binaries
     };
