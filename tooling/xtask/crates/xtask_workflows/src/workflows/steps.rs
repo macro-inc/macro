@@ -458,6 +458,15 @@ pub fn start_sccache_server() -> Step<Run> {
     Step::new("Start sccache server").run("sccache --start-server")
 }
 
+/// Run embedded TypeScript on the hosted image's Node, which strips types
+/// itself, so the step needs no checkout, build or dependency. The script
+/// exports `main`.
+pub fn node_script(source: &str) -> String {
+    format!(
+        "node --disable-warning=ExperimentalWarning --input-type=module-typescript <<'NODE_SCRIPT'\n{source}\nawait main();\nNODE_SCRIPT\n"
+    )
+}
+
 /// `sccache --show-stats` at the end of a job (never fails the job).
 pub fn show_sccache_stats() -> Step<Run> {
     Step::new("show sccache stats")
@@ -465,14 +474,14 @@ pub fn show_sccache_stats() -> Step<Run> {
         .if_condition(Expression::new("always()"))
 }
 
-/// Base for jobs gated behind `path-check`: depends on it and runs only on
-/// non-draft PRs where the path filter matched. Shared by `check` and `test`.
+/// Base for jobs gated behind `path-check`: depends on it and runs only where
+/// the path filter matched. Shared by `check` and `test`.
 pub fn gated_job() -> Job {
     Job::default()
         .needs(vec!["path-check".to_string()])
         .cond(Expression::new(
-        "needs.path-check.outputs.should_run == 'true' && github.event.pull_request.draft == false",
-    ))
+            "needs.path-check.outputs.should_run == 'true'",
+        ))
 }
 
 // ---------------------------------------------------------------------------
@@ -507,7 +516,10 @@ pub fn nix_build(name: &str, targets: &str, done_msg: &str) -> Step<Run> {
 /// stale uploads; the deploy job logs the same hash on read.
 pub fn upload_handoff_artifact(file: &str, service_expr: &str) -> Step<Run> {
     Step::new("Upload handoff artifact")
-        .run(format!("nsc artifact upload {file} \"$DEST\" --expires_in=24h"))
+        .run(format!(
+            "bun .github/scripts/upload-handoff-artifact.ts {file} \"$DEST\""
+        ))
+        .timeout_minutes(20u32)
         .shell("bash")
         .add_env(Env::new(
             "DEST",

@@ -64,7 +64,7 @@ fn entries_carry_their_authored_marks() {
     assert!(!updates.safe_default);
     assert!(updates.affects_others);
     let wire = serde_json::to_value(tags).unwrap();
-    assert_eq!(wire["surface"], "email");
+    assert_eq!(wire["surfaces"], json!(["email"]));
     assert_eq!(wire["safeDefault"], true);
     assert_eq!(wire["namedKnobs"]["replyTag"], "tag");
 }

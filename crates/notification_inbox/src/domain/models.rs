@@ -203,12 +203,18 @@ pub struct InboxEntry<E> {
 pub struct InboxScope {
     /// The row kinds to include; empty means every kind.
     pub row_types: Vec<InboxRowType>,
+    /// Only unread rows, by each row's own unread rule (mail by its unread
+    /// messages). Pages, cursors and live changes are then over unread rows
+    /// alone, so a row read elsewhere leaves and one with new activity
+    /// returns.
+    pub unread_only: bool,
 }
 
 impl InboxScope {
-    /// Whether the scope lists rows of `row_type`.
-    pub fn admits(&self, row_type: InboxRowType) -> bool {
-        self.row_types.is_empty() || self.row_types.contains(&row_type)
+    /// Whether the scope lists `row`.
+    pub fn admits(&self, row: &InboxRow) -> bool {
+        (self.row_types.is_empty() || self.row_types.contains(&row.row_type))
+            && (!self.unread_only || row.unseen)
     }
 }
 
@@ -256,10 +262,8 @@ pub struct InboxRowTarget {
 /// marked done.
 #[derive(Debug, Clone)]
 pub struct InboxClearRequest {
-    /// Which rows are cleared.
+    /// Which rows are cleared; an unread scope clears unread rows only.
     pub scope: InboxScope,
-    /// Clear only unread rows.
-    pub unread_only: bool,
     /// Clear only rows whose newest notification arrived at or after this
     /// time; older groups end the clear.
     pub since: Option<DateTime<Utc>>,

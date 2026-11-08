@@ -20,6 +20,11 @@ export type NotificationInboxRow = InboxRow<InboxRowContent>;
 /** Which rows a feed shows; with no row types it shows and reads nothing. */
 export type InboxScope = {
   rowTypes: readonly InboxRowType[];
+  /**
+   * Only unread rows. The server filters, so pages and live changes cover
+   * unread rows alone.
+   */
+  unreadOnly?: boolean;
 };
 
 /** A completed done, which the caller can reverse once. */

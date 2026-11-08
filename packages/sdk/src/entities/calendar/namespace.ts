@@ -25,6 +25,7 @@ import { paginate, unwrap } from '../../utils';
 import type { MacroClient } from '../../utils/client';
 import type { Link } from '../email/link';
 import { User } from '../users/user';
+import { BookingNamespace } from './booking-namespace';
 import { Calendar } from './calendar';
 import { CalendarEvent } from './event';
 import { CalendarReplacement } from './replacement';
@@ -115,20 +116,26 @@ export type CalendarEventRole = 'organizer' | 'guest';
  * @agent
  * ## Booking links
  *
- * - Booking links use conversational confirmation in every surface. First use `ListBookingLinks`
- *   to find existing links and reusable availability. Resolve team and host identities with tools;
- *   never ask for IDs, revisions or JSON. Default to personal ownership unless a team is requested.
- *   Explain the complete proposal in readable prose: ownership and named hosts, who attends,
- *   meeting name and description, duration, location or Google Meet, time zone, weekly hours and
- *   date exceptions, link name, buffers, minimum notice, booking window, slot interval, daily limit,
- *   guest questions, and whether bookings are enabled. Group related settings so it is easy to
- *   review. Ask whether to proceed, and end the turn. Only after the user's reply approving that
- *   proposal, call `CreateBookingLink` or `EditBookingLink`, quoting the reply verbatim in
- *   `userConfirmation`. Do not quote the original request or invent approval. These tools save
- *   immediately, with no booking review form. Do not use `AskUser` or an elicitation for booking
- *   details. For edits preserve unrequested settings, and re-read and reconfirm if the revision
- *   conflicts. Share the saved URL with an `<m-booking-link-mention>` chip (see Mentions), not a
- *   bare URL. If the same proposal is already approved, do not ask again.
+ * - Booking links live under `macro.calendar.booking`. They are reusable booking pages, not
+ *   calendar meetings; the meetings guests book through them are `Booking`s.
+ * - Booking links use conversational confirmation in every surface. First list
+ *   `macro.calendar.booking.links()` to find existing links and reusable availability. Resolve
+ *   teams and hosts from what it returns; never ask for IDs, revisions or JSON. Default to
+ *   personal ownership unless a team is requested. Explain the complete proposal in readable
+ *   prose: ownership and named hosts, who attends, meeting name and description, duration,
+ *   location, Macro call or Google Meet, time zone, weekly hours and date exceptions, link name,
+ *   buffers, minimum notice, booking window, slot interval, daily limit, guest questions, and
+ *   whether bookings are enabled. Group related settings so it is easy to review. Ask whether to
+ *   proceed, and end the turn. Only after the user's reply approving that proposal, call
+ *   `booking.createLink` or `BookingLink.edit`, quoting the reply verbatim in `userConfirmation`.
+ *   Do not quote the original request or invent approval. These save immediately, with no
+ *   review card. For edits preserve unrequested settings, and re-read and reconfirm if the
+ *   revision conflicts. Share the saved `webUrl()` with an `<m-booking-link-mention>` chip (see
+ *   Mentions), not a bare URL. If the same proposal is already approved, do not ask again.
+ * - `booking.saveSettings` changes shared schedules, page settings and many links at once: explain
+ *   the changes and the links they affect, and save only on the user's approving reply.
+ * - Cancelling, approving or rescheduling a `Booking` notifies its guest and hosts; do it only on
+ *   the user's go-ahead. Reschedule to a start from `rescheduleSlots`.
  *
  * ## Creating events
  *
@@ -263,7 +270,56 @@ export class CalendarNamespace {
     };
   }
 
-  constructor(private readonly client: MacroClient) {}
+  /** Booking links, their settings, booked meetings and booking statistics. */
+  readonly booking: BookingNamespace;
+
+  constructor(private readonly client: MacroClient) {
+    this.booking = new BookingNamespace(client);
+  }
+
+  /**
+   * When the user and their teammates are busy in a bounded UTC window (a day
+   * or a week is best, at most 370 days); `freeWindows` is present only when
+   * every person's data is complete, so never infer free time from missing
+   * busy blocks. Always includes the user; omit `members` for the whole team,
+   * or pass `[]` for only the user. Busy blocks carry no event titles, and
+   * working hours are not applied.
+   */
+  async teamAvailability(opts: {
+    /** Inclusive start, RFC 3339 UTC. */
+    start: string;
+    /** Exclusive end, RFC 3339 UTC; later than `start`. */
+    end: string;
+    /** At most 100 current teammates. */
+    members?: User[];
+  }) {
+    const availability = unwrap(
+      await this.client.storage.getTeamAvailability({
+        body: {
+          start: opts.start,
+          end: opts.end,
+          ...(opts.members
+            ? { userIds: opts.members.map((member) => member.id) }
+            : {}),
+        },
+      }),
+    );
+    return {
+      start: availability.start,
+      end: availability.end,
+      members: availability.members.map(({ userId, ...member }) => ({
+        ...member,
+        user: User.byId(this.client, userId),
+      })),
+      freeWindows: availability.freeWindows ?? undefined,
+      /** Requested people who are not current teammates; nothing about them is disclosed. */
+      unknownUsers: availability.unknownUserIds.map((id) =>
+        User.byId(this.client, id),
+      ),
+      complete: availability.complete,
+      summary: availability.summary,
+    };
+  }
 
   /** The calendars the caller can see, some possibly not theirs, primaries and writable first. */
   calendars(): Promise<Calendar[]> {
@@ -401,7 +457,7 @@ function onSchedule(
     : undefined;
 }
 
-/** The user's role on a copy, read the way ListCalendarEvents reads it: only
+/** The user's role on a copy, read the way Rust `EventRole::of` reads it: only
  * the copy's own inbox row is `isSelf`. That row marked organizer counts only
  * on a copy the user can change, since Microsoft Graph names the mailbox owner
  * as organizer on every event of a read-only calendar. `organize` says they

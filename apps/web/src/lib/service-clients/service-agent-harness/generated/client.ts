@@ -17,6 +17,7 @@ import type {
   AgentSessionLogResponse,
   AgentSessionQueueResponse,
   AgentSessionResponse,
+  AgentUpdates,
   AiAdmissionErrorBody,
   AnswerToolApprovalRequest,
   AnswerToolApprovalResponse,
@@ -26,6 +27,7 @@ import type {
   CallConnectedTool,
   ClassifyInputRequest,
   ClassifyInputResponse,
+  CodingAgentsResponse,
   CodingPreferencesBody,
   ConnectedApp,
   ConnectedAppKind,
@@ -48,6 +50,8 @@ import type {
   ExtractInputRequest,
   ExtractInputResponse,
   GetAgentSessionActivityParams,
+  LinkedTaskResponse,
+  LinkTaskRequest,
   ListAgentRepositoryBranchesParams,
   LoadAgentModelsRequest,
   LoadAgentModelsResponse,
@@ -1304,6 +1308,64 @@ export const previewAgentSessions = async (
     status: res.status,
     headers: res.headers,
   } as previewAgentSessionsResponse;
+};
+
+/**
+ * @summary The caller's coding sessions waiting for their answer, or stalled for over 20 minutes,
+newest activity first.
+ */
+export type listAgentSessionUpdatesResponse200 = {
+  data: AgentUpdates;
+  status: 200;
+};
+
+export type listAgentSessionUpdatesResponse401 = {
+  data: string;
+  status: 401;
+};
+
+export type listAgentSessionUpdatesResponse500 = {
+  data: string;
+  status: 500;
+};
+
+export type listAgentSessionUpdatesResponseSuccess =
+  listAgentSessionUpdatesResponse200 & {
+    headers: Headers;
+  };
+export type listAgentSessionUpdatesResponseError = (
+  | listAgentSessionUpdatesResponse401
+  | listAgentSessionUpdatesResponse500
+) & {
+  headers: Headers;
+};
+
+export type listAgentSessionUpdatesResponse =
+  | listAgentSessionUpdatesResponseSuccess
+  | listAgentSessionUpdatesResponseError;
+
+export const getListAgentSessionUpdatesUrl = () => {
+  return `/agent-sessions/updates`;
+};
+
+export const listAgentSessionUpdates = async (
+  options?: RequestInit
+): Promise<listAgentSessionUpdatesResponse> => {
+  const res = await fetch(getListAgentSessionUpdatesUrl(), {
+    ...options,
+    method: 'GET',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: listAgentSessionUpdatesResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as listAgentSessionUpdatesResponse;
 };
 
 /**
@@ -3809,6 +3871,86 @@ export const putAgentSessionSandboxSize = async (
 };
 
 /**
+ * @summary Link a session the caller owns to a task they can view, replacing any earlier link. The
+session's pull request, now or later, is linked to the task.
+ */
+export type linkAgentSessionTaskResponse200 = {
+  data: LinkedTaskResponse;
+  status: 200;
+};
+
+export type linkAgentSessionTaskResponse400 = {
+  data: string;
+  status: 400;
+};
+
+export type linkAgentSessionTaskResponse401 = {
+  data: string;
+  status: 401;
+};
+
+export type linkAgentSessionTaskResponse403 = {
+  data: string;
+  status: 403;
+};
+
+export type linkAgentSessionTaskResponse404 = {
+  data: string;
+  status: 404;
+};
+
+export type linkAgentSessionTaskResponse500 = {
+  data: string;
+  status: 500;
+};
+
+export type linkAgentSessionTaskResponseSuccess =
+  linkAgentSessionTaskResponse200 & {
+    headers: Headers;
+  };
+export type linkAgentSessionTaskResponseError = (
+  | linkAgentSessionTaskResponse400
+  | linkAgentSessionTaskResponse401
+  | linkAgentSessionTaskResponse403
+  | linkAgentSessionTaskResponse404
+  | linkAgentSessionTaskResponse500
+) & {
+  headers: Headers;
+};
+
+export type linkAgentSessionTaskResponse =
+  | linkAgentSessionTaskResponseSuccess
+  | linkAgentSessionTaskResponseError;
+
+export const getLinkAgentSessionTaskUrl = (sessionId: string) => {
+  return `/agent-sessions/${sessionId}/task`;
+};
+
+export const linkAgentSessionTask = async (
+  sessionId: string,
+  linkTaskRequest: LinkTaskRequest,
+  options?: RequestInit
+): Promise<linkAgentSessionTaskResponse> => {
+  const res = await fetch(getLinkAgentSessionTaskUrl(sessionId), {
+    ...options,
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(linkTaskRequest),
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: linkAgentSessionTaskResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as linkAgentSessionTaskResponse;
+};
+
+/**
  * @summary Answer a tool call the agent made in a turn somebody other than the
 session's owner prompted. Approve and deny are the owner's; cancel is
 anyone's with edit access.
@@ -4147,6 +4289,62 @@ export const listAgentWorkRegistrations = async (
     status: res.status,
     headers: res.headers,
   } as listAgentWorkRegistrationsResponse;
+};
+
+/**
+ * @summary List the coding agents the caller can start a session as: the same
+personas the `ListCodingAgents` tool offers, including built-in ones whose
+runtime the caller has connected (Cursor once its key is saved).
+ */
+export type listCodingAgentsResponse200 = {
+  data: CodingAgentsResponse;
+  status: 200;
+};
+
+export type listCodingAgentsResponse401 = {
+  data: void;
+  status: 401;
+};
+
+export type listCodingAgentsResponse500 = {
+  data: void;
+  status: 500;
+};
+
+export type listCodingAgentsResponseSuccess = listCodingAgentsResponse200 & {
+  headers: Headers;
+};
+export type listCodingAgentsResponseError = (
+  | listCodingAgentsResponse401
+  | listCodingAgentsResponse500
+) & {
+  headers: Headers;
+};
+
+export type listCodingAgentsResponse =
+  | listCodingAgentsResponseSuccess
+  | listCodingAgentsResponseError;
+
+export const getListCodingAgentsUrl = () => {
+  return `/coding-agents`;
+};
+
+export const listCodingAgents = async (
+  options?: RequestInit
+): Promise<listCodingAgentsResponse> => {
+  const res = await fetch(getListCodingAgentsUrl(), {
+    ...options,
+    method: 'GET',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: listCodingAgentsResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as listCodingAgentsResponse;
 };
 
 /**

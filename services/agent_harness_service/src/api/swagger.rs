@@ -21,10 +21,12 @@ use agent_harness::inbound::tool_approvals::{
     ToolApprovalStatusDto,
 };
 use agent_runtime_protocol::domain::action::{AgentAction, AgentActionId, PromptAttachment};
+use agent_session::domain::coding_agents::CodingAgent;
 use agent_session::domain::model::{ArchiveCause, SandboxSize, SessionBot};
 use agent_session::domain::pull_request_links::{
     PullRequestLinkSource, PullRequestLinkedSession, PullRequestSessions, SessionPullRequestLink,
 };
+use agent_session::domain::updates::{AgentUpdate, AgentUpdateKind, AgentUpdates};
 use agent_session::inbound::axum_router::auto_archive::{
     AutoArchiveOverridesBody, AutoArchivePreferencesBody, SessionAutoArchiveResponse,
 };
@@ -32,6 +34,7 @@ use agent_session::inbound::axum_router::pull_requests::{
     PullRequestSessionsResponse, PullRequestUrl, PullRequestUrls, PullRequestsSessionsResponse,
     SessionPullRequestsResponse,
 };
+use agent_session::inbound::axum_router::task::{LinkTaskRequest, LinkedTaskResponse};
 use agent_session::inbound::axum_router::work_registration::WorkRegistrationResponse;
 use agent_session::inbound::axum_router::{
     self, AgentSessionFoldedLogResponse, AgentSessionLogEntryDto, AgentSessionLogResponse,
@@ -42,6 +45,7 @@ use agent_session::inbound::axum_router::{
     PreviewAgentSessionsResponse, QueuedActionDto, RenameAgentSessionRequest, SandboxSizeBody,
     SessionStatusDto, SetAgentSessionArchivedRequest, WithAgentSessionId,
 };
+use agent_session::inbound::coding_agents::{self, CodingAgentsResponse};
 use utoipa::{
     Modify, OpenApi,
     openapi::security::{Http, HttpAuthScheme, SecurityScheme},
@@ -93,6 +97,8 @@ impl Modify for SecurityAddon {
         axum_router::pull_requests::unlink_session_pull_request,
         axum_router::pull_requests::sessions_for_pull_request,
         axum_router::pull_requests::sessions_for_pull_requests,
+        axum_router::task::link_agent_session_task,
+        axum_router::updates::list_agent_session_updates,
         axum_router::get_agent_session_log_handler,
         axum_router::get_agent_session_folded_log_handler,
         axum_router::control_agent_session_handler,
@@ -119,6 +125,7 @@ impl Modify for SecurityAddon {
         agent_harness::inbound::conversations::retry_agent_conversation_turn,
         agent_harness::inbound::conversations::start_fresh_agent_conversation,
         repositories::list_agent_repositories_handler,
+        coding_agents::list_coding_agents_handler,
         repositories::list_agent_repository_branches_handler,
         mode_choice::choose_agent_mode_handler,
         changes_router::get_agent_session_changes_handler,
@@ -128,6 +135,8 @@ impl Modify for SecurityAddon {
         app_connections::app_connected_handler,
     ),
     components(schemas(
+        CodingAgent,
+        CodingAgentsResponse,
         CreateAgentSessionRequest,
         CreateAgentSessionResponse,
         CreateSessionThread,
@@ -153,6 +162,11 @@ impl Modify for SecurityAddon {
         PullRequestSessionsResponse,
         PullRequestUrls,
         PullRequestsSessionsResponse,
+        LinkTaskRequest,
+        LinkedTaskResponse,
+        AgentUpdates,
+        AgentUpdate,
+        AgentUpdateKind,
         PullRequestSessions,
         PullRequestLinkedSession,
         SessionPullRequestLink,

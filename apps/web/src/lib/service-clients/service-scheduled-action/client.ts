@@ -10,6 +10,25 @@ import {
   type AI_USAGE_LIMIT_ERROR,
   aiUsageErrorResponseHandler,
 } from '../ai-usage-limit';
+
+/** Draft failures the dialog words on its own, beside usage limits. */
+export type DraftErrorCode =
+  | typeof AI_USAGE_LIMIT_ERROR
+  | 'PAYLOAD_TOO_LARGE'
+  | 'TIMEOUT';
+
+async function draftErrorResponseHandler(
+  response: Response
+): Promise<ResultError<DraftErrorCode | FetchWithTokenErrorCode>> {
+  if (response.status === 413) {
+    return { code: 'PAYLOAD_TOO_LARGE', message: 'Request too large' };
+  }
+  if (response.status === 408 || response.status === 504) {
+    return { code: 'TIMEOUT', message: 'Request timed out' };
+  }
+  return aiUsageErrorResponseHandler(response);
+}
+
 import type {
   ActionConfiguration,
   ActionConfigurationUpdate,
@@ -150,12 +169,12 @@ export const scheduledActionClient = {
 
   /** Have AI draft a routine or one of its steps, its code checked as saving would. */
   draftRoutine: async (body: DraftRoutineRequest) =>
-    fetchWithToken<Draft, typeof AI_USAGE_LIMIT_ERROR>(
+    fetchWithToken<Draft, DraftErrorCode>(
       `${scheduledActionHost}/scheduled-actions/drafts`,
       {
         method: 'POST',
         body: JSON.stringify(body),
-        errorResponseHandler: aiUsageErrorResponseHandler,
+        errorResponseHandler: draftErrorResponseHandler,
       }
     ),
 

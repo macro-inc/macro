@@ -299,4 +299,10 @@ describe('encodeInboxScope', () => {
       { rowTypes: ['EMAIL', 'CHANNEL_THREAD'] }
     );
   });
+
+  it('asks the server for unread rows only when the scope is unread', () => {
+    expect(
+      encodeInboxScope({ rowTypes: ALL_INBOX_ROW_TYPES, unreadOnly: true })
+    ).toEqual({ rowTypes: [], unreadOnly: true });
+  });
 });
