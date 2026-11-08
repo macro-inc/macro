@@ -19,6 +19,7 @@ agent_correlation = { workspace = true }
 async-trait = { workspace = true }
 bot_id = { workspace = true }
 call = { workspace = true, features = ["outbound"] }
+channel_id = { workspace = true }
 channel_sender = { workspace = true }
 channels = { workspace = true, features = ["sqlx"] }
 documents = { workspace = true, features = ["outbound", "ports"] }

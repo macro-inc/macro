@@ -1,5 +1,6 @@
 //! Unified entity-mutation capability impls for channels.
 
+use channel_id::ChannelId;
 use entity_access::domain::models::{
     EntityAccessReceipt, MemberParticipantRole, RequiredPermission, ViewOnly,
 };
@@ -84,7 +85,7 @@ where
     ) -> Result<Vec<EntityMutationEffect>, EntityMutationErrorCode> {
         let channel_id = channel_uuid(&entity)?;
         let sender = sender_from_receipt(&receipt)?;
-        self.delete_channel(sender, channel_id).await?;
+        self.delete_channel(sender, ChannelId(channel_id)).await?;
         Ok(vec![EntityMutationEffect::deleted(entity)])
     }
 }
