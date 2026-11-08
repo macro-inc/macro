@@ -6,7 +6,7 @@ use sqlx::{Pool, Postgres};
 const EMPTY_PUBLIC_SCHEMA: &str = "DROP SCHEMA public CASCADE; CREATE SCHEMA public;";
 
 const MIGRATION: &str =
-    include_str!("../migrations/20261106205212_unfile_from_trashed_folders.sql");
+    include_str!("../../migrations/20261106205212_unfile_from_trashed_folders.sql");
 
 #[sqlx::test(migrations = false)]
 async fn migration_returns_items_in_trashed_folders_to_the_root(
