@@ -27,7 +27,7 @@ Macro's event topics.
 
 ## Boundaries
 
-- Depends on: `macro_event_topics`, `kafka_util` (optional, feature
+- Depends on: `macro_event_topics`, `agent_correlation`, `kafka_util` (optional, feature
   `outbound`).
 - Used by: crates and services that publish or consume Macro events
   (`agent_session`, `agent_trigger`, `activity`, `bots`, `calendar_events`,
@@ -39,6 +39,10 @@ Macro's event topics.
 
 ## Gotchas
 
+- `Event` constructors stamp `agent_correlation_id` and `routine_id` from
+  `agent_correlation::context` (omitted from the wire when absent). Build
+  events inside the request's task, or `agent_correlation::context::capture`
+  the work you spawn; otherwise a routine's own writes can re-trigger it.
 - `NoopMacroEventBroker` exists for tests/local configs without Kafka — don't
   reach for a hand-rolled in-memory broker instead.
 - Default feature is `outbound`; building without it (e.g. `schema`-only
@@ -47,3 +51,5 @@ Macro's event topics.
 ## Related
 
 - Rules: `.agents/rules/rust/architecture.md` (CS-51/CS-52 hexagonal layering)
+
+- Event constructors capture request-local agent correlation into the envelope; restore it before downstream mutations and capture it before spawning work.

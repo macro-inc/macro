@@ -8,13 +8,12 @@ version = "0.1.0"
 all = ["axum", "inbound", "outbound", "ports"]
 axum = ["inbound", "dep:axum", "dep:utoipa"]
 inbound = ["ports"]
-outbound = ["dep:bytes", "dep:futures", "dep:reqwest", "dep:scraper", "dep:tokio", "ports"]
+outbound = ["dep:futures", "dep:reqwest", "dep:scraper", "dep:tokio", "ports"]
 ports = []
 
 [dependencies]
 anyhow = { workspace = true }
 axum = { workspace = true, optional = true }
-bytes = { workspace = true, optional = true }
 futures = { workspace = true, optional = true }
 reqwest = { workspace = true, features = ["stream"], optional = true }
 scraper = { workspace = true, optional = true }

@@ -28,6 +28,7 @@ import {
 } from '@components/app/previewTarget';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { SplitPanel } from '@components/app/split-panel';
+import { StaticMarkdownContext } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
 import { toast } from '@core/component/Toast/Toast';
 import { registerHotkey } from '@core/hotkey/hotkeys';
 import { TOKENS } from '@core/hotkey/tokens';
@@ -62,6 +63,8 @@ import {
 } from 'solid-js';
 import { match } from 'ts-pattern';
 import { Virtualizer, type VirtualizerHandle } from 'virtua/solid';
+import { InboxClearDrawer } from '../components/inbox-clear-drawer';
+import { InboxClearMenu } from '../components/inbox-clear-menu';
 import { InboxDateHeader } from '../components/inbox-date-header';
 import { InboxFilterDrawer } from '../components/inbox-filter-drawer';
 import { InboxFilterMenu } from '../components/inbox-filter-menu';
@@ -78,7 +81,12 @@ import {
   type NotificationInboxRow,
   useNotificationsInboxContext,
 } from '../context/notifications-inbox-context';
-import type { InboxStatus } from '../core/inbox-filters';
+import {
+  clearFor,
+  clearIncludes,
+  type InboxClearChoice,
+  type InboxStatus,
+} from '../core/inbox-filters';
 import type { InboxDecision } from '../core/inbox-row';
 import {
   describeInboxCard,
@@ -90,6 +98,7 @@ import {
   dateHeaderLabel,
   type InboxListItem,
   type InboxStackItemPlace,
+  inboxSectionEnds,
   isInboxNotification,
   isInboxRow,
   isInboxStackItem,
@@ -106,6 +115,8 @@ import {
   crmCommentParams,
 } from '../primitives/notification-location';
 import { createRowActions, rowButtons } from '../primitives/row-actions';
+import { rowEntity } from '../primitives/row-entity';
+import { NotificationsNoneSelected } from './notifications-none-selected';
 
 type ActivationMetadata = { event?: MouseEvent; newSplit?: boolean };
 /** Stepping through the list and moving on from a done row replace the entry. */
@@ -168,18 +179,12 @@ const previewSelection = (
     ? undefined
     : entity;
 
-/** The entity a row, or one of its notifications, is about. */
-const entityOf = (
-  row: NotificationInboxRow,
-  notification?: UnifiedNotification
-) => (notification ? row.content.entityAt(notification) : row.content.entity);
-
 /**
  * A calendar event row as the Calendar reads it: its notifications, such as
  * a reminder naming the occurrence, behind an accessor.
  */
 const calendarSelection = (
-  entity: ReturnType<typeof entityOf>
+  entity: ReturnType<typeof rowEntity>
 ): CalendarPreviewSelection | undefined => {
   if (entity.type !== 'calendar_event') return undefined;
   const { notifications } = entity;
@@ -201,7 +206,7 @@ const previewTargetFor = (
   row: NotificationInboxRow,
   notification?: UnifiedNotification
 ) => {
-  const entity = previewSelection(entityOf(row, notification));
+  const entity = previewSelection(rowEntity(row, notification));
   if (!entity) return undefined;
   const target = previewBlockTarget(entity);
   const params =
@@ -235,10 +240,10 @@ function ListStatus(props: { children: JSX.Element }) {
 }
 
 /**
- * The unified notifications list beside a preview of the chosen row: one card
+ * The unified notifications list beside a preview of the chosen row: one row
  * per thing that needs the viewer, newest first under Home's date dividers.
  * Several notifications about one thing show as a stack; its button, or the
- * right arrow, unfolds them below the card, and each opens at its own location.
+ * right arrow, unfolds them below the row, and each opens at its own location.
  * All and Unread switch the list, and the choice is kept between visits.
  * `j`/`k` move through rows and unfolded notifications (and follow in an open
  * preview), Enter previews, `e` marks the focused row done. Touch shows the list
@@ -250,35 +255,51 @@ export function NotificationsView(props: NotificationsViewProps) {
   const context = useNotificationsInboxContext();
   const { pushUndo } = useMutationUndoContext();
   const filters = createInboxFilters(context.filterStorage);
-  const feed = context.createFeed(() => ({ rowTypes: filters.rowTypes() }));
-  const inbox = createInboxList(
-    feed,
-    {
-      pushUndo: (entry) => pushUndo(entry),
-      announceDone: (count, undo) => {
-        const id = toast.success(
-          t('notificationsInbox.markedDone', { count }),
+  const feed = context.createFeed(filters.scope);
+  const inbox = createInboxList(feed, {
+    pushUndo: (entry) => pushUndo(entry),
+    announceDone: (count, undo) => {
+      const id = toast.success(t('notificationsInbox.markedDone', { count }), {
+        dismissStyle: 'icon',
+        actionLayout: 'inline',
+        actions: [
           {
-            actions: [
-              {
-                label: t('notificationsInbox.undo'),
-                icon: ArrowCounterClockwise,
-                onClick: () => fireAndForget(undo(), 'notifications-inbox'),
-              },
-            ],
-            duration: 3_000,
-            stack: true,
-            hideOnMobile: true,
-          }
-        );
-        return () => {
-          if (id !== undefined) toast.dismiss(id);
-        };
-      },
-      announceFailure: (message) => toast.failure(message),
+            label: t('notificationsInbox.undo'),
+            icon: ArrowCounterClockwise,
+            onClick: () => fireAndForget(undo(), 'notifications-inbox'),
+          },
+        ],
+        duration: 3_000,
+        stack: true,
+        hideOnMobile: true,
+      });
+      return () => {
+        if (id !== undefined) toast.dismiss(id);
+      };
     },
-    filters.includesRow
-  );
+    announceCleared: (count, undo) => {
+      const id =
+        count === 0
+          ? toast.success(t('notificationsInbox.clearedNothing'))
+          : toast.success(t('notificationsInbox.cleared', { count }), {
+              dismissStyle: 'icon',
+              actionLayout: 'inline',
+              actions: [
+                {
+                  label: t('notificationsInbox.undo'),
+                  icon: ArrowCounterClockwise,
+                  onClick: () => fireAndForget(undo(), 'notifications-inbox'),
+                },
+              ],
+              duration: 8_000,
+              stack: true,
+            });
+      return () => {
+        if (id !== undefined) toast.dismiss(id);
+      };
+    },
+    announceFailure: (message) => toast.failure(message),
+  });
 
   onMount(() => panel.handle.setDisplayName(t('nav.notifications')));
 
@@ -311,6 +332,7 @@ export function NotificationsView(props: NotificationsViewProps) {
   // and a stack stays open through it.
   const stacks = createDisclosureState();
   const listItems = createInboxListItems(rows, stacks.isExpanded);
+  const sectionEnds = createMemo(() => inboxSectionEnds(listItems()));
   const anyStackOpen = createMemo(() =>
     rows().some((row) => row.count > 1 && stacks.isExpanded(row.id))
   );
@@ -322,6 +344,12 @@ export function NotificationsView(props: NotificationsViewProps) {
     if (!item || !isInboxNotification(item)) return undefined;
     return rowsById().get(isInboxStackItem(item) ? item.rowId : item.id);
   };
+  /** An unfolded notification's place, by its item id. */
+  const stackItemOf = (id: string) =>
+    listItems().find(
+      (item): item is InboxStackItemPlace =>
+        isInboxStackItem(item) && item.id === id
+    );
   const notificationOf = (item: InboxListItem | undefined) =>
     item && isInboxStackItem(item)
       ? rowOf(item)?.content.notifications.find(
@@ -340,7 +368,6 @@ export function NotificationsView(props: NotificationsViewProps) {
 
   const markSeen = (row: NotificationInboxRow) => {
     if (!row.unseen) return;
-    filters.keepRead(row.id);
     fireAndForget(feed.markSeen([row]), 'notifications-inbox');
   };
 
@@ -354,7 +381,7 @@ export function NotificationsView(props: NotificationsViewProps) {
     notification?: UnifiedNotification,
     history: HistoryOptions = {}
   ) => {
-    const calendarEvent = calendarSelection(entityOf(row, notification));
+    const calendarEvent = calendarSelection(rowEntity(row, notification));
     if (
       calendarEvent &&
       guard.canSelect(undefined) &&
@@ -452,6 +479,45 @@ export function NotificationsView(props: NotificationsViewProps) {
       failed: (decision) => toast.failure(decisionFailure(decision)),
     },
   });
+
+  /**
+   * Complete one notification of a stack. The stack's last one completes the
+   * row. An open preview of it moves to the stack's next notification, or its
+   * previous one when it was the last.
+   */
+  const markNotificationDone = (
+    row: NotificationInboxRow,
+    notification: UnifiedNotification
+  ) => {
+    if (row.count <= 1) {
+      markDone([row]);
+      return;
+    }
+    if (selection.selectedNotification()?.id === notification.id) {
+      const shown = row.content.notifications;
+      const index = shown.findIndex(
+        (candidate) => candidate.id === notification.id
+      );
+      const next = shown[index + 1] ?? shown[index - 1];
+      if (next) preview(row, next);
+      else preview(row);
+    }
+    fireAndForget(
+      inbox.markNotificationDone(row, notification),
+      'notifications-inbox'
+    );
+  };
+
+  /**
+   * Clear what the reader chose, under their filters. A preview of a row the
+   * clear takes closes, as the list leaves it.
+   */
+  const clear = (choice: InboxClearChoice) => {
+    const request = clearFor(choice, filters.filters(), new Date());
+    const shown = selection.selected();
+    if (shown && clearIncludes(request, shown)) closePreview();
+    fireAndForget(inbox.clear(request), 'notifications-inbox');
+  };
 
   const markDone = (done: readonly NotificationInboxRow[]) => {
     for (const row of done) stacks.collapse(row.id);
@@ -564,9 +630,12 @@ export function NotificationsView(props: NotificationsViewProps) {
     condition: () => panel.isPanelActive() && list.focus.item() !== undefined,
     keyDownHandler: (event) => {
       if (event?.repeat) return true;
-      const row = rowOf(list.focus.item());
+      const item = list.focus.item();
+      const row = rowOf(item);
       if (!row) return false;
-      markDone([row]);
+      const notification = notificationOf(item);
+      if (notification) markNotificationDone(row, notification);
+      else markDone([row]);
       return true;
     },
   });
@@ -594,14 +663,11 @@ export function NotificationsView(props: NotificationsViewProps) {
     onCleanup(() => cancelAnimationFrame(frame));
   });
 
-  /** On touch, a left swipe marks the row done. */
-  const SwipeToDone = (swipe: {
-    row: NotificationInboxRow;
-    children: JSX.Element;
-  }) => (
+  /** On touch, a left swipe marks the row or stack notification done. */
+  const SwipeToDone = (swipe: { id: string; children: JSX.Element }) => (
     <Show when={isTouchDevice()} fallback={swipe.children}>
       <SwipableRow
-        id={swipe.row.id}
+        id={swipe.id}
         swipeLeftColor="bg-success"
         swipeLeftRevealedComponent={<CheckIcon class="size-8 text-surface" />}
       >
@@ -620,7 +686,7 @@ export function NotificationsView(props: NotificationsViewProps) {
           selection.selectedNotification() && stacks.isExpanded(card.row().id)
         ));
     return (
-      <SwipeToDone row={card.row()}>
+      <SwipeToDone id={card.row().id}>
         <NotificationRow
           id={card.row().id}
           icon={
@@ -639,6 +705,7 @@ export function NotificationsView(props: NotificationsViewProps) {
           unfolded={stacks.isExpanded(card.row().id)}
           unseen={card.row().unseen}
           highlighted={highlighted()}
+          endsSection={sectionEnds().has(card.row().id)}
           receded={
             anyStackOpen() &&
             !stacks.isExpanded(card.row().id) &&
@@ -684,38 +751,48 @@ export function NotificationsView(props: NotificationsViewProps) {
       entry.row().content.notifications.at(-1)?.id ===
       entry.place.notificationId;
     return (
-      <NotificationStackItem
-        id={entry.place.id}
-        icon={
-          <InboxSenderAvatar
-            notification={entry.notification()}
-            kind={inboxCardKind(entry.row())}
-            entity={entry.row().content.entity}
-            compact
-          />
-        }
-        by={item().by}
-        text={item().text}
-        time={formatTimestamp(item().at)}
-        last={isLast()}
-        more={
-          isLast()
-            ? entry.row().count - entry.row().content.notifications.length
-            : 0
-        }
-        unseen={entry.row().unseen}
-        highlighted={
-          list.focus.key() === entry.place.id ||
-          selection.selectedNotification()?.id === entry.place.notificationId
-        }
-        onHover={() => list.focus.set(entry.place.id, { reason: 'hover' })}
-        onClick={(event) =>
-          list.activate.key(entry.place.id, {
-            reason: 'pointer',
-            metadata: { event },
-          })
-        }
-      />
+      <SwipeToDone id={entry.place.id}>
+        <NotificationStackItem
+          id={entry.place.id}
+          icon={
+            <InboxSenderAvatar
+              notification={entry.notification()}
+              kind={inboxCardKind(entry.row())}
+              entity={entry.row().content.entity}
+              compact
+            />
+          }
+          by={item().by}
+          text={item().text}
+          time={formatTimestamp(item().at)}
+          last={isLast()}
+          count={entry.row().count}
+          endsSection={sectionEnds().has(entry.place.id)}
+          more={
+            isLast()
+              ? entry.row().count - entry.row().content.notifications.length
+              : 0
+          }
+          unseen={entry.row().unseen}
+          highlighted={
+            list.focus.key() === entry.place.id ||
+            selection.selectedNotification()?.id === entry.place.notificationId
+          }
+          onHover={() => list.focus.set(entry.place.id, { reason: 'hover' })}
+          onClick={(event) =>
+            list.activate.key(entry.place.id, {
+              reason: 'pointer',
+              metadata: { event },
+            })
+          }
+          onDone={() => markNotificationDone(entry.row(), entry.notification())}
+          onToggleStack={() => {
+            // Hide leaves with the item; focus returns to its stack's row.
+            list.focus.set(entry.row().id, { reason: 'pointer' });
+            stacks.toggle(entry.row().id);
+          }}
+        />
+      </SwipeToDone>
     );
   };
 
@@ -724,14 +801,14 @@ export function NotificationsView(props: NotificationsViewProps) {
       <Match when={!filters.showsNothing() && view().t === 'loading'}>
         <ListSkeleton.Root
           label={t('notificationsInbox.loading')}
-          class="px-3 touch:pt-(--mobile-content-inset-top)"
+          class="touch:pt-(--mobile-content-inset-top)"
         >
-          <div class="flex h-7 items-center px-[13px]">
+          <div class="flex h-7 items-center pr-4 pl-6 mobile:pl-7">
             <ListSkeleton.Bar class="h-2 w-16" />
           </div>
           <For each={[0, 1, 2, 3, 4]}>
             {() => (
-              <ListSkeleton.Row class="mb-2.5 h-[83px] gap-3 rounded-xl px-[13px] mobile:mb-3 mobile:h-[89px]">
+              <ListSkeleton.Row class="h-[81px] items-start gap-3 py-3 pr-4 pl-6 touch:h-[81px] mobile:h-[87px] mobile:pl-7">
                 <ListSkeleton.Bar class="size-6 shrink-0 rounded-full mobile:size-10" />
                 <div class="flex min-w-0 flex-1 flex-col gap-2">
                   <ListSkeleton.Bar class="w-1/3" />
@@ -870,7 +947,16 @@ export function NotificationsView(props: NotificationsViewProps) {
             <InboxStatusPills
               status={filters.filters().status}
               onChange={filters.setStatus}
-              leading={<InboxFilterDrawer {...filterControls} />}
+              leading={
+                <>
+                  <InboxFilterDrawer {...filterControls} />
+                  <InboxClearDrawer
+                    unreadOnly={filters.filters().status === 'unread'}
+                    isShown={filters.isShown}
+                    onClear={clear}
+                  />
+                </>
+              }
             />
           </header>
           <PullToRefresh
@@ -879,10 +965,21 @@ export function NotificationsView(props: NotificationsViewProps) {
           />
           <SwipableRowProvider
             container={viewport}
-            canSwipeLeft={(rowId) => rows().some((row) => row.id === rowId)}
-            onSwipeLeft={(rowId) => {
-              const row = rows().find((candidate) => candidate.id === rowId);
-              if (row) markDone([row]);
+            canSwipeLeft={(id) =>
+              rowsById().has(id) || stackItemOf(id) !== undefined
+            }
+            onSwipeLeft={(id) => {
+              const row = rowsById().get(id);
+              if (row) {
+                markDone([row]);
+                return;
+              }
+              const place = stackItemOf(id);
+              const stackRow = rowOf(place);
+              const notification = notificationOf(place);
+              if (stackRow && notification) {
+                markNotificationDone(stackRow, notification);
+              }
             }}
           >
             <div
@@ -899,103 +996,103 @@ export function NotificationsView(props: NotificationsViewProps) {
     </ViewShell.Root>
   );
 
+  // One editor renders every card's text; without it each line of each card
+  // builds its own.
   return (
-    <SplitPanel.Root>
-      <SplitPanel.Body>
-        <Show when={!isTouchDevice()} fallback={touchLayout()}>
-          <div class="size-full min-h-0 bg-panel">
-            <ViewShell.Root
-              asidePreferenceKey="notifications"
-              // Rows read as sentences, so the list starts wider than a nav rail.
-              aside={{ width: 360, max: 480, preserveDuringResize: false }}
-              // Narrow, the list and what it opens take turns.
-              asideList={{
-                open:
-                  props.calendarPreview.isOpen() ||
-                  previewTarget() !== undefined,
-                onBack: () => closePreview(),
-              }}
-              main={{ preferredWidth: 640 }}
-              resizable
-            >
-              <ViewShell.Aside class="flex flex-col bg-panel">
-                <ListHeader
-                  actions={
-                    <>
-                      <div class="relative">
-                        <InboxFilterMenu
-                          open={filterOpen()}
-                          onOpenChange={setFilterOpen}
-                          {...filterControls}
+    <StaticMarkdownContext>
+      <SplitPanel.Root>
+        <SplitPanel.Body>
+          <Show when={!isTouchDevice()} fallback={touchLayout()}>
+            <div class="size-full min-h-0 bg-panel">
+              <ViewShell.Root
+                asidePreferenceKey="notifications"
+                // Rows read as sentences, so the list starts wider than a nav rail.
+                aside={{ width: 360, max: 480, preserveDuringResize: false }}
+                // Narrow, the list and what it opens take turns.
+                asideList={{
+                  open:
+                    props.calendarPreview.isOpen() ||
+                    previewTarget() !== undefined,
+                  onBack: () => closePreview(),
+                }}
+                main={{ preferredWidth: 640 }}
+                resizable
+              >
+                <ViewShell.Aside class="flex flex-col bg-panel">
+                  <ListHeader
+                    actions={
+                      <>
+                        <div class="relative">
+                          <InboxFilterMenu
+                            open={filterOpen()}
+                            onOpenChange={setFilterOpen}
+                            {...filterControls}
+                          />
+                        </div>
+                        <InboxClearMenu
+                          unreadOnly={filters.filters().status === 'unread'}
+                          isShown={filters.isShown}
+                          onClear={clear}
                         />
-                      </div>
-                      <Button
-                        size="icon-md"
-                        variant="ghost"
-                        aria-label={t('notificationsInbox.settings')}
-                        tooltip={t('notificationsInbox.settings')}
-                        onClick={() => props.onOpenSettings()}
-                      >
-                        <GearSixIcon class="size-4" />
-                      </Button>
-                    </>
-                  }
-                />
-                <div class="shrink-0 px-3 pb-1">
-                  <InboxStatusTabs
-                    status={filters.filters().status}
-                    onChange={filters.setStatus}
+                        <Button
+                          size="icon-md"
+                          variant="ghost"
+                          aria-label={t('notificationsInbox.settings')}
+                          tooltip={t('notificationsInbox.settings')}
+                          onClick={() => props.onOpenSettings()}
+                        >
+                          <GearSixIcon class="size-4" />
+                        </Button>
+                      </>
+                    }
                   />
-                </div>
-                <div
-                  role="grid"
-                  aria-label={t('nav.notifications')}
-                  aria-activedescendant={list.focus.key()}
-                  tabIndex={0}
-                  class="relative flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden outline-none"
-                >
-                  {listBody()}
-                </div>
-              </ViewShell.Aside>
-              <ViewShell.Main class="overflow-hidden">
-                <NotificationsCalendarPaneProvider
-                  value={{ refocus: props.calendarPreview.refocus }}
-                >
-                  {/* A calendar event shows under the view's calendar route,
+                  <div class="shrink-0 px-3 pb-1">
+                    <InboxStatusTabs
+                      status={filters.filters().status}
+                      onChange={filters.setStatus}
+                    />
+                  </div>
+                  <div
+                    role="grid"
+                    aria-label={t('nav.notifications')}
+                    aria-activedescendant={list.focus.key()}
+                    tabIndex={0}
+                    class="relative flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden outline-none"
+                  >
+                    {listBody()}
+                  </div>
+                </ViewShell.Aside>
+                <ViewShell.Main class="overflow-hidden">
+                  <NotificationsCalendarPaneProvider
+                    value={{ refocus: props.calendarPreview.refocus }}
+                  >
+                    {/* A calendar event shows under the view's calendar route,
                       which loads lazily: suspend only this pane, so the list
                       keeps its place. */}
-                  <Suspense>
-                    <SplitRouter.Outlet
-                      fallback={() => (
-                        <Show
-                          when={previewTarget()}
-                          fallback={
-                            <EmptyStatePanel
-                              centered
-                              graphic={EmptyStateInboxTrayGraphic}
-                              title={t('notificationsInbox.noneSelectedTitle')}
-                              description={t(
-                                'notificationsInbox.noneSelectedDescription'
-                              )}
+                    <Suspense>
+                      <SplitRouter.Outlet
+                        fallback={() => (
+                          <Show
+                            when={previewTarget()}
+                            fallback={<NotificationsNoneSelected />}
+                          >
+                            <PreviewPanel
+                              target={previewTarget()}
+                              navigationRequest={selection.navigationRequest()}
+                              orchestrator={orchestrator}
+                              splitPanelContext={panel}
                             />
-                          }
-                        >
-                          <PreviewPanel
-                            target={previewTarget()}
-                            navigationRequest={selection.navigationRequest()}
-                            orchestrator={orchestrator}
-                            splitPanelContext={panel}
-                          />
-                        </Show>
-                      )}
-                    />
-                  </Suspense>
-                </NotificationsCalendarPaneProvider>
-              </ViewShell.Main>
-            </ViewShell.Root>
-          </div>
-        </Show>
-      </SplitPanel.Body>
-    </SplitPanel.Root>
+                          </Show>
+                        )}
+                      />
+                    </Suspense>
+                  </NotificationsCalendarPaneProvider>
+                </ViewShell.Main>
+              </ViewShell.Root>
+            </div>
+          </Show>
+        </SplitPanel.Body>
+      </SplitPanel.Root>
+    </StaticMarkdownContext>
   );
 }

@@ -18,7 +18,6 @@ const row = (id: string, revision = 'r1'): NotificationInboxRow => ({
   content: {
     entity: { type: 'document', id, name: id } as never,
     notifications: [],
-    entityAt: () => ({}) as never,
   },
 });
 

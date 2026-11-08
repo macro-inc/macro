@@ -5,6 +5,7 @@
  * OpenAPI spec version: 0.1.0
  */
 import type {
+  AgentActivityPage,
   AgentConversationsDto,
   AgentModeChoiceRequest,
   AgentModeChoiceResponse,
@@ -25,6 +26,7 @@ import type {
   CallConnectedTool,
   ClassifyInputRequest,
   ClassifyInputResponse,
+  CodingAgentsResponse,
   CodingPreferencesBody,
   ConnectedApp,
   ConnectedAppKind,
@@ -46,6 +48,7 @@ import type {
   ExecutionRecord,
   ExtractInputRequest,
   ExtractInputResponse,
+  GetAgentSessionActivityParams,
   ListAgentRepositoryBranchesParams,
   LoadAgentModelsRequest,
   LoadAgentModelsResponse,
@@ -1478,6 +1481,86 @@ export const deleteAgentSession = async (
     status: res.status,
     headers: res.headers,
   } as deleteAgentSessionResponse;
+};
+
+/**
+ * @summary Read activity using the same visibility capability as the session transcript.
+ */
+export type getAgentSessionActivityResponse200 = {
+  data: AgentActivityPage;
+  status: 200;
+};
+
+export type getAgentSessionActivityResponse400 = {
+  data: void;
+  status: 400;
+};
+
+export type getAgentSessionActivityResponse401 = {
+  data: void;
+  status: 401;
+};
+
+export type getAgentSessionActivityResponse403 = {
+  data: void;
+  status: 403;
+};
+
+export type getAgentSessionActivityResponseSuccess =
+  getAgentSessionActivityResponse200 & {
+    headers: Headers;
+  };
+export type getAgentSessionActivityResponseError = (
+  | getAgentSessionActivityResponse400
+  | getAgentSessionActivityResponse401
+  | getAgentSessionActivityResponse403
+) & {
+  headers: Headers;
+};
+
+export type getAgentSessionActivityResponse =
+  | getAgentSessionActivityResponseSuccess
+  | getAgentSessionActivityResponseError;
+
+export const getGetAgentSessionActivityUrl = (
+  sessionId: string,
+  params?: GetAgentSessionActivityParams
+) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : value.toString());
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/agent-sessions/${sessionId}/activity?${stringifiedParams}`
+    : `/agent-sessions/${sessionId}/activity`;
+};
+
+export const getAgentSessionActivity = async (
+  sessionId: string,
+  params?: GetAgentSessionActivityParams,
+  options?: RequestInit
+): Promise<getAgentSessionActivityResponse> => {
+  const res = await fetch(getGetAgentSessionActivityUrl(sessionId, params), {
+    ...options,
+    method: 'GET',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: getAgentSessionActivityResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as getAgentSessionActivityResponse;
 };
 
 /**
@@ -4065,6 +4148,62 @@ export const listAgentWorkRegistrations = async (
     status: res.status,
     headers: res.headers,
   } as listAgentWorkRegistrationsResponse;
+};
+
+/**
+ * @summary List the coding agents the caller can start a session as: the same
+personas the `ListCodingAgents` tool offers, including built-in ones whose
+runtime the caller has connected (Cursor once its key is saved).
+ */
+export type listCodingAgentsResponse200 = {
+  data: CodingAgentsResponse;
+  status: 200;
+};
+
+export type listCodingAgentsResponse401 = {
+  data: void;
+  status: 401;
+};
+
+export type listCodingAgentsResponse500 = {
+  data: void;
+  status: 500;
+};
+
+export type listCodingAgentsResponseSuccess = listCodingAgentsResponse200 & {
+  headers: Headers;
+};
+export type listCodingAgentsResponseError = (
+  | listCodingAgentsResponse401
+  | listCodingAgentsResponse500
+) & {
+  headers: Headers;
+};
+
+export type listCodingAgentsResponse =
+  | listCodingAgentsResponseSuccess
+  | listCodingAgentsResponseError;
+
+export const getListCodingAgentsUrl = () => {
+  return `/coding-agents`;
+};
+
+export const listCodingAgents = async (
+  options?: RequestInit
+): Promise<listCodingAgentsResponse> => {
+  const res = await fetch(getListCodingAgentsUrl(), {
+    ...options,
+    method: 'GET',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: listCodingAgentsResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as listCodingAgentsResponse;
 };
 
 /**
