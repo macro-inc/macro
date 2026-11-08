@@ -10,6 +10,7 @@ import { t } from '@app/lib/i18n';
 import { beginInteraction, usePending } from '@app/observability/flow';
 import { startUiOperation } from '@app/observability/ui-operation';
 import { createActivityTracker } from '@channel/activity-tracker';
+import { CallChatEmptyState } from '@channel/Call/chat/components/CallChatEmptyState';
 import { useStartChannelCall } from '@channel/Call/use-start-channel-call';
 import { DebugSuspense } from '@channel/DebugSuspense';
 import {
@@ -1150,13 +1151,9 @@ export function Channel(props: ChannelProps) {
                                                 m().thread.reply_count === 0
                                               }
                                             >
-                                              <p class="pointer-events-none absolute inset-0 flex items-center justify-center px-6 text-center text-sm text-ink-muted">
-                                                {t('calls.callThreadEmpty', {
-                                                  channel:
-                                                    channel()?.name ??
-                                                    t('calls.thisChannel'),
-                                                })}
-                                              </p>
+                                              <div class="pointer-events-none absolute inset-0">
+                                                <CallChatEmptyState />
+                                              </div>
                                             </Show>
                                           </div>
                                         );
