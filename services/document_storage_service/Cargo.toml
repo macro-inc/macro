@@ -211,7 +211,7 @@ entity_kind = { workspace = true }
 model_notifications = { workspace = true }
 model_owner = { workspace = true }
 databases_types = { workspace = true }
-models_dcs = { workspace = true }
+dcs_types = { workspace = true }
 models_pagination = { workspace = true, features = [
   "axum",
 ] }

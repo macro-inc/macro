@@ -5,12 +5,12 @@ use axum::{
     http::StatusCode,
     response::{IntoResponse, Response},
 };
+use dcs_types::api::ChatHistoryBatchMessagesRequest;
 use macro_authorization::{MacroAuthorizationExtractor, UserOrInternal};
 use macro_db_client::{
     chat::get_chat_ids_for_messages, chat_history::get_chat_history_for_messages,
     share_permission::access_level::chat::get_highest_access_level_for_chats,
 };
-use models_dcs::api::ChatHistoryBatchMessagesRequest;
 use shared_types::chat::ChatHistory;
 use sqlx::PgPool;
 

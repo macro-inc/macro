@@ -58,7 +58,7 @@ use shared_types::{
     version::DocumentCognitionServiceApiVersion,
 };
 
-use models_dcs::api::ChatHistoryBatchMessagesRequest;
+use dcs_types::api::ChatHistoryBatchMessagesRequest;
 use models_permissions::share_permission::channel_share_permission::UpdateOperation;
 use shared_types::citations::DocumentTextPart;
 use utoipa::OpenApi;

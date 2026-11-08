@@ -3,6 +3,7 @@ use crate::{
     model::response::instructions::CreateInstructionsDocumentResponse,
 };
 use axum::{Json, extract::State};
+use dcs_types::constants::INSTRUCTIONS_FILE_NAME;
 use documents_hex::domain::create::{NewDocumentMetadata, NewMarkdownTextDocument};
 use documents_hex::domain::models::DocumentError;
 use documents_hex::domain::ports::create::DocumentCreationService as _;
@@ -12,7 +13,6 @@ use macro_db_client::instructions::create::{
 };
 use macro_db_client::instructions::get::get_instructions_document;
 use model_owner::CreationPrincipal;
-use models_dcs::constants::INSTRUCTIONS_FILE_NAME;
 use shared_types::response::GenericErrorResponse;
 
 /// Creates an instructions document for the current user

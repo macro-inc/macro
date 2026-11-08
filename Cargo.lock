@@ -612,6 +612,7 @@ dependencies = [
  "database_sql_runner",
  "databases",
  "datastore_env_vars",
+ "dcs_types",
  "document_cognition_service_url",
  "document_storage_service_client",
  "document_storage_service_url",
@@ -676,7 +677,6 @@ dependencies = [
  "model_error_response",
  "model_notifications",
  "model_owner",
- "models_dcs",
  "models_permissions",
  "non_empty",
  "notification",
@@ -6594,6 +6594,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "dcs_types"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "utoipa",
+ "workspace-hack",
+]
+
+[[package]]
 name = "deadpool"
 version = "0.12.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -7080,6 +7089,7 @@ dependencies = [
  "database_webhooks",
  "databases",
  "databases_types",
+ "dcs_types",
  "dictation",
  "document_sub_type",
  "documents",
@@ -7147,7 +7157,6 @@ dependencies = [
  "mockall",
  "model_notifications",
  "model_owner",
- "models_dcs",
  "models_pagination",
  "models_permissions",
  "models_properties",
@@ -13100,6 +13109,7 @@ dependencies = [
  "cached",
  "chat_message",
  "chrono",
+ "dcs_types",
  "document_sub_type",
  "entity_access_db_utils",
  "entity_kind",
@@ -13110,7 +13120,6 @@ dependencies = [
  "message_id",
  "messages",
  "model_owner",
- "models_dcs",
  "models_opensearch",
  "models_permissions",
  "models_team",
@@ -14035,15 +14044,6 @@ dependencies = [
  "strum 0.27.2",
  "utoipa",
  "uuid",
- "workspace-hack",
-]
-
-[[package]]
-name = "models_dcs"
-version = "0.1.0"
-dependencies = [
- "serde",
- "utoipa",
  "workspace-hack",
 ]
 

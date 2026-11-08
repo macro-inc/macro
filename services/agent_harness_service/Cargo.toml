@@ -141,7 +141,7 @@ entity_kind = { workspace = true }
 model_error_response = { workspace = true }
 model_notifications = { workspace = true }
 model_owner = { workspace = true }
-models_dcs = { workspace = true }
+dcs_types = { workspace = true }
 models_permissions = { workspace = true }
 non_empty = { workspace = true }
 notification = { workspace = true, default-features = true, features = ["ai_tool"] }
