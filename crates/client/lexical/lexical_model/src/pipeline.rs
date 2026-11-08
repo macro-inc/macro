@@ -130,6 +130,8 @@ impl Transaction<'_> {
         }
         if matches!(&self.pending.selection, Some(Selection::Node(selection)) if selection.nodes.is_empty())
         {
+            #[cfg(feature = "foreign-nodes")]
+            self.retire_foreign_selection();
             self.pending.selection = None;
         }
         #[cfg(debug_assertions)]

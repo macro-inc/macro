@@ -57,6 +57,8 @@ pub struct Transaction<'editor> {
     pub(crate) work: WorkCounters,
     pub(crate) detached: Vec<Option<Selection>>,
     pub(crate) selection_replacements: u64,
+    #[cfg(feature = "foreign-nodes")]
+    pub(crate) foreign_selections: crate::foreign::selections::SelectionIdentities,
 }
 impl<'editor> Transaction<'editor> {
     pub(crate) fn new(editor: &'editor mut Editor) -> Self {
@@ -108,6 +110,8 @@ impl<'editor> Transaction<'editor> {
             work: WorkCounters::default(),
             detached: vec![],
             selection_replacements: 0,
+            #[cfg(feature = "foreign-nodes")]
+            foreign_selections: Default::default(),
         }
     }
     /// Number of active-selection object replacements within this transaction.
@@ -133,6 +137,8 @@ impl<'editor> Transaction<'editor> {
             foreign_native_calls: Some(&self.foreign_native_calls),
             #[cfg(feature = "foreign-nodes")]
             detached_selections: &self.detached,
+            #[cfg(feature = "foreign-nodes")]
+            foreign_selection_identities: Some(&self.foreign_selections),
             #[cfg(feature = "foreign-nodes")]
             source_records: self.foreign_read_sources.as_ref(),
             #[cfg(feature = "foreign-nodes")]
@@ -767,6 +773,8 @@ impl<'editor> Transaction<'editor> {
     /// Install a new selection object and expose its identity replacement.
     pub fn replace_selection(&mut self, selection: Option<Selection>) -> Result<(), Error> {
         self.guard_write()?;
+        #[cfg(feature = "foreign-nodes")]
+        self.retire_foreign_selection();
         self.selection_replacements += 1;
         self.set_selection(selection)
     }
@@ -798,6 +806,8 @@ impl<'editor> Transaction<'editor> {
     pub fn detach_selection(&mut self, selection: Selection) -> SelectionSlot {
         let id = DetachedSelectionId(self.detached.len());
         self.detached.push(Some(selection));
+        #[cfg(feature = "foreign-nodes")]
+        self.foreign_selections.detached.push(Default::default());
         SelectionSlot::Detached(id)
     }
 }

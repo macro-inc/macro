@@ -27,6 +27,9 @@ pub struct StateRef<'state> {
     pub(crate) foreign_origin: Option<crate::foreign::ReadOriginRef<'state>>,
     #[cfg(feature = "foreign-nodes")]
     pub(crate) detached_selections: &'state [Option<Selection>],
+    #[cfg(feature = "foreign-nodes")]
+    pub(crate) foreign_selection_identities:
+        Option<&'state crate::foreign::selections::SelectionIdentities>,
     pub(crate) state: &'state EditorState,
     pub(crate) previous_selection: Option<&'state Selection>,
     pub(crate) composition_key: Option<NodeKey>,
@@ -871,6 +874,8 @@ impl<'state> StateRef<'state> {
             foreign_native_calls: self.foreign_native_calls,
             #[cfg(feature = "foreign-nodes")]
             detached_selections: self.detached_selections,
+            #[cfg(feature = "foreign-nodes")]
+            foreign_selection_identities: self.foreign_selection_identities,
             #[cfg(feature = "foreign-nodes")]
             source_records: self.source_records,
             #[cfg(feature = "foreign-nodes")]

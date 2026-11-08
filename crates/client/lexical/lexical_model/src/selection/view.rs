@@ -61,13 +61,13 @@ impl Transaction<'_> {
     pub fn selection_from_view(&mut self, selection: ViewSelection) -> Result<(), Error> {
         match selection {
             ViewSelection::KeepModel => Ok(()),
-            ViewSelection::None => self.set_selection(None),
+            ViewSelection::None => self.replace_selection(None),
             ViewSelection::Node(keys) => {
                 let mut nodes = NodeSelection::new();
                 for key in keys {
                     nodes.add(key);
                 }
-                self.set_selection(Some(Selection::Node(nodes)))
+                self.replace_selection(Some(Selection::Node(nodes)))
             }
             ViewSelection::Table {
                 table,
@@ -76,7 +76,7 @@ impl Transaction<'_> {
             } => {
                 let selection = TableSelection::new(table, anchor_cell, focus_cell);
                 if selection.is_valid(self.view()) {
-                    self.set_selection(Some(Selection::Table(selection)))?;
+                    self.replace_selection(Some(Selection::Table(selection)))?;
                 }
                 Ok(())
             }
@@ -105,6 +105,8 @@ impl Transaction<'_> {
                 // DOM reads create a clean selection unless resolution changed it.
                 self.guard_write()?;
                 range.invalidate_changed_direction();
+                #[cfg(feature = "foreign-nodes")]
+                self.retire_foreign_selection();
                 self.pending.selection = Some(Selection::Range(range));
                 self.dirty_since_flush = true;
                 Ok(())

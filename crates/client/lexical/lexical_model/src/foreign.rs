@@ -23,3 +23,6 @@ pub(crate) mod state;
 pub use state::{ForeignStateCodec, ForeignStateConfig};
 
 mod records;
+
+pub(crate) mod selections;
+pub use selections::ForeignSelectionIdentity;

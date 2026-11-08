@@ -78,6 +78,8 @@ impl EditorState {
             #[cfg(feature = "foreign-nodes")]
             detached_selections: &[],
             #[cfg(feature = "foreign-nodes")]
+            foreign_selection_identities: None,
+            #[cfg(feature = "foreign-nodes")]
             source_records: None,
             #[cfg(feature = "foreign-nodes")]
             retired_records: None,
