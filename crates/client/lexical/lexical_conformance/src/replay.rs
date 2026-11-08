@@ -78,7 +78,6 @@ pub struct Replayer {
     pub(crate) record_owner: Option<(u64, EditorState)>,
     pub(crate) version: u64,
     pub(crate) committed_version: u64,
-    pub(crate) published_snapshot: Option<(u64, usize)>,
     pub(crate) child_iterators: HashMap<usize, lexical_rich_nodes::utils::ChildCursor>,
     pub(crate) value_iterators: HashMap<usize, Vec<Value>>,
     pub(crate) read_state: Option<EditorState>,

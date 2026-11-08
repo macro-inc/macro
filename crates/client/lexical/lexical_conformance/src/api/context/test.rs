@@ -244,3 +244,138 @@ fn first_seen_committed_root_and_its_writable_record_have_distinct_versions() ->
     );
     Ok(())
 }
+
+#[test]
+fn nested_host_frames_share_encoded_handles_and_published_snapshot_identity() -> Result<()> {
+    struct Hooks {
+        bindings: crate::replay::Bindings,
+        records: crate::replay::RecordIdentities,
+        seen: std::sync::Arc<std::sync::Mutex<Vec<Value>>>,
+    }
+    impl ForeignHooks for Hooks {
+        fn insert_after(
+            &self,
+            tx: &mut Transaction<'_>,
+            _: NodeKey,
+            _: NodeKey,
+            _: bool,
+        ) -> Override<std::result::Result<NodeKey, Error>> {
+            let result = (|| -> Result<()> {
+                let mut child = Context {
+                    replay: Replayer {
+                        bindings: self.bindings.clone(),
+                        record_ids: self.records.clone(),
+                        record_owner: Some((0, tx.committed_state().clone())),
+                        version: 1,
+                        in_callback: true,
+                        ..Replayer::default()
+                    },
+                    scope: Scope::Updating,
+                    ..Context::default()
+                };
+                let latest = super::super::index()
+                    .binary_search(&"LexicalNode.getLatest")
+                    .expect("latest") as u32;
+                assert_eq!(
+                    child.call(tx, latest, json!([]), Some(json!({"$h":0})))?,
+                    json!({"$h":0})
+                );
+                let create = super::super::index()
+                    .binary_search(&"lexical.$createTextNode")
+                    .expect("create") as u32;
+                let text = child.call(tx, create, json!(["nested"]), None)?;
+                assert_eq!(text, json!({"$h":2,"key":"3","type":"text","ver":1}));
+                let append = super::super::index()
+                    .binary_search(&"LexicalNode.append")
+                    .expect("append") as u32;
+                child.call(tx, append, json!([text.clone()]), Some(json!({"$h":1})))?;
+                let state = super::super::index()
+                    .binary_search(&"LexicalEditor.getEditorState")
+                    .expect("state") as u32;
+                let state = child.call(tx, state, json!([]), None)?;
+                assert_eq!(state, json!({"$state":3}));
+                self.seen.lock().expect("log").extend([text, state]);
+                Ok(())
+            })();
+            match result {
+                Ok(()) => Override::Inherit,
+                Err(error) => Override::Value(Err(Error::invariant(error.to_string()))),
+            }
+        }
+    }
+    let mut host = Context::default();
+    let seen = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
+    let mut editor = Editor::builder(EditorMode::Headless)
+        .foreign_node(ForeignNodeType {
+            type_name: "host-callback-paragraph".into(),
+            class_name: "HostCallbackParagraph".into(),
+            kind: NodeKind::Element,
+            extends: Some("paragraph"),
+            required_state: vec![],
+            hooks: std::sync::Arc::new(Hooks {
+                bindings: host.replay.bindings.clone(),
+                records: host.replay.record_ids.clone(),
+                seen: seen.clone(),
+            }),
+        })
+        .build()
+        .expect("editor");
+    let mut tx = editor.transaction();
+    host.begin_update(&mut tx)?;
+    let first = tx.create_foreign("host-callback-paragraph", SerializedNode::new())?;
+    let sibling = tx.create(Paragraph::default())?.key();
+    tx.append(NodeKey::ROOT, &[first])?;
+    let first = host.replay.node(tx.view(), first)?;
+    let first = host.encode(first)?;
+    let sibling = host.replay.node(tx.view(), sibling)?;
+    let sibling = host.encode(sibling)?;
+    let insert = super::super::index()
+        .binary_search(&"LexicalNode.insertAfter")
+        .expect("insert") as u32;
+    host.call(&mut tx, insert, json!([sibling]), Some(first))?;
+    let by_key = super::super::index()
+        .binary_search(&"lexical.$getNodeByKey")
+        .expect("by key") as u32;
+    assert_eq!(
+        host.call(&mut tx, by_key, json!(["3"]), None)?,
+        json!({"$h":2})
+    );
+    assert_eq!(host.read_field(&mut tx, 2, "__text")?, "nested");
+    let state = super::super::index()
+        .binary_search(&"LexicalEditor.getEditorState")
+        .expect("state") as u32;
+    assert_eq!(
+        host.call(&mut tx, state, json!([]), None)?,
+        seen.lock().expect("log")[1]
+    );
+    tx.flush()?;
+    host.finish_update(&tx)?;
+    let commit = tx.commit()?;
+    host.publish(commit.next)?;
+    host.release_version(0)?;
+    assert!(host.replay.decode(&json!({"$state":3})).is_err());
+    let mut tx = editor.transaction();
+    host.begin_update(&mut tx)?;
+    assert_eq!(
+        host.call(&mut tx, state, json!([]), None)?,
+        json!({"$state":4})
+    );
+    assert_eq!(
+        host.call(&mut tx, by_key, json!(["3"]), None)?,
+        json!({"$h":2})
+    );
+    drop(tx);
+    host.discard_update()?;
+    host.release_version(1)?;
+    let mut tx = editor.transaction();
+    host.begin_update(&mut tx)?;
+    assert_eq!(
+        host.call(&mut tx, state, json!([]), None)?,
+        json!({"$state":5})
+    );
+    assert!(host.replay.decode(&json!({"$h":2})).is_err());
+    drop(tx);
+    host.discard_update()?;
+    host.release_version(1)?;
+    Ok(())
+}

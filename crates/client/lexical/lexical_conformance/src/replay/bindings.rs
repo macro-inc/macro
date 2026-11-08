@@ -16,6 +16,10 @@ struct Values {
     keys: HashMap<String, NodeKey>,
     states: HashMap<u64, EditorState>,
     saved_states: Vec<Option<EditorState>>,
+    published_snapshot: Option<(u64, usize)>,
+    identities: HashMap<String, u32>,
+    owners: HashMap<u32, u64>,
+    next_handle: u32,
 }
 
 impl Bindings {
@@ -25,6 +29,65 @@ impl Bindings {
         self.0
             .lock()
             .map_err(|_| fail("API binding store poisoned"))
+    }
+
+    pub fn identity(&self, identity: &str) -> Result<Option<u32>> {
+        Ok(self.lock()?.identities.get(identity).copied())
+    }
+
+    /// Allocate and bind atomically. JSON values contain no callback owners.
+    pub fn intern_handle(
+        &self,
+        identity: String,
+        owner: u64,
+        tag: &str,
+        value: &Value,
+    ) -> Result<(u32, bool)> {
+        let mut values = self.lock()?;
+        if let Some(id) = values.identities.get(&identity) {
+            return Ok((*id, false));
+        }
+        let id = values.next_handle;
+        values.next_handle = id
+            .checked_add(1)
+            .ok_or_else(|| fail("API handle overflow"))?;
+        values.identities.insert(identity, id);
+        values.owners.insert(id, owner);
+        values.handles.insert(format!("{tag}:{id}"), value.clone());
+        Ok((id, true))
+    }
+
+    pub fn bind_host_key(&self, key: NodeKey, id: u32) -> Result<()> {
+        let mut values = self.lock()?;
+        values.keys.insert(key.to_string(), key);
+        values.identities.insert(format!("key:{key}"), id);
+        Ok(())
+    }
+
+    pub fn release_identities(&self, version: u64) -> Result<std::collections::HashSet<u32>> {
+        let mut values = self.lock()?;
+        let released = values
+            .owners
+            .iter()
+            .filter_map(|(id, owner)| (*owner == version).then_some(*id))
+            .collect::<std::collections::HashSet<_>>();
+        values.owners.retain(|_, owner| *owner != version);
+        values.identities.retain(|_, id| !released.contains(id));
+        Ok(released)
+    }
+
+    /// All frames share the identity of the currently published editor state.
+    pub fn published_state(&self, version: u64, state: &EditorState) -> Result<usize> {
+        let mut values = self.lock()?;
+        if let Some((cached_version, id)) = values.published_snapshot
+            && cached_version == version
+        {
+            return Ok(id);
+        }
+        let id = values.saved_states.len();
+        values.saved_states.push(Some(state.clone()));
+        values.published_snapshot = Some((version, id));
+        Ok(id)
     }
 
     pub fn handle(&self, binding: &str) -> Result<Option<Value>> {
@@ -95,7 +158,16 @@ impl Bindings {
     }
 
     pub fn release_saved_state(&self, id: usize) -> Result<()> {
-        let previous = { self.lock()?.saved_states.get_mut(id).and_then(Option::take) };
+        let previous = {
+            let mut values = self.lock()?;
+            if values
+                .published_snapshot
+                .is_some_and(|(_, cached)| cached == id)
+            {
+                values.published_snapshot = None;
+            }
+            values.saved_states.get_mut(id).and_then(Option::take)
+        };
         drop(previous);
         Ok(())
     }

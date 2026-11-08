@@ -504,17 +504,7 @@ pub(crate) fn call(r: &mut Replayer, tx: &mut Transaction<'_>, op: &Value) -> Re
         )),
         "LexicalEditor.getEditorState" => {
             let state = tx.committed_state();
-            let id = if let Some((version, id)) = r
-                .published_snapshot
-                .filter(|(version, _)| *version == r.committed_version)
-            {
-                let _ = version;
-                id
-            } else {
-                let id = r.bindings.save_state(state.clone())?;
-                r.published_snapshot = Some((r.committed_version, id));
-                id
-            };
+            let id = r.bindings.published_state(r.committed_version, state)?;
             Ok(json!({"$snapshot":id}))
         }
         "LexicalEditor.toJSON" => Ok(json!({"editorState":tx.committed_state().to_json()?})),
