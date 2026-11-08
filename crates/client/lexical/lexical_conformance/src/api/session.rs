@@ -178,13 +178,24 @@ impl Session {
             self.context.discard_update()?;
             return Err(error.into());
         }
+        let read_context = match tx.view().context_for_foreign_read() {
+            Ok(capture) => capture,
+            Err(error) => {
+                drop(tx);
+                self.context.discard_update()?;
+                return Err(error.into());
+            }
+        };
         if let Err(error) = self.context.finish_update(&tx) {
             drop(tx);
             self.context.discard_update()?;
             return Err(error);
         }
         let version = self.context.publishing_version()?;
-        let (commit, artifact) = match tx.commit_foreign(|commit| prepare(commit, version)) {
+        let (commit, artifact) = match tx.commit_foreign(|commit| {
+            self.context
+                .with_prepared_reads(read_context, &commit.next, || prepare(commit, version))
+        }) {
             Ok(prepared) => prepared,
             Err(error) => {
                 self.context.discard_update()?;

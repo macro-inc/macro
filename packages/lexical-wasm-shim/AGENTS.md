@@ -67,6 +67,8 @@ Use hosting-import.test.ts for the actual WASM static importJSON bridge: null re
 
 Use hosting-selection-transform.test.ts for previous/current identity, anchor-to-focus movement, native-super and opaque recovery over the actual WASM artifact. Previous selection/point handles first captured in a later aborted update belong to their committed version.
 
-Exercise pure exportJSON against the real WASM read peer, including nested exports, mutable-to-pure reentry, opaque throws, local detached values and node/effect rejection. Keep inherited-selection and committed-capture restrictions explicit until the full synchronization protocol lands.
+Exercise pure exportJSON against the real WASM read peer, including nested exports, mutable-to-pure reentry, opaque throws, local detached values and node/effect rejection. Keep inherited-selection restrictions explicit until the full synchronization protocol lands; committed-state captures require the exact publication lease.
 
 Cover node-result conversion with opaque top-level/nested getter and proxy throws, then verify mutable reentry and disposal. Return conversion must stay inside the callback frame and preserve null/undefined behavior.
+
+Verify attached foreign exports at commit, previous/current selections, opaque conversion rollback and ViewAttached writable-handle/cache identity. Unrelated originless captures and derived captures after preparation must reject.
