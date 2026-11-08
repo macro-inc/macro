@@ -29,6 +29,7 @@ import type {
   ViewSelection,
   TypeFlags,
 } from './types';
+import { textLeaf } from './dom';
 import { registerEvents } from './events';
 import { BulkQueries } from './queries';
 import { TableObserver } from './table/observer';
@@ -148,7 +149,7 @@ export class EditorView implements ViewSink {
               dom = this.getElementByKey(key);
             if (!node || !dom) continue;
             if (node.kind === 'text') {
-              if (dom.childNodes.length !== 1 || dom.firstChild?.nodeType !== 3)
+              if (!textLeaf(dom))
                 this.replace(node, node, dom);
             } else this.reconcileChildren(key);
           }
@@ -628,7 +629,7 @@ export class EditorView implements ViewSink {
     compositionData?: string
   ): void {
     const node = this.node(key),
-      dom = this.dom.get(key)?.firstChild;
+      dom = textLeaf(this.dom.get(key));
     if (node?.kind !== 'text' || dom?.nodeType !== 3) return;
     const selection = readSelection(this);
     this.port.textFromView({

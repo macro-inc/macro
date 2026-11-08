@@ -3,13 +3,32 @@
  * Licensed under the MIT license found in the LICENSE file in the upstream root.
  * Retargeted from Lexical 0.45.0 nodes: 0cfcc169296723e07de2396cd42ea3434b5b79ed.
  */
+
+import { textLeaf } from '../dom';
 import {
-  NodeViewRegistry,
-  themeClass,
   type NodeView,
+  NodeViewRegistry,
   type RenderContext,
+  themeClass,
 } from '../registry';
 import type { ViewNode } from '../types';
+
+// LexicalLinkNode.sanitizeUrl/formatUrl at the pinned upstream revision.
+function safeLink(url: string): string {
+  if (!/^[a-z][a-z0-9+.-]*:/i.test(url) && !/^[/#.]/.test(url)) {
+    if (url.includes('@')) url = `mailto:${url}`;
+    else if (/^\+?[0-9\s()-]{5,}$/.test(url)) url = `tel:${url}`;
+    else url = `https://${url}`;
+  }
+  try {
+    const protocol = new URL(url).protocol;
+    if (!['http:', 'https:', 'mailto:', 'sms:', 'tel:'].includes(protocol))
+      return 'about:blank';
+  } catch {
+    return url;
+  }
+  return url;
+}
 
 function tag(node: ViewNode): string {
   const props = node.props();
@@ -71,10 +90,7 @@ function elementProps(node: ViewNode, dom: HTMLElement): void {
   if (node.type === 'link' || node.type === 'autolink') {
     // The model stores the URL; the view only applies a safe DOM attribute.
     const url = typeof props.url === 'string' ? props.url : '';
-    dom.setAttribute(
-      'href',
-      /^\s*(javascript|vbscript|data):/i.test(url) ? 'about:blank' : url
-    );
+    dom.setAttribute('href', safeLink(url));
     for (const name of ['target', 'rel', 'title']) {
       if (typeof props[name] === 'string') dom.setAttribute(name, props[name]);
       else dom.removeAttribute(name);
@@ -183,8 +199,15 @@ const element: NodeView = {
 function textTag(node: ViewNode): string {
   const format = node.textProps?.format ?? 0;
   if (format & 16) return 'code';
+  if (format & 128) return 'mark';
   if (format & 32) return 'sub';
   if (format & 64) return 'sup';
+  return innerTextTag(node);
+}
+function innerTextTag(node: ViewNode): string {
+  const format = node.textProps?.format ?? 0;
+  if (format & 1) return 'strong';
+  if (format & 2) return 'em';
   return 'span';
 }
 function textProperties(
@@ -195,23 +218,30 @@ function textProperties(
   const props = node.textProps;
   const format = props?.format ?? 0;
   dom.style.cssText = props?.style ?? '';
-  dom.style.fontWeight = format & 1 ? 'bold' : '';
-  dom.style.fontStyle = format & 2 ? 'italic' : '';
-  dom.style.textDecoration = [
-    format & 4 ? 'line-through' : '',
-    format & 8 ? 'underline' : '',
-  ]
-    .filter(Boolean)
-    .join(' ');
-  const classes = [themeClass(ctx.theme, 'text')];
+  const inner =
+    dom.firstElementChild instanceof HTMLElement ? dom.firstElementChild : dom;
+  const classes = [
+    themeClass(ctx.theme, 'text', 'base') || themeClass(ctx.theme, 'text'),
+  ];
+  const combined =
+    format & 4 && format & 8
+      ? themeClass(ctx.theme, 'text', 'underlineStrikethrough')
+      : '';
+  if (combined) classes.push(combined);
   for (const [bit, name] of [
     [1, 'bold'],
     [2, 'italic'],
     [4, 'strikethrough'],
     [8, 'underline'],
     [16, 'code'],
+    [32, 'subscript'],
+    [64, 'superscript'],
+    [128, 'highlight'],
+    [256, 'lowercase'],
+    [512, 'uppercase'],
+    [1024, 'capitalize'],
   ] as const) {
-    if (format & bit)
+    if (format & bit && !(combined && (bit === 4 || bit === 8)))
       classes.push(
         themeClass(ctx.theme, 'text', name) || themeClass(ctx.theme, name)
       );
@@ -224,24 +254,34 @@ function textProperties(
         String(node.props().highlightType ?? '')
       )
     );
-  dom.className = classes.filter(Boolean).join(' ');
+  if (format & 16) dom.spellcheck = false;
+  if (node.type === 'tab') classes.push(themeClass(ctx.theme, 'tab'));
+  inner.className = classes.filter(Boolean).join(' ');
   dom.setAttribute('data-lexical-text', 'true');
 }
 const text: NodeView = {
   createDOM(node, ctx) {
     const dom = ctx.document.createElement(textTag(node));
+    const innerTag = innerTextTag(node);
+    const inner =
+      textTag(node) === innerTag ? dom : ctx.document.createElement(innerTag);
+    if (inner !== dom) dom.appendChild(inner);
+    inner.appendChild(ctx.document.createTextNode(node.text));
     textProperties(node, dom, ctx);
-    dom.appendChild(ctx.document.createTextNode(node.text));
     return dom;
   },
   updateDOM(previous, next, dom, ctx) {
-    if (textTag(previous) !== textTag(next)) return true;
+    if (
+      textTag(previous) !== textTag(next) ||
+      innerTextTag(previous) !== innerTextTag(next)
+    )
+      return true;
     if (
       previous.textProps !== next.textProps ||
       previous.propsJSON !== next.propsJSON
     )
       textProperties(next, dom, ctx);
-    const child = dom.firstChild;
+    const child = textLeaf(dom);
     if (!child || child.nodeType !== 3)
       throw new Error('Missing DOM text node');
     if (child.nodeValue !== next.text) child.nodeValue = next.text;

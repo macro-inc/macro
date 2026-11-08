@@ -1,10 +1,10 @@
-import { themeClass } from '../registry';
 import type { Component } from 'solid-js';
 import type {
   DecoratorProps,
   NodeViewRegistry,
   RenderContext,
 } from '../registry';
+import { themeClass } from '../registry';
 import type { ViewNode } from '../types';
 
 export const macroDecoratorTypes = [
@@ -108,19 +108,19 @@ function decoratorProperties(node: ViewNode, dom: HTMLElement): void {
     const width = typeof props.width === 'number' ? props.width : 0;
     const height = typeof props.height === 'number' ? props.height : 0;
     const maxWidth =
-      typeof props.constrainedWidth === 'number'
+      typeof props.constrainedWidth === 'number' && props.constrainedWidth
         ? props.constrainedWidth
         : width;
     const maxHeight =
-      typeof props.constrainedHeight === 'number'
+      typeof props.constrainedHeight === 'number' && props.constrainedHeight
         ? props.constrainedHeight
         : height;
     const scale =
       width > 0 && height > 0
         ? Math.min(1, maxWidth / width, maxHeight / height)
         : 1;
-    if (height > 0) dom.style.height = `${height * scale}px`;
-    if (width > 0) dom.style.width = `${width * scale}px`;
+    if (height > 0) dom.style.height = `${Math.round(height * scale)}px`;
+    if (width > 0) dom.style.width = `${Math.round(width * scale)}px`;
   }
 }
 function elementTag(node: ViewNode): string {
