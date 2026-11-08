@@ -37,7 +37,7 @@ pub enum CommandPriority {
     /// Critical priority.
     Critical = 4,
 }
-const PRIORITIES: [CommandPriority; 5] = [
+pub(crate) const PRIORITIES: [CommandPriority; 5] = [
     CommandPriority::Critical,
     CommandPriority::High,
     CommandPriority::Normal,
@@ -94,34 +94,57 @@ impl ListenerTable {
 }
 #[derive(Clone)]
 pub(crate) struct Listener {
-    priority: CommandPriority,
-    plugin: Arc<dyn Plugin>,
+    pub(crate) priority: CommandPriority,
+    pub(crate) plugin: Arc<dyn Plugin>,
+    #[cfg(feature = "foreign-nodes")]
+    pub(crate) foreign_id: Option<ForeignListenerId>,
 }
-pub(crate) type Listeners = IndexMap<CommandKind, Vec<Listener>>;
-pub(crate) fn listeners(plugins: &[Arc<dyn Plugin>]) -> (Listeners, ListenerTable) {
-    let mut lists = Listeners::default();
+pub(crate) type Listeners = IndexMap<CommandKind, Vec<Arc<Listener>>>;
+pub(crate) fn insert_listener(
+    lists: &mut Listeners,
+    registration: CommandRegistration,
+    listener: Listener,
+) {
+    let list = lists.entry(registration.command).or_default();
+    let index = list
+        .iter()
+        .position(|l| {
+            l.priority < registration.priority
+                || (registration.placement == Placement::Before
+                    && l.priority == registration.priority)
+        })
+        .unwrap_or(list.len());
+    list.insert(index, Arc::new(listener));
+}
+pub(crate) fn listener_table(lists: &Listeners) -> ListenerTable {
     let mut table = ListenerTable::default();
-    for plugin in plugins {
-        for registration in plugin.commands() {
-            table.0.entry(registration.command).or_default().0 |= 1 << registration.priority as u8;
-            let list = lists.entry(registration.command).or_default();
-            let listener = Listener {
-                priority: registration.priority,
-                plugin: plugin.clone(),
-            };
-            let index = list
-                .iter()
-                .position(|l| {
-                    l.priority < registration.priority
-                        || (registration.placement == Placement::Before
-                            && l.priority == registration.priority)
-                })
-                .unwrap_or(list.len());
-            list.insert(index, listener);
+    for (kind, list) in lists {
+        for listener in list {
+            table.0.entry(*kind).or_default().0 |= 1 << listener.priority as u8;
         }
     }
+    table
+}
+pub(crate) fn listeners(plugins: &[Arc<dyn Plugin>]) -> (Listeners, ListenerTable) {
+    let mut lists = Listeners::default();
+    for plugin in plugins {
+        for registration in plugin.commands() {
+            insert_listener(
+                &mut lists,
+                *registration,
+                Listener {
+                    priority: registration.priority,
+                    plugin: plugin.clone(),
+                    #[cfg(feature = "foreign-nodes")]
+                    foreign_id: None,
+                },
+            );
+        }
+    }
+    let table = listener_table(&lists);
     (lists, table)
 }
+
 impl EditorBuilder {
     /// Install an immutable plugin in registration order.
     pub fn plugin(mut self, plugin: impl Plugin) -> Self {
@@ -140,6 +163,7 @@ impl Transaction<'_> {
     pub fn dispatch(&mut self, command: &Command) -> Result<Handled, Error> {
         self.dispatch_inner(command, false)
     }
+    #[cfg(not(feature = "foreign-nodes"))]
     pub(crate) fn dispatch_inner(
         &mut self,
         command: &Command,

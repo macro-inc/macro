@@ -14,6 +14,8 @@ pub enum EditorMode {
 /// Owns the current immutable snapshot and a non-rollback key allocator.
 pub struct Editor {
     #[cfg(feature = "foreign-nodes")]
+    pub(crate) foreign_runtime: crate::foreign::runtime::ForeignRuntime,
+    #[cfg(feature = "foreign-nodes")]
     pub(crate) suspend_owner: Arc<()>,
     #[cfg(feature = "foreign-nodes")]
     pub(crate) suspend_version: CommitId,
@@ -38,6 +40,8 @@ impl Editor {
         view_host: ViewHost,
     ) -> Result<Self, Error> {
         Ok(Self {
+            #[cfg(feature = "foreign-nodes")]
+            foreign_runtime: Default::default(),
             #[cfg(feature = "foreign-nodes")]
             suspend_owner: Arc::new(()),
             #[cfg(feature = "foreign-nodes")]
