@@ -185,6 +185,51 @@ impl Dispatch for ReadFrame<'_, '_, '_> {
     }
 }
 
+enum Arguments<'a> {
+    Nodes {
+        nodes: &'a [NodeKey],
+        trailing: &'a [Value],
+    },
+    Extract {
+        child: NodeKey,
+        selection: Option<&'a lexical_model::ForeignSelectionCapture>,
+        destination: lexical_model::CopyDestination,
+    },
+}
+impl Arguments<'_> {
+    fn encode(
+        self,
+        peer: &mut CallbackRead<'_, '_>,
+    ) -> Result<Vec<Value>, lexical_conformance::replay::ReplayError> {
+        match self {
+            Self::Nodes { nodes, trailing } => {
+                let mut args = nodes
+                    .iter()
+                    .map(|key| peer.node(*key))
+                    .collect::<Result<Vec<_>, _>>()?;
+                args.extend_from_slice(trailing);
+                Ok(args)
+            }
+            Self::Extract {
+                child,
+                selection,
+                destination,
+            } => {
+                let child = peer.node(child)?;
+                let selection = selection
+                    .map(|selection| peer.selection_argument(selection))
+                    .transpose()?
+                    .unwrap_or(Value::Null);
+                let destination = match destination {
+                    lexical_model::CopyDestination::Clone => "clone",
+                    lexical_model::CopyDestination::Html => "html",
+                };
+                Ok(vec![child, selection, Value::String(destination.into())])
+            }
+        }
+    }
+}
+
 impl Callback {
     pub(crate) fn predicate(
         &self,
@@ -198,8 +243,10 @@ impl Callback {
             snapshot,
             key,
             hook,
-            nodes,
-            arguments,
+            Arguments::Nodes {
+                nodes,
+                trailing: arguments,
+            },
             BoundFunction::invoke_boolean,
         )
     }
@@ -210,7 +257,37 @@ impl Callback {
         key: NodeKey,
         hook: ForeignHook,
     ) -> Result<Value, Error> {
-        self.read(snapshot, key, hook, &[], &[], BoundFunction::invoke_scalar)
+        self.read(
+            snapshot,
+            key,
+            hook,
+            Arguments::Nodes {
+                nodes: &[],
+                trailing: &[],
+            },
+            BoundFunction::invoke_scalar,
+        )
+    }
+
+    pub(crate) fn extract_with_child(
+        &self,
+        snapshot: &ForeignReadSnapshot,
+        key: NodeKey,
+        child: NodeKey,
+        selection: Option<&lexical_model::ForeignSelectionCapture>,
+        destination: lexical_model::CopyDestination,
+    ) -> Result<bool, Error> {
+        self.read(
+            snapshot,
+            key,
+            ForeignHook::ExtractWithChild,
+            Arguments::Extract {
+                child,
+                selection,
+                destination,
+            },
+            BoundFunction::invoke_boolean,
+        )
     }
 
     fn read<T>(
@@ -218,8 +295,7 @@ impl Callback {
         snapshot: &ForeignReadSnapshot,
         key: NodeKey,
         hook: ForeignHook,
-        nodes: &[NodeKey],
-        arguments: &[Value],
+        arguments: Arguments<'_>,
         invoke: impl FnOnce(&BoundFunction, Value, &Errors) -> Result<T, Error>,
     ) -> Result<T, Error> {
         if !ForeignReadOperation::is_active() {
@@ -230,18 +306,10 @@ impl Callback {
         self.context
             .with_read_scope(snapshot, |peer| {
                 let node = peer.node(key)?;
-                let original = peer.original_arguments(key, hook)?;
-                let peer_arguments_missing = original.is_none();
-                let mut args = match original {
+                let args = match peer.original_arguments(key, hook)? {
                     Some(args) => args,
-                    None => nodes
-                        .iter()
-                        .map(|key| peer.node(*key))
-                        .collect::<Result<Vec<_>, _>>()?,
+                    None => arguments.encode(peer)?,
                 };
-                if peer_arguments_missing {
-                    args.extend_from_slice(arguments);
-                }
                 let message =
                     serde_json::to_value(super::super::host_protocol::HostNodeMutation {
                         hook: hook as u8,

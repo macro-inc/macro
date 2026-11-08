@@ -132,3 +132,97 @@ impl Transaction<'_> {
 
 #[cfg(test)]
 mod test;
+
+/// An ordinary selection argument captured without retaining its invoking borrow.
+#[derive(Debug)]
+pub struct ForeignSelectionCapture {
+    value: Selection,
+    identity: Option<ForeignSelectionIdentity>,
+}
+impl Clone for ForeignSelectionCapture {
+    fn clone(&self) -> Self {
+        Self {
+            value: self.value.snapshot_for_foreign_read(),
+            identity: self.identity.clone(),
+        }
+    }
+}
+impl ForeignSelectionCapture {
+    /// Captured fields, including the ordinary range direction memo.
+    pub fn value(&self) -> &Selection {
+        &self.value
+    }
+    /// An existing object's identity, when the caller supplied one.
+    pub fn identity(&self) -> Option<&ForeignSelectionIdentity> {
+        self.identity.as_ref()
+    }
+}
+impl Transaction<'_> {
+    /// Capture an explicit API argument's value and identity before borrowing its view.
+    pub fn capture_foreign_selection(
+        &self,
+        slot: SelectionSlot,
+    ) -> Result<Option<ForeignSelectionCapture>, Error> {
+        Ok(self
+            .selection_at(slot)?
+            .map(|value| ForeignSelectionCapture {
+                value: value.snapshot_for_foreign_read(),
+                identity: self.foreign_selection_identity(slot),
+            }))
+    }
+}
+impl<'state> StateRef<'state> {
+    /// Preserve a selection argument's provenance through native read-only traversal.
+    /// The argument is owned by the caller, not a borrow of its transaction.
+    pub fn with_foreign_selection_argument(
+        mut self,
+        value: &'state ForeignSelectionCapture,
+    ) -> Self {
+        self.foreign_selection_argument = Some(value);
+        self
+    }
+    /// Copy a hook's selection argument, retaining identity only for an exact source.
+    /// Shape-equal but distinct ordinary objects must not alias each other.
+    pub fn capture_foreign_selection(self, value: &Selection) -> ForeignSelectionCapture {
+        let identity = if let Some(argument) = self.foreign_selection_argument
+            && std::ptr::eq(argument.value(), value)
+        {
+            argument.identity.clone()
+        } else if self
+            .state
+            .selection
+            .as_ref()
+            .is_some_and(|source| std::ptr::eq(source, value))
+        {
+            Some(
+                self.foreign_selection_identities
+                    .map(|ids| &ids.current)
+                    .unwrap_or(&self.state.foreign_selection_identity)
+                    .clone(),
+            )
+        } else if self
+            .previous_selection
+            .is_some_and(|source| std::ptr::eq(source, value))
+        {
+            self.foreign_previous_selection_identity.cloned()
+        } else {
+            self.detached_selections
+                .iter()
+                .position(|source| {
+                    source
+                        .as_ref()
+                        .is_some_and(|source| std::ptr::eq(source, value))
+                })
+                .and_then(|index| {
+                    self.foreign_selection_identities?
+                        .detached
+                        .get(index)
+                        .cloned()
+                })
+        };
+        ForeignSelectionCapture {
+            value: value.snapshot_for_foreign_read(),
+            identity,
+        }
+    }
+}

@@ -29,6 +29,7 @@ impl ForeignNode {
             | ForeignHook::Indent.bit()
             | ForeignHook::TextContent.bit()
             | ForeignHook::ExcludeFromCopy.bit()
+            | ForeignHook::ExtractWithChild.bit()
             | ForeignHook::CanIndent.bit()
             | ForeignHook::IsShadowRoot.bit()
             | ForeignHook::CanInsertTextBefore.bit()
@@ -279,6 +280,19 @@ impl ForeignHooks for ForeignNode {
                 &[],
                 &[destination],
             )
+        })
+    }
+    fn extract_with_child(
+        &self,
+        node: NodeView<'_>,
+        _data: &ForeignData,
+        child: NodeKey,
+        selection: Option<&Selection>,
+        destination: CopyDestination,
+    ) -> Override<bool> {
+        self.read(node, ForeignHook::ExtractWithChild, |callback, snapshot| {
+            let selection = selection.map(|value| node.state.capture_foreign_selection(value));
+            callback.extract_with_child(snapshot, node.key, child, selection.as_ref(), destination)
         })
     }
     fn indent(&self, node: NodeView<'_>, _data: &ForeignData) -> Override<u32> {
@@ -630,7 +644,7 @@ mod test {
         assert!(ForeignNode::new(ForeignHook::IsInline.bit()).is_ok());
         assert!(ForeignNode::new(ForeignHook::CanBeEmpty.bit()).is_ok());
         assert!(ForeignNode::new(ForeignHook::AfterClone.bit()).is_ok());
-        assert!(ForeignNode::new(ForeignHook::ExtractWithChild.bit()).is_err());
+        assert!(ForeignNode::new(ForeignHook::ExtractWithChild.bit()).is_ok());
         assert!(ForeignNode::new(1u64 << 63).is_err());
         Ok(())
     }

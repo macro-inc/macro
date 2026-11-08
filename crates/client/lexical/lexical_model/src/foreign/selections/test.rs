@@ -350,3 +350,49 @@ fn inserting_nodes_into_node_selection_creates_a_distinct_range_object() -> Resu
     assert_eq!(tx.text_content(NodeKey::ROOT), "inserted");
     Ok(())
 }
+
+#[test]
+fn explicit_selection_arguments_retain_identity_and_memos_without_shape_aliasing()
+-> Result<(), Error> {
+    let mut editor = Editor::builder(EditorMode::Headless)
+        .build()
+        .expect("editor");
+    let mut tx = editor.transaction();
+    let text = tx.create_text("text")?.key();
+    let mut range = RangeSelection::new(
+        Point::text(text, Utf16Offset(1)),
+        Point::text(text, Utf16Offset(3)),
+    );
+    range.cached_direction = Some((range.anchor, range.focus, true));
+    let first = tx.detach_selection(Selection::Range(range));
+    let second = tx.detach_selection(
+        tx.selection_at(first)?
+            .expect("first")
+            .snapshot_for_foreign_read(),
+    );
+    let first = tx.capture_foreign_selection(first)?.expect("argument");
+    let second = tx
+        .capture_foreign_selection(second)?
+        .expect("other argument");
+    assert_ne!(first.identity(), second.identity());
+    let view = tx.view().with_foreign_selection_argument(&first);
+    assert_eq!(
+        view.capture_foreign_selection(first.value()).identity(),
+        first.identity()
+    );
+    assert_eq!(
+        view.capture_foreign_selection(second.value()).identity(),
+        None
+    );
+    let snapshot = view.snapshot_for_foreign_read()?;
+    let committed = tx.committed_state().clone();
+    snapshot.with_read_transaction(&committed, |peer| -> Result<(), Error> {
+        let slot = peer
+            .foreign_selection_slot(first.identity().expect("identity"))
+            .expect("captured slot");
+        assert_eq!(peer.anchor_at(slot)?.offset(), 1);
+        assert_eq!(peer.range_at(slot)?.cached_is_backward(), Some(true));
+        Ok(())
+    })??;
+    Ok(())
+}

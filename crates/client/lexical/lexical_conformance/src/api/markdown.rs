@@ -65,25 +65,29 @@ pub(crate) fn call(
     args: &[Value],
 ) -> Result<Value> {
     let short = name.rsplit('.').next().unwrap_or(name);
-    let selection = if short == "$convertSelectionToMarkdownString" {
+    let selection_capture = if short == "$convertSelectionToMarkdownString" {
         args.get(1)
             .filter(|value| !value.is_null() && value.get("$undef").is_none())
             .map(|value| -> Result<_> {
                 let slot = slot_arg(r, tx, value)?;
-                Ok(tx
-                    .selection_at(slot)?
-                    .map(Selection::snapshot_for_foreign_read))
+                Ok(tx.capture_foreign_selection(slot)?)
             })
             .transpose()?
             .flatten()
     } else {
         None
     };
+    let selection = selection_capture
+        .as_ref()
+        .map(ForeignSelectionCapture::value);
     let snapshot = r.read_state.clone();
     let view = snapshot
         .as_ref()
         .map(EditorState::view)
         .unwrap_or(tx.view());
+    let view = selection_capture.as_ref().map_or(view, |argument| {
+        view.with_foreign_selection_argument(argument)
+    });
     match short {
         "normalizeMarkdown" => Ok(json!(normalize_markdown(
             string(args.first().ok_or_else(|| fail("markdown source"))?)?,
@@ -94,14 +98,12 @@ pub(crate) fn call(
                 should_preserve_new_lines: args.get(2).and_then(Value::as_bool).unwrap_or(false),
                 ..r.markdown_options
             };
-            if selection
-                .as_ref()
-                .is_none_or(|s| matches!(s,Selection::Range(range) if range.is_collapsed()))
+            if selection.is_none_or(|s| matches!(s,Selection::Range(range) if range.is_collapsed()))
             {
                 return Ok(json!(convert_selection_to_markdown_string(
                     &view,
                     &Transformers::default(),
-                    selection.as_ref(),
+                    selection,
                     &opts
                 )?));
             }
@@ -110,10 +112,7 @@ pub(crate) fn call(
             }
             with_registry(r, args.first(), |registry| {
                 Ok(json!(convert_selection_to_markdown_string(
-                    &view,
-                    registry,
-                    selection.as_ref(),
-                    &opts
+                    &view, registry, selection, &opts
                 )?))
             })
         }

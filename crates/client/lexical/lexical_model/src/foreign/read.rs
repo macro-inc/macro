@@ -85,6 +85,7 @@ impl Hash for ForeignRecordIdentity {
 /// is already borrowed by the operation invoking them. A host still needs a
 /// separate guarded read dispatcher; this value grants no mutation capability.
 pub struct ForeignReadSnapshot {
+    argument: Option<ForeignSelectionCapture>,
     state: EditorState,
     native_calls: Option<Arc<super::native::NativeCalls>>,
     previous_selection: Option<Selection>,
@@ -119,6 +120,7 @@ impl Clone for ForeignReadSnapshot {
             .as_ref()
             .map(Selection::snapshot_for_foreign_read);
         Self {
+            argument: self.argument.clone(),
             state,
             native_calls: self.native_calls.clone(),
             previous_selection: self
@@ -150,7 +152,11 @@ impl ForeignReadSnapshot {
     /// Hosts use this to distinguish inherited values from values created by
     /// an independent read peer, without inspecting transaction-local slots.
     pub fn contains_selection_identity(&self, identity: &ForeignSelectionIdentity) -> bool {
-        &self.selection_identities.current == identity
+        self.argument
+            .as_ref()
+            .and_then(ForeignSelectionCapture::identity)
+            == Some(identity)
+            || &self.selection_identities.current == identity
             || self.selection_identities.detached.contains(identity)
             || self.previous_selection_identity.as_ref() == Some(identity)
     }
@@ -325,6 +331,15 @@ impl ForeignReadSnapshot {
             .iter()
             .map(|slot| slot.as_ref().map(Selection::snapshot_for_foreign_read))
             .collect();
+        if let Some(argument) = &self.argument
+            && let Some(identity) = argument.identity()
+            && tx.foreign_selection_slot(identity).is_none()
+        {
+            tx.detach_foreign_selection(
+                argument.value().snapshot_for_foreign_read(),
+                identity.clone(),
+            );
+        }
         Ok(read(&mut tx))
     }
 }
@@ -332,6 +347,7 @@ impl ForeignReadSnapshot {
 impl Read for ForeignReadSnapshot {
     fn view(&self) -> StateRef<'_> {
         StateRef {
+            foreign_selection_argument: self.argument.as_ref(),
             state: &self.state,
             native_projection: None,
             foreign_projections: None,
@@ -416,6 +432,7 @@ impl StateRef<'_> {
             state.nodes.insert(projection.key, Arc::new(record));
         }
         Ok(ForeignReadSnapshot {
+            argument: self.foreign_selection_argument.cloned(),
             state,
             native_calls: self.foreign_native_calls.cloned(),
             previous_selection: self

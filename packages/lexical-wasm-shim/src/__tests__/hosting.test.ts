@@ -376,9 +376,8 @@ test('foreign dispatchers must be installed before the first update and masks re
   }
 });
 
-test('unimplemented foreign hooks and native overlays fail explicitly at registration', () => {
-  const hook = foreignHookIndex().indexOf('extractWithChild');
-  const mask = (1n << BigInt(hook)).toString();
+test('unknown foreign hook bits and native overlays fail explicitly at registration', () => {
+  const mask = (1n << 63n).toString();
   expect(
     () =>
       new ConformanceBackend({
@@ -392,7 +391,7 @@ test('unimplemented foreign hooks and native overlays fail explicitly at registr
           },
         ],
       })
-  ).toThrow('foreign host hook extractWithChild is not wired yet');
+  ).toThrow('unknown foreign hook mask bit');
   expect(
     () =>
       new ConformanceBackend({
