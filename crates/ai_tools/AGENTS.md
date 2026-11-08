@@ -79,6 +79,9 @@ edit capability but calls no nested model and emits no additional model charge; 
 
 - `src/memory.rs` wires private memory tools and read-only research; `src/bin/memory.rs` runs awaited one-user generation.
 
+Lexical client startup requires `LEXICAL_ROUTE_MODES`; see the
+[route-switch configuration](../lexical_client/README.md).
+
 ## Checks
 
 - `cargo test -p ai_tools` (`SQLX_OFFLINE` unset).
