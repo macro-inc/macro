@@ -17,7 +17,8 @@ Markdown queries reuse lexical_markdown; HTML and clipboard use portable native
 exporters. No browser or storage APIs live in this crate.
 
 Run `just -f apps/web/justfile build-document-session-wasm` to build glue and the
-optimized binary, then enforce the 8 MB raw and 1,107,000-byte Brotli gates. Nix
+optimized binary, then enforce the 8 MB raw gate and provisional D5 cap of
+1,130,000 Brotli bytes. The cap may tighten; WP-59 measures real startup cost. Nix
 uses the same size profile and Binaryen convergence pass. No SIMD override is
 needed. The flag-off application continues to preload Loro; the session package
 is emitted as an optional asset and initialized lazily.

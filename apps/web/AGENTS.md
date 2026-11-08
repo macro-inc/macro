@@ -970,7 +970,8 @@ loader's relative imports unchanged and Tauri serves HTML for the missing
 module, so that file type fails to open on desktop.
 
 The optional document-session package uses the document-session-wasm Cargo profile
-and a Binaryen convergence pass; preserve its 1,107,000-byte Brotli gate. Its
+and a Binaryen convergence pass; enforce its provisional D5 cap of 1,130,000
+Brotli bytes. The cap may tighten; WP-59 measures real startup cost. Its
 main-thread loader is lazy. Keep one model WASM preload: Loro for flag-off builds,
 document_session_wasm when documentSessionPreload is selected. Do not preload both.
 
