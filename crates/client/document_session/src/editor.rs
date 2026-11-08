@@ -147,8 +147,11 @@ impl EditorSurface {
         self.projection = None;
         self.undo = None;
         let has_root = crate::generic::root(doc, "root").is_some();
+        let mut cleanup = false;
         let state = if has_root {
-            lexical_loro::reconstruct_state(doc, self.config.policy)?
+            let initial = lexical_loro::reconstruct_initial_state(doc, self.config.policy)?;
+            cleanup = initial.has_transparent_wrappers && access == Access::Edit;
+            initial.state
         } else {
             SerializedEditorState { root: serde_json::json!({"type":"root","version":1,"children":[],"direction":null,"format":"","indent":0}).as_object().cloned().ok_or(SessionError::Configuration("empty root must be an object"))? }
         };
@@ -177,13 +180,17 @@ impl EditorSurface {
             }));
             return Ok(());
         }
-        let mut projection = if has_root {
+        let mut projection = if cleanup {
+            let state = lexical_loro::synced_json(self.core.state(), self.config.policy)?;
+            lexical_loro::mirror::set_synced_state(doc, &state, self.config.policy)?;
+            LoroProjection::attach(doc, self.core.state(), self.config.policy)?
+        } else if has_root {
             LoroProjection::attach(doc, base, self.config.policy)?
         } else {
             LoroProjection::initialize(doc, base, self.config.policy, now.wall.0 / 1000)?
         };
         if let Some(output) = initial {
-            if access == Access::Edit {
+            if access == Access::Edit && !cleanup {
                 projection.local_commit(doc, &output.commits, LOCAL_ORIGIN, now.wall.0 / 1000)?;
             }
             // Read/comment-only editors may retain unsynced hook fields (S11 §4.6).

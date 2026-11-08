@@ -386,7 +386,7 @@ impl Sim {
             &self.config.session,
             matches!(
                 self.config.seeds.get(&spec.doc),
-                Some(SeedDocument::Editor(_))
+                Some(SeedDocument::Editor(_) | SeedDocument::StoredEditor(_))
             ),
         )?;
         let server = self

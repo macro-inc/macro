@@ -75,8 +75,10 @@ mod policy;
 pub use policy::*;
 mod index;
 mod schema;
+pub use index::{
+    InitialEditorState, fork_doc, new_doc, reconstruct_initial_state, reconstruct_state,
+};
 use index::{NodeIndex, projected_children};
-pub use index::{fork_doc, new_doc, reconstruct_state};
 mod local;
 mod remote;
 pub use remote::RemoteChanges;
