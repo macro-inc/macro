@@ -2,6 +2,10 @@
 use serde::de::{DeserializeSeed, MapAccess, SeqAccess, Visitor};
 use serde::{Deserialize, Deserializer};
 use std::fmt;
+#[cfg(target_arch = "wasm32")]
+mod safe;
+#[cfg(target_arch = "wasm32")]
+pub(super) use safe::value as from_js;
 
 pub(super) fn value<'de, D: Deserializer<'de>>(
     deserializer: D,

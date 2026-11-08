@@ -132,3 +132,5 @@ Snapshot exportJSON result fields under the caught JS import before serde deseri
 Node-returning hook results share the caught tree snapshot with exportJSON before serde. Keep conversion inside the exact callback frame so getters may reenter legitimately, while getter/proxy failures unwind Rust normally. Optional node results still distinguish null from undefined; ignored unit returns never traverse their fields.
 
 Commit-time exportJSON reads the exact canonical next state with leased update metadata, including previous/detached selections and composition. Preparation errors revoke derived read captures before rollback; keep ViewAttached writable-record identities unchanged by using metadata-only contexts.
+
+Decode indexed JS inputs through host_input/safe.rs: catch getters/proxies/iterator steps at their original lazy access points, then retain the existing counted visitor and scalar/byte decoder. Keep opaque accessor errors separate from ordinary serde diagnostics; never eagerly snapshot incoming arrays or change copied-prefix accounting.

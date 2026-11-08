@@ -91,12 +91,19 @@ impl EditorHandle {
     }
 }
 
-pub(super) fn from_js(value: JsValue) -> Result<Value, JsError> {
-    super::host_input::value(
-        serde_wasm_bindgen::Deserializer::from(value),
-        &debug::add_bytes,
-    )
-    .map_err(debug::error)
+pub(super) fn from_js(value: JsValue) -> Result<Value, JsValue> {
+    #[cfg(target_arch = "wasm32")]
+    {
+        super::host_input::from_js(value)
+    }
+    #[cfg(not(target_arch = "wasm32"))]
+    {
+        super::host_input::value(
+            serde_wasm_bindgen::Deserializer::from(value),
+            &debug::add_bytes,
+        )
+        .map_err(|error| debug::error(error).into())
+    }
 }
 pub(super) fn to_js(value: Value) -> Result<JsValue, JsError> {
     let result = serde::Serialize::serialize(
@@ -114,7 +121,7 @@ pub(super) fn to_js(value: Value) -> Result<JsValue, JsError> {
 impl EditorHandle {
     /// Create a core registry with the instance-wide key stream. Node metadata is JSON.
     #[wasm_bindgen(constructor)]
-    pub fn new(config: JsValue) -> Result<EditorHandle, JsError> {
+    pub fn new(config: JsValue) -> Result<EditorHandle, JsValue> {
         let config: Config = serde_json::from_value(from_js(config)?).map_err(debug::error)?;
         let _namespace = config.namespace;
         let mode = if config.headless {
@@ -146,7 +153,7 @@ impl EditorHandle {
             .contains(&definition.type_name.as_str())
             {
                 if mask != 0 {
-                    return Err(debug::error("native class overlays are not wired yet"));
+                    return Err(debug::error("native class overlays are not wired yet").into());
                 }
                 continue;
             }
@@ -161,7 +168,7 @@ impl EditorHandle {
                 "Text" => NodeKind::Text,
                 "Decorator" => NodeKind::Decorator,
                 "LineBreak" => NodeKind::LineBreak,
-                _ => return Err(debug::error("unsupported foreign node kind")),
+                _ => return Err(debug::error("unsupported foreign node kind").into()),
             };
             let hooks =
                 Arc::new(super::host_foreign::ForeignNode::new(mask).map_err(debug::error)?);
@@ -169,7 +176,7 @@ impl EditorHandle {
                 .insert(definition.type_name.clone(), hooks.clone())
                 .is_some()
             {
-                return Err(debug::error("duplicate foreign node type"));
+                return Err(debug::error("duplicate foreign node type").into());
             }
             builder = builder.foreign_node(ForeignNodeType {
                 type_name: definition.type_name.clone().into(),
@@ -261,7 +268,7 @@ impl EditorHandle {
         to_js(result).map_err(Into::into)
     }
     /// Open one unpublished update. Discrete scheduling belongs to the JS host.
-    pub fn begin_update(&self, tags: JsValue, discrete: bool) -> Result<(), JsError> {
+    pub fn begin_update(&self, tags: JsValue, discrete: bool) -> Result<(), JsValue> {
         let tags: Vec<String> = serde_json::from_value(from_js(tags)?).map_err(debug::error)?;
         let tags = tags
             .into_iter()
@@ -271,7 +278,7 @@ impl EditorHandle {
         let tags = TagSet::from_tags(tags);
         let _discrete = discrete;
         if self.foreign.values().any(|node| !node.ready()) {
-            return Err(debug::error("foreign dispatcher is not installed"));
+            return Err(debug::error("foreign dispatcher is not installed").into());
         }
         self.with_session(|session| session.begin_update(tags).map_err(debug::error))?;
         self.started.set(true);
