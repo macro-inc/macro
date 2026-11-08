@@ -280,6 +280,7 @@ pub async fn build_tool_service_context_from_env(
         sync_service_auth_key.clone(),
         sync_service_url,
     ));
+    let lexical_client = lexical_client.with_document_source(sync_client.clone());
     let email_ext_client = Arc::new(EmailServiceClientExternal::new(email_service_url.clone()));
 
     let frecency_storage = FrecencyPgStorage::new(pool.clone());

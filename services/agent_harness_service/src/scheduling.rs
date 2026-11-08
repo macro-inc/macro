@@ -14,7 +14,7 @@ use macro_authorization::{
     InternalAuthConfig, MacroAuthJwtValidator, MacroAuthorizationServiceImpl,
     MacroAuthorizationState, PgUserApiKeyAuthorizationRepo, PgUserApiKeyAuthorizer,
 };
-use macro_service_urls::{ConnectionGatewayUrl, LexicalServiceUrl};
+use macro_service_urls::ConnectionGatewayUrl;
 pub mod config;
 mod routine_analytics;
 mod routine_run_notifications;
@@ -98,6 +98,7 @@ pub async fn build<Ingress: notification::domain::service::NotificationIngress>(
     drafter: crate::routine_drafts::ModelDrafts,
     ready: tokio::sync::watch::Receiver<bool>,
     notifications: Arc<Ingress>,
+    lexical: lexical_client::LexicalClient,
 ) -> Result<SchedulingRuntime> {
     let environment = config.environment;
     let lifecycle = ServiceLifecycle::default();
@@ -163,7 +164,7 @@ pub async fn build<Ingress: notification::domain::service::NotificationIngress>(
         &db,
         &registrar,
         Arc::clone(&access),
-        &config,
+        lexical,
     )?);
     // Tool and code steps run in this process, as the owner; agent steps
     // still go through the routine-session operations.
@@ -376,7 +377,7 @@ fn event_content(
     db: &sqlx::PgPool,
     registrar: &OwnedEntityRegistrar<PgBotsRepo>,
     access: Arc<EntityAccessServiceImpl<PgAccessRepository>>,
-    config: &Config,
+    lexical: lexical_client::LexicalClient,
 ) -> Result<
     impl scheduled_action::domain::event_runs::condition::EventContentReader
     + scheduled_action::domain::ports::RoutineEventReader
@@ -411,11 +412,7 @@ fn event_content(
         call::domain::service::CallRecordQueryServiceImpl::new(
             call::outbound::pg_call_repo::PgCallRepo::new(db.clone()),
         ),
-        lexical_client::LexicalClient::new(
-            config.internal_api_key.to_string(),
-            LexicalServiceUrl::new()?.to_string(),
-        )
-        .with_route_modes(config.lexical_route_modes.clone()),
+        lexical,
     ))
 }
 

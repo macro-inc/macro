@@ -638,6 +638,11 @@ async fn run() -> anyhow::Result<()> {
     )
     .await
     .context("failed to build the in-memory agent tool context")?;
+    let lexical = tool_context
+        .document_tool_context
+        .lexical_client
+        .as_ref()
+        .clone();
     let cognition_runtime = agent_harness_service::cognition::build(
         agent_harness_service::cognition::config::Config::from_env()?,
         pool.clone(),
@@ -732,6 +737,7 @@ async fn run() -> anyhow::Result<()> {
         routine_drafts::ModelDrafts::new(Arc::clone(&recorder)),
         http_ready,
         Arc::clone(&notifications),
+        lexical.clone(),
     )
     .await?;
     let scheduling_router = scheduling_runtime.router.clone();
