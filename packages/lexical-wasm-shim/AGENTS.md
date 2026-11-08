@@ -11,6 +11,7 @@ The package is being assembled; the full lexical export surface is not ready.
 - `src/backend/index.ts`: model boundary; packet types come from Rust generation.
 - `src/update.ts`: JS update scheduling, batching and callback phases.
 - `src/__tests__/setup.ts`: synchronous pinned WASM initialization and editor leak checks.
+- `src/__tests__/surface.test.ts`: literal node API observations from the pinned upstream oracle, exercised through the real backend.
 
 ## Boundaries
 
