@@ -127,6 +127,10 @@ impl<'state> StateRef<'state> {
     pub fn kind(self, key: impl Into<NodeKey>) -> Option<NodeKind> {
         self.slot(key.into()).map(|slot| slot.base.kind())
     }
+    /// Whether this editor registered a serialized node type.
+    pub fn has_node_type(self, name: &str) -> bool {
+        self.state.registry.get(name).is_some()
+    }
     /// Type index.
     pub fn type_index(self, key: impl Into<NodeKey>) -> Option<NodeTypeIndex> {
         self.slot(key.into()).map(|slot| slot.type_index)

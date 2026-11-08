@@ -399,3 +399,176 @@ fn failed_hook_round_rolls_back_even_after_set_editor_state_early_publication() 
         "main"
     );
 }
+
+struct IsolatedProbe {
+    accept: bool,
+    fail: bool,
+    publish: bool,
+}
+static PROBED: EventKey<()> = EventKey::new("isolated-probed");
+impl Plugin for IsolatedProbe {
+    fn name(&self) -> &'static str {
+        "isolated-probe"
+    }
+    fn commands(&self) -> &[CommandRegistration] {
+        &[]
+    }
+    fn handle(&self, _: &mut Transaction<'_>, _: &Command) -> Result<Handled, Error> {
+        Ok(Handled::No)
+    }
+    fn isolated_after_commit(&self) -> Option<&dyn IsolatedAfterCommit> {
+        Some(self)
+    }
+}
+impl IsolatedAfterCommit for IsolatedProbe {
+    fn apply(&self, tx: &mut Transaction<'_>, commit: &Commit) -> Result<bool, Error> {
+        let Some(key) = tx
+            .first_descendant(NodeKey::ROOT)
+            .filter(|key| tx.is_text(*key))
+        else {
+            return Ok(false);
+        };
+        if tx.text_content(key) != "input" || commit.changes.dirty_leaves.is_empty() {
+            return Ok(false);
+        }
+        tx.text(key)?.set_text_content("accepted")?;
+        tx.extension_mut::<Log>()?.0.push("isolated");
+        tx.emit(&PROBED, ());
+        if self.publish {
+            tx.set_editor_state(tx.pending.clone(), TagSet::default())?;
+        }
+        if self.fail {
+            return Err(Error::Invariant("isolated failure"));
+        }
+        Ok(self.accept)
+    }
+}
+#[test]
+fn declined_and_failed_isolated_hooks_preserve_shared_commits_even_after_early_publication()
+-> Result<(), Error> {
+    for fail in [false, true] {
+        let mut editor = Editor::builder(EditorMode::Headless)
+            .extension_state(Ids::default())
+            .extension_state(Log::default())
+            .plugin(Stamp)
+            .plugin(IsolatedProbe {
+                accept: false,
+                fail,
+                publish: true,
+            })
+            .build()
+            .expect("editor");
+        let (key, commit) = editor.update(|tx| {
+            let p = tx.create(Paragraph::default())?;
+            let text = tx.create_text("input")?;
+            tx.append(p, &[text.key()])?;
+            tx.append(NodeKey::ROOT, &[p.key()])?;
+            Ok(text.key())
+        })?;
+        assert_eq!(editor.state().text_content(NodeKey::ROOT), "input");
+        assert_eq!(
+            &*editor.state().view().text_data(key)?.style,
+            "id: assigned"
+        );
+        assert!(editor.extension::<Log>()?.0.is_empty());
+        assert_eq!(commit.chain().count(), 2);
+        assert!(!commit.chain().any(|entry| {
+            entry
+                .events
+                .iter()
+                .any(|event| event.name() == "isolated-probed")
+        }));
+        assert_eq!(
+            commit.follow_up_error.as_ref().map(|error| error.plugin),
+            fail.then_some("isolated-probe")
+        );
+    }
+    Ok(())
+}
+#[test]
+fn accepted_isolated_hook_publishes_once_and_reenters_the_shared_fixpoint() -> Result<(), Error> {
+    let mut editor = Editor::builder(EditorMode::Headless)
+        .extension_state(Ids::default())
+        .extension_state(Log::default())
+        .plugin(Stamp)
+        .plugin(IsolatedProbe {
+            accept: true,
+            fail: false,
+            publish: false,
+        })
+        .build()
+        .expect("editor");
+    let (_, commit) = editor.update(|tx| {
+        let p = tx.create(Paragraph::default())?;
+        let text = tx.create_text("input")?;
+        tx.append(p, &[text.key()])?;
+        tx.append(NodeKey::ROOT, &[p.key()])
+    })?;
+    assert_eq!(editor.state().text_content(NodeKey::ROOT), "accepted");
+    assert_eq!(editor.extension::<Log>()?.0, vec!["isolated"]);
+    assert_eq!(commit.chain().count(), 3);
+    assert_eq!(
+        commit
+            .chain()
+            .flat_map(|entry| entry.events_of(&PROBED))
+            .count(),
+        1
+    );
+    assert!(commit.follow_up_error.is_none());
+    Ok(())
+}
+
+struct QueuedIsolatedLoop;
+impl Plugin for QueuedIsolatedLoop {
+    fn name(&self) -> &'static str {
+        "queued-isolated-loop"
+    }
+    fn commands(&self) -> &[CommandRegistration] {
+        &[]
+    }
+    fn handle(&self, _: &mut Transaction<'_>, _: &Command) -> Result<Handled, Error> {
+        Ok(Handled::No)
+    }
+    fn isolated_after_commit(&self) -> Option<&dyn IsolatedAfterCommit> {
+        Some(self)
+    }
+}
+impl IsolatedAfterCommit for QueuedIsolatedLoop {
+    fn apply(&self, tx: &mut Transaction<'_>, _: &Commit) -> Result<bool, Error> {
+        if tx.first_child(NodeKey::ROOT).is_none() {
+            return Ok(false);
+        }
+        tx.queue_update(
+            |tx| {
+                let key = tx
+                    .first_descendant(NodeKey::ROOT)
+                    .ok_or(Error::Invariant("text"))?;
+                let next = format!("{}!", tx.text_content(key));
+                tx.text(key)?.set_text_content(&next)?;
+                Ok(())
+            },
+            UpdateOptions::default(),
+        )?;
+        Ok(true)
+    }
+}
+#[test]
+fn isolated_round_limit_includes_mutations_queued_until_commit() -> Result<(), Error> {
+    let mut editor = Editor::builder(EditorMode::Headless)
+        .plugin(QueuedIsolatedLoop)
+        .build()
+        .expect("editor");
+    let (_, commit) = editor.update(|tx| {
+        let p = tx.create(Paragraph::default())?;
+        let text = tx.create_text("x")?;
+        tx.append(p, &[text.key()])?;
+        tx.append(NodeKey::ROOT, &[p.key()])
+    })?;
+    assert_eq!(commit.following.len(), 99);
+    assert_eq!(editor.state().root_text_content().len(), 100);
+    assert!(matches!(
+        commit.follow_up_error.as_ref().map(|error| &*error.error),
+        Some(Error::EndlessFollowUps)
+    ));
+    Ok(())
+}
