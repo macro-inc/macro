@@ -79,3 +79,28 @@ fn clearing_multiple_text_nodes_preserves_typing_attributes() -> Result<(), Erro
     );
     Ok(())
 }
+
+#[test]
+fn segmented_end_replacement_preserves_the_new_active_selection_attributes() -> Result<(), Error> {
+    let mut editor = Editor::builder(EditorMode::Headless)
+        .build()
+        .expect("editor");
+    let mut tx = editor.transaction();
+    let paragraph = tx.create(Paragraph::default())?;
+    let first = tx.create_text("a")?;
+    tx.text(first)?.set_format(TextFormat::CODE)?;
+    let last = tx.create_text("bc")?;
+    tx.text(last)?.set_mode(TextMode::Segmented)?;
+    tx.append(paragraph, &[first.key(), last.key()])?;
+    tx.append(NodeKey::ROOT, &[paragraph.key()])?;
+    let range = RangeSelection::new(
+        Point::text(first, Utf16Offset(0)),
+        Point::text(last, Utf16Offset(1)),
+    );
+    tx.set_selection(Some(Selection::Range(range)))?;
+    tx.insert_text("x")?;
+    assert_eq!(tx.text_content(first), "x");
+    assert_eq!(tx.view().text_data(first)?.format, TextFormat::CODE);
+    assert_eq!(tx.range_selection()?.format, TextFormat::empty());
+    Ok(())
+}

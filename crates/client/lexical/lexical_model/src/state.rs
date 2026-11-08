@@ -69,6 +69,8 @@ impl EditorState {
     /// Borrow this snapshot.
     pub fn view(&self) -> StateRef<'_> {
         StateRef {
+            #[cfg(feature = "foreign-nodes")]
+            native_projection: None,
             state: self,
             previous_selection: self.selection.as_ref(),
             composition_key: None,

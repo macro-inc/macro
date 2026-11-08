@@ -134,6 +134,7 @@ impl Transaction<'_> {
             PointRole::Anchor => range.anchor = point,
             PointRole::Focus => range.focus = point,
         }
+        range.cached_direction = None;
         range.dirty = true;
         if slot == SelectionSlot::Active {
             self.selection_dirty = true;

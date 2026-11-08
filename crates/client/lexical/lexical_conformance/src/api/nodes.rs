@@ -25,7 +25,9 @@ pub(crate) fn call(
         .as_ref()
         .map(EditorState::view)
         .unwrap_or(tx.view());
-    if view.is::<lexical_rich_nodes::link::LinkNode>(key)
+    if view
+        .get::<lexical_rich_nodes::link::LinkNode>(key)
+        .is_some()
         && let Some(result) = super::rich::link_method(view, key, method, a)?
     {
         return Ok(result);
@@ -116,7 +118,7 @@ pub(crate) fn call(
             return r.node(tx.view(), key);
         }
         "getType" => return Ok(json!(view.type_name(key)?)),
-        "getKey" => return Ok(json!({"$nodeKey":key_wire(key)})),
+        "getKey" => return Ok(key_value(key)),
         "getTextContent" => return Ok(json!(view.text_content(key))),
         "getTextContentSize" => return Ok(json!(view.text_content_size(key).get())),
         "isBefore" => {
@@ -133,6 +135,10 @@ pub(crate) fn call(
         }
         "isAttached" => return Ok(json!(view.is_attached(key))),
         "getLatest" => return r.node(view, key),
+        "getWritable" => {
+            tx.mark_dirty(key)?;
+            return r.node(tx.view(), key);
+        }
         "getChildrenSize" => return Ok(json!(view.children_size(key))),
         "getIndexWithinParent" => {
             return Ok(json!(
@@ -161,7 +167,7 @@ pub(crate) fn call(
             } else {
                 tx.select_next(key, offset(0)?, offset(1)?)?;
             }
-            return Ok(r.selection(tx));
+            return r.selection(tx);
         }
         "isEmpty" => return Ok(json!(view.is_empty(key))),
         "isInline" => return Ok(json!(view.is_inline(key))),
@@ -230,7 +236,7 @@ pub(crate) fn call(
             let mut keys = Vec::new();
             let mut parent = view.parent(key);
             while let Some(key) = parent {
-                keys.push(json!({"$nodeKey":key_wire(key)}));
+                keys.push(key_value(key));
                 parent = view.parent(key);
             }
             return Ok(json!(keys));
@@ -284,10 +290,10 @@ pub(crate) fn call(
             return Ok(undefined());
         }
         "replace" => {
-            if let Some(id) = r.active_selection.take()
+            if let Some(id) = r.selections.take_active()?
                 && let Some(selection) = tx.selection().cloned()
             {
-                r.selections[id] = tx.detach_selection(selection);
+                r.selections.set_slot(id, tx.detach_selection(selection))?;
             }
             let node = node_key(a.first().ok_or_else(|| fail("replacement"))?)?;
             let node = tx.replace(
@@ -325,7 +331,7 @@ pub(crate) fn call(
                 tx.element(key)?
                     .select(anchor.map(ChildIndex), focus.map(ChildIndex))?;
             }
-            return Ok(r.selection(tx));
+            return r.selection(tx);
         }
         "selectStart" | "selectEnd" => {
             if method == "selectStart" {
@@ -333,7 +339,7 @@ pub(crate) fn call(
             } else {
                 tx.select_end(key)?;
             }
-            return Ok(r.selection(tx));
+            return r.selection(tx);
         }
         "setTextStyle" => {
             tx.element(key)?.set_text_style(str_arg(a, 0)?)?;

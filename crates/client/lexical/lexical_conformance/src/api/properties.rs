@@ -8,14 +8,14 @@ pub(crate) fn get(
     name: &str,
 ) -> Result<Value> {
     if let Some(point) = receiver.get("$point") {
-        let slot = r.selections[integer(&point["selection"])? as usize];
+        let slot = r.selections.slot(integer(&point["selection"])? as usize)?;
         let p = if point["role"] == "anchor" {
             tx.anchor_at(slot)?
         } else {
             tx.focus_at(slot)?
         };
         return match name {
-            "key" => Ok(json!({"$nodeKey":key_wire(p.key())})),
+            "key" => Ok(key_value(p.key())),
             "type" => Ok(json!(p.point_type().to_string())),
             "offset" => Ok(json!(p.offset())),
             _ => Err(fail(format!("unmapped point property {name}"))),
@@ -26,25 +26,30 @@ pub(crate) fn get(
         return match name {
             "anchor" | "focus" => Ok(json!({"$point":{"selection":id,"role":name}})),
             "_cachedIsBackward" => Ok(json!(
-                tx.range_at(r.selections[id as usize])?.cached_is_backward()
+                tx.range_at(r.selections.slot(id as usize)?)?
+                    .cached_is_backward()
             )),
-            "format" => Ok(json!(tx.range_at(r.selections[id as usize])?.format.bits())),
-            "style" => Ok(json!(tx.range_at(r.selections[id as usize])?.style)),
+            "format" => Ok(json!(
+                tx.range_at(r.selections.slot(id as usize)?)?.format.bits()
+            )),
+            "style" => Ok(json!(tx.range_at(r.selections.slot(id as usize)?)?.style)),
             "dirty" => Ok(json!(
-                tx.selection_at(r.selections[id as usize])?
+                tx.selection_at(r.selections.slot(id as usize)?)?
                     .is_some_and(Selection::is_dirty)
             )),
             _ => Err(fail(format!("unmapped selection property {name}"))),
         };
     }
     if receiver.get("$snapshot").is_some() && name == "_nodeMap" {
-        let state = r.saved_states[integer(&receiver["$snapshot"])? as usize].clone();
+        let state = r
+            .saved_state(integer(&receiver["$snapshot"])? as usize)?
+            .clone();
         let mut pairs = Vec::new();
         for key in crate::snapshot::keys(&state) {
             let raw = if key.generation() == 0 {
                 json!(key.to_string())
             } else {
-                json!({"$nodeKey":key_wire(key)})
+                key_value(key)
             };
             pairs.push(json!([raw, r.node(state.view(), key)?]));
         }
@@ -80,7 +85,6 @@ pub(crate) fn get(
             .unwrap_or(tx.view());
         let node = view.node_or_err(key)?;
         return match name {
-            "__key" => Ok(json!({"$nodeKey":key_wire(key)})),
             "__tag" => Ok(json!(if let Some(heading) =
                 view.get::<lexical_rich_nodes::heading::HeadingNode>(key)
             {
@@ -100,9 +104,34 @@ pub(crate) fn get(
                 view.get_or_err::<lexical_rich_nodes::table::TableCellNode>(key)?
                     .header_state,
             )?),
-            "__parent" => Ok(view
-                .parent(key)
-                .map_or(Value::Null, |key| json!({"$nodeKey":key_wire(key)}))),
+            "__parent" => Ok(view.parent(key).map_or(Value::Null, key_value)),
+            "__prev" => Ok(node.prev().map_or(Value::Null, key_value)),
+            "__next" => Ok(node.next().map_or(Value::Null, key_value)),
+            "__key" => Ok(key_value(key)),
+            "__first" => Ok(view
+                .element_data(key)?
+                .first_child()
+                .map_or(Value::Null, key_value)),
+            "__last" => Ok(view
+                .element_data(key)?
+                .last_child()
+                .map_or(Value::Null, key_value)),
+            "__size" => Ok(json!(view.element_data(key)?.children_size())),
+            "__indent" => Ok(json!(view.element_data(key)?.indent)),
+            "__dir" => Ok(serde_json::to_value(view.element_data(key)?.direction)?),
+            "__textFormat" => Ok(json!(view.element_data(key)?.text_format.bits())),
+            "__textStyle" => Ok(json!(view.element_data(key)?.text_style)),
+            "__detail" => Ok(json!(view.text_data(key)?.detail.bits())),
+            "__mode" => Ok(json!(match view.text_data(key)?.mode {
+                TextMode::Normal => 0,
+                TextMode::Token => 1,
+                TextMode::Segmented => 2,
+            })),
+            "__state" => Ok(if node.node_state().is_some() {
+                json!({"$nodeState":receiver})
+            } else {
+                undefined()
+            }),
             "__target" | "__rel" | "__title" => {
                 let link = view.get_or_err::<lexical_rich_nodes::link::LinkNode>(key)?;
                 Ok(json!(match name {
@@ -118,8 +147,16 @@ pub(crate) fn get(
             )),
             "__type" => Ok(json!(node.type_name())),
             "__text" => Ok(json!(view.text_data(key)?.text.as_str())),
-            "__format" => Ok(json!(view.text_data(key)?.format.bits())),
-            "__style" => Ok(json!(view.text_data(key)?.style)),
+            "__format" => Ok(json!(match node.base() {
+                BaseData::Text(data) => data.format.bits(),
+                BaseData::Element(data) => data.format.bits(),
+                _ => return Err(fail("node has no format field")),
+            })),
+            "__style" => Ok(json!(match node.base() {
+                BaseData::Text(data) => &data.style,
+                BaseData::Element(data) => &data.style,
+                _ => return Err(fail("node has no style field")),
+            })),
             _ => Err(fail(format!("unmapped node property {name}"))),
         };
     }

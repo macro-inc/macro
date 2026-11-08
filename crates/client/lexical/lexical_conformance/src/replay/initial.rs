@@ -104,8 +104,8 @@ impl Replayer {
             ),
         )?;
         self.compare(&initial["selection"], &snapshot::selection(editor.state())?)?;
-        self.states
-            .insert((self.editor_id, 0), editor.state().clone());
+        self.bindings
+            .pin_editor_state(self.editor_id, 0, editor.state().clone())?;
         Ok(())
     }
 }

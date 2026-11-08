@@ -397,8 +397,7 @@ log = "0.4.26"
 logos = "0.16"
 lol_html = "2.4.0"
 loro = "=1.17.1"
-loro-internal = "=1.16.2"
-rustc-hash = "2.1.1"
+loro-internal = "=1.17.1"
 lru = "0.16"
 md-5 = "0.10.6"
 miniz_oxide = { version = "0.8", features = ["with-alloc"] }
@@ -433,8 +432,8 @@ prost = "0.14"
 prost-build = "0.14"
 protox = "0.10"
 quote = "1"
+syn = { version = "2", features = ["full", "visit"] }
 rand = "0.9.0"
-rand_chacha = "0.9.0"
 xxhash-rust = { version = "0.8.15", features = ["xxh3"] }
 ratatui = "0.29"
 # uses vendored to fix lambda builds failing.

@@ -206,3 +206,39 @@ fn invalid_table_selection_endpoints_keep_the_upstream_contextual_diagnostic() -
     );
     Ok(())
 }
+
+#[test]
+fn forward_word_delete_removes_noncollapsed_range_across_cells() -> Result<()> {
+    let mut editor = register_table(
+        Editor::builder(EditorMode::Headless),
+        &TableConfig::default(),
+    )
+    .build()
+    .expect("registry");
+    let mut tx = editor.transaction();
+    let table = create_table_node_with_dimensions(&mut tx, 2, 3, IncludeHeaders::All(true))?;
+    tx.append(NodeKey::ROOT, &[table.key()])?;
+    let rows = tx.children_keys(table)?;
+    let first_cells = tx.children_keys(rows[0])?;
+    let second_cells = tx.children_keys(rows[1])?;
+    let start = tx.first_child_or_err(first_cells[1])?;
+    let end = tx.first_child_or_err(second_cells[0])?;
+    for child in tx.children_keys(end)? {
+        tx.remove(child, true)?;
+    }
+    tx.set_selection(Some(Selection::Range(RangeSelection::new(
+        Point::element(end, ChildIndex(0)),
+        Point::element(start, ChildIndex(0)),
+    ))))?;
+    tx.delete_word(
+        EditDirection::Forward,
+        ModifyTarget::NoView,
+        ModifyTarget::NoView,
+    )?;
+    assert_eq!(tx.children_size(rows[0]), 2);
+    assert_eq!(tx.children_size(rows[1]), 3);
+    let range = tx.selection().and_then(Selection::as_range).expect("range");
+    assert_eq!(range.anchor, Point::element(start, ChildIndex(0)));
+    assert!(range.is_collapsed());
+    Ok(())
+}

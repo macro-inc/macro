@@ -2,8 +2,19 @@
 use super::*;
 /// Shared read API for snapshots, transactions, and borrowed views.
 pub trait Read {
+    /// Read unparsed development state, binding its registered codec lazily.
+    #[cfg(feature = "foreign-nodes")]
+    fn foreign_state(&self, node: impl Into<NodeKey>, key: &str) -> Option<&serde_json::Value> {
+        self.view().foreign_state(node, key)
+    }
+
     /// Borrow the readable state.
     fn view(&self) -> StateRef<'_>;
+    /// Own fields of a runtime-defined node, absent for native payloads.
+    #[cfg(feature = "foreign-nodes")]
+    fn foreign_data(&self, key: impl Into<NodeKey>) -> Option<&ForeignData> {
+        self.view().foreign_data(key)
+    }
     /// Node or err.
     fn node_or_err(&self, key: impl Into<NodeKey>) -> Result<NodeRef<'_>, Error> {
         self.view().node_or_err(key)
