@@ -58,3 +58,9 @@ impl SearchText for SnapshotNode {
         Some(js_optional(&self.document_name).into())
     }
 }
+
+impl lexical_markdown::MarkdownText for SnapshotNode {
+    fn markdown_text(&self) -> Option<&str> {
+        self.document_name.as_ref().map(String::as_str)
+    }
+}

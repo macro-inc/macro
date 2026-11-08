@@ -28,13 +28,12 @@ fn every_macro_node_matches_typescript_json_import_and_export() -> Result<()> {
             .extension_state(NodeRandom(Arc::new(|size| vec![0; size])))
             .build()
             .expect("static Macro registry");
-        let result = editor.parse_editor_state(&case.input);
+        let result = editor
+            .parse_editor_state(&case.input)
+            .and_then(|state| Ok(to_js_json_string(&serde_json::to_value(state.to_json()?)?)));
         let mismatch = match (result, case.json) {
-            (Ok(state), Some(expected)) => {
-                let actual = to_js_json_string(&serde_json::to_value(state.to_json()?)?);
-                (actual != expected)
-                    .then(|| format!("{}\nactual: {actual}\nexpect: {expected}", case.name))
-            }
+            (Ok(actual), Some(expected)) => (actual != expected)
+                .then(|| format!("{}\nactual: {actual}\nexpect: {expected}", case.name)),
             (Err(_), None) if case.error.is_some() => None,
             (Err(error), Some(_)) => Some(format!("{}: unexpected error: {error}", case.name)),
             (Ok(_), None) => Some(format!(
