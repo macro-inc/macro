@@ -153,7 +153,7 @@ export class Channel extends PropertiedEntity<ChannelDetail> {
     return new Channel(client, channel_id);
   }
 
-  /** Open (creating if needed) the private group channel with a set of users. */
+  /** Open (creating if needed) the group direct message with exactly these people, excluding the caller. */
   static async private(
     client: MacroClient,
     recipients: User[],

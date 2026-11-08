@@ -384,6 +384,20 @@ export {
   PipelineTable,
   PipelineView,
 } from './entities/crm/pipeline';
+export {
+  type CompanyImport,
+  PipelineEntry,
+  type PipelineField,
+  type PipelineFieldChange,
+  type PipelineFieldInput,
+  type PipelineFieldInputs,
+  type PipelineFieldTotal,
+  type PipelineFieldValue,
+  type PipelineImport,
+  type PipelineImportSkip,
+  type PipelineOptionCounts,
+  type PipelineRecordInput,
+} from './entities/crm/pipeline-entry';
 export type {
   DatabaseQueryOptions,
   DatabaseQueryResult,
