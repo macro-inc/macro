@@ -124,8 +124,8 @@ Follow the [infrastructure guide](../development/infrastructure.md) for the patt
 - `tooling/xtask/crates/xtask_local/src/local/inventory.rs`: a `RustService` entry,
   and bump the count in `inventory/test.rs`. A worker that consumes shared queues
   must be `opt_in` or `modes: &[Mode::Local]`, or `run_dev` steals dev messages.
-- `local/instance.rs`: add the `Port` variant **at the end**; offsets come from
-  declaration order.
+- `tooling/xtask/crates/xtask_ports/src/layout.rs`: add the `Port` variant **at
+  the end**; offsets come from declaration order.
 - `local/resources.rs` and `crates/macro_queues`: any queue or bucket the service
   needs. A worker whose queue doesn't exist locally spins in a tight loop.
 

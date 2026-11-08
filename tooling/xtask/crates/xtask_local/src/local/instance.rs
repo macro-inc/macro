@@ -7,20 +7,13 @@
 //! subnet come from [`super::allocator`], so concurrent stacks can't collide.
 
 use anyhow::{Context, Result, bail};
-use strum::{EnumIter, IntoEnumIterator};
+pub use xtask_ports::Port;
 
 use super::{allocator, repo_root};
 
 /// The reserved default instance name. Maps to today's frozen `macro` Compose
 /// project and the fixed base ports.
-pub const DEFAULT_NAME: &str = "macro";
-
-/// Start of the non-default port window. Keep the entire allocation below
-/// Linux's default ephemeral range (32768-60999), otherwise an ordinary
-/// outbound connection can intermittently occupy a Compose host port.
-pub(super) const WINDOW_START: u32 = 20_000;
-pub(super) const STRIDE: u32 = 100;
-pub(super) const BUCKETS: u32 = 120; // 20000..=31999
+pub const DEFAULT_NAME: &str = xtask_ports::DEFAULT_INSTANCE;
 
 /// A validated instance name: lowercase ASCII alphanumerics, hyphen, and
 /// underscore, starting alphanumeric, non-empty, <= 40 chars. The newtype
@@ -60,97 +53,6 @@ fn ensure_valid(raw: &str) -> Result<()> {
     Ok(())
 }
 
-/// Every host port the orchestrator allocates. The discriminant IS the port the
-/// default `macro` instance binds (matching the values hardcoded in the compose
-/// files today); a named instance binds `port_base + offset`, where `offset` is
-/// the variant's position in declaration order. Adding a port is a single line:
-/// `NewThing = 8099,`. Offsets stay below `STRIDE`, so named windows never
-/// overlap.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, EnumIter)]
-#[repr(u16)]
-pub enum Port {
-    Postgres = 5432,
-    Redis = 6379,
-    RedisUi = 8001,
-    OpenSearch = 9200,
-    OpenSearchPa = 9600,
-    FusionAuth = 9011,
-    LocalStack = 4566,
-    MailpitSmtp = 1025,
-    MailpitUi = 8025,
-    Proxy = 8090,
-    Frontend = 3000,
-    Auth = 8080,
-    ConnGateway = 8082,
-    Contacts = 8083,
-    DocCognition = 8085,
-    DocStorage = 8086,
-    Email = 8087,
-    Notification = 8089,
-    SearchProcessing = 8092,
-    StaticFile = 8094,
-    Unfurl = 8095,
-    ImageProxy = 8097,
-    Kafka = 9092,
-    SdkWebhookSsh = 8788,
-    SdkWebhookHostReceiver = 8789,
-    // Appended (not slotted by number) so existing per-instance port offsets,
-    // which come from declaration order, stay stable.
-    /// Retired with agent_proxy_service; kept (in place, at the end) because
-    /// per-instance port offsets come from declaration order, and removing a
-    /// variant would shift every one declared after it.
-    AgentProxy = 8091,
-    /// Agent session control API.
-    AgentHarness = 8101,
-    /// The agent egress proxy, `agent_harness_service`'s second listener.
-    /// Published on every local instance - it is what the Cursor egress
-    /// tunnel points at, and Cursor's cloud is outside the compose network.
-    AgentHarnessEgress = 8102,
-    /// Scheduled actions API and dispatcher (default compose port 8099).
-    ScheduledAction = 8099,
-    /// Calendar service API (default compose port 8088). Appended at the end so
-    /// existing per-instance port offsets, which come from declaration order,
-    /// stay stable.
-    Calendar = 8088,
-    /// Live-preview control API. Appended after Calendar for the same reason.
-    PreviewControl = 8110,
-    /// Stock SSH reverse-tunnel listener.
-    PreviewSsh = 2222,
-    /// Local wildcard preview TLS listener.
-    PreviewHttps = 8443,
-}
-
-impl Port {
-    /// The port the default `macro` instance binds — the variant's discriminant.
-    pub const fn fixed(self) -> u16 {
-        self as u16
-    }
-
-    /// The per-port offset within a named instance's stride: the variant's
-    /// position in declaration order. Unique and `< STRIDE` by construction
-    /// (there are far fewer variants than the stride).
-    pub fn offset(self) -> u16 {
-        Port::iter()
-            .position(|p| p == self)
-            .expect("every Port is yielded by iter()") as u16
-    }
-
-    /// Every allocated port — used by doctor / collision probing / the env
-    /// summary.
-    pub fn all() -> impl Iterator<Item = Port> {
-        Port::iter()
-    }
-
-    /// Whether anything still listens on this port. Retired variants keep their
-    /// offset, but something else on their port doesn't stop a stack starting.
-    pub fn is_bound(self) -> bool {
-        !matches!(
-            self,
-            Port::AgentProxy | Port::DocCognition | Port::PreviewControl
-        )
-    }
-}
-
 /// A resolved instance: its identity plus the derived resource names and port
 /// base. Construct with [`Instance::derive`].
 #[derive(Clone, Debug)]
@@ -185,7 +87,7 @@ impl Instance {
         } else {
             format!("macro-{}", name.0)
         };
-        let port_base = port_base.unwrap_or_else(|| derive_port_base(&name));
+        let port_base = port_base.unwrap_or_else(|| xtask_ports::hashed_window(name.as_str()));
         Ok(Instance {
             name,
             project_name,
@@ -262,13 +164,9 @@ impl Instance {
             .into_iter()
             .enumerate()
             .map(|(index, name)| {
-                let subnet = self.subnet_block.map(|block| {
-                    format!(
-                        "{}.{block}.{}/26",
-                        allocator::SUBNET_PREFIX,
-                        index * allocator::NETWORK_BLOCK_SIZE
-                    )
-                });
+                let subnet = self
+                    .subnet_block
+                    .map(|block| xtask_ports::network_subnet(block, index));
                 (name, subnet)
             })
             .collect()
@@ -329,22 +227,6 @@ impl Instance {
             .with_context(|| format!("creating artifact dir {}", dir.display()))?;
         Ok(dir)
     }
-}
-
-/// Deterministically derive a port base from the instance name with FNV-1a.
-/// FNV is stable across machines and Rust versions (unlike `DefaultHasher`),
-/// so two developers running `--instance agent-a` get the same ports.
-fn derive_port_base(name: &InstanceName) -> u16 {
-    (WINDOW_START + (fnv1a(name.as_str()) % BUCKETS) * STRIDE) as u16
-}
-
-pub(super) fn fnv1a(s: &str) -> u32 {
-    let mut h: u32 = 0x811c_9dc5;
-    for b in s.bytes() {
-        h ^= b as u32;
-        h = h.wrapping_mul(0x0100_0193);
-    }
-    h
 }
 
 #[cfg(test)]
