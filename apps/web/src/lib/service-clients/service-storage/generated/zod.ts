@@ -941,6 +941,12 @@ export const patchAgentResponse = zod
       .describe(
         "Which Pipedream MCP servers an agent's sessions are handed.\n\nOne value for the whole choice, so a selection can never travel without\nits scope or a scope without its selection. Serialized with a `scope` tag,\nwhich the generated TypeScript sees as a discriminated union."
       ),
+    workspace_path: zod
+      .string()
+      .nullish()
+      .describe(
+        "The directory on the harness its new sessions use, one of the\nharness's reported workspaces. `None` uses the harness's workspace."
+      ),
   })
   .describe('A persisted user- or team-owned AI agent.');
 
