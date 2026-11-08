@@ -290,6 +290,17 @@ pub(super) fn composition(
     effects: &mut Vec<Effect>,
 ) -> Result<Handled, Error> {
     match event {
+        CompositionEvent::Clear => {
+            tx.set_composition_key(None)?;
+            if let Some(mut range) = tx.selection().and_then(Selection::as_range).cloned()
+                && let Some(text) = tx.view().text(range.anchor.key())
+            {
+                range.format = text.format;
+                range.style = text.style.clone();
+                tx.mark_dirty(range.anchor.key())?;
+                tx.set_selection(Some(Selection::Range(range)))?;
+            }
+        }
         CompositionEvent::Start { data: _ } => {
             if tx.composition_key().is_none()
                 && let Some(range) = tx.selection().and_then(Selection::as_range).cloned()

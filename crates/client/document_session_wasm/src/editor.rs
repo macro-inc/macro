@@ -629,6 +629,7 @@ impl EditorSession {
                 focus: (focus != u32::MAX).then_some(Utf16Offset(focus)),
                 data,
             },
+            2 => CompositionEvent::Clear,
             _ => return Err(js(BoundaryError::Invalid("composition kind"))),
         };
         self.machine

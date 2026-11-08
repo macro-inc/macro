@@ -421,3 +421,137 @@ fn closed_and_unsaved_reasons_survive_the_view_boundary() {
     assert_eq!(status.save_reason, wire::SaveReason::ReadOnly);
     assert!(status.flag);
 }
+
+#[test]
+fn targeted_key_input_preserves_consuming_model_listener_precedence() {
+    struct Keys;
+    impl Plugin for Keys {
+        fn name(&self) -> &'static str {
+            "keys"
+        }
+        fn commands(&self) -> &[CommandRegistration] {
+            &[
+                CommandRegistration {
+                    command: CommandKind::KeyDown,
+                    priority: CommandPriority::Critical,
+                    placement: Placement::Before,
+                },
+                CommandRegistration {
+                    command: CommandKind::FormatText,
+                    priority: CommandPriority::Editor,
+                    placement: Placement::After,
+                },
+                CommandRegistration {
+                    command: CommandKind::DeleteCharacter,
+                    priority: CommandPriority::Editor,
+                    placement: Placement::After,
+                },
+            ]
+        }
+        fn handle(
+            &self,
+            tx: &mut Transaction<'_>,
+            command: &Command,
+        ) -> Result<Handled, lexical_model::Error> {
+            match command {
+                Command::KeyDown(_) => Ok(Handled::Yes),
+                Command::FormatText(format) => {
+                    tx.format_text(*format, None)?;
+                    Ok(Handled::Yes)
+                }
+                Command::DeleteCharacter { direction, target } => {
+                    tx.delete_character(*direction, target.clone())?;
+                    Ok(Handled::Yes)
+                }
+                _ => Ok(Handled::No),
+            }
+        }
+    }
+    let mut editor = Editor::builder(EditorMode::ViewAttached)
+        .plugin(Keys)
+        .build()
+        .unwrap();
+    let (key, _) = editor
+        .update(|tx| {
+            let p = tx.create(Paragraph::default())?;
+            let t = tx.create_text("abc")?;
+            tx.append(NodeKey::ROOT, &[p.key()])?;
+            tx.append(p, &[t.key()])?;
+            tx.select_end(t)?;
+            Ok(t.key())
+        })
+        .unwrap();
+    let point = |offset| wire::PointMsg {
+        key: key.index(),
+        offset,
+        _type: 0,
+    };
+    let input = wire::EditorInputMsg::EditorKeyDown {
+        code: 8,
+        mods: 4,
+        key: "Backspace".into(),
+        command: wire::CommandCode::DeleteCharacter,
+        argument: 0,
+        selection: wire::SelectionMsg {
+            kind: 2,
+            anchor: point(3),
+            focus: point(3),
+            nodes: vec![],
+            table: 0,
+            dirty: false,
+        },
+        target: wire::ModifyTargetMsg {
+            kind: 1,
+            anchor: point(3),
+            focus: point(2),
+            dirty: false,
+            backward: true,
+        },
+        character_target: wire::ModifyTargetMsg {
+            kind: 0,
+            anchor: point(3),
+            focus: point(3),
+            dirty: false,
+            backward: true,
+        },
+    };
+    let mut formatting = input.clone();
+    if let wire::EditorInputMsg::EditorKeyDown {
+        command,
+        argument,
+        key,
+        code,
+        ..
+    } = &mut formatting
+    {
+        *command = wire::CommandCode::FormatText;
+        *argument = 3;
+        *key = "u".into();
+        *code = 85;
+    }
+    let input = editor_input::input(input, key.generation()).unwrap();
+    let mut core = EditorCore::new(
+        editor,
+        CoreConfig {
+            history: None,
+            editable: true,
+            diff: DiffOptions::default(),
+            track_text_content: false,
+        },
+    );
+    core.apply(input, HistoryTime(1)).unwrap();
+    assert_eq!(core.state().view().text_content(key), "abc");
+    core.apply(
+        editor_input::input(formatting, key.generation()).unwrap(),
+        HistoryTime(2),
+    )
+    .unwrap();
+    assert_eq!(
+        core.state()
+            .selection()
+            .and_then(Selection::as_range)
+            .unwrap()
+            .format,
+        TextFormat::empty()
+    );
+}

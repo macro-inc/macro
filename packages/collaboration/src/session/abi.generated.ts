@@ -17,7 +17,7 @@
 import { BebopView, BebopRuntimeError, BebopRecord, BebopJson, BebopTypeGuard, Guid, GuidMap } from "bebop";
 
 export const BEBOP_SCHEMA = new Uint8Array ([
-3, 46, 0, 0, 0, 68, 105, 102, 102, 79, 112, 99, 111, 100,
+3, 47, 0, 0, 0, 68, 105, 102, 102, 79, 112, 99, 111, 100,
 101, 0, 4, 0, 251, 255, 255, 255, 0, 4, 0, 0, 0, 11, 82,
 101, 109, 111, 118, 101, 0, 0, 1, 0, 0, 0, 67, 114, 101,
 97, 116, 101, 69, 108, 101, 109, 101, 110, 116, 0, 0, 2,
@@ -84,7 +84,7 @@ export const BEBOP_SCHEMA = new Uint8Array ([
 111, 97, 108, 101, 115, 99, 101, 0, 251, 255, 255, 255, 0,
 115, 110, 97, 112, 115, 104, 111, 116, 73, 110, 116, 101,
 114, 118, 97, 108, 0, 251, 255, 255, 255, 0, 111, 98, 115,
-101, 114, 118, 101, 100, 0, 242, 255, 255, 255, 0, 22, 0,
+101, 114, 118, 101, 100, 0, 242, 255, 255, 255, 0, 23, 0,
 0, 0, 0, 80, 111, 105, 110, 116, 77, 115, 103, 0, 1, 0, 0,
 9, 0, 0, 0, 1, 3, 107, 101, 121, 0, 251, 255, 255, 255, 0,
 111, 102, 102, 115, 101, 116, 0, 251, 255, 255, 255, 0,
@@ -167,83 +167,92 @@ export const BEBOP_SCHEMA = new Uint8Array ([
 102, 115, 101, 116, 0, 251, 255, 255, 255, 0, 100, 97,
 116, 97, 0, 245, 255, 255, 255, 0, 115, 101, 108, 101, 99,
 116, 105, 111, 110, 0, 7, 0, 0, 0, 0, 69, 100, 105, 116,
-111, 114, 84, 101, 120, 116, 0, 1, 0, 0, 49, 0, 0, 0, 0,
-7, 107, 101, 121, 0, 251, 255, 255, 255, 0, 116, 101, 120,
-116, 0, 242, 255, 255, 255, 0, 253, 255, 255, 255, 0, 97,
-110, 99, 104, 111, 114, 79, 102, 102, 115, 101, 116, 0,
-251, 255, 255, 255, 0, 102, 111, 99, 117, 115, 79, 102,
-102, 115, 101, 116, 0, 251, 255, 255, 255, 0, 99, 111,
-109, 112, 111, 115, 105, 116, 105, 111, 110, 69, 110, 100,
-0, 255, 255, 255, 255, 0, 99, 111, 109, 112, 111, 115,
-105, 116, 105, 111, 110, 68, 97, 116, 97, 0, 245, 255,
-255, 255, 0, 115, 101, 108, 101, 99, 116, 105, 111, 110,
-0, 7, 0, 0, 0, 0, 69, 100, 105, 116, 111, 114, 73, 110,
-112, 117, 116, 77, 115, 103, 0, 3, 0, 9, 0, 0, 0, 7, 1,
-13, 0, 0, 0, 2, 14, 0, 0, 0, 3, 15, 0, 0, 0, 4, 16, 0, 0,
-0, 5, 17, 0, 0, 0, 6, 18, 0, 0, 0, 7, 19, 0, 0, 0, 80, 97,
-116, 104, 83, 116, 101, 112, 77, 115, 103, 0, 1, 0, 0, 9,
-0, 0, 0, 0, 3, 107, 105, 110, 100, 0, 254, 255, 255, 255,
+111, 114, 75, 101, 121, 68, 111, 119, 110, 0, 1, 0, 0, 90,
+0, 0, 0, 0, 8, 99, 111, 100, 101, 0, 251, 255, 255, 255,
+0, 109, 111, 100, 115, 0, 251, 255, 255, 255, 0, 107, 101,
+121, 0, 245, 255, 255, 255, 0, 99, 111, 109, 109, 97, 110,
+100, 0, 4, 0, 0, 0, 0, 97, 114, 103, 117, 109, 101, 110,
+116, 0, 251, 255, 255, 255, 0, 115, 101, 108, 101, 99,
+116, 105, 111, 110, 0, 7, 0, 0, 0, 0, 116, 97, 114, 103,
+101, 116, 0, 9, 0, 0, 0, 0, 99, 104, 97, 114, 97, 99, 116,
+101, 114, 84, 97, 114, 103, 101, 116, 0, 9, 0, 0, 0, 0,
+69, 100, 105, 116, 111, 114, 84, 101, 120, 116, 0, 1, 0,
+0, 49, 0, 0, 0, 0, 7, 107, 101, 121, 0, 251, 255, 255,
+255, 0, 116, 101, 120, 116, 0, 242, 255, 255, 255, 0, 253,
+255, 255, 255, 0, 97, 110, 99, 104, 111, 114, 79, 102,
+102, 115, 101, 116, 0, 251, 255, 255, 255, 0, 102, 111,
+99, 117, 115, 79, 102, 102, 115, 101, 116, 0, 251, 255,
+255, 255, 0, 99, 111, 109, 112, 111, 115, 105, 116, 105,
+111, 110, 69, 110, 100, 0, 255, 255, 255, 255, 0, 99, 111,
+109, 112, 111, 115, 105, 116, 105, 111, 110, 68, 97, 116,
+97, 0, 245, 255, 255, 255, 0, 115, 101, 108, 101, 99, 116,
+105, 111, 110, 0, 7, 0, 0, 0, 0, 69, 100, 105, 116, 111,
+114, 73, 110, 112, 117, 116, 77, 115, 103, 0, 3, 0, 9, 0,
+0, 0, 8, 1, 13, 0, 0, 0, 2, 14, 0, 0, 0, 3, 15, 0, 0, 0,
+4, 16, 0, 0, 0, 5, 17, 0, 0, 0, 6, 18, 0, 0, 0, 7, 19, 0,
+0, 0, 8, 20, 0, 0, 0, 80, 97, 116, 104, 83, 116, 101, 112,
+77, 115, 103, 0, 1, 0, 0, 9, 0, 0, 0, 0, 3, 107, 105, 110,
+100, 0, 254, 255, 255, 255, 0, 107, 101, 121, 0, 245, 255,
+255, 255, 0, 105, 110, 100, 101, 120, 0, 251, 255, 255,
+255, 0, 67, 111, 110, 116, 97, 105, 110, 101, 114, 80, 97,
+116, 104, 77, 115, 103, 0, 1, 0, 0, 8, 0, 0, 0, 0, 2, 114,
+111, 111, 116, 0, 245, 255, 255, 255, 0, 115, 116, 101,
+112, 115, 0, 242, 255, 255, 255, 0, 22, 0, 0, 0, 0, 68,
+111, 99, 86, 97, 108, 117, 101, 78, 111, 100, 101, 0, 1,
+0, 0, 33, 0, 0, 0, 0, 7, 107, 105, 110, 100, 0, 254, 255,
+255, 255, 0, 107, 101, 121, 0, 245, 255, 255, 255, 0, 110,
+117, 109, 0, 246, 255, 255, 255, 0, 105, 110, 116, 0, 248,
+255, 255, 255, 0, 115, 116, 114, 0, 245, 255, 255, 255, 0,
+98, 121, 116, 101, 115, 0, 242, 255, 255, 255, 0, 254,
+255, 255, 255, 0, 99, 104, 105, 108, 100, 114, 101, 110,
+0, 251, 255, 255, 255, 0, 68, 111, 99, 79, 112, 77, 115,
+103, 0, 1, 0, 0, 25, 0, 0, 0, 0, 6, 107, 105, 110, 100, 0,
+254, 255, 255, 255, 0, 112, 97, 116, 104, 0, 23, 0, 0, 0,
 0, 107, 101, 121, 0, 245, 255, 255, 255, 0, 105, 110, 100,
-101, 120, 0, 251, 255, 255, 255, 0, 67, 111, 110, 116, 97,
-105, 110, 101, 114, 80, 97, 116, 104, 77, 115, 103, 0, 1,
-0, 0, 8, 0, 0, 0, 0, 2, 114, 111, 111, 116, 0, 245, 255,
-255, 255, 0, 115, 116, 101, 112, 115, 0, 242, 255, 255,
-255, 0, 21, 0, 0, 0, 0, 68, 111, 99, 86, 97, 108, 117,
-101, 78, 111, 100, 101, 0, 1, 0, 0, 33, 0, 0, 0, 0, 7,
-107, 105, 110, 100, 0, 254, 255, 255, 255, 0, 107, 101,
-121, 0, 245, 255, 255, 255, 0, 110, 117, 109, 0, 246, 255,
-255, 255, 0, 105, 110, 116, 0, 248, 255, 255, 255, 0, 115,
-116, 114, 0, 245, 255, 255, 255, 0, 98, 121, 116, 101,
-115, 0, 242, 255, 255, 255, 0, 254, 255, 255, 255, 0, 99,
-104, 105, 108, 100, 114, 101, 110, 0, 251, 255, 255, 255,
-0, 68, 111, 99, 79, 112, 77, 115, 103, 0, 1, 0, 0, 25, 0,
-0, 0, 0, 6, 107, 105, 110, 100, 0, 254, 255, 255, 255, 0,
-112, 97, 116, 104, 0, 22, 0, 0, 0, 0, 107, 101, 121, 0,
-245, 255, 255, 255, 0, 105, 110, 100, 101, 120, 0, 251,
-255, 255, 255, 0, 108, 101, 110, 0, 251, 255, 255, 255, 0,
-118, 97, 108, 117, 101, 0, 242, 255, 255, 255, 0, 23, 0,
-0, 0, 0, 83, 101, 115, 115, 105, 111, 110, 73, 110, 112,
-117, 116, 77, 115, 103, 0, 1, 0, 0, 44, 0, 0, 0, 0, 12,
-107, 105, 110, 100, 0, 254, 255, 255, 255, 0, 114, 101,
-113, 117, 101, 115, 116, 0, 251, 255, 255, 255, 0, 99,
-111, 100, 101, 0, 254, 255, 255, 255, 0, 102, 108, 97,
-103, 0, 255, 255, 255, 255, 0, 98, 121, 116, 101, 115, 0,
-242, 255, 255, 255, 0, 254, 255, 255, 255, 0, 112, 101,
-101, 114, 115, 0, 242, 255, 255, 255, 0, 249, 255, 255,
-255, 0, 101, 100, 105, 116, 111, 114, 0, 20, 0, 0, 0, 0,
-111, 112, 101, 114, 97, 116, 105, 111, 110, 115, 0, 242,
-255, 255, 255, 0, 24, 0, 0, 0, 0, 109, 97, 114, 107, 73,
-100, 0, 245, 255, 255, 255, 0, 97, 110, 99, 104, 111, 114,
-0, 242, 255, 255, 255, 0, 254, 255, 255, 255, 0, 102, 111,
-99, 117, 115, 0, 242, 255, 255, 255, 0, 254, 255, 255,
-255, 0, 101, 120, 112, 101, 99, 116, 101, 100, 84, 101,
-120, 116, 0, 245, 255, 255, 255, 0, 67, 111, 110, 110,
-101, 99, 116, 77, 115, 103, 0, 1, 0, 0, 12, 0, 0, 0, 0, 3,
-100, 111, 99, 0, 245, 255, 255, 255, 0, 116, 111, 107,
-101, 110, 0, 245, 255, 255, 255, 0, 116, 114, 97, 99, 101,
-112, 97, 114, 101, 110, 116, 0, 245, 255, 255, 255, 0, 87,
-97, 108, 82, 101, 99, 111, 114, 100, 77, 115, 103, 0, 1,
-0, 0, 27, 0, 0, 0, 0, 7, 115, 101, 113, 0, 249, 255, 255,
-255, 0, 99, 114, 101, 97, 116, 101, 100, 65, 116, 0, 248,
-255, 255, 255, 0, 117, 115, 101, 114, 0, 245, 255, 255,
-255, 0, 102, 111, 114, 101, 105, 103, 110, 0, 255, 255,
-255, 255, 0, 113, 117, 97, 114, 97, 110, 116, 105, 110,
-101, 100, 0, 255, 255, 255, 255, 0, 100, 101, 108, 105,
-118, 101, 114, 101, 100, 0, 255, 255, 255, 255, 0, 98,
-121, 116, 101, 115, 0, 242, 255, 255, 255, 0, 254, 255,
-255, 255, 0, 79, 119, 110, 101, 114, 82, 111, 119, 115,
-77, 115, 103, 0, 1, 0, 0, 8, 0, 0, 0, 0, 2, 111, 119, 110,
-101, 114, 0, 245, 255, 255, 255, 0, 114, 101, 99, 111,
-114, 100, 115, 0, 242, 255, 255, 255, 0, 27, 0, 0, 0, 0,
-76, 111, 99, 97, 108, 83, 116, 97, 116, 101, 77, 115, 103,
-0, 1, 0, 0, 24, 0, 0, 0, 0, 5, 115, 110, 97, 112, 115,
-104, 111, 116, 0, 242, 255, 255, 255, 0, 254, 255, 255,
-255, 0, 99, 111, 118, 101, 114, 115, 79, 119, 110, 101,
-114, 0, 245, 255, 255, 255, 0, 99, 111, 118, 101, 114,
-115, 83, 101, 113, 0, 249, 255, 255, 255, 0, 111, 114,
-112, 104, 97, 110, 115, 0, 242, 255, 255, 255, 0, 28, 0,
-0, 0, 0, 97, 115, 115, 105, 115, 116, 0, 242, 255, 255,
-255, 0, 28, 0, 0, 0, 0, 83, 116, 111, 114, 97, 103, 101,
+101, 120, 0, 251, 255, 255, 255, 0, 108, 101, 110, 0, 251,
+255, 255, 255, 0, 118, 97, 108, 117, 101, 0, 242, 255,
+255, 255, 0, 24, 0, 0, 0, 0, 83, 101, 115, 115, 105, 111,
+110, 73, 110, 112, 117, 116, 77, 115, 103, 0, 1, 0, 0, 44,
+0, 0, 0, 0, 12, 107, 105, 110, 100, 0, 254, 255, 255, 255,
+0, 114, 101, 113, 117, 101, 115, 116, 0, 251, 255, 255,
+255, 0, 99, 111, 100, 101, 0, 254, 255, 255, 255, 0, 102,
+108, 97, 103, 0, 255, 255, 255, 255, 0, 98, 121, 116, 101,
+115, 0, 242, 255, 255, 255, 0, 254, 255, 255, 255, 0, 112,
+101, 101, 114, 115, 0, 242, 255, 255, 255, 0, 249, 255,
+255, 255, 0, 101, 100, 105, 116, 111, 114, 0, 21, 0, 0, 0,
+0, 111, 112, 101, 114, 97, 116, 105, 111, 110, 115, 0,
+242, 255, 255, 255, 0, 25, 0, 0, 0, 0, 109, 97, 114, 107,
+73, 100, 0, 245, 255, 255, 255, 0, 97, 110, 99, 104, 111,
+114, 0, 242, 255, 255, 255, 0, 254, 255, 255, 255, 0, 102,
+111, 99, 117, 115, 0, 242, 255, 255, 255, 0, 254, 255,
+255, 255, 0, 101, 120, 112, 101, 99, 116, 101, 100, 84,
+101, 120, 116, 0, 245, 255, 255, 255, 0, 67, 111, 110,
+110, 101, 99, 116, 77, 115, 103, 0, 1, 0, 0, 12, 0, 0, 0,
+0, 3, 100, 111, 99, 0, 245, 255, 255, 255, 0, 116, 111,
+107, 101, 110, 0, 245, 255, 255, 255, 0, 116, 114, 97, 99,
+101, 112, 97, 114, 101, 110, 116, 0, 245, 255, 255, 255,
+0, 87, 97, 108, 82, 101, 99, 111, 114, 100, 77, 115, 103,
+0, 1, 0, 0, 27, 0, 0, 0, 0, 7, 115, 101, 113, 0, 249, 255,
+255, 255, 0, 99, 114, 101, 97, 116, 101, 100, 65, 116, 0,
+248, 255, 255, 255, 0, 117, 115, 101, 114, 0, 245, 255,
+255, 255, 0, 102, 111, 114, 101, 105, 103, 110, 0, 255,
+255, 255, 255, 0, 113, 117, 97, 114, 97, 110, 116, 105,
+110, 101, 100, 0, 255, 255, 255, 255, 0, 100, 101, 108,
+105, 118, 101, 114, 101, 100, 0, 255, 255, 255, 255, 0,
+98, 121, 116, 101, 115, 0, 242, 255, 255, 255, 0, 254,
+255, 255, 255, 0, 79, 119, 110, 101, 114, 82, 111, 119,
+115, 77, 115, 103, 0, 1, 0, 0, 8, 0, 0, 0, 0, 2, 111, 119,
+110, 101, 114, 0, 245, 255, 255, 255, 0, 114, 101, 99,
+111, 114, 100, 115, 0, 242, 255, 255, 255, 0, 28, 0, 0, 0,
+0, 76, 111, 99, 97, 108, 83, 116, 97, 116, 101, 77, 115,
+103, 0, 1, 0, 0, 24, 0, 0, 0, 0, 5, 115, 110, 97, 112,
+115, 104, 111, 116, 0, 242, 255, 255, 255, 0, 254, 255,
+255, 255, 0, 99, 111, 118, 101, 114, 115, 79, 119, 110,
+101, 114, 0, 245, 255, 255, 255, 0, 99, 111, 118, 101,
+114, 115, 83, 101, 113, 0, 249, 255, 255, 255, 0, 111,
+114, 112, 104, 97, 110, 115, 0, 242, 255, 255, 255, 0, 29,
+0, 0, 0, 0, 97, 115, 115, 105, 115, 116, 0, 242, 255, 255,
+255, 0, 29, 0, 0, 0, 0, 83, 116, 111, 114, 97, 103, 101,
 79, 112, 77, 115, 103, 0, 1, 0, 0, 86, 0, 0, 0, 0, 14,
 107, 105, 110, 100, 0, 254, 255, 255, 255, 0, 100, 111,
 99, 0, 245, 255, 255, 255, 0, 111, 119, 110, 101, 114, 0,
@@ -254,7 +263,7 @@ export const BEBOP_SCHEMA = new Uint8Array ([
 102, 111, 114, 101, 0, 248, 255, 255, 255, 0, 114, 101,
 116, 114, 121, 0, 255, 255, 255, 255, 0, 116, 101, 114,
 109, 105, 110, 97, 108, 0, 255, 255, 255, 255, 0, 114,
-101, 99, 111, 114, 100, 0, 27, 0, 0, 0, 0, 115, 110, 97,
+101, 99, 111, 114, 100, 0, 28, 0, 0, 0, 0, 115, 110, 97,
 112, 115, 104, 111, 116, 0, 242, 255, 255, 255, 0, 254,
 255, 255, 255, 0, 99, 111, 118, 101, 114, 115, 79, 119,
 110, 101, 114, 0, 245, 255, 255, 255, 0, 99, 111, 118,
@@ -272,16 +281,16 @@ export const BEBOP_SCHEMA = new Uint8Array ([
 255, 0, 111, 117, 116, 99, 111, 109, 101, 0, 245, 255,
 255, 255, 0, 101, 114, 114, 111, 114, 0, 255, 255, 255,
 255, 0, 97, 116, 116, 114, 115, 0, 242, 255, 255, 255, 0,
-31, 0, 0, 0, 0, 112, 97, 114, 101, 110, 116, 0, 249, 255,
+32, 0, 0, 0, 0, 112, 97, 114, 101, 110, 116, 0, 249, 255,
 255, 255, 0, 78, 111, 100, 101, 67, 117, 114, 115, 111,
 114, 77, 115, 103, 0, 1, 0, 0, 8, 0, 0, 0, 0, 2, 110, 111,
 100, 101, 73, 100, 0, 245, 255, 255, 255, 0, 99, 117, 114,
 115, 111, 114, 0, 242, 255, 255, 255, 0, 254, 255, 255,
 255, 0, 68, 111, 99, 69, 118, 101, 110, 116, 77, 115, 103,
 0, 1, 0, 0, 13, 0, 0, 0, 0, 3, 107, 105, 110, 100, 0, 254,
-255, 255, 255, 0, 112, 97, 116, 104, 0, 22, 0, 0, 0, 0,
+255, 255, 255, 0, 112, 97, 116, 104, 0, 23, 0, 0, 0, 0,
 99, 104, 97, 110, 103, 101, 115, 0, 242, 255, 255, 255, 0,
-24, 0, 0, 0, 0, 67, 108, 111, 115, 101, 100, 82, 101, 97,
+25, 0, 0, 0, 0, 67, 108, 111, 115, 101, 100, 82, 101, 97,
 115, 111, 110, 0, 4, 0, 254, 255, 255, 255, 0, 1, 0, 0, 0,
 4, 78, 111, 110, 101, 0, 0, 0, 83, 116, 111, 112, 112,
 101, 100, 0, 0, 1, 85, 110, 97, 117, 116, 104, 111, 114,
@@ -295,8 +304,8 @@ export const BEBOP_SCHEMA = new Uint8Array ([
 0, 5, 82, 101, 98, 97, 115, 105, 110, 103, 0, 0, 6, 86,
 105, 101, 119, 69, 102, 102, 101, 99, 116, 77, 115, 103,
 0, 1, 0, 0, 72, 0, 0, 0, 0, 15, 99, 108, 111, 115, 101,
-100, 82, 101, 97, 115, 111, 110, 0, 35, 0, 0, 0, 0, 115,
-97, 118, 101, 82, 101, 97, 115, 111, 110, 0, 36, 0, 0, 0,
+100, 82, 101, 97, 115, 111, 110, 0, 36, 0, 0, 0, 0, 115,
+97, 118, 101, 82, 101, 97, 115, 111, 110, 0, 37, 0, 0, 0,
 0, 107, 105, 110, 100, 0, 254, 255, 255, 255, 0, 114, 101,
 113, 117, 101, 115, 116, 0, 251, 255, 255, 255, 0, 99,
 111, 100, 101, 0, 251, 255, 255, 255, 0, 100, 101, 116,
@@ -307,9 +316,9 @@ export const BEBOP_SCHEMA = new Uint8Array ([
 255, 255, 255, 0, 115, 116, 121, 108, 101, 0, 245, 255,
 255, 255, 0, 107, 101, 121, 115, 0, 242, 255, 255, 255, 0,
 245, 255, 255, 255, 0, 118, 97, 108, 117, 101, 115, 0,
-242, 255, 255, 255, 0, 23, 0, 0, 0, 0, 101, 118, 101, 110,
-116, 115, 0, 242, 255, 255, 255, 0, 34, 0, 0, 0, 0, 112,
-97, 116, 104, 115, 0, 242, 255, 255, 255, 0, 22, 0, 0, 0,
+242, 255, 255, 255, 0, 24, 0, 0, 0, 0, 101, 118, 101, 110,
+116, 115, 0, 242, 255, 255, 255, 0, 35, 0, 0, 0, 0, 112,
+97, 116, 104, 115, 0, 242, 255, 255, 255, 0, 23, 0, 0, 0,
 0, 81, 117, 101, 114, 121, 77, 115, 103, 0, 1, 0, 0, 13,
 0, 0, 0, 0, 4, 107, 105, 110, 100, 0, 254, 255, 255, 255,
 0, 107, 101, 121, 0, 251, 255, 255, 255, 0, 116, 101, 120,
@@ -332,14 +341,14 @@ export const BEBOP_SCHEMA = new Uint8Array ([
 100, 0, 254, 255, 255, 255, 0, 102, 108, 97, 103, 115, 0,
 251, 255, 255, 255, 0, 84, 121, 112, 101, 84, 97, 98, 108,
 101, 77, 115, 103, 0, 1, 0, 0, 4, 0, 0, 0, 0, 1, 114, 111,
-119, 115, 0, 242, 255, 255, 255, 0, 41, 0, 0, 0, 0, 76,
+119, 115, 0, 242, 255, 255, 255, 0, 42, 0, 0, 0, 0, 76,
 105, 115, 116, 101, 110, 101, 114, 82, 111, 119, 77, 115,
 103, 0, 1, 0, 0, 8, 0, 0, 0, 0, 2, 99, 111, 109, 109, 97,
 110, 100, 0, 245, 255, 255, 255, 0, 112, 114, 105, 111,
 114, 105, 116, 121, 0, 251, 255, 255, 255, 0, 76, 105,
 115, 116, 101, 110, 101, 114, 84, 97, 98, 108, 101, 77,
 115, 103, 0, 1, 0, 0, 4, 0, 0, 0, 0, 1, 114, 111, 119,
-115, 0, 242, 255, 255, 255, 0, 43, 0, 0, 0, 0, 82, 111,
+115, 0, 242, 255, 255, 255, 0, 44, 0, 0, 0, 0, 82, 111,
 117, 116, 101, 77, 115, 103, 0, 1, 0, 0, 18, 0, 0, 0, 0,
 6, 100, 111, 99, 0, 245, 255, 255, 255, 0, 107, 105, 110,
 100, 0, 254, 255, 255, 255, 0, 99, 111, 110, 110, 0, 251,
@@ -2454,6 +2463,167 @@ export class EditorComposition implements IEditorComposition {
 }
 
 
+export interface IEditorKeyDown extends BebopRecord {
+
+  readonly code: number;
+
+  readonly mods: number;
+
+  readonly key: string;
+
+  readonly command: CommandCode;
+
+  readonly argument: number;
+
+  readonly selection: ISelectionMsg;
+
+  readonly target: IModifyTargetMsg;
+
+  readonly characterTarget: IModifyTargetMsg;
+}
+
+export class EditorKeyDown implements IEditorKeyDown {
+  public readonly discriminator: number = 8 as 8;
+  public static readonly discriminator: number = 8 as 8;
+  public readonly code: number;
+  public readonly mods: number;
+  public readonly key: string;
+  public readonly command: CommandCode;
+  public readonly argument: number;
+  public readonly selection: ISelectionMsg;
+  public readonly target: IModifyTargetMsg;
+  public readonly characterTarget: IModifyTargetMsg;
+
+  constructor(record: IEditorKeyDown) {
+    this.code = record.code;
+    this.mods = record.mods;
+    this.key = record.key;
+    this.command = record.command;
+    this.argument = record.argument;
+    this.selection = record.selection;
+    this.target = record.target;
+    this.characterTarget = record.characterTarget;
+  }
+
+  /**
+   * Serializes the current instance into a JSON-Over-Bebop string
+   */
+  public stringify(): string {
+    return EditorKeyDown.encodeToJSON(this);
+  }
+
+  /**
+   * Serializes the specified object into a JSON-Over-Bebop string
+   */
+  public static encodeToJSON(record: IEditorKeyDown): string {
+    return JSON.stringify(record, BebopJson.replacer);
+  }
+
+  /**
+   * Validates that the runtime types of members in the current instance are correct.
+   */
+  public validateTypes(): void {
+    EditorKeyDown.validateCompatibility(this);
+  }
+
+  /**
+   * Validates that the specified dynamic object can become an instance of {@link EditorKeyDown}.
+   */
+  public static validateCompatibility(record: IEditorKeyDown): void {
+    BebopTypeGuard.ensureUint32(record.code)
+    BebopTypeGuard.ensureUint32(record.mods)
+    BebopTypeGuard.ensureString(record.key)
+    BebopTypeGuard.ensureEnum(record.command, CommandCode);
+    BebopTypeGuard.ensureUint32(record.argument)
+    SelectionMsg.validateCompatibility(record.selection);
+    ModifyTargetMsg.validateCompatibility(record.target);
+    ModifyTargetMsg.validateCompatibility(record.characterTarget);
+  }
+
+  /**
+   * Unsafely creates an instance of {@link EditorKeyDown} from the specified dynamic object. No type checking is performed.
+   */
+  public static unsafeCast(record: any): IEditorKeyDown {
+      record.selection = SelectionMsg.unsafeCast(record.selection);
+      record.target = ModifyTargetMsg.unsafeCast(record.target);
+      record.characterTarget = ModifyTargetMsg.unsafeCast(record.characterTarget);
+      return new EditorKeyDown(record);
+  }
+
+  /**
+   * Creates a new {@link EditorKeyDown} instance from a JSON-Over-Bebop string. Type checking is performed.
+   */
+  public static fromJSON(json: string): IEditorKeyDown {
+    if (typeof json !== 'string' || json.trim().length === 0) {
+      throw new BebopRuntimeError(`EditorKeyDown.fromJSON: expected string`);
+    }
+    const parsed = JSON.parse(json, BebopJson.reviver);
+    EditorKeyDown.validateCompatibility(parsed);
+    return EditorKeyDown.unsafeCast(parsed);
+  }
+  public encode(): Uint8Array {
+    return EditorKeyDown.encode(this);
+  }
+
+  public static encode(record: IEditorKeyDown): Uint8Array {
+    const view = BebopView.getInstance();
+    view.startWriting();
+    EditorKeyDown.encodeInto(record, view);
+    return view.toArray();
+  }
+
+  public static encodeInto(record: IEditorKeyDown, view: BebopView): number {
+    const before = view.length;
+    view.writeUint32(record.code);
+    view.writeUint32(record.mods);
+    view.writeString(record.key);
+    view.writeUint32(record.command);
+    view.writeUint32(record.argument);
+    SelectionMsg.encodeInto(record.selection, view)
+    ModifyTargetMsg.encodeInto(record.target, view)
+    ModifyTargetMsg.encodeInto(record.characterTarget, view)
+    const after = view.length;
+    return after - before;
+  }
+
+  public static decode(buffer: Uint8Array): IEditorKeyDown {
+    const view = BebopView.getInstance();
+    view.startReading(buffer);
+    return EditorKeyDown.readFrom(view);
+  }
+
+  public static readFrom(view: BebopView): IEditorKeyDown {
+    let field0: number;
+    field0 = view.readUint32();
+    let field1: number;
+    field1 = view.readUint32();
+    let field2: string;
+    field2 = view.readString();
+    let field3: CommandCode;
+    field3 = view.readUint32() as CommandCode;
+    let field4: number;
+    field4 = view.readUint32();
+    let field5: ISelectionMsg;
+    field5 = SelectionMsg.readFrom(view);
+    let field6: IModifyTargetMsg;
+    field6 = ModifyTargetMsg.readFrom(view);
+    let field7: IModifyTargetMsg;
+    field7 = ModifyTargetMsg.readFrom(view);
+    let message: IEditorKeyDown = {
+      code: field0,
+      mods: field1,
+      key: field2,
+      command: field3,
+      argument: field4,
+      selection: field5,
+      target: field6,
+      characterTarget: field7,
+    };
+    return new EditorKeyDown(message);
+  }
+}
+
+
 export interface IEditorText extends BebopRecord {
 
   readonly key: number;
@@ -2625,6 +2795,7 @@ export type IEditorInputMsgType
   | { discriminator: 4, value: IEditorPaste }
   | { discriminator: 5, value: IEditorInsertText }
   | { discriminator: 6, value: IEditorComposition }
+  | { discriminator: 8, value: IEditorKeyDown }
   | { discriminator: 7, value: IEditorText };
 
 export interface IEditorInputMsg extends BebopRecord {
@@ -2694,6 +2865,14 @@ export class EditorInputMsg implements IEditorInputMsg {
     return this.data.value instanceof EditorComposition;
   }
 
+  public static fromEditorKeyDown(value: IEditorKeyDown) {
+    return new EditorInputMsg({ discriminator: 8, value: new EditorKeyDown(value)});
+  }
+
+  public isEditorKeyDown(): this is { value: EditorKeyDown } & { data: Extract<IEditorInputMsgType, { discriminator: 8 }> } {
+    return this.data.value instanceof EditorKeyDown;
+  }
+
   public static fromEditorText(value: IEditorText) {
     return new EditorInputMsg({ discriminator: 7, value: new EditorText(value)});
   }
@@ -2756,6 +2935,10 @@ export class EditorInputMsg implements IEditorInputMsg {
         EditorComposition.validateCompatibility(record.data.value);
         break;
       }
+      case 8: {
+        EditorKeyDown.validateCompatibility(record.data.value);
+        break;
+      }
       case 7: {
         EditorText.validateCompatibility(record.data.value);
         break;
@@ -2789,6 +2972,9 @@ export class EditorInputMsg implements IEditorInputMsg {
         }
         case 6: {
           return new EditorInputMsg({ discriminator: 6, value: EditorComposition.unsafeCast(record.value) });
+        }
+        case 8: {
+          return new EditorInputMsg({ discriminator: 8, value: EditorKeyDown.unsafeCast(record.value) });
         }
         case 7: {
           return new EditorInputMsg({ discriminator: 7, value: EditorText.unsafeCast(record.value) });
@@ -2843,6 +3029,9 @@ export class EditorInputMsg implements IEditorInputMsg {
       case 6:
         EditorComposition.encodeInto(record.data.value, view);
         break;
+      case 8:
+        EditorKeyDown.encodeInto(record.data.value, view);
+        break;
       case 7:
         EditorText.encodeInto(record.data.value, view);
         break;
@@ -2875,6 +3064,8 @@ export class EditorInputMsg implements IEditorInputMsg {
         return this.fromEditorInsertText(EditorInsertText.readFrom(view));
       case 6:
         return this.fromEditorComposition(EditorComposition.readFrom(view));
+      case 8:
+        return this.fromEditorKeyDown(EditorKeyDown.readFrom(view));
       case 7:
         return this.fromEditorText(EditorText.readFrom(view));
       default:

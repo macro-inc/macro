@@ -13,6 +13,11 @@ View effect kind 9 ends native composition before a bounded remote hold is paint
 Kind 10 replaces remote cursors: a flag=true marker clears the set, followed by
 point selections with peer key/color in keys[0]/keys[1].
 Kind 11 carries commit tag names in keys for view commit listeners.
+Composition kind 2 clears ownership without admitting DOM text; the view owns
+Android event timing and the 30 ms re-clear. Cold EditorCommand b=1 clears
+composition at the supplied selection before executing the command in one input;
+b=0 preserves composition. EditorKeyDown carries the layout target through
+normal KeyDown listener dispatch before the routed deletion.
 
 ## Start here
 
