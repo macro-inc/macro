@@ -1,23 +1,90 @@
 //! Independent inputs for development host read callouts.
 use crate::*;
+use std::hash::{Hash, Hasher};
 use std::sync::Arc;
+
+/// Pinned source record identity for a development host's captured node object.
+/// Materialized native projections retain the identity of their source record.
+#[derive(Clone)]
+pub struct ForeignRecordIdentity(Arc<crate::node::NodeSlot>);
+
+impl ForeignRecordIdentity {
+    /// Whether a borrowed record is the original captured source record.
+    pub fn matches(&self, node: NodeRef<'_>) -> bool {
+        std::ptr::eq(&self.0.base, node.base())
+    }
+}
+
+impl PartialEq for ForeignRecordIdentity {
+    fn eq(&self, other: &Self) -> bool {
+        Arc::ptr_eq(&self.0, &other.0)
+    }
+}
+
+impl Eq for ForeignRecordIdentity {}
+
+impl Hash for ForeignRecordIdentity {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        std::ptr::hash(Arc::as_ptr(&self.0), state);
+    }
+}
 
 /// An owned pending or committed read view, independent of its source borrow.
 ///
 /// Pure host callbacks use this capture instead of reading a transaction that
 /// is already borrowed by the operation invoking them. A host still needs a
 /// separate guarded read dispatcher; this value grants no mutation capability.
-#[derive(Clone)]
 pub struct ForeignReadSnapshot {
     state: EditorState,
     previous_selection: Option<Selection>,
     composition_key: Option<NodeKey>,
+    source_records: crate::state::NodeMap,
+    detached: Vec<Option<Selection>>,
+}
+
+// Selection::clone models the upstream clone() method, which clears direction
+// caches. Capturing a read input must preserve the original object's fields.
+fn capture_selection(selection: &Selection) -> Selection {
+    let mut captured = selection.clone();
+    if let (Selection::Range(source), Selection::Range(target)) = (selection, &mut captured) {
+        target.cached_direction = source.cached_direction;
+    }
+    captured
+}
+
+impl Clone for ForeignReadSnapshot {
+    fn clone(&self) -> Self {
+        let mut state = self.state.clone();
+        state.selection = self.state.selection.as_ref().map(capture_selection);
+        Self {
+            state,
+            previous_selection: self.previous_selection.as_ref().map(capture_selection),
+            composition_key: self.composition_key,
+            source_records: self.source_records.clone(),
+            detached: self
+                .detached
+                .iter()
+                .map(|slot| slot.as_ref().map(capture_selection))
+                .collect(),
+        }
+    }
 }
 
 impl ForeignReadSnapshot {
     /// Captured node map and active selection, including pending writes.
     pub fn state(&self) -> &EditorState {
         &self.state
+    }
+
+    /// Pin the source identity independently of the materialized read payload.
+    /// The token must be released with its owning host handle or version.
+    pub fn record_identity(&self, key: NodeKey) -> Result<ForeignRecordIdentity, Error> {
+        let slot = self
+            .source_records
+            .get(&key)
+            .or_else(|| self.state.nodes.get(&key))
+            .ok_or(Error::NodeNotFound(key))?;
+        Ok(ForeignRecordIdentity(slot.clone()))
     }
 
     /// Run model reads through an independently owned, guarded transaction.
@@ -44,9 +111,16 @@ impl ForeignReadSnapshot {
         peer.state = committed.clone();
         let mut tx = peer.transaction();
         tx.pending = self.state.pending();
+        tx.pending.selection = self.state.selection.as_ref().map(capture_selection);
         tx.composition_key = self.composition_key;
         tx.foreign_read_only = true;
-        tx.foreign_previous_selection = self.previous_selection.clone();
+        tx.foreign_read_sources = Some(self.source_records.clone());
+        tx.foreign_previous_selection = self.previous_selection.as_ref().map(capture_selection);
+        tx.detached = self
+            .detached
+            .iter()
+            .map(|slot| slot.as_ref().map(capture_selection))
+            .collect();
         Ok(read(&mut tx))
     }
 }
@@ -56,6 +130,8 @@ impl Read for ForeignReadSnapshot {
         StateRef {
             state: &self.state,
             native_projection: None,
+            source_records: Some(&self.source_records),
+            detached_selections: &self.detached,
             previous_selection: self.previous_selection.as_ref(),
             composition_key: self.composition_key,
         }
@@ -69,6 +145,8 @@ impl StateRef<'_> {
     /// captured record without invoking a clone hook or changing the source.
     pub fn snapshot_for_foreign_read(self) -> Result<ForeignReadSnapshot, Error> {
         let mut state = self.state.pending();
+        state.selection = self.state.selection.as_ref().map(capture_selection);
+        let mut source_records = self.source_records.cloned().unwrap_or_default();
         if let Some(projection) = self.native_projection {
             let slot = state
                 .nodes
@@ -80,14 +158,23 @@ impl StateRef<'_> {
                 .downcast_ref::<super::projection::ForeignPayload>()
                 .ok_or(Error::NodeTypeMismatch(projection.key))?;
             let payload = projection.snapshot_payload(payload)?;
+            source_records
+                .entry(projection.key)
+                .or_insert_with(|| slot.clone());
             let mut record = slot.as_ref().clone();
             record.data = Arc::new(payload);
             state.nodes.insert(projection.key, Arc::new(record));
         }
         Ok(ForeignReadSnapshot {
             state,
-            previous_selection: self.previous_selection.cloned(),
+            previous_selection: self.previous_selection.map(capture_selection),
             composition_key: self.composition_key,
+            source_records,
+            detached: self
+                .detached_selections
+                .iter()
+                .map(|slot| slot.as_ref().map(capture_selection))
+                .collect(),
         })
     }
 }

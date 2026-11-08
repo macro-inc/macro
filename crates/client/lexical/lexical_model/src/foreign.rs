@@ -2,7 +2,7 @@
 mod pending;
 pub use pending::{ForeignEditorIdentity, ForeignUpdateIdentity, PendingUpdate};
 mod read;
-pub use read::ForeignReadSnapshot;
+pub use read::{ForeignReadSnapshot, ForeignRecordIdentity};
 
 mod hooks;
 pub use hooks::{ForeignData, ForeignHooks, ForeignNodeType, Override};

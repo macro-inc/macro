@@ -69,6 +69,10 @@ impl EditorState {
         StateRef {
             #[cfg(feature = "foreign-nodes")]
             native_projection: None,
+            #[cfg(feature = "foreign-nodes")]
+            detached_selections: &[],
+            #[cfg(feature = "foreign-nodes")]
+            source_records: None,
             state: self,
             previous_selection: self.selection.as_ref(),
             composition_key: None,

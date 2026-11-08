@@ -14,6 +14,10 @@ pub use structural::CommonAncestor;
 pub struct StateRef<'state> {
     #[cfg(feature = "foreign-nodes")]
     pub(crate) native_projection: Option<&'state crate::foreign::projection::NativeProjection>,
+    #[cfg(feature = "foreign-nodes")]
+    pub(crate) source_records: Option<&'state crate::state::NodeMap>,
+    #[cfg(feature = "foreign-nodes")]
+    pub(crate) detached_selections: &'state [Option<Selection>],
     pub(crate) state: &'state EditorState,
     pub(crate) previous_selection: Option<&'state Selection>,
     pub(crate) composition_key: Option<NodeKey>,
@@ -848,6 +852,10 @@ impl<'state> StateRef<'state> {
         StateRef {
             #[cfg(feature = "foreign-nodes")]
             native_projection: self.native_projection,
+            #[cfg(feature = "foreign-nodes")]
+            detached_selections: self.detached_selections,
+            #[cfg(feature = "foreign-nodes")]
+            source_records: self.source_records,
             state: &snapshot,
             previous_selection: self.previous_selection,
             composition_key: self.composition_key,

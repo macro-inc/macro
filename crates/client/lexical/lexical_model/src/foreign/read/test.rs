@@ -104,6 +104,42 @@ fn owned_read_materializes_the_current_native_projection_and_keeps_it_independen
     let snapshot = crate::foreign::projection::native(&mut tx, key, |_, tx| {
         tx.get_mut::<Counter>(key)?.count = 7;
         let snapshot = tx.view().snapshot_for_foreign_read()?;
+        let identity = snapshot.record_identity(key)?;
+        assert!(identity.matches(tx.node_or_err(key)?));
+        assert!(!identity.matches(snapshot.node_or_err(key)?));
+        assert!(identity == snapshot.clone().record_identity(key)?);
+        let nested = snapshot.view().snapshot_for_foreign_read()?;
+        assert!(identity == nested.record_identity(key)?);
+        snapshot.with_read_transaction(tx.committed_state(), |peer| -> Result<(), Error> {
+            let nested = peer.view().snapshot_for_foreign_read()?;
+            assert!(identity == nested.record_identity(key)?);
+            assert_eq!(
+                nested.foreign_data(key).expect("foreign").fields["count"],
+                7
+            );
+            nested.with_read_transaction(peer.committed_state(), |inner| -> Result<(), Error> {
+                assert!(
+                    identity
+                        == inner
+                            .view()
+                            .snapshot_for_foreign_read()?
+                            .record_identity(key)?
+                );
+                Ok(())
+            })?
+        })??;
+        let root_identity = snapshot.record_identity(NodeKey::ROOT)?;
+        assert!(root_identity.matches(tx.node_or_err(NodeKey::ROOT)?));
+        assert!(root_identity.matches(snapshot.node_or_err(NodeKey::ROOT)?));
+        #[expect(
+            clippy::mutable_key_type,
+            reason = "tokens hash only their pinned allocation address"
+        )]
+        let mut identities = std::collections::HashSet::new();
+        identities.insert(identity.clone());
+        identities.insert(snapshot.record_identity(key)?);
+        identities.insert(root_identity);
+        assert_eq!(identities.len(), 2);
         assert_eq!(clones.load(std::sync::atomic::Ordering::SeqCst), 0);
         assert_eq!(
             snapshot.foreign_data(key).expect("foreign").fields["count"],
@@ -120,6 +156,9 @@ fn owned_read_materializes_the_current_native_projection_and_keeps_it_independen
     })?;
     assert_eq!(tx.foreign_data(key).expect("foreign").fields["count"], 9);
     tx.set_foreign_field(key, "count", serde_json::json!(11))?;
+    assert!(!snapshot.record_identity(key)?.matches(tx.node_or_err(key)?));
+    let changed = tx.view().snapshot_for_foreign_read()?;
+    assert!(snapshot.record_identity(key)? != changed.record_identity(key)?);
     assert_eq!(
         snapshot.foreign_data(key).expect("foreign").fields["count"],
         7
@@ -130,6 +169,113 @@ fn owned_read_materializes_the_current_native_projection_and_keeps_it_independen
         snapshot.foreign_data(key).expect("foreign").fields["count"],
         7
     );
+    Ok(())
+}
+
+#[test]
+fn independent_read_preserves_detached_slots_holes_and_selection_object_fields() -> Result<(), Error>
+{
+    let mut editor = Editor::builder(EditorMode::Headless)
+        .build()
+        .expect("editor");
+    let ((paragraph, text), _) = editor.update(|tx| {
+        let paragraph = tx.create(Paragraph::default())?.key();
+        let text = tx.create_text("abcdef")?.key();
+        tx.append(paragraph, &[text])?;
+        tx.append(NodeKey::ROOT, &[paragraph])?;
+        tx.text(text)?
+            .select(Some(Utf16Offset(1)), Some(Utf16Offset(3)))?;
+        Ok((paragraph, text))
+    })?;
+    let Some(Selection::Range(previous)) = editor.state.selection.as_mut() else {
+        panic!("previous range")
+    };
+    previous.cached_direction = Some((previous.anchor, previous.focus, false));
+    let mut tx = editor.transaction();
+    tx.text(text)?
+        .select(Some(Utf16Offset(4)), Some(Utf16Offset(2)))?;
+    assert!(tx.range_is_backward_at(SelectionSlot::Active)?);
+    let mut range = RangeSelection::new(
+        Point::text(text, Utf16Offset(5)),
+        Point::text(text, Utf16Offset(1)),
+    );
+    range.cached_direction = Some((range.anchor, range.focus, true));
+    range.style = "color: red".into();
+    range.format = TextFormat::BOLD;
+    range.dirty = true;
+    tx.detached.push(None);
+    let range_slot = tx.detach_selection(Selection::Range(range));
+    let mut nodes = NodeSelection::new();
+    nodes.add(text);
+    nodes.add(paragraph);
+    let node_slot = tx.detach_selection(Selection::Node(nodes));
+    let table_slot = tx.detach_selection(Selection::Table(TableSelection::new(
+        paragraph, text, paragraph,
+    )));
+    let snapshot = tx.view().snapshot_for_foreign_read()?.clone();
+    tx.detached.clear();
+    tx.set_selection(None)?;
+    snapshot.with_read_transaction(tx.committed_state(), |peer| -> Result<(), Error> {
+        assert_eq!(peer.detached.len(), 4);
+        assert!(peer.detached[0].is_none());
+        let active = peer.range_selection()?;
+        assert_eq!(active.anchor.offset(), 4);
+        assert_eq!(active.cached_is_backward(), Some(true));
+        let previous = peer
+            .previous_selection()
+            .and_then(Selection::as_range)
+            .expect("previous");
+        assert_eq!(previous.anchor.offset(), 1);
+        assert_eq!(previous.cached_is_backward(), Some(false));
+        let range = peer.range_at(range_slot)?;
+        assert_eq!(range.anchor.offset(), 5);
+        assert_eq!(range.focus.offset(), 1);
+        assert_eq!(range.cached_is_backward(), Some(true));
+        assert_eq!(range.style.as_ref(), "color: red");
+        assert_eq!(range.format, TextFormat::BOLD);
+        assert!(range.dirty);
+        assert_eq!(
+            peer.selection_at(node_slot)?
+                .and_then(Selection::as_node)
+                .expect("nodes")
+                .nodes
+                .iter()
+                .copied()
+                .collect::<Vec<_>>(),
+            [text, paragraph]
+        );
+        let table = peer
+            .selection_at(table_slot)?
+            .and_then(Selection::as_table)
+            .expect("table");
+        assert_eq!(table.table, paragraph);
+        assert_eq!(table.anchor.key(), text);
+        assert_eq!(table.focus.key(), paragraph);
+        assert_eq!(
+            peer.detach_selection(Selection::Node(NodeSelection::new())),
+            SelectionSlot::Detached(DetachedSelectionId(4))
+        );
+        peer.detached.clear();
+        Ok(())
+    })??;
+    snapshot.with_read_transaction(tx.committed_state(), |peer| {
+        assert_eq!(peer.detached.len(), 4);
+        assert_eq!(
+            peer.range_at(range_slot)
+                .expect("range")
+                .cached_is_backward(),
+            Some(true)
+        );
+    })?;
+    assert!(tx.detached.is_empty());
+    assert!(tx.selection().is_none());
+    assert!(matches!(
+        snapshot.record_identity(NodeKey::from_parts(KeyParts {
+            generation: 0,
+            index: 999
+        })),
+        Err(Error::NodeNotFound(_))
+    ));
     Ok(())
 }
 
