@@ -15,8 +15,10 @@ people. The server owns all state; the browser only calls the API.
 - An enrollment has at most one unsent step (a partial unique index). History
   rows are keyed by the step's stable `id`; the next step is the one after the
   last step reached that is still in the sequence.
-- Steps are ordinary scheduled sends, created and withdrawn through the email
-  crate's `SequenceStepStore` port on the sweep's own connection.
+- Steps are scheduled sends (`source = 'sequence'`) that stay out of Mail until
+  they are sent or fail, created and withdrawn through the email crate's
+  `SequenceStepStore` port on the sweep's own connection. One the owner
+  reschedules in Mail becomes theirs: it is recorded once sent, never withdrawn.
 - An email that didn't go out (refused, stuck, cancelled or trashed in Mail,
   or gone) puts the enrollment in `needs_attention`. An inbox that can't send,
   or an owner without access, only holds steps back.

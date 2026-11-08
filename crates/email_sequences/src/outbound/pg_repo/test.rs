@@ -572,6 +572,28 @@ async fn i4_stop_withdraws_a_new_step_and_records_one_already_sending(pool: PgPo
         ("stopped".into(), Some("manual".into()), 1)
     );
     assert_eq!(in_flight(&pool, late).await, None);
+
+    // One the owner rescheduled themselves in Mail is theirs: a stop leaves it.
+    let third = active_sequence(&svc, OWNER, OWNER_LINK, two_steps()).await;
+    let theirs = enroll(&svc, OWNER, third, BOB).await;
+    make_due(&pool, theirs).await;
+    svc.sweep(Utc::now()).await;
+    let rescheduled = in_flight(&pool, theirs).await.unwrap();
+    sqlx::query!(
+        "UPDATE email_scheduled_messages SET source = NULL WHERE message_id = $1",
+        rescheduled
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    svc.act(OWNER, theirs, EnrollmentAction::Stop).await.unwrap();
+    assert!(message_exists(&pool, rescheduled).await);
+    deliver(&pool, rescheduled).await;
+    svc.sweep(Utc::now()).await;
+    assert_eq!(
+        status(&pool, theirs).await,
+        ("stopped".into(), Some("manual".into()), 1)
+    );
 }
 
 #[sqlx::test(

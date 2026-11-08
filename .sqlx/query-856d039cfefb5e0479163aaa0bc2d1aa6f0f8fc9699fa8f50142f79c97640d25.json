@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n        SELECT\n            m.id, m.provider_id, m.global_id, m.link_id, m.thread_id, m.provider_thread_id, m.provider_history_id,\n            m.replying_to_id, m.internal_date_ts, m.snippet, m.size_estimate, m.subject, m.from_name,\n            m.from_contact_id, m.sent_at, m.has_attachments, m.is_read, m.is_starred, m.is_sent, m.is_draft,\n            m.body_text as body_text,\n            m.body_html_sanitized as body_html_sanitized,\n            NULL::TEXT as body_macro,\n            m.headers_jsonb, m.created_at, m.updated_at\n        FROM email_messages m\n        JOIN email_links l ON m.link_id = l.id\n        WHERE m.id = $1\n        ",
+  "query": "\n        SELECT\n            m.id,\n            m.provider_id,\n            m.global_id,\n            m.thread_id,\n            m.provider_thread_id,\n            m.replying_to_id,\n            m.link_id,\n            m.provider_history_id,\n            m.internal_date_ts,\n            m.snippet,\n            m.size_estimate,\n            m.subject,\n            m.from_name,\n            m.from_contact_id,\n            m.sent_at,\n            m.has_attachments,\n            m.is_read,\n            m.is_starred,\n            m.is_sent,\n            m.is_draft,\n            m.body_text,\n            m.body_html_sanitized,\n            m.body_macro,\n            m.headers_jsonb,\n            m.created_at,\n            m.updated_at\n        FROM email_messages m\n        JOIN email_scheduled_messages sm ON m.id = sm.message_id\n        WHERE m.link_id = $1\n          AND m.is_draft = true\n          AND m.is_sent = false\n          AND sm.sent = false\n          -- A pending sequence step is not the user's scheduled send; a failed one is listed so the user can fix it.\n          AND (sm.source IS NULL OR sm.delivery_status = 'failed')\n        ORDER BY m.created_at DESC\n        LIMIT $2 OFFSET $3\n        ",
   "describe": {
     "columns": [
       {
@@ -20,28 +20,28 @@
       },
       {
         "ordinal": 3,
-        "name": "link_id",
-        "type_info": "Uuid"
-      },
-      {
-        "ordinal": 4,
         "name": "thread_id",
         "type_info": "Uuid"
       },
       {
-        "ordinal": 5,
+        "ordinal": 4,
         "name": "provider_thread_id",
         "type_info": "Text"
       },
       {
+        "ordinal": 5,
+        "name": "replying_to_id",
+        "type_info": "Uuid"
+      },
+      {
         "ordinal": 6,
-        "name": "provider_history_id",
-        "type_info": "Text"
+        "name": "link_id",
+        "type_info": "Uuid"
       },
       {
         "ordinal": 7,
-        "name": "replying_to_id",
-        "type_info": "Uuid"
+        "name": "provider_history_id",
+        "type_info": "Text"
       },
       {
         "ordinal": 8,
@@ -136,7 +136,9 @@
     ],
     "parameters": {
       "Left": [
-        "Uuid"
+        "Uuid",
+        "Int8",
+        "Int8"
       ]
     },
     "nullable": [
@@ -144,29 +146,29 @@
       true,
       true,
       false,
+      true,
+      true,
+      false,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      false,
+      false,
+      false,
+      false,
       false,
       true,
       true,
       true,
-      true,
-      true,
-      true,
-      true,
-      true,
-      true,
-      true,
-      false,
-      false,
-      false,
-      false,
-      false,
-      true,
-      true,
-      null,
       true,
       false,
       false
     ]
   },
-  "hash": "500f0b56eb070f7bb2a4ea9a95337f7074464d19fc6646401072914709be353e"
+  "hash": "856d039cfefb5e0479163aaa0bc2d1aa6f0f8fc9699fa8f50142f79c97640d25"
 }

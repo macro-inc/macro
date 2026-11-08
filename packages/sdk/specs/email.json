@@ -5012,6 +5012,17 @@
             "type": ["string", "null"],
             "format": "uuid"
           },
+          "scheduled_send_source": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/ScheduledSendSource",
+                "description": "What created the unsent schedule; `sequence` marks a sequence step,\nwhich is not the user's own draft while it is pending."
+              }
+            ]
+          },
           "scheduled_send_status": {
             "oneOf": [
               {
@@ -8044,6 +8055,11 @@
             "description": "Opaque ID of the backfill job or provider sync stream driving the resync.\nthe one already in progress."
           }
         }
+      },
+      "ScheduledSendSource": {
+        "type": "string",
+        "description": "What created a scheduled send, when it was not the user's own composer.\n\nA pending send from a source stays out of the user's mail lists (Drafts,\nScheduled, Inbox) until it is sent or its delivery fails.",
+        "enum": ["sequence"]
       },
       "ScheduledSendStatus": {
         "type": "string",

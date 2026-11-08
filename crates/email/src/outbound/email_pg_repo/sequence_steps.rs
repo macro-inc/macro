@@ -3,12 +3,12 @@
 use super::{contact, draft, message, send_attempt, thread};
 use crate::domain::{
     models::{
-        ContactInfo, EmailErr, ParsedAddresses, ResolvedDraftInput, ScheduledSendStatus, ThreadRow,
-        UpsertedContacts, UserProvider,
+        ContactInfo, EmailErr, ParsedAddresses, ResolvedDraftInput, ScheduledSendSource,
+        ScheduledSendStatus, ThreadRow, UpsertedContacts, UserProvider,
     },
     sequence_steps::{
-        CancelOutcome, InboundMessage, NewStep, ReplySearch, SendingInbox, SequenceStepStore,
-        StepState,
+        CancelExpectation, CancelOutcome, InboundMessage, NewStep, ReplySearch, SendingInbox,
+        SequenceStepStore, StepState,
     },
 };
 use chrono::{DateTime, Utc};
@@ -205,14 +205,16 @@ impl SequenceStepStore for PgSequenceSteps {
         message::upsert_recipients(conn, message_id, step.contacts)
             .await
             .map_err(storage)?;
+        let source: &'static str = ScheduledSendSource::Sequence.into();
         sqlx::query!(
             r#"INSERT INTO email_scheduled_messages
-                (link_id, message_id, send_time, sent, processing, actor_id, list_unsubscribe_url)
-               VALUES ($1, $2, $3, false, false, $4, $5)"#,
+                (link_id, message_id, send_time, sent, processing, actor_id, source, list_unsubscribe_url)
+               VALUES ($1, $2, $3, false, false, $4, $5, $6)"#,
             step.link_id,
             message_id,
             step.send_time,
             step.actor,
+            source,
             step.list_unsubscribe_url,
         )
         .execute(&mut *conn)
@@ -229,6 +231,7 @@ impl SequenceStepStore for PgSequenceSteps {
         &self,
         conn: &mut PgConnection,
         message_id: Uuid,
+        expect: CancelExpectation,
     ) -> Result<CancelOutcome, EmailErr> {
         let Some(found) = sqlx::query!(
             "SELECT link_id, provider_thread_id FROM email_messages WHERE id = $1",
@@ -264,7 +267,7 @@ impl SequenceStepStore for PgSequenceSteps {
             return Ok(CancelOutcome::Sent);
         }
         let schedule = sqlx::query!(
-            r#"SELECT sent, processing, delivery_status, delivery_started_at, delivery_claim_id
+            r#"SELECT sent, processing, delivery_status, delivery_started_at, delivery_claim_id, source
                FROM email_scheduled_messages WHERE message_id = $1 AND link_id = $2 FOR UPDATE"#,
             message_id,
             locked.link_id,
@@ -272,9 +275,16 @@ impl SequenceStepStore for PgSequenceSteps {
         .fetch_optional(&mut *conn)
         .await
         .map_err(storage)?;
+        if schedule.is_none() && expect == CancelExpectation::Scheduled {
+            return Ok(CancelOutcome::Changed);
+        }
         if let Some(schedule) = schedule {
             if schedule.sent {
                 return Ok(CancelOutcome::Sent);
+            }
+            // The owner scheduled it from Mail: it is theirs.
+            if schedule.source.is_none() {
+                return Ok(CancelOutcome::Changed);
             }
             // The rule `change_schedule` applies: a submitted or uncertain
             // delivery can't be withdrawn; a failed one can.
@@ -386,10 +396,10 @@ impl SequenceStepStore for PgSequenceSteps {
         link_id: Uuid,
         until: DateTime<Utc>,
     ) -> Result<Option<DateTime<Utc>>, EmailErr> {
-        // `idx_email_scheduled_messages_send_time_sent` keeps this to the window.
+        // `email_scheduled_messages_pending_sequence_idx`
         sqlx::query_scalar!(
             r#"SELECT max(send_time) FROM email_scheduled_messages
-               WHERE link_id = $1 AND NOT sent AND send_time > now() AND send_time <= $2"#,
+               WHERE link_id = $1 AND source IS NOT NULL AND NOT sent AND send_time <= $2"#,
             link_id,
             until,
         )

@@ -3,7 +3,7 @@
 use chrono::{DateTime, Duration, Utc};
 use email::domain::{
     models::{ContactInfo, UserProvider},
-    sequence_steps::{CancelOutcome, SendingInbox, SequenceStepStore},
+    sequence_steps::{CancelExpectation, CancelOutcome, SendingInbox, SequenceStepStore},
 };
 use macro_user_id::email::EmailStr;
 use uuid::Uuid;
@@ -311,8 +311,13 @@ where
         }
         let mut history = self.repo.history(tx, row.id).await.map_err(internal)?;
         if let Some(step) = in_flight(&history).cloned() {
-            match self.withdraw(tx, row, &step).await? {
-                CancelOutcome::Cancelled => {}
+            // Takes back a draft the owner unscheduled or trashed in Mail.
+            match self
+                .withdraw(tx, row, &step, CancelExpectation::Draft)
+                .await?
+            {
+                // The owner scheduled it themselves: it is recorded once sent.
+                CancelOutcome::Cancelled | CancelOutcome::Changed => {}
                 // Gmail may have it: never resent, the sequence moves past it.
                 CancelOutcome::DeliveryStarted if now > step.scheduled_at + STUCK_AFTER => self
                     .repo
@@ -405,10 +410,11 @@ where
         tx: &mut R::Tx,
         row: &EnrollmentRow,
         step: &HistoryRow,
+        expect: CancelExpectation,
     ) -> Result<CancelOutcome, SequenceError> {
         let outcome = self
             .steps
-            .cancel_step(R::conn(tx), step.message_id)
+            .cancel_step(R::conn(tx), step.message_id, expect)
             .await
             .map_err(internal)?;
         if outcome == CancelOutcome::Cancelled {
@@ -420,7 +426,8 @@ where
         Ok(outcome)
     }
 
-    /// Withdraw the enrollment's unsent step unless it is already sending.
+    /// Withdraw the enrollment's unsent step, unless it is already sending or
+    /// the owner took it over in Mail.
     /// Returns when the withdrawn step was due.
     async fn withdraw_unsent(
         &self,
@@ -431,7 +438,9 @@ where
         let Some(step) = in_flight(&history) else {
             return Ok(None);
         };
-        let outcome = self.withdraw(tx, row, step).await?;
+        let outcome = self
+            .withdraw(tx, row, step, CancelExpectation::Scheduled)
+            .await?;
         Ok((outcome == CancelOutcome::Cancelled).then_some(step.scheduled_at))
     }
 

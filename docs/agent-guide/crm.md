@@ -669,8 +669,8 @@ CRM on for the team, the section and its links behave the same way.
   while active; edits reach every email not yet created (each is rendered
   about a minute before it sends). A save that would leave an active sequence
   incomplete (an emptied subject, say) is refused: the message shows above the
-  editor and the local edits stay. Pending emails show in Mail's Scheduled list
-  for the last ~90 seconds before they send.
+  editor and the local edits stay. Pending emails stay out of Mail; a failed one
+  shows there like any failed send.
 - **Add people:** **Add people** searches CRM People (up to 50 at a time) and
   takes a start time in your time zone, by default in a few minutes during
   working hours (9:00 to 17:00 on weekdays) or else 9:00 the next working day.
