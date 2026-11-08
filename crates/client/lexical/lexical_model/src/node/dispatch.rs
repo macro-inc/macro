@@ -61,7 +61,7 @@ pub struct NodeVTable {
     pub(crate) project: fn(&dyn Any, TypeId) -> Option<&dyn Any>,
     pub(crate) project_mut: fn(&mut dyn Any, TypeId) -> Option<&mut dyn Any>,
     pub(crate) probe: fn() -> Option<Arc<dyn AnyNodeData>>,
-    pub(crate) default_data: fn() -> Option<Arc<dyn AnyNodeData>>,
+    pub(crate) default_create: fn(&mut Transaction<'_>) -> Result<NodeKey, Error>,
     pub(crate) initial_base: fn(&dyn Any) -> Result<BaseData, Error>,
     pub(crate) import_exact: fn(&mut Transaction<'_>, &SerializedNode) -> Result<NodeKey, Error>,
     pub(crate) import: fn(&mut Transaction<'_>, &SerializedNode) -> Result<NodeKey, Error>,

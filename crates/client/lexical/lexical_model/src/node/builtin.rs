@@ -235,6 +235,12 @@ impl ElementNode for Paragraph {
         let style = first.map_or(data.text_style.as_ref(), |text| text.style.as_ref());
         json.insert("textFormat".into(), serde_json::json!(format.bits()));
         json.insert("textStyle".into(), serde_json::json!(style));
+        if first.is_some_and(|text| text.absent.contains(crate::node::AbsentKeys::FORMAT)) {
+            json.remove("textFormat");
+        }
+        if first.is_some_and(|text| text.absent.contains(crate::node::AbsentKeys::STYLE)) {
+            json.remove("textStyle");
+        }
         Ok(())
     }
 

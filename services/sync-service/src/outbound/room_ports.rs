@@ -216,19 +216,137 @@ impl PeerDirectory for WorkerPeers {
     }
 }
 
-/// Production comment checks continue to use lexical-service over HTTP.
+/// Comment-only execution selection loaded once for this room.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, strum::EnumString, strum::AsRefStr)]
+#[strum(serialize_all = "snake_case")]
+enum CommentGateMode {
+    Http,
+    InProcess,
+    Shadow,
+}
+/// Worker selection preserves the HTTP result in shadow and never falls back.
 pub struct WorkerCommentGate {
     env: Env,
+    mode: worker::Result<CommentGateMode>,
+}
+impl WorkerCommentGate {
+    fn new(env: Env) -> Self {
+        let mode = env.var("COMMENT_GATE_MODE").and_then(|value| {
+            value
+                .to_string()
+                .parse()
+                .map_err(|_| worker::Error::from("invalid COMMENT_GATE_MODE"))
+        });
+        Self { env, mode }
+    }
 }
 impl CommentGate for WorkerCommentGate {
     type Error = worker::Error;
+    #[tracing::instrument(name = "lexical.comment_only_change", skip_all, err, fields(
+        route = "gate", mode = tracing::field::Empty,
+        bytes_in = tracing::field::Empty, bytes_out = tracing::field::Empty,
+        outcome = tracing::field::Empty, error.kind = tracing::field::Empty,
+        ms = tracing::field::Empty, gate.comment_only = tracing::field::Empty
+    ))]
     async fn is_comment_only_change(&self, change: &RootChange) -> worker::Result<bool> {
         let started = web_time::Instant::now();
-        let result = crate::lexical_service::LexicalServiceClient::new(&self.env)
-            .is_comment_only_change(change)
-            .await;
-        tracing::Span::current().record("ms", started.elapsed().as_millis() as i64);
+        let span = tracing::Span::current();
+        if let Ok(mode) = &self.mode {
+            span.record("mode", mode.as_ref());
+        }
+        let input = serde_json::to_vec(&serde_json::json!({
+            "before": {"root": change.before}, "after": {"root": change.after}
+        }))
+        .map_err(|_| worker::Error::from("cannot encode gate roots"));
+        if let Ok(bytes) = &input {
+            if let Ok(length) = i64::try_from(bytes.len()) {
+                span.record("bytes_in", length);
+            }
+        }
+        let result = match input {
+            Ok(_) => self.check(change).await,
+            Err(error) => Err(error),
+        };
+        span.record("ms", started.elapsed().as_millis() as i64);
+        span.record("outcome", if result.is_ok() { "ok" } else { "error" });
+        match &result {
+            Ok(value) => {
+                span.record("gate.comment_only", *value);
+                span.record("bytes_out", if *value { 4_i64 } else { 5_i64 });
+            }
+            Err(_) => {
+                span.record(
+                    "error.kind",
+                    if self.mode.is_err() {
+                        "configuration"
+                    } else {
+                        "backend"
+                    },
+                );
+            }
+        }
         result
+    }
+}
+impl WorkerCommentGate {
+    async fn check(&self, change: &RootChange) -> worker::Result<bool> {
+        let mode = self
+            .mode
+            .as_ref()
+            .map_err(|_| worker::Error::from("missing or invalid COMMENT_GATE_MODE"))?;
+        tracing::Span::current().record("mode", mode.as_ref());
+        let local = async {
+            sync_server_core::comment_gate::InProcessCommentGate::new(
+                macro_document_model::DocumentContext {
+                    clock: macro_document_model::NodeClock(std::sync::Arc::new(|| {
+                        worker::Date::now().as_millis()
+                    })),
+                    random: macro_document_model::NodeRandom(std::sync::Arc::new(|length| {
+                        let mut bytes = vec![0; length];
+                        if getrandom::fill(&mut bytes).is_err() {
+                            bytes.clear();
+                        }
+                        bytes
+                    })),
+                    host: Default::default(),
+                    keys: Default::default(),
+                    editor_created: None,
+                },
+            )
+            .is_comment_only_change(change)
+            .await
+            .map_err(|_| worker::Error::from("in-process comment gate rejected invalid state"))
+        };
+        let http = crate::lexical_service::LexicalServiceClient::new(&self.env);
+        match mode {
+            CommentGateMode::Http => http.is_comment_only_change(change).await,
+            CommentGateMode::InProcess => local.await,
+            CommentGateMode::Shadow => {
+                use tracing::Instrument;
+                async {
+                    let (http, local) = futures::join!(http.is_comment_only_change(change), local);
+                    let equal = matches!((&http, &local), (Ok(left), Ok(right)) if left == right);
+                    tracing::Span::current().record("equal", equal);
+                    tracing::Span::current()
+                        .record("outcome", if equal { "equal" } else { "mismatch" });
+                    if local.is_err() {
+                        tracing::Span::current().record("error.kind", "backend");
+                    }
+                    if !equal {
+                        tracing::warn!(route = "gate", "lexical shadow mismatch");
+                    }
+                    http
+                }
+                .instrument(tracing::info_span!(
+                    "lexical.shadow",
+                    route = "gate",
+                    equal = tracing::field::Empty,
+                    outcome = tracing::field::Empty,
+                    error.kind = tracing::field::Empty
+                ))
+                .await
+            }
+        }
     }
 }
 
@@ -319,7 +437,7 @@ impl WorkerPorts {
                 state: state.clone(),
             },
             peers: WorkerPeers { env: env.clone() },
-            comment_gate: WorkerCommentGate { env: env.clone() },
+            comment_gate: WorkerCommentGate::new(env.clone()),
             background: WorkerBackground { state, env },
         }
     }

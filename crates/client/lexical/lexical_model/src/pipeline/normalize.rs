@@ -22,11 +22,11 @@ fn can_merge(tx: &Transaction<'_>, left: NodeKey, right: NodeKey) -> bool {
         && ["mode", "format", "style"]
             .into_iter()
             .all(|field| x.absent.contains_field(field) == y.absent.contains_field(field))
-        && (a.state.is_none()
-            || a.state
-                .as_ref()
-                .zip(b.state.as_ref())
-                .is_some_and(|(a, b)| Arc::ptr_eq(a, b))
+        && (a
+            .state
+            .as_ref()
+            .zip(b.state.as_ref())
+            .is_some_and(|(a, b)| Arc::ptr_eq(a, b))
             || NodeState::equivalent(a.state.as_deref(), b.state.as_deref()))
 }
 pub(super) fn normalize_text_node(tx: &mut Transaction<'_>, mut key: NodeKey) -> Result<(), Error> {

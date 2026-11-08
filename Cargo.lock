@@ -11808,14 +11808,37 @@ version = "0.1.0"
 dependencies = [
  "agent_fold",
  "anyhow",
+ "async-trait",
+ "axum",
  "base64 0.22.1",
+ "chrono",
+ "getrandom 0.3.4",
+ "lazy-regex",
+ "lexical_loro",
+ "lexical_model",
+ "loro",
+ "macro_config",
+ "macro_document_composers",
+ "macro_document_model",
+ "macro_service_urls",
  "macro_tower_layers",
  "messages",
+ "nom 8.0.0",
+ "opentelemetry",
+ "opentelemetry-otlp",
+ "opentelemetry_sdk",
  "reqwest 0.13.4",
  "serde",
  "serde_json",
+ "strum 0.27.2",
+ "sync_service_client",
+ "thiserror 2.0.18",
+ "tokio",
  "tracing",
+ "tracing-opentelemetry",
+ "tracing-subscriber",
  "trigger_context",
+ "wiremock",
  "workspace-hack",
 ]
 
@@ -11823,19 +11846,29 @@ dependencies = [
 name = "lexical_conformance"
 version = "0.1.0"
 dependencies = [
+ "lexical_markdown",
  "lexical_model",
  "lexical_rich_nodes",
  "libtest-mimic",
+ "macro_document_composers",
+ "macro_document_model",
  "serde",
  "serde_json",
  "thiserror 2.0.18",
+ "wasm-bindgen-test",
 ]
 
 [[package]]
 name = "lexical_conformance_wasm"
 version = "0.1.0"
 dependencies = [
+ "lexical_loro",
+ "lexical_markdown",
  "lexical_model",
+ "lexical_rich_nodes",
+ "macro_document_composers",
+ "macro_document_model",
+ "regress",
  "serde",
  "serde_json",
  "thiserror 2.0.18",
@@ -11851,6 +11884,7 @@ dependencies = [
  "nom 8.0.0",
  "regress",
  "serde",
+ "serde_json",
  "thiserror 2.0.18",
 ]
 
@@ -11890,6 +11924,8 @@ dependencies = [
  "lexical_client",
  "messages",
  "rootcause",
+ "serde_json",
+ "tokio",
  "workspace-hack",
 ]
 
@@ -11929,6 +11965,7 @@ version = "0.1.0"
 dependencies = [
  "bitflags 2.11.1",
  "indexmap 2.14.0",
+ "lexical_html",
  "lexical_model",
  "phf 0.13.1",
  "regress",
@@ -12666,6 +12703,52 @@ dependencies = [
 ]
 
 [[package]]
+name = "macro_document_composers"
+version = "0.1.0"
+dependencies = [
+ "lexical_markdown",
+ "lexical_model",
+ "macro_document_model",
+ "serde",
+ "serde_json",
+ "trigger_context",
+ "url",
+ "workspace-hack",
+]
+
+[[package]]
+name = "macro_document_model"
+version = "0.1.0"
+dependencies = [
+ "base64 0.22.1",
+ "chrono",
+ "chrono-tz",
+ "document_id",
+ "indexmap 2.14.0",
+ "lexical_html",
+ "lexical_loro",
+ "lexical_markdown",
+ "lexical_model",
+ "lexical_node_id",
+ "lexical_rich_nodes",
+ "logos",
+ "loro",
+ "mention_date",
+ "nom 8.0.0",
+ "rand_chacha 0.9.0",
+ "regress",
+ "serde",
+ "serde_json",
+ "serde_with",
+ "sha2 0.10.9",
+ "strum 0.27.2",
+ "sync_server_core",
+ "thiserror 2.0.18",
+ "url",
+ "urlencoding",
+]
+
+[[package]]
 name = "macro_entrypoint"
 version = "0.1.0"
 dependencies = [
@@ -13174,14 +13257,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "mention_date"
+version = "0.1.0"
+dependencies = [
+ "lazy-regex",
+]
+
+[[package]]
 name = "mention_utils"
 version = "0.1.0"
 dependencies = [
  "bot_id",
  "channel_sender",
  "cool_asserts",
- "lazy-regex",
  "macro_user_id",
+ "mention_date",
  "nom 8.0.0",
  "serde",
  "serde_json",
@@ -20084,6 +20174,7 @@ dependencies = [
  "futures",
  "lazy-regex",
  "loro",
+ "macro_document_model",
  "macro_sync_service_jwt",
  "rootcause",
  "serde",
@@ -20123,9 +20214,11 @@ dependencies = [
  "bebop",
  "futures",
  "getrandom 0.3.4",
+ "macro_document_model",
  "macro_sync_service_jwt",
  "serde",
  "serde_json",
+ "strum 0.27.2",
  "subtle",
  "sync_protocol",
  "sync_server_core",
@@ -20149,6 +20242,7 @@ dependencies = [
  "anyhow",
  "base64 0.22.1",
  "macro_sync_service_jwt",
+ "macro_tower_layers",
  "model",
  "reqwest 0.13.4",
  "serde",

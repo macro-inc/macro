@@ -158,3 +158,55 @@ fn subclass_inherits_splice_numbering_and_intrinsic_merge() -> Result<()> {
     assert_eq!(st.text_content(st.first_child_or_err(task)?), "wrapped");
     Ok(())
 }
+
+#[test]
+fn imported_null_and_absent_values_share_parent_setter_state() -> Result<()> {
+    let mut editor = Editor::builder(EditorMode::Headless)
+        .node::<ListNode>()
+        .node::<ListItemNode>()
+        .build()
+        .unwrap();
+    let mut tx = editor.transaction();
+    for input in [
+        serde_json::json!({"type":"list","listType":null,"start":null}),
+        serde_json::json!({"type":"list"}),
+    ] {
+        let json = input.as_object().unwrap();
+        let key = tx.import_node(json)?;
+        let before = tx.view().export_json(key)?;
+        assert_eq!(before.get("listType"), json.get("listType"));
+        assert_eq!(before.get("start"), json.get("start"));
+        tx.set_indent(key, 2)?;
+        assert_eq!(tx.view().export_json(key)?.get("start"), json.get("start"));
+        let mut node = tx.get_mut::<ListNode>(key)?;
+        node.set_start(3);
+        node.set_list_type(ListType::Check);
+        let after = tx.view().export_json(key)?;
+        assert_eq!(after.get("start"), Some(&3.into()));
+        assert_eq!(after.get("listType"), Some(&"check".into()));
+        assert_eq!(after.get("tag"), Some(&"ul".into()));
+    }
+    Ok(())
+}
+#[test]
+fn splitting_raw_text_in_list_dispatches_parent_splice() -> Result<()> {
+    let mut editor = register_list_nodes(Editor::builder(EditorMode::Headless))
+        .build()
+        .expect("editor");
+    let mut tx = editor.transaction();
+    let list = create_list_node(&mut tx, ListType::Bullet, 1)?;
+    let item = create_list_item_node(&mut tx, None)?;
+    tx.append(list, &[item.key()])?;
+    tx.append(NodeKey::ROOT, &[list.key()])?;
+    let text = tx.create_text(" ab")?;
+    tx.insert_before(item, text, true)?;
+    let parts = tx.text(text)?.split_text(&[Utf16Offset(1)])?;
+    assert_eq!(parts.len(), 2);
+    let children = tx.children_keys(list)?;
+    assert_eq!(children.len(), 2);
+    assert!(tx.is::<ListItemNode>(children[0]));
+    assert!(tx.is::<ListItemNode>(children[1]));
+    assert_eq!(tx.text_content(children[0]), " ");
+    assert_eq!(tx.text_content(children[1]), "ab");
+    Ok(())
+}

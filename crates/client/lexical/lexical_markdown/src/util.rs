@@ -1,11 +1,13 @@
 //! Explicit JavaScript whitespace and markdown escape scans.
 use lexical_model::*;
 /// ECMAScript whitespace, tested on one code unit.
-pub fn is_js_whitespace(c: u16) -> bool {
+pub fn is_js_whitespace_unit(c: u16) -> bool {
     matches!(c,0x9..=0xd|0x20|0xa0|0x1680|0x2000..=0x200a|0x2028|0x2029|0x202f|0x205f|0x3000|0xfeff)
 }
+/// Backwards-compatible name for the code-unit predicate.
+pub use is_js_whitespace_unit as is_js_whitespace;
 fn whitespace(c: char) -> bool {
-    (c as u32) <= 0xffff && is_js_whitespace(c as u16)
+    (c as u32) <= 0xffff && is_js_whitespace_unit(c as u16)
 }
 /// JavaScript trimStart.
 pub fn js_trim_start(s: &str) -> &str {
@@ -15,17 +17,14 @@ pub fn js_trim_start(s: &str) -> &str {
 pub fn js_trim_end(s: &str) -> &str {
     s.trim_end_matches(whitespace)
 }
-/// JavaScript trim.
-pub fn js_trim(s: &str) -> &str {
-    js_trim_end(js_trim_start(s))
-}
+pub use lexical_model::js_trim;
 /// ASCII markdown punctuation.
 pub fn is_punctuation(c: u16) -> bool {
     matches!(c,0x21..=0x2f|0x3a..=0x40|0x5b..=0x60|0x7b..=0x7e)
 }
 /// ASCII punctuation or JS whitespace.
 pub fn is_punctuation_or_space(c: u16) -> bool {
-    is_punctuation(c) || is_js_whitespace(c)
+    is_punctuation(c) || is_js_whitespace_unit(c)
 }
 /// Slice using UTF-16 positions, replacing lone surrogate halves as JS/Rust boundary requires.
 pub(crate) fn slice(s: &str, start: usize, end: usize) -> String {
@@ -47,7 +46,7 @@ pub fn is_empty_paragraph(st: StateRef<'_>, node: NodeKey) -> bool {
     children.is_empty()
         || children.len() == 1 && st.is_text(children[0]) && {
             let text = st.text_content(children[0]);
-            len(&text) <= 3 && text.encode_utf16().all(is_js_whitespace)
+            len(&text) <= 3 && text.encode_utf16().all(is_js_whitespace_unit)
         }
 }
 /// Remove escaped ASCII punctuation, then decode decimal numeric entities.

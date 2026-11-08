@@ -57,9 +57,12 @@ and closes take that room lock; the error callback only logs. Background tasks
 receive owned snapshots and editor batches before the guard is released.
 `HttpHandlers` borrows Room only to parse requests and serialize responses; it
 has no session state or mutable-memory escape hatch. `RoomMemoryView` supplies
-read-only diagnostics. Worker clocks, sockets, storage, D1, alarms, HTTP comment
+read-only diagnostics. Worker clocks, sockets, storage, D1, alarms, comment
 validation and publication scheduling implement the core ports in
-`src/outbound/room_ports.rs`. The comment gate remains the existing HTTP call.
+`src/outbound/room_ports.rs`. `COMMENT_GATE_MODE` selects `http` (the checked-in
+default), `in_process` or `shadow`. Shadow compares both verdicts and returns the
+HTTP verdict. The `lexical.comment_only_change` span records `gate.comment_only`,
+mode, sizes, timing and sanitized error kind; `lexical.shadow` records equality.
 
 For native simulation, run from the repository root:
 

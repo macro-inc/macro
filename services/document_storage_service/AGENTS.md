@@ -79,6 +79,9 @@ threads, pins, recents, notifications, folders, activity.
 - Add a config value or feature-gated behavior: `src/config.rs` → the
   `[features]` table in `Cargo.toml` if it should be independently toggleable.
 
+Lexical client startup requires `LEXICAL_ROUTE_MODES`; see the
+[route-switch configuration](../../crates/lexical_client/README.md).
+
 ## Checks
 
 - `cargo test -p document_storage_service` (`SQLX_OFFLINE` unset; needs
@@ -123,3 +126,5 @@ threads, pins, recents, notifications, folders, activity.
 - Negotiate Mail cache profiles through `x-macro-mail-cache-profile` (CORS-enabled HTTP) and `mailCacheProfile` (WebSocket connection init); preserve authenticated connection data and default unknown capabilities to v2.
 
 - The HTTP boundary validates agent correlation; activity consumption restores Kafka envelope attribution before materialization.
+
+Inject the existing shared SyncServiceClient into the Lexical facade so native document exports retain the host credential and tracing configuration.

@@ -17,6 +17,8 @@ No I/O, DOM, clipboard or application runtime.
 
 ## Boundaries
 
+- Use convert_nodes_to_markdown_string for explicit block lists; MarkdownText projections preserve raw undefined decorator values during array joining.
+
 - Depends inward on lexical_model and lexical_rich_nodes; remain excluded from workspace-hack.
 - Keep offsets in UTF-16 and whitespace in the JavaScript set.
 - Preserve transformer order, explicit NotHandled and None export semantics.

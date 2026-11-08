@@ -1,10 +1,12 @@
 # WP-07 Tier C: upstream text/paragraph
 
-From the repository root:
+Install from the repository root, then run inside the package to use its pinned
+Vitest version:
 
 ```sh
 bun install --cwd packages/lexical-conformance --frozen-lockfile
-STEPS=10000 bunx vitest run --config packages/lexical-conformance/diff/vitest.config.mts
+\cd packages/lexical-conformance
+STEPS=10000 bunx vitest run --config diff/vitest.config.mts
 ```
 
 The fixed seeds are 73129, 19088743 and 1592639710. `STEPS` counts generated
@@ -15,7 +17,9 @@ mismatch, delta-shrinks the tape and writes its seed, commands and snapshots to
 
 The config builds optimized Node and web WASM with cargo, wasm-bindgen and
 wasm-opt, requiring the wasm32 target and those tools on PATH. Builds are locked
-and cached within this worktree. The loader frees each handle after a run.
+and cached within this worktree. The setup file assigns the Chrome user agent
+after jsdom creation, avoiding the removed ResourceLoader API while preserving
+the oracle environment before test modules load. The loader frees each handle after a run.
 Upstream source is fetched and checksum-verified from `upstream.lock` into a
 separate disposable directory, without touching the recorder's source checkout.
 
@@ -54,7 +58,14 @@ normalization.
 
 `patches/cascade-count.patch` is S4's prescribed `divergence-cascade-guard`:
 it disables only the upstream long-run cascade guard in this disposable oracle.
-Other console errors fail the run. The recorder's hooks and fixtures are separate.
+S1 D-11 also keeps the error-mode `$getTextNodeOffset` guard enabled in this
+release oracle, matching Rust's always-on guard. The Vite transform changes only
+that call from `devInvariant` to `invariant` and checks its pinned source shape.
+Its numeric offset is rendered with Rust's typed error spelling; the full state,
+selection and identities still compare exactly. The oracle validates that its
+failed-update recovery listener contains empty arrays before representing it as
+no commit, matching Rust's atomic rejection. Nonempty recovery data fails. Other console
+errors fail the run. The recorder's hooks and fixtures are separate.
 
 This is WP-07 v0: raw transactions for text, paragraphs, line breaks, tabs,
 formatting and view inputs. EditorCore/session encoding (WP-14), rich nodes,

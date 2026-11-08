@@ -174,8 +174,12 @@ fn horizontal(
         if tx.is::<TableRowNode>(caret.origin()) {
             continue;
         }
-        if tx.is::<TableCellNode>(caret.origin()) && matches!(caret, NodeCaret::Child(_)) {
-            focus = Some(caret)
+        if tx.is::<TableCellNode>(caret.origin()) {
+            if matches!(caret, NodeCaret::Child(_)) {
+                focus = Some(caret);
+                break;
+            }
+            continue;
         }
         break;
     }
@@ -365,15 +369,20 @@ pub fn handle_arrow_key(
             if s.table != table.key() {
                 return Ok(HandlerResult::none());
             }
-            let a = cell_id(tx.view(), s.anchor.key())?;
-            let f = cell_id(tx.view(), s.focus.key())?;
+            let a = find_cell_node(tx.view(), s.anchor.key());
+            let f = find_cell_node(tx.view(), s.focus.key());
             if !s
                 .get_nodes(tx.view())?
                 .first()
                 .is_some_and(|k| tx.is::<TableNode>(*k))
             {
-                return Err(Error::Invariant("Expected TableNode"));
+                return Err(Error::Invariant(
+                    "$handleArrowKey: TableSelection.getNodes()[0] expected to be TableNode",
+                ));
             }
+            let (Some(a), Some(f)) = (a, f) else {
+                return Ok(HandlerResult::none());
+            };
             let pair = if shift {
                 let (map, av, fv) = map::checked_in(tx, table, a, f)?;
                 adjust_focus_in_direction(&map, &av, &fv, dir)?

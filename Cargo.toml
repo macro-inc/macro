@@ -6,6 +6,9 @@ exclude = ["vendor"]
 members = [
   "crates/client/document_session",
   "crates/client/document_session_wasm",
+  "crates/macro_document_composers",
+  "crates/client/mention_date",
+  "crates/client/lexical/macro_document_model",
   "crates/client/lexical/lexical_loro",
   "crates/client/lexical/lexical_model",
   "crates/client/lexical/lexical_html",
@@ -232,13 +235,21 @@ members = [
 # WP-00 reserves these dependencies for the following Lexical work packages.
 # Remove each exception when its first consumer lands (model, replay, XML, HTML).
 [workspace.metadata.cargo-shear]
-ignored = ["quick-xml", "rand_chacha", "lexical_node_id"]
+ignored = ["quick-xml", "rand_chacha"]
 
 [workspace.dependencies]
 lexical_html = { path = "crates/client/lexical/lexical_html" }
 lexical_markdown = { path = "crates/client/lexical/lexical_markdown" }
 document_session = { path = "crates/client/document_session" }
 lexical_loro = { path = "crates/client/lexical/lexical_loro" }
+macro_document_composers = { path = "crates/macro_document_composers" }
+trigger_context = { path = "crates/trigger_context" }
+mention_date = { path = "crates/client/mention_date" }
+macro_config = { path = "crates/macro_config" }
+macro_tower_layers = { path = "crates/macro_tower_layers" }
+macro_service_urls = { path = "crates/macro_service_urls" }
+sync_service_client = { path = "crates/sync_service_client" }
+macro_document_model = { path = "crates/client/lexical/macro_document_model", default-features = false }
 phf = { version = "0.13.1", features = ["macros"] }
 lexical_model = { path = "crates/client/lexical/lexical_model" }
 lexical_rich_nodes = { path = "crates/client/lexical/lexical_rich_nodes" }

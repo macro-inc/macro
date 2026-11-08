@@ -6,6 +6,94 @@ static FOLDED: StateKey<String> = StateKey::new("folded", |value| {
         .into()
 })
 .with_is_equal(|a, b| a.eq_ignore_ascii_case(b));
+
+#[test]
+fn learned_state_import_order_is_scoped_to_editor_and_exact_class() -> Result<(), Error> {
+    let mut editor = Editor::builder(EditorMode::Headless)
+        .build()
+        .expect("builder");
+    let json = serde_json::json!({"type":"text","text":"text","$":{"folded":"value","extra":1}});
+    {
+        let mut tx = editor.transaction();
+        let first = tx.import_node(json.as_object().expect("node"))?;
+        tx.set_state(first, &FOLDED, "updated".into())?;
+        assert_eq!(
+            to_js_json_string(&tx.export_json(first)?["$"]),
+            r#"{"folded":"updated","extra":1}"#
+        );
+        let second = tx.import_node(json.as_object().expect("node"))?;
+        assert_eq!(
+            to_js_json_string(&tx.export_json(second)?["$"]),
+            r#"{"extra":1,"folded":"value"}"#
+        );
+        let paragraph = tx.import_node(
+            serde_json::json!({"type":"paragraph","$":{"folded":"value","extra":1}})
+                .as_object()
+                .expect("paragraph"),
+        )?;
+        assert_eq!(
+            to_js_json_string(&tx.export_json(paragraph)?["$"]),
+            r#"{"folded":"value","extra":1}"#
+        );
+    }
+    // Shared configs survive a parse/update boundary, as upstream's registered-node map does.
+    let raw: SerializedEditorState = serde_json::from_str(
+        r#"{"root":{"type":"root","children":[{"type":"paragraph","children":[{"type":"text","text":"text","$":{"folded":"value","extra":1}}]}]}}"#,
+    )?;
+    let state = editor.parse_editor_state(&raw)?;
+    assert_eq!(
+        to_js_json_string(&state.to_json()?.root["children"][0]["children"][0]["$"]),
+        r#"{"extra":1,"folded":"value"}"#
+    );
+    let mut fresh = Editor::builder(EditorMode::Headless)
+        .build()
+        .expect("fresh builder");
+    let state = fresh.parse_editor_state(&raw)?;
+    assert_eq!(
+        to_js_json_string(&state.to_json()?.root["children"][0]["children"][0]["$"]),
+        r#"{"folded":"value","extra":1}"#
+    );
+    Ok(())
+}
+#[test]
+fn state_reads_teach_later_imports_and_copy_on_write_prunes_known_slots() -> Result<(), Error> {
+    let mut editor = Editor::builder(EditorMode::Headless)
+        .build()
+        .expect("builder");
+    let json = serde_json::json!({"type":"text","text":"text","$":{"folded":"value","extra":1}});
+    let (first, _) = editor.update(|tx| {
+        let first = tx.import_node(json.as_object().expect("node"))?;
+        assert_eq!(tx.get_state(first, &FOLDED)?, "value");
+        let second = tx.import_node(json.as_object().expect("node"))?;
+        assert_eq!(
+            to_js_json_string(&tx.export_json(second)?["$"]),
+            r#"{"extra":1,"folded":"value"}"#
+        );
+        let paragraph = tx.create(Paragraph::default())?;
+        tx.append(paragraph, &[first, second])?;
+        tx.append(NodeKey::ROOT, &[paragraph.key()])?;
+        Ok(first)
+    })?;
+    let before = editor.state().clone();
+    assert_eq!(
+        to_js_json_string(&before.view().export_json(first)?["$"]),
+        r#"{"folded":"value","extra":1}"#
+    );
+    editor.update(|tx| {
+        tx.set_state(first, &FOLDED, "next".into())?;
+        assert_eq!(
+            to_js_json_string(&tx.export_json(first)?["$"]),
+            r#"{"extra":1,"folded":"next"}"#
+        );
+        Ok(())
+    })?;
+    assert_eq!(
+        to_js_json_string(&before.view().export_json(first)?["$"]),
+        r#"{"folded":"value","extra":1}"#
+    );
+    Ok(())
+}
+
 #[test]
 fn custom_state_equality_and_unknown_introspection() -> Result<(), Error> {
     assert_eq!(FOLDED.name(), "folded");
@@ -137,5 +225,72 @@ fn nested_view_cache_uses_the_first_text_descendant() -> Result<(), Error> {
         "color: red"
     );
     assert_eq!(commit.changes.mutations.len(), 1);
+    Ok(())
+}
+
+#[test]
+fn optional_state_preserves_inner_identity_and_omits_none() -> Result<(), Error> {
+    use std::sync::Arc;
+    static LOCAL: StateKey<Option<bool>> =
+        StateKey::new("local", |value| value.and_then(serde_json::Value::as_bool));
+    static PEERS: StateKey<Option<Arc<[String]>>> = StateKey::new("peers", |_| None);
+    let mut editor = Editor::builder(EditorMode::Headless)
+        .build()
+        .expect("editor");
+    let mut tx = editor.transaction();
+    let paragraph = tx.create(Paragraph::default())?;
+    tx.append(NodeKey::ROOT, &[paragraph.key()])?;
+    tx.set_state(paragraph, &LOCAL, Some(false))?;
+    let peers: Arc<[String]> = vec!["peer".to_owned()].into();
+    tx.set_state(paragraph, &PEERS, Some(peers.clone()))?;
+    let first = tx.commit()?;
+    assert_eq!(
+        first.next.view().export_json(paragraph)?["$"]["local"],
+        false
+    );
+    let mut tx = editor.transaction();
+    tx.update_state(paragraph, &PEERS, |_| Some(peers))?;
+    assert!(tx.commit()?.is_noop());
+    let mut tx = editor.transaction();
+    tx.set_state(paragraph, &PEERS, Some(vec!["peer".to_owned()].into()))?;
+    assert!(!tx.commit()?.is_noop());
+    let mut tx = editor.transaction();
+    tx.set_state(paragraph, &LOCAL, None)?;
+    tx.set_state(paragraph, &PEERS, None)?;
+    assert!(
+        !tx.commit()?
+            .next
+            .view()
+            .export_json(paragraph)?
+            .contains_key("$")
+    );
+    Ok(())
+}
+
+#[test]
+fn imported_text_format_names_and_undefined_style_reach_paragraph_export() -> Result<(), Error> {
+    let mut editor = Editor::builder(EditorMode::Headless)
+        .build()
+        .expect("editor");
+    let input: SerializedEditorState = serde_json::from_value(
+        serde_json::json!({"root":{"type":"root","version":1,"children":[{"type":"paragraph","version":1,"format":"unknown","children":[{"type":"text","version":1,"text":"text","format":"unknown","detail":0,"mode":"normal"}]}]}}),
+    )?;
+    let state = editor.parse_editor_state(&input)?;
+    let output = serde_json::to_value(state.to_json()?)?;
+    assert_eq!(output["root"]["children"][0]["format"], "");
+    assert!(output["root"]["children"][0].get("textFormat").is_none());
+    assert!(output["root"]["children"][0].get("textStyle").is_none());
+    assert!(
+        output["root"]["children"][0]["children"][0]
+            .get("format")
+            .is_none()
+    );
+    let mut named = input;
+    named.root["children"][0]["children"][0]["format"] = serde_json::json!("bold");
+    assert_eq!(
+        serde_json::to_value(editor.parse_editor_state(&named)?.to_json()?)?["root"]["children"][0]
+            ["textFormat"],
+        1
+    );
     Ok(())
 }

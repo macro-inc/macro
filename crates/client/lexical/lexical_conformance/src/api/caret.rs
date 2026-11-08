@@ -72,6 +72,13 @@ pub(crate) fn call(
             return Err(fail("unsupported iterator method"));
         }
         let id = integer(id)? as usize;
+        if let Some(mut cursor) = r.child_iterators.remove(&id) {
+            let mut values = Vec::new();
+            while let Some(key) = cursor.next(tx) {
+                values.push(r.node(tx.view(), key)?);
+            }
+            return Ok(json!(values));
+        }
         if let Some(values) = r.value_iterators.remove(&id) {
             return Ok(json!(values));
         }

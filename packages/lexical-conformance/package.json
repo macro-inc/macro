@@ -40,7 +40,8 @@
     "lexical": "0.45.0",
     "lib0": "0.2.117",
     "linkify-it": "5.0.2",
-    "loro-crdt": "1.16.3",
+    "loro-crdt": "1.17.1",
+    "loro-crdt-legacy": "npm:loro-crdt@1.16.3",
     "nanoid": "5.1.5",
     "prettier": "3.8.1",
     "prettier-plugin-hermes-parser": "0.36.0",
@@ -59,6 +60,8 @@
     "y-protocols": "1.0.6",
     "y-websocket": "2.1.0",
     "yjs": "13.6.30",
-    "zod": "4.4.3"
+    "zod": "4.4.3",
+    "jsonwebtoken": "9.0.3",
+    "@types/jsonwebtoken": "9.0.9"
   }
 }

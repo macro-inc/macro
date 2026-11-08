@@ -439,3 +439,117 @@ fn line_boundary_continues_to_host_after_an_inline_decorator() -> Result<(), Err
     assert_eq!(tx.focus()?, Point::text(b, Utf16Offset(1)));
     Ok(())
 }
+
+#[test]
+fn forward_delete_at_segmented_end_removes_last_segment_and_restores_selection() -> Result<(), Error>
+{
+    let mut editor = Editor::builder(EditorMode::Headless)
+        .build()
+        .expect("editor");
+    let mut tx = editor.transaction();
+    let paragraph = tx.create(Paragraph::default())?;
+    let segmented = tx.create_text("a")?;
+    let tail = tx.create_text("tail")?;
+    tx.text(segmented)?.set_mode(TextMode::Segmented)?;
+    tx.append(paragraph, &[segmented.key(), tail.key()])?;
+    tx.append(NodeKey::ROOT, &[paragraph.key()])?;
+    tx.select_start(segmented)?;
+    tx.delete_character(
+        EditDirection::Forward,
+        ModifyTarget::View {
+            anchor: Point::text(segmented, Utf16Offset(0)),
+            focus: Point::text(segmented, Utf16Offset(1)),
+            resolution_dirty: false,
+            is_backward_in_dom: false,
+        },
+    )?;
+    assert_eq!(tx.children_keys(paragraph)?, vec![tail.key()]);
+    let range = tx.selection().and_then(Selection::as_range).expect("range");
+    assert_eq!(range.anchor, Point::text(tail, Utf16Offset(0)));
+    assert_eq!(range.focus, range.anchor);
+    Ok(())
+}
+
+#[test]
+fn no_view_movement_does_not_enter_a_direct_child_block() -> Result<(), Error> {
+    let mut editor = Editor::builder(EditorMode::Headless)
+        .build()
+        .expect("editor");
+    let mut tx = editor.transaction();
+    let outer = tx.create(Paragraph::default())?;
+    let inner = tx.create(Paragraph::default())?;
+    tx.append(outer, &[inner.key()])?;
+    tx.append(NodeKey::ROOT, &[outer.key()])?;
+    let point = Point::element(outer, ChildIndex(0));
+    tx.set_selection(Some(Selection::Range(RangeSelection::collapsed(point))))?;
+    tx.delete_word(
+        EditDirection::Forward,
+        ModifyTarget::NoView,
+        ModifyTarget::NoView,
+    )?;
+    assert_eq!(tx.anchor()?, point);
+    assert_eq!(tx.focus()?, point);
+    Ok(())
+}
+
+#[test]
+fn collapsed_node_reads_choose_the_inline_element_beyond_a_break() -> Result<(), Error> {
+    let mut editor = Editor::builder(EditorMode::Headless)
+        .node::<Inline>()
+        .build()
+        .expect("editor");
+    let mut tx = editor.transaction();
+    let paragraph = tx.create(Paragraph::default())?;
+    let line = tx.create(LineBreak {})?;
+    let inline = tx.create(Inline {})?;
+    let text = tx.create_text("a")?;
+    tx.append(inline, &[text.key()])?;
+    tx.append(paragraph, &[line.key(), inline.key()])?;
+    tx.append(NodeKey::ROOT, &[paragraph.key()])?;
+    let range = RangeSelection::collapsed(Point::element(paragraph, ChildIndex(1)));
+    assert_eq!(range.nodes(tx.view())?, vec![inline.key()]);
+    Ok(())
+}
+
+#[derive(Clone, Default, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
+struct Inline {}
+impl NodeType for Inline {
+    const TYPE: &'static str = "inline-element";
+    type Kind = ElementKind;
+    impl_default_node!();
+}
+impl ElementNode for Inline {
+    element_node_base!();
+    fn is_inline(&self, _: ElementView<'_>) -> bool {
+        true
+    }
+}
+
+#[test]
+fn text_selection_and_caret_reads_allow_surrogate_interiors_but_edits_reject_them()
+-> Result<(), Error> {
+    let mut editor = Editor::builder(EditorMode::Headless)
+        .build()
+        .expect("editor");
+    let mut tx = editor.transaction();
+    let paragraph = tx.create(Paragraph::default())?;
+    let text = tx.create_text("a😀b")?;
+    tx.append(paragraph, &[text.key()])?;
+    tx.append(NodeKey::ROOT, &[paragraph.key()])?;
+    tx.text(text)?
+        .select(Some(Utf16Offset(2)), Some(Utf16Offset(2)))?;
+    let range = tx.range_selection()?;
+    let caret = caret_from_point(tx.view(), &range.anchor, CaretDirection::Next)?;
+    assert_eq!(
+        point_from_caret(tx.view(), &caret)?,
+        Point::text(text, Utf16Offset(2))
+    );
+    assert_eq!(range.nodes(tx.view())?, vec![text.key()]);
+    assert_eq!(
+        tx.character_offsets(&Selection::Range(range.clone()))?,
+        (Utf16Offset(2), Utf16Offset(2))
+    );
+    assert!(tx.insert_text("x").is_err());
+    assert_eq!(tx.text_content(text), "a😀b");
+    Ok(())
+}

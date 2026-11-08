@@ -588,3 +588,62 @@ fn replacing_old_anchor_is_not_classified_as_first_character_typing() {
         HistoryAction::Push
     );
 }
+
+static RESTORED: EventKey<()> = EventKey::new("restored");
+struct NotifyRestored;
+impl Plugin for NotifyRestored {
+    fn name(&self) -> &'static str {
+        "notify-restored"
+    }
+    fn commands(&self) -> &[CommandRegistration] {
+        &[]
+    }
+    fn handle(&self, _: &mut Transaction<'_>, _: &Command) -> Result<Handled, Error> {
+        Ok(Handled::No)
+    }
+    fn after_commit(&self, tx: &mut Transaction<'_>, commit: &Commit) -> Result<(), Error> {
+        if commit.tags.contains(&UpdateTag::Historic) && !commit.changes.is_empty() {
+            tx.emit(&RESTORED, ());
+        }
+        Ok(())
+    }
+}
+#[test]
+fn standalone_restore_publishes_notification_without_replacing_history_candidate()
+-> Result<(), Error> {
+    let mut editor = Editor::builder(EditorMode::Headless)
+        .plugin(NotifyRestored)
+        .build()
+        .expect("editor");
+    let (text, initial) = editor.update(|tx| {
+        let p = tx.create(Paragraph::default())?;
+        let text = tx.create_text("a")?;
+        tx.append(p, &[text.key()])?;
+        tx.append(NodeKey::ROOT, &[p.key()])?;
+        tx.select_end(text)?;
+        Ok(text)
+    })?;
+    let mut history = History::new(HistoryConfig::default(), HistoryTime(0));
+    history.record(&initial, HistoryTime(0));
+    let (_, edit) = editor.update(|tx| {
+        tx.text(text)?.set_text_content("abc")?;
+        Ok(())
+    })?;
+    history.record(&edit, HistoryTime(1));
+    let commit = history.undo(&mut editor, HistoryTime(2))?.expect("undo");
+    assert_eq!(commit.chain().count(), 2);
+    assert_eq!(
+        commit.chain().flat_map(|c| c.events_of(&RESTORED)).count(),
+        1
+    );
+    assert_eq!(editor.state().view().text_content(text), "a");
+    assert_eq!(history.current_commit, None);
+    assert_eq!(
+        history.availability(),
+        HistoryAvailability {
+            can_undo: false,
+            can_redo: true
+        }
+    );
+    Ok(())
+}
