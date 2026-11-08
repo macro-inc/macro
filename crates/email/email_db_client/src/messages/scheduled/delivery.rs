@@ -1,6 +1,6 @@
 //! Fenced persistence for recoverable scheduled delivery.
 
-use models_email::service::message::ScheduledMessage;
+use email_types::service::message::ScheduledMessage;
 use sqlx::types::Uuid;
 use sqlx::{PgConnection, PgPool};
 

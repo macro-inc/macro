@@ -30,7 +30,7 @@ methods, shared by almost every list endpoint in the backend.
   `channels`, `complete_graph`, `database_sql_runner`, `email`, `email_db_client`,
   `foreign_entity`, `github_pull_requests`, `graphql_activity`,
   `graphql_calendar`, `graphql_initiative`, `graphql_soup`, `macro_db_client`,
-  `messages`, `model`, `model_notifications`, `models_email`, `models_soup`,
+  `messages`, `model`, `model_notifications`, `email_types`, `models_soup`,
   `notification`, `notification_db_client`, `skills`, `soup`, `teams`.
 
 ## Recipes

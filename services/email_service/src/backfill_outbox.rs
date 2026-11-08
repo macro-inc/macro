@@ -2,10 +2,10 @@
 
 mod crm;
 
-use models_email::email::service::backfill::{
+use email_types::email::service::backfill::{
     BackfillOperation, BackfillPubsubMessage, FinalizeBackfillPayload, JobScopedPayload,
 };
-use models_email::email::service::thread::ListThreadsPayload;
+use email_types::email::service::thread::ListThreadsPayload;
 use sqlx::PgPool;
 use sqs_client::SQS;
 use uuid::Uuid;

@@ -1,4 +1,4 @@
-use models_email::service::contact::{Contact, ContactList};
+use email_types::service::contact::{Contact, ContactList};
 use uuid::Uuid;
 
 use super::super::models::{AccessToken, ContactPage, EmailApiError};

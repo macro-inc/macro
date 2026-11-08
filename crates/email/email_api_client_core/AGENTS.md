@@ -28,7 +28,7 @@ adapters are `crates/email/email_api_client_outbound`.
 
 ## Boundaries
 
-- Depends on: `models_email`. Ports, service and request counting are behind
+- Depends on: `email_types`. Ports, service and request counting are behind
   the `ports` feature (which adds tokio).
 - Used by: `crates/email/email` (ports only), `email_api_client_outbound`,
   `services/email_service`, `services/calendar_service`.

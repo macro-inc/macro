@@ -218,7 +218,7 @@ async fn draft_discard_recomputes_thread_metadata(pool: Pool<Postgres>) -> anyho
     assert!(before.latest_inbound_message_ts.is_some());
 
     let now = chrono::Utc::now();
-    let draft = models_email::email::service::message::SimpleMessage {
+    let draft = email_types::email::service::message::SimpleMessage {
         db_id: Uuid::parse_str(DRAFT_MSG)?,
         provider_id: None,
         thread_db_id: Uuid::parse_str(THREAD)?,

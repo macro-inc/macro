@@ -3,9 +3,9 @@ mod test;
 
 use crate::parse::db_to_service::map_db_contact_to_service;
 use chrono::{DateTime, Utc};
+use email_types::service::address;
+use email_types::{db, service};
 use email_utils::{dedupe_emails, is_generic_email};
-use models_email::service::address;
-use models_email::{db, service};
 use sqlx::PgPool;
 use sqlx::types::Uuid;
 use std::collections::{HashMap, HashSet};

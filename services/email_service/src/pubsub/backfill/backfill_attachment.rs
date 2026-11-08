@@ -2,9 +2,9 @@ use crate::pubsub::context::PubSubContext;
 use crate::util::upload_attachment::{
     UploadAttachmentContext, UploadAttachmentError, upload_attachment,
 };
-use models_email::service::backfill::BackfillAttachmentPayload;
-use models_email::service::link;
-use models_email::service::pubsub::{DetailedError, FailureReason, ProcessingError};
+use email_types::service::backfill::BackfillAttachmentPayload;
+use email_types::service::link;
+use email_types::service::pubsub::{DetailedError, FailureReason, ProcessingError};
 use uuid::Uuid;
 
 /// this step is invoked by the UpdateMetadata step. it uploads the specified attachment as a

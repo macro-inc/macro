@@ -1,4 +1,4 @@
-use models_email::gmail::{HistoryListResponse, HistoryRecord};
+use email_types::gmail::{HistoryListResponse, HistoryRecord};
 
 use email_api_client_core::models::{ChangePage, InboxChanges, SyncCursor};
 

@@ -1,5 +1,5 @@
-use models_email::gmail::contacts::PersonResource;
-use models_email::service::contact::Contact;
+use email_types::gmail::contacts::PersonResource;
+use email_types::service::contact::Contact;
 use uuid::Uuid;
 
 pub(crate) fn map_person_to_contact(link_id: Uuid, person: PersonResource) -> Contact {

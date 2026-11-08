@@ -1,8 +1,8 @@
 use crate::{MAX_BATCH_SIZE, SQS};
 use anyhow::Context;
 use aws_sdk_sqs::types::SendMessageBatchRequestEntry;
-use models_email::gmail::gmail_ops::GmailOpsPubsubMessage;
-use models_email::gmail::inbox_sync::InboxSyncPubsubMessage;
+use email_types::gmail::gmail_ops::GmailOpsPubsubMessage;
+use email_types::gmail::inbox_sync::InboxSyncPubsubMessage;
 
 impl SQS {
     pub fn gmail_inbox_sync_queue(mut self, gmail_inbox_sync_queue: &str) -> Self {

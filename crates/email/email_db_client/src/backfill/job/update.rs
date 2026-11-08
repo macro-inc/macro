@@ -1,5 +1,5 @@
-use models_email::email::db;
-use models_email::email::service;
+use email_types::email::db;
+use email_types::email::service;
 use sqlx::PgPool;
 use sqlx::types::Uuid;
 

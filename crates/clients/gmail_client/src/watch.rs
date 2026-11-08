@@ -1,7 +1,7 @@
 use crate::error::{decode_json_response, unsuccessful_response};
 use crate::{GmailApiHttpError, GmailClient};
-use models_email::gmail::WatchRequest;
-use models_email::gmail::history::WatchResponse;
+use email_types::gmail::WatchRequest;
+use email_types::gmail::history::WatchResponse;
 
 /// Registers a user for Gmail push notifications.
 #[tracing::instrument(skip(client, access_token), err)]

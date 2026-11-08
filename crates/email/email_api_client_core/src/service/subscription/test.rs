@@ -1,5 +1,5 @@
 use chrono::{TimeZone, Utc};
-use models_email::service::link::{Link, UserProvider};
+use email_types::service::link::{Link, UserProvider};
 use uuid::Uuid;
 
 use super::super::super::models::{

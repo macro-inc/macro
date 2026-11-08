@@ -1,5 +1,5 @@
 use base64::{Engine as _, engine::general_purpose::URL_SAFE};
-use models_email::gmail::{Header, MessagePart, MessagePartBody, MessageResource, ThreadResource};
+use email_types::gmail::{Header, MessagePart, MessagePartBody, MessageResource, ThreadResource};
 use uuid::Uuid;
 
 use super::map_thread_resource_to_service;

@@ -1,5 +1,5 @@
 use email::domain::mailbox::{MailboxError, lifecycle::*};
-use models_email::{
+use email_types::{
     api::refresh::RefreshEmailEvent,
     service::{
         backfill::{BackfillOperation, BackfillPubsubMessage, InitPayload, JobScopedPayload},
@@ -22,7 +22,7 @@ impl InboxLifecycleEffects for InboxLifecycleClients {
         match effect {
             InboxLifecycleEffect::GmailHistory { work } => {
                 use email::domain::mailbox::gmail_history::HistoryWork;
-                use models_email::gmail::inbox_sync::{
+                use email_types::gmail::inbox_sync::{
                     DeleteMessagePayload, InboxSyncOperation, InboxSyncPubsubMessage,
                     UpdateLabelsPayload, UpsertMessagePayload,
                 };
@@ -162,7 +162,7 @@ impl InboxLifecycleEffects for InboxLifecycleClients {
 
 use crate::outbound::email_api::GmailApi;
 use email_api_client_core::models::EmailApiError;
-use models_email::service::{
+use email_types::service::{
     cache::TokenCacheKey,
     link::{Link, UserProvider},
 };

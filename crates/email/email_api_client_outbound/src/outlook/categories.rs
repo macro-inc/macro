@@ -4,7 +4,7 @@ use email_api_client_core::{
     models::{AccessToken, EmailApiError, StreamToken},
     ports::MailboxLabelClient,
 };
-use models_email::service::label::{Label, LabelListVisibility, LabelType, MessageListVisibility};
+use email_types::service::label::{Label, LabelListVisibility, LabelType, MessageListVisibility};
 use reqwest::Method;
 use serde::Deserialize;
 use serde_json::json;

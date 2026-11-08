@@ -2,7 +2,7 @@ use std::sync::{Arc, Mutex};
 
 use std::collections::VecDeque;
 
-use models_email::service::contact::Contact;
+use email_types::service::contact::Contact;
 use uuid::Uuid;
 
 use super::super::test_support::{Call, FakeGate, FakeTokenSource, call_log};

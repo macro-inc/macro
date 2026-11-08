@@ -1,6 +1,6 @@
 use email_api_client_core::models::EmailApiError;
-use models_email::gmail::gmail_ops::GmailOpsPubsubMessage;
-use models_email::service::pubsub::{DetailedError, FailureReason, ProcessingError};
+use email_types::gmail::gmail_ops::GmailOpsPubsubMessage;
+use email_types::service::pubsub::{DetailedError, FailureReason, ProcessingError};
 
 use crate::pubsub::gmail_ops::worker::GmailOpsContext;
 

@@ -330,7 +330,7 @@ scenario!(
     a_recovery_backfill_does_not_bring_back_an_archive_that_landed_during_its_fetch,
     913,
     |world| {
-        use models_email::email::service::backfill::{BackfillMessagePayload, JobScopedPayload};
+        use email_types::email::service::backfill::{BackfillMessagePayload, JobScopedPayload};
         let sim = &mut Sim::new(&mut world, 1);
         sim.act(Action::Archive(T1, true), false).await.unwrap();
         sim.deliver_all(Queue::Ops, Reply::RateLimited).await;
@@ -581,7 +581,7 @@ async fn crossing_bulk_writes_each_send_where_they_are_newest_and_fall_back_on_r
     use crate::pubsub::gmail_ops::operations::OperationError;
     use crate::pubsub::gmail_ops::operations::modify_message_labels::modify_message_labels;
     use email::domain::ports::EmailRepo;
-    use models_email::gmail::gmail_ops::{GmailMessageRef, ModifyMessageLabelsBatchPayload};
+    use email_types::gmail::gmail_ops::{GmailMessageRef, ModifyMessageLabelsBatchPayload};
     use uuid::Uuid;
 
     let mut world = World::new(pool, 920, true).await;
@@ -695,7 +695,7 @@ fn label_writes_and_a_label_sync_fit_on_small_worker_stacks(
 ) {
     use aws_sdk_sqs::types::{Message, MessageSystemAttributeName};
     use email::domain::ports::EmailService;
-    use models_email::gmail::inbox_sync::{
+    use email_types::gmail::inbox_sync::{
         InboxSyncOperation, InboxSyncPubsubMessage, UpdateLabelsPayload,
     };
     let message = |id: String, body: String| {

@@ -1,10 +1,10 @@
 use super::*;
 use crate::links::insert::upsert_link;
 use crate::links::update::update_link_sync_status;
+use email_types::email::service::link::{Link, UserProvider};
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
 use macro_user_id::email::EmailStr;
 use macro_user_id::user_id::MacroUserIdStr;
-use models_email::email::service::link::{Link, UserProvider};
 use sqlx::{Pool, Postgres};
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};

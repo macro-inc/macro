@@ -4,11 +4,11 @@ use crate::pubsub::backfill::increment_counters::{
 };
 use crate::pubsub::context::PubSubContext;
 use crate::pubsub::util::cg_refresh_email;
-use models_email::api::refresh::{BackfillStatus, RefreshEmailEvent};
-use models_email::email::service::backfill::{
+use email_types::api::refresh::{BackfillStatus, RefreshEmailEvent};
+use email_types::email::service::backfill::{
     BackfillMessagePayload, BackfillOperation, BackfillPubsubMessage, JobScopedPayload,
 };
-use models_email::email::service::pubsub::{DetailedError, FailureReason};
+use email_types::email::service::pubsub::{DetailedError, FailureReason};
 use sqs_worker::cleanup_message;
 use std::time::Duration;
 use uuid::Uuid;

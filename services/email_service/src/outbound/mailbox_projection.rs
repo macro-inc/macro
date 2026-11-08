@@ -7,11 +7,7 @@ use email::domain::{
     mailbox::{DatabaseFailure, MailboxError, MailboxKey, projection::*},
     models::calendar_invitation::CalendarInvitation,
 };
-use entity_kind::EntityType;
-use macro_event_broker::MacroEventBroker;
-use macro_user_id::user_id::MacroUserIdStr;
-use model_notifications::NewEmailMetadata;
-use models_email::{
+use email_types::{
     api::refresh::RefreshEmailEvent,
     service::{
         attachment::{AttachmentUploadArgs, AttachmentUploadDestination},
@@ -20,6 +16,10 @@ use models_email::{
         },
     },
 };
+use entity_kind::EntityType;
+use macro_event_broker::MacroEventBroker;
+use macro_user_id::user_id::MacroUserIdStr;
+use model_notifications::NewEmailMetadata;
 use notification::domain::{models::SendNotificationRequestBuilder, service::NotificationIngress};
 use std::{collections::HashSet, sync::Arc};
 use system_properties::{PgSystemPropertiesRepository, SystemPropertiesServiceImpl};

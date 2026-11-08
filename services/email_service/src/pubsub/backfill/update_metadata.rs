@@ -3,9 +3,9 @@ use crate::pubsub::backfill::increment_counters::incr_completed_threads;
 use crate::pubsub::context::PubSubContext;
 use crate::pubsub::util::publish_email_event;
 use email::domain::events::{EmailMacroEvent, ThreadBackfilledMetadata};
-use models_email::email::service::backfill::{JobScopedPayload, UpdateMetadataPayload};
-use models_email::email::service::link;
-use models_email::email::service::pubsub::{DetailedError, FailureReason, ProcessingError};
+use email_types::email::service::backfill::{JobScopedPayload, UpdateMetadataPayload};
+use email_types::email::service::link;
+use email_types::email::service::pubsub::{DetailedError, FailureReason, ProcessingError};
 
 /// This step is invoked by BackfillMessage once all messages in a thread have been backfilled.
 /// Updates the thread metadata in the database, the replying_to_id values of its messages, and

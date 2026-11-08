@@ -131,7 +131,7 @@ fn probe(accessible: bool) -> Probe {
                     "owner@example.com".to_owned(),
                 )
                 .unwrap(),
-                provider: models_email::service::link::UserProvider::Outlook,
+                provider: email_types::service::link::UserProvider::Outlook,
                 is_sync_active: true,
                 is_primary: true,
                 needs_reauth: false,

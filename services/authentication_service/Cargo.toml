@@ -145,7 +145,7 @@ macro_uuid = { workspace = true }
 maud = { version = "0.27.0" }
 miniserde = "0.1.45"
 mobile_welcome_email_db_client = { workspace = true }
-models_email = { workspace = true }
+email_types = { workspace = true }
 mockall = { workspace = true }
 shared_types = { workspace = true }
 entity_kind = { workspace = true }

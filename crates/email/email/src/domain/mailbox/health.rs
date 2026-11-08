@@ -2,8 +2,8 @@
 
 use super::*;
 use email_api_client_core::models::{AccessToken, TokenFreshness};
+use email_types::service::link::{Link, UserProvider};
 use macro_user_id::user_id::MacroUserIdStr;
-use models_email::service::link::{Link, UserProvider};
 
 pub struct InboxHealthBinding {
     pub link: Link,

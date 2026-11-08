@@ -1,5 +1,5 @@
 use crate::EmailServiceClient;
-use models_email::email::service::message::RecentInboxMessagesResponse;
+use email_types::email::service::message::RecentInboxMessagesResponse;
 
 #[cfg(test)]
 mod test;

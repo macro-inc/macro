@@ -2,13 +2,13 @@ use crate::pubsub::context::PubSubContext;
 use crate::pubsub::inbox_sync::email_api_error::handle_operation_error;
 use crate::util::process_pre_insert::sync_labels::sync_labels;
 use email_api_client_core::models::{EmailApiError, SyncCursor};
-use models_email::email::service::backfill::BackfillJob;
-use models_email::email::service::backfill::{
+use email_types::email::service::backfill::BackfillJob;
+use email_types::email::service::backfill::{
     BackfillOperation, BackfillPubsubMessage, InitPayload, JobScopedPayload,
 };
-use models_email::gmail::inbox_sync::{GmailMessagePayload, InboxSyncOperation};
-use models_email::service::link::{Link, UserProvider};
-use models_email::service::pubsub::{DetailedError, FailureReason, ProcessingError};
+use email_types::gmail::inbox_sync::{GmailMessagePayload, InboxSyncOperation};
+use email_types::service::link::{Link, UserProvider};
+use email_types::service::pubsub::{DetailedError, FailureReason, ProcessingError};
 use sqlx::PgPool;
 use std::result;
 use uuid::Uuid;

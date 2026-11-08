@@ -1,6 +1,6 @@
 use anyhow::Context;
 use chrono::Utc;
-use models_email::service::{label::system_labels, message::ParsedSearchMessage};
+use email_types::service::{label::system_labels, message::ParsedSearchMessage};
 use models_properties::EntityType;
 use opensearch_client::{
     OpensearchClient, date_format::EpochMillis, upsert::email::UpsertEmailArgs,

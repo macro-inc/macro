@@ -23,7 +23,7 @@ cleanup, and backfill.
 
 ## Boundaries
 
-- Depends on: `models_email`, `models_pagination`, `email_utils`.
+- Depends on: `email_types`, `models_pagination`, `email_utils`.
 - Used by: `crates/email/email`, `crates/search/search_service`, `services/calendar_service`,
   `services/authentication_service`, `services/search_processing_service`,
   `services/email_service`.

@@ -215,8 +215,8 @@ fn service_attachment(
     filename: &str,
     mime_type: &str,
     provider_id: &str,
-) -> models_email::service::attachment::Attachment {
-    models_email::service::attachment::Attachment {
+) -> email_types::service::attachment::Attachment {
+    email_types::service::attachment::Attachment {
         db_id: Uuid::new_v4(),
         provider_id: Some(provider_id.to_string()),
         data_url: None,

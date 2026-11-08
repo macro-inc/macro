@@ -72,7 +72,7 @@ pub struct PathParams {
         ("id" = Uuid, Path, description = "Message ID."),
     ),
     responses(
-            (status = 200, body=models_email::service::message::ParsedMessage),
+            (status = 200, body=email_types::service::message::ParsedMessage),
             (status = 400, body=ErrorResponse),
             (status = 401, body=ErrorResponse),
             (status = 404, body=ErrorResponse),
@@ -109,7 +109,7 @@ pub async fn handler(
     path = "/email/messages/batch",
     operation_id = "get_messages_batch",
     responses(
-            (status = 200, body=Vec<models_email::service::message::ParsedMessage>),
+            (status = 200, body=Vec<email_types::service::message::ParsedMessage>),
             (status = 400, body=ErrorResponse),
             (status = 401, body=ErrorResponse),
             (status = 404, body=ErrorResponse),

@@ -2,7 +2,7 @@ use std::sync::{Arc, Mutex};
 use std::task::{Context, Waker};
 use std::time::Duration;
 
-use models_email::email::service::label::Label;
+use email_types::email::service::label::Label;
 use uuid::Uuid;
 
 use super::super::models::{

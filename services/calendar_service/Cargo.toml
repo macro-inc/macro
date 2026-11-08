@@ -48,7 +48,7 @@ macro_env = { workspace = true }
 macro_env_var = { workspace = true }
 macro_event_broker = { workspace = true, default-features = true }
 macro_queues = { workspace = true }
-models_email = { workspace = true }
+email_types = { workspace = true }
 redis = { workspace = true, features = ["tokio-rustls-comp"] }
 reqwest = { workspace = true }
 rootcause = { workspace = true }

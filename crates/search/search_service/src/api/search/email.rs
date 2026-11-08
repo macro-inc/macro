@@ -1,9 +1,9 @@
 use crate::api::context::SearchHandlerState;
 use crate::api::search::simple::SearchError;
 use email_db_client::contacts::get::ThreadContactsMap;
+use email_types::service::message::{MessageSenderInfo, ThreadHistoryInfo};
 use indexmap::IndexMap;
 use macro_user_id::user_id::MacroUserIdStr;
-use models_email::service::message::{MessageSenderInfo, ThreadHistoryInfo};
 use models_properties::{EntityReference, EntityType};
 use models_search::email::{
     EmailSearchParticipant, EmailSearchResponseItem, EmailSearchResponseItemWithMetadata,

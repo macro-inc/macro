@@ -1,6 +1,6 @@
 use crate::EmailServiceClient;
-use models_email::email::service;
-use models_email::email::service::message;
+use email_types::email::service;
+use email_types::email::service::message;
 
 impl EmailServiceClient {
     // External routes - require JWT authentication and perform permission checks

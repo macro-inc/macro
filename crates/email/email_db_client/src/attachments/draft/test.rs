@@ -4,8 +4,8 @@ use crate::attachments::draft::{
     insert_draft_attachment,
 };
 use anyhow::Result;
+use email_types::service;
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
-use models_email::service;
 use sqlx::types::Uuid;
 use sqlx::{Pool, Postgres};
 

@@ -1,4 +1,4 @@
-use models_email::email::service::crm_cleanup::CrmCleanupCandidate;
+use email_types::email::service::crm_cleanup::CrmCleanupCandidate;
 use sqlx::PgPool;
 use sqlx::types::Uuid;
 

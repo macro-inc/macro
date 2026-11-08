@@ -5,8 +5,8 @@ pub mod upload_filters;
 
 use crate::parse::db_to_service::map_db_attachment_to_service;
 use crate::parse::service_to_db::map_service_attachments_to_db;
-use models_email::db::attachment;
-use models_email::{db, service};
+use email_types::db::attachment;
+use email_types::{db, service};
 use sqlx::types::Uuid;
 use sqlx::{Executor, PgPool, Pool, Postgres};
 use std::collections::HashMap;

@@ -18,8 +18,8 @@ where
     MacroAuthorizationState<Auth>: axum::extract::FromRef<crate::api::ApiContext>,
 {
     let provider = match link.provider.as_str() {
-        "GMAIL" => models_email::email::service::link::UserProvider::Gmail,
-        "OUTLOOK" => models_email::email::service::link::UserProvider::Outlook,
+        "GMAIL" => email_types::email::service::link::UserProvider::Gmail,
+        "OUTLOOK" => email_types::email::service::link::UserProvider::Outlook,
         other => {
             tracing::error!(provider = other, "unknown provider in link");
             return Err((
@@ -30,7 +30,7 @@ where
         }
     };
     req.extensions_mut()
-        .insert(models_email::email::service::link::Link {
+        .insert(email_types::email::service::link::Link {
             id: link.id,
             macro_id: link.macro_id.clone(),
             fusionauth_user_id: link.fusionauth_user_id.clone(),

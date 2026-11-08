@@ -3,12 +3,12 @@ use base64::Engine;
 use base64::engine::general_purpose::STANDARD;
 use document_storage_service_client::DocumentStorageServiceClient;
 use email_api_client_core::models::EmailApiError;
-use macro_user_id::lowercased::Lowercase;
-use macro_user_id::user_id::{MacroUserId, MacroUserIdStr};
-use models_email::service::attachment::{
+use email_types::service::attachment::{
     AttachmentSfs, AttachmentUploadArgs, AttachmentUploadMetadata,
 };
-use models_email::service::link;
+use email_types::service::link;
+use macro_user_id::lowercased::Lowercase;
+use macro_user_id::user_id::{MacroUserId, MacroUserIdStr};
 use sha2::{Digest, Sha256};
 use shared_types::document::MAX_DOCUMENT_NAME_GRAPHEMES;
 use shared_types::document::response::{CreateDocumentRequest, CreateDocumentResponse};
@@ -116,10 +116,10 @@ pub async fn store_attachment(
     let mime_type = args.attachment_metadata.mime_type.clone();
 
     match args.upload_destination {
-        models_email::service::attachment::AttachmentUploadDestination::Sfs => {
+        email_types::service::attachment::AttachmentUploadDestination::Sfs => {
             upload_media_attachment(&ctx, args, attachment_data, mime_type).await
         }
-        models_email::service::attachment::AttachmentUploadDestination::Dss => {
+        email_types::service::attachment::AttachmentUploadDestination::Dss => {
             upload_document_attachment(&ctx, args, attachment_data).await
         }
     }

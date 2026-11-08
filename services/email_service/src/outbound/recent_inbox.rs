@@ -10,10 +10,10 @@ use email_api_client_core::{
     },
     service::mailbox::MailboxApiService,
 };
+use email_types::email::service::message::{Message, RecentInboxMessage};
+use email_types::service::link::UserProvider;
 use futures::StreamExt;
 use macro_user_id::user_id::MacroUserIdStr;
-use models_email::email::service::message::{Message, RecentInboxMessage};
-use models_email::service::link::UserProvider;
 use uuid::Uuid;
 
 use super::email_api::GmailApi;

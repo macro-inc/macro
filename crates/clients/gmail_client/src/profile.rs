@@ -1,6 +1,6 @@
 use crate::error::{decode_json_response, unsuccessful_response};
 use crate::{GmailApiHttpError, GmailClient};
-use models_email::gmail::GmailUserProfile;
+use email_types::gmail::GmailUserProfile;
 
 #[tracing::instrument(skip(client, access_token), err)]
 pub(crate) async fn get_profile(

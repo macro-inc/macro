@@ -2,9 +2,9 @@
 mod tests;
 
 use crate::contacts::normalize;
-use models_email::db;
-use models_email::db::contact::ContactPhotoless;
-use models_email::db::{address, message};
+use email_types::db;
+use email_types::db::contact::ContactPhotoless;
+use email_types::db::{address, message};
 use sqlx::PgPool;
 use sqlx::types::Uuid;
 use std::collections::HashMap;

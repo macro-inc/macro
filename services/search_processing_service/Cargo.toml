@@ -98,7 +98,7 @@ doppler-config = { workspace = true }
 shared_types = { workspace = true }
 model_owner = { workspace = true }
 s3_key = { workspace = true }
-models_email = { workspace = true }
+email_types = { workspace = true }
 model_file_type = { workspace = true }
 models_properties = { workspace = true, optional = true }
 models_search = { workspace = true }

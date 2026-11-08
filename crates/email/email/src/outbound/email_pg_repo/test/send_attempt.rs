@@ -422,7 +422,7 @@ async fn attachment_edits_cannot_change_accepted_snapshot(
     let attempt = SendAttemptId(macro_uuid::generate_uuid_v7());
     repo.admit_send(&actor(), link(), attempt, prepared())
         .await?;
-    let attachment = models_email::service::attachment::AttachmentDraft {
+    let attachment = email_types::service::attachment::AttachmentDraft {
         upload_pending: false,
         content_id: None,
         is_inline: false,

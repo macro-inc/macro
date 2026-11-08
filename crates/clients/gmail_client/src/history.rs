@@ -1,6 +1,6 @@
 use crate::error::{decode_json_response, unsuccessful_response};
 use crate::{GmailApiHttpError, GmailClient};
-use models_email::gmail::HistoryListResponse;
+use email_types::gmail::HistoryListResponse;
 
 const MAX_RESULTS: usize = 500;
 

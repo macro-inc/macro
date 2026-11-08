@@ -5,9 +5,9 @@ use crate::pubsub::inbox_sync::operations::gmail_message::gmail_message;
 use crate::pubsub::inbox_sync::operations::update_labels::update_labels;
 use crate::pubsub::inbox_sync::operations::upsert_message::upsert_message;
 use anyhow::{Context, Result, anyhow};
-use models_email::gmail::inbox_sync::{InboxSyncOperation, InboxSyncPubsubMessage};
-use models_email::service::link::Link;
-use models_email::service::pubsub::{DetailedError, FailureReason, ProcessingError};
+use email_types::gmail::inbox_sync::{InboxSyncOperation, InboxSyncPubsubMessage};
+use email_types::service::link::Link;
+use email_types::service::pubsub::{DetailedError, FailureReason, ProcessingError};
 use sqs_worker::cleanup_message;
 use std::result;
 

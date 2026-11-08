@@ -6,9 +6,9 @@ use crate::messages::replying_to_id;
 use crate::parse::service_to_db::addresses_from_message;
 use crate::{contacts, labels, messages, parse, threads};
 
-use models_email::email::db::address::UpsertedRecipients;
-use models_email::email::service::label::system_labels;
-use models_email::email::service::message;
+use email_types::email::db::address::UpsertedRecipients;
+use email_types::email::service::label::system_labels;
+use email_types::email::service::message;
 use sqlx::PgPool;
 use sqlx::types::Uuid;
 

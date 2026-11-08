@@ -2,17 +2,17 @@ use crate::pubsub::context::PubSubContext;
 use crate::pubsub::util::{build_contact_connections, cg_refresh_email};
 use contacts::domain::ports::ContactsIngress;
 use email_db_client::backfill::job::update::BackfillCompletion;
-use models_email::api::refresh::{BackfillStatus, RefreshEmailEvent};
-use models_email::db::address::EmailRecipientType;
-use models_email::service::attachment::{
+use email_types::api::refresh::{BackfillStatus, RefreshEmailEvent};
+use email_types::db::address::EmailRecipientType;
+use email_types::service::attachment::{
     AttachmentUploadArgs, AttachmentUploadDestination, AttachmentUploadMetadata,
 };
-use models_email::service::backfill::{
+use email_types::service::backfill::{
     BackfillAttachmentPayload, BackfillMessagePayload, BackfillOperation, BackfillPubsubMessage,
     JobScopedPayload, UpdateMetadataPayload,
 };
-use models_email::service::link::Link;
-use models_email::service::pubsub::{DetailedError, FailureReason, ProcessingError};
+use email_types::service::link::Link;
+use email_types::service::pubsub::{DetailedError, FailureReason, ProcessingError};
 use uuid::Uuid;
 
 /// Emit a `refresh_email` event once per this many completed threads, plus on
@@ -208,17 +208,17 @@ async fn finalize_claimed_backfill(
         return Ok(());
     };
     match job.status {
-        models_email::service::backfill::BackfillJobStatus::Complete => {}
+        email_types::service::backfill::BackfillJobStatus::Complete => {}
         // A job that failed or was cancelled after its completion message
         // published will never become Complete; retrying such a delivery
         // only burns receives, so retire its effects instead.
-        models_email::service::backfill::BackfillJobStatus::Failed
-        | models_email::service::backfill::BackfillJobStatus::Cancelled => {
+        email_types::service::backfill::BackfillJobStatus::Failed
+        | email_types::service::backfill::BackfillJobStatus::Cancelled => {
             tracing::warn!(%job_id, status = ?job.status, "retiring completion effects for a terminal, non-complete job");
             return retire_completion_effects(ctx, job_id, lease_token).await;
         }
-        models_email::service::backfill::BackfillJobStatus::Init
-        | models_email::service::backfill::BackfillJobStatus::InProgress => {
+        email_types::service::backfill::BackfillJobStatus::Init
+        | email_types::service::backfill::BackfillJobStatus::InProgress => {
             return Err(ProcessingError::Retryable(DetailedError {
                 reason: FailureReason::DatabaseQueryFailed,
                 source: anyhow::anyhow!(

@@ -48,16 +48,16 @@ use crate::auth::{fetch_google_public_keys, verify_google_jwt};
 use crate::contacts::get_self_connection;
 use crate::messages::{get_message, get_message_label_ids, list_messages};
 use crate::threads::get_thread;
-pub use error::GmailApiHttpError;
-use models_email::gmail::contacts::{ConnectionsResponse, OtherContactsResponse, PersonResource};
-pub use models_email::gmail::filters::Filter;
-use models_email::gmail::inbox_sync::{
+use email_types::gmail::contacts::{ConnectionsResponse, OtherContactsResponse, PersonResource};
+pub use email_types::gmail::filters::Filter;
+use email_types::gmail::inbox_sync::{
     GoogleJwtClaims, GooglePublicKeys, JwtVerificationError, KeyMap,
 };
-use models_email::gmail::labels::GmailLabel;
-use models_email::gmail::{
+use email_types::gmail::labels::GmailLabel;
+use email_types::gmail::{
     GmailUserProfile, HistoryListResponse, ListThreadsResponse, MessageResource, ThreadResource,
 };
+pub use error::GmailApiHttpError;
 
 #[derive(Clone, Debug)]
 pub struct GmailClient {
@@ -226,7 +226,7 @@ impl GmailClient {
     pub async fn register_watch(
         &self,
         access_token: &str,
-    ) -> Result<models_email::gmail::history::WatchResponse, GmailApiHttpError> {
+    ) -> Result<email_types::gmail::history::WatchResponse, GmailApiHttpError> {
         watch::register_watch(self, access_token).await
     }
 
@@ -260,7 +260,7 @@ impl GmailClient {
     }
 
     /// Adds and removes labels on many messages in one request (at most
-    /// [`models_email::gmail::gmail_ops::MAX_BATCH_MODIFY_MESSAGES`] ids).
+    /// [`email_types::gmail::gmail_ops::MAX_BATCH_MODIFY_MESSAGES`] ids).
     #[tracing::instrument(
         skip(self, access_token, provider_message_ids),
         fields(message_count = provider_message_ids.len()),
@@ -321,7 +321,7 @@ impl GmailClient {
         access_token: &str,
         mime: &[u8],
         thread_id: Option<&str>,
-    ) -> Result<models_email::gmail::SentMessageResource, GmailApiHttpError> {
+    ) -> Result<email_types::gmail::SentMessageResource, GmailApiHttpError> {
         messages::send_message(self, access_token, mime, thread_id).await
     }
 
@@ -331,7 +331,7 @@ impl GmailClient {
         &self,
         access_token: &str,
         message_id: &str,
-    ) -> Result<Option<models_email::gmail::SentMessageResource>, GmailApiHttpError> {
+    ) -> Result<Option<email_types::gmail::SentMessageResource>, GmailApiHttpError> {
         messages::find_sent_message(self, access_token, message_id).await
     }
 
@@ -443,7 +443,7 @@ impl GmailClient {
     pub async fn list_send_as(
         &self,
         access_token: &str,
-    ) -> Result<models_email::gmail::ListSendAsResponse, GmailApiHttpError> {
+    ) -> Result<email_types::gmail::ListSendAsResponse, GmailApiHttpError> {
         send_as::list_send_as(self, access_token).await
     }
 }

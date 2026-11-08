@@ -5,8 +5,8 @@ use crate::messages::replying_to_id::update_thread_messages_replying_to;
 use crate::parse::service_to_db::addresses_from_message;
 use crate::{contacts, messages, parse};
 
-use models_email::email::db::address::UpsertedRecipients;
-use models_email::email::service::{message, thread};
+use email_types::email::db::address::UpsertedRecipients;
+use email_types::email::service::{message, thread};
 use sqlx::types::Uuid;
 use sqlx::{PgConnection, PgPool};
 use std::collections::HashMap;

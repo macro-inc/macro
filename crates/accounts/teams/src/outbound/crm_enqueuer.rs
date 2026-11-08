@@ -5,16 +5,16 @@
 //! `BackfillOperation::DepopulateCrmForUser` messages onto the email
 //! backfill queue (the same queue `email_service` consumes from for its
 //! backfill worker). This is the only file in the teams crate that
-//! depends on `models_email` — the port itself speaks in domain types
+//! depends on `email_types` — the port itself speaks in domain types
 //! only, so consumers that don't need SQS enqueueing (tests, callers
-//! using a no-op) never pull `models_email` in.
+//! using a no-op) never pull `email_types` in.
 
 use crate::domain::crm_enqueuer::CrmEnqueuer;
-use macro_user_id::{cow_str::CowLike, user_id::MacroUserIdStr};
-use models_email::email::service::backfill::{
+use email_types::email::service::backfill::{
     BackfillOperation, BackfillPubsubMessage, DepopulateCrmForUserPayload,
     PopulateCrmForUserPayload,
 };
+use macro_user_id::{cow_str::CowLike, user_id::MacroUserIdStr};
 
 /// SQS adapter for [`CrmEnqueuer`]. Wraps a `sqs_client::SQS` that must
 /// have been built with `.email_backfill_queue(...)` set.

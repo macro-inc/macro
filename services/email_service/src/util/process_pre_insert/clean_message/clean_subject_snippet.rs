@@ -1,5 +1,5 @@
-use models_email::service;
-use models_email::service::message::Message;
+use email_types::service;
+use email_types::service::message::Message;
 
 pub fn clean_threads_subject_snippet(threads: &mut Vec<service::thread::Thread>) {
     for thread in threads {

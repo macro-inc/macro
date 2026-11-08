@@ -1,7 +1,7 @@
 use crate::pubsub::context::PubSubContext;
 use crm::domain::service::CrmService;
-use models_email::email::service::backfill::DepopulateCrmForUserPayload;
-use models_email::email::service::pubsub::{DetailedError, FailureReason, ProcessingError};
+use email_types::email::service::backfill::DepopulateCrmForUserPayload;
+use email_types::email::service::pubsub::{DetailedError, FailureReason, ProcessingError};
 
 /// Removes every CRM source row owned by the user's email link within
 /// `payload.team_id`, plus the team's contact / company rows orphaned

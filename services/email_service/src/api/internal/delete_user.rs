@@ -3,8 +3,8 @@ use axum::Json;
 use axum::extract::{Path, State};
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
+use email_types::email::service::pubsub::LinkManagerMessage;
 use macro_authorization::{InternalOnly, MacroAuthorizationExtractor};
-use models_email::email::service::pubsub::LinkManagerMessage;
 use shared_types::response::ErrorResponse;
 
 #[tracing::instrument(skip(ctx))]
@@ -34,7 +34,7 @@ pub async fn handler(
     for link in links {
         let message = LinkManagerMessage::DeleteLink {
             link_id: link.id,
-            deletion_reason: models_email::email::service::pubsub::DeletionReason::UserDeleted,
+            deletion_reason: email_types::email::service::pubsub::DeletionReason::UserDeleted,
         };
 
         ctx.sqs_client

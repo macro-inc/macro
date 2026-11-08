@@ -368,7 +368,7 @@ fn checkpoint(lease: &DraftLease, stage: DraftStage) -> DraftCheckpoint {
         prepared:PreparedDraft {reply_to:None,request:SendRequest {
             message_id: None,
             message:serde_json::from_value(serde_json::json!({"db_id":lease.message_id,"link_id":lease.mailbox.link_id,"subject":"Local subject"})).unwrap(),
-            from:models_email::service::address::ContactInfo {email:"outlook-test@example.com".into(),name:None,photo_url:None},parent_message_id:None,references:None,
+            from:email_types::service::address::ContactInfo {email:"outlook-test@example.com".into(),name:None,photo_url:None},parent_message_id:None,references:None,
         },files:Vec::new(),removals:Vec::new()},
         draft:Some(ProviderDraft {id:ProviderId::new("a").unwrap(),conversation_id:ProviderId::new("conversation").unwrap(),version:Some("v2".into()),is_draft:true,content_fingerprint:Some("unchanged-body".into()),app_revision:Some(lease.revision as u64)}),
         submission_started:matches!(stage,DraftStage::Submitting | DraftStage::Confirming),

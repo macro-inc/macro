@@ -1,4 +1,4 @@
-use models_email::service::{label::LabelInfo, message::ParsedSearchMessage};
+use email_types::service::{label::LabelInfo, message::ParsedSearchMessage};
 
 use super::*;
 

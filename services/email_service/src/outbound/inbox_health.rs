@@ -4,12 +4,12 @@ use email_api_client_core::{
     models::{AccessToken, EmailApiError, MailboxAccess, TokenError, TokenFreshness},
     ports::MailboxTokenSource,
 };
-use macro_event_broker::MacroEventBroker;
-use macro_user_id::user_id::MacroUserIdStr;
-use models_email::service::{
+use email_types::service::{
     link::{Link, UserProvider},
     pubsub::LinkManagerMessage,
 };
+use macro_event_broker::MacroEventBroker;
+use macro_user_id::user_id::MacroUserIdStr;
 use uuid::Uuid;
 
 pub struct PgInboxHealth {

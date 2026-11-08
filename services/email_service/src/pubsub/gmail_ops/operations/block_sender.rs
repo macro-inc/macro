@@ -1,6 +1,6 @@
 use email_api_client_core::models::EmailApiError;
-use models_email::gmail::gmail_ops::BlockSenderPayload;
-use models_email::service::link::Link;
+use email_types::gmail::gmail_ops::BlockSenderPayload;
+use email_types::service::link::Link;
 
 use crate::pubsub::gmail_ops::worker::GmailOpsContext;
 

@@ -1,7 +1,7 @@
 use crate::error::{decode_json_response, unsuccessful_response};
 use crate::{GmailApiHttpError, GmailClient};
-use models_email::gmail::labels::{GmailLabel, GmailLabelsResponse};
-use models_email::gmail::{BatchModifyLabelsRequest, ModifyLabelsRequest};
+use email_types::gmail::labels::{GmailLabel, GmailLabelsResponse};
+use email_types::gmail::{BatchModifyLabelsRequest, ModifyLabelsRequest};
 
 /// Modifies the labels for a specific message in Gmail.
 #[tracing::instrument(

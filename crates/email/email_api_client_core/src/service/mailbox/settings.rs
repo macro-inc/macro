@@ -7,7 +7,7 @@ impl<R: MailboxLabelClient + ScopedMailboxRepository, T: MailboxTokenSource, L: 
     pub async fn labels(
         &self,
         mailbox: MailboxAccess,
-    ) -> Result<Vec<models_email::service::label::Label>, EmailApiError> {
+    ) -> Result<Vec<email_types::service::label::Label>, EmailApiError> {
         let repository = self.repository.for_mailbox(mailbox);
         let token = self
             .token(
@@ -36,7 +36,7 @@ impl<R: MailboxLabelClient + ScopedMailboxRepository, T: MailboxTokenSource, L: 
         &self,
         mailbox: MailboxAccess,
         name: &str,
-    ) -> Result<models_email::service::label::Label, EmailApiError> {
+    ) -> Result<email_types::service::label::Label, EmailApiError> {
         let repository = self.repository.for_mailbox(mailbox);
         let token = self
             .token(

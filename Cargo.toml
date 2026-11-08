@@ -735,6 +735,7 @@ email_formatting = { path = "crates/email/email_formatting" }
 email_service_client = { path = "crates/clients/email_service_client" }
 email_service_url = { path = "crates/platform/service_urls/email_service_url" }
 email_thread_id = { path = "crates/types/email_thread_id" }
+email_types = { path = "crates/types/email_types" }
 email_utils = { path = "crates/email/email_utils" }
 email_validator = { path = "crates/email/email_validator" }
 embedding = { path = "crates/ai/embedding" }
@@ -856,7 +857,6 @@ model_file_type = { path = "crates/types/model_file_type" }
 model_notifications = { path = "crates/notifications/model_notifications" }
 model_owner = { path = "crates/types/model_owner" }
 model_user = { path = "crates/types/model_user" }
-models_email = { path = "crates/types/models_email" }
 models_entity_access_management = { path = "crates/types/models_entity_access_management", default-features = false }
 models_forms = { path = "crates/types/models_forms" }
 models_grouping = { path = "crates/types/models_grouping" }

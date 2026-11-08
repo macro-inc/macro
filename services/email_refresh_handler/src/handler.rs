@@ -1,12 +1,12 @@
 use crate::context::{self};
 use aws_lambda_events::eventbridge::EventBridgeEvent;
 use chrono::Timelike;
+use email_types::email::service::pubsub::{DeletionReason, LinkManagerMessage};
 use lambda_runtime::{
     Error, LambdaEvent,
     tracing::{self},
 };
 use macro_env::Environment;
-use models_email::email::service::pubsub::{DeletionReason, LinkManagerMessage};
 use sqlx::types::uuid;
 use sqlx::{Pool, Postgres, Type};
 

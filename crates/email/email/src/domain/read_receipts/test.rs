@@ -306,7 +306,7 @@ mod outlook {
                         "body_html": format!(r#"<p>Hi</p><img src="{PREFIX}ancestor">"#),
                     }))
                     .unwrap(),
-                    from: models_email::service::address::ContactInfo {
+                    from: email_types::service::address::ContactInfo {
                         email: "owner@example.com".into(),
                         name: None,
                         photo_url: None,

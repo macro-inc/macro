@@ -121,7 +121,7 @@ impl PgMailboxSync {
         link_id: Uuid,
         message_id: Uuid,
     ) -> Result<Option<ProjectedMessage>, MailboxError> {
-        let db_message = sqlx::query_as!(models_email::db::message::Message,r#"
+        let db_message = sqlx::query_as!(email_types::db::message::Message,r#"
             SELECT m.id,m.provider_id,m.global_id,m.thread_id,m.provider_thread_id,m.replying_to_id,m.link_id,
                 m.provider_history_id,m.internal_date_ts,m.snippet,m.size_estimate,m.subject,m.from_name,
                 m.from_contact_id,m.sent_at,m.has_attachments,m.is_read,m.is_starred,m.is_sent,m.is_draft,

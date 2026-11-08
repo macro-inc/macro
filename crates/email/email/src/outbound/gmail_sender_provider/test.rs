@@ -1,7 +1,7 @@
 use super::*;
 use crate::domain::models::UserProvider;
+use email_types::gmail::{SendAsAlias, SendAsVerificationStatus};
 use macro_user_id::user_id::MacroUserIdStr;
-use models_email::gmail::{SendAsAlias, SendAsVerificationStatus};
 
 fn link() -> Link {
     Link {

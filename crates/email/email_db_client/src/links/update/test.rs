@@ -1,10 +1,10 @@
 use super::*;
 use crate::links::get::fetch_link_by_id;
 use crate::links::insert::upsert_link;
+use email_types::email::service::link::{Link, UserProvider};
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
 use macro_user_id::email::EmailStr;
 use macro_user_id::user_id::MacroUserIdStr;
-use models_email::email::service::link::{Link, UserProvider};
 use sqlx::{Pool, Postgres};
 
 async fn insert_test_link(pool: &Pool<Postgres>, email: &str) -> anyhow::Result<Uuid> {

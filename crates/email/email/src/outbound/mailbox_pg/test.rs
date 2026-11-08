@@ -626,7 +626,7 @@ async fn folder_delete_and_restore_reprojects_unchanged_message_etags(db: PgPool
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn completed_import_rechecks_attachments_after_later_sent_correspondence(db: PgPool) {
     use email_api_client_core::models::MailboxState;
-    use models_email::service::address::ContactInfo;
+    use email_types::service::address::ContactInfo;
     let (repo, link) = fixture(&db).await;
     sqlx::query!("INSERT INTO email_sync_streams(id,link_id,generation,kind,scope_id,initial_complete) VALUES($1,$2,1,'folder_catalog','mail',true)",Uuid::new_v4(),link).execute(&db).await.unwrap();
     let stream = repo.claim_stream(Uuid::new_v4()).await.unwrap().unwrap();

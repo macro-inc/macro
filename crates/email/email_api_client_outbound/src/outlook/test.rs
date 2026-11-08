@@ -296,7 +296,7 @@ async fn categories_use_assignment_names_and_never_become_folder_roles() {
     assert_eq!(labels[0].provider_label_id, "TRASH");
     assert!(matches!(
         labels[0].type_,
-        Some(models_email::service::label::LabelType::User)
+        Some(email_types::service::label::LabelType::User)
     ));
     Mock::given(method("DELETE"))
         .and(path("/v1.0/me/outlook/masterCategories/opaque-catalog-id"))

@@ -259,7 +259,7 @@ async fn scheduled_draft_blocks_all_attachment_mutations_and_preserves_manifest(
     let original = Uuid::parse_str("00000000-0000-0000-0000-0000000fa001")?;
     let extra = Uuid::parse_str("00000000-0000-0000-0000-0000000fa003")?;
     let upload = Uuid::new_v4();
-    let attachment = |id| models_email::service::attachment::AttachmentDraft {
+    let attachment = |id| email_types::service::attachment::AttachmentDraft {
         id,
         draft_id: draft,
         file_name: "approved.txt".into(),

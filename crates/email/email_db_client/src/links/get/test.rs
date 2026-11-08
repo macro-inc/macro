@@ -3,11 +3,11 @@ use crate::links::get::{
     fetch_link_by_macro_id_and_email_address, fetch_owned_link_for_message,
     fetch_owned_link_for_thread, fetch_readable_owned_inboxes,
 };
+use email_types::email::db;
+use email_types::service::backfill::BackfillJobStatus;
+use email_types::service::link::UserProvider;
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
 use macro_user_id::user_id::MacroUserIdStr;
-use models_email::email::db;
-use models_email::service::backfill::BackfillJobStatus;
-use models_email::service::link::UserProvider;
 use sqlx::types::Uuid;
 use sqlx::{Pool, Postgres};
 

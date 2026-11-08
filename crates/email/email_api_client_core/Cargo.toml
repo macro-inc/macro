@@ -11,7 +11,7 @@ ports = ["dep:tokio"]
 [dependencies]
 chrono = { workspace = true }
 mail-builder = "0.4.3"
-models_email = { workspace = true }
+email_types = { workspace = true }
 serde = { workspace = true }
 thiserror = { workspace = true }
 tokio = { workspace = true, optional = true }

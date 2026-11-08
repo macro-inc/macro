@@ -1,6 +1,6 @@
 use std::sync::{Arc, Mutex};
 
-use models_email::email::service::label::Label;
+use email_types::email::service::label::Label;
 use uuid::Uuid;
 
 use super::super::test_support::{Call, FakeGate, FakeTokenSource, call_log};

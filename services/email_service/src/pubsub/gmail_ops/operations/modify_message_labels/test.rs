@@ -1,6 +1,6 @@
 use super::*;
+use email_types::gmail::gmail_ops::ModifyMessageLabelsPayload;
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
-use models_email::gmail::gmail_ops::ModifyMessageLabelsPayload;
 
 const THREAD: Uuid = Uuid::from_u128(0xb1);
 const ARCHIVE: Uuid = Uuid::from_u128(0xf1);

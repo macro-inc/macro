@@ -2,7 +2,7 @@ use anyhow::Context;
 use email_db_client::attachments::provider::upload_filters::{
     ATTACHMENT_MIME_TYPE_FILTERS, ATTACHMENT_WHITELISTED_DOMAINS,
 };
-use models_email::service::attachment::AttachmentUploadMetadata;
+use email_types::service::attachment::AttachmentUploadMetadata;
 use sqlx::PgPool;
 use sqlx::postgres::PgPoolOptions;
 use uuid::Uuid;

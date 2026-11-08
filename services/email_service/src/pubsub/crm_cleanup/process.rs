@@ -1,10 +1,10 @@
 use crate::pubsub::crm_cleanup::worker::CrmCleanupContext;
 use crate::pubsub::crm_cleanup::{list_candidates, process_candidate, start_job};
 use anyhow::Context;
-use models_email::email::service::crm_cleanup::{
+use email_types::email::service::crm_cleanup::{
     CrmCleanupJobStatus, CrmCleanupOperation, CrmCleanupPubsubMessage,
 };
-use models_email::email::service::pubsub::ProcessingError;
+use email_types::email::service::pubsub::ProcessingError;
 use sqs_worker::cleanup_message;
 
 /// Process a single message from the crm cleanup queue.

@@ -1,5 +1,5 @@
 use crate::EmailServiceClient;
-use models_email::service::message::{MessageSendersRequest, MessageSendersResponse};
+use email_types::service::message::{MessageSendersRequest, MessageSendersResponse};
 
 impl EmailServiceClient {
     pub async fn get_message_senders(

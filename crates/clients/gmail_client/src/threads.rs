@@ -1,6 +1,6 @@
 use std::cmp::min;
 
-use models_email::gmail::{ListThreadsResponse, MinimalThreadResource, ThreadResource};
+use email_types::gmail::{ListThreadsResponse, MinimalThreadResource, ThreadResource};
 use serde::de::DeserializeOwned;
 
 use crate::error::{decode_json_response, unsuccessful_response};

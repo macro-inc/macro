@@ -4,8 +4,8 @@ use axum::{
     http::StatusCode,
     response::{IntoResponse, Json, Response},
 };
+use email_types::email::service::backfill::BackfillJob;
 use macro_authorization::{InternalOnly, MacroAuthorizationExtractor};
-use models_email::email::service::backfill::BackfillJob;
 use shared_types::response::ErrorResponse;
 use sqlx::PgPool;
 use sqlx::types::Uuid;

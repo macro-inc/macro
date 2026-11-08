@@ -1,7 +1,7 @@
-use models_email::email::db::attachment;
-use models_email::email::service::{message, thread};
-use models_email::email::{db, service};
-use models_email::service::message::MessageToSend;
+use email_types::email::db::attachment;
+use email_types::email::service::{message, thread};
+use email_types::email::{db, service};
+use email_types::service::message::MessageToSend;
 
 /// logic for parsing db-layer structs into service-layer structs
 

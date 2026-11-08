@@ -1,6 +1,6 @@
 use crate::parse::db_to_service::map_db_message_to_simple_message;
-use models_email::db;
-use models_email::service::message;
+use email_types::db;
+use email_types::service::message;
 use sqlx::types::Uuid;
 use sqlx::{Executor, PgPool, Postgres};
 

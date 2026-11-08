@@ -33,7 +33,7 @@ html-escape = { workspace = true, optional = true }
 http = { workspace = true, optional = true }
 httpdate = { workspace = true, optional = true }
 mailparse = { version = "0.16.1", optional = true }
-models_email = { workspace = true }
+email_types = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true, optional = true }
 reqwest = { workspace = true, optional = true }

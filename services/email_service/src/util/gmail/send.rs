@@ -1,7 +1,7 @@
 /// Frozen attachment metadata and payload preparation for delivery.
 pub mod attachment_snapshot;
 
-use models_email::service::attachment::AttachmentDraft;
+use email_types::service::attachment::AttachmentDraft;
 use sqlx::PgPool;
 use uuid::Uuid;
 

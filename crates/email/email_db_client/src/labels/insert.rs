@@ -1,4 +1,4 @@
-use models_email::email::{db, service};
+use email_types::email::{db, service};
 use sqlx::types::Uuid;
 use sqlx::{Executor, PgPool, Postgres};
 

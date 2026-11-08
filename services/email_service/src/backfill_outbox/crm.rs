@@ -1,9 +1,9 @@
 //! Retryable publication of backfills requested by explicit CRM consent.
 
-use macro_user_id::user_id::MacroUserIdStr;
-use models_email::email::service::backfill::{
+use email_types::email::service::backfill::{
     BackfillOperation, BackfillPubsubMessage, PopulateCrmForUserPayload,
 };
+use macro_user_id::user_id::MacroUserIdStr;
 use sqlx::PgPool;
 use sqs_client::SQS;
 use tracing::Instrument;

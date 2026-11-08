@@ -1,5 +1,5 @@
 use crate::{backfill_init_service, pubsub::context::PubSubContext};
-use models_email::email::service::{
+use email_types::email::service::{
     backfill::{BackfillJob, InitPayload, JobScopedPayload},
     link::Link,
     pubsub::ProcessingError,

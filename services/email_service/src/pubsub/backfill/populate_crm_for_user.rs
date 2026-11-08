@@ -2,8 +2,8 @@ use crate::pubsub::context::PubSubContext;
 use crate::pubsub::util::enqueue_populate_crm_contacts;
 use crm::domain::email_privacy::EmailPrivacyService;
 use crm::domain::service::CrmService;
-use models_email::email::service::backfill::PopulateCrmForUserPayload;
-use models_email::email::service::pubsub::{DetailedError, FailureReason, ProcessingError};
+use email_types::email::service::backfill::PopulateCrmForUserPayload;
+use email_types::email::service::pubsub::{DetailedError, FailureReason, ProcessingError};
 
 /// Fans out historical contacts only for the user's explicitly consented
 /// primary mailbox. Consent and exclusions are rechecked by each contact job.

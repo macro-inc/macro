@@ -1,7 +1,7 @@
 use crate::api::context::ApiContext;
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Json, Response};
-use models_email::service::link::Link;
+use email_types::service::link::Link;
 use shared_types::response::ErrorResponse;
 use thiserror::Error;
 use uuid::Uuid;

@@ -11,7 +11,7 @@ use std::ops::RangeInclusive;
 use std::time::Duration;
 
 use email_api_client_core::models::EmailApiError;
-use models_email::email::service::pubsub::{DetailedError, FailureReason};
+use email_types::email::service::pubsub::{DetailedError, FailureReason};
 use rand::Rng;
 use sqs_client::email::BACKFILL_DEFERRALS_ATTRIBUTE;
 

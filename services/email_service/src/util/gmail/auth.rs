@@ -1,7 +1,7 @@
 use crate::util::redis::RedisClient;
 use anyhow::Context;
+use email_types::gmail::inbox_sync::KeyMap;
 use gmail_client::GmailClient;
-use models_email::gmail::inbox_sync::KeyMap;
 use std::sync::Arc;
 
 /// Retrieves Google public keys, first looking in the Redis cache and then fetching them.

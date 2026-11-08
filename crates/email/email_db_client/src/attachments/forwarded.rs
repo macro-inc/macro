@@ -1,4 +1,4 @@
-use models_email::db;
+use email_types::db;
 use sqlx::PgPool;
 use sqlx::types::Uuid;
 

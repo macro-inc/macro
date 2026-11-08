@@ -1,4 +1,4 @@
-use models_email::gmail::{
+use email_types::gmail::{
     HistoryListResponse, HistoryMessage, HistoryRecord, LabelAdded, MessageAdded, MessageDeleted,
 };
 

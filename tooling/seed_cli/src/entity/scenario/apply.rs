@@ -14,16 +14,16 @@ use chrono::{DateTime, Duration, Utc};
 use comms_db_client::channels::seed_channel::SeedChannelOptions;
 use comms_db_client::messages::seed_message::SeedMessageOptions;
 use comms_db_client::model::SimpleMention;
+use email_types::email::service::address::ContactInfo;
+use email_types::email::service::label::{
+    Label, LabelListVisibility, LabelType, MessageListVisibility,
+};
+use email_types::email::service::link::{Link, UserProvider};
+use email_types::email::service::message::Message;
+use email_types::email::service::thread::Thread;
 use entity_access_db_utils::{AccessLevel, EntityAccessSourceType, EntityType};
 use macro_db_client::document::v2::create::CreateDocumentArgs;
 use macro_user_id::user_id::MacroUserIdStr;
-use models_email::email::service::address::ContactInfo;
-use models_email::email::service::label::{
-    Label, LabelListVisibility, LabelType, MessageListVisibility,
-};
-use models_email::email::service::link::{Link, UserProvider};
-use models_email::email::service::message::Message;
-use models_email::email::service::thread::Thread;
 use models_permissions::share_permission::{LinkShare, SharePermissionV2};
 use models_properties::service::property_value::PropertyValue;
 use shared_types::document::FileType;

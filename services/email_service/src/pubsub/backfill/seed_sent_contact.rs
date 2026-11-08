@@ -3,10 +3,10 @@ use std::collections::HashSet;
 use crate::pubsub::backfill::email_api_error::map_email_api_error;
 use crate::pubsub::context::PubSubContext;
 use contacts::domain::ports::ContactsIngress;
+use email_types::email::service::backfill::{JobScopedPayload, SeedSentContactPayload};
+use email_types::email::service::link;
+use email_types::email::service::pubsub::{DetailedError, FailureReason, ProcessingError};
 use macro_user_id::user_id::MacroUserIdStr;
-use models_email::email::service::backfill::{JobScopedPayload, SeedSentContactPayload};
-use models_email::email::service::link;
-use models_email::email::service::pubsub::{DetailedError, FailureReason, ProcessingError};
 
 /// Consumer for `BackfillOperation::SeedSentContact`. Fetches one recent sent
 /// message and enqueues a sender<->recipient contact connection for every

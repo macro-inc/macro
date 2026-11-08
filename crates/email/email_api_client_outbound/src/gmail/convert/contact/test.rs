@@ -1,4 +1,4 @@
-use models_email::gmail::contacts::{EmailAddress, Name, PersonResource, Photo};
+use email_types::gmail::contacts::{EmailAddress, Name, PersonResource, Photo};
 use uuid::Uuid;
 
 use super::map_person_to_contact;

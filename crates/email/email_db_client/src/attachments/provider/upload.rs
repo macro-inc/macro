@@ -2,7 +2,7 @@ use crate::attachments::provider::upload_filters::{
     ATTACHMENT_MIME_TYPE_FILTERS, ATTACHMENT_MIME_TYPE_FILTERS_WITH_MEDIA,
     ATTACHMENT_WHITELISTED_DOMAINS, DOCUMENT_MIME_TYPES, OCTET_STREAM_DOCUMENT_EXTENSIONS,
 };
-use models_email::service::attachment::AttachmentUploadMetadata;
+use email_types::service::attachment::AttachmentUploadMetadata;
 use sqlx::types::Uuid;
 use sqlx::{Pool, Postgres, Row};
 

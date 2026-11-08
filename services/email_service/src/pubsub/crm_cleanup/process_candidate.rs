@@ -1,7 +1,7 @@
 use crate::pubsub::crm_cleanup::worker::CrmCleanupContext;
 use crm::domain::service::CrmService;
 use email_db_client::crm_cleanup::candidates;
-use models_email::email::service::pubsub::{DetailedError, FailureReason, ProcessingError};
+use email_types::email::service::pubsub::{DetailedError, FailureReason, ProcessingError};
 use uuid::Uuid;
 
 /// Processes one cleanup candidate: claims (deletes) the candidate row, then

@@ -1,10 +1,10 @@
 use super::*;
 use email::domain::attachment_access::{AttachmentReadRecord, AttachmentReadRepository};
 use email::domain::mailbox::MailboxError;
+use email_types::service::message;
 use entity_access_outbound::PgAccessRepository;
 use futures::future::BoxFuture;
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
-use models_email::service::message;
 use std::sync::{Arc, Mutex};
 
 struct Reader {
@@ -129,7 +129,7 @@ impl AuthorizedAttachmentBytes for SourceInboxReader {
             assert_eq!(record.mailbox.link_id, self.source_link);
             assert_eq!(
                 record.link.provider,
-                models_email::service::link::UserProvider::Outlook
+                email_types::service::link::UserProvider::Outlook
             );
             assert_eq!(record.message_provider_id, "original-message");
             assert_eq!(

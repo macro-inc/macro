@@ -2,7 +2,7 @@ use std::cmp::min;
 
 use base64::Engine;
 use base64::engine::general_purpose::{URL_SAFE, URL_SAFE_NO_PAD};
-use models_email::gmail::{
+use email_types::gmail::{
     ListMessagesResponse, MessageResource, MinimalMessageResource, SendMessagePayload,
     SentMessageResource,
 };

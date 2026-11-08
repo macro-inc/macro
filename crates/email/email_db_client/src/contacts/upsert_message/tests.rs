@@ -1,7 +1,7 @@
 use super::*;
 use anyhow::Result;
+use email_types::db::contact::ContactPhotoless;
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
-use models_email::db::contact::ContactPhotoless;
 use sqlx::{Pool, Postgres};
 
 #[sqlx::test(

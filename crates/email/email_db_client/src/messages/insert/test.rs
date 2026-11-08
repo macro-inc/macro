@@ -1,9 +1,9 @@
 use super::*;
 use chrono::{DateTime, Utc};
+use email_types::email::service::address::ContactInfo;
+use email_types::email::service::attachment::Attachment;
+use email_types::email::service::label::Label;
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
-use models_email::email::service::address::ContactInfo;
-use models_email::email::service::attachment::Attachment;
-use models_email::email::service::label::Label;
 use sqlx::{Pool, Postgres};
 
 const LINK_ID: &str = "00000000-0000-0000-0000-000000000001";

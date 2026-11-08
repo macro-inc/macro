@@ -26,7 +26,7 @@ admission gate every Graph request passes.
 
 ## Boundaries
 
-- Depends on: `email_api_client_core`, `email_utils`, `models_email`,
+- Depends on: `email_api_client_core`, `email_utils`, `email_types`,
   `gmail_client` (feature `outbound-gmail`), `calendar_events` (feature
   `outbound-outlook`).
 - Used by: the composition roots `services/email_service` and

@@ -4,8 +4,8 @@
 
 use super::*;
 use crate::domain::models::UserProvider;
+use email_types::service::pubsub::DeletionReason;
 use macro_user_id::user_id::MacroUserIdStr;
-use models_email::service::pubsub::DeletionReason;
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, thiserror::Error)]

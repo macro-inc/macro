@@ -1,8 +1,8 @@
 use super::*;
 use crate::domain::mailbox::settings::*;
 use email_api_client_core::models::EmailApiError;
+use email_types::service::{label::Label, link::UserProvider};
 use macro_user_id::user_id::MacroUserIdStr;
-use models_email::service::{label::Label, link::UserProvider};
 
 #[cfg(test)]
 mod test;
@@ -126,7 +126,7 @@ impl MailboxSettingsRepository for PgMailboxSync {
                 created_at: chrono::Utc::now(),
                 message_list_visibility: None,
                 label_list_visibility: None,
-                type_: Some(models_email::service::label::LabelType::User),
+                type_: Some(email_types::service::label::LabelType::User),
             },
         )
         .await?;

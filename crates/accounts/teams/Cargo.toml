@@ -32,7 +32,7 @@ outbound = [
   "dep:analytics_client",
   "dep:contacts_core",
   "dep:entity_access_db_utils",
-  "dep:models_email",
+  "dep:email_types",
   "dep:sqlx",
   "dep:sqs_client",
   "dep:url",
@@ -100,7 +100,7 @@ notification = { workspace = true, optional = true }
 # Outbound dependencies
 analytics_client = { workspace = true, optional = true }
 entity_access_db_utils = { workspace = true, optional = true }
-models_email = { workspace = true, optional = true }
+email_types = { workspace = true, optional = true }
 sqlx = { workspace = true, optional = true }
 sqs_client = { workspace = true, features = [
   "email",

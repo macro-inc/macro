@@ -197,7 +197,7 @@ to = "ai_toolset"
 reason = "implements ai_toolset traits; it may belong in ai/, not clients/"
 
 [[allow]]
-from = "models_email"
+from = "email_types"
 to = "email_utils"
 reason = "computes parsed bodies and token cache keys with email_utils; move those helpers to types or out of the model crate"
 

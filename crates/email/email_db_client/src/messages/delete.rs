@@ -1,6 +1,6 @@
 use crate::crm_cleanup::candidates::insert_candidates;
 use crate::threads;
-use models_email::email::service::message;
+use email_types::email::service::message;
 use sqlx::types::Uuid;
 use sqlx::{Executor, Postgres};
 

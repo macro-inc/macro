@@ -15,16 +15,16 @@ use email::domain::models::UserProvider;
 use email::domain::ports::EmailRepo;
 use email::outbound::EmailPgRepo;
 use email_api_client_core::models::{EmailApiError, TokenFreshness};
+use email_types::email::service::backfill::{
+    BackfillOperation, BackfillPubsubMessage, InitPayload, JobScopedPayload,
+};
+use email_types::service::link;
+use email_types::service::link::Link;
 use entity_access_outbound::PgAccessRepository;
 use macro_authorization::{MacroAuthorizationExtractor, UserOrInternal};
 use macro_db_client::in_progress_user_link::InProgressUserLink;
 use macro_user_id::email::EmailStr;
 use macro_user_id::user_id::MacroUserIdStr;
-use models_email::email::service::backfill::{
-    BackfillOperation, BackfillPubsubMessage, InitPayload, JobScopedPayload,
-};
-use models_email::service::link;
-use models_email::service::link::Link;
 use shared_types::response::ErrorResponse;
 use std::sync::Arc;
 use strum_macros::AsRefStr;

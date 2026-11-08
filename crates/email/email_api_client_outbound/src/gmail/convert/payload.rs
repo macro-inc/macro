@@ -3,8 +3,8 @@ use base64::{
     engine::general_purpose::{URL_SAFE, URL_SAFE_NO_PAD},
 };
 use chrono::{DateTime, TimeZone, Utc};
-use models_email::email::service;
-use models_email::gmail::{Header, MessagePart};
+use email_types::email::service;
+use email_types::gmail::{Header, MessagePart};
 
 use super::message::{find_header, parse_address_header};
 use email_api_client_core::models::EmailApiError;

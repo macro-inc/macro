@@ -1,13 +1,13 @@
 use super::email_api_error::map_email_api_error;
 use super::increment_counters;
 use crate::pubsub::context::PubSubContext;
-use models_email::email::service::backfill::{
+use email_types::email::service::backfill::{
     BackfillJob, BackfillOperation, BackfillPubsubMessage, BackfillThreadPayload, JobScopedPayload,
 };
-use models_email::email::service::link;
-use models_email::email::service::pubsub::{DetailedError, FailureReason, ProcessingError};
-use models_email::email::service::thread::ListThreadsPayload;
-use models_email::gmail::labels::SystemLabelID;
+use email_types::email::service::link;
+use email_types::email::service::pubsub::{DetailedError, FailureReason, ProcessingError};
+use email_types::email::service::thread::ListThreadsPayload;
+use email_types::gmail::labels::SystemLabelID;
 use std::cmp::min;
 
 // the max size allowed by the gmail api
@@ -275,7 +275,7 @@ async fn enqueue_sent_contact_seeds(
     scope: &JobScopedPayload<ListThreadsPayload>,
     link: &link::Link,
 ) {
-    use models_email::email::service::backfill::SeedSentContactPayload;
+    use email_types::email::service::backfill::SeedSentContactPayload;
 
     let message_ids = match ctx
         .email_api

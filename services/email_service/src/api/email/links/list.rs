@@ -3,8 +3,8 @@ use axum::Json;
 use axum::extract::State;
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
+use email_types::api;
 use macro_authorization::{MacroAuthorizationExtractor, UserOrInternal};
-use models_email::api;
 use shared_types::response::ErrorResponse;
 use utoipa::ToSchema;
 

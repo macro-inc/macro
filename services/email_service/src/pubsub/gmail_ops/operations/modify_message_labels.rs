@@ -4,10 +4,10 @@ use crate::pubsub::gmail_ops::worker::GmailOpsContext;
 use anyhow::Context;
 use email_api_client_core::service::SEPARATE_LABEL_WRITES_BELOW;
 use email_db_client::labels::pending_writes::{self, LabelWriteTurn};
+use email_types::gmail::gmail_ops::{GmailMessageRef, ModifyMessageLabelsBatchPayload};
+use email_types::service;
+use email_types::service::link::Link;
 use futures::future::BoxFuture;
-use models_email::gmail::gmail_ops::{GmailMessageRef, ModifyMessageLabelsBatchPayload};
-use models_email::service;
-use models_email::service::link::Link;
 use sqlx::{PgPool, Postgres, Transaction};
 use uuid::Uuid;
 

@@ -151,7 +151,7 @@ shared_types = { workspace = true }
 entity_kind = { workspace = true }
 model_file_type = { workspace = true }
 model_notifications = { workspace = true }
-models_email = { workspace = true }
+email_types = { workspace = true }
 models_pagination = { workspace = true, features = ["axum"] }
 models_properties = { workspace = true }
 rand = { workspace = true }

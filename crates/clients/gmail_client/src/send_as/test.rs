@@ -1,4 +1,4 @@
-use models_email::gmail::SendAsVerificationStatus;
+use email_types::gmail::SendAsVerificationStatus;
 use wiremock::{
     Mock, MockServer, ResponseTemplate,
     matchers::{header, method, path},

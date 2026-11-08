@@ -1,10 +1,10 @@
 use crate::parse::db_to_service;
 use crate::{contacts, labels};
 
+use email_types::db;
+use email_types::service::message;
+use email_types::service::message::{MessageWithBodyReplyless, ParsedSearchMessage};
 use futures::future::join_all;
-use models_email::db;
-use models_email::service::message;
-use models_email::service::message::{MessageWithBodyReplyless, ParsedSearchMessage};
 use sqlx::PgPool;
 use sqlx::types::Uuid;
 

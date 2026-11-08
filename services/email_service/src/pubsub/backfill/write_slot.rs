@@ -3,7 +3,7 @@
 
 use crate::pubsub::context::PubSubContext;
 use crate::util::redis::backfill_write_slots::BackfillWriteSlot;
-use models_email::email::service::pubsub::{DetailedError, FailureReason, ProcessingError};
+use email_types::email::service::pubsub::{DetailedError, FailureReason, ProcessingError};
 
 /// Takes a backfill write slot for one write. A slot that stays taken,
 /// or Redis failing to decide, refuses the write so the operation is deferred

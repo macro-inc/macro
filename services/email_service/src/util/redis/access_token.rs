@@ -1,7 +1,7 @@
 use crate::util::redis::RedisClient;
 use anyhow::Context;
-use models_email::gmail::inbox_sync::{GooglePublicKeys, KeyMap};
-use models_email::service::cache::TokenCacheKey;
+use email_types::gmail::inbox_sync::{GooglePublicKeys, KeyMap};
+use email_types::service::cache::TokenCacheKey;
 use redis::AsyncCommands;
 
 /// ten minutes less than the hour the token is valid for, for long-running jobs

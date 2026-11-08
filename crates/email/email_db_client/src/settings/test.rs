@@ -1,6 +1,6 @@
 use crate::settings::{fetch_settings, patch_settings};
+use email_types::service::settings::SettingsPatch;
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
-use models_email::service::settings::SettingsPatch;
 use sqlx::types::Uuid;
 use sqlx::{Pool, Postgres};
 

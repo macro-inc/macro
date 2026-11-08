@@ -6,7 +6,7 @@ use email::domain::{
     mailbox::{MailboxError, projection::MailboxAttachmentAccess},
 };
 use email_api_client_core::models::EmailApiError;
-use models_email::{
+use email_types::{
     db::address::EmailRecipientType,
     service::{
         attachment::{AttachmentUploadArgs, AttachmentUploadDestination},

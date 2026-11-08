@@ -4,7 +4,7 @@ use std::collections::HashSet;
 
 use base64::{Engine, engine::general_purpose::STANDARD};
 use chrono::{DateTime, Utc};
-use models_email::email::service::address::ContactInfo;
+use email_types::email::service::address::ContactInfo;
 use reqwest::{Method, Response, StatusCode};
 use serde::Deserialize;
 use serde_json::{Value, json};

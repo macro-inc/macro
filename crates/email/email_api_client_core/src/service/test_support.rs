@@ -1,7 +1,7 @@
 use std::sync::{Arc, Mutex};
 
-use models_email::email::service::label::Label;
-use models_email::service::contact::Contact;
+use email_types::email::service::label::Label;
+use email_types::service::contact::Contact;
 use uuid::Uuid;
 
 use super::super::models::{
@@ -72,7 +72,7 @@ impl ProviderTokenSource for FakeTokenSource {
 
     async fn get_access_token_for_link(
         &self,
-        link: &models_email::service::link::Link,
+        link: &email_types::service::link::Link,
         freshness: TokenFreshness,
     ) -> Result<AccessToken, TokenError> {
         self.calls
@@ -84,7 +84,7 @@ impl ProviderTokenSource for FakeTokenSource {
 
     async fn get_access_token_health_neutral(
         &self,
-        link: &models_email::service::link::Link,
+        link: &email_types::service::link::Link,
         freshness: TokenFreshness,
     ) -> Result<AccessToken, TokenError> {
         self.calls

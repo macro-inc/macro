@@ -1,10 +1,10 @@
 use crate::parse::column_limits;
 use chrono::Utc;
-use models_email::email::db::{address, attachment};
-use models_email::email::service::{message, thread};
-use models_email::email::{db, service};
-use models_email::service::contact::Contact;
-use models_email::service::message::HasContactInfo;
+use email_types::email::db::{address, attachment};
+use email_types::email::service::{message, thread};
+use email_types::email::{db, service};
+use email_types::service::contact::Contact;
+use email_types::service::message::HasContactInfo;
 use sqlx::types::Uuid;
 use std::mem;
 

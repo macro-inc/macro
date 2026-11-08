@@ -5,10 +5,10 @@ use crate::pubsub::util::{
 };
 use email::domain::events::{EmailMacroEvent, MessageDeletedMetadata};
 use email_db_client::messages::delete::MessageDeletion;
-use models_email::api::refresh::RefreshEmailEvent;
-use models_email::email::service::link;
-use models_email::gmail::inbox_sync::DeleteMessagePayload;
-use models_email::service::pubsub::{DetailedError, FailureReason, ProcessingError};
+use email_types::api::refresh::RefreshEmailEvent;
+use email_types::email::service::link;
+use email_types::gmail::inbox_sync::DeleteMessagePayload;
+use email_types::service::pubsub::{DetailedError, FailureReason, ProcessingError};
 use std::result;
 
 // delete user's message from the db

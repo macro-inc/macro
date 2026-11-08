@@ -1,4 +1,4 @@
-use models_email::service;
+use email_types::service;
 use sqlx::PgPool;
 
 /// Inserts or updates the sync tokens for a given link id

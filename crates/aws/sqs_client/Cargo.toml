@@ -24,8 +24,8 @@ default = [
 ]
 document = []
 document_text_extractor = []
-email = ["uuid", "models_email", "gmail", "dep:opentelemetry", "dep:tracing-opentelemetry"]
-gmail = ["shared_types", "models_email", "uuid"]
+email = ["uuid", "email_types", "gmail", "dep:opentelemetry", "dep:tracing-opentelemetry"]
+gmail = ["shared_types", "email_types", "uuid"]
 organization_retention = []
 search = ["chrono", "shared_types", "uuid", "futures"]
 sfs_delete = []
@@ -41,7 +41,7 @@ chrono = { workspace = true, optional = true }
 shared_types = { workspace = true, optional = true }
 ai_projection_types = { workspace = true, optional = true }
 s3_key = { workspace = true }
-models_email = { workspace = true, optional = true }
+email_types = { workspace = true, optional = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 strum = { workspace = true, features = ["derive"] }

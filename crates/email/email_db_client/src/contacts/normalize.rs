@@ -1,4 +1,4 @@
-use models_email::db::contact::ContactPhotoless;
+use email_types::db::contact::ContactPhotoless;
 
 pub fn normalize_contact(contact: ContactPhotoless) -> ContactPhotoless {
     let normalized_name =

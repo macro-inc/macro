@@ -31,7 +31,7 @@ macro_event_broker = { workspace = true, default-features = true, features = ["o
 macro_tower_layers = { workspace = true }
 macro_user_id = { workspace = true }
 memory = { workspace = true }
-models_email = { workspace = true }
+email_types = { workspace = true }
 opentelemetry = { workspace = true, features = ["trace"] }
 rdkafka = { workspace = true }
 reqwest = { workspace = true }
