@@ -12,7 +12,7 @@ struct Properties {
 }
 static PROPERTIES: LazyLock<Properties> = LazyLock::new(|| {
     serde_json::from_str(include_str!(
-        "../../../macro_document_model/tests/corpus/wire-properties.json"
+        "../../../macro_document_model/src/wire-properties.json"
     ))
     .expect("generated source class properties")
 });

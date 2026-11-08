@@ -7,6 +7,8 @@ The transformer layer uses the shared lexical_markdown engine; route adapters ar
 
 ## Boundaries
 
+- Restore source own-undefined properties as null only at the snapshot storage boundary; ordinary editor JSON continues to omit them.
+- Keep wire-properties.json generated from actual source node exports and shared with conformance.
 - Keep all 41 concrete nodes typed, with own fields in upstream exportJSON order.
 - Preserve raw code language/theme when the parent afterCloneFrom hook restores them.
 - Keep named and full registration on the one source-ordered catalog in editor.rs.
@@ -39,6 +41,7 @@ The transformer layer uses the shared lexical_markdown engine; route adapters ar
 - `TMPDIR=/home/wolf/tmp cargo check -p macro_document_model --target wasm32-unknown-unknown -j4`
 - `TMPDIR=/home/wolf/tmp cargo clippy -p macro_document_model --all-targets -j4 -- -D warnings`
 - `TMPDIR=/home/wolf/tmp bun packages/lexical-conformance/diff/gate-fuzz/wasm.ts` after native gate generation checks the actual WASM gate.
+- `bun packages/lexical-conformance/corpus/macro-snapshots.ts --check` checks stored snapshot source compatibility.
 - `bun packages/lexical-conformance/corpus/macro-exports.ts --check` checks service export and XML source results.
 - `bun packages/lexical-conformance/corpus/synthetic.ts` regenerates fixed JSON oracles.
 - `bun packages/lexical-conformance/corpus/transformers.ts --check` checks source metadata.
