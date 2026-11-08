@@ -12641,6 +12641,7 @@ dependencies = [
  "chrono-tz",
  "document_id",
  "indexmap 2.14.0",
+ "lexical_loro",
  "lexical_markdown",
  "lexical_model",
  "lexical_node_id",

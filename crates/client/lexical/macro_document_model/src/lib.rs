@@ -54,3 +54,6 @@ pub mod export;
 
 /// Comment-only permission gate using the exact service registry.
 pub mod comment_gate;
+
+/// Collaborative content policy and draft preservation commands.
+pub mod sync;

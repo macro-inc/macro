@@ -181,6 +181,11 @@ pub fn preset_builder(ty: EditorType) -> EditorBuilder {
         | EditorType::Chat
         | EditorType::Calendar => {
             let builder = register_preset_nodes(Editor::builder(EditorMode::ViewAttached), ty);
+            let builder = if ty == EditorType::MarkdownSync {
+                crate::sync::DraftCommentPlugin::register(builder)
+            } else {
+                builder
+            };
             builder
                 .replace::<CodeNode, CustomCodeNode>(CustomCodeNode::from)
                 .replace::<ListNode, TaskListNode>(TaskListNode::from)
