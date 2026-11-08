@@ -23,11 +23,15 @@ impl Transaction<'_> {
     /// Delete a range, including whole tokens and selected containers.
     pub fn remove_text_at(&mut self, slot: SelectionSlot) -> Result<(), Error> {
         let identity = self.selection_replacements;
+        #[cfg(feature = "foreign-nodes")]
+        let object = self.foreign_selections.current.clone();
         let result = self.remove_range(slot, false);
         // RangeSelection.removeText restores its original selection object after
         // caret-based replacements, so those transient clones do not escape.
         if result.is_ok() {
             self.selection_replacements = identity;
+            #[cfg(feature = "foreign-nodes")]
+            self.restore_foreign_selection_identity(object);
         }
         result
     }

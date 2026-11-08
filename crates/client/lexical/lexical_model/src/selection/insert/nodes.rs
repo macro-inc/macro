@@ -43,7 +43,7 @@ impl Transaction<'_> {
                         ),
                     )
                 };
-                self.set_selection(Some(Selection::Range(RangeSelection::collapsed(point))))?;
+                self.replace_selection(Some(Selection::Range(RangeSelection::collapsed(point))))?;
                 self.insert_nodes_at(SelectionSlot::Active, nodes)?;
                 for key in selected {
                     if self.is_attached(key) {

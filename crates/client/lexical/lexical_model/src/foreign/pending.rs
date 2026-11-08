@@ -61,6 +61,7 @@ pub struct PendingUpdate {
     work: WorkCounters,
     detached: Vec<Option<Selection>>,
     selection_replacements: u64,
+    foreign_selections: super::selections::SelectionIdentities,
     native_projection: Option<super::projection::NativeProjection>,
 }
 
@@ -129,6 +130,7 @@ impl Transaction<'_> {
             work: self.work,
             detached: self.detached,
             selection_replacements: self.selection_replacements,
+            foreign_selections: self.foreign_selections,
         }
     }
 }
@@ -172,6 +174,7 @@ impl Editor {
             work: update.work,
             detached: update.detached,
             selection_replacements: update.selection_replacements,
+            foreign_selections: update.foreign_selections,
         })
     }
 }

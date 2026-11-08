@@ -85,6 +85,7 @@ pub struct ForeignReadSnapshot {
     composition_key: Option<NodeKey>,
     source_records: crate::state::NodeMap,
     detached: Vec<Option<Selection>>,
+    selection_identities: super::selections::SelectionIdentities,
     origin: Option<ReadOrigin>,
     retired_records: crate::state::NodeMap,
 }
@@ -121,6 +122,7 @@ impl Clone for ForeignReadSnapshot {
             source_records: self.source_records.clone(),
             origin: self.origin.clone(),
             retired_records: self.retired_records.clone(),
+            selection_identities: self.selection_identities.clone(),
             detached: self
                 .detached
                 .iter()
@@ -198,6 +200,7 @@ impl ForeignReadSnapshot {
             .previous_selection
             .as_ref()
             .map(Selection::snapshot_for_foreign_read);
+        tx.foreign_selections = self.selection_identities.clone();
         tx.detached = self
             .detached
             .iter()
@@ -218,6 +221,7 @@ impl Read for ForeignReadSnapshot {
             retired_records: Some(&self.retired_records),
             foreign_origin: self.origin.as_ref().map(ReadOrigin::borrowed),
             detached_selections: &self.detached,
+            foreign_selection_identities: Some(&self.selection_identities),
             previous_selection: self.previous_selection.as_ref(),
             composition_key: self.composition_key,
         }
@@ -298,6 +302,10 @@ impl StateRef<'_> {
             source_records,
             origin: self.foreign_origin.map(ReadOriginRef::capture),
             retired_records: self.retired_records.cloned().unwrap_or_default(),
+            selection_identities: self
+                .foreign_selection_identities
+                .cloned()
+                .unwrap_or_default(),
             detached: self
                 .detached_selections
                 .iter()

@@ -289,6 +289,8 @@ impl Transaction<'_> {
             return Err(Error::ForeignEditorState);
         }
         self.editor.keys.raise_to(state.max_key());
+        #[cfg(feature = "foreign-nodes")]
+        self.retire_foreign_selection();
         self.pending = state.pending();
         for key in self.pending.nodes.keys().copied().collect::<Vec<_>>() {
             let slot = self
@@ -330,6 +332,8 @@ impl Transaction<'_> {
         for tag in tags.iter() {
             self.add_tag(tag.clone());
         }
+        #[cfg(feature = "foreign-nodes")]
+        self.retire_foreign_selection();
         self.pending = state.pending();
         self.composition_key = None;
         self.dirty_leaves.clear();
