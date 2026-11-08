@@ -437,6 +437,13 @@ export type AgentSessionSource = 'user' | 'agent' | 'routine';
 export type AgentSessionVisibility = 'listed' | 'unlisted' | 'hidden';
 
 /**
+ * Why an agent's turn stopped: one of ACP's stop reasons, or `error` for a
+ * turn whose prompt the runtime answered with an error. On the wire each is
+ * its `snake_case` name, ACP's own spelling.
+ */
+export type AgentTurnStopReason = 'end_turn' | 'max_tokens' | 'max_turn_requests' | 'refusal' | 'cancelled' | 'error' | 'other';
+
+/**
  * An agent session typing through its bot.
  */
 export type AgentTyping = {
@@ -15851,9 +15858,9 @@ export type TurnEndedMetadata = {
      */
     queued_remaining: number;
     /**
-     * The ACP stop reason, or `"error"` when the runtime refused the prompt.
+     * Why the turn stopped.
      */
-    stop_reason: string;
+    stop_reason: AgentTurnStopReason;
     /**
      * Position in the session's log.
      */
@@ -15902,9 +15909,9 @@ export type TurnSummary = {
      */
     excerpt?: string | null;
     /**
-     * The ACP stop reason, or `"error"` when the runtime refused the prompt.
+     * Why the turn stopped.
      */
-    stop_reason: string;
+    stop_reason: AgentTurnStopReason;
     /**
      * Position in the session's log.
      */

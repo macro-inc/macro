@@ -12,8 +12,9 @@ types.
   metadata types — the fastest way to see every notification kind that exists.
 - `src/metadata.rs` + `src/metadata/`: one metadata struct per notification
   kind (channel, CRM discussion, initiative discussion, GitHub PR, reminder, …).
-- `src/metadata/agent_session.rs`: agent-session kinds; alert titles say how a turn
-  ended (from the ACP stop reason) and name the session.
+- `src/metadata/agent_session.rs`: agent-session kinds and `AgentTurnStopReason`
+  (also carried by `agent_session` lifecycle events); alert titles say how a turn
+  ended and name the session.
 - `src/metadata/channel_push.rs`: channel push destinations, including the known
   thread root so clients can open directly without fetching notification metadata.
 - `src/digest_state.rs`: the digest batching state machine.
@@ -29,7 +30,7 @@ types.
 
 - Depends on: `macro_user_id`, `mention_utils`, `model-entity`, `model_owner`,
   `models_pagination`, `notification`, `invite_email`.
-- Used by: `agent_harness`, `ai_tools`, `attention_feed`, `authentication_service`,
+- Used by: `agent_harness`, `agent_session`, `ai_tools`, `attention_feed`, `authentication_service`,
   `calendar_events`, `channels`, `complete_graph`, `document_cognition_service`,
   `document_storage_service`, `email_formatting`, `email_service`, `github`,
   `graphql_notification`, `graphql_work_feed`, `messages`, `notification_db_client`,

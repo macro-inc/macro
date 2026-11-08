@@ -6,14 +6,15 @@
  */
 import type { AgentSessionSettledMetadataAllOfActor } from './agentSessionSettledMetadataAllOfActor';
 import type { AgentSessionSettledMetadataAllOfExcerpt } from './agentSessionSettledMetadataAllOfExcerpt';
+import type { AgentTurnStopReason } from './agentTurnStopReason';
 
 export type AgentSessionSettledMetadataAllOf = {
   /** Who prompted the turn, absent when a bot acted on nobody's behalf. */
   actor?: AgentSessionSettledMetadataAllOfActor;
   /** The agent's last prose in the turn, whole; `None` when it wrote none. */
   excerpt?: AgentSessionSettledMetadataAllOfExcerpt;
-  /** The ACP stop reason, or `error`. */
-  stopReason: string;
+  /** Why the turn stopped. */
+  stopReason: AgentTurnStopReason;
   /**
    * The turn that ended.
    * @minimum 0

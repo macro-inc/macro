@@ -10,6 +10,7 @@ use agent_session::domain::events::{
 };
 use agent_session::domain::model::{StoredQueuedAction, TurnPrompter};
 use futures::future::BoxFuture;
+use model_notifications::AgentTurnStopReason;
 
 use super::*;
 
@@ -722,11 +723,10 @@ where
                         "the fold closed a different turn than the one dispatched"
                     );
                 }
-                let stop_reason = wire_stop_reason(&stop);
+                let stop_reason = lifecycle_stop_reason(&stop);
                 if let Some(turn) = &ended {
                     let turn = turn.clone();
                     let queued_remaining = self.queues.list(session_id).len();
-                    let stop_reason = stop_reason.clone();
                     self.publish_lifecycle(session_id, |identity| {
                         AgentSessionLifecycleEvent::TurnEnded(TurnEndedMetadata {
                             identity,
@@ -1723,17 +1723,17 @@ where
     }
 }
 
-/// The stop reason as downstream reads it: the ACP wire word for the reasons
-/// ACP names, `error` for a prompt the runtime refused.
-fn wire_stop_reason(stop: &StopReason) -> String {
+/// The stop reason as lifecycle events carry it: ACP's reasons as they are,
+/// `Error` for a prompt the runtime refused.
+fn lifecycle_stop_reason(stop: &StopReason) -> AgentTurnStopReason {
     match stop {
-        StopReason::EndTurn => "end_turn".to_owned(),
-        StopReason::MaxTokens => "max_tokens".to_owned(),
-        StopReason::MaxTurnRequests => "max_turn_requests".to_owned(),
-        StopReason::Refusal => "refusal".to_owned(),
-        StopReason::Cancelled => "cancelled".to_owned(),
-        StopReason::Other { reason } => reason.clone(),
-        StopReason::Failed { .. } => "error".to_owned(),
+        StopReason::EndTurn => AgentTurnStopReason::EndTurn,
+        StopReason::MaxTokens => AgentTurnStopReason::MaxTokens,
+        StopReason::MaxTurnRequests => AgentTurnStopReason::MaxTurnRequests,
+        StopReason::Refusal => AgentTurnStopReason::Refusal,
+        StopReason::Cancelled => AgentTurnStopReason::Cancelled,
+        StopReason::Other { .. } => AgentTurnStopReason::Other,
+        StopReason::Failed { .. } => AgentTurnStopReason::Error,
     }
 }
 

@@ -89,9 +89,9 @@ export type AgentSessionSettledMetadata = AgentSessionNotificationRef & {
      */
     excerpt?: string | null;
     /**
-     * The ACP stop reason, or `error`.
+     * Why the turn stopped.
      */
-    stopReason: string;
+    stopReason: AgentTurnStopReason;
     /**
      * The turn that ended.
      */
@@ -111,6 +111,13 @@ export type AgentSessionWaitingForInputMetadata = AgentSessionNotificationRef & 
      */
     turn: number;
 };
+
+/**
+ * Why an agent's turn stopped: one of ACP's stop reasons, or `error` for a
+ * turn whose prompt the runtime answered with an error. On the wire each is
+ * its `snake_case` name, ACP's own spelling.
+ */
+export type AgentTurnStopReason = 'end_turn' | 'max_tokens' | 'max_turn_requests' | 'refusal' | 'cancelled' | 'error' | 'other';
 
 export type AiResponseMetadata = {
     messageId: string;

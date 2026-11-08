@@ -36,7 +36,8 @@ consumer talks to.
 ## Boundaries
 
 - Depends on: `agent_runtime_protocol`, `agent_fold`, `jev`, `teams`,
-  `macro_authorization`.
+  `macro_authorization`, `model_notifications` (`AgentTurnStopReason`, the
+  typed stop reason lifecycle events and agent notifications share).
 - Used by: `agent_harness`, `agent_inmem`, `agent_egress`, `agent_trigger`,
   `agent_changes`, `agent_session_realtime`, `ai_tools` (coding-agent
   toolset), `complete_graph`, `webhook`, `search_service`, `soup_realtime`,

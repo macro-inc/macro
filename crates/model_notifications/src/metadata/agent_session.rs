@@ -67,11 +67,34 @@ pub struct AgentSessionSettledMetadata {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[schema(value_type = Option<String>)]
     pub actor: Option<MacroUserIdStr<'static>>,
-    /// The ACP stop reason, or `error`.
-    pub stop_reason: String,
+    /// Why the turn stopped.
+    pub stop_reason: AgentTurnStopReason,
     /// The agent's last prose in the turn, whole; `None` when it wrote none.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub excerpt: Option<String>,
+}
+
+/// Why an agent's turn stopped: one of ACP's stop reasons, or `error` for a
+/// turn whose prompt the runtime answered with an error. On the wire each is
+/// its `snake_case` name, ACP's own spelling.
+#[derive(Serialize, Deserialize, Debug, Clone, Copy, PartialEq, Eq, ToSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum AgentTurnStopReason {
+    /// The agent finished its turn.
+    EndTurn,
+    /// The model hit its token limit.
+    MaxTokens,
+    /// The agent hit its turn-request limit.
+    MaxTurnRequests,
+    /// The agent declined to continue.
+    Refusal,
+    /// The turn was cancelled.
+    Cancelled,
+    /// The runtime answered the prompt with an error.
+    Error,
+    /// A stop reason ACP added after this enum.
+    #[serde(other)]
+    Other,
 }
 
 /// An agent is blocked on a question only the session's owner can answer.
@@ -137,15 +160,15 @@ enum TurnEnding {
 }
 
 impl TurnEnding {
-    /// Read from the ACP stop reason. A reason ACP adds later reads as
-    /// finished: the turn ended without the runtime reporting a failure.
-    fn from_stop_reason(stop_reason: &str) -> Self {
+    /// A reason ACP adds later reads as finished: the turn ended without
+    /// the runtime reporting a failure.
+    fn from_stop_reason(stop_reason: AgentTurnStopReason) -> Self {
         match stop_reason {
-            "cancelled" => Self::Stopped,
-            "max_tokens" | "max_turn_requests" => Self::HitLimit,
-            "refusal" => Self::Declined,
-            "error" => Self::Failed,
-            _ => Self::Finished,
+            AgentTurnStopReason::EndTurn | AgentTurnStopReason::Other => Self::Finished,
+            AgentTurnStopReason::Cancelled => Self::Stopped,
+            AgentTurnStopReason::MaxTokens | AgentTurnStopReason::MaxTurnRequests => Self::HitLimit,
+            AgentTurnStopReason::Refusal => Self::Declined,
+            AgentTurnStopReason::Error => Self::Failed,
         }
     }
 
@@ -186,7 +209,7 @@ impl NotificationTitle for AgentSessionSettledMetadata {
         &self,
         _sender_id: Option<MacroUserIdStr<'_>>,
     ) -> Result<String, rootcause::Report> {
-        let ending = TurnEnding::from_stop_reason(&self.stop_reason);
+        let ending = TurnEnding::from_stop_reason(self.stop_reason);
         Ok(session_title(&self.session, ending.verb()))
     }
 
@@ -200,7 +223,7 @@ impl NotificationTitle for AgentSessionSettledMetadata {
             .map(agent_excerpt)
             .filter(|excerpt| !excerpt.is_empty());
         Ok(excerpt.unwrap_or_else(|| {
-            TurnEnding::from_stop_reason(&self.stop_reason)
+            TurnEnding::from_stop_reason(self.stop_reason)
                 .without_prose()
                 .to_owned()
         }))

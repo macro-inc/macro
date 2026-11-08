@@ -20,6 +20,7 @@ export * from './agentSessionSettledMetadataAllOfActor';
 export * from './agentSessionSettledMetadataAllOfExcerpt';
 export * from './agentSessionWaitingForInputMetadata';
 export * from './agentSessionWaitingForInputMetadataAllOf';
+export * from './agentTurnStopReason';
 export * from './aiResponseMetadata';
 export * from './apiUserNotification';
 export * from './apiUserNotificationAllOf';

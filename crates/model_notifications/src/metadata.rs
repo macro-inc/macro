@@ -1793,7 +1793,7 @@ impl NotificationExtIos for CalendarEventReminderMetadata {
 mod agent_session;
 pub use agent_session::{
     AgentSessionMentionedMetadata, AgentSessionNotificationRef, AgentSessionOriginParent,
-    AgentSessionSettledMetadata, AgentSessionWaitingForInputMetadata,
+    AgentSessionSettledMetadata, AgentSessionWaitingForInputMetadata, AgentTurnStopReason,
 };
 
 mod initiative_discussion;

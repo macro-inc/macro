@@ -21074,6 +21074,19 @@
         "description": "Where an agent session is shown. The string form is the\n`agent_session.visibility` column's.",
         "enum": ["listed", "unlisted", "hidden"]
       },
+      "AgentTurnStopReason": {
+        "type": "string",
+        "description": "Why an agent's turn stopped: one of ACP's stop reasons, or `error` for a\nturn whose prompt the runtime answered with an error. On the wire each is\nits `snake_case` name, ACP's own spelling.",
+        "enum": [
+          "end_turn",
+          "max_tokens",
+          "max_turn_requests",
+          "refusal",
+          "cancelled",
+          "error",
+          "other"
+        ]
+      },
       "AgentTyping": {
         "type": "object",
         "description": "An agent session typing through its bot.",
@@ -45147,8 +45160,8 @@
             "minimum": 0
           },
           "stop_reason": {
-            "type": "string",
-            "description": "The ACP stop reason, or `\"error\"` when the runtime refused the prompt."
+            "$ref": "#/components/schemas/AgentTurnStopReason",
+            "description": "Why the turn stopped."
           },
           "turn": {
             "type": "integer",
@@ -45225,8 +45238,8 @@
             "description": "The agent's last text in the turn, whole; what the magic chip shows\nonce the turn ends. `None` when the turn produced no prose."
           },
           "stop_reason": {
-            "type": "string",
-            "description": "The ACP stop reason, or `\"error\"` when the runtime refused the prompt."
+            "$ref": "#/components/schemas/AgentTurnStopReason",
+            "description": "Why the turn stopped."
           },
           "turn": {
             "type": "integer",

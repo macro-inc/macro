@@ -20,6 +20,7 @@ mod calendar_join_request;
 pub use calendar_join_request::GraphqlCalendarEventJoinRequestMetadata;
 
 use async_graphql::{Enum, ID, Object, Union};
+use model_notifications::AgentTurnStopReason;
 use model_notifications::{
     AgentSessionMentionedMetadata, AgentSessionNotificationRef, AgentSessionSettledMetadata,
     AgentSessionWaitingForInputMetadata, AiResponseMetadata, CalendarEventReminderMetadata,
@@ -54,6 +55,39 @@ impl From<ChannelType> for GraphqlNotificationChannelType {
             ChannelType::Private => Self::Private,
             ChannelType::DirectMessage => Self::DirectMessage,
             ChannelType::Team => Self::Team,
+        }
+    }
+}
+
+/// Why an agent's turn stopped.
+#[derive(Clone, Copy, Debug, Eq, Enum, PartialEq)]
+pub enum GraphqlAgentTurnStopReason {
+    /// The agent finished its turn.
+    EndTurn,
+    /// The model hit its token limit.
+    MaxTokens,
+    /// The agent hit its turn-request limit.
+    MaxTurnRequests,
+    /// The agent declined to continue.
+    Refusal,
+    /// The turn was cancelled.
+    Cancelled,
+    /// The runtime answered the prompt with an error.
+    Error,
+    /// A stop reason ACP added after this one was defined.
+    Other,
+}
+
+impl From<AgentTurnStopReason> for GraphqlAgentTurnStopReason {
+    fn from(value: AgentTurnStopReason) -> Self {
+        match value {
+            AgentTurnStopReason::EndTurn => Self::EndTurn,
+            AgentTurnStopReason::MaxTokens => Self::MaxTokens,
+            AgentTurnStopReason::MaxTurnRequests => Self::MaxTurnRequests,
+            AgentTurnStopReason::Refusal => Self::Refusal,
+            AgentTurnStopReason::Cancelled => Self::Cancelled,
+            AgentTurnStopReason::Error => Self::Error,
+            AgentTurnStopReason::Other => Self::Other,
         }
     }
 }
@@ -1209,9 +1243,9 @@ impl GraphqlAgentSessionSettledMetadata {
         self.0.actor.as_ref().map(ToString::to_string)
     }
 
-    /// ACP stop reason, or `error`.
-    async fn stop_reason(&self) -> &str {
-        &self.0.stop_reason
+    /// Why the turn stopped.
+    async fn stop_reason(&self) -> GraphqlAgentTurnStopReason {
+        self.0.stop_reason.into()
     }
 
     /// The agent's last prose in the turn.

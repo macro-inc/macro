@@ -11,6 +11,7 @@ const SESSION: Uuid = Uuid::from_u128(0xA);
 use macro_user_id::user_id::MacroUserIdStr;
 use macro_uuid::Uuid;
 use model_entity::EntityType;
+use model_notifications::AgentTurnStopReason;
 
 use super::*;
 
@@ -54,7 +55,7 @@ fn settled(identity: SessionIdentity, turn: u32) -> AgentSessionLifecycleEvent {
             action_id: AgentActionId::mint(),
             actor: Some(user("alice@macro.com")),
             announcement_message_id: Some(Uuid::from_u128(4)),
-            stop_reason: "end_turn".to_owned(),
+            stop_reason: AgentTurnStopReason::EndTurn,
             excerpt: Some("Done.".to_owned()),
         }),
     })
@@ -160,7 +161,7 @@ fn a_chat_agents_unannounced_turn_still_notifies() {
             action_id: AgentActionId::mint(),
             actor: Some(user("alice@macro.com")),
             announcement_message_id: None,
-            stop_reason: "end_turn".to_owned(),
+            stop_reason: AgentTurnStopReason::EndTurn,
             excerpt: Some("Done.".to_owned()),
         }),
     });
@@ -204,7 +205,7 @@ fn routine_run() -> SessionIdentity {
     }
 }
 
-fn routine_settled(turn: u32, stop_reason: &str) -> AgentSessionLifecycleEvent {
+fn routine_settled(turn: u32, stop_reason: AgentTurnStopReason) -> AgentSessionLifecycleEvent {
     AgentSessionLifecycleEvent::Settled(SessionSettledMetadata {
         identity: routine_run(),
         last_turn: Some(TurnSummary {
@@ -212,7 +213,7 @@ fn routine_settled(turn: u32, stop_reason: &str) -> AgentSessionLifecycleEvent {
             action_id: AgentActionId::mint(),
             actor: Some(owner()),
             announcement_message_id: None,
-            stop_reason: stop_reason.to_owned(),
+            stop_reason,
             excerpt: Some("Nothing new today.".to_owned()),
         }),
     })
@@ -220,21 +221,27 @@ fn routine_settled(turn: u32, stop_reason: &str) -> AgentSessionLifecycleEvent {
 
 #[test]
 fn a_routine_runs_own_turn_notifies_nobody_however_it_ended() {
-    for stop_reason in ["end_turn", "cancelled", "error", "max_tokens", "refusal"] {
+    for stop_reason in [
+        AgentTurnStopReason::EndTurn,
+        AgentTurnStopReason::Cancelled,
+        AgentTurnStopReason::Error,
+        AgentTurnStopReason::MaxTokens,
+        AgentTurnStopReason::Refusal,
+    ] {
         assert!(
             coder(&routine_settled(0, stop_reason)).is_empty(),
-            "{stop_reason}"
+            "{stop_reason:?}"
         );
         assert!(
             plan(&routine_settled(0, stop_reason), false).is_empty(),
-            "{stop_reason}"
+            "{stop_reason:?}"
         );
     }
 }
 
 #[test]
 fn a_turn_the_owner_prompts_after_a_routine_run_notifies() {
-    let notify = one_settled(coder(&routine_settled(1, "end_turn")));
+    let notify = one_settled(coder(&routine_settled(1, AgentTurnStopReason::EndTurn)));
     assert_eq!(notify.metadata.turn, 1);
 }
 

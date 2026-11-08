@@ -28,7 +28,7 @@ fn agent_session_settled_serializes_flat_and_formats() {
         session: agent_session_ref(),
         turn: 3,
         actor: Some(uid("macro|asker@example.com")),
-        stop_reason: "end_turn".to_string(),
+        stop_reason: AgentTurnStopReason::EndTurn,
         excerpt: Some("  Done.\nAll   tests pass. ".to_string()),
     };
 
@@ -62,7 +62,7 @@ fn agent_session_settled_without_prose_says_where_to_look() {
         session: agent_session_ref(),
         turn: 0,
         actor: None,
-        stop_reason: "end_turn".to_string(),
+        stop_reason: AgentTurnStopReason::EndTurn,
         excerpt: Some("   ".to_string()),
     };
     assert_eq!(
@@ -77,7 +77,7 @@ fn agent_session_settled_push_groups_with_the_thread_and_collapses_per_session()
         session: agent_session_ref(),
         turn: 0,
         actor: None,
-        stop_reason: "end_turn".to_string(),
+        stop_reason: AgentTurnStopReason::EndTurn,
         excerpt: Some("Done.".to_string()),
     };
     let entity = EntityType::Channel.with_entity_str("cccccccc-cccc-4ccc-8ccc-cccccccccccc");
@@ -179,7 +179,7 @@ fn agent_session_alerts_show_mentions_by_name() {
         session: agent_session_ref(),
         turn: 0,
         actor: None,
-        stop_reason: "end_turn".to_string(),
+        stop_reason: AgentTurnStopReason::EndTurn,
         excerpt: Some(
             r#"The most recent one was <m-user-mention>{"userId":"macro|user@example.com","email":"user@example.com"}</m-user-mention>, posted in <m-document-mention>{"documentId":"0195c94f-3b0c-79f0-8558-e5e509ac9dd8","documentName":"the request","blockName":"channel","blockParams":{}}</m-document-mention>; it returns Option<String>."#
                 .to_string(),
@@ -207,7 +207,7 @@ fn agent_session_settled_with_only_hidden_tags_says_where_to_look() {
         session: agent_session_ref(),
         turn: 0,
         actor: None,
-        stop_reason: "end_turn".to_string(),
+        stop_reason: AgentTurnStopReason::EndTurn,
         excerpt: Some(r#"<m-await>{"text":"thinking"}</m-await>"#.to_string()),
     };
     assert_eq!(
@@ -217,34 +217,69 @@ fn agent_session_settled_with_only_hidden_tags_says_where_to_look() {
 }
 
 #[test]
-fn agent_session_settled_tells_a_failed_or_stopped_turn_from_a_finished_one() {
-    let failed = AgentSessionSettledMetadata {
+fn agent_session_settled_says_how_each_stop_reason_ended_the_turn() {
+    let cases = [
+        (
+            AgentTurnStopReason::EndTurn,
+            "finished",
+            "Open the session to see what it did.",
+        ),
+        (
+            AgentTurnStopReason::Other,
+            "finished",
+            "Open the session to see what it did.",
+        ),
+        (
+            AgentTurnStopReason::Cancelled,
+            "was stopped",
+            "It stopped before finishing.",
+        ),
+        (
+            AgentTurnStopReason::MaxTokens,
+            "hit its limit",
+            "It stopped before finishing. Open the session to continue.",
+        ),
+        (
+            AgentTurnStopReason::MaxTurnRequests,
+            "hit its limit",
+            "It stopped before finishing. Open the session to continue.",
+        ),
+        (
+            AgentTurnStopReason::Refusal,
+            "declined",
+            "It declined to continue.",
+        ),
+        (
+            AgentTurnStopReason::Error,
+            "ran into an error",
+            "Open the session to see what went wrong.",
+        ),
+    ];
+    for (stop_reason, ending, body) in cases {
+        let metadata = AgentSessionSettledMetadata {
+            session: agent_session_ref(),
+            turn: 1,
+            actor: None,
+            stop_reason,
+            excerpt: None,
+        };
+        assert_eq!(
+            metadata.format_title(None).unwrap(),
+            format!("Macro Coder {ending} · Fix the flaky test"),
+            "{stop_reason:?}"
+        );
+        assert_eq!(metadata.format_body(None).unwrap(), body, "{stop_reason:?}");
+    }
+
+    let quoted = AgentSessionSettledMetadata {
         session: agent_session_ref(),
         turn: 1,
         actor: None,
-        stop_reason: "error".to_string(),
-        excerpt: None,
-    };
-    assert_eq!(
-        failed.format_title(None).unwrap(),
-        "Macro Coder ran into an error · Fix the flaky test"
-    );
-    assert_eq!(
-        failed.format_body(None).unwrap(),
-        "Open the session to see what went wrong."
-    );
-
-    let stopped = AgentSessionSettledMetadata {
-        stop_reason: "cancelled".to_string(),
+        stop_reason: AgentTurnStopReason::Cancelled,
         excerpt: Some("I updated two of the three files.".to_string()),
-        ..failed.clone()
     };
     assert_eq!(
-        stopped.format_title(None).unwrap(),
-        "Macro Coder was stopped · Fix the flaky test"
-    );
-    assert_eq!(
-        stopped.format_body(None).unwrap(),
+        quoted.format_body(None).unwrap(),
         "I updated two of the three files."
     );
 
@@ -253,10 +288,36 @@ fn agent_session_settled_tells_a_failed_or_stopped_turn_from_a_finished_one() {
             session_name: String::new(),
             ..agent_session_ref()
         },
-        ..failed
+        stop_reason: AgentTurnStopReason::Error,
+        ..quoted
     };
     assert_eq!(
         unnamed.format_title(None).unwrap(),
         "Macro Coder ran into an error"
+    );
+}
+
+/// Stored notifications carry ACP's own spelling, and keep reading after
+/// ACP adds a reason this enum does not name.
+#[test]
+fn agent_turn_stop_reason_reads_and_writes_acp_spelling() {
+    let cases = [
+        ("end_turn", AgentTurnStopReason::EndTurn),
+        ("max_tokens", AgentTurnStopReason::MaxTokens),
+        ("max_turn_requests", AgentTurnStopReason::MaxTurnRequests),
+        ("refusal", AgentTurnStopReason::Refusal),
+        ("cancelled", AgentTurnStopReason::Cancelled),
+        ("error", AgentTurnStopReason::Error),
+    ];
+    for (wire, stop_reason) in cases {
+        assert_eq!(serde_json::to_value(stop_reason).unwrap(), wire);
+        assert_eq!(
+            serde_json::from_value::<AgentTurnStopReason>(wire.into()).unwrap(),
+            stop_reason
+        );
+    }
+    assert_eq!(
+        serde_json::from_value::<AgentTurnStopReason>("paused".into()).unwrap(),
+        AgentTurnStopReason::Other
     );
 }

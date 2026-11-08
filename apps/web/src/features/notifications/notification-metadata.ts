@@ -1,4 +1,5 @@
 import { providerIdentity } from '@app/features/external-chat/providers/identity';
+import type { AgentTurnStopReason } from '@service-notification/generated/schemas/agentTurnStopReason';
 import { format } from 'date-fns';
 import { match, P } from 'ts-pattern';
 import { isEntityDiscussionEvent } from './entity-discussion';
@@ -335,17 +336,18 @@ export function shouldShowNotificationTarget(n: UnifiedNotification): boolean {
 }
 
 /**
- * How an agent's turn ended, read from its ACP stop reason, so a failed or
- * stopped turn does not read as finished. A reason ACP adds later reads as
- * finished, as the backend's alert title does.
+ * How an agent's turn ended, so a failed or stopped turn does not read as
+ * finished. A reason ACP adds later reads as finished, as the backend's
+ * alert title does.
  */
-export function agentTurnEnding(stopReason: string): string {
+export function agentTurnEnding(stopReason: AgentTurnStopReason): string {
   return match(stopReason)
+    .with('end_turn', 'other', () => 'finished')
     .with('cancelled', () => 'was stopped')
     .with('max_tokens', 'max_turn_requests', () => 'hit its limit')
     .with('refusal', () => 'declined')
     .with('error', () => 'ran into an error')
-    .otherwise(() => 'finished');
+    .exhaustive();
 }
 
 function routineRunFailed(n: UnifiedNotification): boolean {
