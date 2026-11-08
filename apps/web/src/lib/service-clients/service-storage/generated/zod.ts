@@ -24061,6 +24061,61 @@ export const getDocumentLocationV3Response = zod
   .describe('Location response with content lifecycle metadata.');
 
 /**
+ * @summary Read a markdown document's or task's body with the revision it was read
+at, to write it back with `PUT` without overwriting anyone's edits.
+ */
+export const getDocumentMarkdownParams = zod.object({
+  document_id: zod.string().describe('Document identity'),
+});
+
+export const getDocumentMarkdownResponse = zod
+  .object({
+    markdown: zod
+      .string()
+      .describe('The body as Markdown, in the format `text-content` returns.'),
+    revision: zod
+      .string()
+      .describe(
+        "The document's version, as sync-service encodes it. Pass it back to\nwrite the body only if nobody has changed the document since."
+      ),
+  })
+  .describe("A markdown document's body and the revision it was read at.");
+
+/**
+ * @summary Replace a markdown document's or task's body, only if the document is still
+at the revision the caller read. Top-level blocks whose Markdown is
+unchanged keep their comments and formatting; changed blocks are replaced.
+ */
+export const writeDocumentMarkdownParams = zod.object({
+  document_id: zod.string().describe('Document identity'),
+});
+
+export const writeDocumentMarkdownBody = zod
+  .object({
+    expectedRevision: zod
+      .string()
+      .min(1)
+      .describe(
+        'The `revision` from the read this body is based on. The write applies\nonly if the document is still at this revision.'
+      ),
+    markdown: zod.string().describe('The whole new body, as Markdown.'),
+  })
+  .describe('The body to write and the revision it was written against.');
+
+export const writeDocumentMarkdownResponse = zod
+  .object({
+    changed: zod
+      .boolean()
+      .describe(
+        'Whether the body changed; `false` when it already read that way.'
+      ),
+    revision: zod.string().describe("The document's version after the write."),
+  })
+  .describe(
+    'A body write that landed, or found the body already reading that way.'
+  );
+
+/**
  * @summary Permanently deletes a document.
  */
 export const permanentlyDeleteDocumentParams = zod.object({
