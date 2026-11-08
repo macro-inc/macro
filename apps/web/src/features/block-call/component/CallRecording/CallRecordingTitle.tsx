@@ -67,7 +67,6 @@ export function CallRecordingTitle(props: { record: CallRecord }) {
           t('calls.detailFallbackName')}
       </h1>
       <div class="flex flex-wrap items-center gap-x-4 gap-y-2 text-sm text-ink-muted">
-        <span class="mr-auto">{dateRange()}</span>
         <Show
           when={isMobile()}
           fallback={<CallRecordingAvatars record={props.record} />}
@@ -82,6 +81,7 @@ export function CallRecordingTitle(props: { record: CallRecord }) {
             <CaretRightIcon class="size-4" />
           </Button>
         </Show>
+        <span class="mr-auto">{dateRange()}</span>
         <Show when={!isMobile() && !props.record.isActive && canCallAgain()}>
           <Button
             variant="ghost"

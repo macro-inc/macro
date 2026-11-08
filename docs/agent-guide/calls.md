@@ -43,7 +43,7 @@ On desktop the header keeps the breadcrumb, the call's More menu, Ask Macro,
 combined Share/copy-link control, and side-panel toggle. Calls and Drive use the
 same More menu for call actions, including rename, recording download and delete.
 The channel appears above the title, with the
-start/end time range, participant avatars, and Call again below.
+participant avatars before the start/end time range, and Call again on the right.
 The existing tag picker sits below the title metadata and uses the call's property tags. The recording
 precedes the stored summary and read-only Call chat. Summary headings are the
 stored Markdown, not generated client-side sections.
