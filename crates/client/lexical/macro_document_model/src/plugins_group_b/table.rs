@@ -2,11 +2,18 @@
 use super::*;
 mod actions;
 mod controls;
+mod keys;
+pub(super) use keys::decode as decode_key;
 mod resize;
 pub(super) use resize::query;
 mod list_grid;
 pub(super) use actions::decode;
-pub(super) use actions::event_payload;
+pub(super) fn event_payload(event: &PluginEvent) -> Result<Option<serde_json::Value>, Error> {
+    if let Some(payload) = keys::event_payload(event)? {
+        return Ok(Some(payload));
+    }
+    actions::event_payload(event)
+}
 use lexical_rich_nodes::{list::ListItemNode, table::*};
 
 pub(super) fn register(builder: EditorBuilder) -> EditorBuilder {
@@ -43,7 +50,7 @@ pub(super) fn register(builder: EditorBuilder) -> EditorBuilder {
             Ok(())
         })
         .plugin(Tables);
-    resize::register(builder)
+    keys::register(resize::register(builder))
 }
 struct Tables;
 impl Plugin for Tables {

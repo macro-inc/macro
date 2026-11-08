@@ -369,3 +369,167 @@ fn resize_snapshot_uses_unmerged_rendered_columns_and_restores_unset_row_height(
     );
     Ok(())
 }
+
+#[test]
+fn table_key_facts_preserve_native_defaults_and_are_scoped_to_one_dispatch() -> Result<(), Error> {
+    let mut editor =
+        surface::preset_builder_with_mode(EditorType::MarkdownSync, EditorMode::ViewAttached)
+            .build()
+            .expect("surface");
+    let ((table, a, b, c, text, edge), _) = editor.update(|tx| {
+        let table = create_table_node_with_dimensions(tx, 2, 2, IncludeHeaders::All(false))?;
+        tx.append(NodeKey::ROOT, &[table.key()])?;
+        let grid = table_grid(tx.view(), table)?;
+        let a = grid.cell_at(0, 0).expect("A");
+        let b = grid.cell_at(1, 0).expect("B");
+        let c = grid.cell_at(0, 1).expect("C");
+        let text = tx.first_descendant(a).expect("text");
+        tx.text(text)?.set_text_content("hello")?;
+        tx.select_start(text)?;
+        Ok((
+            table.key(),
+            a.key(),
+            b.key(),
+            c.key(),
+            text,
+            tx.first_child(a).expect("paragraph"),
+        ))
+    })?;
+    let event = KeyEvent {
+        key: "ArrowDown".into(),
+        ..Default::default()
+    };
+    let facts = json!({"cells": [a.index(), b.index(), c.index()], "caret": {"key": text.index(), "offset": 0, "edge": edge.index(), "up": false, "exits": true}});
+    let mut menu = facts.clone();
+    menu["typeahead"] = json!(true);
+    let command = decode_command(
+        "group-b.table-key",
+        &menu.to_string(),
+        table.generation(),
+        Some(&event),
+    )?
+    .expect("table key");
+    let (handled, commit) = editor.dispatch(&command)?;
+    assert_eq!(handled, Handled::No);
+    assert!(!commit.default_prevented);
+    let command = decode_command(
+        "group-b.table-key",
+        &facts.to_string(),
+        table.generation(),
+        Some(&event),
+    )?
+    .expect("table key");
+    let (handled, commit) = editor.dispatch(&command)?;
+    assert_eq!(handled, Handled::Yes);
+    assert!(commit.default_prevented);
+    let focus = editor
+        .state()
+        .selection()
+        .and_then(Selection::as_range)
+        .expect("range")
+        .focus;
+    assert_eq!(
+        find_cell_node(editor.state().view(), focus.key()).map(|cell| cell.key()),
+        Some(c)
+    );
+    editor.update(|tx| tx.select_start(text))?;
+    assert_eq!(
+        editor
+            .dispatch(&Command::Key {
+                command: KeyCommand::ArrowDown,
+                event: None
+            })?
+            .0,
+        Handled::No
+    );
+    assert_eq!(
+        editor
+            .state()
+            .selection()
+            .and_then(Selection::as_range)
+            .expect("range")
+            .focus
+            .key(),
+        text
+    );
+    editor.update(|tx| {
+        let selected = create_table_selection_from(
+            tx,
+            tx.view().cast::<TableNode>(table).expect("table"),
+            tx.view().cast::<TableCellNode>(a).expect("A"),
+            tx.view().cast::<TableCellNode>(b).expect("B"),
+        )?;
+        tx.set_selection(Some(Selection::Table(selected)))
+    })?;
+    let extend = KeyEvent {
+        key: "ArrowRight".into(),
+        shift: true,
+        ..Default::default()
+    };
+    let command = decode_command(
+        "group-b.table-key",
+        &facts.to_string(),
+        table.generation(),
+        Some(&extend),
+    )?
+    .expect("extend key");
+    let (handled, commit) = editor.dispatch(&command)?;
+    assert_eq!(handled, Handled::No);
+    assert!(
+        commit.default_prevented,
+        "a saturated table rectangle still stops the browser"
+    );
+    let escape = KeyEvent {
+        key: "Escape".into(),
+        ..Default::default()
+    };
+    let command = decode_command(
+        "group-b.table-key",
+        &facts.to_string(),
+        table.generation(),
+        Some(&escape),
+    )?
+    .expect("escape key");
+    assert_eq!(editor.dispatch(&command)?.0, Handled::Yes);
+    assert!(
+        matches!(editor.state().selection(), Some(Selection::Range(range)) if range.is_collapsed())
+    );
+    Ok(())
+}
+
+#[test]
+fn unhandled_down_requests_one_bulk_selection_check_for_all_tables() -> Result<(), Error> {
+    let mut editor =
+        surface::preset_builder_with_mode(EditorType::MarkdownSync, EditorMode::ViewAttached)
+            .build()
+            .expect("surface");
+    let (tables, _) = editor.update(|tx| {
+        let p = tx.create(Paragraph::default())?;
+        let text = tx.create_text("before")?;
+        tx.append(p, &[text.key()])?;
+        tx.append(NodeKey::ROOT, &[p.key()])?;
+        let a = create_table_node_with_dimensions(tx, 1, 1, IncludeHeaders::All(false))?;
+        let b = create_table_node_with_dimensions(tx, 1, 1, IncludeHeaders::All(false))?;
+        tx.append(NodeKey::ROOT, &[a.key(), b.key()])?;
+        tx.select_start(text)?;
+        Ok([a.key(), b.key()])
+    })?;
+    let (handled, commit) = editor.dispatch(&Command::Key {
+        command: KeyCommand::ArrowDown,
+        event: None,
+    })?;
+    assert_eq!(handled, Handled::No);
+    let events: Vec<_> = commit
+        .events
+        .iter()
+        .filter(|event| event.name() == "group-b.table-check-down")
+        .collect();
+    assert_eq!(events.len(), 1);
+    assert_eq!(
+        event_payload(events[0])?,
+        Some(
+            json!({"tables": [tables[0].index(), tables[1].index()], "generation": tables[0].generation()})
+        )
+    );
+    Ok(())
+}

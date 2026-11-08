@@ -314,7 +314,7 @@ test('a nested editor owns its paste drop before the parent capture handlers', a
   expect(await page.evaluate(() => window.groupB.errors)).toEqual([]);
 });
 
-const tableState = JSON.stringify({
+const tableDocument = {
   root: {
     type: 'root',
     version: 1,
@@ -343,7 +343,8 @@ const tableState = JSON.stringify({
       },
     ],
   },
-});
+};
+const tableState = JSON.stringify(tableDocument);
 
 test('native table borders resize live with one snapshot and Escape restores unset row height', async ({
   page,
@@ -579,5 +580,290 @@ test('cancelled, foreign-pointer and readonly cell drags submit no table selecti
   await expect(
     page.locator('#first [data-lexical-table-selected]')
   ).toHaveCount(0);
+  expect(await page.evaluate(() => window.groupB.errors)).toEqual([]);
+});
+
+test('native table keys preserve browser defaults and cell ranges in one admission', async ({
+  page,
+}) => {
+  await page.evaluate((state) => window.groupB.first.set(state), tableState);
+  const middle = await page.evaluate(() => {
+    window.groupB.first.caret('A', 0);
+    window.groupB.first.resetCounters();
+    const event = new KeyboardEvent('keydown', {
+      key: 'ArrowRight',
+      bubbles: true,
+      cancelable: true,
+    });
+    document.getElementById('first')?.dispatchEvent(event);
+    return {
+      prevented: event.defaultPrevented,
+      counters: window.groupB.first.counters(),
+    };
+  });
+  expect(middle).toEqual({
+    prevented: false,
+    counters: { admissions: 1, queries: 0, nodeQueries: 0 },
+  });
+  const edge = await page.evaluate(() => {
+    window.groupB.first.caret('A', 1);
+    window.groupB.first.resetCounters();
+    const event = new KeyboardEvent('keydown', {
+      key: 'ArrowRight',
+      bubbles: true,
+      cancelable: true,
+    });
+    document.getElementById('first')?.dispatchEvent(event);
+    const b = window.groupB.first.nodes().find((node) => node.text === 'B');
+    return {
+      prevented: event.defaultPrevented,
+      selection: window.groupB.first.selection(),
+      b: b?.key,
+      counters: window.groupB.first.counters(),
+    };
+  });
+  expect(edge.prevented).toBe(true);
+  expect(edge.selection).toEqual({
+    kind: 'range',
+    anchor: { key: edge.b, offset: 0, type: 'text' },
+    focus: { key: edge.b, offset: 0, type: 'text' },
+  });
+  expect(edge.counters).toEqual({ admissions: 1, queries: 0, nodeQueries: 0 });
+  const saturated = await page.evaluate(() => {
+    const cells = window.groupB.first
+      .nodes()
+      .filter((node) => node.type === 'tablecell');
+    const a = cells.at(0),
+      b = cells.at(1);
+    if (!a || !b) throw new Error('Missing table cells');
+    window.groupB.first.selectCells(a.key, b.key);
+    const before = window.groupB.first.selection();
+    window.groupB.first.resetCounters();
+    const event = new KeyboardEvent('keydown', {
+      key: 'ArrowRight',
+      shiftKey: true,
+      bubbles: true,
+      cancelable: true,
+    });
+    document.getElementById('first')?.dispatchEvent(event);
+    return {
+      prevented: event.defaultPrevented,
+      before,
+      after: window.groupB.first.selection(),
+      counters: window.groupB.first.counters(),
+    };
+  });
+  expect(saturated.prevented).toBe(true);
+  expect(saturated.after).toEqual(saturated.before);
+  expect(saturated.counters).toEqual({
+    admissions: 1,
+    queries: 0,
+    nodeQueries: 0,
+  });
+  const escaped = await page.evaluate(() => {
+    window.groupB.first.resetCounters();
+    const event = new KeyboardEvent('keydown', {
+      key: 'Escape',
+      bubbles: true,
+      cancelable: true,
+    });
+    document.getElementById('first')?.dispatchEvent(event);
+    return {
+      prevented: event.defaultPrevented,
+      selection: window.groupB.first.selection(),
+      counters: window.groupB.first.counters(),
+    };
+  });
+  expect(escaped.prevented).toBe(true);
+  expect(escaped.selection).toEqual({
+    kind: 'range',
+    anchor: { key: edge.b, offset: 1, type: 'text' },
+    focus: { key: edge.b, offset: 1, type: 'text' },
+  });
+  expect(escaped.counters).toEqual({
+    admissions: 1,
+    queries: 0,
+    nodeQueries: 0,
+  });
+  expect(await page.evaluate(() => window.groupB.errors)).toEqual([]);
+});
+
+test('native table vertical arrows use fresh DOM geometry and respect typeahead menus', async ({
+  page,
+}) => {
+  await page.evaluate((state) => window.groupB.first.set(state), tableState);
+  const menu = await page.evaluate(() => {
+    window.groupB.first.caret('A', 0);
+    const root = document.getElementById('first');
+    root?.setAttribute('aria-controls', 'typeahead-menu');
+    window.groupB.first.resetCounters();
+    const event = new KeyboardEvent('keydown', {
+      key: 'ArrowDown',
+      bubbles: true,
+      cancelable: true,
+    });
+    root?.dispatchEvent(event);
+    root?.removeAttribute('aria-controls');
+    return {
+      prevented: event.defaultPrevented,
+      counters: window.groupB.first.counters(),
+    };
+  });
+  expect(menu).toEqual({
+    prevented: false,
+    counters: { admissions: 1, queries: 0, nodeQueries: 0 },
+  });
+  const moved = await page.evaluate(() => {
+    window.groupB.first.resetCounters();
+    const event = new KeyboardEvent('keydown', {
+      key: 'ArrowDown',
+      bubbles: true,
+      cancelable: true,
+    });
+    document.getElementById('first')?.dispatchEvent(event);
+    const c = window.groupB.first.nodes().find((node) => node.text === 'C');
+    return {
+      prevented: event.defaultPrevented,
+      selection: window.groupB.first.selection(),
+      c: c?.key,
+      counters: window.groupB.first.counters(),
+    };
+  });
+  expect(moved.prevented).toBe(true);
+  expect(moved.selection).toEqual({
+    kind: 'range',
+    anchor: { key: moved.c, offset: 0, type: 'text' },
+    focus: { key: moved.c, offset: 0, type: 'text' },
+  });
+  expect(moved.counters).toEqual({ admissions: 1, queries: 0, nodeQueries: 0 });
+  expect(await page.evaluate(() => window.groupB.errors)).toEqual([]);
+});
+
+test('post-default table checks use one batch admission for multiple tables', async ({
+  page,
+}) => {
+  const state = JSON.stringify({
+    root: {
+      type: 'root',
+      version: 1,
+      children: [
+        {
+          type: 'paragraph',
+          version: 1,
+          children: [{ type: 'text', version: 1, text: 'before' }],
+        },
+        ...tableDocument.root.children,
+        ...tableDocument.root.children,
+      ],
+    },
+  });
+  await page.evaluate(async (state) => {
+    window.groupB.first.set(state);
+    window.groupB.first.caret('before', 0);
+    await new Promise<void>((resolve) =>
+      requestAnimationFrame(() => resolve())
+    );
+  }, state);
+  const counters = await page.evaluate(async () => {
+    window.groupB.first.resetCounters();
+    const event = new KeyboardEvent('keydown', {
+      key: 'ArrowDown',
+      bubbles: true,
+      cancelable: true,
+    });
+    document.getElementById('first')?.dispatchEvent(event);
+    const immediate = window.groupB.first.counters();
+    await new Promise<void>((resolve) =>
+      requestAnimationFrame(() => resolve())
+    );
+    return {
+      prevented: event.defaultPrevented,
+      immediate,
+      final: window.groupB.first.counters(),
+    };
+  });
+  expect(counters.prevented).toBe(false);
+  expect(counters.immediate).toEqual({
+    admissions: 1,
+    queries: 0,
+    nodeQueries: 0,
+  });
+  expect(counters.final).toEqual({ admissions: 2, queries: 0, nodeQueries: 0 });
+  expect(await page.evaluate(() => window.groupB.errors)).toEqual([]);
+});
+
+test('a pending parent table correction cannot steal nested-editor focus', async ({
+  page,
+}) => {
+  const state = JSON.stringify({
+    root: {
+      type: 'root',
+      version: 1,
+      children: [
+        {
+          type: 'paragraph',
+          version: 1,
+          children: [{ type: 'text', version: 1, text: 'before' }],
+        },
+        ...tableDocument.root.children,
+        { type: 'paste', version: 1, content: 'nested host', origin: 'pasted' },
+      ],
+    },
+  });
+  await page.evaluate(async (state) => {
+    window.groupB.first.set(state);
+    window.groupB.second.set(
+      JSON.stringify({
+        root: {
+          type: 'root',
+          version: 1,
+          children: [
+            {
+              type: 'paragraph',
+              version: 1,
+              children: [{ type: 'text', version: 1, text: 'nested' }],
+            },
+          ],
+        },
+      })
+    );
+    const host = document.querySelector('[data-nested-host="first"]');
+    const child = document.getElementById('second');
+    if (!host || !child) throw new Error('Missing nested editor');
+    host.append(child);
+    window.groupB.first.caret('before', 0);
+    await new Promise<void>((resolve) =>
+      requestAnimationFrame(() => resolve())
+    );
+  }, state);
+  const counters = await page.evaluate(async () => {
+    window.groupB.first.resetCounters();
+    document
+      .getElementById('first')
+      ?.dispatchEvent(
+        new KeyboardEvent('keydown', {
+          key: 'ArrowDown',
+          bubbles: true,
+          cancelable: true,
+        })
+      );
+    const immediate = window.groupB.first.counters();
+    window.groupB.second.caret('nested', 1);
+    await new Promise<void>((resolve) =>
+      requestAnimationFrame(() => resolve())
+    );
+    return {
+      immediate,
+      final: window.groupB.first.counters(),
+      focus: document.activeElement?.id,
+    };
+  });
+  expect(counters.immediate).toEqual({
+    admissions: 1,
+    queries: 0,
+    nodeQueries: 0,
+  });
+  expect(counters.final).toEqual(counters.immediate);
+  expect(counters.focus).toBe('second');
   expect(await page.evaluate(() => window.groupB.errors)).toEqual([]);
 });

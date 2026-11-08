@@ -27,7 +27,7 @@ claiming the browser default unless a handler consumes it.
 Application command envelopes carry the mirror generation and an optional
 keyboard event; reject stale generations before decoding typed surface commands.
 Use clipboard kind 2 for complete block-drag subtrees; retain ordinary node-selection copy semantics for kinds 0 and 1.
-Use the surface decoder table so migration groups append registrations independently.
+Use the surface decoder and key-default policy tables so migration groups append registrations independently; table-key routes let model effects decide browser prevention.
 Route application bulk reads through query kind 9 with the mirror generation in flags and a name/data JSON envelope in text; reject retired generations and unknown names.
 
 ## Start here

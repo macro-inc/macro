@@ -77,3 +77,12 @@ pub fn query(
     }
     Ok(None)
 }
+
+/// Resolve browser-default policy through append-only migration group registration.
+pub fn key_prevents_default(name: &str) -> bool {
+    let policies: &[fn(&str) -> Option<bool>] = &[crate::plugins_group_b::key_prevents_default];
+    policies
+        .iter()
+        .find_map(|policy| policy(name))
+        .unwrap_or(true)
+}
