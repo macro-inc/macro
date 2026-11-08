@@ -2,7 +2,7 @@
 
 ## What it is
 
-AI building blocks: the LLM loop (`agent`), the AI tool registry and toolsets, attachments, embeddings, image generation, yes/no classification (`jev_classifier`), the shown-text check on AI-written text, memory, MCP selection and toolsets, Pipedream MCP, universal input, dictation and web search.
+AI building blocks: the LLM loop (`agent_loop`), the AI tool registry and toolsets, attachments, embeddings, image generation, yes/no classification (`jev_classifier`), the shown-text check on AI-written text, memory, MCP selection and toolsets, Pipedream MCP, universal input, dictation and web search.
 
 Layer: `domain` in [`.config/layers.toml`](../../.config/layers.toml), which
 lists what this group may depend on. `cargo x deps` reports edges that break it.
@@ -11,7 +11,7 @@ lists what this group may depend on. `cargo x deps` reports edges that break it.
 
 | Crate | What it is |
 | --- | --- |
-| [`agent`](agent/AGENTS.md) | Part of AI: the model-agnostic turn runner every AI surface in the product builds on — agent sessions, document AI, and background AI features all run a turn through … |
+| [`agent_loop`](agent_loop/AGENTS.md) | Part of AI: the model-agnostic turn runner every AI surface in the product builds on — agent sessions, document AI, and background AI features all run a turn through … |
 | [`agent_tools`](agent_tools/AGENTS.md) | Part of AI: assembles every domain crate's AI tool implementations into the one `AsyncToolCollection` every AI surface (chat, agent sessions, MCP) calls through, plus … |
 | [`ai_toolset`](ai_toolset/AGENTS.md) | Part of AI: the framework underneath every AI tool in the product — the `AsyncTool` trait, JSON schema generation via `schemars`, per-tool context extraction, and … |
 | [`attachment`](attachment/AGENTS.md) | Part of AI: the shared contract for turning a reference to any entity (a document, a channel message, a calendar event) into AI-consumable content, so AI tools and … |
