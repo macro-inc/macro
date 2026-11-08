@@ -42,3 +42,9 @@ impl DecoratorNode for ThemeMentionNode {
     }
 }
 impl SearchText for ThemeMentionNode {}
+
+impl lexical_markdown::MarkdownText for ThemeMentionNode {
+    fn markdown_text(&self) -> Option<&str> {
+        self.name.as_ref().map(String::as_str)
+    }
+}

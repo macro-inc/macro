@@ -62,3 +62,9 @@ impl DecoratorNode for MagicChipNode {
     }
 }
 impl SearchText for MagicChipNode {}
+
+impl lexical_markdown::MarkdownText for MagicChipNode {
+    fn markdown_text(&self) -> Option<&str> {
+        self.status.as_ref().map(|value| value.as_str())
+    }
+}

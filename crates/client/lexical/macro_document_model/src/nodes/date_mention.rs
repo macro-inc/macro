@@ -71,3 +71,9 @@ pub fn parse_date_mention_body(body: &str) -> Option<DateMentionNode> {
         mention_uuid: Maybe::Missing,
     })
 }
+
+impl lexical_markdown::MarkdownText for DateMentionNode {
+    fn markdown_text(&self) -> Option<&str> {
+        self.display_format.as_ref().map(String::as_str)
+    }
+}

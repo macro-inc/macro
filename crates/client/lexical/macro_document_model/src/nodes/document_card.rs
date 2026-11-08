@@ -171,3 +171,9 @@ pub fn convert_card_to_mention(
     tx.replace(card, paragraph, false)?;
     Ok(mention)
 }
+
+impl lexical_markdown::MarkdownText for DocumentCardNode {
+    fn markdown_text(&self) -> Option<&str> {
+        self.document_name.as_ref().map(String::as_str)
+    }
+}

@@ -48,3 +48,6 @@ pub mod peer;
 
 /// Durable identity helpers and plugin.
 pub use node_ids as ids;
+
+/// Plaintext, search, cognition and Markdown export projections.
+pub mod export;
