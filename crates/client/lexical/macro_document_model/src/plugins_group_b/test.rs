@@ -377,3 +377,101 @@ fn diff_delete_at_start_restores_blocks_in_source_order_and_removes_replacement(
     );
     Ok(())
 }
+
+#[test]
+fn tab_grows_bottom_right_table_cell_and_selects_first_new_cell() -> Result<(), Error> {
+    use lexical_rich_nodes::table::*;
+    let mut editor =
+        surface::preset_builder_with_mode(EditorType::MarkdownSync, EditorMode::ViewAttached)
+            .build()
+            .expect("surface");
+    let (table, _) = editor.update(|tx| {
+        let table = create_table_node_with_dimensions(tx, 1, 2, IncludeHeaders::All(false))?;
+        tx.append(NodeKey::ROOT, &[table.key()])?;
+        let row = tx.first_child(table).expect("row");
+        let cell = tx.last_child(row).expect("cell");
+        tx.select_start(cell)?;
+        Ok(table)
+    })?;
+    let (handled, _) = editor.dispatch(&Command::Key {
+        command: KeyCommand::Tab,
+        event: Some(KeyEvent {
+            key: "Tab".into(),
+            ..KeyEvent::default()
+        }),
+    })?;
+    assert_eq!(handled, Handled::Yes);
+    let state = editor.state().view();
+    let rows = state.children_keys(table)?;
+    assert_eq!(rows.len(), 2);
+    assert_eq!(state.children_size(rows[1]), 2);
+    let range = editor
+        .state()
+        .selection()
+        .and_then(Selection::as_range)
+        .expect("range");
+    assert_eq!(
+        find_cell_node(state, range.anchor.key()).map(Id::key),
+        state.first_child(rows[1])
+    );
+    Ok(())
+}
+
+#[test]
+fn table_cell_wraps_stray_inline_content_and_removes_nested_table() -> Result<(), Error> {
+    use lexical_rich_nodes::table::*;
+    let mut editor =
+        surface::preset_builder_with_mode(EditorType::MarkdownSync, EditorMode::ViewAttached)
+            .build()
+            .expect("surface");
+    let (cell, _) = editor.update(|tx| {
+        let table = create_table_node_with_dimensions(tx, 1, 1, IncludeHeaders::All(false))?;
+        let row = tx.first_child(table).expect("row");
+        let cell = tx.first_child(row).expect("cell");
+        let text = tx.create_text("keep")?;
+        let nested = create_table_node_with_dimensions(tx, 1, 1, IncludeHeaders::All(false))?;
+        tx.append(cell, &[text.key(), nested.key()])?;
+        tx.append(NodeKey::ROOT, &[table.key()])?;
+        Ok(cell)
+    })?;
+    let state = editor.state().view();
+    assert_eq!(state.text_content(cell), "\n\nkeep");
+    assert!(
+        state
+            .children_keys(cell)?
+            .iter()
+            .all(|key| state.is::<Paragraph>(*key))
+    );
+    Ok(())
+}
+
+#[test]
+fn select_all_in_table_first_selects_cells_then_propagates_to_document() -> Result<(), Error> {
+    use lexical_rich_nodes::table::*;
+    let mut editor =
+        surface::preset_builder_with_mode(EditorType::MarkdownSync, EditorMode::ViewAttached)
+            .build()
+            .expect("surface");
+    editor.update(|tx| {
+        let table = create_table_node_with_dimensions(tx, 2, 2, IncludeHeaders::All(false))?;
+        tx.append(NodeKey::ROOT, &[table.key()])?;
+        let row = tx.first_child(table).expect("row");
+        tx.select_start(tx.first_child(row).expect("cell"))?;
+        Ok(())
+    })?;
+    assert_eq!(editor.dispatch(&Command::SelectAll(None))?.0, Handled::Yes);
+    let Some(Selection::Table(selection)) = editor.state().selection() else {
+        panic!("table selection");
+    };
+    assert_eq!(
+        selection.get_shape(editor.state().view())?,
+        TableSelectionShape {
+            from_x: 0,
+            from_y: 0,
+            to_x: 1,
+            to_y: 1
+        }
+    );
+    assert_eq!(editor.dispatch(&Command::SelectAll(None))?.0, Handled::No);
+    Ok(())
+}
