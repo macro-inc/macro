@@ -498,6 +498,17 @@ gen-database-sql-types:
 
 # Dev fast path: build the wasm pkg only when missing or its version drifts
 # from client/cache-wasm/Cargo.toml (bump that version to push a rebuild to
-# dev machines). See tooling/xtask/crates/xtask_cache_wasm/src/main.rs.
+# dev machines). CI app builds always rebuild (`build-cache-wasm`), so deploys
+# never depend on that bump. Runs no cargo, so it doesn't wait on a service
+# build holding the workspace target dir.
 ensure-cache-wasm:
-    cd {{justfile_directory()}}/../.. && SQLX_OFFLINE=true cargo run -q -p xtask -- cache-wasm
+    #!/usr/bin/env bash
+    set -euo pipefail
+    CRATE="{{justfile_directory()}}/../../crates/client/cache-wasm/Cargo.toml"
+    PKG="{{justfile_directory()}}/src/lib/graphql-cache/wasm/package.json"
+    WANT=$(sed -n 's/^version = "\(.*\)"$/\1/p' "$CRATE" | head -1)
+    HAVE=$(jq -r '.version // empty' "$PKG" 2>/dev/null || true)
+    if [ "$HAVE" != "$WANT" ]; then
+        echo "cache-wasm: built '${HAVE:-none}', crate $WANT; building"
+        just --justfile "{{justfile()}}" build-cache-wasm
+    fi

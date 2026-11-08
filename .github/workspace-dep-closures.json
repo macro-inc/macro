@@ -13998,10 +13998,6 @@
     "xtask": [
       "tooling/xtask"
     ],
-    "xtask_cache_wasm": [
-      "tooling/xtask/crates/xtask_cache_wasm",
-      "tooling/xtask/crates/xtask_paths"
-    ],
     "xtask_deps": [
       "tooling/xtask/crates/xtask_deps",
       "tooling/xtask/crates/xtask_graph",

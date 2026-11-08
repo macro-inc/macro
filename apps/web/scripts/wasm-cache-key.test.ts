@@ -172,4 +172,17 @@ describe('wasmCacheKey', () => {
     ];
     for (const other of changed) expect(other).not.toBe(base);
   });
+
+  it('gives every checkout of the same sources one key', () => {
+    const first = workspace(BASE_FILES);
+    const second = workspace(BASE_FILES);
+    const build = (root: string) => [
+      ...BUILD,
+      '--out-dir',
+      join(root, 'apps/web/src/lib/engine/wasm'),
+    ];
+    expect(wasmCacheKey(first, 'engine', build(first), {})).toBe(
+      wasmCacheKey(second, 'engine', build(second), {})
+    );
+  });
 });

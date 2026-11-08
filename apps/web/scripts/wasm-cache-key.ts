@@ -12,7 +12,7 @@
 //   `[workspace.dependencies]` entries of workspace crates outside the closure.
 //   Other dependencies, profiles, patches and lints stay in.
 // - The `CARGO_PROFILE_*` variables of the profile the build uses, and the
-//   build command.
+//   build command, with the checkout's own path taken out.
 //
 // usage: bun scripts/wasm-cache-key.ts <closure package> -- <build command...>
 
@@ -232,7 +232,10 @@ export function wasmCacheKey(
     .map(([name, value]) => `${name}=${value ?? ''}`)
     .sort();
   hash.update(`env\0${profileEnv.join('\0')}\0`);
-  hash.update(`command\0${command.join('\0')}\0`);
+  // The command names this checkout's absolute paths (output and target
+  // dirs); without them, every checkout of the same sources shares an entry.
+  const portable = command.map((arg) => arg.replaceAll(root, '<repo>'));
+  hash.update(`command\0${portable.join('\0')}\0`);
 
   return hash.digest('hex').slice(0, 32);
 }
