@@ -2695,6 +2695,30 @@ export class Sdk extends HeyApiClient {
     }
 
     /**
+     * Read a markdown document's or task's body with the revision it was read
+     * at, to write it back with `PUT` without overwriting anyone's edits.
+     */
+    public getDocumentMarkdown<ThrowOnError extends boolean = false>(options: Options<GetDocumentMarkdownData, ThrowOnError>): RequestResult<GetDocumentMarkdownResponses, GetDocumentMarkdownErrors, ThrowOnError> {
+        return (options.client ?? this.client).get<GetDocumentMarkdownResponses, GetDocumentMarkdownErrors, ThrowOnError>({ url: '/documents/{document_id}/markdown', ...options });
+    }
+
+    /**
+     * Replace a markdown document's or task's body, only if the document is still
+     * at the revision the caller read. Top-level blocks whose Markdown is
+     * unchanged keep their comments and formatting; changed blocks are replaced.
+     */
+    public writeDocumentMarkdown<ThrowOnError extends boolean = false>(options: Options<WriteDocumentMarkdownData, ThrowOnError>): RequestResult<WriteDocumentMarkdownResponses, WriteDocumentMarkdownErrors, ThrowOnError> {
+        return (options.client ?? this.client).put<WriteDocumentMarkdownResponses, WriteDocumentMarkdownErrors, ThrowOnError>({
+            url: '/documents/{document_id}/markdown',
+            ...options,
+            headers: {
+                'Content-Type': 'application/json',
+                ...options.headers
+            }
+        });
+    }
+
+    /**
      * Permanently deletes a document.
      */
     public permanentlyDeleteDocument<ThrowOnError extends boolean = false>(options: Options<PermanentlyDeleteDocumentData, ThrowOnError>): RequestResult<PermanentlyDeleteDocumentResponses, PermanentlyDeleteDocumentErrors, ThrowOnError> {
@@ -4411,30 +4435,6 @@ export class Sdk extends HeyApiClient {
     public whatsappPasskey<ThrowOnError extends boolean = false>(options: Options<WhatsappPasskeyData, ThrowOnError>): RequestResult<WhatsappPasskeyResponses, unknown, ThrowOnError> {
         return (options.client ?? this.client).post<WhatsappPasskeyResponses, unknown, ThrowOnError>({
             url: '/whatsapp/pairing/{id}/passkey',
-            ...options,
-            headers: {
-                'Content-Type': 'application/json',
-                ...options.headers
-            }
-        });
-    }
-
-    /**
-     * Read a markdown document's or task's body with the revision it was read
-     * at, to write it back with `PUT` without overwriting anyone's edits.
-     */
-    public getDocumentMarkdown<ThrowOnError extends boolean = false>(options: Options<GetDocumentMarkdownData, ThrowOnError>): RequestResult<GetDocumentMarkdownResponses, GetDocumentMarkdownErrors, ThrowOnError> {
-        return (options.client ?? this.client).get<GetDocumentMarkdownResponses, GetDocumentMarkdownErrors, ThrowOnError>({ url: '/documents/{document_id}/markdown', ...options });
-    }
-
-    /**
-     * Replace a markdown document's or task's body, only if the document is still
-     * at the revision the caller read. Top-level blocks whose Markdown is
-     * unchanged keep their comments and formatting; changed blocks are replaced.
-     */
-    public writeDocumentMarkdown<ThrowOnError extends boolean = false>(options: Options<WriteDocumentMarkdownData, ThrowOnError>): RequestResult<WriteDocumentMarkdownResponses, WriteDocumentMarkdownErrors, ThrowOnError> {
-        return (options.client ?? this.client).put<WriteDocumentMarkdownResponses, WriteDocumentMarkdownErrors, ThrowOnError>({
-            url: '/documents/{document_id}/markdown',
             ...options,
             headers: {
                 'Content-Type': 'application/json',
