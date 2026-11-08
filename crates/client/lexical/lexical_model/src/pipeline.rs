@@ -74,6 +74,10 @@ impl Transaction<'_> {
     }
     /// Run queued updates, selection hooks, normalization, transforms, GC and validation.
     pub fn flush_with(&mut self, mode: FlushMode) -> Result<(), Error> {
+        #[cfg(feature = "foreign-nodes")]
+        if self.foreign_read_only {
+            return Err(Error::ForeignReadOnly);
+        }
         if self.sealed {
             return Ok(());
         }

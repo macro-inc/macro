@@ -142,6 +142,10 @@ impl Transaction<'_> {
         self.commit_phase()
     }
     pub(crate) fn commit_phase(&mut self) -> Result<Commit, Error> {
+        #[cfg(feature = "foreign-nodes")]
+        if self.foreign_read_only {
+            return Err(Error::ForeignReadOnly);
+        }
         let next_id = self.editor.keys.next_commit()?;
         let prev = self.editor.state.clone();
         let selection_changed = self.selection_dirty
