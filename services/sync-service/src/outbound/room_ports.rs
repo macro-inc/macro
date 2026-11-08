@@ -246,7 +246,7 @@ impl CommentGate for WorkerCommentGate {
         route = "gate", mode = tracing::field::Empty,
         bytes_in = tracing::field::Empty, bytes_out = tracing::field::Empty,
         outcome = tracing::field::Empty, error.kind = tracing::field::Empty,
-        ms = tracing::field::Empty
+        ms = tracing::field::Empty, gate.comment_only = tracing::field::Empty
     ))]
     async fn is_comment_only_change(&self, change: &RootChange) -> worker::Result<bool> {
         let started = web_time::Instant::now();
@@ -271,6 +271,7 @@ impl CommentGate for WorkerCommentGate {
         span.record("outcome", if result.is_ok() { "ok" } else { "error" });
         match &result {
             Ok(value) => {
+                span.record("gate.comment_only", *value);
                 span.record("bytes_out", if *value { 4_i64 } else { 5_i64 });
             }
             Err(_) => {
