@@ -3,7 +3,10 @@ use super::*;
 use crate::domain::{
     ports::ChatRepository,
     rich::RichContent,
-    timeline::{view::StoredVote, *},
+    timeline::{
+        view::{StoredPerson, StoredVote},
+        *,
+    },
 };
 use async_trait::async_trait;
 use macro_user_id::user_id::MacroUserIdStr;
@@ -28,7 +31,7 @@ impl PgExternalChatRepository {
         only: Option<Uuid>,
         limit: i64,
     ) -> ExternalChatResult<StoredPage> {
-        let rows = sqlx::query!(r#"SELECT m.id,m.person_id,p.user_id,COALESCE(p.display_name,'WhatsApp participant') AS "name!",
+        let rows = sqlx::query!(r#"SELECT m.id,m.person_id,p.user_id,p.display_name AS name,
             m.body,m.reply_to,m.source_at,m.ingested_at,m.revised_at,m.deleted_at,m.kind,m.rich,m.mentions,m.forwarded,m.view_once
             FROM external_chat_message m JOIN external_chat_person p ON p.id = m.person_id
             WHERE m.chat_id = $1 AND m.message_id IS NOT NULL
@@ -54,7 +57,7 @@ impl PgExternalChatRepository {
             .map(|(row, _)| row.id)
             .collect();
         let votes: Vec<StoredVote> = sqlx::query!(
-            r#"SELECT v.message_id, v.selected, p.user_id, COALESCE(p.display_name, 'WhatsApp participant') AS "name!"
+            r#"SELECT v.message_id, v.selected, p.user_id, v.person_id, p.display_name AS name
             FROM external_chat_poll_vote v JOIN external_chat_person p ON p.id = v.person_id
             WHERE v.message_id = ANY($1) AND cardinality(v.selected) > 0
             ORDER BY v.updated_at"#,
@@ -67,9 +70,10 @@ impl PgExternalChatRepository {
         .map(|row| StoredVote {
             message_id: row.message_id,
             selected: row.selected,
-            voter: ExternalChatPersonRef {
-                name: row.name,
+            voter: StoredPerson {
+                person_id: row.person_id,
                 user_id: row.user_id,
+                name: row.name,
             },
         })
         .collect();
@@ -81,7 +85,7 @@ impl PgExternalChatRepository {
             let deleted = row.deleted_at.is_some();
             messages.push(StoredMessage {
                 id: row.id,
-                sender: ExternalChatSender {
+                sender: StoredPerson {
                     person_id: row.person_id,
                     user_id: row.user_id,
                     name: row.name,

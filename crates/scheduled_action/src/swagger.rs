@@ -109,6 +109,13 @@ use model::response::EmptyResponse;
             routine_program::AgentTask,
             routine_program::AgentSelection,
             routine_program::RoutineModelId,
+            routine_program::CodeIdentity,
+            routine_program::RoutineTask,
+            routine_program::RoutineProgram,
+            routine_program::Step,
+            routine_program::CodeStep,
+            routine_program::AgentStep,
+            routine_program::Knob,
         ),
     ),
     tags(
@@ -116,3 +123,6 @@ use model::response::EmptyResponse;
     )
 )]
 pub struct ApiDoc;
+
+#[cfg(test)]
+mod test;
