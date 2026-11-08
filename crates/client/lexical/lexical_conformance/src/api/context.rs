@@ -37,15 +37,23 @@ impl Context {
             .version
             .checked_add(1)
             .ok_or_else(|| fail("API version overflow"))?;
-        self.replay
-            .states
-            .entry(self.replay.committed_version)
-            .or_insert_with(|| tx.committed_state().clone());
+        if self
+            .replay
+            .bindings
+            .state(&self.replay.committed_version)?
+            .is_none()
+        {
+            self.replay
+                .bindings
+                .pin_state(self.replay.committed_version, tx.committed_state().clone())?;
+        }
         self.previous_selections = self.replay.selection_values.clone();
         self.replay.record_owner =
             Some((self.replay.committed_version, tx.committed_state().clone()));
         self.replay.begin_slots(tx, true);
-        self.replay.keys.insert("root".into(), NodeKey::ROOT);
+        self.replay
+            .bindings
+            .bind_key("root".into(), NodeKey::ROOT)?;
         self.replay.in_callback = true;
         self.scope = Scope::Updating;
         Ok(())
@@ -67,7 +75,7 @@ impl Context {
         if self.scope != Scope::Publishing {
             return Err(fail("finish the API update before publication"));
         }
-        self.replay.states.insert(self.replay.version, state);
+        self.replay.bindings.pin_state(self.replay.version, state)?;
         self.replay.committed_version = self.replay.version;
         self.replay.record_owner = None;
         self.previous_selections.clear();
@@ -133,7 +141,7 @@ impl Context {
                 "cannot release the committed version borrowed by an API update",
             ));
         }
-        self.replay.states.remove(&version);
+        self.replay.bindings.release_state(version)?;
         self.replay.record_ids.release_version(version)?;
         let released = self
             .owners
@@ -144,13 +152,11 @@ impl Context {
         self.identities.retain(|_, id| !released.contains(id));
         for tag in ["$h", "$sel", "$pt", "$caret", "$iterator", "$state", "$ed"] {
             for id in &released {
-                if let Some(value) = self.replay.handles.remove(&format!("{tag}:{id}"))
+                if let Some(value) = self.replay.bindings.remove_handle(&format!("{tag}:{id}"))?
                     && let Some(snapshot) = value.get("$snapshot")
                 {
                     let snapshot = integer(snapshot)? as usize;
-                    if let Some(state) = self.replay.saved_states.get_mut(snapshot) {
-                        *state = None;
-                    }
+                    self.replay.bindings.release_saved_state(snapshot)?;
                     if self
                         .replay
                         .published_snapshot
@@ -168,7 +174,7 @@ impl Context {
         if value.get("$nodeKey").is_some() {
             let key = tagged_key(&value, "$nodeKey")?;
             let raw = key.to_string();
-            self.replay.keys.insert(raw.clone(), key);
+            self.replay.bindings.bind_key(raw.clone(), key)?;
             // Key references use a known node handle when available. The raw
             // string remains authoritative for fixture decoding.
             return Ok(match self.identities.get(&format!("key:{raw}")) {
@@ -214,12 +220,12 @@ impl Context {
             };
             self.owners.insert(id, owner);
             self.replay
-                .handles
-                .insert(format!("{tag}:{id}"), value.clone());
+                .bindings
+                .bind_handle(format!("{tag}:{id}"), value.clone())?;
             let mut encoded = json!({tag:id});
             if raw_tag == "$node" {
                 let key = node_key(&value)?;
-                self.replay.keys.insert(key.to_string(), key);
+                self.replay.bindings.bind_key(key.to_string(), key)?;
                 self.identities.insert(format!("key:{key}"), id);
                 encoded["key"] = json!(key.to_string());
                 encoded["type"] = value["type"].clone();

@@ -210,8 +210,8 @@ fn publication_refreshes_editor_state_handles_and_release_drops_saved_snapshots(
     let published = host.call(&mut tx, state, json!([]), None)?;
     assert_eq!(published, json!({"$state":1}));
     host.release_version(0)?;
-    assert!(host.replay.saved_states[0].is_none());
-    assert!(host.replay.saved_states[1].is_some());
+    assert!(host.replay.saved_state(0).is_err());
+    assert!(host.replay.saved_state(1).is_ok());
     assert!(host.replay.decode(&initial).is_err());
     assert!(host.replay.decode(&published).is_ok());
     Ok(())

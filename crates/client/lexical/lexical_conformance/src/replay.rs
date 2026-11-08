@@ -4,8 +4,10 @@ use crate::{fixture::Fixture, snapshot, test_nodes};
 use lexical_model::*;
 use serde_json::{Value, json};
 use std::collections::HashMap;
+mod bindings;
 mod initial;
 mod records;
+pub(crate) use bindings::Bindings;
 pub(crate) use records::RecordIdentities;
 
 /// A malformed fixture, unsupported operation, or observable oracle mismatch.
@@ -71,13 +73,10 @@ pub struct Replayer {
     pub(crate) caret_endpoints: HashMap<usize, (Value, Value)>,
     pub(crate) caret_origins: HashMap<usize, Value>,
     pub(crate) iterators: Vec<Option<(lexical_model::NodeCaretCursor, Option<Value>)>>,
-    pub(crate) handles: HashMap<String, Value>,
-    pub(crate) keys: HashMap<String, NodeKey>,
+    pub(crate) bindings: Bindings,
     pub(crate) record_ids: RecordIdentities,
     pub(crate) record_owner: Option<(u64, EditorState)>,
     pub(crate) version: u64,
-    pub(crate) states: HashMap<u64, EditorState>,
-    pub(crate) saved_states: Vec<Option<EditorState>>,
     pub(crate) committed_version: u64,
     pub(crate) published_snapshot: Option<(u64, usize)>,
     pub(crate) child_iterators: HashMap<usize, lexical_rich_nodes::utils::ChildCursor>,
@@ -102,11 +101,8 @@ pub struct Replayer {
     pub(crate) microtasks: std::collections::VecDeque<Value>,
 }
 impl Replayer {
-    pub(crate) fn saved_state(&self, id: usize) -> Result<&EditorState> {
-        self.saved_states
-            .get(id)
-            .and_then(Option::as_ref)
-            .ok_or_else(|| fail("unknown or released state handle"))
+    pub(crate) fn saved_state(&self, id: usize) -> Result<EditorState> {
+        self.bindings.saved_state(id)
     }
     /// Replay all trace operations and final state; no original JS executes.
     pub fn replay(&mut self, fixture: &Fixture) -> Result<()> {
@@ -164,7 +160,7 @@ impl Replayer {
         {
             return Err(fail("unknown recorder build"));
         }
-        self.keys.insert("root".into(), NodeKey::ROOT);
+        self.bindings.bind_key("root".into(), NodeKey::ROOT)?;
         self.tapes = fixture.tapes.clone();
         self.tape_positions = vec![0; fixture.tapes.len()];
         let mut editor = None;
@@ -251,7 +247,7 @@ impl Replayer {
                             return Err(fail("state install commit index"));
                         }
                         self.committed_version = self.version;
-                        self.states.insert(self.version, commit.next.clone());
+                        self.bindings.pin_state(self.version, commit.next.clone())?;
                         snapshot::compare(self, &op["snapshot"], &commit.next, Some(&commit))?;
                         self.updates.clear();
                         self.causes.clear();
@@ -282,7 +278,7 @@ impl Replayer {
                                 return Err(fail("commit index mismatch"));
                             }
                             self.committed_version = self.version;
-                            self.states.insert(self.version, commit.next.clone());
+                            self.bindings.pin_state(self.version, commit.next.clone())?;
                             snapshot::compare(
                                 self,
                                 &pending["snapshot"],
@@ -465,8 +461,7 @@ impl Replayer {
             } else {
                 editor.parse_editor_state(&serde_json::from_value(value)?)?
             };
-            let id = self.saved_states.len();
-            self.saved_states.push(Some(state));
+            let id = self.bindings.save_state(state)?;
             json!({"$snapshot":id})
         } else {
             let id = integer(&args[0]["$snapshot"])? as usize;
@@ -665,19 +660,18 @@ impl Replayer {
             for tag in ["$h", "$ed", "$state", "$sel", "$pt", "$caret", "$iterator"] {
                 if let Some(id) = object.get(tag) {
                     return self
-                        .handles
-                        .get(&format!("{tag}:{id}"))
-                        .cloned()
+                        .bindings
+                        .handle(&format!("{tag}:{id}"))?
                         .ok_or_else(|| fail(format!("unknown handle {tag}:{id}")));
                 }
             }
             if let Some(raw) = object.get("$key") {
                 let _ = raw;
                 let key = self
-                    .keys
-                    .get(string(&object["raw"])?)
+                    .bindings
+                    .key(string(&object["raw"])?)?
                     .ok_or_else(|| fail("unknown key"))?;
-                return Ok(key_value(*key));
+                return Ok(key_value(key));
             }
             let mut decoded = serde_json::Map::new();
             for (key, value) in object {
@@ -706,8 +700,8 @@ impl Replayer {
                         return Err(fail(format!("expected {tag} object, got {actual}")));
                     }
                     let binding = format!("{tag}:{id}");
-                    if let Some(bound) = self.handles.get(&binding) {
-                        if bound != actual {
+                    if let Some(bound) = self.bindings.handle(&binding)? {
+                        if &bound != actual {
                             return Err(fail(format!(
                                 "identity mismatch {binding}: {bound} != {actual}"
                             )));
@@ -768,13 +762,14 @@ impl Replayer {
                             }
                         }
                         if self
-                            .handles
+                            .bindings
+                            .handles()?
                             .iter()
                             .any(|(other, value)| other.starts_with(tag) && value == actual)
                         {
                             return Err(fail(format!("distinct oracle handles alias {binding}")));
                         }
-                        self.handles.insert(binding, actual.clone());
+                        self.bindings.bind_handle(binding, actual.clone())?;
                     }
                     return Ok(());
                 }
@@ -837,19 +832,19 @@ impl Replayer {
                 "strict key allocation mismatch: {raw} != {key}"
             )));
         }
-        if let Some(existing) = self.keys.get(raw) {
-            if *existing != key {
+        if let Some(existing) = self.bindings.key(raw)? {
+            if existing != key {
                 return Err(fail(format!(
                     "key bijection mismatch: {raw} {existing} != {key}"
                 )));
             }
         } else {
-            if self.keys.values().any(|other| *other == key) {
+            if self.bindings.keys()?.values().any(|other| *other == key) {
                 return Err(fail(format!(
                     "key bijection is not injective: {raw} -> {key}"
                 )));
             }
-            self.keys.insert(raw.into(), key);
+            self.bindings.bind_key(raw.into(), key)?;
         }
         Ok(())
     }

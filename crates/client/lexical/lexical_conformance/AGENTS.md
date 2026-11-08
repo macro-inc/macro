@@ -9,6 +9,7 @@ Development-only schema-2 fixture interpreter for the pinned upstream oracle.
 - `src/fixture.rs`: recorder wire schema.
 - `src/config.rs`: strict host/provenance and constructor-reference validation.
 - `src/replay.rs`: operation ordering, identities and callback tapes.
+- `src/replay/bindings.rs`: shared owned handle/key bindings and snapshot pins; return clones before any model or host call.
 - `src/replay/records.rs`: shared record identities for independent callback frames; guards cover owned map operations only.
 - `src/api/`: explicit dispatch to model APIs, including caret object identity and metadata.
 - `src/api.rs`: shared fixture/WASM call entry point; `build.rs` derives its sorted API index from dispatcher match arms with syn.

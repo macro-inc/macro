@@ -28,7 +28,7 @@ fn indexed_calls_mutate_the_same_model_and_keep_captured_records()
     tx.append(paragraph, &[key])?;
     tx.append(NodeKey::ROOT, &[paragraph])?;
     tx.commit()?;
-    r.states.insert(0, editor.state().clone());
+    r.bindings.pin_state(0, editor.state().clone())?;
     r.version = 1;
     let mut tx = editor.transaction();
     let writable_id = api::index()
@@ -57,7 +57,14 @@ fn indexed_calls_mutate_the_same_model_and_keep_captured_records()
         "before"
     );
     assert!(api::call_by_id(&mut r, &mut tx, u32::MAX, json!([]), None).is_err());
-    assert_eq!(r.states[&0].view().text_content(key), "before");
+    assert_eq!(
+        r.bindings
+            .state(&0)?
+            .expect("state")
+            .view()
+            .text_content(key),
+        "before"
+    );
     Ok(())
 }
 
@@ -295,6 +302,7 @@ fn nested_model_callback_frames_share_record_identity_without_borrowing_the_pare
 -> Result<(), crate::replay::ReplayError> {
     struct Hooks {
         records: crate::replay::RecordIdentities,
+        bindings: crate::replay::Bindings,
         seen: std::sync::Arc<std::sync::Mutex<Vec<serde_json::Value>>>,
     }
     impl ForeignHooks for Hooks {
@@ -308,17 +316,46 @@ fn nested_model_callback_frames_share_record_identity_without_borrowing_the_pare
             let result = (|| -> Result<(), crate::replay::ReplayError> {
                 let mut child = Replayer {
                     record_ids: self.records.clone(),
+                    bindings: self.bindings.clone(),
+                    record_owner: Some((0, tx.committed_state().clone())),
                     version: 1,
                     in_callback: true,
                     ..Replayer::default()
                 };
+                let sibling_handle = child.decode(&json!({"$h":22}))?;
+                assert_eq!(crate::replay::node_key(&sibling_handle)?, sibling);
+                assert_eq!(
+                    api::call(
+                        &mut child,
+                        tx,
+                        &json!({"fn":"LexicalNode.getType","this":{"$h":22},"args":[]}),
+                    )?,
+                    "paragraph"
+                );
+                assert_eq!(
+                    super::lexical::key_arg(&child, &json!(sibling.to_string()))?,
+                    sibling
+                );
                 let nested = api::call(
                     &mut child,
                     tx,
                     &json!({"fn":"lexical.$createTextNode","args":["nested"]}),
                 )?;
                 tx.append(sibling, &[crate::replay::node_key(&nested)?])?;
-                self.seen.lock().expect("test log").push(nested);
+                child.compare(&json!({"$h":77,"key":nested["$node"].as_u64().expect("key").to_string(),"type":"text","ver":1}), &nested)?;
+                let committed = tx.committed_state().clone();
+                let root = child.node(committed.view(), NodeKey::ROOT)?;
+                assert_eq!(root["ver"], 0);
+                assert_eq!(super::properties::get(&mut child, tx, &root, "__size")?, 0);
+                let snapshot = api::call(
+                    &mut child,
+                    tx,
+                    &json!({"fn":"LexicalEditor.getEditorState","args":[]}),
+                )?;
+                self.seen
+                    .lock()
+                    .expect("test log")
+                    .extend([nested, root, snapshot]);
                 Ok(())
             })();
             match result {
@@ -328,6 +365,7 @@ fn nested_model_callback_frames_share_record_identity_without_borrowing_the_pare
         }
     }
     let records = crate::replay::RecordIdentities::default();
+    let bindings = crate::replay::Bindings::default();
     let seen = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
     let mut editor = Editor::builder(EditorMode::Headless)
         .foreign_node(ForeignNodeType {
@@ -338,6 +376,7 @@ fn nested_model_callback_frames_share_record_identity_without_borrowing_the_pare
             required_state: vec![],
             hooks: std::sync::Arc::new(Hooks {
                 records: records.clone(),
+                bindings: bindings.clone(),
                 seen: seen.clone(),
             }),
         })
@@ -345,21 +384,46 @@ fn nested_model_callback_frames_share_record_identity_without_borrowing_the_pare
         .expect("editor");
     let mut parent = Replayer {
         record_ids: records.clone(),
+        bindings: bindings.clone(),
+        record_owner: Some((0, editor.state().clone())),
         version: 1,
         ..Replayer::default()
     };
+    bindings.pin_state(0, editor.state().clone())?;
     let mut tx = editor.transaction();
     let first = tx.create_foreign("callback-paragraph", SerializedNode::new())?;
     let sibling = tx.create(Paragraph::default())?.key();
     tx.append(NodeKey::ROOT, &[first])?;
     let first = parent.node(tx.view(), first)?;
     let sibling = parent.node(tx.view(), sibling)?;
+    parent.compare(&json!({"$h":22,"key":sibling["$node"].as_u64().expect("key").to_string(),"type":"paragraph","ver":1}), &sibling)?;
     let returned = api::call(
         &mut parent,
         &mut tx,
         &json!({"fn":"LexicalNode.insertAfter","this":first,"args":[sibling]}),
     )?;
     let nested = seen.lock().expect("test log")[0].clone();
+    assert_eq!(parent.decode(&json!({"$h":77}))?, nested);
+    assert_eq!(
+        super::lexical::key_arg(
+            &parent,
+            &json!(nested["$node"].as_u64().expect("key").to_string())
+        )?,
+        crate::replay::node_key(&nested)?
+    );
+    let root = seen.lock().expect("test log")[1].clone();
+    assert_eq!(
+        parent.node(tx.committed_state().view(), NodeKey::ROOT)?,
+        root
+    );
+    let snapshot = seen.lock().expect("test log")[2].clone();
+    assert_eq!(
+        parent
+            .saved_state(snapshot["$snapshot"].as_u64().expect("snapshot") as usize)?
+            .view()
+            .text_content(NodeKey::ROOT),
+        ""
+    );
     assert_ne!(nested["identity"], first["identity"]);
     assert_ne!(nested["identity"], sibling["identity"]);
     assert_eq!(returned["identity"], sibling["identity"]);

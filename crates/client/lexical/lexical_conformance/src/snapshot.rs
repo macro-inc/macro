@@ -47,10 +47,10 @@ pub(crate) fn selection(state: &EditorState) -> Result<Value> {
 fn expected_key(replay: &Replayer, value: &Value) -> Result<String> {
     if value.is_number() {
         let handle = replay
-            .handles
-            .get(&format!("$h:{value}"))
+            .bindings
+            .handle(&format!("$h:{value}"))?
             .ok_or_else(|| fail(format!("unknown dirty handle {value}")))?;
-        return Ok(crate::replay::node_key(handle)?.to_string());
+        return Ok(crate::replay::node_key(&handle)?.to_string());
     }
     let raw = if value.get("$key").is_some() {
         string(&value["raw"])?
@@ -58,9 +58,9 @@ fn expected_key(replay: &Replayer, value: &Value) -> Result<String> {
         string(value)?
     };
     replay
-        .keys
-        .get(raw)
-        .map(ToString::to_string)
+        .bindings
+        .key(raw)?
+        .map(|key| key.to_string())
         .ok_or_else(|| fail(format!("unknown snapshot key {raw}")))
 }
 fn canonical_selection(replay: &Replayer, value: &mut Value) -> Result<()> {
@@ -193,7 +193,7 @@ pub(crate) fn compare(
                 commit
                     .tags
                     .iter()
-                    .map(ToString::to_string)
+                    .map(|key| key.to_string())
                     .collect::<Vec<_>>()
             ),
         )?;
@@ -220,7 +220,7 @@ pub(crate) fn compare(
                 commit
                     .normalized
                     .iter()
-                    .map(ToString::to_string)
+                    .map(|key| key.to_string())
                     .collect::<Vec<_>>()
             ),
         )?;
@@ -235,7 +235,7 @@ pub(crate) fn compare(
             .changes
             .dirty_leaves
             .iter()
-            .map(ToString::to_string)
+            .map(|key| key.to_string())
             .collect::<Vec<_>>();
         actual_leaves.sort();
         replay
@@ -302,7 +302,7 @@ fn bind_transient_keys(replay: &mut Replayer, expected: &Value, commit: &Commit)
         } else {
             string(value)?
         };
-        if !replay.keys.contains_key(key) {
+        if replay.bindings.key(key)?.is_none() {
             raw.insert(key.to_owned());
         }
     }
@@ -314,7 +314,7 @@ fn bind_transient_keys(replay: &mut Replayer, expected: &Value, commit: &Commit)
         .chain(commit.changes.dirty_elements.keys())
         .chain(&commit.normalized)
     {
-        if !replay.keys.values().any(|known| known == key) {
+        if !replay.bindings.keys()?.values().any(|known| known == key) {
             actual.insert(*key);
         }
     }

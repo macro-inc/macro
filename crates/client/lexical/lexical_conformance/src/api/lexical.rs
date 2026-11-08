@@ -62,8 +62,8 @@ pub(crate) fn call(r: &mut Replayer, tx: &mut Transaction<'_>, op: &Value) -> Re
                     .get("$nodeState")
                     .ok_or_else(|| fail("NodeState argument"))?;
                 let key = node_key(record)?;
-                let state = r.states.get(&integer(&record["ver"])?);
-                let view = state.map(EditorState::view).unwrap_or(tx.view());
+                let state = r.bindings.state(&integer(&record["ver"])?)?;
+                let view = state.as_ref().map(EditorState::view).unwrap_or(tx.view());
                 Ok(view.node_or_err(key)?.node_state().cloned())
             };
             let left = state(a.first())?;
@@ -511,8 +511,7 @@ pub(crate) fn call(r: &mut Replayer, tx: &mut Transaction<'_>, op: &Value) -> Re
                 let _ = version;
                 id
             } else {
-                let id = r.saved_states.len();
-                r.saved_states.push(Some(state.clone()));
+                let id = r.bindings.save_state(state.clone())?;
                 r.published_snapshot = Some((r.committed_version, id));
                 id
             };
@@ -564,9 +563,8 @@ pub(crate) fn key_arg(r: &Replayer, value: &Value) -> Result<NodeKey> {
     if value.get("$node").is_some() {
         return node_key(value);
     }
-    r.keys
-        .get(string(value)?)
-        .copied()
+    r.bindings
+        .key(string(value)?)?
         .ok_or_else(|| fail(format!("unknown key argument: {value}")))
 }
 pub(crate) fn slot_arg(r: &Replayer, value: &Value) -> Result<SelectionSlot> {
