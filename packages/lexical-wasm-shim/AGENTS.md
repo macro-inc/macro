@@ -45,3 +45,5 @@ Own exactly one node-handle cache per backend, retained until disposal; never le
 Use selection.test.ts to check captured selection fields across suspension, replacement and rollback against the real backend.
 
 Keep mutations.test.ts literals tied to the pinned upstream observations; assert D-6/D-7 differences as specified errors, not upstream success cases.
+
+Use backend foreignHookIndex for override-bit order; hook names come from the model trait, and upstream derivation/hosting checks remain required separately.

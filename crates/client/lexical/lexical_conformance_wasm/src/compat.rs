@@ -44,3 +44,13 @@ pub fn text_format_flags() -> Result<JsValue, JsError> {
 
 #[cfg(test)]
 mod test;
+
+/// Upstream hook names in model-derived override-bit order.
+#[cfg(feature = "js-nodes")]
+#[wasm_bindgen]
+pub fn foreign_hook_index() -> Vec<String> {
+    lexical_model::ForeignHook::ALL
+        .iter()
+        .map(|hook| super::debug::returned_string(hook.upstream_name().to_owned()))
+        .collect()
+}

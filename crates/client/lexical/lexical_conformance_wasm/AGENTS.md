@@ -14,7 +14,7 @@ Never import them from production crates or bundles.
 - `examples/export_host_types.rs`: generate/check the Specta packet declaration with the web formatter.
 - `src/debug.rs`: actual export-entry, logical payload-byte and editor-facade lifetime counters; raw WASM must pass through instrument_exports before crossing measurements.
 - `build.rs`: build-time syn derivation of fixed scalar/receiver input sizes and string ABI locations; unsupported signatures or unknown exports fail instrumentation.
-- `src/compat.rs`: model-derived format flags and one WASM-instance key counter for shim host allocation/reset; Tier C handles retain their isolated counters.
+- `src/compat.rs`: model-derived foreign-hook IDs and format flags and one WASM-instance key counter for shim host allocation/reset; Tier C handles retain their isolated counters.
 - `src/lib.rs`: isolated `CoreHandle`, JSON transaction boundary and build identity.
 - `examples/instrument_exports/main.rs`: native export counter postprocessor; run after bindgen/wasm-opt and never optimize afterward. Preserve internal model indices; only bindgen throw imports gain outgoing-string wrappers. Keep the reserved counter helper unwrapped so generated raw ABI types stay accurate.
 - `src/rich.rs` and `src/rich/input.rs`: rich profile, history, markdown and explicit
@@ -108,3 +108,5 @@ without allocating a model commit; false leaves the pending update open.
 Count indexed JSON inputs at serde visitor delivery, including map keys and
 prefixes consumed before a later error. Keep the wrapped deserializer requests
 and error text unchanged; do not count only the final normalized JSON value.
+
+Read foreign_hook_index in override-bit order; it is generated from the model trait, including its explicit upstream aliases. Never hand-maintain another host hook list.

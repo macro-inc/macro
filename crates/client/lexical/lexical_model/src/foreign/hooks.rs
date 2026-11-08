@@ -113,6 +113,7 @@ pub trait ForeignHooks: Send + Sync + 'static {
         Override::Inherit
     }
     /// Runtime counterpart of `indent`.
+    /// Upstream host method: `getIndent`.
     fn indent(&self, _node: NodeView<'_>, _data: &ForeignData) -> Override<u32> {
         Override::Inherit
     }
@@ -137,6 +138,7 @@ pub trait ForeignHooks: Send + Sync + 'static {
         Override::Inherit
     }
     /// Runtime counterpart of `text_content`.
+    /// Upstream host method: `getTextContent`.
     fn text_content(&self, _node: NodeView<'_>, _data: &ForeignData) -> Override<String> {
         Override::Inherit
     }
@@ -180,6 +182,7 @@ pub trait ForeignHooks: Send + Sync + 'static {
         Override::Inherit
     }
     /// Runtime counterpart of `reset_on_copy`.
+    /// Upstream host method: `resetOnCopyNodeFrom`.
     fn reset_on_copy(
         &self,
         _tx: &mut Transaction<'_>,
@@ -189,6 +192,7 @@ pub trait ForeignHooks: Send + Sync + 'static {
         Override::Inherit
     }
     /// Runtime counterpart of `create_parent_element`.
+    /// Upstream host method: `createParentElementNode`.
     fn create_parent_element(
         &self,
         _tx: &mut Transaction<'_>,
@@ -245,6 +249,7 @@ pub trait ForeignHooks: Send + Sync + 'static {
         Override::Inherit
     }
     /// Runtime counterpart of `import`.
+    /// Upstream host method: `importJSON`.
     fn import(
         &self,
         _tx: &mut Transaction<'_>,
@@ -253,6 +258,7 @@ pub trait ForeignHooks: Send + Sync + 'static {
         Override::Inherit
     }
     /// Runtime counterpart of `update_from_json`.
+    /// Upstream host method: `updateFromJSON`.
     fn update_from_json(
         &self,
         _tx: &mut Transaction<'_>,
@@ -262,6 +268,7 @@ pub trait ForeignHooks: Send + Sync + 'static {
         Override::Inherit
     }
     /// Runtime counterpart of `adjust_export_json`.
+    /// Upstream host method: `exportJSON`.
     fn adjust_export_json(
         &self,
         _node: NodeView<'_>,
@@ -271,6 +278,7 @@ pub trait ForeignHooks: Send + Sync + 'static {
         Override::Inherit
     }
     /// Runtime counterpart of `after_clone`.
+    /// Upstream host method: `afterCloneFrom`.
     fn after_clone(
         &self,
         _key: NodeKey,
@@ -280,6 +288,7 @@ pub trait ForeignHooks: Send + Sync + 'static {
         Override::Inherit
     }
     /// Runtime counterpart of `static_transform`.
+    /// Upstream host method: `transform`.
     fn static_transform(
         &self,
         _tx: &mut Transaction<'_>,
@@ -296,6 +305,7 @@ pub trait ForeignHooks: Send + Sync + 'static {
         Override::Inherit
     }
     /// Runtime counterpart of `coerce_text_content`.
+    /// Upstream host method: `setTextContent`.
     fn coerce_text_content(
         &self,
         _node: NodeView<'_>,
@@ -305,6 +315,7 @@ pub trait ForeignHooks: Send + Sync + 'static {
         Override::Inherit
     }
     /// Runtime counterpart of `check_splice_text`.
+    /// Upstream host method: `spliceText`.
     fn check_splice_text(
         &self,
         _node: NodeView<'_>,
@@ -315,6 +326,7 @@ pub trait ForeignHooks: Send + Sync + 'static {
         Override::Inherit
     }
     /// Runtime counterpart of `coerce_detail`.
+    /// Upstream host method: `setDetail`.
     fn coerce_detail(
         &self,
         _node: NodeView<'_>,
@@ -324,6 +336,7 @@ pub trait ForeignHooks: Send + Sync + 'static {
         Override::Inherit
     }
     /// Runtime counterpart of `coerce_mode`.
+    /// Upstream host method: `setMode`.
     fn coerce_mode(
         &self,
         _node: NodeView<'_>,
@@ -333,6 +346,7 @@ pub trait ForeignHooks: Send + Sync + 'static {
         Override::Inherit
     }
     /// Runtime counterpart of `coerce_format`.
+    /// Upstream host method: `setFormat`.
     fn coerce_format(
         &self,
         _node: NodeView<'_>,
@@ -342,3 +356,5 @@ pub trait ForeignHooks: Send + Sync + 'static {
         Override::Inherit
     }
 }
+
+include!(concat!(env!("OUT_DIR"), "/foreign_hooks.rs"));

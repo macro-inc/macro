@@ -236,3 +236,40 @@ test('error values count their message strings after numeric input validation', 
     core.free();
   }
 });
+
+test('derived foreign hook aliases exist upstream and their returned names are fully counted', async () => {
+  const upstream = await import('lexical');
+  const bases = [
+    Object.getPrototypeOf(upstream.ElementNode),
+    upstream.ElementNode,
+    upstream.TextNode,
+    upstream.DecoratorNode,
+  ];
+  node.debug_reset_counters();
+  const names = node.foreign_hook_index();
+  expect(node.debug_boundary_bytes()).toBe(
+    names.reduce((bytes, name) => bytes + name.length * 2, 0) + 8
+  );
+  // The vector result also calls externref_drop_slice and __wbindgen_free.
+  // Count those cleanup exports, the hook export, and both observers.
+  expect(node.debug_crossings()).toBe(5);
+  for (const name of names) {
+    expect(
+      bases.some(
+        (base) =>
+          typeof Reflect.get(base, name) === 'function' ||
+          typeof Reflect.get(base.prototype, name) === 'function'
+      ),
+      name
+    ).toBe(true);
+  }
+  web.initSync({
+    module: readFileSync(
+      path.resolve(
+        import.meta.dirname,
+        '../pkg/web/lexical_conformance_wasm_bg.wasm'
+      )
+    ),
+  });
+  expect(web.foreign_hook_index()).toEqual(names);
+});

@@ -6,7 +6,7 @@ pub use read::{ForeignReadSnapshot, ForeignRecordIdentity};
 pub(crate) use read::{ReadOrigin, ReadOriginRef};
 
 mod hooks;
-pub use hooks::{ForeignData, ForeignHooks, ForeignNodeType, Override};
+pub use hooks::{ForeignData, ForeignHook, ForeignHooks, ForeignNodeType, Override};
 
 pub(crate) mod dispatch;
 pub(crate) mod payload;
