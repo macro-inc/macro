@@ -1,6 +1,6 @@
 //! SQL grouping and property-value expressions for Soup queries.
 
-use models_grouping::{GroupByField, date_bucket_sql_key, date_bucket_sql_order};
+use grouping_types::{GroupByField, date_bucket_sql_key, date_bucket_sql_order};
 use std::borrow::Cow;
 use system_properties::SystemPropertyKey;
 

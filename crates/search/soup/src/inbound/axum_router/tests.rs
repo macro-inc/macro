@@ -79,7 +79,7 @@ struct MockSoupCall {
 #[derive(Clone)]
 struct MockSoup {
     called: Arc<std::sync::Mutex<Vec<MockSoupCall>>>,
-    grouped_calls: Arc<std::sync::Mutex<Vec<(models_grouping::GroupingConfig, DynamicSort)>>>,
+    grouped_calls: Arc<std::sync::Mutex<Vec<(grouping_types::GroupingConfig, DynamicSort)>>>,
     succeeds: bool,
 }
 

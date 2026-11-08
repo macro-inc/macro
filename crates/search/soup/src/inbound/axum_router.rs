@@ -32,6 +32,8 @@ use entity_access::{
 };
 use entity_kind::Entity;
 use filter_ast::{Expr, ExprFrame};
+use grouping_types::{GroupByField, GroupingConfig};
+pub use grouping_types::{PropertyBucketing, PropertyDateRange, PropertyDateRanges};
 use item_filters::{
     EntityFilters,
     ast::{
@@ -56,8 +58,6 @@ use macro_authorization::{
 };
 use macro_user_id::user_id::MacroUserIdStr;
 use model_error_response::ErrorResponse;
-use models_grouping::{GroupByField, GroupingConfig};
-pub use models_grouping::{PropertyBucketing, PropertyDateRange, PropertyDateRanges};
 use models_pagination::{
     CursorWithValAndFilter, Frecency, NotifiedAt, PaginatedOpaqueCursor, SimpleSortMethod,
     TouchedByMe, TypeEraseCursor,

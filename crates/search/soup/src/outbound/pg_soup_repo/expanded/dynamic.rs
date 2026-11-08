@@ -63,7 +63,7 @@ use crate::outbound::pg_soup_repo::grouping::{
     property_date_expression, property_value_sql,
 };
 use crate::outbound::pg_soup_repo::type_err;
-use models_grouping::{GroupByField, GroupingConfig, date_bucket_sql_order};
+use grouping_types::{GroupByField, GroupingConfig, date_bucket_sql_order};
 
 fn property_sort_join(enabled: bool, parameter: usize) -> String {
     if !enabled {

@@ -1,8 +1,8 @@
 //! Requests for ordinary timestamp grouping.
 
+use grouping_types::GroupingConfig;
 use item_filters::ast::{EntityFilterAst, ExpandErr};
 use macro_user_id::user_id::MacroUserIdStr;
-use models_grouping::GroupingConfig;
 use models_pagination::{Base64Str, CursorWithValAndFilter, Query};
 use uuid::Uuid;
 

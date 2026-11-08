@@ -792,6 +792,7 @@ graphql_scheduled_action = { path = "crates/graphql/graphql_scheduled_action" }
 graphql_soup = { path = "crates/graphql/graphql_soup" }
 graphql_soup_filter_input = { path = "crates/graphql/graphql_soup_filter_input" }
 graphql_work_feed = { path = "crates/graphql/graphql_work_feed" }
+grouping_types = { path = "crates/types/grouping_types" }
 gtm_invite = { path = "crates/accounts/gtm_invite" }
 harness_id = { path = "crates/types/harness_id" }
 harnesses = { path = "crates/agents/harnesses", default-features = false }
@@ -859,7 +860,6 @@ model_file_type = { path = "crates/types/model_file_type" }
 model_notifications = { path = "crates/notifications/model_notifications" }
 model_owner = { path = "crates/types/model_owner" }
 model_user = { path = "crates/types/model_user" }
-models_grouping = { path = "crates/types/models_grouping" }
 models_opensearch = { path = "crates/types/models_opensearch" }
 models_pagination = { path = "crates/types/models_pagination" }
 models_permissions = { path = "crates/types/models_permissions" }

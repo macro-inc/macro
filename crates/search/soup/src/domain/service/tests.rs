@@ -23,6 +23,7 @@ use frecency::{domain::models::AggregateFrecency, outbound::mock::MockFrecencySt
 use github_pull_requests::domain::models::{
     GithubPullRequestError, GithubPullRequestSortDirection,
 };
+use grouping_types::{GroupByField, GroupingConfig};
 use item_filters::{
     ChannelThreadFilters, EntityFilters, ForeignEntityFilters,
     ast::{
@@ -31,7 +32,6 @@ use item_filters::{
     },
 };
 use model_owner::Owner;
-use models_grouping::{GroupByField, GroupingConfig};
 use models_pagination::{
     Cursor, CursorVal, CursorWithValAndFilter, FrecencyValue, PaginatedCursor, SimpleSortMethod,
     TypeEraseCursor,

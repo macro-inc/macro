@@ -72,7 +72,7 @@ macro_user_id = { workspace = true }
 entity_kind = { workspace = true }
 model_error_response = { workspace = true, optional = true }
 model_owner = { workspace = true }
-models_grouping = { workspace = true }
+grouping_types = { workspace = true }
 models_pagination = { workspace = true }
 models_properties = { workspace = true }
 models_soup = { workspace = true }

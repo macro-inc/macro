@@ -45,7 +45,7 @@ lists what this group may depend on. `cargo x deps` reports edges that break it.
 | [`email_types`](email_types/AGENTS.md) | Part of the Email feature. |
 | `entity_access_management_types` |  |
 | [`forms_types`](forms_types/AGENTS.md) | Part of Macro Forms. |
-| `models_grouping` |  |
+| `grouping_types` |  |
 | `models_opensearch` |  |
 | [`models_pagination`](models_pagination/AGENTS.md) | Shared infrastructure. |
 | [`models_permissions`](models_permissions/AGENTS.md) | Part of entity sharing/permissions, used across nearly every feature. |

@@ -16,7 +16,7 @@ fn continuation_uses_requested_limit_not_initial_group_size() {
     let request = GroupedSortRequest::continue_from(
         MacroUserIdStr::parse_from_str("macro|viewer@example.com").unwrap(),
         cursor,
-        GroupingConfig::new(models_grouping::GroupByField::EntityType).with_group_key("document"),
+        GroupingConfig::new(grouping_types::GroupByField::EntityType).with_group_key("document"),
         Some(100),
     )
     .unwrap();
