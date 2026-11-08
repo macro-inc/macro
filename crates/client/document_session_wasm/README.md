@@ -22,6 +22,10 @@ registry remains a later integration through the native registry builder.
 Markdown queries reuse lexical_markdown; HTML and clipboard use portable native
 exporters. No browser or storage APIs live in this crate.
 
+Release WASM compiles tracing at INFO, matching the host subscriber's existing
+filter. Native builds keep their normal tracing levels. Size changes must retain
+the model, projection and session keystroke work-counter checks.
+
 Run `just -f apps/web/justfile build-document-session-wasm` to build glue and the
 optimized binary, then enforce the 8 MB raw and 1,107,000-byte Brotli gates. Nix
 uses the same size profile and Binaryen convergence pass. No SIMD override is
