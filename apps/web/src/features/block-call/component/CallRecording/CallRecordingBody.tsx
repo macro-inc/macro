@@ -65,8 +65,6 @@ export function CallRecordingBody(props: {
   const [contentTab, setContentTab] = createSignal<
     'summary' | 'transcript' | 'chat'
   >('summary');
-  const columnTabs = () =>
-    isMobile() || panel?.isOverlayMode() || !panel?.isOpen();
   const selectedTab = () =>
     !isMobile() && contentTab() === 'chat' ? 'summary' : contentTab();
   const [playbackSeconds, setPlaybackSeconds] = createSignal(0);
@@ -346,61 +344,55 @@ export function CallRecordingBody(props: {
                         </Show>
 
                         <div class="flex min-w-0 flex-col gap-2 mobile:order-3">
-                          <Show when={columnTabs()}>
-                            <div>
-                              <Tabs
-                                aria-label={t('calls.detailContent')}
-                                size="md"
-                                fullWidth={isMobile()}
-                                options={[
-                                  {
-                                    value: 'summary',
-                                    label: t('calls.detailSummary'),
-                                  },
-                                  {
-                                    value: 'transcript',
-                                    label: t('calls.detailTranscript'),
-                                  },
-                                  ...(isMobile()
-                                    ? [
-                                        {
-                                          value: 'chat' as const,
-                                          label: t('calls.detailChat'),
-                                          count: messages().length,
-                                        },
-                                      ]
-                                    : []),
-                                ]}
-                                value={selectedTab()}
-                                onChange={(tab) => {
-                                  const interaction = beginInteraction(
-                                    'call.detail.tab',
-                                    {
-                                      attributes: {
-                                        'call.id': props.callId,
-                                        'call.tab': tab,
+                          <div>
+                            <Tabs
+                              aria-label={t('calls.detailContent')}
+                              size="md"
+                              fullWidth={isMobile()}
+                              options={[
+                                {
+                                  value: 'summary',
+                                  label: t('calls.detailSummary'),
+                                },
+                                {
+                                  value: 'transcript',
+                                  label: t('calls.detailTranscript'),
+                                },
+                                ...(isMobile()
+                                  ? [
+                                      {
+                                        value: 'chat' as const,
+                                        label: t('calls.detailChat'),
+                                        count: messages().length,
                                       },
-                                    }
-                                  );
-                                  try {
-                                    setContentTab(tab);
-                                  } finally {
-                                    interaction.end();
+                                    ]
+                                  : []),
+                              ]}
+                              value={selectedTab()}
+                              onChange={(tab) => {
+                                const interaction = beginInteraction(
+                                  'call.detail.tab',
+                                  {
+                                    attributes: {
+                                      'call.id': props.callId,
+                                      'call.tab': tab,
+                                    },
                                   }
-                                }}
-                              />
-                            </div>
-                          </Show>
+                                );
+                                try {
+                                  setContentTab(tab);
+                                } finally {
+                                  interaction.end();
+                                }
+                              }}
+                            />
+                          </div>
                           <div class="flex min-w-0 flex-col gap-7">
                             <Switch>
-                              <Match
-                                when={
-                                  !columnTabs() || selectedTab() === 'summary'
-                                }
-                              >
+                              <Match when={selectedTab() === 'summary'}>
                                 <CallRecordingSummarySection
                                   record={props.record}
-                                  hideHeading={columnTabs()}
+                                  hideHeading
                                 />
                                 <Show when={!isMobile()}>
                                   <CallRecordingChat
