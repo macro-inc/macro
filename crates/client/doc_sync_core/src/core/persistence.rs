@@ -215,6 +215,15 @@ impl SyncCore {
                         self.seed(SeedKind::Remote, bytes, now, doc, out);
                     }
                 }
+                if matches!(
+                    pending.completion,
+                    StorageCompletion::Adopt { .. } | StorageCompletion::Orphans
+                ) {
+                    // A conditional adoption can reject a replaced snapshot.
+                    // Reload the real source selection instead of reusing stale
+                    // payload-to-sequence reservations.
+                    self.load_retry = Some(now.mono.after(self.config.converge.retry_delay));
+                }
                 if error == StorageFailure::Uncertain
                     && matches!(pending.completion, StorageCompletion::Append { .. })
                 {
@@ -358,6 +367,7 @@ impl SyncCore {
                     to: self.config.session,
                     first_seq: first,
                     covers,
+                    expected: orphan.records.clone(),
                 },
                 StorageCompletion::Adopt {
                     first,

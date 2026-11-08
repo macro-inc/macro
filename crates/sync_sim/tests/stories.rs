@@ -59,3 +59,6 @@ mod presence_replacement;
 
 #[path = "stories/idle_presence.rs"]
 mod idle_presence;
+
+#[path = "stories/adoption_snapshot.rs"]
+mod adoption_snapshot;

@@ -146,3 +146,10 @@ Record only applied clock-skew transitions as facts. Expiry uses timeout plus
 observed signed offset spread (including baseline zero) and latency: opposite
 sender/receiver offsets add. Keep deadline checks and exact stale-view mutations;
 unapplied script intentions cannot extend the budget or exempt convergence.
+
+Native adoption and the independent transaction reference reject stale loaded
+snapshot covers and changed exact row selections atomically, including concurrent
+partial TTL deletion and selection growth/shrink. The expected records are part of
+the Rust storage operation; the server wire protocol is unchanged.
+The pure client retries a real load before reserving a new selection. This Rust
+storage port is distinct from the shipping TS peer's BrowserWAL API.

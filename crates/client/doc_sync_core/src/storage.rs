@@ -90,6 +90,10 @@ pub enum StorageOp {
     /// `seq > covers_for(from)` or `!delivered`, preserving `delivered`, `created_at`, `user`
     /// `foreign` and `quarantined`; delete the rest of `from`'s rows (delivered and covered by the snapshot).
     /// `covers_for(from)` is the snapshot's `covers.seq` when `covers.owner == from`, else 0.
+    /// Reject atomically if the current snapshot-derived cover differs from `covers`:
+    /// the caller reserved sequences and retained payloads using that loaded cover.
+    /// The selected nonempty source must equal `expected`, including flags and bytes;
+    /// otherwise reject without mutation. An empty source reports zero after a competing win.
     /// Atomic for legacy rows too (no copy-then-delete).
     WalAdopt {
         /// Document or collaborative-surface transport key.
@@ -102,6 +106,9 @@ pub enum StorageOp {
         first_seq: WalSeq,
         /// WAL prefix already represented by the stored snapshot.
         covers: WalSeq,
+        /// Exact loaded selection, in original sequence order. Reject a changed
+        /// nonempty source atomically; an empty source means another adopter won.
+        expected: Vec<StoredWalRecord>,
     },
     /// Drop `from`'s undelivered rows with `created_at < before` (TTL, W-7). `from` is an orphan,
     /// `Legacy`, or another user's owner (O-2: `Load` reports other users' expired rows for this

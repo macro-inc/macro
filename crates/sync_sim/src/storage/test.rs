@@ -80,7 +80,8 @@ fn adoption_checks_lease_collision_and_overflow_without_mutation() {
         from: WalOwner::Session(SessionId(uuid_value::Uuid::from_u128(1))),
         to: SessionId(uuid_value::Uuid::from_u128(2)),
         first_seq: WalSeq(1),
-        covers: WalSeq(99),
+        covers: WalSeq(0),
+        expected: store.image().entries.values().cloned().collect(),
     };
     let before = store.image().clone();
     store
@@ -286,4 +287,152 @@ fn write_load_and_quota_errors_never_wipe_or_cross_profile_storage() {
     ));
     assert_eq!(store.image(), &before);
     assert!(other_profile.image().entries.is_empty());
+}
+
+#[test]
+fn adoption_rejects_replaced_snapshot_cover_without_moving_any_row() {
+    let mut store = SimStorage::new(StorageProfile::fast());
+    complete(&mut store, append(1), 1);
+    complete(&mut store, append(2), 2);
+    let doc = SyncDocId::new("00000000-0000-7000-8000-000000000001".into()).unwrap();
+    let one = SessionId(uuid_value::Uuid::from_u128(1));
+    let two = SessionId(uuid_value::Uuid::from_u128(2));
+    complete(
+        &mut store,
+        StorageOp::WalMarkDelivered {
+            doc: doc.clone(),
+            owner: one,
+            through: WalSeq(1),
+        },
+        3,
+    );
+    complete(
+        &mut store,
+        StorageOp::SnapshotSave {
+            doc: doc.clone(),
+            bytes: vec![8],
+            covers: Some((one, WalSeq(1))),
+        },
+        4,
+    );
+    let before = store.image().clone();
+    // A caller loaded no cover; a new covering snapshot would shrink selection.
+    let mut adopt = StorageOp::WalAdopt {
+        doc: doc.clone(),
+        from: WalOwner::Session(one),
+        to: two,
+        first_seq: WalSeq(10),
+        covers: WalSeq(0),
+        expected: store.image().entries.values().cloned().collect(),
+    };
+    assert!(matches!(
+        complete(&mut store, adopt.clone(), 5).event,
+        StorageEvent::Adopted {
+            result: Err(StorageFailure::Other),
+            ..
+        }
+    ));
+    assert_eq!(*store.image(), before);
+    if let StorageOp::WalAdopt {
+        covers, expected, ..
+    } = &mut adopt
+    {
+        *covers = WalSeq(1);
+        expected.retain(|row| !row.delivered || row.record.seq > WalSeq(1));
+    }
+    complete(
+        &mut store,
+        StorageOp::SnapshotSave {
+            doc: doc.clone(),
+            bytes: vec![9],
+            covers: Some((two, WalSeq(2))),
+        },
+        6,
+    );
+    let replaced = store.image().clone();
+    // A different owner replaces the snapshot: selection would grow instead.
+    assert!(matches!(
+        complete(&mut store, adopt.clone(), 7).event,
+        StorageEvent::Adopted {
+            result: Err(StorageFailure::Other),
+            ..
+        }
+    ));
+    assert_eq!(*store.image(), replaced);
+    if let StorageOp::WalAdopt {
+        covers, expected, ..
+    } = &mut adopt
+    {
+        *covers = WalSeq(0);
+        *expected = store.image().entries.values().cloned().collect();
+    }
+    assert!(matches!(
+        complete(&mut store, adopt, 8).event,
+        StorageEvent::Adopted { result: Ok(2), .. }
+    ));
+    let records = store
+        .image()
+        .entries
+        .values()
+        .map(|row| (row.record.seq, row.delivered, row.record.bytes.clone()))
+        .collect::<Vec<_>>();
+    assert_eq!(
+        records,
+        vec![
+            (WalSeq(10), true, vec![1, 2, 3]),
+            (WalSeq(11), false, vec![1, 2, 3])
+        ]
+    );
+}
+
+#[test]
+fn partial_ttl_cleanup_cannot_relabel_the_remaining_adopted_payload() {
+    let mut store = SimStorage::new(StorageProfile::fast());
+    complete(&mut store, append(1), 1);
+    let mut second = append(2);
+    if let StorageOp::WalAppend { record, .. } = &mut second {
+        record.created_at = UnixMillis(200);
+        record.bytes = vec![4, 5, 6];
+    }
+    complete(&mut store, second, 2);
+    let doc = SyncDocId::new("00000000-0000-7000-8000-000000000001".into()).unwrap();
+    let one = SessionId(uuid_value::Uuid::from_u128(1));
+    let two = SessionId(uuid_value::Uuid::from_u128(2));
+    let mut adopt = StorageOp::WalAdopt {
+        doc: doc.clone(),
+        from: WalOwner::Session(one),
+        to: two,
+        first_seq: WalSeq(10),
+        covers: WalSeq(0),
+        expected: store.image().entries.values().cloned().collect(),
+    };
+    // Another tab's skewed wall/retention calculation expires only the old row.
+    complete(
+        &mut store,
+        StorageOp::WalDropExpired {
+            doc: doc.clone(),
+            from: WalOwner::Session(one),
+            before: UnixMillis(150),
+        },
+        3,
+    );
+    let after_expiry = store.image().clone();
+    assert!(matches!(
+        complete(&mut store, adopt.clone(), 4).event,
+        StorageEvent::Adopted {
+            result: Err(StorageFailure::Other),
+            ..
+        }
+    ));
+    assert_eq!(*store.image(), after_expiry);
+    if let StorageOp::WalAdopt { expected, .. } = &mut adopt {
+        *expected = store.image().entries.values().cloned().collect();
+    }
+    assert!(matches!(
+        complete(&mut store, adopt, 5).event,
+        StorageEvent::Adopted { result: Ok(1), .. }
+    ));
+    let row = &store.image().entries[&(doc, WalOwner::Session(two), WalSeq(10))];
+    assert_eq!(row.record.bytes, vec![4, 5, 6]);
+    assert_eq!(row.record.created_at, UnixMillis(200));
 }
