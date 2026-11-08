@@ -28,7 +28,7 @@ pub(crate) fn config(mut config: EditorConfig, clock: Arc<AtomicI64>) -> EditorC
             })
             .clone();
         let clock = clock.clone();
-        let builder = macro_document_model::preset_builder_with_mode(
+        let builder = macro_document_model::surface::preset_builder_with_mode(
             macro_document_model::EditorType::MarkdownSync,
             mode,
         )
