@@ -3728,7 +3728,9 @@ export type ImportKind =
   | 'jira_epic'
   | 'channel';
 /**
- * A kind of action or inactivity the user should see.
+ * A kind of action or inactivity the user should see: `permission` to run a tool, an
+ * `elicitation` question or form, a `tool_approval` held for the owner, or `stalled` with no
+ * activity for over 20 minutes.
  */
 export type AgentUpdateKind =
   | 'permission'
@@ -11483,21 +11485,51 @@ export type ListAgentUpdates = {};
  * Bounded results; truncation means older qualifying sessions were not folded.
  */
 export interface AgentUpdates {
+  /**
+   * One entry per pending request or stalled session, newest session activity first.
+   */
   items: AgentUpdate[];
+  /**
+   * Whether qualifying sessions beyond the 25 most recent were left out.
+   */
   truncated: boolean;
+  /**
+   * Says what was left out, when truncated.
+   */
   truncationNotice?: string | null;
 }
 /**
  * One pending interaction, or one stalled session.
  */
 export interface AgentUpdate {
+  /**
+   * The session.
+   */
   sessionId: string;
+  /**
+   * The session's name.
+   */
   sessionName: string;
+  /**
+   * The runtime the session runs on.
+   */
   harness: string;
+  /**
+   * The session's pull request, if it has one.
+   */
   pullRequestUrl?: string | null;
   kind: AgentUpdateKind;
+  /**
+   * What is asked, or why the session looks stalled, in at most 240 characters.
+   */
   summary: string;
+  /**
+   * When the request was made, or the session's last activity.
+   */
   since: string;
+  /**
+   * The choices a permission request offers; empty for other kinds.
+   */
   options: string[];
 }
 /**

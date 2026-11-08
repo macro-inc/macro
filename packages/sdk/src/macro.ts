@@ -106,6 +106,7 @@ export {
 export { FormOption, FormQuestion } from './entities/forms/question';
 export { FormResponse } from './entities/forms/response';
 export { FormSection } from './entities/forms/section';
+export type { CreatedEntity } from './entities/routines/namespace';
 export type { ListenOptions, MacroEvents } from './events/receiver';
 export {
   here,
@@ -314,9 +315,13 @@ export {
   AgentInvocation,
 } from './entities/agent-sessions/activity';
 export type {
+  AgentSessionUpdate,
+  AgentSessionUpdates,
   ArchiveCause,
   AutoArchiveOverrides,
   FoldedAgentSessionLog,
+  LinkedTask,
+  PendingToolApproval,
   SessionAutoArchive,
 } from './entities/agent-sessions/agent-session';
 export type { CodeResult } from './entities/agent-sessions/code-execution';

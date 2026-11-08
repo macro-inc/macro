@@ -2,17 +2,21 @@
 # thin delegates. They target xtask_local directly (rather than the `cargo x`
 # launcher) so the `local-stack` feature — off by default so bare CI builds
 # skip librdkafka — can be enabled to turn on the Kafka topic provisioning that
-# run-local needs.
-xtask := "cargo run --quiet --manifest-path Cargo.toml -p xtask_local --features local-stack --"
+# run-local needs. Its own target dir, so `just run_local status` answers at once
+# while a service build holds the main one's lock (the flag rather than
+# CARGO_TARGET_DIR, which xtask's own child cargo builds would inherit).
+xtask := "cargo run --quiet --manifest-path Cargo.toml --target-dir target/xtask -p xtask_local --features local-stack --"
 
 # Short name for the fully local development stack.
 alias local := run_local
 
-# Start a fully local stack (xtask: zigbuild + runtime image + infra + proxy + frontend).
+# Start a fully local stack (xtask: native build + runtime image + infra + proxy + frontend).
 #   just run_local                      # default instance
 #   just run_local --instance agent-a   # isolated, concurrent instance
 #   just run_local --no-doppler --env-file ./local.env --no-frontend --no-build
 #   just run_local --no-snapshot        # re-run the full DB/kickstart/index init
+#   just run_local --detach             # background, returns once ready (automatic with no terminal)
+#   just run_local status --json        # also: wait, logs, rebuild, restart-frontend, stop
 run_local *ARGS:
   {{ xtask }} run-local "$@"
 
@@ -40,8 +44,8 @@ destroy_local *ARGS:
 stop_local *ARGS:
   {{ xtask }} stop-local "$@"
 
-# Headless stack orchestration for agents and CI.
-#   just stack up                      # full stack; static frontend served by the proxy
+# Lower-level stack control for Cursor Cloud and bakes. Prefer run_local, which needs no terminal.
+#   just stack up                      # WIPES the instance; static frontend served by the proxy
 #   just stack update                  # adopt a new build; volumes stay
 #   just stack status --json           # machine-readable state
 #   just stack down                    # reclaim everything

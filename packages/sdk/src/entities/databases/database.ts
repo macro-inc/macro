@@ -252,6 +252,9 @@ function soleResult<
  * loads lazily on first field access and is dropped after any mutation.
  */
 export class Database extends MacroEntity<DatabaseDetail> {
+  /** How entity-addressed APIs identify this entity's type. */
+  readonly entityType = 'database';
+
   /** Access requests and direct user grants. */
   readonly access = new EntityAccess(this.client, 'database', this);
 
