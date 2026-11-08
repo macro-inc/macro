@@ -10,3 +10,6 @@ pub(crate) mod rich;
 pub(crate) mod markdown;
 
 pub(crate) mod tab;
+
+#[cfg(test)]
+mod test;

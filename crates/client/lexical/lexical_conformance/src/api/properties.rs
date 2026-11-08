@@ -15,7 +15,7 @@ pub(crate) fn get(
             tx.focus_at(slot)?
         };
         return match name {
-            "key" => Ok(json!({"$nodeKey":p.key().index()})),
+            "key" => Ok(key_value(p.key())),
             "type" => Ok(json!(p.point_type().to_string())),
             "offset" => Ok(json!(p.offset())),
             _ => Err(fail(format!("unmapped point property {name}"))),
@@ -71,10 +71,8 @@ pub(crate) fn get(
             .unwrap_or(tx.view());
         let node = view.node_or_err(key)?;
         return match name {
-            "__parent" => Ok(view
-                .parent(key)
-                .map_or(Value::Null, |key| json!({"$nodeKey":key.index()}))),
-            "__key" => Ok(json!({"$nodeKey":key.index()})),
+            "__parent" => Ok(view.parent(key).map_or(Value::Null, key_value)),
+            "__key" => Ok(key_value(key)),
             "__target" | "__rel" | "__title" => {
                 let link = view.get_or_err::<lexical_rich_nodes::link::LinkNode>(key)?;
                 Ok(json!(match name {
