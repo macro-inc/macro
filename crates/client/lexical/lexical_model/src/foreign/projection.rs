@@ -105,6 +105,13 @@ impl NativeProjection {
             None => Ok(()),
         }
     }
+    pub fn snapshot_payload(&self, payload: &ForeignPayload) -> Result<ForeignPayload, Error> {
+        let mut snapshot = payload.clone();
+        snapshot.user = self.fields(&payload.user);
+        self.check_error()?;
+        snapshot.native = self.data.clone();
+        Ok(snapshot)
+    }
     fn merge_fields(&self, mut fields: SerializedNode) -> Result<SerializedNode, Error> {
         self.check_error()?;
         for field in self.original.to_json()?.keys() {

@@ -10,6 +10,7 @@ node types, immutable snapshots, transactional tree editing, update processing, 
 - `src/lib.rs` exposes the model API.
 - `src/node.rs` defines node kinds, inheritance and dispatch.
 - `src/read/record.rs` owns borrowed records and ephemeral copies; `src/foreign/` owns development runtime hooks, registration and state codecs.
+- `src/foreign/read.rs` captures independent pure-callout inputs, including current native projections, selection and composition; it grants no transaction mutation capability.
 - `src/selection/caret.rs` implements directional caret range deletion.
 - `src/transaction.rs` owns writes; never mutate a committed snapshot.
 - `src/pipeline/` implements flush order, normalization, GC and view-attached caches.
@@ -80,6 +81,7 @@ node types, immutable snapshots, transactional tree editing, update processing, 
 - Node ordering is post-order within shared ancestry, including detached subtrees.
 - Node ancestry follows the kind trait's `Parent`, never Rust layout casts.
 - Keep key allocation outside rollback, and snapshots independent on first write.
+- Give owned captures of pending state a separate root-text memo, and materialize active native projections without invoking clone hooks.
 
 ## Tests
 
