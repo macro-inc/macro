@@ -2608,6 +2608,23 @@ export class Sdk extends HeyApiClient {
     }
 
     /**
+     * Start a comment thread anchored to a quoted passage of a markdown or Word
+     * document, with the caller's comment access. On markdown the passage is
+     * marked in the live document first, and nothing is posted when the quote is
+     * ambiguous or missing.
+     */
+    public commentOnDocumentText<ThrowOnError extends boolean = false>(options: Options<CommentOnDocumentTextData, ThrowOnError>): RequestResult<CommentOnDocumentTextResponses, CommentOnDocumentTextErrors, ThrowOnError> {
+        return (options.client ?? this.client).post<CommentOnDocumentTextResponses, CommentOnDocumentTextErrors, ThrowOnError>({
+            url: '/documents/{document_id}/comments/text',
+            ...options,
+            headers: {
+                'Content-Type': 'application/json',
+                ...options.headers
+            }
+        });
+    }
+
+    /**
      * Handler for `POST /documents/{document_id}/copy`.
      *
      * Copies an existing document, creating a new document with the same content.
@@ -4394,23 +4411,6 @@ export class Sdk extends HeyApiClient {
     public whatsappPasskey<ThrowOnError extends boolean = false>(options: Options<WhatsappPasskeyData, ThrowOnError>): RequestResult<WhatsappPasskeyResponses, unknown, ThrowOnError> {
         return (options.client ?? this.client).post<WhatsappPasskeyResponses, unknown, ThrowOnError>({
             url: '/whatsapp/pairing/{id}/passkey',
-            ...options,
-            headers: {
-                'Content-Type': 'application/json',
-                ...options.headers
-            }
-        });
-    }
-
-    /**
-     * Start a comment thread anchored to a quoted passage of a markdown or Word
-     * document, with the caller's comment access. On markdown the passage is
-     * marked in the live document first, and nothing is posted when the quote is
-     * ambiguous or missing.
-     */
-    public commentOnDocumentText<ThrowOnError extends boolean = false>(options: Options<CommentOnDocumentTextData, ThrowOnError>): RequestResult<CommentOnDocumentTextResponses, CommentOnDocumentTextErrors, ThrowOnError> {
-        return (options.client ?? this.client).post<CommentOnDocumentTextResponses, CommentOnDocumentTextErrors, ThrowOnError>({
-            url: '/documents/{document_id}/comments/text',
             ...options,
             headers: {
                 'Content-Type': 'application/json',

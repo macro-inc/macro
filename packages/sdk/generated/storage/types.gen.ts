@@ -4541,6 +4541,65 @@ export type CommandRejectedMetadata = {
 };
 
 /**
+ * The quote could not be anchored; nothing was posted.
+ */
+export type CommentOnTextRefused = {
+    /**
+     * Always `quote_not_placed`.
+     */
+    error: CommentOnTextRefusedCode;
+    /**
+     * Lists each appearance to choose from with `occurrence`, or says the
+     * text was not found.
+     */
+    reason: string;
+};
+
+/**
+ * Error code of a quote the document cannot anchor to.
+ */
+export type CommentOnTextRefusedCode = 'quote_not_placed';
+
+/**
+ * A comment on a quoted passage.
+ */
+export type CommentOnTextRequest = {
+    /**
+     * Comment body in macro markdown.
+     */
+    content: string;
+    /**
+     * The people and items the body mentions, notified as in any comment.
+     */
+    mentions?: Array<SimpleMention>;
+    /**
+     * Which appearance of the passage, counting from 1 in document order.
+     * Only needed when it appears more than once.
+     */
+    occurrence?: number | null;
+    /**
+     * The passage to comment on, quoted exactly as the document reads: plain
+     * text without markdown syntax, within one paragraph, heading, list item
+     * or table cell.
+     */
+    quote: string;
+};
+
+/**
+ * The thread the comment started.
+ */
+export type CommentOnTextResponse = {
+    /**
+     * The posted comment, the root of its thread.
+     */
+    comment: Message;
+    /**
+     * The text the comment is anchored to, as the document reads.
+     */
+    markedText: string;
+};
+
+/**
  * One change a committed batch journaled: a table, the version the batch
  * produced, and the journal's id for it.
  */
@@ -22492,65 +22551,6 @@ export type WordDocumentResponse = {
  */
 export type ZOrder = 'front' | 'back' | 'forward' | 'backward';
 
-/**
- * The quote could not be anchored; nothing was posted.
- */
-export type CommentOnTextRefused = {
-    /**
-     * Always `quote_not_placed`.
-     */
-    error: CommentOnTextRefusedCode;
-    /**
-     * Lists each appearance to choose from with `occurrence`, or says the
-     * text was not found.
-     */
-    reason: string;
-};
-
-/**
- * Error code of a quote the document cannot anchor to.
- */
-export type CommentOnTextRefusedCode = 'quote_not_placed';
-
-/**
- * A comment on a quoted passage.
- */
-export type CommentOnTextRequest = {
-    /**
-     * Comment body in macro markdown.
-     */
-    content: string;
-    /**
-     * The people and items the body mentions, notified as in any comment.
-     */
-    mentions?: Array<SimpleMention>;
-    /**
-     * Which appearance of the passage, counting from 1 in document order.
-     * Only needed when it appears more than once.
-     */
-    occurrence?: number | null;
-    /**
-     * The passage to comment on, quoted exactly as the document reads: plain
-     * text without markdown syntax, within one paragraph, heading, list item
-     * or table cell.
-     */
-    quote: string;
-};
-
-/**
- * The thread the comment started.
- */
-export type CommentOnTextResponse = {
-    /**
-     * The posted comment, the root of its thread.
-     */
-    comment: Message;
-    /**
-     * The text the comment is anchored to, as the document reads.
-     */
-    markedText: string;
-};
-
 export type ListAccountManagersData = {
     body?: never;
     path?: never;
@@ -28581,6 +28581,57 @@ export type ReadCanvasSceneResponses = {
 
 export type ReadCanvasSceneResponse = ReadCanvasSceneResponses[keyof ReadCanvasSceneResponses];
 
+export type CommentOnDocumentTextData = {
+    body: CommentOnTextRequest;
+    path: {
+        /**
+         * Document identity
+         */
+        document_id: string;
+    };
+    query?: never;
+    url: '/documents/{document_id}/comments/text';
+};
+
+export type CommentOnDocumentTextErrors = {
+    /**
+     * Not a markdown or Word document, or an invalid quote or occurrence
+     */
+    400: ErrorResponse;
+    /**
+     * Authentication required
+     */
+    401: unknown;
+    /**
+     * Document comment access denied
+     */
+    403: ErrorResponse;
+    /**
+     * Document not found
+     */
+    404: unknown;
+    /**
+     * The quote appears more than once or not at all; nothing was posted
+     */
+    422: CommentOnTextRefused;
+    /**
+     * The comment could not be posted
+     */
+    500: ErrorResponse;
+    /**
+     * The comment could not be anchored; nothing was posted
+     */
+    502: ErrorResponse;
+};
+
+export type CommentOnDocumentTextError = CommentOnDocumentTextErrors[keyof CommentOnDocumentTextErrors];
+
+export type CommentOnDocumentTextResponses = {
+    200: CommentOnTextResponse;
+};
+
+export type CommentOnDocumentTextResponse = CommentOnDocumentTextResponses[keyof CommentOnDocumentTextResponses];
+
 export type CopyDocumentData = {
     body: CopyDocumentRequest;
     path: {
@@ -33334,54 +33385,3 @@ export type WhatsappPasskeyResponses = {
 };
 
 export type WhatsappPasskeyResponse = WhatsappPasskeyResponses[keyof WhatsappPasskeyResponses];
-
-export type CommentOnDocumentTextData = {
-    body: CommentOnTextRequest;
-    path: {
-        /**
-         * Document identity
-         */
-        document_id: string;
-    };
-    query?: never;
-    url: '/documents/{document_id}/comments/text';
-};
-
-export type CommentOnDocumentTextErrors = {
-    /**
-     * Not a markdown or Word document, or an invalid quote or occurrence
-     */
-    400: ErrorResponse;
-    /**
-     * Authentication required
-     */
-    401: unknown;
-    /**
-     * Document comment access denied
-     */
-    403: ErrorResponse;
-    /**
-     * Document not found
-     */
-    404: unknown;
-    /**
-     * The quote appears more than once or not at all; nothing was posted
-     */
-    422: CommentOnTextRefused;
-    /**
-     * The comment could not be posted
-     */
-    500: ErrorResponse;
-    /**
-     * The comment could not be anchored; nothing was posted
-     */
-    502: ErrorResponse;
-};
-
-export type CommentOnDocumentTextError = CommentOnDocumentTextErrors[keyof CommentOnDocumentTextErrors];
-
-export type CommentOnDocumentTextResponses = {
-    200: CommentOnTextResponse;
-};
-
-export type CommentOnDocumentTextResponse = CommentOnDocumentTextResponses[keyof CommentOnDocumentTextResponses];
