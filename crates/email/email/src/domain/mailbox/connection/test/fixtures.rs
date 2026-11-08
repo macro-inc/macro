@@ -2,8 +2,8 @@ use super::*;
 use crate::domain::mailbox::initialization::{InitializationError, InitializeMailbox};
 use calendar_events::domain::models::{AppliedGoogleGrant, CalendarGrantIntent};
 use email_api_client_core::models::{AccessToken, EmailApiError};
+use email_types::service::link::{Link, UserProvider};
 use macro_user_id::{email::EmailStr, user_id::MacroUserIdStr};
-use models_email::service::link::{Link, UserProvider};
 use std::sync::{Arc, Mutex};
 use uuid::Uuid;
 

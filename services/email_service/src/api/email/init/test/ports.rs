@@ -9,7 +9,7 @@ use email::domain::{
     },
     mailbox::connection::{ConnectionBackfill, ConnectionError, ConnectionIdentity},
 };
-use models_email::service::{
+use email_types::service::{
     backfill::{BackfillJob, BackfillJobStatus},
     link::{Link, UserProvider},
 };

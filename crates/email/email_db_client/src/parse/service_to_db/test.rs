@@ -1,5 +1,5 @@
 use super::*;
-use models_email::email::service::address::ContactInfo;
+use email_types::email::service::address::ContactInfo;
 
 /// The shape that wedged mwatts42's backfill: a one-click-unsubscribe `To:`
 /// address far past what `email_contacts.email_address` can hold.

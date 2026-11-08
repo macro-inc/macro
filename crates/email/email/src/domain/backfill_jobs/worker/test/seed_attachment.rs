@@ -1,6 +1,6 @@
 use super::*;
 use email_api_client_core::models::{EmailApiError, MessageWithCalendarParts, RateLimitOrigin};
-use models_email::service::address::ContactInfo;
+use email_types::service::address::ContactInfo;
 
 #[tokio::test]
 async fn contact_seed_provider_absence_and_failure_do_not_enqueue() {

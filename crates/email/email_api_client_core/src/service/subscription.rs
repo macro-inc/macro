@@ -1,4 +1,4 @@
-use models_email::service::link::Link;
+use email_types::service::link::Link;
 use uuid::Uuid;
 
 use super::super::models::{EmailApiError, ProviderSubscription, TokenFreshness};

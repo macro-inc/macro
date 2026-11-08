@@ -5,10 +5,10 @@ use crate::domain::mailbox::link_manager::purge::{
 use email_db_client::links::delete::mark_link_deleting;
 use email_db_client::links::insert::upsert_link;
 use email_db_client::links::update::update_link_sync_status;
+use email_types::email::service::link::{Link, UserProvider};
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
 use macro_user_id::email::EmailStr;
 use macro_user_id::user_id::MacroUserIdStr;
-use models_email::email::service::link::{Link, UserProvider};
 use sqlx::{Pool, Postgres};
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};

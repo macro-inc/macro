@@ -1,12 +1,12 @@
 use super::*;
 use crate::domain::events::{EmailMacroEvent, ThreadBackfilledMetadata};
 use crate::domain::mailbox::connection::ConnectionSourceError;
-use macro_event_broker::MacroEventBroker;
-use models_email::service::{
+use email_types::service::{
     backfill::*,
     link,
     pubsub::{DetailedError, FailureReason, ProcessingError},
 };
+use macro_event_broker::MacroEventBroker;
 
 /// This step is invoked by BackfillMessage once all messages in a thread have been backfilled.
 /// Updates the thread metadata in the database, the replying_to_id values of its messages, and

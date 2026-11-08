@@ -1,7 +1,7 @@
 use crate::labels::get::{fetch_message_labels_in_bulk, messages_changing_label};
 use anyhow::Result;
+use email_types::db::label::{LabelListVisibility, LabelType, MessageListVisibility};
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
-use models_email::db::label::{LabelListVisibility, LabelType, MessageListVisibility};
 use sqlx::types::Uuid;
 use sqlx::{Pool, Postgres};
 

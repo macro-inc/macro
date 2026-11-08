@@ -69,7 +69,7 @@ pub struct PathParams {
         ("limit" = Option<i64>, Query, description = "Limit number of messages returned"),
     ),
     responses(
-        (status = 200, description = "OK", body = Vec<models_email::service::message::ParsedMessage>),
+        (status = 200, description = "OK", body = Vec<email_types::service::message::ParsedMessage>),
         (status = 400, description = "Bad Request", body = ErrorResponse),
         (status = 401, description = "Unauthorized", body = ErrorResponse),
         (status = 404, description = "Not Found", body = ErrorResponse),

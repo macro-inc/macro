@@ -1,8 +1,8 @@
 use base64::Engine;
 use base64::engine::general_purpose::URL_SAFE_NO_PAD;
+use email_types::email::service::address::ContactInfo;
+use email_types::email::service::message::MessageToSend;
 use gmail_client::GmailClient;
-use models_email::email::service::address::ContactInfo;
-use models_email::email::service::message::MessageToSend;
 use serde_json::Value;
 use uuid::Uuid;
 use wiremock::matchers::{header, method, path};

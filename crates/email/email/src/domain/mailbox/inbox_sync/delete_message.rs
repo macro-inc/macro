@@ -1,7 +1,7 @@
 use super::*;
 use crate::domain::events::MessageDeletedMetadata;
-use models_email::gmail::inbox_sync::DeleteMessagePayload;
-use models_email::service::link;
+use email_types::gmail::inbox_sync::DeleteMessagePayload;
+use email_types::service::link;
 
 // delete user's message from the db
 #[tracing::instrument(skip(ctx))]

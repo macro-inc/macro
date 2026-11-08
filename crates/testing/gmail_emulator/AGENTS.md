@@ -152,8 +152,8 @@ a local stack, without Google accounts.
 - It only listens where it is told to, `127.0.0.1` by default. Never give it
   real mail or real tokens.
 - Responses are Google's shapes, not ours: absent fields are omitted, not
-  null, and carry fields `models_email` does not read. Don't build them from
-  `models_email` types.
+  null, and carry fields `email_types` does not read. Don't build them from
+  `email_types` types.
 - A `message/rfc822` part that is not an attachment (the original a bounce
   returns) carries the wrapped message as its one child part, as at Gmail.
 - Push tokens are dated by the real clock, because the verifier reads the

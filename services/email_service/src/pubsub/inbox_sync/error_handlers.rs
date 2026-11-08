@@ -1,7 +1,7 @@
 use crate::pubsub::inbox_sync::worker::InboxSyncContext;
 use email::domain::mailbox::inbox_sync::{InboxSyncFailureLog, record_retryable_error};
-use models_email::gmail::inbox_sync::InboxSyncPubsubMessage;
-use models_email::service::pubsub::DetailedError;
+use email_types::gmail::inbox_sync::InboxSyncPubsubMessage;
+use email_types::service::pubsub::DetailedError;
 use sqs_worker::cleanup_message;
 
 #[cfg(test)]

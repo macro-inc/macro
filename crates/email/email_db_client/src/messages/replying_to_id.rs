@@ -4,7 +4,7 @@ mod test;
 use crate::messages;
 use crate::messages::get;
 
-use models_email::service::message;
+use email_types::service::message;
 use sqlx::types::Uuid;
 use std::collections::HashMap;
 

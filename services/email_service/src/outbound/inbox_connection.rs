@@ -16,7 +16,7 @@ pub use transactions::PgConnectionTransactions;
 
 use super::persistence_error::InboxPersistenceError;
 use email::domain::mailbox::connection::*;
-use models_email::service::link::Link;
+use email_types::service::link::Link;
 use uuid::Uuid;
 
 impl ConnectionSourceError for InboxPersistenceError {

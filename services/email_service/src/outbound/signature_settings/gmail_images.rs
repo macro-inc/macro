@@ -6,7 +6,7 @@ use email_api_client_core::ports::{
     MailboxAttachmentClient, MailboxMessageClient, ProviderRequestGate, ProviderTokenSource,
 };
 use email_api_client_core::service::EmailApiClientServiceImpl;
-use models_email::email::service::message::Message;
+use email_types::email::service::message::Message;
 use uuid::Uuid;
 
 pub(super) struct GmailImageReader<'a, R, T, L>(&'a EmailApiClientServiceImpl<R, T, L>);

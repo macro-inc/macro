@@ -5,9 +5,9 @@ use crate::domain::events::{
     EmailEventOrigin, LabelRef, ThreadArchivedMetadata, ThreadLabelsUpdatedMetadata,
     ThreadReadMetadata, ThreadSpamChangedMetadata, ThreadStarredMetadata, ThreadTrashedMetadata,
 };
+use email_types::gmail::inbox_sync::{UpdateLabelsPayload, UpsertMessagePayload};
+use email_types::service::{self, link};
 use macro_user_id::user_id::MacroUserIdStr;
-use models_email::gmail::inbox_sync::{UpdateLabelsPayload, UpsertMessagePayload};
-use models_email::service::{self, link};
 use uuid::Uuid;
 
 #[cfg(test)]
@@ -281,7 +281,7 @@ async fn publish_label_diff_events<L, R, G, Q, E>(
     thread_db_id: Uuid,
     labels_to_add: &[String],
     labels_to_delete: &[String],
-    db_message_labels: &[models_email::db::label::Label],
+    db_message_labels: &[email_types::db::label::Label],
 ) where
     L: GmailOpsLinks,
     R: InboxSyncRepository,

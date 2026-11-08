@@ -427,7 +427,7 @@ async fn thread_state_overrides_message_flags_and_failed_lookup_uses_label_fallb
             if missing {
                 state.failures.push(("thread", 1));
             } else {
-                state.thread = Some(models_email::service::thread::Thread {
+                state.thread = Some(email_types::service::thread::Thread {
                     db_id: THREAD,
                     provider_id: None,
                     link_id: LINK,

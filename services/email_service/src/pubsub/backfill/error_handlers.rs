@@ -1,6 +1,6 @@
 use super::{deferral, worker::BackfillContext};
 use email::domain::backfill_jobs::worker::{BackfillDeferral, handle_retryable_error};
-use models_email::service::{backfill::BackfillPubsubMessage, pubsub::DetailedError};
+use email_types::service::{backfill::BackfillPubsubMessage, pubsub::DetailedError};
 use sqs_worker::cleanup_message;
 use std::time::Duration;
 

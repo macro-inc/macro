@@ -1,6 +1,6 @@
 //! Gmail contact capability implementation.
 
-use models_email::service::contact::Contact;
+use email_types::service::contact::Contact;
 use uuid::Uuid;
 
 use email_api_client_core::models::{AccessToken, ContactPage, EmailApiError};
@@ -66,7 +66,7 @@ impl MailboxContactsClient for GmailApiClientRepository {
 
 fn contact_page(
     link_id: Uuid,
-    people: Vec<models_email::gmail::contacts::PersonResource>,
+    people: Vec<email_types::gmail::contacts::PersonResource>,
     next_sync_token: Option<String>,
     next_page_token: Option<String>,
 ) -> ContactPage {

@@ -21,8 +21,8 @@ use calendar_events::domain::{
 };
 use calendar_events::outbound::{google::GoogleCalendarClient, pg::PgCalendarRepository};
 use chrono::Utc;
+use email_types::email::service::link::Link;
 use macro_event_broker::{KafkaEventPublisher, MacroEventBrokerService};
-use models_email::email::service::link::Link;
 use redis::aio::MultiplexedConnection;
 use sqlx::PgPool;
 use tokio_util::sync::CancellationToken;

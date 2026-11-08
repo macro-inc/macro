@@ -12,7 +12,7 @@ use email_api_client_core::models::{AccessToken, EmailApiError, TokenError, Toke
 use email_api_client_core::ports::{AlwaysAllowRateLimiter, ProviderTokenSource};
 use email_api_client_core::service::EmailApiClientServiceImpl;
 use email_api_client_outbound::GmailApiClientRepository;
-use models_email::service::link::Link;
+use email_types::service::link::Link;
 use serde_json::{Value, json};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};

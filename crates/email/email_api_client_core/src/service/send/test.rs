@@ -1,5 +1,5 @@
-use models_email::email::service::address::ContactInfo;
-use models_email::email::service::message::MessageToSend;
+use email_types::email::service::address::ContactInfo;
+use email_types::email::service::message::MessageToSend;
 use uuid::Uuid;
 
 use super::super::super::models::{

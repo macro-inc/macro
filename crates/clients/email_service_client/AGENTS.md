@@ -25,7 +25,7 @@ preview endpoint.
 ## Boundaries
 
 - Depends on: `email` (features `axum`, `inbound`), `macro_tower_layers`,
-  `model`, `models_email`.
+  `model`, `email_types`.
 - Used by: `crates/ai/memory`, `crates/ai/agent_tools`, `services/agent_harness_service`,
   `services/agent_harness_service`.
 
@@ -33,7 +33,7 @@ preview endpoint.
 
 - Add an endpoint: new module with `impl EmailServiceClient` (internal auth)
   or `impl EmailServiceClientExternal` (JWT) → wire response types from
-  `email`/`models_email`.
+  `email`/`email_types`.
 
 ## Checks
 

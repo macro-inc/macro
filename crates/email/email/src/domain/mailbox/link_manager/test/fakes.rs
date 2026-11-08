@@ -56,7 +56,7 @@ pub(super) fn service() -> (LinkManagerService<Fake, Fake, Fake, Fake, Fake, Fak
             macro_id: MacroUserIdStr::try_from("macro|owner@example.com".to_string()).unwrap(),
             fusionauth_user_id: "credential-owner".into(),
             email_address: EmailStr::try_from("owner@example.com".to_string()).unwrap(),
-            provider: models_email::service::link::UserProvider::Gmail,
+            provider: email_types::service::link::UserProvider::Gmail,
             is_sync_active: true,
             is_primary: true,
             needs_reauth: true,

@@ -10,7 +10,7 @@ use email::domain::crm_cleanup::{
     CleanupCandidates, CleanupClock, CleanupCrm, CleanupJobs, CleanupMailbox, CleanupQueue,
 };
 use email_db_client::crm_cleanup::{candidates, job};
-use models_email::service::{
+use email_types::service::{
     crm_cleanup::{
         CrmCleanupCandidate, CrmCleanupJob, CrmCleanupJobStatus, CrmCleanupOperation,
         CrmCleanupPubsubMessage,

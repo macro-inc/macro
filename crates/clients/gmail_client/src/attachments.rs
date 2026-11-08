@@ -1,6 +1,6 @@
 use base64::Engine;
 use base64::engine::general_purpose::{URL_SAFE, URL_SAFE_NO_PAD};
-use models_email::gmail::AttachmentGetResponse;
+use email_types::gmail::AttachmentGetResponse;
 
 use crate::error::{decode_json_response, unsuccessful_response};
 use crate::{GmailApiHttpError, GmailClient};

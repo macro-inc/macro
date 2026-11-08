@@ -70,7 +70,7 @@ impl<T: GmailTokenProvider> GmailSenderProvider<T> {
 
 fn sender_addresses(
     link: &Link,
-    aliases: Vec<models_email::gmail::SendAsAlias>,
+    aliases: Vec<email_types::gmail::SendAsAlias>,
 ) -> Vec<SendAsAddress> {
     aliases
         .into_iter()
@@ -81,7 +81,7 @@ fn sender_addresses(
                 return None;
             };
             let verified = alias.verification_status
-                == Some(models_email::gmail::SendAsVerificationStatus::Accepted)
+                == Some(email_types::gmail::SendAsVerificationStatus::Accepted)
                 || email_address
                     .0
                     .as_ref()

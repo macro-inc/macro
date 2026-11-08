@@ -1,4 +1,4 @@
-use models_email::{db, service};
+use email_types::{db, service};
 
 /// Upserts a scheduled message entry
 #[tracing::instrument(skip(tx, scheduled_message), err)]

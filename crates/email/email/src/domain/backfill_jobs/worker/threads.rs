@@ -4,7 +4,7 @@ use super::metadata::map_db_error;
 use super::*;
 use crate::domain::mailbox::inbox_sync::InboxSyncPreparation;
 use email_api_client_core::models::{CalendarPart, MessageWithCalendarParts};
-use models_email::service::{backfill::*, link, message::Message, pubsub::ProcessingError};
+use email_types::service::{backfill::*, link, message::Message, pubsub::ProcessingError};
 /// This step is invoked by ListThreads for each thread being backfilled.
 /// Reads the whole thread from the provider at once and writes the thread with
 /// all of its messages in one transaction, holding one of the fleet's backfill

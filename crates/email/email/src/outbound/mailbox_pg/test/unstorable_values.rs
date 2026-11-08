@@ -5,9 +5,9 @@ use super::retries::{Provider, outcomes, queue, row, sync};
 use super::{fixture, snapshot};
 use crate::telemetry_capture::Telemetry;
 use email_api_client_core::models::{Attention, MailboxState};
+use email_types::email::service::address::ContactInfo;
+use email_types::email::service::attachment::Attachment;
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
-use models_email::email::service::address::ContactInfo;
-use models_email::email::service::attachment::Attachment;
 use sqlx::PgPool;
 use uuid::Uuid;
 

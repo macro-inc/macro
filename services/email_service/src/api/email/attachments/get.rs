@@ -4,8 +4,8 @@ use axum::{
     Json,
     extract::{Path, State},
 };
+use email_types::service::attachment;
 use macro_authorization::{MacroAuthorizationExtractor, UserOrInternal};
-use models_email::service::attachment;
 use shared_types::response::ErrorResponse;
 use utoipa::ToSchema;
 use uuid::Uuid;

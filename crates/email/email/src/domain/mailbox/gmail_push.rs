@@ -10,7 +10,7 @@ pub use authentication::GooglePushAuthentication;
 pub use ports::*;
 
 use super::catalog::InboxAddressLookup;
-use models_email::service::link::UserProvider;
+use email_types::service::link::UserProvider;
 
 #[derive(Debug, PartialEq, Eq, thiserror::Error)]
 pub enum PushAuthenticationError {

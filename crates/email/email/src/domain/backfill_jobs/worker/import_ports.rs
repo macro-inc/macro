@@ -1,7 +1,7 @@
 //! Backfill-specific persistence with the original transaction and savepoint boundaries.
 use super::BackfillDatabaseError;
 use crate::domain::mailbox::inbox_sync::{InboxSyncResync, MessageResyncRepository};
-use models_email::service::{
+use email_types::service::{
     message::{Message, SimpleMessage},
     thread::ThreadProviderMap,
 };

@@ -54,7 +54,7 @@ app_service_url = { workspace = true }
 auth_service_url = { workspace = true }
 connection_gateway_url = { workspace = true }
 document_storage_service_url = { workspace = true }
-models_email = { workspace = true }
+email_types = { workspace = true }
 redis = { workspace = true, features = ["tokio-rustls-comp"] }
 reqwest = { workspace = true }
 rootcause = { workspace = true }

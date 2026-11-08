@@ -4,10 +4,10 @@ use opensearch_client::search::model::Highlight;
 use super::*;
 use chrono::DateTime;
 
-fn create_email_history(thread_id: &str) -> models_email::service::message::ThreadHistoryInfo {
+fn create_email_history(thread_id: &str) -> email_types::service::message::ThreadHistoryInfo {
     let now = chrono::Utc::now();
     let thread_uuid = Uuid::parse_str(thread_id).unwrap_or_else(|_| Uuid::new_v4());
-    models_email::service::message::ThreadHistoryInfo {
+    email_types::service::message::ThreadHistoryInfo {
         item_id: thread_uuid,
         created_at: now,
         updated_at: now,

@@ -1,5 +1,5 @@
 use super::*;
-use models_email::service::backfill::{
+use email_types::service::backfill::{
     BackfillOperation, BackfillPubsubMessage, LinkScopedPayload, PopulateCrmContactPayload,
 };
 pub type CrmContactRecipient = (

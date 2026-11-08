@@ -14,8 +14,8 @@ use crate::outbound::email_api::GmailApi;
 use crate::outbound::persistence_error::InboxPersistenceError;
 use email::domain::backfill_jobs::worker::*;
 use email_api_client_core::models::{EmailApiError, MessageWithCalendarParts};
+use email_types::service::backfill::BackfillPubsubMessage;
 use futures::future::BoxFuture;
-use models_email::service::backfill::BackfillPubsubMessage;
 use uuid::Uuid;
 
 pub(crate) type Backfill = BackfillService<
@@ -58,7 +58,7 @@ impl BackfillGmail for GmailBackfill {
     fn labels(
         &self,
         link: Uuid,
-    ) -> BoxFuture<'_, Result<Vec<models_email::service::label::Label>, EmailApiError>> {
+    ) -> BoxFuture<'_, Result<Vec<email_types::service::label::Label>, EmailApiError>> {
         Box::pin(self.0.list_labels(link))
     }
     fn thread_count(&self, link: Uuid) -> BoxFuture<'_, Result<u64, EmailApiError>> {

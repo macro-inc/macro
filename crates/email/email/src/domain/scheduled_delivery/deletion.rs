@@ -1,5 +1,5 @@
 //! Message deletion sequencing and deferred identity resolution.
-use models_email::service::message::SimpleMessage;
+use email_types::service::message::SimpleMessage;
 use uuid::Uuid;
 
 pub use crate::domain::mailbox::inbox_sync::MessageDeletion;

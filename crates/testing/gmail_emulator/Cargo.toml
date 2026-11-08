@@ -40,6 +40,6 @@ email_api_client_core = { workspace = true, features = ["ports"] }
 email_api_client_outbound = { workspace = true, features = ["outbound-gmail"] }
 fusionauth = { workspace = true }
 gmail_client = { workspace = true }
-models_email = { workspace = true }
+email_types = { workspace = true }
 tracing-subscriber = { workspace = true }
 uuid = { workspace = true }

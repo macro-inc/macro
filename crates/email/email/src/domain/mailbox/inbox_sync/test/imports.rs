@@ -280,8 +280,8 @@ async fn notifications_select_signal_partitions_and_filter_sent_or_missing_messa
     assert_eq!(n[1][2], false);
 }
 
-fn parsed_attachment() -> models_email::service::attachment::Attachment {
-    models_email::service::attachment::Attachment {
+fn parsed_attachment() -> email_types::service::attachment::Attachment {
+    email_types::service::attachment::Attachment {
         db_id: Uuid::from_u128(80),
         provider_id: None,
         data_url: None,
@@ -293,8 +293,8 @@ fn parsed_attachment() -> models_email::service::attachment::Attachment {
         content_id: None,
     }
 }
-fn claimed(id: u128, mime: &str) -> models_email::service::attachment::AttachmentUploadMetadata {
-    models_email::service::attachment::AttachmentUploadMetadata {
+fn claimed(id: u128, mime: &str) -> email_types::service::attachment::AttachmentUploadMetadata {
+    email_types::service::attachment::AttachmentUploadMetadata {
         attachment_db_id: Uuid::from_u128(id),
         email_provider_id: "message-1".into(),
         provider_attachment_id: format!("att-{id}"),
@@ -449,7 +449,7 @@ async fn crm_fanout_normalizes_deduplicates_and_omits_self_and_invalid_addresses
             "x@@example.com",
         ]
         .into_iter()
-        .map(|email| models_email::service::address::ContactInfo {
+        .map(|email| email_types::service::address::ContactInfo {
             email: email.into(),
             name: Some("friend".into()),
             photo_url: None,
@@ -477,7 +477,7 @@ async fn crm_fanout_normalizes_deduplicates_and_omits_self_and_invalid_addresses
 }
 #[tokio::test]
 async fn crm_fanout_rejects_each_malformed_shape_and_preserves_valid_neighbours() {
-    use models_email::service::backfill::{
+    use email_types::service::backfill::{
         BackfillOperation, BackfillPubsubMessage, LinkScopedPayload, PopulateCrmContactPayload,
     };
 
@@ -506,13 +506,11 @@ async fn crm_fanout_rejects_each_malformed_shape_and_preserves_valid_neighbours(
                 (" second@example.com ", "Duplicate second"),
             ]
             .into_iter()
-            .map(
-                |(email, name)| models_email::service::address::ContactInfo {
-                    email: email.into(),
-                    name: Some(name.into()),
-                    photo_url: None,
-                },
-            )
+            .map(|(email, name)| email_types::service::address::ContactInfo {
+                email: email.into(),
+                name: Some(name.into()),
+                photo_url: None,
+            })
             .collect();
         }
 
@@ -566,7 +564,7 @@ async fn a_failed_crm_fanout_remains_retryable_after_the_message_was_committed()
             .as_mut()
             .unwrap()
             .message
-            .from = Some(models_email::service::address::ContactInfo {
+            .from = Some(email_types::service::address::ContactInfo {
             email: "friend@example.com".into(),
             name: None,
             photo_url: None,
@@ -593,7 +591,7 @@ async fn contact_connections_follow_direction_and_enqueue_failure_is_terminal() 
             .as_mut()
             .unwrap()
             .message
-            .from = Some(models_email::service::address::ContactInfo {
+            .from = Some(email_types::service::address::ContactInfo {
             email: "friend@example.com".into(),
             name: None,
             photo_url: None,

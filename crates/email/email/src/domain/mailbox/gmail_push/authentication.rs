@@ -1,7 +1,7 @@
 use super::{
     PushAuthentication, PushAuthenticationError, PushKeyCache, PushKeySource, PushTokenVerifier,
 };
-use models_email::gmail::inbox_sync::{JwtVerificationError, KeyMap};
+use email_types::gmail::inbox_sync::{JwtVerificationError, KeyMap};
 
 pub struct GooglePushAuthentication<C, S, V> {
     pub cache: C,

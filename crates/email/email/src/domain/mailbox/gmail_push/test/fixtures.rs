@@ -1,7 +1,7 @@
 use super::super::*;
 use crate::domain::mailbox::catalog::InboxAddressLookup;
-use models_email::gmail::inbox_sync::{GooglePublicKeys, JwkKey, JwtVerificationError, KeyMap};
-use models_email::service::link::UserProvider;
+use email_types::gmail::inbox_sync::{GooglePublicKeys, JwkKey, JwtVerificationError, KeyMap};
+use email_types::service::link::UserProvider;
 use std::collections::VecDeque;
 use std::sync::{Arc, Mutex};
 use uuid::Uuid;

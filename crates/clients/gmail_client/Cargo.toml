@@ -11,7 +11,7 @@ jsonwebtoken = { workspace = true }
 gmail_api_url = { workspace = true }
 google_oauth_certs_url = { workspace = true }
 google_people_api_url = { workspace = true }
-models_email = { workspace = true }
+email_types = { workspace = true }
 regex = { workspace = true }
 reqwest = { workspace = true }
 serde = { workspace = true }

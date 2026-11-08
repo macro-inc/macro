@@ -1,6 +1,6 @@
 use super::*;
 use email::domain::mailbox::inbox_sync::CrmContactRecipient;
-use models_email::service::link::Link;
+use email_types::service::link::Link;
 
 impl BackfillRepository for PgBackfillWorker {
     type Err = InboxPersistenceError;

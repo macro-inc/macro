@@ -1,8 +1,8 @@
 use super::*;
 use crate::domain::mailbox::inbox_sync::{InboxSyncAttachmentRecipients, LabelCatalogRepository};
+use email_types::service::link::Link;
+use email_types::service::{attachment::AttachmentUploadMetadata, label::Label};
 use macro_user_id::user_id::MacroUserIdStr;
-use models_email::service::link::Link;
-use models_email::service::{attachment::AttachmentUploadMetadata, label::Label};
 use tokio::sync::oneshot;
 
 pub(super) struct LifecycleState {

@@ -1,9 +1,9 @@
 use std::collections::HashMap;
 
-use jsonwebtoken::{Algorithm, DecodingKey, Validation, decode};
-use models_email::gmail::inbox_sync::{
+use email_types::gmail::inbox_sync::{
     GoogleJwtClaims, GooglePublicKeys, JwksResponse, JwtVerificationError, KeyMap,
 };
+use jsonwebtoken::{Algorithm, DecodingKey, Validation, decode};
 
 use crate::error::{decode_json_response, unsuccessful_response};
 use crate::{GmailApiHttpError, GmailClient};

@@ -5,11 +5,11 @@
 //! link-manager queue, whose email_service consumer owns the single
 //! reconnect-your-inbox notification. Enqueued directly rather than through
 //! `sqs_client`, whose `email` feature would pull `crates/email/email` back into
-//! this service; the wire body is the shared `models_email` serde impl, so it
+//! this service; the wire body is the shared `email_types` serde impl, so it
 //! stays byte-compatible with the messages email_service enqueues.
 
 use calendar_events::domain::ports::CalendarReauthNotifier;
-use models_email::email::service::pubsub::LinkManagerMessage;
+use email_types::email::service::pubsub::LinkManagerMessage;
 use rootcause::Report;
 use uuid::Uuid;
 

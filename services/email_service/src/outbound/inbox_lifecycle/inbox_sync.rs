@@ -15,11 +15,11 @@ use crate::outbound::message_labels::gmail_ops::PgGmailOps;
 use crate::outbound::persistence_error::InboxPersistenceError;
 use email::domain::mailbox::inbox_sync::*;
 use email_api_client_core::models::EmailApiError;
+use email_types::api::refresh::RefreshEmailEvent;
+use email_types::gmail::inbox_sync::InboxSyncPubsubMessage;
+use email_types::service::link::Link;
 use futures::future::BoxFuture;
 use macro_event_broker::{EventBrokerError, MacroEvent, MacroEventBroker};
-use models_email::api::refresh::RefreshEmailEvent;
-use models_email::gmail::inbox_sync::InboxSyncPubsubMessage;
-use models_email::service::link::Link;
 use sqlx::PgPool;
 use uuid::Uuid;
 
@@ -80,7 +80,7 @@ impl InboxSyncQueue for InboxSyncSqs {
 
     async fn enqueue_backfill(
         &self,
-        message: models_email::service::backfill::BackfillPubsubMessage,
+        message: email_types::service::backfill::BackfillPubsubMessage,
     ) -> Result<(), Self::Err> {
         self.0
             .enqueue_email_backfill_message(message)
@@ -124,7 +124,7 @@ impl InboxSyncImportGmail for GmailInboxSync {
     fn catalog(
         &self,
         link: Uuid,
-    ) -> BoxFuture<'_, Result<Vec<models_email::service::label::Label>, EmailApiError>> {
+    ) -> BoxFuture<'_, Result<Vec<email_types::service::label::Label>, EmailApiError>> {
         Box::pin(self.0.list_labels(link))
     }
     fn changes<'a>(

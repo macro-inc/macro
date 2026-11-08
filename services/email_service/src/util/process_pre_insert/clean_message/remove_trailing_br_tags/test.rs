@@ -1,5 +1,5 @@
 use crate::util::process_pre_insert::clean_message::clean_message;
-use models_email::email::service;
+use email_types::email::service;
 
 #[test]
 fn test_clean_html_test_1() {

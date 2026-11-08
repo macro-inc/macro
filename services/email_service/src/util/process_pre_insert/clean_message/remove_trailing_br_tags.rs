@@ -1,6 +1,6 @@
 use ego_tree::{NodeId, Tree};
-use models_email::service::message::Message;
-use models_email::service::thread::Thread;
+use email_types::service::message::Message;
+use email_types::service::thread::Thread;
 use scraper::{Html, Node};
 
 pub fn remove_trailing_br_tags_threads(threads: &mut [Thread]) {

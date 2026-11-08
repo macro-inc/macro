@@ -1,7 +1,7 @@
 use super::email_api_error::map_email_api_error;
 use super::*;
 use crate::domain::mailbox::inbox_sync::sync_labels;
-use models_email::service::{
+use email_types::service::{
     backfill::{self, InitPayload, JobScopedPayload},
     link,
     pubsub::{DetailedError, FailureReason, ProcessingError},

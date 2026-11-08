@@ -77,7 +77,7 @@ prerequisite PR in phase 0, behaviour-neutral for existing providers:
 
 1. **Provider discriminator.** Add `Macro` to `UserProvider`
    (`crates/email/email/src/domain/models/link.rs`), its legacy copies in
-   `models_email`, `DbUserProvider` (two crates plus a private copy in
+   `email_types`, `DbUserProvider` (two crates plus a private copy in
    `services/email_refresh_handler`), the Postgres `email_user_provider_enum`,
    `GraphqlEmailProvider`, and the generated SDK types. Replace the web app's
    hand-written `'GMAIL' | 'OUTLOOK'` unions (`features/email-compose/core/*`,

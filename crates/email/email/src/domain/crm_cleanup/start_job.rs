@@ -2,10 +2,10 @@ use super::{
     CleanupCandidates, CleanupClock, CleanupCrm, CleanupJobs, CleanupMailbox, CleanupQueue,
     CrmCleanupService,
 };
-use models_email::email::service::crm_cleanup::{
+use email_types::email::service::crm_cleanup::{
     CrmCleanupJob, CrmCleanupJobStatus, CrmCleanupOperation,
 };
-use models_email::email::service::pubsub::{DetailedError, FailureReason, ProcessingError};
+use email_types::email::service::pubsub::{DetailedError, FailureReason, ProcessingError};
 
 /// An active job whose `updated_at` hasn't moved for this long is considered
 /// stranded (e.g. its lister exhausted retries into the DLQ) and gets failed

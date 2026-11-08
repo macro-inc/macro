@@ -1,6 +1,6 @@
 use crate::error::{decode_json_response, unsuccessful_response};
 use crate::{GmailApiHttpError, GmailClient};
-use models_email::gmail::ListSendAsResponse;
+use email_types::gmail::ListSendAsResponse;
 
 #[cfg(test)]
 mod test;

@@ -5,10 +5,10 @@ use crate::domain::{
     mailbox::MailboxError,
 };
 use email_api_client_core::models::{EmailApiError, ProviderId, SendRequest};
+use email_types::service::{address::ContactInfo, message::MessageToSend};
 use entity_access::domain::{models::ViewAccessLevel, ports::EntityAccessService};
 use futures::future::BoxFuture;
 use macro_user_id::user_id::MacroUserIdStr;
-use models_email::service::{address::ContactInfo, message::MessageToSend};
 use sha2::{Digest, Sha256};
 use std::future::Future;
 use uuid::Uuid;
@@ -129,7 +129,7 @@ impl<R: DraftContentRepository, B: DraftContentBytes, A: EntityAccessService>
                 if record.blob.is_none()
                     && (!record.link.is_sync_active
                         || (record.link.provider
-                            == models_email::service::link::UserProvider::Outlook
+                            == email_types::service::link::UserProvider::Outlook
                             && record.mailbox.grant_generation != *generation))
                 {
                     return Err(EmailApiError::AuthRequired.into());

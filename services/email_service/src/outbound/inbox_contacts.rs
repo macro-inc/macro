@@ -2,7 +2,7 @@
 
 use super::persistence_error::InboxPersistenceError;
 use email::domain::mailbox::contacts::list::InboxContactsRepository;
-use models_email::service::address::ContactInfoWithInteraction;
+use email_types::service::address::ContactInfoWithInteraction;
 use uuid::Uuid;
 
 pub struct PgInboxContacts(pub sqlx::PgPool);

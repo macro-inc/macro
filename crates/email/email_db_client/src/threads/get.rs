@@ -1,8 +1,8 @@
 use crate::parse::db_to_service;
-use models_email::email::service::thread::{
+use email_types::email::service::thread::{
     ThreadProviderMap, ThreadUserInfo, UserThreadIds, UserThreadsPage,
 };
-use models_email::{db, service};
+use email_types::{db, service};
 use sqlx::PgPool;
 use sqlx::types::Uuid;
 use std::collections::{HashMap, HashSet};
@@ -393,8 +393,8 @@ pub async fn get_thread_ids_by_contact_ids(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use email_types::email::service::thread::UserThreadIds;
     use macro_db_migrator::MACRO_DB_MIGRATIONS;
-    use models_email::email::service::thread::UserThreadIds;
     use sqlx::types::uuid::uuid;
     use sqlx::{Pool, Postgres};
     #[sqlx::test(

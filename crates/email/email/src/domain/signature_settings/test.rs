@@ -410,7 +410,7 @@ impl SignatureImageReader for Fake {
         &self,
         _: Uuid,
         _: &str,
-    ) -> Result<Option<models_email::email::service::message::Message>, EmailApiError> {
+    ) -> Result<Option<email_types::email::service::message::Message>, EmailApiError> {
         if self.fail == Some("mailbox_missing") {
             return Ok(None);
         }
@@ -423,7 +423,7 @@ impl SignatureImageReader for Fake {
         &self,
         _: Uuid,
         _: &str,
-    ) -> Result<Vec<models_email::email::service::message::Message>, EmailApiError> {
+    ) -> Result<Vec<email_types::email::service::message::Message>, EmailApiError> {
         panic!("unexpected thread read")
     }
     async fn get_attachment(&self, _: Uuid, _: &str, _: &str) -> Result<Vec<u8>, EmailApiError> {

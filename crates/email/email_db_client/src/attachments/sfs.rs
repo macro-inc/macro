@@ -1,4 +1,4 @@
-use models_email::{db, service};
+use email_types::{db, service};
 use sqlx::{Executor, Postgres};
 
 /// Inserts an attachment SFS record into the database

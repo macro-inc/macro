@@ -1,5 +1,5 @@
 use super::*;
-use models_email::{db, service};
+use email_types::{db, service};
 use transaction::PgInboxSyncTransaction;
 
 impl InboxSyncRepository for PgInboxSync {

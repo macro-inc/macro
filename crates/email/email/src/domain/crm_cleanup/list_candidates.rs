@@ -2,8 +2,8 @@ use super::{
     CleanupCandidates, CleanupClock, CleanupCrm, CleanupJobs, CleanupMailbox, CleanupQueue,
     CrmCleanupService,
 };
-use models_email::email::service::crm_cleanup::{CrmCleanupJobStatus, CrmCleanupOperation};
-use models_email::email::service::pubsub::{DetailedError, FailureReason, ProcessingError};
+use email_types::email::service::crm_cleanup::{CrmCleanupJobStatus, CrmCleanupOperation};
+use email_types::email::service::pubsub::{DetailedError, FailureReason, ProcessingError};
 use std::collections::HashSet;
 use uuid::Uuid;
 

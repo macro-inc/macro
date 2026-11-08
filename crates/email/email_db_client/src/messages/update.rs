@@ -1,4 +1,4 @@
-use models_email::email::service::label::system_labels;
+use email_types::email::service::label::system_labels;
 use sqlx::types::Uuid;
 
 #[cfg(test)]

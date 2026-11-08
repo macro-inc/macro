@@ -9,12 +9,12 @@ use crate::domain::{
 use email_api_client_core::models::{
     CalendarPart, ChangeBatch, EmailApiError, InboxChanges, MessageWithCalendarParts, SyncCursor,
 };
-use futures::future::BoxFuture;
-use models_email::service;
-use models_email::service::{
+use email_types::service;
+use email_types::service::{
     attachment::{Attachment, AttachmentUploadArgs, AttachmentUploadMetadata},
     backfill::{BackfillJob, BackfillJobStatus},
 };
+use futures::future::BoxFuture;
 use std::collections::{HashMap, VecDeque};
 
 pub(super) struct ImportState {

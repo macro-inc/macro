@@ -4,9 +4,9 @@ use crate::contacts::get::{
     link_has_any_message_with,
 };
 use anyhow::Result;
+use email_types::db::address::EmailRecipientType;
+use email_types::email::service::address::ContactInfoWithInteraction;
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
-use models_email::db::address::EmailRecipientType;
-use models_email::email::service::address::ContactInfoWithInteraction;
 use sqlx::types::Uuid;
 use sqlx::{Pool, Postgres};
 use std::collections::HashMap;

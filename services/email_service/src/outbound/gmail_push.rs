@@ -3,7 +3,7 @@
 use super::persistence_error::InboxPersistenceError;
 use anyhow::Context;
 use email::domain::mailbox::{catalog::InboxAddressLookup, gmail_push::*};
-use models_email::{
+use email_types::{
     gmail::inbox_sync::{
         GmailMessagePayload, GooglePublicKeys, InboxSyncOperation, InboxSyncPubsubMessage,
         JwtVerificationError, KeyMap,

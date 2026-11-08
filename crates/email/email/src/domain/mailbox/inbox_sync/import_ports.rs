@@ -8,12 +8,12 @@ use email_api_client_core::models::EmailApiError;
 use email_api_client_core::models::{
     CalendarPart, ChangeBatch, MessageWithCalendarParts, SyncCursor,
 };
-use futures::future::BoxFuture;
-use macro_user_id::user_id::MacroUserIdStr;
-use models_email::service::attachment::{
+use email_types::service::attachment::{
     Attachment, AttachmentUploadArgs, AttachmentUploadMetadata,
 };
-use models_email::{db, service};
+use email_types::{db, service};
+use futures::future::BoxFuture;
+use macro_user_id::user_id::MacroUserIdStr;
 use std::collections::HashMap;
 use uuid::Uuid;
 

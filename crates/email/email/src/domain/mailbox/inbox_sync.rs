@@ -31,10 +31,10 @@ use crate::domain::events::EmailMacroEvent;
 use crate::domain::message_labels::gmail_ops::GmailOpsLinks;
 use anyhow::anyhow;
 use delete_message::delete_message;
+use email_types::gmail::inbox_sync::{InboxSyncOperation, InboxSyncPubsubMessage};
+use email_types::service::link::Link;
+use email_types::service::pubsub::{DetailedError, FailureReason, ProcessingError};
 use macro_event_broker::MacroEventBroker;
-use models_email::gmail::inbox_sync::{InboxSyncOperation, InboxSyncPubsubMessage};
-use models_email::service::link::Link;
-use models_email::service::pubsub::{DetailedError, FailureReason, ProcessingError};
 use std::result;
 use update_labels::update_labels;
 

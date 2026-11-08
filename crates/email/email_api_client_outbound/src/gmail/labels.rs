@@ -1,7 +1,7 @@
 //! Gmail label capability implementation.
 
-use models_email::gmail::labels::{GmailLabel, GmailLabelsResponse};
-use models_email::service::label::Label;
+use email_types::gmail::labels::{GmailLabel, GmailLabelsResponse};
+use email_types::service::label::Label;
 use uuid::Uuid;
 
 use email_api_client_core::models::{AccessToken, EmailApiError};

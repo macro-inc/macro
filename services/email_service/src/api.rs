@@ -78,7 +78,7 @@ fn hide_sign_in_emails_from_programs<S: Clone + Send + Sync + 'static>(
             authorization.clone(),
             request,
             next,
-            models_email::sign_in_email::hide_sign_in_emails,
+            email_types::sign_in_email::hide_sign_in_emails,
         )
     }))
 }

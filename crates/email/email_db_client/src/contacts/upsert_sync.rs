@@ -2,8 +2,8 @@
 mod test;
 
 use crate::parse::service_to_db::map_new_contact_to_db;
-use models_email::db;
-use models_email::service::contact::Contact;
+use email_types::db;
+use email_types::service::contact::Contact;
 use sqlx::PgPool;
 use sqlx::types::Uuid;
 use std::collections::HashMap;

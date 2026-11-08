@@ -1,9 +1,9 @@
 use super::*;
-use macro_user_id::{email::EmailStr, user_id::MacroUserIdStr};
-use models_email::service::{
+use email_types::service::{
     address::ContactInfoLegacy,
     link::{Link, UserProvider},
 };
+use macro_user_id::{email::EmailStr, user_id::MacroUserIdStr};
 use std::sync::{Arc, Mutex};
 
 const CALLER: &str = "macro|reader@example.com";

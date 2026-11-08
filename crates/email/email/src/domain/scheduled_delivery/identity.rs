@@ -1,6 +1,6 @@
 //! Sent identity adoption and persistence sequencing.
 use anyhow::Context;
-use models_email::service::message::MessageToSend;
+use email_types::service::message::MessageToSend;
 use uuid::Uuid;
 
 /// Statement capabilities for adopting an imported message and its references.

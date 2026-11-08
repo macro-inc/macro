@@ -1,5 +1,5 @@
 use doppleganger::Mirror;
-use models_email::email::service;
+use email_types::email::service;
 use sqlx::types::Uuid;
 
 use crate::links::types::DbUserProvider;

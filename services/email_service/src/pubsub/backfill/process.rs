@@ -1,7 +1,7 @@
 use super::{error_handlers, worker::BackfillContext};
 use anyhow::Context;
 use email::domain::backfill_jobs::worker::BackfillDisposition;
-use models_email::service::backfill::BackfillPubsubMessage;
+use email_types::service::backfill::BackfillPubsubMessage;
 use sqs_worker::cleanup_message;
 use std::time::Duration;
 

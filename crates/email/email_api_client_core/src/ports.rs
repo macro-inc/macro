@@ -5,9 +5,9 @@ pub use mailbox::*;
 
 use std::future::Future;
 
-use models_email::email::service::label::Label;
-use models_email::service::contact::Contact;
-use models_email::service::link::Link;
+use email_types::email::service::label::Label;
+use email_types::service::contact::Contact;
+use email_types::service::link::Link;
 use uuid::Uuid;
 
 use super::models::{

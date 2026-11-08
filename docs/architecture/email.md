@@ -747,7 +747,7 @@ A program (`macro_authorization::is_program_run`) never reads one of Macro's
 own sign-in emails: a sign-in code or verification link would let it sign in
 as the user. Every email-service response, and the storage service's REST
 `/items` and `/search` responses, pass `rewrite_program_json` with
-`models_email::sign_in_email::hide_sign_in_emails`, which replaces the
+`email_types::sign_in_email::hide_sign_in_emails`, which replaces the
 subject, snippet, body, headers and search highlights of any message or
 thread from a sign-in sender. `GET /email/messages/{id}/eml` refuses such a
 message, and GraphQL refuses programs. A person reads the email whole.

@@ -12,10 +12,10 @@ use crm::domain::{
     model::{CrmError, DepopulateContactOutcome},
 };
 use email_api_client_core::models::{EmailApiError, MessageWithCalendarParts};
+use email_types::service::{backfill::*, link::Link, pubsub::ProcessingError};
 use futures::future::BoxFuture;
 use macro_event_broker::MacroEventBroker;
 use macro_user_id::user_id::MacroUserIdStr;
-use models_email::service::{backfill::*, link::Link, pubsub::ProcessingError};
 use std::collections::HashSet;
 use uuid::Uuid;
 
@@ -116,7 +116,7 @@ pub trait BackfillGmail: Send + Sync + 'static {
     fn labels(
         &self,
         link: Uuid,
-    ) -> BoxFuture<'_, Result<Vec<models_email::service::label::Label>, EmailApiError>>;
+    ) -> BoxFuture<'_, Result<Vec<email_types::service::label::Label>, EmailApiError>>;
     /// Fetch the provider's thread total during initialization.
     fn thread_count(&self, link: Uuid) -> BoxFuture<'_, Result<u64, EmailApiError>>;
     /// List a provider page without altering its requested size or labels.
@@ -223,21 +223,21 @@ pub trait BackfillCrm: Send + Sync + 'static {
     /// Reauthorize and prepare one bounded policy-history page.
     fn policy_history_page(
         &self,
-        payload: &models_email::service::backfill::PopulateCrmPolicyPayload,
+        payload: &email_types::service::backfill::PopulateCrmPolicyPayload,
     ) -> impl Future<
         Output = Result<Option<crm::domain::email_policy_work::EmailPolicyHistoryPage>, CrmError>,
     > + Send;
     /// Apply one address using the original generation, never current consent by substitution.
     fn populate_policy_contact(
         &self,
-        payload: &models_email::service::backfill::PopulateCrmPolicyPayload,
+        payload: &email_types::service::backfill::PopulateCrmPolicyPayload,
         page: &crm::domain::email_policy_work::EmailPolicyHistoryPage,
         contact: &crm::domain::email_policy_work::EmailPolicyHistoryContact,
     ) -> impl Future<Output = Result<(), CrmError>> + Send;
     /// Durably hand off the next page only after all effects succeeded.
     fn finish_policy_history_page(
         &self,
-        payload: &models_email::service::backfill::PopulateCrmPolicyPayload,
+        payload: &email_types::service::backfill::PopulateCrmPolicyPayload,
         page: &crm::domain::email_policy_work::EmailPolicyHistoryPage,
     ) -> impl Future<Output = Result<(), CrmError>> + Send;
     /// The current team, if any.

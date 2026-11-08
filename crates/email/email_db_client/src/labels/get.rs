@@ -1,8 +1,8 @@
 #[cfg(test)]
 mod test;
 
-use models_email::db;
-use models_email::email::service::label;
+use email_types::db;
+use email_types::email::service::label;
 use sqlx::PgPool;
 use sqlx::types::Uuid;
 use std::collections::{HashMap, HashSet};

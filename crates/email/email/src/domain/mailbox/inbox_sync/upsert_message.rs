@@ -3,18 +3,18 @@ use crate::domain::events::{
     EmailEventOrigin, MessageDraftSyncedMetadata, MessageReceivedMetadata, MessageSentMetadata,
 };
 use email_api_client_core::models::{EmailApiError, MessageWithCalendarParts};
-use email_utils::dedupe_emails;
-use macro_user_id::user_id::MacroUserIdStr;
-use models_email::db::address::EmailRecipientType;
-use models_email::gmail::inbox_sync::{InboxSyncOperation, UpsertMessagePayload};
-use models_email::service::attachment::{
+use email_types::db::address::EmailRecipientType;
+use email_types::gmail::inbox_sync::{InboxSyncOperation, UpsertMessagePayload};
+use email_types::service::attachment::{
     Attachment, AttachmentUploadArgs, AttachmentUploadDestination, AttachmentUploadMetadata,
 };
-use models_email::service::{
+use email_types::service::{
     link,
     message::{Message, SimpleMessage, is_inbound, is_outbound, is_spam_or_trash},
     thread::Thread,
 };
+use email_utils::dedupe_emails;
+use macro_user_id::user_id::MacroUserIdStr;
 use std::collections::HashSet;
 use uuid::Uuid;
 mod attachments;

@@ -11,8 +11,8 @@ use email::domain::models::mailbox_action::{
 };
 use email::domain::ports::EmailRepo;
 use email::outbound::label_state_pg::PgLabelState;
+use email_types::service;
 use macro_user_id::user_id::MacroUserIdStr;
-use models_email::service;
 use uuid::Uuid;
 
 pub mod gmail_ops;

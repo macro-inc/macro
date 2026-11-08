@@ -1,6 +1,6 @@
 use super::*;
+use email_types::service::link::UserProvider;
 use macro_user_id::{email::EmailStr, user_id::MacroUserIdStr};
-use models_email::service::link::UserProvider;
 use std::io::Write;
 use std::sync::{Arc, Mutex};
 use tracing::instrument::WithSubscriber;

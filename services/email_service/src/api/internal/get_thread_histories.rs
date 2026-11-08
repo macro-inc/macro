@@ -6,8 +6,8 @@ use axum::{
     response::{IntoResponse, Json, Response},
 };
 use email::domain::message_reads::SummaryReadError;
+use email_types::service::message::ThreadHistoryRequest;
 use macro_authorization::{InternalOnly, MacroAuthorizationExtractor};
-use models_email::service::message::ThreadHistoryRequest;
 use strum_macros::AsRefStr;
 use thiserror::Error;
 

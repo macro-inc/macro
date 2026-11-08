@@ -1,6 +1,6 @@
 use super::*;
-use models_email::gmail::inbox_sync::{DeleteMessagePayload, InboxSyncOperation};
-use models_email::service::pubsub::FailureReason;
+use email_types::gmail::inbox_sync::{DeleteMessagePayload, InboxSyncOperation};
+use email_types::service::pubsub::FailureReason;
 use std::io::Write;
 use std::sync::{Arc, Mutex};
 use tracing::instrument::WithSubscriber;

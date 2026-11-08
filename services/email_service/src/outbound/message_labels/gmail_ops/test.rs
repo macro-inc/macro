@@ -1,7 +1,7 @@
 use super::*;
+use email_types::gmail::gmail_ops::ModifyMessageLabelsPayload;
+use email_types::gmail::gmail_ops::{GmailMessageRef, ModifyMessageLabelsBatchPayload};
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
-use models_email::gmail::gmail_ops::ModifyMessageLabelsPayload;
-use models_email::gmail::gmail_ops::{GmailMessageRef, ModifyMessageLabelsBatchPayload};
 use std::io::Write;
 use std::sync::{Arc, Mutex};
 use tracing::instrument::WithSubscriber;
@@ -26,8 +26,8 @@ impl Write for EventOutput {
 
 #[tokio::test]
 async fn retryable_listener_emits_one_debug_event_with_error_and_payload_in_its_handler_span() {
-    use models_email::gmail::gmail_ops::GmailOpsOperation;
-    use models_email::service::pubsub::{DetailedError, FailureReason};
+    use email_types::gmail::gmail_ops::GmailOpsOperation;
+    use email_types::service::pubsub::{DetailedError, FailureReason};
 
     let data = GmailOpsPubsubMessage {
         link_id: Uuid::from_u128(0xa1),

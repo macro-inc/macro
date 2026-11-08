@@ -2,8 +2,8 @@
 
 use crate::pubsub::gmail_ops::worker::GmailOpsContext;
 use email::domain::message_labels::gmail_ops::{GmailOpsFailureLog, record_retryable_error};
-use models_email::gmail::gmail_ops::GmailOpsPubsubMessage;
-use models_email::service::pubsub::DetailedError;
+use email_types::gmail::gmail_ops::GmailOpsPubsubMessage;
+use email_types::service::pubsub::DetailedError;
 use sqs_worker::cleanup_message;
 
 /// Perform the domain's delete disposition under the existing failure span.

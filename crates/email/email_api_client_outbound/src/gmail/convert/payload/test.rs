@@ -2,7 +2,7 @@ use base64::{
     Engine as _,
     engine::general_purpose::{URL_SAFE, URL_SAFE_NO_PAD},
 };
-use models_email::gmail::{Header, MessagePart, MessagePartBody};
+use email_types::gmail::{Header, MessagePart, MessagePartBody};
 
 use super::parse_gmail_payload;
 

@@ -1,11 +1,11 @@
 use super::email_api_error::map_email_api_error;
 use super::*;
-use macro_user_id::user_id::MacroUserIdStr;
-use models_email::service::{
+use email_types::service::{
     backfill::*,
     link,
     pubsub::{DetailedError, FailureReason, ProcessingError},
 };
+use macro_user_id::user_id::MacroUserIdStr;
 use std::collections::HashSet;
 /// Consumer for `BackfillOperation::SeedSentContact`. Fetches one recent sent
 /// message and enqueues a sender<->recipient contact connection for every

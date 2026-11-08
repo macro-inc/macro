@@ -1,7 +1,7 @@
 use super::super::*;
+use email_types::{db, service};
 use macro_event_broker::{EventBrokerError, MacroEvent};
 use macro_user_id::{email::EmailStr, user_id::MacroUserIdStr};
-use models_email::{db, service};
 use std::collections::{HashMap, VecDeque};
 use std::sync::{Arc, Mutex};
 use uuid::Uuid;
@@ -376,7 +376,7 @@ impl InboxSyncQueue for Fake {
     }
     async fn enqueue_backfill(
         &self,
-        message: models_email::service::backfill::BackfillPubsubMessage,
+        message: email_types::service::backfill::BackfillPubsubMessage,
     ) -> Result<(), Failure> {
         self.step(
             "backfill_queue",

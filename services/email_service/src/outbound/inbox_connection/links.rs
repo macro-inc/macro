@@ -34,7 +34,7 @@ impl<R: ConnectionLinkLookup> ConnectionLinks for PgConnectionLinks<R> {
         Ok(email_db_client::links::get::fetch_link_by_email(
             &self.db,
             email,
-            models_email::service::link::UserProvider::Gmail,
+            email_types::service::link::UserProvider::Gmail,
         )
         .await?)
     }

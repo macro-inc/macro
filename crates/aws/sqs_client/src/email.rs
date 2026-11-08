@@ -1,12 +1,12 @@
 pub mod trace_context;
 
 use crate::SQS;
-use models_email::email::service::backfill::BackfillPubsubMessage;
-use models_email::email::service::crm_cleanup::CrmCleanupPubsubMessage;
-pub use models_email::email::service::pubsub::LinkManagerMessage;
+use email_types::email::service::backfill::BackfillPubsubMessage;
+use email_types::email::service::crm_cleanup::CrmCleanupPubsubMessage;
+pub use email_types::email::service::pubsub::LinkManagerMessage;
 #[cfg(feature = "sfs_uploader")]
-use models_email::service::pubsub::SFSUploaderMessage;
-use models_email::service::pubsub::ScheduledPubsubMessage;
+use email_types::service::pubsub::SFSUploaderMessage;
+use email_types::service::pubsub::ScheduledPubsubMessage;
 use uuid::Uuid;
 
 /// Message attribute counting how often a backfill operation has been sent
@@ -75,8 +75,8 @@ impl SQS {
         labels_to_add: Vec<String>,
         labels_to_remove: Vec<String>,
         pending_write_id: Uuid,
-    ) -> Vec<models_email::gmail::gmail_ops::GmailOpsPubsubMessage> {
-        use models_email::gmail::gmail_ops::{
+    ) -> Vec<email_types::gmail::gmail_ops::GmailOpsPubsubMessage> {
+        use email_types::gmail::gmail_ops::{
             GmailMessageRef, GmailOpsPubsubMessage, label_write_operations,
         };
 

@@ -1,6 +1,6 @@
 use std::{fmt::Debug, future::Future};
 
-use models_email::email::service::pubsub::LinkManagerMessage;
+use email_types::email::service::pubsub::LinkManagerMessage;
 use uuid::Uuid;
 
 pub(crate) trait LinkRepository: Send + Sync {

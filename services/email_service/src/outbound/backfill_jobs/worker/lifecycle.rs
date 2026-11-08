@@ -4,7 +4,7 @@ use email::domain::mailbox::inbox_sync::{InboxSyncAttachmentRecipients, LabelCat
 use email::domain::message_labels::state as label_state;
 use email::outbound::label_state_pg::PgLabelCatalog;
 use email_db_client::backfill::job::update as jobs;
-use models_email::service::{attachment::AttachmentUploadMetadata, label::Label};
+use email_types::service::{attachment::AttachmentUploadMetadata, label::Label};
 
 impl LabelCatalogRepository for PgBackfillWorker {
     type CatalogError = BackfillDatabaseError;

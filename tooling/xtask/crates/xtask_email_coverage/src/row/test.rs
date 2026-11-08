@@ -42,7 +42,7 @@ fn the_written_file_reads_back_as_the_same_rows() {
             key: "gmail-ops:DeleteLabel".to_owned(),
             providers: Providers::Gmail,
             matcher: "/operation/delete_label".to_owned(),
-            source: "crates/types/models_email/src/gmail/gmail_ops.rs:28".to_owned(),
+            source: "crates/types/email_types/src/gmail/gmail_ops.rs:28".to_owned(),
         },
         route("GET /health", "api/health.rs:18"),
     ];

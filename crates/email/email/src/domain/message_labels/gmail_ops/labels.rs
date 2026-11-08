@@ -7,9 +7,9 @@ use super::{
 };
 use crate::domain::mailbox::connection::ConnectionSourceError;
 use email_api_client_core::{models::EmailApiError, service::SEPARATE_LABEL_WRITES_BELOW};
+use email_types::gmail::gmail_ops::{GmailMessageRef, ModifyMessageLabelsBatchPayload};
+use email_types::service::{self, link::Link};
 use futures::future::BoxFuture;
-use models_email::gmail::gmail_ops::{GmailMessageRef, ModifyMessageLabelsBatchPayload};
-use models_email::service::{self, link::Link};
 use uuid::Uuid;
 
 /// Why a gmail_ops operation did not finish.

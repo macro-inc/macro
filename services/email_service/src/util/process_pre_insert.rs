@@ -1,5 +1,5 @@
 use crate::util::process_pre_insert::clean_message::{clean_message, clean_threads};
-use models_email::email::service;
+use email_types::email::service;
 
 mod clean_message;
 pub mod sfs_map;

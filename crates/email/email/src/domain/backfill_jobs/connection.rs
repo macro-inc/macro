@@ -1,7 +1,7 @@
 //! Initial backfill publication for a newly connected inbox.
 
 use super::{BackfillJobQueue, BackfillJobRepository, BackfillJobService};
-use models_email::service::link::Link;
+use email_types::service::link::Link;
 use uuid::Uuid;
 
 pub trait ConnectedInboxHistory: Send + Sync + 'static {

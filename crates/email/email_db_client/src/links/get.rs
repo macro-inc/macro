@@ -1,9 +1,9 @@
 use chrono::{DateTime, Utc};
 use doppleganger::Mirror;
+use email_types::email::db;
+use email_types::email::service::link;
+use email_types::service;
 use macro_user_id::user_id::MacroUserIdStr;
-use models_email::email::db;
-use models_email::email::service::link;
-use models_email::service;
 use sqlx::PgPool;
 use sqlx::types::Uuid;
 

@@ -37,8 +37,8 @@ pub use metadata::{is_unstorable_sqlstate, map_db_error};
 pub use ports::*;
 pub use write_slot::admit_write_slot;
 
-use models_email::service::backfill::BackfillPubsubMessage;
-use models_email::service::pubsub::{DetailedError, ProcessingError};
+use email_types::service::backfill::BackfillPubsubMessage;
+use email_types::service::pubsub::{DetailedError, ProcessingError};
 use std::time::Duration;
 
 /// The acknowledgement chosen for one delivered operation.

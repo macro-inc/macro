@@ -1,6 +1,6 @@
 use super::*;
 use email_api_client_core::models::{CalendarPart, EmailApiError, MessageWithCalendarParts};
-use models_email::service::{address::ContactInfo, message::SimpleMessage};
+use email_types::service::{address::ContactInfo, message::SimpleMessage};
 
 fn thread(refresh: bool) -> BackfillPubsubMessage {
     input(BackfillOperation::BackfillThread(scope(

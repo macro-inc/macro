@@ -1,7 +1,7 @@
 //! Lists the sent-message contacts of the caller's owned and delegated inboxes.
 
 use super::super::catalog::{InboxAccessRepository, InboxCatalogService};
-use models_email::service::address::ContactInfoWithInteraction;
+use email_types::service::address::ContactInfoWithInteraction;
 use std::{collections::HashMap, sync::Arc};
 use uuid::Uuid;
 

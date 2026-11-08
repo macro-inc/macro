@@ -152,7 +152,7 @@ async fn catalog_refresh_cannot_restore_a_category_while_cleanup_is_pending(db: 
         created_at: chrono::Utc::now(),
         message_list_visibility: None,
         label_list_visibility: None,
-        type_: Some(models_email::service::label::LabelType::User),
+        type_: Some(email_types::service::label::LabelType::User),
     };
     assert!(matches!(
         repo.store_label(&actor(), mailbox, normalized).await,

@@ -1,6 +1,6 @@
 use super::*;
 use email_api_client_core::models::{EmailApiError, ThreadListPage};
-use models_email::service::thread::{ListThreadsPayload, ThreadSummary};
+use email_types::service::thread::{ListThreadsPayload, ThreadSummary};
 
 fn listing(priority: bool) -> BackfillPubsubMessage {
     input(BackfillOperation::ListThreads(scope(ListThreadsPayload {

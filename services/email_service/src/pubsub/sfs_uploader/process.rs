@@ -2,7 +2,7 @@ use crate::pubsub::sfs_uploader::context::SFSUploaderContext;
 use anyhow::Context;
 use aws_sdk_sqs::types::Message;
 use email::domain::mailbox::contacts::sfs_upload::SfsPhotoUploadDisposition;
-use models_email::service::pubsub::SFSUploaderMessage;
+use email_types::service::pubsub::SFSUploaderMessage;
 use sqs_worker::cleanup_message;
 
 #[cfg(test)]

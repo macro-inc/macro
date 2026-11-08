@@ -26,11 +26,11 @@ contacts, watch) behind a single public facade; most modules are
 
 - Owns: typed request/response calls against the Gmail REST API.
 - Not here: Macro's email domain model or sync orchestration →
-  `models_email` (the wire types this crate returns), `email_service`.
+  `email_types` (the wire types this crate returns), `email_service`.
 
 ## Boundaries
 
-- Depends on: `models_email` (response/request types), `gmail_api_url`,
+- Depends on: `email_types` (response/request types), `gmail_api_url`,
   `google_oauth_certs_url`, `google_people_api_url`.
 - Used by: `email_service`, `email_api_client_outbound`.
 

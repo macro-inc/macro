@@ -10,8 +10,8 @@ pub use ports::*;
 use super::{LinkDeletion, purge::PurgePacing};
 use crate::domain::events::{EmailMacroEvent, LinkDisconnectReason, LinkDisconnectedMetadata};
 use anyhow::Context;
+use email_types::service::{link::Link, pubsub::DeletionReason};
 use macro_event_broker::MacroEventBroker;
-use models_email::service::{link::Link, pubsub::DeletionReason};
 
 /// Coordinates physical deletion after the lifecycle service permits it.
 pub struct LinkDeletionService<R, G, A, C, P, N, B> {

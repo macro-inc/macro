@@ -18,7 +18,7 @@ use aws_sdk_sqs::types::{Message, MessageSystemAttributeName};
 use email::domain::models::mailbox_action::MailboxAction;
 use email::domain::ports::EmailService;
 use email_thread_id::EmailThreadId;
-use models_email::gmail::inbox_sync::{
+use email_types::gmail::inbox_sync::{
     InboxSyncOperation, InboxSyncPubsubMessage, UpdateLabelsPayload, UpsertMessagePayload,
 };
 use rand::rngs::StdRng;

@@ -5,11 +5,11 @@ use email::domain::attachment_access::AuthorizedAttachmentBytes;
 use email::domain::scheduled_delivery::attachments::{
     ApprovedAttachments, AttachmentSnapshotMismatch,
 };
-use futures::{StreamExt, TryStreamExt};
-use models_email::service::{
+use email_types::service::{
     attachment::{AttachmentDraft, AttachmentToSend},
     message::MessageToSend,
 };
+use futures::{StreamExt, TryStreamExt};
 use sqlx::PgPool;
 use uuid::Uuid;
 
