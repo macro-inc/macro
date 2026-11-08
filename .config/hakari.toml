@@ -59,7 +59,9 @@ workspace-members = [
     "xtask_local",
     "macro_sync_service_jwt",
     "sync_service",
-    "sync_service_bebop_schema",
+    "sync_protocol",
+    "sync_server_core",
+    "sync_server_sim",
     "worker-rs-otel",
     # maybe_send: zero-dep marker traits used by cache-core; must stay
     # wasm-safe (workspace-hack pulls native-only deps like mio into wasm32).

@@ -6722,8 +6722,8 @@ dependencies = [
  "sqs_client",
  "sqs_worker",
  "static_file_service_client",
+ "sync_protocol",
  "sync_router",
- "sync_service_bebop_schema",
  "sync_service_client",
  "sync_service_hex",
  "system_properties",
@@ -19765,6 +19765,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "sync_protocol"
+version = "0.1.0"
+dependencies = [
+ "bebop",
+ "loro",
+ "loro-internal",
+ "postcard",
+ "rustc-hash 2.1.2",
+ "serde",
+ "thiserror 2.0.18",
+]
+
+[[package]]
 name = "sync_router"
 version = "0.1.0"
 dependencies = [
@@ -19774,7 +19787,7 @@ dependencies = [
  "mockall",
  "opentelemetry",
  "rustls",
- "sync_service_bebop_schema",
+ "sync_protocol",
  "thiserror 2.0.18",
  "tokio",
  "tokio-tungstenite 0.28.0",
@@ -19787,6 +19800,44 @@ dependencies = [
 ]
 
 [[package]]
+name = "sync_server_core"
+version = "0.1.0"
+dependencies = [
+ "bebop",
+ "futures",
+ "lazy-regex",
+ "loro",
+ "macro_sync_service_jwt",
+ "rootcause",
+ "serde",
+ "serde_json",
+ "sha2 0.10.9",
+ "sync_protocol",
+ "thiserror 2.0.18",
+ "tracing",
+ "utoipa",
+ "uuid",
+]
+
+[[package]]
+name = "sync_server_sim"
+version = "0.1.0"
+dependencies = [
+ "base64 0.22.1",
+ "bebop",
+ "futures",
+ "loro",
+ "macro_sync_service_jwt",
+ "serde",
+ "serde_json",
+ "sha2 0.10.9",
+ "sync_protocol",
+ "sync_server_core",
+ "thiserror 2.0.18",
+ "uuid",
+]
+
+[[package]]
 name = "sync_service"
 version = "0.1.0"
 dependencies = [
@@ -19795,14 +19846,12 @@ dependencies = [
  "bebop",
  "futures",
  "getrandom 0.3.4",
- "loro",
  "macro_sync_service_jwt",
  "serde",
  "serde_json",
- "sha2 0.10.9",
  "subtle",
- "sync_service_bebop_schema",
- "thiserror 2.0.18",
+ "sync_protocol",
+ "sync_server_core",
  "time",
  "tower-service",
  "tracing",
@@ -19814,13 +19863,6 @@ dependencies = [
  "web-time",
  "worker",
  "worker-rs-otel",
-]
-
-[[package]]
-name = "sync_service_bebop_schema"
-version = "0.1.0"
-dependencies = [
- "bebop",
 ]
 
 [[package]]

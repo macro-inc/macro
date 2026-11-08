@@ -318,7 +318,7 @@ zip = { workspace = true }
 
 [dev-dependencies]
 bebop = { workspace = true }
-sync_service_bebop_schema = { path = "../sync-service/bebop-schema" }
+sync_protocol = { workspace = true }
 tokio-tungstenite = { workspace = true }
 flate2 = "1"
 frecency = { path = "../../crates/frecency", features = ["mock"] }

@@ -1,4 +1,4 @@
-pub use crate::domain::permissions::{AccessLevel, AuthToken, WriteAccess};
+pub use crate::domain::permissions::{AccessLevel, AuthToken};
 use macro_sync_service_jwt::session::{
     SessionIdentity, SessionKind, SurfaceAccessLevel, decode_surface,
 };
@@ -33,15 +33,15 @@ pub(crate) fn decode_document_token(token: &str, secret: &str) -> worker::Result
     {
         return Err(Error::from("surface grant cannot authorize a document"));
     }
-    Ok(AuthToken {
-        agent_correlation_id: claims.agent_correlation_id,
-        user_id: claims.user_id,
-        document_id: claims.document_id,
-        access_level: claims.access_level,
-        actor: claims.actor,
-        session_kind: SessionKind::Document,
-        expires_at: None,
-    })
+    Ok(AuthToken::new(
+        claims.document_id,
+        claims.access_level,
+        SessionKind::Document,
+        claims.user_id,
+        claims.actor,
+        claims.agent_correlation_id,
+        None,
+    ))
 }
 
 pub(crate) fn decode_surface_token(
@@ -59,15 +59,15 @@ pub(crate) fn decode_surface_token(
         SurfaceAccessLevel::Edit => AccessLevel::Edit,
         SurfaceAccessLevel::Owner => AccessLevel::Owner,
     };
-    Ok(AuthToken {
-        agent_correlation_id: None,
-        user_id: claims.user_id,
-        document_id: identity.storage_key(),
+    Ok(AuthToken::new(
+        identity.storage_key(),
         access_level,
-        actor: claims.actor,
-        session_kind: SessionKind::Surface,
-        expires_at: Some(claims.exp),
-    })
+        SessionKind::Surface,
+        claims.user_id,
+        claims.actor,
+        None,
+        Some(claims.exp),
+    ))
 }
 
 #[cfg(test)]
