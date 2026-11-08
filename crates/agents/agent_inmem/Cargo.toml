@@ -24,7 +24,7 @@ bytes = { workspace = true }
 async-trait = { workspace = true }
 axum = { workspace = true }
 bot_id = { workspace = true }
-chat = { workspace = true }
+ai_chat = { workspace = true }
 cognition = { workspace = true }
 dashmap = { workspace = true }
 futures = { workspace = true }

@@ -1,5 +1,5 @@
 use super::{AUTO_MODEL, ROUTED_MODELS, advertised_models, display_name, resolve};
-use chat::domain::models::CHAT_MODELS;
+use ai_chat::domain::models::CHAT_MODELS;
 
 #[test]
 fn advertised_models_lead_with_auto_then_chat_then_routed() {

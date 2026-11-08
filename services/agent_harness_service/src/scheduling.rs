@@ -837,7 +837,7 @@ pub async fn build<Ingress: notification::domain::service::NotificationIngress>(
         routine_flags.clone(),
         RoutineBriefing {
             guide: agent_code_mode::domain::entity_guide("routines").unwrap_or_default(),
-            agent_model: chat::domain::models::FREE_MODEL.to_owned(),
+            agent_model: ai_chat::domain::models::FREE_MODEL.to_owned(),
         },
     ));
     let feed_repo = Arc::new(PgSuggestionRepo::new(db.clone()));
@@ -881,7 +881,7 @@ pub async fn build<Ingress: notification::domain::service::NotificationIngress>(
             suggestions::domain::prompt::SYMBOLS,
             suggestions::domain::prompt::FIELDS_OF,
         ))
-        .with_checker_model(chat::domain::models::FREE_MODEL.to_owned())
+        .with_checker_model(ai_chat::domain::models::FREE_MODEL.to_owned())
         // A reply suggestion shows who its email thread or channel message waits
         // on the person for, read when a session writes it.
         .with_reply_waits(Arc::new(ItemReplyWaits {
@@ -901,7 +901,7 @@ pub async fn build<Ingress: notification::domain::service::NotificationIngress>(
             routine_flags.clone(),
             GenerationAgent {
                 bot: bot_id::MACRO_NEW_BOT_ID,
-                model: chat::domain::models::FREE_MODEL.to_owned(),
+                model: ai_chat::domain::models::FREE_MODEL.to_owned(),
             },
             lifecycle.workers.clone(),
             lifecycle.stop_workers.clone(),

@@ -146,7 +146,7 @@ impl ai_billing::domain::BillingService for UnavailableBilling {
 pub(crate) const TEST_MODELS: &[&str] = &[
     "anthropic/claude-sonnet-5-5",
     "other-model",
-    chat::domain::models::FREE_MODEL,
+    ai_chat::domain::models::FREE_MODEL,
 ];
 
 /// An engine that plays back a script of parts for every turn.

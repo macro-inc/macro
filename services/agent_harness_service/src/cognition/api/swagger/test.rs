@@ -1,4 +1,4 @@
-use chat::domain::models::FREE_MODEL;
+use ai_chat::domain::models::FREE_MODEL;
 use utoipa::OpenApi;
 
 #[test]

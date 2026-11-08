@@ -10,7 +10,7 @@ outbox worker that notifies `connection_gateway`.
 
 - `src/main.rs`: wires `contacts::domain::service::ContactsDomainService`,
   `contacts::inbound::http::contacts_router`, and the SQS/outbox workers — the
-  actual logic lives in `crates/comms/chat/contacts_*`, not here.
+  actual logic lives in `crates/comms/ai_chat/contacts_*`, not here.
 - `src/config.rs`: env vars and per-environment DB pool sizing.
 - `src/health.rs`: health check endpoint.
 
