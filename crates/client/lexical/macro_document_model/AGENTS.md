@@ -14,6 +14,8 @@ The transformer layer uses the shared lexical_markdown engine; route adapters ar
 - Validate activity envelopes separately from lenient stored-node imports; keep unknown card objects.
 - Parse notification attributes in source order and unescape embedded internal link payloads.
 - Share URL matching and preview/search/embedding projections through links.rs and parsers.rs.
+- Keep permission gate imports fail-closed; bind each approved source divergence to its full oracle row and exact error, and reject stale entries.
+- Preserve immutable export reads and shallow JSON order; see [EXPORTS.md](EXPORTS.md) for the S1 Q8 acceptance boundary.
 - Build reader-oriented XML through xml.rs without importing or normalizing stored node payloads.
 - Use ImportPolicy as the single state/base import mechanism; reproduce upstream loss.
 - Preserve the Export registry without code/list replacements; Headless applies both.
@@ -36,6 +38,8 @@ The transformer layer uses the shared lexical_markdown engine; route adapters ar
 - `TMPDIR=/home/wolf/tmp cargo test -p lexical_conformance --test replay -j4 -- upstream::lexical-core`; the full source corpus is acceptance, and synthetic JSON oracles supplement it.
 - `TMPDIR=/home/wolf/tmp cargo check -p macro_document_model --target wasm32-unknown-unknown -j4`
 - `TMPDIR=/home/wolf/tmp cargo clippy -p macro_document_model --all-targets -j4 -- -D warnings`
+- `TMPDIR=/home/wolf/tmp bun packages/lexical-conformance/diff/gate-fuzz/wasm.ts` after native gate generation checks the actual WASM gate.
+- `bun packages/lexical-conformance/corpus/macro-exports.ts --check` checks service export and XML source results.
 - `bun packages/lexical-conformance/corpus/synthetic.ts` regenerates fixed JSON oracles.
 - `bun packages/lexical-conformance/corpus/transformers.ts --check` checks source metadata.
 - `bun packages/lexical-conformance/corpus/macro-markdown.ts --check` checks the supplemental source conversion oracle.
