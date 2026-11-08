@@ -300,6 +300,25 @@ impl BoundFunction {
             Err(crate::debug::error("JS callbacks require WASM").into())
         }
     }
+    fn invoke_value(&self, value: Value, errors: &Errors) -> Result<Value, Error> {
+        #[cfg(target_arch = "wasm32")]
+        {
+            let argument = to_js(value).map_err(|error| Error::invariant(format!("{error:?}")))?;
+            match self.function.call1(&JsValue::UNDEFINED, &argument) {
+                Ok(value) => crate::host::from_js(value)
+                    .map_err(|error| Error::invariant(format!("{error:?}"))),
+                Err(error) => {
+                    errors.save(error);
+                    Err(Error::Invariant("JS node hook threw"))
+                }
+            }
+        }
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            let _ = (value, errors);
+            Err(Error::Invariant("JS callbacks require WASM"))
+        }
+    }
     fn invoke(&self, value: Value, errors: &Errors) -> Result<(), Error> {
         #[cfg(target_arch = "wasm32")]
         {
@@ -362,6 +381,29 @@ impl Callback {
         hook: lexical_model::ForeignHook,
         args: Vec<Value>,
     ) -> Result<(), Error> {
+        let message = self.node_message(tx, key, hook, args)?;
+        self.with_scope(tx, || self.function.invoke(message, &self.errors))
+    }
+    pub(super) fn node_result(
+        &self,
+        tx: &mut Transaction<'_>,
+        key: NodeKey,
+        hook: lexical_model::ForeignHook,
+        args: Vec<Value>,
+    ) -> Result<NodeKey, Error> {
+        let message = self.node_message(tx, key, hook, args)?;
+        let result = self.with_scope(tx, || self.function.invoke_value(message, &self.errors))?;
+        self.context
+            .returned_node(tx, &result)
+            .map_err(|error| Error::invariant(error.to_string()))
+    }
+    fn node_message(
+        &self,
+        tx: &Transaction<'_>,
+        key: NodeKey,
+        hook: lexical_model::ForeignHook,
+        args: Vec<Value>,
+    ) -> Result<Value, Error> {
         let node = self
             .context
             .node(tx, key)
@@ -377,7 +419,7 @@ impl Callback {
             args,
         })
         .map_err(|error| Error::invariant(error.to_string()))?;
-        self.with_scope(tx, || self.function.invoke(message, &self.errors))
+        Ok(message)
     }
 
     pub(super) fn command(

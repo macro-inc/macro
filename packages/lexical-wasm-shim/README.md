@@ -49,3 +49,5 @@ and native class overlays still reject explicitly while their adapters are built
 the complete prototype-driven class facade remains unfinished.
 
 Mutable structural overrides (`append`, `splice`, `remove`, `setIndent`, `updateFromJSON`, `resetOnCopyNodeFrom`) share the exact callback scope and native-super path. Node arguments from internal model calls use the shared captured identity encoder. Other foreign hooks and the full facade remain unfinished.
+
+Node-returning overrides (`replace`, `insertAfter`, `insertBefore`, `createParentElementNode`) return captured node handles. The host validates them against the exact update and reuses the normal identity encoder; invalid results fail without losing the callback scope.

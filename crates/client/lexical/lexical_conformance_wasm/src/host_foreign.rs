@@ -30,7 +30,11 @@ impl ForeignNode {
             | ForeignHook::Splice.bit()
             | ForeignHook::Append.bit()
             | ForeignHook::SetIndent.bit()
-            | ForeignHook::UpdateFromJson.bit();
+            | ForeignHook::UpdateFromJson.bit()
+            | ForeignHook::Replace.bit()
+            | ForeignHook::InsertAfter.bit()
+            | ForeignHook::InsertBefore.bit()
+            | ForeignHook::CreateParentElement.bit();
         if let Some(hook) = ForeignHook::ALL
             .iter()
             .find(|hook| mask & !supported & hook.bit() != 0)
@@ -74,6 +78,26 @@ impl ForeignNode {
         self.overrides.load(Ordering::SeqCst) == 0
             || self.callback.lock().expect("foreign dispatcher").is_some()
     }
+    fn invoke_result(
+        &self,
+        tx: &mut Transaction<'_>,
+        key: NodeKey,
+        hook: ForeignHook,
+        nodes: &[NodeKey],
+        trailing_args: Vec<Value>,
+    ) -> Override<Result<NodeKey, Error>> {
+        if self.overrides.load(Ordering::SeqCst) & hook.bit() == 0 {
+            return Override::Inherit;
+        }
+        let callback = { self.callback.lock().expect("foreign dispatcher").clone() };
+        Override::Value(match callback {
+            Some(callback) => callback.nodes(tx, nodes).and_then(|mut args| {
+                args.extend(trailing_args);
+                callback.node_result(tx, key, hook, args)
+            }),
+            None => Err(Error::Invariant("foreign dispatcher is not installed")),
+        })
+    }
     fn invoke(
         &self,
         tx: &mut Transaction<'_>,
@@ -103,6 +127,58 @@ impl ForeignNode {
     }
 }
 impl ForeignHooks for ForeignNode {
+    fn replace(
+        &self,
+        tx: &mut Transaction<'_>,
+        key: NodeKey,
+        replacement: NodeKey,
+        include_children: bool,
+    ) -> Override<Result<NodeKey, Error>> {
+        self.invoke_result(
+            tx,
+            key,
+            ForeignHook::Replace,
+            &[replacement],
+            vec![json!(include_children)],
+        )
+    }
+    fn insert_after(
+        &self,
+        tx: &mut Transaction<'_>,
+        key: NodeKey,
+        node: NodeKey,
+        restore_selection: bool,
+    ) -> Override<Result<NodeKey, Error>> {
+        self.invoke_result(
+            tx,
+            key,
+            ForeignHook::InsertAfter,
+            &[node],
+            vec![json!(restore_selection)],
+        )
+    }
+    fn insert_before(
+        &self,
+        tx: &mut Transaction<'_>,
+        key: NodeKey,
+        node: NodeKey,
+        restore_selection: bool,
+    ) -> Override<Result<NodeKey, Error>> {
+        self.invoke_result(
+            tx,
+            key,
+            ForeignHook::InsertBefore,
+            &[node],
+            vec![json!(restore_selection)],
+        )
+    }
+    fn create_parent_element(
+        &self,
+        tx: &mut Transaction<'_>,
+        key: NodeKey,
+    ) -> Override<Result<NodeKey, Error>> {
+        self.invoke_result(tx, key, ForeignHook::CreateParentElement, &[], vec![])
+    }
     fn remove(
         &self,
         tx: &mut Transaction<'_>,
