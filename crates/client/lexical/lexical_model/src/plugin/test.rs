@@ -399,3 +399,159 @@ fn failed_hook_round_rolls_back_even_after_set_editor_state_early_publication() 
         "main"
     );
 }
+
+struct ConditionalHook {
+    result: Result<bool, &'static str>,
+    flush: bool,
+}
+impl Plugin for ConditionalHook {
+    fn name(&self) -> &'static str {
+        "conditional"
+    }
+    fn commands(&self) -> &[CommandRegistration] {
+        &[]
+    }
+    fn handle(&self, _: &mut Transaction<'_>, _: &Command) -> Result<Handled, Error> {
+        Ok(Handled::No)
+    }
+    fn conditional_after_commit<'a>(&'a self, commit: &'a Commit) -> Option<ConditionalUpdate<'a>> {
+        if commit.tags.contains(&UpdateTag::HistoryPush) {
+            return None;
+        }
+        Some(Box::new(move |tx| {
+            let p = tx.create(Paragraph::default())?;
+            tx.append(NodeKey::ROOT, &[p.key()])?;
+            tx.extension_mut::<Log>()?.0.push("conditional");
+            tx.add_tag(UpdateTag::HistoryPush);
+            if self.flush {
+                tx.flush()?;
+            }
+            self.result.map_err(Error::Invariant)
+        }))
+    }
+}
+#[test]
+fn declined_conditional_hooks_discard_flushed_state_extensions_and_tags() {
+    let mut editor = Editor::builder(EditorMode::Headless)
+        .extension_state(Log::default())
+        .plugin(ConditionalHook {
+            result: Ok(false),
+            flush: true,
+        })
+        .build()
+        .unwrap();
+    let allocated = editor.keys.last_allocated();
+    let (_, commit) = editor.update(|tx| tx.mark_dirty(NodeKey::ROOT)).unwrap();
+    assert!(editor.keys.last_allocated() > allocated);
+    assert_eq!(editor.state().view().children_size(NodeKey::ROOT), 0);
+    assert!(editor.extension::<Log>().unwrap().0.is_empty());
+    assert!(editor.carried_tags.iter().next().is_none());
+    assert!(commit.following.is_empty());
+    assert!(commit.follow_up_error.is_none());
+}
+#[test]
+fn accepted_conditional_hooks_publish_once_through_the_normal_commit_chain() {
+    for flush in [false, true] {
+        let mut editor = Editor::builder(EditorMode::Headless)
+            .extension_state(Log::default())
+            .plugin(ConditionalHook {
+                result: Ok(true),
+                flush,
+            })
+            .build()
+            .unwrap();
+        let (_, commit) = editor.update(|tx| tx.mark_dirty(NodeKey::ROOT)).unwrap();
+        assert_eq!(editor.state().view().children_size(NodeKey::ROOT), 1);
+        assert_eq!(editor.extension::<Log>().unwrap().0, vec!["conditional"]);
+        assert_eq!(commit.following.len(), 1);
+        assert!(
+            commit.following[0]
+                .chain()
+                .any(|entry| entry.tags.contains(&UpdateTag::HistoryPush))
+        );
+        assert!(commit.follow_up_error.is_none());
+    }
+}
+
+#[test]
+fn failed_conditional_hooks_restore_the_round_after_an_early_flush() {
+    let mut editor = Editor::builder(EditorMode::Headless)
+        .extension_state(Log::default())
+        .plugin(ConditionalHook {
+            result: Err("declined with error"),
+            flush: true,
+        })
+        .build()
+        .unwrap();
+    let (_, commit) = editor.update(|tx| tx.mark_dirty(NodeKey::ROOT)).unwrap();
+    assert_eq!(editor.state().view().children_size(NodeKey::ROOT), 0);
+    assert!(editor.extension::<Log>().unwrap().0.is_empty());
+    assert!(commit.following.is_empty());
+    assert_eq!(
+        commit.follow_up_error.as_ref().unwrap().plugin,
+        "conditional"
+    );
+}
+
+struct ConditionalEndless;
+impl Plugin for ConditionalEndless {
+    fn name(&self) -> &'static str {
+        "conditional-endless"
+    }
+    fn commands(&self) -> &[CommandRegistration] {
+        &[]
+    }
+    fn handle(&self, _: &mut Transaction<'_>, _: &Command) -> Result<Handled, Error> {
+        Ok(Handled::No)
+    }
+    fn conditional_after_commit<'a>(&'a self, _: &'a Commit) -> Option<ConditionalUpdate<'a>> {
+        Some(Box::new(|tx| {
+            tx.mark_dirty(NodeKey::ROOT)?;
+            Ok(true)
+        }))
+    }
+}
+#[test]
+fn conditional_hooks_obey_the_same_ninety_nine_round_guard() {
+    let mut editor = Editor::builder(EditorMode::Headless)
+        .plugin(ConditionalEndless)
+        .build()
+        .unwrap();
+    let (_, commit) = editor.update(|tx| tx.mark_dirty(NodeKey::ROOT)).unwrap();
+    assert_eq!(commit.following.len(), 99);
+    assert_eq!(
+        commit.follow_up_error.unwrap().error.kind(),
+        "EndlessFollowUps"
+    );
+}
+#[test]
+fn failed_conditional_hooks_also_roll_back_the_shared_phase_of_the_round() {
+    let mut editor = Editor::builder(EditorMode::Headless)
+        .extension_state(Log::default())
+        .extension_state(Ids::default())
+        .plugin(Stamp)
+        .plugin(ConditionalHook {
+            result: Err("failure after shared hook"),
+            flush: false,
+        })
+        .build()
+        .unwrap();
+    let (key, commit) = editor
+        .update(|tx| {
+            let p = tx.create(Paragraph::default())?;
+            let text = tx.create_text("retained main edit")?;
+            tx.append(NodeKey::ROOT, &[p.key()])?;
+            tx.append(p, &[text.key()])?;
+            Ok(text.key())
+        })
+        .unwrap();
+    assert_eq!(
+        editor.state().view().text_content(key),
+        "retained main edit"
+    );
+    assert_eq!(&*editor.state().view().text_data(key).unwrap().style, "");
+    assert!(editor.extension::<Ids>().unwrap().0.is_empty());
+    assert!(editor.extension::<Log>().unwrap().0.is_empty());
+    assert!(commit.following.is_empty());
+    assert_eq!(commit.follow_up_error.unwrap().plugin, "conditional");
+}
