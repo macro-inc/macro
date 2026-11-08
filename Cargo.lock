@@ -17495,11 +17495,13 @@ name = "scheduled_action"
 version = "0.1.0"
 dependencies = [
  "activity",
+ "agent_correlation",
  "agent_runtime_protocol",
  "agent_session",
  "ai_billing",
  "ai_usage",
  "anyhow",
+ "async-trait",
  "axum",
  "bot_id",
  "bots",
@@ -23331,9 +23333,10 @@ dependencies = [
  "serde_json",
  "serde_yaml",
  "sha2 0.10.9",
- "strum 0.27.2",
+ "tempfile",
  "tokio",
  "xtask_paths",
+ "xtask_ports",
 ]
 
 [[package]]
@@ -23354,6 +23357,19 @@ name = "xtask_paths"
 version = "0.1.0"
 dependencies = [
  "glob",
+]
+
+[[package]]
+name = "xtask_ports"
+version = "0.1.0"
+dependencies = [
+ "libc",
+ "macro_env_var",
+ "serde",
+ "serde_json",
+ "strum 0.27.2",
+ "tempfile",
+ "thiserror 2.0.18",
 ]
 
 [[package]]

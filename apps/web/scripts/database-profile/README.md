@@ -2,8 +2,9 @@
 
 Run the isolated stack with browser telemetry enabled, following
 [Running locally](../../../../docs/development/running-locally.md). Keep the instance running
-throughout the audit; `run_local` startup and its quit command rebuild/remove
-instance data. Use the `r` hotkey to rebuild services without replacing data.
+throughout the audit; an attached `run_local`'s startup and quit command rebuild or
+remove instance data. Use the `r` hotkey or `just run_local rebuild` to rebuild
+services without replacing data.
 
 For an optimized headless frontend, explicitly set `VITE_ENABLE_DATABASES=true`,
 `VITE_ENABLE_BROWSER_OTEL=true` and
@@ -14,13 +15,13 @@ and backend spans can be retrieved from the local collector.
 
 After a machine restart, follow the existing-instance recovery steps in the local
 running guide. Restore missing LocalStack resources with
-`cargo x localstack-provision --instance <name> --port-base <base>`, then start services
+`cargo x localstack-provision --instance <name>`, then start services
 that exited while their dependencies were unavailable. Check the collaboration
 gateway as well as Postgres and DSS: a stopped gateway can add seconds of DNS or
 connection retries to otherwise fast database writes.
 
 ```sh
-nix develop --command just run_local --no-doppler --instance database-profiling-audit --port-base 21000
+nix develop --command just run_local --no-doppler --instance database-profiling-audit
 ```
 
 Use a private Playwright browser to sign in and save its `storageState` outside
@@ -102,7 +103,7 @@ current database’s `dbid` from `pg_database`. Compare deltas in
 database, so correlate the measured window and query shape with the trace.
 Use `EXPLAIN (ANALYZE, BUFFERS)` only for the audit's read queries on synthetic
 fixtures. Existing running stacks need a PostgreSQL restart to activate preload;
-do not restart another session's stack or rerun `run_local` over retained data.
+do not restart another session's stack or rerun an attached `run_local` over retained data.
 
 Use a request's traceparent to retrieve its complete trace from Tempo. Verify
 the browser flag/exporter and server OTEL filter before an audit; do not infer
