@@ -14,6 +14,7 @@ export interface SnapshotStore<T> {
 
 /** DB name for the Loro doc-snapshot store. */
 export const LORO_SNAPSHOT_DB_NAME = 'macro-document-snapshots';
+export const snapshotWriteLock = (doc: string) => `macro-snapshot:${doc}`;
 
 const DB_VERSION = 1;
 const STORE = 'snapshots';
@@ -38,11 +39,13 @@ export class IDBSnapshotStore<T> implements SnapshotStore<T> {
   }
 
   public async save(snapshot: T): Promise<void> {
-    const tx = await this.database.transaction(STORE, 'readwrite');
-    await Promise.all([
-      tx.store.put({ scopeId: this.scopeId, snapshot }),
-      tx.done,
-    ]);
+    await this.write(async () => {
+      const tx = await this.database.transaction(STORE, 'readwrite');
+      await Promise.all([
+        tx.store.put({ scopeId: this.scopeId, snapshot }),
+        tx.done,
+      ]);
+    });
     logSyncService({
       documentId: this.scopeId,
       level: 'debug',
@@ -67,8 +70,18 @@ export class IDBSnapshotStore<T> implements SnapshotStore<T> {
   }
 
   public async delete(): Promise<void> {
-    const tx = await this.database.transaction(STORE, 'readwrite');
-    await Promise.all([tx.store.delete(this.scopeId), tx.done]);
+    await this.write(async () => {
+      const tx = await this.database.transaction(STORE, 'readwrite');
+      await Promise.all([tx.store.delete(this.scopeId), tx.done]);
+    });
+  }
+
+  private write<R>(operation: () => Promise<R>): Promise<R> {
+    const locks = globalThis.navigator?.locks;
+    // The legacy path also runs on platforms where native sessions are unavailable.
+    return locks
+      ? locks.request(snapshotWriteLock(this.scopeId), operation)
+      : operation();
   }
 }
 

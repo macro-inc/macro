@@ -1,4 +1,4 @@
-const uint32 ABI_MAJOR = 1;
+const uint32 ABI_MAJOR = 2;
 const uint32 DIFF_FORMAT_VERSION = 1;
 enum DiffOpcode : uint32 { Remove = 1; CreateElement = 2; CreateText = 3; CreateDecorator = 4; CreateLineBreak = 5; Children = 6; Text = 7; TextProps = 8; ElementProps = 9; NodeProps = 10; State = 11; }
 enum Access : byte { Read = 0; CommentOnly = 1; Edit = 2; }
@@ -32,7 +32,7 @@ struct ConnectMsg { string doc; string token; string traceparent; }
 struct WalRecordMsg { uint64 seq; int64 createdAt; string user; bool foreign; bool quarantined; bool delivered; byte[] bytes; }
 struct OwnerRowsMsg { string owner; WalRecordMsg[] records; }
 struct LocalStateMsg { byte[] snapshot; string coversOwner; uint64 coversSeq; OwnerRowsMsg[] orphans; OwnerRowsMsg[] assist; }
-struct StorageOpMsg { byte kind; string doc; string owner; string user; string from; uint64 seq; uint64 through; int64 before; bool retry; bool terminal; WalRecordMsg record; byte[] snapshot; string coversOwner; uint64 coversSeq; }
+struct StorageOpMsg { byte kind; string doc; string owner; string user; string from; uint64 seq; uint64 through; int64 before; bool retry; bool terminal; WalRecordMsg record; byte[] snapshot; string coversOwner; uint64 coversSeq; WalRecordMsg[] expected; }
 struct AttrMsg { string key; byte kind; string text; uint64 unsigned; int64 signed; bool flag; }
 struct TelemetryMsg { uint64 span; byte kind; string name; string outcome; bool error; AttrMsg[] attrs; uint64 parent; }
 struct NodeCursorMsg { string nodeId; byte[] cursor; }

@@ -39,7 +39,21 @@ test('SC-1/4/8: durable completion survives a renderer crash and is adopted once
   });
   const adopted = await reopened.evaluate(
     async ({ doc, owner, other }) =>
-      window.storageFixture.execute(doc, other, 5, { from: owner, seq: 10n }),
+      window.storageFixture.execute(doc, other, 5, {
+        from: owner,
+        seq: 10n,
+        expected: [
+          {
+            seq: 1n,
+            createdAt: 1n,
+            user: 'fixture-user',
+            foreign: false,
+            quarantined: false,
+            delivered: false,
+            bytes: new Uint8Array([1, 255]),
+          },
+        ],
+      }),
     { doc, owner, other }
   );
   expect(adopted).toMatchObject({ kind: 'adopted', adopted: 1 });

@@ -166,6 +166,7 @@ fn sample_storage_op_msg() -> wire::StorageOpMsg {
         snapshot: vec![0, 127, 255],
         covers_owner: "fixture 😀 é".into(),
         covers_seq: 9_007_199_254_740_993,
+        expected: vec![sample_wal_record_msg()],
     }
 }
 fn sample_attr_msg() -> wire::AttrMsg {

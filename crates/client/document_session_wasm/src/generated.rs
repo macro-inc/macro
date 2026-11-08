@@ -20,7 +20,7 @@ use ::std::io::Write as _;
 use ::core::convert::TryInto as _;
 use ::bebop::FixedSized as _;
 
-pub const ABI_MAJOR: u32 = 1;
+pub const ABI_MAJOR: u32 = 2;
 
 pub const DIFF_FORMAT_VERSION: u32 = 1;
 
@@ -2122,6 +2122,7 @@ pub struct StorageOpMsg<'raw> {
     pub snapshot: ::bebop::SliceWrapper<'raw, u8>,
     pub covers_owner: &'raw str,
     pub covers_seq: u64,
+    pub expected: ::std::vec::Vec<WalRecordMsg<'raw>>,
 }
 
 impl<'raw> ::bebop::SubRecord<'raw> for StorageOpMsg<'raw> {
@@ -2139,7 +2140,8 @@ impl<'raw> ::bebop::SubRecord<'raw> for StorageOpMsg<'raw> {
         <WalRecordMsg<'raw>>::MIN_SERIALIZED_SIZE +
         <::bebop::SliceWrapper<'raw, u8>>::MIN_SERIALIZED_SIZE +
         <&'raw str>::MIN_SERIALIZED_SIZE +
-        <u64>::MIN_SERIALIZED_SIZE;
+        <u64>::MIN_SERIALIZED_SIZE +
+        <::std::vec::Vec<WalRecordMsg<'raw>>>::MIN_SERIALIZED_SIZE;
 
     #[inline]
     fn serialized_size(&self) -> usize {
@@ -2156,7 +2158,8 @@ impl<'raw> ::bebop::SubRecord<'raw> for StorageOpMsg<'raw> {
         self.record.serialized_size() +
         self.snapshot.serialized_size() +
         self.covers_owner.serialized_size() +
-        self.covers_seq.serialized_size()
+        self.covers_seq.serialized_size() +
+        self.expected.serialized_size()
     }
 
     ::bebop::define_serialize_chained!(Self => |zelf, dest| {
@@ -2174,7 +2177,8 @@ impl<'raw> ::bebop::SubRecord<'raw> for StorageOpMsg<'raw> {
             zelf.record._serialize_chained(dest)? +
             zelf.snapshot._serialize_chained(dest)? +
             zelf.covers_owner._serialize_chained(dest)? +
-            zelf.covers_seq._serialize_chained(dest)?
+            zelf.covers_seq._serialize_chained(dest)? +
+            zelf.expected._serialize_chained(dest)?
         )
     });
 
@@ -2213,6 +2217,8 @@ impl<'raw> ::bebop::SubRecord<'raw> for StorageOpMsg<'raw> {
         i += read;
         let (read, v13) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
         i += read;
+        let (read, v14) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+        i += read;
 
         Ok((i, Self {
             kind: v0,
@@ -2229,6 +2235,7 @@ impl<'raw> ::bebop::SubRecord<'raw> for StorageOpMsg<'raw> {
             snapshot: v11,
             covers_owner: v12,
             covers_seq: v13,
+            expected: v14,
         }))
     }
 }
@@ -5147,6 +5154,7 @@ pub mod owned {
         pub snapshot: ::std::vec::Vec<u8>,
         pub covers_owner: String,
         pub covers_seq: u64,
+        pub expected: ::std::vec::Vec<WalRecordMsg>,
     }
 
     impl<'raw> ::core::convert::From<super::StorageOpMsg<'raw>> for StorageOpMsg {
@@ -5166,6 +5174,7 @@ pub mod owned {
                 snapshot: value.snapshot.iter().map(|value| value).collect(),
                 covers_owner: value.covers_owner.into(),
                 covers_seq: value.covers_seq,
+                expected: value.expected.into_iter().map(|value| value.into()).collect(),
             }
         }
     }
@@ -5185,7 +5194,8 @@ pub mod owned {
             <WalRecordMsg>::MIN_SERIALIZED_SIZE +
             <::std::vec::Vec<u8>>::MIN_SERIALIZED_SIZE +
             <String>::MIN_SERIALIZED_SIZE +
-            <u64>::MIN_SERIALIZED_SIZE;
+            <u64>::MIN_SERIALIZED_SIZE +
+            <::std::vec::Vec<WalRecordMsg>>::MIN_SERIALIZED_SIZE;
 
         #[inline]
         fn serialized_size(&self) -> usize {
@@ -5202,7 +5212,8 @@ pub mod owned {
             self.record.serialized_size() +
             self.snapshot.serialized_size() +
             self.covers_owner.serialized_size() +
-            self.covers_seq.serialized_size()
+            self.covers_seq.serialized_size() +
+            self.expected.serialized_size()
         }
 
         ::bebop::define_serialize_chained!(Self => |zelf, dest| {
@@ -5220,7 +5231,8 @@ pub mod owned {
                 zelf.record._serialize_chained(dest)? +
                 zelf.snapshot._serialize_chained(dest)? +
                 zelf.covers_owner._serialize_chained(dest)? +
-                zelf.covers_seq._serialize_chained(dest)?
+                zelf.covers_seq._serialize_chained(dest)? +
+                zelf.expected._serialize_chained(dest)?
             )
         });
 
@@ -5259,6 +5271,8 @@ pub mod owned {
             i += read;
             let (read, v13) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
             i += read;
+            let (read, v14) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+            i += read;
 
             Ok((i, Self {
                 kind: v0,
@@ -5275,6 +5289,7 @@ pub mod owned {
                 snapshot: v11,
                 covers_owner: v12,
                 covers_seq: v13,
+                expected: v14,
             }))
         }
     }
