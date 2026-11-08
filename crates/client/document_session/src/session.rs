@@ -615,6 +615,9 @@ impl<S: Surface> SyncDoc for Adapter<'_, S> {
     fn oplog_vv(&self) -> VersionVector {
         self.doc.oplog_vv()
     }
+    fn oplog_frontiers(&self) -> Frontiers {
+        self.doc.oplog_frontiers()
+    }
     fn import_remote(
         &mut self,
         bytes: &[u8],

@@ -89,6 +89,9 @@ impl SyncDoc for Doc {
     fn oplog_vv(&self) -> loro::VersionVector {
         self.loro.oplog_vv()
     }
+    fn oplog_frontiers(&self) -> loro::Frontiers {
+        self.loro.oplog_frontiers()
+    }
     fn import_remote(
         &mut self,
         bytes: &[u8],
