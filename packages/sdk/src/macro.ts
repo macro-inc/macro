@@ -99,6 +99,7 @@ export {
 export { FormOption, FormQuestion } from './entities/forms/question';
 export { FormResponse } from './entities/forms/response';
 export { FormSection } from './entities/forms/section';
+export type { CreatedEntity } from './entities/routines/namespace';
 export type { ListenOptions, MacroEvents } from './events/receiver';
 export {
   here,
@@ -299,9 +300,13 @@ export {
   AgentInvocation,
 } from './entities/agent-sessions/activity';
 export type {
+  AgentSessionUpdate,
+  AgentSessionUpdates,
   ArchiveCause,
   AutoArchiveOverrides,
   FoldedAgentSessionLog,
+  LinkedTask,
+  PendingToolApproval,
   SessionAutoArchive,
 } from './entities/agent-sessions/agent-session';
 export type { CodeResult } from './entities/agent-sessions/code-execution';
@@ -379,6 +384,20 @@ export {
   PipelineTable,
   PipelineView,
 } from './entities/crm/pipeline';
+export {
+  type CompanyImport,
+  PipelineEntry,
+  type PipelineField,
+  type PipelineFieldChange,
+  type PipelineFieldInput,
+  type PipelineFieldInputs,
+  type PipelineFieldTotal,
+  type PipelineFieldValue,
+  type PipelineImport,
+  type PipelineImportSkip,
+  type PipelineOptionCounts,
+  type PipelineRecordInput,
+} from './entities/crm/pipeline-entry';
 export type {
   DatabaseQueryOptions,
   DatabaseQueryResult,

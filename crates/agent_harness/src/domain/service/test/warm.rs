@@ -448,3 +448,80 @@ async fn a_routine_run_opens_its_own_session_instead_of_claiming_a_warm_one() {
         .await
         .expect("delete");
 }
+
+/// A routine draft's session is the person's own, asked for out of sight: it
+/// is hidden, and nothing about it notifies them, while the same session
+/// opened in plain view does.
+#[tokio::test]
+async fn a_session_asked_for_out_of_sight_is_hidden_and_notifies_nobody() {
+    let ((service, repo, _containers, _, _), turns) =
+        harness_with_signals(PromptContextMock::default(), PromptComposerMock::default());
+    let open = |visibility| OpenManagedSession {
+        origin: trigger_context::TriggerOrigin::Requested { by: sender() },
+        id: Some(AgentSessionId::new()),
+        owner: model_owner::Owner::User(sender()),
+        prompt: None,
+        repo_url: None,
+        repo_branch: None,
+        instructions: None,
+        model: None,
+        profile: Some(agent_session::domain::ports::SelectedManagedPersona {
+            bot_id: bot_id::MACRO_NEW_BOT_ID,
+            profile: None,
+        }),
+        source: SessionSource::User,
+        visibility,
+    };
+    let background = service
+        .open_managed_session(open(SessionVisibility::Hidden))
+        .await
+        .expect("open the draft's session");
+    let listed = service
+        .open_managed_session(open(SessionVisibility::Listed))
+        .await
+        .expect("open a session in plain view");
+
+    let persisted = repo.get(background.id).await.expect("persisted");
+    assert_eq!(persisted.source, SessionSource::User);
+    assert_eq!(persisted.visibility, SessionVisibility::Hidden);
+    assert!(persisted.is_background());
+    let persisted = repo.get(listed.id).await.expect("persisted");
+    assert_eq!(persisted.visibility, SessionVisibility::Listed);
+    assert!(!persisted.is_background());
+
+    for id in [background.id, listed.id] {
+        service
+            .inner
+            .publish_lifecycle(id, |identity| {
+                AgentSessionLifecycleEvent::Settled(
+                    agent_session::domain::events::SessionSettledMetadata {
+                        identity,
+                        last_turn: Some(agent_session::domain::events::TurnSummary {
+                            turn: agent_session::domain::model::TurnId(0),
+                            action_id: AgentActionId::mint(),
+                            actor: Some(sender()),
+                            announcement_message_id: None,
+                            stop_reason: model_notifications::AgentTurnStopReason::EndTurn,
+                            excerpt: Some("Done.".into()),
+                        }),
+                    },
+                )
+            })
+            .await;
+    }
+    let notified = turns.notifier.notified();
+    assert!(
+        matches!(
+            notified.as_slice(),
+            [crate::domain::notifications::PlannedNotification::Settled(notify)]
+                if notify.metadata.session.session_id == listed.id.as_uuid()
+        ),
+        "only the session in plain view notifies: {notified:#?}"
+    );
+    for id in [background.id, listed.id] {
+        service
+            .execute(id, HarnessCommand::Delete)
+            .await
+            .expect("delete");
+    }
+}

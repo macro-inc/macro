@@ -48,7 +48,11 @@ enforced by the ordinary backend APIs.
   either the single agent task or `steps` (generated `CodeStep`s, agent steps
   with `Agent` handles) and `dangerouslyOperateAsUser`, which its TSDoc
   restricts to an explicit user request; `routineBody` maps both onto the
-  scheduler's `RoutineTask`.
+  scheduler's `RoutineTask`. `routines.check` sends the same body to
+  `POST /scheduled-actions/check` (as `{routine, created}`), which runs
+  saving's checks and saves nothing; code mode's catalog lists it as a read.
+  `created` takes handles with an `entityType` (`CreatedEntity`) and is kept
+  with a routine draft for its review.
 - `users.search(nameOrEmail)` searches existing Macro contacts with batched auth
   names and returns seeded User handles; it is not a global directory. Empty
   contact sets are 404, but authorization/service errors must propagate.
@@ -62,6 +66,10 @@ enforced by the ordinary backend APIs.
   `parseDatabaseQueryData`; `withView()` follows the AI editor's `setDatabaseQueryView` rules.
 - `src/entities/crm/pipeline.ts`: pipeline-authorized table/row/view handles;
   `PipelineTable.views()` returns views whose `positions()` reads saved board order.
+- `src/entities/crm/pipeline-entry.ts`: `PipelineEntry` handles from the
+  name-based pipeline methods (`find`, `addRecords`, `updateEntries`,
+  `removeRecords`, `edit`, `importCsv`/`exportCsv`), which call
+  `crm::inbound::pipeline_workflows`; field values are tagged by kind.
 - `src/entities/external-chat/`: added provider chats (`macro.externalChats`, entity type
   `external_chat`) and their message/send/upload/participant handles.
 - `src/entities/connected-apps/`: `macro.connectedApps.list(execution)` returns the
