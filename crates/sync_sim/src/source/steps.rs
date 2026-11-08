@@ -84,6 +84,10 @@ pub(super) fn source(step: &Step) -> String {
             "Step::ClockSkew {{ client: {}, wall_offset_ms: {wall_offset_ms} }}",
             client(name)
         ),
+        Step::AssertProfileDrained { profile: name } => format!(
+            "Step::AssertProfileDrained {{ profile: {} }}",
+            profile(name)
+        ),
         Step::SignIn {
             profile: name,
             user,

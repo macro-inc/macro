@@ -2,6 +2,8 @@
 #![deny(missing_docs)]
 
 mod facts;
+/// Shrinkable GenericSurface script generation and reproducible seeded coverage.
+pub mod generate;
 mod replay;
 mod source;
 mod stats;

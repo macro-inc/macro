@@ -16,6 +16,10 @@ clients and real `sync_server_core::Room` callbacks over `sync_server_sim` ports
 - `src/defaults.rs`: host-supplied production session policies.
 - `src/replay.rs`: exact replay and first-differing-event/port/final diagnostics.
 - `src/source.rs`: complete literal Rust reproductions, including every policy clock.
+- `src/generate.rs` + `src/generate/`: abstract action strategies, explicit causal scenarios
+  and literal workload materialization; positions resolve only in the real world.
+- `tests/random_sessions.rs` and `.regressions`: standard proptest shrinking/persistence.
+- `tests/generator_coverage.rs`: all500 observed runs on four isolated host workers.
 - `src/world/external.rs`: pure ports for caller-owned TS drivers, no shadow SyncCore.
 - `tests/stories/COVERAGE.md`: GenericSurface story/S7 map and pending editor producers.
 - `src/stats.rs`: fact-derived coverage counters; runtime counters retain actual queue/handle timing.
@@ -150,6 +154,38 @@ Record only applied clock-skew transitions as facts. Expiry uses timeout plus
 observed signed offset spread (including baseline zero) and latency: opposite
 sender/receiver offsets add. Keep deadline checks and exact stale-view mutations;
 unapplied script intentions cannot extend the budget or exempt convergence.
+
+WP-50 generator hosts use proptest's standard Config (including its environment
+configuration) outside the environment-free Sim executor. Default cases are256;
+PROPTEST_CASES controls the total across four independent host runners (quotient +
+remainder, asserted exact). Fixed master seeds derive distinct printed shard seeds;
+random defaults stay random. Shard0 retains the committed regression file; other
+shards use separate persistence suffixes. Shrinking deletes abstract actions and reduces
+numbers, and failures print complete literal input plus actual observations. Keep
+max_shrink_iters8192 and sampled exact replay; the CLI alone reads SIM_SEED.
+The random-sessions binary includes coverage exactly once, allowing libtest to run
+both hosts concurrently. Explicit Cargo test targets retain replay, stories and
+mixed_versions. Filter coverage with `cargo test -p sync_sim --test random_sessions
+coverage::generator_coverage -- --nocapture`.
+Coverage runs every seed0..500/allqueries on four independent host threads, each
+owning one single-threaded world. A host-only atomic seed queue balances heavy
+cases; aggregate by seed and assert every seed was executed exactly once. Count completed paths,
+not requested faults; retain all GenericSurface half-floors and skipped ratio<=15%.
+
+Generate account changes only for profiles whose existing desired and fixed host
+capabilities permit old-user Edit drainage. Reopen crashed sessions and Settle
+already-issued immutable claims, then explicitly
+refresh those profile connections under the same grant, Settle again, and execute
+AssertProfileDrained before the sampled CrashProfile/SignIn. The assertion checks
+actual current-user retained rows without mutation. Never invent Edit authority.
+Undrained/read-only old-user switches remain isolation-only, outside generated
+convergence claims: a new writable user's cache can otherwise depend on a private
+old-user parent that cannot upload. Keep the retained-row isolation stories and
+counterexample report; do not claim broader cached-account convergence.
+
+For final T0 acceptance run `PROPTEST_CASES=256 cargo test -p sync_sim`, including
+all stories, the500-seed coverage and shipping TS peer. Measure total wall time
+and peak memory; standalone coverage timing is not the three-minute suite claim.
 
 Native adoption and the independent transaction reference reject stale loaded
 snapshot covers and changed exact row selections atomically, including concurrent
