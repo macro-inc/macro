@@ -3,6 +3,7 @@
 ## What it is
 
 Portable Macro node payloads, model hooks and exact export/headless/web registries.
+Server prompt/reply composers live in crates/macro_document_composers.
 The transformer layer uses the shared lexical_markdown engine; route adapters are separate.
 
 ## Boundaries

@@ -75,7 +75,7 @@ pub fn serialized_editor_state_to_markdown(
     )
 }
 /// Parse markdown into a headless editor using the same combined-list options as source utilities.
-pub(crate) fn editor_from_markdown(
+pub fn editor_from_markdown(
     markdown: &str,
     context: &crate::DocumentContext,
 ) -> Result<lexical_model::Editor> {
@@ -94,53 +94,4 @@ pub(crate) fn editor_from_markdown(
         )
     })?;
     Ok(editor)
-}
-
-/// Generated image metadata used by channel Markdown.
-#[derive(Clone, Debug, serde::Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct ImageMarkdownInput {
-    /// Stored static file identifier.
-    pub static_file_id: String,
-    /// Image URL.
-    pub url: String,
-    /// Natural width.
-    pub width: f64,
-    /// Natural height.
-    pub height: f64,
-}
-/// Compose a constrained image using the same nodes and ordered editor callbacks.
-pub fn compose_image_markdown(
-    image: &ImageMarkdownInput,
-    context: &crate::DocumentContext,
-) -> Result<String> {
-    let mut editor = context.builder().build()?;
-    editor.update(|tx| {
-        let node = crate::nodes::create_image_node(
-            tx,
-            crate::nodes::CreateMedia {
-                src_type: "sfs".into(),
-                id: Some(image.static_file_id.clone()),
-                url: Some(image.url.clone()),
-                width: Some(image.width),
-                height: Some(image.height),
-                constrained_width: Some(400.0),
-                constrained_height: Some(400.0),
-                ..Default::default()
-            },
-            Some("Generated image".into()),
-        )?;
-        tx.append(NodeKey::ROOT, &[node.key()])?;
-        Ok(())
-    })?;
-    let transformers = crate::transformers::transformers("all", &context.markdown_options())?;
-    convert_to_markdown_string(
-        editor.state(),
-        &transformers,
-        None,
-        &MarkdownOptions {
-            list_indent: 2,
-            ..Default::default()
-        },
-    )
 }
