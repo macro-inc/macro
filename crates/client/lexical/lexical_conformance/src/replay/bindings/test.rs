@@ -1,5 +1,5 @@
 use super::*;
-use lexical_model::{Editor, EditorMode, ForeignHooks, ForeignNodeType, NodeKind};
+use lexical_model::{Editor, EditorMode, ForeignHooks, ForeignNodeType, NodeKey, NodeKind};
 use std::sync::atomic::{AtomicBool, Ordering};
 
 #[test]
@@ -17,7 +17,13 @@ fn snapshot_release_and_replacement_drop_foreign_owners_outside_the_lock() -> Re
     }
     // Each editor's registry is owned only by the pinned snapshot after the
     // editor drops. Releasing it must permit its callback owner to reenter.
-    for operation in ["replace", "release", "release saved"] {
+    for operation in [
+        "replace",
+        "release",
+        "release saved",
+        "replace retired",
+        "release retired",
+    ] {
         let bindings = Bindings::default();
         let dropped_unlocked = Arc::new(AtomicBool::new(false));
         let editor = Editor::builder(EditorMode::Headless)
@@ -36,6 +42,16 @@ fn snapshot_release_and_replacement_drop_foreign_owners_outside_the_lock() -> Re
             .expect("editor");
         if operation == "release saved" {
             assert_eq!(bindings.save_state(editor.state().clone())?, 0);
+        } else if operation.ends_with("retired") {
+            bindings.pin_retired_record(
+                0,
+                NodeKey::ROOT,
+                editor
+                    .state()
+                    .view()
+                    .node_or_err(NodeKey::ROOT)?
+                    .capture_for_foreign_read(),
+            )?;
         } else {
             bindings.pin_state(0, editor.state().clone())?;
         }
@@ -48,7 +64,21 @@ fn snapshot_release_and_replacement_drop_foreign_owners_outside_the_lock() -> Re
                     .expect("replacement");
                 bindings.pin_state(0, replacement.state().clone())?;
             }
-            "release" => bindings.release_state(0)?,
+            "replace retired" => {
+                let replacement = Editor::builder(EditorMode::Headless)
+                    .build()
+                    .expect("replacement");
+                bindings.pin_retired_record(
+                    0,
+                    NodeKey::ROOT,
+                    replacement
+                        .state()
+                        .view()
+                        .node_or_err(NodeKey::ROOT)?
+                        .capture_for_foreign_read(),
+                )?;
+            }
+            "release" | "release retired" => bindings.release_state(0)?,
             "release saved" => bindings.release_saved_state(0)?,
             _ => unreachable!(),
         }

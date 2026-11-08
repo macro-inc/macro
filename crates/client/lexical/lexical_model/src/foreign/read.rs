@@ -71,6 +71,7 @@ pub struct ForeignReadSnapshot {
     source_records: crate::state::NodeMap,
     detached: Vec<Option<Selection>>,
     origin: Option<ReadOrigin>,
+    retired_records: crate::state::NodeMap,
 }
 
 // Selection::clone models the upstream clone() method, which clears direction
@@ -93,6 +94,7 @@ impl Clone for ForeignReadSnapshot {
             composition_key: self.composition_key,
             source_records: self.source_records.clone(),
             origin: self.origin.clone(),
+            retired_records: self.retired_records.clone(),
             detached: self
                 .detached
                 .iter()
@@ -163,6 +165,7 @@ impl ForeignReadSnapshot {
         tx.foreign_read_only = true;
         tx.foreign_read_sources = Some(self.source_records.clone());
         tx.foreign_read_origin = self.origin.clone();
+        tx.foreign_retired_records = self.retired_records.clone();
         tx.foreign_previous_selection = self.previous_selection.as_ref().map(capture_selection);
         tx.detached = self
             .detached
@@ -179,6 +182,7 @@ impl Read for ForeignReadSnapshot {
             state: &self.state,
             native_projection: None,
             source_records: Some(&self.source_records),
+            retired_records: Some(&self.retired_records),
             foreign_origin: self.origin.as_ref().map(ReadOrigin::borrowed),
             detached_selections: &self.detached,
             previous_selection: self.previous_selection.as_ref(),
@@ -220,6 +224,7 @@ impl StateRef<'_> {
             composition_key: self.composition_key,
             source_records,
             origin: self.foreign_origin.map(ReadOriginRef::capture),
+            retired_records: self.retired_records.cloned().unwrap_or_default(),
             detached: self
                 .detached_selections
                 .iter()

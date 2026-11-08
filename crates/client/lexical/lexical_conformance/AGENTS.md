@@ -60,7 +60,8 @@ Development-only schema-2 fixture interpreter for the pinned upstream oracle.
 ## Gotchas
 
 - Preserve callback argument/order checks, versioned handles, exact errors and JSON property order.
-- Read raw framework fields from the captured record without virtual accessors; element format is numeric alignment and text format is a bitset. NodeState equivalence delegates to the model, including lazy foreign codecs.
+- Keep collected raw captures by version and generation-aware key until version release; historical snapshots take precedence, and graph lookup never consults retired records. Drop replaced/released record owners outside binding locks.
+- Read raw framework fields in src/api/properties/node.rs from the captured record without virtual accessors; element format is numeric alignment and text format is a bitset. NodeState equivalence delegates to the model, including lazy foreign codecs.
 - Retain key generations in internal node/key handle values after shared-counter resets; visible keys stay decimal strings.
 - Detach replaced selection handles only if the call still owns their activation revision after nested callbacks.
 - Retain committed snapshots while their host handles are reachable; release their handles and saved-state pins together, without reusing record identities.

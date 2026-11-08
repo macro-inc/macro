@@ -1,6 +1,6 @@
 //! Owned bindings shared by dispatchers without borrowing an ancestor frame.
-use super::{Result, fail};
-use lexical_model::{EditorState, NodeKey};
+use super::{Result, fail, integer, node_key};
+use lexical_model::{EditorState, NodeKey, NodeRecord, Transaction};
 use serde_json::Value;
 use std::{
     collections::HashMap,
@@ -15,6 +15,7 @@ struct Values {
     handles: HashMap<String, Value>,
     keys: HashMap<String, NodeKey>,
     states: HashMap<u64, EditorState>,
+    retired: HashMap<u64, HashMap<NodeKey, Arc<NodeRecord>>>,
     saved_states: Vec<Option<EditorState>>,
     published_snapshot: Option<(u64, usize)>,
     identities: HashMap<String, u32>,
@@ -129,6 +130,39 @@ impl Bindings {
         Ok(self.lock()?.states.get(version).cloned())
     }
 
+    pub fn retired_record(&self, version: u64, key: NodeKey) -> Result<Option<Arc<NodeRecord>>> {
+        Ok(self
+            .lock()?
+            .retired
+            .get(&version)
+            .and_then(|records| records.get(&key))
+            .cloned())
+    }
+
+    pub fn capture_retired_records(&self, tx: &Transaction<'_>, version: u64) -> Result<()> {
+        for value in self.handles()?.into_values() {
+            if value.get("$node").is_some() && integer(&value["ver"])? == version {
+                let key = node_key(&value)?;
+                if let Some(record) = tx.retired_record(key) {
+                    self.pin_retired_record(version, key, record.capture_for_foreign_read())?;
+                }
+            }
+        }
+        Ok(())
+    }
+
+    pub fn pin_retired_record(&self, version: u64, key: NodeKey, record: NodeRecord) -> Result<()> {
+        let previous = {
+            self.lock()?
+                .retired
+                .entry(version)
+                .or_default()
+                .insert(key, Arc::new(record))
+        };
+        drop(previous);
+        Ok(())
+    }
+
     pub fn pin_state(&self, version: u64, state: EditorState) -> Result<()> {
         let previous = { self.lock()?.states.insert(version, state) };
         drop(previous);
@@ -136,7 +170,13 @@ impl Bindings {
     }
 
     pub fn release_state(&self, version: u64) -> Result<()> {
-        let previous = { self.lock()?.states.remove(&version) };
+        let previous = {
+            let mut values = self.lock()?;
+            (
+                values.states.remove(&version),
+                values.retired.remove(&version),
+            )
+        };
         drop(previous);
         Ok(())
     }
