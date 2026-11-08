@@ -28,7 +28,7 @@ projects.
 
 - Depends on: `opensearch_query_builder`, `opensearch_types`,
   `search_cursor_types`.
-- Used by: `models_search`, `search_service`,
+- Used by: `search_types`, `search_service`,
   `services/document_storage_service`, `services/search_processing_service`.
 
 ## Recipes

@@ -1,5 +1,5 @@
 use super::*;
-use models_search::calendar_event::{
+use search_types::calendar_event::{
     CalendarEventMetadata, CalendarEventSearchResponseItem,
     CalendarEventSearchResponseItemWithMetadata, CalendarEventSearchRole, CalendarEventSearchTime,
 };

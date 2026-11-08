@@ -2,15 +2,15 @@ use std::time::Duration;
 
 use chrono::{DateTime, Utc};
 use macro_user_id::cow_str::CowLike as _;
-use models_search::SearchHighlight;
-use models_search::channel::{ChannelNameSearchResponse, ChannelNameSearchResponseItem};
-use models_search::document::{
+use search_types::SearchHighlight;
+use search_types::channel::{ChannelNameSearchResponse, ChannelNameSearchResponseItem};
+use search_types::document::{
     DocumentMetadata, DocumentSearchResponseItem, DocumentSearchResponseItemWithMetadata,
 };
-use models_search::project::{
+use search_types::project::{
     ProjectMetadata, ProjectSearchResponseItem, ProjectSearchResponseItemWithMetadata,
 };
-use models_search::unified::UnifiedSearchResponse;
+use search_types::unified::UnifiedSearchResponse;
 use serde_json::json;
 use uuid::Uuid;
 use wiremock::matchers::{body_partial_json, header, method, path};

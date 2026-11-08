@@ -285,7 +285,7 @@ fn the_next_cursor_carries_the_mode_only_where_dynamic_matching_could_apply() {
 #[test]
 fn a_request_without_the_field_asks_for_strict_matching() -> Result<(), serde_json::Error> {
     // The SDK and AI tools send no `term_matching`.
-    let request: models_search::unified::UnifiedSearchRequest =
+    let request: search_types::unified::UnifiedSearchRequest =
         serde_json::from_value(serde_json::json!({
             "query": "quarterly revenue forecast",
             "match_type": "partial",

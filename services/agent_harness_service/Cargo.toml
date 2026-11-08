@@ -33,7 +33,7 @@ universal_input = { workspace = true }
 # The global allocator (`src/main.rs`).
 mimalloc = { workspace = true }
 nom = { workspace = true }
-models_search = { workspace = true }
+search_types = { workspace = true }
 document_sub_type = { workspace = true, default-features = true }
 activity = { workspace = true, features = ["axum", "outbound", "schema"] }
 agent_loop = { workspace = true, features = ["debug-messages"] }

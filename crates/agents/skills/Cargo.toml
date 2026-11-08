@@ -22,7 +22,7 @@ outbound = [
   "dep:item_filters",
   "dep:lexical_client",
   "dep:pagination_types",
-  "dep:models_search",
+  "dep:search_types",
   "dep:models_soup",
   "dep:search_service_client",
   "dep:soup",
@@ -67,7 +67,7 @@ filter_ast = { workspace = true, optional = true }
 item_filters = { workspace = true, default-features = true, optional = true }
 lexical_client = { workspace = true, optional = true }
 pagination_types = { workspace = true, optional = true }
-models_search = { workspace = true, optional = true }
+search_types = { workspace = true, optional = true }
 models_soup = { workspace = true, optional = true }
 search_service_client = { workspace = true, optional = true }
 soup = { workspace = true, features = ["ports"], optional = true }

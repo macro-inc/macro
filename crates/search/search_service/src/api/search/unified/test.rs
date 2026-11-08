@@ -1,6 +1,6 @@
 use super::*;
 use chrono::DateTime;
-use models_search::{
+use search_types::{
     SearchHighlight,
     channel::ChannelMessageSearchResponseItem,
     chat::{ChatMetadata, ChatSearchResponseItem, ChatSearchResponseItemWithMetadata},

@@ -2,8 +2,8 @@
 
 use indexmap::IndexMap;
 use macro_user_id::user_id::MacroUserId;
-use models_search::agent_session::{AgentSessionSearchResponseItem, AgentSessionSearchResult};
 use opensearch_client::search::model::{SearchGotoContent, SearchHit};
+use search_types::agent_session::{AgentSessionSearchResponseItem, AgentSessionSearchResult};
 
 use crate::api::{context::SearchHandlerState, search::simple::SearchError};
 

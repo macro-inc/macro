@@ -9,7 +9,7 @@ impl ToolSchemaGenerator for LegacyConversationSchemas {
     fn register_schemas(&self, generator: &mut SchemaGenerator) -> Vec<FrontendToolEntry> {
         // Search output shapes are unchanged except that live tools filter out chats.
         // Retain the old union for saved responses, including its linked definitions.
-        let search = models_search::unified::UnifiedSearchResponseItem::json_schema(generator);
+        let search = search_types::unified::UnifiedSearchResponseItem::json_schema(generator);
         generator
             .definitions_mut()
             .insert("SessionAwareSearchResult".into(), search.into());
