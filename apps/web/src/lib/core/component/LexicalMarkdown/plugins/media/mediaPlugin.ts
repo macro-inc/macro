@@ -1,11 +1,6 @@
-import { blockNameToFileExtensionSet } from '@core/constant/allBlocks';
 import { staticFileIdEndpoint } from '@core/constant/servers';
-import { heicConversionService } from '@core/heic/service';
-import type { FetchError } from '@core/service';
 import { fireAndForget } from '@core/util/fireAndForget';
-import type { ResultError } from '@core/util/result';
 import {
-  createStaticUploadFile,
   createUploadFile,
   createUploadFilePreviewUrl,
   getUploadFileCacheKey,
@@ -23,8 +18,6 @@ import {
   VideoNode,
 } from '@macro-inc/lexical-core';
 import { Telemetry } from '@macro-inc/observability';
-import { fetchBinaryDocumentData } from '@queries/storage/binary-document';
-import { fileExtension } from '@service-storage/util/filename';
 import {
   $createNodeSelection,
   $getNodeByKey,
@@ -43,13 +36,17 @@ import {
   type NodeKey,
   type NodeMutation,
 } from 'lexical';
-import { ok, type Result, ResultAsync } from 'neverthrow';
+import { ResultAsync } from 'neverthrow';
 import { $insertNodesAndSplitList } from '../../utils';
+import { processFile, uploadStaticFile, validateMediaFile } from './io';
+
 import { mapRegisterDelete } from '../shared';
 import {
   $insertImageIntoListItem,
   registerListItemImages,
 } from './listItemImages';
+
+export { getMediaUrl } from './io';
 
 type DSSMedia = {
   type: 'dss';
@@ -112,11 +109,6 @@ export const TRY_INSERT_MEDIA_UPLOAD_COMMAND: LexicalCommand<
     }
 > = createCommand('TRY_INSERT_MEDIA_UPLOAD_COMMAND');
 
-function validateMediaFile(file: UploadFile, mediaType: MediaType): boolean {
-  const ext = fileExtension(file.name);
-  return ext != null && blockNameToFileExtensionSet[mediaType].has(ext);
-}
-
 export async function addMediaFromFile(
   editor: LexicalEditor,
   file: File,
@@ -138,51 +130,10 @@ export async function addMediaFromFile(
 }
 
 /**
- * Get the URL for media based on its source type.
- */
-export async function getMediaUrl(src: {
-  type: string;
-  id: string;
-  url: string;
-}): Promise<Result<string, ResultError<FetchError | 'INVALID_DOCUMENT'>[]>> {
-  if (src.type === 'local' || src.type === 'url') return ok(src.url);
-  if (src.type === 'sfs') {
-    const url = staticFileIdEndpoint(src.id);
-    return ok(url);
-  }
-  if (src.type === 'dss') {
-    return (await fetchBinaryDocumentData(src.id)).map((res) => res.blobUrl);
-  }
-  console.warn('Get media url failed for src:', src);
-  return ok('');
-}
-
-/**
  * Generate a unique key for a file to prevent duplicate uploads.
  */
 async function getFileKey(file: UploadFile, chunks = 8) {
   return getUploadFileCacheKey(file, chunks);
-}
-
-async function processFile(file: UploadFile): Promise<UploadFile> {
-  if (file.kind === 'browser' && heicConversionService.canConvert(file.file)) {
-    return createUploadFile(await heicConversionService.convertFile(file.file));
-  }
-  return file;
-}
-
-/**
- * Upload a file to the static file service. Resolves to its static file id, or
- * undefined when the upload fails.
- */
-async function uploadStaticFile(file: File): Promise<string | undefined> {
-  const uploaded = await ResultAsync.fromPromise(
-    processFile(createUploadFile(file)),
-    () => undefined
-  ).andThen((processed) =>
-    ResultAsync.fromPromise(createStaticUploadFile(processed), () => undefined)
-  );
-  return uploaded.unwrapOr(undefined);
 }
 
 /**
