@@ -1145,6 +1145,7 @@ fn test_state(
             ),
         ),
         #[cfg(feature = "ai_tools")]
+        messages: Arc::new(messages::domain::api::MockMessageServiceApi::new()),
         spreadsheet: Arc::new(crate::domain::spreadsheet::SpreadsheetService::new(
             document_service.clone(),
             Arc::new(

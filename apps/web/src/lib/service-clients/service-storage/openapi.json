@@ -2033,6 +2033,41 @@
         }
       }
     },
+    "/calendar-events/team/availability": {
+      "post": {
+        "tags": ["calendar_events"],
+        "summary": "Merge the requester's and selected teammates' busy time in a bounded window.",
+        "operationId": "get_team_availability",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TeamAvailabilityRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TeamAvailability"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid window or more than 100 teammates"
+          },
+          "404": {
+            "description": "Team calendar sharing is disabled"
+          }
+        }
+      }
+    },
     "/calendar-events/{event_id}/ics": {
       "get": {
         "tags": [
@@ -8015,6 +8050,45 @@
         }
       }
     },
+    "/crm/companies/import": {
+      "post": {
+        "tags": ["crm::inbound::pipeline_workflows"],
+        "summary": "Create the companies a CSV lists, and put its Stage, Owner and Revenue\nvalues on entries of a company pipeline.",
+        "operationId": "import_crm_companies_csv",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ImportCompaniesCsvRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CompanyImportResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/crm/companies/{company_id}": {
       "get": {
         "tags": [
@@ -9184,6 +9258,101 @@
         }
       }
     },
+    "/crm/pipelines/entry-search": {
+      "get": {
+        "tags": ["crm::inbound::pipeline_workflows"],
+        "summary": "Entries whose company or contact matches the search, across the caller's\npipelines; pipelines without a match are left out.",
+        "operationId": "search_crm_pipeline_entries",
+        "parameters": [
+          {
+            "name": "search",
+            "in": "query",
+            "description": "Text the record's name, domain or email must contain.",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "description": "Most entries per pipeline, 1 to 5000; defaults to 50.",
+            "required": false,
+            "schema": {
+              "type": ["integer", "null"],
+              "minimum": 0
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/PipelineEntries"
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/crm/pipelines/record-entries": {
+      "post": {
+        "tags": ["crm::inbound::pipeline_workflows"],
+        "summary": "Every entry tracking one of the records, across the caller's pipelines;\npipelines without one are left out.",
+        "operationId": "list_crm_record_pipeline_entries",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RecordEntriesRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/PipelineEntries"
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/crm/pipelines/{id}": {
       "get": {
         "tags": [
@@ -9209,6 +9378,394 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/AccessiblePipeline"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/crm/pipelines/{id}/csv": {
+      "get": {
+        "tags": ["crm::inbound::pipeline_workflows"],
+        "summary": "Every entry as CSV text: Company and Domain (or Contact and Email), then\none column per field, people as emails. An import reads the same layout.",
+        "operationId": "get_crm_pipeline_csv",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PipelineCsvResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/crm/pipelines/{id}/edit": {
+      "post": {
+        "tags": ["crm::inbound::pipeline_workflows"],
+        "summary": "Rename or share a pipeline, and add, rename or delete its fields and\noptions by name, in one change.",
+        "operationId": "edit_crm_pipeline",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EditPipelineRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PipelineFields"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/crm/pipelines/{id}/entries": {
+      "post": {
+        "tags": ["crm::inbound::pipeline_workflows"],
+        "summary": "Add entries, filling fields by name: companies or contacts in a tracked\npipeline, free-form rows in a generic one. A record already in the\npipeline is returned in `alreadyPresent` instead, unless `allowDuplicates`.",
+        "operationId": "add_crm_pipeline_entries",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AddEntriesRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AddEntriesResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "tags": ["crm::inbound::pipeline_workflows"],
+        "summary": "Set fields of entries by name, all or nothing; a stage takes its label.",
+        "operationId": "update_crm_pipeline_entries",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateEntriesRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UpdateEntriesResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/crm/pipelines/{id}/entries/find": {
+      "post": {
+        "tags": ["crm::inbound::pipeline_workflows"],
+        "summary": "Entries of one pipeline matching filters, records or a search, with\nper-option counts and number totals over every match.",
+        "operationId": "find_crm_pipeline_entries",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FindEntriesRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FoundEntriesResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/crm/pipelines/{id}/entries/remove": {
+      "post": {
+        "tags": ["crm::inbound::pipeline_workflows"],
+        "summary": "Delete entries by id, or every entry of the records; the companies and\ncontacts stay in the CRM.",
+        "operationId": "remove_crm_pipeline_entries",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RemoveEntriesRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RemoveEntriesResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/crm/pipelines/{id}/export": {
+      "post": {
+        "tags": ["crm::inbound::pipeline_workflows"],
+        "summary": "Save every entry as a CSV file in the caller's files, laid out as\n`/csv` returns it.",
+        "operationId": "export_crm_pipeline_csv",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PipelineExportResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/crm/pipelines/{id}/import": {
+      "post": {
+        "tags": ["crm::inbound::pipeline_workflows"],
+        "summary": "Add a CSV's rows as entries, matching its columns to fields by name and\ncreating the companies or contacts the team lacks. Records already in the\npipeline are not added again.",
+        "operationId": "import_crm_pipeline_csv",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ImportPipelineCsvRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PipelineImportResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
                 }
               }
             }
@@ -14216,6 +14773,102 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/CanvasErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/documents/{document_id}/comments/text": {
+      "post": {
+        "tags": ["document"],
+        "summary": "Start a comment thread anchored to a quoted passage of a markdown or Word\ndocument, with the caller's comment access. On markdown the passage is\nmarked in the live document first, and nothing is posted when the quote is\nambiguous or missing.",
+        "operationId": "comment_on_document_text",
+        "parameters": [
+          {
+            "name": "document_id",
+            "in": "path",
+            "description": "Document identity",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CommentOnTextRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CommentOnTextResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Not a markdown or Word document, or an invalid quote or occurrence",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "403": {
+            "description": "Document comment access denied",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Document not found"
+          },
+          "422": {
+            "description": "The quote appears more than once or not at all; nothing was posted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CommentOnTextRefused"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "The comment could not be posted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "The comment could not be anchored; nothing was posted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
                 }
               }
             }
@@ -20807,6 +21460,128 @@
         }
       }
     },
+    "/initiatives/{initiative_id}/activity": {
+      "get": {
+        "tags": ["initiative"],
+        "summary": "Read an initiative's creation, edits, property changes and task membership\nchanges, newest first.",
+        "description": "Task references require current view access to the task, so a page can hold\nfewer records than `limit`, even none. Follow `nextCursor` with the same\nwindow until it is absent.",
+        "operationId": "get_initiative_activity",
+        "parameters": [
+          {
+            "name": "initiative_id",
+            "in": "path",
+            "description": "Initiative identifier.",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "after",
+            "in": "query",
+            "description": "Only changes at or after this time.",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            }
+          },
+          {
+            "name": "before",
+            "in": "query",
+            "description": "Only changes before this time.",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            }
+          },
+          {
+            "name": "cursorOccurredAt",
+            "in": "query",
+            "description": "`occurredAt` of the previous page's `nextCursor`; send with `cursorId`.",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            }
+          },
+          {
+            "name": "cursorId",
+            "in": "query",
+            "description": "`id` of the previous page's `nextCursor`; send with `cursorOccurredAt`.",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "description": "Events to scan, 1 through 100; defaults to 100.",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "minimum": 0
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InitiativeActivityPage"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid credentials",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/initiatives/{initiative_id}/description": {
       "get": {
         "tags": ["initiative"],
@@ -25663,6 +26438,51 @@
           }
         }
       },
+      "AddEntriesRequest": {
+        "type": "object",
+        "description": "Entries to add.",
+        "required": ["entries"],
+        "properties": {
+          "allowDuplicates": {
+            "type": "boolean",
+            "description": "Add a record again although it already has an entry here."
+          },
+          "entries": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/NewEntry"
+            },
+            "description": "The records to add, each with its starting fields."
+          }
+        },
+        "additionalProperties": false
+      },
+      "AddEntriesResponse": {
+        "type": "object",
+        "description": "The entries added.",
+        "required": ["added", "alreadyPresent"],
+        "properties": {
+          "added": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PipelineEntry"
+            },
+            "description": "The new entries, as saved."
+          },
+          "alreadyPresent": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PipelineEntry"
+            },
+            "description": "Existing entries of requested records that were not added again."
+          },
+          "version": {
+            "type": ["integer", "null"],
+            "format": "int64",
+            "description": "The table's version after the write; missing when nothing was written."
+          }
+        }
+      },
       "AddFavoriteRequest": {
         "type": "object",
         "description": "Request body for favoriting an entity.",
@@ -27722,6 +28542,41 @@
         "enum": [
           "members",
           "public"
+        ]
+      },
+      "AvailabilityCoverage": {
+        "type": "string",
+        "description": "Whether missing busy blocks can safely be interpreted as free time.",
+        "enum": ["complete", "unknown"]
+      },
+      "AvailabilityInterval": {
+        "type": "object",
+        "description": "An exact, half-open interval of UTC instants, without event metadata.",
+        "required": ["start", "end"],
+        "properties": {
+          "end": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Exclusive end."
+          },
+          "start": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Inclusive start."
+          }
+        }
+      },
+      "AvailabilityUnknownReason": {
+        "type": "string",
+        "description": "Why a person's unoccupied intervals cannot establish availability.",
+        "enum": [
+          "hidden",
+          "unavailable",
+          "truncated",
+          "missing_time_zone",
+          "invalid_time_zone",
+          "invalid_interval",
+          "conflicting_copies"
         ]
       },
       "Awareness": {
@@ -33395,6 +34250,70 @@
           }
         }
       },
+      "CommentOnTextRefused": {
+        "type": "object",
+        "description": "The quote could not be anchored; nothing was posted.",
+        "required": ["error", "reason"],
+        "properties": {
+          "error": {
+            "$ref": "#/components/schemas/CommentOnTextRefusedCode",
+            "description": "Always `quote_not_placed`."
+          },
+          "reason": {
+            "type": "string",
+            "description": "Lists each appearance to choose from with `occurrence`, or says the\ntext was not found."
+          }
+        }
+      },
+      "CommentOnTextRefusedCode": {
+        "type": "string",
+        "description": "Error code of a quote the document cannot anchor to.",
+        "enum": ["quote_not_placed"]
+      },
+      "CommentOnTextRequest": {
+        "type": "object",
+        "description": "A comment on a quoted passage.",
+        "required": ["content", "quote"],
+        "properties": {
+          "content": {
+            "type": "string",
+            "description": "Comment body in macro markdown."
+          },
+          "mentions": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SimpleMention"
+            },
+            "description": "The people and items the body mentions, notified as in any comment."
+          },
+          "occurrence": {
+            "type": ["integer", "null"],
+            "format": "int32",
+            "description": "Which appearance of the passage, counting from 1 in document order.\nOnly needed when it appears more than once.",
+            "minimum": 1
+          },
+          "quote": {
+            "type": "string",
+            "description": "The passage to comment on, quoted exactly as the document reads: plain\ntext without markdown syntax, within one paragraph, heading, list item\nor table cell.",
+            "minLength": 1
+          }
+        }
+      },
+      "CommentOnTextResponse": {
+        "type": "object",
+        "description": "The thread the comment started.",
+        "required": ["comment", "markedText"],
+        "properties": {
+          "comment": {
+            "$ref": "#/components/schemas/Message",
+            "description": "The posted comment, the root of its thread."
+          },
+          "markedText": {
+            "type": "string",
+            "description": "The text the comment is anchored to, as the document reads."
+          }
+        }
+      },
       "CommittedChange": {
         "type": "object",
         "description": "One change a committed batch journaled: a table, the version the batch\nproduced, and the journal's id for it.",
@@ -33417,6 +34336,46 @@
           "version": {
             "$ref": "#/components/schemas/TableVersion",
             "description": "The version the batch produced."
+          }
+        }
+      },
+      "CompanyImportResponse": {
+        "type": "object",
+        "description": "What a companies import did.",
+        "required": ["created", "existing", "skippedRows", "failed"],
+        "properties": {
+          "created": {
+            "type": "integer",
+            "description": "Companies created.",
+            "minimum": 0
+          },
+          "existing": {
+            "type": "integer",
+            "description": "Companies the team already had.",
+            "minimum": 0
+          },
+          "failed": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SkippedImportRecord"
+            },
+            "description": "Companies that could not be created."
+          },
+          "pipeline": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/PipelineImportResponse",
+                "description": "The entries made from Stage, Owner and Revenue, when the CSV had any."
+              }
+            ]
+          },
+          "skippedRows": {
+            "type": "integer",
+            "description": "Rows without a domain like acme.com.",
+            "minimum": 0
           }
         }
       },
@@ -41464,6 +42423,70 @@
           }
         }
       },
+      "EditPipelineRequest": {
+        "type": "object",
+        "description": "Changes to a pipeline's name, sharing, fields and options, applied\ntogether.",
+        "properties": {
+          "addFields": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/NewFieldRequest"
+            },
+            "description": "Fields to add."
+          },
+          "addOptions": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/FieldOptions"
+            },
+            "description": "Labels to add to select fields; for Stage, new stages go last."
+          },
+          "name": {
+            "type": ["string", "null"],
+            "description": "A new name."
+          },
+          "removeFields": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Fields to delete with their values."
+          },
+          "removeOptions": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/OptionRemoval"
+            },
+            "description": "Options to delete."
+          },
+          "renameFields": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/FieldRename"
+            },
+            "description": "Fields to rename."
+          },
+          "renameOptions": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/OptionRename"
+            },
+            "description": "Options to relabel."
+          },
+          "sharing": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/PipelineSharing",
+                "description": "New team sharing; only the owner may change it."
+              }
+            ]
+          }
+        },
+        "additionalProperties": false
+      },
       "EditSpreadsheetRequest": {
         "type": "object",
         "description": "One atomic batch of operations against the revision it was planned on.",
@@ -42463,6 +43486,220 @@
           "THREAD",
           "USER"
         ]
+      },
+      "EntryChanges": {
+        "type": "object",
+        "description": "The changes to one entry: exactly one of `entryId` or `recordId`.",
+        "required": ["set"],
+        "properties": {
+          "entryId": {
+            "type": ["string", "null"],
+            "format": "uuid",
+            "description": "The entry."
+          },
+          "recordId": {
+            "type": ["string", "null"],
+            "format": "uuid",
+            "description": "The record whose single entry in the pipeline to change."
+          },
+          "set": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/FieldValueInput"
+            },
+            "description": "Fields to set."
+          }
+        },
+        "additionalProperties": false
+      },
+      "EntryFieldChange": {
+        "type": "object",
+        "description": "One field's value before and after an update.",
+        "required": ["field"],
+        "properties": {
+          "after": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/EntryFieldValue",
+                "description": "Its value now; missing when it is empty."
+              }
+            ]
+          },
+          "before": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/EntryFieldValue",
+                "description": "Its value before; missing when it was empty."
+              }
+            ]
+          },
+          "field": {
+            "type": "string",
+            "description": "The field."
+          }
+        }
+      },
+      "EntryFieldValue": {
+        "oneOf": [
+          {
+            "type": "object",
+            "description": "Free text.",
+            "required": ["value", "type"],
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": ["text"]
+              },
+              "value": {
+                "type": "string",
+                "description": "Free text."
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "A number.",
+            "required": ["value", "type"],
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": ["number"]
+              },
+              "value": {
+                "type": "number",
+                "format": "double",
+                "description": "A number."
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "True or false.",
+            "required": ["value", "type"],
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": ["checkbox"]
+              },
+              "value": {
+                "type": "boolean",
+                "description": "True or false."
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "A date-time.",
+            "required": ["value", "type"],
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": ["date"]
+              },
+              "value": {
+                "type": "string",
+                "format": "date-time",
+                "description": "A date-time."
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "A span of time, written start/end: 2026-10-12/2026-10-16.",
+            "required": ["value", "type"],
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": ["date_range"]
+              },
+              "value": {
+                "type": "string",
+                "description": "A span of time, written start/end: 2026-10-12/2026-10-16."
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "Option labels, in the cell's order.",
+            "required": ["value", "type"],
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": ["labels"]
+              },
+              "value": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                },
+                "description": "Option labels, in the cell's order."
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "URLs.",
+            "required": ["value", "type"],
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": ["links"]
+              },
+              "value": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                },
+                "description": "URLs."
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "Macro ids: people as macro| user ids, records or other items.",
+            "required": ["value", "type"],
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": ["references"]
+              },
+              "value": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                },
+                "description": "Macro ids: people as macro| user ids, records or other items."
+              }
+            }
+          }
+        ],
+        "description": "A stored value in its field's own terms."
+      },
+      "EntryRecord": {
+        "type": "object",
+        "description": "The company or contact an entry tracks.",
+        "required": ["id"],
+        "properties": {
+          "detail": {
+            "type": ["string", "null"],
+            "description": "A company's domain or a contact's email."
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The CRM company or contact id."
+          },
+          "name": {
+            "type": ["string", "null"],
+            "description": "Its name; missing when the caller cannot see the record."
+          }
+        }
       },
       "ErrorResponse": {
         "type": "object",
@@ -44266,6 +45503,103 @@
           }
         }
       },
+      "FieldOptionCounts": {
+        "type": "object",
+        "description": "Matched entries per option of one single-select field, such as Stage.",
+        "required": ["field", "counts", "empty"],
+        "properties": {
+          "counts": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/OptionCount"
+            },
+            "description": "Every option in order, with its count."
+          },
+          "empty": {
+            "type": "integer",
+            "description": "Matched entries with the field empty.",
+            "minimum": 0
+          },
+          "field": {
+            "type": "string",
+            "description": "The field."
+          }
+        }
+      },
+      "FieldOptions": {
+        "type": "object",
+        "description": "Labels to add to a select field.",
+        "required": ["field", "labels"],
+        "properties": {
+          "field": {
+            "type": "string",
+            "description": "The field."
+          },
+          "labels": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "The labels."
+          }
+        },
+        "additionalProperties": false
+      },
+      "FieldRename": {
+        "type": "object",
+        "description": "A field to rename.",
+        "required": ["from", "to"],
+        "properties": {
+          "from": {
+            "type": "string",
+            "description": "Its current name."
+          },
+          "to": {
+            "type": "string",
+            "description": "Its new name."
+          }
+        },
+        "additionalProperties": false
+      },
+      "FieldTotal": {
+        "type": "object",
+        "description": "The sum of a number field over the matched entries.",
+        "required": ["field", "sum"],
+        "properties": {
+          "field": {
+            "type": "string",
+            "description": "The field."
+          },
+          "sum": {
+            "type": "number",
+            "format": "double",
+            "description": "The sum."
+          }
+        }
+      },
+      "FieldValueInput": {
+        "type": "object",
+        "description": "A field and the text to write into it or match it against. Leave out both\n`value` and `values` to empty the field, or in a filter to match an empty\nfield.",
+        "required": ["field"],
+        "properties": {
+          "field": {
+            "type": "string",
+            "description": "The field's name, ignoring case."
+          },
+          "value": {
+            "type": ["string", "null"],
+            "description": "One value: an option label, a person as \"me\", an email or a macro|\nuser id, a number, true/false, or a date."
+          },
+          "values": {
+            "type": ["array", "null"],
+            "items": {
+              "type": "string"
+            },
+            "description": "Several values, for a field holding several. A filter matches an entry\nholding any of them."
+          }
+        },
+        "additionalProperties": false
+      },
       "FileChangeKindDto": {
         "type": "string",
         "description": "What happened to a file, on the wire.",
@@ -45160,6 +46494,45 @@
           }
         ],
         "description": "What a column's cell must be, by the kind of value the column holds."
+      },
+      "FindEntriesRequest": {
+        "type": "object",
+        "description": "Which entries to read, and how to order them.",
+        "properties": {
+          "descending": {
+            "type": "boolean",
+            "description": "Put the largest first."
+          },
+          "filters": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/FieldValueInput"
+            },
+            "description": "Every filter must match."
+          },
+          "limit": {
+            "type": ["integer", "null"],
+            "description": "Most entries to return, 1 to 5000; defaults to 50. Counts and totals\ncover every match regardless.",
+            "minimum": 0
+          },
+          "recordIds": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "Only entries tracking one of these companies or contacts."
+          },
+          "search": {
+            "type": ["string", "null"],
+            "description": "Text the record's name, domain or email must contain."
+          },
+          "sortBy": {
+            "type": ["string", "null"],
+            "description": "The field to order by; number, date and select fields order by value\nand stage order."
+          }
+        },
+        "additionalProperties": false
       },
       "FolderItem": {
         "type": "object",
@@ -46233,6 +47606,54 @@
           }
         ],
         "description": "An expression over one row's cells."
+      },
+      "FoundEntriesResponse": {
+        "type": "object",
+        "description": "The entries a query matched.",
+        "required": [
+          "pipeline",
+          "entries",
+          "matched",
+          "complete",
+          "counts",
+          "totals"
+        ],
+        "properties": {
+          "complete": {
+            "type": "boolean",
+            "description": "Whether every entry was read; a pipeline beyond 5000 entries is not,\nso counts and totals cover only the entries read."
+          },
+          "counts": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/FieldOptionCounts"
+            },
+            "description": "Matched entries per option of each single-select field."
+          },
+          "entries": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PipelineEntry"
+            },
+            "description": "The first `limit` matches, in the requested order."
+          },
+          "matched": {
+            "type": "integer",
+            "description": "How many entries matched in all.",
+            "minimum": 0
+          },
+          "pipeline": {
+            "$ref": "#/components/schemas/PipelineFields",
+            "description": "The pipeline read, with its fields and version."
+          },
+          "totals": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/FieldTotal"
+            },
+            "description": "The sum of each number field over the matched entries."
+          }
+        }
       },
       "GenericErrorResponse": {
         "type": "object",
@@ -48153,6 +49574,38 @@
           3
         ]
       },
+      "ImportCompaniesCsvRequest": {
+        "type": "object",
+        "description": "A companies CSV to import: exactly one of its text or a CSV file in\nMacro, and at most one of `pipelineId` or `newPipeline` for its Stage,\nOwner and Revenue values (a new private pipeline when neither is given).",
+        "properties": {
+          "csv": {
+            "type": ["string", "null"],
+            "description": "The CSV text."
+          },
+          "documentId": {
+            "type": ["string", "null"],
+            "format": "uuid",
+            "description": "A CSV document the caller can open."
+          },
+          "newPipeline": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/NewImportPipeline",
+                "description": "A new company pipeline."
+              }
+            ]
+          },
+          "pipelineId": {
+            "type": ["string", "null"],
+            "format": "uuid",
+            "description": "An existing company pipeline the caller can edit."
+          }
+        },
+        "additionalProperties": false
+      },
       "ImportCounters": {
         "type": "object",
         "description": "Committed counters, never optimistic browser or uncommitted worker counts.",
@@ -48327,6 +49780,22 @@
             "description": "Binding summary used by the picker confirmation."
           }
         }
+      },
+      "ImportPipelineCsvRequest": {
+        "type": "object",
+        "description": "A CSV to import: exactly one of its text or a CSV file in Macro.",
+        "properties": {
+          "csv": {
+            "type": ["string", "null"],
+            "description": "The CSV text."
+          },
+          "documentId": {
+            "type": ["string", "null"],
+            "format": "uuid",
+            "description": "A CSV document the caller can open."
+          }
+        },
+        "additionalProperties": false
       },
       "ImportProgress": {
         "type": "object",
@@ -48565,6 +50034,80 @@
           "value": {
             "$ref": "#/components/schemas/SetPropertyValue",
             "description": "Value, validated by the properties service like any other property write."
+          }
+        }
+      },
+      "InitiativeActivityCursor": {
+        "type": "object",
+        "description": "Stable cursor for project history.",
+        "required": ["occurredAt", "id"],
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Tie-breaker within the same timestamp."
+          },
+          "occurredAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Time of the last scanned activity."
+          }
+        }
+      },
+      "InitiativeActivityPage": {
+        "type": "object",
+        "description": "History page. Access filtering can shorten records; follow nextCursor until exhausted.",
+        "required": ["records"],
+        "properties": {
+          "nextCursor": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/InitiativeActivityCursor",
+                "description": "The next raw-row boundary, including when this page had no visible task events."
+              }
+            ]
+          },
+          "records": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/InitiativeActivityRecord"
+            },
+            "description": "Visible changes in newest-first order."
+          }
+        }
+      },
+      "InitiativeActivityRecord": {
+        "type": "object",
+        "description": "One authorized activity row; task names are hydrated through existing authorized task reads.",
+        "required": ["id", "actorId", "subjectId", "action", "occurredAt"],
+        "properties": {
+          "action": {
+            "type": "string",
+            "description": "Durable activity action tag."
+          },
+          "actionPayload": {
+            "description": "Typed payload for known actions. Absent for unknown actions."
+          },
+          "actorId": {
+            "type": "string",
+            "description": "Principal who acted."
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Stable record identifier, also used for realtime deduplication."
+          },
+          "occurredAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Time of the change."
+          },
+          "subjectId": {
+            "type": "string",
+            "description": "Acting user's feed identity when a bot acted on their behalf."
           }
         }
       },
@@ -51538,6 +53081,82 @@
         ],
         "description": "What a new column holds."
       },
+      "NewEntry": {
+        "type": "object",
+        "description": "One entry to add: at most one of `recordId` or `email`. A tracked\npipeline's entry names its record; a generic pipeline's names none.",
+        "properties": {
+          "email": {
+            "type": ["string", "null"],
+            "description": "A contact's email: that contact, or in a company pipeline its company."
+          },
+          "recordId": {
+            "type": ["string", "null"],
+            "format": "uuid",
+            "description": "A CRM company or contact id."
+          },
+          "set": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/FieldValueInput"
+            },
+            "description": "Fields to fill in."
+          }
+        },
+        "additionalProperties": false
+      },
+      "NewFieldRequest": {
+        "type": "object",
+        "description": "A field to add.",
+        "required": ["name", "type"],
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "Its name, unique in the pipeline ignoring case."
+          },
+          "options": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "A select field's labels, in order."
+          },
+          "type": {
+            "$ref": "#/components/schemas/NewFieldType",
+            "description": "Its type."
+          }
+        },
+        "additionalProperties": false
+      },
+      "NewFieldType": {
+        "type": "string",
+        "description": "The type of a field to add.",
+        "enum": [
+          "text",
+          "number",
+          "checkbox",
+          "date",
+          "link",
+          "select",
+          "multi_select",
+          "person",
+          "people"
+        ]
+      },
+      "NewImportPipeline": {
+        "type": "object",
+        "description": "A new company pipeline for a companies import.",
+        "properties": {
+          "name": {
+            "type": ["string", "null"],
+            "description": "Its name; defaults to the file's name."
+          },
+          "sharing": {
+            "$ref": "#/components/schemas/PipelineSharing",
+            "description": "Whether the team may edit it; private by default."
+          }
+        },
+        "additionalProperties": false
+      },
       "NewOption": {
         "type": "object",
         "description": "A select or tag option to create.",
@@ -52323,6 +53942,22 @@
           "divide"
         ]
       },
+      "OptionCount": {
+        "type": "object",
+        "description": "How many matched entries hold one option.",
+        "required": ["label", "count"],
+        "properties": {
+          "count": {
+            "type": "integer",
+            "description": "Matched entries holding it.",
+            "minimum": 0
+          },
+          "label": {
+            "type": "string",
+            "description": "The option's label."
+          }
+        }
+      },
       "OptionId": {
         "type": "string",
         "format": "uuid",
@@ -52359,6 +53994,42 @@
           }
         ],
         "description": "A select option, by its id or by its label."
+      },
+      "OptionRemoval": {
+        "type": "object",
+        "description": "An option to delete, emptying the entries holding it.",
+        "required": ["field", "label"],
+        "properties": {
+          "field": {
+            "type": "string",
+            "description": "The field."
+          },
+          "label": {
+            "type": "string",
+            "description": "The label."
+          }
+        },
+        "additionalProperties": false
+      },
+      "OptionRename": {
+        "type": "object",
+        "description": "An option to relabel.",
+        "required": ["field", "from", "to"],
+        "properties": {
+          "field": {
+            "type": "string",
+            "description": "The field."
+          },
+          "from": {
+            "type": "string",
+            "description": "The current label."
+          },
+          "to": {
+            "type": "string",
+            "description": "The new label."
+          }
+        },
+        "additionalProperties": false
       },
       "PairingDetails": {
         "type": "object",
@@ -53539,6 +55210,277 @@
           "userId": {
             "type": "string",
             "description": "Owning user; sharing never changes ownership."
+          }
+        }
+      },
+      "PipelineCsvResponse": {
+        "type": "object",
+        "description": "A pipeline's entries as CSV text: Company and Domain (or Contact and\nEmail), then one column per field, people as emails.",
+        "required": ["name", "csv", "rows", "complete"],
+        "properties": {
+          "complete": {
+            "type": "boolean",
+            "description": "Whether every entry was written; a pipeline beyond 5000 entries is cut."
+          },
+          "csv": {
+            "type": "string",
+            "description": "The CSV."
+          },
+          "name": {
+            "type": "string",
+            "description": "The pipeline's name."
+          },
+          "rows": {
+            "type": "integer",
+            "description": "Entries written.",
+            "minimum": 0
+          }
+        }
+      },
+      "PipelineEntries": {
+        "type": "object",
+        "description": "A pipeline's entries among those asked for.",
+        "required": ["pipeline", "entries"],
+        "properties": {
+          "entries": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PipelineEntry"
+            },
+            "description": "Its matching entries."
+          },
+          "pipeline": {
+            "$ref": "#/components/schemas/AccessiblePipeline",
+            "description": "The pipeline."
+          }
+        }
+      },
+      "PipelineEntry": {
+        "type": "object",
+        "description": "One pipeline entry.",
+        "required": ["entryId", "fields"],
+        "properties": {
+          "entryId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The entry: a row of the pipeline's table."
+          },
+          "fields": {
+            "type": "object",
+            "description": "Its other fields that hold a value, by name.",
+            "additionalProperties": {
+              "$ref": "#/components/schemas/EntryFieldValue"
+            },
+            "propertyNames": {
+              "type": "string"
+            }
+          },
+          "record": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/EntryRecord",
+                "description": "The company or contact it tracks; missing in a generic pipeline."
+              }
+            ]
+          }
+        }
+      },
+      "PipelineExportResponse": {
+        "type": "object",
+        "description": "A pipeline saved as a CSV file in the caller's files.",
+        "required": ["documentId", "fileName", "rows", "complete"],
+        "properties": {
+          "complete": {
+            "type": "boolean",
+            "description": "Whether every entry was written; a pipeline beyond 5000 entries is cut."
+          },
+          "documentId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The CSV document."
+          },
+          "fileName": {
+            "type": "string",
+            "description": "Its name."
+          },
+          "rows": {
+            "type": "integer",
+            "description": "Entries written.",
+            "minimum": 0
+          }
+        }
+      },
+      "PipelineFieldSummary": {
+        "type": "object",
+        "description": "One field of a pipeline, named as people see it.",
+        "required": [
+          "name",
+          "type",
+          "multiple",
+          "options",
+          "required",
+          "readOnly"
+        ],
+        "properties": {
+          "multiple": {
+            "type": "boolean",
+            "description": "Whether it holds several values."
+          },
+          "name": {
+            "type": "string",
+            "description": "The name entries and filters use."
+          },
+          "options": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "A select or tags field's labels in order: for Stage, the stages from\nfirst to last."
+          },
+          "readOnly": {
+            "type": "boolean",
+            "description": "Whether the caller cannot write it."
+          },
+          "required": {
+            "type": "boolean",
+            "description": "Whether every entry must have a value."
+          },
+          "type": {
+            "$ref": "#/components/schemas/PipelineFieldType",
+            "description": "What it holds."
+          }
+        }
+      },
+      "PipelineFieldType": {
+        "type": "string",
+        "description": "What a field holds.",
+        "enum": [
+          "company",
+          "contact",
+          "text",
+          "number",
+          "checkbox",
+          "date",
+          "date_range",
+          "link",
+          "select",
+          "tags",
+          "person",
+          "item",
+          "relation",
+          "formula"
+        ]
+      },
+      "PipelineFields": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/AccessiblePipeline",
+            "description": "The pipeline and the caller's grant on it."
+          },
+          {
+            "type": "object",
+            "required": ["fields", "version"],
+            "properties": {
+              "fields": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/PipelineFieldSummary"
+                },
+                "description": "Its fields in column order; a tracked pipeline's first names its record."
+              },
+              "version": {
+                "type": "integer",
+                "format": "int64",
+                "description": "Its table's version when read."
+              }
+            }
+          }
+        ],
+        "description": "A pipeline with its fields."
+      },
+      "PipelineImportResponse": {
+        "type": "object",
+        "description": "What a pipeline import did.",
+        "required": [
+          "pipelineId",
+          "pipelineName",
+          "added",
+          "alreadyPresent",
+          "createdRecords",
+          "unresolved",
+          "invalid",
+          "skippedRows",
+          "filledFields",
+          "ignoredColumns",
+          "addedOptions"
+        ],
+        "properties": {
+          "added": {
+            "type": "integer",
+            "description": "Entries added.",
+            "minimum": 0
+          },
+          "addedOptions": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/FieldOptions"
+            },
+            "description": "Labels added to select fields so the CSV's values fit."
+          },
+          "alreadyPresent": {
+            "type": "integer",
+            "description": "Rows whose record the pipeline already had.",
+            "minimum": 0
+          },
+          "createdRecords": {
+            "type": "integer",
+            "description": "Companies or contacts the import created.",
+            "minimum": 0
+          },
+          "filledFields": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Pipeline fields the CSV filled."
+          },
+          "ignoredColumns": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "CSV columns matching no field the import can fill."
+          },
+          "invalid": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SkippedImportRecord"
+            },
+            "description": "Rows refused for a value their field cannot hold."
+          },
+          "pipelineId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The pipeline filled."
+          },
+          "pipelineName": {
+            "type": "string",
+            "description": "Its name."
+          },
+          "skippedRows": {
+            "type": "integer",
+            "description": "Rows without a domain or email.",
+            "minimum": 0
+          },
+          "unresolved": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SkippedImportRecord"
+            },
+            "description": "Records that could not be found or created."
           }
         }
       },
@@ -54954,6 +56896,22 @@
           }
         }
       },
+      "RecordEntriesRequest": {
+        "type": "object",
+        "description": "The companies or contacts to find entries for, across pipelines.",
+        "required": ["recordIds"],
+        "properties": {
+          "recordIds": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "CRM company or contact ids."
+          }
+        },
+        "additionalProperties": false
+      },
       "RecordingBytes": {
         "type": "string",
         "format": "binary",
@@ -54976,6 +56934,48 @@
           }
         },
         "additionalProperties": false
+      },
+      "RemoveEntriesRequest": {
+        "type": "object",
+        "description": "Entries to delete; their companies and contacts stay in the CRM.",
+        "properties": {
+          "entryIds": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "Entries to delete."
+          },
+          "recordIds": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "Records whose every entry in the pipeline to delete."
+          }
+        },
+        "additionalProperties": false
+      },
+      "RemoveEntriesResponse": {
+        "type": "object",
+        "description": "The entries deleted.",
+        "required": ["removed"],
+        "properties": {
+          "removed": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PipelineEntry"
+            },
+            "description": "Each entry as it was."
+          },
+          "version": {
+            "type": ["integer", "null"],
+            "format": "int64",
+            "description": "The table's version after the write; missing when nothing was written."
+          }
+        }
       },
       "RemoveParticipantsRequest": {
         "type": "object",
@@ -57120,6 +59120,21 @@
             "type": "string",
             "format": "uuid",
             "description": "The row."
+          }
+        }
+      },
+      "SkippedImportRecord": {
+        "type": "object",
+        "description": "A record an import could not add, and why.",
+        "required": ["key", "reason"],
+        "properties": {
+          "key": {
+            "type": "string",
+            "description": "The company's domain or the contact's email."
+          },
+          "reason": {
+            "type": "string",
+            "description": "What went wrong."
           }
         }
       },
@@ -63072,6 +65087,83 @@
           }
         }
       },
+      "TeamAvailability": {
+        "type": "object",
+        "description": "Availability for exactly the members selected by the domain service.",
+        "required": [
+          "start",
+          "end",
+          "members",
+          "unknownUserIds",
+          "complete",
+          "summary"
+        ],
+        "properties": {
+          "complete": {
+            "type": "boolean",
+            "description": "True only when all requested people and source intervals were covered."
+          },
+          "end": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Exclusive requested end."
+          },
+          "freeWindows": {
+            "type": ["array", "null"],
+            "items": {
+              "$ref": "#/components/schemas/AvailabilityInterval"
+            },
+            "description": "Common calendar gaps for every included person, present only with\ncomplete coverage. These are not working-hours or booking guarantees."
+          },
+          "members": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/TeamMemberAvailability"
+            },
+            "description": "Included people, always including the requester."
+          },
+          "start": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Inclusive requested start."
+          },
+          "summary": {
+            "type": "string",
+            "description": "A concise explanation that does not overstate incomplete results."
+          },
+          "unknownUserIds": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Requested identifiers without a current team relationship. No profile\nor calendar data about those identifiers is disclosed."
+          }
+        }
+      },
+      "TeamAvailabilityRequest": {
+        "type": "object",
+        "description": "A bounded window and the teammates whose busy time to merge.",
+        "required": ["start", "end"],
+        "properties": {
+          "end": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Exclusive instant."
+          },
+          "start": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Inclusive instant."
+          },
+          "userIds": {
+            "type": ["array", "null"],
+            "items": {
+              "type": "string"
+            },
+            "description": "At most 100 current teammates; the requester is always included.\nOmit for the whole team; an empty list checks only the requester."
+          }
+        }
+      },
       "TeamCalendarContent": {
         "oneOf": [
           {
@@ -63280,6 +65372,35 @@
           "busy_only",
           "none"
         ]
+      },
+      "TeamMemberAvailability": {
+        "type": "object",
+        "description": "Busy time and confidence for one explicitly included person.",
+        "required": ["userId", "busy", "coverage", "unknownReasons"],
+        "properties": {
+          "busy": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AvailabilityInterval"
+            },
+            "description": "Merged known busy intervals clipped to the requested range."
+          },
+          "coverage": {
+            "$ref": "#/components/schemas/AvailabilityCoverage",
+            "description": "Whether the whole requested range was established."
+          },
+          "unknownReasons": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AvailabilityUnknownReason"
+            },
+            "description": "Reasons gaps in the busy intervals cannot be called free."
+          },
+          "userId": {
+            "type": "string",
+            "description": "Macro identifier of the included person."
+          }
+        }
       },
       "TeamOutOfOfficeItem": {
         "type": "object",
@@ -64426,6 +66547,45 @@
           }
         }
       },
+      "UpdateEntriesRequest": {
+        "type": "object",
+        "description": "Entries to change.",
+        "required": ["updates"],
+        "properties": {
+          "baseVersion": {
+            "type": ["integer", "null"],
+            "format": "int64",
+            "description": "Refuse the change if the pipeline's table moved past this version."
+          },
+          "updates": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/EntryChanges"
+            },
+            "description": "Each entry's changes."
+          }
+        },
+        "additionalProperties": false
+      },
+      "UpdateEntriesResponse": {
+        "type": "object",
+        "description": "The entries an update wrote.",
+        "required": ["updated"],
+        "properties": {
+          "updated": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/UpdatedPipelineEntry"
+            },
+            "description": "Each entry, in request order."
+          },
+          "version": {
+            "type": ["integer", "null"],
+            "format": "int64",
+            "description": "The table's version after the write; missing when nothing was written."
+          }
+        }
+      },
       "UpdateForm": {
         "type": "object",
         "description": "A change to a form's facts; what is left out stays. The description,\nconfirmation message and branding take edit, the rest owner. A form is renamed\nthrough the entity mutation router.",
@@ -64610,6 +66770,36 @@
               {
                 "$ref": "#/components/schemas/AccessLevel",
                 "description": "The explicit team access level. Omit to leave unchanged or pass `null` to disable team\nsharing. Only the actual owner may change this setting; `owner` is not an allowed level."
+              }
+            ]
+          }
+        }
+      },
+      "UpdatedPipelineEntry": {
+        "type": "object",
+        "description": "An updated entry.",
+        "required": ["entryId", "changes"],
+        "properties": {
+          "changes": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/EntryFieldChange"
+            },
+            "description": "The fields set, as they were and are."
+          },
+          "entryId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The entry."
+          },
+          "record": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/EntryRecord",
+                "description": "The company or contact it tracks; missing in a generic pipeline."
               }
             ]
           }
