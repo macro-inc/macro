@@ -20,6 +20,7 @@ The host supplies identities and both clocks and executes the returned effects.
   hold at composition end, 3 seconds or 64 new imports; merge through Loro.
 - Use the supplied editor factory for live editors and headless comment forks.
   Application registry/policy wiring belongs to macro_document_model (WP-28/29).
+- Wrap application registries with `with_session_plugins` to retain session commands and durable node identity tracking.
 - Collaborative builders enable opaque unknown types and disable core snapshot history.
 - Deliver explicit Focus inputs when host focus changes; preserve logical selection on blur.
 - Loro owns undo with merge_interval 0; MergeTracker and injected time own grouping.

@@ -7,6 +7,9 @@ pub struct MacroSyncPolicy;
 /// Shared projection policy for all collaborative Macro documents.
 pub static MACRO_SYNC_POLICY: MacroSyncPolicy = MacroSyncPolicy;
 impl SyncPolicy for MacroSyncPolicy {
+    fn own_undefined_fields(&self, node_type: &str) -> &[String] {
+        crate::policy::own_undefined_fields(node_type)
+    }
     fn is_dropped(&self, view: StateRef<'_>, key: NodeKey) -> bool {
         view.is::<CompletionNode>(key)
     }

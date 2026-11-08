@@ -18,6 +18,7 @@ Kind 11 carries commit tag names in keys for view commit listeners.
 
 - `abi/session.bop`: authoritative ABI, generated constants and messages.
 - `src/machine.rs`: clocks, lifecycle and one handle call per input.
+- `src/macro_editor.rs`: explicit MarkdownSync registry/policy, input clock and continuing per-peer constructor entropy for `EditorSession.createMacro`.
 - `src/output.rs`: owned output envelope and raw framed socket bytes.
 - `src/editor_input.rs`: explicit cold model input adapter; Input has no wire derives.
 - `src/query.rs`: portable HTML, Markdown, clipboard and model queries.
@@ -31,6 +32,7 @@ Kind 11 carries commit tag names in keys for view commit listeners.
 Sync policy, authorization, history and retries remain in document_session/doc_sync_core.
 Hosts own clocks, identities, transport, storage and telemetry. Generated artifacts ship
 with their glue in one bundle. ABI major mismatch is fatal; no fallback decoding.
+Use `createMacro` for application markdown; `create` retains the generic rich-text registry for portable clients and conformance. Keep server composers out of both constructors.
 Carry the exact WAL adoption selection across the ABI, including delivered flags and bytes.
 Compile release WASM tracing at INFO to match HostSubscriber; preserve emitted cold spans and native tracing.
 Preserve keystroke work counters when changing code-generation or post-processing settings.

@@ -2,6 +2,10 @@ use super::*;
 use serde_json::Value;
 /// Application exclusions and comparison policy; projection has no application dependencies.
 pub trait SyncPolicy: Send + Sync + 'static {
+    /// Source own-undefined properties stored as Loro null instead of omitted JSON.
+    fn own_undefined_fields(&self, _node_type: &str) -> &[String] {
+        &[]
+    }
     /// Drop the node and its entire subtree.
     fn is_dropped(&self, view: StateRef<'_>, key: NodeKey) -> bool;
     /// Replace this local wrapper with its synced descendants.
@@ -63,6 +67,11 @@ pub(crate) fn own(
 ) -> Result<SerializedNode> {
     let mut json = view.export_json(key)?;
     json.remove("children");
+    if let Some(ty) = json.get("type").and_then(Value::as_str) {
+        for name in policy.own_undefined_fields(ty) {
+            json.entry(name.clone()).or_insert(Value::Null);
+        }
+    }
     json.values_mut().for_each(schema::normalize_numbers);
     mask_local(&mut json, policy);
     Ok(json)

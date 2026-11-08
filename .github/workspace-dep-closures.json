@@ -5484,8 +5484,11 @@
       "crates/client/lexical/lexical_markdown",
       "crates/client/lexical/lexical_model",
       "crates/client/lexical/lexical_rich_nodes",
+      "crates/client/lexical/macro_document_model",
+      "crates/client/mention_date",
       "crates/cowlike",
       "crates/document_id",
+      "crates/lexical_node_id",
       "crates/macro_user_id",
       "crates/sync_doc_id",
       "crates/sync_protocol"

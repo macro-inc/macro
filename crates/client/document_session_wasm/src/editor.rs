@@ -9,6 +9,18 @@ pub struct EditorSession {
 }
 #[wasm_bindgen]
 impl EditorSession {
+    /// Construct the application's MarkdownSync registry and projection policy.
+    #[wasm_bindgen(js_name=createMacro)]
+    pub fn create_macro(
+        abi_major: u32,
+        config: &[u8],
+        now: f64,
+        wall: f64,
+    ) -> Result<Self, JsError> {
+        Ok(Self {
+            machine: machine::Machine::create_macro(abi_major, config, now, wall).map_err(js)?,
+        })
+    }
     /// Construct a session; reject incompatible ABI majors before decoding configuration.
     pub fn create(abi_major: u32, config: &[u8], now: f64, wall: f64) -> Result<Self, JsError> {
         Ok(Self {
