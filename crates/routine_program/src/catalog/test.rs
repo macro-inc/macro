@@ -76,9 +76,36 @@ fn every_surface_has_a_template() {
     let surfaces: HashSet<_> = CATALOG
         .iter()
         .filter(|routine| routine.template)
-        .map(|routine| routine.surface)
+        .flat_map(|routine| routine.surfaces.iter().copied())
         .collect();
     assert_eq!(surfaces.len(), 9);
+}
+
+#[test]
+fn every_surface_has_a_routine_macro_suggests_unpicked() {
+    let surfaces: HashSet<_> = CATALOG
+        .iter()
+        .filter(|routine| routine.suggest)
+        .flat_map(|routine| routine.surfaces.iter().copied())
+        .collect();
+    assert_eq!(surfaces.len(), 9);
+}
+
+#[test]
+fn every_routine_is_offered_somewhere_and_once_per_surface() {
+    for routine in CATALOG.iter() {
+        let unique: HashSet<_> = routine.surfaces.iter().collect();
+        assert!(!routine.surfaces.is_empty(), "{}", routine.key);
+        assert_eq!(unique.len(), routine.surfaces.len(), "{}", routine.key);
+    }
+}
+
+#[test]
+fn routines_suggested_unpicked_need_no_knob_filled_for_others() {
+    // A routine that posts where others see needs its owner to pick where.
+    for routine in CATALOG.iter().filter(|routine| routine.suggest) {
+        assert!(!routine.affects_others, "{}", routine.key);
+    }
 }
 
 #[test]

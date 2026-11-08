@@ -1450,7 +1450,7 @@
         "description": "One of Macro's routines, ready to start a new routine from.",
         "required": [
           "key",
-          "surface",
+          "surfaces",
           "title",
           "description",
           "request",
@@ -1460,7 +1460,8 @@
           "instructions",
           "affectsOthers",
           "safeDefault",
-          "template"
+          "template",
+          "suggest"
         ],
         "properties": {
           "action": {
@@ -1512,9 +1513,16 @@
             "type": "boolean",
             "description": "It may be switched on before its owner changes anything."
           },
-          "surface": {
-            "$ref": "#/components/schemas/Surface",
-            "description": "Where it is offered."
+          "suggest": {
+            "type": "boolean",
+            "description": "Offered unpicked as a suggestion from Macro."
+          },
+          "surfaces": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Surface"
+            },
+            "description": "Where it is offered, first the part of the app it belongs to most."
           },
           "template": {
             "type": "boolean",

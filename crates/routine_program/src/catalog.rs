@@ -57,8 +57,9 @@ pub enum NamedItemKind {
 pub struct CatalogRoutine {
     /// Names it for clients and suggestions, e.g. `inbox`.
     pub key: &'static str,
-    /// Where it is offered.
-    pub surface: Surface,
+    /// Where it is offered: the sidebars of these parts of the app, first
+    /// the one it belongs to most.
+    pub surfaces: &'static [Surface],
     /// Its name once saved, e.g. "Sort my inbox".
     pub title: &'static str,
     /// What it does, in a short line.
@@ -89,6 +90,9 @@ pub struct CatalogRoutine {
     /// Offered among the templates when someone creates a routine; otherwise
     /// only the drafter and suggestions see it.
     pub template: bool,
+    /// Offered as a suggestion from Macro, unpicked, to fill a surface's
+    /// suggestions; otherwise only AI may suggest it, with its knobs filled.
+    pub suggest: bool,
 }
 
 /// Every catalog routine, in the order templates are offered.
@@ -96,7 +100,7 @@ pub static CATALOG: LazyLock<Vec<CatalogRoutine>> = LazyLock::new(|| {
     vec![
         CatalogRoutine {
             key: "inbox",
-            surface: Surface::Email,
+            surfaces: &[Surface::Email],
             title: "Sort my inbox",
             description: "AI labels new email by topic",
             request: "When a new email arrives, label it with the one of my labels that fits it best.",
@@ -114,10 +118,11 @@ pub static CATALOG: LazyLock<Vec<CatalogRoutine>> = LazyLock::new(|| {
             affects_others: false,
             safe_default: true,
             template: true,
+            suggest: true,
         },
         CatalogRoutine {
             key: "triage",
-            surface: Surface::Tasks,
+            surfaces: &[Surface::Tasks],
             title: "Triage new tasks",
             description: "AI sets each new task\u{2019}s priority",
             request: "When a task is created, set its priority from what it says.",
@@ -135,10 +140,11 @@ pub static CATALOG: LazyLock<Vec<CatalogRoutine>> = LazyLock::new(|| {
             affects_others: false,
             safe_default: true,
             template: true,
+            suggest: true,
         },
         CatalogRoutine {
             key: "brief",
-            surface: Surface::Calendar,
+            surfaces: &[Surface::Calendar, Surface::Tasks],
             title: "Morning brief",
             description: "Weekdays at 9, sum up my day",
             request: "Every weekday at 9am, sum up my day: meetings, tasks due and anything waiting on me.",
@@ -150,10 +156,11 @@ pub static CATALOG: LazyLock<Vec<CatalogRoutine>> = LazyLock::new(|| {
             affects_others: false,
             safe_default: false,
             template: true,
+            suggest: true,
         },
         CatalogRoutine {
             key: "updates",
-            surface: Surface::Chat,
+            surfaces: &[Surface::Chat, Surface::Tasks],
             title: "Share updates",
             description: "Post finished tasks to a channel",
             request: "When a task is marked completed, post \"Done: <task name>\" in the updates channel.",
@@ -179,10 +186,11 @@ pub static CATALOG: LazyLock<Vec<CatalogRoutine>> = LazyLock::new(|| {
             affects_others: true,
             safe_default: false,
             template: true,
+            suggest: false,
         },
         CatalogRoutine {
             key: "stuck",
-            surface: Surface::Tasks,
+            surfaces: &[Surface::Tasks],
             title: "Chase stuck tasks",
             description: "Fridays, list what\u{2019}s stalled",
             request: "Every Friday at 3pm, list my tasks that have been in progress or in review for over a week.",
@@ -194,10 +202,11 @@ pub static CATALOG: LazyLock<Vec<CatalogRoutine>> = LazyLock::new(|| {
             affects_others: false,
             safe_default: false,
             template: true,
+            suggest: true,
         },
         CatalogRoutine {
             key: "email_tags",
-            surface: Surface::Email,
+            surfaces: &[Surface::Email],
             title: "Tag new email",
             description: "AI tags new email Reply, Followup, Action or FYI",
             request: "When a new email arrives, tag it Reply, Followup, Action or FYI, whichever fits.",
@@ -225,10 +234,11 @@ pub static CATALOG: LazyLock<Vec<CatalogRoutine>> = LazyLock::new(|| {
             affects_others: false,
             safe_default: true,
             template: true,
+            suggest: true,
         },
         CatalogRoutine {
             key: "document_tags",
-            surface: Surface::Files,
+            surfaces: &[Surface::Files],
             title: "Tag new documents",
             description: "AI tags new documents by topic",
             request: "When I create a document, tag it with the one of my personal tags that fits it best.",
@@ -246,10 +256,11 @@ pub static CATALOG: LazyLock<Vec<CatalogRoutine>> = LazyLock::new(|| {
             affects_others: false,
             safe_default: true,
             template: true,
+            suggest: true,
         },
         CatalogRoutine {
             key: "call_tasks",
-            surface: Surface::Calls,
+            surfaces: &[Surface::Calls, Surface::Tasks],
             title: "Tasks from my calls",
             description: "After a call, make tasks for what I agreed to do",
             request: "When a call I joined ends, make a task for each thing I agreed to do.",
@@ -261,10 +272,11 @@ pub static CATALOG: LazyLock<Vec<CatalogRoutine>> = LazyLock::new(|| {
             affects_others: false,
             safe_default: false,
             template: true,
+            suggest: true,
         },
         CatalogRoutine {
             key: "pipeline",
-            surface: Surface::Crm,
+            surfaces: &[Surface::Crm],
             title: "Weekly pipeline review",
             description: "Mondays, list deals that need a next step",
             request: "Every Monday at 9am, list my CRM deals that have gone quiet, with a next step for each.",
@@ -276,10 +288,11 @@ pub static CATALOG: LazyLock<Vec<CatalogRoutine>> = LazyLock::new(|| {
             affects_others: false,
             safe_default: false,
             template: true,
+            suggest: true,
         },
         CatalogRoutine {
             key: "mentions",
-            surface: Surface::Chat,
+            surfaces: &[Surface::Chat],
             title: "Catch up on mentions",
             description: "Weekdays at 5, sum up where I was mentioned",
             request: "Every weekday at 5pm, sum up the channel messages that mentioned me today and what they need from me.",
@@ -291,10 +304,11 @@ pub static CATALOG: LazyLock<Vec<CatalogRoutine>> = LazyLock::new(|| {
             affects_others: false,
             safe_default: false,
             template: true,
+            suggest: true,
         },
         CatalogRoutine {
             key: "pull_requests",
-            surface: Surface::Reviews,
+            surfaces: &[Surface::Reviews],
             title: "Sum up new pull requests",
             description: "AI sums up each pull request opened in a repository",
             request: "When a pull request is opened in one of my repositories, sum up what it changes and what to look at first.",
@@ -312,10 +326,11 @@ pub static CATALOG: LazyLock<Vec<CatalogRoutine>> = LazyLock::new(|| {
             affects_others: false,
             safe_default: false,
             template: true,
+            suggest: true,
         },
         CatalogRoutine {
             key: "agent_digest",
-            surface: Surface::Agents,
+            surfaces: &[Surface::Agents],
             title: "Weekly agent digest",
             description: "Fridays, sum up what my agents did",
             request: "Every Friday at 4pm, sum up what my agents did this week and what's waiting on me.",
@@ -327,11 +342,12 @@ pub static CATALOG: LazyLock<Vec<CatalogRoutine>> = LazyLock::new(|| {
             affects_others: false,
             safe_default: false,
             template: true,
+            suggest: true,
         },
         // Offered to the drafter only, as the example of question knobs.
         CatalogRoutine {
             key: "invoices",
-            surface: Surface::Email,
+            surfaces: &[Surface::Email, Surface::Tasks],
             title: "Task for invoices due soon",
             description: "AI makes a task to pay each invoice due soon",
             request: "When an invoice arrives that's due within a week, make a High priority task to pay it.",
@@ -353,6 +369,7 @@ pub static CATALOG: LazyLock<Vec<CatalogRoutine>> = LazyLock::new(|| {
             affects_others: false,
             safe_default: false,
             template: false,
+            suggest: true,
         },
     ]
 });

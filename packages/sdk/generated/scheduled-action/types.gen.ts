@@ -206,9 +206,13 @@ export type CatalogEntry = {
      */
     safeDefault: boolean;
     /**
-     * Where it is offered.
+     * Offered unpicked as a suggestion from Macro.
      */
-    surface: Surface;
+    suggest: boolean;
+    /**
+     * Where it is offered, first the part of the app it belongs to most.
+     */
+    surfaces: Array<Surface>;
     /**
      * Offered among the templates when someone creates a routine.
      */
