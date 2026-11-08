@@ -21,7 +21,9 @@ use macro_uuid::Uuid;
 use serde::Serialize;
 use utoipa::ToSchema;
 
-use crate::domain::runtime_bypass::{RuntimeBypassError, RuntimeBypassOffer, RuntimeBypassService};
+use crate::domain::runtime_bypass::{
+    AgentChoiceChange, RuntimeBypassError, RuntimeBypassOffer, RuntimeBypassService, StoppedAsking,
+};
 
 #[cfg(test)]
 mod test;
@@ -42,6 +44,49 @@ impl From<RuntimeBypassOffer> for RuntimeBypassOfferDto {
         Self {
             harness_id: offer.harness.as_uuid(),
             enables_agent_auto_accept: offer.enables_agent_auto_accept,
+        }
+    }
+}
+
+/// What happened to the agent's own permission choice.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub enum AgentChoiceChangeDto {
+    /// The agent's choice did not need changing.
+    NotNeeded,
+    /// The agent is now set to bypass.
+    SetToBypass,
+    /// The runtime allows bypass, but the agent could not be set to bypass
+    /// and still asks.
+    StillAsks,
+}
+
+impl From<AgentChoiceChange> for AgentChoiceChangeDto {
+    fn from(change: AgentChoiceChange) -> Self {
+        match change {
+            AgentChoiceChange::NotNeeded => Self::NotNeeded,
+            AgentChoiceChange::SetToBypass => Self::SetToBypass,
+            AgentChoiceChange::StillAsks => Self::StillAsks,
+        }
+    }
+}
+
+/// What stopping the asking changed. The runtime's bypass is on.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct StoppedAskingDto {
+    /// The registered runtime whose bypass is now on.
+    #[schema(value_type = String)]
+    pub harness_id: Uuid,
+    /// What happened to the agent's own choice.
+    pub agent: AgentChoiceChangeDto,
+}
+
+impl From<StoppedAsking> for StoppedAskingDto {
+    fn from(stopped: StoppedAsking) -> Self {
+        Self {
+            harness_id: stopped.harness.as_uuid(),
+            agent: stopped.agent.into(),
         }
     }
 }
@@ -202,7 +247,7 @@ where
     operation_id = "stop_agent_session_runtime_asking",
     params(("session_id" = Uuid, Path, description = "ID of the agent session")),
     responses(
-        (status = 200, body = RuntimeBypassOfferDto, description = "What was changed"),
+        (status = 200, body = StoppedAskingDto, description = "What was changed"),
         (status = 401, body = String),
         (status = 403, body = String, description = "No edit access, or a change was refused"),
         (status = 404, body = String),
@@ -218,7 +263,7 @@ pub async fn stop_asking_on_runtime_handler<Service, Access, Auth>(
     access: AgentSessionAccessLevelExtractor<EditAccessLevel, Access, Auth>,
     State(state): State<RuntimeBypassRouterState<Service, Access, Auth>>,
     Path(session_id): Path<Uuid>,
-) -> Result<Json<RuntimeBypassOfferDto>, Response>
+) -> Result<Json<StoppedAskingDto>, Response>
 where
     Service: RuntimeBypassService,
     Access: EntityAccessService,
@@ -229,10 +274,10 @@ where
         .get_authenticated_user()
         .map_err(|_| (StatusCode::FORBIDDEN, "a person must ask").into_response())?
         .clone();
-    let offer = state
+    let stopped = state
         .service
         .stop_asking_on_runtime(&caller, AgentSessionId::new_from_uuid(session_id))
         .await
         .map_err(|error| RuntimeBypassApiError(error).into_response())?;
-    Ok(Json(offer.into()))
+    Ok(Json(stopped.into()))
 }

@@ -5,7 +5,8 @@
 use super::*;
 use crate::domain::model::PermissionPolicyConfig;
 use crate::domain::runtime_bypass::{
-    RuntimeBypassError, RuntimeBypassOffer, RuntimeBypassService, SessionPermissionChoice, offer,
+    AgentChoiceChange, RuntimeBypassError, RuntimeBypassOffer, RuntimeBypassService,
+    SessionPermissionChoice, StoppedAsking, offer,
 };
 
 impl<
@@ -70,6 +71,7 @@ where
             %caller,
             harness = tracing::field::Empty,
             enables_agent_auto_accept = tracing::field::Empty,
+            agent_choice = tracing::field::Empty,
         ),
         err
     )]
@@ -77,7 +79,7 @@ where
         &self,
         caller: &MacroUserIdStr<'static>,
         session: AgentSessionId,
-    ) -> Result<RuntimeBypassOffer, RuntimeBypassError> {
+    ) -> Result<StoppedAsking, RuntimeBypassError> {
         let (bot, offer) = self
             .inner
             .runtime_bypass_offer(caller, session)
@@ -91,13 +93,33 @@ where
             .runtime_bypass
             .allow_runtime_bypass(caller, offer.harness)
             .await?;
-        if offer.enables_agent_auto_accept {
-            self.inner
+
+        let agent = if !offer.enables_agent_auto_accept {
+            AgentChoiceChange::NotNeeded
+        } else {
+            match self
+                .inner
                 .runtime_bypass
                 .auto_accept_permissions(caller, bot)
-                .await?;
-        }
-        Ok(offer)
+                .await
+            {
+                Ok(()) => AgentChoiceChange::SetToBypass,
+                // The runtime's bypass stays on: it is what the person
+                // confirmed, and on its own it lets the agent be set later.
+                Err(error) => {
+                    tracing::warn!(
+                        error = ?error,
+                        "runtime bypass is on but the agent could not be set to bypass"
+                    );
+                    AgentChoiceChange::StillAsks
+                }
+            }
+        };
+        span.record("agent_choice", tracing::field::debug(agent));
+        Ok(StoppedAsking {
+            harness: offer.harness,
+            agent,
+        })
     }
 }
 

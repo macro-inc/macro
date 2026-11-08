@@ -32,13 +32,13 @@ import type {
   PreviewAgentSessionsResponse,
   PullRequestSessionsResponse,
   PullRequestsSessionsResponse,
-  RuntimeBypassOfferDto,
   RuntimeBypassOfferResponse,
   SandboxSize,
   SandboxSizeBody,
   SessionAutoArchiveResponse,
   SessionPullRequestsResponse,
   SharePermissionV2,
+  StoppedAskingDto,
   ToolApprovalAnswerDto,
   UpdateSharePermissionRequestV2,
   WarmAgentSessionResponse,
@@ -519,7 +519,7 @@ export const agentHarnessServiceClient = {
    * answered. 409 when nothing the caller may change would stop it.
    */
   stopAskingOnRuntime(sessionId: string) {
-    return fetchWithToken<RuntimeBypassOfferDto>(
+    return fetchWithToken<StoppedAskingDto>(
       `${agentHarnessHost}/agent-sessions/${sessionId}/runtime-bypass`,
       { method: 'POST', errorResponseHandler: sessionError }
     );

@@ -86,6 +86,28 @@ pub fn offer(
     })
 }
 
+/// What happened to the agent's own choice when the asking was stopped.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum AgentChoiceChange {
+    /// The agent's choice already bypassed, or the session does not follow it.
+    NotNeeded,
+    /// The agent is now set to bypass.
+    SetToBypass,
+    /// The runtime allows bypass now, but setting the agent failed, so the
+    /// agent still asks.
+    StillAsks,
+}
+
+/// What stopping the asking changed. The runtime's bypass is on in every
+/// case; a failure to turn it on is an error, since nothing changed.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct StoppedAsking {
+    /// The runtime whose bypass is now on.
+    pub harness: HarnessId,
+    /// What happened to the agent's own choice.
+    pub agent: AgentChoiceChange,
+}
+
 /// Why the asking could not be stopped.
 #[derive(Debug, thiserror::Error)]
 pub enum RuntimeBypassError {
@@ -173,12 +195,14 @@ pub trait RuntimeBypassService: Send + Sync + 'static {
 
     /// Make the changes [`Self::runtime_bypass_offer`] names: the runtime's
     /// bypass first, since an agent may only choose bypass on a runtime that
-    /// allows it, then the agent's. The session takes the new policy when a
-    /// person next answers one of its permission requests, or at its next
+    /// allows it, then the agent's. An error means nothing changed; once the
+    /// runtime's bypass is on, a failed agent change is reported as
+    /// [`AgentChoiceChange::StillAsks`]. The session takes the new policy when
+    /// a person next answers one of its permission requests, or at its next
     /// turn.
     fn stop_asking_on_runtime(
         &self,
         caller: &MacroUserIdStr<'static>,
         session: AgentSessionId,
-    ) -> impl Future<Output = Result<RuntimeBypassOffer, RuntimeBypassError>> + Send;
+    ) -> impl Future<Output = Result<StoppedAsking, RuntimeBypassError>> + Send;
 }

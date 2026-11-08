@@ -44,7 +44,10 @@ function setup() {
   const order: string[] = [];
   queries.stopAskingOnRuntime.mockImplementation(async () => {
     order.push('stop');
-    return ok({});
+    return ok({
+      harnessId: '0190a8f2-7a4c-7000-8000-000000000001',
+      agent: 'setToBypass',
+    });
   });
   const respond = vi.fn(async (response: InteractionResponse) => {
     order.push(`respond:${JSON.stringify(response)}`);
@@ -130,6 +133,21 @@ describe('stopping the runtime asking', () => {
     expect(respond).toHaveBeenCalledWith(allowed);
     expect(onFailure).toHaveBeenCalledTimes(1);
     expect(onFailure.mock.calls[0][0]).toMatch(/wasn't turned on/);
+    dispose();
+  });
+
+  it('says the agent still asks when only the runtime changed', async () => {
+    const { runtimeBypass, respond, onFailure, dispose } = setup();
+    queries.stopAskingOnRuntime.mockResolvedValueOnce(
+      ok({
+        harnessId: '0190a8f2-7a4c-7000-8000-000000000001',
+        agent: 'stillAsks',
+      })
+    );
+    await runtimeBypass.stopAsking(request);
+    expect(respond).toHaveBeenCalledWith(allowed);
+    expect(onFailure).toHaveBeenCalledTimes(1);
+    expect(onFailure.mock.calls[0][0]).toMatch(/Bypass is on for this runtime/);
     dispose();
   });
 });

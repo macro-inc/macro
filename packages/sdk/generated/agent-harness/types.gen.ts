@@ -112,6 +112,11 @@ export type AgentActivityPage = {
 };
 
 /**
+ * What happened to the agent's own permission choice.
+ */
+export type AgentChoiceChangeDto = 'notNeeded' | 'setToBypass' | 'stillAsks';
+
+/**
  * Type-specific state for one agent session setting.
  */
 export type AgentConfigKindDto = {
@@ -2678,6 +2683,20 @@ export type StartFreshAgentConversationRequest = {
 };
 
 /**
+ * What stopping the asking changed. The runtime's bypass is on.
+ */
+export type StoppedAskingDto = {
+    /**
+     * What happened to the agent's own choice.
+     */
+    agent: AgentChoiceChangeDto;
+    /**
+     * The registered runtime whose bypass is now on.
+     */
+    harnessId: string;
+};
+
+/**
  * Task facets match the shared search editor; assignee and creator are distinct.
  */
 export type TaskSearchSuggestions = {
@@ -4350,7 +4369,7 @@ export type StopAgentSessionRuntimeAskingResponses = {
     /**
      * What was changed
      */
-    200: RuntimeBypassOfferDto;
+    200: StoppedAskingDto;
 };
 
 export type StopAgentSessionRuntimeAskingResponse = StopAgentSessionRuntimeAskingResponses[keyof StopAgentSessionRuntimeAskingResponses];

@@ -5,7 +5,9 @@ import {
 } from '@queries/agent-session/runtime-bypass';
 import { queryReadyGate } from '@queries/gate';
 import type { PendingPermission } from '@service-agent-fold/generated/types';
+import type { AgentChoiceChangeDto } from '@service-agent-harness/generated/schemas';
 import { type Accessor, createSignal } from 'solid-js';
+import { match } from 'ts-pattern';
 import type {
   InteractionController,
   StopAskingAction,
@@ -63,20 +65,32 @@ export function createRuntimeBypass(
 
     setRunning(true);
     try {
-      const turnedOn = await stopAskingOnRuntime(sessionId).then(
-        (result) => result.isOk(),
-        () => false
-      );
+      const outcome: AgentChoiceChangeDto | 'runtimeUnchanged' =
+        await stopAskingOnRuntime(sessionId).then(
+          (result) =>
+            result.isOk() ? result.value.agent : 'runtimeUnchanged',
+          () => 'runtimeUnchanged'
+        );
       await source.respond({
         kind: 'permission',
         requestId: request.requestId,
         turn: request.turn,
         answer: { kind: 'selected', optionId: allow.id },
       });
-      if (!turnedOn)
-        source.onFailure(
-          "Allowed once. Bypass wasn't turned on, so the agent will keep asking."
-        );
+      const failure = match(outcome)
+        .with('notNeeded', 'setToBypass', () => undefined)
+        .with(
+          'stillAsks',
+          () =>
+            "Allowed once. Bypass is on for this runtime, but the agent couldn't be set to bypass, so it will keep asking."
+        )
+        .with(
+          'runtimeUnchanged',
+          () =>
+            "Allowed once. Bypass wasn't turned on, so the agent will keep asking."
+        )
+        .exhaustive();
+      if (failure) source.onFailure(failure);
     } finally {
       setRunning(false);
     }

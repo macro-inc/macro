@@ -3297,7 +3297,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/RuntimeBypassOfferDto"
+                  "$ref": "#/components/schemas/StoppedAskingDto"
                 }
               }
             }
@@ -4042,6 +4042,11 @@
             ]
           }
         }
+      },
+      "AgentChoiceChangeDto": {
+        "type": "string",
+        "description": "What happened to the agent's own permission choice.",
+        "enum": ["notNeeded", "setToBypass", "stillAsks"]
       },
       "AgentConfigKindDto": {
         "oneOf": [
@@ -7687,6 +7692,21 @@
             "type": "string",
             "format": "uuid",
             "description": "Current session id shown in the conversation metadata."
+          }
+        }
+      },
+      "StoppedAskingDto": {
+        "type": "object",
+        "description": "What stopping the asking changed. The runtime's bypass is on.",
+        "required": ["harnessId", "agent"],
+        "properties": {
+          "agent": {
+            "$ref": "#/components/schemas/AgentChoiceChangeDto",
+            "description": "What happened to the agent's own choice."
+          },
+          "harnessId": {
+            "type": "string",
+            "description": "The registered runtime whose bypass is now on."
           }
         }
       },

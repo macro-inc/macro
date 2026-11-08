@@ -17,7 +17,7 @@ use agent_harness::inbound::repositories::{
     self, AgentRepositoriesResponse, AgentRepositoryBranchesResponse, AgentRepositoryDto,
 };
 use agent_harness::inbound::runtime_bypass::{
-    self, RuntimeBypassOfferDto, RuntimeBypassOfferResponse,
+    self, AgentChoiceChangeDto, RuntimeBypassOfferDto, RuntimeBypassOfferResponse, StoppedAskingDto,
 };
 use agent_harness::inbound::tool_approvals::{
     self, AnswerToolApprovalRequest, AnswerToolApprovalResponse, ToolApprovalAnswerDto,
@@ -199,6 +199,8 @@ impl Modify for SecurityAddon {
         FileChangeKindDto,
         AnswerToolApprovalRequest,
         RuntimeBypassOfferDto,
+        StoppedAskingDto,
+        AgentChoiceChangeDto,
         RuntimeBypassOfferResponse,
         AppConnectedRequest,
         AnswerToolApprovalResponse,

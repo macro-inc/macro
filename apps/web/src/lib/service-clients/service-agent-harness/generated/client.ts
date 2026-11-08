@@ -62,7 +62,6 @@ import type {
   RetryAgentConversationTurnRequest,
   ReviewDecision,
   ReviewRecord,
-  RuntimeBypassOfferDto,
   RuntimeBypassOfferResponse,
   SandboxSizeBody,
   SearchConnectedAppToolsParams,
@@ -71,6 +70,7 @@ import type {
   SetAgentSessionArchivedRequest,
   SharePermissionV2,
   StartFreshAgentConversationRequest,
+  StoppedAskingDto,
   UnlinkAgentSessionPullRequestParams,
   UpdateSharePermissionRequestV2,
   WarmAgentSessionRequest,
@@ -3821,7 +3821,7 @@ bypass when that asks too. The session stops asking once a person answers
 the request in front of them, or from its next turn.
  */
 export type stopAgentSessionRuntimeAskingResponse200 = {
-  data: RuntimeBypassOfferDto;
+  data: StoppedAskingDto;
   status: 200;
 };
 
