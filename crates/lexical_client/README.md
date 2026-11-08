@@ -2,7 +2,7 @@
 
 `LexicalClient` keeps the typed lexical-service API and chooses execution at
 startup. Production composition roots read `LEXICAL_ROUTE_MODES` through
-`MacroConfig`; env-only bootstrap tools use `LexicalClient::from_env`. Reuse
+`MacroConfig`; env-only bootstrap tools use `LexicalClient::from_env(...)?.with_sync_from_env().await?`. Reuse
 configured clients (or clones) rather than loading configuration in handlers.
 `LexicalClient::new` explicitly constructs an all-HTTP client for isolated use.
 
@@ -27,12 +27,20 @@ typed results, and returns the HTTP result, including HTTP errors. Shadow
 comparison masks only `"awaitId":"[A-Za-z0-9_-]{21}"` in composer markdown,
 as prescribed by S3 §4.4 and §6.5. It never changes the returned response.
 
-The initial facade's local route adapters all return typed `NotYetPorted`.
-WP34–38 supply the route-specific fetch, context, and wire integration. Pure
-model transformations alone do not provide those adapters. Future CPU-heavy
-adapters must use `spawn_blocking` and enter the captured current span.
-The sync Worker's comment-only gate has its own `COMMENT_GATE_MODE` and is
-outside this client.
+Local adapters call macro_document_model and macro_document_composers, running
+CPU work in spawn_blocking under the captured route span. Document exports use
+an injected RawDocumentSource, implemented by SyncServiceClient. Composition
+roots call with_sync_from_env().await once, or supply an already resolved source
+through with_document_source. Non-HTTP markdown mode requires SYNC_SERVICE_AUTH_KEY
+and ENVIRONMENT through MacroConfig; remote secret references resolve through the
+existing SecretsManager adapter. SyncServiceUrl provides the typed URL and its
+local OVERRIDE_SYNC_SERVICE_URL override. No credentials are loaded in handlers.
+HTTP-only configuration does not require this extra source.
+
+The unused legacy cognition methods remain explicit NotYetPorted local operations;
+removing their API and the service is deferred to WP39. The Worker's gate is
+selected separately with COMMENT_GATE_MODE=http|in_process|shadow; HTTP is its
+checked-in default in every environment.
 
 Each operation emits `lexical.<route>` under the caller's active span. Shadow
 execution emits child `lexical.shadow`; mismatch events include only the stable

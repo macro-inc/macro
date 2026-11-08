@@ -12,7 +12,9 @@ read or render document content.
 - `src/routing.rs` (+ `src/routing/test.rs`): strict MacroConfig modes, execution
   policy, comparison and content-free route/shadow spans.
 - `src/lib.rs`: retained HTTP transport, internal-access header and local CA.
-- `README.md`: route groups, provisioning and the unported adapter boundary.
+- `in_process.rs`: blocking model adapters with explicit clock and entropy.
+- `raw_document.rs`: live sync-source port and startup configuration.
+- `README.md`: route groups, provisioning and startup wiring.
 - `src/parse_markdown.rs` (+ `src/parse_markdown/test.rs`): typed lexical-service HTTP operations.
 - `src/types.rs`: the Lexical node/document types shared with the service.
 - `src/notion.rs`: `notion_to_loro_snapshot` (`POST /snapshot/notion`) and its
@@ -23,7 +25,7 @@ read or render document content.
 
 - Owns: execution policy, route/shadow spans, retained HTTP transport and typed
   service request/response models. Pure document transformations belong to
-  `macro_document_model`; subsequent route work supplies their adapters.
+  `macro_document_model`; in_process.rs supplies only host/wire adapters.
 - Not here: the service itself, or the frontend's own Lexical node
   implementations (`apps/web`) — those are kept in sync by hand, not shared
   code.
