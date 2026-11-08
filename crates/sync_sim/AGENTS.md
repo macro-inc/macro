@@ -69,6 +69,11 @@ clients and real `sync_server_core::Room` callbacks over `sync_server_sim` ports
   receipt on the same document, or its exact author incarnation still observing
   that bad write. Never accept an armed configuration or arbitrary error text.
   Remaining M2 command/story and comment-gate producers are listed in COVERAGE.md.
+- Exempt editor convergence only for exact private history covered by valid,
+  unacknowledged ReadOnly parked WAL rows for that profile/document/user. Keep
+  own projection checks strict, show Unsaved(ReadOnly), and require automatic
+  delivery plus strict equality after an explicit write regrant. A parked label
+  without retained bytes never exempts edit loss.
 - Headless inputs always use KeepModel. Install resolved selection through the
   registered model-selection-only command, then dispatch the actual command in
   the same core Batch. SelectionFromView(Range) is rejected in headless mode even

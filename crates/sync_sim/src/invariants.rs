@@ -80,6 +80,11 @@ pub fn editor_states_equal(outcome: &Outcome) -> Result<(), Failure> {
             }
             continue;
         };
+        // Revoked-writer ruling: only exact retained ReadOnly private history
+        // may differ until regrant. Own projection checks remain strict.
+        if durability::readonly_private_history_retained(outcome, client) {
+            continue;
+        }
         if let Some((other, state)) = states.insert(client.doc, (name, &editor.synced_json))
             && state != &editor.synced_json
         {
