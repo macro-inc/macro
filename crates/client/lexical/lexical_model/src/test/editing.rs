@@ -404,3 +404,46 @@ fn text_select_transfers_composition_from_either_existing_range_endpoint() -> Re
     assert_eq!(tx.focus()?, Point::text(target, Utf16Offset(1)));
     Ok(())
 }
+
+#[test]
+fn tab_detail_toggles_write_bits_without_calling_the_forbidden_setter() -> Result<(), Error> {
+    let mut editor = Editor::builder(EditorMode::Headless)
+        .build()
+        .expect("editor");
+    let mut tx = editor.transaction();
+    let key = tx.create(Tab {})?.key();
+    assert!(matches!(
+        tx.text(key)?.set_detail(TextDetail::DIRECTIONLESS),
+        Err(Error::TabSetDetail)
+    ));
+    let initial = tx.view().text_data(key)?.detail;
+    tx.text(key)?.toggle_directionless()?;
+    assert_eq!(
+        tx.view().text_data(key)?.detail,
+        initial ^ TextDetail::DIRECTIONLESS
+    );
+    tx.text(key)?.toggle_unmergeable()?;
+    assert_eq!(
+        tx.view().text_data(key)?.detail,
+        initial ^ TextDetail::DIRECTIONLESS ^ TextDetail::UNMERGEABLE
+    );
+    tx.text(key)?.toggle_directionless()?.toggle_unmergeable()?;
+    assert_eq!(tx.view().text_data(key)?.detail, initial);
+    Ok(())
+}
+
+#[test]
+fn detail_toggles_materialize_an_absent_imported_detail_field() -> Result<(), Error> {
+    let mut editor = Editor::builder(EditorMode::Headless)
+        .build()
+        .expect("editor");
+    let mut tx = editor.transaction();
+    let json = serde_json::json!({"type":"text","version":1,"text":"words","format":0,"mode":"normal","style":""});
+    let key = tx.import_node(json.as_object().expect("node"))?;
+    assert!(!tx.view().export_json(key)?.contains_key("detail"));
+    tx.text(key)?.toggle_directionless()?;
+    assert_eq!(tx.view().export_json(key)?["detail"], 1);
+    tx.text(key)?.toggle_unmergeable()?;
+    assert_eq!(tx.view().export_json(key)?["detail"], 3);
+    Ok(())
+}

@@ -138,3 +138,5 @@ Track foreign captured-record identity with immutable marker tokens that do not 
 Hide typed native projections while invoking pure foreign hooks, but retain the lexical projection stack for owned read captures; nested native predicates and sibling hooks must capture all pending projected payload fields with their original source identities.
 
 Give runtime ForeignHooks text setters the current mutable transaction and ownership of the whole operation; Override::Value does not trigger a second framework write. Native TextNode coercion stays pure on fallback. Run the write guard before callbacks, and consume native-super bypass before walking any runtime ancestors.
+
+Toggle text directionless/unmergeable bits directly on the writable detail field, clearing absent-detail export state; do not call the virtual set_detail hook or Tab's forbidden setter. toggle_format remains virtual through set_format.
