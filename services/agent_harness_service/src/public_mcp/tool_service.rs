@@ -49,7 +49,7 @@ pub trait CalledBy {
     fn called_by(self, caller: &ToolCaller) -> impl Future<Output = Self> + Send;
 }
 
-impl CalledBy for ai_tools::ToolServiceContext {
+impl CalledBy for agent_tools::ToolServiceContext {
     async fn called_by(self, caller: &ToolCaller) -> Self {
         self.for_caller(caller).await
     }
@@ -201,7 +201,7 @@ mod test;
 fn mcp_instructions(base_url: &str) -> String {
     format!(
         "{}{}",
-        prompt::mcp_instructions(base_url),
+        agent_prompts::mcp_instructions(base_url),
         agent_code_mode::domain::mcp_guides()
     )
 }

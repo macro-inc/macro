@@ -23,9 +23,13 @@
 use std::pin::Pin;
 use std::sync::Arc;
 
-use agent::{AgentError, AgentLoop, ReadToolResult, StreamPart, SystemPrompt, ToolResultLimit};
-use ai_tools::user_tool_review::{ReviewError, UserToolAuthorizer, authorized_user_tool_finisher};
-use ai_tools::{AiHost, DeferredToolSet, ToolServiceContext, tools_for};
+use agent_loop::{
+    AgentError, AgentLoop, ReadToolResult, StreamPart, SystemPrompt, ToolResultLimit,
+};
+use agent_tools::user_tool_review::{
+    ReviewError, UserToolAuthorizer, authorized_user_tool_finisher,
+};
+use agent_tools::{AiHost, DeferredToolSet, ToolServiceContext, tools_for};
 use ai_toolset::{AsyncToolCollection, ToolSet as AiToolSet};
 use axum::extract::FromRef;
 use futures::{FutureExt as _, StreamExt as _};
@@ -76,8 +80,8 @@ const CODE_MODE_MCP_TOOLS: &[&str] = &[
     "mcp__macro_internal__ReadCodeDocs",
 ];
 
-/// [`TurnEngine`] backed by [`agent::AgentLoop`] and
-/// [`ai_tools::tools_for`].
+/// [`TurnEngine`] backed by [`agent_loop::AgentLoop`] and
+/// [`agent_tools::tools_for`].
 pub struct RigTurnEngine {
     memory: Arc<MemoryServiceImpl<PgMemoryRepo>>,
     native_tools: Arc<NativeTools>,
@@ -97,13 +101,13 @@ impl RigTurnEngine {
     #[must_use]
     pub fn new(db: PgPool, tool_context: ToolServiceContext) -> Self {
         Self {
-            memory: Arc::new(ai_tools::memory::build_memory_service(
+            memory: Arc::new(agent_tools::memory::build_memory_service(
                 db,
                 tool_context.clone(),
             )),
             native_tools: Arc::new(NativeTools::new()),
             code_mode_tools: Arc::new(NativeTools::from_factory(
-                ai_tools::tools_for_agent_code_mode,
+                agent_tools::tools_for_agent_code_mode,
                 true,
             )),
             auto_model: match &tool_context.cognition_tool_context.service {
@@ -268,7 +272,7 @@ impl FromRef<InMemToolContext> for ToolResultLimit {
 }
 
 fn tools_for_turn(
-    base_tools: ai_tools::AiToolSet,
+    base_tools: agent_tools::AiToolSet,
     supports_user_input: bool,
 ) -> AsyncToolCollection<InMemToolContext> {
     let tools = AsyncToolCollection::<InMemToolContext>::new()
@@ -303,7 +307,7 @@ impl NativeTools {
         Self::from_factory(|| tools_for(AiHost::AgentSession), false)
     }
 
-    fn from_factory(build: impl Fn() -> ai_tools::ToolSetWithPrompt, code_mode: bool) -> Self {
+    fn from_factory(build: impl Fn() -> agent_tools::ToolSetWithPrompt, code_mode: bool) -> Self {
         let tools = build();
         let base_tools = Arc::into_inner(tools.toolset)
             .expect("tools_for should return a fresh, uniquely owned collection");
@@ -353,9 +357,9 @@ impl TurnEngine for RigTurnEngine {
         let entity_routing = Arc::clone(&self.entity_routing);
         let tool_context = self.tool_context.clone();
         let gate = Arc::clone(&self.gate);
-        let metering = agent::MeteringContext::current();
+        let metering = agent_loop::MeteringContext::current();
         tokio::spawn(
-            agent::MeteringContext::carry(metering, async move {
+            agent_loop::MeteringContext::carry(metering, async move {
                 let mut request = request;
                 let Some(model) = select_auto_model(auto_model.as_ref(), &request).await else {
                     return;
@@ -431,7 +435,7 @@ async fn select_auto_model(
         .messages
         .iter()
         .rev()
-        .find(|message| message.role == agent::types::Role::User)
+        .find(|message| message.role == agent_loop::types::Role::User)
         .and_then(|message| message.content.user_message_text())
         .unwrap_or_default();
     tokio::select! {
@@ -622,7 +626,7 @@ async fn drive_turn(
     } else {
         let user_messages: Vec<String> = messages
             .iter()
-            .filter(|message| message.role == agent::types::Role::User)
+            .filter(|message| message.role == agent_loop::types::Role::User)
             .filter_map(|message| message.content.user_message_text())
             .collect();
         let requested = user_messages.last().cloned().unwrap_or_default();
@@ -746,7 +750,7 @@ async fn drive_turn(
         let gate = Arc::clone(&gate);
         let cancel = cancel.clone();
         let awaiting = Arc::clone(&awaiting);
-        agent_loop = agent_loop.with_user_tool_finisher(Arc::new(move |mut call: agent::PendingUserTool| {
+        agent_loop = agent_loop.with_user_tool_finisher(Arc::new(move |mut call: agent_loop::PendingUserTool| {
             let tools = Arc::clone(&tools);
             let context = context.clone();
             let gate = Arc::clone(&gate);
@@ -757,7 +761,7 @@ async fn drive_turn(
                 if !tools.user_tools.contains_key(&call.tool_name) { return None; }
                 let (actor, arguments) = match ai_toolset::actor::ToolActor::take(&call.args) {
                     Ok(selection) => selection,
-                    Err(error) => return Some(agent::FinishedUserTool::Error(error.to_string())),
+                    Err(error) => return Some(agent_loop::FinishedUserTool::Error(error.to_string())),
                 };
                 let authorize_cancel = cancel.clone();
                 let authorize: UserToolAuthorizer = Arc::new(move |name, mut args| {
@@ -825,7 +829,7 @@ async fn drive_turn(
     // of the conversation only.
     let mut messages = messages;
     crate::domain::skill_routing::inject(&mut messages, &loaded_skills);
-    let rig_messages = agent::to_rig_messages_limited(&messages, &tool_results);
+    let rig_messages = agent_loop::to_rig_messages_limited(&messages, &tool_results);
     let result = async {
         let mut stream = session.send_message(rig_messages).await?;
         let mut turn_spoke = false;
@@ -986,12 +990,12 @@ fn system_prompt(
     user_memory: Option<&str>,
 ) -> SystemPrompt {
     let mut shared = String::new();
-    shared.push_str(&prompt::agent_session::PROMPT.to_string());
+    shared.push_str(&agent_prompts::agent_session::PROMPT.to_string());
     shared.push_str(&tools_prompt.to_string());
     let mut rest = String::new();
     if let Some(identity) = identity {
         rest.push('\n');
-        rest.push_str(&prompt::agent_identity::render(
+        rest.push_str(&agent_prompts::agent_identity::render(
             &identity.name,
             &identity.handle,
         ));

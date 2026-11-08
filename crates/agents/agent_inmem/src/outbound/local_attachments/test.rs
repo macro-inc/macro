@@ -2,7 +2,7 @@ use std::sync::Mutex;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
 
-use agent::types::{ChatMessage, ChatMessageContent, Role};
+use agent_loop::types::{ChatMessage, ChatMessageContent, Role};
 use attachment::{AttachmentError, ResolutionError};
 use macro_user_id::user_id::MacroUserIdStr;
 use model_entity::Entity;
@@ -151,8 +151,8 @@ fn request(messages: Vec<ChatMessage>) -> TurnRequest {
         awaiting: std::sync::Arc::default(),
         owner: Owner::from_principal_str("macro|test@macro.com").expect("user"),
         model: "test-model".to_owned(),
-        reasoning_effort: agent::ReasoningEffort::default(),
-        speed: agent::ModelSpeed::Standard,
+        reasoning_effort: agent_loop::ReasoningEffort::default(),
+        speed: agent_loop::ModelSpeed::Standard,
         identity: None,
         instructions: None,
         messages,
@@ -340,11 +340,13 @@ impl TurnEngine for CooperativeEngine {
             started.notify_one();
             request.cancel.cancelled().await;
             let _ = parts
-                .send(Ok(StreamPart::ToolResponse(agent::ToolResponse::Json {
-                    id: "running-tool".to_owned(),
-                    name: "cooperative-tool".to_owned(),
-                    json: serde_json::json!({"status": "cancelled"}),
-                })))
+                .send(Ok(StreamPart::ToolResponse(
+                    agent_loop::ToolResponse::Json {
+                        id: "running-tool".to_owned(),
+                        name: "cooperative-tool".to_owned(),
+                        json: serde_json::json!({"status": "cancelled"}),
+                    },
+                )))
                 .await;
         });
         receiver
@@ -376,7 +378,7 @@ async fn a_running_engine_drains_its_final_tool_response_after_cancellation() {
         .await
         .expect("inner engine drains");
     assert!(matches!(final_part,
-        Some(Ok(StreamPart::ToolResponse(agent::ToolResponse::Json { id, json, .. })))
+        Some(Ok(StreamPart::ToolResponse(agent_loop::ToolResponse::Json { id, json, .. })))
         if id == "running-tool" && json == serde_json::json!({"status": "cancelled"})
     ));
     assert!(stream.recv().await.is_none());

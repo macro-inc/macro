@@ -226,7 +226,7 @@ async fn authenticated_mcp_runs_javascript_and_persists_source_and_result(pool: 
         .connect(vec![entry("session-secret")])
         .await
         .expect("the default agent must discover internal code tools");
-    let remote = ai_tools::DeferredToolSet::new(
+    let remote = agent_tools::DeferredToolSet::new(
         Arc::new(
             mcp_select::CombinedToolSet::new(Arc::new(AsyncToolCollection::<()>::new()), remote)
                 .with_eager_mcp_tools(&[

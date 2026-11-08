@@ -140,7 +140,7 @@ the existing gateway prefixes.
   not …") that agents route on, and may carry an `@agent` block: how that area
   of Macro works, for agents only. Both are stripped from the public
   reference, and code-mode generation fails without the routing sentence. Put
-  an area's rules there, never in `crates/agents/prompt`; cross-namespace search
+  an area's rules there, never in `crates/agents/agent_prompts`; cross-namespace search
   guidance lives on `SearchNamespace` in `search/namespace.ts`.
 - Code mode puts each relevant entity's index in the agent turn, at most 48
   KiB: a method's signature and the first sentence of its doc, cut at 160

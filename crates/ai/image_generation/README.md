@@ -25,7 +25,7 @@ which admits the acting user for `AiFeature::ImageGeneration` before any
 provider call and refuses team bots with no user to bill. The tool path skips
 admission because agent turns are admitted before they run.
 
-Hosts compose the provider, reference reader, and storage client in `ai_tools`.
+Hosts compose the provider, reference reader, and storage client in `agent_tools`.
 The frontend renders the returned SFS image directly.
 
 Usage is attributed by the domain service to the creating user (including bots

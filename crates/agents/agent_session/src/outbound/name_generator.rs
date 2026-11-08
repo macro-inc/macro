@@ -6,7 +6,7 @@ mod test;
 use crate::domain::model::{AgentSession, MAX_AGENT_SESSION_NAME_CHARS};
 use crate::domain::ports::AgentSessionNameGenerator;
 use crate::domain::retitle::ConversationDigest;
-use agent::PredefinedModel;
+use agent_loop::PredefinedModel;
 use ai_usage::{AiFeature, UsageContext, UsageRecorder};
 use std::sync::Arc;
 
@@ -85,7 +85,7 @@ impl AgentSessionNameGenerator for HaikuAgentSessionNameGenerator {
             .map_err(|error| rootcause::report!(error))?;
         let usage_ctx = UsageContext::new(AiFeature::ChatRename, owner.clone())
             .with_entity(Some(session.id.as_uuid()));
-        let response = agent::complete(
+        let response = agent_loop::complete(
             PredefinedModel::Fast,
             AGENT_SESSION_RENAME_SYSTEM_PROMPT,
             &rename_request,
@@ -121,7 +121,7 @@ impl AgentSessionNameGenerator for HaikuAgentSessionNameGenerator {
             .map_err(|error| rootcause::report!(error))?;
         let usage_ctx = UsageContext::new(AiFeature::ChatRename, owner.clone())
             .with_entity(Some(session.id.as_uuid()));
-        let response = agent::complete(
+        let response = agent_loop::complete(
             PredefinedModel::Fast,
             AGENT_SESSION_RETITLE_SYSTEM_PROMPT,
             &retitle_request,

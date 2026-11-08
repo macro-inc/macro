@@ -1,4 +1,4 @@
-use agent::PredefinedModel;
+use agent_loop::PredefinedModel;
 use ai_toolset::{AsyncTool, RequestContext, ServiceContext, ToolCallError, ToolResult};
 use ai_toolset::{ToolAnnotated, ToolAnnotations};
 use async_trait::async_trait;
@@ -95,7 +95,7 @@ impl AsyncTool<SubagentContext> for Subagent {
         // report "cancelled" rather than a partial or errored result.
         let usage = usage_for_request(&service_context.usage_context, &request_context);
         let completion = service_context.operations.run(&usage, || {
-            agent::complete(
+            agent_loop::complete(
                 SUBAGENT_MODEL,
                 SUBAGENT_PROMPT,
                 &self.task,

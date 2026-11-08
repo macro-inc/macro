@@ -2,9 +2,9 @@ use crate::cognition::api::context::{ApiContext, DcsAuthorizationService, DcsCha
 use crate::cognition::api::tool_selection::{service_tools, structured_completion_prompt};
 use crate::cognition::model::stream::ToolSet;
 use crate::cognition::service::structured_completion::{ToolFreeCompletionError, ToolFreeRequest};
-use agent::structured_output::{CompletionThinking, DynamicSchema};
-use agent::types::{ChatMessage, ChatMessageContent, Role};
-use agent::{AgentLoop, StreamAccumulator};
+use agent_loop::structured_output::{CompletionThinking, DynamicSchema};
+use agent_loop::types::{ChatMessage, ChatMessageContent, Role};
+use agent_loop::{AgentLoop, StreamAccumulator};
 use ai_billing::inbound::admission::admission_status;
 use axum::Json;
 use axum::extract::State;
@@ -108,7 +108,7 @@ pub async fn structured_completion(
             code: None,
         });
     }
-    agent::structured_output::validate_schema(&request.output_schema).map_err(|error| {
+    agent_loop::structured_output::validate_schema(&request.output_schema).map_err(|error| {
         StructuredCompletionError {
             error: error.to_string(),
             status: StatusCode::BAD_REQUEST,
@@ -187,7 +187,7 @@ pub async fn structured_completion(
         content: ChatMessageContent::Text(request.prompt.clone()),
         attachments: None,
     };
-    let rig_messages = agent::to_rig_messages(&[user_message]);
+    let rig_messages = agent_loop::to_rig_messages(&[user_message]);
 
     let agent_loop = AgentLoop::new(ctx.tool_service_context.recorder.clone()).with_model(&model);
     let usage_ctx =
@@ -253,9 +253,9 @@ pub async fn structured_completion(
             attachments: None,
         },
     ];
-    let rig_messages = agent::to_rig_messages(&conversation);
+    let rig_messages = agent_loop::to_rig_messages(&conversation);
 
-    let result = agent::structured_output::dynamic_structured_completion(
+    let result = agent_loop::structured_output::dynamic_structured_completion(
         model,
         &system_prompt,
         rig_messages,

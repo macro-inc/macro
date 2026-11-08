@@ -15,8 +15,8 @@ const QUERY_TIMEOUT: Duration = Duration::from_secs(90);
 #[cfg(test)]
 mod test;
 
-fn discovery_tools() -> ai_toolset::AsyncToolCollection<ai_tools::ToolServiceContext> {
-    ai_toolset::AsyncToolCollection::new().add_subtoolset::<ai_tools::ToolDatabasesToolContext>(
+fn discovery_tools() -> ai_toolset::AsyncToolCollection<agent_tools::ToolServiceContext> {
+    ai_toolset::AsyncToolCollection::new().add_subtoolset::<agent_tools::ToolDatabasesToolContext>(
         databases::inbound::toolset::databases_read_only_toolset(),
     )
 }

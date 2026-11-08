@@ -240,7 +240,7 @@ when they apply. Then, on the web:
   the Soup row actions in `apps/web/src/features/next-soup/actions/`. An entity
   outside Soup is invisible in Drive, search, and Cmd+K until each is wired;
   databases shipped missing from Drive and needed a follow-up for all of them.
-- Agent mentions: add the `blockName` to `crates/agents/prompt/src/mentions.rs`, or
+- Agent mentions: add the `blockName` to `crates/agents/agent_prompts/src/mentions.rs`, or
   agents link the entity as a plain URL.
 
 ## 6. Wasm engine (blocks with a Rust engine)

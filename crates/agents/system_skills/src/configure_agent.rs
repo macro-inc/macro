@@ -1,6 +1,6 @@
 //! System skill for changing an agent's instructions and settings.
 
-use prompt::StaticPrompt;
+use agent_prompts::StaticPrompt;
 
 use crate::SystemSkill;
 

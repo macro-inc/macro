@@ -33,7 +33,7 @@ listings, and calls all go through Connect, with no Pipedream fallback.
   Pipedream has no such app.
 - `src/outbound/dispatch.rs`: `ConnectorBackends`, the one type hosts wire:
   it holds the host's `ConnectRollout` (the `macro-connect` PostHog flag,
-  read by `ai_tools::macro_connect_rollout`). A user on Connect alone gets
+  read by `agent_tools::macro_connect_rollout`). A user on Connect alone gets
   Connect's directory and tool listings, and their Pipedream rows are
   refused; everyone else stays on Pipedream. A Connect row always reaches
   Connect.
@@ -53,7 +53,7 @@ listings, and calls all go through Connect, with no Pipedream fallback.
 
 - Depends on: `ai_toolset`, `mcp_toolset`, `macro_authorization`,
   `macro_user_id`, `connect_client` (the only Connect crate Macro may use).
-- Used by: `ai_tools`, `import_notion`, `import_tracker`, `import_linear`,
+- Used by: `agent_tools`, `import_notion`, `import_tracker`, `import_linear`,
   `import_jira`, `agent_egress`, `agent_harness`,
   `granola_sync`, `mcp_select`, `services/agent_harness_service`.
 

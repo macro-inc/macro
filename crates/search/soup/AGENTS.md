@@ -39,7 +39,7 @@ rows, initiatives, ...) and get back a single unified, paginated result.
   `github_pull_requests`, `foreign_entity`, `activity`. Agent working
   branches come through the `AgentWorkingBranches` port, which DSS serves
   from `agent_changes`.
-- Used by: `ai_tools`, `attention_feed`, `complete_graph`, `database_sql_runner`,
+- Used by: `agent_tools`, `attention_feed`, `complete_graph`, `database_sql_runner`,
   `graphql_initiative`, `graphql_soup`, `graphql_work_feed`, `memory`, `skills`,
   `soup_filter_projection`.
 

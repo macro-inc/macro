@@ -9,7 +9,7 @@ a project, as a `nutype` String newtype (CS-10).
 
 - Depends on: `nutype`; `sqlx` and `utoipa` behind the `sqlx` and `schema`
   features.
-- Used by: `projects` (`ProjectService`), `ai_tools`.
+- Used by: `projects` (`ProjectService`), `agent_tools`.
 
 ## Checks
 

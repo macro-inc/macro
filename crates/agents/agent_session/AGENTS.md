@@ -46,7 +46,7 @@ consumer talks to.
 - Depends on: `agent_runtime_protocol`, `agent_fold`, `jev_classifier`, `teams`,
   `macro_authorization`.
 - Used by: `agent_harness`, `agent_inmem`, `agent_egress`, `agent_trigger`,
-  `agent_changes`, `agent_session_realtime`, `ai_tools` (coding-agent
+  `agent_changes`, `agent_session_realtime`, `agent_tools` (coding-agent
   toolset), `complete_graph`, `graphql_registered_work`, `webhook`,
   `search_service`, `soup_realtime_outbound`,
   and the cloud-agent crates (`cursor_cloud_agents`, `codex_cloud_agents`).

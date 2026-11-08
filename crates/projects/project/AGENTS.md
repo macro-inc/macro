@@ -31,7 +31,7 @@ properties, and activity.
 - Depends on: `entity_access` (ports), `activity`, `models_permissions`,
   `macro_event_broker`/`macro_event_topics`, optionally `properties` /
   `system_properties` (feature `resources`).
-- Used by: `graphql_initiative`, `ai_tools`, `initiative_description`,
+- Used by: `graphql_initiative`, `agent_tools`, `initiative_description`,
   `agent_trigger`, `messages`, `soup_realtime_inbound`.
 
 ## Recipes

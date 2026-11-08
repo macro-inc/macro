@@ -17,7 +17,7 @@ they need.
 - `src/inbound/axum_router.rs`: the HTTP surface (feature `inbound`).
 - `src/inbound/toolset.rs`: the AI tools for any entity's Discussion
   (`ReadDiscussion`, `Comment`, `EditComment`, `DeleteComment`,
-  `ResolveComment`; feature `ai_tools`), addressed by parent kind and id or by
+  `ResolveComment`; feature `agent_tools`), addressed by parent kind and id or by
   a thread or comment id alone. `DiscussionParentType::from_parent` is
   exhaustive: a new `MessageParent` variant decides there whether the tools
   address it.
@@ -43,7 +43,7 @@ they need.
   `properties`/`models_properties`/`model_notifications`/`notification`
   (delivery), `initiative` (outbound), `macro_event_broker`/`macro_event_topics`
   (broker).
-- Used by: `agent_harness`, `agent_session`, `agent_trigger`, `ai_tools`, `bots`,
+- Used by: `agent_harness`, `agent_session`, `agent_trigger`, `agent_tools`, `bots`,
   `channel_bots`, `channels`, `coding_agent_worker`, `crm`, `documents`,
   `lexical_client`, `lexical_mention_extractor`, `macro_db_client`,
   `soup_realtime_inbound`, `webhook`.
@@ -78,7 +78,7 @@ grant users another agent invocation's edit, deletion, or reaction authority.
 
 - `MessageKind::CallRoot` messages stand for a channel call. Only `ensure_call_root` creates them, and
   they announce themselves with `MessageChange::CallRootPosted`, which reaches viewers and nothing else.
-- Most modules are feature-gated (`ai_tools`, `annotations`, `broker`,
+- Most modules are feature-gated (`agent_tools`, `annotations`, `broker`,
   `delivery`, `inbound`, `outbound`, `ports`, `schema`); a caller enabling the wrong
   combination gets a missing-module compile error, not a runtime one — check
   `Cargo.toml`'s `[features]` table before adding a dependency edge.

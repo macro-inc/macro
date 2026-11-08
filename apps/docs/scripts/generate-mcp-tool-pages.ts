@@ -12,7 +12,7 @@ type ToolEntry = {
   output: string;
 };
 
-/** Shape of `crates/ai/ai_tools/schemas/mcp-tools.json`. */
+/** Shape of `crates/ai/agent_tools/schemas/mcp-tools.json`. */
 type ToolSchemaFile = {
   $defs: Record<string, JsonSchema>;
   tools: ToolEntry[];

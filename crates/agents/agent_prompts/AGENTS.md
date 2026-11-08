@@ -24,7 +24,7 @@ AI system prompts: one module per prompt section, each exporting a
 
 ## Boundaries
 
-- Used by: `ai_tools`, `agent_inmem`, `channel_bots`, `agent`,
+- Used by: `agent_tools`, `agent_inmem`, `channel_bots`, `agent`,
   `system_skills`, `services/agent_harness_service`,
   `services/agent_harness_service`, `services/agent_harness_service`.
 
@@ -36,7 +36,7 @@ AI system prompts: one module per prompt section, each exporting a
 - Guidance for one tool goes in that tool's description, and how an area of
   Macro works (databases, CRM, email, calendar, channels, tasks, routines,
   documents, search) in its SDK namespace's `@agent` TSDoc block, never here:
-  `ai_tools` inlines it from the generated catalog, and routed turns load it
+  `agent_tools` inlines it from the generated catalog, and routed turns load it
   per entity. Only cross-cutting rules live in this crate. `code_mode.rs` is
   only the general code-mode section.
 
@@ -59,7 +59,7 @@ reference grants the channel View, so no second message or link is needed.
 
 ## Checks
 
-- `cargo test -p prompt` (`SQLX_OFFLINE` unset).
+- `cargo test -p agent_prompts` (`SQLX_OFFLINE` unset).
 
 ## Related
 

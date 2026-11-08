@@ -49,13 +49,14 @@ fn preserves_explicit_end_roles_without_inheriting_dates_in_the_adapter() {
 #[test]
 fn prompt_examples_match_the_actual_strict_schema_and_typed_adapter() {
     let schema = super::super::AgentTemporalExtractor::schema();
-    let validator =
-        agent::structured_output::validate_schema(&agent::structured_output::DynamicSchema {
+    let validator = agent_loop::structured_output::validate_schema(
+        &agent_loop::structured_output::DynamicSchema {
             schema,
             name: "TemporalExpression".into(),
             description: None,
-        })
-        .unwrap();
+        },
+    )
+    .unwrap();
     for line in include_str!("../../../../prompts/temporal_prompt.txt").lines() {
         if let Some(example) = line.strip_prefix("JSON: ") {
             let value: Value = serde_json::from_str(example).unwrap();

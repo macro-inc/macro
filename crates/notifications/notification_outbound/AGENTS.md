@@ -21,7 +21,7 @@ snooze/mute), `retention.rs` (bounded 30-day cleanup).
 
 - Depends on: `notification` (domain), `kafka_util`/`rdkafka` (feature
   `kafka`, on by default), Redis, SNS, SES, SQS.
-- Used by: the composition roots, `ai_tools`, `properties_service`,
+- Used by: the composition roots, `agent_tools`, `properties_service`,
   `tooling/notification_sandbox`. Never on `macrod`'s path (librdkafka).
 
 ## Checks

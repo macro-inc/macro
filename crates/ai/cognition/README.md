@@ -1,7 +1,7 @@
 # Shared cognition tools
 
 `GenerateObject` and `Decide` are ordinary Macro tools available through the
-shared `ai_tools` toolset. The code-mode SDK calls those same tools; it has no
+shared `agent_tools` toolset. The code-mode SDK calls those same tools; it has no
 provider client, separate AI service, or model credentials.
 
 The domain `Cognition` port takes the authenticated acting user and typed
@@ -19,7 +19,7 @@ validation, and usage metering. Tools cannot choose an acting user, change the
 service destination, pass credentials, or enable nested tools. Callers supply
 the source context; these operations do not fetch or modify Macro documents.
 
-`ai_tools::build_cognition_tool_context` constructs one pooled client using the
+`agent_tools::build_cognition_tool_context` constructs one pooled client using the
 existing cognition service URL and internal credential. The client forwards
 trace context and the authenticated user. It bounds responses to 1 MiB and the
 complete request to 28 seconds, with no redirects or automatic retries because

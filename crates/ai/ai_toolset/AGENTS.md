@@ -4,7 +4,7 @@
 
 Part of AI: the framework underneath every AI tool in the product — the
 `AsyncTool` trait, JSON schema generation via `schemars`, per-tool context
-extraction, and toolset collection/dispatch that `ai_tools` assembles
+extraction, and toolset collection/dispatch that `agent_tools` assembles
 domain crates' tools with.
 
 Do not change this crate without reading `TOOL_DESIGN.md` first; it is
@@ -31,20 +31,20 @@ deliberately stable and widely depended on.
   the tool-search wire types (`tool_search.rs`: `SearchToolsResponse`,
   `LoadToolsResponse`) the agent loop reads loads back from.
 - Not here: any actual tool implementation — those live in domain crates
-  and are assembled in `ai_tools`.
+  and are assembled in `agent_tools`.
 
 ## Boundaries
 
 - Depends on: `schemars`, `axum` (for `FromRef`-based context extraction).
 - Used by: nearly every domain crate that defines tools (`forms`,
   `activity`, `agent_session`, `anthropic`, `databases`, `mcp_toolset`,
-  `crm`, `routines`, and many more) plus `ai_tools` itself and `agent`.
+  `crm`, `routines`, and many more) plus `agent_tools` itself and `agent`.
 
 ## Recipes
 
 - Define a new tool: implement `AsyncTool` in the owning domain crate →
   add required annotations (`src/annotations.rs`) → wire it into that
-  crate's `inbound::toolset` module → picked up by `ai_tools`.
+  crate's `inbound::toolset` module → picked up by `agent_tools`.
 
 ## Checks
 

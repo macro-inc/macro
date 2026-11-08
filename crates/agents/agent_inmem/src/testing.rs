@@ -1,6 +1,6 @@
 //! Test doubles shared by this crate's tests.
 
-use agent::{AgentError, StreamPart};
+use agent_loop::{AgentError, StreamPart};
 use ai_billing::domain::{AdmissionFuture, AiAdmissionError, AiAdmissionService};
 use ai_usage::AiFeature;
 use macro_user_id::user_id::MacroUserIdStr;
@@ -163,9 +163,9 @@ pub(crate) struct RecordedTurn {
     /// Model the turn was to run on.
     pub(crate) model: String,
     /// Reasoning effort the turn was to use.
-    pub(crate) reasoning_effort: agent::ReasoningEffort,
+    pub(crate) reasoning_effort: agent_loop::ReasoningEffort,
     /// Provider speed selected for this turn.
-    pub(crate) speed: agent::ModelSpeed,
+    pub(crate) speed: agent_loop::ModelSpeed,
     /// The conversation, flattened to text per message.
     pub(crate) messages: Vec<String>,
     /// Every image URL attached across the conversation, in order.

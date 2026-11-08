@@ -26,7 +26,7 @@ inbound = [
 outbound = [
   "admission",
   "bots/outbound",
-  "dep:agent",
+  "dep:agent_loop",
   "dep:ai_usage",
   "dep:connection_gateway_client",
   "dep:entity_access_db_utils",
@@ -57,7 +57,7 @@ schemars = { workspace = true, optional = true }
 
 agent-client-protocol = { workspace = true }
 harness_id = { workspace = true }
-agent = { workspace = true, optional = true }
+agent_loop = { workspace = true, optional = true }
 ai_usage = { workspace = true, optional = true }
 jev_classifier = { workspace = true, optional = true }
 dashmap = { workspace = true }

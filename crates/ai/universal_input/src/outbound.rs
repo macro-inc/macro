@@ -8,7 +8,7 @@ use crate::domain::{
     ExtractInputRequest, FIELD_EXTRACTION_GUIDANCE, FieldExtractor, InputError, InputIntent,
     InputSuggestions,
 };
-use agent::{Message, complete_with_history_and_params};
+use agent_loop::{Message, complete_with_history_and_params};
 use ai_usage::{UsageContext, UsageRecorder};
 use serde_json::{Value, json};
 use std::sync::Arc;

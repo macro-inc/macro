@@ -36,14 +36,14 @@ soft delete/restore/purge, and bulk upload into a project tree.
 
 - Depends on: `entity_access`, `entity_access_management`, `entity_mutation`,
   `macro_event_broker`, `model_owner`, `models_permissions`.
-- Used by: `ai_tools` (project tools), `soup_realtime_inbound`,
+- Used by: `agent_tools` (project tools), `soup_realtime_inbound`,
   `services/deleted_item_poller`, `services/search_processing_service`.
 
 ## Recipes
 
 - Add a mutation route: `src/domain/ports.rs` (`ProjectService` method) →
   `src/domain/service.rs` → `src/inbound/axum_router.rs`.
-- Add an AI tool: `src/inbound/toolset.rs` → the `ai_tools` feature gate in
+- Add an AI tool: `src/inbound/toolset.rs` → the `agent_tools` feature gate in
   `Cargo.toml`.
 - Copy a folder tree in from elsewhere (an import): create each folder with
   `ProjectService::create_project_dated_by_contents`. It starts never edited

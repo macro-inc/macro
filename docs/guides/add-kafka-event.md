@@ -88,7 +88,7 @@ Services default their broker generic to `NoopMacroEventBroker`, so a compositio
 that forgets it compiles and silently publishes nothing.
 
 - Find every place the producing service is constructed: its service binaries,
-  `crates/ai/ai_tools/src/tool_context.rs` (AI tools and MCP; use
+  `crates/ai/agent_tools/src/tool_context.rs` (AI tools and MCP; use
   `MaybeToolEventBroker`), and any other host. A write path left on the no-op
   broker is a write that never produces an event.
 - Build the broker as `MacroEventBrokerService::new(KafkaEventPublisher::new(..)?,

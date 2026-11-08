@@ -91,7 +91,7 @@ from this import's other databases into it are not linked.
   review), `ai_toolset`, `ai_usage`, `ai_billing`, `connection_gateway_client`,
   `mcp_select`, `properties`, `import_notion` (Notion REST), `import_tracker` (tracker snapshots), `models_databases`
   (database ops the workspace import writes).
-- Used by: `ai_tools`, `slack_integration`, `services/agent_harness_service`
+- Used by: `agent_tools`, `slack_integration`, `services/agent_harness_service`
   (cognition `/import/*` routes, the Notion sweeper, import reviews).
 
 ## Recipes
@@ -108,7 +108,7 @@ from this import's other databases into it are not linked.
 ## Gotchas
 
 - Workspace imports write through the host's `WorkspaceWriter` (the
-  `ai_tools` entity creator), which also implements `EntityCreator`; the
+  `agent_tools` entity creator), which also implements `EntityCreator`; the
   import service's `N` type parameter is the Notion connection factory, and
   hosts that never call `.with_notion_connections` report Notion as not
   connected.
@@ -168,7 +168,7 @@ from this import's other databases into it are not linked.
   one given up on. A cancel from another process keeps the run `dismissed`,
   so the write's end reports it cancelled. `attach_review` records the
   session (`import_run.review_session_id`); hosts that run Notion imports
-  build the ledger with `ai_tools::build_import_repo`, which wires the
+  build the ledger with `agent_tools::build_import_repo`, which wires the
   writer. Left open: a writer whose process dies after a cancel never ends,
   so that cancel is not reported.
 - The inventory counts each data source's rows, and takes its sample titles,

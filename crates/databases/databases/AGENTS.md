@@ -33,7 +33,7 @@ service with Axum, agent-tool and Postgres adapters.
   `connection_gateway_client` (liveness), `entity_mutation`
   (rename/move/duplicate/trash/restore).
 - Used by: `database_sql_runner` (agent SQL), `crm` and `forms` (own storage via
-  `DatabaseStorage`, no `database_entities` row), `ai_tools`, `complete_graph`,
+  `DatabaseStorage`, no `database_entities` row), `agent_tools`, `complete_graph`,
   `graphql_crm`. The document storage service mounts `src/inbound/axum_router.rs`.
 
 ## Recipes
@@ -48,7 +48,7 @@ service with Axum, agent-tool and Postgres adapters.
 
 ## Checks
 
-- `cargo test -p databases --features postgres,inbound,ai_tools,gateway,entity_mutation`
+- `cargo test -p databases --features postgres,inbound,agent_tools,gateway,entity_mutation`
   (`SQLX_OFFLINE` unset; needs a migrated local MacroDB).
 
 ## Gotchas

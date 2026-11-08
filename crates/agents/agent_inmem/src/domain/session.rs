@@ -7,9 +7,9 @@
 
 use std::collections::HashMap;
 
-use agent::ReasoningEffort;
-use agent::types::{AssistantMessagePart, ChatMessage, ChatMessageContent, Role};
 use agent_client_protocol::schema::v1::{ContentBlock, PromptRequest, RequestId, SessionId};
+use agent_loop::ReasoningEffort;
+use agent_loop::types::{AssistantMessagePart, ChatMessage, ChatMessageContent, Role};
 use agent_runtime_protocol::domain::action::PromptAttachment;
 use agent_session::domain::model::AgentSessionId;
 use attachment::image::ImageData;
@@ -192,7 +192,7 @@ fn attachment_content(attachment: &PromptAttachment) -> AttachmentContent<'stati
 use super::engine::AgentIdentity;
 
 /// One entry of the conversation, in the shape
-/// [`agent::to_rig_messages`] round-trips.
+/// [`agent_loop::to_rig_messages`] round-trips.
 #[derive(Debug, Clone)]
 pub enum HistoryEntry {
     /// A prompt from a user.
@@ -265,7 +265,7 @@ pub struct SessionState {
     /// Reasoning effort applied to subsequent turns.
     pub reasoning_effort: ReasoningEffort,
     /// Inference speed applied to subsequent turns.
-    pub speed: agent::ModelSpeed,
+    pub speed: agent_loop::ModelSpeed,
     /// Who this agent is, snapshotted from the session's bot at attach.
     pub identity: Option<AgentIdentity>,
     /// Instructions every turn runs under, snapshotted from the session row
@@ -289,7 +289,7 @@ impl SessionState {
             acp_session_id: None,
             model,
             reasoning_effort: ReasoningEffort::default(),
-            speed: agent::ModelSpeed::Standard,
+            speed: agent_loop::ModelSpeed::Standard,
             identity: None,
             instructions: None,
             history: Vec::new(),

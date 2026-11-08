@@ -28,7 +28,7 @@ to read or render document content.
 ## Boundaries
 
 - Depends on: `agent_fold`, `messages`, `trigger_context`.
-- Used by: `documents`, `collab_surface`, `email`, `ai_tools`, `agent_harness`,
+- Used by: `documents`, `collab_surface`, `email`, `agent_tools`, `agent_harness`,
   `agent_trigger`, `channel_bots`, `image_generation`,
   `lexical_mention_extractor`, `memory`, `skills`, `task_dedup`.
 

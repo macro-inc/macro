@@ -42,8 +42,8 @@ pub struct SessionConnectedApps<Egress, Connections, Servers, Sessions> {
     /// The gate native tools pass, so discovery and adding a server wait for
     /// the owner exactly as `DiscoverConnectors` and `ConnectMcpServer` do.
     pub gate: Arc<dyn NativeToolGate>,
-    pub connectors: ai_tools::ToolConnectorToolContext,
-    pub mcp_servers: ai_tools::ToolMcpServerToolContext,
+    pub connectors: agent_tools::ToolConnectorToolContext,
+    pub mcp_servers: agent_tools::ToolMcpServerToolContext,
 }
 
 /// A use settled against the session: its grant, the account it spends and

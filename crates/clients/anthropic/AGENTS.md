@@ -21,15 +21,15 @@ tools.
 
 - Owns: the Anthropic API client, its OpenAI-shaped adapter, and Anthropic's
   built-in code-execution tools.
-- Not here: web search and fetch → `crates/ai/web_search` (wired as tools in `crates/ai/ai_tools`).
+- Not here: web search and fetch → `crates/ai/web_search` (wired as tools in `crates/ai/agent_tools`).
 - Not here: model selection, pricing, usage/billing policy, or the provider-agnostic
-  chat abstraction → `crates/ai/agent`, `crates/billing/ai_billing`, `crates/billing/ai_usage`.
+  chat abstraction → `crates/ai/agent_loop`, `crates/billing/ai_billing`, `crates/billing/ai_usage`.
 
 ## Boundaries
 
 - Depends on: `macro_env_var`, optionally `async-openai` (`openai` feature),
   `ai_billing`/`ai_toolset`/`ai_usage` (`toolset` feature).
-- Used by: `crates/ai/ai_tools`.
+- Used by: `crates/ai/agent_tools`.
 
 ## Recipes
 

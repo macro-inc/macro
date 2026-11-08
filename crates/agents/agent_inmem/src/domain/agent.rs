@@ -14,9 +14,6 @@ use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
 use crate::domain::model_access::{InMemModelAccess, ModelAccessError, SessionModels};
-use agent::types::{AssistantMessagePart, ChatMessage};
-use agent::{McpInfo, StreamAccumulator, StreamPart, ToolResponse};
-use agent::{ModelSpeed, ReasoningEffort};
 use agent_api_keys::domain::{AgentKeys, ModelProvider, UsableAgentKey};
 use agent_client_protocol::schema::v1::{
     AgentCapabilities, AvailableCommand, AvailableCommandInput, AvailableCommandsUpdate,
@@ -34,13 +31,16 @@ use agent_client_protocol::schema::v1::{
 use agent_client_protocol::{
     Agent, Channel as AcpChannel, Client, ConnectionTo, Error as AcpError,
 };
+use agent_loop::types::{AssistantMessagePart, ChatMessage};
+use agent_loop::{McpInfo, StreamAccumulator, StreamPart, ToolResponse};
+use agent_loop::{ModelSpeed, ReasoningEffort};
 use agent_runtime_protocol::domain::action::MODEL_CONFIG_ID;
 use agent_runtime_protocol::domain::turn::{FailureNotice, FailureNoticeKind};
 use agent_session::domain::model::AgentSessionId;
-use ai_billing::domain::AiAdmissionService;
-use ai_tools::user_tool_review::{
+use agent_tools::user_tool_review::{
     ReviewError, ReviewFieldKind, ReviewForm, ReviewOutcome, ReviewRequest, UserToolReviewer,
 };
+use ai_billing::domain::AiAdmissionService;
 use async_trait::async_trait;
 use model_owner::Owner;
 use tokio_util::sync::CancellationToken;

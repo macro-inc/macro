@@ -12,7 +12,7 @@
 //! `GET /system_skills` endpoint.
 #![deny(missing_docs)]
 
-use prompt::Section;
+use agent_prompts::Section;
 use uuid::Uuid;
 
 pub mod catch_me_up;

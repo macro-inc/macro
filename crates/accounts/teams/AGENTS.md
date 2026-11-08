@@ -49,10 +49,10 @@ event contract (schema, sanitization, delivery semantics).
 ## Boundaries
 
 - Depends on: `entity_access`, `contacts` (feature `outbound`), the team channel through its `TeamChannels` port (`src/domain/team_channels.rs`, served by `authentication_service`; never depend on `channels`),
-  `analytics_client`, `ai_toolset` (feature `ai_tools`).
+  `analytics_client`, `ai_toolset` (feature `agent_tools`).
 - Used by: `services/authentication_service`, `services/document_storage_service`,
   `services/calendar_service`, `services/agent_harness_service`,
-  `services/agent_harness_service`, `crates/agents/scheduled_action`, `crates/ai/ai_tools`,
+  `services/agent_harness_service`, `crates/agents/scheduled_action`, `crates/ai/agent_tools`,
   `crates/billing/ai_billing`, `crates/calendar/calendar_scheduling`.
 
 ## Recipes

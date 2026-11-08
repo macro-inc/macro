@@ -21,7 +21,7 @@ and the web's TypeScript through specta.
 
 - Depends on: `serde`, `serde_path_to_error`, `schemars`, `specta`, `nutype`.
 - Used by: `agent_code_mode` (`execution.views.present`, ExecuteCode's
-  description), `ai_tools` (`DisplayResults`), `agent_fold` (view tool
+  description), `agent_tools` (`DisplayResults`), `agent_fold` (view tool
   details and activity cards, built for wasm too).
 
 ## Recipes
@@ -54,7 +54,7 @@ and the web's TypeScript through specta.
 - The model's schema is a subset of what decodes: `not` negates a single
   clause there, while decoding takes any expression. A recursive field must
   stay optional or behind a list in the schema, or Gemini rejects every
-  request carrying `DisplayResults`; `ai_tools` tests fail when one does not.
+  request carrying `DisplayResults`; `agent_tools` tests fail when one does not.
 - Paths stop at an internally tagged widget: serde buffers a tagged variant's
   fields, so a problem inside one names the widget, not the field.
 - The browser never validates a view: every path decodes it on the server

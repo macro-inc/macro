@@ -29,7 +29,7 @@ agent_correlation = { workspace = true, features = ["http", "postgres"] }
 universal_input = { workspace = true }
 models_ai_projection = { workspace = true }
 activity = { workspace = true, features = ["outbound", "schema"] }
-agent = { workspace = true, features = ["debug-messages"] }
+agent_loop = { workspace = true, features = ["debug-messages"] }
 agent-client-protocol = { workspace = true }
 agent_changes = { workspace = true, default-features = true }
 agent_code_mode = { workspace = true }
@@ -45,7 +45,7 @@ agent_trigger = { workspace = true, features = ["outbound"] }
 ai_billing = { workspace = true, features = ["pg-admission"] }
 agent_api_keys = { workspace = true }
 ai_projections = { workspace = true }
-ai_tools = { workspace = true }
+agent_tools = { workspace = true }
 ai_toolset = { workspace = true }
 calendar_events = { workspace = true, features = ["postgres"] }
 ai_usage = { workspace = true }
@@ -149,7 +149,7 @@ notification_inbound = { workspace = true, features = ["ai_tool"] }
 notification_outbound = { workspace = true }
 onboarding = { workspace = true }
 pipedream_mcp = { workspace = true }
-prompt = { workspace = true }
+agent_prompts = { workspace = true }
 properties = { workspace = true, features = ["outbound"] }
 rdkafka = { workspace = true }
 readonly_pool = { workspace = true }
@@ -224,9 +224,9 @@ soup_realtime_core = { workspace = true }
 soup_realtime_outbound = { workspace = true }
 
 [dev-dependencies]
-agent = { workspace = true }
+agent_loop = { workspace = true }
 agent_session = { workspace = true, default-features = true, features = ["test-utils"] }
-ai_tools = { workspace = true, features = ["test-support"] }
+agent_tools = { workspace = true, features = ["test-support"] }
 async-trait = { workspace = true }
 bot_id = { workspace = true, features = ["test-utils"] }
 harness_id = { workspace = true, features = ["test-utils"] }

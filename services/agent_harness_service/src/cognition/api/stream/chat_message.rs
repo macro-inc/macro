@@ -13,8 +13,8 @@ use crate::cognition::service::ai_stream_registry::CancellationSubscription;
 use crate::cognition::service::chat_renamer::spawn_initial_chat_rename;
 use crate::cognition::service::get_chat::get_chat;
 use crate::cognition::service::notification::notify;
-use agent::types::{AssistantMessagePart, ChatMessage, ChatMessageContent};
-use agent::{AgentLoop, ModelSpeed, StreamAccumulator};
+use agent_loop::types::{AssistantMessagePart, ChatMessage, ChatMessageContent};
+use agent_loop::{AgentLoop, ModelSpeed, StreamAccumulator};
 use ai_billing::inbound::admission::admission_status;
 use async_stream::stream;
 use attachment::FormattedParts;
@@ -590,7 +590,7 @@ fn stream_and_save_message(
             .expect("chat speed was validated before starting the stream");
 
 
-        let rig_messages = agent::to_rig_messages(&request);
+        let rig_messages = agent_loop::to_rig_messages(&request);
         let usage_ctx = ai_usage::UsageContext::new(ai_usage::AiFeature::Chat, user_id.clone())
             .with_entity(macro_uuid::string_to_uuid(&chat_id).ok());
         // Carry the feature on the context so tool-spawned subagents attribute to it.
@@ -715,8 +715,8 @@ fn stream_and_save_message(
             if resolved_parts.is_empty() {
                 vec![]
             } else {
-                vec![agent::types::ChatMessage {
-                    role: agent::types::Role::Assistant,
+                vec![agent_loop::types::ChatMessage {
+                    role: agent_loop::types::Role::Assistant,
                     content: ChatMessageContent::AssistantMessageParts(resolved_parts),
                     attachments: None,
                 }]
@@ -726,7 +726,7 @@ fn stream_and_save_message(
         // Extract assistant response text before moving new_messages into store
         let assistant_text = new_messages
             .iter()
-            .find(|m| m.role == agent::types::Role::Assistant)
+            .find(|m| m.role == agent_loop::types::Role::Assistant)
             .and_then(|m| m.content.assistant_message_text());
 
         if let Err(err) = store_conversation_messages(

@@ -19,6 +19,7 @@ members = [
   "crates/agents/agent_harness",
   "crates/agents/agent_inmem",
   "crates/agents/agent_preview",
+  "crates/agents/agent_prompts",
   "crates/agents/agent_runtime_protocol",
   "crates/agents/agent_session",
   "crates/agents/agent_session_realtime",
@@ -36,13 +37,12 @@ members = [
   "crates/agents/dynamic_ui",
   "crates/agents/harnesses",
   "crates/agents/macrod",
-  "crates/agents/prompt",
   "crates/agents/routine_program",
   "crates/agents/routines",
   "crates/agents/scheduled_action",
   "crates/agents/skills",
   "crates/agents/system_skills",
-  "crates/ai/agent",
+  "crates/ai/agent_loop",
   "crates/ai/ai_projections",
   "crates/ai/cognition",
   "crates/ai/dictation",
@@ -621,7 +621,6 @@ subtle = "2.6.1"
 access_requests = { path = "crates/entities/access_requests" }
 account_manager = { path = "crates/accounts/account_manager" }
 activity = { path = "crates/search/activity", default-features = false }
-agent = { path = "crates/ai/agent" }
 agent_api_keys = { path = "crates/agents/agent_api_keys" }
 agent_changes = { path = "crates/agents/agent_changes", default-features = false }
 agent_code_mode = { path = "crates/agents/agent_code_mode" }
@@ -632,17 +631,19 @@ agent_harness = { path = "crates/agents/agent_harness" }
 agent_harness_egress_url = { path = "crates/platform/service_urls/agent_harness_egress_url" }
 agent_harness_service_url = { path = "crates/platform/service_urls/agent_harness_service_url" }
 agent_inmem = { path = "crates/agents/agent_inmem" }
+agent_loop = { path = "crates/ai/agent_loop" }
 agent_preview = { path = "crates/agents/agent_preview" }
+agent_prompts = { path = "crates/agents/agent_prompts" }
 agent_runtime_protocol = { path = "crates/agents/agent_runtime_protocol", default-features = false }
 agent_session = { path = "crates/agents/agent_session", default-features = false }
 agent_session_id = { path = "crates/types/agent_session_id" }
 agent_session_realtime = { path = "crates/agents/agent_session_realtime", default-features = false }
+agent_tools = { path = "crates/ai/agent_tools" }
 agent_trigger = { path = "crates/agents/agent_trigger" }
 ai_admission = { path = "crates/billing/ai_admission" }
 ai_billing = { path = "crates/billing/ai_billing" }
 ai_editing_worker_url = { path = "crates/platform/service_urls/ai_editing_worker_url" }
 ai_projections = { path = "crates/ai/ai_projections" }
-ai_tools = { path = "crates/ai/ai_tools" }
 ai_toolset = { path = "crates/ai/ai_toolset" }
 ai_usage = { path = "crates/billing/ai_usage" }
 analytics_client = { path = "crates/clients/analytics_client" }
@@ -890,7 +891,6 @@ preview_gateway_url = { path = "crates/platform/service_urls/preview_gateway_url
 project = { path = "crates/projects/project", default-features = false }
 project_id = { path = "crates/types/project_id" }
 projects_hex = { package = "folder", path = "crates/projects/folder" }
-prompt = { path = "crates/agents/prompt" }
 properties = { path = "crates/databases/properties", default-features = false }
 properties_inbound = { path = "crates/databases/properties_inbound", default-features = false }
 psd_engine = { path = "crates/engines/psd_engine" }

@@ -1,4 +1,4 @@
-//! The channels HTTP routes (feature `axum`), AI toolset (`ai_tools`),
+//! The channels HTTP routes (feature `axum`), AI toolset (`agent_tools`),
 //! attachment adapter (`attachment`) and teammate-DM Kafka consumer
 //! (`kafka_consumer`), all driving the `channels` domain.
 

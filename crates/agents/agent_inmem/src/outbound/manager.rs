@@ -161,17 +161,18 @@ impl InMemAgentManager {
             // map; `or_insert_with` still wins any race to create it.
             let frames = self.frames.frames(facts.id).await?;
             let restored_effort = replay_reasoning_effort(&frames);
-            let reasoning_effort =
-                if agent::ReasoningEffort::supported(&facts.model).contains(&restored_effort) {
-                    restored_effort
-                } else {
-                    agent::ReasoningEffort::default()
-                };
+            let reasoning_effort = if agent_loop::ReasoningEffort::supported(&facts.model)
+                .contains(&restored_effort)
+            {
+                restored_effort
+            } else {
+                agent_loop::ReasoningEffort::default()
+            };
             let restored_speed = replay_speed(&frames);
             let speed = if restored_speed.supported(&facts.model) {
                 restored_speed
             } else {
-                agent::ModelSpeed::Standard
+                agent_loop::ModelSpeed::Standard
             };
             let history = replay_history(frames);
             self.store.entry(facts.id).or_insert_with(|| SessionState {

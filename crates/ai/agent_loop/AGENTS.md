@@ -35,7 +35,7 @@ and usage metering.
 
 - Owns: the turn loop, provider routing/model selection, streaming parts,
   and metering integration.
-- Not here: tool definitions and schemas → `ai_toolset`, `ai_tools`; usage
+- Not here: tool definitions and schemas → `ai_toolset`, `agent_tools`; usage
   pricing/billing → `ai_usage`, `ai_billing`.
 
 ## Boundaries
@@ -43,8 +43,8 @@ and usage metering.
 - Depends on: `ai_usage` (metering), `ai_toolset` (tool adapter trait),
   `attachment`, `genai_telemetry`, `rig-core`/`rig-agent`. Not `prompt`: it is
   edited often and every `agent` dependent would rebuild with it.
-- Used by: `agent_inmem`, `ai_tools`, `ai_projections` (`agent` feature),
-  and most AI-surface crates that run a turn (directly or via `ai_tools`).
+- Used by: `agent_inmem`, `agent_tools`, `ai_projections` (`agent` feature),
+  and most AI-surface crates that run a turn (directly or via `agent_tools`).
 
 ## Recipes
 
@@ -56,14 +56,14 @@ and usage metering.
 
 ## Checks
 
-- `cargo test -p agent` (`SQLX_OFFLINE` unset).
+- `cargo test -p agent_loop` (`SQLX_OFFLINE` unset).
 
 ## Gotchas
 
 - A `Session` lives for one turn. Before its first request it reloads the
   catalog tools the history called or loaded, reading `SearchTools`/`LoadTools`
   results through `ai_toolset::tool_search::tools_loaded_by`; change those
-  response types there, not in `ai_tools`.
+  response types there, not in `agent_tools`.
 - `rig-core`/`rig-agent` are pinned exact versions (not workspace deps);
   bump both together and check `test-utils` feature compatibility.
 - `AgentLoop::with_provider_api_key` rekeys only the loop's own model calls

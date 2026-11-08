@@ -262,12 +262,13 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
         PgChannelsRepo::new(pool.clone()),
         frecency_storage,
     );
-    let email_service_for_tools: Arc<ai_tools::ToolEmailService> = Arc::new(email_service.clone());
+    let email_service_for_tools: Arc<agent_tools::ToolEmailService> =
+        Arc::new(email_service.clone());
     let github_pull_request_service = GithubPullRequestServiceImpl::new(
         ForeignEntityServiceImpl::new(PgForeignEntityRepo::new(pool.clone())),
         PgGithubPullRequestRepo::new(pool.clone()),
     );
-    let favorites_service = ai_tools::build_favorites_service(pool.clone());
+    let favorites_service = agent_tools::build_favorites_service(pool.clone());
     let soup_service = Arc::new(
         SoupImpl::new(
             PgSoupRepo::new(readonly_pool::ReadOnlyPool(pool.clone())),
@@ -302,8 +303,8 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
     );
     let notification_reader_service = NotificationReaderService {
         repository: DbNotificationRepository::new(pool.clone()),
-        queue: ai_tools::ToolNotificationQueue::Sqs(notification_reader_queue),
-        sns_endpoint: ai_tools::NoOpSnsEndpointManager,
+        queue: agent_tools::ToolNotificationQueue::Sqs(notification_reader_queue),
+        sns_endpoint: agent_tools::NoOpSnsEndpointManager,
         platform_config: PlatformArnConfig {
             apns_platform_arn: String::new(),
             fcm_platform_arn: String::new(),
@@ -352,12 +353,12 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
             .expect("kafka producer config is valid"),
         TaskTracker::new(),
     );
-    let properties_service = ai_tools::build_properties_service_with_broker(
+    let properties_service = agent_tools::build_properties_service_with_broker(
         pool.clone(),
         entity_access_service.clone(),
         macro_event_broker.clone(),
     );
-    let task_properties_service = ai_tools::build_task_properties_adapter(
+    let task_properties_service = agent_tools::build_task_properties_adapter(
         pool.clone(),
         properties_service.clone(),
         entity_access_service.clone(),
@@ -369,7 +370,7 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
         sync_service_client.as_ref().clone(),
         s3_upload_adapter,
         task_properties_service,
-        ai_tools::NoOpConnectionService,
+        agent_tools::NoOpConnectionService,
         entity_access_management::domain::service::EntityAccessManagementServiceImpl::new(
             entity_access_management::outbound::PgRepository::new(pool.clone()),
         ),
@@ -388,7 +389,7 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
         sync_service_client.as_ref().clone(),
         test_editing_client,
         "test-jwt-secret".to_string(),
-        ai_tools::build_message_service_without_side_effects(
+        agent_tools::build_message_service_without_side_effects(
             pool.clone(),
             std::sync::Arc::new(test_lexical_client.clone()),
         ),
@@ -397,7 +398,7 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
     let search_service_client = Arc::new(search_service_client);
 
     // Build properties tool context
-    let properties_tool_context = ai_tools::build_properties_tool_context(
+    let properties_tool_context = agent_tools::build_properties_tool_context(
         properties_service.clone(),
         entity_access_service.clone(),
     );
@@ -434,10 +435,10 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
                 pool.clone(),
             )),
         ),
-        ai_tools::NoOpCallRtcClient,
-        ai_tools::NoOpConnectionService,
+        agent_tools::NoOpCallRtcClient,
+        agent_tools::NoOpConnectionService,
         (*entity_access_service).clone(),
-        ai_tools::NoOpNotificationIngress,
+        agent_tools::NoOpNotificationIngress,
         None::<call::outbound::s3_recording_storage::S3RecordingStorage>,
         String::new(),
     );
@@ -458,7 +459,7 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
         (*entity_access_service).clone(),
     );
 
-    let initiative_tool_context = ai_tools::build_initiative_tool_context(
+    let initiative_tool_context = agent_tools::build_initiative_tool_context(
         pool.clone(),
         &document_tool_context,
         properties_service.clone(),
@@ -466,13 +467,13 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
         macro_event_broker.clone(),
     );
 
-    let databases_tool_context = ai_tools::build_databases_tool_context(
+    let databases_tool_context = agent_tools::build_databases_tool_context(
         pool.clone(),
         entity_access_service.clone(),
-        ai_tools::ToolTableEventPublisher::NoOp(Default::default()),
-        ai_tools::MaybeToolEventBroker::Real(macro_event_broker.clone()),
+        agent_tools::ToolTableEventPublisher::NoOp(Default::default()),
+        agent_tools::MaybeToolEventBroker::Real(macro_event_broker.clone()),
     );
-    let project_tool_context = ai_tools::build_project_tool_context(
+    let project_tool_context = agent_tools::build_project_tool_context(
         pool.clone(),
         macro_event_broker.clone(),
         entity_access_service.clone(),
@@ -480,24 +481,24 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
         user_email_service.clone(),
         databases_tool_context.service.clone(),
     );
-    let databases_sql_tool_context = ai_tools::build_databases_sql_tool_context(
+    let databases_sql_tool_context = agent_tools::build_databases_sql_tool_context(
         &databases_tool_context,
         soup_service.clone(),
         pool.clone(),
     );
-    let crm_tool_context = ai_tools::build_crm_tool_context(pool.clone());
-    let pipeline_tool_context = ai_tools::build_pipeline_tool_context(
+    let crm_tool_context = agent_tools::build_crm_tool_context(pool.clone());
+    let pipeline_tool_context = agent_tools::build_pipeline_tool_context(
         pool.clone(),
         &databases_tool_context,
         &crm_tool_context,
     );
-    let crm_transfer_tool_context = ai_tools::build_crm_transfer_tool_context(
+    let crm_transfer_tool_context = agent_tools::build_crm_transfer_tool_context(
         &pipeline_tool_context,
         &crm_tool_context,
         &document_tool_context,
     );
 
-    let calendar_tool_context = ai_tools::build_calendar_tool_context(
+    let calendar_tool_context = agent_tools::build_calendar_tool_context(
         pool.clone(),
         service_url::ServiceUrl::owned("http://localhost:0").into(),
         "test-internal-api-key".to_string(),
@@ -505,14 +506,14 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
         app_service_url::AppServiceUrl::local(),
         true,
     );
-    let forms_tool_context = ai_tools::build_forms_tool_context(
+    let forms_tool_context = agent_tools::build_forms_tool_context(
         pool.clone(),
         &document_tool_context,
         &databases_tool_context,
         &calendar_tool_context,
         None,
-        ai_tools::MaybeToolEventBroker::Real(macro_event_broker.clone()),
-        ai_tools::FormsToolConfig {
+        agent_tools::MaybeToolEventBroker::Real(macro_event_broker.clone()),
+        agent_tools::FormsToolConfig {
             app_origin: "https://macro.test".into(),
             editing_worker_url: "http://localhost:8933".into(),
             static_files: static_file_service_client::StaticFileServiceClient::new(
@@ -522,40 +523,40 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
         },
     );
 
-    let tool_service_context = ai_tools::ToolServiceContext {
-        memory_tool_context: ai_tools::memory::build_memory_tool_context(
+    let tool_service_context = agent_tools::ToolServiceContext {
+        memory_tool_context: agent_tools::memory::build_memory_tool_context(
             pool.clone(),
             recorder.clone(),
         ),
         cognition_tool_context: Default::default(),
-        connector_tool_context: ai_tools::build_connector_tool_context(pool.clone(), None, None),
+        connector_tool_context: agent_tools::build_connector_tool_context(pool.clone(), None, None),
         search_service_client: search_service_client.clone(),
         email_service_client: email_service_client_external.clone(),
         soup_service: soup_service.clone(),
         email_service: email_service_for_tools.clone(),
-        activity_tool_context: ai_tools::build_activity_tool_context(
+        activity_tool_context: agent_tools::build_activity_tool_context(
             pool.clone(),
             properties_service.clone(),
             entity_access_service.clone(),
         ),
-        image_generation_tool_context: ai_tools::build_image_generation_tool_context_test(
+        image_generation_tool_context: agent_tools::build_image_generation_tool_context_test(
             &document_tool_context,
         ),
-        message_tool_context: ai_tools::build_message_tool_context(&document_tool_context),
+        message_tool_context: agent_tools::build_message_tool_context(&document_tool_context),
         document_tool_context: document_tool_context.clone(),
         properties_tool_context: properties_tool_context.clone(),
         email_tool_context: email_tool_context.clone(),
         call_tool_context: call_tool_context.clone(),
-        booking_management_tool_context: ai_tools::build_booking_management_tool_context(
+        booking_management_tool_context: agent_tools::build_booking_management_tool_context(
             service_url::ServiceUrl::owned("http://localhost:0").into(),
             "test-internal-api-key".to_string(),
             macro_env::Environment::Local,
         ),
-        booking_link_tool_context: ai_tools::build_booking_link_tool_context(
+        booking_link_tool_context: agent_tools::build_booking_link_tool_context(
             pool.clone(),
             macro_env::Environment::Local,
         ),
-        calendar_tool_context: ai_tools::build_calendar_tool_context(
+        calendar_tool_context: agent_tools::build_calendar_tool_context(
             pool.clone(),
             service_url::ServiceUrl::owned("http://localhost:0").into(),
             "test-internal-api-key".to_string(),
@@ -563,54 +564,58 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
             app_service_url::AppServiceUrl::local(),
             true,
         ),
-        team_calendar_tool_context: ai_tools::build_team_calendar_tool_context(pool.clone(), true),
+        team_calendar_tool_context: agent_tools::build_team_calendar_tool_context(
+            pool.clone(),
+            true,
+        ),
         notification_tool_context: notification_tool_context.clone(),
         item_notification_preference_tool_context:
-            ai_tools::build_item_notification_preference_tool_context(pool.clone()),
+            agent_tools::build_item_notification_preference_tool_context(pool.clone()),
         databases_tool_context,
         forms_tool_context,
         databases_sql_tool_context,
-        import_tool_context: ai_tools::ToolImportToolContext::unwired(),
-        mcp_server_tool_context: ai_tools::ToolMcpServerToolContext::unwired(),
+        import_tool_context: agent_tools::ToolImportToolContext::unwired(),
+        mcp_server_tool_context: agent_tools::ToolMcpServerToolContext::unwired(),
         chat_tool_context,
-        channel_tool_context: ai_tools::build_channel_tool_context_without_side_effects(
+        channel_tool_context: agent_tools::build_channel_tool_context_without_side_effects(
             pool.clone(),
             std::sync::Arc::new(test_lexical_client),
         ),
-        channel_media_upload_tool_context: ai_tools::build_channel_media_upload_tool_context_test(),
-        bot_tool_context: ai_tools::build_bot_tool_context(
+        channel_media_upload_tool_context:
+            agent_tools::build_channel_media_upload_tool_context_test(),
+        bot_tool_context: agent_tools::build_bot_tool_context(
             pool.clone(),
-            ai_tools::MaybeToolEventBroker::Real(macro_event_broker.clone()),
+            agent_tools::MaybeToolEventBroker::Real(macro_event_broker.clone()),
             entity_access_service.clone(),
             "http://localhost:8086".to_string(),
             None,
         ),
-        read_agent_session_context: ai_tools::build_read_agent_session_context(
+        read_agent_session_context: agent_tools::build_read_agent_session_context(
             pool.clone(),
             entity_access_service.clone(),
         ),
-        coding_agent_tool_context: ai_tools::build_coding_agent_tool_context(
+        coding_agent_tool_context: agent_tools::build_coding_agent_tool_context(
             service_url::ServiceUrl::owned("http://localhost:0").into(),
             "test-internal-api-key".to_string(),
         )
         .expect("valid test coding agent context"),
         project_tool_context,
-        favorites_tool_context: ai_tools::build_favorites_tool_context(
+        favorites_tool_context: agent_tools::build_favorites_tool_context(
             favorites_service,
             entity_access_service.clone(),
         ),
         initiative_tool_context,
-        team_tool_context: ai_tools::build_team_tool_context(pool.clone()),
+        team_tool_context: agent_tools::build_team_tool_context(pool.clone()),
         crm_tool_context,
         pipeline_tool_context,
         crm_transfer_tool_context,
-        skill_tool_context: ai_tools::build_skill_tool_context(
+        skill_tool_context: agent_tools::build_skill_tool_context(
             search_service_client.clone(),
             soup_service.clone(),
             &document_tool_context,
         ),
-        schedule_tool_context: ai_tools::no_op_schedule_context(),
-        anthropic_tool_context: ai_tools::build_anthropic_tool_context_test(),
+        schedule_tool_context: agent_tools::no_op_schedule_context(),
+        anthropic_tool_context: agent_tools::build_anthropic_tool_context_test(),
         web_search_provider: std::sync::Arc::new(web_search::outbound::tavily::TavilyClient::new(
             &web_search::outbound::tavily::TavilyApiKey::new_unset(),
         )),
@@ -618,7 +623,7 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
         recorder: recorder.clone(),
         usage_context: ai_usage::UsageContext::system(ai_usage::AiFeature::Chat),
     };
-    let all_tools = ai_tools::tools_for(ai_tools::AiHost::Chat);
+    let all_tools = agent_tools::tools_for(agent_tools::AiHost::Chat);
     let all_tools_toolset = all_tools.toolset.clone();
     let all_tools_prompt: Arc<dyn std::fmt::Display + Send + Sync> =
         Arc::new(all_tools.prompt.to_string());
@@ -630,11 +635,11 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
             mcp_client::outbound::pg_server_repo::PgServerRepo::new(pool.clone(), mcp_key),
             None,
         );
-        let creator = ai_tools::ToolEntityCreator {
+        let creator = agent_tools::ToolEntityCreator {
             document_creator: document_tool_context.creator.clone(),
             entity_access_service: entity_access_service.clone(),
             channel_service: tool_service_context.channel_tool_context.service.clone(),
-            task_properties: ai_tools::build_task_properties_adapter(
+            task_properties: agent_tools::build_task_properties_adapter(
                 pool.clone(),
                 properties_service.clone(),
                 entity_access_service.clone(),
@@ -643,7 +648,7 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
                 import::outbound::document_properties::DocumentPropertiesApplicator::new(
                     properties_service.clone(),
                 ),
-            team_repository: ai_tools::build_team_repository(pool.clone()),
+            team_repository: agent_tools::build_team_repository(pool.clone()),
             initiative_service: tool_service_context.initiative_tool_context.service.clone(),
             project_service: tool_service_context.project_tool_context.service.clone(),
             databases_service: tool_service_context.databases_tool_context.service.clone(),
@@ -652,7 +657,7 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
         let pipedream_connections = Arc::new(
             pipedream_mcp::outbound::pg_connection_repo::PgConnectionRepo::new(pool.clone()),
         );
-        let mcp_selector: Arc<ai_tools::ToolMcpSelector> =
+        let mcp_selector: Arc<agent_tools::ToolMcpSelector> =
             Arc::new(mcp_select::McpToolSelector::new(
                 Arc::new(mcp_repo.clone()),
                 pipedream_connections.clone(),
@@ -683,7 +688,7 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
         (import_service, onboarding_service, mcp_selector)
     };
 
-    let memory_service = Arc::new(ai_tools::memory::build_memory_service(
+    let memory_service = Arc::new(agent_tools::memory::build_memory_service(
         pool.clone(),
         tool_service_context.clone(),
     ));
@@ -698,7 +703,7 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
     let projection_generator =
         crate::cognition::service::projection_generator::AgentProjectionGenerator::new(
             tool_service_context.clone(),
-            ai_tools::tools_for(ai_tools::AiHost::Chat),
+            agent_tools::tools_for(agent_tools::AiHost::Chat),
         );
 
     let projection_notifier =

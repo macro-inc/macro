@@ -17,8 +17,8 @@ use super::ports::{
     Result, SlackSourceError, SlackWorkspaceSource,
 };
 use crate::inbound::toolset::{ImportToolContext, notion_import_toolset};
-use agent::types::{ChatMessage, ChatMessageContent, Role};
-use agent::{AgentLoop, PredefinedModel};
+use agent_loop::types::{ChatMessage, ChatMessageContent, Role};
+use agent_loop::{AgentLoop, PredefinedModel};
 use ai_toolset::{RequestContext, ToolResult, ToolSet, ToolSetError};
 use futures::StreamExt;
 use import_notion::domain::ports::NotionConnections;
@@ -661,7 +661,7 @@ where
             attachments: None,
         };
         let mut stream = session
-            .send_message(agent::to_rig_messages(&[opening]))
+            .send_message(agent_loop::to_rig_messages(&[opening]))
             .await?;
         while let Some(part) = stream.next().await {
             // Only tool effects matter; text chunks are discarded.

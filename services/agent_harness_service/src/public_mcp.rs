@@ -55,7 +55,7 @@ const DEFAULT_MCP_ALLOWED_REDIRECT_HOSTS: [&str; 5] = [
 pub async fn router(
     config: &Config,
     secrets: &secretsmanager_client::SecretsManager,
-    tool_context: ai_tools::ToolServiceContext,
+    tool_context: agent_tools::ToolServiceContext,
     db: sqlx::PgPool,
     kms: aws_sdk_kms::Client,
     jwt_args: JwtValidationArgs,
@@ -76,7 +76,7 @@ pub async fn router(
         .context("public MCP URL has no host")?
         .to_owned();
     // Built once: the factory runs per request in stateless mode.
-    let tools = ai_tools::tools_for(ai_tools::AiHost::Mcp).toolset;
+    let tools = agent_tools::tools_for(agent_tools::AiHost::Mcp).toolset;
     let code_mode = code_mode.map(|code_mode| {
         Arc::new(CodeModeSurface {
             tools: Arc::new(agent_code_mode::inbound::toolset::user_toolset()),

@@ -26,7 +26,7 @@ preview endpoint.
 
 - Depends on: `email` (features `axum`, `inbound`), `macro_tower_layers`,
   `model`, `models_email`.
-- Used by: `crates/ai/memory`, `crates/ai/ai_tools`, `services/agent_harness_service`,
+- Used by: `crates/ai/memory`, `crates/ai/agent_tools`, `services/agent_harness_service`,
   `services/agent_harness_service`.
 
 ## Recipes

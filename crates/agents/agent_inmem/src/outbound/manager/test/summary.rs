@@ -32,7 +32,7 @@ impl TurnEngine for ReasonsFirst {
     fn run_turn(
         &self,
         request: TurnRequest,
-    ) -> mpsc::Receiver<Result<StreamPart, agent::AgentError>> {
+    ) -> mpsc::Receiver<Result<StreamPart, agent_loop::AgentError>> {
         if request.purpose == TurnPurpose::Summary {
             let release = Arc::clone(&self.release);
             let mut summary = self.summaries.run_turn(request);

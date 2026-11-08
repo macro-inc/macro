@@ -576,7 +576,7 @@ fn only_confirmed_effort_replays_and_removal_resets_it() {
         "anthropic/claude-sonnet-5-5",
         &["anthropic/claude-sonnet-5-5"],
         ReasoningEffort::Low,
-        agent::ModelSpeed::Standard,
+        agent_loop::ModelSpeed::Standard,
     );
     frames.push(config_response(
         serde_json::json!({ "configOptions": options }),
@@ -675,7 +675,7 @@ fn a_call_stopped_while_being_written_does_not_replay() {
 
 #[test]
 fn speed_replays_only_from_confirmed_configuration() {
-    use agent::ModelSpeed;
+    use agent_loop::ModelSpeed;
     let mut frames = vec![config_frame("speed", "ultrafast")];
     assert_eq!(replay_speed(&frames), ModelSpeed::Standard);
     let options = crate::domain::model_options::session_config_options(

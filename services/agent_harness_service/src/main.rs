@@ -537,9 +537,9 @@ async fn run() -> anyhow::Result<()> {
     // user on Connect alone gets no Pipedream grant.
     let mut connectors = ConnectorBackends::new(
         Arc::new(pipedream),
-        ai_tools::connect_adapter(config.connect_customer_key.value())?,
+        agent_tools::connect_adapter(config.connect_customer_key.value())?,
     );
-    if let Some(rollout) = ai_tools::macro_connect_rollout(
+    if let Some(rollout) = agent_tools::macro_connect_rollout(
         config.posthog_api_key.value(),
         config.posthog_host.value(),
     )? {
@@ -625,8 +625,8 @@ async fn run() -> anyhow::Result<()> {
 
     // Notion imports started from sessions, public MCP, and the cognition
     // routes share these jobs and hand their runs over on shutdown.
-    let import_jobs = ai_tools::ImportJobs::new();
-    let tool_context = ai_tools::build_tool_service_context_from_env(
+    let import_jobs = agent_tools::ImportJobs::new();
+    let tool_context = agent_tools::build_tool_service_context_from_env(
         pool.clone(),
         event_broker_tracker.clone(),
         import_jobs.clone(),
@@ -1244,7 +1244,7 @@ async fn run() -> anyhow::Result<()> {
                     project::domain::lookup::InitiativeLookup::new(
                         project::outbound::PgInitiativeRepo::new(pool.clone()),
                     ),
-                    ai_tools::build_properties_service(pool.clone(), entity_access.clone()),
+                    agent_tools::build_properties_service(pool.clone(), entity_access.clone()),
                 )
                 .with_crm(crm::outbound::lookup::PgCrmParentReader::new(pool.clone())),
             messages::outbound::entity_access_audience::EntityAccessMessageAudience(
@@ -1449,7 +1449,7 @@ async fn run() -> anyhow::Result<()> {
             log: review_log,
             harness: harness.clone(),
             context: tool_context.clone(),
-            tools: ai_tools::code_mode_tools(),
+            tools: agent_tools::code_mode_tools(),
         }),
     );
     reviews_cell

@@ -1,6 +1,6 @@
 [package]
 edition = "2024"
-name = "ai_tools"
+name = "agent_tools"
 publish = false
 version = "0.1.0"
 
@@ -26,7 +26,7 @@ collab_surface = { workspace = true, features = ["postgres"] }
 project = { workspace = true, features = ["messages", "postgres", "resources", "toolset"] }
 initiative_description = { workspace = true }
 activity = { workspace = true, features = ["ai_tools", "outbound"] }
-agent = { workspace = true }
+agent_loop = { workspace = true }
 agent_session = { workspace = true, default-features = true, features = ["ai_tools"] }
 ai_usage = { workspace = true }
 anthropic = { workspace = true, features = ["toolset"] }
@@ -94,7 +94,7 @@ models_permissions = { workspace = true }
 notification = { workspace = true, default-features = true, features = ["ai_tool"] }
 notification_inbound = { workspace = true, features = ["ai_tool"] }
 notification_outbound = { workspace = true }
-prompt = { workspace = true }
+agent_prompts = { workspace = true }
 models_properties = { workspace = true }
 models_search = { workspace = true }
 models_soup = { workspace = true }

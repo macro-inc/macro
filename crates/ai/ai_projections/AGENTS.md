@@ -21,7 +21,7 @@ regenerated on demand or when cold.
 - `src/domain/projection_generator.rs`: the generation port.
 - `services/agent_harness_service/src/cognition/service/projection_generator.rs`:
   the agent-backed generator, in the composition root because it runs the
-  `ai_tools` toolset — two-phase when `output_schema` is set (tool-enabled
+  `agent_tools` toolset — two-phase when `output_schema` is set (tool-enabled
   agent gathers context, then a structured completion distills it).
 - `src/worker.rs`: the SQS-polling worker that drains `ai_projection_queue`.
 
@@ -30,11 +30,11 @@ regenerated on demand or when cold.
 - Owns: projection definitions, per-user cached instances, generation
   orchestration (inline or queued), and push notification on completion.
 - Not here: the agent turn loop itself → `agent`; tool definitions →
-  `ai_tools`/`ai_toolset`.
+  `agent_tools`/`ai_toolset`.
 
 ## Boundaries
 
-- Depends on: `models_ai_projection`, and (behind `agent`) `ai_tools`,
+- Depends on: `models_ai_projection`, and (behind `agent`) `agent_tools`,
   `ai_toolset`, `agent`, `ai_usage`.
 - Used by: `document_cognition_service` (inbound/outbound/agent) and
   `ai_projections_refresh_handler` (the scheduled refresh lambda).

@@ -4,7 +4,7 @@
 
 Part of Chat: the inbound adapters for `channels`. The channel-message and
 access-request HTTP routes (feature `axum`, plus `list` for the legacy list
-routes), the AI toolset (`ai_tools`), the `AttachmentService` for channel
+routes), the AI toolset (`agent_tools`), the `AttachmentService` for channel
 messages (`attachment`), and the teammate-DM Kafka consumer
 (`kafka_consumer`).
 
@@ -19,7 +19,7 @@ messages (`attachment`), and the teammate-DM Kafka consumer
 ## Boundaries
 
 - Depends on: `channels` (domain), `entity_access`, `macro_authorization`.
-- Used by: `ai_tools`, `services/document_storage_service`,
+- Used by: `agent_tools`, `services/document_storage_service`,
   `services/agent_harness_service`.
 
 ## Tool contracts

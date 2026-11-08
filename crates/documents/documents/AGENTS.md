@@ -94,14 +94,14 @@ word docs, Illustrator/Photoshop files).
   `illustrator_engine`/`ai_toolset`/`ai_billing`/`ai_usage` (AI tools), `pptx_engine`/
   `psd_engine` (file formats), `lexical_client` (sync-service calls),
   `comms_db_client` (create/purge adapters), `macro_db_client` (purge/backfill).
-- Used by: `ai_tools`, `agent_harness`, `webhook`, `soup_realtime_inbound`, `memory`,
+- Used by: `agent_tools`, `agent_harness`, `webhook`, `soup_realtime_inbound`, `memory`,
   `projects`, `skills`, `github` — this crate's service and toolset are widely
   reused; check callers before changing a port signature.
 
 ## Recipes
 
 - Add an AI document tool: new module under `src/inbound/toolset/` → wire it
-  into `src/inbound/toolset.rs` → register it where `ai_tools`/`crates/ai/ai_tools`
+  into `src/inbound/toolset.rs` → register it where `agent_tools`/`crates/ai/agent_tools`
   assembles the toolset.
 - Add a document route: `src/domain/service.rs` (new domain method) →
   `src/inbound/axum_router.rs` → `src/domain/ports.rs` if it needs a new
@@ -129,7 +129,7 @@ word docs, Illustrator/Photoshop files).
 ## Gotchas
 
 - Features compose non-trivially (`inbound` pulls in `axum` and
-  `document_create_adapters`; `ai_tools` pulls in `outbound` and `ports`) —
+  `document_create_adapters`; `agent_tools` pulls in `outbound` and `ports`) —
   check `Cargo.toml`'s `[features]` block before assuming a module compiles
   standalone.
 - The markdown backfill binary defaults to dry-run; the `_apply`/prod `just`

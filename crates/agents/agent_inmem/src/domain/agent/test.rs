@@ -1,6 +1,5 @@
 use std::sync::Arc;
 
-use agent::StreamPart;
 use agent_client_protocol::schema::ProtocolVersion;
 use agent_client_protocol::schema::v1::{
     ContentBlock, InitializeRequest, NewSessionRequest, PromptRequest, ResourceLink,
@@ -8,6 +7,7 @@ use agent_client_protocol::schema::v1::{
     SessionConfigValueId, SessionNotification, SetSessionConfigOptionRequest, TextContent,
 };
 use agent_client_protocol::{Client, ConnectionTo};
+use agent_loop::StreamPart;
 use ai_billing::domain::{
     AiAdmissionError, AiAdmissionService, DenyReason, DisabledAiAdmissionService,
 };
@@ -41,7 +41,7 @@ impl TurnEngine for CancelledEngine {
     fn run_turn(
         &self,
         _request: TurnRequest,
-    ) -> tokio::sync::mpsc::Receiver<Result<StreamPart, agent::AgentError>> {
+    ) -> tokio::sync::mpsc::Receiver<Result<StreamPart, agent_loop::AgentError>> {
         let (parts, receiver) = tokio::sync::mpsc::channel(1);
         tokio::spawn(async move {
             let cancellation = PromptError::PromptCancelled {
@@ -49,7 +49,7 @@ impl TurnEngine for CancelledEngine {
                 reason: "user cancelled".to_owned(),
             };
             let error =
-                agent::AgentError::Streaming(StreamingError::Prompt(Box::new(cancellation)));
+                agent_loop::AgentError::Streaming(StreamingError::Prompt(Box::new(cancellation)));
             let _ = parts.send(Err(error)).await;
         });
         receiver
@@ -67,7 +67,7 @@ impl TurnEngine for UnknownToolEngine {
     fn run_turn(
         &self,
         _request: TurnRequest,
-    ) -> tokio::sync::mpsc::Receiver<Result<StreamPart, agent::AgentError>> {
+    ) -> tokio::sync::mpsc::Receiver<Result<StreamPart, agent_loop::AgentError>> {
         let (parts, receiver) = tokio::sync::mpsc::channel(3);
         tokio::spawn(async move {
             let _ = parts
@@ -84,7 +84,8 @@ impl TurnEngine for UnknownToolEngine {
                 allowed_tools: vec!["LoadTools".to_owned()],
                 chat_history: Box::default(),
             };
-            let error = agent::AgentError::Streaming(StreamingError::Prompt(Box::new(unknown)));
+            let error =
+                agent_loop::AgentError::Streaming(StreamingError::Prompt(Box::new(unknown)));
             let _ = parts.send(Err(error)).await;
         });
         receiver
@@ -722,7 +723,7 @@ async fn changing_reasoning_effort_applies_to_the_next_turn() {
 
     assert_eq!(
         engine.requests()[0].reasoning_effort,
-        agent::ReasoningEffort::Low
+        agent_loop::ReasoningEffort::Low
     );
 }
 
@@ -766,13 +767,13 @@ async fn a_prompt_streams_updates_and_ends_the_turn() {
     let engine = Arc::new(ScriptedEngine::new(vec![
         StreamPart::Thinking("hmm".into()),
         StreamPart::Content("Hello ".into()),
-        StreamPart::ToolCall(agent::ToolCall {
+        StreamPart::ToolCall(agent_loop::ToolCall {
             id: "call-1".into(),
             name: "NameSearch".into(),
             json: serde_json::json!({"query": "roadmap"}),
             mcp: None,
         }),
-        StreamPart::ToolResponse(agent::ToolResponse::Json {
+        StreamPart::ToolResponse(agent_loop::ToolResponse::Json {
             id: "call-1".into(),
             json: serde_json::json!({"hits": 1}),
             name: "NameSearch".into(),
@@ -821,23 +822,23 @@ async fn a_prompt_streams_updates_and_ends_the_turn() {
 #[tokio::test]
 async fn tool_calls_are_stamped_with_their_names_and_subagent_flag() {
     let engine = Arc::new(ScriptedEngine::new(vec![
-        StreamPart::ToolCall(agent::ToolCall {
+        StreamPart::ToolCall(agent_loop::ToolCall {
             id: "call-1".into(),
             name: "ReadContent".into(),
             json: serde_json::json!({"documentId": "d"}),
             mcp: None,
         }),
-        StreamPart::ToolCall(agent::ToolCall {
+        StreamPart::ToolCall(agent_loop::ToolCall {
             id: "call-2".into(),
             name: "Subagent".into(),
             json: serde_json::json!({"task": "count the beans"}),
             mcp: None,
         }),
-        StreamPart::ToolCall(agent::ToolCall {
+        StreamPart::ToolCall(agent_loop::ToolCall {
             id: "call-3".into(),
             name: "slack__search".into(),
             json: serde_json::json!({"query": "standup"}),
-            mcp: Some(agent::McpInfo {
+            mcp: Some(agent_loop::McpInfo {
                 service: "slack".into(),
                 tool_name: "search".into(),
                 display_name: Some("Search Slack".into()),
@@ -916,7 +917,7 @@ fn tool_frames(notifications: &[SessionNotification]) -> Vec<String> {
 #[tokio::test]
 async fn a_streamed_tool_call_opens_pending_and_is_peeked_at_while_written() {
     let engine = Arc::new(ScriptedEngine::new(vec![
-        StreamPart::ToolCallStarted(agent::ToolCallStart {
+        StreamPart::ToolCallStarted(agent_loop::ToolCallStart {
             id: "call-1".into(),
             name: "NameSearch".into(),
             mcp: None,
@@ -929,13 +930,13 @@ async fn a_streamed_tool_call_opens_pending_and_is_peeked_at_while_written() {
             id: "call-1".into(),
             delta: "map\"}".into(),
         },
-        StreamPart::ToolCall(agent::ToolCall {
+        StreamPart::ToolCall(agent_loop::ToolCall {
             id: "call-1".into(),
             name: "NameSearch".into(),
             json: serde_json::json!({"query": "roadmap"}),
             mcp: None,
         }),
-        StreamPart::ToolResponse(agent::ToolResponse::Json {
+        StreamPart::ToolResponse(agent_loop::ToolResponse::Json {
             id: "call-1".into(),
             json: serde_json::json!({"hits": 1}),
             name: "NameSearch".into(),
@@ -981,7 +982,7 @@ async fn a_streamed_tool_call_opens_pending_and_is_peeked_at_while_written() {
 async fn a_call_the_turn_ends_while_writing_closes_and_stays_out_of_history() {
     let engine = Arc::new(ScriptedEngine::new(vec![
         StreamPart::Content("On it.".into()),
-        StreamPart::ToolCallStarted(agent::ToolCallStart {
+        StreamPart::ToolCallStarted(agent_loop::ToolCallStart {
             id: "call-1".into(),
             name: "CreateDocument".into(),
             mcp: None,
@@ -1124,10 +1125,10 @@ impl CondensingEngine {
 }
 
 /// A model call that fails at once.
-fn failed_call() -> tokio::sync::mpsc::Receiver<Result<StreamPart, agent::AgentError>> {
+fn failed_call() -> tokio::sync::mpsc::Receiver<Result<StreamPart, agent_loop::AgentError>> {
     let (parts, receiver) = tokio::sync::mpsc::channel(1);
     parts
-        .try_send(Err(agent::AgentError::Other(anyhow::anyhow!(
+        .try_send(Err(agent_loop::AgentError::Other(anyhow::anyhow!(
             "summary unavailable"
         ))))
         .unwrap();
@@ -1142,7 +1143,7 @@ impl TurnEngine for CondensingEngine {
     fn run_turn(
         &self,
         request: TurnRequest,
-    ) -> tokio::sync::mpsc::Receiver<Result<StreamPart, agent::AgentError>> {
+    ) -> tokio::sync::mpsc::Receiver<Result<StreamPart, agent_loop::AgentError>> {
         if request.purpose == TurnPurpose::Conversation {
             return self.turns.run_turn(request);
         }
@@ -1400,7 +1401,7 @@ impl TurnEngine for FailedSummaryEngine {
     fn run_turn(
         &self,
         request: TurnRequest,
-    ) -> tokio::sync::mpsc::Receiver<Result<StreamPart, agent::AgentError>> {
+    ) -> tokio::sync::mpsc::Receiver<Result<StreamPart, agent_loop::AgentError>> {
         if request.purpose == TurnPurpose::Summary {
             self.attempts.fetch_add(1, Ordering::Relaxed);
             failed_call()
@@ -1533,7 +1534,7 @@ impl TurnEngine for HangingSummaryEngine {
     fn run_turn(
         &self,
         request: TurnRequest,
-    ) -> tokio::sync::mpsc::Receiver<Result<StreamPart, agent::AgentError>> {
+    ) -> tokio::sync::mpsc::Receiver<Result<StreamPart, agent_loop::AgentError>> {
         if request.purpose == TurnPurpose::Summary {
             self.summarizing.notify_one();
             HangingEngine.run_turn(request)
@@ -2388,7 +2389,7 @@ impl TurnEngine for AskingEngine {
     fn run_turn(
         &self,
         request: TurnRequest,
-    ) -> tokio::sync::mpsc::Receiver<Result<StreamPart, agent::AgentError>> {
+    ) -> tokio::sync::mpsc::Receiver<Result<StreamPart, agent_loop::AgentError>> {
         let (parts, receiver) = tokio::sync::mpsc::channel(4);
         tokio::spawn(async move {
             let requester = request
@@ -2458,7 +2459,7 @@ impl TurnEngine for ReviewingEngine {
     fn run_turn(
         &self,
         request: TurnRequest,
-    ) -> tokio::sync::mpsc::Receiver<Result<StreamPart, agent::AgentError>> {
+    ) -> tokio::sync::mpsc::Receiver<Result<StreamPart, agent_loop::AgentError>> {
         let (parts, receiver) = tokio::sync::mpsc::channel(4);
         tokio::spawn(async move {
             let reviewer = request
@@ -2473,7 +2474,7 @@ impl TurnEngine for ReviewingEngine {
                     form: ReviewForm {
                         title: Some("Create calendar event".to_owned()),
                         fields: vec![
-                            ai_tools::user_tool_review::ReviewField {
+                            agent_tools::user_tool_review::ReviewField {
                                 name: "title".to_owned(),
                                 description: Some("The event title.".to_owned()),
                                 kind: ReviewFieldKind::Text {
@@ -2481,14 +2482,14 @@ impl TurnEngine for ReviewingEngine {
                                     format: None,
                                 },
                             },
-                            ai_tools::user_tool_review::ReviewField {
+                            agent_tools::user_tool_review::ReviewField {
                                 name: "addGoogleMeet".to_owned(),
                                 description: None,
                                 kind: ReviewFieldKind::Boolean {
                                     default: Some(false),
                                 },
                             },
-                            ai_tools::user_tool_review::ReviewField {
+                            agent_tools::user_tool_review::ReviewField {
                                 name: "draft".to_owned(),
                                 description: None,
                                 kind: ReviewFieldKind::Json,
@@ -2644,7 +2645,7 @@ impl TurnEngine for OwnerWaitingEngine {
     fn run_turn(
         &self,
         request: TurnRequest,
-    ) -> tokio::sync::mpsc::Receiver<Result<StreamPart, agent::AgentError>> {
+    ) -> tokio::sync::mpsc::Receiver<Result<StreamPart, agent_loop::AgentError>> {
         let (parts, receiver) = tokio::sync::mpsc::channel(1);
         tokio::spawn(async move {
             {
@@ -2946,7 +2947,7 @@ async fn changing_speed_applies_to_next_turn_and_rejects_unsupported_models() {
         fn run_turn(
             &self,
             request: TurnRequest,
-        ) -> tokio::sync::mpsc::Receiver<Result<StreamPart, agent::AgentError>> {
+        ) -> tokio::sync::mpsc::Receiver<Result<StreamPart, agent_loop::AgentError>> {
             self.0.run_turn(request)
         }
     }
@@ -3023,15 +3024,15 @@ async fn changing_speed_applies_to_next_turn_and_rejects_unsupported_models() {
     })
     .await;
     let requests = engine.0.requests();
-    assert_eq!(requests[0].speed, agent::ModelSpeed::Ultrafast);
-    assert_eq!(requests[1].speed, agent::ModelSpeed::Standard);
+    assert_eq!(requests[0].speed, agent_loop::ModelSpeed::Ultrafast);
+    assert_eq!(requests[1].speed, agent_loop::ModelSpeed::Standard);
 }
 
 #[test]
 fn a_turn_that_ends_on_a_tool_call_has_not_replied() {
     let mut output = TurnOutput::default();
     output.observe(&StreamPart::Content("Let me look.".to_owned()));
-    output.observe(&StreamPart::ToolCall(agent::ToolCall {
+    output.observe(&StreamPart::ToolCall(agent_loop::ToolCall {
         id: "call-1".to_owned(),
         name: "ExecuteCode".to_owned(),
         json: serde_json::json!({}),

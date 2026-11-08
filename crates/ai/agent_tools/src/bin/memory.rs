@@ -28,7 +28,7 @@ async fn main() -> anyhow::Result<()> {
         .await?;
 
     let event_broker_tracker = TaskTracker::new();
-    let import_jobs = ai_tools::ImportJobs::new();
+    let import_jobs = agent_tools::ImportJobs::new();
     let tool_context = build_tool_service_context(
         pool.clone(),
         &config,
@@ -36,7 +36,7 @@ async fn main() -> anyhow::Result<()> {
         import_jobs.clone(),
     )
     .await?;
-    let memory_service = ai_tools::memory::build_memory_service(pool, tool_context);
+    let memory_service = agent_tools::memory::build_memory_service(pool, tool_context);
 
     tracing::info!("generating composed memory");
     let memory_result = memory_service

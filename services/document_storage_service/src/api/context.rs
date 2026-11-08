@@ -272,8 +272,8 @@ pub(crate) type DssGraphqlSoupSchema = complete_graph::SharedSoupSchema<
     DssEntityMutationService,
     FavoritesMutationServiceType,
     DssChannelService,
-    ai_tools::ToolNotificationService,
-    Arc<ai_tools::ToolNotificationService>,
+    agent_tools::ToolNotificationService,
+    Arc<agent_tools::ToolNotificationService>,
     complete_graph::PropertiesEntityPropertyReader<PropertiesService, EntityAccessService>,
     complete_graph::EmailServiceEmailContentReader<DssEmailService, EntityAccessService>,
     Arc<FavoritesServiceType>,
@@ -504,7 +504,7 @@ pub(crate) type DssChannelService = ChannelServiceImpl<
             NotificationChannelSender<
                 NotificationIngressType,
                 NotificationReaderCompletion<
-                    ai_tools::ToolNotificationService,
+                    agent_tools::ToolNotificationService,
                     notification_outbound::withdrawal::PgNotificationWithdrawal,
                 >,
             >,
@@ -522,7 +522,7 @@ pub(crate) type DssChannelsState =
 
 /// Type alias for the bots service wired into DSS.
 pub(crate) type DssBotService =
-    BotServiceImpl<PgBotsRepo, DssEventBroker, ai_tools::PipedreamMcpAppCatalog>;
+    BotServiceImpl<PgBotsRepo, DssEventBroker, agent_tools::PipedreamMcpAppCatalog>;
 
 /// Type alias for the bots router state.
 pub(crate) type DssBotsState =
@@ -946,7 +946,7 @@ pub(crate) struct ApiContext {
     pub soup_router_state: DssSoupState,
     pub graphql_soup_schema: DssGraphqlSoupSchema,
     pub agent_session_log_subscriptions: complete_graph::AgentSessionLogSubscriptions,
-    pub graphql_notification_reader: Arc<ai_tools::ToolNotificationService>,
+    pub graphql_notification_reader: Arc<agent_tools::ToolNotificationService>,
     pub activity_reader: DssActivityReader,
     pub graphql_entity_mutation_service: Arc<DssEntityMutationService>,
     pub favorites_state: DssFavoritesState,

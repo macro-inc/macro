@@ -9,7 +9,7 @@ agent_runtime_protocol = { workspace = true }
 agent_session = { workspace = true }
 ai_billing = { workspace = true }
 rootcause = { workspace = true }
-agent = { workspace = true }
+agent_loop = { workspace = true }
 ai_toolset = { workspace = true }
 ai_usage = { workspace = true }
 anyhow = { workspace = true }

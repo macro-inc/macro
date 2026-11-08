@@ -1,6 +1,6 @@
 //! System skill for composing a routine's triggers and steps.
 
-use prompt::StaticPrompt;
+use agent_prompts::StaticPrompt;
 
 use crate::SystemSkill;
 

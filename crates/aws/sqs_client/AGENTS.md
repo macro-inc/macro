@@ -36,7 +36,7 @@ crate that produces or consumes an SQS queue.
   `email_service`, `search_processing_service`, `authentication_service`,
   the `*_handler`/`*_trigger` Lambda services) and `crates/accounts/teams`,
   `crates/integrations/webhook`, `crates/documents/documents`, `crates/ai/ai_projections`,
-  `crates/ai/ai_tools`, `crates/projects/folder`, `crates/ai/memory`.
+  `crates/ai/agent_tools`, `crates/projects/folder`, `crates/ai/memory`.
 
 ## Recipes
 

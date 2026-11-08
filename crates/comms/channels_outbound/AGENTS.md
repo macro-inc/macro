@@ -19,7 +19,7 @@ static-file uploads.
 
 - Depends on: `channels` (with `list`, `ports` and `sqlx`), `entity_access`,
   `notification_hex`, `static_file_service_client`.
-- Used by: composition roots, `ai_tools`, `call`, `name_search`,
+- Used by: composition roots, `agent_tools`, `call`, `name_search`,
   `search_service`, and `agent_harness`'s tests.
 
 ## Checks

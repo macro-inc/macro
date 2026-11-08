@@ -67,7 +67,7 @@ pub fn build_memory_service(
         recorder: context.recorder.clone(),
         context,
         tools: Arc::new(toolset),
-        tool_prompt: prompt::DIRECT_TOOL_USE_PROMPT.to_string(),
+        tool_prompt: agent_prompts::DIRECT_TOOL_USE_PROMPT.to_string(),
     };
     MemoryServiceImpl::new(
         PgMemoryRepo::new(pool.clone()),

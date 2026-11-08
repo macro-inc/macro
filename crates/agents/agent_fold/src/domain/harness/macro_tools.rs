@@ -13,7 +13,7 @@
 //!   `ai_toolset::UserToolResponse`, restated here so the wasm fold does not
 //!   depend on the toolset crate.
 //! - Macro's own delegation tool, `Subagent`, and its [`SubagentResponse`].
-//!   Mirrors `ai_tools::subagent::SubagentResponse`.
+//!   Mirrors `agent_tools::subagent::SubagentResponse`.
 //!
 //! Every other Macro tool's result is the tool's own JSON, handed to a reader
 //! as it is.

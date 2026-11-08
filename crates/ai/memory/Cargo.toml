@@ -8,12 +8,12 @@ version = "0.1.0"
 [dependencies]
 async-trait = { workspace = true }
 schemars = { workspace = true }
-prompt = { workspace = true }
+agent_prompts = { workspace = true }
 strum = { workspace = true }
 
 ai_billing = { workspace = true }
 rootcause = { workspace = true }
-agent = { workspace = true }
+agent_loop = { workspace = true }
 ai_usage = { workspace = true }
 ai_toolset = { workspace = true }
 anyhow = { workspace = true }

@@ -7,7 +7,7 @@ version = "0.1.0"
 [dependencies]
 agent_code_mode = { workspace = true }
 ai_billing = { workspace = true }
-agent = { workspace = true }
+agent_loop = { workspace = true }
 agent_api_keys = { workspace = true }
 # The egress proxy's domain service, driven in-process: the same verification,
 # resolution and stamping a sandbox reaches over the wire, minus the wire.
@@ -16,7 +16,7 @@ agent-client-protocol = { workspace = true }
 agent_runtime_protocol = { workspace = true, default-features = true }
 agent_session = { workspace = true, default-features = true }
 anyhow = { workspace = true }
-ai_tools = { workspace = true }
+agent_tools = { workspace = true }
 attachment = { workspace = true }
 ai_toolset = { workspace = true }
 ai_usage = { workspace = true }
@@ -42,7 +42,7 @@ memory = { workspace = true }
 model_entity = { workspace = true }
 non_empty = { workspace = true }
 nom = { workspace = true }
-prompt = { workspace = true }
+agent_prompts = { workspace = true }
 rmcp = { workspace = true, features = ["client", "transport-streamable-http-client"] }
 schemars = { workspace = true }
 serde = { workspace = true }

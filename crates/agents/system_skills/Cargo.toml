@@ -5,6 +5,6 @@ publish = false
 version = "0.1.0"
 
 [dependencies]
-prompt = { workspace = true }
+agent_prompts = { workspace = true }
 uuid = { workspace = true }
 workspace-hack = { version = "0.1", path = "../../workspace-hack" }

@@ -22,7 +22,7 @@ use std::future::Future;
 use std::pin::Pin;
 use std::sync::Arc;
 
-use agent::{FinishedUserTool, PendingUserTool, UserToolFinisher};
+use agent_loop::{FinishedUserTool, PendingUserTool, UserToolFinisher};
 use ai_toolset::tool_object::UserToolResponse;
 use ai_toolset::{AsyncToolCollection, RequestContext};
 use async_trait::async_trait;

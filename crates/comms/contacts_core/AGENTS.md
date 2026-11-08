@@ -25,7 +25,7 @@ adapters are `crates/comms/contacts_outbound`.
 - Depends on: `macro_user_id`.
 - Used by: `teams` (backfill on team join), `channels`, `database_sql_runner`, the
   adapter crates, and through the `contacts` facade the composition roots and
-  `ai_tools`.
+  `agent_tools`.
 
 ## Recipes
 

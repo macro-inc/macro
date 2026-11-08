@@ -370,7 +370,7 @@ async fn run_server() -> anyhow::Result<()> {
     let consumer_cancellation_token = CancellationToken::new();
     let consumer_tracker = TaskTracker::new();
     let event_broker_tracker = TaskTracker::new();
-    let import_jobs = ai_tools::ImportJobs::new();
+    let import_jobs = agent_tools::ImportJobs::new();
     let macro_event_broker = MacroEventBrokerService::new(
         KafkaEventPublisher::new(config.kafka_brokers.as_ref())
             .context("failed to create kafka event publisher")?,
@@ -380,7 +380,7 @@ async fn run_server() -> anyhow::Result<()> {
     // The agent API checks a newly selected MCP app against Pipedream's
     // directory, the same check the ConfigureAgent tool makes.
     let bots_service = BotServiceImpl::new(bots_repo, macro_event_broker.clone()).with_mcp_apps(
-        ai_tools::PipedreamMcpAppCatalog::new(ai_tools::pipedream_client_from_env()?),
+        agent_tools::PipedreamMcpAppCatalog::new(agent_tools::pipedream_client_from_env()?),
     );
 
     let authorization_service: AuthorizationService = MacroAuthorizationServiceImpl::new(
@@ -480,13 +480,13 @@ async fn run_server() -> anyhow::Result<()> {
     let notification_ingress_service = Arc::new(SqsNotificationIngress {
         queue: ingress_queue.clone(),
     });
-    let graphql_notification_reader: Arc<ai_tools::ToolNotificationService> =
+    let graphql_notification_reader: Arc<agent_tools::ToolNotificationService> =
         Arc::new(NotificationReaderService {
             repository: notification_outbound::repository::DbNotificationRepository::new(
                 db.clone(),
             ),
-            queue: ai_tools::ToolNotificationQueue::Sqs(ingress_queue.clone()),
-            sns_endpoint: ai_tools::NoOpSnsEndpointManager,
+            queue: agent_tools::ToolNotificationQueue::Sqs(ingress_queue.clone()),
+            sns_endpoint: agent_tools::NoOpSnsEndpointManager,
             platform_config: PlatformArnConfig {
                 apns_platform_arn: String::new(),
                 fcm_platform_arn: String::new(),
@@ -1437,7 +1437,7 @@ async fn run_server() -> anyhow::Result<()> {
     // This host holds no authentication-service key, so its counted usage is
     // settled by that service's reconciliation sweep rather than requested
     // after each completion.
-    let mut macro_agent_tool_context = ai_tools::build_tool_service_context_from_env(
+    let mut macro_agent_tool_context = agent_tools::build_tool_service_context_from_env(
         db.clone(),
         event_broker_tracker.clone(),
         import_jobs.clone(),
@@ -1463,14 +1463,14 @@ async fn run_server() -> anyhow::Result<()> {
     // used by the HTTP API, including the in-process bot trigger sender (the
     // env builder wires an equivalent pipeline, but without bot triggers).
     macro_agent_tool_context.channel_tool_context =
-        ai_tools::build_channel_tool_context_with_dispatcher(
+        agent_tools::build_channel_tool_context_with_dispatcher(
             db.clone(),
             std::sync::Arc::new(SpawnedChannelEventDispatcher::new(
                 channel_side_effects.clone(),
             )),
             message_service.clone(),
         );
-    let macro_agent_tools = ai_tools::tools_for(ai_tools::AiHost::ChannelBot);
+    let macro_agent_tools = agent_tools::tools_for(agent_tools::AiHost::ChannelBot);
     let conversation_access = Arc::new(
         channel_bots::outbound::conversation::EntityAccessConversation(
             entity_access_service.clone(),
@@ -1495,7 +1495,7 @@ async fn run_server() -> anyhow::Result<()> {
         admission: admission.clone(),
         recorder: document_ai_usage.clone(),
         // Off when PostHog isn't configured, as for the agents' Canvas tools.
-        artifacts: ai_tools::canvas_artifacts_rollout_from_env()?
+        artifacts: agent_tools::canvas_artifacts_rollout_from_env()?
             .unwrap_or_else(|| Arc::new(|_| Box::pin(async { false }))),
         images: Arc::new(crate::outbound::canvas_images::StaticFileCanvasImages(
             static_file_service_client::StaticFileServiceClient::new(

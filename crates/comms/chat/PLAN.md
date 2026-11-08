@@ -162,7 +162,7 @@ When a user edits a message, re-run attachment resolution and update the resolve
 Once the new flow is wired:
 
 1. Delete `service/attachment/fetch.rs` (`fetchium`)
-2. Remove `ai::traits::TextAttachment` re-export (update `ai_tools` rewrite tool)
+2. Remove `ai::traits::TextAttachment` re-export (update `agent_tools` rewrite tool)
 3. Remove `PromptAttachments` if system prompt no longer carries attachment text
 4. Remove scribe-based attachment fetching from DCS
 

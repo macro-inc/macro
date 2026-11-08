@@ -32,7 +32,7 @@ logically-combinable query form.
   `model_file_type`, `model_owner`, `macro_user_id`.
 - Used by: crates building soup/search queries (`graphql_soup`,
   `database_sql_engine`/`database_sql_runner`, `email`, `channels`, `crm`, `call`,
-  `github_pull_requests`, `ai_tools`, `search_service`, `item_filter_index`);
+  `github_pull_requests`, `agent_tools`, `search_service`, `item_filter_index`);
   a new field here needs each `IsEmpty` impl updated or filters silently stop
   being "no-ops" when empty.
 

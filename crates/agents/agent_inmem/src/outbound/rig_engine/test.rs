@@ -76,7 +76,7 @@ fn cached_definitions_keep_client_capabilities_and_reviewable_tools() {
 
 #[test]
 fn reduced_definitions_keep_user_input_and_user_tool_review() {
-    let tools = NativeTools::from_factory(ai_tools::tools_for_agent_code_mode, true);
+    let tools = NativeTools::from_factory(agent_tools::tools_for_agent_code_mode, true);
     assert!(tools.for_turn(true).tools.contains_key("AskUser"));
     assert!(!tools.for_turn(false).tools.contains_key("AskUser"));
     for supports_input in [true, false] {
@@ -201,7 +201,7 @@ fn instructions_are_a_delimited_section_after_the_standing_prompt() {
     .to_string();
 
     assert!(
-        prompt.starts_with(&prompt::agent_session::PROMPT.to_string()),
+        prompt.starts_with(&agent_prompts::agent_session::PROMPT.to_string()),
         "the session preamble comes first"
     );
     assert!(
@@ -238,7 +238,7 @@ fn identity_opens_the_session_part_and_does_not_need_instructions() {
         None,
         None,
     );
-    let identity_section = prompt::agent_identity::render("Grunk", "grunk");
+    let identity_section = agent_prompts::agent_identity::render("Grunk", "grunk");
 
     assert!(
         prompt.rest().starts_with(&format!("\n{identity_section}")),
@@ -303,7 +303,7 @@ fn sessions_share_everything_before_their_identity() {
         None,
     );
 
-    let shared = format!("{}{TOOLS}", prompt::agent_session::PROMPT);
+    let shared = format!("{}{TOOLS}", agent_prompts::agent_session::PROMPT);
     assert_eq!(first.shared(), Some(shared.as_str()));
     assert_eq!(second.shared(), Some(shared.as_str()));
     let agent_session = format!(
@@ -316,7 +316,7 @@ fn sessions_share_everything_before_their_identity() {
         first.rest(),
         format!(
             "\n{}\n<session_instructions>\ntask A\n</session_instructions>{agent_session}\n<user_memory>\nprefers Rust\n</user_memory><macro_sdk>documents</macro_sdk>",
-            prompt::agent_identity::render("Grunk", "grunk"),
+            agent_prompts::agent_identity::render("Grunk", "grunk"),
         )
     );
     assert_eq!(
@@ -448,11 +448,11 @@ async fn a_summary_turns_closed_opener_has_no_verdict() {
 
 #[test]
 fn opening_transcript_leaves_out_the_hidden_agent_context() {
-    let messages = vec![agent::types::ChatMessage {
-        content: agent::types::ChatMessageContent::Text(
+    let messages = vec![agent_loop::types::ChatMessage {
+        content: agent_loop::types::ChatMessageContent::Text(
             "<m-agent-context>{\"version\":1,\"text\":\"<session owner=\\\"wolf@macro.com\\\"/>\"}</m-agent-context>\n\nwhat is going on in my workspace".to_owned(),
         ),
-        role: agent::types::Role::User,
+        role: agent_loop::types::Role::User,
         attachments: None,
     }];
 

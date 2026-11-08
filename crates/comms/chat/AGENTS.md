@@ -12,7 +12,7 @@ adapters, and lifecycle events. See `README.md` for the Kafka event schema.
 - `src/domain/events.rs`: `chat.*`/`chat.message_*` events published to
   `macro.chats` (schema in `README.md`).
 - `src/inbound/attachment.rs`: the `AttachmentService` impl for chat messages.
-- `src/inbound/toolset.rs`: AI tools over chats (feature `ai_tools`).
+- `src/inbound/toolset.rs`: AI tools over chats (feature `agent_tools`).
 - `src/outbound/postgres.rs`: storage (feature `outbound`).
 - `PLAN.md`: in-progress plan for user-level resolved attachments — check its
   "What's Broken" section before assuming it's finished.
@@ -22,13 +22,13 @@ adapters, and lifecycle events. See `README.md` for the Kafka event schema.
 - Owns: the `Chat`/`ChatMessage` tables, chat sharing/ownership, and message
   send/store/delete.
 - Not here: channel messages → `crates/comms/channels`; model selection and provider
-  calls → `crates/ai/agent`.
+  calls → `crates/ai/agent_loop`.
 
 ## Boundaries
 
 - Depends on: `attachment` (feature `attachment`), `entity_access_db_utils`,
   `share_permission_db_utils`, `macro_uuid`.
-- Used by: `ai_tools`, `agent_inmem`, `soup_realtime_inbound`.
+- Used by: `agent_tools`, `agent_inmem`, `soup_realtime_inbound`.
 
 ## Recipes
 

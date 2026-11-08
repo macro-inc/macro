@@ -35,7 +35,7 @@ default = ["backfill"]
 
 [dependencies]
 rootcause = { workspace = true }
-agent = { workspace = true }
+agent_loop = { workspace = true }
 ai_usage = { workspace = true }
 anyhow = { workspace = true }
 async-trait = { workspace = true }

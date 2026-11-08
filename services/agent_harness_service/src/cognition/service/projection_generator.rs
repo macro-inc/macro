@@ -8,16 +8,16 @@
 //! When the projection defines an `output_schema`, generation is two-phase
 //! (mirroring the `/structured-completion` endpoint): the agent loop first
 //! gathers information with tools, then a prompted structured completion
-//! (`agent::structured_output`) distills the gathered context into JSON
+//! (`agent_loop::structured_output`) distills the gathered context into JSON
 //! conforming to the schema. Prompted JSON works with every routed provider —
 //! Anthropic, OpenAI, and OpenAI-compatible providers like Cerebras — without
 //! requiring strict schema support.
 
 use std::sync::Arc;
 
-use agent::{AgentLoop, StreamAccumulator, to_rig_messages};
-use agent::{PredefinedModel, structured_output::DynamicSchema};
-use ai_tools::{AiToolSet, ToolServiceContext, ToolSetWithPrompt};
+use agent_loop::{AgentLoop, StreamAccumulator, to_rig_messages};
+use agent_loop::{PredefinedModel, structured_output::DynamicSchema};
+use agent_tools::{AiToolSet, ToolServiceContext, ToolSetWithPrompt};
 use ai_usage::{AiFeature, UsageContext};
 use futures::StreamExt;
 use macro_user_id::{cow_str::CowLike, user_id::MacroUserIdStr};
@@ -37,8 +37,8 @@ pub struct AgentProjectionGenerator {
 
 impl AgentProjectionGenerator {
     /// Creates a generator from a pre-configured tool context and toolset, e.g.
-    /// [`ai_tools::build_tool_service_context_from_env`] and
-    /// [`ai_tools::all_tools`].
+    /// [`agent_tools::build_tool_service_context_from_env`] and
+    /// [`agent_tools::all_tools`].
     pub fn new(tool_context: ToolServiceContext, tools: ToolSetWithPrompt) -> Self {
         Self {
             tool_context: Arc::new(tool_context),
@@ -78,9 +78,9 @@ impl AgentProjectionGenerator {
             )
             .await;
 
-        let messages = vec![agent::types::ChatMessage {
-            role: agent::types::Role::User,
-            content: agent::types::ChatMessageContent::Text(request.prompt.to_string()),
+        let messages = vec![agent_loop::types::ChatMessage {
+            role: agent_loop::types::Role::User,
+            content: agent_loop::types::ChatMessageContent::Text(request.prompt.to_string()),
             attachments: None,
         }];
 
@@ -111,21 +111,21 @@ impl AgentProjectionGenerator {
             .expect("structured_result requires an output schema");
 
         let conversation = vec![
-            agent::types::ChatMessage {
-                role: agent::types::Role::User,
-                content: agent::types::ChatMessageContent::Text(request.prompt.to_string()),
+            agent_loop::types::ChatMessage {
+                role: agent_loop::types::Role::User,
+                content: agent_loop::types::ChatMessageContent::Text(request.prompt.to_string()),
                 attachments: None,
             },
-            agent::types::ChatMessage {
-                role: agent::types::Role::Assistant,
-                content: agent::types::ChatMessageContent::AssistantMessageParts(
+            agent_loop::types::ChatMessage {
+                role: agent_loop::types::Role::Assistant,
+                content: agent_loop::types::ChatMessageContent::AssistantMessageParts(
                     accumulator.into_parts(),
                 ),
                 attachments: None,
             },
-            agent::types::ChatMessage {
-                role: agent::types::Role::User,
-                content: agent::types::ChatMessageContent::Text(
+            agent_loop::types::ChatMessage {
+                role: agent_loop::types::Role::User,
+                content: agent_loop::types::ChatMessageContent::Text(
                     "Based on the information gathered above, produce a structured response \
                      matching the required schema."
                         .to_string(),
@@ -139,7 +139,7 @@ impl AgentProjectionGenerator {
             .map(str::to_string)
             .unwrap_or_else(|| PredefinedModel::default().to_string());
 
-        let value = agent::structured_output::dynamic_structured_completion(
+        let value = agent_loop::structured_output::dynamic_structured_completion(
             model,
             &self.system_prompt,
             to_rig_messages(&conversation),
@@ -185,7 +185,7 @@ impl ProjectionGenerator for AgentProjectionGenerator {
             .into_parts()
             .into_iter()
             .filter_map(|part| match part {
-                agent::types::AssistantMessagePart::Text { text } => Some(text),
+                agent_loop::types::AssistantMessagePart::Text { text } => Some(text),
                 _ => None,
             })
             .collect();

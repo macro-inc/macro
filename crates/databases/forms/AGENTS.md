@@ -32,7 +32,7 @@ service.
   `entity_access`, `models_forms`, `models_databases`, `macro_event_broker`,
   `static_file_service_client` (feature `static_files`: branding images must
   be the setter's own image uploads; `src/outbound/static_file_images.rs`).
-- Used by: `document_storage_service`, `ai_tools`.
+- Used by: `document_storage_service`, `agent_tools`.
 
 ## Recipes
 

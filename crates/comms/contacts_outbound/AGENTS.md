@@ -15,7 +15,7 @@ announces graph changes.
 ## Boundaries
 
 - Depends on: `contacts_core`.
-- Used by: the composition roots and `ai_tools`, through the `contacts`
+- Used by: the composition roots and `agent_tools`, through the `contacts`
   facade.
 
 ## Recipes

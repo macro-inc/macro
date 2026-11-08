@@ -15,8 +15,6 @@
 //! name from `_meta.macro.toolName`; only older frames without that metadata
 //! fall back to the display title.
 
-use agent::ReasoningEffort;
-use agent::types::AssistantMessagePart;
 use agent_client_protocol::schema::v1::{
     ContentBlock, PromptRequest, SessionNotification, SessionUpdate, ToolCallStatus,
 };
@@ -24,6 +22,8 @@ use agent_client_protocol::schema::v1::{
     RequestId, Response, SessionConfigKind, SessionConfigOption,
 };
 use agent_client_protocol::{JsonRpcMessage, RawJsonRpcMessage, RawJsonRpcParams};
+use agent_loop::ReasoningEffort;
+use agent_loop::types::AssistantMessagePart;
 use agent_runtime_protocol::domain::schema::v0::{ToRuntimeMessage, ToServerMessage};
 use agent_session::domain::model::Message;
 use futures::future::BoxFuture;
@@ -166,7 +166,7 @@ pub fn replay_reasoning_effort(frames: &[Message]) -> ReasoningEffort {
 }
 
 /// Restore the last confirmed speed selection after a runtime restart.
-pub fn replay_speed(frames: &[Message]) -> agent::ModelSpeed {
+pub fn replay_speed(frames: &[Message]) -> agent_loop::ModelSpeed {
     replay_config(frames, |options| {
         options
             .iter()
@@ -177,7 +177,7 @@ pub fn replay_speed(frames: &[Message]) -> agent::ModelSpeed {
                 let SessionConfigKind::Select(select) = &option.kind else {
                     return None;
                 };
-                agent::ModelSpeed::parse(&select.current_value.to_string())
+                agent_loop::ModelSpeed::parse(&select.current_value.to_string())
             })
             .unwrap_or_default()
     })

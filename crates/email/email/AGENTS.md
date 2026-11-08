@@ -11,7 +11,7 @@ tools — hexagonal, heavily feature-gated.
 - `src/domain/service.rs` + `src/domain/ports.rs`: the domain service and the
   traits its adapters implement.
 - `src/inbound/axum.rs`: HTTP routes (feature `axum`); `src/inbound/toolset.rs`:
-  the AI email tools (feature `ai_tools`).
+  the AI email tools (feature `agent_tools`).
 - `src/outbound/email_pg_repo.rs`, `src/outbound/invitation_pg.rs`: Postgres
   adapters (feature `outbound`); `src/outbound/email_service_http.rs`: calls
   into `email_service`; `src/outbound/s3_draft_attachment_storage.rs`: staged
@@ -37,7 +37,7 @@ tools — hexagonal, heavily feature-gated.
   `crm`, `frecency`, `item_filters`, `lexical_client`, `macro_event_broker`,
   `calendar_events` (optional, feature `calendar_invitations`), `sqs_client`
   (optional, feature `sqs`; it must not depend back on this crate).
-- Used by: many crates and services, including `ai_tools`, `graphql_email`,
+- Used by: many crates and services, including `agent_tools`, `graphql_email`,
   `teams`, `database_sql_runner`, `attention_feed`, `calendar_service`, `email_service`,
   `email_scheduled_handler`, `search_processing_service`.
 
@@ -144,7 +144,7 @@ tools — hexagonal, heavily feature-gated.
   is `None` on snapshots saved before it was recorded, where a series looks
   like a single event, so those cannot be added to a calendar.
 - The feature matrix (`ports`/`inbound`/`outbound`/`http_client`/`s3`/
-  `gmail_token`/`ai_tools`/`attachment`/`calendar_invitations`/`axum`) gates
+  `gmail_token`/`agent_tools`/`attachment`/`calendar_invitations`/`axum`) gates
   most modules; check `Cargo.toml`'s `[features]` block for which one a new
   dependency belongs under before wiring it in.
 - `domain/ports.rs` defines the traits adapters implement — call through the

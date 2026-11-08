@@ -38,7 +38,7 @@ run-local.fish
 infra/local/generated/
 **/target/
 /target
-**/ai_tools/schemas/
+**/agent_tools/schemas/
 .pi/outputs/
 .commandcode/
 **/.webhook.json

@@ -1,6 +1,6 @@
 //! System skill for reconstructing a timeline of the user's activity yesterday.
 
-use prompt::StaticPrompt;
+use agent_prompts::StaticPrompt;
 
 use crate::SystemSkill;
 

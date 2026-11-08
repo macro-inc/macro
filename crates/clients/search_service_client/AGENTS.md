@@ -19,7 +19,7 @@ authenticating with the internal API key header instead of a user JWT.
 ## Boundaries
 
 - Depends on: `models_search` (request/response types).
-- Used by: `ai_tools`, `memory`, `skills`, `document_cognition_service`, `mcp_service`.
+- Used by: `agent_tools`, `memory`, `skills`, `document_cognition_service`, `mcp_service`.
 
 ## Recipes
 

@@ -382,24 +382,24 @@ fn tools_for_inner(host: AiHost, code_mode_direct: bool) -> ToolSetWithPrompt {
     // how; direct hosts keep the dispatch tools' own guidance.
     let (tools_prompt, guides): (String, &str) = match host {
         AiHost::Chat => (
-            prompt::TOOL_USE_PROMPT
-                .compose(&prompt::coding_agents::PROMPT)
+            agent_prompts::TOOL_USE_PROMPT
+                .compose(&agent_prompts::coding_agents::PROMPT)
                 .to_string(),
             inline_guides(GuideHost::Direct),
         ),
         AiHost::AgentSession if code_mode_direct => (
-            prompt::CODE_MODE_SESSION_TOOL_USE_PROMPT.to_string(),
+            agent_prompts::CODE_MODE_SESSION_TOOL_USE_PROMPT.to_string(),
             inline_guides(GuideHost::Code),
         ),
         AiHost::AgentSession => (
-            prompt::SESSION_TOOL_USE_PROMPT
-                .compose(&prompt::coding_agents::PROMPT)
+            agent_prompts::SESSION_TOOL_USE_PROMPT
+                .compose(&agent_prompts::coding_agents::PROMPT)
                 .to_string(),
             inline_guides(GuideHost::Direct),
         ),
         AiHost::ChannelBot | AiHost::Mcp => (
-            prompt::DIRECT_TOOL_USE_PROMPT
-                .compose(&prompt::coding_agents::PROMPT)
+            agent_prompts::DIRECT_TOOL_USE_PROMPT
+                .compose(&agent_prompts::coding_agents::PROMPT)
                 .to_string(),
             inline_guides(GuideHost::Direct),
         ),
@@ -408,7 +408,7 @@ fn tools_for_inner(host: AiHost, code_mode_direct: bool) -> ToolSetWithPrompt {
         .iter()
         .map(|tool| (tool.name.as_str(), tool.description.as_str()))
         .collect();
-    let deferred_section = prompt::deferred_tools::render(&catalog).unwrap_or_default();
+    let deferred_section = agent_prompts::deferred_tools::render(&catalog).unwrap_or_default();
     let prompt = format!("{tools_prompt}{guides}{deferred_section}");
     // Only code-mode sessions route SDK entities per turn.
     let routed_prompt = if code_mode_direct {
@@ -444,8 +444,8 @@ pub fn all_tool_frontend_schemas() -> FrontendSchemas {
 
 pub fn no_tools() -> ToolSetWithPrompt {
     ToolSetWithPrompt {
-        prompt: Box::new(&prompt::BASE_PROMPT),
-        routed_prompt: Box::new(&prompt::BASE_PROMPT),
+        prompt: Box::new(&agent_prompts::BASE_PROMPT),
+        routed_prompt: Box::new(&agent_prompts::BASE_PROMPT),
         toolset: Arc::new(AsyncToolCollection::new()),
         deferred: Arc::from([]),
     }

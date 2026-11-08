@@ -33,7 +33,7 @@ events to the `macro.properties` Kafka topic.
 
 - Depends on: `entity_access`, `macro_event_broker`, `model_owner`,
   `notification` (optional, `outbound` feature).
-- Used by: `databases`, `ai_tools`, `agent_trigger`, `initiative`, `messages`,
+- Used by: `databases`, `agent_tools`, `agent_trigger`, `initiative`, `messages`,
   `search_service`, `soup`, `crm`, `graphql_properties`, `properties_service`,
   `services/document_storage_service`, `services/agent_trigger_service`,
   `services/search_processing_service`.

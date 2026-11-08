@@ -5,10 +5,10 @@
 use std::sync::Arc;
 use std::time::Duration;
 
-use agent::StreamPart;
 use agent_client_protocol::RawJsonRpcMessage;
 use agent_fold::domain::log::Message;
 use agent_fold::domain::service::FoldedMessageService;
+use agent_loop::StreamPart;
 use agent_runtime_protocol::domain::action::{AgentAction, AgentActionId};
 use agent_session::domain::connection::RuntimeAttachment;
 use agent_session::domain::model::{AgentSessionId, CreateAgentSessionParams};

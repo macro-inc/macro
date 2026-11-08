@@ -55,7 +55,7 @@ initiative_description = { workspace = true }
 agent_session = { workspace = true, default-features = true, features = ["outbound"] }
 agent_session_realtime = { workspace = true, default-features = true }
 activity = { workspace = true, default-features = true }
-ai_tools = { workspace = true }
+agent_tools = { workspace = true }
 ai_usage = { workspace = true }
 analytics_client = { workspace = true }
 attention_feed = { workspace = true, features = ["inbound", "outbound"] }

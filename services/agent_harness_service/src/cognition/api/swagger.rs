@@ -229,7 +229,7 @@ use utoipa::OpenApi;
                 skills::inbound::axum_router::SkillsResponse,
                 skills::inbound::axum_router::SkillContentResponse,
                 skills::inbound::axum_router::SkillErrorBody,
-                agent::structured_output::DynamicSchema,
+                agent_loop::structured_output::DynamicSchema,
 
                 // Memory
                 MemoryResponse,

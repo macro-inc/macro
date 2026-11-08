@@ -197,7 +197,7 @@ fn image_names_and_source_uris_reach_the_model_after_history_replay() {
             ToRuntimeMessage::Acp(AcpMessage(raw)),
         )]);
         let messages = messages_for_turn(&history, &UserPrompt::text("use that reference"));
-        let serialized = serde_json::to_string(&agent::to_rig_messages(&messages))
+        let serialized = serde_json::to_string(&agent_loop::to_rig_messages(&messages))
             .expect("model messages serialize");
         assert!(serialized.contains("image_file_name: reference-photo.png"));
         assert!(serialized.contains(&format!("image_source_uri: {uri}")));

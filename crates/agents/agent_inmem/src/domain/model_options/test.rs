@@ -52,8 +52,8 @@ fn model_image_capability_survives_acp_projection() {
 
 #[test]
 fn speed_is_advertised_only_for_supported_models_with_current_value() {
-    use agent::{ModelSpeed, ReasoningEffort};
     use agent_client_protocol::schema::v1::SessionConfigKind;
+    use agent_loop::{ModelSpeed, ReasoningEffort};
     for (model, speed) in [
         ("openai/gpt-6-astra", ModelSpeed::Ultrafast),
         ("openai/gpt-6.1-sol", ModelSpeed::Ultrafast),

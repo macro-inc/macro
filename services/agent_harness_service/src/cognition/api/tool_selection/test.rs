@@ -70,7 +70,7 @@ async fn read_only_never_loads_mutation_tools_or_connectors() {
 
 #[test]
 fn database_formatter_retains_the_registered_sql_reference() {
-    let tools = ai_tools::database_read_only_tools();
+    let tools = agent_tools::database_read_only_tools();
     let schemas = tools.request_schemas().unwrap();
     let prompt = structured_completion_prompt(
         &ToolSet::DatabasesReadOnly,
@@ -98,7 +98,7 @@ fn database_formatter_retains_the_registered_sql_reference() {
 
 #[test]
 fn tool_free_completions_do_not_receive_a_database_catalog() {
-    let tools = ai_tools::database_read_only_tools();
+    let tools = agent_tools::database_read_only_tools();
     let prompt = structured_completion_prompt(
         &ToolSet::None,
         &"Unrelated tools",
@@ -112,7 +112,7 @@ fn tool_free_completions_do_not_receive_a_database_catalog() {
 #[test]
 fn the_database_host_carries_how_databases_work_and_no_other_area() {
     let prompt = choose_tools_prompt(&ToolSet::Databases, &"Unrelated tools").to_string();
-    assert!(prompt.starts_with(&prompt::BASE_PROMPT.to_string()));
+    assert!(prompt.starts_with(&agent_prompts::BASE_PROMPT.to_string()));
     assert!(prompt.contains("check every database's tables"));
     assert!(prompt.contains("Never invent a person or an id"));
     assert!(!prompt.contains("How CRM pipelines work"));

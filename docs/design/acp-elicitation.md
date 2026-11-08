@@ -325,7 +325,7 @@ elicitation (see [User tools reviewed in the turn](#user-tools-reviewed-in-the-t
   `on_tool_result` hands a `"PendingUserExecution"` answer to the finisher
   and rewrites what the model reads (and the stream records) to what the
   user decided.
-- `ai_tools::user_tool_review`: the `UserToolReviewer` port in a neutral
+- `agent_tools::user_tool_review`: the `UserToolReviewer` port in a neutral
   form vocabulary, the schema→form projection, and `user_tool_finisher`
   over `is_valid_tool` / `try_user_tool_call` — the same pair chat's
   `/tool/call` uses.
@@ -378,7 +378,7 @@ through elicitation, before the model reads the result.
 model calls CreateCalendarEvent(draft)
   └─ UserTool::call → "PendingUserExecution"
        └─ StreamBridge::on_tool_result (agent)
-            └─ UserToolFinisher (ai_tools)
+            └─ UserToolFinisher (agent_tools)
                  ├─ form = project(tool input schema, draft) + `draft` (_macro/json)
                  ├─ reviewer.review(..)          → elicitation/create   (agent_inmem)
                  │      sessionId, toolCallId, mode: form, requestedSchema,
@@ -417,7 +417,7 @@ Create/Cancel and "Edit in session". Once the tool reports, the part's
 `tool_outcome` carries its result and the question renders as the finished
 user tool.
 
-Hosts (`ai_tools::AiHost`): `Chat` keeps the deferring registrations and the
+Hosts (`agent_tools::AiHost`): `Chat` keeps the deferring registrations and the
 composer prompt; `AgentSession` keeps the same tools with the review prompt;
 `ChannelBot` and `Mcp` are unchanged — direct `CreateCalendarEvent`, no
 `SendEmail` — until the MCP server reviews through `rmcp`'s elicitation.

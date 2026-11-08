@@ -1,10 +1,10 @@
 //! ACP session configuration advertised by the in-memory agent.
 
-use agent::{ModelSpeed, ReasoningEffort};
 use agent_client_protocol::schema::v1::{
     SessionConfigOption, SessionConfigOptionCategory, SessionConfigSelectOption,
     SessionConfigValueId,
 };
+use agent_loop::{ModelSpeed, ReasoningEffort};
 use agent_runtime_protocol::domain::action::MODEL_CONFIG_ID;
 
 /// Build session configuration from the actual turn engine catalog and state.

@@ -3,11 +3,11 @@
 use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering};
 
-use agent::ReasoningEffort;
-use agent::types::ChatMessage;
-use agent::{AgentError, StreamPart};
 use agent_api_keys::domain::UsableAgentKey;
-use ai_tools::user_tool_review::UserToolReviewer;
+use agent_loop::ReasoningEffort;
+use agent_loop::types::ChatMessage;
+use agent_loop::{AgentError, StreamPart};
+use agent_tools::user_tool_review::UserToolReviewer;
 use bot_id::BotId;
 use mcp_toolset::RemoteMcpToolSet;
 use model_owner::Owner;
@@ -54,7 +54,7 @@ pub struct TurnRequest {
     /// Provider-independent effort selected for this session.
     pub reasoning_effort: ReasoningEffort,
     /// Inference speed applied without changing model or reasoning effort.
-    pub speed: agent::ModelSpeed,
+    pub speed: agent_loop::ModelSpeed,
     /// Who this agent is. Folded into every turn's system prompt so the
     /// model can answer "who are you" even when the session has no
     /// instructions. `None` leaves the standing prompt unnamed.

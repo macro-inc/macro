@@ -1,6 +1,6 @@
 use crate::cognition::config::Config;
 use crate::cognition::service::ai_stream_registry::AiStreamRegistry;
-use ai_tools::{
+use agent_tools::{
     AiToolSet, ToolCallToolContext, ToolDocumentService, ToolDocumentToolContext, ToolEmailService,
     ToolEmailToolContext, ToolEntityAccessService, ToolPropertiesToolContext, ToolServiceContext,
     ToolSoupService,
@@ -119,7 +119,7 @@ pub type DcsMcpRouterState = mcp_client::inbound::McpRouterState<
 
 /// The import pipeline service, shared between the import router and the
 /// chat toolset.
-pub type DcsImportService = ai_tools::ToolImportService;
+pub type DcsImportService = agent_tools::ToolImportService;
 
 /// The onboarding orchestrator wired to the Postgres repo and the MCP server
 /// store.
@@ -188,7 +188,7 @@ pub struct ApiContext {
     pub pipedream_state: DcsPipedreamRouterState,
     pub granola_sync: Option<Arc<dyn granola_sync::domain::service::SyncService>>,
     /// Selects which MCP stack (Pipedream vs native) serves a user's tools.
-    pub mcp_selector: Arc<ai_tools::ToolMcpSelector>,
+    pub mcp_selector: Arc<agent_tools::ToolMcpSelector>,
     pub import_service: Arc<DcsImportService>,
     pub onboarding_service: Arc<DcsOnboardingService>,
     /// Kafka-backed macro event broker for publishing domain events.

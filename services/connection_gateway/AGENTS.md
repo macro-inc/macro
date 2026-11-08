@@ -36,7 +36,7 @@ the socket themselves.
   (document_storage_service, document_cognition_service, email_service,
   calendar_service, agent_harness_service, mcp_service, scheduled_action,
   agent_trigger_service, preview_gateway, and domain crates like `channels`,
-  `messages`, `databases`, `ai_tools`).
+  `messages`, `databases`, `agent_tools`).
 
 ## Recipes
 

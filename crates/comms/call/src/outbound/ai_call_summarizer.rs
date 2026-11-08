@@ -1,12 +1,12 @@
 //! AI-backed implementation of [`CallSummarizer`](crate::domain::ports::CallSummarizer).
 //!
-//! Uses [`agent::complete`] to generate a natural-language summary of a
+//! Uses [`agent_loop::complete`] to generate a natural-language summary of a
 //! finished call from its finalized transcript.
 
 use std::collections::HashSet;
 use std::fmt::Write as _;
 
-use agent::PredefinedModel;
+use agent_loop::PredefinedModel;
 use uuid::Uuid;
 
 use macro_user_id::user_id::MacroUserIdStr;
@@ -118,7 +118,7 @@ const CALL_NAME_SUMMARY_CHAR_CAP: usize = 4_000;
 /// output regardless of the system prompt.
 const CALL_NAME_MAX_CHARS: usize = 80;
 
-/// AI-powered [`CallSummarizer`] that delegates to [`agent::complete`].
+/// AI-powered [`CallSummarizer`] that delegates to [`agent_loop::complete`].
 #[derive(Clone)]
 pub struct AiCallSummarizer {
     recorder: std::sync::Arc<dyn ai_usage::UsageRecorder>,
@@ -142,7 +142,7 @@ impl CallSummarizer for AiCallSummarizer {
     ) -> Result<Option<String>, Self::Err> {
         let user_message = format_transcript_prompt(call_id, &transcript);
 
-        let raw = agent::complete(
+        let raw = agent_loop::complete(
             SUMMARIZATION_MODEL,
             SUMMARIZATION_SYSTEM_PROMPT,
             &user_message,
@@ -180,7 +180,7 @@ impl CallSummarizer for AiCallSummarizer {
 
         let user_message = format!("Summary:\n\n{summary_for_prompt}");
 
-        let raw = agent::complete(
+        let raw = agent_loop::complete(
             SUMMARIZATION_MODEL,
             CALL_NAME_SYSTEM_PROMPT,
             &user_message,
@@ -216,7 +216,7 @@ impl CallSummarizer for AiCallSummarizer {
             .collect();
         let user_message = format_custom_speakers_prompt(&transcript, &candidate_speakers);
 
-        let raw = agent::complete(
+        let raw = agent_loop::complete(
             SUMMARIZATION_MODEL,
             CUSTOM_SPEAKER_SYSTEM_PROMPT,
             &user_message,

@@ -34,7 +34,7 @@ instructions an agent follows when the skill is referenced in its input.
 - Depends on: `document_sub_type`, `entity_access` (ports); `outbound` feature
   additionally needs `documents`, `search_service_client`, `soup`,
   `lexical_client`, `item_filters`, `filter_ast`.
-- Used by: `ai_tools`, `agent_inmem` (skill routing), `agent_harness_service`
+- Used by: `agent_tools`, `agent_inmem` (skill routing), `agent_harness_service`
   (cognition `/skills` routes). Descriptions come from
   `documents` (`skill_descriptions`); system skills have none.
 

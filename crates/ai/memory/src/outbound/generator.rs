@@ -1,6 +1,6 @@
 //! The generic agent adapter accepts only a host-supplied read toolset.
 use crate::domain::ports::*;
-use agent::{
+use agent_loop::{
     AgentLoop, PredefinedModel, StreamPart,
     types::{ChatMessage, ChatMessageContent, Role},
 };
@@ -24,7 +24,11 @@ impl<C: Clone + Send + Sync + 'static> MemoryGenerator for AgentMemoryGenerator<
             "Research subject: {user}. Current UTC time: {}.",
             chrono::Utc::now()
         );
-        let system = prompt::compose(&[&self.tool_prompt, &prompt::privacy::PROMPT, &identity]);
+        let system = agent_prompts::compose(&[
+            &self.tool_prompt,
+            &agent_prompts::privacy::PROMPT,
+            &identity,
+        ]);
         let agent = AgentLoop::new(self.recorder.clone()).with_model(PredefinedModel::Smart);
         let mut session = agent
             .session(
@@ -34,11 +38,11 @@ impl<C: Clone + Send + Sync + 'static> MemoryGenerator for AgentMemoryGenerator<
                 ai_usage::UsageContext::new(ai_usage::AiFeature::Memory, user),
             )
             .await;
-        let request = prompt::compose(&[
+        let request = agent_prompts::compose(&[
             &instructions,
             &"Wrap only the final report in <memory></memory> tags. Do not narrate your research inside the tags.",
         ]);
-        let messages = agent::to_rig_messages(&[ChatMessage {
+        let messages = agent_loop::to_rig_messages(&[ChatMessage {
             content: ChatMessageContent::Text(request),
             role: Role::User,
             attachments: None,
@@ -70,8 +74,8 @@ impl<C: Clone + Send + Sync + 'static> MemoryGenerator for AgentMemoryGenerator<
         instructions: &str,
         sources: &str,
     ) -> Result<String> {
-        let system = prompt::compose(&[&prompt::privacy::PROMPT, &instructions]);
-        agent::complete(
+        let system = agent_prompts::compose(&[&agent_prompts::privacy::PROMPT, &instructions]);
+        agent_loop::complete(
             PredefinedModel::Smart,
             &system,
             sources,
@@ -85,8 +89,8 @@ impl<C: Clone + Send + Sync + 'static> MemoryGenerator for AgentMemoryGenerator<
     #[tracing::instrument(skip_all, err)]
     async fn judge(&self, user: MacroUserIdStr<'static>, content: &str) -> Result<()> {
         let instructions = include_str!("generator/judge.md");
-        let system = prompt::compose(&[&prompt::privacy::PROMPT, &instructions]);
-        let response = agent::complete(
+        let system = agent_prompts::compose(&[&agent_prompts::privacy::PROMPT, &instructions]);
+        let response = agent_loop::complete(
             PredefinedModel::Sonnet4_6,
             &system,
             content,

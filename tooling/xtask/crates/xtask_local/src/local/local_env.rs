@@ -442,7 +442,7 @@ impl QueueEnv {
                 env.insert(key.into(), form.value(queue.name));
             }
         }
-        // Without these the `ai_tools` SQS client is built with no queue name
+        // Without these the `agent_tools` SQS client is built with no queue name
         // and every enqueue fails, so an agent session can neither send email
         // nor sync thread labels. Deployed environments set them in Doppler.
         env.insert("ENABLE_EMAIL_SCHEDULED_QUEUE".into(), "true".into());
@@ -739,7 +739,7 @@ impl BootStubEnv {
             "DOCUMENT_STORAGE_SERVICE_CLOUDFRONT_SIGNER_PRIVATE_KEY".into(),
             "local".into(),
         );
-        // The `ai_tools` tool-context env (document_storage_service builds one
+        // The `agent_tools` tool-context env (document_storage_service builds one
         // at boot) reads this as a separate secret-name var.
         env.insert(
             "DOCUMENT_STORAGE_SERVICE_CLOUDFRONT_SIGNER_PRIVATE_KEY_SECRET_NAME".into(),

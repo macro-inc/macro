@@ -29,22 +29,22 @@ feature `axum`) that the SDK's `macro.images.generate()` calls.
 - Owns: image generation orchestration, reference resolution, and the toolset
   wrapper.
 - Not here: provider composition (which `ImageGenerator`/`ImageReferenceReader`
-  to use) — that's `ai_tools`, the host crate.
+  to use) — that's `agent_tools`, the host crate.
 
 ## Boundaries
 
 - Depends on: `ai_billing` (admission port), `ai_toolset`, `ai_usage`,
   `attachment`, `lexical_client`, `static_file_service_client`; with `axum`,
   `entity_registry` and `macro_authorization`.
-- Used by: `ai_tools` (composes providers and wires the toolset);
+- Used by: `agent_tools` (composes providers and wires the toolset);
   `agent_harness_service` mounts the router under `/cognition`.
 
 ## Recipes
 
 - Add a reference source: implement `ImageReferenceReader` →
-  `src/outbound/references.rs` → wire it in the composing host (`ai_tools`).
+  `src/outbound/references.rs` → wire it in the composing host (`agent_tools`).
 - Add a new provider: implement `ImageGenerator` → `src/outbound/<provider>.rs`
-  → wire it in `ai_tools`.
+  → wire it in `agent_tools`.
 
 ## Checks
 

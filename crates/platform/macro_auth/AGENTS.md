@@ -25,7 +25,7 @@ internal API key, and the Axum JWT-decode middleware.
 ## Boundaries
 
 - Depends on: `macro_env`, `macro_env_var`, `macro_user_id`, `remote_env_var`.
-- Used by: `macro_authorization`, `agent_egress`, `ai_tools`, `decode_jwt`,
+- Used by: `macro_authorization`, `agent_egress`, `agent_tools`, `decode_jwt`,
   `local_e2e_test_support`, `search_service`.
 
 ## Checks

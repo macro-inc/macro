@@ -25,7 +25,7 @@ use serde::Deserialize;
 use std::pin::Pin;
 use std::sync::Arc;
 
-/// Stand-in for `ai_tools::SearchTools`: returns all tools and stages them so
+/// Stand-in for `agent_tools::SearchTools`: returns all tools and stages them so
 /// they are callable on the next model turn. (The real tool auto-loads only
 /// the top-ranked matches; with this test catalog everything fits the cap.)
 #[derive(Deserialize, JsonSchema)]
@@ -61,7 +61,7 @@ impl AsyncTool<()> for SearchToolsTest {
     }
 }
 
-/// Stand-in for `ai_tools::LoadTools`: looks names up in the request context's
+/// Stand-in for `agent_tools::LoadTools`: looks names up in the request context's
 /// searchable catalog and hands them to the loader.
 #[derive(Deserialize, JsonSchema)]
 #[schemars(title = "LoadTools", description = "Load searchable tools by name.")]

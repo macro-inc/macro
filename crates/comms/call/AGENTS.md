@@ -41,7 +41,7 @@ in-call chat.
 
 - Depends on: `channels` (feature `outbound`), `agent`/`ai_usage` (call summarization),
   `entity_access_db_utils`, `livekit-api`/`livekit-protocol`.
-- Used by: `memory`, `ai_tools`, `models_soup`, `agent_trigger`, `crm`, `soup`,
+- Used by: `memory`, `agent_tools`, `models_soup`, `agent_trigger`, `crm`, `soup`,
   `calendar_events` (meeting links).
 
 ## Recipes
@@ -51,7 +51,7 @@ in-call chat.
 - Add a public call notification: `src/domain/notification_events.rs` →
   `src/domain/service.rs` or its meeting/channel submodule → `crates/integrations/webhook`.
 - Change ringing/decline behavior: `src/domain/service.rs` → `src/inbound/axum_router.rs`.
-- Add an AI tool over calls: `src/inbound/toolset.rs` (feature `ai_tools`).
+- Add an AI tool over calls: `src/inbound/toolset.rs` (feature `agent_tools`).
 
 ## Checks
 

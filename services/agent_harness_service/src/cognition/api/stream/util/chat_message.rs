@@ -3,8 +3,8 @@ pub mod ai_request;
 use crate::cognition::{api::context::ApiContext, model::stream::SendChatMessagePayload};
 use chat_id::ChatId;
 
-use agent::types::Role;
-use agent::types::{ChatMessage, ChatMessageContent};
+use agent_loop::types::Role;
+use agent_loop::types::{ChatMessage, ChatMessageContent};
 use anyhow::{Context, Result};
 use chat::domain::models::ResolvedMessageContent;
 use chat::domain::ports::MessageService;

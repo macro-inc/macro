@@ -1,4 +1,4 @@
-# ai_tools
+# agent_tools
 
 ## What it is
 
@@ -81,8 +81,8 @@ edit capability but calls no nested model and emits no additional model charge; 
 
 ## Checks
 
-- `cargo test -p ai_tools` (`SQLX_OFFLINE` unset).
-- After adding/changing a tool: `cargo run -p ai_tools --bin gen_tool_schemas`
+- `cargo test -p agent_tools` (`SQLX_OFFLINE` unset).
+- After adding/changing a tool: `cargo run -p agent_tools --bin gen_tool_schemas`
   and `--bin gen_ai_request_schemas` to refresh generated frontend schemas.
 - `DisplayResults` decodes its view with `dynamic_ui` and returns it; readers render the result, never the arguments. Its schema comes from `dynamic_ui::View`.
 

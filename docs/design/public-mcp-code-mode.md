@@ -28,7 +28,7 @@ plugin directory refuses generic executors.
   top 4, 48 KiB budget, falls back to an entity's overview when its full
   reference does not fit, 1 s deadline. The result goes into the system prompt.
 - Public MCP (`services/agent_harness_service/src/public_mcp`): stateless,
-  OAuth user id only, `ai_tools::tools_for(AiHost::Mcp)`.
+  OAuth user id only, `agent_tools::tools_for(AiHost::Mcp)`.
 
 The MCP has no system prompt and never sees the user's message, so per-turn
 docs injection cannot carry over. The agent has to ask for docs itself.

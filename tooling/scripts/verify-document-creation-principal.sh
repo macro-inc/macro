@@ -38,6 +38,6 @@ cargo test -p share_permission_db_utils --lib team_share
 cargo test -p documents --lib
 cargo test -p folder --lib pg_project_repo
 cargo test -p document_storage_service bot_tokens_keep_the_actor_without_inventing_a_user
-cargo test --no-run -p ai_tools -p memory -p github -p document_storage_service \
+cargo test --no-run -p agent_tools -p memory -p github -p document_storage_service \
   -p agent_harness_service -p document_upload_finalizer_handler \
   -p webhook -p search_processing_service

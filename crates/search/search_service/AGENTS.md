@@ -82,7 +82,7 @@ per-entity-type search plus a unified search across them — mounted into
   which web rows show even where a read-only calendar names the user's own
   mailbox: `NameSearch`'s description is what tells a model that only `role`
   says they organize it. Fields alone did not stop models calling a colleague's
-  event "your appointment"; `ai_tools` adds `calendar_events`'
+  event "your appointment"; `agent_tools` adds `calendar_events`'
   `off_schedule_summary` to such a result, and that sentence did. Measure a
   change to any of these with the default model on rows that are really in the
   index, and a user whose memory does not describe the behavior under test.

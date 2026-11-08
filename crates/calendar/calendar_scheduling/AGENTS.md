@@ -31,7 +31,7 @@ MacroDB migrations.
 
 - Depends on: `calendar_events`, `teams`, `email_validator`; optionally `call`
   via `calendar_events` (meeting links).
-- Used by: `forms`, `ai_tools`, `calendar_service` (router, mounted at `/scheduling`).
+- Used by: `forms`, `agent_tools`, `calendar_service` (router, mounted at `/scheduling`).
 
 ## Interfaces
 
