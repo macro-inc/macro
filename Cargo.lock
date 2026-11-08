@@ -3967,7 +3967,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ade8366b8bd5ba243f0a58f036cc0ca8a2f069cff1a2351ef1cac6b083e16fc0"
 
 [[package]]
-name = "cal"
+name = "calcom_webhooks"
 version = "0.1.0"
 dependencies = [
  "analytics_client",
@@ -7012,7 +7012,7 @@ dependencies = [
  "bebop",
  "bot_id",
  "bots",
- "cal",
+ "calcom_webhooks",
  "calendar_events",
  "calendar_service_url",
  "call",

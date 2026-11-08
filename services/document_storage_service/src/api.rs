@@ -135,7 +135,9 @@ fn api_router(state: ApiContext) -> Router {
         )
         .nest(
             "/cal",
-            cal::inbound::cal_webhook_router::cal_webhook_router(state.cal_webhook_state.clone()),
+            calcom_webhooks::inbound::cal_webhook_router::cal_webhook_router(
+                state.cal_webhook_state.clone(),
+            ),
         );
 
     // Internal call router — agent-authenticated via x-macro-internal-call header.

@@ -49,7 +49,7 @@ export const handleDemoClick = (buttonName: string): void => {
 
 /**
  * A demo was booked in the site's dialog. Sends Meta the conversion the backend
- * sent for a cal.com demo booking (`crates/calendar/cal`), so campaigns that count demos
+ * sent for a cal.com demo booking (`crates/calendar/calcom_webhooks`), so campaigns that count demos
  * keep counting them.
  */
 export const handleDemoBooked = (): void => {

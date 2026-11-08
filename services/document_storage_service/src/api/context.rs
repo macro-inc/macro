@@ -15,7 +15,7 @@ use bots::{
     inbound::{axum_router::BotsRouterState, channel_webhook_router::ChannelBotWebhookRouterState},
     outbound::pg_bots_repo::PgBotsRepo,
 };
-use cal::{
+use calcom_webhooks::{
     domain::service::CalWebhookServiceImpl, inbound::cal_webhook_router::CalWebhookRouterState,
     outbound::analytics_client::AnalyticsClientSink,
 };

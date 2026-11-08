@@ -658,7 +658,7 @@ bots = { path = "crates/agents/bots", default-features = false }
 broadcast = { path = "crates/platform/broadcast" }
 cache-core = { path = "crates/client/cache-core" }
 cache-turso = { path = "crates/client/cache-turso" }
-cal = { path = "crates/calendar/cal" }
+calcom_webhooks = { path = "crates/calendar/calcom_webhooks" }
 calendar_event_id = { path = "crates/types/calendar_event_id" }
 calendar_events = { path = "crates/calendar/calendar_events" }
 calendar_scheduling = { path = "crates/calendar/calendar_scheduling" }

@@ -78,7 +78,7 @@ base64 = { workspace = true }
 bots = { workspace = true, default-features = true }
 bot_id = { workspace = true }
 calendar_events = { workspace = true, features = ["dispatch-sqs", "inbound", "mutation-client", "notify", "postgres"] }
-cal = { workspace = true, features = ["axum", "outbound"] }
+calcom_webhooks = { workspace = true, features = ["axum", "outbound"] }
 call = { workspace = true, default-features = true }
 feature_flags = { workspace = true }
 channel_bots = { workspace = true }

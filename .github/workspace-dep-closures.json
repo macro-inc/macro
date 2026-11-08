@@ -2663,8 +2663,8 @@
       "crates/types/trigger_context",
       "crates/workspace-hack"
     ],
-    "cal": [
-      "crates/calendar/cal",
+    "calcom_webhooks": [
+      "crates/calendar/calcom_webhooks",
       "crates/clients/analytics_client",
       "crates/platform/macro_env",
       "crates/platform/macro_env_var",
@@ -4984,7 +4984,7 @@
       "crates/billing/ai_admission",
       "crates/billing/ai_billing",
       "crates/billing/ai_usage",
-      "crates/calendar/cal",
+      "crates/calendar/calcom_webhooks",
       "crates/calendar/calendar_events",
       "crates/calendar/calendar_scheduling",
       "crates/clients/analytics_client",
