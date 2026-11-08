@@ -197,7 +197,13 @@ impl SyncCore {
             .is_some_and(|p| p.id.as_str() == id)
         {
             if let Some(push) = self.assist_push.take() {
-                self.assist.drain(..push.count);
+                let confirmed = self.assist.drain(..push.count).collect::<Vec<_>>();
+                for row in confirmed {
+                    // Delivery proof and local import are separate: a reset
+                    // can defer importing these acknowledged bytes.
+                    self.server_evidence(&row.record.bytes, now, out);
+                    self.assist_replay.push(row.record.bytes);
+                }
             }
             self.assist_retry = None;
             return;
@@ -337,7 +343,8 @@ impl SyncCore {
     }
 
     pub(super) fn push_assist(&mut self, now: Now, out: &mut SyncOutput) {
-        if !self.can_push()
+        if self.phase != Phase::Running
+            || !self.can_push()
             || self.assist.is_empty()
             || self.assist_push.is_some()
             || self.assist_retry.is_some_and(|at| at > now.mono)

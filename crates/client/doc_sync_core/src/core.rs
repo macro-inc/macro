@@ -6,6 +6,7 @@ use bebop::{Record, SliceWrapper};
 use std::collections::{BTreeMap, BTreeSet, VecDeque};
 use std::sync::Arc;
 
+mod assistance;
 mod delivery;
 mod imports;
 mod lifecycle;
@@ -134,6 +135,7 @@ pub struct SyncCore {
     push: Option<Push>,
     push_retry: Option<Millis>,
     assist: Vec<StoredWalRecord>,
+    assist_replay: Vec<Vec<u8>>,
     assist_push: Option<AssistPush>,
     assist_retry: Option<Millis>,
     convergence: Option<Convergence>,
@@ -246,6 +248,7 @@ impl SyncCore {
             push: None,
             push_retry: None,
             assist: Vec::new(),
+            assist_replay: Vec::new(),
             assist_push: None,
             assist_retry: None,
             convergence: None,
@@ -385,7 +388,7 @@ impl SyncCore {
         if self.rebase_due.is_some() || self.rebase_active {
             return Some(BusyReason::Rebasing);
         }
-        if self.pending_import {
+        if self.pending_import || !self.assist_replay.is_empty() {
             return Some(BusyReason::PendingImport);
         }
         if self.push.is_some()
@@ -404,7 +407,7 @@ impl SyncCore {
             .entries
             .iter()
             .any(|e| !self.is_delivered(e.seq) && !e.superseded && self.park_reason(e).is_none())
-            || !self.assist.is_empty()
+            || (!self.assist.is_empty() && self.effective_access == Access::Edit)
         {
             return Some(BusyReason::Undelivered);
         }

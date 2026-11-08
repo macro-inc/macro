@@ -666,3 +666,95 @@ fn server_evidence_retires_an_entire_foreign_push_before_its_ack() {
     assert!(!h.core.waiting_for_fresh_ack);
     assert_eq!(h.core.status().save, SaveState::Saved);
 }
+
+#[test]
+fn assisted_ack_imports_missing_history_and_prevents_reloading_delivered_rows() {
+    let mut h = Harness::running(TransportKind::Direct, Persistence::Memory);
+    let record = row(1);
+    h.core.loaded(
+        LocalState {
+            snapshot: None,
+            orphans: vec![],
+            assist: vec![OrphanWal {
+                owner: WalOwner::Legacy,
+                records: vec![record.clone()],
+            }],
+        },
+        now(h.time),
+        &mut h.doc,
+        &mut h.out,
+    );
+    h.send(SyncInput::Tick);
+    let id = h.core.assist_push.as_ref().unwrap().id.as_str().to_owned();
+    assert_eq!(h.doc.loro.get_text("text").to_string(), "");
+    h.remote(sync_protocol::FromRemote::RemoteUpdateAck { id: &id });
+    assert_eq!(h.doc.loro.get_text("text").to_string(), "foreign");
+    assert!(h.core.assist.is_empty());
+    h.core.loaded(
+        LocalState {
+            snapshot: None,
+            orphans: vec![],
+            assist: vec![OrphanWal {
+                owner: WalOwner::Legacy,
+                records: vec![record],
+            }],
+        },
+        now(h.time),
+        &mut h.doc,
+        &mut h.out,
+    );
+    h.send(SyncInput::Tick);
+    assert!(h.core.assist.is_empty());
+    assert!(h.core.assist_push.is_none());
+}
+
+#[test]
+fn read_only_helpers_do_not_queue_or_become_busy_with_foreign_assistance() {
+    let mut h = Harness::running(TransportKind::Direct, Persistence::Memory);
+    h.settle();
+    h.send(SyncInput::Authorization(AuthorizationState {
+        current: true,
+        can_write: false,
+        can_comment: false,
+    }));
+    h.core.loaded(
+        LocalState {
+            snapshot: None,
+            orphans: vec![],
+            assist: vec![OrphanWal {
+                owner: WalOwner::Legacy,
+                records: vec![row(1)],
+            }],
+        },
+        now(h.time),
+        &mut h.doc,
+        &mut h.out,
+    );
+    h.send(SyncInput::Tick);
+    assert!(h.core.assist.is_empty());
+    assert!(h.core.assist_push.is_none());
+    assert!(h.core.is_idle());
+    assert_eq!(h.core.status().save, SaveState::Saved);
+}
+
+#[test]
+fn revoked_helpers_leave_assistance_retained_until_they_can_write_again() {
+    let mut h = Harness::running(TransportKind::Direct, Persistence::Memory);
+    h.settle();
+    h.core.assist.push(row(1));
+    h.send(SyncInput::Authorization(AuthorizationState {
+        current: true,
+        can_write: false,
+        can_comment: false,
+    }));
+    assert_eq!(h.core.assist.len(), 1);
+    assert!(h.core.assist_push.is_none());
+    assert!(h.core.is_idle());
+    assert_eq!(h.core.status().save, SaveState::Saved);
+    h.send(SyncInput::Authorization(AuthorizationState {
+        current: true,
+        can_write: true,
+        can_comment: false,
+    }));
+    assert!(h.core.assist_push.is_some());
+}
