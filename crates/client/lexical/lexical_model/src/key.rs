@@ -73,6 +73,10 @@ impl SharedKeyCounter {
     pub fn new() -> Self {
         Self::default()
     }
+    #[cfg(feature = "foreign-nodes")]
+    pub(crate) fn is_fresh(&self) -> bool {
+        self.0.load(Ordering::Relaxed) == 0 && self.1.load(Ordering::Relaxed) == 0
+    }
     /// Advance the generation and restart numbering; fail on generation exhaustion.
     pub fn reset(&self) -> Result<(), Error> {
         self.0
@@ -82,6 +86,18 @@ impl SharedKeyCounter {
             })
             .map(|_| ())
             .map_err(|_| Error::KeySpaceExhausted)
+    }
+    /// Last allocated identity, including nodes removed before a commit.
+    /// Returns none until this generation has allocated its first non-root node.
+    pub fn last_allocated(&self) -> Option<NodeKey> {
+        let value = self.0.load(Ordering::Relaxed);
+        let index = (value & u64::from(u32::MAX)) as u32;
+        (index != 0).then(|| {
+            NodeKey::from_parts(KeyParts {
+                generation: (value >> 32) as u32,
+                index,
+            })
+        })
     }
     pub(crate) fn next_commit(&self) -> Result<crate::CommitId, Error> {
         self.1

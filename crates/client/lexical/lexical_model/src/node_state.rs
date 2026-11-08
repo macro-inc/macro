@@ -24,13 +24,16 @@ macro_rules! primitive {
     )*};
 }
 primitive!(bool, String, i64, u32);
-impl StateValue for Option<String> {
+impl<T: StateValue> StateValue for Option<T> {
     fn to_json(&self) -> Value {
-        self.as_ref()
-            .map_or(Value::Null, |v| Value::String(v.clone()))
+        self.as_ref().map_or(Value::Null, StateValue::to_json)
     }
     fn js_equal(&self, other: &Self) -> bool {
-        self == other
+        match (self, other) {
+            (None, None) => true,
+            (Some(left), Some(right)) => left.js_equal(right),
+            _ => false,
+        }
     }
 }
 impl StateValue for f64 {

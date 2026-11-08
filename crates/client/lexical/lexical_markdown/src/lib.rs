@@ -12,7 +12,10 @@ pub use shortcuts::*;
 pub mod state;
 pub mod transformer;
 pub mod util;
-pub use export::{ExportCx, convert_selection_to_markdown_string, convert_to_markdown_string};
+pub use export::{
+    ExportCx, MarkdownText, convert_nodes_to_markdown_string, convert_selection_to_markdown_string,
+    convert_to_markdown_string,
+};
 pub use import::convert_from_markdown_string;
 pub use normalize::normalize_markdown;
 pub use options::MarkdownOptions;
@@ -29,6 +32,9 @@ pub enum Error {
     /// Invalid regular expression or flags.
     #[error(transparent)]
     Matcher(#[from] lexical_rich_nodes::utils::matcher::MatcherError),
+    /// A registered application callback returned a typed error.
+    #[error(transparent)]
+    Transformer(Box<dyn std::error::Error + Send + Sync>),
     /// Invalid caller argument.
     #[error("invalid markdown argument: {0}")]
     InvalidArgument(&'static str),

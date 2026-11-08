@@ -10,9 +10,17 @@ pub(crate) fn call(
     a: &[Value],
 ) -> Result<Value> {
     let key = node_key(receiver)?;
+    if let Some(value) = super::macro_edit::call(r, tx, key, method, a)? {
+        return Ok(value);
+    }
+
     // These public accessors call getLatest() in upstream. Raw get:__fields
     // resolve the receiver's captured version in properties.rs instead.
-    let snapshot = r.read_state.clone();
+    let snapshot = r.read_state.clone().or_else(|| {
+        (!r.in_callback || !tx.view().contains(key))
+            .then(|| r.captured_state(receiver))
+            .flatten()
+    });
     let view = snapshot
         .as_ref()
         .map(EditorState::view)
@@ -22,7 +30,17 @@ pub(crate) fn call(
     {
         return Ok(result);
     }
+    if let Some(value) = super::macro_model::node_method(view, key, method)? {
+        return Ok(value);
+    }
     match method {
+        "getListType" => {
+            return Ok(serde_json::to_value(
+                view.get_or_err::<lexical_rich_nodes::list::ListNode>(key)?
+                    .list_type(),
+            )?);
+        }
+
         "getLanguage" => {
             return Ok(view
                 .get::<lexical_rich_nodes::code::CodeNode>(key)
@@ -81,12 +99,6 @@ pub(crate) fn call(
                 key == node_key(a.first().ok_or_else(|| fail("other node"))?)?
             ));
         }
-        "isBefore" => {
-            return Ok(json!(view.is_before(
-                key,
-                node_key(a.first().ok_or_else(|| fail("other node"))?)?
-            )?));
-        }
         "splice" => {
             let nodes = a
                 .get(2)
@@ -104,9 +116,21 @@ pub(crate) fn call(
             return r.node(tx.view(), key);
         }
         "getType" => return Ok(json!(view.type_name(key)?)),
-        "getKey" => return Ok(json!({"$nodeKey":key.index()})),
+        "getKey" => return Ok(json!({"$nodeKey":key_wire(key)})),
         "getTextContent" => return Ok(json!(view.text_content(key))),
         "getTextContentSize" => return Ok(json!(view.text_content_size(key).get())),
+        "isBefore" => {
+            return Ok(json!(view.is_before(
+                key,
+                node_key(a.first().ok_or_else(|| fail("isBefore target"))?)?
+            )?));
+        }
+        "isParentOf" => {
+            return Ok(json!(view.is_parent_of(
+                key,
+                node_key(a.first().ok_or_else(|| fail("isParentOf target"))?)?
+            )));
+        }
         "isAttached" => return Ok(json!(view.is_attached(key))),
         "getLatest" => return r.node(view, key),
         "getChildrenSize" => return Ok(json!(view.children_size(key))),
@@ -191,7 +215,7 @@ pub(crate) fn call(
                     }
                 }
             }
-            return Ok(Value::Object(json));
+            return Ok(super::wire::exported_object(Value::Object(json)));
         }
         "hasFormat" => {
             return Ok(json!(
@@ -201,6 +225,16 @@ pub(crate) fn call(
         }
         "getFormat" => return Ok(json!(view.text_data(key)?.format.bits())),
         "getStyle" => return Ok(json!(view.text_data(key)?.style)),
+        "getTextStyle" => return Ok(json!(view.element_data(key)?.text_style)),
+        "getParentKeys" => {
+            let mut keys = Vec::new();
+            let mut parent = view.parent(key);
+            while let Some(key) = parent {
+                keys.push(json!({"$nodeKey":key_wire(key)}));
+                parent = view.parent(key);
+            }
+            return Ok(json!(keys));
+        }
         _ => {}
     }
     match method {
@@ -365,3 +399,6 @@ pub(crate) fn call(
     }
     r.node(tx.view(), key)
 }
+
+#[cfg(test)]
+mod test;

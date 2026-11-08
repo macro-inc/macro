@@ -15,12 +15,14 @@ export const root = path.resolve(
 );
 export const pkg = path.join(root, 'packages/lexical-conformance');
 function run(command: string, args: string[]) {
+  const temporary = process.env.TMPDIR ?? path.join(root, 'target/tmp');
+  mkdirSync(temporary, { recursive: true });
   const result = spawnSync(command, args, {
     cwd: root,
     stdio: 'inherit',
     env: {
       ...process.env,
-      TMPDIR: '/home/wolf/tmp',
+      TMPDIR: temporary,
       CARGO_BUILD_JOBS: '4',
       CARGO_TARGET_DIR: path.join(root, 'target'),
     },
@@ -61,11 +63,19 @@ export function buildWasm() {
       else add(file);
     }
   }
-  for (const name of ['lexical_model', 'lexical_conformance_wasm'])
-    directory(path.join(root, 'crates/client/lexical', name));
+  // Include the complete local interpreter closure, including patched dependencies.
+  for (const name of [
+    'crates/client/lexical',
+    'crates/macro_document_composers/src',
+    'vendor',
+    '.cargo',
+  ])
+    directory(path.join(root, name));
   for (const name of [
     'Cargo.toml',
+    'crates/macro_document_composers/Cargo.toml',
     'Cargo.lock',
+    'rust-toolchain.toml',
     'packages/lexical-conformance/upstream.lock',
     'packages/lexical-conformance/diff/build-wasm.ts',
   ])

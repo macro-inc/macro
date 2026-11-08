@@ -31,6 +31,7 @@ fn event_identity_order_and_rollback_are_transactional() -> Result<(), Error> {
             tx.flush()?;
             Err(Error::Invariant("rollback"))
         })
+        .map(|_| ())
         .expect_err("rollback");
     assert!(matches!(error, Error::Invariant("rollback")));
     let tx = editor.transaction();

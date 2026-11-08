@@ -14,6 +14,12 @@ pub(crate) fn call(r: &mut Replayer, tx: &mut Transaction<'_>, op: &Value) -> Re
     {
         return Err(ReplayError::NoActiveEditor);
     }
+    if name == "lexical.$onUpdate" && r.in_callback {
+        let callback = op["args"][0].clone();
+        integer(&callback["$tape"])?;
+        r.on_update.push(callback);
+        return Ok(undefined());
+    }
     let args = r.decode(op.get("args").unwrap_or(&json!([])))?;
     let a = args.as_array().ok_or_else(|| fail("args must be array"))?;
     let receiver = op
@@ -44,10 +50,56 @@ pub(crate) fn call(r: &mut Replayer, tx: &mut Transaction<'_>, op: &Value) -> Re
     if receiver.get("$node").is_some() {
         return super::nodes::call(r, tx, &receiver, short, a);
     }
+    if name.starts_with("@lexical/markdown.") || name.starts_with("@lexical/markdown/") {
+        return super::markdown::call(r, tx, name, a);
+    }
     if name.starts_with("@lexical/link.") {
         return super::rich::call(r, tx, name, a);
     }
+    if name.starts_with("@macro-inc/lexical-core/") {
+        return super::macro_model::call(r, tx, name, a);
+    }
+    if matches!(
+        name,
+        "@lexical/table.$isTableNode"
+            | "@lexical/list.$isListNode"
+            | "@lexical/list.$isListItemNode"
+    ) {
+        let key = a
+            .first()
+            .filter(|value| value.get("$node").is_some())
+            .map(node_key)
+            .transpose()?;
+        return Ok(json!(key.is_some_and(|key| if short == "$isListNode" {
+            view.is::<lexical_rich_nodes::list::ListNode>(key)
+        } else if short == "$isListItemNode" {
+            view.is::<lexical_rich_nodes::list::ListItemNode>(key)
+        } else {
+            view.is::<lexical_rich_nodes::table::TableNode>(key)
+        })));
+    }
     match name {
+        "@lexical/utils.$firstToLastIterator" | "@lexical/utils.$lastToFirstIterator" => {
+            let parent = node_key(a.first().ok_or_else(|| fail("iterator parent"))?)?;
+            let cursor = if name.ends_with("$firstToLastIterator") {
+                lexical_rich_nodes::utils::first_to_last(&view, parent)
+            } else {
+                lexical_rich_nodes::utils::last_to_first(&view, parent)
+            };
+            let id = r.iterators.len();
+            r.iterators.push(None);
+            r.child_iterators.insert(id, cursor);
+            Ok(json!({"$iteratorValue":id}))
+        }
+        "@lexical/list/formatList.$handleIndent" => {
+            let key = node_key(a.first().ok_or_else(|| fail("list item"))?)?;
+            let item = tx
+                .cast::<lexical_rich_nodes::list::ListItemNode>(key)
+                .ok_or_else(|| fail("list item"))?;
+            lexical_rich_nodes::list::format::handle_indent(tx, item)?;
+            Ok(undefined())
+        }
+
         "@lexical/overflow.$createOverflowNode" => {
             let key = tx.create(crate::test_nodes::OverflowNode::default())?.key();
             r.node(tx.view(), key)
@@ -275,18 +327,8 @@ pub(crate) fn call(r: &mut Replayer, tx: &mut Transaction<'_>, op: &Value) -> Re
             })))
         }
         "LexicalEditor.dispatchCommand" => {
-            if !r.rich_text_registered {
-                return Ok(json!(false));
-            }
             let command = string(&a.first().ok_or_else(|| fail("command"))?["$cmd"])?;
-            let handled = match command {
-                "FORMAT_TEXT_COMMAND" => lexical_rich_nodes::rich_text::format_text(
-                    tx,
-                    str_arg(a, 1)?.parse().map_err(|_| fail("format"))?,
-                )?,
-                "INSERT_TAB_COMMAND" => lexical_rich_nodes::rich_text::insert_tab(tx)?,
-                _ => return Err(fail(format!("unmapped command: {command}"))),
-            };
+            let handled = super::tab::dispatch(r, tx, command, a.get(1).unwrap_or(&Value::Null))?;
             Ok(json!(handled))
         }
         "lexical/LexicalUtils.scheduleMicroTask" => {
@@ -471,16 +513,13 @@ pub(crate) fn call(r: &mut Replayer, tx: &mut Transaction<'_>, op: &Value) -> Re
         )),
         "LexicalEditor.getEditorState" => {
             let state = tx.committed_state();
-            let id = if let Some((version, id)) = r
-                .published_snapshot
-                .filter(|(version, _)| *version == r.committed_version)
-            {
-                let _ = version;
-                id
+            let version = (r.editor_id, r.committed_version);
+            let id = if let Some(id) = r.saved_editor_states.get(&version) {
+                *id
             } else {
-                let id = r.saved_states.len();
                 r.saved_states.push(state.clone());
-                r.published_snapshot = Some((r.committed_version, id));
+                let id = r.saved_states.len() - 1;
+                r.saved_editor_states.insert(version, id);
                 id
             };
             Ok(json!({"$snapshot":id}))
@@ -512,12 +551,12 @@ pub(crate) fn call(r: &mut Replayer, tx: &mut Transaction<'_>, op: &Value) -> Re
         }
         "EditorState.toJSON" => {
             let id = integer(&receiver["$snapshot"])? as usize;
-            Ok(serde_json::to_value(
+            Ok(super::wire::exported_object(serde_json::to_value(
                 r.saved_states
                     .get(id)
                     .ok_or_else(|| fail("state handle"))?
                     .to_json()?,
-            )?)
+            )?))
         }
         "iter" => {
             if receiver.is_array() {

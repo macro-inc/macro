@@ -350,7 +350,12 @@ fn build() -> Job {
         .add_step(steps::setup_reqs_web("Setup", false))
         .add_step(steps::configure_namespace_sccache(vars::WEB_SCCACHE_NAME))
         .add_step(steps::start_sccache_server())
+        .add_step(Step::new("Clear previous bundle output").run("rm -rf apps/web/dist"))
         .add_step(run_build())
+        .add_step(
+            Step::new("Exclude development oracle from production bundle")
+                .run("bun packages/lexical-conformance/coverage/boundaries.ts --bundle-only"),
+        )
         .add_step(steps::show_sccache_stats())
         .add_step(preview_credentials);
     preview_steps

@@ -15,7 +15,7 @@ pub(crate) fn get(
             tx.focus_at(slot)?
         };
         return match name {
-            "key" => Ok(json!({"$nodeKey":p.key().index()})),
+            "key" => Ok(json!({"$nodeKey":key_wire(p.key())})),
             "type" => Ok(json!(p.point_type().to_string())),
             "offset" => Ok(json!(p.offset())),
             _ => Err(fail(format!("unmapped point property {name}"))),
@@ -25,6 +25,9 @@ pub(crate) fn get(
         let id = integer(&receiver["$selection"])?;
         return match name {
             "anchor" | "focus" => Ok(json!({"$point":{"selection":id,"role":name}})),
+            "_cachedIsBackward" => Ok(json!(
+                tx.range_at(r.selections[id as usize])?.cached_is_backward()
+            )),
             "format" => Ok(json!(tx.range_at(r.selections[id as usize])?.format.bits())),
             "style" => Ok(json!(tx.range_at(r.selections[id as usize])?.style)),
             "dirty" => Ok(json!(
@@ -38,9 +41,18 @@ pub(crate) fn get(
         let state = r.saved_states[integer(&receiver["$snapshot"])? as usize].clone();
         let mut pairs = Vec::new();
         for key in crate::snapshot::keys(&state) {
-            pairs.push(json!([key.to_string(), r.node(state.view(), key)?]));
+            let raw = if key.generation() == 0 {
+                json!(key.to_string())
+            } else {
+                json!({"$nodeKey":key_wire(key)})
+            };
+            pairs.push(json!([raw, r.node(state.view(), key)?]));
         }
         return Ok(json!({"$map":pairs}));
+    }
+    if name == "then" && (receiver.get("$editor").is_some() || receiver.get("$snapshot").is_some())
+    {
+        return Ok(undefined());
     }
     if name == "length" {
         if let Some(array) = receiver.as_array() {
@@ -60,7 +72,7 @@ pub(crate) fn get(
     }
     if receiver.get("$node").is_some() {
         let key = node_key(receiver)?;
-        let state = r.states.get(&integer(&receiver["ver"])?).cloned();
+        let state = r.captured_state(receiver);
         let view = state
             .as_ref()
             .filter(|s| s.view().contains(key))
@@ -68,10 +80,29 @@ pub(crate) fn get(
             .unwrap_or(tx.view());
         let node = view.node_or_err(key)?;
         return match name {
+            "__key" => Ok(json!({"$nodeKey":key_wire(key)})),
+            "__tag" => Ok(json!(if let Some(heading) =
+                view.get::<lexical_rich_nodes::heading::HeadingNode>(key)
+            {
+                serde_json::to_value(heading.tag)?
+            } else {
+                view.export_json(key)?
+                    .get("tag")
+                    .cloned()
+                    .unwrap_or_else(undefined)
+            })),
+            "__classes" => Ok(serde_json::to_value(
+                &view
+                    .get_or_err::<macro_document_model::nodes::ClassedBlockNode>(key)?
+                    .classes,
+            )?),
+            "__headerState" => Ok(serde_json::to_value(
+                view.get_or_err::<lexical_rich_nodes::table::TableCellNode>(key)?
+                    .header_state,
+            )?),
             "__parent" => Ok(view
                 .parent(key)
-                .map_or(Value::Null, |key| json!({"$nodeKey":key.index()}))),
-            "__key" => Ok(json!({"$nodeKey":key.index()})),
+                .map_or(Value::Null, |key| json!({"$nodeKey":key_wire(key)}))),
             "__target" | "__rel" | "__title" => {
                 let link = view.get_or_err::<lexical_rich_nodes::link::LinkNode>(key)?;
                 Ok(json!(match name {
@@ -95,10 +126,14 @@ pub(crate) fn get(
     if let Some(array) = receiver.as_array()
         && let Ok(index) = name.parse::<usize>()
     {
-        return array.get(index).cloned().ok_or_else(|| fail("array index"));
+        return Ok(array.get(index).cloned().unwrap_or_else(undefined));
     }
-    receiver
-        .get(name)
-        .cloned()
-        .ok_or_else(|| fail(format!("unmapped property {name}")))
+    if receiver
+        .as_object()
+        .is_some_and(|object| object.keys().all(|key| key == "$" || !key.starts_with('$')))
+        || receiver.is_array()
+    {
+        return Ok(receiver.get(name).cloned().unwrap_or_else(undefined));
+    }
+    Err(fail(format!("unmapped property {name}")))
 }

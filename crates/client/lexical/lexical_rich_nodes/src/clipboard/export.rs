@@ -75,7 +75,7 @@ pub fn get_lexical_content(
     let payload = generate_json_from_selected_nodes(state, namespace, Some(selection))?;
     Ok(Some(to_js_json_string(&serde_json::to_value(payload)?)))
 }
-/// Default portable clipboard entries; HTML export is provided by the view.
+/// Default portable clipboard entries, including HTML when its feature is enabled.
 pub fn get_clipboard_data_from_selection(
     state: StateRef<'_>,
     namespace: &str,
@@ -85,8 +85,32 @@ pub fn get_clipboard_data_from_selection(
     if let Some(selection) = selection {
         data.insert(MIME_PLAIN, selection.text_content(state)?);
     }
+    #[cfg(feature = "html")]
+    if let Some(selection) = selection {
+        let registry = crate::html::register_rich_nodes_html(lexical_html::register_core(
+            lexical_html::ExportRegistry::builder(),
+        ))
+        .build();
+        let html = get_html_content(state.snapshot(), selection, &registry)
+            .map_err(|error| Error::invariant(error.to_string()))?;
+        data.insert(MIME_HTML, html);
+    }
     if let Some(content) = get_lexical_content(state, namespace, selection)? {
         data.insert(MIME_LEXICAL, content);
     }
     Ok(data)
+}
+
+/// Export selected HTML; collapsed or empty selections produce an empty string.
+#[cfg(feature = "html")]
+pub fn get_html_content(
+    state: &EditorState,
+    selection: &Selection,
+    registry: &lexical_html::ExportRegistry,
+) -> lexical_html::Result<String> {
+    if selection.is_collapsed() || selection.nodes(state.view())?.is_empty() {
+        return Ok(String::new());
+    }
+    lexical_html::HtmlExporter::new(registry.clone(), Default::default())
+        .generate_html_from_nodes(state, Some(selection))
 }

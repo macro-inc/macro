@@ -674,3 +674,154 @@ fn selection_change_clamps_crossing_ranges_and_converts_distinct_cells() -> Resu
     tx.commit()?;
     Ok(())
 }
+
+#[test]
+fn nested_escape_and_delete_line_use_the_requested_outer_cell_ancestry() -> Result<()> {
+    let mut editor = register_table(
+        Editor::builder(EditorMode::Headless),
+        &TableConfig {
+            has_nested_tables: true,
+            ..Default::default()
+        },
+    )
+    .build()
+    .expect("registry");
+    let mut tx = editor.transaction();
+    let outer = create_table_node_with_dimensions(&mut tx, 1, 1, IncludeHeaders::All(false))?;
+    tx.append(NodeKey::ROOT, &[outer.key()])?;
+    let outer_cell = table_grid(tx.view(), outer)?.cell_at(0, 0).expect("outer");
+    let inner = create_table_node_with_dimensions(&mut tx, 1, 2, IncludeHeaders::All(false))?;
+    tx.append(outer_cell, &[inner.key()])?;
+    let g = table_grid(tx.view(), inner)?;
+    let a = g.cell_at(0, 0).expect("a");
+    let b = g.cell_at(1, 0).expect("b");
+    select_cells(&mut tx, inner, a, b)?;
+    assert!(escape_table_selection(&mut tx, outer)?);
+    assert_eq!(
+        find_cell_node(
+            tx.view(),
+            tx.selection()
+                .and_then(Selection::as_range)
+                .expect("range")
+                .anchor
+                .key()
+        ),
+        Some(b)
+    );
+    tx.select_start(a)?;
+    assert_eq!(
+        delete_text_in_table(&mut tx, outer, DeleteTextKind::Line)?,
+        DeleteOutcome::Handled
+    );
+    // Horizontal traversal must continue past enclosing cell sibling carets.
+    tx.select_end(b)?;
+    let host = Host {
+        typeahead: false,
+        present: true,
+        exits: Some(true),
+    };
+    assert!(handle_arrow_key(&mut tx, inner, TableDirection::Forward, false, &host)?.handled);
+    assert!(matches!(tx.selection(), Some(Selection::Range(_))));
+    tx.commit()?;
+    Ok(())
+}
+
+#[test]
+fn arrow_selection_resolves_descendant_elements_but_element_format_requires_cells() -> Result<()> {
+    let mut editor = register_table(
+        Editor::builder(EditorMode::Headless),
+        &TableConfig::default(),
+    )
+    .build()
+    .expect("registry");
+    let mut tx = editor.transaction();
+    let table = create_table_node_with_dimensions(&mut tx, 1, 2, IncludeHeaders::All(false))?;
+    tx.append(NodeKey::ROOT, &[table.key()])?;
+    let g = table_grid(tx.view(), table)?;
+    let a = g.cell_at(0, 0).expect("a");
+    let b = g.cell_at(1, 0).expect("b");
+    let ap = tx.first_child(a).expect("p");
+    let bp = tx.first_child(b).expect("p");
+    tx.set_selection(Some(Selection::Table(TableSelection::new(
+        table.key(),
+        ap,
+        bp,
+    ))))?;
+    assert!(!format_element_in_table(
+        &mut tx,
+        table,
+        ElementFormat::Center
+    )?);
+    let host = Host {
+        typeahead: false,
+        present: true,
+        exits: Some(true),
+    };
+    assert_eq!(
+        handle_arrow_key(&mut tx, table, TableDirection::Backward, false, &host)?,
+        HandlerResult {
+            handled: true,
+            stop_event: true,
+            effect: ObserverEffect::ResyncFromTableSelection {
+                anchor: a,
+                then: None
+            }
+        }
+    );
+    assert_eq!(
+        find_cell_node(
+            tx.view(),
+            tx.selection()
+                .and_then(Selection::as_range)
+                .expect("range")
+                .focus
+                .key()
+        ),
+        Some(b)
+    );
+    tx.commit()?;
+    Ok(())
+}
+
+#[test]
+fn range_fix_treats_table_and_row_boundary_points_as_outside_cells() -> Result<()> {
+    let mut editor = register_table(
+        Editor::builder(EditorMode::Headless),
+        &TableConfig::default(),
+    )
+    .build()
+    .expect("registry");
+    let mut tx = editor.transaction();
+    let table = create_table_node_with_dimensions(&mut tx, 1, 2, IncludeHeaders::All(false))?;
+    let p = tx.create(Paragraph::default())?;
+    tx.append(NodeKey::ROOT, &[p.key(), table.key()])?;
+    let g = table_grid(tx.view(), table)?;
+    let a = g.cell_at(0, 0).expect("a");
+    let b = g.cell_at(1, 0).expect("b");
+    let text = tx.first_descendant(a).expect("text");
+    tx.set_selection(Some(Selection::Range(RangeSelection::new(
+        Point::element(table, ChildIndex(0)),
+        Point::text(text, Utf16Offset(0)),
+    ))))?;
+    assert_eq!(
+        fix_range_selection_for_tables(&mut tx, &|_| TouchState::default())?,
+        RangeFix::Applied
+    );
+    assert_eq!(
+        tx.selection()
+            .and_then(Selection::as_range)
+            .expect("range")
+            .focus,
+        Point::element(b, ChildIndex(1))
+    );
+    tx.set_selection(Some(Selection::Range(RangeSelection::new(
+        Point::element(p, ChildIndex(0)),
+        Point::element(table, ChildIndex(0)),
+    ))))?;
+    assert_eq!(
+        fix_range_selection_for_tables(&mut tx, &|_| TouchState::default())?,
+        RangeFix::None
+    );
+    tx.commit()?;
+    Ok(())
+}

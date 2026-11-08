@@ -45,6 +45,12 @@ pub trait NodeType:
     fn default_node() -> Option<Self> {
         None
     }
+    /// Create a no-argument instance with access to host-provided editor context.
+    /// Types with constructor side effects override this instead of reading global state.
+    fn create_default(tx: &mut Transaction<'_>) -> Result<NodeKey, Error> {
+        let node = Self::default_node().ok_or(Error::NoDefault(Self::TYPE))?;
+        Ok(tx.create_exact(node)?.key())
+    }
     /// Representative instance used to compute static view flags.
     fn flag_probe() -> Option<Self> {
         Self::default_node()

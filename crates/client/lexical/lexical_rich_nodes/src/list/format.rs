@@ -55,8 +55,10 @@ pub fn merge_next_sibling_list_if_same_type(
         .next_sibling(list)
         .and_then(|k| tx.view().cast::<ListNode>(k));
     if let Some(next) = next
-        && tx.get::<ListNode>(list).map(ListNode::list_type)
-            == tx.get::<ListNode>(next).map(ListNode::list_type)
+        && tx
+            .get::<ListNode>(list)
+            .zip(tx.get::<ListNode>(next))
+            .is_some_and(|(a, b)| a.same_list_type(b))
     {
         merge_lists(tx, list, next)?;
     }

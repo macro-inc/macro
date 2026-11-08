@@ -198,3 +198,62 @@ fn parsing_a_typed_document_does_not_normalize_adjacent_text() -> Result<(), Err
     assert!(editor.state().is_empty_state());
     Ok(())
 }
+
+#[test]
+fn json_boundary_coercions_use_javascript_primitives() {
+    assert_eq!(js_string(&serde_json::json!({})), "[object Object]");
+    assert_eq!(
+        js_string(&serde_json::json!([1, null, [2, 3], {}])),
+        "1,,2,3,[object Object]"
+    );
+    assert_eq!(js_to_number(&serde_json::json!([12])), 12.0);
+    assert_eq!(js_to_number(&serde_json::json!([null])), 0.0);
+    assert!(js_to_number(&serde_json::json!([1, 2])).is_nan());
+    assert_eq!(js_to_number(&serde_json::json!("\u{feff}0x10\u{a0}")), 16.0);
+    assert_eq!(js_to_number(&serde_json::json!("0b101")), 5.0);
+    assert_eq!(js_to_number(&serde_json::json!("0o17")), 15.0);
+    assert_eq!(
+        js_to_number(&serde_json::json!("0x20000000000001")),
+        9_007_199_254_740_992.0
+    );
+    assert_eq!(
+        js_to_number(&serde_json::json!("0x20000000000003")),
+        9_007_199_254_740_996.0
+    );
+    assert!(js_to_number(&serde_json::json!("-0x10")).is_nan());
+    assert!(js_to_number(&serde_json::json!("inf")).is_nan());
+    assert_eq!(js_to_number(&serde_json::json!("+Infinity")), f64::INFINITY);
+    assert!(js_to_number(&serde_json::json!("-0")).is_sign_negative());
+}
+
+#[test]
+fn parse_report_retains_partial_state_without_weakening_the_strict_parser() -> Result<(), Error> {
+    let mut editor = Editor::builder(EditorMode::Headless)
+        .build()
+        .expect("editor");
+    let input: SerializedEditorState = serde_json::from_value(
+        serde_json::json!({"root":{"type":"root","version":1,"children":[{"type":"paragraph","version":1,"children":[{"type":"text","version":1,"text":"retained"}]},{"type":"unknown-import-node","version":1}]}}),
+    )?;
+    assert!(matches!(
+        editor.parse_editor_state(&input),
+        Err(Error::UnknownSerializedType(_))
+    ));
+    let report = editor.parse_editor_state_report(&input)?;
+    assert!(matches!(
+        report.error,
+        Some(Error::UnknownSerializedType(_))
+    ));
+    assert_eq!(report.state.view().children(NodeKey::ROOT).count(), 1);
+    assert_eq!(
+        report.state.view().text_content(
+            report
+                .state
+                .view()
+                .first_child(NodeKey::ROOT)
+                .expect("retained paragraph")
+        ),
+        "retained"
+    );
+    assert!(editor.state().is_empty_state());
+    Ok(())
+}

@@ -127,3 +127,51 @@ fn paragraph_command_preserves_code_indentation_at_middle_and_end() -> Result<()
     }
     Ok(())
 }
+
+#[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
+struct FactoryCode {
+    code: CodeNode,
+}
+impl Default for FactoryCode {
+    fn default() -> Self {
+        Self {
+            code: CodeNode {
+                language: Some("replacement".into()),
+                theme: Some("replacement".into()),
+            },
+        }
+    }
+}
+impl NodeType for FactoryCode {
+    const TYPE: &'static str = "factory-code";
+    type Kind = ElementKind;
+    lexical_model::impl_default_node!();
+}
+impl ElementNode for FactoryCode {
+    type Parent = CodeNode;
+    fn as_parent(&self) -> &CodeNode {
+        &self.code
+    }
+    fn as_parent_mut(&mut self) -> Option<&mut CodeNode> {
+        Some(&mut self.code)
+    }
+}
+#[test]
+fn code_factory_resolves_default_class_before_setting_language_and_theme() -> crate::Result<()> {
+    let mut editor = Editor::builder(EditorMode::Headless)
+        .node::<CodeNode>()
+        .node::<FactoryCode>()
+        .replace::<CodeNode, FactoryCode>(|code| FactoryCode { code })
+        .build()
+        .unwrap();
+    let mut tx = editor.transaction();
+    let code = create_code_node(&mut tx, None, Some("dark"))?;
+    assert_eq!(code.key().index(), 1);
+    assert!(tx.view().is::<FactoryCode>(code));
+    assert_eq!(tx.view().get::<CodeNode>(code).unwrap().language(), None);
+    assert_eq!(
+        tx.view().get::<CodeNode>(code).unwrap().theme(),
+        Some("dark")
+    );
+    Ok(())
+}

@@ -183,3 +183,38 @@ fn unwrap_filter_hoists_matching_descendants_in_original_order_and_fills_ragged_
     assert!(!tx.is_attached(invalid_row));
     Ok(())
 }
+
+// LexicalSelection.ts: insertText removes emptied end ancestors across cells.
+#[test]
+fn cross_cell_text_replacement_uses_node_based_removal() -> Result<()> {
+    let mut editor = register_table(
+        Editor::builder(EditorMode::Headless),
+        &TableConfig::default(),
+    )
+    .build()
+    .expect("registry");
+    let ((row, second_row, first, second, text), _) = editor.update(|tx| {
+        let table = create_table_node_with_dimensions(tx, 2, 2, IncludeHeaders::All(true))?;
+        tx.append(NodeKey::ROOT, &[table.key()])?;
+        let row = tx.children_keys(table)?[0];
+        let second_row = tx.children_keys(table)?[1];
+        let first = tx.children_keys(row)?[0];
+        let second = tx.children_keys(row)?[1];
+        let paragraph = tx.children_keys(first)?[0];
+        let text = tx.create_text("aa")?;
+        tx.append(paragraph, &[text.key()])?;
+        Ok((row, second_row, first, second, text))
+    })?;
+    editor.update(|tx| {
+        let end = tx.children_keys(second)?[0];
+        tx.set_selection(Some(Selection::Range(RangeSelection::new(
+            Point::element(end, ChildIndex(0)),
+            Point::text(text, Utf16Offset(1)),
+        ))))?;
+        tx.insert_text("a")
+    })?;
+    assert_eq!(editor.state().children_keys(row)?, vec![first]);
+    assert_eq!(editor.state().children_keys(second_row)?.len(), 2);
+    assert_eq!(editor.state().text_content(text).as_ref(), "aa");
+    Ok(())
+}

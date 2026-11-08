@@ -1,5 +1,5 @@
 //! S4 §4. Generated scripts supplement the explicit upstream behavior tests.
-use super::performance::Opaque;
+use super::{Inline, performance::Opaque};
 use crate::*;
 use proptest::prelude::*;
 use std::collections::{BTreeMap, HashSet};
@@ -23,14 +23,14 @@ fn arb_state() -> impl Strategy<Value = Vec<Tree>> {
             .prop_map(|(s, f, style, mode, state)| Tree::Text(s, f, style, mode, state)),
         Just(Tree::Break),
         Just(Tree::Tab),
-        Just(Tree::Decorator),
     ];
-    prop::collection::vec(
-        leaf.prop_recursive(3, 48, 6, |inner| {
-            prop::collection::vec(inner, 0..6).prop_map(Tree::Element)
-        }),
-        1..6,
-    )
+    // Paragraph contents are inline. Block decorators belong directly under root;
+    // arbitrary nested paragraphs can have no leaf-block ancestor for insertion,
+    // which upstream rejects too (see the literal malformed-tree regression).
+    let inline = leaf.prop_recursive(3, 48, 6, |inner| {
+        prop::collection::vec(inner, 0..6).prop_map(Tree::Element)
+    });
+    prop::collection::vec(prop_oneof![inline, Just(Tree::Decorator)], 1..6)
 }
 
 fn arb_command() -> impl Strategy<Value = Command> {
@@ -73,7 +73,7 @@ fn append_tree(tx: &mut Transaction<'_>, parent: NodeKey, tree: &Tree) -> Result
         Tree::Break => tx.create(LineBreak::default())?.key(),
         Tree::Tab => tx.create(Tab::default())?.key(),
         Tree::Element(children) => {
-            let key = tx.create(Paragraph::default())?.key();
+            let key = tx.create(Inline::default())?.key();
             for child in children {
                 append_tree(tx, key, child)?;
             }
@@ -84,6 +84,19 @@ fn append_tree(tx: &mut Transaction<'_>, parent: NodeKey, tree: &Tree) -> Result
 }
 
 fn apply(tx: &mut Transaction<'_>, command: &Command) -> Result<(), Error> {
+    // These primitives require a range, just as the host command handlers do.
+    // Deleting beside a block decorator can intentionally install NodeSelection.
+    // Do not call a range-only primitive with that different selection variant.
+    if matches!(
+        command,
+        Command::InsertParagraph
+            | Command::FormatText(_)
+            | Command::DeleteCharacter { .. }
+            | Command::RemoveText
+    ) && !matches!(tx.selection(), Some(Selection::Range(_)))
+    {
+        return Ok(());
+    }
     match command {
         Command::InsertText(text) => tx.insert_text(text),
         Command::InsertParagraph => tx.insert_paragraph().map(|_| ()),
@@ -181,6 +194,11 @@ fn check_state(state: &EditorState) {
                     assert!(offsets.contains(&offset.0));
                 }
             }
+        }
+    }
+    if let Some(Selection::Node(nodes)) = state.selection() {
+        for key in nodes.keys() {
+            assert!(visited.contains(&key));
         }
     }
 }
@@ -391,14 +409,19 @@ fn run_script(
     };
     let mut editor = Editor::builder(mode)
         .node::<Opaque>()
+        .node::<Inline>()
         .build()
         .expect("registry");
     let (_, initial) = editor
         .update(|tx| {
             for tree in trees {
-                let p = tx.create(Paragraph::default())?;
-                tx.append(NodeKey::ROOT, &[p.key()])?;
-                append_tree(tx, p.key(), tree)?;
+                if matches!(tree, Tree::Decorator) {
+                    append_tree(tx, NodeKey::ROOT, tree)?;
+                } else {
+                    let p = tx.create(Paragraph::default())?;
+                    tx.append(NodeKey::ROOT, &[p.key()])?;
+                    append_tree(tx, p.key(), tree)?;
+                }
             }
             tx.set_selection(Some(Selection::Range(RangeSelection::at_root())))
         })
@@ -450,28 +473,7 @@ fn run_script(
             }
         };
         assert_eq!(previous.to_json().expect("old export"), json);
-        // Nested generated paragraphs can leave an element caret on a container
-        // with no INTERNAL_$isBlock ancestor. Upstream rejects inline insertion there.
-        if matches!(&result, Err(Error::Invariant("insertion requires a block")))
-            && previous
-                .selection()
-                .and_then(Selection::as_range)
-                .is_some_and(|range| {
-                    range.is_collapsed()
-                        && !previous.is_root_or_shadow_root(range.anchor.key())
-                        && previous
-                            .find_matching_parent(range.anchor.key(), |view, key| {
-                                view.is_block(key)
-                            })
-                            .is_none()
-                })
-        {
-            assert!(editor.state().same_snapshot(&previous));
-            assert_eq!(editor.state().selection(), previous.selection());
-            check_state(editor.state());
-            continue;
-        }
-        let ((), commit) = result.expect("generated command with valid active range");
+        let ((), commit) = result.expect("generated command with valid preconditions");
         check_state(editor.state());
         if attached {
             for key in commit
@@ -603,22 +605,113 @@ proptest! {
 }
 
 #[test]
-fn nested_block_deletion_then_inline_insertion_rejects_atomically() {
-    run_script(
-        &[Tree::Element(vec![Tree::Decorator, Tree::Element(vec![])])],
-        &[
-            Command::DeleteCharacter {
+fn range_only_generated_commands_respect_decorator_node_selection() -> Result<(), Error> {
+    let mut editor = Editor::builder(EditorMode::Headless)
+        .node::<Opaque>()
+        .build()
+        .expect("registry");
+    let (decorator, _) = editor.update(|tx| {
+        let d = tx.create(Opaque {})?;
+        tx.append(NodeKey::ROOT, &[d.key()])?;
+        tx.set_selection(Some(Selection::Range(RangeSelection::at_root())))?;
+        Ok(d)
+    })?;
+    editor.update(|tx| {
+        apply(tx, &Command::InsertParagraph)?;
+        apply(
+            tx,
+            &Command::DeleteCharacter {
                 direction: EditDirection::Forward,
                 target: ModifyTarget::NoView,
             },
-            Command::DeleteCharacter {
-                direction: EditDirection::Forward,
-                target: ModifyTarget::NoView,
-            },
-            Command::InsertLineBreak {
-                select_start: false,
-            },
-        ],
-        false,
+        )
+    })?;
+    let previous = editor.state().clone();
+    check_state(&previous);
+    let mut tx = editor.transaction();
+    assert!(matches!(tx.selection(),Some(Selection::Node(s)) if s.has(decorator.key())));
+    assert!(matches!(tx.remove_text(), Err(Error::NoRangeSelection)));
+    apply(&mut tx, &Command::RemoveText)?;
+    assert_eq!(tx.selection(), previous.selection());
+    assert_eq!(tx.children_keys(NodeKey::ROOT)?, vec![decorator.key()]);
+    assert!(tx.is_attached(decorator));
+    apply(&mut tx, &Command::SelectAll(None))?;
+    assert!(matches!(tx.selection(), Some(Selection::Range(_))));
+    tx.commit()?;
+    Ok(())
+}
+
+// Upstream insertText treats a selected Tab as atomic even in normal text mode.
+#[test]
+fn replacing_selected_tab_before_empty_inline_creates_plain_text() -> Result<(), Error> {
+    let mut editor = Editor::builder(EditorMode::Headless)
+        .node::<Inline>()
+        .build()
+        .expect("registry");
+    let mut tx = editor.transaction();
+    let paragraph = tx.create(Paragraph::default())?;
+    let tab = tx.create(Tab::default())?;
+    let inline = tx.create(Inline::default())?;
+    let empty = tx.create_text("")?;
+    tx.text(empty)?.set_mode(TextMode::Token)?;
+    tx.append(inline, &[empty.key()])?;
+    tx.append(paragraph, &[tab.key(), inline.key()])?;
+    tx.append(NodeKey::ROOT, &[paragraph.key()])?;
+    tx.select_all(None)?;
+    tx.insert_text("é")?;
+    assert_eq!(tx.text_content(NodeKey::ROOT), "é");
+    assert!(!tx.is_attached(tab));
+    let Selection::Range(range) = tx.selection().expect("selection") else {
+        panic!("range");
+    };
+    assert!(range.is_collapsed());
+    assert!(!tx.is::<Tab>(range.anchor.key()));
+    assert_eq!(range.anchor.offset(), 1);
+    tx.commit()?;
+    Ok(())
+}
+
+// Original 20542059 reproduction used nested Paragraphs, unlike valid generated Inline content.
+#[test]
+fn nested_paragraph_delete_script_keeps_a_root_insertion_boundary() -> Result<(), Error> {
+    let mut editor = Editor::builder(EditorMode::Headless)
+        .node::<Opaque>()
+        .build()
+        .expect("registry");
+    editor.update(|tx| {
+        let outer = tx.create(Paragraph::default())?;
+        let inner = tx.create(Paragraph::default())?;
+        let empty = tx.create(Paragraph::default())?;
+        let decorator = tx.create(Opaque {})?;
+        tx.append(inner, &[decorator.key(), empty.key()])?;
+        tx.append(outer, &[inner.key()])?;
+        tx.append(NodeKey::ROOT, &[outer.key()])?;
+        tx.set_selection(Some(Selection::Range(RangeSelection::at_root())))
+    })?;
+    editor.update(|tx| tx.delete_character(EditDirection::Forward, ModifyTarget::NoView))?;
+    editor.update(|tx| tx.delete_character(EditDirection::Forward, ModifyTarget::NoView))?;
+    let point = Point::element(NodeKey::ROOT, ChildIndex(0));
+    assert_eq!(
+        editor
+            .state()
+            .selection()
+            .and_then(Selection::as_range)
+            .map(|r| (r.anchor, r.focus)),
+        Some((point, point))
     );
+    editor.update(|tx| tx.insert_line_break(false))?;
+    let view = editor.state().view();
+    let children: Vec<_> = view.children(NodeKey::ROOT).collect();
+    assert_eq!(children.len(), 2);
+    let first = children[0];
+    assert!(view.is::<Paragraph>(first));
+    let line = view.first_child(first).expect("inserted linebreak");
+    assert!(view.is::<LineBreak>(line));
+    assert_eq!(view.children(first).count(), 1);
+    assert!(
+        !view
+            .descendants(NodeKey::ROOT)
+            .any(|(key, _)| view.is::<Opaque>(key))
+    );
+    Ok(())
 }

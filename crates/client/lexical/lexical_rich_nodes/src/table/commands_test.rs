@@ -161,7 +161,7 @@ fn upstream_clipboard_table_grows_grid_copies_background_and_moves_children() ->
         for (col, value) in values.iter().enumerate() {
             let c = template_grid.cell_at(col as i64, row as i64).expect("cell");
             let t = tx.first_descendant(c).expect("text");
-            tx.text(t)?.set_text_content(*value)?;
+            tx.text(t)?.set_text_content(value)?;
         }
     }
     tx.get_mut::<TableCellNode>(template_grid.cell_at(1, 1).expect("cell"))?
@@ -287,8 +287,12 @@ fn nearest_root_caret_splits_text_wraps_inline_and_preserves_direction() -> Resu
         &Point::text(t, Utf16Offset(2)),
         CaretDirection::Previous,
     )?;
-    let result =
-        crate::utils::insert_node_to_nearest_root_at_caret(&mut tx, inline.key(), caret, None)?;
+    let result = crate::utils::insert_node_to_nearest_root_at_caret(
+        &mut tx,
+        inline.key(),
+        caret,
+        Default::default(),
+    )?;
     assert_eq!(result.direction(), CaretDirection::Previous);
     assert_eq!(tx.children_size(NodeKey::ROOT), 3);
     assert!(tx.parent(inline).is_some_and(|k| tx.is::<Paragraph>(k)));
