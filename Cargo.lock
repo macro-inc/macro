@@ -2470,7 +2470,6 @@ dependencies = [
  "miniserde",
  "mobile_welcome_email_db_client",
  "mockall",
- "models_sfs",
  "native_app_service",
  "non_empty",
  "notification",
@@ -2494,6 +2493,7 @@ dependencies = [
  "serde_urlencoded",
  "serde_utils",
  "ses_client",
+ "sfs_types",
  "sha1 0.10.6",
  "sha2 0.10.9",
  "shared_types",
@@ -14128,16 +14128,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "models_sfs"
-version = "0.1.0"
-dependencies = [
- "serde",
- "serde_json",
- "utoipa",
- "workspace-hack",
-]
-
-[[package]]
 name = "models_soup"
 version = "0.1.0"
 dependencies = [
@@ -19154,6 +19144,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "sfs_types"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "serde_json",
+ "utoipa",
+ "workspace-hack",
+]
+
+[[package]]
 name = "sha1"
 version = "0.10.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -20338,12 +20338,12 @@ dependencies = [
  "macro_env",
  "macro_env_var",
  "macro_queues",
- "models_sfs",
  "s3_key",
  "secretsmanager_client",
  "serde",
  "serde_dynamo",
  "serde_json",
+ "sfs_types",
  "shared_types",
  "static_file_public_url",
  "strum_macros 0.27.2",
@@ -20364,10 +20364,10 @@ dependencies = [
  "anyhow",
  "bytes",
  "macro_aws_config",
- "models_sfs",
  "reqwest 0.13.4",
  "serde",
  "serde_json",
+ "sfs_types",
  "static_file_service_url",
  "tokio",
  "tracing",

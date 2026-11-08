@@ -79,7 +79,7 @@ contacts = { workspace = true, features = [
 cookie = { workspace = true }
 decode_jwt = { workspace = true }
 document_storage_service_client = { workspace = true }
-models_sfs = { workspace = true }
+sfs_types = { workspace = true }
 static_file_service_client = { workspace = true }
 user_api_key = { workspace = true, features = ["postgres"] }
 email = { workspace = true, features = ["http_client", "outbound"] }

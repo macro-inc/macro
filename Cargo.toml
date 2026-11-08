@@ -861,7 +861,6 @@ model_notifications = { path = "crates/notifications/model_notifications" }
 model_owner = { path = "crates/types/model_owner" }
 model_user = { path = "crates/types/model_user" }
 models_search = { path = "crates/search/models_search" }
-models_sfs = { path = "crates/types/models_sfs" }
 models_soup = { path = "crates/search/models_soup" }
 models_team = { path = "crates/types/models_team" }
 name_search = { path = "crates/search/name_search" }
@@ -913,6 +912,7 @@ secretsmanager_client = { path = "crates/aws/secretsmanager_client" }
 serde_utils = { path = "crates/platform/serde_utils" }
 service_url = { path = "crates/platform/service_urls/service_url" }
 ses_client = { path = "crates/aws/ses_client" }
+sfs_types = { path = "crates/types/sfs_types" }
 share_permission_db_utils = { path = "crates/entities/share_permission_db_utils" }
 shared_entity_registry = { path = "crates/entities/shared_entity_registry" }
 shared_types = { path = "crates/types/shared_types" }
