@@ -209,7 +209,7 @@ impl RunTelemetry {
             fields.insert("failed_step".to_owned(), Value::from(step_name(step)));
         }
         let ready = ended.duration_since(self.shared.started_at).unwrap_or_default();
-        fields.insert("ready_seconds".to_owned(), Value::from(seconds(ready)));
+        fields.insert("seconds".to_owned(), Value::from(seconds(ready)));
 
         let (done, finished) = mpsc::channel();
         let shared = self.shared;
