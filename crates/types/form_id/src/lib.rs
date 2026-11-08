@@ -2,7 +2,7 @@
 //! questions, its submissions, and the scheduling profile and event type it
 //! books.
 //!
-//! `models_forms` re-exports them; they live here so a crate that only names
+//! `forms_types` re-exports them; they live here so a crate that only names
 //! a form does not depend on the forms wire vocabulary.
 
 #![deny(missing_docs)]

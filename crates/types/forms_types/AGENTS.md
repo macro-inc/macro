@@ -1,4 +1,4 @@
-# models_forms
+# forms_types
 
 ## What it is
 
@@ -38,7 +38,7 @@ reuse `databases_types` cells, gate rules reuse its filters, unchanged.
 
 ## Checks
 
-- `cargo test -p models_forms` (`SQLX_OFFLINE` unset).
+- `cargo test -p forms_types` (`SQLX_OFFLINE` unset).
 
 ## Related
 

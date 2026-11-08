@@ -4,7 +4,7 @@ use axum::Json;
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
 use entity_access::domain::models::AccessError;
-use models_forms::{FormErrorCode, FormErrorResponse};
+use forms_types::{FormErrorCode, FormErrorResponse};
 
 use super::access::AccessRefusal;
 use crate::domain::models::FormError;

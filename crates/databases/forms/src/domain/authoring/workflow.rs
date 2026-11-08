@@ -18,7 +18,7 @@ use entity_access::domain::models::{
     EditAccessLevel, Entity, EntityAccessReceipt, EntityType, OwnerAccessLevel, RequiredPermission,
     ViewAccessLevel,
 };
-use models_forms::{FormAccess, FormId, FormLayout};
+use forms_types::{FormAccess, FormId, FormLayout};
 use std::sync::Arc;
 
 /// Dependencies supplied by the composition root. Permissions are checked on every call.
@@ -83,7 +83,7 @@ impl<
     }
     async fn targets(&self, actor: &Viewer, layout: &FormLayout) -> Result<(), AuthoringError> {
         for section in &layout.sections {
-            if let models_forms::FormSection::Booking { target, .. } = section {
+            if let forms_types::FormSection::Booking { target, .. } = section {
                 self.booking.check_target(actor, target).await?;
             }
         }

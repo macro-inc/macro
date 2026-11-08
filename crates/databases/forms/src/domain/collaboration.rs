@@ -7,11 +7,11 @@ mod test;
 
 use std::collections::{BTreeMap, HashMap, HashSet};
 
+use forms_types::{FormLayout, FormQuestionId, FormSection, FormSectionId, FormSectionKind};
 use loro::{
     Container, ExportMode, LoroDoc, LoroMap, LoroMovableList, LoroText, LoroValue, UpdateOptions,
     ValueOrContainer, VersionVector,
 };
-use models_forms::{FormLayout, FormQuestionId, FormSection, FormSectionId, FormSectionKind};
 use serde_json::{Map as JsonMap, Value as JsonValue};
 
 /// The schema format this module reads and writes.

@@ -17,11 +17,11 @@ fn a_booking_target_survives_seeding_and_an_independent_title_edit() {
             id: DETAILS,
             title: "Book a time".to_owned(),
             description: "Choose a time after screening".to_owned(),
-            target: models_forms::BookingTarget {
-                profile_id: models_forms::BookingProfileId::from_uuid(uuid!(
+            target: forms_types::BookingTarget {
+                profile_id: forms_types::BookingProfileId::from_uuid(uuid!(
                     "0199a000-0000-7000-8000-000000000031"
                 )),
-                event_type_id: models_forms::BookingEventTypeId::from_uuid(uuid!(
+                event_type_id: forms_types::BookingEventTypeId::from_uuid(uuid!(
                     "0199a000-0000-7000-8000-000000000032"
                 )),
             },

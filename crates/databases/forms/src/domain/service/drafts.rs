@@ -4,8 +4,8 @@
 use databases::domain::models::TableDetail;
 use databases::domain::ports::{DatabaseMetadataReads, DatabaseRowReads, DatabasesService};
 use entity_access::domain::models::{EditAccessLevel, EntityAccessReceipt};
+use forms_types::{FormCollaboration, FormPublicationProblem};
 use macro_event_broker::MacroEventBroker;
-use models_forms::{FormCollaboration, FormPublicationProblem};
 
 use super::layout::{asks_for_a_file, form_detail, validate_layout};
 use super::{FormsServiceImpl, receipt_access, receipt_form_id, repository_error};

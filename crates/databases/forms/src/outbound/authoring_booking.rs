@@ -15,7 +15,7 @@ impl<R: Repository, C: AttachmentReadiness, D: Directory> AuthoringBooking
     async fn check_target(
         &self,
         actor: &Viewer,
-        target: &models_forms::BookingTarget,
+        target: &forms_types::BookingTarget,
     ) -> Result<(), AuthoringError> {
         self.0
             .validate_attachment(

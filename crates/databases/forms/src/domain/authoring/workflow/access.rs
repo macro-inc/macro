@@ -1,5 +1,5 @@
 use super::*;
-use models_forms::UpdateForm;
+use forms_types::UpdateForm;
 use models_permissions::share_permission::{
     UpdateSharePermissionRequestV2,
     access_level::AccessLevel,

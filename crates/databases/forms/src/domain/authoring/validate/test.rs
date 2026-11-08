@@ -73,7 +73,7 @@ fn equivalent_numeric_options_are_rejected_before_schema_provisioning() {
 
 #[test]
 fn review_regression_preserving_human_content_keeps_authoring_limits() {
-    use models_forms::{Audience, FormQuestionId, FormSectionId, QuestionLayout};
+    use forms_types::{Audience, FormQuestionId, FormSectionId, QuestionLayout};
     let column = Column {
         id: ColumnId::generate(),
         name: "Contact".into(),
@@ -274,7 +274,7 @@ fn show_when_resolves_earlier_keys_and_refuses_its_own_or_later_questions() {
 
 #[test]
 fn a_canonical_show_when_must_name_an_earlier_section_and_an_unchanged_one_is_kept() {
-    use models_forms::{Audience, FormQuestionId, FormSectionId, QuestionLayout};
+    use forms_types::{Audience, FormQuestionId, FormSectionId, QuestionLayout};
     let role = Column {
         id: ColumnId::generate(),
         name: "Role".into(),

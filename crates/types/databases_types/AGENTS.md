@@ -25,14 +25,14 @@ domain.
 - Owns: the write-op vocabulary, cell casting, view evaluation, and position
   keys — kept wasm-safe (no `workspace-hack` dependency; see `.config/hakari.toml`).
 - Not here: SQL execution or the domain port → `database_sql_engine`, `database_sql_runner`;
-  Forms (a view of one table) → `models_forms`.
+  Forms (a view of one table) → `forms_types`.
 
 ## Boundaries
 
 - Depends on: `fractional_index`, `macro_user_id`, `macro_uuid` — no
   `workspace-hack`, so new dependencies must stay wasm-compatible.
 - Used by: `crm`, `databases`, `database_sql_engine`, `database_sql_runner`,
-  `document_storage_service`, `forms`, `graphql_crm`, `models_forms`.
+  `document_storage_service`, `forms`, `graphql_crm`, `forms_types`.
 
 ## Recipes
 

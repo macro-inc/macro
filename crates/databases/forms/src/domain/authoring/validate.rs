@@ -7,7 +7,7 @@ use databases_types::views::{
     check,
 };
 use databases_types::{ColumnId, ColumnKind, OptionId};
-use models_forms::{
+use forms_types::{
     FormLayout, FormQuestionId, FormSection, FormSectionId, QuestionLayout, QuestionOption,
 };
 use std::collections::{BTreeMap, HashMap, HashSet};
@@ -495,7 +495,7 @@ pub fn canonical(
     layout: &FormLayout,
     columns: &[Column],
     managed: &[ColumnId],
-    audience: models_forms::Audience,
+    audience: forms_types::Audience,
 ) -> Result<(), AuthoringError> {
     canonical_preserving(layout, columns, managed, audience, None)
 }
@@ -506,7 +506,7 @@ pub fn canonical_preserving(
     layout: &FormLayout,
     columns: &[Column],
     managed: &[ColumnId],
-    audience: models_forms::Audience,
+    audience: forms_types::Audience,
     previous: Option<&FormLayout>,
 ) -> Result<(), AuthoringError> {
     let previous_questions: Vec<_> = previous
@@ -627,8 +627,8 @@ pub fn canonical_preserving(
                             "Select a widget supported by the column kind.",
                         ));
                     }
-                    if audience == models_forms::Audience::Public
-                        && q.widget == Some(models_forms::Widget::File)
+                    if audience == forms_types::Audience::Public
+                        && q.widget == Some(forms_types::Widget::File)
                     {
                         return Err(fail(
                             Code::InvalidAccess,

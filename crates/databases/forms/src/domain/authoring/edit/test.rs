@@ -1,6 +1,6 @@
 use super::*;
 use databases_types::ColumnId;
-use models_forms::{FormQuestionId, FormSectionId};
+use forms_types::{FormQuestionId, FormSectionId};
 
 #[test]
 fn help_text_edit_changes_only_requested_fields_in_the_current_layout() {
