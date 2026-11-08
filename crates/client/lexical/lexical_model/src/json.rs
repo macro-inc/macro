@@ -109,7 +109,9 @@ impl Editor {
             return Err(Error::ExpectedSerializedRoot);
         }
         let mut tx = self.transaction();
+        let shared = tx.pending.shared_state_configs.clone();
         tx.pending = EditorState::empty(tx.pending.registry.clone())?;
+        tx.pending.shared_state_configs = shared;
         let error = tx.import_node(&json.root).err();
         Ok(ParsedEditorState {
             state: tx.pending.clone(),

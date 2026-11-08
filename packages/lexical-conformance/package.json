@@ -60,6 +60,8 @@
     "y-protocols": "1.0.6",
     "y-websocket": "2.1.0",
     "yjs": "13.6.30",
-    "zod": "4.4.3"
+    "zod": "4.4.3",
+    "jsonwebtoken": "9.0.3",
+    "@types/jsonwebtoken": "9.0.9"
   }
 }

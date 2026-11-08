@@ -48,7 +48,7 @@ pub fn table_transform(tx: &mut Transaction<'_>, table: Id<TableNode>) -> Result
     let count = TableNode::column_count(tx.view(), table) as usize;
     if let Some(mut widths) = tx
         .get::<TableNode>(table)
-        .and_then(|t| t.col_widths.clone())
+        .and_then(|t| t.col_widths.as_ref().cloned())
         && widths.len() != count
     {
         let next = if count < widths.len() {
@@ -60,7 +60,7 @@ pub fn table_transform(tx: &mut Transaction<'_>, table: Id<TableNode>) -> Result
         } else {
             None
         };
-        tx.get_mut::<TableNode>(table)?.col_widths = next;
+        tx.get_mut::<TableNode>(table)?.col_widths = next.into();
     }
     Ok(())
 }

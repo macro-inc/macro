@@ -5,6 +5,39 @@ use serde_json::{Value, json};
 use std::sync::Arc;
 
 #[test]
+fn custom_code_import_learns_state_keys_for_later_nodes_of_the_same_class() -> Result<()> {
+    let raw = serde_json::from_str(
+        r#"{"root":{"type":"root","children":[{"type":"custom-code","version":1,"language":"rust","$":{"id":"first","extra":"kept"},"children":[{"type":"text","text":"code"}]},{"type":"custom-code","version":1,"language":"rust","$":{"id":"second","extra":"kept"},"children":[{"type":"text","text":"code"}]}]}}"#,
+    )?;
+    let state = parse_export_state(
+        &raw,
+        &DocumentContext {
+            clock: NodeClock(Arc::new(|| 1794052800000)),
+            random: NodeRandom(Arc::new(|size| vec![0; size])),
+            host: NodeHost::default(),
+            keys: KeySource::default(),
+            editor_created: None,
+        },
+    )?;
+    let before = state.to_json()?;
+    let search = to_search_text(&state)?;
+    assert_eq!(
+        search[0].raw_content,
+        r#"{"children":[],"format":"","type":"custom-code","version":1,"$":{"id":"first","extra":"kept"},"language":"rust","previewEnabled":false}"#
+    );
+    assert_eq!(
+        search[1].raw_content,
+        r#"{"children":[],"format":"","type":"custom-code","version":1,"$":{"extra":"kept","id":"second"},"language":"rust","previewEnabled":false}"#
+    );
+    assert_eq!(
+        to_cognition_text(&state)?[1].raw_content,
+        search[1].raw_content
+    );
+    assert_eq!(state.to_json()?, before);
+    Ok(())
+}
+
+#[test]
 fn service_exports_and_xml_match_source_and_leave_stored_state_unchanged() -> Result<()> {
     let mut failures = Vec::new();
     for line in include_str!("corpus/exports.jsonl").lines() {

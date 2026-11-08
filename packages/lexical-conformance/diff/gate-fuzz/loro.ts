@@ -1,9 +1,8 @@
 // Real Loro operations and binary updates; the Rust test projects them through sync_server_core.
 import { mock, setSystemTime } from 'bun:test';
-import { readFileSync, writeFileSync } from 'node:fs';
+import { writeFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { fileURLToPath } from 'node:url';
-import { plugin } from 'bun';
 
 const root = fileURLToPath(new URL('../../../../', import.meta.url));
 setSystemTime(new Date('2026-11-07T12:00:00.000Z'));
@@ -14,19 +13,6 @@ mock.module(
   () => ({ nanoid: (size = 21) => 'u'.repeat(size) })
 );
 await import(root + 'services/lexical-service/src/polyfills/prism.ts');
-plugin({
-  name: 'observe-loro-gate',
-  setup(builder) {
-    builder.onLoad(
-      { filter: /\/lib\/comment-only-change\.ts$/ },
-      ({ path }) => ({
-        contents:
-          readFileSync(path, 'utf8') + '\nexport {contentWithoutComments};',
-        loader: 'ts',
-      })
-    );
-  },
-});
 const { isCommentOnlyChange, contentWithoutComments } = await import(
   root + 'services/lexical-service/src/lib/comment-only-change.ts'
 );
