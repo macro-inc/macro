@@ -12,6 +12,7 @@ before touching the edit flow.
 
 - `src/index.ts` / `src/endpoints/index.ts`: the hono app and route table
   (`POST /edit` and friends).
+- `src/editing-workspace.ts`: real session/engine ownership and the borrowed Writer capability; keep its types independent of agent dispatch.
 - `src/run-edit.ts`: `runEditSession` — joins the sync-service WebSocket,
   drives the agents, flushes commits back.
 - `src/canvas/`: bounded CanvasEditor SDK, real QuickJS runner, live graphics/Loro

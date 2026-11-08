@@ -1,7 +1,7 @@
 //! Abstract editor inputs resolved against the live document session at execution time.
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 /// A text-bearing block and UTF-16 offset, resolved modulo current content.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize, specta::Type)]
 pub struct Pos {
     /// Block in document order.
     pub block: u16,
@@ -9,7 +9,7 @@ pub struct Pos {
     pub offset: u16,
 }
 /// Editor inputs use the real session and collaborative history.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, specta::Type)]
 pub enum EditorOp {
     /// Insert literal text without shortcuts.
     Type {

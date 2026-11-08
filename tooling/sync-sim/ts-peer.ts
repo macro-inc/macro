@@ -1,6 +1,6 @@
 import { createInterface } from 'node:readline';
 import type { PeerCommand, PeerReport } from './generated';
-import { clock, WALL_ORIGIN, wakeAt } from './runtime';
+import { activity, clock, WALL_ORIGIN, wakeAt } from './runtime';
 
 // Imports happen after fake timers/entropy and the network-free transport exist.
 const idb = await import('fake-indexeddb');
@@ -9,7 +9,7 @@ for (const [key, value] of Object.entries(idb)) {
     Object.defineProperty(globalThis, key, { value, configurable: true });
 }
 const { effects } = await import('./transport');
-const { command, finals, activity } = await import('./peer');
+const { command, finals } = await import('./peer');
 const loroPackage = await Bun.file(
   new URL('../../node_modules/loro-crdt/package.json', import.meta.url)
 ).json();
@@ -30,6 +30,11 @@ for await (const line of createInterface({
     effects: effects.splice(0),
     peers,
   };
-  process.stdout.write(`${JSON.stringify(report)}\n`);
+  await new Promise<void>((resolve, reject) => {
+    process.stdout.write(`${JSON.stringify(report)}\n`, (error) => {
+      if (error) reject(error);
+      else resolve();
+    });
+  });
   if (input.type === 'shutdown') process.exit(0);
 }

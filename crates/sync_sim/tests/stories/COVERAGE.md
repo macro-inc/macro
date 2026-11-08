@@ -140,5 +140,15 @@ pending; these literals do not claim those producers.
 eight-character identities; all three headless list commands create TaskListNode;
 table behavior composes with the application-owned registry and preserves the
 requested rows/columns. Every story retains all invariants and exact replay.
-Markdown, comments/gate, generated editor floors and the TS editor peer remain
-pending.
+Markdown, comments/gate and generated editor floors remain pending.
+
+`mixed_versions::real_shipping_editor_workspace_interoperates_with_native_sessions_and_replays_exactly`
+uses the actual AI worker EditingWorkspace and upstream Lexical/loro-mirror over
+real SyncEngine/WAL/socket ports. Native collaborative undo preserves TS typing;
+source formatting, quote conversion and table insertion converge with native synced
+JSON, independent reconstruction, raw persisted Loro state and VV. All actual WAL
+rows are delivered. Both outcomes and the full IPC transcript replay exactly.
+Rotated local peer ranges come from update metadata, never imported VV growth.
+This direct source AI host has no browser movement/undo binding; native stories
+own those paths. Browser reconcile, faults/reconnect and cross-account editor
+interop remain outside this literal.
