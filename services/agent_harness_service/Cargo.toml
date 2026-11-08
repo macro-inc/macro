@@ -36,7 +36,7 @@ nom = { workspace = true }
 models_search = { workspace = true }
 document_sub_type = { workspace = true, default-features = true }
 activity = { workspace = true, features = ["axum", "outbound", "schema"] }
-agent = { workspace = true, features = ["debug-messages"] }
+agent_loop = { workspace = true, features = ["debug-messages"] }
 agent-client-protocol = { workspace = true }
 agent_changes = { workspace = true, default-features = true }
 agent_code_mode = { workspace = true }
@@ -52,7 +52,7 @@ agent_session_realtime = { workspace = true, default-features = true }
 agent_trigger = { workspace = true, features = ["outbound"] }
 ai_billing = { workspace = true, features = ["pg-admission"] }
 agent_api_keys = { workspace = true }
-ai_tools = { workspace = true }
+agent_tools = { workspace = true }
 ai_toolset = { workspace = true }
 calendar_events = { workspace = true, features = ["postgres"] }
 ai_usage = { workspace = true }
@@ -169,7 +169,7 @@ opentelemetry = { workspace = true, features = ["metrics"] }
 tracing-opentelemetry = { workspace = true }
 pipedream_mcp = { workspace = true }
 png = { workspace = true }
-prompt = { workspace = true }
+agent_prompts = { workspace = true }
 properties = { workspace = true, features = ["outbound"] }
 rdkafka = { workspace = true }
 readonly_pool = { workspace = true }
@@ -251,9 +251,9 @@ code_execution_core = { workspace = true }
 code_execution_outbound = { workspace = true }
 
 [dev-dependencies]
-agent = { workspace = true }
+agent_loop = { workspace = true }
 agent_session = { workspace = true, default-features = true, features = ["test-utils"] }
-ai_tools = { workspace = true, features = ["test-support"] }
+agent_tools = { workspace = true, features = ["test-support"] }
 async-trait = { workspace = true }
 bot_id = { workspace = true, features = ["test-utils"] }
 # The hosts the SDK can reach, which the code-mode scope test checks.

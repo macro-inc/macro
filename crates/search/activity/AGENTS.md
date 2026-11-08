@@ -45,8 +45,8 @@ distribution.
   `EntityAccessService::get_users_by_entity`; change both together.
 - Used by: most domain crates with activity surfaces (`documents`, `forms`,
   `databases`, `initiative`, `messages`, `channels`, `soup`, `call`, `chat`,
-  `attention_feed`, `projects`, `github`, `email`, `properties`) and `ai_tools`.
-  `ai_tools` reads `SubjectActivityPresence` so memory skips days without
+  `attention_feed`, `projects`, `github`, `email`, `properties`) and `agent_tools`.
+  `agent_tools` reads `SubjectActivityPresence` so memory skips days without
   activity.
 
 ## Recipes

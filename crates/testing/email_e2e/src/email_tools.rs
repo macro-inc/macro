@@ -3,7 +3,7 @@
 //!
 //! The hosts that give the tools to a model (`agent_harness_service`, the MCP
 //! server) are not started: this builds the tool context the way
-//! `ai_tools::build_tool_service_context_from_env` does, on the scenario's
+//! `agent_tools::build_tool_service_context_from_env` does, on the scenario's
 //! Postgres database and SQS queues, so what a tool stages is carried out by
 //! the scenario's real `pubsub_workers`. No model is involved; a scenario
 //! calls a tool by name with the JSON a model would send.

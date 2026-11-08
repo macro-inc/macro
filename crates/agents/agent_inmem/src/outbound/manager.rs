@@ -296,16 +296,16 @@ fn rebuilt_state(
 ) -> SessionState {
     let restored_effort = replay_reasoning_effort(&frames);
     let reasoning_effort =
-        if agent::ReasoningEffort::supported(&facts.model).contains(&restored_effort) {
+        if agent_loop::ReasoningEffort::supported(&facts.model).contains(&restored_effort) {
             restored_effort
         } else {
-            agent::ReasoningEffort::default()
+            agent_loop::ReasoningEffort::default()
         };
     let restored_speed = replay_speed(&frames);
     let speed = if restored_speed.supported(&facts.model) {
         restored_speed
     } else {
-        agent::ModelSpeed::Standard
+        agent_loop::ModelSpeed::Standard
     };
     SessionState {
         acp_session_id: facts.acp_session_id.clone(),
@@ -327,11 +327,14 @@ fn model_history(history: &[HistoryEntry]) -> Vec<HistoryEntry> {
         .iter()
         .filter_map(|entry| match entry {
             HistoryEntry::Assistant(parts) => {
-                let parts = agent::merge_consecutive_parts(
+                let parts = agent_loop::merge_consecutive_parts(
                     parts
                         .iter()
                         .filter(|part| {
-                            !matches!(part, agent::types::AssistantMessagePart::Thinking { .. })
+                            !matches!(
+                                part,
+                                agent_loop::types::AssistantMessagePart::Thinking { .. }
+                            )
                         })
                         .cloned()
                         .collect(),

@@ -25,7 +25,7 @@ export type SplitMessageContent = {
  * inside the tag, with no line breaks - anchored to the start, plus the
  * blank line the harness puts after it.
  *
- * The node has to be the whole first line. `crates/agents/prompt` tells agents to
+ * The node has to be the whole first line. `crates/agents/agent_prompts` tells agents to
  * write session mentions in their own replies, so a bot that opens one with
  * a chip and keeps writing on the same line ("<chip> - picked this up
  * there") means it as prose; only a node standing alone as its own

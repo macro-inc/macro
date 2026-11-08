@@ -27,7 +27,7 @@ Object): document CRUD, state, surfaces, and wakeup calls.
   (`crates/documents/sync_service_hex`, aliased).
 - Used by: `services/document_storage_service`, `services/agent_harness_service`,
   `services/document_upload_finalizer_handler`, `services/agent_harness_service`,
-  `crates/documents/documents`, `crates/documents/collab_surface`, `crates/ai/ai_tools`,
+  `crates/documents/documents`, `crates/documents/collab_surface`, `crates/ai/agent_tools`,
   `crates/ai/memory`, `tooling/seed_cli`.
 
 ## Recipes

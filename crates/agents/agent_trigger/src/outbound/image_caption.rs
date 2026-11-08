@@ -6,7 +6,7 @@ mod test;
 use std::sync::Arc;
 use std::time::Duration;
 
-use agent::PredefinedModel;
+use agent_loop::PredefinedModel;
 use ai_usage::{UsageContext, UsageRecorder};
 use async_trait::async_trait;
 use messages::domain::events::MessageEventAttachment;
@@ -75,7 +75,7 @@ where
                 return None;
             }
         };
-        match agent::complete_about_image(
+        match agent_loop::complete_about_image(
             self.model,
             CAPTION_SYSTEM,
             CAPTION_INSTRUCTION,

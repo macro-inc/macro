@@ -74,7 +74,7 @@ impl TurnEngine for IdleEngine {
     fn run_turn(
         &self,
         _request: TurnRequest,
-    ) -> tokio::sync::mpsc::Receiver<Result<agent::StreamPart, agent::AgentError>> {
+    ) -> tokio::sync::mpsc::Receiver<Result<agent_loop::StreamPart, agent_loop::AgentError>> {
         tokio::sync::mpsc::channel(1).1
     }
 }

@@ -1,6 +1,6 @@
 //! System skill for catching the user up on messages and activity they missed.
 
-use prompt::StaticPrompt;
+use agent_prompts::StaticPrompt;
 
 use crate::SystemSkill;
 

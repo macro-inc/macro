@@ -1,6 +1,6 @@
 //! The generic agent adapter accepts only a host-supplied read toolset.
 use crate::domain::ports::*;
-use agent::{
+use agent_loop::{
     AgentLoop, PredefinedModel, ReasoningEffort, StreamPart,
     types::{ChatMessage, ChatMessageContent, Role},
 };
@@ -31,7 +31,11 @@ impl<C: Clone + Send + Sync + 'static> MemoryGenerator for AgentMemoryGenerator<
             "Research subject: {user}. Current UTC time: {}.",
             chrono::Utc::now()
         );
-        let system = prompt::compose(&[&self.tool_prompt, &prompt::privacy::PROMPT, &identity]);
+        let system = agent_prompts::compose(&[
+            &self.tool_prompt,
+            &agent_prompts::privacy::PROMPT,
+            &identity,
+        ]);
         let agent = AgentLoop::new(self.recorder.clone())
             .with_model(GENERATION_MODEL)
             .with_reasoning_effort(GENERATION_EFFORT);
@@ -43,11 +47,11 @@ impl<C: Clone + Send + Sync + 'static> MemoryGenerator for AgentMemoryGenerator<
                 ai_usage::UsageContext::new(ai_usage::AiFeature::Memory, user),
             )
             .await;
-        let request = prompt::compose(&[
+        let request = agent_prompts::compose(&[
             &instructions,
             &"Wrap only the final report in <memory></memory> tags. Do not narrate your research inside the tags.",
         ]);
-        let messages = agent::to_rig_messages(&[ChatMessage {
+        let messages = agent_loop::to_rig_messages(&[ChatMessage {
             content: ChatMessageContent::Text(request),
             role: Role::User,
             attachments: None,
@@ -79,8 +83,8 @@ impl<C: Clone + Send + Sync + 'static> MemoryGenerator for AgentMemoryGenerator<
         instructions: &str,
         sources: &str,
     ) -> Result<String> {
-        let system = prompt::compose(&[&prompt::privacy::PROMPT, &instructions]);
-        let messages = agent::to_rig_messages(&[ChatMessage {
+        let system = agent_prompts::compose(&[&agent_prompts::privacy::PROMPT, &instructions]);
+        let messages = agent_loop::to_rig_messages(&[ChatMessage {
             content: ChatMessageContent::Text(sources.to_owned()),
             role: Role::User,
             attachments: None,
@@ -90,7 +94,7 @@ impl<C: Clone + Send + Sync + 'static> MemoryGenerator for AgentMemoryGenerator<
             "thinking": { "type": "adaptive" },
             "output_config": { "effort": GENERATION_EFFORT.as_str() },
         });
-        agent::complete_with_history_and_params(
+        agent_loop::complete_with_history_and_params(
             GENERATION_MODEL,
             &system,
             messages,

@@ -174,7 +174,7 @@ from `tooling/just/database.just` via `DATABASE_URL`.
 
 | Check | Result |
 | --- | --- |
-| `cargo test -p import -p mcp_select -p onboarding -p ai_tools -p channels -p pipedream_mcp` | Passed: 455 tests (114 import, 5 mcp_select, 6 onboarding, 47 ai_tools, 267 channels, 16 pipedream_mcp). Initial attempt lacked `DATABASE_URL`; rerun against local Postgres passed. |
+| `cargo test -p import -p mcp_select -p onboarding -p agent_tools -p channels -p pipedream_mcp` | Passed: 455 tests (114 import, 5 mcp_select, 6 onboarding, 47 agent_tools, 267 channels, 16 pipedream_mcp). Initial attempt lacked `DATABASE_URL`; rerun against local Postgres passed. |
 | `cargo test -p slack_integration --features ledger` | Passed: 100 tests, including the archive adapter's new fail-closed error-mapping regression. |
 | `just rust-check` | Passed after fixing the archive ledger's exhaustive match for the new `UnsupportedDiscovery` error. Archive import policy is unchanged. |
 | `just check full` / `just check` | Wrapper cannot discover changes in this non-colocated jj workspace: its Git commands fail and it exits 0 having checked nothing. Not counted as a pass. Component checks below were run directly. |

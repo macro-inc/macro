@@ -209,7 +209,7 @@ fn instructions_are_a_delimited_section_after_the_standing_prompt() {
     .to_string();
 
     assert!(
-        prompt.starts_with(&prompt::agent_session::PROMPT.to_string()),
+        prompt.starts_with(&agent_prompts::agent_session::PROMPT.to_string()),
         "the session preamble comes first"
     );
     assert!(
@@ -251,10 +251,10 @@ fn an_unseen_turn_reads_its_own_short_prompt() {
 
     assert!(text.starts_with(unseen::PROMPT));
     assert!(!text.contains(TOOLS));
-    assert!(!text.contains(&prompt::agent_session::PROMPT.to_string()));
+    assert!(!text.contains(&agent_prompts::agent_session::PROMPT.to_string()));
     assert!(!text.contains("<agent_session>"));
     assert!(!text.contains(opener::NOT_OPENED));
-    assert!(text.contains(&prompt::agent_identity::render("Grunk", "grunk")));
+    assert!(text.contains(&agent_prompts::agent_identity::render("Grunk", "grunk")));
     assert!(text.contains("<session_instructions>\nbe terse\n</session_instructions>"));
     assert!(text.contains("<user_memory>\nprefers Rust\n</user_memory>"));
     assert!(!text.contains("<macro_sdk>"));
@@ -320,7 +320,7 @@ fn only_a_background_session_with_instructions_skips_picked_documentation() {
 /// one; any other turn keeps the effort it was given.
 #[test]
 fn an_unseen_turn_runs_at_low_effort_where_its_model_takes_one() {
-    use agent::ReasoningEffort;
+    use agent_loop::ReasoningEffort;
     let model = "anthropic/claude-sonnet-5-5";
     assert_eq!(
         unseen_effort(true, model, ReasoningEffort::default()),
@@ -354,7 +354,7 @@ fn identity_opens_the_session_part_and_does_not_need_instructions() {
         None,
         None,
     );
-    let identity_section = prompt::agent_identity::render("Grunk", "grunk");
+    let identity_section = agent_prompts::agent_identity::render("Grunk", "grunk");
 
     assert!(
         prompt.rest().starts_with(&format!("\n{identity_section}")),
@@ -415,7 +415,7 @@ fn sessions_share_everything_before_their_identity() {
         None,
     );
 
-    let shared = format!("{}{TOOLS}", prompt::agent_session::PROMPT);
+    let shared = format!("{}{TOOLS}", agent_prompts::agent_session::PROMPT);
     assert_eq!(first.shared(), Some(shared.as_str()));
     assert_eq!(second.shared(), Some(shared.as_str()));
     let agent_session = format!(
@@ -428,7 +428,7 @@ fn sessions_share_everything_before_their_identity() {
         first.rest(),
         format!(
             "\n{}\n<session_instructions>\ntask A\n</session_instructions>{agent_session}\n<user_memory>\nprefers Rust\n</user_memory>",
-            prompt::agent_identity::render("Grunk", "grunk"),
+            agent_prompts::agent_identity::render("Grunk", "grunk"),
         )
     );
     assert_eq!(
@@ -550,11 +550,11 @@ async fn a_summary_turns_closed_opener_has_no_verdict() {
 
 #[test]
 fn opening_transcript_leaves_out_the_hidden_agent_context() {
-    let messages = vec![agent::types::ChatMessage {
-        content: agent::types::ChatMessageContent::Text(
+    let messages = vec![agent_loop::types::ChatMessage {
+        content: agent_loop::types::ChatMessageContent::Text(
             "<m-agent-context>{\"version\":1,\"text\":\"<session owner=\\\"wolf@macro.com\\\"/>\"}</m-agent-context>\n\nwhat is going on in my workspace".to_owned(),
         ),
-        role: agent::types::Role::User,
+        role: agent_loop::types::Role::User,
         attachments: None,
     }];
 

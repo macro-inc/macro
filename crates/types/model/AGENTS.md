@@ -29,7 +29,7 @@ authentication — one of the most widely depended-on crates in the backend.
 
 - Depends on: `model_entity`, `model_owner`, `model_file_type`, `model_user`,
   `models_permissions`, `models_pagination`, `models_bulk_upload`.
-- Used by: dozens of services and crates — `agent_harness`, `ai_tools`,
+- Used by: dozens of services and crates — `agent_harness`, `agent_tools`,
   `authentication_service(_client)`, `chat`, `collab_surface`,
   `document_storage_service(_client)`, `documents`, `email_service(_client)`,
   `entity_access`, `macro_db_client`, `messages`, `models_soup`, `projects`,

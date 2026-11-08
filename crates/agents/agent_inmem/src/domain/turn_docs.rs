@@ -11,7 +11,7 @@ use std::collections::HashMap;
 use std::hash::{DefaultHasher, Hash, Hasher};
 use std::sync::{Mutex, PoisonError};
 
-use agent::types::{ChatMessage, ChatMessageContent, Role};
+use agent_loop::types::{ChatMessage, ChatMessageContent, Role};
 use agent_session::domain::model::AgentSessionId;
 use tokio::time::Instant;
 

@@ -1,4 +1,4 @@
-use agent::AgentError;
+use agent_loop::AgentError;
 use chrono::{DateTime, Utc};
 use macro_user_id::user_id::MacroUserIdStr;
 use macro_uuid::Uuid;

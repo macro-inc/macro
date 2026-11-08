@@ -3,8 +3,8 @@
 use std::fmt::Write as _;
 use std::sync::Arc;
 
-use agent::structured_output::{DynamicSchema, dynamic_structured_completion};
-use agent::{Message, PredefinedModel};
+use agent_loop::structured_output::{DynamicSchema, dynamic_structured_completion};
+use agent_loop::{Message, PredefinedModel};
 use async_trait::async_trait;
 use macro_user_id::user_id::MacroUserIdStr;
 use serde::Deserialize;

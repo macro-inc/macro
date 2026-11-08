@@ -3,11 +3,11 @@
 //!
 //! The chat agent loop reads tools via `ToolSet::request_schemas` and wraps
 //! each one in a rig `ToolDefinition { name, description: "", parameters }`
-//! (see `agent::DynToolSetAdapter`) — tool descriptions live inside the
+//! (see `agent_loop::DynToolSetAdapter`) — tool descriptions live inside the
 //! schema itself. This binary serializes those definitions verbatim.
 //!
-//! Usage: `cargo run -p ai_tools --bin gen_ai_request_schemas [out_path]`
-//! Defaults to `ai_tools/schemas/ai_request_schemas.json`.
+//! Usage: `cargo run -p agent_tools --bin gen_ai_request_schemas [out_path]`
+//! Defaults to `agent_tools/schemas/ai_request_schemas.json`.
 
 use ai_toolset::ToolSet;
 
@@ -20,14 +20,14 @@ fn main() {
         .to_string()
     });
 
-    let tools = ai_tools::tools_for(ai_tools::AiHost::Chat);
+    let tools = agent_tools::tools_for(agent_tools::AiHost::Chat);
     let schemas = tools.toolset.request_schemas().unwrap_or_default();
 
     let definitions = schemas
         .iter()
         .map(|s| {
             let mut parameters = serde_json::to_value(&s.schema).expect("serialize tool schema");
-            agent::normalize_request_schema(&mut parameters);
+            agent_loop::normalize_request_schema(&mut parameters);
             serde_json::json!({
                 "name": s.name,
                 "description": "",

@@ -35,7 +35,7 @@ for bot mutations that channel bots, agent triggers, and memory build on.
 - Depends on: `harnesses` (ports), `channels` (inbound, optional), `entity_access`, `entity_registry`,
   `messages`, `macro_event_broker`/`macro_event_topics`, `macro_authorization`,
   `connection_gateway_client` and `kafka_util` (`realtime`).
-- Used by: `memory`, `ai_tools`, `agent_trigger`, `complete_graph`, `agent_session`.
+- Used by: `memory`, `agent_tools`, `agent_trigger`, `complete_graph`, `agent_session`.
 
 ## Recipes
 

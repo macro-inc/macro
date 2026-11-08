@@ -24,7 +24,7 @@ tools/HTTP/GraphQL surfaces over them.
   agents and the SDK (companies, pipeline entries, pipeline exports as text or
   a saved file). Writes go through the
   pipeline workflows and `CrmService`; CSV files reach documents through the
-  `CsvFiles` port, implemented in `ai_tools::crm_csv_files`.
+  `CsvFiles` port, implemented in `agent_tools::crm_csv_files`.
 - `src/inbound/axum_router.rs` (+ `axum_router/*.rs`): HTTP handlers.
 - `src/inbound/pipeline_workflows.rs`: HTTP routes over the pipeline workflows
   and CSV transfers (entries by record, fields by name, options by label),
@@ -50,7 +50,7 @@ tools/HTTP/GraphQL surfaces over them.
   `unfurl`/`axum`; pick the narrowest feature for a new caller.
 - Depends on: `entity_access` (ports-and-adapters base), `databases` (ports),
   `filter_ast`, `item_filters`, `macro_authorization`, `properties`.
-- Used by: `email`, `memory`, `ai_tools`, `soup`/`models_soup`, `graphql_crm`,
+- Used by: `email`, `memory`, `agent_tools`, `soup`/`models_soup`, `graphql_crm`,
   `search_service`, `complete_graph`; composition roots include
   `document_storage_service`, `agent_harness_service`, `mcp_service`,
   `email_service`, `agent_trigger_service`, `scheduled_action`.

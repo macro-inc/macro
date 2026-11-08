@@ -25,7 +25,7 @@ levels, and the computed `UserItemAccess` a caller has to an entity.
 
 - Depends on: `agent_attribution`, `macro_user_id`, `model_entity`,
   `model_file_type`, `model_owner`.
-- Used by: `agent_session`, `ai_tools`, `authentication_service`, `call`,
+- Used by: `agent_session`, `agent_tools`, `authentication_service`, `call`,
   `channels`, `chat`, `collab_surface`, `databases`, `document_cognition_service`,
   `documents`, `document_storage_service(_client)`, `email_service`,
   `entity_access(_db_utils)`, `entity_access_management`, `entity_mutation`,

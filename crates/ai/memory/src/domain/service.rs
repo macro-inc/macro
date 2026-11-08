@@ -58,7 +58,7 @@ impl<R: ComposedMemoryRepo> MemoryService for MemoryServiceImpl<R> {
             .map(|(user, profile)| format!("## {user}\n{profile}"))
             .collect();
         let team = format!("# Current team profiles\n{}", profiles.join("\n"));
-        Ok(Some(prompt::compose(&[&activity, &explicit, &team])))
+        Ok(Some(agent_prompts::compose(&[&activity, &explicit, &team])))
     }
 
     /// Private memory is always read as the authenticated caller.
@@ -498,7 +498,7 @@ fn render_activity(rows: &[Activity]) -> String {
         .iter()
         .map(|s| s as &dyn std::fmt::Display)
         .collect();
-    prompt::compose(&refs)
+    agent_prompts::compose(&refs)
 }
 
 #[cfg(test)]

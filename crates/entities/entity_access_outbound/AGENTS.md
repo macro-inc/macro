@@ -19,7 +19,7 @@ while ~120 crates depend on its domain.
 ## Boundaries
 
 - Depends on: `entity_access` (domain, with its `sqlx` feature).
-- Used by: composition roots, `ai_tools`, `search_service`, `email` and
+- Used by: composition roots, `agent_tools`, `search_service`, `email` and
   `agent_harness` (which query source ids directly), `properties_service`,
   and many crates' tests as a dev-dependency.
 

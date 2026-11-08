@@ -6,7 +6,7 @@ use std::sync::{Mutex, PoisonError};
 use std::time::Duration;
 use std::{future::Future, pin::Pin};
 
-use agent::types::{ChatMessage, ChatMessageContent, Role};
+use agent_loop::types::{ChatMessage, ChatMessageContent, Role};
 use agent_session::domain::model::AgentSessionId;
 use feature_flags::FeatureFlags;
 use macro_user_id::user_id::MacroUserIdStr;

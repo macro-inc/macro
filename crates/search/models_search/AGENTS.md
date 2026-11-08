@@ -27,7 +27,7 @@ cross-entity response.
 
 - Depends on: `item_filters`, `model_file_type`, `models_opensearch`,
   `soup_property`, `opensearch_client`, `document_sub_type`.
-- Used by: `ai_tools`, `search_processing_service`, `search_service(_client)`,
+- Used by: `agent_tools`, `search_processing_service`, `search_service(_client)`,
   `skills`.
 
 ## Recipes

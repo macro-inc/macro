@@ -26,16 +26,16 @@ summary. Legacy `memory` rows remain private and are not copied into shared prof
   `disable-memory-refresh` (service context `memory-refresh`) is read before each
   claim and stops the batch while it is on; a failed flag read keeps refresh
   running.
-- `../ai_tools/src/memory.rs`: composition root, allowlisted read-only research, and
+- `../agent_tools/src/memory.rs`: composition root, allowlisted read-only research, and
   the activity-log adapter behind `MemoryActivity`.
-- `../ai_tools/src/bin/memory.rs`: awaited one-user CLI (`cargo run -p ai_tools
+- `../agent_tools/src/bin/memory.rs`: awaited one-user CLI (`cargo run -p agent_tools
   --bin memory`); uses the existing memory environment configuration.
 
 ## Boundaries
 
 Business policy and authorization live in the domain service. SQL and model calls
-are outbound adapters. `ai_tools` depends on this crate; this crate must not depend
-on `ai_tools`. Runtime context is composed with `prompt::compose`.
+are outbound adapters. `agent_tools` depends on this crate; this crate must not depend
+on `agent_tools`. Runtime context is composed with `prompt::compose`.
 
 Explicit edits require a current revision, use one-based lines, and are never
 performed by generation. Deletion remains possible if older content would fail

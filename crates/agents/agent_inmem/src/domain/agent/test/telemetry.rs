@@ -18,7 +18,7 @@ async fn prompt_trace_context_reaches_the_engine_for_each_turn() {
         fn run_turn(
             &self,
             _request: TurnRequest,
-        ) -> tokio::sync::mpsc::Receiver<Result<StreamPart, agent::AgentError>> {
+        ) -> tokio::sync::mpsc::Receiver<Result<StreamPart, agent_loop::AgentError>> {
             let _work = tracing::info_span!("engine.work");
             let (_sender, receiver) = tokio::sync::mpsc::channel(1);
             receiver

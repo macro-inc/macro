@@ -1,10 +1,10 @@
 //! Read-only query proposals for live database answers.
 
-use agent::ReasoningEffort;
-use agent::structured_output::{DynamicSchema, dynamic_structured_completion};
-use agent::types::{AssistantMessagePart, ChatMessage, ChatMessageContent, Role};
-use agent::{AgentLoop, StreamAccumulator};
-use ai_tools::ToolServiceContext;
+use agent_loop::ReasoningEffort;
+use agent_loop::structured_output::{DynamicSchema, dynamic_structured_completion};
+use agent_loop::types::{AssistantMessagePart, ChatMessage, ChatMessageContent, Role};
+use agent_loop::{AgentLoop, StreamAccumulator};
+use agent_tools::ToolServiceContext;
 use ai_usage::UsageContext;
 use futures::StreamExt;
 use schemars::JsonSchema;
@@ -183,7 +183,7 @@ pub async fn generate(
             .session(tools, Arc::new(context.clone()), &system, usage.clone())
             .await;
         let mut stream = session
-            .send_message(agent::to_rig_messages(&conversation))
+            .send_message(agent_loop::to_rig_messages(&conversation))
             .await?;
         let mut accumulator = StreamAccumulator::new();
         while let Some(part) = stream.next().await {
@@ -231,7 +231,7 @@ pub async fn generate(
     let answer = dynamic_structured_completion(
         request.model,
         &system,
-        agent::to_rig_messages(&conversation),
+        agent_loop::to_rig_messages(&conversation),
         answer_schema(),
         context.recorder.as_ref(),
         usage,

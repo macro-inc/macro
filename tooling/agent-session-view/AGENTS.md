@@ -15,6 +15,8 @@ calls, gaps and failures, for finding out why a session was slow or wrong.
   per session (`<id>.md`), its uncut code and results (`<id>.full.md`), and a
   batch `index.md`.
 - `test_agent_session_view.py`: the exporters' and CLI's unit tests.
+- `test_reconstruction_target.py`: offline target-checkout resolver tests;
+  exact historical layouts live in `testdata/reconstruction-workspaces.json`.
 - `datadog_spans.py`: `--datadog`, the session's `execute_tool` and
   `chat_streaming` spans: tool start and end, result size and cut flag, and
   one row per model call (timing, tokens, prompt part sizes, eager and loaded
@@ -75,7 +77,7 @@ calls, gaps and failures, for finding out why a session was slow or wrong.
   user content: keep exports out of the repository.
 - Frame times come from each row's `id`, a UUIDv7 minted when the frame was
   appended, never `created_at`: frames are buffered up to 1.5 s
-  (`LOG_FLUSH_INTERVAL` in `crates/agent_session/src/domain/service.rs`) and a
+  (`LOG_FLUSH_INTERVAL` in `crates/agents/agent_session/src/domain/service.rs`) and a
   flush stamps a batch together. A tool's frames still bracket streamed output
   around it; `--datadog` gives its span's start and end.
 - `chat_streaming` and `select_documentation` spans carry no session id;
@@ -83,8 +85,8 @@ calls, gaps and failures, for finding out why a session was slow or wrong.
   `invoke_agent` spans.
 - No span names the eager tools, only their count and bytes
   (`macro.genai.prompt.tools.eager.*`). Names come from `EAGER_TOOLS`
-  (`crates/ai/ai_tools/src/lib.rs`) and `EAGER_INTERNAL_MCP_TOOLS`
-  (`crates/agent_inmem/src/rig_engine.rs`) as checked out, kept where the
+  (`crates/ai/agent_tools/src/lib.rs`) and `EAGER_INTERNAL_MCP_TOOLS`
+  (`crates/agents/agent_inmem/src/rig_engine.rs`) as checked out, kept where the
   session shows the tool. Fewer names than the span count is normal (code
   mode's own tools are not in those lists); a list that can't be read is the
   `eager-names-unknown` flag, and more names than the count is
@@ -120,4 +122,4 @@ calls, gaps and failures, for finding out why a session was slow or wrong.
 
 ## Related
 
-- Docs: `crates/agent_session/README.md` (telemetry fields)
+- Docs: `crates/agents/agent_session/README.md` (telemetry fields)

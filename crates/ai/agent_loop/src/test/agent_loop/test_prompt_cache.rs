@@ -123,7 +123,7 @@ fn text_response(text: &str) -> String {
     ])
 }
 
-/// Stand-in for `ai_tools::LoadTools`: hands the named catalog tools to the
+/// Stand-in for `agent_tools::LoadTools`: hands the named catalog tools to the
 /// session's loader.
 #[derive(Deserialize, JsonSchema)]
 #[schemars(title = "LoadTools", description = "Load deferred tools by name.")]

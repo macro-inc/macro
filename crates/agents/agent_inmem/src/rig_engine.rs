@@ -23,11 +23,13 @@
 use std::pin::Pin;
 use std::sync::Arc;
 
-use agent::{
+use agent_loop::{
     AgentError, AgentLoop, PromptSection, ReadToolResult, StreamPart, SystemPrompt, ToolResultLimit,
 };
-use ai_tools::user_tool_review::{ReviewError, UserToolAuthorizer, authorized_user_tool_finisher};
-use ai_tools::{DeferredToolSet, ToolServiceContext};
+use agent_tools::user_tool_review::{
+    ReviewError, UserToolAuthorizer, authorized_user_tool_finisher,
+};
+use agent_tools::{DeferredToolSet, ToolServiceContext};
 use ai_toolset::{AsyncToolCollection, ToolSet as AiToolSet};
 use axum::extract::FromRef;
 use futures::{FutureExt as _, StreamExt as _};
@@ -74,8 +76,8 @@ const EAGER_INTERNAL_MCP_TOOLS: &[&str] = &[
     "mcp__macro_internal__ReadCodeDocs",
 ];
 
-/// [`TurnEngine`] backed by [`agent::AgentLoop`] and
-/// [`ai_tools::tools_for_agent_code_mode`].
+/// [`TurnEngine`] backed by [`agent_loop::AgentLoop`] and
+/// [`agent_tools::tools_for_agent_code_mode`].
 pub struct RigTurnEngine {
     memory: Arc<MemoryServiceImpl<PgMemoryRepo>>,
     native_tools: Arc<NativeTools>,
@@ -95,7 +97,7 @@ impl RigTurnEngine {
     #[must_use]
     pub fn new(db: PgPool, tool_context: ToolServiceContext) -> Self {
         Self {
-            memory: Arc::new(ai_tools::memory::build_memory_service(
+            memory: Arc::new(agent_tools::memory::build_memory_service(
                 db,
                 tool_context.clone(),
             )),
@@ -340,7 +342,7 @@ impl FromRef<InMemToolContext> for ToolResultLimit {
 }
 
 fn tools_for_turn(
-    base_tools: ai_tools::AiToolSet,
+    base_tools: agent_tools::AiToolSet,
     supports_user_input: bool,
 ) -> AsyncToolCollection<InMemToolContext> {
     let tools = AsyncToolCollection::<InMemToolContext>::new()
@@ -375,10 +377,10 @@ struct NativeTools {
 impl NativeTools {
     /// The code-mode toolset: the SDK in place of every direct tool it covers.
     fn new() -> Self {
-        let tools = ai_tools::tools_for_agent_code_mode();
+        let tools = agent_tools::tools_for_agent_code_mode();
         let base_tools = Arc::into_inner(tools.toolset)
             .expect("tools_for_agent_code_mode should return a fresh, uniquely owned collection");
-        let other_tools = Arc::into_inner(ai_tools::tools_for_agent_code_mode().toolset)
+        let other_tools = Arc::into_inner(agent_tools::tools_for_agent_code_mode().toolset)
             .expect("tools_for_agent_code_mode should return a fresh, uniquely owned collection");
         let with_user_input = tools_for_turn(base_tools, true);
         let tool_names = with_user_input
@@ -427,9 +429,9 @@ impl TurnEngine for RigTurnEngine {
         let entity_routing = Arc::clone(&self.entity_routing);
         let tool_context = self.tool_context.clone();
         let gate = Arc::clone(&self.gate);
-        let metering = agent::MeteringContext::current();
+        let metering = agent_loop::MeteringContext::current();
         tokio::spawn(
-            agent::MeteringContext::carry(metering, async move {
+            agent_loop::MeteringContext::carry(metering, async move {
                 let mut request = request;
                 let Some(model) = select_auto_model(auto_model.as_ref(), &request).await else {
                     return;
@@ -504,7 +506,7 @@ async fn select_auto_model(
         .messages
         .iter()
         .rev()
-        .find(|message| message.role == agent::types::Role::User)
+        .find(|message| message.role == agent_loop::types::Role::User)
         .and_then(|message| message.content.user_message_text())
         .unwrap_or_default();
     tokio::select! {
@@ -700,7 +702,7 @@ async fn drive_turn(
     } else {
         let user_messages: Vec<String> = messages
             .iter()
-            .filter(|message| message.role == agent::types::Role::User)
+            .filter(|message| message.role == agent_loop::types::Role::User)
             .filter_map(|message| message.content.user_message_text())
             .collect();
         let requested = user_messages.last().cloned().unwrap_or_default();
@@ -842,7 +844,7 @@ async fn drive_turn(
         let cancel = cancel.clone();
         let awaiting = Arc::clone(&awaiting);
         agent_loop = agent_loop.with_user_tool_finisher(Arc::new(
-            move |mut call: agent::PendingUserTool| {
+            move |mut call: agent_loop::PendingUserTool| {
                 let tools = Arc::clone(&tools);
                 let context = context.clone();
                 let gate = Arc::clone(&gate);
@@ -856,7 +858,7 @@ async fn drive_turn(
                     let (actor, arguments) = match ai_toolset::actor::ToolActor::take(&call.args) {
                         Ok(selection) => selection,
                         Err(error) => {
-                            return Some(agent::FinishedUserTool::Error(error.to_string()));
+                            return Some(agent_loop::FinishedUserTool::Error(error.to_string()));
                         }
                     };
                     let authorize_cancel = cancel.clone();
@@ -944,7 +946,7 @@ async fn drive_turn(
     let mut messages = messages;
     crate::domain::turn_docs::inject(&mut messages, &received_docs);
     crate::domain::skill_routing::inject(&mut messages, &loaded_skills);
-    let rig_messages = agent::to_rig_messages_limited(&messages, &tool_results);
+    let rig_messages = agent_loop::to_rig_messages_limited(&messages, &tool_results);
     let result = async {
         let mut stream = session.send_message(rig_messages).await?;
         let mut turn_spoke = false;
@@ -1110,7 +1112,7 @@ fn system_prompt(
     let identity = identity.map(|identity| {
         format!(
             "\n{}",
-            prompt::agent_identity::render(&identity.name, &identity.handle)
+            agent_prompts::agent_identity::render(&identity.name, &identity.handle)
         )
     });
     // Blank instructions are "none" stated clumsily. A delimited section with
@@ -1134,7 +1136,7 @@ fn system_prompt(
     } else {
         prompt.push_shared(
             PromptSection::Preamble,
-            &prompt::agent_session::PROMPT.to_string(),
+            &agent_prompts::agent_session::PROMPT.to_string(),
         );
         prompt.push_shared(PromptSection::MacroPrompt, &tools_prompt.to_string());
         if let Some(identity) = &identity {
@@ -1175,10 +1177,10 @@ fn system_prompt(
 fn unseen_effort(
     unseen: bool,
     model: &str,
-    effort: agent::ReasoningEffort,
-) -> agent::ReasoningEffort {
-    let low = agent::ReasoningEffort::Low;
-    if unseen && agent::ReasoningEffort::supported(model).contains(&low) {
+    effort: agent_loop::ReasoningEffort,
+) -> agent_loop::ReasoningEffort {
+    let low = agent_loop::ReasoningEffort::Low;
+    if unseen && agent_loop::ReasoningEffort::supported(model).contains(&low) {
         low
     } else {
         effort

@@ -5,7 +5,7 @@ edition = "2024"
 publish = false
 
 [dependencies]
-agent = { workspace = true }
+agent_loop = { workspace = true }
 ai_billing = { workspace = true }
 ai_usage = { workspace = true }
 axum = { workspace = true }

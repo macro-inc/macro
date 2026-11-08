@@ -37,7 +37,7 @@ provider cost (plus markup for overage).
   `OpenSeatRelease` from `BillingServiceImpl`.
 - Used by: `agent_harness_service`, `document_cognition_service`,
   `agent_trigger_service`, `document_storage_service`,
-  `authentication_service`, `mcp_service`, `scheduled_action`, `ai_tools`,
+  `authentication_service`, `mcp_service`, `scheduled_action`, `agent_tools`,
   `agent_session`, `agent_trigger`, `agent_inmem`, `channel_bots`, `memory`,
   `documents`, `anthropic`, `import`.
 

@@ -118,7 +118,7 @@ async fn empty_toolset_lists_no_tools() {
 /// newly added tool can't quietly regress the submission.
 #[test]
 fn tools_hidden_from_chatgpt_still_exist() {
-    let tools = ai_tools::tools_for(ai_tools::AiHost::Mcp);
+    let tools = agent_tools::tools_for(agent_tools::AiHost::Mcp);
     for name in HIDDEN_FROM_CHATGPT {
         assert!(tools.toolset.tools.contains_key(name), "{name} was renamed");
     }
@@ -126,7 +126,7 @@ fn tools_hidden_from_chatgpt_still_exist() {
 
 #[test]
 fn every_exposed_tool_meets_directory_requirements() {
-    let tools = ai_tools::tools_for(ai_tools::AiHost::Mcp);
+    let tools = agent_tools::tools_for(agent_tools::AiHost::Mcp);
     assert!(
         !tools.toolset.tools.is_empty(),
         "the MCP toolset should not be empty"

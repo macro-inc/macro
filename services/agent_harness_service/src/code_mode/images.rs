@@ -10,7 +10,7 @@ use static_file_service_client::StaticFileServiceClient;
 #[cfg(test)]
 mod test;
 
-/// The bound `agent::tool_media` applies to the base64 of a model image.
+/// The bound `agent_loop::tool_media` applies to the base64 of a model image.
 const MAX_BASE64_BYTES: usize = 4_000_000;
 /// The most PNG bytes whose base64 fits [`MAX_BASE64_BYTES`].
 const MAX_PNG_BYTES: usize = MAX_BASE64_BYTES / 4 * 3;

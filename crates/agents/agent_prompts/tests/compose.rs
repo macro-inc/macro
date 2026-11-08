@@ -1,6 +1,6 @@
 //! Rendering tests for the composed prompts exported from the crate root.
 
-use prompt::{BASE_PROMPT, TOOL_USE_PROMPT};
+use agent_prompts::{BASE_PROMPT, TOOL_USE_PROMPT};
 
 const BASE_TITLES: [&str; 6] = [
     "# Tone and Style",
@@ -40,7 +40,7 @@ fn tool_use_prompt_appends_tool_sections_to_base_and_no_area_guidance() {
     let rendered = TOOL_USE_PROMPT.to_string();
     assert!(rendered.starts_with(&BASE_PROMPT.to_string()));
     // How each area of Macro works is the SDK's `@agent` guidance, which
-    // `ai_tools` composes; none of it lives in this crate.
+    // `agent_tools` composes; none of it lives in this crate.
     assert!(!rendered.contains("How Macro databases work"));
     assert!(!rendered.contains("Labels are per inbox"));
 }

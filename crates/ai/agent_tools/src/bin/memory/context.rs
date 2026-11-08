@@ -1,6 +1,6 @@
 //! Memory host composition using the shared, configured tool services.
 
-use ai_tools::{ToolServiceContext, build_tool_service_context_from_env};
+use agent_tools::{ToolServiceContext, build_tool_service_context_from_env};
 use tokio_util::task::TaskTracker;
 
 use memory::config::Config;
@@ -15,7 +15,7 @@ pub async fn build_tool_service_context(
     pool: sqlx::PgPool,
     config: &Config,
     event_task_tracker: TaskTracker,
-    import_jobs: ai_tools::ImportJobs,
+    import_jobs: agent_tools::ImportJobs,
 ) -> anyhow::Result<ToolServiceContext> {
     let recorder =
         ai_usage::pg_recorder_with_enforcement(pool.clone(), config.enable_ai_usage_enforcement);

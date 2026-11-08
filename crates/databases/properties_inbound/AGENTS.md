@@ -18,9 +18,9 @@ serve it, not the ~100 crates that depend on `properties`.
 ## Boundaries
 
 - Depends on: `properties` (domain), `entity_access`, `macro_authorization`
-  (axum), `ai_toolset` (ai_tools).
+  (axum), `ai_toolset` (agent_tools).
 - Used by: `properties_service`, `services/document_storage_service`,
-  `ai_tools`.
+  `agent_tools`.
 
 ## Checks
 

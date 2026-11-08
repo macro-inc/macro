@@ -30,11 +30,11 @@ DMs, and the shared message store other domains discuss things on.
 ## Boundaries
 
 - Depends on: `entity_access` (ports), `messages`, `model_entity`. Features
-  `schema`, `sqlx` and `ai_tools` add the utoipa, sqlx and JsonSchema derives
+  `schema`, `sqlx` and `agent_tools` add the utoipa, sqlx and JsonSchema derives
   the adapter crates need.
 - Used by: widely — `bots`, `call`, `teams`, `webhook`, `soup`/`soup_realtime_inbound`,
   `agent_harness`, `agent_trigger`, `coding_agent_worker`, `comms_db_client`,
-  `graphql_channel`, `search_service`, `name_search`, `ai_tools`, `memory`.
+  `graphql_channel`, `search_service`, `name_search`, `agent_tools`, `memory`.
   Check callers before changing a public service method's signature.
 
 ## Recipes
@@ -45,7 +45,7 @@ DMs, and the shared message store other domains discuss things on.
 - Change realtime delivery: `src/domain/message_delivery.rs` →
   `channels_outbound`'s `src/connection_gateway_realtime.rs`.
 - Add a channel-message AI tool: `channels_inbound`'s `src/toolset.rs` (feature
-  `ai_tools`).
+  `agent_tools`).
 
 ## Tool contracts
 

@@ -43,7 +43,7 @@ credential, so a routine `CreateRoutine` makes is always top-level, and
 
 - Depends on: `ai_toolset`, `macro_authorization`, `macro_user_id`,
   `routine_program` (the step model and its validation).
-- Used by: `ai_tools`.
+- Used by: `agent_tools`.
 
 ## Recipes
 

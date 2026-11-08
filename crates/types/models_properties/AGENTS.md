@@ -29,7 +29,7 @@ split into three layers plus a `shared` layer used by all of them.
 ## Boundaries
 
 - Depends on: `document_sub_type`.
-- Used by: `agent_trigger`, `ai_tools`, `complete_graph`, `crm`, `databases`,
+- Used by: `agent_trigger`, `agent_tools`, `complete_graph`, `crm`, `databases`,
   `database_sql_runner`, `documents`, `document_storage_service`, `email_service`,
   `forms`, `github`, `graphql_common`, `graphql_crm`, `graphql_initiative`,
   `graphql_properties`, `graphql_soup`, `import`, `initiative`, `messages`,
