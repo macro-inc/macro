@@ -42,11 +42,13 @@ pub(crate) fn encode(
     terminal: bool,
     buffer: &mut Vec<u8>,
     correction: Option<TextCorrection>,
+    selection_feedback: Option<ViewEffect>,
 ) -> Result<u32, BoundaryError> {
     if output.view.is_empty()
         && output.io.is_empty()
         && !output.need_peer_ids
         && correction.is_none()
+        && selection_feedback.is_none()
     {
         buffer.clear();
         return Ok(0);
@@ -56,7 +58,7 @@ pub(crate) fn encode(
     let mut entries = vec![];
     let mut count = 0;
     let mut flags = 0;
-    for v in &output.view {
+    for v in output.view.iter().chain(selection_feedback.as_ref()) {
         flags |= 1;
         let mut m = view(0);
         match v {

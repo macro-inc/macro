@@ -79,7 +79,8 @@ pub(super) fn flatten(commit: &Commit) -> SmallVec<[Commit; 1]> {
         })
         .collect()
 }
-pub(super) fn view_selection(selection: Option<&Selection>) -> ViewSelection {
+/// Resolve a committed model selection into host-facing points.
+pub fn view_selection(selection: Option<&Selection>) -> ViewSelection {
     match selection {
         None => ViewSelection::None,
         Some(Selection::Range(range)) => ViewSelection::Range {
