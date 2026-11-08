@@ -64,3 +64,5 @@ The transformer layer uses the shared lexical_markdown engine; route adapters ar
 - `bun packages/lexical-conformance/corpus/macro-html.ts --check` and `bun packages/lexical-conformance/corpus/html-entities.ts --check` check HTML source freshness.
 - `bun packages/lexical-conformance/corpus/macro-mentions.ts --check` checks authored references.
 - `cargo x deps --check`, `cargo shear`, `just check`
+
+Stage table key layout facts only around the nested native Key dispatch; restore the previous facts before returning, including error paths.

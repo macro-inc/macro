@@ -187,3 +187,51 @@ test.each(['code-highlight', 'text'])(
     }
   }
 );
+
+test('an unhandled native key route preserves consuming after-listener ordering', () => {
+  const fixture = nativeSurface();
+  const release = fixture.view.registerKeyRoute((event) =>
+    event.key === 'ArrowRight'
+      ? { name: 'group-b.table-key', json: '{}', preventDefault: false }
+      : null
+  );
+  try {
+    fixture.port.setState(
+      JSON.stringify({
+        root: {
+          type: 'root',
+          version: 1,
+          children: [
+            {
+              type: 'paragraph',
+              version: 1,
+              children: [{ type: 'text', version: 1, text: 'plain' }],
+            },
+          ],
+        },
+      })
+    );
+    const original = fixture.view.runViewCommand.bind(fixture.view);
+    const after: string[] = [];
+    fixture.view.runViewCommand = (name, payload, phase) => {
+      if (phase === 'after') {
+        after.push(name);
+        return true;
+      }
+      return original(name, payload, phase);
+    };
+    const event = new KeyboardEvent('keydown', {
+      key: 'ArrowRight',
+      bubbles: true,
+      cancelable: true,
+    });
+    fixture.counters.admissions = 0;
+    fixture.root.dispatchEvent(event);
+    expect(event.defaultPrevented).toBe(true);
+    expect(after).toEqual(['KeyDown']);
+    expect(fixture.counters.admissions).toBe(1);
+  } finally {
+    release();
+    fixture.close();
+  }
+});

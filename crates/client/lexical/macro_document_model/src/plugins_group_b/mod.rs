@@ -107,6 +107,9 @@ pub fn decode_command(
     generation: u32,
     event: Option<&KeyEvent>,
 ) -> Result<Option<Command>, Error> {
+    if let Some(command) = table::decode_key(name, json, generation, event)? {
+        return Ok(Some(command));
+    }
     if let Some(command) = table::decode(name, json, generation)? {
         return Ok(Some(command));
     }
@@ -174,4 +177,9 @@ pub fn query(
     state: &EditorState,
 ) -> Result<Option<serde_json::Value>, Error> {
     table::query(name, data, generation, state)
+}
+
+/// Whether an application key route claims the browser default before dispatch.
+pub fn key_prevents_default(name: &str) -> Option<bool> {
+    (name == "group-b.table-key").then_some(false)
 }

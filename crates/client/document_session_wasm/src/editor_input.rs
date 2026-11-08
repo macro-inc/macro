@@ -275,7 +275,9 @@ pub(crate) fn input(msg: wire::EditorInputMsg, generation: u32) -> Result<Input,
                 Input::KeyDown {
                     event,
                     routed: Some(command),
-                    routed_prevent_default: true,
+                    routed_prevent_default: macro_document_model::surface::key_prevents_default(
+                        &name,
+                    ),
                     selection,
                 }
             } else {
