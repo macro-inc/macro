@@ -5,6 +5,7 @@ use lexical_model::{ForeignEditorIdentity, ForeignReadSnapshot, ForeignUpdateIde
 use std::sync::{Arc, Mutex, Weak};
 
 pub(super) struct Frames {
+    pub(super) arguments: super::arguments::HookArguments,
     bindings: Bindings,
     records: RecordIdentities,
     selections: SelectionBindings,
@@ -34,6 +35,7 @@ pub struct CallbackContext(Weak<Frames>);
 impl Frames {
     pub fn new(replay: &Replayer) -> Self {
         Self {
+            arguments: super::arguments::HookArguments::default(),
             bindings: replay.bindings.clone(),
             records: replay.record_ids.clone(),
             selections: replay.selections.clone(),
@@ -162,6 +164,23 @@ impl CallbackContext {
         let mut context = frames.context(&active)?;
         let value = context.replay.node(tx.view(), key)?;
         context.encode(value)
+    }
+
+    /// Consume original encoded arguments for the first exact indexed hook call.
+    /// Native-super does not install a frame; nested virtual calls use their own
+    /// model arguments. This retains no transaction or host object.
+    pub fn original_arguments(
+        &self,
+        tx: &Transaction<'_>,
+        key: NodeKey,
+        hook: lexical_model::ForeignHook,
+    ) -> Result<Option<Vec<Value>>> {
+        let frames = self
+            .0
+            .upgrade()
+            .ok_or(crate::replay::ReplayError::NoActiveEditor)?;
+        frames.active(tx)?;
+        Ok(frames.arguments.take(key, hook))
     }
 
     pub(super) fn new(frames: &Arc<Frames>) -> Self {

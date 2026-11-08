@@ -103,3 +103,7 @@ Context/Session call_native uses the shared API index and model-derived hook nam
 Native-super currently selects the nearest registered native ancestor. Explicit older-prototype targeting (for example a TextNode base method on a TabNode) is still required with the native facade/overlay; do not count this primitive as full native-class hosting acceptance.
 
 Key RecordIdentities by immutable model tokens, not allocation addresses; resolve owner versions by matching the source token before encoding handles. Token retention must not pin records or force COW, including native-projection read peers.
+
+Keep conformance.createForeignNode an internal development constructor in the shared indexed dispatcher; return through the normal captured-node identity encoder and honor read-mode guards before allocation.
+
+Preserve original encoded indexed-hook arguments in exact node/hook scopes before native normalization; consume once at JS dispatch and restore guards on every exit. Native-super installs no original-argument frame, so nested virtual calls receive their actual model arguments. Retain owned JSON only, with no transaction borrow or lock across host calls.
