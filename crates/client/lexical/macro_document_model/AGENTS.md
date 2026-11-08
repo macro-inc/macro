@@ -47,6 +47,8 @@ The transformer layer uses the shared lexical_markdown engine; route adapters ar
 
 ## Checks
 
+- `bun apps/web/scripts/lexical-group-b-themes.ts --check` checks Group B theme paste validation/migration constants and source cases.
+
 - `TMPDIR=/home/wolf/tmp cargo test -p macro_document_model -j4`
 - `TMPDIR=/home/wolf/tmp cargo test -p lexical_conformance --test replay -j4 -- upstream::lexical-core`; the full source corpus is acceptance, and synthetic JSON oracles supplement it.
 - `TMPDIR=/home/wolf/tmp cargo check -p macro_document_model --target wasm32-unknown-unknown -j4`
