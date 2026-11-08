@@ -6,6 +6,7 @@ import {
 import { t } from '@app/lib/i18n';
 import { beginInteraction } from '@app/observability/flow';
 import { FloatRegion } from '@components/app/mobile/float-regions/FloatRegion';
+import { DEFAULT_SIDE_PANEL_WIDTH } from '@components/app/side-panel/sizing';
 import { Resize } from '@core/component/Resize';
 import type { ResizeZoneCtx } from '@core/component/Resize/types';
 import { UserIcon } from '@core/component/UserIcon';
@@ -117,7 +118,7 @@ export function CallOverlay(props: {
   const [selectedTab, setSelectedTab] = createSignal<CallPanelTab>('chat');
   const [focusChatOnOpen, setFocusChatOnOpen] = createSignal(true);
   const [resizeContext, setResizeContext] = createSignal<ResizeZoneCtx>();
-  const [panelWidth, setPanelWidth] = createSignal(360);
+  const [panelWidth, setPanelWidth] = createSignal(DEFAULT_SIDE_PANEL_WIDTH);
   const [sidebarMount, setSidebarMount] = createSignal<HTMLDivElement>();
   const [overlayMount, setOverlayMount] = createSignal<HTMLDivElement>();
   const widePanel = () => !isMobile() && (resizeContext()?.size() ?? 0) >= 800;
@@ -913,7 +914,7 @@ export function CallOverlay(props: {
             id="call-sidebar"
             minSize={280}
             maxSize={480}
-            target={{ kind: 'px', px: 360 }}
+            target={{ kind: 'px', px: DEFAULT_SIDE_PANEL_WIDTH }}
             redistributionPreferredSize={panelWidth()}
             onSizeChangeEnd={setPanelWidth}
             hidden={() => !widePanel() || !panelOpen()}

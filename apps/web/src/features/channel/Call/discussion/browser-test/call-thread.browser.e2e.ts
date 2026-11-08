@@ -749,6 +749,13 @@ test('rebuilt call panel keeps a long thread, bottom composer and draft across t
     expect(box!.y).toBeGreaterThanOrEqual(metrics.bottom - 1);
   };
   await checkGeometry();
+  expect(
+    Math.round(
+      (await page
+        .getByRole('complementary', { name: 'Call sidebar' })
+        .boundingBox())!.width
+    )
+  ).toBe(380);
   await expect(
     page.getByText('Replying in the call thread', { exact: true })
   ).toHaveCount(0);
