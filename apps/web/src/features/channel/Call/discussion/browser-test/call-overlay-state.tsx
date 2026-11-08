@@ -8,12 +8,16 @@ const [backgroundEffect, setBackgroundEffect] = createSignal<BackgroundEffect>({
 
 const callId = '00000000-0000-7000-8000-0000000ca110';
 const channelId = '00000000-0000-7000-8000-00000000c0c0';
+let participantVolume = 1;
 const participant = {
   identity: 'macro|member@example.com',
   name: 'Call participant',
   isAgent: false,
   getTrackPublication: () => undefined,
-  getVolume: () => 1,
+  getVolume: () => participantVolume,
+  setVolume: (value: number) => {
+    participantVolume = value;
+  },
 };
 const room = {
   on: () => room,

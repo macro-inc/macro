@@ -20,6 +20,10 @@ afterEach(() => {
   platform.mobile = false;
   vi.restoreAllMocks();
 });
+vi.mock('@core/context/user', () => ({ useUserId: () => () => 'viewer' }));
+vi.mock('@core/component/UserIcon', () => ({
+  UserIcon: () => <span>Viewer</span>,
+}));
 
 it('changes only microphone playback and retains the value when controls remount', async () => {
   const participant = new RemoteParticipant(
@@ -32,7 +36,9 @@ it('changes only microphone playback and retains the value when controls remount
     <CallParticipantVolume participant={participant} name="Guest" />
   ));
   fireEvent.click(screen.getByRole('button', { name: 'Volume' }));
-  const slider = (await screen.findAllByRole('slider', { name: 'Volume' }))[0];
+  const slider = (
+    await screen.findAllByRole('slider', { name: /Volume for Guest/ })
+  )[0];
   slider.focus();
   fireEvent.keyDown(slider, { key: 'ArrowLeft' });
   expect(setVolume).toHaveBeenLastCalledWith(0.99, Track.Source.Microphone);

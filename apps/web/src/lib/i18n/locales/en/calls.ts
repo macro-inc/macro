@@ -24,7 +24,7 @@ export default {
   participantScreen: "{{name}}'s screen",
   yourScreen: 'Your screen',
   volume: 'Volume',
-  volumeForYou: '{{name}}, for you',
+  volumeForYou: 'Volume for {{name}}, on this device only',
   hideParticipants: 'Hide participants',
   showParticipants: 'Show participants',
   whileSharing: "While someone's sharing",

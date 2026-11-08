@@ -116,7 +116,7 @@ export function CallChatPanel(props: {
       >
         <div class="flex h-12 shrink-0 items-center justify-between gap-2 px-3">
           <Tabs<CallPanelTab>
-            touch={isMobile()}
+            touch="segmented"
             class="mobile:w-full"
             aria-label={t('calls.panel')}
             value={props.activeTab}

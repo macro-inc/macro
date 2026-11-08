@@ -1,9 +1,11 @@
 import { t } from '@app/lib/i18n';
+import { UserIcon } from '@core/component/UserIcon';
+import { useUserId } from '@core/context/user';
 import { isMobile } from '@core/mobile/isMobile';
 import { getNativeMobilePlatform } from '@core/util/platform';
 import SpeakerIcon from '@icon/system/regular/speaker-high.svg';
 import { Popover } from '@kobalte/core/popover';
-import { Button, Slider } from '@ui';
+import { Avatar, Button, Slider, Tooltip } from '@ui';
 import type { RemoteParticipant } from 'livekit-client';
 import { createSignal, Show } from 'solid-js';
 import { LK_TRACK_SOURCE } from './livekit-loader';
@@ -26,6 +28,8 @@ export function CallParticipantVolume(props: {
   name: string;
 }) {
   const supported = supportsParticipantVolume();
+  const viewerId = useUserId();
+  const localLabel = () => t('calls.volumeForYou', { name: props.name });
   const [volume, setVolume] = createSignal(
     Math.round(
       (props.participant.getVolume(LK_TRACK_SOURCE.Microphone) ?? 1) * 100
@@ -52,7 +56,7 @@ export function CallParticipantVolume(props: {
         >
           <Popover.Content class="menu-surface z-action-menu w-64 max-w-[calc(100vw-2rem)] rounded-xl p-3 outline-none">
             <Popover.Title class="mb-3 text-sm text-ink-muted">
-              {t('calls.volumeForYou', { name: props.name })}
+              {t('calls.volume')}
             </Popover.Title>
             <Slider
               value={[volume()]}
@@ -68,12 +72,30 @@ export function CallParticipantVolume(props: {
               }}
               getValueLabel={({ values }) => `${values[0]}%`}
             >
-              <Slider.Label class="sr-only">{t('calls.volume')}</Slider.Label>
+              <Slider.Label class="sr-only">{localLabel()}</Slider.Label>
               <div class="flex items-center gap-3">
-                <SpeakerIcon class="size-4 shrink-0" />
+                <Tooltip label={localLabel()} tabIndex={0}>
+                  <Show
+                    when={viewerId()}
+                    fallback={
+                      <Avatar size="sm">
+                        <Avatar.Fallback>?</Avatar.Fallback>
+                      </Avatar>
+                    }
+                  >
+                    {(id) => (
+                      <UserIcon
+                        id={id()}
+                        size="sm"
+                        suppressClick
+                        showTooltip={false}
+                      />
+                    )}
+                  </Show>
+                </Tooltip>
                 <Slider.Track class="flex-1">
                   <Slider.Fill />
-                  <Slider.Thumb aria-label={t('calls.volume')}>
+                  <Slider.Thumb appearance="switch">
                     <Slider.Input />
                   </Slider.Thumb>
                 </Slider.Track>
