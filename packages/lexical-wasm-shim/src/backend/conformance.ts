@@ -8,6 +8,7 @@ const commands = new WeakMap<object, string>();
 let nextCommand = 0;
 type Callback = (argument: unknown) => unknown;
 const collectionListeners = new Set<() => void>();
+const versionListeners = new Set<(version: string) => void>();
 const active: ConformanceBackend[] = [];
 const editors = new FinalizationRegistry<wasm.EditorHandle>((handle) => {
   handle.free();
@@ -53,6 +54,12 @@ export const diagnostics = {
   bytes: () => wasm.debug_boundary_bytes(),
   resetCounters: () => wasm.debug_reset_counters(),
   resetKeys: () => wasm.reset_key_counter(),
+  onVersionReleased(listener: (version: string) => void): () => void {
+    versionListeners.add(listener);
+    return () => {
+      versionListeners.delete(listener);
+    };
+  },
   onCollected(listener: () => void): () => void {
     collectionListeners.add(listener);
     return () => {
@@ -67,6 +74,15 @@ export class ConformanceBackend implements ShimBackend {
   private readonly callbacks = new Map<number, Callback>();
   private readonly bridges = new WeakMap<Callback, Callback>();
   private disposed = false;
+  private pending = false;
+  private nodeHandles?: object;
+  private readonly collections = new Map<
+    string,
+    {
+      unowned: () => boolean;
+      released: () => void;
+    }
+  >();
 
   constructor(config: unknown) {
     if (!initialized) throw new Error('conformance WASM is not initialized');
@@ -93,6 +109,7 @@ export class ConformanceBackend implements ShimBackend {
   }
   beginUpdate(tags: readonly string[], discrete: boolean): void {
     this.enter((handle) => handle.begin_update(tags, discrete));
+    this.pending = true;
   }
   call(name: string, args: readonly unknown[], receiver?: unknown): unknown {
     const id = api.get(name);
@@ -108,19 +125,72 @@ export class ConformanceBackend implements ShimBackend {
     this.enter((handle) => handle.flush());
   }
   finishNoop(): boolean {
-    return this.enter((handle) => handle.finish_noop());
+    const finished = this.enter((handle) => handle.finish_noop());
+    if (finished) {
+      this.pending = false;
+      this.collect();
+    }
+    return finished;
   }
   commit() {
-    return decodeHostPacket(this.enter((handle) => handle.commit()));
+    // A rejected nested commit has not closed the leased native update.
+    if (active.includes(this))
+      throw new Error('editor is executing a model operation');
+    try {
+      return decodeHostPacket(this.enter((handle) => handle.commit()));
+    } finally {
+      this.pending = false;
+      this.collect();
+    }
   }
   discard(): void {
     this.enter((handle) => handle.discard_update());
+    this.pending = false;
+    this.collect();
   }
   readField(handle: number, field: string): unknown {
     return this.enter((editor) => editor.read_field(handle, field));
   }
+  ownNodeHandles(cache: object): void {
+    if (this.disposed) throw new Error('editor is disposed');
+    if (this.nodeHandles !== undefined)
+      throw new Error('editor already owns its node handle cache');
+    this.nodeHandles = cache;
+  }
   releaseVersion(version: string): void {
+    if (this.disposed) return;
     this.enter((handle) => handle.release_version(version));
+    this.notifyVersionReleased(version);
+  }
+  private notifyVersionReleased(version: string): void {
+    // Diagnostics observe completed cleanup and cannot interrupt publication.
+    for (const listener of [...versionListeners])
+      queueMicrotask(() => listener(version));
+  }
+  collectVersion(
+    version: string,
+    unowned: () => boolean,
+    released: () => void
+  ): void {
+    if (this.disposed) {
+      if (unowned()) released();
+      return;
+    }
+    this.collections.set(version, { unowned, released });
+    this.collect();
+  }
+  private collect(): void {
+    if (this.pending || this.disposed) return;
+    for (const [version, collection] of this.collections) {
+      if (collection.unowned()) {
+        this.enter((handle) => handle.release_version(version));
+        this.collections.delete(version);
+        collection.released();
+        this.notifyVersionReleased(version);
+      } else {
+        this.collections.delete(version);
+      }
+    }
   }
   registerTransform(
     type: string,
@@ -169,5 +239,7 @@ export class ConformanceBackend implements ShimBackend {
     this.disposed = true;
     editors.unregister(this);
     this.callbacks.clear();
+    this.collections.clear();
+    this.nodeHandles = undefined;
   }
 }
