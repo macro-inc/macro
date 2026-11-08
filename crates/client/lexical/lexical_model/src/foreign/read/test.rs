@@ -895,3 +895,5 @@ fn pure_hooks_capture_projected_payloads_without_exposing_native_typed_reads() -
     assert_eq!(tx.foreign_data(first).expect("written").fields["count"], 7);
     Ok(())
 }
+
+mod publication;

@@ -1,18 +1,22 @@
 //! Independent inputs for development host read callouts.
 use crate::*;
 use std::hash::{Hash, Hasher};
-use std::sync::Arc;
+use std::sync::{Arc, Weak};
+mod context;
+pub use context::{ForeignReadContext, ForeignReadLease};
 
 #[derive(Clone)]
 pub(crate) struct ReadOrigin {
     editor: Arc<()>,
     update: Arc<()>,
+    lease: Option<Weak<()>>,
 }
 
 #[derive(Clone, Copy)]
 pub(crate) struct ReadOriginRef<'a> {
     pub editor: &'a Arc<()>,
     pub update: &'a Arc<()>,
+    pub lease: Option<&'a Weak<()>>,
 }
 
 impl ReadOrigin {
@@ -20,6 +24,7 @@ impl ReadOrigin {
         ReadOriginRef {
             editor: &self.editor,
             update: &self.update,
+            lease: self.lease.as_ref(),
         }
     }
 }
@@ -29,6 +34,7 @@ impl ReadOriginRef<'_> {
         ReadOrigin {
             editor: self.editor.clone(),
             update: self.update.clone(),
+            lease: self.lease.cloned(),
         }
     }
 }
@@ -149,6 +155,107 @@ impl ForeignReadSnapshot {
             || self.previous_selection_identity.as_ref() == Some(identity)
     }
 
+    /// Whether an originless capture describes this exact immutable state.
+    /// Native projections compare their original records, never their copies.
+    /// Hosts must separately authorize that state and the lifetime of the read.
+    pub fn is_originless_capture_of(&self, state: &EditorState) -> bool {
+        self.origin.is_none()
+            && Arc::ptr_eq(&self.state.registry, &state.registry)
+            && self.selection_identities.current == state.foreign_selection_identity
+            && match (self.state.selection.as_ref(), state.selection.as_ref()) {
+                (Some(Selection::Range(actual)), Some(Selection::Range(expected))) => {
+                    actual == expected
+                        && actual.cached_direction == expected.cached_direction
+                        && actual.dirty == expected.dirty
+                }
+                (Some(Selection::Node(actual)), Some(Selection::Node(expected))) => {
+                    actual.nodes.iter().eq(expected.nodes.iter()) && actual.dirty == expected.dirty
+                }
+                (Some(Selection::Table(actual)), Some(Selection::Table(expected))) => {
+                    actual == expected && actual.dirty == expected.dirty
+                }
+                (None, None) => true,
+                _ => false,
+            }
+            && self.state.nodes.len() == state.nodes.len()
+            && (self.state.nodes.ptr_eq(&state.nodes)
+                || self.state.nodes.iter().all(|(key, record)| {
+                    let source = self.source_records.get(key).unwrap_or(record);
+                    state
+                        .nodes
+                        .get(key)
+                        .is_some_and(|expected| Arc::ptr_eq(source, expected))
+                }))
+    }
+
+    /// Pair an originless state capture with an authorized update's read context.
+    /// This retains the captured state and its current selection identity, while
+    /// supplying previous/detached objects, composition and native-super scopes.
+    /// The host must first prove this exact state is allowed by that update;
+    /// this model primitive alone grants no host dispatch authority.
+    pub fn with_read_context_from(
+        &self,
+        source: &ForeignReadContext,
+        lease: &ForeignReadLease,
+    ) -> Result<Self, Error> {
+        if self.origin.is_some() {
+            return Err(Error::Invariant(
+                "read context requires an originless target",
+            ));
+        }
+        if !Arc::ptr_eq(&self.state.registry, &source.registry) {
+            return Err(Error::ForeignEditorState);
+        }
+        let mut captured = self.clone();
+        let mut origin = source.origin.clone();
+        origin.lease = Some(Arc::downgrade(&lease.0));
+        captured.origin = Some(origin);
+        captured.native_calls = self
+            .native_calls
+            .clone()
+            .or_else(|| source.native_calls.clone());
+        captured.previous_selection = source
+            .previous_selection
+            .as_ref()
+            .map(Selection::snapshot_for_foreign_read);
+        captured.previous_selection_identity = source.previous_selection_identity.clone();
+        captured.composition_key = source.composition_key;
+        captured.detached = source
+            .detached
+            .iter()
+            .map(|value| value.as_ref().map(Selection::snapshot_for_foreign_read))
+            .collect();
+        captured.selection_identities.detached = source.selection_identities.detached.clone();
+        if source.selection_identities.current != captured.selection_identities.current {
+            captured.detached.push(
+                source
+                    .current_selection
+                    .as_ref()
+                    .map(Selection::snapshot_for_foreign_read),
+            );
+            captured
+                .selection_identities
+                .detached
+                .push(source.selection_identities.current.clone());
+        }
+        for (key, record) in &source.retired_records {
+            captured
+                .retired_records
+                .entry(*key)
+                .or_insert_with(|| record.clone());
+        }
+        Ok(captured)
+    }
+
+    /// Whether the capture carries this exact preparation lease.
+    /// None accepts only ordinary, unleased update origins. Hosts must verify
+    /// both the editor/update and their own currently active lease.
+    pub fn matches_read_lease(&self, lease: Option<&ForeignReadLease>) -> bool {
+        self.origin
+            .as_ref()
+            .is_some_and(|origin| origin.matches_lease(lease))
+    }
+
     /// Whether this capture originated in the given editor and exact update.
     /// This proves provenance, not freshness or continued callback authorization;
     /// the host must also check that the matching update is still active.
@@ -158,9 +265,9 @@ impl ForeignReadSnapshot {
         editor: &ForeignEditorIdentity,
         update: &ForeignUpdateIdentity,
     ) -> bool {
-        self.origin.as_ref().is_some_and(|origin| {
-            Arc::ptr_eq(&origin.editor, &editor.0) && Arc::ptr_eq(&origin.update, &update.0)
-        })
+        self.origin
+            .as_ref()
+            .is_some_and(|origin| origin.matches(editor, update))
     }
 
     /// Pin the source identity independently of the materialized read payload.
