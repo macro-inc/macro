@@ -49,6 +49,7 @@ fn test_frontend(stage: &Stage) -> Frontend {
     let port = listener.local_addr().unwrap().port();
     drop(listener);
 
+    let log = std::env::temp_dir().join(format!("frontend-test-{port}.log"));
     let mut command = Command::new("python3");
     command
         .args([
@@ -60,14 +61,14 @@ fn test_frontend(stage: &Stage) -> Frontend {
         .current_dir(app_dir())
         .env("VITE_LOCAL_BACKEND_ORIGIN", "http://localhost:18090")
         .process_group(0)
-        .stdin(Stdio::piped())
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped());
-    let process = spawn(stage, &mut command, port).unwrap();
+        .stdin(Stdio::piped());
+    let process = spawn(stage, &mut command, port, &log).unwrap();
     Frontend {
         process,
         command,
         port,
+        pid_file: log.with_extension("pid"),
+        log,
     }
 }
 
@@ -118,9 +119,7 @@ fn failed_restart_reports_output_and_releases_the_port() {
     frontend
         .command
         .args(["-c", "echo vite-startup-failed >&2; exit 1"])
-        .process_group(0)
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped());
+        .process_group(0);
 
     let error = frontend.restart(&stage).unwrap_err();
     assert!(error.to_string().contains("vite-startup-failed"));

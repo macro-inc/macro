@@ -51,11 +51,12 @@ impl<Tokens> ArtifactCalls for StorageArtifactCalls<Tokens>
 where
     Tokens: MacroApiTokens,
 {
-    #[tracing::instrument(skip_all, err, fields(%user, %agent, ?endpoint))]
+    #[tracing::instrument(skip_all, err, fields(%user, %agent, %session, ?endpoint))]
     async fn resolve(
         &self,
         user: &MacroUserIdStr<'static>,
         agent: BotId,
+        session: uuid::Uuid,
         endpoint: ArtifactEndpoint,
     ) -> Result<UpstreamCall, EgressError> {
         // Appended rather than `Url::join`ed, which would drop the gateway
@@ -66,7 +67,7 @@ where
                     "artifact endpoint is not a url: {error}"
                 ))
             })?;
-        let token = BearerToken::new(self.tokens.mint(user, agent).await?);
+        let token = BearerToken::new(self.tokens.mint(user, agent, session).await?);
 
         if self.local_cleartext && url.scheme() != "https" {
             return Ok(UpstreamCall::bearer_over_local_cleartext(url, token));

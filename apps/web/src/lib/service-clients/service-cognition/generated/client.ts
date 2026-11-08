@@ -14,6 +14,8 @@ import type {
   ChatMessageError,
   CompleteOnboardingRequest,
   CreateChatRequest,
+  CreateConfirmedCalendarEvent200,
+  CreateConfirmedCalendarEventBody,
   CreatePipedreamMcpTokenBody,
   DatabaseQueryAnswer,
   DatabaseQueryRequest,
@@ -29,6 +31,7 @@ import type {
   GenerateImageErrorBody,
   GenerateImageRequest,
   GenerateImageResponse,
+  GenericErrorResponse,
   GetBatchPreviewRequest,
   GetBatchPreviewResponse,
   GetChatPermissionsResponse,
@@ -36,6 +39,7 @@ import type {
   GetChatsForAttachmentResponse,
   HttpSendChatMessageRequest,
   ImportSource,
+  ListSkillsParams,
   McpAuthCallbackParams,
   MemoryErrorBody,
   MemoryResponse,
@@ -56,8 +60,13 @@ import type {
   RunImportOutcome,
   RunImportRequest,
   SendChatMessageResponse,
+  SendConfirmedEmail200,
+  SendConfirmedEmailBody,
   ServerResponse,
   SetPricingRequest,
+  SkillContentResponse,
+  SkillErrorBody,
+  SkillsResponse,
   StartAuthRequest,
   StartAuthResponse,
   StopChatStreamError,
@@ -330,6 +339,72 @@ export const getChatsForAttachmentHandler = async (
     status: res.status,
     headers: res.headers,
   } as getChatsForAttachmentHandlerResponse;
+};
+
+/**
+ * @summary Create a calendar event the user approved in conversation, quoting their approval.
+ */
+export type createConfirmedCalendarEventResponse200 = {
+  data: CreateConfirmedCalendarEvent200;
+  status: 200;
+};
+
+export type createConfirmedCalendarEventResponse400 = {
+  data: GenericErrorResponse;
+  status: 400;
+};
+
+export type createConfirmedCalendarEventResponse401 = {
+  data: void;
+  status: 401;
+};
+
+export type createConfirmedCalendarEventResponse422 = {
+  data: GenericErrorResponse;
+  status: 422;
+};
+
+export type createConfirmedCalendarEventResponseSuccess =
+  createConfirmedCalendarEventResponse200 & {
+    headers: Headers;
+  };
+export type createConfirmedCalendarEventResponseError = (
+  | createConfirmedCalendarEventResponse400
+  | createConfirmedCalendarEventResponse401
+  | createConfirmedCalendarEventResponse422
+) & {
+  headers: Headers;
+};
+
+export type createConfirmedCalendarEventResponse =
+  | createConfirmedCalendarEventResponseSuccess
+  | createConfirmedCalendarEventResponseError;
+
+export const getCreateConfirmedCalendarEventUrl = () => {
+  return `/calendar/events/create-confirmed`;
+};
+
+export const createConfirmedCalendarEvent = async (
+  createConfirmedCalendarEventBody: CreateConfirmedCalendarEventBody,
+  options?: RequestInit
+): Promise<createConfirmedCalendarEventResponse> => {
+  const res = await fetch(getCreateConfirmedCalendarEventUrl(), {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(createConfirmedCalendarEventBody),
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: createConfirmedCalendarEventResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as createConfirmedCalendarEventResponse;
 };
 
 /**
@@ -1372,6 +1447,70 @@ export const decisions = async (
     status: res.status,
     headers: res.headers,
   } as decisionsResponse;
+};
+
+/**
+ * @summary Send an email the user approved in conversation, quoting their approval.
+ */
+export type sendConfirmedEmailResponse200 = {
+  data: SendConfirmedEmail200;
+  status: 200;
+};
+
+export type sendConfirmedEmailResponse400 = {
+  data: GenericErrorResponse;
+  status: 400;
+};
+
+export type sendConfirmedEmailResponse401 = {
+  data: void;
+  status: 401;
+};
+
+export type sendConfirmedEmailResponse422 = {
+  data: GenericErrorResponse;
+  status: 422;
+};
+
+export type sendConfirmedEmailResponseSuccess =
+  sendConfirmedEmailResponse200 & {
+    headers: Headers;
+  };
+export type sendConfirmedEmailResponseError = (
+  | sendConfirmedEmailResponse400
+  | sendConfirmedEmailResponse401
+  | sendConfirmedEmailResponse422
+) & {
+  headers: Headers;
+};
+
+export type sendConfirmedEmailResponse =
+  | sendConfirmedEmailResponseSuccess
+  | sendConfirmedEmailResponseError;
+
+export const getSendConfirmedEmailUrl = () => {
+  return `/email/send-confirmed`;
+};
+
+export const sendConfirmedEmail = async (
+  sendConfirmedEmailBody: SendConfirmedEmailBody,
+  options?: RequestInit
+): Promise<sendConfirmedEmailResponse> => {
+  const res = await fetch(getSendConfirmedEmailUrl(), {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(sendConfirmedEmailBody),
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: sendConfirmedEmailResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as sendConfirmedEmailResponse;
 };
 
 /**
@@ -3158,6 +3297,154 @@ export const getBatchPreview = async (
     status: res.status,
     headers: res.headers,
   } as getBatchPreviewResponse;
+};
+
+/**
+ * @summary List the caller's skills, or search them by name when `query` is given.
+Built-in skills are included.
+ */
+export type listSkillsResponse200 = {
+  data: SkillsResponse;
+  status: 200;
+};
+
+export type listSkillsResponse400 = {
+  data: SkillErrorBody;
+  status: 400;
+};
+
+export type listSkillsResponse401 = {
+  data: void;
+  status: 401;
+};
+
+export type listSkillsResponse500 = {
+  data: SkillErrorBody;
+  status: 500;
+};
+
+export type listSkillsResponse502 = {
+  data: SkillErrorBody;
+  status: 502;
+};
+
+export type listSkillsResponseSuccess = listSkillsResponse200 & {
+  headers: Headers;
+};
+export type listSkillsResponseError = (
+  | listSkillsResponse400
+  | listSkillsResponse401
+  | listSkillsResponse500
+  | listSkillsResponse502
+) & {
+  headers: Headers;
+};
+
+export type listSkillsResponse =
+  | listSkillsResponseSuccess
+  | listSkillsResponseError;
+
+export const getListSkillsUrl = (params?: ListSkillsParams) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : value.toString());
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/skills?${stringifiedParams}`
+    : `/skills`;
+};
+
+export const listSkills = async (
+  params?: ListSkillsParams,
+  options?: RequestInit
+): Promise<listSkillsResponse> => {
+  const res = await fetch(getListSkillsUrl(params), {
+    ...options,
+    method: 'GET',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: listSkillsResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as listSkillsResponse;
+};
+
+/**
+ * @summary Read one skill's complete instructions: a skill document the caller can
+view, or a built-in skill.
+ */
+export type readSkillResponse200 = {
+  data: SkillContentResponse;
+  status: 200;
+};
+
+export type readSkillResponse401 = {
+  data: void;
+  status: 401;
+};
+
+export type readSkillResponse404 = {
+  data: SkillErrorBody;
+  status: 404;
+};
+
+export type readSkillResponse500 = {
+  data: SkillErrorBody;
+  status: 500;
+};
+
+export type readSkillResponse503 = {
+  data: SkillErrorBody;
+  status: 503;
+};
+
+export type readSkillResponseSuccess = readSkillResponse200 & {
+  headers: Headers;
+};
+export type readSkillResponseError = (
+  | readSkillResponse401
+  | readSkillResponse404
+  | readSkillResponse500
+  | readSkillResponse503
+) & {
+  headers: Headers;
+};
+
+export type readSkillResponse =
+  | readSkillResponseSuccess
+  | readSkillResponseError;
+
+export const getReadSkillUrl = (id: string) => {
+  return `/skills/${id}`;
+};
+
+export const readSkill = async (
+  id: string,
+  options?: RequestInit
+): Promise<readSkillResponse> => {
+  const res = await fetch(getReadSkillUrl(id), {
+    ...options,
+    method: 'GET',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: readSkillResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as readSkillResponse;
 };
 
 /**

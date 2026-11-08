@@ -1,10 +1,7 @@
 import { MobileFilterDrawer as FilterDrawer } from '@app/components/view-shell/MobileFilterDrawer';
 import type { ListView } from '@app/constants/list-views';
 import { isListViewID } from '@app/constants/list-views';
-import {
-  type FilterContext,
-  NO_ASSIGNEE,
-} from '@app/features/next-soup/filters';
+import type { FilterContext } from '@app/features/next-soup/filters';
 import {
   buildDocumentTypeQuery,
   getActiveDocumentTypeFilterIds,
@@ -21,6 +18,10 @@ import {
   TASK_SORT_OPTIONS,
 } from '@app/features/next-soup/soup-view/sort-options';
 import { useSoupView } from '@app/features/next-soup/soup-view/soup-view-context';
+import {
+  AssigneePickerStatus,
+  useAssigneePicker,
+} from '@app/features/soup/assignee-picker';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { t } from '@app/lib/i18n';
 import { MobileDrawer } from '@components/app/mobile/MobileDrawer';
@@ -30,7 +31,7 @@ import { enableMultiInbox } from '@core/constant/featureFlags';
 import { useUserId } from '@core/context/user';
 import { useAddInboxFlow } from '@core/email-link';
 import { fireAndForget } from '@core/util/fireAndForget';
-import CircleDashedIcon from '@icon/system/regular/circle-dashed.svg';
+import { useSelectedFirst } from '@core/util/useSelectedFirst';
 import SearchIcon from '@icon/system/regular/magnifying-glass.svg';
 import PlusIcon from '@icon/system/regular/plus.svg';
 import { Accordion } from '@kobalte/core/accordion';
@@ -73,6 +74,10 @@ export const MobileFilterDrawer = (props: {
       return undefined;
     return content.id;
   });
+  const assigneePicker = useAssigneePicker(
+    assigneeFilter,
+    () => currentView() === 'tasks'
+  );
 
   const categories = createMemo(() => {
     const view = currentView();
@@ -204,47 +209,12 @@ export const MobileFilterDrawer = (props: {
     );
   };
 
-  const assigneeOptions = createMemo(() => {
-    const currentUserId = userId();
-    const noAssigneeOption = {
-      id: NO_ASSIGNEE,
-      label: t('viewMenus.unassigned'),
-      icon: () => <CircleDashedIcon class="size-3.5 text-ink-muted" />,
-    };
-    let meOption: typeof noAssigneeOption | undefined;
-    const otherContactOptions: (typeof noAssigneeOption)[] = [];
-    for (const contact of contacts()) {
-      const opt = {
-        id: contact.id,
-        label: buildContactLabel(contact, currentUserId),
-        icon: () => (
-          <UserIcon
-            id={contact.id}
-            size="sm"
-            suppressClick
-            showTooltip={false}
-          />
-        ),
-      };
-      if (contact.id === currentUserId) {
-        meOption = opt;
-      } else {
-        otherContactOptions.push(opt);
-      }
-    }
-    return [
-      ...(meOption ? [meOption] : []),
-      noAssigneeOption,
-      ...otherContactOptions,
-    ];
-  });
-
   const filteredAssigneeOptions = createMemo(() => {
     const query = assigneeSearch().toLowerCase();
-    if (!query) return assigneeOptions();
-    return assigneeOptions().filter((o) =>
-      o.label.toLowerCase().includes(query)
-    );
+    if (!query) return assigneePicker.options();
+    return assigneePicker
+      .options()
+      .filter((o) => o.label.toLowerCase().includes(query));
   });
 
   const createdByOptions = createMemo(() => {
@@ -291,12 +261,28 @@ export const MobileFilterDrawer = (props: {
   };
 
   const activeCount = () => consolidatedFiltersList().length;
+  const [expandedSections, setExpandedSections] = createSignal([
+    categories()[0]?.id ?? 'assignee',
+  ]);
+  const orderedAssigneeOptions = useSelectedFirst({
+    items: filteredAssigneeOptions,
+    selectedIds: assigneePicker.selectedIdsAtViewEntry,
+    searchQuery: assigneeSearch,
+    getId: (option) => option.id,
+    sortDeps: [assigneePicker.selectedIdsAtViewEntry],
+  });
 
   return (
     <Show when={hasFiltersOrCategories()}>
       <FilterDrawer
         class={props.class}
         activeCount={activeCount()}
+        onOpenChange={(open) => {
+          assigneePicker.onOpenChange(open);
+          if (!open) {
+            setAssigneeSearch('');
+          }
+        }}
         onClear={resetToTabDefaults}
         footer={
           <For each={consolidatedFiltersList()}>
@@ -340,7 +326,16 @@ export const MobileFilterDrawer = (props: {
         <Accordion
           multiple
           collapsible
-          defaultValue={[categories()[0]?.id ?? 'assignee']}
+          value={expandedSections()}
+          onChange={(value) => {
+            const wasOpen = expandedSections().includes('assignee');
+            const isOpen = value.includes('assignee');
+            if (wasOpen !== isOpen) {
+              assigneePicker.onOpenChange(isOpen);
+              if (!isOpen) setAssigneeSearch('');
+            }
+            setExpandedSections(value);
+          }}
         >
           {/* Filter section */}
           <Show
@@ -464,22 +459,22 @@ export const MobileFilterDrawer = (props: {
                 <SearchIcon class="size-3.5 text-ink-muted shrink-0" />
                 <input
                   type="text"
-                  aria-label={t('viewMenus.searchAssigneesLabel')}
+                  aria-label={assigneePicker.placeholder()}
                   value={assigneeSearch()}
                   onInput={(e) => setAssigneeSearch(e.currentTarget.value)}
-                  placeholder={t('viewMenus.searchAssignees')}
+                  placeholder={assigneePicker.placeholder()}
                   class="min-w-0 flex-1 bg-transparent text-base outline-none placeholder:text-ink-placeholder"
                 />
               </div>
               <div class="max-h-[calc(50*var(--dvh))] overflow-y-auto scrollbar-hidden">
-                <For each={filteredAssigneeOptions()}>
+                <For each={orderedAssigneeOptions()}>
                   {(option) => {
                     const active = () => assigneeFilter().includes(option.id);
                     return (
                       <FilterDrawer.Option
                         checked={active()}
                         onChange={() => toggleAssignee(option.id)}
-                        icon={option.icon()}
+                        icon={option.icon?.()}
                       >
                         {option.label}
                       </FilterDrawer.Option>
@@ -487,12 +482,12 @@ export const MobileFilterDrawer = (props: {
                   }}
                 </For>
               </div>
-
               <Show when={filteredAssigneeOptions().length === 0}>
                 <div class="px-4 py-2 text-sm text-ink-muted">
                   {t('viewMenus.noResults')}
                 </div>
               </Show>
+              <AssigneePickerStatus picker={assigneePicker} />
             </FilterDrawer.Section>
           </Show>
 

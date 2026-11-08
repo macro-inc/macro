@@ -217,31 +217,6 @@ function selectSyncServiceHost():
 
 export const SYNC_SERVICE_HOSTS = selectSyncServiceHost();
 
-// Artifact pages run agent-written scripts, so each artifact is served from
-// its own origin, `<document_id>.` before this host, outside macro.com.
-// Mirrors `ArtifactContentUrl` in crates/macro_service_urls; document storage
-// service serves it, so it follows the local DSS selection.
-const artifactContentHosts = {
-  local: 'http://artifacts.localhost:8086',
-  dev: 'https://artifacts.dev.macro-agent-gateway.com',
-  prod: 'https://artifacts.macro-agent-gateway.com',
-} as const;
-
-function selectArtifactContentHost(): string {
-  if (import.meta.env.MODE !== 'development') return artifactContentHosts.prod;
-  const selectedLocalServers: string = import.meta.env.VITE_LOCAL_SERVERS;
-  if (
-    selectedLocalServers === 'ALL' ||
-    selectedLocalServers?.includes('document-storage-service')
-  ) {
-    return artifactContentHosts.local;
-  }
-  return artifactContentHosts.dev;
-}
-
-/** The artifact content host; an artifact's origin puts its id before it. */
-export const ARTIFACT_CONTENT_HOST = selectArtifactContentHost();
-
 // Desktop HTTP services share the native session cookie jar. Navigation-only
 // destinations and WebSocket endpoints do not define HTTP transport prefixes.
 const nativeSessionServices = {

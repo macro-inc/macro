@@ -24,7 +24,7 @@ export type FavoritesFilter = {
 /**
  * The user's favorites: a manually ordered collection of entity references.
  *
- * @routing Use when adding or removing the user's favorites; not pins.
+ * @routing Use when adding or removing the user's favorites; not pins (`macro.pins`).
  */
 export class FavoritesNamespace {
   constructor(private readonly client: MacroClient) {}

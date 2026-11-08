@@ -15,6 +15,7 @@ impl ArtifactCalls for RecordingArtifactCalls {
         &self,
         user: &MacroUserIdStr<'static>,
         agent: BotId,
+        _session: uuid::Uuid,
         endpoint: ArtifactEndpoint,
     ) -> Result<UpstreamCall, EgressError> {
         self.resolved

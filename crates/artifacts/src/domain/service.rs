@@ -17,7 +17,7 @@ use super::models::{
     Artifact, ArtifactError, ArtifactPath, ArtifactVersion, ArtifactVersionSummary, ContentOrigin,
     ContentRequest, ContentResponse, CreateArtifact, ENTRY_PATH, MAX_CANVAS_COORDINATE,
     MAX_CANVAS_SIZE, MAX_FILE_BYTES, MAX_FILES, Manifest, PlaceArtifact, Placement, PublishVersion,
-    Publisher, Sha256, UploadInput, UploadTarget, ViewUrl, ViewUrlRequest, Viewer,
+    Publisher, Sha256, UploadInput, UploadTarget, ViewUrl, ViewUrlRequest,
 };
 use super::ports::{
     ArtifactCanvases, ArtifactDocuments, ArtifactNotifier, ArtifactObjectStore, ArtifactRepository,
@@ -466,7 +466,6 @@ where
     async fn view_url(
         &self,
         receipt: EntityAccessReceipt<ViewAccessLevel>,
-        viewer: &Viewer,
         request: ViewUrlRequest,
     ) -> Result<ViewUrl, ArtifactError> {
         let document_id = document_id_of(&receipt);
@@ -501,7 +500,7 @@ where
             None => String::new(),
         };
 
-        let minted = self.tokens.mint(viewer, &document_id)?;
+        let minted = self.tokens.mint(&document_id)?;
 
         let encoded_path = path
             .split('/')

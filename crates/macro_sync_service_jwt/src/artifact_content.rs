@@ -4,7 +4,8 @@
 //! token must be useless anywhere else. It names a distinct issuer and an
 //! audience no other consumer accepts (a JWT with an audience its consumer
 //! does not expect is rejected), and it carries no access level, so it fails
-//! to deserialize as a document grant too.
+//! to deserialize as a document grant too. It names no viewer: the page's
+//! author could decode any identity it carried.
 
 #[cfg(test)]
 mod test;
@@ -30,12 +31,6 @@ pub const ARTIFACT_CONTENT_TOKEN_TTL_SECS: u64 = 3600;
 pub struct ArtifactContentClaims {
     /// The artifact document.
     pub document_id: String,
-    /// The viewing user, absent for anonymous public-link viewers.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub user_id: Option<String>,
-    /// The bot viewing for them.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub actor: Option<String>,
     /// Expiry, in seconds since the epoch.
     pub exp: u64,
     /// Always [`ARTIFACT_CONTENT_ISSUER`].
@@ -47,16 +42,9 @@ pub struct ArtifactContentClaims {
 impl ArtifactContentClaims {
     /// Claims for `document_id`, expiring [`ARTIFACT_CONTENT_TOKEN_TTL_SECS`]
     /// after `now_secs`.
-    pub fn new(
-        document_id: String,
-        user_id: Option<String>,
-        actor: Option<String>,
-        now_secs: u64,
-    ) -> Self {
+    pub fn new(document_id: String, now_secs: u64) -> Self {
         Self {
             document_id,
-            user_id,
-            actor,
             exp: now_secs + ARTIFACT_CONTENT_TOKEN_TTL_SECS,
             iss: ARTIFACT_CONTENT_ISSUER.to_string(),
             aud: ARTIFACT_CONTENT_AUDIENCE.to_string(),

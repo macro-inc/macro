@@ -37,6 +37,28 @@ pub trait EgressService: Send + Sync {
     ) -> impl Future<Output = Result<ProxyResponse, EgressError>> + Send;
 }
 
+/// MCP exchanges for an in-process caller, such as a code execution's
+/// connected-app route, that authorized its request against the session
+/// itself rather than presenting the session's token.
+pub trait SessionMcpExchange: Send + Sync {
+    /// The session's grant, read by id. Refuses a closed session.
+    fn session_grant(
+        &self,
+        session: crate::domain::model::AgentSessionId,
+    ) -> impl Future<Output = Result<crate::domain::model::SessionGrant, EgressError>> + Send;
+
+    /// One `tools/list` or `tools/call` on a connected app or custom server
+    /// as `user`, an account the caller already settled the call may spend.
+    /// Returns the MCP `result` payload.
+    fn exchange_as(
+        &self,
+        grant: &crate::domain::model::SessionGrant,
+        user: &macro_user_id::user_id::MacroUserIdStr<'static>,
+        destination: &McpDestination,
+        request: serde_json::Value,
+    ) -> impl Future<Output = Result<serde_json::Value, EgressError>> + Send;
+}
+
 /// The service, over its ports.
 ///
 /// Held tool calls are refused until [`Self::with_owner_approvals`] says how
@@ -258,7 +280,12 @@ where
             ) => {
                 let (call, answer): (UpstreamCall, Option<Answer>) = match self
                     .credentials
-                    .resolve(&grant.owner, grant.agent, destination)
+                    .resolve(
+                        &grant.owner,
+                        grant.agent,
+                        grant.session.as_uuid(),
+                        destination,
+                    )
                     .await?
                 {
                     McpResolution::Connected(call) => (call, None),
@@ -345,7 +372,9 @@ where
                     .as_ref()
                     .and_then(TurnPrompter::acting_user)
                     .ok_or(EgressError::NoActingUser)?;
-                artifacts.resolve(user, grant.agent, *endpoint).await?
+                artifacts
+                    .resolve(user, grant.agent, grant.session.as_uuid(), *endpoint)
+                    .await?
             }
         };
 

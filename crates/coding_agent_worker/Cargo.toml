@@ -27,7 +27,6 @@ trigger_context = { path = "../trigger_context" }
 chrono = { workspace = true }
 clap = { workspace = true }
 crossterm = { workspace = true }
-dashmap = { workspace = true }
 eventsource-stream = { workspace = true }
 futures = { workspace = true }
 harness_id = { path = "../harness_id" }
@@ -99,3 +98,7 @@ chrono = { workspace = true }
 harness_id = { path = "../harness_id", features = ["test-utils"] }
 tempfile = { workspace = true }
 tokio = { workspace = true, features = ["io-util", "net", "test-util"] }
+
+[package.metadata.cargo-shear]
+# Linked for its `vendored` feature on musl, never named in code.
+ignored = ["openssl-sys"]

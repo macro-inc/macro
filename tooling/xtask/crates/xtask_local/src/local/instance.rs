@@ -187,7 +187,6 @@ impl Instance {
         &self.project_name
     }
 
-    #[allow(dead_code)] // used by tests and diagnostics
     pub fn port_base(&self) -> u16 {
         self.port_base
     }

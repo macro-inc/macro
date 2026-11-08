@@ -19,7 +19,6 @@ export default {
   'record-files': 'Files',
   'record-tasks': 'Tasks',
   'record-calls': 'Calls',
-  'record-databases': 'Databases',
 
   // Project sections.
   projectSections: 'Project sections',

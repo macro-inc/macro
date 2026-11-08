@@ -164,7 +164,7 @@ async fn a_closed_connection_is_unlisted_so_nothing_binds_onto_it() {
     let connection = registry
         .connections
         .get(&HarnessId::TEST_A)
-        .map(|entry| Arc::clone(&entry))
+        .map(|entry| entry.value().clone())
         .expect("the dial is listed");
     let bound = connections(
         Arc::new(FakeBindings::bound(BotId::TEST_A, HarnessId::TEST_A)),
@@ -174,7 +174,7 @@ async fn a_closed_connection_is_unlisted_so_nothing_binds_onto_it() {
     runtime.disconnects();
     // The same work `attach` spawns, awaited here rather than raced.
     Arc::clone(&registry)
-        .drop_when_closed(HarnessId::TEST_A, connection)
+        .drop_when_closed(HarnessId::TEST_A, connection, None)
         .await;
 
     assert!(!registry.is_connected(HarnessId::TEST_A));
@@ -194,7 +194,7 @@ async fn a_redials_connection_outlives_the_one_it_displaced() {
     let displaced = registry
         .connections
         .get(&HarnessId::TEST_A)
-        .map(|entry| Arc::clone(&entry))
+        .map(|entry| entry.value().clone())
         .expect("the first dial is listed");
     let bound = connections(
         Arc::new(FakeBindings::bound(BotId::TEST_A, HarnessId::TEST_A)),
@@ -204,7 +204,7 @@ async fn a_redials_connection_outlives_the_one_it_displaced() {
     registry.attach(HarnessId::TEST_A, ContainerMock::default());
     first.disconnects();
     Arc::clone(&registry)
-        .drop_when_closed(HarnessId::TEST_A, displaced)
+        .drop_when_closed(HarnessId::TEST_A, displaced, None)
         .await;
 
     // The dead connection's eviction must not unlist the live one that took
@@ -218,61 +218,167 @@ async fn a_redials_connection_outlives_the_one_it_displaced() {
     );
 }
 
-#[tokio::test]
-async fn attach_and_close_report_presence() {
-    #[derive(Default)]
-    struct RecordingPresence {
-        events: Mutex<Vec<(HarnessId, &'static str)>>,
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum PresenceEvent {
+    Connected(RuntimeConnectionId),
+    Disconnected(RuntimeConnectionId),
+}
+
+#[derive(Default)]
+struct RecordingPresence {
+    events: Mutex<Vec<PresenceEvent>>,
+    renewed: Mutex<Vec<Vec<(HarnessId, RuntimeConnectionId)>>>,
+}
+
+impl HarnessPresence for RecordingPresence {
+    fn connected(
+        self: Arc<Self>,
+        _harness: HarnessId,
+        connection: RuntimeConnectionId,
+    ) -> std::pin::Pin<Box<dyn Future<Output = ()> + Send>> {
+        Box::pin(async move {
+            self.events
+                .lock()
+                .unwrap()
+                .push(PresenceEvent::Connected(connection));
+        })
     }
 
-    impl HarnessPresence for RecordingPresence {
-        fn connected(
-            self: Arc<Self>,
-            harness: HarnessId,
-        ) -> std::pin::Pin<Box<dyn Future<Output = ()> + Send>> {
-            Box::pin(async move {
-                self.events.lock().unwrap().push((harness, "connected"));
-            })
-        }
-
-        fn disconnected(
-            self: Arc<Self>,
-            harness: HarnessId,
-        ) -> std::pin::Pin<Box<dyn Future<Output = ()> + Send>> {
-            Box::pin(async move {
-                self.events.lock().unwrap().push((harness, "disconnected"));
-            })
-        }
+    fn disconnected(
+        self: Arc<Self>,
+        _harness: HarnessId,
+        connection: RuntimeConnectionId,
+    ) -> std::pin::Pin<Box<dyn Future<Output = ()> + Send>> {
+        Box::pin(async move {
+            self.events
+                .lock()
+                .unwrap()
+                .push(PresenceEvent::Disconnected(connection));
+        })
     }
 
-    let presence = Arc::new(RecordingPresence::default());
-    let registry: Arc<RuntimeRegistry<ContainerSender>> = RuntimeRegistry::with_presence(
-        Arc::clone(&presence) as Arc<dyn HarnessPresence>,
+    fn renew(
+        self: Arc<Self>,
+        live: Vec<(HarnessId, RuntimeConnectionId)>,
+    ) -> std::pin::Pin<Box<dyn Future<Output = ()> + Send>> {
+        Box::pin(async move {
+            self.renewed.lock().unwrap().push(live);
+        })
+    }
+}
+
+fn registry_with_presence(
+    presence: &Arc<RecordingPresence>,
+) -> Arc<RuntimeRegistry<ContainerSender>> {
+    RuntimeRegistry::with_presence(
+        Arc::clone(presence) as Arc<dyn HarnessPresence>,
         mpsc::unbounded_channel().0,
-    );
-    let runtime = ContainerMock::default();
-    registry.attach(HarnessId::TEST_A, runtime.clone());
-    let connection = registry
+    )
+}
+
+fn listed_connection(
+    registry: &Arc<RuntimeRegistry<ContainerSender>>,
+) -> ListedConnection<ContainerSender> {
+    registry
         .connections
         .get(&HarnessId::TEST_A)
-        .map(|entry| Arc::clone(&entry))
-        .expect("the dial is listed");
+        .map(|entry| entry.value().clone())
+        .expect("the dial is listed")
+}
 
-    runtime.disconnects();
+#[tokio::test]
+async fn a_displaced_connections_close_reports_only_that_connection() {
+    let presence = Arc::new(RecordingPresence::default());
+    let registry = registry_with_presence(&presence);
+    let first = ContainerMock::default();
+    registry.attach(HarnessId::TEST_A, first.clone());
+    let displaced = listed_connection(&registry);
+    registry.attach(HarnessId::TEST_A, ContainerMock::default());
+    let current = listed_connection(&registry);
+
+    first.disconnects();
     Arc::clone(&registry)
-        .drop_when_closed(HarnessId::TEST_A, connection)
+        .drop_when_closed(HarnessId::TEST_A, displaced.clone(), None)
         .await;
 
-    // The connected write is spawned; give it a beat to land.
-    for _ in 0..100 {
-        if presence.events.lock().unwrap().len() >= 2 {
-            break;
-        }
-        tokio::task::yield_now().await;
-    }
+    // Presence is told about the dead connection, by name, so its write cannot
+    // be mistaken for the live connection going away.
     let events = presence.events.lock().unwrap().clone();
-    assert!(events.contains(&(HarnessId::TEST_A, "connected")));
-    assert!(events.contains(&(HarnessId::TEST_A, "disconnected")));
+    assert!(events.contains(&PresenceEvent::Disconnected(displaced.id)));
+    assert!(!events.contains(&PresenceEvent::Disconnected(current.id)));
+    assert_eq!(listed_connection(&registry).id, current.id);
+}
+
+#[tokio::test(start_paused = true)]
+async fn a_close_waits_for_its_own_connected_write() {
+    let presence = Arc::new(RecordingPresence::default());
+    let registry = registry_with_presence(&presence);
+    let runtime = ContainerMock::default();
+    // Not through `attach`, whose own watch would report the close unprompted.
+    let listed = ListedConnection {
+        id: RuntimeConnectionId::generate(),
+        connection: RuntimeConnection::connect(runtime.clone()),
+    };
+    registry
+        .connections
+        .insert(HarnessId::TEST_A, listed.clone());
+    let (release, released) = tokio::sync::oneshot::channel::<()>();
+    let connected_write = tokio::spawn({
+        let presence = Arc::clone(&presence);
+        let id = listed.id;
+        async move {
+            let _ = released.await;
+            presence
+                .events
+                .lock()
+                .unwrap()
+                .push(PresenceEvent::Connected(id));
+        }
+    });
+    runtime.disconnects();
+
+    let closing = Arc::clone(&registry).drop_when_closed(
+        HarnessId::TEST_A,
+        listed.clone(),
+        Some(connected_write),
+    );
+    tokio::pin!(closing);
+    tokio::select! {
+        () = &mut closing => panic!("the close finished before its attach was recorded"),
+        () = tokio::time::sleep(Duration::from_secs(1)) => {}
+    }
+    // The registry already stopped listing it; only the presence write waited.
+    assert!(!registry.is_connected(HarnessId::TEST_A));
+    assert!(presence.events.lock().unwrap().is_empty());
+
+    release.send(()).expect("the connected write is waiting");
+    closing.await;
+
+    assert_eq!(
+        *presence.events.lock().unwrap(),
+        [
+            PresenceEvent::Connected(listed.id),
+            PresenceEvent::Disconnected(listed.id)
+        ]
+    );
+}
+
+#[tokio::test]
+async fn renewal_lists_the_connections_this_process_holds() {
+    let presence = Arc::new(RecordingPresence::default());
+    let registry = registry_with_presence(&presence);
+
+    registry.renew_presence().await;
+    assert!(presence.renewed.lock().unwrap().is_empty());
+
+    registry.attach(HarnessId::TEST_A, ContainerMock::default());
+    let listed = listed_connection(&registry);
+    registry.renew_presence().await;
+
+    assert_eq!(
+        *presence.renewed.lock().unwrap(),
+        [vec![(HarnessId::TEST_A, listed.id)]]
+    );
 }
 
 #[tokio::test]

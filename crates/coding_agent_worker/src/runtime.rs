@@ -73,6 +73,11 @@ impl Runtime {
         }
     }
 
+    /// Follows whether the runtime connection is currently up.
+    pub fn connection_state(&self) -> watch::Receiver<bool> {
+        self.connected.clone()
+    }
+
     /// Wait briefly for the supervisor to connect before dispatching a prompt.
     /// Callers never open a second connection while it is reconnecting.
     pub async fn ensure_connected(&self) -> Result<(), tungstenite::Error> {

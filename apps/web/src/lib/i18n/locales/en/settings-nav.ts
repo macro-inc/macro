@@ -28,6 +28,7 @@ export default {
   tabRuntimes: 'Runtimes',
   tabMcpServer: 'MCP server',
   tabApiKeys: 'API Keys',
+  tabAccountManagers: 'Account Managers',
   tabBots: 'Bots',
   tabDebug: 'Debug',
 
@@ -55,4 +56,5 @@ export default {
   sectionUnavailable: 'This settings section is unavailable.',
   createTeam: 'Create a team',
   inviteTeam: 'Invite your team',
+  teamActions: 'Team actions',
 };

@@ -10,7 +10,7 @@ use model_owner::{CreationPrincipal, Owner};
 
 use crate::domain::models::{
     ArtifactError, ArtifactVersion, ArtifactVersionSummary, MintedToken, ObjectBody, Publisher,
-    Sha256, Viewer,
+    Sha256,
 };
 use crate::domain::ports::{
     ArtifactCanvases, ArtifactDocuments, ArtifactNotifier, ArtifactObjectStore, ArtifactRepository,
@@ -222,15 +222,12 @@ impl ArtifactDocuments for MemoryDocuments {
 /// verify. Minted tokens are recorded.
 #[derive(Default)]
 pub(crate) struct FakeTokens {
-    pub(crate) minted: Mutex<Vec<(Viewer, String)>>,
+    pub(crate) minted: Mutex<Vec<String>>,
 }
 
 impl ViewTokens for FakeTokens {
-    fn mint(&self, viewer: &Viewer, document_id: &str) -> Result<MintedToken, ArtifactError> {
-        self.minted
-            .lock()
-            .unwrap()
-            .push((viewer.clone(), document_id.to_string()));
+    fn mint(&self, document_id: &str) -> Result<MintedToken, ArtifactError> {
+        self.minted.lock().unwrap().push(document_id.to_string());
         Ok(MintedToken {
             token: format!("token-for-{document_id}"),
             expires_at: "2026-11-04T13:00:00Z".parse().unwrap(),

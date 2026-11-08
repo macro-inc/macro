@@ -29,6 +29,8 @@ export interface CreateArtifactOptions {
  * fonts) published as Macro items people open, share, comment on, browse the
  * history of, and place on canvases one scene at a time.
  *
+ * @routing Use when publishing an HTML page, a prototype, a report or any other web page as an artifact, or reading, versioning or placing one on a canvas; not markdown documents, canvases or databases.
+ *
  * @agent
  * An artifact is a document of file type `artifact`; share, move and mention
  * it through `artifact.document()`. Pages run in a sandboxed frame on their

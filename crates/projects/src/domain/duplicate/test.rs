@@ -93,6 +93,7 @@ type TestProjects = ProjectServiceImpl<
     AcceptAll,
     AcceptAll,
     AcceptAll,
+    crate::domain::ports::UnavailableFiledItemsUnfiler,
     NoopMacroEventBroker,
 >;
 
@@ -107,6 +108,7 @@ fn projects(pool: PgPool) -> Arc<TestProjects> {
         AcceptAll,
         AcceptAll,
         AcceptAll,
+        crate::domain::ports::UnavailableFiledItemsUnfiler,
         None,
         NoopMacroEventBroker,
     ))
@@ -347,6 +349,43 @@ async fn places_the_copy_beside_the_source_only_when_the_user_can_add_there(pool
         "First child copy".to_string(),
         OWNER.to_string()
     )));
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("projects_test_data"))
+)]
+async fn skips_artifacts_and_copies_the_rest(pool: PgPool) {
+    let artifact_id = Uuid::now_v7().to_string();
+    sqlx::query!(
+        r#"
+        INSERT INTO "Document" (id, name, owner, "projectId", "fileType")
+        VALUES ($1, 'Artifact', $2, $3, 'artifact')
+        "#,
+        artifact_id,
+        OWNER,
+        ROOT_ID,
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    let contents = FakeContents::new(pool.clone());
+    let duplicator = ProjectDuplicator::new(projects(pool.clone()), contents.clone());
+
+    let effects = duplicate(&duplicator, ROOT_ID, None).await.unwrap();
+
+    let copy = copy_id(&effects);
+    assert_eq!(
+        contents.copied(),
+        vec![
+            (
+                DOCUMENT_ID.to_string(),
+                copy.clone(),
+                "Document".to_string()
+            ),
+            (CHAT_ID.to_string(), copy, "Chat".to_string()),
+        ]
+    );
 }
 
 #[sqlx::test(

@@ -11,10 +11,12 @@ HTML worker belong to `packages/sdk-docs`.
 - `scripts/generate.ts`: builds the Deno bundles and backend documentation into
   the directory it is given; `crates/code_mode_assets` runs it at build time.
 - `scripts/typedoc.ts`: index each entity and split linked Markdown into
-  per-symbol references (classes, methods, types).
-- `scripts/catalog.ts`: the entity directories agents discover; agent and
-  harness docs share a topic, as do native channels, external chats and
-  WhatsApp, and documents and artifacts.
+  per-symbol references (classes, methods, types). A discriminated union over
+  the 16 KiB reference size, such as `EditOp`, lists its members, each read as
+  `EditOp.<discriminator>`.
+- `scripts/catalog.ts`: the entity directories agents discover, one entity
+  each. Never fold an area into another to save room: Jev routes the catalog
+  in parallel 32-question calls, so its size is not capped.
 - Each entity's description is its one `@routing` sentence ("Use when …; not
   …") and its `guide` every `@agent` block, both from the SDK's TSDoc and
   collected by `packages/sdk-docs/src/render.ts`. Generation fails for an
@@ -26,7 +28,6 @@ HTML worker belong to `packages/sdk-docs`.
 ## Tool contracts
 
 - External chat sends/uploads use only the credential owner's connection and accept their session or own API token (including signed agent attribution); bots never send. Pairing and account/access controls require the person's session.
-- Agent documentation excludes the legacy chats/workspace namespaces and their Macro properties; public SDK APIs remain compatible for existing callers.
 
 ## Checks
 

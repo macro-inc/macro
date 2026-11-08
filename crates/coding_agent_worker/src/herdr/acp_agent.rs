@@ -38,6 +38,7 @@ use agent_client_protocol::schema::v1::{
     ListSessionsRequest, ListSessionsResponse, SessionId, SessionInfo,
 };
 use agent_fold::domain::transcript::{Fold, LogEvent};
+use agent_runtime_protocol::domain::turn::{FailureNotice, FailureNoticeKind};
 use claude_fold::ClaudeLog;
 use codex_fold::CodexLog;
 
@@ -179,6 +180,7 @@ pub(crate) struct AdapterOptions {
 struct RpcError {
     code: i64,
     message: String,
+    data: Option<Value>,
 }
 
 impl RpcError {
@@ -186,6 +188,7 @@ impl RpcError {
         Self {
             code: -32603,
             message: message.into(),
+            data: None,
         }
     }
 
@@ -193,6 +196,23 @@ impl RpcError {
         Self {
             code: -32602,
             message: message.into(),
+            data: None,
+        }
+    }
+
+    /// A prompt that was stopped before it was typed into the TUI. Answering
+    /// `cancelled` would read in Macro as a message the agent saw.
+    fn not_delivered() -> Self {
+        let notice = FailureNotice {
+            kind: FailureNoticeKind::PromptNotDelivered,
+            title: "Message not delivered".to_owned(),
+            body: "The turn running in Herdr was stopped before this message was typed in, so the agent never received it. Send it again.".to_owned(),
+            link: None,
+        };
+        Self {
+            code: -32603,
+            message: "the prompt was stopped before it reached the native agent".to_owned(),
+            data: serde_json::to_value(notice).ok(),
         }
     }
 }
@@ -375,11 +395,13 @@ impl Adapter {
     fn respond(&self, id: Value, result: Result<Value, RpcError>) {
         self.send(match result {
             Ok(result) => json!({"jsonrpc": "2.0", "id": id, "result": result}),
-            Err(error) => json!({
-                "jsonrpc": "2.0",
-                "id": id,
-                "error": {"code": error.code, "message": error.message},
-            }),
+            Err(error) => {
+                let mut body = json!({"code": error.code, "message": error.message});
+                if let Some(data) = error.data {
+                    body["data"] = data;
+                }
+                json!({"jsonrpc": "2.0", "id": id, "error": body})
+            }
         });
     }
 
@@ -500,6 +522,7 @@ impl Adapter {
             _ => Err(RpcError {
                 code: -32601,
                 message: format!("{method} is not supported"),
+                data: None,
             }),
         }
     }
@@ -841,7 +864,8 @@ impl Adapter {
                     native_turns += 1;
                     tracing::Span::current().record("native_turns", native_turns);
                     // An interrupted native turn ends "cancelled" too; only a
-                    // Stop from Macro drops the waiting prompt.
+                    // Stop from Macro drops the waiting prompt, which then
+                    // answers as not delivered.
                     self.follow(herdr, session, live, &cancel, true).await?;
                     if cancel.is_cancelled() {
                         return Ok(None);
@@ -855,8 +879,8 @@ impl Adapter {
                 tracing::warn!(parent: &wait, error = %error.message, "queued prompt failed while waiting");
             })?;
             let Some(info) = waited else {
-                wait.record("outcome", "cancelled");
-                return Ok("cancelled");
+                wait.record("outcome", "not_delivered");
+                return Err(RpcError::not_delivered());
             };
             wait.record("outcome", "ready");
             match info {
@@ -904,7 +928,7 @@ impl Adapter {
             }
         }
         if cancel.is_cancelled() {
-            return Ok("cancelled");
+            return Err(RpcError::not_delivered());
         }
         // The observer cannot acquire this session until the turn ends. Publish
         // native settings now, while the freshly started composer is visible.

@@ -5,6 +5,7 @@
   "macro.agent_sessions",
   "macro.bots",
   "macro.calendar",
+  "macro.call_notifications",
   "macro.calls",
   "macro.channels",
   "macro.chats",

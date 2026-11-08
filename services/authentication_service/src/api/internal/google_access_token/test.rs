@@ -1,5 +1,5 @@
 use axum::http::StatusCode;
-use fusionauth::error::{FusionAuthClientError, GenericErrorResponse};
+use fusionauth::error::{FusionAuthClientError, GenericErrorResponse, GrantBlockReason};
 use upstream_error::UpstreamFailure;
 
 use super::*;
@@ -38,6 +38,17 @@ fn a_google_outage_during_refresh_is_service_unavailable() {
 #[test]
 fn a_revoked_grant_during_refresh_is_still_forbidden() {
     let response = refresh_error_response(FusionAuthClientError::InvalidGrant, USER, IDP);
+
+    assert_eq!(response.status(), StatusCode::FORBIDDEN);
+}
+
+#[test]
+fn a_grant_blocked_by_the_users_organization_is_forbidden() {
+    let error = FusionAuthClientError::GrantBlocked {
+        reason: GrantBlockReason::AccessNotConfigured,
+    };
+
+    let response = refresh_error_response(error, USER, IDP);
 
     assert_eq!(response.status(), StatusCode::FORBIDDEN);
 }

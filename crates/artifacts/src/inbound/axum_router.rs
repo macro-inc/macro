@@ -37,7 +37,7 @@ use utoipa::{OpenApi, ToSchema};
 use crate::domain::models::{
     Artifact, ArtifactError, ArtifactVersion, ArtifactVersionSummary, CreateArtifact, FileInput,
     PlaceArtifact, PublishVersion, Publisher, SceneInput, Theme, UploadInput, UploadTarget,
-    ViewUrl, ViewUrlRequest, Viewer,
+    ViewUrl, ViewUrlRequest,
 };
 use crate::domain::ports::ArtifactService;
 
@@ -191,6 +191,13 @@ where
 #[derive(Deserialize)]
 struct DocumentIdPath {
     document_id: String,
+}
+
+/// A version route's number. Named, so routes nested under DSS's
+/// `/{version}` prefix, which carry that extra parameter, still extract.
+#[derive(Deserialize)]
+struct VersionPath {
+    number: i32,
 }
 
 /// Load the artifact document the access extractors read.
@@ -836,7 +843,7 @@ where
 pub async fn get_version_handler<Service, EntityAccess, Authorization>(
     State(state): State<ArtifactsRouterState<Service, EntityAccess, Authorization>>,
     access: DocumentAccessExtractor<ViewAccessLevel, EntityAccess, Authorization>,
-    Path((_document_id, number)): Path<(String, i32)>,
+    Path(VersionPath { number }): Path<VersionPath>,
 ) -> Result<Json<ArtifactVersionResponse>, ArtifactError>
 where
     Service: ArtifactService,
@@ -874,7 +881,7 @@ pub async fn restore_handler<Service, EntityAccess, Authorization>(
     State(state): State<ArtifactsRouterState<Service, EntityAccess, Authorization>>,
     access: DocumentAccessExtractor<EditAccessLevel, EntityAccess, Authorization>,
     caller: MacroAuthorizationExtractor<Authorization, AnyPrincipal>,
-    Path((_document_id, number)): Path<(String, i32)>,
+    Path(VersionPath { number }): Path<VersionPath>,
 ) -> Result<(StatusCode, Json<ArtifactVersionResponse>), ArtifactError>
 where
     Service: ArtifactService,
@@ -889,28 +896,16 @@ where
     Ok((StatusCode::CREATED, Json(version.into())))
 }
 
-/// The identity a view token names, as document permission tokens do.
-fn viewer_of(authorization: Option<&MacroAuthorization>) -> Result<Viewer, ArtifactError> {
+/// Harness credentials act for no viewer, so they get no view URL.
+fn reject_harness(authorization: Option<&MacroAuthorization>) -> Result<(), ArtifactError> {
     match authorization {
-        None => Ok(Viewer::default()),
-        Some(MacroAuthorization::User(user)) => Ok(Viewer {
-            user_id: Some(user.macro_user_id.to_string()),
-            actor: None,
-        }),
-        Some(MacroAuthorization::Bot(bot)) => Ok(Viewer {
-            user_id: bot
-                .acting_user
-                .as_ref()
-                .map(|user| user.macro_user_id.to_string()),
-            actor: Some(bot.bot_id.into_storage_id().to_string()),
-        }),
-        Some(MacroAuthorization::Internal(user)) => Ok(Viewer {
-            user_id: user.as_ref().map(|user| user.macro_user_id.to_string()),
-            actor: None,
-        }),
         Some(MacroAuthorization::Harness(_)) => Err(ArtifactError::Forbidden(
             "harness credentials cannot view artifacts".to_string(),
         )),
+        None
+        | Some(MacroAuthorization::User(_))
+        | Some(MacroAuthorization::Bot(_))
+        | Some(MacroAuthorization::Internal(_)) => Ok(()),
     }
 }
 
@@ -942,12 +937,11 @@ where
     EntityAccess: EntityAccessService,
     Authorization: MacroAuthorizationService,
 {
-    let viewer = viewer_of(caller.authorization.as_ref())?;
+    reject_harness(caller.authorization.as_ref())?;
     let view_url = state
         .service
         .view_url(
             access.entity_access_receipt,
-            &viewer,
             ViewUrlRequest {
                 version: request.version,
                 scene: request.scene,

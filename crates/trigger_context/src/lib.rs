@@ -12,6 +12,9 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use uuid::Uuid;
 
+pub mod origin;
+pub use origin::TriggerOrigin;
+
 #[cfg(test)]
 mod test;
 

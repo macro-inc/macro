@@ -41,6 +41,7 @@ unit tests. Standalone pure-logic crates need no database setup.
 | `just check` | Fast, change-scoped format/lint/code-rule/PII gate; not a type check or test runner. |
 | `just check full` | Add TypeScript checking and Rust clippy to the gate. |
 | `just clippy` | Run workspace Rust lints using the SQLx cache. |
+| `cargo shear` | Find unused dependencies from source, without compiling (CI and `just check` run it). `cargo shear --fix` removes them; list a dependency needed only for a side effect (feature activation, linking) in its manifest's `[package.metadata.cargo-shear] ignored` with a comment. `cargo udeps` is the slower, compile-based cross-check. |
 
 `SQLX_OFFLINE=true` is allowed for `cargo check`, `cargo build`, and `cargo clippy`
 when the cache is current. Do not export it for a session that will run tests.
@@ -68,9 +69,9 @@ query metadata. If a test reports missing SQLx cache data, follow the
 [database troubleshooting workflow](database.md#troubleshooting);
 do not enable offline mode to work around it.
 
-CI limits Cargo to two concurrent build jobs for tests because linking several
-large service test binaries can exhaust runner memory. Nextest's test worker
-count is configured separately; the build limit does not reduce test coverage.
+CI runs `test` and `check` on a 32 vCPU, 64 GiB runner with no build job limit.
+Don't lift the job limit on the 8 vCPU, 16 GiB runner by itself: linking many
+large test binaries exhausts its memory and can lose the runner.
 
 Keep tests in a sibling `test.rs` (CS-49). For example, `src/user.rs` declares:
 

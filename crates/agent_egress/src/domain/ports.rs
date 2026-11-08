@@ -29,6 +29,14 @@ pub trait SessionAuthority: Send + Sync {
         &self,
         token: &SessionToken,
     ) -> impl Future<Output = Result<SessionGrant, EgressError>> + Send;
+
+    /// The same grant, read by session id for an in-process caller that has
+    /// already authorized its request against the session itself. Refuses a
+    /// closed session exactly as [`Self::authorize`] does.
+    fn authorize_session(
+        &self,
+        session: AgentSessionId,
+    ) -> impl Future<Output = Result<SessionGrant, EgressError>> + Send;
 }
 
 /// Resolve an MCP destination to a live upstream call.
@@ -53,6 +61,7 @@ pub trait McpCredentials: Send + Sync {
         &self,
         owner: &MacroUserIdStr<'static>,
         agent: bot_id::BotId,
+        session: uuid::Uuid,
         destination: &McpDestination,
     ) -> impl Future<Output = Result<McpResolution, EgressError>> + Send;
 }
@@ -88,11 +97,12 @@ pub trait GithubTokens: Send + Sync {
 #[async_trait::async_trait]
 pub trait ArtifactCalls: Send + Sync {
     /// The upstream for `endpoint`, with a credential that acts as `user`
-    /// and nobody else, attributed to `agent`.
+    /// and nobody else, attributed to `agent` in `session`.
     async fn resolve(
         &self,
         user: &MacroUserIdStr<'static>,
         agent: bot_id::BotId,
+        session: uuid::Uuid,
         endpoint: ArtifactEndpoint,
     ) -> Result<UpstreamCall, EgressError>;
 }

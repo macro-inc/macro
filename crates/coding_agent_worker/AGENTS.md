@@ -35,6 +35,11 @@ the local ACP process (Claude Code, Codex, ...), and drives native
   drop the root variable so the server roots at the agent's own directory.
 - `src/trigger.rs` + `src/dispatch.rs`: agent-trigger broker events → session
   create/dial/prompt against the live harness service.
+- `src/daemon.rs` `watch_presence`: each minute a connection has held, asks
+  `GET /harnesses/me` with `RUNTIME_CONNECTED_HEADER`. A service that reads the
+  harness offline logs `harness_presence_disagreement`, macrod warns, and the TUI
+  header says "runtime connected, service reports offline" instead of "paired,
+  runtime not dialed in".
 - `src/tui.rs` (`src/tui/`): the control panel itself (registration, agents,
   sessions, config form, logs).
 - `src/herdr.rs` (`src/herdr/`): native herdr integration — only compiled

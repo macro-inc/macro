@@ -75,7 +75,8 @@ A prompt from Macro while the native agent is working or showing a dialog
 waits, like input typed into the TUI mid-turn. The running turn keeps streaming
 and its permission dialogs still reach Macro; the prompt is typed once the turn
 ends. Stopping from Macro while it waits interrupts the native turn and drops
-the prompt. Claude Code's exit confirmation, left by a second Ctrl-C while
+the prompt, which fails with a `prompt_not_delivered` notice so Macro shows the
+message was never typed in rather than a stopped turn. Claude Code's exit confirmation, left by a second Ctrl-C while
 background work runs, is dismissed with Escape ("Stay") before the prompt is
 typed.
 
@@ -184,6 +185,14 @@ answers (approve in Herdr), and cancelling a turn Macro did not start.
 Transcripts still end its turns. Without a reported session ID, macrod finds
 Codex's transcript by working directory and start time. Viewer windows
 (`macrod herdr-pane`) report their own state through OSC 7501.
+
+## What opened a session
+
+Each `New` trigger event says what opened its session
+(`NewAgentSessionEvent::origin`). `src/trigger.rs` keeps it on `TriggerWork`, and
+`src/dispatch.rs` copies it onto the create request, where the service stores it
+with the session. macrod reports only what the event said. The service treats it
+as a description, so it never decides a session's visibility or notifications.
 
 ## Replies to chat-agent mentions
 
