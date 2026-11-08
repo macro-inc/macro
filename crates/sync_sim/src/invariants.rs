@@ -123,7 +123,7 @@ pub fn all_docs_equal(outcome: &Outcome) -> Result<(), Failure> {
         // S8 §4.1 requires read-only replicas to cover the server's visible VV.
         // A revoked writer may also retain private, parked edits, so its VV and
         // content need not equal the server until write access is regranted.
-        if client.access == Access::Read {
+        if client.access != Access::Edit {
             if !server
                 .oplog_vv
                 .iter()
