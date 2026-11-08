@@ -941,7 +941,6 @@ export function CallOverlay(props: {
             sidebarMount={widePanel() ? sidebarMount() : undefined}
             overlayMount={overlayMount()}
             returnFocus={panelButton}
-            discussionLabel={props.discussion?.label()}
           >
             <Show when={canChat() && callCtx.activeCallId()} keyed>
               {(callId) => (

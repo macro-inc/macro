@@ -32,8 +32,6 @@ export function CallChatPanel(props: {
   sidebarMount?: HTMLElement;
   overlayMount?: HTMLElement;
   returnFocus?: HTMLButtonElement;
-  /** Names the discussion tab, for a discussion that isn't the call's chat. */
-  discussionLabel?: string;
 }) {
   const [sidebarBody, setSidebarBody] = createSignal<HTMLDivElement>();
   const [sheetBody, setSheetBody] = createSignal<HTMLDivElement>();
@@ -132,7 +130,9 @@ export function CallChatPanel(props: {
               {
                 value: 'participants',
                 label: t('calls.participants'),
-                count: props.participantCount.toLocaleString(formatLocale()),
+                count: isMobile()
+                  ? props.participantCount.toLocaleString(formatLocale())
+                  : undefined,
               },
               ...(props.work
                 ? [
