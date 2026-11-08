@@ -31,6 +31,7 @@ Development-only schema-2 fixture interpreter for the pinned upstream oracle.
 - Marshal own undefined properties separately from JSON snapshots; keep every comparison strict.
 - Register Macro classes through the shared source catalog; honor recorded mode, named replacements, namespace entropy and update callbacks.
 - Dispatch adapters contain no node or transformer policy.
+- Replay composer source functions through macro_document_composers; its development WASM path excludes native trigger_context and workspace-hack.
 - Partial recordings restore and validate the complete initial JSON, selection, key layout and next allocation counter before replay; no import transforms or synthetic commits run.
 - Decode inline markdown transformer objects with their real regexes and checked callback tapes; nullable import matchers disable import matching.
 - Route TabIndentation and Prism registration through rich-node tab/code handlers, preserving critical indent priority over code and rich text; leave tokenization to the view.

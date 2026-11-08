@@ -86,6 +86,7 @@ impl ExportDom for TableNode {
                             .take()
                             .and_then(|key| positions.remove(&key))
                     {
+                        cell.remove_attribute("data-temporary-table-cell-lexical-key");
                         known.extend(start..start + span);
                     }
                 }
@@ -103,7 +104,9 @@ impl ExportDom for TableNode {
                     rest.push(child);
                 }
             }
-            rest.push(HtmlNode::Element(body));
+            if !body.children.is_empty() {
+                rest.push(HtmlNode::Element(body));
+            }
             el.children = rest;
             Ok(())
         }));
@@ -167,6 +170,7 @@ impl ExportDom for TableCellNode {
         );
         element_export_dom(ctx, key, &mut el)?;
         el.lexical_key = Some(key);
+        el.set_attribute("data-temporary-table-cell-lexical-key", key.to_string());
         el.style_set_property("border", "1px solid black");
         el.style_set_property("width", &pixels(width.map_or(75.0, |width| width.0)));
         el.style_set_property(
