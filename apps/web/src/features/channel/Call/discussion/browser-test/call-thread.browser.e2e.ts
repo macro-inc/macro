@@ -721,6 +721,11 @@ test('rebuilt call panel keeps a long thread, bottom composer and draft across t
   test.skip(
     process.env.CALL_FULL_HOST !== 'true' || testInfo.project.name === 'phone'
   );
+  if (process.env.CALL_PANEL_WIDTH)
+    await page.setViewportSize({
+      width: Number(process.env.CALL_PANEL_WIDTH),
+      height: 860,
+    });
   const { posted } = await open(page, 'panel', {
     status: { state: 'live' },
     fullOverlay: true,
@@ -755,7 +760,9 @@ test('rebuilt call panel keeps a long thread, bottom composer and draft across t
         .getByRole('complementary', { name: 'Call sidebar' })
         .boundingBox())!.width
     )
-  ).toBe(380);
+  ).toBe(
+    page.viewportSize()!.width >= 800 ? 380 : page.viewportSize()!.width - 24
+  );
   await expect(
     page.getByText('Replying in the call thread', { exact: true })
   ).toHaveCount(0);
@@ -771,8 +778,8 @@ test('rebuilt call panel keeps a long thread, bottom composer and draft across t
     .toBeCloseTo(previous, 0);
   await checkGeometry();
   await page
+    .getByRole('complementary', { name: 'Call sidebar' })
     .getByRole('button', { name: 'Close chat and participants' })
-    .first()
     .click();
   await page
     .getByRole('button', { name: 'Open chat and participants' })
