@@ -15660,6 +15660,142 @@
         }
       }
     },
+    "/documents/{document_id}/markdown": {
+      "get": {
+        "tags": ["document"],
+        "summary": "Read a markdown document's or task's body with the revision it was read\nat, to write it back with `PUT` without overwriting anyone's edits.",
+        "operationId": "get_document_markdown",
+        "parameters": [
+          {
+            "name": "document_id",
+            "in": "path",
+            "description": "Document identity",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DocumentMarkdown"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Not a markdown document",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "403": {
+            "description": "Document access denied"
+          },
+          "404": {
+            "description": "Document not found"
+          },
+          "502": {
+            "description": "The body could not be read",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DocumentMarkdownFailure"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": ["document"],
+        "summary": "Replace a markdown document's or task's body, only if the document is still\nat the revision the caller read. Top-level blocks whose Markdown is\nunchanged keep their comments and formatting; changed blocks are replaced.",
+        "operationId": "write_document_markdown",
+        "parameters": [
+          {
+            "name": "document_id",
+            "in": "path",
+            "description": "Document identity",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/WriteDocumentMarkdownRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DocumentMarkdownWritten"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Not a markdown document, or an empty revision",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "403": {
+            "description": "Document edit access denied"
+          },
+          "404": {
+            "description": "Document not found"
+          },
+          "409": {
+            "description": "The document changed since the revision was read; nothing was written",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DocumentMarkdownFailure"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "The write failed and may have applied",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DocumentMarkdownFailure"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/documents/{document_id}/permanent": {
       "delete": {
         "tags": ["document"],
@@ -35864,6 +36000,56 @@
           "reason": {
             "$ref": "#/components/schemas/InteractionReason",
             "description": "What triggered this interaction."
+          }
+        }
+      },
+      "DocumentMarkdown": {
+        "type": "object",
+        "description": "A markdown document's body and the revision it was read at.",
+        "required": ["markdown", "revision"],
+        "properties": {
+          "markdown": {
+            "type": "string",
+            "description": "The body as Markdown, in the format `text-content` returns."
+          },
+          "revision": {
+            "type": "string",
+            "description": "The document's version, as sync-service encodes it. Pass it back to\nwrite the body only if nobody has changed the document since."
+          }
+        }
+      },
+      "DocumentMarkdownFailure": {
+        "type": "object",
+        "description": "Why a body read or write did not complete.",
+        "required": ["error", "message"],
+        "properties": {
+          "error": {
+            "$ref": "#/components/schemas/DocumentMarkdownFailureCode",
+            "description": "What went wrong."
+          },
+          "message": {
+            "type": "string",
+            "description": "What to do next; the cause is logged, never returned."
+          }
+        }
+      },
+      "DocumentMarkdownFailureCode": {
+        "type": "string",
+        "description": "Error code of a body read or write that did not complete.",
+        "enum": ["revision_conflict", "read_failed", "write_failed"]
+      },
+      "DocumentMarkdownWritten": {
+        "type": "object",
+        "description": "A body write that landed, or found the body already reading that way.",
+        "required": ["revision", "changed"],
+        "properties": {
+          "changed": {
+            "type": "boolean",
+            "description": "Whether the body changed; `false` when it already read that way."
+          },
+          "revision": {
+            "type": "string",
+            "description": "The document's version after the write."
           }
         }
       },
@@ -61480,6 +61666,23 @@
             "description": "Blocks with their ids and text, or what an edit changed."
           }
         }
+      },
+      "WriteDocumentMarkdownRequest": {
+        "type": "object",
+        "description": "The body to write and the revision it was written against.",
+        "required": ["markdown", "expectedRevision"],
+        "properties": {
+          "expectedRevision": {
+            "type": "string",
+            "description": "The `revision` from the read this body is based on. The write applies\nonly if the document is still at this revision.",
+            "minLength": 1
+          },
+          "markdown": {
+            "type": "string",
+            "description": "The whole new body, as Markdown."
+          }
+        },
+        "additionalProperties": false
       },
       "ZOrder": {
         "type": "string",

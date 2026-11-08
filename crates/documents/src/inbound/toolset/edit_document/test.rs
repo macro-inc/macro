@@ -625,6 +625,24 @@ impl EditingWorkerService for FakeEditingWorker {
         panic!("unexpected word document call")
     }
 
+    async fn read_markdown(
+        &self,
+        _document_id: &str,
+        _document_token: &DocumentPermissionToken,
+    ) -> anyhow::Result<crate::domain::markdown_body::DocumentMarkdown> {
+        panic!("unexpected read_markdown call")
+    }
+
+    async fn write_markdown(
+        &self,
+        _document_id: &str,
+        _document_token: &DocumentPermissionToken,
+        _expected_revision: &str,
+        _markdown: &str,
+    ) -> anyhow::Result<crate::domain::ports::editing::MarkdownWrite> {
+        panic!("unexpected write_markdown call")
+    }
+
     async fn add_comment_mark(
         &self,
         document_id: &str,
