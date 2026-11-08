@@ -787,6 +787,11 @@ impl<'state> StateRef<'state> {
                 });
             }
         }
+        if slot.state.is_some() {
+            self.state
+                .shared_state_configs
+                .learn(slot.type_index, state_key)?;
+        }
         state_key.read(slot.state.as_deref())
     }
     /// State change.

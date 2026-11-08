@@ -6,6 +6,94 @@ static FOLDED: StateKey<String> = StateKey::new("folded", |value| {
         .into()
 })
 .with_is_equal(|a, b| a.eq_ignore_ascii_case(b));
+
+#[test]
+fn learned_state_import_order_is_scoped_to_editor_and_exact_class() -> Result<(), Error> {
+    let mut editor = Editor::builder(EditorMode::Headless)
+        .build()
+        .expect("builder");
+    let json = serde_json::json!({"type":"text","text":"text","$":{"folded":"value","extra":1}});
+    {
+        let mut tx = editor.transaction();
+        let first = tx.import_node(json.as_object().expect("node"))?;
+        tx.set_state(first, &FOLDED, "updated".into())?;
+        assert_eq!(
+            to_js_json_string(&tx.export_json(first)?["$"]),
+            r#"{"folded":"updated","extra":1}"#
+        );
+        let second = tx.import_node(json.as_object().expect("node"))?;
+        assert_eq!(
+            to_js_json_string(&tx.export_json(second)?["$"]),
+            r#"{"extra":1,"folded":"value"}"#
+        );
+        let paragraph = tx.import_node(
+            serde_json::json!({"type":"paragraph","$":{"folded":"value","extra":1}})
+                .as_object()
+                .expect("paragraph"),
+        )?;
+        assert_eq!(
+            to_js_json_string(&tx.export_json(paragraph)?["$"]),
+            r#"{"folded":"value","extra":1}"#
+        );
+    }
+    // Shared configs survive a parse/update boundary, as upstream's registered-node map does.
+    let raw: SerializedEditorState = serde_json::from_str(
+        r#"{"root":{"type":"root","children":[{"type":"paragraph","children":[{"type":"text","text":"text","$":{"folded":"value","extra":1}}]}]}}"#,
+    )?;
+    let state = editor.parse_editor_state(&raw)?;
+    assert_eq!(
+        to_js_json_string(&state.to_json()?.root["children"][0]["children"][0]["$"]),
+        r#"{"extra":1,"folded":"value"}"#
+    );
+    let mut fresh = Editor::builder(EditorMode::Headless)
+        .build()
+        .expect("fresh builder");
+    let state = fresh.parse_editor_state(&raw)?;
+    assert_eq!(
+        to_js_json_string(&state.to_json()?.root["children"][0]["children"][0]["$"]),
+        r#"{"folded":"value","extra":1}"#
+    );
+    Ok(())
+}
+#[test]
+fn state_reads_teach_later_imports_and_copy_on_write_prunes_known_slots() -> Result<(), Error> {
+    let mut editor = Editor::builder(EditorMode::Headless)
+        .build()
+        .expect("builder");
+    let json = serde_json::json!({"type":"text","text":"text","$":{"folded":"value","extra":1}});
+    let (first, _) = editor.update(|tx| {
+        let first = tx.import_node(json.as_object().expect("node"))?;
+        assert_eq!(tx.get_state(first, &FOLDED)?, "value");
+        let second = tx.import_node(json.as_object().expect("node"))?;
+        assert_eq!(
+            to_js_json_string(&tx.export_json(second)?["$"]),
+            r#"{"extra":1,"folded":"value"}"#
+        );
+        let paragraph = tx.create(Paragraph::default())?;
+        tx.append(paragraph, &[first, second])?;
+        tx.append(NodeKey::ROOT, &[paragraph.key()])?;
+        Ok(first)
+    })?;
+    let before = editor.state().clone();
+    assert_eq!(
+        to_js_json_string(&before.view().export_json(first)?["$"]),
+        r#"{"folded":"value","extra":1}"#
+    );
+    editor.update(|tx| {
+        tx.set_state(first, &FOLDED, "next".into())?;
+        assert_eq!(
+            to_js_json_string(&tx.export_json(first)?["$"]),
+            r#"{"extra":1,"folded":"next"}"#
+        );
+        Ok(())
+    })?;
+    assert_eq!(
+        to_js_json_string(&before.view().export_json(first)?["$"]),
+        r#"{"folded":"value","extra":1}"#
+    );
+    Ok(())
+}
+
 #[test]
 fn custom_state_equality_and_unknown_introspection() -> Result<(), Error> {
     assert_eq!(FOLDED.name(), "folded");

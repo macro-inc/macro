@@ -16,6 +16,7 @@ pub(crate) type NodeMap = imbl::GenericHashMap<
 #[derive(Clone)]
 /// s2: UPD-02
 pub struct EditorState {
+    pub(crate) shared_state_configs: Arc<crate::node_state::SharedStateConfigs>,
     pub(crate) registry: Arc<Registry>,
     pub(crate) nodes: NodeMap,
     pub(crate) selection: Option<Selection>,
@@ -43,6 +44,7 @@ impl EditorState {
             }),
         );
         Ok(Self {
+            shared_state_configs: Default::default(),
             registry,
             nodes,
             selection: None,

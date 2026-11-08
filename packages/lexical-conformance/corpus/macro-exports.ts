@@ -34,6 +34,37 @@ const inputs = readFileSync(
     return count < 3;
   });
 inputs.push({
+  name: 'custom-code:learned-state-order',
+  input: {
+    root: {
+      type: 'root',
+      children: [
+        {
+          type: 'custom-code',
+          version: 1,
+          language: 'rust',
+          $: { id: 'first', extra: 'kept' },
+          children: [{ type: 'text', text: 'code' }],
+        },
+        {
+          type: 'custom-code',
+          version: 1,
+          language: 'rust',
+          $: { id: 'second', extra: 'kept' },
+          children: [{ type: 'text', text: 'code' }],
+        },
+        {
+          type: 'custom-code',
+          version: 1,
+          language: 'rust',
+          $: { id: 'third', extra: 'kept' },
+          children: [{ type: 'text', text: 'code' }],
+        },
+      ],
+    },
+  },
+});
+inputs.push({
   name: 'partial-import:export',
   input: {
     root: {
