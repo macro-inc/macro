@@ -1,6 +1,6 @@
 //! Record identity allocation shared by independent callback dispatch frames.
 use super::{Result, fail};
-use lexical_model::NodeKey;
+use lexical_model::{ForeignRecordIdentity, NodeKey};
 use std::{
     collections::HashMap,
     sync::{Arc, Mutex},
@@ -11,19 +11,24 @@ pub(crate) struct RecordIdentities(Arc<Mutex<Records>>);
 
 #[derive(Default)]
 struct Records {
-    by_pointer: HashMap<(NodeKey, usize), (u64, u64)>,
+    by_record: HashMap<(NodeKey, ForeignRecordIdentity), (u64, u64)>,
     next: u64,
 }
 
 impl RecordIdentities {
     /// Only owned identity data is accessed under this guard; no model or host
     /// call runs in this scope.
-    pub fn identify(&self, key: NodeKey, pointer: usize, version: u64) -> Result<(u64, u64)> {
+    pub fn identify(
+        &self,
+        key: NodeKey,
+        identity: ForeignRecordIdentity,
+        version: u64,
+    ) -> Result<(u64, u64)> {
         let mut records = self
             .0
             .lock()
             .map_err(|_| fail("record identity store poisoned"))?;
-        if let Some(record) = records.by_pointer.get(&(key, pointer)) {
+        if let Some(record) = records.by_record.get(&(key, identity.clone())) {
             return Ok(*record);
         }
         let record = (version, records.next);
@@ -31,7 +36,7 @@ impl RecordIdentities {
             .next
             .checked_add(1)
             .ok_or_else(|| fail("record identity overflow"))?;
-        records.by_pointer.insert((key, pointer), record);
+        records.by_record.insert((key, identity), record);
         Ok(record)
     }
 
@@ -39,7 +44,7 @@ impl RecordIdentities {
         self.0
             .lock()
             .map_err(|_| fail("record identity store poisoned"))?
-            .by_pointer
+            .by_record
             .retain(|_, (owner, _)| *owner != version);
         Ok(())
     }

@@ -388,10 +388,6 @@ fn owned_read_materializes_the_current_native_projection_and_keeps_it_independen
         let root_identity = snapshot.record_identity(NodeKey::ROOT)?;
         assert!(root_identity.matches(tx.node_or_err(NodeKey::ROOT)?));
         assert!(root_identity.matches(snapshot.node_or_err(NodeKey::ROOT)?));
-        #[expect(
-            clippy::mutable_key_type,
-            reason = "tokens hash only their pinned allocation address"
-        )]
         let mut identities = std::collections::HashSet::new();
         identities.insert(identity.clone());
         identities.insert(snapshot.record_identity(key)?);
@@ -737,5 +733,60 @@ fn independent_read_peer_preserves_inputs_and_rejects_guarded_writes_before_hook
     ));
     tx.commit()?;
     assert_eq!(editor.state().root_text_content().as_ref(), "pending");
+    Ok(())
+}
+
+#[test]
+fn record_identity_tokens_preserve_writability_and_change_only_with_record_copies()
+-> Result<(), Error> {
+    let mut editor = Editor::builder(EditorMode::Headless)
+        .build()
+        .expect("editor");
+    let mut tx = editor.transaction();
+    let key = tx.create_text("first")?.key();
+    let identity = tx.view().foreign_record_identity(key)?;
+    assert!(tx.is_writable(key));
+    tx.text(key)?.set_text_content("same record")?;
+    assert!(identity == tx.view().foreign_record_identity(key)?);
+    assert!(identity.clone().matches(tx.node_or_err(key)?));
+    assert!(tx.is_writable(key));
+    let snapshot = tx.view().snapshot_for_foreign_read()?;
+    tx.text(key)?.set_text_content("copied record")?;
+    assert!(identity != tx.view().foreign_record_identity(key)?);
+    assert!(!identity.matches(tx.node_or_err(key)?));
+    assert!(identity.matches(snapshot.node_or_err(key)?));
+    assert!(identity == snapshot.record_identity(key)?);
+    assert_eq!(snapshot.text_content(key), "same record");
+    Ok(())
+}
+
+#[test]
+fn retaining_a_record_identity_does_not_retain_the_node_payload() -> Result<(), Error> {
+    #[derive(Clone, Debug, Default, PartialEq, serde::Serialize, serde::Deserialize)]
+    struct ResourceNode {
+        #[serde(skip)]
+        resource: Arc<()>,
+    }
+    impl NodeType for ResourceNode {
+        const TYPE: &'static str = "identity-resource";
+        type Kind = DecoratorKind;
+        impl_default_node!();
+    }
+    impl DecoratorNode for ResourceNode {
+        decorator_node_base!();
+    }
+    let resource = Arc::new(());
+    let observer = Arc::downgrade(&resource);
+    let mut editor = Editor::builder(EditorMode::Headless)
+        .node::<ResourceNode>()
+        .build()
+        .expect("editor");
+    let mut tx = editor.transaction();
+    let key = tx.create(ResourceNode { resource })?.key();
+    let identity = tx.view().foreign_record_identity(key)?;
+    assert!(observer.upgrade().is_some());
+    drop(tx);
+    assert!(observer.upgrade().is_none());
+    assert!(identity == identity.clone());
     Ok(())
 }

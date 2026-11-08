@@ -612,3 +612,72 @@ fn callback_native_super_uses_the_shared_index_and_keeps_nested_virtual_hooks() 
     assert_eq!(splice.load(Ordering::SeqCst), 2);
     Ok(())
 }
+
+#[test]
+fn projected_read_captures_keep_the_source_record_handle_and_owner_version() -> Result<()> {
+    #[derive(Clone, Debug, Default, PartialEq, serde::Serialize, serde::Deserialize)]
+    struct NativeProbe {}
+    impl NodeType for NativeProbe {
+        const TYPE: &'static str = "identity-probe";
+        type Kind = ElementKind;
+        impl_default_node!();
+    }
+    impl ElementNode for NativeProbe {
+        element_node_base!();
+        fn set_indent(
+            tx: &mut Transaction<'_>,
+            _: Id<Self>,
+            _: u32,
+        ) -> std::result::Result<(), Error> {
+            let capture = tx.view().snapshot_for_foreign_read()?;
+            let captures = tx
+                .extension::<Arc<std::sync::Mutex<Vec<ForeignReadSnapshot>>>>()?
+                .clone();
+            captures.lock().expect("captures").push(capture);
+            Ok(())
+        }
+    }
+    struct Hooks;
+    impl ForeignHooks for Hooks {}
+    let captures = Arc::new(std::sync::Mutex::new(Vec::<ForeignReadSnapshot>::new()));
+    let mut editor = Editor::builder(EditorMode::Headless)
+        .node::<NativeProbe>()
+        .extension_state(captures.clone())
+        .foreign_node(ForeignNodeType {
+            type_name: "projected-probe".into(),
+            class_name: "ProjectedProbe".into(),
+            kind: NodeKind::Element,
+            extends: Some("identity-probe"),
+            required_state: vec![],
+            hooks: Arc::new(Hooks),
+        })
+        .build()
+        .expect("editor");
+    let (key, _) = editor.update(|tx| {
+        let key = tx.create_foreign("projected-probe", SerializedNode::new())?;
+        tx.append(NodeKey::ROOT, &[key])?;
+        Ok(key)
+    })?;
+    let mut context = Context::default();
+    let mut tx = editor.transaction();
+    context.begin_update(&mut tx)?;
+    let source = context.replay.node(tx.view(), key)?;
+    let handle = context.encode(source.clone())?;
+    assert_eq!(handle["ver"], 0);
+    tx.set_indent(key, 0)?;
+    let capture = captures
+        .lock()
+        .expect("capture")
+        .pop()
+        .expect("native capture");
+    let projected = context.replay.node(capture.view(), key)?;
+    assert_eq!(projected, source);
+    assert_eq!(context.encode(projected)?["$h"], handle["$h"]);
+    capture.with_read_transaction(tx.committed_state(), |peer| -> Result<()> {
+        let value = context.replay.node(peer.view(), key)?;
+        assert_eq!(value, source);
+        assert_eq!(context.encode(value)?["$h"], handle["$h"]);
+        Ok(())
+    })??;
+    Ok(())
+}
