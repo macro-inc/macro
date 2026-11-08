@@ -12646,6 +12646,7 @@ dependencies = [
  "lexical_rich_nodes",
  "mention_date",
  "nom 8.0.0",
+ "rand_chacha 0.9.0",
  "regress",
  "serde",
  "serde_json",
