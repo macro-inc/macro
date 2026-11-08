@@ -23,6 +23,7 @@ feature exports owned HTML; browser DOM import and layout stay in views.
 - Omit the synthetic tbody for empty tables and preserve linkedom anchor href decoding.
 - Emit temporary table-cell wire keys until enclosing table export removes them.
 - Keep block-only registration separate from opt-in transforms and plugins.
+- Use table::register_table_behavior for application registries that already own table nodes; register_table installs both.
 - Keep physical grid coordinates separate from span coordinates; the physical column count comes from the last row.
 - Keep DOM geometry behind TableView and apply returned observer effects in the host.
 - Table span reads retain map-time writable identity; frozen cells use captured fields, live cells read current fields.
