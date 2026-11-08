@@ -134,9 +134,7 @@ impl Context {
             ));
         }
         self.replay.states.remove(&version);
-        self.replay
-            .records
-            .retain(|_, (owner, _)| *owner != version);
+        self.replay.record_ids.release_version(version)?;
         let released = self
             .owners
             .iter()

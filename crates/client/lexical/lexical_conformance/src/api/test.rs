@@ -270,3 +270,88 @@ fn foreign_link_ancestry_does_not_route_core_methods_through_a_native_payload_ca
     );
     Ok(())
 }
+
+#[test]
+fn nested_model_callback_frames_share_record_identity_without_borrowing_the_parent_dispatcher()
+-> Result<(), crate::replay::ReplayError> {
+    struct Hooks {
+        records: crate::replay::RecordIdentities,
+        seen: std::sync::Arc<std::sync::Mutex<Vec<serde_json::Value>>>,
+    }
+    impl ForeignHooks for Hooks {
+        fn insert_after(
+            &self,
+            tx: &mut Transaction<'_>,
+            _: NodeKey,
+            sibling: NodeKey,
+            _: bool,
+        ) -> Override<std::result::Result<NodeKey, Error>> {
+            let result = (|| -> Result<(), crate::replay::ReplayError> {
+                let mut child = Replayer {
+                    record_ids: self.records.clone(),
+                    version: 1,
+                    in_callback: true,
+                    ..Replayer::default()
+                };
+                let nested = api::call(
+                    &mut child,
+                    tx,
+                    &json!({"fn":"lexical.$createTextNode","args":["nested"]}),
+                )?;
+                tx.append(sibling, &[crate::replay::node_key(&nested)?])?;
+                self.seen.lock().expect("test log").push(nested);
+                Ok(())
+            })();
+            match result {
+                Ok(()) => Override::Inherit,
+                Err(error) => Override::Value(Err(Error::invariant(error.to_string()))),
+            }
+        }
+    }
+    let records = crate::replay::RecordIdentities::default();
+    let seen = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
+    let mut editor = Editor::builder(EditorMode::Headless)
+        .foreign_node(ForeignNodeType {
+            type_name: "callback-paragraph".into(),
+            class_name: "CallbackParagraph".into(),
+            kind: NodeKind::Element,
+            extends: Some("paragraph"),
+            required_state: vec![],
+            hooks: std::sync::Arc::new(Hooks {
+                records: records.clone(),
+                seen: seen.clone(),
+            }),
+        })
+        .build()
+        .expect("editor");
+    let mut parent = Replayer {
+        record_ids: records.clone(),
+        version: 1,
+        ..Replayer::default()
+    };
+    let mut tx = editor.transaction();
+    let first = tx.create_foreign("callback-paragraph", SerializedNode::new())?;
+    let sibling = tx.create(Paragraph::default())?.key();
+    tx.append(NodeKey::ROOT, &[first])?;
+    let first = parent.node(tx.view(), first)?;
+    let sibling = parent.node(tx.view(), sibling)?;
+    let returned = api::call(
+        &mut parent,
+        &mut tx,
+        &json!({"fn":"LexicalNode.insertAfter","this":first,"args":[sibling]}),
+    )?;
+    let nested = seen.lock().expect("test log")[0].clone();
+    assert_ne!(nested["identity"], first["identity"]);
+    assert_ne!(nested["identity"], sibling["identity"]);
+    assert_eq!(returned["identity"], sibling["identity"]);
+    assert_eq!(
+        parent.node(tx.view(), crate::replay::node_key(&nested)?)?,
+        nested
+    );
+    assert_eq!(tx.text_content(NodeKey::ROOT), "\n\nnested");
+    tx.commit()?;
+    records.release_version(1)?;
+    let recaptured = parent.node(editor.state().view(), crate::replay::node_key(&nested)?)?;
+    assert_ne!(recaptured["identity"], nested["identity"]);
+    Ok(())
+}
