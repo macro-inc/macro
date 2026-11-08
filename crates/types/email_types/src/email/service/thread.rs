@@ -3,7 +3,7 @@ use crate::service::attachment::Attachment;
 use crate::service::contact::Contact;
 use chrono::{DateTime, Utc};
 use macro_user_id::user_id::MacroUserIdStr;
-use models_pagination::{Identify, SimpleSortMethod, SortOn};
+use pagination_types::{Identify, SimpleSortMethod, SortOn};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use serde_with::{DeserializeFromStr, SerializeDisplay};
@@ -98,10 +98,10 @@ impl ThreadPreviewCursor {
 impl SortOn<SimpleSortMethod> for ThreadPreviewCursor {
     fn sort_on(
         sort: SimpleSortMethod,
-    ) -> impl FnMut(&Self) -> models_pagination::CursorVal<SimpleSortMethod> {
+    ) -> impl FnMut(&Self) -> pagination_types::CursorVal<SimpleSortMethod> {
         move |v| {
             let last_val = v.timestamp_for_sort_method(sort);
-            models_pagination::CursorVal {
+            pagination_types::CursorVal {
                 sort_type: sort,
                 last_val,
             }

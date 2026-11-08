@@ -35,7 +35,7 @@ use macro_authorization::{
 use macro_user_id::cow_str::CowLike;
 use macro_user_id::user_id::MacroUserIdStr;
 use macro_user_id::{lowercased::Lowercase, user_id::MacroUserId};
-use models_pagination::{CreatedAt, PaginateOn, Query};
+use pagination_types::{CreatedAt, PaginateOn, Query};
 use rootcause::Report;
 use std::sync::{
     Arc, Mutex,
@@ -609,7 +609,7 @@ impl ChannelService for RecordingMutationService {
     async fn get_channel_attachments(
         &self,
         _channel_id: ChannelId,
-        _query: models_pagination::Query<Uuid, CreatedAt, ()>,
+        _query: pagination_types::Query<Uuid, CreatedAt, ()>,
         _limit: u16,
         _attachment_type: Option<ChannelAttachmentType>,
     ) -> Result<ChannelAttachmentsPage, ChannelMessagesErr> {

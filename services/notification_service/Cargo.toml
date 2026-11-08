@@ -57,7 +57,7 @@ shared_types = { workspace = true, features = ["axum"] }
 entity_kind = { workspace = true }
 model_error_response = { workspace = true }
 model_notifications = { workspace = true }
-models_pagination = { workspace = true, features = [
+pagination_types = { workspace = true, features = [
   "axum",
 ] }
 notification = { workspace = true }

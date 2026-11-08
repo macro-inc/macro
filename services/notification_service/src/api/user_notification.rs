@@ -200,7 +200,7 @@ async fn list_typed_notifications<S: ::notification::domain::service::Notificati
     user: MacroAuthorizationExtractor<AuthorizationService, UserOrInternal>,
     query: axum::extract::Query<::notification_inbound::http::Params>,
     cursor: Option<
-        models_pagination::CursorWithValAndFilter<uuid::Uuid, models_pagination::CreatedAt, ()>,
+        pagination_types::CursorWithValAndFilter<uuid::Uuid, pagination_types::CreatedAt, ()>,
     >,
 ) -> Result<
     axum::Json<GetAllUserNotificationsResponse>,
@@ -313,7 +313,7 @@ async fn bulk_get_typed_notifications_by_event_item_ids<
     user: MacroAuthorizationExtractor<AuthorizationService, UserOrInternal>,
     query: axum::extract::Query<::notification_inbound::http::Params>,
     cursor: Option<
-        models_pagination::CursorWithValAndFilter<uuid::Uuid, models_pagination::CreatedAt, ()>,
+        pagination_types::CursorWithValAndFilter<uuid::Uuid, pagination_types::CreatedAt, ()>,
     >,
     body: axum::Json<::notification_inbound::http::BulkGetByEventItemIdsRequest>,
 ) -> Result<
@@ -373,7 +373,7 @@ async fn get_typed_by_event_item_id<S: ::notification::domain::service::Notifica
     path: axum::extract::Path<::notification_inbound::http::EventItemIdPath>,
     query: axum::extract::Query<::notification_inbound::http::Params>,
     cursor: Option<
-        models_pagination::CursorWithValAndFilter<uuid::Uuid, models_pagination::CreatedAt, ()>,
+        pagination_types::CursorWithValAndFilter<uuid::Uuid, pagination_types::CreatedAt, ()>,
     >,
 ) -> Result<
     axum::Json<GetAllUserNotificationsResponse>,

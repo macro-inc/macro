@@ -40,7 +40,7 @@ use entity_kind::EntityType;
 use frecency_core::ports::FrecencyQueryService;
 use macro_event_broker::{MacroEventBroker, NoopMacroEventBroker};
 use macro_user_id::user_id::MacroUserIdStr;
-use models_pagination::{PaginatedCursor, SimpleSortMethod};
+use pagination_types::{PaginatedCursor, SimpleSortMethod};
 use std::collections::{HashMap, HashSet};
 use uuid::Uuid;
 

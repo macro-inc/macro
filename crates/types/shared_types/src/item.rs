@@ -1,7 +1,7 @@
 use super::{chat::Chat, document::BasicDocument};
 use crate::project::Project;
-use models_pagination::Identify;
 use models_permissions::share_permission::access_level::AccessLevel;
+use pagination_types::Identify;
 use serde::{Deserialize, Serialize};
 use std::cmp::Ordering;
 use strum::EnumString;

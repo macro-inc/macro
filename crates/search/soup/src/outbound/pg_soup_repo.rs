@@ -14,9 +14,9 @@ use crate::{
 };
 use item_filters::ast::EntityFilterAst;
 use macro_user_id::user_id::MacroUserIdStr;
-use models_pagination::{Identify, SortOn};
 use models_properties::service::property_definition_with_options::PropertyDefinitionWithOptions;
 use models_soup::{SoupProperty, item::SoupItem};
+use pagination_types::{Identify, SortOn};
 use readonly_pool::ReadOnlyPool;
 use system_properties::SystemPropertyKey;
 
@@ -364,7 +364,7 @@ impl SoupRepo for PgSoupRepo {
 
 fn sort_and_truncate_hydrations(
     items: &mut Vec<SoupProjectionHydration>,
-    sort: models_pagination::SimpleSortMethod,
+    sort: pagination_types::SimpleSortMethod,
     limit: u16,
 ) {
     let mut sort_on = SoupItem::sort_on(sort);
@@ -379,7 +379,7 @@ fn sort_and_truncate_hydrations(
 
 fn sort_and_truncate(
     items: &mut Vec<SoupItem<()>>,
-    sort: models_pagination::SimpleSortMethod,
+    sort: pagination_types::SimpleSortMethod,
     limit: u16,
 ) {
     let mut sort_on = SoupItem::sort_on(sort);

@@ -938,8 +938,8 @@ async fn thread_in_inbox(
         view: PreviewView::StandardLabel(PreviewViewStandardLabel::Inbox),
         link_ids: vec![link.id],
         limit: 1,
-        query: models_pagination::Query::Sort(
-            models_pagination::SimpleSortMethod::UpdatedAt,
+        query: pagination_types::Query::Sort(
+            pagination_types::SimpleSortMethod::UpdatedAt,
             Some(Arc::new(filter)),
         ),
         team_id: None,

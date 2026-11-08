@@ -15,8 +15,8 @@ use crate::{
 };
 use chrono::{DateTime, Utc};
 use entity_kind::{Entity, EntityType};
-use models_pagination::{Identify, SimpleSortMethod, SortOn};
 use models_properties::{EntityReference, EntityType as PropertiesEntityType};
+use pagination_types::{Identify, SimpleSortMethod, SortOn};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
@@ -652,10 +652,10 @@ impl<T> Identify for SoupItem<T> {
 impl<T> SortOn<SimpleSortMethod> for SoupItem<T> {
     fn sort_on(
         sort: SimpleSortMethod,
-    ) -> impl FnMut(&Self) -> models_pagination::CursorVal<SimpleSortMethod> {
+    ) -> impl FnMut(&Self) -> pagination_types::CursorVal<SimpleSortMethod> {
         move |v| {
             let last_val = v.cursor_timestamp(sort);
-            models_pagination::CursorVal {
+            pagination_types::CursorVal {
                 sort_type: sort,
                 last_val,
             }

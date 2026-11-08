@@ -452,7 +452,7 @@ async fn mailbox_previews_distinguish_categories_trash_and_imported_drafts(db: P
         ports::EmailRepo,
     };
     use macro_user_id::user_id::MacroUserIdStr;
-    use models_pagination::{Query, SimpleSortMethod};
+    use pagination_types::{Query, SimpleSortMethod};
     let (sync, link) = fixture(&db).await;
     let stream = sync
         .claim_stream(macro_uuid::generate_uuid_v7())

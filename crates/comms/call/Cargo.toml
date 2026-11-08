@@ -80,7 +80,7 @@ feature_flags = { workspace = true, optional = true }
 messages = { workspace = true, features = ["ports"], optional = true }
 entity_kind = { workspace = true }
 model_error_response = { workspace = true, optional = true }
-models_pagination = { workspace = true }
+pagination_types = { workspace = true }
 models_permissions = { workspace = true }
 notification = { workspace = true, default-features = true }
 rootcause = { workspace = true }

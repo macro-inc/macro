@@ -16,7 +16,7 @@ use item_filters::ast::{
 };
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
 use macro_user_id::{cow_str::CowLike, user_id::MacroUserIdStr};
-use models_pagination::{Identify, Query, SimpleSortMethod};
+use pagination_types::{Identify, Query, SimpleSortMethod};
 use sqlx::{Pool, Postgres};
 use std::sync::Arc;
 

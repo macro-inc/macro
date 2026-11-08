@@ -35,7 +35,7 @@ where
         use crate::domain::models::{PreviewCursorQuery, PreviewView, PreviewViewStandardLabel};
         use filter_ast::Expr;
         use item_filters::ast::email::EmailLiteral;
-        use models_pagination::{Query, SimpleSortMethod};
+        use pagination_types::{Query, SimpleSortMethod};
         use std::sync::Arc;
 
         let thread_ids: Vec<Uuid> = receipts

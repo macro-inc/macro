@@ -61,7 +61,7 @@ shared_types = { workspace = true, optional = true }
 entity_kind = { workspace = true, optional = true }
 model_notifications = { workspace = true, optional = true }
 model_owner = { workspace = true, optional = true }
-models_pagination = { workspace = true }
+pagination_types = { workspace = true }
 models_properties = { workspace = true, optional = true }
 properties = { workspace = true, features = ["ports"], optional = true }
 notification = { workspace = true, default-features = true, optional = true }

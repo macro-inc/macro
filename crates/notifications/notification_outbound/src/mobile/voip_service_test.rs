@@ -189,7 +189,7 @@ impl NotificationRepository for MockRepo {
         &self,
         _: MacroUserIdStr<'_>,
         _: u32,
-        _: models_pagination::Query<uuid::Uuid, models_pagination::CreatedAt, ()>,
+        _: pagination_types::Query<uuid::Uuid, pagination_types::CreatedAt, ()>,
         _: notification::domain::models::request::NotificationListFilters,
     ) -> Result<Vec<notification::domain::models::UserNotificationRow<T>>, Report> {
         unimplemented!()
@@ -199,7 +199,7 @@ impl NotificationRepository for MockRepo {
         _: MacroUserIdStr<'_>,
         _: &[uuid::Uuid],
         _: u32,
-        _: models_pagination::Query<uuid::Uuid, models_pagination::CreatedAt, ()>,
+        _: pagination_types::Query<uuid::Uuid, pagination_types::CreatedAt, ()>,
         _: notification::domain::models::request::NotificationListFilters,
     ) -> Result<Vec<notification::domain::models::UserNotificationRow<T>>, Report> {
         unimplemented!()

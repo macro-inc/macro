@@ -11,8 +11,8 @@ pub use grouping_types::GroupByField;
 use grouping_types::{date_bucket_label, date_bucket_order};
 use indexmap::IndexMap;
 use item_filters::ast::EntityFilterAst;
-use models_pagination::{Base64Str, CursorVal, CursorWithValAndFilter, Identify, SortOn};
 use models_soup::item::SoupItem;
+use pagination_types::{Base64Str, CursorVal, CursorWithValAndFilter, Identify, SortOn};
 use serde::Serialize;
 use std::collections::HashMap;
 use uuid::Uuid;
@@ -135,7 +135,7 @@ pub fn build_grouped_response(
             document_server_facts.insert(item_id, facts);
         }
         let timestamp = get_cursor_val(&grouped_item.item).last_val;
-        let cursor_val = models_pagination::CursorVal {
+        let cursor_val = pagination_types::CursorVal {
             sort_type: sort_method,
             last_val: sort_method.position(grouped_item.sort_key, timestamp),
         };

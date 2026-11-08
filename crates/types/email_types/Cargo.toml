@@ -10,7 +10,7 @@ base64 = { workspace = true }
 chrono = { workspace = true }
 email_utils = { workspace = true }
 macro_user_id = { workspace = true }
-models_pagination = { workspace = true }
+pagination_types = { workspace = true }
 schemars = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true, features = ["raw_value"] }

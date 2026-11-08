@@ -12,7 +12,7 @@ use channels::domain::{
     service::ChannelServiceImpl,
 };
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
-use models_pagination::{Query, SimpleSortMethod};
+use pagination_types::{Query, SimpleSortMethod};
 use sqlx::PgPool;
 use std::{
     collections::HashSet,

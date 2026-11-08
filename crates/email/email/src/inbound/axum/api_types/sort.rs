@@ -1,4 +1,4 @@
-use models_pagination::SimpleSortMethod;
+use pagination_types::SimpleSortMethod;
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 

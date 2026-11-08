@@ -22,9 +22,9 @@ use item_filters::{
 };
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
 use macro_user_id::{cow_str::CowLike, user_id::MacroUserIdStr};
-use models_pagination::Identify;
-use models_pagination::{Frecency, PaginateOn, Query, SimpleSortMethod};
 use models_soup::item::SoupItem;
+use pagination_types::Identify;
+use pagination_types::{Frecency, PaginateOn, Query, SimpleSortMethod};
 use sqlx::{PgPool, Pool, Postgres};
 use std::collections::HashSet;
 use std::sync::Arc;
@@ -241,7 +241,7 @@ async fn test_get_user_items_expanded_cursor(pool: Pool<Postgres>) -> anyhow::Re
         Query::new(
             result.next_cursor.map(|s| {
                 let decoded = s.decode_json().unwrap();
-                models_pagination::Cursor {
+                pagination_types::Cursor {
                     id: decoded.id,
                     limit: decoded.limit,
                     val: decoded.val,
@@ -701,7 +701,7 @@ async fn test_no_frecency_expanded_cursor_pagination(pool: Pool<Postgres>) -> an
         Query::new(
             result.next_cursor.map(|s| {
                 let decoded = s.decode_json().unwrap();
-                models_pagination::Cursor {
+                pagination_types::Cursor {
                     id: decoded.id,
                     limit: decoded.limit,
                     val: decoded.val,
@@ -1813,10 +1813,10 @@ async fn test_cursor_pagination_with_document_filter(db: PgPool) -> anyhow::Resu
         ExpandedDynamicCursorArgs {
             user_id: user_id.copied(),
             limit: 3,
-            cursor: Query::Cursor(models_pagination::Cursor {
+            cursor: Query::Cursor(pagination_types::Cursor {
                 id: cursor_decoded.id,
                 limit: cursor_decoded.limit,
-                val: models_pagination::CursorVal {
+                val: pagination_types::CursorVal {
                     sort_type: cursor_decoded.val.sort_type.into(),
                     last_val: DynamicSortValue::Timestamp(cursor_decoded.val.last_val),
                 },
@@ -1924,10 +1924,10 @@ async fn test_cursor_pagination_with_combined_filters(db: PgPool) -> anyhow::Res
             ExpandedDynamicCursorArgs {
                 user_id: user_id.copied(),
                 limit: 2,
-                cursor: Query::Cursor(models_pagination::Cursor {
+                cursor: Query::Cursor(pagination_types::Cursor {
                     id: cursor_decoded.id,
                     limit: cursor_decoded.limit,
-                    val: models_pagination::CursorVal {
+                    val: pagination_types::CursorVal {
                         sort_type: cursor_decoded.val.sort_type.into(),
                         last_val: DynamicSortValue::Timestamp(cursor_decoded.val.last_val),
                     },
@@ -2022,7 +2022,7 @@ async fn test_cursor_pagination_filter_consistency(db: PgPool) -> anyhow::Result
                 let cursor_decoded = cursor.decode_json()?;
                 let filters_for_cursor =
                     EntityFilterAst::new_from_filters(entity_filters.clone())?.unwrap();
-                current_query = Query::Cursor(models_pagination::Cursor {
+                current_query = Query::Cursor(pagination_types::Cursor {
                     id: cursor_decoded.id,
                     limit: cursor_decoded.limit,
                     val: cursor_decoded.val,
@@ -2130,10 +2130,10 @@ async fn test_cursor_pagination_with_single_item_filter(db: PgPool) -> anyhow::R
             ExpandedDynamicCursorArgs {
                 user_id: user_id.copied(),
                 limit: 5,
-                cursor: Query::Cursor(models_pagination::Cursor {
+                cursor: Query::Cursor(pagination_types::Cursor {
                     id: cursor_decoded.id,
                     limit: cursor_decoded.limit,
-                    val: models_pagination::CursorVal {
+                    val: pagination_types::CursorVal {
                         sort_type: cursor_decoded.val.sort_type.into(),
                         last_val: DynamicSortValue::Timestamp(cursor_decoded.val.last_val),
                     },
@@ -3261,7 +3261,7 @@ async fn test_exhaustive_paginate_one_at_a_time(pool: Pool<Postgres>) -> anyhow:
             Some(cursor) => {
                 let decoded = cursor.decode_json().unwrap();
                 current_query = Query::new(
-                    Some(models_pagination::Cursor {
+                    Some(pagination_types::Cursor {
                         id: decoded.id,
                         limit: decoded.limit,
                         val: decoded.val,
@@ -3334,7 +3334,7 @@ async fn test_exhaustive_paginate_all_sort_methods(pool: Pool<Postgres>) -> anyh
                 Some(cursor) => {
                     let decoded = cursor.decode_json().unwrap();
                     current_query = Query::new(
-                        Some(models_pagination::Cursor {
+                        Some(pagination_types::Cursor {
                             id: decoded.id,
                             limit: decoded.limit,
                             val: decoded.val,
@@ -4522,7 +4522,7 @@ async fn test_dyn_paginate_one_at_a_time(db: PgPool) -> anyhow::Result<()> {
         match result.next_cursor {
             Some(cursor) => {
                 let decoded = cursor.decode_json().unwrap();
-                current_query = Query::Cursor(models_pagination::Cursor {
+                current_query = Query::Cursor(pagination_types::Cursor {
                     id: decoded.id,
                     limit: decoded.limit,
                     val: decoded.val,
@@ -4615,7 +4615,7 @@ async fn test_dyn_paginate_with_filters(db: PgPool) -> anyhow::Result<()> {
         match result.next_cursor {
             Some(cursor) => {
                 let decoded = cursor.decode_json()?;
-                current_query = Query::Cursor(models_pagination::Cursor {
+                current_query = Query::Cursor(pagination_types::Cursor {
                     id: decoded.id,
                     limit: decoded.limit,
                     val: decoded.val,

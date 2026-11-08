@@ -395,7 +395,7 @@ pub struct GetNotificationsByEventItemIdsRequest<'a> {
     /// Maximum number of results per page (default 20, max 500).
     pub limit: Option<u32>,
     /// Cursor for pagination.
-    pub cursor: models_pagination::Query<Uuid, models_pagination::CreatedAt, ()>,
+    pub cursor: pagination_types::Query<Uuid, pagination_types::CreatedAt, ()>,
     /// Filters to apply to the notification status fields.
     pub filters: NotificationListFilters,
 }

@@ -16,7 +16,7 @@ use item_filters::ast::{
     foreign_entity::ForeignEntityLiteral,
     github_pull_request::{GithubPullRequestLiteral, GithubPullRequestReviewStatus},
 };
-use models_pagination::SimpleSortMethod;
+use pagination_types::SimpleSortMethod;
 use uuid::Uuid;
 
 use super::PgGithubPullRequestRepo;

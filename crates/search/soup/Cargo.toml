@@ -26,7 +26,7 @@ axum = [
   "email/axum",
   "email/inbound",
   "item_filters/schema",
-  "models_pagination/axum",
+  "pagination_types/axum",
   "models_soup/schema",
 ]
 inbound = ["email/inbound", "entity_access/inbound", "ports"]
@@ -73,7 +73,7 @@ entity_kind = { workspace = true }
 model_error_response = { workspace = true, optional = true }
 model_owner = { workspace = true }
 grouping_types = { workspace = true }
-models_pagination = { workspace = true }
+pagination_types = { workspace = true }
 models_properties = { workspace = true }
 models_soup = { workspace = true }
 non_empty = { workspace = true }

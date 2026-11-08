@@ -8,7 +8,7 @@ use item_filters::ast::{
     calendar_event::CalendarEventLiteral, chat::ChatLiteral, document::DocumentLiteral,
     project::ProjectLiteral,
 };
-use models_pagination::{
+use pagination_types::{
     CursorVal, CursorWithValAndFilter, Identify, Query, SimpleSortMethod, SortOn,
 };
 use serde_json::{Value, json};

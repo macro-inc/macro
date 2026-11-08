@@ -14,7 +14,7 @@ use serde::de::DeserializeOwned;
 use uuid::Uuid;
 
 use entity_kind::Entity;
-use models_pagination::{CreatedAt, Query};
+use pagination_types::{CreatedAt, Query};
 
 use crate::domain::models::device::DeviceType;
 use crate::domain::models::{NotificationStatusPayload, TaggedContent};

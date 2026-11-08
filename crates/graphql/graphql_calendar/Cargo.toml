@@ -11,7 +11,7 @@ chrono = { workspace = true }
 futures = { workspace = true }
 graphql_common = { workspace = true }
 macro_user_id = { workspace = true }
-models_pagination = { workspace = true }
+pagination_types = { workspace = true }
 rootcause = { workspace = true }
 tracing = { workspace = true }
 uuid = { workspace = true }

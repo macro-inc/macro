@@ -32,11 +32,11 @@ use item_filters::ast::properties::{
 };
 use item_filters::ast::{EmailFilterAst, EntityFilterAst};
 use macro_user_id::user_id::MacroUserIdStr;
-use models_pagination::{
-    Base64SerdeErr, Base64Str, CursorWithValAndFilter, Query, SimpleSortMethod, TypeEraseCursor,
-};
 use models_properties::service::property_value::PropertyValue;
 use models_soup::item::SoupItem;
+use pagination_types::{
+    Base64SerdeErr, Base64Str, CursorWithValAndFilter, Query, SimpleSortMethod, TypeEraseCursor,
+};
 use soup::domain::models::{
     GroupedSortRequest, SoupErr, SoupPropertiesField, SoupQuery, SoupRequest, SoupSortDirection,
     SoupType,

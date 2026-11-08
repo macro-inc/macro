@@ -4,9 +4,9 @@ use crate::outbound::pg_soup_repo::unexpanded::{
 use entity_kind::EntityType;
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
 use macro_user_id::{cow_str::CowLike, user_id::MacroUserIdStr};
-use models_pagination::Identify;
-use models_pagination::{PaginateOn, Query, SimpleSortMethod};
 use models_soup::item::SoupItem;
+use pagination_types::Identify;
+use pagination_types::{PaginateOn, Query, SimpleSortMethod};
 use sqlx::{Pool, Postgres};
 use std::collections::HashMap;
 use uuid::Uuid;
@@ -253,7 +253,7 @@ async fn test_get_user_items_unexpanded_cursor(pool: Pool<Postgres>) -> anyhow::
         Query::new(
             result.next_cursor.map(|s| {
                 let decoded = s.decode_json().unwrap();
-                models_pagination::Cursor {
+                pagination_types::Cursor {
                     id: decoded.id,
                     limit: decoded.limit,
                     val: decoded.val,

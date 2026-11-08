@@ -3,7 +3,7 @@ use entity_access::domain::models::{EntityAccessReceipt, MemberTeamRole};
 use frecency_core::models::AggregateFrecency;
 use item_filters::ast::{CrmScope, LiteralTree, email::EmailLiteral};
 use macro_user_id::user_id::MacroUserIdStr;
-use models_pagination::{Identify, Query, SimpleSortMethod, SortOn};
+use pagination_types::{Identify, Query, SimpleSortMethod, SortOn};
 use serde_with::{DeserializeFromStr, SerializeDisplay};
 use std::str::FromStr;
 use strum::{Display, EnumString};
@@ -120,7 +120,7 @@ impl Identify for EnrichedEmailThreadPreview {
 impl SortOn<SimpleSortMethod> for EnrichedEmailThreadPreview {
     fn sort_on(
         sort: SimpleSortMethod,
-    ) -> impl FnMut(&Self) -> models_pagination::CursorVal<SimpleSortMethod> {
+    ) -> impl FnMut(&Self) -> pagination_types::CursorVal<SimpleSortMethod> {
         move |v| {
             let val = match sort {
                 SimpleSortMethod::ViewedAt => v.thread.viewed_at.unwrap_or_default(),
@@ -131,7 +131,7 @@ impl SortOn<SimpleSortMethod> for EnrichedEmailThreadPreview {
                 }
             };
 
-            models_pagination::CursorVal {
+            pagination_types::CursorVal {
                 sort_type: sort,
                 last_val: val,
             }

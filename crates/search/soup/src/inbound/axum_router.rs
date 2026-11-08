@@ -58,11 +58,11 @@ use macro_authorization::{
 };
 use macro_user_id::user_id::MacroUserIdStr;
 use model_error_response::ErrorResponse;
-use models_pagination::{
+use non_empty::IsEmpty;
+use pagination_types::{
     CursorWithValAndFilter, Frecency, NotifiedAt, PaginatedOpaqueCursor, SimpleSortMethod,
     TouchedByMe, TypeEraseCursor,
 };
-use non_empty::IsEmpty;
 use recursion::CollapsibleExt;
 use rootcause::{Report, report};
 use serde::{Deserialize, Serialize};
@@ -173,7 +173,7 @@ impl SoupApiSort {
             return Err(SoupHandlerErr::Expand);
         }
         Ok(match self {
-            Self::Property => SoupQuery::Property(models_pagination::Query::Sort(
+            Self::Property => SoupQuery::Property(pagination_types::Query::Sort(
                 DynamicSort::Property {
                     property_definition_id: property.ok_or(SoupHandlerErr::Expand)?,
                     direction,
@@ -653,7 +653,7 @@ where
                 create_fallback()?
             }
             Either5::E5(Some(cursor)) => {
-                SoupQuery::Property(models_pagination::Query::Cursor(cursor))
+                SoupQuery::Property(pagination_types::Query::Cursor(cursor))
             }
             Either5::E5(None) => create_fallback()?,
         };

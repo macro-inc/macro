@@ -5,7 +5,7 @@ use calendar_events::domain::{
 };
 use chrono::{DateTime, NaiveDate, NaiveTime, Utc};
 use graphql_common::parse_id;
-use models_pagination::Base64Str;
+use pagination_types::Base64Str;
 
 use crate::bad_input;
 

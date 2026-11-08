@@ -15,7 +15,7 @@ futures = { workspace = true }
 graphql_common = { workspace = true }
 macro_user_id = { workspace = true }
 entity_kind = { workspace = true }
-models_pagination = { workspace = true }
+pagination_types = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 tokio = { workspace = true }

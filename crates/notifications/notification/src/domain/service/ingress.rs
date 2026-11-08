@@ -31,7 +31,7 @@ use ::futures::future::join_all;
 use entity_kind::Entity;
 use macro_user_id::cow_str::CowLike;
 use macro_user_id::user_id::MacroUserIdStr;
-use models_pagination::{CreatedAt, PaginateOn, Paginated, Query, TypeEraseCursor};
+use pagination_types::{CreatedAt, PaginateOn, Paginated, Query, TypeEraseCursor};
 use rootcause::Report;
 use rootcause::prelude::ResultExt;
 use serde::Serialize;

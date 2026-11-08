@@ -8,11 +8,11 @@ use item_filters::{
     ast::{LiteralTree, call::CallLiteral},
 };
 use macro_user_id::user_id::MacroUserIdStr;
-use models_pagination::{Query, SimpleSortMethod};
 use models_permissions::share_permission::access_level::AccessLevel;
 use models_permissions::share_permission::team_share::{
     AuthorizedTeamShareCommand, TeamSharePolicyError,
 };
+use pagination_types::{Query, SimpleSortMethod};
 use uuid::Uuid;
 
 /// Represents an active call in a channel.

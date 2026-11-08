@@ -1,7 +1,7 @@
 use super::*;
 use item_filters::ast::channel::{ChannelLiteral, ChannelThreadLiteral};
 use item_filters::ast::foreign_entity::ForeignEntityLiteral;
-use models_pagination::CursorVal;
+use pagination_types::CursorVal;
 
 #[derive(Clone, Copy, Debug)]
 enum Leg {

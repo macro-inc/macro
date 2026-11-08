@@ -32,12 +32,12 @@ use item_filters::{
     },
 };
 use model_owner::Owner;
-use models_pagination::{
+use models_soup::document::{SoupDocument, SoupDocumentSubType};
+use ordered_float::OrderedFloat;
+use pagination_types::{
     Cursor, CursorVal, CursorWithValAndFilter, FrecencyValue, PaginatedCursor, SimpleSortMethod,
     TypeEraseCursor,
 };
-use models_soup::document::{SoupDocument, SoupDocumentSubType};
-use ordered_float::OrderedFloat;
 use rootcause::Report;
 use std::sync::{Arc, Mutex};
 use uuid::Uuid;
@@ -2891,7 +2891,7 @@ async fn touched_soup_full_page_builds_keyset_cursor() {
 
     assert_eq!(page.items.len(), 20);
     // A full candidate page continues from the last row's keyset position.
-    let decoded: CursorWithValAndFilter<String, models_pagination::TouchedByMe, EntityFilters> =
+    let decoded: CursorWithValAndFilter<String, pagination_types::TouchedByMe, EntityFilters> =
         page.next_cursor.unwrap().decode_json().unwrap();
     assert_eq!(decoded.id, last_id.to_string());
     assert_eq!(decoded.val.last_val, last_touch);
@@ -3239,7 +3239,7 @@ async fn notified_soup_full_page_builds_keyset_cursor() {
 
     assert_eq!(page.items.len(), 2);
     // A full candidate page continues from the last walked candidate.
-    let decoded: CursorWithValAndFilter<String, models_pagination::NotifiedAt, EntityFilters> =
+    let decoded: CursorWithValAndFilter<String, pagination_types::NotifiedAt, EntityFilters> =
         page.next_cursor.unwrap().decode_json().unwrap();
     assert_eq!(decoded.id, doc_2.to_string());
     assert_eq!(decoded.val.last_val, base + Days::new(4));
@@ -3288,7 +3288,7 @@ async fn notified_soup_caps_refill_rounds_and_keeps_a_cursor() {
     .unwrap();
 
     assert!(page.items.is_empty());
-    let decoded: CursorWithValAndFilter<String, models_pagination::NotifiedAt, EntityFilters> =
+    let decoded: CursorWithValAndFilter<String, pagination_types::NotifiedAt, EntityFilters> =
         page.next_cursor.unwrap().decode_json().unwrap();
     assert_eq!(decoded.id, ghost.to_string());
     assert_eq!(

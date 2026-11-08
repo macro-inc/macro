@@ -2,7 +2,7 @@ use chrono::{DateTime, Utc};
 use doppleganger::{Doppleganger, Mirror};
 use frecency_core::models::AggregateFrecency;
 use macro_user_id::user_id::MacroUserIdStr;
-use models_pagination::PaginatedOpaqueCursor;
+use pagination_types::PaginatedOpaqueCursor;
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 use uuid::Uuid;

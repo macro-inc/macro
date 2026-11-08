@@ -1,7 +1,7 @@
 //! Sort descriptors and position values for Soup's dynamic query.
 
 use chrono::{DateTime, Utc};
-use models_pagination::{Cursor, CursorVal, Query, SimpleSortMethod, Sortable};
+use pagination_types::{Cursor, CursorVal, Query, SimpleSortMethod, Sortable};
 use serde::{Deserialize, Serialize};
 use std::cmp::Ordering;
 use uuid::Uuid;

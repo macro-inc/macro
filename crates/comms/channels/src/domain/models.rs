@@ -8,9 +8,9 @@ use item_filters::ast::{
 #[cfg(feature = "list")]
 use macro_user_id::email::ReadEmailParts;
 use macro_user_id::user_id::MacroUserIdStr;
-use models_pagination::{CreatedAt, CursorVal, Identify, SortOn};
+use pagination_types::{CreatedAt, CursorVal, Identify, SortOn};
 #[cfg(feature = "list")]
-use models_pagination::{Query, SimpleSortMethod};
+use pagination_types::{Query, SimpleSortMethod};
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
 use uuid::Uuid;

@@ -212,7 +212,7 @@ model_notifications = { workspace = true }
 model_owner = { workspace = true }
 databases_types = { workspace = true }
 dcs_types = { workspace = true }
-models_pagination = { workspace = true, features = [
+pagination_types = { workspace = true, features = [
   "axum",
 ] }
 models_permissions = { workspace = true }

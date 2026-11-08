@@ -19,7 +19,7 @@ use item_filters::ast::{
     },
 };
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
-use models_pagination::{Cursor, CursorVal, Query, SimpleSortMethod};
+use pagination_types::{Cursor, CursorVal, Query, SimpleSortMethod};
 use serde_json::json;
 use sqlx::PgPool;
 use uuid::Uuid;

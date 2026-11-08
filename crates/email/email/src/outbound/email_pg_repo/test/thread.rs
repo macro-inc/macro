@@ -130,9 +130,9 @@ async fn mail_archive_filters_do_not_require_notifications(
             &[uuid::uuid!("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa")],
             50,
             &PreviewView::StandardLabel(PreviewViewStandardLabel::All),
-            models_pagination::Query::new(
+            pagination_types::Query::new(
                 None,
-                models_pagination::SimpleSortMethod::UpdatedAt,
+                pagination_types::SimpleSortMethod::UpdatedAt,
                 std::sync::Arc::new(filter),
             ),
             "macro|user1@test.com",

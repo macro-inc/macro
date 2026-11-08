@@ -13,7 +13,7 @@ use crate::domain::models::{
 use email_thread_id::EmailThreadId;
 use entity_access::domain::models::{EditAccessLevel, EntityAccessReceipt, ViewAccessLevel};
 use macro_user_id::user_id::MacroUserIdStr;
-use models_pagination::{PaginatedCursor, SimpleSortMethod};
+use pagination_types::{PaginatedCursor, SimpleSortMethod};
 use std::collections::HashMap;
 use std::pin::Pin;
 use std::sync::Arc;

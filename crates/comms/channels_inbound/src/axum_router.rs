@@ -47,7 +47,7 @@ use macro_authorization::{
 };
 use macro_user_id::user_id::MacroUserIdStr;
 use model_error_response::ErrorResponse;
-use models_pagination::{
+use pagination_types::{
     CreatedAt, CursorOptionExt, CursorWithValAndFilter, PaginatedOpaqueCursor, TypeEraseCursor,
 };
 use serde::{Deserialize, Serialize};

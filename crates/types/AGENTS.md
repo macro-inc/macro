@@ -47,7 +47,7 @@ lists what this group may depend on. `cargo x deps` reports edges that break it.
 | [`forms_types`](forms_types/AGENTS.md) | Part of Macro Forms. |
 | `grouping_types` |  |
 | `opensearch_types` |  |
-| [`models_pagination`](models_pagination/AGENTS.md) | Shared infrastructure. |
+| [`pagination_types`](pagination_types/AGENTS.md) | Shared infrastructure. |
 | [`models_permissions`](models_permissions/AGENTS.md) | Part of entity sharing/permissions, used across nearly every feature. |
 | [`models_properties`](models_properties/AGENTS.md) | Part of the custom-properties feature (custom fields on documents, CRM records, and other entities). |
 | `models_search_cursor` |  |

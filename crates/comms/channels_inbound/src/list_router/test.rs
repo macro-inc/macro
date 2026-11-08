@@ -16,7 +16,7 @@ use macro_authorization::{
     ValidatedIdentity,
 };
 use macro_user_id::user_id::MacroUserIdStr;
-use models_pagination::Base64Str;
+use pagination_types::Base64Str;
 use rootcause::Report;
 use tower::ServiceExt;
 use uuid::Uuid;
@@ -289,10 +289,10 @@ async fn channel_list_omits_cursor_when_a_full_page_exhausts_results() {
 #[tokio::test]
 async fn channel_list_passes_the_next_page_cursor_to_the_service() {
     let cursor_id = Uuid::from_u128(42);
-    let cursor = Base64Str::encode_json(models_pagination::Cursor {
+    let cursor = Base64Str::encode_json(pagination_types::Cursor {
         id: cursor_id,
         limit: 25,
-        val: models_pagination::CursorVal {
+        val: pagination_types::CursorVal {
             sort_type: SimpleSortMethod::UpdatedAt,
             last_val: Utc.timestamp_opt(10, 0).unwrap(),
         },

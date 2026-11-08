@@ -6,11 +6,11 @@ use item_filters::ast::{
     properties::{PropertiesLiteral, PropertyEntityType, properties_filter_can_apply_to},
 };
 use macro_user_id::user_id::MacroUserIdStr;
-use models_pagination::{Query, SimpleSortMethod};
 use models_soup::{
     calendar_event::{SoupCalendarEvent, SoupCalendarEventTime},
     item::SoupItem,
 };
+use pagination_types::{Query, SimpleSortMethod};
 use sqlx::{FromRow, PgPool, Postgres, QueryBuilder};
 use uuid::Uuid;
 

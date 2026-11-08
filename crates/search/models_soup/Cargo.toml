@@ -16,7 +16,7 @@ item_filters = { workspace = true, default-features = true }
 macro_user_id = { workspace = true }
 entity_kind = { workspace = true }
 model_owner = { workspace = true }
-models_pagination = { workspace = true }
+pagination_types = { workspace = true }
 models_properties = { workspace = true }
 serde = { workspace = true }
 soup_property = { workspace = true }

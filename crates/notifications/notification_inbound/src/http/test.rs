@@ -31,7 +31,7 @@ use macro_authorization::{
 };
 use macro_user_id::user_id::MacroUserIdStr;
 use model_user::UserContext;
-use models_pagination::{CreatedAt, Paginated, Query};
+use pagination_types::{CreatedAt, Paginated, Query};
 use reqwest::StatusCode;
 use rootcause::Report;
 use serde::de::DeserializeOwned;

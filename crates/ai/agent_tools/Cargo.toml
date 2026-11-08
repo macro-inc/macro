@@ -89,7 +89,7 @@ shared_types = { workspace = true }
 entity_kind = { workspace = true }
 model_owner = { workspace = true }
 databases_types = { workspace = true }
-models_pagination = { workspace = true }
+pagination_types = { workspace = true }
 models_permissions = { workspace = true }
 notification = { workspace = true, default-features = true, features = ["ai_tool"] }
 notification_inbound = { workspace = true, features = ["ai_tool"] }

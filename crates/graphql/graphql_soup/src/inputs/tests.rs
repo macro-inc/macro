@@ -1,5 +1,5 @@
 use macro_user_id::{cow_str::CowLike, user_id::MacroUserIdStr};
-use models_pagination::{CursorVal, Query};
+use pagination_types::{CursorVal, Query};
 
 use super::date_ranges::{GraphqlDateBucketRange, GraphqlPropertyBucketingType};
 use super::*;
@@ -322,7 +322,7 @@ fn property_sort_keeps_null_position_without_a_query_context() {
     let cursor = Base64Str::encode_json(CursorWithValAndFilter {
         id: Uuid::from_u128(1),
         limit: 10,
-        val: models_pagination::CursorVal {
+        val: pagination_types::CursorVal {
             sort_type: sort,
             last_val: sort.position(None, chrono::DateTime::default()),
         },

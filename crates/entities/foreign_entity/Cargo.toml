@@ -16,7 +16,7 @@ inbound = [
   "service",
 ]
 outbound = ["dep:filter_ast", "dep:sqlx", "ports"]
-ports = ["dep:entity_access", "dep:item_filters", "dep:models_pagination", "dep:tokio"]
+ports = ["dep:entity_access", "dep:item_filters", "dep:pagination_types", "dep:tokio"]
 service = ["ports"]
 
 [dependencies]
@@ -30,7 +30,7 @@ macro_authorization = { workspace = true, optional = true, features = ["axum"] }
 macro_user_id = { workspace = true }
 macro_uuid = { workspace = true }
 model_error_response = { workspace = true, optional = true }
-models_pagination = { workspace = true, optional = true }
+pagination_types = { workspace = true, optional = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 sqlx = { workspace = true, optional = true }

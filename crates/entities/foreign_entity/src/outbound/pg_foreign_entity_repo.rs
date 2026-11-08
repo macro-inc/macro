@@ -6,7 +6,7 @@ mod tests;
 use chrono::{DateTime, Utc};
 use filter_ast::Expr;
 use item_filters::ast::foreign_entity::ForeignEntityLiteral;
-use models_pagination::SimpleSortMethod;
+use pagination_types::SimpleSortMethod;
 use sqlx::PgPool;
 use uuid::Uuid;
 

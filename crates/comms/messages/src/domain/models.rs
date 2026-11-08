@@ -521,17 +521,17 @@ pub struct MessageThreadPreview {
     pub preview: Vec<Message>,
 }
 
-impl models_pagination::Identify for MessageListItem {
+impl pagination_types::Identify for MessageListItem {
     type Id = Uuid;
     fn id(&self) -> Uuid {
         self.message.id
     }
 }
-impl models_pagination::SortOn<models_pagination::CreatedAt> for MessageListItem {
+impl pagination_types::SortOn<pagination_types::CreatedAt> for MessageListItem {
     fn sort_on(
-        sort_type: models_pagination::CreatedAt,
-    ) -> impl FnMut(&Self) -> models_pagination::CursorVal<models_pagination::CreatedAt> {
-        move |item| models_pagination::CursorVal {
+        sort_type: pagination_types::CreatedAt,
+    ) -> impl FnMut(&Self) -> pagination_types::CursorVal<pagination_types::CreatedAt> {
+        move |item| pagination_types::CursorVal {
             sort_type,
             last_val: item.message.created_at,
         }

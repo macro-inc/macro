@@ -7,7 +7,7 @@ use super::*;
 
 use entity_kind::EntityType;
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
-use models_pagination::CreatedAt;
+use pagination_types::CreatedAt;
 use serde::{Deserialize, Serialize};
 use sqlx::{Pool, Postgres};
 

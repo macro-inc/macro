@@ -392,7 +392,7 @@ impl ChannelService for ToolTestChannelService {
     async fn get_channel_attachments(
         &self,
         _channel_id: ChannelId,
-        _query: models_pagination::Query<Uuid, models_pagination::CreatedAt, ()>,
+        _query: pagination_types::Query<Uuid, pagination_types::CreatedAt, ()>,
         _limit: u16,
         _attachment_type: Option<channels::domain::models::ChannelAttachmentType>,
     ) -> Result<

@@ -13,8 +13,8 @@ use item_filters::ast::{
     foreign_entity::ForeignEntityLiteral, project::ProjectLiteral,
 };
 use macro_user_id::user_id::MacroUserIdStr;
-use models_pagination::{SimpleSortMethod, TypeEraseCursor};
 use models_soup::item::SoupItem;
+use pagination_types::{SimpleSortMethod, TypeEraseCursor};
 use soup::domain::{
     models::{SoupQuery, SoupRequest, SoupSortDirection, SoupType},
     ports::SoupService,

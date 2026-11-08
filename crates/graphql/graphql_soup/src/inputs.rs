@@ -8,7 +8,7 @@ use macro_user_id::user_id::MacroUserIdStr;
 /// Caller-defined property date-range inputs.
 mod date_ranges;
 use date_ranges::GraphqlPropertyBucketing;
-use models_pagination::{Base64Str, CursorWithValAndFilter, NotifiedAt, SimpleSortMethod};
+use pagination_types::{Base64Str, CursorWithValAndFilter, NotifiedAt, SimpleSortMethod};
 use soup::domain::models::{
     DynamicSort, GroupedSortRequest, SoupQuery, SoupRequest, SoupSortDirection, SoupType,
 };
@@ -291,7 +291,7 @@ impl SoupInitialInput {
             .sort_method
             .unwrap_or(GraphqlSimpleSortMethod::ViewedAt);
         let cursor = if method == GraphqlSimpleSortMethod::Property {
-            SoupQuery::Property(models_pagination::Query::Sort(
+            SoupQuery::Property(pagination_types::Query::Sort(
                 selected_sort(
                     method,
                     self.sort_property_definition_id,
@@ -333,7 +333,7 @@ impl SoupContinuationInput {
         let (limit, cursor) = match cursor {
             SoupContinuationCursor::Property(cursor) => (
                 cursor.limit,
-                SoupQuery::Property(models_pagination::Query::Cursor(cursor)),
+                SoupQuery::Property(pagination_types::Query::Cursor(cursor)),
             ),
             SoupContinuationCursor::Simple(cursor) => {
                 (cursor.limit, SoupQuery::new_cursor_simple(cursor))

@@ -32,7 +32,7 @@ macro_authorization = { workspace = true, features = ["axum"] }
 macro_user_id = { workspace = true }
 entity_kind = { workspace = true }
 grouping_types = { workspace = true }
-models_pagination = { workspace = true }
+pagination_types = { workspace = true }
 models_soup = { workspace = true }
 predicate-index = { workspace = true }
 rootcause = { workspace = true }

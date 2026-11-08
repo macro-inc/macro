@@ -17,7 +17,7 @@ use chrono::{DateTime, NaiveDate, NaiveTime, Utc};
 use macro_authorization::{
     MacroAuthorizationExtractor, MacroAuthorizationService, MacroAuthorizationState, UserOrInternal,
 };
-use models_pagination::Base64Str;
+use pagination_types::Base64Str;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 

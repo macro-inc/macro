@@ -35,7 +35,6 @@ use item_filters::ast::{
 };
 use macro_user_id::user_id::MacroUserIdStr;
 use model_owner::Owner;
-use models_pagination::{Query, SimpleSortMethod};
 use models_soup::{
     calendar_event::SoupCalendarEvent,
     chat::SoupChat,
@@ -45,6 +44,7 @@ use models_soup::{
     item::SoupItem,
     project::SoupProject,
 };
+use pagination_types::{Query, SimpleSortMethod};
 use recursion::CollapsibleExt;
 use sqlx::{
     PgConnection, PgPool, Postgres, QueryBuilder, Row, Transaction, postgres::PgRow,

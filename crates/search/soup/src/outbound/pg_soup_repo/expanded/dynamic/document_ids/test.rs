@@ -14,8 +14,8 @@ use item_filters::ast::{
 };
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
 use macro_user_id::user_id::MacroUserIdStr;
-use models_pagination::{CursorWithValAndFilter, Identify, Query, SimpleSortMethod, SortOn};
 use models_soup::item::SoupItem;
+use pagination_types::{CursorWithValAndFilter, Identify, Query, SimpleSortMethod, SortOn};
 use sqlx::PgPool;
 use std::sync::Arc;
 use system_properties::SystemPropertyKey;

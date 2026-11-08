@@ -15,7 +15,7 @@ macro_env = { workspace = true }
 macro_user_id = { workspace = true }
 entity_kind = { workspace = true }
 model_notifications = { workspace = true }
-models_pagination = { workspace = true }
+pagination_types = { workspace = true }
 notification = { workspace = true, default-features = true }
 notification_outbound = { workspace = true }
 rate_limit = { workspace = true, features = ["testing"] }

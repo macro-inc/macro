@@ -16,7 +16,7 @@ inbound = [
 ]
 outbound = [
   "dep:filter_ast",
-  "dep:models_pagination",
+  "dep:pagination_types",
   "dep:sqlx",
   "ports",
 ]
@@ -41,7 +41,7 @@ macro_event_broker = { workspace = true }
 macro_event_topics = { workspace = true }
 macro_user_id = { workspace = true }
 model_error_response = { workspace = true, optional = true }
-models_pagination = { workspace = true, optional = true }
+pagination_types = { workspace = true, optional = true }
 rootcause = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }

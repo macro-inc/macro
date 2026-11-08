@@ -8,7 +8,7 @@ use filter_ast::Expr;
 use item_filters::SharedEmailFilter;
 use item_filters::ast::email::EmailLiteral;
 use macro_user_id::user_id::MacroUserIdStr;
-use models_pagination::{Query, SimpleSortMethod};
+use pagination_types::{Query, SimpleSortMethod};
 use recursion::CollapsibleExt;
 use sqlx::{PgPool, Postgres, QueryBuilder, Row};
 use std::sync::Arc;
