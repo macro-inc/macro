@@ -828,7 +828,25 @@ async fn membership_plan(pool: &PgPool, table: &QueryTable, test: FilterTest) ->
     .execute(&mut *transaction)
     .await
     .unwrap();
-    let explain = format!("EXPLAIN (GENERIC_PLAN, COSTS OFF) {}", sql.sql());
+    // PostgreSQL 14 (CI) has no EXPLAIN (GENERIC_PLAN): prepare the query and
+    // force the generic plan, so the bind values never reach the planner.
+    sqlx::raw_sql(&format!(
+        "PREPARE membership AS {}; SET LOCAL plan_cache_mode = force_generic_plan",
+        sql.sql()
+    ))
+    .execute(&mut *transaction)
+    .await
+    .unwrap();
+    let parameters: i32 = sqlx::query_scalar!(
+        r#"SELECT cardinality(parameter_types) AS "parameters!" FROM pg_prepared_statements WHERE name = 'membership'"#
+    )
+    .fetch_one(&mut *transaction)
+    .await
+    .unwrap();
+    let explain = format!(
+        "EXPLAIN (COSTS OFF) EXECUTE membership({}); DEALLOCATE membership",
+        vec!["NULL"; parameters as usize].join(", ")
+    );
     let plan: Vec<String> = sqlx::raw_sql(&explain)
         .fetch_all(&mut *transaction)
         .await
