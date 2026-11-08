@@ -85,7 +85,7 @@ pub(in crate::api::search) async fn enrich_channels(
 ) -> Result<Vec<ChannelSearchResponseItemWithMetadata>, SearchError> {
     let results: Vec<opensearch_client::search::model::SearchHit> = results
         .into_iter()
-        .filter(|r| r.entity_type == models_opensearch::SearchEntityType::Channels)
+        .filter(|r| r.entity_type == opensearch_types::SearchEntityType::Channels)
         .collect();
 
     if results.is_empty() {
@@ -113,7 +113,7 @@ pub(in crate::api::search) async fn enrich_channel_messages(
 ) -> Result<Vec<ChannelMessageSearchResponseItem>, SearchError> {
     let results: Vec<opensearch_client::search::model::SearchHit> = results
         .into_iter()
-        .filter(|r| r.entity_type == models_opensearch::SearchEntityType::Channels)
+        .filter(|r| r.entity_type == opensearch_types::SearchEntityType::Channels)
         .collect();
 
     if results.is_empty() {

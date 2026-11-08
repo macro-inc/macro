@@ -1,7 +1,7 @@
 use super::*;
 use chrono::{TimeZone, Utc};
-use models_opensearch::SearchEntityType;
 use opensearch_client::search::model::Highlight;
+use opensearch_types::SearchEntityType;
 use sqlx::types::Uuid;
 
 /// Helper to create a TaggedSearchHit for testing
@@ -640,8 +640,8 @@ fn the_unified_search_span_carries_the_mode_and_not_the_request() {
             "search.entity_types",
             searched_entity_types(
                 &[
-                    models_opensearch::OpenSearchEntityType::Emails,
-                    models_opensearch::OpenSearchEntityType::Chats,
+                    opensearch_types::OpenSearchEntityType::Emails,
+                    opensearch_types::OpenSearchEntityType::Chats,
                 ]
                 .into(),
                 &[

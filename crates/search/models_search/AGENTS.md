@@ -21,11 +21,11 @@ cross-entity response.
 - Owns: search response models per indexed entity kind and the unified
   response shape.
 - Not here: the OpenSearch query/index logic itself → `search_service`,
-  `search_processing_service`; the indexed doc models → `models_opensearch`.
+  `search_processing_service`; the indexed doc models → `opensearch_types`.
 
 ## Boundaries
 
-- Depends on: `item_filters`, `model_file_type`, `models_opensearch`,
+- Depends on: `item_filters`, `model_file_type`, `opensearch_types`,
   `soup_property`, `opensearch_client`, `document_sub_type`.
 - Used by: `agent_tools`, `search_processing_service`, `search_service(_client)`,
   `skills`.

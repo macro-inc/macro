@@ -2,8 +2,8 @@
 
 use std::collections::{BTreeMap, HashSet};
 
-use models_opensearch::{OpenSearchEntityType, SearchEntityType};
 use opensearch_query_builder::{BoolQueryBuilder, HasChildQuery, InnerHits, QueryType};
+use opensearch_types::{OpenSearchEntityType, SearchEntityType};
 
 use super::{
     builder::{SearchQueryBuilder, SearchQueryConfig},

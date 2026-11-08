@@ -24,14 +24,14 @@ per-entity-type search plus a unified search across them — mounted into
 
 ## Scope
 
-- Owns: query construction against the `models_opensearch` index and the
+- Owns: query construction against the `opensearch_types` index and the
   HTTP surface for searching each entity type.
 - Not here: indexing/backfill (the writer side) or the service binary that
   hosts this router → `document_storage_service`.
 
 ## Boundaries
 
-- Depends on: `opensearch_client`, `models_opensearch`, `macro_db_client`,
+- Depends on: `opensearch_client`, `opensearch_types`, `macro_db_client`,
   `entity_access`, `properties`, `crm`, `item_filters`, `calendar_events`
   (domain only, no features, for its Macro call rule and label port).
 - Used by: `document_storage_service` (mounts `search_router`); called

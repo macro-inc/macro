@@ -20,7 +20,7 @@ anyhow = { workspace = true }
 chrono = { workspace = true }
 h2 = { workspace = true }
 hyper = { workspace = true }
-models_opensearch = { workspace = true }
+opensearch_types = { workspace = true }
 models_search_cursor = { workspace = true }
 opensearch = { version = "2.3.0", default-features = false, features = ["rustls-tls"] }
 opensearch_query_builder = { workspace = true }

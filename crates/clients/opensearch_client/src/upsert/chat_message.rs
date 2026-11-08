@@ -1,4 +1,4 @@
-use models_opensearch::SearchIndex;
+use opensearch_types::SearchIndex;
 
 use crate::upsert::properties::IndexedProperty;
 use crate::{

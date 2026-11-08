@@ -1,7 +1,7 @@
 use std::collections::BTreeSet;
 
-use models_opensearch::SearchIndex;
 use opensearch::BulkParts;
+use opensearch_types::SearchIndex;
 use serde::Serialize;
 use sha2::{Digest, Sha256};
 

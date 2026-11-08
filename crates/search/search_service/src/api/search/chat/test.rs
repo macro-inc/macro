@@ -1,7 +1,7 @@
 use super::*;
 use macro_db_client::chat::get::ChatHistoryInfo;
-use models_opensearch::SearchEntityType;
 use opensearch_client::search::model::Highlight;
+use opensearch_types::SearchEntityType;
 use sqlx::types::chrono;
 
 fn create_test_response(

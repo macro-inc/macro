@@ -193,7 +193,7 @@ impl OpensearchClient {
         resend_on_lost_connection(|| {
             delete::email::refresh_index(
                 &self.inner,
-                models_opensearch::SearchIndex::Emails.as_ref(),
+                opensearch_types::SearchIndex::Emails.as_ref(),
             )
         })
         .await

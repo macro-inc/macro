@@ -1,6 +1,6 @@
 use std::collections::HashSet;
 
-use models_opensearch::SearchIndex;
+use opensearch_types::SearchIndex;
 
 use super::BulkUpsertResult;
 use crate::upsert::properties::IndexedProperty;
