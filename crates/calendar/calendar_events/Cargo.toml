@@ -77,6 +77,9 @@ calendar_event_id = { workspace = true }
 
 [dev-dependencies]
 wiremock = { workspace = true }
+http-body-util = { workspace = true }
 macro_db_migrator = { workspace = true }
 macro_user_id = { workspace = true }
+model_user = { workspace = true }
 tokio = { workspace = true }
+tower = { workspace = true }

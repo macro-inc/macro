@@ -15,10 +15,15 @@ tools/HTTP/GraphQL surfaces over them.
 - `src/domain/pipeline_workflows/`: pipeline entry/field/record ops built on
   the shared `databases` engine (Sales pipelines are a `databases` consumer).
 - `src/domain/crm_csv.rs`, `src/domain/crm_transfer.rs`: CSV import/export for
-  agents (companies, pipeline entries, pipeline exports). Writes go through the
+  agents and the SDK (companies, pipeline entries, pipeline exports as text or
+  a saved file). Writes go through the
   pipeline workflows and `CrmService`; CSV files reach documents through the
   `CsvFiles` port, implemented in `agent_tools::crm_csv_files`.
 - `src/inbound/axum_router.rs` (+ `axum_router/*.rs`): HTTP handlers.
+- `src/inbound/pipeline_workflows.rs`: HTTP routes over the pipeline workflows
+  and CSV transfers (entries by record, fields by name, options by label),
+  merged into `/crm` beside `src/inbound/pipelines.rs`; the SDK's pipeline
+  entry methods call them.
 - `src/inbound/toolset.rs` (+ `toolset/*.rs`): AI tool definitions.
 - `src/outbound/companies_repo.rs`: the Postgres adapter for companies/contacts.
 - `SALES_BACKFILL.md`: how the legacy-CRM-to-Sales migration behaves.

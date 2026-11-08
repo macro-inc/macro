@@ -159,8 +159,9 @@ Larger selections return guidance to supply a smaller `userIds` list.
 The requester's own setting of `none` does not prevent reading their direct
 calendar sources for their own availability.
 
-The domain computes merged busy intervals and coverage; the AI adapter forwards
-one service call. Its result contains no event titles or meeting metadata.
+The domain computes merged busy intervals and coverage; the AI adapter and
+`POST /calendar-events/team/availability` (the SDK's
+`calendar.teamAvailability`) each forward one service call. Its result contains no event titles or meeting metadata.
 `freeWindows` is omitted unless every requested person and the entire requested
 range have complete coverage. Hidden sharing, absent calendars, incomplete or
 stale sync, access changes awaiting resync, unknown IDs, invalid all-day zones,
