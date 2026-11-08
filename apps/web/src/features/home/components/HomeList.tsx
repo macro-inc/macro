@@ -54,7 +54,6 @@ import {
   createMemo,
   createSignal,
   Match,
-  on,
   onCleanup,
   type Setter,
   Show,
@@ -131,12 +130,13 @@ export function HomeList(props: HomeListProps) {
     entity.type === 'channel_thread'
       ? getChannelThreadName(entity, channels.channelsById())
       : undefined;
-  const { state, startedSessions } = useHomeView();
+  const { state, startedSessionToHighlight, clearStartedSessionToHighlight } =
+    useHomeView();
   const panel = useSplitPanelOrThrow();
   const notificationSource = useGlobalNotificationSource();
 
   const source = withSplitPanelOwner(listOwnedSlotName('data-source'), () =>
-    useHomeDataSource(state, startedSessions)
+    useHomeDataSource(state)
   );
 
   usePending('home.items', source.isLoading);
@@ -500,18 +500,23 @@ export function HomeList(props: HomeListProps) {
     setPersistedListState((current) => ({ ...current, scrollOffset: 0 }));
   });
 
-  // A session the composer opened is shown like a clicked row: focused,
-  // without taking the keyboard from the conversation it opened.
-  createEffect(
-    on(startedSessions.opened, (id) => {
-      if (!id) return;
-      startedSessions.clearOpened();
-      const row = untrack(rows).find(
-        (row) => row.kind === 'entity' && row.entity.id === id
-      );
-      if (row) list.focus.set(row.id, { reason: 'programmatic', force: true });
-    })
-  );
+  // The composer's new session is shown like a clicked row once it is
+  // listed, without taking the keyboard from the conversation it opened.
+  createEffect(() => {
+    const id = startedSessionToHighlight();
+    if (!id) return;
+    const row = rows().find(
+      (row) =>
+        row.kind === 'entity' &&
+        row.entity.type === 'agent_session' &&
+        row.entity.id === id
+    );
+    if (!row) return;
+    clearStartedSessionToHighlight();
+    untrack(() =>
+      list.focus.set(row.id, { reason: 'programmatic', force: true })
+    );
+  });
 
   createEffect(() => {
     rows();

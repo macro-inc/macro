@@ -12,10 +12,8 @@ import { HomeAgentComposer } from './home-agent-composer';
 
 const mocks = vi.hoisted(() => ({
   start: vi.fn(() => 'pending-session'),
-  pending: { sessionId: () => undefined, failed: () => false },
-  record: vi.fn(),
   replace: vi.fn(),
-  openPreview: vi.fn(() => true),
+  openStartedSession: vi.fn(),
   buildPrompt: vi.fn(),
   failure: vi.fn(),
   pendingDraft: () => null as string | null,
@@ -24,13 +22,9 @@ const mocks = vi.hoisted(() => ({
 }));
 vi.mock('@app/features/block-agent/context/pending-session', () => ({
   startPendingSession: mocks.start,
-  pendingSession: () => mocks.pending,
 }));
 vi.mock('./home-view-context', () => ({
-  useHomeView: () => ({
-    openPreview: mocks.openPreview,
-    startedSessions: { record: mocks.record },
-  }),
+  useHomeView: () => ({ openStartedSession: mocks.openStartedSession }),
 }));
 vi.mock('@core/context/user', () => ({
   useUserId: () => () => 'viewer-1',
@@ -104,21 +98,8 @@ it('opens the new session inside Home', () => {
     userId: 'viewer-1',
     submitSurface: 'home',
   });
-  // Home lists the session before its create answers.
-  expect(mocks.record).toHaveBeenCalledWith({
-    id: 'pending-session',
-    pending: mocks.pending,
-    prompt: 'Build it',
-    botId: 'selected-agent',
-    repoUrl: 'https://github.com/macro-inc/macro',
-    userId: 'viewer-1',
-    startedAt: expect.any(String),
-  });
   // The session opens in Home's detail pane instead of replacing Home.
-  expect(mocks.openPreview).toHaveBeenCalledWith({
-    type: 'agent_session',
-    id: 'pending-session',
-  });
+  expect(mocks.openStartedSession).toHaveBeenCalledWith('pending-session');
   expect(mocks.replace).not.toHaveBeenCalled();
 });
 

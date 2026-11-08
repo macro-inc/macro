@@ -48,10 +48,6 @@ import {
 } from './home-preview-navigation';
 import { homeDetailParamsFromRoute, homePreviewTarget } from './home-route';
 import { homeProjectSearch, isHomeDocumentType } from './home-route-schema';
-import {
-  createHomeStartedSessions,
-  type HomeStartedSessions,
-} from './home-started-sessions';
 import { homeTabSearch, homeTabSearchCodec } from './home-tab-search';
 import { createHomeViewPersistence, normalizeHomeFacets } from './persistence';
 import type {
@@ -81,10 +77,13 @@ export type HomeViewContext = {
     options?: { activate?: boolean }
   ) => boolean;
   closePreview: () => void;
+  /** Open a session the composer just started; the list highlights its row once listed. */
+  openStartedSession: (id: string) => void;
+  /** The started session whose row the list has yet to highlight. */
+  startedSessionToHighlight: Accessor<string | undefined>;
+  clearStartedSessionToHighlight: () => void;
   setTab: (tab: HomeTab) => void;
   setFacets: (facets: FacetSelection) => void;
-  /** Sessions the composer started that the list may not have yet. */
-  startedSessions: HomeStartedSessions;
 };
 
 function defaultGroupBy(): HomeGroupBy {
@@ -179,7 +178,10 @@ export const [HomeViewProvider, useHomeView] = createAssertedContextProvider<
   };
   const navigateTarget = (target: PreviewBlockTarget, replace = false) =>
     navigateDetail(homePreviewTargetNavigation(target), replace);
+  const [startedSessionToHighlight, setStartedSessionToHighlight] =
+    createSignal<string>();
   const closePreview = () => {
+    setStartedSessionToHighlight(undefined);
     fireAndForget(
       navigate(
         { route: homeSplitRoute, params: {} },
@@ -194,6 +196,7 @@ export const [HomeViewProvider, useHomeView] = createAssertedContextProvider<
     entity: PreviewSelection,
     options?: { activate?: boolean }
   ) => {
+    setStartedSessionToHighlight(undefined);
     if (entity.type === 'calendar_event') {
       return openCalendarEvent(entity, options);
     }
@@ -255,8 +258,14 @@ export const [HomeViewProvider, useHomeView] = createAssertedContextProvider<
     calendarRefocus,
     openPreview,
     closePreview,
+    openStartedSession: (id: string) => {
+      openPreview({ type: 'agent_session', id });
+      setStartedSessionToHighlight(id);
+    },
+    startedSessionToHighlight,
+    clearStartedSessionToHighlight: () =>
+      setStartedSessionToHighlight(undefined),
     setTab,
     setFacets,
-    startedSessions: createHomeStartedSessions(),
   };
 });

@@ -49,7 +49,6 @@ import {
   signalFilter,
 } from '../../next-soup/filters/inbox-filters';
 import type { HomeFacetContext } from '../home-facets';
-import type { HomeStartedSessions } from '../home-started-sessions';
 import type { HomeTab, HomeViewState } from '../types';
 import { useWorkFeedHomeDataSource } from '../work-feed/home-work-feed';
 import {
@@ -241,8 +240,7 @@ export type HomeListDataSource = HomeDataSource & {
  * and recent-activity sources on the client.
  */
 export function useHomeDataSource(
-  state: HomeDataSourceInput,
-  startedSessions: Pick<HomeStartedSessions, 'unlisted'>
+  state: HomeDataSourceInput
 ): HomeListDataSource {
   const graphqlSoup = useFeatureFlag(enableGraphqlSoup);
   const usesWorkFeed = () =>
@@ -253,12 +251,8 @@ export function useHomeDataSource(
 
   const soup = useSoupHomeDataSource(state, {
     enabled: () => !usesWorkFeed(),
-    startedSessions,
   });
-  const workFeed = useWorkFeedHomeDataSource(state, {
-    enabled: usesWorkFeed,
-    startedSessions,
-  });
+  const workFeed = useWorkFeedHomeDataSource(state, { enabled: usesWorkFeed });
   const active = (): HomeDataSource => (usesWorkFeed() ? workFeed : soup);
 
   return {
@@ -278,10 +272,7 @@ export function useHomeDataSource(
 
 function useSoupHomeDataSource(
   state: HomeDataSourceInput,
-  options: {
-    enabled: () => boolean;
-    startedSessions: Pick<HomeStartedSessions, 'unlisted'>;
-  }
+  options: { enabled: () => boolean }
 ): HomeDataSource {
   const {
     query,
@@ -396,29 +387,18 @@ function useSoupHomeDataSource(
     );
   });
 
-  const homeEntities = createMemo(() => {
-    const cutoff = homePagination()?.cutoff ?? -Infinity;
-    return transformHomeEntities(
-      rawEntities(),
-      search.isSearching() ? rawEntities() : recentEntities()
-    ).filter(
-      (entity) =>
-        cutoff === -Infinity ||
-        (homeTimestamp(entity.sortTs) ?? -Infinity) > cutoff
-    );
-  });
-  // Started sessions are the viewer's own work, which only the merged
-  // recents of desktop Signal list.
-  const startedSessions = options.startedSessions.unlisted(homeEntities);
-  const listedEntities = () =>
-    mergeRecents() && !search.isSearching()
-      ? [...startedSessions().map(attachNotifications), ...homeEntities()]
-      : homeEntities();
-
   const entities = createMemo<HomeAdmission>((previous) => {
     const context = viewContext();
+    const cutoff = homePagination()?.cutoff ?? -Infinity;
     return admitHomeEntities(previous, {
-      entities: listedEntities(),
+      entities: transformHomeEntities(
+        rawEntities(),
+        search.isSearching() ? rawEntities() : recentEntities()
+      ).filter(
+        (entity) =>
+          cutoff === -Infinity ||
+          (homeTimestamp(entity.sortTs) ?? -Infinity) > cutoff
+      ),
       tab: context.tab,
       facets: context.facets,
       facetContext: context.facetContext,
