@@ -4,6 +4,10 @@ resolver = "2"
 exclude = ["vendor"]
 
 members = [
+  "crates/sync_doc_id",
+  "crates/client/doc_sync_core",
+  "crates/lexical_node_id",
+  "crates/document_id",
   "crates/access_requests",
   "crates/agent_api_keys",
   "crates/routines",
@@ -200,6 +204,7 @@ members = [
   "crates/sync_protocol",
   "crates/sync_server_core",
   "crates/sync_server_sim",
+  "crates/sync_sim",
   "services/unfurl_service",
   "services/upload_extractor_lambda_handler",
   "services/upload_extractor_lambda_trigger",
@@ -215,9 +220,17 @@ members = [
 ]
 
 [workspace.dependencies]
+macro_user_id = { path = "crates/macro_user_id" }
+sync_doc_id = { path = "crates/sync_doc_id" }
+lexical_node_id = { path = "crates/lexical_node_id" }
+document_id = { path = "crates/document_id" }
+# Parsing-only UUIDs for wasm-safe value crates; no random generation.
+uuid_value = { package = "uuid", version = "1.15.1", default-features = false }
 macro_sync_service_jwt = { path = "crates/macro_sync_service_jwt" }
 sync_server_core = { path = "crates/sync_server_core" }
 sync_protocol = { path = "crates/sync_protocol", default-features = false }
+doc_sync_core = { path = "crates/client/doc_sync_core" }
+sync_server_sim = { path = "crates/sync_server_sim" }
 aes = "0.8.4"
 aes-gcm = { version = "0.10.3", features = ["zeroize"] }
 anyhow = "1.0.100"
@@ -383,6 +396,8 @@ prost-build = "0.14"
 protox = "0.10"
 quote = "1"
 rand = "0.9.0"
+rand_chacha = "0.9.0"
+xxhash-rust = { version = "0.8.15", features = ["xxh3"] }
 ratatui = "0.29"
 # uses vendored to fix lambda builds failing.
 rdkafka = { version = "0.37", default-features = false, features = [
@@ -590,3 +605,25 @@ codegen-units = 1
 inherits = "release"
 lto = "fat"
 codegen-units = 1
+
+[workspace.metadata.cargo-shear]
+# Leaf ID registered for the document model, which lands in the next work package.
+ignored = ["lexical_node_id"]
+
+# S8 T0 retains exact frame bytes and canonical port evidence across hundreds
+# of worlds. Optimize the simulation and JSON tree traversal in tests only;
+# production profiles and assertion coverage stay unchanged.
+[profile.test.package.sync_sim]
+opt-level = 2
+
+[profile.test.package.serde_json]
+opt-level = 2
+
+[profile.test.package.sync_server_sim]
+opt-level = 2
+
+[profile.test.package.sync_server_core]
+opt-level = 2
+
+[profile.test.package.doc_sync_core]
+opt-level = 2

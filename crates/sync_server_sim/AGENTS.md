@@ -46,6 +46,14 @@ Native in-memory room capabilities and the golden Worker transcript corpus.
   receipts verify SHA-256 against each side's snapshot before semantic comparison;
   translate only exact previously validated receipt/snapshot references. Never
   repair forged inputs. Keep workerd digest bytes exact.
+- `fork_durable` opens an isolated cold view; `take_completed_puts` and
+  `take_delivery_proofs` expose success/generation evidence without changing port effects.
+  Durable generations share immutable value/snapshot buffers; writes replace leaves,
+  and public reads/dumps return owned copies. Confirming an older generation must
+  preserve its exact pre-overwrite content through cold recovery.
+  `take_queued_sends` and `take_completed_closes` distinguish successful runtime
+  actions from failed attempts.
+  Fault `"*"` counts calls through the fault-capable boundary, not diagnostic clock reads.
 - Keep this crate excluded from hakari; no ambient clock or random UUID calls.
 
 ## Native coverage floor
@@ -64,3 +72,5 @@ runtime effects. Presence comparisons include exact native timestamps, including
 tombstones. For C0's unobservable local-delete clocks, only clock inputs are
 recovered from wire timestamps. Runtime enumeration order must retain exact live
 socket membership. Read-only Room diagnostics expose no mutable Loro handle.
+- `src/persistence_test.rs` checks failed first writes versus durable pending/failed
+  archive writes, same-time log identities and actual cold replay after cache invalidation.
