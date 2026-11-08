@@ -3,6 +3,7 @@
 
 mod facts;
 mod replay;
+mod source;
 mod stats;
 pub use facts::*;
 mod defaults;

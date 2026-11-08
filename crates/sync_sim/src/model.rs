@@ -112,6 +112,15 @@ pub enum AbstractOp {
         /// New integer value.
         value: u16,
     },
+    /// Write deterministic incompressible text to exercise the real multi-frame path.
+    FormText {
+        /// Field index resolved against the current form.
+        field: u16,
+        /// Requested size, capped at4MiB at run time.
+        bytes: u32,
+        /// Literal content salt; no ambient randomness is used.
+        salt: u16,
+    },
     /// Move one element in the form's ordered field list.
     FormMove {
         /// Source index.

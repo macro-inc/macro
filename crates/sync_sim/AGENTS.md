@@ -15,6 +15,7 @@ clients and real `sync_server_core::Room` callbacks over `sync_server_sim` ports
   real client RouterCore instances to physical profile sockets and real room routes.
 - `src/defaults.rs`: host-supplied production session policies.
 - `src/replay.rs`: exact replay and first-differing-event/port/final diagnostics.
+- `src/source.rs`: complete literal Rust reproductions, including every policy clock.
 - `src/stats.rs`: fact-derived coverage counters; runtime counters retain actual queue/handle timing.
 - `src/invariants.rs`: queries over the immutable Outcome facts.
 
