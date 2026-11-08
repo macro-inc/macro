@@ -212,7 +212,8 @@ impl<P: RoomPorts> Room<P> {
         attribution: Option<&DocumentAttribution>,
     ) -> Result<ImportedUpdate> {
         self.load_document().await?;
-        self.memory
+        let result = self
+            .memory
             .operation_log
             .as_mut()
             .expect("log initialized")
@@ -223,8 +224,15 @@ impl<P: RoomPorts> Room<P> {
                 attribution,
                 self.ports.clock(),
             )
-            .await
-            .map_err(|e| RoomError::port(PortName::Storage, e))
+            .await;
+        if result.is_err() {
+            // Import mutates Loro before persistence can fail. Future snapshots
+            // and updates must reload only durable history, or they can expose
+            // missing causal parents to later acknowledged edits. Keep log IDs
+            // and persisted keys so a partial batch remains safely replayable.
+            self.memory.document = None;
+        }
+        result.map_err(|e| RoomError::port(PortName::Storage, e))
     }
     async fn register_peer(
         &mut self,

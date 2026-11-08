@@ -12,3 +12,6 @@ pub mod transcript;
 
 #[cfg(test)]
 mod migration_test;
+
+#[cfg(test)]
+mod persistence_test;

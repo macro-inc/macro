@@ -41,3 +41,6 @@ Cloudflare Durable Objects and native simulation.
 - Supply UUIDs through ports and `uuid-types`; ambient randomness belongs to adapters.
 - Production adapters always select `FaultPlan::None`; fault headers are test-only.
 - Retain operation IDs and applied keys across same-session exists/initialize calls. Retain unresolved operation keys until the oplog covers them.
+- After an import/persistence error, discard the cached document before another read
+  or update can expose unpersisted causal parents. Retain operation-log IDs and keys;
+  reload the snapshot and pending durable prefix, including partially completed writes.

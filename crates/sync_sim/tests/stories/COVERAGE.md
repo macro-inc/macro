@@ -57,3 +57,6 @@ Executor-only unit rows remain in their existing adapters/core suites: IDB abort
 (S7:27), outage/TTL telemetry (25,33), stale connection events (61,64,71), Tauri read
 errors/traceparent (77,79), and spreadsheet mount serialization (107). This native
 harness does not claim browser/Tauri execution or spreadsheet adapter conformance.
+
+Storage-error causal boundary: `failed_persistence::failed_pending_write_cannot_seed_a_durably_acked_dependency`
+requires actual cold-server ACK durability after a failed AI parent write and new-tab snapshot.
