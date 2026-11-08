@@ -104,7 +104,17 @@ impl<'editor> Transaction<'editor> {
             .ok_or(Error::NodeNotFound(key))?;
         if Arc::strong_count(slot) > 1 {
             let replacement = slot.data.after_clone();
+            let state = if let Some(state) = &slot.state {
+                let shared = self
+                    .pending
+                    .shared_state_configs
+                    .for_type(slot.type_index)?;
+                Some(Arc::new(state.clone_for_write(&shared)))
+            } else {
+                None
+            };
             let record = Arc::make_mut(slot);
+            record.state = state;
             if let Some(data) = replacement {
                 record.data = data;
             }
@@ -148,10 +158,19 @@ impl<'editor> Transaction<'editor> {
                 self.work.bytes_allocated += std::mem::size_of::<NodeSlot>() as u64;
             }
             let normalized = slot.data.after_clone();
-            if let Some(data) = normalized {
-                Arc::make_mut(slot).data = data;
+            let state = if let Some(state) = &slot.state {
+                let shared = self
+                    .pending
+                    .shared_state_configs
+                    .for_type(slot.type_index)?;
+                Some(Arc::new(state.clone_for_write(&shared)))
             } else {
-                Arc::make_mut(slot);
+                None
+            };
+            let record = Arc::make_mut(slot);
+            record.state = state;
+            if let Some(data) = normalized {
+                record.data = data;
             }
         }
         Ok(())
@@ -372,7 +391,10 @@ impl<'editor> Transaction<'editor> {
         value: ValueType,
     ) -> Result<(), Error> {
         let key = key.into();
+        self.guard_write()?;
         self.get_state(key, state_key)?;
+        let index = self.type_index(key).ok_or(Error::NodeNotFound(key))?;
+        self.pending.shared_state_configs.learn(index, state_key)?;
         let slot = self.writable(key)?;
         let state = slot
             .state
@@ -451,10 +473,12 @@ impl<'editor> Transaction<'editor> {
                 }
             }
         }
+        let shared = self.pending.shared_state_configs.for_type(index)?;
         let state = NodeState::import(
             &filtered,
             &self.pending.registry.registered(index).state_layout,
             existing.as_deref(),
+            Some(&shared),
         );
         self.writable(key)?.state = state.map(Arc::new);
         if import.base_fields {

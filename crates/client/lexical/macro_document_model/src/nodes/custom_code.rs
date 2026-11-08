@@ -20,7 +20,24 @@ impl NodeType for CustomCodeNode {
         Some(Self::default())
     }
     fn import(tx: &mut Transaction<'_>, json: &SerializedNode) -> crate::ModelResult<NodeKey> {
-        super::wire::import_node::<Self>(tx, json)
+        let key = super::wire::import_node::<Self>(tx, json)?;
+        if let Some(state) = json.get("$").and_then(Value::as_object) {
+            if let Some(peer) = state
+                .get("peerId")
+                .and_then(Value::as_str)
+                .filter(|s| !s.is_empty())
+            {
+                crate::peer::set_peer_id(tx, key, peer.into())?;
+            }
+            if let Some(id) = state
+                .get("id")
+                .and_then(Value::as_str)
+                .filter(|s| !s.is_empty())
+            {
+                tx.set_state(key, &crate::node_ids::ID_STATE, Some(id.into()))?;
+            }
+        }
+        Ok(key)
     }
     fn import_json(json: &SerializedNode) -> crate::ModelResult<Self> {
         let json = super::wire::own_json(Self::TYPE, json)?;

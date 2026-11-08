@@ -149,6 +149,38 @@ pub(crate) trait AnyStateKey: Send + Sync {
     fn equal_any(&self, a: &dyn Any, b: &dyn Any) -> bool;
     fn json_any(&self, value: &dyn Any) -> Option<Value>;
 }
+type SharedConfigMap = IndexMap<&'static str, &'static dyn AnyStateKey>;
+#[derive(Default)]
+pub(crate) struct SharedStateConfigs(
+    std::sync::Mutex<crate::collections::HashMap<crate::NodeTypeIndex, SharedConfigMap>>,
+);
+impl SharedStateConfigs {
+    pub(crate) fn learn(
+        &self,
+        index: crate::NodeTypeIndex,
+        key: &'static dyn AnyStateKey,
+    ) -> Result<(), Error> {
+        let mut maps = self
+            .0
+            .lock()
+            .map_err(|_| Error::Invariant("shared state configs poisoned"))?;
+        let shared = maps.entry(index).or_default();
+        if let Some(existing) = shared.get(key.name())
+            && existing.identity() != key.identity()
+        {
+            return Err(Error::StateKeyCollision { key: key.name() });
+        }
+        shared.insert(key.name(), key);
+        Ok(())
+    }
+    pub(crate) fn for_type(&self, index: crate::NodeTypeIndex) -> Result<SharedConfigMap, Error> {
+        let maps = self
+            .0
+            .lock()
+            .map_err(|_| Error::Invariant("shared state configs poisoned"))?;
+        Ok(maps.get(&index).cloned().unwrap_or_default())
+    }
+}
 impl<ValueType: StateValue> AnyStateKey for StateKey<ValueType> {
     fn name(&self) -> &'static str {
         self.name
@@ -210,6 +242,26 @@ impl fmt::Debug for NodeState {
     }
 }
 impl NodeState {
+    pub(crate) fn clone_for_write(&self, shared: &SharedConfigMap) -> Self {
+        let mut next = self.clone();
+        if let Some(unknown) = &mut next.unknown {
+            unknown.retain(|name, value| {
+                if let Some(key) = shared.get(name.as_str()) {
+                    if !next
+                        .known
+                        .iter()
+                        .any(|(known, _)| known.identity() == key.identity())
+                    {
+                        next.known.push((*key, key.parse_any(Some(value))));
+                    }
+                    false
+                } else {
+                    true
+                }
+            });
+        }
+        next
+    }
     /// Unparsed imported state.
     pub fn unknown(&self) -> Option<&IndexMap<String, Arc<Value>>> {
         self.unknown.as_ref()
@@ -282,9 +334,8 @@ impl NodeState {
         } else {
             self.known.push((key, Arc::new(value)));
         }
-        if let Some(unknown) = &mut self.unknown {
-            unknown.shift_remove(key.name);
-        }
+        // updateFromKnown retains an existing unknown slot. Export overwrites
+        // its value in place; a later JSON import prunes learned configs.
         Ok(())
     }
     pub(crate) fn reset_copy(&mut self) {
@@ -299,6 +350,7 @@ impl NodeState {
         json: &crate::SerializedNode,
         layout: &StateLayout,
         previous: Option<&NodeState>,
+        shared: Option<&IndexMap<&'static str, &'static dyn AnyStateKey>>,
     ) -> Option<Self> {
         let nested = json.get("$").and_then(Value::as_object);
         if previous.is_none()
@@ -346,6 +398,19 @@ impl NodeState {
                     *key,
                     value.map_or_else(|| key.default_any(), |value| key.parse_any(Some(&value))),
                 ));
+            }
+        }
+        let learned: Vec<_> = unknown
+            .keys()
+            .filter_map(|name| shared.and_then(|shared| shared.get(name.as_str())).copied())
+            .collect();
+        for key in learned {
+            let value = unknown.shift_remove(key.name());
+            if !known
+                .iter()
+                .any(|(existing, _)| existing.identity() == key.identity())
+            {
+                known.push((key, key.parse_any(value.as_deref())));
             }
         }
         Some(Self {
