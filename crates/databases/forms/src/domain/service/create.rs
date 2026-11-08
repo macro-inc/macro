@@ -5,11 +5,11 @@ use crate::domain::drafts::{FormDraftRepository, FormDraftStore};
 
 use databases::domain::models::{CreateDatabase, DatabaseError, OpBatch, TableDetail, Viewer};
 use databases::domain::ports::{DatabaseMetadataReads, DatabaseRowReads, DatabasesService};
+use databases_types::{ColumnChange, ColumnKind, DatabaseOp, NewColumn, TableChange};
 use entity_access::domain::models::{
     EditAccessLevel, EntityAccessReceipt, OwnerAccessLevel, ViewAccessLevel,
 };
 use macro_event_broker::MacroEventBroker;
-use models_databases::{ColumnChange, ColumnKind, DatabaseOp, NewColumn, TableChange};
 
 use super::layout::{form_detail, question_columns};
 use super::managed::{respondent_kind, submitted_kind};

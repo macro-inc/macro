@@ -6,11 +6,11 @@ use std::sync::Arc;
 use databases::domain::catalog::column_kind;
 use databases::domain::models::{DatabaseError, OpBatch, Viewer};
 use databases::domain::ports::DatabasesService;
+use databases_types::{
+    CellWrite, DatabaseId, DatabaseOp, OpResult, RowId, RowsChange, RowsResult, TableId,
+};
 use entity_access::domain::models::{
     EditAccessLevel, EntityAccessReceipt, EntityType, ViewAccessLevel,
-};
-use models_databases::{
-    CellWrite, DatabaseId, DatabaseOp, OpResult, RowId, RowsChange, RowsResult, TableId,
 };
 
 use crate::domain::mapping::WebhookColumn;

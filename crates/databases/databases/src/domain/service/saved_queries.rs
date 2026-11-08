@@ -1,5 +1,5 @@
 use super::*;
-use models_databases::MAX_STATEMENT_LENGTH;
+use databases_types::MAX_STATEMENT_LENGTH;
 
 impl<Repository, Definitions, Cells, Events, Access, Broker>
     DatabasesServiceImpl<Repository, Definitions, Cells, Events, Access, Broker>

@@ -103,7 +103,7 @@ impl<
 fn schema_dependencies(
     layout: &FormLayout,
     changes: &[Change],
-) -> std::collections::HashSet<models_databases::ColumnId> {
+) -> std::collections::HashSet<databases_types::ColumnId> {
     use models_forms::FormSection;
     let mut ids = std::collections::HashSet::new();
     for change in changes {

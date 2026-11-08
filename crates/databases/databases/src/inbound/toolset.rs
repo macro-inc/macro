@@ -9,11 +9,12 @@ mod save_database_view;
 #[cfg(test)]
 mod test;
 
-use models_databases::{ColumnId, DatabaseId, OpResult, OptionId, TableId};
+use databases_types::{ColumnId, DatabaseId, OpResult, OptionId, TableId};
 use std::sync::Arc;
 
 use ai_toolset::{AsyncToolCollection, ToolCallError};
 use bot_id::BotId;
+use databases_types::cast::SpelledColumnType;
 use entity_access::domain::{
     models::{
         AccessError, AccessLevel, EditAccessLevel, EntityAccessReceipt, RequiredPermission,
@@ -22,7 +23,6 @@ use entity_access::domain::{
     ports::EntityAccessService,
 };
 use macro_user_id::user_id::MacroUserIdStr;
-use models_databases::cast::SpelledColumnType;
 use models_properties::shared::DataType;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
@@ -555,9 +555,9 @@ impl From<ColumnDetail> for ToolColumn {
         let (safe_types, checked_types) = match column.column.formula() {
             Some(_) if column.definition.definition.data_type == DataType::Number => {
                 let other = if column.column.is_percentage() {
-                    models_databases::ColumnKind::Number
+                    databases_types::ColumnKind::Number
                 } else {
-                    models_databases::ColumnKind::Percentage
+                    databases_types::ColumnKind::Percentage
                 };
                 (vec![other], Vec::new())
             }

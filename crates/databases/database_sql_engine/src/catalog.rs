@@ -6,9 +6,9 @@
 
 mod schema;
 
-use models_databases::EntityKind as OpEntityKind;
-use models_databases::cast::CastKind;
-use models_databases::{ColumnId, DatabaseId, Formula, OptionId, TableId};
+use databases_types::EntityKind as OpEntityKind;
+use databases_types::cast::CastKind;
+use databases_types::{ColumnId, DatabaseId, Formula, OptionId, TableId};
 use serde::{Deserialize, Serialize};
 use specta::Type;
 use uuid::Uuid;

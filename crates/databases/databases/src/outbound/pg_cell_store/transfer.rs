@@ -1,8 +1,8 @@
 //! Imports: the table, its placements, its rows and their cells, committed
 //! together so a retry never finds half an import.
 
-use models_databases::position::{key_between, keys_between};
-use models_databases::{ColumnId, RowId};
+use databases_types::position::{key_between, keys_between};
+use databases_types::{ColumnId, RowId};
 use uuid::Uuid;
 
 use super::*;
@@ -12,7 +12,7 @@ use crate::domain::transfer::{
     DatabaseTransferRepo, ImportFingerprint, ImportOutcome, ImportTable,
 };
 use crate::outbound::pg_databases_repo::{TableRecord, last_position, stored_positions, uuids};
-use models_databases::position::Position;
+use databases_types::position::Position;
 
 /// Rows minted per `INSERT … UNNEST` statement.
 const ROWS_PER_INSERT: usize = 500;

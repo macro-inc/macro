@@ -9,7 +9,7 @@
 
 use std::collections::HashMap;
 
-use models_databases::OptionId;
+use databases_types::OptionId;
 use uuid::Uuid;
 
 use crate::resolve::JoinKind;

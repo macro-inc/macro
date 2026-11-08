@@ -4,7 +4,7 @@ name = "database_id"
 publish = false
 version = "0.1.0"
 
-# Wasm-safe like models_databases, which runs in the browser: no workspace-hack
+# Wasm-safe like databases_types, which runs in the browser: no workspace-hack
 # dependency (see .config/hakari.toml).
 [features]
 # The agent tools' JSON Schemas of the ids.

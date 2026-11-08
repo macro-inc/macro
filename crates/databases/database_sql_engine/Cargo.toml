@@ -12,7 +12,7 @@ openapi = ["dep:utoipa"]
 # build never compiles the exporter; the derives themselves need only `specta`.
 cli = ["dep:specta-serde", "dep:specta-typescript"]
 # JSON Schemas of the result cells, for agent tools that hand them back.
-schema = ["dep:schemars", "models_databases/schema"]
+schema = ["dep:schemars", "databases_types/schema"]
 
 # Needs the exporter and a filesystem to write to, which the library does not.
 # Not `export_types`, which `agent_runtime_protocol` already builds into the same target.
@@ -26,7 +26,7 @@ filter_ast = { workspace = true }
 item_filters = { workspace = true }
 logos = { workspace = true }
 maybe_send = { workspace = true }
-models_databases = { workspace = true }
+databases_types = { workspace = true }
 nom = { workspace = true }
 schemars = { workspace = true, optional = true }
 serde = { workspace = true }

@@ -1,6 +1,6 @@
 //! The one catalog every stage's tests run against.
 
-use models_databases::{ColumnId, DatabaseId, OptionId, TableId, ViewId};
+use databases_types::{ColumnId, DatabaseId, OptionId, TableId, ViewId};
 use uuid::Uuid;
 
 use crate::catalog::{
@@ -365,11 +365,11 @@ pub const ISSUES_VIEW: ViewId = ViewId::from_uuid(Uuid::from_u128(0x7e1));
 
 /// A view of `work.issues`.
 pub fn issues_view(
-    query: models_databases::views::ViewQuery,
-    layout: models_databases::views::ViewLayout,
-) -> models_databases::views::DatabaseView {
+    query: databases_types::views::ViewQuery,
+    layout: databases_types::views::ViewLayout,
+) -> databases_types::views::DatabaseView {
     use chrono::{TimeZone, Utc};
-    models_databases::views::DatabaseView {
+    databases_types::views::DatabaseView {
         id: ISSUES_VIEW,
         database_id: WORK,
         table_id: ISSUES,

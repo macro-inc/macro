@@ -1,6 +1,6 @@
 //! Table ops over Postgres: names, removal, and the database's lock.
 
-use models_databases::{
+use databases_types::{
     CellValue, CellWrite, ColumnChange, ColumnKind, DatabaseOp, NewColumn, OpResult, RowsChange,
     TableChange, TableResult,
 };

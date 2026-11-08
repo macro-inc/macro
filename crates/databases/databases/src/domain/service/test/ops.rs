@@ -1,7 +1,7 @@
 //! Typed ops over the fakes: what each op writes, what refuses a batch, and
 //! that a refused batch writes nothing.
 
-use models_databases::{ColumnKind, RowChange};
+use databases_types::{ColumnKind, RowChange};
 use models_properties::shared::EntityReference;
 
 use super::*;

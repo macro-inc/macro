@@ -3,8 +3,8 @@
 //! behind when it fails.
 
 use ::databases::domain::models::DatabaseError;
+use databases_types::{ColumnChange, DatabaseOp, NewColumn};
 use entity_access::domain::models::OwnerAccessLevel;
-use models_databases::{ColumnChange, DatabaseOp, NewColumn};
 
 use super::*;
 use crate::domain::models::{

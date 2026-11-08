@@ -6,9 +6,9 @@ use crm::domain::pipelines::{
     AccessiblePipeline, Pipeline, PipelineEntry, PipelineRecordType, PipelineSharing,
 };
 use databases::domain::models::{Column, ColumnDetail, ColumnId, DatabaseId, RowId, TableId};
+use databases_types::position::key_between;
 use entity_access::domain::models::AccessLevel;
 use macro_user_id::{cow_str::CowLike, user_id::MacroUserIdStr};
-use models_databases::position::key_between;
 use models_properties::{
     DataType,
     service::{

@@ -3,12 +3,12 @@
 //! need no answer, answers sent for it are neither checked nor written, and
 //! later gates and rules never see them.
 
-use entity_access::domain::models::{EditAccessLevel, ViewAccessLevel};
-use models_databases::views::{PresenceOperator, TextOperator};
-use models_databases::{
+use databases_types::views::{PresenceOperator, TextOperator};
+use databases_types::{
     CellValue, CellWrite, DatabaseOp, EntityKind, EntityRef, OptionRef, RowChange, RowChanges,
     RowsChange,
 };
+use entity_access::domain::models::{EditAccessLevel, ViewAccessLevel};
 
 use super::*;
 use crate::domain::models::{

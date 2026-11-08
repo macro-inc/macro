@@ -2,7 +2,7 @@
 //! columns, rows, select options, saved views and queries, and the property
 //! definitions behind columns.
 //!
-//! `models_databases` re-exports them; they live here so a crate that only
+//! `databases_types` re-exports them; they live here so a crate that only
 //! names a database or table does not depend on the whole write vocabulary.
 
 #![deny(missing_docs)]

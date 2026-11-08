@@ -13,10 +13,10 @@
 //!
 //! Only the wasm-bindgen glue lives here; the engine knows nothing of it.
 
-use models_databases::position::{self, Position};
-use models_databases::views::ViewProblem;
-use models_databases::views::{CardPosition, DatabaseView};
-use models_databases::{ColumnId, DatabaseId, Formula, TableId};
+use databases_types::position::{self, Position};
+use databases_types::views::ViewProblem;
+use databases_types::views::{CardPosition, DatabaseView};
+use databases_types::{ColumnId, DatabaseId, Formula, TableId};
 use serde::Serialize;
 use serde::de::DeserializeOwned;
 use serde_wasm_bindgen::Serializer;

@@ -3,8 +3,8 @@
 //! instead of stopping everyone; the builder still loads it, and a layout
 //! read back puts back as it is.
 
+use databases_types::{CellValue, OptionRef};
 use entity_access::domain::models::{EditAccessLevel, ViewAccessLevel};
-use models_databases::{CellValue, OptionRef};
 
 use super::*;
 use crate::domain::models::{

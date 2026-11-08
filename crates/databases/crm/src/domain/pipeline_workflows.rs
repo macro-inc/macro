@@ -20,16 +20,16 @@ use databases::domain::{
     models::{OpBatch, RowId, TableVersion, Viewer},
     storage::{StorageRow, StorageRowsQuery},
 };
+use databases_types::{
+    CellValue, CellWrite, ColumnChange, DatabaseOp, EntityRef, OpResult, RowChange, RowChanges,
+    RowsChange, RowsResult,
+};
 use entity_access::domain::{
     models::{
         AccessError, EditAccessLevel, Entity, EntityAccessReceipt, EntityPermission, EntityType,
         MemberTeamRole, OwnerAccessLevel, RequiredPermission, ViewAccessLevel,
     },
     ports::EntityAccessService,
-};
-use models_databases::{
-    CellValue, CellWrite, ColumnChange, DatabaseOp, EntityRef, OpResult, RowChange, RowChanges,
-    RowsChange, RowsResult,
 };
 use uuid::Uuid;
 

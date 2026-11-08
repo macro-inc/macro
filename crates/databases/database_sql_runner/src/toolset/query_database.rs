@@ -1,7 +1,7 @@
 //! QueryDatabase tool: the read *and* write verb for Macro Databases. What
 //! it may write is the viewer's access, never the tool.
 
-use models_databases::{DatabaseId, RowId, TableId};
+use databases_types::{DatabaseId, RowId, TableId};
 use std::collections::HashMap;
 
 use ai_toolset::{

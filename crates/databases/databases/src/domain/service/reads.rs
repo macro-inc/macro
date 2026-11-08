@@ -4,7 +4,7 @@ use super::*;
 use crate::domain::journal::cell_value;
 use crate::domain::models::Column;
 use crate::domain::ports::DatabaseRowReads;
-use models_databases::{CellValue, CellWrite};
+use databases_types::{CellValue, CellWrite};
 
 impl<Repository, Definitions, Cells, Events, Access, Broker>
     DatabasesServiceImpl<Repository, Definitions, Cells, Events, Access, Broker>

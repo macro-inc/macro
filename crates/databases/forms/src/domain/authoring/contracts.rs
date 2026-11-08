@@ -1,7 +1,7 @@
 //! Public workflow results and read/access commands. These are the AI tool contract.
 use super::models::*;
 use chrono::{DateTime, Utc};
-use models_databases::DatabaseId;
+use databases_types::DatabaseId;
 use models_forms::{
     Audience, Form, FormAccess, FormDetail, FormId, FormLayout, FormStatus, ResponseSummary,
 };

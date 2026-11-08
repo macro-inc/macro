@@ -4,7 +4,7 @@ use super::*;
 use crate::domain::derivation::Derivation;
 use crate::domain::journal::{Before, RowImage, cell_value, row_cells};
 use crate::domain::models::{ChangeId, CommittedChange};
-use models_databases::views::LaneKey;
+use databases_types::views::LaneKey;
 
 /// A first value settles the columns it landed in, as the cell store does in
 /// its transaction.

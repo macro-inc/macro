@@ -1,7 +1,7 @@
 //! Row ids a client mints: an insert's rows take them, and an id that
 //! already names a row, or is minted twice, refuses the batch whole.
 
-use models_databases::{
+use databases_types::{
     CellValue, CellWrite, DatabaseOp, OpResult, RowsChange, RowsResult, TableVersion, TakenId,
 };
 use uuid::Uuid;

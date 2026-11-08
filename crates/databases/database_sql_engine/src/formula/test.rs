@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
 use chrono::{TimeZone, Utc};
-use models_databases::{ColumnId, DatabaseId, Formula, FormulaType, Operator, TableId};
+use databases_types::{ColumnId, DatabaseId, Formula, FormulaType, Operator, TableId};
 use uuid::Uuid;
 
 use super::*;

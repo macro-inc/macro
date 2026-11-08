@@ -17,9 +17,9 @@ use databases::domain::models::{
 };
 use databases::domain::ports::DatabasesService;
 use databases::domain::receipt::database_receipt;
+use databases_types::MAX_STATEMENT_LENGTH;
 use entity_access::domain::models::{AccessError, EditAccessLevel};
 use entity_access::domain::ports::EntityAccessService;
-use models_databases::MAX_STATEMENT_LENGTH;
 use soup::domain::ports::SoupService;
 
 use crate::catalog::ViewerCatalog;

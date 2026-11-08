@@ -2,7 +2,7 @@
 //! the one [`DatabaseOp`] the driver applies, and the op's result becomes the
 //! statement's [`Outcome`].
 
-use models_databases::{
+use databases_types::{
     CellValue, CellWrite, ColumnChange, ColumnKind as OpColumnKind, ColumnResult, DatabaseOp,
     EntityKind as OpEntityKind, EntityRef, OpResult, OptionId, OptionRef, RowChange, RowChanges,
     RowId, RowsChange, RowsResult, TableId,

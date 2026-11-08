@@ -1,8 +1,8 @@
 //! A form as its page reads it: its facts and layout, each question joined
 //! with its column's title, kind and options. Never any rows.
 
-use models_databases::views::FilterGroup;
-use models_databases::{ColumnId, ColumnKind, OptionId};
+use databases_types::views::FilterGroup;
+use databases_types::{ColumnId, ColumnKind, OptionId};
 use serde::{Deserialize, Serialize};
 
 use crate::form::{Form, FormAccess};

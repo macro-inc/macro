@@ -4,13 +4,13 @@
 //! against its source, so both sides agree on what crosses the wasm
 //! boundary; writes are driven on the server.
 
-use models_databases::position::Position;
-use models_databases::{ColumnId, DatabaseId, OptionId, RowId, TableId};
+use databases_types::position::Position;
+use databases_types::{ColumnId, DatabaseId, OptionId, RowId, TableId};
 use std::collections::HashMap;
 
 use serde_json::{Value, json};
 
-use models_databases::{
+use databases_types::{
     CellValue, CellWrite, ColumnChange, ColumnKind as ColumnType, ColumnResult, DatabaseOp,
     OpResult, OptionRef, RowChange, RowChanges, RowsChange, RowsResult, TableVersion,
 };

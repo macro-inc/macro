@@ -11,7 +11,7 @@ UUID string on the wire and in every generated schema.
 
 - Depends on: `id_newtype`, `utoipa`, `specta`; `schemars` behind `schema`.
   Wasm-safe (the SQL engine runs in the browser); a hakari traversal exclude.
-- Used by: `models_databases`, which re-exports every id, and through it the
+- Used by: `databases_types`, which re-exports every id, and through it the
   databases, forms and SQL engine crates.
 
 ## Checks

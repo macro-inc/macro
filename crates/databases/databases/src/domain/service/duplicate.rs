@@ -2,8 +2,8 @@
 //! swapped for a new one, and the copy is written as one batch that also
 //! creates the database.
 
+use databases_types::views::{CardPosition, ViewLayout};
 use macro_user_id::user_id::MacroUserIdStr;
-use models_databases::views::{CardPosition, ViewLayout};
 use serde::Serialize;
 use serde::de::DeserializeOwned;
 

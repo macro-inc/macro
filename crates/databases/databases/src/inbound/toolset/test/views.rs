@@ -2,8 +2,8 @@
 //! view ops, created under a new name and replacing the view of a name the
 //! table has, and a view deleted by its id.
 
-use models_databases::views::{Lane, LaneKey, NewView, RequestedLayout, ViewLayout, ViewQuery};
-use models_databases::{DatabaseOp, ViewChange};
+use databases_types::views::{Lane, LaneKey, NewView, RequestedLayout, ViewLayout, ViewQuery};
+use databases_types::{DatabaseOp, ViewChange};
 
 use super::*;
 

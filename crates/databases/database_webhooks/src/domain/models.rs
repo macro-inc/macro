@@ -2,7 +2,7 @@
 
 use chrono::{DateTime, Utc};
 use databases::domain::models::DatabaseError;
-use models_databases::{DatabaseId, RowId, TableId};
+use databases_types::{DatabaseId, RowId, TableId};
 use uuid::Uuid;
 
 /// A webhook's id.

@@ -2,7 +2,7 @@
 //! value in the formula's definition, so readers see an ordinary number or
 //! date column, and keeps it current as inputs and formulas change.
 
-use models_databases::{
+use databases_types::{
     CellValue, CellWrite, ColumnChange, ColumnKind, DatabaseOp, Formula, NewColumn, OpResult,
     Operator, RowChange, RowChanges, RowsChange, RowsResult,
 };

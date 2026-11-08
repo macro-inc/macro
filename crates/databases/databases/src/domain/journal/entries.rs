@@ -3,7 +3,7 @@
 
 use std::collections::{BTreeMap, HashMap};
 
-use models_databases::{
+use databases_types::{
     CellValue, ColumnChange, ColumnId, DatabaseId, DatabaseOp, OptionRef, RowId, TableChange,
     TableId, TableVersion,
 };

@@ -5,9 +5,9 @@ use ai_toolset::{
     ToolResult,
 };
 use async_trait::async_trait;
+use databases_types::views::ViewId;
+use databases_types::{DatabaseId, DatabaseOp, TableId, ViewChange};
 use entity_access::domain::ports::EntityAccessService;
-use models_databases::views::ViewId;
-use models_databases::{DatabaseId, DatabaseOp, TableId, ViewChange};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 

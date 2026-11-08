@@ -11,7 +11,7 @@ use crate::domain::storage::{
     DatabaseStorageService, StorageRow, StorageRows, StorageRowsQuery, StorageRowsRead,
     StorageTableRows,
 };
-use models_databases::{ColumnChange, ColumnKind, DatabaseOp, NewColumn};
+use databases_types::{ColumnChange, ColumnKind, DatabaseOp, NewColumn};
 
 /// A column as storage consumers see it, in the resource `database`.
 fn column_detail(column: ColumnEntry, database: DatabaseId) -> ColumnDetail {

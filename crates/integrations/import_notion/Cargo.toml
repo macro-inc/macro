@@ -11,7 +11,7 @@ http = { workspace = true }
 indexmap = { workspace = true, features = ["serde"] }
 lazy-regex = { workspace = true }
 macro_user_id = { workspace = true }
-models_databases = { workspace = true }
+databases_types = { workspace = true }
 pipedream_mcp = { workspace = true }
 rand = { workspace = true }
 rootcause = { workspace = true }

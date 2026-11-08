@@ -443,9 +443,9 @@ async fn board_moves_share_stage_validation_and_keep_failed_moves_unchanged(pool
         table: p.table_id,
         column: range,
         change: ColumnChange::Create {
-            definition: models_databases::NewColumn::New {
+            definition: databases_types::NewColumn::New {
                 name: "Schedule".into(),
-                kind: models_databases::ColumnKind::DateRange,
+                kind: databases_types::ColumnKind::DateRange,
                 options: vec![],
                 infer_type: false,
             },

@@ -1,4 +1,4 @@
-use models_databases::{DatabaseId, EntityKind, TableId};
+use databases_types::{DatabaseId, EntityKind, TableId};
 use uuid::Uuid;
 
 use super::*;

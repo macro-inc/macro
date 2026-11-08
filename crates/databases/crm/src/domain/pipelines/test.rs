@@ -49,7 +49,7 @@ fn names_are_trimmed_and_limited_by_characters() {
 
 #[test]
 fn an_insert_with_client_row_ids_still_names_its_primary_records() {
-    use models_databases::{
+    use databases_types::{
         CellValue, CellWrite, DatabaseOp, EntityKind, EntityRef, RowId, RowsChange,
     };
 

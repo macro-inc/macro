@@ -1,6 +1,6 @@
 //! Atomic database provisioning for domains that own a database's lifecycle.
 
-use models_databases::{ColumnId, DatabaseId, TableId};
+use databases_types::{ColumnId, DatabaseId, TableId};
 use models_properties::service::property_option::PropertyOptionValue;
 use models_properties::{DataType, EntityType};
 use uuid::Uuid;

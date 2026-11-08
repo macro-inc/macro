@@ -6,13 +6,13 @@ use ai_toolset::{
     ToolResult,
 };
 use async_trait::async_trait;
-use entity_access::domain::ports::EntityAccessService;
-use models_databases::views::{
+use databases_types::views::{
     Conjunction, DatabaseView, FilterCondition, FilterGroup, FilterNode, NewView, RequestedLayout,
     SortKey, ViewId, ViewQuery,
 };
-use models_databases::{DatabaseId, TableId};
-use models_databases::{DatabaseOp, OpResult, ViewChange, ViewResult};
+use databases_types::{DatabaseId, TableId};
+use databases_types::{DatabaseOp, OpResult, ViewChange, ViewResult};
+use entity_access::domain::ports::EntityAccessService;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 

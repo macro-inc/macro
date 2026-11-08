@@ -74,7 +74,7 @@ crm = { workspace = true, features = ["ports"] }
 databases = { workspace = true, features = ["ports"] }
 database_sql_runner = { workspace = true }
 macro_db_migrator = { workspace = true }
-models_databases = { workspace = true }
+databases_types = { workspace = true }
 attention_feed = { workspace = true, features = ["inbound"] }
 notification_inbox = { workspace = true }
 tokio = { workspace = true, features = ["test-util"] }

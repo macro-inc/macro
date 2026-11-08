@@ -3,7 +3,7 @@
 use std::future::Future;
 
 use database_sql_engine::{catalog::Table, resolve::SelectQuery};
-use models_databases::{RowId, TableVersion};
+use databases_types::{RowId, TableVersion};
 
 /// A view read failed before a page could be returned.
 #[derive(Debug, thiserror::Error)]

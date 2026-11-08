@@ -3,7 +3,7 @@
 use std::collections::HashSet;
 
 use databases::domain::models::Viewer;
-use models_databases::{
+use databases_types::{
     CellWrite, ColumnChange, ColumnId, DatabaseOp, NewColumn, NewOption, OptionId,
 };
 
