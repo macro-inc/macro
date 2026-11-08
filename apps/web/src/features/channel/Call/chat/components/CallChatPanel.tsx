@@ -3,7 +3,14 @@ import { MobileDrawer } from '@components/app/mobile/MobileDrawer';
 import { isMobile } from '@core/mobile/isMobile';
 import XIcon from '@icon/system/regular/x.svg';
 import { Button, cn, Tabs } from '@ui';
-import { createEffect, createSignal, type JSX, on, onCleanup } from 'solid-js';
+import {
+  createEffect,
+  createSignal,
+  type JSX,
+  on,
+  onCleanup,
+  Show,
+} from 'solid-js';
 
 export type CallPanelTab = 'chat' | 'participants' | 'work';
 
@@ -94,7 +101,7 @@ export function CallChatPanel(props: {
           forceMount
           aria-hidden={!sheetOpen()}
           inert={!sheetOpen()}
-          targetHeight={80}
+          targetHeight={65}
           class="data-closed:hidden motion-reduce:duration-0!"
         >
           <MobileDrawer.Handle />
@@ -111,6 +118,8 @@ export function CallChatPanel(props: {
       >
         <div class="flex h-12 shrink-0 items-center justify-between gap-2 px-3">
           <Tabs<CallPanelTab>
+            touch={isMobile()}
+            class="mobile:w-full"
             aria-label={t('calls.panel')}
             value={props.activeTab}
             onChange={props.onTabChange}
@@ -136,15 +145,17 @@ export function CallChatPanel(props: {
                 : []),
             ]}
           />
-          <Button
-            variant="ghost"
-            size="icon-sm"
-            aria-label={t('calls.closePanel')}
-            tooltip={t('calls.closePanel')}
-            onClick={props.onClose}
-          >
-            <XIcon class="size-4" />
-          </Button>
+          <Show when={!isMobile()}>
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              aria-label={t('calls.closePanel')}
+              tooltip={t('calls.closePanel')}
+              onClick={props.onClose}
+            >
+              <XIcon class="size-4" />
+            </Button>
+          </Show>
         </div>
         <section
           aria-label={t('calls.chat')}

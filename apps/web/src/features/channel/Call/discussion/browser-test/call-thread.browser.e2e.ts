@@ -718,9 +718,7 @@ for (const phone of [false, true]) {
 test('rebuilt call panel keeps a long thread, bottom composer and draft across tabs and reopen', async ({
   page,
 }, testInfo) => {
-  test.skip(
-    process.env.CALL_FULL_HOST !== 'true' || testInfo.project.name === 'phone'
-  );
+  test.skip(process.env.CALL_FULL_HOST !== 'true');
   if (process.env.CALL_PANEL_WIDTH)
     await page.setViewportSize({
       width: Number(process.env.CALL_PANEL_WIDTH),
@@ -748,24 +746,37 @@ test('rebuilt call panel keeps a long thread, bottom composer and draft across t
       content: el.scrollHeight,
       bottom: el.getBoundingClientRect().bottom,
     }));
-    const box = await composer.boundingBox();
     expect(metrics.height).toBeGreaterThan(100);
     expect(metrics.content).toBeGreaterThan(metrics.height);
-    expect(box!.y).toBeGreaterThanOrEqual(metrics.bottom - 1);
+    await expect
+      .poll(async () => {
+        const list = await scroll.boundingBox();
+        const input = await composer.boundingBox();
+        return input!.y - list!.y - list!.height;
+      })
+      .toBeGreaterThanOrEqual(-1);
   };
   await checkGeometry();
   expect(
     Math.round(
       (await page
-        .getByRole('complementary', { name: 'Call sidebar' })
+        .getByRole(
+          testInfo.project.name === 'phone' ? 'dialog' : 'complementary',
+          { name: 'Call sidebar' }
+        )
         .boundingBox())!.width
     )
   ).toBe(
-    page.viewportSize()!.width >= 800 ? 380 : page.viewportSize()!.width - 24
+    testInfo.project.name === 'phone'
+      ? page.viewportSize()!.width - 16
+      : page.viewportSize()!.width >= 800
+        ? 380
+        : page.viewportSize()!.width - 24
   );
   await expect(
     page.getByText('Replying in the call thread', { exact: true })
   ).toHaveCount(0);
+  if (testInfo.project.name === 'phone') await composer.click();
   await editor.fill('A preserved call draft');
   await scroll.hover();
   await page.mouse.wheel(0, -300);
@@ -777,10 +788,12 @@ test('rebuilt call panel keeps a long thread, bottom composer and draft across t
     .poll(() => scroll.evaluate((el) => el.scrollTop))
     .toBeCloseTo(previous, 0);
   await checkGeometry();
-  await page
-    .getByRole('complementary', { name: 'Call sidebar' })
-    .getByRole('button', { name: 'Close chat and participants' })
-    .click();
+  if (testInfo.project.name === 'phone') await page.keyboard.press('Escape');
+  else
+    await page
+      .getByRole('complementary', { name: 'Call sidebar' })
+      .getByRole('button', { name: 'Close chat and participants' })
+      .click();
   await page
     .getByRole('button', { name: 'Open chat and participants' })
     .click();
