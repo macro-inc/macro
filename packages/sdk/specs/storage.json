@@ -1967,6 +1967,41 @@
         }
       }
     },
+    "/calendar-events/team/availability": {
+      "post": {
+        "tags": ["calendar_events"],
+        "summary": "Merge the requester's and selected teammates' busy time in a bounded window.",
+        "operationId": "get_team_availability",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TeamAvailabilityRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TeamAvailability"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid window or more than 100 teammates"
+          },
+          "404": {
+            "description": "Team calendar sharing is disabled"
+          }
+        }
+      }
+    },
     "/calendar-events/{event_id}/ics": {
       "get": {
         "tags": ["calendar_events"],
@@ -26889,6 +26924,41 @@
         "type": "string",
         "description": "Who may respond to a form.",
         "enum": ["members", "public"]
+      },
+      "AvailabilityCoverage": {
+        "type": "string",
+        "description": "Whether missing busy blocks can safely be interpreted as free time.",
+        "enum": ["complete", "unknown"]
+      },
+      "AvailabilityInterval": {
+        "type": "object",
+        "description": "An exact, half-open interval of UTC instants, without event metadata.",
+        "required": ["start", "end"],
+        "properties": {
+          "end": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Exclusive end."
+          },
+          "start": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Inclusive start."
+          }
+        }
+      },
+      "AvailabilityUnknownReason": {
+        "type": "string",
+        "description": "Why a person's unoccupied intervals cannot establish availability.",
+        "enum": [
+          "hidden",
+          "unavailable",
+          "truncated",
+          "missing_time_zone",
+          "invalid_time_zone",
+          "invalid_interval",
+          "conflicting_copies"
+        ]
       },
       "Awareness": {
         "type": "object",
@@ -56938,6 +57008,83 @@
           }
         }
       },
+      "TeamAvailability": {
+        "type": "object",
+        "description": "Availability for exactly the members selected by the domain service.",
+        "required": [
+          "start",
+          "end",
+          "members",
+          "unknownUserIds",
+          "complete",
+          "summary"
+        ],
+        "properties": {
+          "complete": {
+            "type": "boolean",
+            "description": "True only when all requested people and source intervals were covered."
+          },
+          "end": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Exclusive requested end."
+          },
+          "freeWindows": {
+            "type": ["array", "null"],
+            "items": {
+              "$ref": "#/components/schemas/AvailabilityInterval"
+            },
+            "description": "Common calendar gaps for every included person, present only with\ncomplete coverage. These are not working-hours or booking guarantees."
+          },
+          "members": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/TeamMemberAvailability"
+            },
+            "description": "Included people, always including the requester."
+          },
+          "start": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Inclusive requested start."
+          },
+          "summary": {
+            "type": "string",
+            "description": "A concise explanation that does not overstate incomplete results."
+          },
+          "unknownUserIds": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Requested identifiers without a current team relationship. No profile\nor calendar data about those identifiers is disclosed."
+          }
+        }
+      },
+      "TeamAvailabilityRequest": {
+        "type": "object",
+        "description": "A bounded window and the teammates whose busy time to merge.",
+        "required": ["start", "end"],
+        "properties": {
+          "end": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Exclusive instant."
+          },
+          "start": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Inclusive instant."
+          },
+          "userIds": {
+            "type": ["array", "null"],
+            "items": {
+              "type": "string"
+            },
+            "description": "At most 100 current teammates; the requester is always included.\nOmit for the whole team; an empty list checks only the requester."
+          }
+        }
+      },
       "TeamCalendarContent": {
         "oneOf": [
           {
@@ -57095,6 +57242,35 @@
         "type": "string",
         "description": "What a user exposes through their team membership.",
         "enum": ["all", "busy_only", "none"]
+      },
+      "TeamMemberAvailability": {
+        "type": "object",
+        "description": "Busy time and confidence for one explicitly included person.",
+        "required": ["userId", "busy", "coverage", "unknownReasons"],
+        "properties": {
+          "busy": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AvailabilityInterval"
+            },
+            "description": "Merged known busy intervals clipped to the requested range."
+          },
+          "coverage": {
+            "$ref": "#/components/schemas/AvailabilityCoverage",
+            "description": "Whether the whole requested range was established."
+          },
+          "unknownReasons": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AvailabilityUnknownReason"
+            },
+            "description": "Reasons gaps in the busy intervals cannot be called free."
+          },
+          "userId": {
+            "type": "string",
+            "description": "Macro identifier of the included person."
+          }
+        }
       },
       "TeamOutOfOfficeItem": {
         "type": "object",
