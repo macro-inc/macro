@@ -671,6 +671,14 @@ opt-level = 2
 [profile.test.package.doc_sync_core]
 opt-level = 2
 
+# Native replay repeatedly validates large snapshot checksums and hashes exact
+# trace bytes. Keep the measured byte-hashing hot path optimized in tests while
+# preserving debug/overflow checks and every production profile.
+[profile.test.package.xxhash-rust]
+opt-level = 2
+debug-assertions = true
+overflow-checks = true
+
 # The complete session includes native Loro; keep its single browser artifact small.
 [profile.document-session-wasm]
 inherits = "release"
