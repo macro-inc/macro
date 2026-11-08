@@ -67,6 +67,17 @@ pub enum InitialView {
     /// Observed generic containers that currently exist.
     Generic(Vec<(ContainerPath, DocValue)>),
 }
+/// Remote editor cursor resolved against the current live CRDT document.
+#[derive(Clone, PartialEq)]
+pub struct EditorPeerSelection {
+    /// Presence entry key.
+    pub key: String,
+    /// Application palette color.
+    pub color: String,
+    /// Model points, never opaque native cursor bytes.
+    pub selection: lexical_model::ViewSelection,
+}
+
 /// Non-I/O effect delivered in the same call as its triggering input.
 pub enum ViewEffect {
     /// First paint or replacement.
@@ -79,6 +90,8 @@ pub enum ViewEffect {
     DocChanged(Vec<DocEvent>),
     /// Remote peer presence.
     Presence(Vec<PeerPresence>),
+    /// Resolved editor cursor set; replaces the preceding set.
+    Cursors(Vec<EditorPeerSelection>),
     /// Connection and durability state.
     Status(SyncStatus),
     /// Correlated request completion.
@@ -157,6 +170,12 @@ pub trait Surface: sealed::Sealed {
         Err(CommentRefusal::StagingFailed)
     }
     #[doc(hidden)]
+    fn peer_selection(
+        &self,
+        doc: &LoroDoc,
+        value: &loro::LoroValue,
+    ) -> Option<lexical_model::ViewSelection>;
+    #[doc(hidden)]
     fn composing(&self) -> bool;
     #[doc(hidden)]
     fn composition_changed(&self, before: &LoroDoc, after: &LoroDoc) -> bool;
@@ -193,6 +212,8 @@ pub struct DocumentSession<S: Surface> {
     sync_out: SyncOutput,
     comments: BTreeMap<RequestId, CommentMarkRequest>,
     held: Option<CompositionHold>,
+    peers: Vec<PeerPresence>,
+    cursors: Vec<EditorPeerSelection>,
 }
 impl<S: Surface> DocumentSession<S> {
     /// Construct an unstarted session. Deliver Sync(Start), then a seed or storage result.
@@ -223,6 +244,8 @@ impl<S: Surface> DocumentSession<S> {
             sync_out: SyncOutput::default(),
             comments: BTreeMap::new(),
             held: None,
+            peers: vec![],
+            cursors: vec![],
         })
     }
     /// Immutable surface queries; never performs I/O.
@@ -361,6 +384,33 @@ impl<S: Surface> DocumentSession<S> {
                     .map_or(held.deadline, |wake| wake.min(held.deadline)),
             );
         }
+        let live = self.held.as_ref().map_or(&self.doc, |held| &held.live);
+        let cursors: Vec<_> = self
+            .peers
+            .iter()
+            .filter_map(|peer| {
+                let loro::LoroValue::Map(value) = &peer.value else {
+                    return None;
+                };
+                let selection = self.surface.peer_selection(live, value.get("selection")?)?;
+                let color = match value.get("user") {
+                    Some(loro::LoroValue::Map(user)) => match user.get("color") {
+                        Some(loro::LoroValue::String(color)) => color.to_string(),
+                        _ => "blue".into(),
+                    },
+                    _ => "blue".into(),
+                };
+                Some(EditorPeerSelection {
+                    key: peer.key.clone(),
+                    color,
+                    selection,
+                })
+            })
+            .collect();
+        if cursors != self.cursors {
+            self.cursors.clone_from(&cursors);
+            self.out.view.push(ViewEffect::Cursors(cursors));
+        }
         self.out.need_peer_ids = self.sync.needs_peer_ids();
         &self.out
     }
@@ -433,7 +483,10 @@ impl<S: Surface> DocumentSession<S> {
         for event in events {
             match event {
                 SyncEvent::Status(status) => self.out.view.push(ViewEffect::Status(status)),
-                SyncEvent::Presence(peers) => self.out.view.push(ViewEffect::Presence(peers)),
+                SyncEvent::Presence(peers) => {
+                    self.peers.clone_from(&peers);
+                    self.out.view.push(ViewEffect::Presence(peers));
+                }
                 SyncEvent::AccessChanged(access) => self.access = access,
                 SyncEvent::Reply { request, reply } => {
                     self.comments.remove(&request);

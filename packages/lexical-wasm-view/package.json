@@ -15,15 +15,28 @@
   "dependencies": {
     "@macro-inc/collaboration": "workspace:*",
     "@macro-inc/observability": "workspace:*",
-    "solid-js": "^1.9.7"
+    "solid-js": "^1.9.7",
+    "prismjs": "^1.30.0"
   },
   "devDependencies": {
-    "@playwright/test": "^1.56.1",
+    "@playwright/test": "1.62.0",
     "@types/node": "^24.8.0",
     "jsdom": "^26.1.0",
     "typescript": "^5.9.3",
-    "vite": "^7.1.12",
+    "vite": "^6.4.1",
     "vite-plugin-solid": "^2.11.8",
-    "vitest": "5.0.1"
-  }
+    "vitest": "5.0.1",
+    "@types/prismjs": "^1.26.5",
+    "lexical": "0.45.0",
+    "@lexical/headless": "0.45.0",
+    "@lexical/html": "0.45.0",
+    "@lexical/rich-text": "0.45.0",
+    "@lexical/list": "0.45.0",
+    "@lexical/link": "0.45.0",
+    "@lexical/table": "0.45.0",
+    "@lexical/code": "0.45.0",
+    "@lexical/mark": "0.45.0",
+    "loro-crdt": "1.17.1"
+  },
+  "sideEffects": false
 }
