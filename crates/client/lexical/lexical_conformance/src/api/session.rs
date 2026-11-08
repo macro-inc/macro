@@ -24,6 +24,20 @@ impl Session {
         }
     }
 
+    /// Attach a context whose weak callbacks were used to configure the editor.
+    /// The context must be idle and either unbound or already bound to this editor.
+    pub fn with_context(mut editor: Editor, context: Context) -> Result<Self> {
+        {
+            let tx = editor.transaction();
+            context.bind_editor(&tx)?;
+        }
+        Ok(Self {
+            editor,
+            pending: None,
+            context,
+        })
+    }
+
     /// Last published model state, excluding suspended writes.
     pub fn state(&self) -> &EditorState {
         self.editor.state()
