@@ -33,7 +33,7 @@ pub struct LocalE2eArgs {
     /// Isolated stack name. Defaults to `LOCAL_E2E_INSTANCE` or `local-e2e`.
     #[arg(long)]
     pub instance: Option<String>,
-    /// Override the instance's derived port base.
+    /// Use this port window instead of an automatically allocated one.
     #[arg(long)]
     pub port_base: Option<u16>,
     /// Test suite to run after the stack is ready and seeded.

@@ -1,13 +1,16 @@
 //! The Rust build + runtime-image contract.
 //!
-//! Binaries are built on the host with `cargo zigbuild` (or consumed from a
-//! prebuilt Nix/crane dir) and bind-mounted read-only into a minimal runtime
+//! Binaries are built natively on the host with `cargo build` (or consumed from
+//! a prebuilt Nix/crane dir) and bind-mounted read-only into a minimal runtime
 //! image at `/app/out`. Docker never compiles Rust. Re-building binaries +
 //! restarting a container picks up code changes with no image rebuild.
 
 mod binaries_dir;
+mod cargo_build;
+mod dep_cache;
 mod runtime_image;
-mod zigbuild;
+#[cfg(test)]
+mod test_support;
 
 pub use binaries_dir::{Adoption, BinariesDir};
 pub use runtime_image::{ensure_runtime_image, runtime_image_tag};
@@ -26,15 +29,17 @@ pub struct BuildOptions {
 }
 
 /// Resolve a [`BinariesDir`] for the run: from `--binaries-dir`, from the
-/// existing target dir (`--no-build`), or by building with zigbuild.
+/// existing target dir (`--no-build`), or by building with cargo.
 pub fn resolve(stage: &Stage, target: Target, opts: &BuildOptions) -> Result<BinariesDir> {
     let dir = match &opts.binaries_dir {
         Some(dir) => BinariesDir::classify(dir)?,
         None if opts.no_build => {
+            super::arch::ensure_linux_host()?;
             BinariesDir::classify(&super::workspace_root().join(target.debug_dir()))?
         }
         None => {
-            zigbuild::run(stage, target)?;
+            super::arch::ensure_linux_host()?;
+            cargo_build::run(stage, target)?;
             BinariesDir::classify(&super::workspace_root().join(target.debug_dir()))?
         }
     };

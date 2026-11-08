@@ -101,6 +101,25 @@ fn sample_list() -> InitiativeList {
     }
 }
 
+fn sample_page() -> crate::domain::reads::InitiativePage {
+    crate::domain::reads::InitiativePage {
+        initiatives: vec![crate::domain::reads::InitiativePageRow {
+            initiative: sample_list().initiatives.remove(0),
+            user_access_level: AccessLevel::Edit,
+            properties: crate::domain::reads::InitiativePropertySnapshot {
+                status: Some(Uuid::from_u128(7)),
+                priority: None,
+                assignees: vec![USER_ID.to_string()],
+                due_date: Some(now()),
+                completed: false,
+            },
+            task_count: 3,
+            completed_task_count: 1,
+        }],
+        next_cursor: Some("next".to_string()),
+    }
+}
+
 #[derive(Clone)]
 struct FakeAuthorizationService;
 
@@ -270,6 +289,8 @@ impl EntityAccessService for FakeEntityAccessService {
 #[derive(Debug, Clone, PartialEq)]
 enum ServiceCall {
     List,
+    Page(crate::domain::reads::InitiativePageRequest),
+    Description,
     Create { name: String },
     Get,
     Update,
@@ -333,12 +354,10 @@ impl InitiativeService for FakeInitiativeService {
     async fn page(
         &self,
         _user_id: &MacroUserIdStr<'_>,
-        _request: crate::domain::reads::InitiativePageRequest,
+        request: crate::domain::reads::InitiativePageRequest,
     ) -> Result<crate::domain::reads::InitiativePage, InitiativeError> {
-        Ok(crate::domain::reads::InitiativePage {
-            initiatives: Vec::new(),
-            next_cursor: None,
-        })
+        self.record(ServiceCall::Page(request));
+        Ok(sample_page())
     }
 
     async fn tasks_page(
@@ -399,7 +418,8 @@ impl InitiativeService for FakeInitiativeService {
         &self,
         _receipt: EntityAccessReceipt<ViewAccessLevel>,
     ) -> Result<String, InitiativeError> {
-        Ok(String::new())
+        self.record(ServiceCall::Description);
+        Ok("## Goals\n\nShip it.".to_string())
     }
 
     async fn update(
@@ -720,5 +740,120 @@ async fn task_membership_routes_are_gone() {
         .await;
         assert!(response.status().is_client_error(), "{}", response.status());
     }
+    assert!(service.calls().is_empty());
+}
+
+#[tokio::test]
+async fn page_passes_filters_and_returns_rows_with_progress() {
+    let service = FakeInitiativeService::default();
+    let status = Uuid::from_u128(7);
+    let response = send(
+        build_router(service.clone(), FakeEntityAccessService::default()),
+        authed(axum::http::Request::get(format!(
+            "/page?query=launch&status={status}&assignee=macro%7Cother%40macro.com\
+             &dueBefore=2026-09-15T12%3A00%3A00Z&sort=due&descending=false&limit=10&cursor=abc"
+        )))
+        .body(axum::body::Body::empty())
+        .expect("request should build"),
+    )
+    .await;
+
+    assert_eq!(response.status(), StatusCode::OK);
+    assert_eq!(
+        read_json(response).await,
+        serde_json::json!({
+            "initiatives": [{
+                "id": existing_id().to_string(),
+                "name": "Launch",
+                "updatedAt": "2026-09-15T12:00:00Z",
+                "userAccessLevel": "edit",
+                "properties": {
+                    "status": status.to_string(),
+                    "priority": null,
+                    "assignees": [USER_ID],
+                    "dueDate": "2026-09-15T12:00:00Z",
+                    "completed": false,
+                },
+                "taskCount": 3,
+                "completedTaskCount": 1,
+            }],
+            "nextCursor": "next",
+        })
+    );
+    assert_eq!(
+        service.calls(),
+        vec![ServiceCall::Page(
+            crate::domain::reads::InitiativePageRequest {
+                limit: Some(10),
+                cursor: Some("abc".to_string()),
+                query: Some("launch".to_string()),
+                status: Some(status),
+                priority: None,
+                assignee: Some("macro|other@macro.com".to_string()),
+                due_after: None,
+                due_before: Some(now()),
+                sort: crate::domain::reads::InitiativeSort::Due,
+                descending: Some(false),
+            }
+        )]
+    );
+}
+
+#[tokio::test]
+async fn page_without_credentials_is_401() {
+    let response = send(
+        build_router(
+            FakeInitiativeService::default(),
+            FakeEntityAccessService::default(),
+        ),
+        axum::http::Request::get("/page")
+            .body(axum::body::Body::empty())
+            .expect("request should build"),
+    )
+    .await;
+
+    assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
+}
+
+#[tokio::test]
+async fn description_returns_markdown() {
+    let service = FakeInitiativeService::default();
+    let response = send(
+        build_router(service.clone(), FakeEntityAccessService::default()),
+        authed(axum::http::Request::get(format!(
+            "/{}/description",
+            existing_id()
+        )))
+        .body(axum::body::Body::empty())
+        .expect("request should build"),
+    )
+    .await;
+
+    assert_eq!(response.status(), StatusCode::OK);
+    assert_eq!(
+        read_json(response).await,
+        serde_json::json!({ "markdown": "## Goals\n\nShip it." })
+    );
+    assert_eq!(service.calls(), vec![ServiceCall::Description]);
+}
+
+#[tokio::test]
+async fn description_without_access_is_401() {
+    let service = FakeInitiativeService::default();
+    let response = send(
+        build_router(
+            service.clone(),
+            FakeEntityAccessService::without_initiative_access(),
+        ),
+        authed(axum::http::Request::get(format!(
+            "/{}/description",
+            existing_id()
+        )))
+        .body(axum::body::Body::empty())
+        .expect("request should build"),
+    )
+    .await;
+
+    assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
     assert!(service.calls().is_empty());
 }

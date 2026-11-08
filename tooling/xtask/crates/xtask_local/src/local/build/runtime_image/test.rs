@@ -3,11 +3,9 @@ use super::*;
 fn target(arch: &'static str) -> Target {
     match arch {
         "x86_64" => Target {
-            triple: "x86_64-unknown-linux-gnu",
             docker_platform: "linux/amd64",
         },
         _ => Target {
-            triple: "aarch64-unknown-linux-gnu",
             docker_platform: "linux/arm64",
         },
     }

@@ -45,7 +45,6 @@ just seed-scenario status --file seed/scenarios/channel-access.json
 
 These commands target the default stack. For a named stack, add `--instance <name>`
 before `apply`, `matrix`, or `status` (for example, `--instance channel-access`).
-Include `--port-base` if you started with one.
 The scenario creates four users with emails ending in `@channel-access.seed.macro.local`:
 Alex (`owner`), Morgan (`member`), Riley (`requester`), and Sam (`outsider`).
 Alex, Morgan, and Riley share a team; Sam does not.

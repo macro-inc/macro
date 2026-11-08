@@ -19,12 +19,13 @@ struct Cli {
 
 #[derive(Subcommand)]
 enum Cmd {
-    /// Start a fully local stack (infra + binaries + proxy + frontend).
-    RunLocal(RunArgs),
+    /// Start a fully local stack (infra + binaries + proxy + frontend), attached
+    /// to a terminal or in the background without one, or control a running one.
+    RunLocal(RunLocalArgs),
     /// Run local binaries against shared dev resources.
-    RunDev(RunArgs),
-    /// Cross-compile the local service binaries with cargo zigbuild.
-    Zigbuild,
+    RunDev(RunLocalArgs),
+    /// Build the local service binaries natively with cargo.
+    BuildServices,
     /// Build the minimal runtime image.
     RuntimeImage(ForceArg),
     /// Render the per-instance compose override and print its path.
@@ -55,15 +56,16 @@ enum Cmd {
     DestroyLocal(InstanceArgs),
     /// Start, seed, and test an isolated local E2E stack.
     LocalE2e(super::e2e::LocalE2eArgs),
-    /// Headless stack orchestration (agents, CI) — no TTY, no attached
-    /// dev server; the proxy serves a static frontend bundle.
+    /// Lower-level stack control for Cursor Cloud and bakes. `stack up` always
+    /// wipes; prefer `run-local`, which runs without a terminal too.
     #[command(subcommand)]
     Stack(StackCmd),
 }
 
 #[derive(Subcommand)]
 pub enum StackCmd {
-    /// Bring a full local stack up and return (only containers keep running).
+    /// Delete the instance's data, bring a full stack up with a static frontend,
+    /// and return (only containers keep running).
     Up(super::stack::UpArgs),
     /// Adopt a new build into the running stack. Data survives.
     Update(super::stack::UpdateArgs),
@@ -73,12 +75,25 @@ pub enum StackCmd {
     Down(super::stack::DownArgs),
 }
 
+/// `just run_local`: start flags, or a subcommand acting on a running stack.
+#[derive(Args, Clone, Default)]
+#[command(args_conflicts_with_subcommands = true)]
+pub struct RunLocalArgs {
+    #[command(flatten)]
+    pub run: RunArgs,
+    #[command(flatten)]
+    pub flags: super::supervisor::RunLocalFlags,
+    #[command(subcommand)]
+    pub action: Option<super::supervisor::RunAction>,
+}
+
 #[derive(Args, Clone, Default)]
 pub struct InstanceArgs {
     /// Stack name. Absent (or `macro`) is the default instance.
     #[arg(long)]
     pub instance: Option<String>,
-    /// Override the derived port base.
+    /// Use this port window instead of an automatically allocated one. Later
+    /// commands find it without the flag.
     #[arg(long)]
     pub port_base: Option<u16>,
 }
@@ -148,7 +163,8 @@ pub struct RunArgs {
     /// Open Cloudflare quick tunnels into this stack: one for `@cursor`
     /// sessions (a public egress service URL) and one sharing the app itself
     /// through the reverse proxy. Off by default — nothing dials out and the
-    /// stack stays localhost-only. `run_local` only.
+    /// stack stays localhost-only. `run_local` only. A detached run keeps its
+    /// background process alive to hold them.
     #[arg(long)]
     pub with_cf_tunnel: bool,
 }
@@ -257,7 +273,7 @@ fn run(cli: Cli) -> Result<()> {
     match cli.command {
         Cmd::RunLocal(args) => super::run_stack(Mode::Local, &args),
         Cmd::RunDev(args) => super::run_stack(Mode::Dev, &args),
-        Cmd::Zigbuild => super::zigbuild_only(),
+        Cmd::BuildServices => super::build_services_only(),
         Cmd::RuntimeImage(a) => super::runtime_image_only(a.force),
         Cmd::GenCompose(a) => super::gen_compose_only(&a),
         Cmd::FrontendProxyRoutes => {
@@ -265,7 +281,7 @@ fn run(cli: Cli) -> Result<()> {
             Ok(())
         }
         Cmd::ValidateLocalCompose(a) => {
-            let instance = super::instance::Instance::derive(
+            let instance = super::instance::Instance::resolve(
                 a.instance.instance.as_deref(),
                 a.instance.port_base,
             )?;
@@ -277,7 +293,7 @@ fn run(cli: Cli) -> Result<()> {
             super::validate::local_compose(&instance, Mode::Local, &computers)
         }
         Cmd::ValidateLocalEnv(a) => {
-            let instance = super::instance::Instance::derive(
+            let instance = super::instance::Instance::resolve(
                 a.instance.instance.as_deref(),
                 a.instance.port_base,
             )?;
@@ -286,24 +302,24 @@ fn run(cli: Cli) -> Result<()> {
         }
         Cmd::KafkaProvision(a) => {
             super::kafka::ensure_available("kafka-provision")?;
-            let instance = super::instance::Instance::derive(a.instance.as_deref(), a.port_base)?;
+            let instance = super::instance::Instance::resolve(a.instance.as_deref(), a.port_base)?;
             super::kafka::provision(&instance)
         }
         Cmd::LocalstackProvision(a) => {
-            let instance = super::instance::Instance::derive(a.instance.as_deref(), a.port_base)?;
+            let instance = super::instance::Instance::resolve(a.instance.as_deref(), a.port_base)?;
             super::localstack::provision(&instance)
         }
         Cmd::DoctorLocal(a) => super::doctor::run(&a),
         Cmd::StatusLocal(a) => {
-            let instance = super::instance::Instance::derive(a.instance.as_deref(), a.port_base)?;
+            let instance = super::instance::Instance::resolve(a.instance.as_deref(), a.port_base)?;
             super::status::run(&instance)
         }
         Cmd::SeedEnv(a) => {
-            let instance = super::instance::Instance::derive(a.instance.as_deref(), a.port_base)?;
+            let instance = super::instance::Instance::resolve(a.instance.as_deref(), a.port_base)?;
             super::seed_env::emit(&instance)
         }
         Cmd::SeedScenario(a) => {
-            let instance = super::instance::Instance::derive(
+            let instance = super::instance::Instance::resolve(
                 a.instance.instance.as_deref(),
                 a.instance.port_base,
             )?;

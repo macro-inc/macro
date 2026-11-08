@@ -133,3 +133,32 @@ fn disabled_control_plane_is_explicit_only_in_the_harness() {
     );
     assert_eq!(value[EGRESS_SERVICE]["environment"]["PORT"], "8080");
 }
+
+/// External is what lets an existing instance keep its networks: a Compose-managed
+/// network whose config changed would be recreated, stopping what's attached.
+#[test]
+fn named_instances_use_their_own_external_project_networks() {
+    let instance = Instance::derive(Some("agent-a"), None).unwrap();
+    let mut value = Value::Mapping(serde_yaml::Mapping::new());
+
+    set_external_project_networks(&mut value, &instance);
+
+    let services = &value["networks"]["services"];
+    assert_eq!(services["external"], Value::from(true));
+    assert_eq!(services["name"], Value::from("macro-agent-a_services"));
+    let auth_internal = &value["networks"]["auth-internal"];
+    assert_eq!(auth_internal["external"], Value::from(true));
+    assert_eq!(
+        auth_internal["name"],
+        Value::from("macro-agent-a_auth-internal")
+    );
+}
+
+/// Compose builds only a missing tag, so a Dockerfile edit has to change the tag.
+#[test]
+fn relay_image_tag_follows_its_dockerfile() {
+    let tag = sdk_webhook_relay_image(b"FROM alpine\nRUN a\n");
+    assert_ne!(tag, sdk_webhook_relay_image(b"FROM alpine\nRUN b\n"));
+    assert_eq!(tag, sdk_webhook_relay_image(b"FROM alpine\nRUN a\n"));
+    assert!(tag.starts_with("macro-sdk-webhook-relay:"));
+}

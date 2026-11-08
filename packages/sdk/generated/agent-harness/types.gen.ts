@@ -743,6 +743,69 @@ export type AgentSetModelAction = {
 };
 
 /**
+ * One pending interaction, or one stalled session.
+ */
+export type AgentUpdate = {
+    /**
+     * The runtime the session runs on.
+     */
+    harness: string;
+    /**
+     * What the session is waiting for.
+     */
+    kind: AgentUpdateKind;
+    /**
+     * The choices a permission request offers; empty for other kinds.
+     */
+    options: Array<string>;
+    /**
+     * The session's pull request, if it has one.
+     */
+    pullRequestUrl?: string | null;
+    /**
+     * The session.
+     */
+    sessionId: string;
+    /**
+     * The session's name.
+     */
+    sessionName: string;
+    /**
+     * When the request was made, or the session's last activity.
+     */
+    since: string;
+    /**
+     * What is asked, or why the session looks stalled, in at most 240 characters.
+     */
+    summary: string;
+};
+
+/**
+ * A kind of action or inactivity the user should see: `permission` to run a tool, an
+ * `elicitation` question or form, a `tool_approval` held for the owner, or `stalled` with no
+ * activity for over 20 minutes.
+ */
+export type AgentUpdateKind = 'permission' | 'elicitation' | 'tool_approval' | 'stalled';
+
+/**
+ * Bounded results; truncation means older qualifying sessions were not folded.
+ */
+export type AgentUpdates = {
+    /**
+     * One entry per pending request or stalled session, newest session activity first.
+     */
+    items: Array<AgentUpdate>;
+    /**
+     * Whether qualifying sessions beyond the 25 most recent were left out.
+     */
+    truncated: boolean;
+    /**
+     * Says what was left out, when truncated.
+     */
+    truncationNotice?: string | null;
+};
+
+/**
  * Public admission error payload. Handlers with additional fields can reuse the
  * domain error's code and message and [`admission_status`].
  */
@@ -2041,6 +2104,34 @@ export type Lineage = {
  * Defines who can access an item through its share link.
  */
 export type LinkShare = 'PUBLIC' | 'TEAM';
+
+/**
+ * The task to link a session to.
+ */
+export type LinkTaskRequest = {
+    /**
+     * The task document's id.
+     */
+    taskId: string;
+};
+
+/**
+ * The task a session is now linked to.
+ */
+export type LinkedTaskResponse = {
+    /**
+     * The session's pull request, now linked to the task, if it has one.
+     */
+    pullRequestUrl?: string | null;
+    /**
+     * Put this in the pull request description so GitHub activity reaches the task.
+     */
+    reference: string;
+    /**
+     * The task document's id.
+     */
+    taskId: string;
+};
 
 /**
  * HTTP request selecting one provider to probe.
@@ -3580,6 +3671,26 @@ export type PreviewAgentSessionsResponses = {
 
 export type PreviewAgentSessionsResponse2 = PreviewAgentSessionsResponses[keyof PreviewAgentSessionsResponses];
 
+export type ListAgentSessionUpdatesData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/agent-sessions/updates';
+};
+
+export type ListAgentSessionUpdatesErrors = {
+    401: string;
+    500: string;
+};
+
+export type ListAgentSessionUpdatesError = ListAgentSessionUpdatesErrors[keyof ListAgentSessionUpdatesErrors];
+
+export type ListAgentSessionUpdatesResponses = {
+    200: AgentUpdates;
+};
+
+export type ListAgentSessionUpdatesResponse = ListAgentSessionUpdatesResponses[keyof ListAgentSessionUpdatesResponses];
+
 export type WarmAgentSessionHandlerData = {
     body: WarmAgentSessionRequest;
     path?: never;
@@ -4560,6 +4671,34 @@ export type PutAgentSessionSandboxSizeResponses = {
 };
 
 export type PutAgentSessionSandboxSizeResponse = PutAgentSessionSandboxSizeResponses[keyof PutAgentSessionSandboxSizeResponses];
+
+export type LinkAgentSessionTaskData = {
+    body: LinkTaskRequest;
+    path: {
+        /**
+         * ID of the agent session
+         */
+        session_id: string;
+    };
+    query?: never;
+    url: '/agent-sessions/{session_id}/task';
+};
+
+export type LinkAgentSessionTaskErrors = {
+    400: string;
+    401: string;
+    403: string;
+    404: string;
+    500: string;
+};
+
+export type LinkAgentSessionTaskError = LinkAgentSessionTaskErrors[keyof LinkAgentSessionTaskErrors];
+
+export type LinkAgentSessionTaskResponses = {
+    200: LinkedTaskResponse;
+};
+
+export type LinkAgentSessionTaskResponse = LinkAgentSessionTaskResponses[keyof LinkAgentSessionTaskResponses];
 
 export type AnswerAgentSessionToolApprovalData = {
     body: AnswerToolApprovalRequest;
