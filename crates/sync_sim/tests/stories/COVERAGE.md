@@ -79,3 +79,6 @@ routed links with deferred server callbacks. `presence_snapshot` retains literal
 and requires the first snapshot to survive later heartbeat hold restarts. `faults`
 and the routed native unit complete immutable issued token failures before healing
 Online, preserving the real core's pending-attempt retry policy.
+
+`gap_push::resolved_gaps_keep_the_existing_push_contiguous` retains literal280;
+server-backed gap recovery must preserve an outstanding own batch until ACK/timeout.

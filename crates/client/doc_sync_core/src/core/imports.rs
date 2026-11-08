@@ -334,9 +334,15 @@ impl SyncCore {
     }
 
     pub(super) fn resume_server_backed_gaps(&mut self, doc: &impl SyncDoc, out: &mut SyncOutput) {
-        if self.phase != Phase::Running || self.reset.is_some() || self.rebase_due.is_some() {
+        if self.phase != Phase::Running
+            || self.reset.is_some()
+            || self.rebase_due.is_some()
+            || self.push.is_some()
+        {
             return;
         }
+        // Eligibility below an outstanding batch must stay fixed until its ACK
+        // or timeout. Resuming an earlier gap would invalidate that batch's run.
         let local = doc.oplog_vv();
         let mut resumed = Vec::new();
         for entry in &mut self.wal.entries {
