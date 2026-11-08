@@ -89,3 +89,7 @@ extension, event, reconciliation and queued-work effects; tags alone may close.
 Session::commit_prepared encodes artifacts against the upcoming host version before
 model publication. Preparation errors invalidate pending handles and retain the
 last committed host version; already published preceding transitions are retained.
+
+Node indexed dispatch uses model tree queries and predicates for all node kinds.
+Keep element alignment/style/text-format fields distinct from text format/detail,
+and preserve null versus undefined when decoding getFormatFlags alignment.
