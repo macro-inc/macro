@@ -31,6 +31,18 @@ async function navigateWithinApp(page: Page, path: string) {
 const body = (page: Page) =>
   page.getByRole('textbox', { name: 'Document content', exact: true });
 
+async function flushTelemetry(page: Page) {
+  await page.evaluate(async () => {
+    const moduleUrl = performance
+      .getEntriesByType('resource')
+      .map((entry) => entry.name)
+      .find((name) => name.includes('/packages/observability/src/index.ts'));
+    if (!moduleUrl) throw new Error('Observability module was not loaded');
+    const { Telemetry } = await import(/* @vite-ignore */ moduleUrl);
+    await Telemetry.flush();
+  });
+}
+
 test('document model selection, durable typing, reconnect and offline reopen', async ({
   page,
   context,
@@ -108,6 +120,7 @@ test('document model selection, durable typing, reconnect and offline reopen', a
       { timeout: 30_000 }
     )
     .toBe(true);
+  await flushTelemetry(page);
 
   await context.setOffline(true);
   const offline = `${marker}-offline`;
