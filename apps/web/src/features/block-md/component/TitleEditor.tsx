@@ -1,3 +1,4 @@
+import { t } from '@app/lib/i18n';
 import { activeElement } from '@app/signal/focus';
 import { useSplitPanel } from '@components/app/split-layout/layoutUtils';
 import { EmojiMenu } from '@core/component/LexicalMarkdown/component/menu/EmojiMenu';
@@ -18,6 +19,7 @@ import {
   isRectFlushWith,
   trimWhitespace,
 } from '@core/component/LexicalMarkdown/utils';
+import { toast } from '@core/component/Toast/Toast';
 import { blockNameToDefaultFile } from '@core/constant/allBlocks';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { onElementConnect } from '@core/util/onElementConnect';
@@ -159,7 +161,9 @@ export function TitleEditor(props: { autoFocusOnMount?: boolean } = {}) {
   const panel = useSplitPanel();
   const canEdit = permissions.canEdit;
   const { md: mdData, setMd: setMdData } = documentState.editor;
-  const renameDocumentMutation = createRenameDssEntityMutation();
+  const renameDocumentMutation = createRenameDssEntityMutation({
+    onError: () => toast.failure(t('entityActions.toastRenameFailed')),
+  });
   const {
     persistedName: persistedDocumentName,
     editorName: mdDocumentName,

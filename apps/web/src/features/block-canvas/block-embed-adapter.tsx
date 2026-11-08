@@ -11,6 +11,7 @@ import type {
   SplitHandle,
   SplitId,
 } from '@components/app/split-layout/layoutManager';
+import { createSplitTitleRenames } from '@components/app/split-layout/title-rename';
 import { createOwnedSlots } from '@components/app/split-layout/utils/createOwnedSlots';
 import { useHotkeyDOMScope } from '@core/hotkey/hotkeys';
 import { createBlockInstance } from '@core/orchestrator';
@@ -55,6 +56,7 @@ function CanvasBlockEmbedContent(props: CanvasEmbedViewProps) {
     createSignal<() => void>();
   const [titleFileMenuActions, setTitleFileMenuActions] =
     createSignal<SplitFileMenuActionGroups>();
+  const titleRenames = createSplitTitleRenames();
   const slots = createOwnedSlots();
   const header = createPriorityCollapseController();
   const toolbar = createPriorityCollapseController();
@@ -115,6 +117,7 @@ function CanvasBlockEmbedContent(props: CanvasEmbedViewProps) {
     setTitleFileMenuTrigger,
     titleFileMenuActions,
     setTitleFileMenuActions,
+    ...titleRenames,
     replaceOwnedSlot: slots.replace,
     headerCollapser: header.collapser,
     toolbarCollapser: toolbar.collapser,

@@ -38,6 +38,8 @@ export type BlockTool = {
   hotkeyToken?: HotkeyToken;
   /** Menu section this tool renders in when shown in the title file menu. */
   group?: SplitFileMenuActionGroup;
+  /** See {@link SplitFileMenuAction.afterMenuCloses}. */
+  afterMenuCloses?: boolean;
 };
 
 export function ToolButton(props: { tool: BlockTool; grouped?: boolean }) {

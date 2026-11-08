@@ -11,11 +11,13 @@ import {
   StaticSplitLabel,
 } from '@components/app/split-layout/components/SplitLabel';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
+import { createSplitTitleRename } from '@components/app/split-layout/title-rename';
 import { toast } from '@core/component/Toast/Toast';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { downloadFile } from '@filesystem/download';
 import IconShared from '@icon/share.svg';
-import { Button, Dialog } from '@ui';
+import { Button } from '@ui';
+import { okAsync } from 'neverthrow';
 import { createSignal } from 'solid-js';
 import { spreadsheetChatContext } from './core/chat-context';
 import type { SpreadsheetCells } from './core/spreadsheet-document';
@@ -62,12 +64,14 @@ const sample: SpreadsheetCells = {
   E9: { value: '=C9/B9', format: 'percent', bold: true },
 };
 
+/** The draft is not an entity yet; its header renames it under this id. */
+const DRAFT_TITLE_ID = 'spreadsheet-draft';
+
 /** A local workbook that becomes a saved document when shared or attached to chat. */
 export default function SpreadsheetDemo() {
   const panel = useSplitPanelOrThrow();
   const [name, setName] = createSignal('Launch budget');
   const [menuOpen, setMenuOpen] = createSignal(false);
-  const [renameDraft, setRenameDraft] = createSignal<string>();
   const [documentCreated, setDocumentCreated] = createSignal(false);
   const source = createLocalSpreadsheetSource(sample);
   const store = createSpreadsheetStore({
@@ -114,6 +118,16 @@ export default function SpreadsheetDemo() {
   });
 
   const canRename = () => !actions.pending() && !documentCreated();
+  const titleRename = createSplitTitleRename(panel, {
+    id: () => DRAFT_TITLE_ID,
+    name,
+    enabled: canRename,
+    rename: (next) => {
+      setName(next);
+      return okAsync(undefined);
+    },
+    failureMessage: (failure: never) => failure,
+  });
 
   return (
     <div class="flex size-full min-h-0 min-w-0 flex-col overflow-hidden">
@@ -121,8 +135,7 @@ export default function SpreadsheetDemo() {
         <StaticSplitLabel
           label={name()}
           iconType="spreadsheet"
-          onRename={canRename() ? setName : undefined}
-          renameAriaLabel="Spreadsheet name"
+          id={DRAFT_TITLE_ID}
         />
       </SplitHeaderLeft>
       <SplitTitleFileMenu>
@@ -132,12 +145,7 @@ export default function SpreadsheetDemo() {
           onAsk={() => fireAndForget(actions.ask(), 'spreadsheet-draft')}
           onShare={() => fireAndForget(actions.share(), 'spreadsheet-draft')}
           onRename={
-            canRename()
-              ? () => {
-                  // Let the menu restore focus before the dialog claims it.
-                  requestAnimationFrame(() => setRenameDraft(name()));
-                }
-              : undefined
+            canRename() ? () => titleRename.begin(DRAFT_TITLE_ID) : undefined
           }
         />
       </SplitTitleFileMenu>
@@ -167,56 +175,6 @@ export default function SpreadsheetDemo() {
           </Button>
         </div>
       </SplitHeaderRight>
-      <Dialog
-        open={renameDraft() !== undefined}
-        onOpenChange={(open) => {
-          if (!open) setRenameDraft(undefined);
-        }}
-        position="center"
-        class="w-96"
-      >
-        <form
-          class="p-5 text-ink"
-          onSubmit={(event) => {
-            event.preventDefault();
-            const next = renameDraft()?.trim();
-            if (!next || !canRename()) return;
-            setName(next);
-            setRenameDraft(undefined);
-          }}
-        >
-          <Dialog.Title class="mb-2 text-sm font-semibold">
-            Rename spreadsheet
-          </Dialog.Title>
-          <Dialog.Description class="mb-4 text-sm text-ink-muted">
-            Choose a name for this spreadsheet.
-          </Dialog.Description>
-          <input
-            aria-label="Spreadsheet name"
-            class="h-9 w-full rounded-md border border-edge-muted bg-input px-3 text-sm outline-none focus:border-accent"
-            value={renameDraft() ?? ''}
-            onInput={(event) => setRenameDraft(event.currentTarget.value)}
-            onFocus={(event) => event.currentTarget.select()}
-          />
-          <div class="mt-5 flex justify-end gap-2">
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => setRenameDraft(undefined)}
-            >
-              Cancel
-            </Button>
-            <Button
-              size="sm"
-              variant="secondary"
-              type="submit"
-              disabled={!renameDraft()?.trim() || !canRename()}
-            >
-              Save name
-            </Button>
-          </div>
-        </form>
-      </Dialog>
       <div class="min-h-0 min-w-0 flex-1">
         <SpreadsheetEditor
           autoFocus={!panel.isInlinePreview}

@@ -4,6 +4,7 @@ import { useBlockEntityCommands } from '@app/features/next-soup/actions';
 import { FileDownloadHeader } from '@components/app/FileDownloadHeader';
 import type { FileOperation } from '@components/app/split-layout/components/SplitFileMenu';
 import { SplitFileMenu } from '@components/app/split-layout/components/SplitFileMenu';
+import { SplitTitleCrumb } from '@components/app/split-layout/title-rename';
 import {
   useSplitDisplayName,
   useSplitPanelOrThrow,
@@ -77,30 +78,32 @@ export function FileDetailBreadcrumbItem(props: {
       >
         {(item) => (
           <div class="flex min-w-0 items-center motion-safe:animate-[dialog-overlay-open_150ms_ease-out]">
-            <DocumentTitleHoverCard
-              documentId={documentId()}
-              name={documentName()}
-              ownerId={props.documentMetadata.owner}
-              createdAt={props.documentMetadata.createdAt}
-              updatedAt={props.documentMetadata.updatedAt}
-            >
-              <ViewBreadcrumbs.Button
-                class="gap-1.5"
-                isActive={item.isActive()}
-                onClick={item.onSelect}
+            <SplitTitleCrumb id={documentId()} isActive={item.isActive()}>
+              <DocumentTitleHoverCard
+                documentId={documentId()}
+                name={documentName()}
+                ownerId={props.documentMetadata.owner}
+                createdAt={props.documentMetadata.createdAt}
+                updatedAt={props.documentMetadata.updatedAt}
               >
-                <EntityIcon
-                  targetType={
-                    props.blockType === 'unknown'
-                      ? (props.documentMetadata.fileType ?? props.blockType)
-                      : props.blockType
-                  }
-                  size="xs"
-                  class="shrink-0"
-                />
-                <span class="truncate">{documentName()}</span>
-              </ViewBreadcrumbs.Button>
-            </DocumentTitleHoverCard>
+                <ViewBreadcrumbs.Button
+                  class="gap-1.5"
+                  isActive={item.isActive()}
+                  onClick={item.onSelect}
+                >
+                  <EntityIcon
+                    targetType={
+                      props.blockType === 'unknown'
+                        ? (props.documentMetadata.fileType ?? props.blockType)
+                        : props.blockType
+                    }
+                    size="xs"
+                    class="shrink-0"
+                  />
+                  <span class="truncate">{documentName()}</span>
+                </ViewBreadcrumbs.Button>
+              </DocumentTitleHoverCard>
+            </SplitTitleCrumb>
             <div class="shrink-0">
               <SplitFileMenu
                 id={documentId()}

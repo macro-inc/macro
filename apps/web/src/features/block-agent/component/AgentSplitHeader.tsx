@@ -89,9 +89,8 @@ export function agentSessionTitle(
  * toolbar: static label, shared entity actions, the session's pull request
  * once one exists, and external-provider links.
  *
- * Rename lives on the title menu (channel / routine), not on a tap of
- * the name — `StaticSplitLabel` without `onRename` so a touch tap opens
- * the dropdown instead of an inline editor.
+ * A touch tap on the name opens the title menu; its Rename, or a
+ * double-click on desktop, renames the session in place.
  */
 export function AgentSplitHeader(props: {
   session: AgentSessionResponse | undefined;
@@ -201,6 +200,7 @@ export function AgentSplitHeader(props: {
             />
           }
           label={title()}
+          id={sessionId()}
         />
       </SplitHeaderLeft>
 

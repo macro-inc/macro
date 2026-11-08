@@ -6,6 +6,7 @@ import {
 } from '@app/components/view-shell';
 import type { FileOperation } from '@components/app/split-layout/components/SplitFileMenu';
 import { SplitFileMenu } from '@components/app/split-layout/components/SplitFileMenu';
+import { SplitTitleCrumb } from '@components/app/split-layout/title-rename';
 import { Permissions } from '@core/component/SharePermissions';
 import type { ProjectEntity } from '@entity';
 import ShareIcon from '@icon/share.svg';
@@ -100,14 +101,19 @@ export function DriveLocationBreadcrumbItems(props: {
                 <Show
                   when={index() === 0 && item.isActive() && !folder()}
                   fallback={
-                    <ViewBreadcrumbs.Button
-                      class="max-w-48"
+                    <SplitTitleCrumb
+                      id={folder()?.id}
                       isActive={item.isActive()}
-                      onClick={item.onSelect}
-                      tooltip={entry.label}
                     >
-                      <span class="truncate">{entry.label}</span>
-                    </ViewBreadcrumbs.Button>
+                      <ViewBreadcrumbs.Button
+                        class="max-w-48"
+                        isActive={item.isActive()}
+                        onClick={item.onSelect}
+                        tooltip={entry.label}
+                      >
+                        <span class="truncate">{entry.label}</span>
+                      </ViewBreadcrumbs.Button>
+                    </SplitTitleCrumb>
                   }
                 >
                   {/* The top-level location switches views; folders keep their menu. */}

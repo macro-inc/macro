@@ -17,9 +17,6 @@ vi.mock('@components/app/side-panel', () => ({
 vi.mock('@components/app/side-panel/EntityMetadata', () => ({
   EntityMetadata: () => null,
 }));
-vi.mock('@core/component/InlineTitleEditor', () => ({
-  InlineTitleEditor: () => null,
-}));
 vi.mock('@property/component/PropertyValuePill', () => ({
   PropertyValuePill: (props: { property: Property }) => (
     <button>

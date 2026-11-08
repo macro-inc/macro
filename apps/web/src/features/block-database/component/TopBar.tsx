@@ -15,6 +15,8 @@ import {
 } from '@components/app/split-layout/components/SplitHeader';
 import { BlockItemSplitLabel } from '@components/app/split-layout/components/SplitLabel';
 import { useSplitLayout } from '@components/app/split-layout/layout';
+import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
+import { createSplitTitleRename } from '@components/app/split-layout/title-rename';
 import { useItemOperations } from '@core/component/FileList/useItemOperations';
 import { BlockLiveIndicators } from '@core/component/LiveIndicators';
 import { toast } from '@core/component/Toast/Toast';
@@ -31,7 +33,6 @@ import { getEntityGraphqlClient } from '@service-storage/graphql-soup';
 import { ButtonGroup } from '@ui';
 import type { ResultAsync } from 'neverthrow';
 import { createSignal, lazy, Show, Suspense } from 'solid-js';
-import { DatabaseTitle } from '../../database/components/database-title';
 import {
   type DatabaseEntityFailure,
   databaseEntityMessage,
@@ -66,7 +67,6 @@ export function TopBar(props: {
   const databaseId = props.databaseId;
   const permissions = useGetPermissions();
   const formsFlag = useFeatureFlag(enableForms);
-  let editTitle: (() => void) | undefined;
   const name = () => props.detail?.database.name ?? 'Database';
   const openShare = useShareModal(() => {
     const detail = props.detail;
@@ -150,28 +150,19 @@ export function TopBar(props: {
             })
         : undefined,
   });
-  const rename = (next: string) => {
-    renameDatabase(getEntityGraphqlClient(), databaseId, next).mapErr(
-      (failure) => toast.failure(databaseEntityMessage(failure, 'rename'))
-    );
-  };
+  const titleRename = createSplitTitleRename(useSplitPanelOrThrow(), {
+    id: () => databaseId,
+    name,
+    enabled: () => !!props.detail && props.canEdit,
+    rename: (next) =>
+      renameDatabase(getEntityGraphqlClient(), databaseId, next),
+    failureMessage: (failure) => databaseEntityMessage(failure, 'rename'),
+  });
 
   return (
     <>
       <SplitHeaderLeft>
-        <BlockItemSplitLabel
-          name={name}
-          title={
-            <Show when={props.detail}>
-              <DatabaseTitle
-                name={name()}
-                canEdit={props.canEdit}
-                onEditReady={(edit) => (editTitle = edit)}
-                onRename={rename}
-              />
-            </Show>
-          }
-        />
+        <BlockItemSplitLabel id={databaseId} name={name} />
         <Show when={props.detail}>
           {(detail) => (
             <>
@@ -179,7 +170,7 @@ export function TopBar(props: {
                 detail={detail()}
                 table={props.activeTable}
                 entityActions={entityActions(detail())}
-                onRename={() => editTitle?.()}
+                onRename={() => titleRename.begin(databaseId)}
                 onDelete={props.onDelete}
                 onImported={props.onSelectTable}
               />

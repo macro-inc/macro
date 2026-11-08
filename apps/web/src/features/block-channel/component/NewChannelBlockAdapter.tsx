@@ -91,7 +91,13 @@ import { createMethodRegistration } from '@core/orchestrator';
 import { blockHotkeyScopeSignal } from '@core/signal/blockElement';
 import { blockHandleSignal } from '@core/signal/load';
 import { fireAndForget } from '@core/util/fireAndForget';
-import { buildEntityData, canEditChannelIdentity } from '@entity';
+import {
+  buildEntityData,
+  canEditChannelIdentity,
+  createRenameDssEntityMutation,
+} from '@entity';
+import { errAsync, ResultAsync } from 'neverthrow';
+import { createSplitTitleRename } from '@components/app/split-layout/title-rename';
 import CaretLeft from '@icon/system/regular/caret-left.svg';
 import PictureIcon from '@icon/system/regular/image.svg';
 import RenameIcon from '@icon/system/regular/pencil-line.svg';
@@ -177,6 +183,26 @@ function NewTop(props: { channelId: string }) {
         : undefined,
     });
   };
+
+  const canRename = () => {
+    const entity = channelEntity();
+    return !!entity && renameAction.canExecute(entity);
+  };
+  const renameMutation = createRenameDssEntityMutation();
+  const titleRename = createSplitTitleRename(panel, {
+    id: () => props.channelId,
+    name: () => channelName() ?? 'New Channel',
+    enabled: canRename,
+    rename: (newName) => {
+      const entity = channelEntity();
+      if (!entity) return errAsync(undefined);
+      return ResultAsync.fromPromise(
+        renameMutation.mutateAsync({ entity, newName }),
+        () => undefined
+      );
+    },
+    failureMessage: () => t('entityActions.toastRenameFailed'),
+  });
 
   const picture = useChannelPictureActions({
     channelId: () => props.channelId,
@@ -265,15 +291,9 @@ function NewTop(props: { channelId: string }) {
               label: 'Rename',
               icon: RenameIcon,
               hotkeyToken: TOKENS.entity.action.rename,
-              action: () => {
-                const entity = channelEntity();
-                if (!entity) return;
-                fireAndForget(renameAction.execute([entity]), 'channel-header');
-              },
-              condition: () => {
-                const entity = channelEntity();
-                return !!entity && renameAction.canExecute(entity);
-              },
+              action: () => titleRename.begin(props.channelId),
+              afterMenuCloses: true,
+              condition: canRename,
             },
             {
               group: 'file',

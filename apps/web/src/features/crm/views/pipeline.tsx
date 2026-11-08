@@ -1,6 +1,5 @@
 import { ViewSidebar } from '@app/components/view-shell';
 import { HeaderActionGroup } from '@components/app/HeaderActionGroup';
-import { InlineTitleEditor } from '@core/component/InlineTitleEditor';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { fireAndForget } from '@core/util/fireAndForget';
 import DotsThreeIcon from '@icon/system/regular/dots-three.svg';
@@ -13,7 +12,12 @@ import { Button } from '@ui/components/Button';
 import { DeleteDialog } from '@ui/components/DeleteDialog';
 import { Dialog } from '@ui/components/Dialog';
 import { Dropdown } from '@ui/components/Dropdown';
-import { Input } from '@ui/components/Input';
+import {
+  createInlineRename,
+  RenameInput,
+  RenameTitle,
+} from '@ui/components/InlineRename';
+import { ResultAsync } from 'neverthrow';
 import { createSignal, type JSX, Show } from 'solid-js';
 import type {
   PipelineEditor,
@@ -47,10 +51,7 @@ export function PipelineView(props: {
   const [error, setError] = createSignal('');
   const [deleting, setDeleting] = createSignal(false);
   const [actionsOpen, setActionsOpen] = createSignal(false);
-  const [renaming, setRenaming] = createSignal(false);
-  const [name, setName] = createSignal('');
-  let title: HTMLSpanElement | undefined;
-  let mobileNameInput: HTMLInputElement | undefined;
+  let renameAfterMenuCloses = false;
   const canEdit = () => ['owner', 'edit'].includes(props.pipeline.grant);
   const isOwner = () => props.pipeline.grant === 'owner';
   const tracked = () =>
@@ -83,31 +84,19 @@ export function PipelineView(props: {
       setPending(false);
     }
   }
-  const editTitle = () => {
-    const input = title?.querySelector('input');
-    input?.focus();
-    input?.select();
-  };
+  const pipelineRename = createInlineRename({
+    key: (pipeline: Pipeline) => pipeline.id,
+    name: (pipeline) => pipeline.name,
+    rename: (pipeline, name) =>
+      ResultAsync.fromPromise(
+        props.source.rename(pipeline.id, name),
+        () => 'Could not rename this pipeline. Please try again.'
+      ),
+    failureMessage: (message: string) => message,
+  });
   const openActions = () => {
-    setName(props.pipeline.name);
     setError('');
-    setRenaming(false);
     setActionsOpen(true);
-  };
-  const startRenaming = () => {
-    setRenaming(true);
-    queueMicrotask(() => {
-      mobileNameInput?.focus();
-      mobileNameInput?.select();
-    });
-  };
-  const rename = async (event: SubmitEvent) => {
-    event.preventDefault();
-    const nextName = name().trim();
-    if (!canEdit() || !nextName || nextName === props.pipeline.name) return;
-    if (await save(() => props.source.rename(props.pipeline.id, nextName))) {
-      setActionsOpen(false);
-    }
   };
   return (
     <div class="flex min-h-0 min-w-0 flex-1 flex-col touch:pb-[max(var(--safe-bottom,0px),var(--mobile-content-inset-bottom,0px))]">
@@ -122,18 +111,15 @@ export function PipelineView(props: {
               </ViewSidebar.Title>
             }
           >
-            <span ref={title} class="flex min-w-0 px-1">
-              <InlineTitleEditor
-                value={props.pipeline.name}
+            <span class="flex min-w-0 px-1">
+              <RenameTitle
+                rename={pipelineRename}
+                target={props.pipeline}
+                startOn="double-click"
+                aria-label="Pipeline name"
                 placeholder="Untitled pipeline"
-                ariaLabel="Pipeline name"
-                class="text-sm"
-                onRename={(name) =>
-                  fireAndForget(
-                    save(() => props.source.rename(props.pipeline.id, name)),
-                    'crm'
-                  )
-                }
+                maxLength={200}
+                class="text-sm font-semibold"
               />
             </span>
           </Show>
@@ -148,10 +134,20 @@ export function PipelineView(props: {
               >
                 <DotsThreeIcon class="size-4" />
               </Dropdown.Trigger>
-              <Dropdown.Content class="min-w-44">
+              <Dropdown.Content
+                class="min-w-44"
+                onCloseAutoFocus={(event) => {
+                  if (!renameAfterMenuCloses) return;
+                  renameAfterMenuCloses = false;
+                  event.preventDefault();
+                  queueMicrotask(() => pipelineRename.begin(props.pipeline));
+                }}
+              >
                 <Dropdown.Group>
                   <Show when={canEdit()}>
-                    <Dropdown.Item onSelect={() => queueMicrotask(editTitle)}>
+                    <Dropdown.Item
+                      onSelect={() => (renameAfterMenuCloses = true)}
+                    >
                       <PencilIcon class="size-4" />
                       Rename
                     </Dropdown.Item>
@@ -227,45 +223,24 @@ export function PipelineView(props: {
             </ActionDialogShell.Header>
             <Show when={canEdit()}>
               <Show
-                when={renaming()}
+                when={pipelineRename.isRenaming(props.pipeline)}
                 fallback={
                   <Button
                     variant="ghost"
                     class="w-full justify-start"
-                    onClick={startRenaming}
+                    onClick={() => pipelineRename.begin(props.pipeline)}
                   >
                     <PencilIcon class="size-4" />
                     Rename pipeline
                   </Button>
                 }
               >
-                <form
-                  class="flex flex-col gap-3"
-                  onSubmit={(event) => fireAndForget(rename(event), 'crm')}
-                >
-                  <label class="flex flex-col gap-1.5 text-sm">
-                    Pipeline name
-                    <Input
-                      ref={mobileNameInput}
-                      value={name()}
-                      onInput={(event) => setName(event.currentTarget.value)}
-                      disabled={pending()}
-                      maxlength={200}
-                      required
-                    />
-                  </label>
-                  <Button
-                    type="submit"
-                    variant="secondary"
-                    disabled={
-                      pending() ||
-                      !name().trim() ||
-                      name().trim() === props.pipeline.name
-                    }
-                  >
-                    Save name
-                  </Button>
-                </form>
+                <RenameInput
+                  rename={pipelineRename}
+                  aria-label="Pipeline name"
+                  maxLength={200}
+                  width="fill"
+                />
               </Show>
             </Show>
             <Show when={transfer}>

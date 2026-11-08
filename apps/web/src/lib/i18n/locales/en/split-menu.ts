@@ -30,6 +30,8 @@ export default {
   closeReferencesDrawer: 'Close References Drawer',
   fileActions: 'File actions',
   untitled: 'Untitled',
+  // The field that renames the split's title in place.
+  titleName: 'Name',
 
   // Split permission badge.
   noAccess: 'No Access',

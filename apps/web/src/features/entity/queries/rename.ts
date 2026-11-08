@@ -1,3 +1,4 @@
+import { t } from '@app/lib/i18n';
 import { renameDatabase } from '@block-database/queries/rename-database';
 import { renameItem } from '@core/component/FileList/itemOperations';
 import { toast } from '@core/component/Toast/Toast';
@@ -511,7 +512,8 @@ const bulkRenameOnMutate = (
   return { contexts, updates };
 };
 
-const bulkRenameOnSettled = (
+/** Rolls back the renames that failed; whoever started them reports it. */
+const rollBackFailedRenames = (
   data: BulkRenameDssEntityMutationData | undefined,
   error: Error | null,
   params: BulkRenameDssEntityMutationVariables,
@@ -521,7 +523,6 @@ const bulkRenameOnSettled = (
   if (!hasFailed) return;
 
   console.error(`Failed rename`, params, data, error);
-  toast.failure('Failed to rename');
 
   if (!onMutateResult) {
     // most likely nothing to rollback, but it's possible there were mutations that succeeded before the OnMutate failed
@@ -565,7 +566,10 @@ const bulkRenameOnSettled = (
   }
 };
 
-/** Supports channel/document/chat/project/call/agent-session/database rename. */
+/**
+ * Supports channel/document/chat/project/call/agent-session/database rename.
+ * A failed rename rejects and is rolled back; the caller says so.
+ */
 export function createRenameDssEntityMutation(
   callbacks?: MutationCallbacks<
     RenameDssEntityMutationData,
@@ -580,7 +584,11 @@ export function createRenameDssEntityMutation(
     RenameDssEntityMutationVariables,
     RenameOnMutateResult
   >(() => ({
-    mutationFn: async (params) => (await bulkRenameMutationFn([params]))[0],
+    mutationFn: async (params) => {
+      const [result] = await bulkRenameMutationFn([params]);
+      if (!result.success) throw new Error('Rename failed');
+      return result;
+    },
     ...withCallbacks<
       RenameDssEntityMutationData,
       Error,
@@ -590,7 +598,7 @@ export function createRenameDssEntityMutation(
       {
         onMutate: async (params) => bulkRenameOnMutate([params]),
         onSettled: (data, error, params, onMutateResult) => {
-          bulkRenameOnSettled(
+          rollBackFailedRenames(
             data ? [data] : undefined,
             error,
             [params],
@@ -613,6 +621,10 @@ export function createBulkRenameDssEntityMutation() {
   >(() => ({
     mutationFn: bulkRenameMutationFn,
     onMutate: bulkRenameOnMutate,
-    onSettled: bulkRenameOnSettled,
+    onSettled: (data, error, params, onMutateResult) => {
+      rollBackFailedRenames(data, error, params, onMutateResult);
+      if (error || data?.some((result) => !result.success))
+        toast.failure(t('entityActions.toastRenameFailed'));
+    },
   }));
 }

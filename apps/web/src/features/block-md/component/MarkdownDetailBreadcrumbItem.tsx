@@ -2,6 +2,7 @@ import { DocumentTitleHoverCard } from '@app/components/entity-detail/DocumentTi
 import { ViewBreadcrumbs } from '@app/components/view-shell';
 import { useBlockEntityCommands } from '@app/features/next-soup/actions';
 import { SplitFileMenu } from '@components/app/split-layout/components/SplitFileMenu';
+import { SplitTitleCrumb } from '@components/app/split-layout/title-rename';
 import {
   useSplitDisplayName,
   useSplitPanelOrThrow,
@@ -73,23 +74,29 @@ export function MarkdownDetailBreadcrumbItem(props: {
     >
       {(item) => (
         <div class="flex min-w-0 items-center motion-safe:animate-[dialog-overlay-open_150ms_ease-out]">
-          <DocumentTitleHoverCard
-            documentId={props.documentId}
-            name={documentName()}
-            ownerId={props.ownerId}
-          >
-            <ViewBreadcrumbs.Button
-              class="gap-1.5"
-              isActive={item.isActive()}
-              onClick={() => {
-                item.onSelect();
-                focusDocument();
-              }}
+          <SplitTitleCrumb id={props.documentId} isActive={item.isActive()}>
+            <DocumentTitleHoverCard
+              documentId={props.documentId}
+              name={documentName()}
+              ownerId={props.ownerId}
             >
-              <EntityIcon targetType={blockName()} size="xs" class="shrink-0" />
-              <span class="truncate">{documentName()}</span>
-            </ViewBreadcrumbs.Button>
-          </DocumentTitleHoverCard>
+              <ViewBreadcrumbs.Button
+                class="gap-1.5"
+                isActive={item.isActive()}
+                onClick={() => {
+                  item.onSelect();
+                  focusDocument();
+                }}
+              >
+                <EntityIcon
+                  targetType={blockName()}
+                  size="xs"
+                  class="shrink-0"
+                />
+                <span class="truncate">{documentName()}</span>
+              </ViewBreadcrumbs.Button>
+            </DocumentTitleHoverCard>
+          </SplitTitleCrumb>
           <div class="shrink-0">
             <SplitFileMenu
               id={props.documentId}

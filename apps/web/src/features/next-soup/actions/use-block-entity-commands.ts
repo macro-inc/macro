@@ -8,6 +8,7 @@ import { openPropertyEditor } from '@app/features/property/editor/state/property
 import { t } from '@app/lib/i18n';
 import { useGlobalNotificationSource } from '@components/app/GlobalAppState';
 import { useSplitPanel } from '@components/app/split-layout/layoutUtils';
+import { splitTitleRename } from '@components/app/split-layout/title-rename';
 import { useMaybeBlockId } from '@core/block';
 import { useQuickAccess } from '@core/context/quickAccess';
 import { useUserId } from '@core/context/user';
@@ -36,7 +37,6 @@ import {
   makeMarkDoneAction,
   makeMoveToProjectAction,
   makeMuteAction,
-  makeRenameAction,
 } from './index';
 
 const reportEntityActionError = (error: unknown) =>
@@ -96,7 +96,6 @@ export const useBlockEntityCommands = (
     userId: () => userId(),
     onDeleted: options.onDeleted,
   });
-  const renameAction = makeRenameAction({ userId: () => userId() });
   const copyAction = makeCopyAction();
   const moveToProjectAction = makeMoveToProjectAction({
     userId: () => userId(),
@@ -322,15 +321,13 @@ export const useBlockEntityCommands = (
       description: () => t('entityActions.renameItem'),
       keyDownHandler: () => {
         const entity = getEntity();
-        if (!entity) return false;
-        if (!renameAction.canExecute(entity)) return false;
-        fireAndForget(renameAction.execute([entity]), 'entity-actions');
+        const rename = splitTitleRename(splitPanel, entity?.id);
+        if (!entity || !rename) return false;
+        rename.begin(entity.id);
         return true;
       },
-      condition: () => {
-        const entity = getEntity();
-        return entity !== undefined && renameAction.canExecute(entity);
-      },
+      // The header renames in place; it registers only what the viewer may rename.
+      condition: () => !!splitTitleRename(splitPanel, getEntity()?.id),
       displayPriority: 10,
       tags: [HotkeyTags.SelectionModification],
     }).withGroup(group);

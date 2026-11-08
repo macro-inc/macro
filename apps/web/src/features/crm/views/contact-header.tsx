@@ -1,7 +1,8 @@
 import { ListSkeleton } from '@app/components/view-shell/ListSkeleton';
 import { propertyPillClasses } from '@app/features/property/extractors/property-pill-classes';
 import { EntityIcon } from '@core/component/EntityIcon';
-import { InlineTitleEditor } from '@core/component/InlineTitleEditor';
+import { createInlineRename, RenameTitle } from '@ui/components/InlineRename';
+import { ResultAsync } from 'neverthrow';
 import { formatDateAndTime, formatRelativeTimestamp } from '@entity';
 import ContactIcon from '@icon/system/regular/address-book.svg';
 import ClockIcon from '@icon/system/regular/clock.svg';
@@ -17,21 +18,30 @@ import { useCompanyQuery, useSetContactNameMutation } from './use-crm';
 // no global directory involved (unlike company renames).
 function TitleEditor(props: { contact: CrmContactResponse }) {
   const renameMutation = useSetContactNameMutation();
-  return (
-    <InlineTitleEditor
-      // Nameless contacts display their email; committing it unchanged
-      // is a no-op rather than a save.
-      value={props.contact.name ?? props.contact.email ?? ''}
-      placeholder="Contact"
-      ariaLabel="Contact name"
-      class="w-full text-2xl"
-      onRename={(name) =>
-        renameMutation.mutate({
-          contactId: props.contact.id,
-          companyId: props.contact.companyId,
+  const rename = createInlineRename({
+    key: (contact: CrmContactResponse) => contact.id,
+    // Nameless contacts display their email; committing it unchanged is a
+    // no-op rather than a save.
+    name: (contact) => contact.name ?? contact.email ?? '',
+    rename: (contact, name) =>
+      ResultAsync.fromPromise(
+        renameMutation.mutateAsync({
+          contactId: contact.id,
+          companyId: contact.companyId,
           name,
-        })
-      }
+        }),
+        () => 'Could not rename this contact. Please try again.'
+      ),
+    failureMessage: (message: string) => message,
+  });
+  return (
+    <RenameTitle
+      rename={rename}
+      target={props.contact}
+      startOn="click"
+      aria-label="Contact name"
+      placeholder="Contact"
+      class="block w-full text-2xl font-semibold"
     />
   );
 }

@@ -21,6 +21,7 @@ import {
   type FileOperation,
   SplitFileMenu,
 } from '@components/app/split-layout/components/SplitFileMenu';
+import { SplitTitleCrumb } from '@components/app/split-layout/title-rename';
 import {
   useSplitDisplayName,
   useSplitPanelOrThrow,
@@ -50,6 +51,8 @@ type DetailParams = {
 
 function HomeEntityBreadcrumb(props: {
   name: Accessor<string | undefined>;
+  /** The entity the crumb names, when its file menu can rename it. */
+  id?: string;
   target: EntityDetailTarget;
   value: Accessor<string>;
   fileMenu?: JSX.Element;
@@ -64,30 +67,34 @@ function HomeEntityBreadcrumb(props: {
     >
       {(item) => (
         <div class="flex min-w-0 items-center">
-          <ViewBreadcrumbs.Button
-            class="gap-1.5"
-            isActive={item.isActive()}
-            onClick={item.onSelect}
-            tooltip={props.name()}
-          >
-            <Show
-              when={
-                props.target.type === 'channel' ? props.target.id : undefined
-              }
-              fallback={
-                <EntityIcon
-                  targetType={entityDetailBlockType(props.target) ?? 'unknown'}
-                  size="xs"
-                  class="shrink-0"
-                />
-              }
+          <SplitTitleCrumb id={props.id} isActive={item.isActive()}>
+            <ViewBreadcrumbs.Button
+              class="gap-1.5"
+              isActive={item.isActive()}
+              onClick={item.onSelect}
+              tooltip={props.name()}
             >
-              {(channelId) => (
-                <ChannelTitleIcon channelId={channelId()} suppressClick />
-              )}
-            </Show>
-            <span class="truncate">{props.name()}</span>
-          </ViewBreadcrumbs.Button>
+              <Show
+                when={
+                  props.target.type === 'channel' ? props.target.id : undefined
+                }
+                fallback={
+                  <EntityIcon
+                    targetType={
+                      entityDetailBlockType(props.target) ?? 'unknown'
+                    }
+                    size="xs"
+                    class="shrink-0"
+                  />
+                }
+              >
+                {(channelId) => (
+                  <ChannelTitleIcon channelId={channelId()} suppressClick />
+                )}
+              </Show>
+              <span class="truncate">{props.name()}</span>
+            </ViewBreadcrumbs.Button>
+          </SplitTitleCrumb>
           <Show when={props.fileMenu}>
             <div class="shrink-0">{props.fileMenu}</div>
           </Show>
@@ -119,6 +126,7 @@ function HomeMarkdownBreadcrumb(props: {
   return (
     <HomeEntityBreadcrumb
       name={name}
+      id={documentId()}
       target={props.target}
       value={props.value}
       fileMenu={
@@ -158,6 +166,7 @@ function HomeDocumentBreadcrumb(props: {
   return (
     <HomeEntityBreadcrumb
       name={name}
+      id={props.context.documentMetadata.documentId}
       target={props.target}
       value={props.value}
       fileMenu={

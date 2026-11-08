@@ -1,4 +1,9 @@
 import { BlockItemSplitLabel } from '@components/app/split-layout/components/SplitLabel';
+import {
+  createSplitTitleRename,
+  createSplitTitleRenames,
+} from '@components/app/split-layout/title-rename';
+import type { InlineRename } from '@ui';
 import { queryClient } from '@queries/client';
 import type { DatabaseDetail } from '@service-storage/generated/schemas/databaseDetail';
 import type { TableDetail } from '@service-storage/generated/schemas/tableDetail';
@@ -12,10 +17,9 @@ import {
 } from '@solidjs/testing-library';
 import { QueryClientProvider } from '@tanstack/solid-query';
 import { errAsync, okAsync, type ResultAsync } from 'neverthrow';
-import { type Accessor, createSignal, Show } from 'solid-js';
+import { type Accessor, createSignal } from 'solid-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { toast } from '../../../lib/core/component/Toast/Toast';
-import { DatabaseTitle } from '../../database/components/database-title';
 import type { DatabaseEntityFailure } from '../../database/core/write-failure';
 import {
   type DatabaseEntityActions,
@@ -29,6 +33,7 @@ vi.mock('@app/components/entity-detail/DocumentTitleHoverCard', () => ({
 vi.mock('@core/block', () => ({
   isInBlock: () => true,
   useBlockAliasedName: () => 'database',
+  useBlockId: () => 'db',
 }));
 vi.mock('@core/component/EntityIcon', () => ({ EntityIcon: () => null }));
 vi.mock('@core/signal/load', () => ({ blockMetadataSignal: () => undefined }));
@@ -38,12 +43,14 @@ vi.mock('@core/signal/permissions', () => ({
 vi.mock('@core/util/currentBlockDocumentName', () => ({
   useBlockDocumentName: () => () => 'Customers',
 }));
+const titleRenames = createSplitTitleRenames();
 vi.mock('@components/app/split-layout/layoutUtils', () => ({
   useSplitDisplayName: () => {},
   useSplitPanelOrThrow: () => ({
     titleFileMenuActions: () => undefined,
     titleFileMenuTrigger: () => undefined,
     setTitleFileMenuRef: () => {},
+    ...titleRenames,
   }),
 }));
 
@@ -111,27 +118,22 @@ function setup(
   entityActions?: DatabaseEntityActions,
   selectedTable?: Accessor<TableDetail>
 ) {
-  let editTitle: (() => void) | undefined;
-  const editReady = vi.fn((edit: (() => void) | undefined) => {
-    editTitle = edit;
-  });
+  let titleRename!: InlineRename<string>;
   const [loaded, setLoaded] = createSignal(false);
   render(() => (
     <QueryClientProvider client={queryClient}>
       <>
-        <BlockItemSplitLabel
-          name={() => 'Customers'}
-          title={
-            <Show when={loaded()}>
-              <DatabaseTitle
-                name="Customers"
-                canEdit={grant !== 'view'}
-                onRename={vi.fn()}
-                onEditReady={editReady}
-              />
-            </Show>
-          }
-        />
+        {(() => {
+          titleRename = createSplitTitleRename(titleRenames, {
+            id: () => 'db',
+            name: () => 'Customers',
+            enabled: () => loaded() && grant !== 'view',
+            rename: () => okAsync(undefined),
+            failureMessage: () => 'Could not rename',
+          });
+          return null;
+        })()}
+        <BlockItemSplitLabel id="db" name={() => 'Customers'} />
         <DatabasePageActions
           detail={
             {
@@ -146,14 +148,14 @@ function setup(
           }
           entityActions={entityActions}
           onImported={vi.fn()}
-          onRename={() => editTitle?.()}
+          onRename={() => titleRename.begin('db')}
           onDelete={remove}
         />
       </>
     </QueryClientProvider>
   ));
   setLoaded(true);
-  return { remove, editReady };
+  return { remove };
 }
 async function openMenu() {
   const trigger = screen.getByRole('button', { name: 'Database actions' });
@@ -169,15 +171,14 @@ function selectItem(name: string) {
 
 describe('database page actions', () => {
   it('focuses the inline title from Rename', async () => {
-    const { editReady } = setup();
-    expect(editReady).toHaveBeenCalledTimes(1);
+    setup();
     expect(screen.queryByRole('button', { name: 'Import CSV' })).toBeNull();
     expect(
       screen.queryByRole('button', { name: 'Download database' })
     ).toBeNull();
     await openMenu();
     selectItem('Rename');
-    const title = await screen.findByRole('textbox', { name: 'Database name' });
+    const title = await screen.findByRole('textbox', { name: 'Name' });
     await waitFor(() => expect(document.activeElement).toBe(title));
     expect(screen.queryByRole('menu')).toBeNull();
   });

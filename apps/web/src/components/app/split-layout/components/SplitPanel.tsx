@@ -29,6 +29,7 @@ import {
   SplitPanelContext,
   type SplitPanelContextType,
 } from '../context';
+import { createSplitTitleRenames } from '../title-rename';
 import { useSplitLayout } from '../layout';
 import type { SplitHandle, SplitState } from '../layoutManager';
 import { shouldShowSplitCloseButton } from '../layoutUtils';
@@ -60,6 +61,7 @@ export function SplitPanel(props: SplitPanelProps) {
     createSignal<() => void>();
   const [titleFileMenuActions, setTitleFileMenuActions] =
     createSignal<SplitFileMenuActionGroups>();
+  const titleRenames = createSplitTitleRenames();
   const [bottomPanel, setBottomPanel] =
     createSignal<SplitBottomPanelRegistration>();
   const panelSize = createElementSize(panelRef);
@@ -239,6 +241,7 @@ export function SplitPanel(props: SplitPanelProps) {
             setTitleFileMenuTrigger,
             titleFileMenuActions,
             setTitleFileMenuActions,
+            ...titleRenames,
             replaceOwnedSlot: ownedSlots.replace,
             panelSize,
             panelRef,

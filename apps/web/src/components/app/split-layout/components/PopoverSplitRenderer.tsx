@@ -17,6 +17,7 @@ import {
   SplitPanelContext,
   type SplitPanelContextType,
 } from '../context';
+import { createSplitTitleRenames } from '../title-rename';
 import type {
   PopoverSplitOptions,
   SplitContent,
@@ -77,6 +78,7 @@ function PopoverSplitModal(props: {
     createSignal<() => void>();
   const [titleFileMenuActions, setTitleFileMenuActions] =
     createSignal<SplitFileMenuActionGroups>();
+  const titleRenames = createSplitTitleRenames();
   const ownedSlots = createOwnedSlots();
 
   const stubHandle: SplitHandle = {
@@ -149,6 +151,7 @@ function PopoverSplitModal(props: {
     setTitleFileMenuTrigger,
     titleFileMenuActions,
     setTitleFileMenuActions,
+    ...titleRenames,
     replaceOwnedSlot: ownedSlots.replace,
     headerCollapser: { register: () => () => {} },
     toolbarCollapser: { register: () => () => {} },

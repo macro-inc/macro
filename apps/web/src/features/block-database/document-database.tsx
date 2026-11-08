@@ -11,15 +11,17 @@ import {
 import { useDatabaseTableChangedSync } from '@queries/storage/databases-sync';
 import type { DatabaseView } from '@service-storage/generated/schemas/databaseView';
 import { getEntityGraphqlClient } from '@service-storage/graphql-soup';
-import { Button, Tooltip } from '@ui';
+import { Button, createInlineRename, RenameTitle, Tooltip } from '@ui';
 import { createMemo, createSignal, onCleanup, Show } from 'solid-js';
 import { DatabaseEditorToolbar } from '../database/components/database-editor-toolbar';
-import { DatabaseTitle } from '../database/components/database-title';
 import { ViewSelect } from '../database/components/view-select';
 import type { DatabaseRelatedDestination } from '../database/core/database-relations';
 import type { ViewChange } from '../database/core/view-state';
 import { allRecordsView } from '../database/core/views';
-import { databaseEntityMessage } from '../database/core/write-failure';
+import {
+  type DatabaseEntityFailure,
+  databaseEntityMessage,
+} from '../database/core/write-failure';
 import { createDatabaseUndo } from '../database/primitives/undo-controller';
 import type { DatabaseRecordsActions } from '../database/views/database-records-view';
 import { DatabaseGrid } from './component/DatabaseGrid';
@@ -104,6 +106,14 @@ export function DocumentDatabase(props: {
     offer: (label, revert) =>
       toast.success(label, { actions: [{ label: 'Undo', onClick: revert }] }),
   });
+  const titleRename = createInlineRename({
+    key: (id: string) => id,
+    name: () => name(),
+    rename: (_id, next) =>
+      renameDatabase(getEntityGraphqlClient(), databaseId, next),
+    failureMessage: (failure: DatabaseEntityFailure) =>
+      databaseEntityMessage(failure, 'rename'),
+  });
 
   return (
     <section
@@ -136,15 +146,14 @@ export function DocumentDatabase(props: {
       <div class="flex min-w-0 flex-wrap items-center gap-2 px-3 py-2">
         <DatabaseIcon class="size-4 shrink-0 text-ink-muted" />
         <div class="min-w-0 flex-1">
-          <DatabaseTitle
-            name={name()}
-            canEdit={canEdit() && !props.collapsed}
-            onRename={(next) => {
-              renameDatabase(getEntityGraphqlClient(), databaseId, next).mapErr(
-                (failure) =>
-                  toast.failure(databaseEntityMessage(failure, 'rename'))
-              );
-            }}
+          <RenameTitle
+            rename={titleRename}
+            target={databaseId}
+            startOn="double-click"
+            readOnly={!canEdit() || props.collapsed}
+            aria-label="Database name"
+            placeholder="Untitled database"
+            class="inline-block text-sm font-semibold"
           />
         </div>
         <Show when={detail.isSuccess && !canEdit()}>

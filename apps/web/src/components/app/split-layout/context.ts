@@ -10,6 +10,7 @@ import {
 } from 'solid-js';
 import type { PriorityCollapser } from '../../priority-collapse/createPriorityCollapser';
 import type { SplitHandle, SplitManager } from './layoutManager';
+import type { SplitTitleRename } from './title-rename';
 import type { ReplaceOwnedSlot } from './utils/createOwnedSlots';
 
 export const SplitLayoutContext = createContext<{
@@ -31,6 +32,11 @@ export type SplitFileMenuAction = {
   /** Only set when the token's shortcut is executable from the split. */
   hotkeyToken?: HotkeyToken;
   group?: SplitFileMenuActionGroup;
+  /**
+   * Runs once the menu has closed and handed focus back, for an action that
+   * puts focus somewhere itself (renaming the title in place).
+   */
+  afterMenuCloses?: boolean;
 };
 
 /** Menu sections, in render order. */
@@ -121,6 +127,10 @@ export type SplitPanelContextType = {
   setTitleFileMenuTrigger: Setter<(() => void) | undefined>;
   titleFileMenuActions: Accessor<SplitFileMenuActionGroups | undefined>;
   setTitleFileMenuActions: Setter<SplitFileMenuActionGroups | undefined>;
+  /** The entities this split's header can rename in place. */
+  titleRenames: Accessor<readonly SplitTitleRename[]>;
+  /** Adds one; the returned function removes it. */
+  registerTitleRename: (registration: SplitTitleRename) => () => void;
   replaceOwnedSlot: ReplaceOwnedSlot;
   headerCollapser: PriorityCollapser;
   toolbarCollapser: PriorityCollapser;

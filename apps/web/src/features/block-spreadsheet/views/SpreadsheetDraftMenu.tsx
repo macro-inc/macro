@@ -18,13 +18,21 @@ export function SpreadsheetDraftMenu(props: {
   onRename?: () => void;
 }) {
   const panel = useSplitPanelOrThrow();
+  let afterClose: (() => void) | undefined;
   const groups = createMemo<SplitFileMenuActionGroups>(() => ({
     entity: [],
     sender: [],
     macro: [{ label: 'Ask Macro', icon: Sparkle, action: props.onAsk }],
     sharing: [{ label: 'Share', icon: Share, action: props.onShare }],
     file: props.onRename
-      ? [{ label: 'Rename', icon: Rename, action: props.onRename }]
+      ? [
+          {
+            label: 'Rename',
+            icon: Rename,
+            action: props.onRename,
+            afterMenuCloses: true,
+          },
+        ]
       : [],
     delete: [],
   }));
@@ -53,13 +61,24 @@ export function SpreadsheetDraftMenu(props: {
           >
             <DotsThree class="size-3.5 touch:size-6 shrink-0 pointer-events-none" />
           </Dropdown.Trigger>
-          <Dropdown.Content class="w-64">
+          <Dropdown.Content
+            class="w-64"
+            onCloseAutoFocus={(event) => {
+              const run = afterClose;
+              if (!run) return;
+              afterClose = undefined;
+              event.preventDefault();
+              queueMicrotask(run);
+            }}
+          >
             <Dropdown.Group>
               <For each={actions()}>
                 {(action) => (
                   <Dropdown.Item
                     onSelect={() => {
-                      action.action?.();
+                      if (action.afterMenuCloses)
+                        afterClose = () => action.action?.();
+                      else action.action?.();
                       props.onOpenChange(false);
                     }}
                   >

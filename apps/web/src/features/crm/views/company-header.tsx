@@ -1,6 +1,7 @@
 import { ListSkeleton } from '@app/components/view-shell/ListSkeleton';
 import { EntityIcon } from '@core/component/EntityIcon';
-import { InlineTitleEditor } from '@core/component/InlineTitleEditor';
+import { createInlineRename, RenameTitle } from '@ui/components/InlineRename';
+import { ResultAsync } from 'neverthrow';
 import {
   type CrmCompanyEntity,
   formatDateAndTime,
@@ -59,15 +60,24 @@ function Description(props: { text: string }) {
 // directory.
 function TitleEditor(props: { company: CrmCompanyEntity }) {
   const renameMutation = useSetCompanyNameMutation();
+  const rename = createInlineRename({
+    key: (company: CrmCompanyEntity) => company.id,
+    name: (company) => company.name,
+    rename: (company, name) =>
+      ResultAsync.fromPromise(
+        renameMutation.mutateAsync({ companyId: company.id, name }),
+        () => 'Could not rename this company. Please try again.'
+      ),
+    failureMessage: (message: string) => message,
+  });
   return (
-    <InlineTitleEditor
-      value={props.company.name}
+    <RenameTitle
+      rename={rename}
+      target={props.company}
+      startOn="click"
+      aria-label="Company name"
       placeholder="Company"
-      ariaLabel="Company name"
-      class="w-full text-2xl"
-      onRename={(name) =>
-        renameMutation.mutate({ companyId: props.company.id, name })
-      }
+      class="block w-full text-2xl font-semibold"
     />
   );
 }

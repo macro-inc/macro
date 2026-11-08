@@ -163,6 +163,7 @@ export function CallRecordingSplitHeader(props: { record: CallRecord }) {
           <div class="ph-no-capture z-split-header-content relative flex h-full max-w-full min-w-0 shrink items-center gap-2">
             <StaticSplitLabel
               label={callName()}
+              id={blockId}
               icon={
                 <PhoneCallIcon class="size-4 touch:size-6 shrink-0 text-ink-muted" />
               }

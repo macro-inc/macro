@@ -152,6 +152,7 @@ function SessionContent(props: {
             <>
               <StaticSplitLabel
                 label={title()}
+                id={entity()?.id}
                 icon={
                   <Show
                     when={modelProvider(metadata()?.model ?? session()?.model)}

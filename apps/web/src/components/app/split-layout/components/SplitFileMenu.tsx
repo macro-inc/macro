@@ -32,7 +32,11 @@ import { getActiveCommandByToken } from '@core/hotkey/utils';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { useGetPermissions } from '@core/signal/permissions';
 import { fireAndForget } from '@core/util/fireAndForget';
-import { buildEntityData, type EntityData } from '@entity';
+import {
+  buildEntityData,
+  createRenameDssEntityMutation,
+  type EntityData,
+} from '@entity';
 import ArrowRight from '@icon/system/regular/arrow-right.svg';
 import BellSimple from '@icon/system/regular/bell-simple.svg';
 import BellSlash from '@icon/system/regular/bell-slash.svg';
@@ -49,6 +53,7 @@ import Star from '@icon/system/regular/star.svg';
 import Tag from '@icon/system/regular/tag.svg';
 import Trash from '@icon/system/regular/trash-simple.svg';
 import type { ItemType } from '@service-storage/itemType';
+import { errAsync, ResultAsync } from 'neverthrow';
 import { cn, Dropdown, Hotkey } from '@ui';
 import {
   type Component,
@@ -72,6 +77,7 @@ import {
 } from '../context';
 import { useSplitLayout } from '../layout';
 import { returnSplitToRecentListView } from '../layoutUtils';
+import { createSplitTitleRename } from '../title-rename';
 
 export type FileOperationName = 'delete' | 'rename' | 'copy' | 'moveToProject';
 
@@ -145,6 +151,7 @@ type SplitFileMenuRenderProps = {
 
 function DesktopRender(props: SplitFileMenuRenderProps) {
   const sections = () => getSplitFileMenuActionSections(props.groups);
+  let afterClose: (() => void) | undefined;
 
   const item = (action: SplitFileMenuAction) => {
     const children = () => action.children?.filter(Boolean) ?? [];
@@ -155,7 +162,8 @@ function DesktopRender(props: SplitFileMenuRenderProps) {
         fallback={
           <Dropdown.Item
             onSelect={() => {
-              action.action?.();
+              if (action.afterMenuCloses) afterClose = () => action.action?.();
+              else action.action?.();
               props.onOpenChange(false);
             }}
           >
@@ -187,7 +195,16 @@ function DesktopRender(props: SplitFileMenuRenderProps) {
       >
         <DotsThree class="size-3.5 touch:size-6 shrink-0 pointer-events-none" />
       </Dropdown.Trigger>
-      <Dropdown.Content class="min-w-64 max-w-[min(22rem,calc(100vw-1rem))]">
+      <Dropdown.Content
+        class="min-w-64 max-w-[min(22rem,calc(100vw-1rem))]"
+        onCloseAutoFocus={(event) => {
+          const run = afterClose;
+          if (!run) return;
+          afterClose = undefined;
+          event.preventDefault();
+          queueMicrotask(run);
+        }}
+      >
         <For each={sections()}>
           {(section) => (
             <Dropdown.Group>
@@ -534,6 +551,25 @@ export function SplitFileMenu(props: SplitFileMenuProps) {
 
   const ownsMenuEntity = () => props.permissions === Permissions.OWNER;
 
+  const renameMutation = createRenameDssEntityMutation();
+  const offersRename = () =>
+    ownsMenuEntity() &&
+    props.ops.some((op) => isDefaultFileOperation(op) && op.op === 'rename');
+  const titleRename = createSplitTitleRename(ctx, {
+    id: () => props.id,
+    name: () => props.name,
+    enabled: offersRename,
+    rename: (newName) => {
+      const entity = menuEntity();
+      if (!entity) return errAsync(undefined);
+      return ResultAsync.fromPromise(
+        renameMutation.mutateAsync({ entity, newName }),
+        () => undefined
+      );
+    },
+    failureMessage: () => t('entityActions.toastRenameFailed'),
+  });
+
   const ops = createMemo<SplitFileMenuAction[]>(() => {
     const mapped = props.ops
       .map((op) => {
@@ -568,22 +604,11 @@ export function SplitFileMenu(props: SplitFileMenuProps) {
               };
             })
             .with('rename', () => {
-              if (!ownsMenuEntity()) return null;
+              if (!offersRename()) return null;
               return {
                 label: t('entityActions.rename'),
-                action: () => {
-                  const entity = menuEntity();
-                  if (!entity) return;
-                  setOpen(false);
-                  openBulkEditModal({
-                    view: 'rename',
-                    entities: [entity],
-                    onFinish: () =>
-                      toast.success(t('entityActions.toastRenamed')),
-                    onError: () =>
-                      toast.failure(t('entityActions.toastRenameFailed')),
-                  });
-                },
+                action: () => titleRename.begin(props.id),
+                afterMenuCloses: true,
                 icon: Rename,
                 get hotkeyToken() {
                   return activeHotkeyToken(TOKENS.entity.action.rename);
@@ -686,6 +711,7 @@ export function SplitFileMenu(props: SplitFileMenuProps) {
       children: tool.children,
       hotkeyToken: tool.hotkeyToken,
       group: tool.group,
+      afterMenuCloses: tool.afterMenuCloses,
       action: (e?: MouseEvent) => {
         tool.action();
         if (tool.focusTarget) {

@@ -1,12 +1,12 @@
 import { SidePanel } from '@components/app/side-panel';
 import { EntityMetadata } from '@components/app/side-panel/EntityMetadata';
-import { InlineTitleEditor } from '@core/component/InlineTitleEditor';
-import { fireAndForget } from '@core/util/fireAndForget';
+import { createInlineRename, RenameTitle } from '@ui/components/InlineRename';
+import { ResultAsync } from 'neverthrow';
 import { PropertyValuePill } from '@property/component/PropertyValuePill';
 import { SYSTEM_PROPERTY_IDS } from '@property/identifiers';
 import { EntityPropertiesSection } from '@property/side-panel/properties/EntityPropertiesSection';
 import { Key } from '@solid-primitives/keyed';
-import { createSignal, type JSX, Match, Show, Switch } from 'solid-js';
+import { type JSX, Match, Show, Switch } from 'solid-js';
 import {
   type ProjectSource,
   type ProjectsContext,
@@ -42,18 +42,18 @@ export function ProjectWorkspace(props: {
   description: JSX.Element;
 }) {
   const definitions = useProjectsContext().createPropertyDefinitionsSource();
-  const [error, setError] = createSignal<string>();
   const canEdit = () => canEditProject(props.project);
-  const run = async (action: () => Promise<void>) => {
-    setError(undefined);
-    try {
-      await action();
-    } catch (error) {
-      setError(
-        error instanceof Error ? error.message : 'Could not save project.'
-      );
-    }
-  };
+  const projectRename = createInlineRename({
+    key: (project: { id: string; name: string }) => project.id,
+    name: (project) => project.name,
+    rename: (project, name) =>
+      ResultAsync.fromPromise(
+        props.commands.rename(project.id, name),
+        (error) =>
+          error instanceof Error ? error.message : 'Could not save project.'
+      ),
+    failureMessage: (message: string) => message,
+  });
 
   return (
     <SidePanel.Layout headerToggle={false} floating defaultOpen={false}>
@@ -89,13 +89,6 @@ export function ProjectWorkspace(props: {
         )}
       />
       <div class="flex size-full min-h-0 min-w-0 flex-col overflow-hidden">
-        <Show when={error()}>
-          {(message) => (
-            <p role="alert" class="px-6 py-2 text-sm text-failure">
-              {message()}
-            </p>
-          )}
-        </Show>
         <Show when={props.source.error()}>
           <p role="status" class="px-6 py-2 text-sm text-ink-muted">
             Could not refresh this project.
@@ -114,19 +107,13 @@ export function ProjectWorkspace(props: {
                       </h1>
                     }
                   >
-                    <InlineTitleEditor
-                      value={props.project.name}
+                    <RenameTitle
+                      rename={projectRename}
+                      target={props.project}
+                      startOn="click"
+                      aria-label="Project name"
                       placeholder="Project name"
-                      ariaLabel="Project name"
-                      class="w-full text-2xl"
-                      onRename={(name) =>
-                        fireAndForget(
-                          run(() =>
-                            props.commands.rename(props.project.id, name)
-                          ),
-                          'projects'
-                        )
-                      }
+                      class="block w-full text-2xl font-semibold"
                     />
                   </Show>
                   <div

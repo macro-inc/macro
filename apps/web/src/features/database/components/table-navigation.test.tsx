@@ -230,9 +230,11 @@ describe('table creation and navigation', () => {
   });
 
   it('puts the table name back and says why when a rename fails', async () => {
-    const rename = vi.fn(() =>
-      errAsync([{ code: 'NETWORK_ERROR', message: 'Offline' }])
-    );
+    const rename = vi
+      .fn()
+      .mockReturnValue(
+        errAsync([{ code: 'NETWORK_ERROR', message: 'Offline' }])
+      );
     render(() => (
       <TableNavigation
         tables={[

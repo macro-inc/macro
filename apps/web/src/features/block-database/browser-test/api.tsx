@@ -5,7 +5,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/solid-query';
 import { err, errAsync, okAsync, ResultAsync } from 'neverthrow';
 import { createSignal } from 'solid-js';
 import { render } from 'solid-js/web';
-import { DatabaseTitle } from '../../database/components/database-title';
+import { createInlineRename, RenameTitle } from '@ui';
 import { DatabaseProvider } from '../../database/context/database';
 import type { DatabaseApi, DatabaseTableSchema } from '../../database/core/api';
 import type { DatabaseRow } from '../../database/core/table';
@@ -37,7 +37,15 @@ function ApiFixture() {
   ]);
   const [refuseMove, setRefuseMove] = createSignal<() => void>();
   const [name, setName] = createSignal('Untitled database');
-  let editTitle: (() => void) | undefined;
+  const titleRename = createInlineRename({
+    key: (id: string) => id,
+    name: () => name(),
+    rename: (_id, next: string) => {
+      setName(next);
+      return okAsync(undefined);
+    },
+    failureMessage: (failure: string) => failure,
+  });
   const [editable, setEditable] = createSignal(true);
   const [writes, setWrites] = createSignal(0);
   let releaseColumnWrites!: () => void;
@@ -216,15 +224,21 @@ function ApiFixture() {
     >
       <main class="flex h-screen flex-col bg-panel text-ink">
         <div class="flex flex-wrap gap-4 p-4">
-          <DatabaseTitle
-            name={name()}
-            canEdit={editable()}
-            onRename={setName}
-            onEditReady={(edit) => {
-              editTitle = edit;
-            }}
+          <RenameTitle
+            rename={titleRename}
+            target="database"
+            startOn="double-click"
+            readOnly={!editable()}
+            aria-label="Database name"
+            class="text-sm font-semibold"
           />
-          <button onClick={() => editTitle?.()}>Rename database</button>
+          <button
+            onClick={() => {
+              if (editable()) titleRename.begin('database');
+            }}
+          >
+            Rename database
+          </button>
           <button onClick={() => setEditable((value) => !value)}>
             Toggle editing
           </button>

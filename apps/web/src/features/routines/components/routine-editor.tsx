@@ -1,10 +1,10 @@
 import { ViewBreadcrumbs, ViewShell } from '@app/components/view-shell';
-import { InlineTitleEditor } from '@core/component/InlineTitleEditor';
 import ClockIcon from '@icon/system/regular/clock.svg';
 import ClockCounterIcon from '@icon/system/regular/clock-counter-clockwise.svg';
 import { ComposerSurface, cn, TabSelector } from '@ui';
 import { For, type JSX, type ParentProps, Show } from 'solid-js';
 import type { ScheduleDraft } from '../core/draft';
+import { RoutineName } from './routine-name';
 import { RoutineDescription } from './routine-description';
 
 /**
@@ -254,12 +254,10 @@ export function RoutineEditor(props: {
                       </h1>
                     }
                   >
-                    <InlineTitleEditor
+                    <RoutineName
                       value={props.draft.name}
-                      placeholder="Routine name"
-                      ariaLabel="Routine name"
                       class="text-[28px] leading-[34px]"
-                      onRename={(name) =>
+                      onChange={(name) =>
                         props.onChange((draft) => ({ ...draft, name }))
                       }
                     />

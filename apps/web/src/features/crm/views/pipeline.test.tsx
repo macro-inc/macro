@@ -15,11 +15,8 @@ const device = vi.hoisted(() => ({ touch: true }));
 vi.mock('@core/mobile/isTouchDevice', () => ({
   isTouchDevice: () => device.touch,
 }));
-vi.mock('@core/component/InlineTitleEditor', () => ({
-  InlineTitleEditor: (props: { value: string; ariaLabel: string }) => (
-    <input aria-label={props.ariaLabel} value={props.value} />
-  ),
-}));
+const toast = vi.hoisted(() => ({ failure: vi.fn(), success: vi.fn() }));
+vi.mock('@core/component/Toast/Toast', () => ({ toast }));
 vi.mock('@ui/components/DeleteDialog', () => ({
   DeleteDialog: (props: {
     open: boolean;
@@ -100,6 +97,7 @@ beforeEach(() => {
 });
 afterEach(() => {
   cleanup();
+  toast.failure.mockReset();
   motionStyles.remove();
   device.touch = true;
   vi.restoreAllMocks();
@@ -134,26 +132,23 @@ it.each(['view', 'comment', 'edit', 'owner'] as const)(
   }
 );
 
-it('renames from mobile and keeps a failed attempt open for retry', async () => {
+it('renames from mobile in place, putting the name back when it fails', async () => {
   const { rename } = setup('edit');
   rename.mockRejectedValueOnce(new Error('Request failed'));
   fireEvent.click(screen.getByRole('button', { name: 'Pipeline actions' }));
   fireEvent.click(screen.getByRole('button', { name: 'Rename pipeline' }));
-  fireEvent.input(screen.getByRole('textbox', { name: 'Pipeline name' }), {
-    target: { value: '  Renewals  ' },
-  });
-  fireEvent.click(screen.getByRole('button', { name: 'Save name' }));
+  const field = screen.getByRole('textbox', { name: 'Pipeline name' });
+  await waitFor(() => expect(document.activeElement).toBe(field));
+  expect((field as HTMLInputElement).value).toBe('Sales');
+  fireEvent.input(field, { target: { value: '  Renewals  ' } });
+  fireEvent.keyDown(field, { key: 'Enter' });
+  expect(rename).toHaveBeenCalledExactlyOnceWith('pipeline', 'Renewals');
   await waitFor(() =>
-    expect(screen.getByRole('alert').textContent).toContain('Could not save')
+    expect(toast.failure).toHaveBeenCalledExactlyOnceWith(
+      'Could not rename this pipeline. Please try again.'
+    )
   );
-  expect(
-    (screen.getByRole('textbox', { name: 'Pipeline name' }) as HTMLInputElement)
-      .value
-  ).toBe('  Renewals  ');
-  fireEvent.click(screen.getByRole('button', { name: 'Save name' }));
-  await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
-  expect(rename).toHaveBeenCalledTimes(2);
-  expect(rename).toHaveBeenLastCalledWith('pipeline', 'Renewals');
+  expect(screen.getByRole('button', { name: 'Rename pipeline' })).toBeTruthy();
 });
 
 it('requires confirmation before trashing a pipeline from mobile', async () => {

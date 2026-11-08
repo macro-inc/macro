@@ -7,6 +7,10 @@ import {
 } from '@solidjs/testing-library';
 import type { JSX, ParentProps } from 'solid-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import {
+  createSplitTitleRenames,
+  SplitTitleName,
+} from '@components/app/split-layout/title-rename';
 import type { SpreadsheetStore } from './primitives/create-spreadsheet-store';
 
 vi.mock('./spreadsheet-mentions', () => ({ spreadsheetMentions: undefined }));
@@ -20,11 +24,13 @@ const mocks = vi.hoisted(() => ({
   menuTrigger: vi.fn(),
   menuActions: vi.fn(),
 }));
+const titleRenames = createSplitTitleRenames();
 vi.mock('@components/app/split-layout/layoutUtils', () => ({
   useSplitPanelOrThrow: () => ({
     handle: { replace: mocks.replace },
     setTitleFileMenuTrigger: mocks.menuTrigger,
     setTitleFileMenuActions: mocks.menuActions,
+    ...titleRenames,
   }),
 }));
 vi.mock('@components/app/split-layout/components/SplitHeader', () => ({
@@ -32,7 +38,9 @@ vi.mock('@components/app/split-layout/components/SplitHeader', () => ({
   SplitHeaderRight: (props: ParentProps) => props.children,
 }));
 vi.mock('@components/app/split-layout/components/SplitLabel', () => ({
-  StaticSplitLabel: (props: { label: string }) => <span>{props.label}</span>,
+  StaticSplitLabel: (props: { label: string; id?: string }) => (
+    <SplitTitleName panel={titleRenames} id={props.id} label={props.label} />
+  ),
   SplitTitleFileMenu: (props: ParentProps) => props.children,
 }));
 vi.mock('@core/mobile/isTouchDevice', () => ({ isTouchDevice: () => false }));
@@ -52,7 +60,7 @@ vi.mock('./queries/save-spreadsheet-draft', () => ({
   saveSpreadsheetDraft: mocks.save,
 }));
 vi.mock('@ui', async () => ({
-  Dialog: (await import('@ui/components/Dialog')).Dialog,
+  ...(await import('@ui/components/InlineRename')),
   Dropdown: (await import('@ui/components/Dropdown')).Dropdown,
   Button: (props: JSX.ButtonHTMLAttributes<HTMLButtonElement>) => (
     <button
@@ -179,12 +187,11 @@ describe('Spreadsheet draft title menu', () => {
     fireEvent.keyDown(screen.getByRole('menuitem', { name: 'Rename' }), {
       key: 'Enter',
     });
-    const input = await screen.findByRole('textbox', {
-      name: 'Spreadsheet name',
-    });
+    const input = await screen.findByRole('textbox', { name: 'Name' });
+    await waitFor(() => expect(document.activeElement).toBe(input));
     fireEvent.input(input, { target: { value: '  Quarterly plan  ' } });
-    fireEvent.click(screen.getByRole('button', { name: 'Save name' }));
-    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+    fireEvent.keyDown(input, { key: 'Enter' });
+    expect(screen.queryByRole('textbox', { name: 'Name' })).toBeNull();
     expect(screen.getByText('Quarterly plan')).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: 'Export CSV' }));
     expect(mocks.download).toHaveBeenCalledWith(

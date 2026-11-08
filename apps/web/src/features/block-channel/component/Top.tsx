@@ -51,9 +51,9 @@ export function ChannelTopLeft(props: ChannelTopLeftProps) {
             participants={props.participants}
           />
           <SplitLabel
+            id={props.channelId}
             label={channelName() ?? 'New Channel'}
             lockRename={props.lockRename}
-            renameOverrides={{ channelType: props.channelType }}
             maxDisplayLength={48}
           />
           <div

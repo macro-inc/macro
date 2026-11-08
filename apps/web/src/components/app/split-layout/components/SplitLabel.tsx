@@ -1,6 +1,6 @@
 import { DocumentTitleHoverCard } from '@app/components/entity-detail/DocumentTitleHoverCard';
 import { t } from '@app/lib/i18n';
-import { isInBlock, useBlockAliasedName } from '@core/block';
+import { isInBlock, useBlockAliasedName, useBlockId } from '@core/block';
 import {
   ContextMenuContent,
   MenuItem,
@@ -11,7 +11,6 @@ import {
   EntityIcon,
   type EntityIconSelector,
 } from '@core/component/EntityIcon';
-import { InlineTitleEditor } from '@core/component/InlineTitleEditor';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { blockMetadataSignal } from '@core/signal/load';
 import {
@@ -21,7 +20,6 @@ import {
   useIsDocumentOwner,
 } from '@core/signal/permissions';
 import { useBlockDocumentName } from '@core/util/currentBlockDocumentName';
-import type { BuildEntityDataArgs } from '@entity';
 import CaretDownIcon from '@icon/system/regular/caret-down.svg';
 import { ContextMenu } from '@kobalte/core/context-menu';
 import { cn, Tooltip } from '@ui';
@@ -29,7 +27,6 @@ import {
   type Accessor,
   type Component,
   createMemo,
-  createSignal,
   For,
   type JSX,
   onCleanup,
@@ -43,6 +40,7 @@ import {
   type SplitPanelContextType,
 } from '../context';
 import { useSplitDisplayName, useSplitPanelOrThrow } from '../layoutUtils';
+import { SplitTitleName } from '../title-rename';
 import { HeaderIsland } from './HeaderIsland';
 
 export function StaticSplitLabel(props: {
@@ -52,19 +50,12 @@ export function StaticSplitLabel(props: {
   badges?: JSX.Element;
   class?: string;
   colorIcon?: boolean;
-  /** Enables double-click renaming while retaining the split title/menu
-   * chrome. */
-  onRename?: (name: string) => void;
-  renameAriaLabel?: string;
+  /** The entity the label names; the header renames it in place when its
+   * file menu offers Rename. */
+  id?: string;
 }) {
   const panel = useSplitPanelOrThrow();
-  const [renaming, setRenaming] = createSignal(false);
   useSplitDisplayName(() => props.label);
-  const startRename = (event: MouseEvent) => {
-    event.preventDefault();
-    event.stopPropagation();
-    setRenaming(true);
-  };
   const openTitleFileMenu = (e: MouseEvent) => {
     if (!isTouchDevice()) return;
     const trigger = panel.titleFileMenuTrigger();
@@ -97,48 +88,7 @@ export function StaticSplitLabel(props: {
           </Show>
           <Show when={props.badges}>{props.badges}</Show>
           <span class="inline-flex min-w-0 items-center gap-1">
-            <Show
-              when={props.onRename}
-              fallback={
-                <span class="inline-block truncate text-sm font-semibold">
-                  {props.label}
-                </span>
-              }
-            >
-              {(onRename) => (
-                <Show
-                  when={renaming()}
-                  fallback={
-                    <span
-                      class="inline-block truncate text-sm font-semibold"
-                      onDblClick={startRename}
-                      onClick={(event) => {
-                        if (isTouchDevice()) startRename(event);
-                      }}
-                    >
-                      {props.label}
-                    </span>
-                  }
-                >
-                  <span
-                    onClick={(event) => event.stopPropagation()}
-                    onDblClick={(event) => event.stopPropagation()}
-                  >
-                    <InlineTitleEditor
-                      value={props.label}
-                      placeholder={t('splitMenu.untitled')}
-                      ariaLabel={
-                        props.renameAriaLabel ?? t('entityActions.rename')
-                      }
-                      onRename={onRename()}
-                      class="text-sm"
-                      autofocus
-                      onExit={() => setRenaming(false)}
-                    />
-                  </span>
-                </Show>
-              )}
-            </Show>
+            <SplitTitleName panel={panel} id={props.id} label={props.label} />
             <Show when={panel.titleFileMenuTrigger()}>
               <CaretDownIcon class="hidden size-3.5 shrink-0 text-ink-muted touch:block" />
             </Show>
@@ -155,10 +105,9 @@ export function StaticSplitLabel(props: {
 
 export function SplitLabel(props: {
   label: string;
+  /** The entity the label names; see {@link StaticSplitLabel}. */
+  id?: string;
   lockRename?: boolean;
-  /** Per-variant fields the block context can't supply (e.g. `channelType`
-   * for a channel rename). Merged into the args passed to `buildEntityData`. */
-  renameOverrides?: Partial<BuildEntityDataArgs>;
   maxDisplayLength?: number;
 }) {
   const panel = useSplitPanelOrThrow();
@@ -182,9 +131,13 @@ export function SplitLabel(props: {
 
   return (
     <span class="flex min-w-0 items-center gap-1" onClick={openTitleFileMenu}>
-      <span class="inline-block truncate text-sm font-semibold">
+      <SplitTitleName
+        panel={panel}
+        id={props.lockRename ? undefined : props.id}
+        label={props.label}
+      >
         {truncatedLabel()}
-      </span>
+      </SplitTitleName>
       <Show when={panel.titleFileMenuTrigger()}>
         <CaretDownIcon class="hidden size-4 shrink-0 text-ink-muted touch:block" />
       </Show>
@@ -228,6 +181,8 @@ export function SplitPermissionsBadge() {
 }
 
 export function BlockItemSplitLabel(props: {
+  /** The entity the label names, when it is not the block's own. */
+  id?: string;
   icon?: JSX.Element;
   fallbackName?: string;
   name?: Accessor<string | undefined>;
@@ -242,6 +197,8 @@ export function BlockItemSplitLabel(props: {
   if (!isInBlock())
     throw new Error('<BlockItemSplitLabel> must be used within a Block');
 
+  const ownBlockId = useBlockId();
+  const blockId = () => props.id ?? ownBlockId;
   const fileName = useBlockDocumentName(props.fallbackName);
   const displayName = () => props.name?.() ?? fileName();
   const blockName = useBlockAliasedName();
@@ -289,6 +246,7 @@ export function BlockItemSplitLabel(props: {
                 when={blockMetadataSignal()}
                 fallback={
                   <SplitLabel
+                    id={blockId()}
                     label={displayName() ?? ''}
                     lockRename={!isOwner() || props.lockRename}
                   />
@@ -303,6 +261,7 @@ export function BlockItemSplitLabel(props: {
                     updatedAt={metadata().updatedAt}
                   >
                     <SplitLabel
+                      id={blockId()}
                       label={displayName() ?? ''}
                       lockRename={!isOwner() || props.lockRename}
                     />
@@ -332,6 +291,7 @@ function SplitLabelContextMenu(props: ParentProps) {
     return groups ? getSplitFileMenuActionSections(groups) : [];
   });
   const hasActions = createMemo(() => sections().length > 0);
+  let afterClose: (() => void) | undefined;
 
   const item = (action: SplitFileMenuAction) => {
     const children = () => action.children?.filter(Boolean) ?? [];
@@ -344,7 +304,10 @@ function SplitLabelContextMenu(props: ParentProps) {
             icon={action.icon as Component<JSX.SvgSVGAttributes<SVGSVGElement>>}
             text={action.label}
             hotkeyToken={action.hotkeyToken}
-            onClick={() => action.action?.()}
+            onClick={() => {
+              if (action.afterMenuCloses) afterClose = () => action.action?.();
+              else action.action?.();
+            }}
           />
         }
       >
@@ -385,7 +348,16 @@ function SplitLabelContextMenu(props: ParentProps) {
           {props.children}
         </ContextMenu.Trigger>
         <ContextMenu.Portal>
-          <ContextMenuContent class="w-64">
+          <ContextMenuContent
+            class="w-64"
+            onCloseAutoFocus={(event) => {
+              const run = afterClose;
+              if (!run) return;
+              afterClose = undefined;
+              event.preventDefault();
+              queueMicrotask(run);
+            }}
+          >
             <For each={sections()}>
               {(section, index) => (
                 <>
