@@ -10,12 +10,14 @@ import type {
   ActionConfigurationUpdate,
   ActionExecutionRecord,
   AiAdmissionErrorBody,
+  CheckRoutineRequest,
   CodeUpgrade,
   Draft,
   DraftRoutineRequest,
   EmptyResponse,
   InProgressExecution,
   ListScheduledActionsParams,
+  RoutineCheck,
   RoutineTemplate,
   ScheduledActionResponse,
   SetScheduledActionEnabled,
@@ -202,6 +204,86 @@ export const createScheduledAction = async (
     status: res.status,
     headers: res.headers,
   } as createScheduledActionResponse;
+};
+
+/**
+ * @summary What saving this routine would find wrong, without saving it: the same
+checks as creating it. A routine draft's session hands its draft back
+this way.
+ */
+export type checkScheduledActionResponse200 = {
+  data: RoutineCheck;
+  status: 200;
+};
+
+export type checkScheduledActionResponse400 = {
+  data: string;
+  status: 400;
+};
+
+export type checkScheduledActionResponse401 = {
+  data: string;
+  status: 401;
+};
+
+export type checkScheduledActionResponse403 = {
+  data: string;
+  status: 403;
+};
+
+export type checkScheduledActionResponse500 = {
+  data: string;
+  status: 500;
+};
+
+export type checkScheduledActionResponse503 = {
+  data: string;
+  status: 503;
+};
+
+export type checkScheduledActionResponseSuccess =
+  checkScheduledActionResponse200 & {
+    headers: Headers;
+  };
+export type checkScheduledActionResponseError = (
+  | checkScheduledActionResponse400
+  | checkScheduledActionResponse401
+  | checkScheduledActionResponse403
+  | checkScheduledActionResponse500
+  | checkScheduledActionResponse503
+) & {
+  headers: Headers;
+};
+
+export type checkScheduledActionResponse =
+  | checkScheduledActionResponseSuccess
+  | checkScheduledActionResponseError;
+
+export const getCheckScheduledActionUrl = () => {
+  return `/scheduled-actions/check`;
+};
+
+export const checkScheduledAction = async (
+  checkRoutineRequest: CheckRoutineRequest,
+  options?: RequestInit
+): Promise<checkScheduledActionResponse> => {
+  const res = await fetch(getCheckScheduledActionUrl(), {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(checkRoutineRequest),
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: checkScheduledActionResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as checkScheduledActionResponse;
 };
 
 export type routineCodeStartersResponse200 = {

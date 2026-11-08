@@ -25,7 +25,6 @@ mod preview;
 mod public_mcp;
 mod pull_request_archive;
 mod routine_code;
-mod routine_drafts;
 mod routine_sessions;
 mod runtime_commands;
 mod scheduling;
@@ -723,7 +722,6 @@ async fn run() -> anyhow::Result<()> {
         pool.clone(),
         std::net::SocketAddr::from(([127, 0, 0, 1], config.port)),
         routine_code,
-        routine_drafts::ModelDrafts::new(Arc::clone(&recorder)),
         http_ready,
         Arc::clone(&notifications),
     )
@@ -902,7 +900,7 @@ async fn run() -> anyhow::Result<()> {
             .to_owned(),
         internal_mcp::InternalTools {
             service: session_pull_requests.clone(),
-            tasks: session_tasks,
+            tasks: session_tasks.clone(),
             code_mode: code_mode_enabled.then(|| code_mode.clone()),
             cognition: tool_context.cognition_tool_context.service.clone(),
             reviews: reviews_cell.clone(),
@@ -1761,6 +1759,20 @@ async fn run() -> anyhow::Result<()> {
                 MacroAuthorizationState::new(Arc::new(authorization_service.clone())),
             ),
         );
+    let session_task_links = agent_session::inbound::axum_router::task::agent_session_task_router(
+        AgentSessionRouterState::new(
+            session_tasks,
+            entity_access.clone(),
+            MacroAuthorizationState::new(Arc::new(authorization_service.clone())),
+        ),
+    );
+    let updates = agent_session::inbound::axum_router::updates::agent_session_updates_router(
+        AgentSessionRouterState::new(
+            session_repo.clone(),
+            entity_access.clone(),
+            MacroAuthorizationState::new(Arc::new(authorization_service.clone())),
+        ),
+    );
     let auto_archive = agent_session::inbound::axum_router::auto_archive::agent_auto_archive_router(
         AgentSessionRouterState::new(
             auto_archive_settings,
@@ -1873,6 +1885,8 @@ async fn run() -> anyhow::Result<()> {
             .with_capabilities(capabilities)
             .with_mode_choice(mode_choice)
             .with_pull_requests(pull_requests)
+            .with_session_tasks(session_task_links)
+            .with_updates(updates)
             .with_auto_archive(auto_archive)
             .with_work_registrations(work_registrations)
             .with_tool_approvals(tool_approval_answers)
