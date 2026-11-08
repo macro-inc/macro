@@ -1,3 +1,4 @@
+import { themeClass } from '../registry';
 import type { Component } from 'solid-js';
 import type {
   DecoratorProps,
@@ -173,6 +174,19 @@ export function registerMacroViews(
       throw new Error('Missing Macro decorator component: ' + type);
     registry.register(type, {
       decorator: component,
+      flags: (node) => ({
+        isInline:
+          type === 'agent-session-mention'
+            ? !node.props().expanded
+            : type === 'database-query'
+              ? node.props().displayMode === 'scalar'
+              : Boolean(node.props().inline),
+        canInsertTextBefore: true,
+        canInsertTextAfter: true,
+        isKeyboardSelectable: type !== 'await',
+        isIsolated: false,
+        isShadowRoot: false,
+      }),
       createDOM(node, ctx) {
         const dom = ctx.document.createElement(decoratorTag(node));
         decoratorProperties(node, dom);
@@ -215,10 +229,15 @@ export function registerMacroViews(
         dom.dataset.diffStatus = String(node.props().diffStatus ?? '');
         if (typeof node.props().author === 'string')
           dom.setAttribute('data-diff-author', String(node.props().author));
+        else dom.removeAttribute('data-diff-author');
       } else if (type === 'inline-search')
-        dom.className = ctx.theme['inline-search'] ?? '';
-      else if (type === 'search-match' && ctx.theme.searchMatch)
-        dom.classList.add(ctx.theme.searchMatch);
+        dom.className = themeClass(ctx.theme, 'inline-search');
+      else if (type === 'search-match') {
+        const classes = themeClass(ctx.theme, 'searchMatch')
+          .split(/\s+/)
+          .filter(Boolean);
+        dom.classList.add(...classes);
+      }
     };
     registry.register(type, {
       createDOM(node, ctx) {

@@ -90,6 +90,8 @@ pub enum ViewEffect {
     DocChanged(Vec<DocEvent>),
     /// Remote peer presence.
     Presence(Vec<PeerPresence>),
+    /// Semantic tags from the admitted editor commits.
+    CommitTags(Vec<String>),
     /// Resolved editor cursor set; replaces the preceding set.
     Cursors(Vec<EditorPeerSelection>),
     /// Connection and durability state.
@@ -273,19 +275,34 @@ impl<S: Surface> DocumentSession<S> {
             self.out.imports.clear();
         }
         self.out.io.clear();
-        if let Err(error) = self.release_composition(
-            now,
-            matches!(
-                &input,
-                SessionInput::Focus(false)
-                    | SessionInput::Sync(
-                        SyncInput::Stop(_)
-                            | SyncInput::Reset
-                            | SyncInput::Authorization(_)
-                            | SyncInput::Host(HostSignal::Hidden | HostSignal::PageHide)
-                    )
-            ),
-        ) {
+        // Admit the final displayed IME text on its original branch before a
+        // due cap merges remote operations. A throttled host timer must not
+        // turn that stale DOM snapshot into a replacement of merged text.
+        let composing_text = matches!(
+            &input,
+            SessionInput::Editor(
+                lexical_model::Input::TextFromView { .. }
+                    | lexical_model::Input::Composition {
+                        event: lexical_model::CompositionEvent::End { .. },
+                        ..
+                    }
+            )
+        );
+        if !composing_text
+            && let Err(error) = self.release_composition(
+                now,
+                matches!(
+                    &input,
+                    SessionInput::Focus(false)
+                        | SessionInput::Sync(
+                            SyncInput::Stop(_)
+                                | SyncInput::Reset
+                                | SyncInput::Authorization(_)
+                                | SyncInput::Host(HostSignal::Hidden | HostSignal::PageHide)
+                        )
+                ),
+            )
+        {
             self.out.view.push(ViewEffect::Error(error));
         }
         let result = match input {
