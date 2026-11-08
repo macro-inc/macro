@@ -42,6 +42,8 @@ const STEP_NAMES: &[(&str, &str)] = &[
     ("Reloading ", "Reloading services"),
     ("Stopping ", "Stopping stack"),
     ("Building sandbox image ", "Building sandbox image"),
+    ("Restoring init snapshot ", "Restoring init snapshot"),
+    ("Saving init snapshot ", "Saving init snapshot"),
 ];
 
 /// What a run is, for the `kind` field.

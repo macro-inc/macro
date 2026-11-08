@@ -13,6 +13,14 @@ fn labels_with_names_become_one_step() {
         step_name("Building sandbox image macro-sandbox:3f2a9c"),
         "Building sandbox image"
     );
+    assert_eq!(
+        step_name("Saving init snapshot (9b59c964b276)"),
+        "Saving init snapshot"
+    );
+    assert_eq!(
+        step_name("Restoring init snapshot (9b59c964b276)"),
+        "Restoring init snapshot"
+    );
     assert_eq!(step_name("Running migrations"), "Running migrations");
 }
 
