@@ -57,6 +57,8 @@ pub(in crate::node) fn decorator<Node: DecoratorNode>() -> NodeVTable {
         per_instance |= parent.per_instance;
     }
     NodeVTable {
+        #[cfg(feature = "foreign-nodes")]
+        foreign: None,
         type_name: Node::TYPE,
         class_name: Node::class_name(),
         kind: NodeKind::Decorator,
@@ -71,6 +73,8 @@ pub(in crate::node) fn decorator<Node: DecoratorNode>() -> NodeVTable {
         project_mut: project_decorator_mut::<Node>,
         probe: || Node::flag_probe().map(|n| Arc::new(n) as Arc<dyn AnyNodeData>),
         default_data: || Node::default_node().map(|n| Arc::new(n) as Arc<dyn AnyNodeData>),
+        #[cfg(feature = "foreign-nodes")]
+        decode: |json| Ok(Arc::new(Node::import_json(json)?)),
         import_exact: |tx, json| tx.create_exact(Node::import_json(json)?).map(|id| id.key()),
         import: Node::import,
         update: |data, json| {

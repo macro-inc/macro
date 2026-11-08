@@ -10,6 +10,8 @@ pub use structural::CommonAncestor;
 /// A read-only view whose returned borrows live as long as the underlying state.
 #[derive(Clone, Copy)]
 pub struct StateRef<'state> {
+    #[cfg(feature = "foreign-nodes")]
+    pub(crate) native_projection: Option<&'state crate::foreign::projection::NativeProjection>,
     pub(crate) state: &'state EditorState,
     pub(crate) previous_selection: Option<&'state Selection>,
     pub(crate) composition_key: Option<NodeKey>,
@@ -81,7 +83,17 @@ impl<'state> NodeRef<'state> {
     /// s2: ID-07
     pub fn to_owned(self) -> NodeRecord {
         let mut slot = self.slot.clone();
-        if let Some(data) = slot.data.after_clone() {
+        #[cfg(feature = "foreign-nodes")]
+        let replacement = crate::foreign::payload::clone_payload(
+            self.registry,
+            slot.type_index,
+            slot.key,
+            slot.key,
+            &slot.data,
+        );
+        #[cfg(not(feature = "foreign-nodes"))]
+        let replacement = slot.data.after_clone();
+        if let Some(data) = replacement {
             slot.data = data;
         }
         NodeRecord {
@@ -147,7 +159,12 @@ impl<'state> StateRef<'state> {
     }
     /// Get.
     pub fn get<Node: NodeType>(self, key: impl Into<NodeKey>) -> Option<&'state Node> {
-        let slot = self.slot(key.into())?;
+        let key = key.into();
+        #[cfg(feature = "foreign-nodes")]
+        if let Some(frame) = self.native_projection.filter(|frame| frame.key == key) {
+            return frame.get::<Node>();
+        }
+        let slot = self.slot(key)?;
         (self.state.registry.vtable(slot.type_index).project)(
             slot.data.as_any(),
             TypeId::of::<Node>(),
@@ -157,10 +174,27 @@ impl<'state> StateRef<'state> {
     /// Cast.
     pub fn cast<Node: NodeType>(self, key: impl Into<NodeKey>) -> Option<Id<Node>> {
         let key = key.into();
-        self.get::<Node>(key).map(|_| Id::new_unchecked(key))
+        self.is::<Node>(key).then(|| Id::new_unchecked(key))
     }
     /// Is.
     pub fn is<Node: NodeType>(self, key: impl Into<NodeKey>) -> bool {
+        let key = key.into();
+        #[cfg(feature = "foreign-nodes")]
+        if let Some(slot) = self.slot(key)
+            && self
+                .state
+                .registry
+                .registered(slot.type_index)
+                .foreign
+                .is_some()
+        {
+            return self
+                .state
+                .registry
+                .registered(slot.type_index)
+                .ancestry
+                .contains(&TypeId::of::<Node>());
+        }
         self.get::<Node>(key).is_some()
     }
     /// Kind.
@@ -874,6 +908,8 @@ impl<'state> StateRef<'state> {
         let mut snapshot = self.state.clone();
         snapshot.nodes.insert(key, std::sync::Arc::new(record.slot));
         StateRef {
+            #[cfg(feature = "foreign-nodes")]
+            native_projection: self.native_projection,
             state: &snapshot,
             previous_selection: self.previous_selection,
             composition_key: self.composition_key,

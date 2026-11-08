@@ -201,6 +201,8 @@ impl Transaction<'_> {
             }
         }
         crate::pipeline::apply_model_caches(self);
+        #[cfg(feature = "foreign-nodes")]
+        self.view().check_foreign_payloads()?;
         changes.dirty_elements = self.dirty_elements.clone();
         let dirty = !changes.is_empty();
         if let Some(selection) = &mut self.pending.selection {
@@ -258,6 +260,15 @@ impl Transaction<'_> {
                 .nodes
                 .get_mut(&key)
                 .ok_or(Error::NodeNotFound(key))?;
+            #[cfg(feature = "foreign-nodes")]
+            let replacement = crate::foreign::payload::clone_payload(
+                &self.pending.registry,
+                slot.type_index,
+                key,
+                key,
+                &slot.data,
+            );
+            #[cfg(not(feature = "foreign-nodes"))]
             let replacement = slot.data.after_clone();
             let record = Arc::make_mut(slot);
             if let Some(data) = replacement {
