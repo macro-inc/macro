@@ -65,8 +65,10 @@ export type Tutorial = {
 
 /**
  * The tutorials that have a video. A block whose video isn't here yet renders
- * no tutorial entry. Vite emits each video as a hashed asset that loads only
- * when its dialog opens and the person presses play.
+ * no tutorial entry. Vite emits each video as a hashed asset under
+ * `assets/tutorials/` (`scripts/tutorial-assets.ts`) that loads only when its
+ * dialog opens and the person presses play. The native apps' bundles leave
+ * that folder out; see `tutorialFor` and `servedUrl` in `views/BlockTutorial`.
  */
 export const TUTORIALS: Partial<Record<TutorialId, Tutorial>> = {
   mail: {

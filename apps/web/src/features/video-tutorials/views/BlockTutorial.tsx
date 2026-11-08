@@ -1,4 +1,5 @@
-import { getNativeMobilePlatform } from '@core/util/platform';
+import { getNativeMobilePlatform, isTauri } from '@core/util/platform';
+import { getWebOrigin } from '@core/util/webOrigin';
 import { Match, Show, Switch } from 'solid-js';
 import { TUTORIALS, type Tutorial } from '../catalog';
 import {
@@ -17,12 +18,24 @@ import {
 
 /**
  * A block's tutorial, once its video is in the catalog. The iOS and Android
- * apps show none. This is about what the native app ships, not layout, so
- * mobile web at phone width keeps its tutorials.
+ * apps show none: their bundles ship without the videos
+ * (`scripts/strip-native-tutorials.sh`). This is about what the native app
+ * ships, not layout, so mobile web at phone width keeps its tutorials.
  */
 function tutorialFor(id: TutorialId): Tutorial | undefined {
   if (getNativeMobilePlatform()) return undefined;
   return TUTORIALS[id];
+}
+
+/**
+ * Where a tutorial's video or poster loads from. The native apps' over-the-air
+ * bundle leaves them out, so the desktop app streams them from the web app,
+ * which publishes the same content-hashed files. The web app and the dev
+ * server serve their own.
+ */
+function servedUrl(asset: string): string {
+  if (import.meta.env.DEV || !isTauri()) return asset;
+  return new URL(asset, getWebOrigin()).href;
 }
 
 /**
@@ -92,8 +105,8 @@ function Entry(props: {
         onOpenChange={state.setOpen}
         title={shown().title}
         length={shown().length}
-        videoUrl={shown().videoUrl}
-        posterUrl={shown().posterUrl}
+        videoUrl={servedUrl(shown().videoUrl)}
+        posterUrl={servedUrl(shown().posterUrl)}
         onPlayStarted={state.recordPlay}
         more={more()}
         onSelectTutorial={state.show}

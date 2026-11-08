@@ -57,7 +57,9 @@ the window (a bottom sheet on phones) that never autoplays: the play pill
 starts it and brings up the native controls. When it ends, the last frame dims under a shelf, "More videos from Macro", of the other tutorials (each block's nav icon on a pastel tile with its length), followed by the videos about Macro as a whole (Company graph, AI tagging, Automatic permissions, Workspace events, Unified search), which have no entry of their own except Unified search's; a card switches the dialog to that video, paused, and Replay or a click on the frame restarts it. Under the video, three Macro team faces (stacked like a block's live viewers) and "Have questions about Macro Mail? **Talk to us in your support channel →**" open the person's own `Macro Support x …` channel and close the dialog; the line is left out when they own no such channel. The row's X (on hover, always on
 touch) hides it on that device for good (`localStorage`
 `email-tutorial-row-dismissed`). It is outside the virtualized rows, so list
-keyboard focus skips it.
+keyboard focus skips it. The iOS and Android apps show no tutorial entries in
+any block, and their bundles ship without the videos; mobile web at phone width
+keeps them, and the desktop app streams them from the web app.
 Compose via the `Email` button (or `Create` → `Email E`). On a fresh local user it
 shows `Connect your email`; Gmail/Google Workspace and enabled Outlook connections
 use provider consent. Most functionality needs a connected account. Search is `Ctrl+F` or `/` within the surface.

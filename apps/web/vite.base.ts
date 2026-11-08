@@ -16,6 +16,7 @@ import { devExternalSourcemaps } from './scripts/dev-sourcemaps';
 import { hostedDevProxy } from './scripts/hosted-dev-proxy';
 import { keepImportMetaDev } from './scripts/keep-import-meta-dev';
 import { localDevServer } from './scripts/local-dev-server';
+import { assetFileNames } from './scripts/tutorial-assets';
 
 function readShortSha(): string {
   try {
@@ -406,13 +407,14 @@ export const createAppViteConfig = (): UserConfigFn => {
                 // https://github.com/vitejs/vite/issues/378
                 entryFileNames: `assets/[name].js`,
                 chunkFileNames: `assets/[name].js`,
-                assetFileNames: `assets/[name].[ext]`,
+                assetFileNames: assetFileNames('[name].[ext]'),
                 manualChunks: startupChunks(),
               }
             : {
                 format: 'es',
                 chunkFileNames: '[name]-[hash].js',
                 entryFileNames: '[name]-[hash].js',
+                assetFileNames: assetFileNames('[name]-[hash][extname]'),
                 manualChunks: startupChunks(),
               },
         },

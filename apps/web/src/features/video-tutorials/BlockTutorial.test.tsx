@@ -84,6 +84,7 @@ beforeEach(() => {
 afterEach(() => {
   cleanup();
   vi.unstubAllGlobals();
+  vi.unstubAllEnvs();
 });
 
 const row = () =>
@@ -370,4 +371,22 @@ describe('in the native apps', () => {
       expect(hasTutorial('mail')).toBe(false);
     }
   );
+
+  it('streams the video and poster from the web app in the desktop app', async () => {
+    // The desktop app's bundle has no videos; a built one loads them from macro.com.
+    vi.stubEnv('DEV', false);
+    platform.tauri = true;
+    render(() => <TutorialRow tutorial="mail" />);
+    expect(hasTutorial('mail')).toBe(true);
+
+    fireEvent.click(row()!);
+    await screen.findByRole('dialog');
+
+    const served = (asset: string | undefined) =>
+      new URL(asset!, 'https://macro.com').href;
+    expect(video()?.getAttribute('src')).toBe(served(TUTORIALS.mail?.videoUrl));
+    expect(video()?.getAttribute('poster')).toBe(
+      served(TUTORIALS.mail?.posterUrl)
+    );
+  });
 });
