@@ -23,6 +23,7 @@ claiming the browser default unless a handler consumes it.
 
 Application command envelopes carry the mirror generation and an optional
 keyboard event; reject stale generations before decoding typed surface commands.
+Use clipboard kind 2 for complete block-drag subtrees; retain ordinary node-selection copy semantics for kinds 0 and 1.
 Use the surface decoder table so migration groups append registrations independently.
 
 ## Start here

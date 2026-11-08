@@ -94,7 +94,7 @@ export class EditorSession {
      */
     chatter(kind: number, data: Uint8Array, now: number, wall: number): number;
     /**
-     * Current clipboard formats; kind 0 copy, kind 1 cut uses the same read snapshot.
+     * Clipboard formats: kind 0 copy, 1 cut, 2 complete block-drag subtrees.
      */
     clipboard(kind: number): Uint8Array;
     /**
@@ -350,20 +350,20 @@ export interface InitOutput {
     readonly syncrouter_tokenFetched: (a: number, b: number, c: number, d: number, e: number, f: number, g: number, h: number, i: number) => [number, number, number];
     readonly syncrouter_wakeAt: (a: number) => number;
     readonly __wbg_editorsession_free: (a: number, b: number) => void;
-    readonly editorsession_storageAdopted: (a: number, b: number, c: number, d: number, e: number, f: number) => [number, number, number];
-    readonly editorsession_takeOutput: (a: number) => [number, number];
-    readonly editorsession_tick: (a: number, b: number, c: number) => [number, number, number];
-    readonly editorsession_authorization: (a: number, b: number, c: number, d: number, e: number, f: number) => [number, number, number];
-    readonly editorsession_socketFrame: (a: number, b: number, c: number, d: number, e: number) => [number, number, number];
     readonly editorsession_chatter: (a: number, b: number, c: number, d: number, e: number, f: number) => [number, number, number];
-    readonly editorsession_storageLoaded: (a: number, b: number, c: number, d: number, e: number, f: number, g: number) => [number, number, number];
-    readonly editorsession_socketText: (a: number, b: number, c: number, d: number, e: number) => [number, number, number];
-    readonly editorsession_storageDone: (a: number, b: number, c: number, d: number, e: number, f: number) => [number, number, number];
-    readonly editorsession_socketOpened: (a: number, b: number, c: number, d: number) => [number, number, number];
     readonly editorsession_input: (a: number, b: number, c: number, d: number, e: number) => [number, number, number];
-    readonly editorsession_host: (a: number, b: number, c: number, d: number) => [number, number, number];
     readonly editorsession_tokenFetched: (a: number, b: number, c: number, d: number, e: number, f: number, g: number) => [number, number, number];
+    readonly editorsession_storageAdopted: (a: number, b: number, c: number, d: number, e: number, f: number) => [number, number, number];
+    readonly editorsession_host: (a: number, b: number, c: number, d: number) => [number, number, number];
+    readonly editorsession_socketFrame: (a: number, b: number, c: number, d: number, e: number) => [number, number, number];
+    readonly editorsession_socketOpened: (a: number, b: number, c: number, d: number) => [number, number, number];
+    readonly editorsession_authorization: (a: number, b: number, c: number, d: number, e: number, f: number) => [number, number, number];
+    readonly editorsession_socketText: (a: number, b: number, c: number, d: number, e: number) => [number, number, number];
+    readonly editorsession_storageLoaded: (a: number, b: number, c: number, d: number, e: number, f: number, g: number) => [number, number, number];
+    readonly editorsession_tick: (a: number, b: number, c: number) => [number, number, number];
+    readonly editorsession_takeOutput: (a: number) => [number, number];
     readonly editorsession_socketClosed: (a: number, b: number, c: number, d: number, e: number, f: number) => [number, number, number];
+    readonly editorsession_storageDone: (a: number, b: number, c: number, d: number, e: number, f: number) => [number, number, number];
     readonly editorsession_wakeAt: (a: number) => number;
     readonly __wbindgen_malloc: (a: number, b: number) => number;
     readonly __wbindgen_realloc: (a: number, b: number, c: number, d: number) => number;

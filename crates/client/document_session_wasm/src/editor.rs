@@ -697,14 +697,18 @@ impl EditorSession {
         .and_then(|reply| bytes(&reply))
         .map_err(js)
     }
-    /// Current clipboard formats; kind 0 copy, kind 1 cut uses the same read snapshot.
+    /// Clipboard formats: kind 0 copy, 1 cut, 2 complete block-drag subtrees.
     pub fn clipboard(&self, kind: u32) -> Result<Vec<u8>, JsError> {
-        if kind > 1 {
+        if kind > 2 {
             return Err(js(BoundaryError::Invalid("clipboard kind")));
         }
-        query::clipboard(self.surface().state())
-            .and_then(|reply| bytes(&reply))
-            .map_err(js)
+        query::clipboard(
+            self.surface().state(),
+            kind == 2,
+            query::export_flavor(self),
+        )
+        .and_then(|reply| bytes(&reply))
+        .map_err(js)
     }
     /// Development checksum of the complete rendered tree.
     #[wasm_bindgen(js_name=debugViewChecksum)]
