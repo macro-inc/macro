@@ -101,7 +101,10 @@ export function loadAiEngineWasm(): Promise<AiEngineWasmModule> {
         )) as AiEngineWasmModule;
         // The generated JS's own relative wasm URL 404s in production; a static
         // `new URL` makes vite emit and rewrite the binary.
-        const wasmUrl = new URL('./wasm/illustrator_engine_bg.wasm', import.meta.url);
+        const wasmUrl = new URL(
+          './wasm/illustrator_engine_bg.wasm',
+          import.meta.url
+        );
         await mod.default({ module_or_path: wasmUrl });
         return mod;
       } catch (error) {
