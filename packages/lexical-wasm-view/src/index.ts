@@ -31,3 +31,6 @@ export {
   getTableElement,
   getTableObserverFromTableElement,
 } from './view/table/observer';
+
+export * from './view/commands';
+export { createDOMRange, createRectsFromDOMRange } from './view/selection';

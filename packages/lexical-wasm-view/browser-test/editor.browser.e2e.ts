@@ -25,6 +25,7 @@ declare global {
         recreateSlot(): void;
         stats: { mounts: number; unmounts: number };
       };
+      presence(visible: boolean): void;
       reset(text: string): void;
       selectEnd(): void;
       text(): string;
@@ -316,4 +317,24 @@ test('long native CJK composition holds remote paint but keeps sync live and con
   expect(await page.evaluate(() => window.imeFixture.result().model)).toBe(
     '遠a漢字入力!'
   );
+});
+
+test('remote cursor overlays paint after apply without moving local selection', async ({
+  page,
+}) => {
+  await page.evaluate(() => window.fixture.presence(true));
+  await expect(
+    page.locator('[data-remote-cursor="fixture-peer"]')
+  ).toBeVisible();
+  await expect(
+    page.locator('[data-remote-selection="fixture-peer"]')
+  ).toBeVisible();
+  expect(await page.evaluate(() => document.getSelection()?.anchorOffset)).toBe(
+    1
+  );
+  await page.evaluate(() => window.fixture.presence(false));
+  await expect(page.locator('[data-remote-cursor="fixture-peer"]')).toHaveCount(
+    0
+  );
+  expect(await page.evaluate(() => window.fixture.text())).toBe('a');
 });

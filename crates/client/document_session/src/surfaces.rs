@@ -125,6 +125,19 @@ impl Surface for EditorSurface {
     ) -> Result<Vec<u8>, doc_sync_core::CommentRefusal> {
         self.stage(doc, request, peer, now)
     }
+    fn peer_selection(
+        &self,
+        doc: &LoroDoc,
+        value: &loro::LoroValue,
+    ) -> Option<lexical_model::ViewSelection> {
+        let cursors = lexical_loro::decode_selection(value)?;
+        let projection = self.projection.as_ref()?;
+        Some(lexical_model::ViewSelection::Range {
+            anchor: projection.point(doc, self.state(), &cursors.anchor)?,
+            focus: projection.point(doc, self.state(), &cursors.focus)?,
+            resolution_dirty: false,
+        })
+    }
     fn composing(&self) -> bool {
         matches!(
             self.core.composition(),
@@ -247,6 +260,13 @@ impl Surface for GenericSurface {
         view: &mut Vec<ViewEffect>,
     ) -> Result<bool, SessionError> {
         self.local(doc, input, now, access, ready, view)
+    }
+    fn peer_selection(
+        &self,
+        _: &LoroDoc,
+        _: &loro::LoroValue,
+    ) -> Option<lexical_model::ViewSelection> {
+        None
     }
     fn composing(&self) -> bool {
         false

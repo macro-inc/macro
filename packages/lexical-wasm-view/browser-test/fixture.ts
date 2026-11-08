@@ -11,6 +11,8 @@ import {
   Transport,
 } from '@macro-inc/collaboration/session/abi.generated';
 import { SessionExecutor } from '@macro-inc/collaboration/session/executor';
+import { decodeOutput } from '@macro-inc/collaboration/session/output';
+import { selectionMessage } from '../src/view/session-port';
 import { emptyInput } from '@macro-inc/collaboration/session/input';
 import { SessionTelemetry } from '@macro-inc/collaboration/session/telemetry';
 import { EditorView } from '../src/view/editor-view';
@@ -113,6 +115,27 @@ executor.run(() =>
 );
 const fixture = {
   render: renderFixture(view),
+  presence(visible: boolean) {
+    const template = decodeOutput(executor.session.initialize()).viewEffects[0];
+    const node = [...view!.mirror.values()].find(
+      (node) => node.kind === 'text'
+    );
+    if (!template || !node) throw new Error('Missing presence fixture state');
+    const marker = { ...template, kind: 10, flag: true };
+    const effects = [marker];
+    if (visible)
+      effects.push({
+        ...marker,
+        flag: false,
+        keys: ['fixture-peer', 'blue'],
+        selection: selectionMessage({
+          kind: 'range',
+          anchor: { key: node.key, offset: 0, type: 'text' },
+          focus: { key: node.key, offset: node.text.length, type: 'text' },
+        }),
+      });
+    view!.apply(new Uint32Array(), new Uint8Array(), effects);
+  },
   reset(text: string) {
     port.setState(
       JSON.stringify({

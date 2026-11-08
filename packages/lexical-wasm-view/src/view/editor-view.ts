@@ -36,6 +36,7 @@ import type {
   ViewListener,
 } from './commands';
 import { selectionMessage } from './session-port';
+import { PresenceLayer } from './presence';
 import { Telemetry } from '@macro-inc/observability';
 
 const roots = new WeakMap<Node, EditorView>();
@@ -76,6 +77,7 @@ export class EditorView implements ViewSink {
     (keys: readonly NodeKey[]) => void
   >();
   private readonly observer: MutationObserver;
+  private readonly presence: PresenceLayer;
   private readonly events: ReturnType<typeof registerEvents>;
   private selectionInfo: ViewSelectionInfo = {
     selection: { kind: 'none' },
@@ -121,6 +123,7 @@ export class EditorView implements ViewSink {
     this.setEditable(options.editable);
     this.observe();
     this.events = registerEvents(this);
+    this.presence = new PresenceLayer(this);
   }
   static mount(
     root: HTMLElement,
@@ -238,6 +241,7 @@ export class EditorView implements ViewSink {
     if (this.disposed) throw new Error('Diff applied to a disposed view');
     this.observer.disconnect();
     try {
+      this.presence.update(effects);
       if (effects.some((effect) => effect.kind === 9))
         this.events.endComposition();
       const initialize = effects.some((effect) => effect.kind === 8);
@@ -673,6 +677,7 @@ export class EditorView implements ViewSink {
     for (const timer of this.cleanupTimers) clearTimeout(timer);
     this.cleanupTimers.clear();
     this.events.dispose();
+    this.presence.dispose();
     for (const decorator of this.decorators.values()) decorator.dispose();
     this.decorators.clear();
     for (const table of this.tables.values()) table.dispose();

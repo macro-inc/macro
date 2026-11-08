@@ -10,6 +10,8 @@ include authoritative text or full view repair, including permission rejection,
 stale/non-text keys and malformed UTF-16. A cold `initialize` rebuilds only the
 view. ABI major 2 includes static type predicate flags and initialize markers.
 View effect kind 9 ends native composition before a bounded remote hold is painted.
+Kind 10 replaces remote cursors: a flag=true marker clears the set, followed by
+point selections with peer key/color in keys[0]/keys[1].
 
 ## Start here
 
