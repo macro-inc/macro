@@ -352,3 +352,87 @@ test('version release observers see cache cleanup before attempting to recapture
     backend.dispose();
   }
 });
+
+test('constructors adopt their own instance and cannot replace a captured identity', () => {
+  const backend = new ConformanceBackend({ namespace: 'constructor identity' });
+  const handles = new NodeHandles<object>(backend, () => {
+    throw new Error('the adopted constructor must supply its instance');
+  });
+  try {
+    backend.beginUpdate([], false);
+    const raw = backend.call('lexical.$createTextNode', ['constructed']);
+    const instance = { opaque: Symbol('custom constructor field') };
+    handles.adopt(raw, instance);
+    expect(handles.node(raw)).toBe(instance);
+    expect(handles.node(backend.call('LexicalNode.getLatest', [], raw))).toBe(
+      instance
+    );
+    expect(() => handles.adopt(raw, {})).toThrow(
+      'node handle already has an instance'
+    );
+    const other = backend.call('lexical.$createTextNode', ['other']);
+    expect(() => handles.adopt(other, instance)).toThrow(
+      'node factory reused an instance'
+    );
+    const second = {};
+    handles.adopt(other, second);
+    expect(handles.node(other)).toBe(second);
+    backend.discard();
+  } finally {
+    backend.dispose();
+  }
+});
+
+test('an EditorState owner pins a version without retaining a node instance', async () => {
+  const backend = new ConformanceBackend({ namespace: 'state version owner' });
+  const handles = new NodeHandles(backend, (id) => ({ id }));
+  let unsubscribe = () => {};
+  try {
+    backend.beginUpdate([], false);
+    const paragraph = backend.call('lexical.$createParagraphNode', []);
+    const raw = backend.call('lexical.$createTextNode', ['old']);
+    if (
+      raw === null ||
+      typeof raw !== 'object' ||
+      !('ver' in raw) ||
+      typeof raw.ver !== 'number'
+    )
+      throw new Error('expected captured version metadata');
+    backend.call('LexicalNode.append', [raw], paragraph);
+    backend.call(
+      'LexicalNode.append',
+      [paragraph],
+      backend.call('lexical.$getRoot', [])
+    );
+    let state: { token: object } | undefined = {
+      token: handles.pinVersion(raw.ver),
+    };
+    const previous = new WeakRef(handles.node(raw));
+    backend.commit();
+    backend.beginUpdate([], false);
+    backend.call('LexicalNode.setTextContent', ['new'], raw);
+    backend.commit();
+    await new Promise<void>((resolve) => setImmediate(resolve));
+    collect();
+    expect(previous.deref()).toBeUndefined();
+    expect(handles.pinVersion(raw.ver)).toBe(state.token);
+    backend.readState(String(raw.ver), () => {
+      expect(backend.call('LexicalNode.getTextContent', [], raw)).toBe('old');
+    });
+    const released = new Promise<void>((resolve) => {
+      unsubscribe = diagnostics.onVersionReleased((version) => {
+        if (version === String(raw.ver)) resolve();
+      });
+    });
+    state = undefined;
+    await new Promise<void>((resolve) => setImmediate(resolve));
+    collect();
+    await released;
+    expect(() => backend.readState(String(raw.ver), () => {})).toThrow(
+      /released/
+    );
+  } finally {
+    unsubscribe();
+    backend.dispose();
+  }
+});

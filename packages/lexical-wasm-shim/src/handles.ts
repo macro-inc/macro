@@ -8,12 +8,16 @@ const collectedVersions = new FinalizationRegistry<{
   version: number;
 }>(({ cache, version }) => cache.deref()?.release(version));
 
+interface RecordHandle<Node extends object> {
+  readonly key: string;
+  readonly type: string;
+  readonly version: number;
+  node?: WeakRef<Node>;
+}
+
 /** Per-editor identities for captured model records, independent of getLatest(). */
 export class NodeHandles<Node extends object> {
-  private readonly records = new Map<
-    number,
-    { key: string; type: string; version: number; node?: WeakRef<Node> }
-  >();
+  private readonly records = new Map<number, RecordHandle<Node>>();
   private readonly versions = new Map<number, WeakRef<object>>();
 
   constructor(
@@ -28,7 +32,7 @@ export class NodeHandles<Node extends object> {
     backend.ownNodeHandles(this);
   }
 
-  node(value: unknown): Node {
+  private record(value: unknown): readonly [number, RecordHandle<Node>] {
     if (
       value === null ||
       typeof value !== 'object' ||
@@ -55,22 +59,46 @@ export class NodeHandles<Node extends object> {
       record = { key: value.key, type: value.type, version: value.ver };
       this.records.set(id, record);
     }
+    return [id, record];
+  }
+
+  node(value: unknown): Node {
+    const [id, record] = this.record(value);
     const existing = record.node?.deref();
     if (existing !== undefined) return existing;
-    let version = this.versions.get(record.version)?.deref();
+    const node = this.create(id, record.key, record.type, record.version);
+    this.own(record, node);
+    return node;
+  }
+
+  /** Bind a JS constructor's actual instance before its derived fields initialize. */
+  adopt(value: unknown, node: Node): void {
+    const [, record] = this.record(value);
+    if (record.node?.deref() !== undefined)
+      throw new Error('node handle already has an instance');
+    this.own(record, node);
+  }
+
+  private own(record: RecordHandle<Node>, node: Node): void {
+    if (owners.has(node)) throw new Error('node factory reused an instance');
+    owners.set(node, { cache: this, version: this.pinVersion(record.version) });
+    record.node = new WeakRef(node);
+  }
+
+  /** Retain immutable records with an EditorState, even if it has no live node. */
+  pinVersion(id: number): object {
+    if (!Number.isSafeInteger(id) || id < 0)
+      throw new Error('invalid node version');
+    let version = this.versions.get(id)?.deref();
     if (version === undefined) {
       version = {};
-      this.versions.set(record.version, new WeakRef(version));
+      this.versions.set(id, new WeakRef(version));
       collectedVersions.register(version, {
         cache: new WeakRef(this),
-        version: record.version,
+        version: id,
       });
     }
-    const node = this.create(id, record.key, record.type, record.version);
-    if (owners.has(node)) throw new Error('node factory reused an instance');
-    owners.set(node, { cache: this, version });
-    record.node = new WeakRef(node);
-    return node;
+    return version;
   }
 
   /** Finalizer callback; a replacement token can already own this version. */
