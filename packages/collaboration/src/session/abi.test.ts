@@ -68,6 +68,7 @@ const codecs: Record<string, (bytes: Uint8Array) => Uint8Array> = {
     abi.EditorInputMsg.encode(abi.EditorInputMsg.decode(bytes)),
   'EditorInputMsg.EditorComposition': (bytes) =>
     abi.EditorInputMsg.encode(abi.EditorInputMsg.decode(bytes)),
+  'EditorInputMsg.EditorApplication': (bytes) => abi.EditorInputMsg.encode(abi.EditorInputMsg.decode(bytes)),
   'EditorInputMsg.EditorKeyDown': (bytes) =>
     abi.EditorInputMsg.encode(abi.EditorInputMsg.decode(bytes)),
   'EditorInputMsg.EditorText': (bytes) =>

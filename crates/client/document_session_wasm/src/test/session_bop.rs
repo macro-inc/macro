@@ -625,6 +625,21 @@ fn input_output_round_trip() {
         assert_eq!(wire::EditorInputMsg::deserialize(&data).unwrap(), value);
         cases.push(serde_json::json!({"name":"EditorInputMsg.EditorKeyDown","bytes":data}));
     }
+    {
+        let value = wire::EditorInputMsg::EditorApplication {
+            name: "group-b.node-transform".into(),
+            json: "\"heading1\"".into(),
+            generation: 3,
+            selection: sample_selection_msg(),
+            keyboard: false,
+            key: "".into(),
+            mods: 0,
+            code: 0,
+        };
+        let data = bytes(&value).unwrap();
+        assert_eq!(wire::EditorInputMsg::deserialize(&data).unwrap(), value);
+        cases.push(serde_json::json!({"name":"EditorInputMsg.EditorApplication","bytes":data}));
+    }
     let path = directory.join("messages.json");
     let json = serde_json::to_string_pretty(&cases).unwrap() + "\n";
     if record {

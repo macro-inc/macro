@@ -17,7 +17,7 @@
 import { BebopView, BebopRuntimeError, BebopRecord, BebopJson, BebopTypeGuard, Guid, GuidMap } from "bebop";
 
 export const BEBOP_SCHEMA = new Uint8Array ([
-3, 47, 0, 0, 0, 68, 105, 102, 102, 79, 112, 99, 111, 100,
+3, 48, 0, 0, 0, 68, 105, 102, 102, 79, 112, 99, 111, 100,
 101, 0, 4, 0, 251, 255, 255, 255, 0, 4, 0, 0, 0, 11, 82,
 101, 109, 111, 118, 101, 0, 0, 1, 0, 0, 0, 67, 114, 101,
 97, 116, 101, 69, 108, 101, 109, 101, 110, 116, 0, 0, 2,
@@ -84,7 +84,7 @@ export const BEBOP_SCHEMA = new Uint8Array ([
 111, 97, 108, 101, 115, 99, 101, 0, 251, 255, 255, 255, 0,
 115, 110, 97, 112, 115, 104, 111, 116, 73, 110, 116, 101,
 114, 118, 97, 108, 0, 251, 255, 255, 255, 0, 111, 98, 115,
-101, 114, 118, 101, 100, 0, 242, 255, 255, 255, 0, 23, 0,
+101, 114, 118, 101, 100, 0, 242, 255, 255, 255, 0, 24, 0,
 0, 0, 0, 80, 111, 105, 110, 116, 77, 115, 103, 0, 1, 0, 0,
 9, 0, 0, 0, 1, 3, 107, 101, 121, 0, 251, 255, 255, 255, 0,
 111, 102, 102, 115, 101, 116, 0, 251, 255, 255, 255, 0,
@@ -187,31 +187,41 @@ export const BEBOP_SCHEMA = new Uint8Array ([
 109, 112, 111, 115, 105, 116, 105, 111, 110, 68, 97, 116,
 97, 0, 245, 255, 255, 255, 0, 115, 101, 108, 101, 99, 116,
 105, 111, 110, 0, 7, 0, 0, 0, 0, 69, 100, 105, 116, 111,
-114, 73, 110, 112, 117, 116, 77, 115, 103, 0, 3, 0, 9, 0,
-0, 0, 8, 1, 13, 0, 0, 0, 2, 14, 0, 0, 0, 3, 15, 0, 0, 0,
-4, 16, 0, 0, 0, 5, 17, 0, 0, 0, 6, 18, 0, 0, 0, 7, 19, 0,
-0, 0, 8, 20, 0, 0, 0, 80, 97, 116, 104, 83, 116, 101, 112,
-77, 115, 103, 0, 1, 0, 0, 9, 0, 0, 0, 0, 3, 107, 105, 110,
-100, 0, 254, 255, 255, 255, 0, 107, 101, 121, 0, 245, 255,
-255, 255, 0, 105, 110, 100, 101, 120, 0, 251, 255, 255,
-255, 0, 67, 111, 110, 116, 97, 105, 110, 101, 114, 80, 97,
-116, 104, 77, 115, 103, 0, 1, 0, 0, 8, 0, 0, 0, 0, 2, 114,
-111, 111, 116, 0, 245, 255, 255, 255, 0, 115, 116, 101,
-112, 115, 0, 242, 255, 255, 255, 0, 22, 0, 0, 0, 0, 68,
-111, 99, 86, 97, 108, 117, 101, 78, 111, 100, 101, 0, 1,
-0, 0, 33, 0, 0, 0, 0, 7, 107, 105, 110, 100, 0, 254, 255,
-255, 255, 0, 107, 101, 121, 0, 245, 255, 255, 255, 0, 110,
-117, 109, 0, 246, 255, 255, 255, 0, 105, 110, 116, 0, 248,
-255, 255, 255, 0, 115, 116, 114, 0, 245, 255, 255, 255, 0,
-98, 121, 116, 101, 115, 0, 242, 255, 255, 255, 0, 254,
-255, 255, 255, 0, 99, 104, 105, 108, 100, 114, 101, 110,
-0, 251, 255, 255, 255, 0, 68, 111, 99, 79, 112, 77, 115,
-103, 0, 1, 0, 0, 25, 0, 0, 0, 0, 6, 107, 105, 110, 100, 0,
-254, 255, 255, 255, 0, 112, 97, 116, 104, 0, 23, 0, 0, 0,
-0, 107, 101, 121, 0, 245, 255, 255, 255, 0, 105, 110, 100,
+114, 65, 112, 112, 108, 105, 99, 97, 116, 105, 111, 110,
+0, 1, 0, 0, 53, 0, 0, 0, 0, 8, 110, 97, 109, 101, 0, 245,
+255, 255, 255, 0, 106, 115, 111, 110, 0, 245, 255, 255,
+255, 0, 103, 101, 110, 101, 114, 97, 116, 105, 111, 110,
+0, 251, 255, 255, 255, 0, 115, 101, 108, 101, 99, 116,
+105, 111, 110, 0, 7, 0, 0, 0, 0, 107, 101, 121, 98, 111,
+97, 114, 100, 0, 255, 255, 255, 255, 0, 107, 101, 121, 0,
+245, 255, 255, 255, 0, 109, 111, 100, 115, 0, 251, 255,
+255, 255, 0, 99, 111, 100, 101, 0, 251, 255, 255, 255, 0,
+69, 100, 105, 116, 111, 114, 73, 110, 112, 117, 116, 77,
+115, 103, 0, 3, 0, 9, 0, 0, 0, 9, 1, 13, 0, 0, 0, 2, 14,
+0, 0, 0, 3, 15, 0, 0, 0, 4, 16, 0, 0, 0, 5, 17, 0, 0, 0,
+6, 18, 0, 0, 0, 7, 19, 0, 0, 0, 8, 20, 0, 0, 0, 9, 21, 0,
+0, 0, 80, 97, 116, 104, 83, 116, 101, 112, 77, 115, 103,
+0, 1, 0, 0, 9, 0, 0, 0, 0, 3, 107, 105, 110, 100, 0, 254,
+255, 255, 255, 0, 107, 101, 121, 0, 245, 255, 255, 255, 0,
+105, 110, 100, 101, 120, 0, 251, 255, 255, 255, 0, 67,
+111, 110, 116, 97, 105, 110, 101, 114, 80, 97, 116, 104,
+77, 115, 103, 0, 1, 0, 0, 8, 0, 0, 0, 0, 2, 114, 111, 111,
+116, 0, 245, 255, 255, 255, 0, 115, 116, 101, 112, 115, 0,
+242, 255, 255, 255, 0, 23, 0, 0, 0, 0, 68, 111, 99, 86,
+97, 108, 117, 101, 78, 111, 100, 101, 0, 1, 0, 0, 33, 0,
+0, 0, 0, 7, 107, 105, 110, 100, 0, 254, 255, 255, 255, 0,
+107, 101, 121, 0, 245, 255, 255, 255, 0, 110, 117, 109, 0,
+246, 255, 255, 255, 0, 105, 110, 116, 0, 248, 255, 255,
+255, 0, 115, 116, 114, 0, 245, 255, 255, 255, 0, 98, 121,
+116, 101, 115, 0, 242, 255, 255, 255, 0, 254, 255, 255,
+255, 0, 99, 104, 105, 108, 100, 114, 101, 110, 0, 251,
+255, 255, 255, 0, 68, 111, 99, 79, 112, 77, 115, 103, 0,
+1, 0, 0, 25, 0, 0, 0, 0, 6, 107, 105, 110, 100, 0, 254,
+255, 255, 255, 0, 112, 97, 116, 104, 0, 24, 0, 0, 0, 0,
+107, 101, 121, 0, 245, 255, 255, 255, 0, 105, 110, 100,
 101, 120, 0, 251, 255, 255, 255, 0, 108, 101, 110, 0, 251,
 255, 255, 255, 0, 118, 97, 108, 117, 101, 0, 242, 255,
-255, 255, 0, 24, 0, 0, 0, 0, 83, 101, 115, 115, 105, 111,
+255, 255, 0, 25, 0, 0, 0, 0, 83, 101, 115, 115, 105, 111,
 110, 73, 110, 112, 117, 116, 77, 115, 103, 0, 1, 0, 0, 44,
 0, 0, 0, 0, 12, 107, 105, 110, 100, 0, 254, 255, 255, 255,
 0, 114, 101, 113, 117, 101, 115, 116, 0, 251, 255, 255,
@@ -219,9 +229,9 @@ export const BEBOP_SCHEMA = new Uint8Array ([
 108, 97, 103, 0, 255, 255, 255, 255, 0, 98, 121, 116, 101,
 115, 0, 242, 255, 255, 255, 0, 254, 255, 255, 255, 0, 112,
 101, 101, 114, 115, 0, 242, 255, 255, 255, 0, 249, 255,
-255, 255, 0, 101, 100, 105, 116, 111, 114, 0, 21, 0, 0, 0,
+255, 255, 0, 101, 100, 105, 116, 111, 114, 0, 22, 0, 0, 0,
 0, 111, 112, 101, 114, 97, 116, 105, 111, 110, 115, 0,
-242, 255, 255, 255, 0, 25, 0, 0, 0, 0, 109, 97, 114, 107,
+242, 255, 255, 255, 0, 26, 0, 0, 0, 0, 109, 97, 114, 107,
 73, 100, 0, 245, 255, 255, 255, 0, 97, 110, 99, 104, 111,
 114, 0, 242, 255, 255, 255, 0, 254, 255, 255, 255, 0, 102,
 111, 99, 117, 115, 0, 242, 255, 255, 255, 0, 254, 255,
@@ -243,16 +253,16 @@ export const BEBOP_SCHEMA = new Uint8Array ([
 255, 255, 255, 0, 79, 119, 110, 101, 114, 82, 111, 119,
 115, 77, 115, 103, 0, 1, 0, 0, 8, 0, 0, 0, 0, 2, 111, 119,
 110, 101, 114, 0, 245, 255, 255, 255, 0, 114, 101, 99,
-111, 114, 100, 115, 0, 242, 255, 255, 255, 0, 28, 0, 0, 0,
+111, 114, 100, 115, 0, 242, 255, 255, 255, 0, 29, 0, 0, 0,
 0, 76, 111, 99, 97, 108, 83, 116, 97, 116, 101, 77, 115,
 103, 0, 1, 0, 0, 24, 0, 0, 0, 0, 5, 115, 110, 97, 112,
 115, 104, 111, 116, 0, 242, 255, 255, 255, 0, 254, 255,
 255, 255, 0, 99, 111, 118, 101, 114, 115, 79, 119, 110,
 101, 114, 0, 245, 255, 255, 255, 0, 99, 111, 118, 101,
 114, 115, 83, 101, 113, 0, 249, 255, 255, 255, 0, 111,
-114, 112, 104, 97, 110, 115, 0, 242, 255, 255, 255, 0, 29,
+114, 112, 104, 97, 110, 115, 0, 242, 255, 255, 255, 0, 30,
 0, 0, 0, 0, 97, 115, 115, 105, 115, 116, 0, 242, 255, 255,
-255, 0, 29, 0, 0, 0, 0, 83, 116, 111, 114, 97, 103, 101,
+255, 0, 30, 0, 0, 0, 0, 83, 116, 111, 114, 97, 103, 101,
 79, 112, 77, 115, 103, 0, 1, 0, 0, 90, 0, 0, 0, 0, 15,
 107, 105, 110, 100, 0, 254, 255, 255, 255, 0, 100, 111,
 99, 0, 245, 255, 255, 255, 0, 111, 119, 110, 101, 114, 0,
@@ -263,13 +273,13 @@ export const BEBOP_SCHEMA = new Uint8Array ([
 102, 111, 114, 101, 0, 248, 255, 255, 255, 0, 114, 101,
 116, 114, 121, 0, 255, 255, 255, 255, 0, 116, 101, 114,
 109, 105, 110, 97, 108, 0, 255, 255, 255, 255, 0, 114,
-101, 99, 111, 114, 100, 0, 28, 0, 0, 0, 0, 115, 110, 97,
+101, 99, 111, 114, 100, 0, 29, 0, 0, 0, 0, 115, 110, 97,
 112, 115, 104, 111, 116, 0, 242, 255, 255, 255, 0, 254,
 255, 255, 255, 0, 99, 111, 118, 101, 114, 115, 79, 119,
 110, 101, 114, 0, 245, 255, 255, 255, 0, 99, 111, 118,
 101, 114, 115, 83, 101, 113, 0, 249, 255, 255, 255, 0,
 101, 120, 112, 101, 99, 116, 101, 100, 0, 242, 255, 255,
-255, 0, 28, 0, 0, 0, 0, 65, 116, 116, 114, 77, 115, 103,
+255, 0, 29, 0, 0, 0, 0, 65, 116, 116, 114, 77, 115, 103,
 0, 1, 0, 0, 26, 0, 0, 0, 0, 6, 107, 101, 121, 0, 245, 255,
 255, 255, 0, 107, 105, 110, 100, 0, 254, 255, 255, 255, 0,
 116, 101, 120, 116, 0, 245, 255, 255, 255, 0, 117, 110,
@@ -282,7 +292,7 @@ export const BEBOP_SCHEMA = new Uint8Array ([
 97, 109, 101, 0, 245, 255, 255, 255, 0, 111, 117, 116, 99,
 111, 109, 101, 0, 245, 255, 255, 255, 0, 101, 114, 114,
 111, 114, 0, 255, 255, 255, 255, 0, 97, 116, 116, 114,
-115, 0, 242, 255, 255, 255, 0, 32, 0, 0, 0, 0, 112, 97,
+115, 0, 242, 255, 255, 255, 0, 33, 0, 0, 0, 0, 112, 97,
 114, 101, 110, 116, 0, 249, 255, 255, 255, 0, 78, 111,
 100, 101, 67, 117, 114, 115, 111, 114, 77, 115, 103, 0, 1,
 0, 0, 8, 0, 0, 0, 0, 2, 110, 111, 100, 101, 73, 100, 0,
@@ -290,8 +300,8 @@ export const BEBOP_SCHEMA = new Uint8Array ([
 242, 255, 255, 255, 0, 254, 255, 255, 255, 0, 68, 111, 99,
 69, 118, 101, 110, 116, 77, 115, 103, 0, 1, 0, 0, 13, 0,
 0, 0, 0, 3, 107, 105, 110, 100, 0, 254, 255, 255, 255, 0,
-112, 97, 116, 104, 0, 23, 0, 0, 0, 0, 99, 104, 97, 110,
-103, 101, 115, 0, 242, 255, 255, 255, 0, 25, 0, 0, 0, 0,
+112, 97, 116, 104, 0, 24, 0, 0, 0, 0, 99, 104, 97, 110,
+103, 101, 115, 0, 242, 255, 255, 255, 0, 26, 0, 0, 0, 0,
 67, 108, 111, 115, 101, 100, 82, 101, 97, 115, 111, 110,
 0, 4, 0, 254, 255, 255, 255, 0, 1, 0, 0, 0, 4, 78, 111,
 110, 101, 0, 0, 0, 83, 116, 111, 112, 112, 101, 100, 0, 0,
@@ -306,8 +316,8 @@ export const BEBOP_SCHEMA = new Uint8Array ([
 101, 98, 97, 115, 105, 110, 103, 0, 0, 6, 86, 105, 101,
 119, 69, 102, 102, 101, 99, 116, 77, 115, 103, 0, 1, 0, 0,
 72, 0, 0, 0, 0, 15, 99, 108, 111, 115, 101, 100, 82, 101,
-97, 115, 111, 110, 0, 36, 0, 0, 0, 0, 115, 97, 118, 101,
-82, 101, 97, 115, 111, 110, 0, 37, 0, 0, 0, 0, 107, 105,
+97, 115, 111, 110, 0, 37, 0, 0, 0, 0, 115, 97, 118, 101,
+82, 101, 97, 115, 111, 110, 0, 38, 0, 0, 0, 0, 107, 105,
 110, 100, 0, 254, 255, 255, 255, 0, 114, 101, 113, 117,
 101, 115, 116, 0, 251, 255, 255, 255, 0, 99, 111, 100,
 101, 0, 251, 255, 255, 255, 0, 100, 101, 116, 97, 105,
@@ -318,9 +328,9 @@ export const BEBOP_SCHEMA = new Uint8Array ([
 255, 0, 115, 116, 121, 108, 101, 0, 245, 255, 255, 255, 0,
 107, 101, 121, 115, 0, 242, 255, 255, 255, 0, 245, 255,
 255, 255, 0, 118, 97, 108, 117, 101, 115, 0, 242, 255,
-255, 255, 0, 24, 0, 0, 0, 0, 101, 118, 101, 110, 116, 115,
-0, 242, 255, 255, 255, 0, 35, 0, 0, 0, 0, 112, 97, 116,
-104, 115, 0, 242, 255, 255, 255, 0, 23, 0, 0, 0, 0, 81,
+255, 255, 0, 25, 0, 0, 0, 0, 101, 118, 101, 110, 116, 115,
+0, 242, 255, 255, 255, 0, 36, 0, 0, 0, 0, 112, 97, 116,
+104, 115, 0, 242, 255, 255, 255, 0, 24, 0, 0, 0, 0, 81,
 117, 101, 114, 121, 77, 115, 103, 0, 1, 0, 0, 13, 0, 0, 0,
 0, 4, 107, 105, 110, 100, 0, 254, 255, 255, 255, 0, 107,
 101, 121, 0, 251, 255, 255, 255, 0, 116, 101, 120, 116, 0,
@@ -343,14 +353,14 @@ export const BEBOP_SCHEMA = new Uint8Array ([
 100, 0, 254, 255, 255, 255, 0, 102, 108, 97, 103, 115, 0,
 251, 255, 255, 255, 0, 84, 121, 112, 101, 84, 97, 98, 108,
 101, 77, 115, 103, 0, 1, 0, 0, 4, 0, 0, 0, 0, 1, 114, 111,
-119, 115, 0, 242, 255, 255, 255, 0, 42, 0, 0, 0, 0, 76,
+119, 115, 0, 242, 255, 255, 255, 0, 43, 0, 0, 0, 0, 76,
 105, 115, 116, 101, 110, 101, 114, 82, 111, 119, 77, 115,
 103, 0, 1, 0, 0, 8, 0, 0, 0, 0, 2, 99, 111, 109, 109, 97,
 110, 100, 0, 245, 255, 255, 255, 0, 112, 114, 105, 111,
 114, 105, 116, 121, 0, 251, 255, 255, 255, 0, 76, 105,
 115, 116, 101, 110, 101, 114, 84, 97, 98, 108, 101, 77,
 115, 103, 0, 1, 0, 0, 4, 0, 0, 0, 0, 1, 114, 111, 119,
-115, 0, 242, 255, 255, 255, 0, 44, 0, 0, 0, 0, 82, 111,
+115, 0, 242, 255, 255, 255, 0, 45, 0, 0, 0, 0, 82, 111,
 117, 116, 101, 77, 115, 103, 0, 1, 0, 0, 18, 0, 0, 0, 0,
 6, 100, 111, 99, 0, 245, 255, 255, 255, 0, 107, 105, 110,
 100, 0, 254, 255, 255, 255, 0, 99, 111, 110, 110, 0, 251,
@@ -2790,6 +2800,165 @@ export class EditorText implements IEditorText {
 }
 
 
+export interface IEditorApplication extends BebopRecord {
+
+  readonly name: string;
+
+  readonly json: string;
+
+  readonly generation: number;
+
+  readonly selection: ISelectionMsg;
+
+  readonly keyboard: boolean;
+
+  readonly key: string;
+
+  readonly mods: number;
+
+  readonly code: number;
+}
+
+export class EditorApplication implements IEditorApplication {
+  public readonly discriminator: number = 9 as 9;
+  public static readonly discriminator: number = 9 as 9;
+  public readonly name: string;
+  public readonly json: string;
+  public readonly generation: number;
+  public readonly selection: ISelectionMsg;
+  public readonly keyboard: boolean;
+  public readonly key: string;
+  public readonly mods: number;
+  public readonly code: number;
+
+  constructor(record: IEditorApplication) {
+    this.name = record.name;
+    this.json = record.json;
+    this.generation = record.generation;
+    this.selection = record.selection;
+    this.keyboard = record.keyboard;
+    this.key = record.key;
+    this.mods = record.mods;
+    this.code = record.code;
+  }
+
+  /**
+   * Serializes the current instance into a JSON-Over-Bebop string
+   */
+  public stringify(): string {
+    return EditorApplication.encodeToJSON(this);
+  }
+
+  /**
+   * Serializes the specified object into a JSON-Over-Bebop string
+   */
+  public static encodeToJSON(record: IEditorApplication): string {
+    return JSON.stringify(record, BebopJson.replacer);
+  }
+
+  /**
+   * Validates that the runtime types of members in the current instance are correct.
+   */
+  public validateTypes(): void {
+    EditorApplication.validateCompatibility(this);
+  }
+
+  /**
+   * Validates that the specified dynamic object can become an instance of {@link EditorApplication}.
+   */
+  public static validateCompatibility(record: IEditorApplication): void {
+    BebopTypeGuard.ensureString(record.name)
+    BebopTypeGuard.ensureString(record.json)
+    BebopTypeGuard.ensureUint32(record.generation)
+    SelectionMsg.validateCompatibility(record.selection);
+    BebopTypeGuard.ensureBoolean(record.keyboard)
+    BebopTypeGuard.ensureString(record.key)
+    BebopTypeGuard.ensureUint32(record.mods)
+    BebopTypeGuard.ensureUint32(record.code)
+  }
+
+  /**
+   * Unsafely creates an instance of {@link EditorApplication} from the specified dynamic object. No type checking is performed.
+   */
+  public static unsafeCast(record: any): IEditorApplication {
+      record.selection = SelectionMsg.unsafeCast(record.selection);
+      return new EditorApplication(record);
+  }
+
+  /**
+   * Creates a new {@link EditorApplication} instance from a JSON-Over-Bebop string. Type checking is performed.
+   */
+  public static fromJSON(json: string): IEditorApplication {
+    if (typeof json !== 'string' || json.trim().length === 0) {
+      throw new BebopRuntimeError(`EditorApplication.fromJSON: expected string`);
+    }
+    const parsed = JSON.parse(json, BebopJson.reviver);
+    EditorApplication.validateCompatibility(parsed);
+    return EditorApplication.unsafeCast(parsed);
+  }
+  public encode(): Uint8Array {
+    return EditorApplication.encode(this);
+  }
+
+  public static encode(record: IEditorApplication): Uint8Array {
+    const view = BebopView.getInstance();
+    view.startWriting();
+    EditorApplication.encodeInto(record, view);
+    return view.toArray();
+  }
+
+  public static encodeInto(record: IEditorApplication, view: BebopView): number {
+    const before = view.length;
+    view.writeString(record.name);
+    view.writeString(record.json);
+    view.writeUint32(record.generation);
+    SelectionMsg.encodeInto(record.selection, view)
+    view.writeByte(Number(record.keyboard));
+    view.writeString(record.key);
+    view.writeUint32(record.mods);
+    view.writeUint32(record.code);
+    const after = view.length;
+    return after - before;
+  }
+
+  public static decode(buffer: Uint8Array): IEditorApplication {
+    const view = BebopView.getInstance();
+    view.startReading(buffer);
+    return EditorApplication.readFrom(view);
+  }
+
+  public static readFrom(view: BebopView): IEditorApplication {
+    let field0: string;
+    field0 = view.readString();
+    let field1: string;
+    field1 = view.readString();
+    let field2: number;
+    field2 = view.readUint32();
+    let field3: ISelectionMsg;
+    field3 = SelectionMsg.readFrom(view);
+    let field4: boolean;
+    field4 = !!view.readByte();
+    let field5: string;
+    field5 = view.readString();
+    let field6: number;
+    field6 = view.readUint32();
+    let field7: number;
+    field7 = view.readUint32();
+    let message: IEditorApplication = {
+      name: field0,
+      json: field1,
+      generation: field2,
+      selection: field3,
+      keyboard: field4,
+      key: field5,
+      mods: field6,
+      code: field7,
+    };
+    return new EditorApplication(message);
+  }
+}
+
+
 export type IEditorInputMsgType
   = { discriminator: 1, value: IEditorCommand }
   | { discriminator: 2, value: IEditorSetState }
@@ -2798,7 +2967,8 @@ export type IEditorInputMsgType
   | { discriminator: 5, value: IEditorInsertText }
   | { discriminator: 6, value: IEditorComposition }
   | { discriminator: 8, value: IEditorKeyDown }
-  | { discriminator: 7, value: IEditorText };
+  | { discriminator: 7, value: IEditorText }
+  | { discriminator: 9, value: IEditorApplication };
 
 export interface IEditorInputMsg extends BebopRecord {
   readonly data: IEditorInputMsgType;
@@ -2883,6 +3053,14 @@ export class EditorInputMsg implements IEditorInputMsg {
     return this.data.value instanceof EditorText;
   }
 
+  public static fromEditorApplication(value: IEditorApplication) {
+    return new EditorInputMsg({ discriminator: 9, value: new EditorApplication(value)});
+  }
+
+  public isEditorApplication(): this is { value: EditorApplication } & { data: Extract<IEditorInputMsgType, { discriminator: 9 }> } {
+    return this.data.value instanceof EditorApplication;
+  }
+
 
   /**
    * Serializes the current instance into a JSON-Over-Bebop string
@@ -2945,6 +3123,10 @@ export class EditorInputMsg implements IEditorInputMsg {
         EditorText.validateCompatibility(record.data.value);
         break;
       }
+      case 9: {
+        EditorApplication.validateCompatibility(record.data.value);
+        break;
+      }
       default: {
         throw new Error(`Unknown discriminator for EditorInputMsg: ${discriminator}`);
       }
@@ -2980,6 +3162,9 @@ export class EditorInputMsg implements IEditorInputMsg {
         }
         case 7: {
           return new EditorInputMsg({ discriminator: 7, value: EditorText.unsafeCast(record.value) });
+        }
+        case 9: {
+          return new EditorInputMsg({ discriminator: 9, value: EditorApplication.unsafeCast(record.value) });
         }
       }
       throw new BebopRuntimeError(`Failed to unsafely cast union from discriminator: ${discriminator}`);
@@ -3037,6 +3222,9 @@ export class EditorInputMsg implements IEditorInputMsg {
       case 7:
         EditorText.encodeInto(record.data.value, view);
         break;
+      case 9:
+        EditorApplication.encodeInto(record.data.value, view);
+        break;
     }
     const end = view.length;
     view.fillMessageLength(pos, end - start);
@@ -3070,6 +3258,8 @@ export class EditorInputMsg implements IEditorInputMsg {
         return this.fromEditorKeyDown(EditorKeyDown.readFrom(view));
       case 7:
         return this.fromEditorText(EditorText.readFrom(view));
+      case 9:
+        return this.fromEditorApplication(EditorApplication.readFrom(view));
       default:
         view.index = end;
         throw new BebopRuntimeError("Unrecognized discriminator while decoding EditorInputMsg");

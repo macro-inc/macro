@@ -4,7 +4,8 @@ use lexical_model::*;
 mod structure;
 
 /// Surface block conversion supported by the node-transform plugin.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Deserialize)]
+#[serde(rename_all = "kebab-case")]
 pub enum BlockKind {
     /// Plain paragraph.
     Paragraph,
@@ -17,12 +18,18 @@ pub enum BlockKind {
     /// Block quote.
     Quote,
     /// Source code block, respecting the preset replacement.
+    #[serde(alias = "custom-code")]
     Code,
+    /// Inline hyperlink block conversion supported by the source command.
+    Link,
     /// Bullet list.
+    #[serde(alias = "list-bullet")]
     Bullet,
     /// Numbered list.
+    #[serde(alias = "list-number")]
     Number,
     /// Checklist.
+    #[serde(alias = "list-check")]
     Check,
 }
 /// Convert the active forward-normalized range without changing its direction.
@@ -47,3 +54,16 @@ pub fn register(builder: EditorBuilder, ty: crate::EditorType) -> EditorBuilder 
 
 #[cfg(test)]
 mod test;
+
+/// Decode a named application command into an immutable typed model payload.
+/// Unknown namespaces remain available to the other surface plugin groups.
+pub fn decode_command(name: &str, json: &str, _generation: u32) -> Result<Option<Command>, Error> {
+    if name == NODE_TRANSFORM.name() {
+        let kind: BlockKind = serde_json::from_str(json)?;
+        return Ok(Some(Command::Extension(ExtensionCommand::new(
+            &NODE_TRANSFORM,
+            kind,
+        ))));
+    }
+    Ok(None)
+}

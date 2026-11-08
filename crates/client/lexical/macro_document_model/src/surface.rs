@@ -11,3 +11,23 @@ pub fn preset_builder_with_mode(ty: EditorType, mode: EditorMode) -> EditorBuild
 
     builder
 }
+
+/// Decode application command names through the registered migration groups.
+/// The WASM adapter retains envelope and generation validation.
+pub fn decode_command(
+    name: &str,
+    json: &str,
+    generation: u32,
+) -> crate::ModelResult<Option<lexical_model::Command>> {
+    type Decoder = fn(&str, &str, u32) -> crate::ModelResult<Option<lexical_model::Command>>;
+    let decoders: &[Decoder] = &[
+        // WP-58 Group B application commands.
+        crate::plugins_group_b::decode_command,
+    ];
+    for decode in decoders {
+        if let Some(command) = decode(name, json, generation)? {
+            return Ok(Some(command));
+        }
+    }
+    Ok(None)
+}
