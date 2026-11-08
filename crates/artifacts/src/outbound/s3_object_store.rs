@@ -1,6 +1,9 @@
 //! Artifact objects in the document storage bucket, content-addressed at
 //! `artifacts/<document_id>/<sha256>`.
 
+#[cfg(test)]
+mod test;
+
 use std::collections::BTreeMap;
 use std::time::Duration;
 
@@ -92,12 +95,15 @@ impl ArtifactObjectStore for S3ArtifactObjectStore {
         content_type: &str,
     ) -> anyhow::Result<PresignedUpload> {
         let checksum = base64_digest(sha256)?;
+        // Signing the length, type and checksum makes S3 reject any other
+        // body, so an upload can't exceed the size that was checked.
         let presigned = self
             .client
             .put_object()
             .bucket(&self.bucket)
             .key(object_key(document_id, sha256))
             .content_type(content_type)
+            .content_length(i64::try_from(size).context("artifact upload size")?)
             .checksum_sha256(&checksum)
             .presigned(PresigningConfig::expires_in(UPLOAD_URL_LIFETIME)?)
             .await
@@ -107,7 +113,6 @@ impl ArtifactObjectStore for S3ArtifactObjectStore {
             ("content-type".to_string(), content_type.to_string()),
             ("x-amz-checksum-sha256".to_string(), checksum),
         ]);
-        tracing::debug!(size, "presigned artifact upload");
 
         Ok(PresignedUpload {
             url: macro_aws_config::transform_aws_url(presigned.uri()),
