@@ -16,6 +16,8 @@ SessionExecutor executes effects; Rust owns retry, backoff, WAL and permission p
 Storage remains compatible with v1 macro-document-wal and macro-document-snapshots.
 Hold the owner's Web Lock before storage; release after terminal append and FIFO drain,
 then post Closing. Never wipe on error or adopt another user's rows.
+Attribute only unowned v1 rows without a user to the current user, identically
+during load and conditional adoption; never relabel an owned session row.
 Hold the source owner's lease during adoption and the shared snapshot lock while
 checking covers and moving WAL rows; reject changed selections without mutation.
 Prune only delivered rows covered by the current matching-owner snapshot, under
