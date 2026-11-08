@@ -1,5 +1,6 @@
 // Install virtual time/entropy before importing any shipping collaboration code.
 
+import nodeCrypto from 'node:crypto';
 import { format } from 'node:util';
 import FakeTimers from '@sinonjs/fake-timers';
 
@@ -26,6 +27,25 @@ function random(): number {
   return (entropy >>> 0) / 4_294_967_296;
 }
 Math.random = random;
+// Nanoid's Node entry reads this port, rather than globalThis.crypto.
+nodeCrypto.randomFillSync = <T extends NodeJS.ArrayBufferView>(
+  buffer: T,
+  offset = 0,
+  size = buffer.byteLength - offset
+): T => {
+  if (
+    !Number.isInteger(offset) ||
+    !Number.isInteger(size) ||
+    offset < 0 ||
+    size < 0 ||
+    offset + size > buffer.byteLength
+  )
+    throw new RangeError('invalid simulated random-fill bounds');
+  const bytes = new Uint8Array(buffer.buffer, buffer.byteOffset + offset, size);
+  for (let index = 0; index < bytes.length; index++)
+    bytes[index] = Math.floor(random() * 256);
+  return buffer;
+};
 let identity = 0;
 Object.defineProperty(globalThis, 'crypto', {
   value: {
@@ -43,6 +63,11 @@ Object.defineProperty(globalThis, 'crypto', {
       return `00000000-0000-7000-8000-${(++identity).toString(16).padStart(12, '0')}`;
     },
   },
+});
+// Nanoid v5 imports Node webcrypto directly, independently of globalThis.crypto.
+Object.defineProperty(nodeCrypto.webcrypto, 'getRandomValues', {
+  value: <T extends ArrayBufferView>(array: T): T =>
+    globalThis.crypto.getRandomValues(array),
 });
 Object.defineProperty(globalThis, 'fetch', {
   value: async () => {
@@ -81,6 +106,8 @@ export class Activity {
     }
   }
 }
+export const activity = new Activity();
+
 export function wakeAt(): number | null {
   // Pinned fake-timers exposes timer deadlines but no non-advancing next().
   // Reading its table avoids advancing through a future network timeout.

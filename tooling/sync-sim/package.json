@@ -11,7 +11,10 @@
     "@macro-inc/collaboration": "workspace:*",
     "@sinonjs/fake-timers": "13.0.5",
     "fake-indexeddb": "6.2.5",
-    "loro-crdt": "catalog:"
+    "loro-crdt": "catalog:",
+    "@macro-inc/lexical-core": "workspace:*",
+    "lexical": "catalog:",
+    "@lexical/list": "catalog:"
   },
   "devDependencies": {
     "@types/bun": "^1.3.14",

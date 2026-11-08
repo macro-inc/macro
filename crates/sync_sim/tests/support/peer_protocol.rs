@@ -2,6 +2,7 @@
 use serde::{Deserialize, Serialize};
 use specta::Type;
 use std::collections::BTreeMap;
+use sync_sim::EditorOp;
 
 #[derive(Clone, Debug, Serialize, Deserialize, Type)]
 #[serde(tag = "type", rename_all = "snake_case")]
@@ -12,6 +13,15 @@ pub enum PeerCommand {
         document: String,
         ai: bool,
         readonly: bool,
+    },
+    OpenEditor {
+        client: String,
+        peer: String,
+        document: String,
+    },
+    Editor {
+        client: String,
+        op: EditorOp,
     },
     Frame {
         client: String,
@@ -60,6 +70,12 @@ pub struct PeerWalRow {
 #[derive(Clone, Debug, Serialize, Deserialize, Type)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum PeerEffect {
+    Commit {
+        client: String,
+        peer: String,
+        start: i32,
+        end: i32,
+    },
     Frame {
         client: String,
         bytes: Vec<u8>,
@@ -83,6 +99,7 @@ pub struct PeerFinal {
     pub initialized: bool,
     pub vv: BTreeMap<String, i32>,
     pub value_json: String,
+    pub editor_json: Option<String>,
     pub rows: Vec<PeerWalRow>,
 }
 #[derive(Clone, Debug, Serialize, Deserialize, Type)]

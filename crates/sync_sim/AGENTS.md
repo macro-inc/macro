@@ -26,7 +26,8 @@ clients and real `sync_server_core::Room` callbacks over `sync_server_sim` ports
 - `tests/random_sessions.rs` and `.regressions*`: standard proptest shrinking/persistence.
 - `src/generate/test.rs`: literal minimized revoked memory-writer recovery draw; keep every invariant and replay check enabled.
 - `tests/generator_coverage.rs`: all500 observed runs on four isolated host workers.
-- `src/world/external.rs`: pure ports for caller-owned TS drivers, no shadow SyncCore.
+- `src/world/external.rs`: pure ports for caller-owned TS drivers, no shadow SyncCore;
+  actual local-update ranges cover rotating foreign editor peers.
 - `tests/stories/COVERAGE.md`: GenericSurface story/S7 map and pending editor producers.
 - `src/stats.rs`: fact-derived coverage counters; runtime counters retain actual queue/handle timing.
 - `src/invariants.rs`: queries over the immutable Outcome facts.

@@ -22,6 +22,7 @@ loro.workspace = true
 bebop.workspace = true
 futures.workspace = true
 serde.workspace = true
+specta.workspace = true
 serde_json.workspace = true
 postcard.workspace = true
 thiserror.workspace = true
@@ -30,7 +31,6 @@ rand_chacha.workspace = true
 xxhash-rust.workspace = true
 
 [dev-dependencies]
-specta.workspace = true
 specta-serde.workspace = true
 specta-typescript.workspace = true
 macro_env_var = { path = "../macro_env_var" }
