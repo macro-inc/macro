@@ -454,7 +454,13 @@ export {
   Initiative,
   type InitiativeOptions,
 } from './entities/initiatives/initiative';
-export type { InitiativeSummary } from './entities/initiatives/namespace';
+export type {
+  InitiativeListing,
+  InitiativeListOptions,
+  InitiativePriority,
+  InitiativeStatus,
+  InitiativeSummary,
+} from './entities/initiatives/namespace';
 export {
   MeNamespace,
   type UpdateMeOptions,
