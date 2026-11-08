@@ -6,6 +6,7 @@ import type {
 import type { MarkDoneDelegate } from '@app/features/next-soup/actions/mark-done-delegate';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { MenuItem, MenuSeparator } from '@core/component/ContextMenu';
+import { fireAndForget } from '@core/util/fireAndForget';
 import type { EntityData } from '@entity';
 import { children, For, type JSX, Show } from 'solid-js';
 import {
@@ -30,6 +31,8 @@ interface SoupEntityActionsMenuProps {
     | undefined;
   /** The folder the list shows, when the split's content doesn't say. */
   viewedProjectId?: string;
+  /** Holds an action until the host's menu has closed and returned focus. */
+  runAfterClose: (run: () => void) => void;
 }
 
 export const SoupEntityActionsMenu = (props: SoupEntityActionsMenuProps) => {
@@ -77,7 +80,16 @@ export const SoupEntityActionsMenu = (props: SoupEntityActionsMenuProps) => {
                   hotkeyToken={action.hotkeyToken}
                   shortcut={action.shortcut}
                   disabled={action.disabled}
-                  onClick={() => handleAction(action.onClick)}
+                  onClick={() => {
+                    if (action.afterMenuCloses)
+                      props.runAfterClose(() =>
+                        fireAndForget(
+                          handleAction(action.onClick),
+                          'entity-actions'
+                        )
+                      );
+                    else return handleAction(action.onClick);
+                  }}
                   class={action.destructive ? 'text-failure-ink' : undefined}
                 />
               )}

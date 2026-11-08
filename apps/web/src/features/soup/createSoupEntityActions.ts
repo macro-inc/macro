@@ -64,6 +64,11 @@ type SoupEntityActionItem = {
   onClick: () => void | Promise<void>;
   destructive?: boolean;
   disabled?: boolean;
+  /**
+   * Runs once the menu has closed and handed focus back, for an action that
+   * puts focus somewhere itself (renaming a row in place).
+   */
+  afterMenuCloses?: boolean;
 };
 
 type SoupEntityActionGroup = {
@@ -330,6 +335,7 @@ export function createSoupEntityActions(
         label: t('entityActions.rename'),
         hotkeyToken: TOKENS.entity.action.rename,
         onClick: handle(renameAction.executeWithSoup),
+        afterMenuCloses: true,
       });
     }
 

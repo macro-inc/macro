@@ -44,6 +44,14 @@ Desktop sidebar and list-header titles, saved-view icon alignment, unclipped
 switcher triggers, and scrolling list controls have a backend-free regression:
 `bunx playwright test --config src/components/view-shell/browser-test/playwright.config.ts sidebar-title.browser.e2e.ts`.
 
+Inline renaming (the shared `@ui` `InlineRename`: header titles opened from a
+menu, page headings, and list rows renamed from their context menu, with focus
+handed back and a refused name rolled back) has a backend-free desktop/phone
+regression:
+`bunx playwright test --config src/components/ui/browser-test/inline-rename/playwright.config.ts`.
+A menu item that starts a rename runs after the menu has closed and returned
+focus; see [renaming](../../docs/agent-guide/ui-conventions.md#renaming).
+
 Search facet chip sizing, text alignment, and filter interactions have a backend-free
 regression: `bunx playwright test --config src/features/universal-input/browser-test/playwright.config.ts global-search.browser.e2e.ts --project chromium`.
 

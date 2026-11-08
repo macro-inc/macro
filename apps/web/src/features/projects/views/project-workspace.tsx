@@ -49,8 +49,7 @@ export function ProjectWorkspace(props: {
     rename: (project, name) =>
       ResultAsync.fromPromise(
         props.commands.rename(project.id, name),
-        (error) =>
-          error instanceof Error ? error.message : 'Could not save project.'
+        () => 'Could not rename project. Please try again.'
       ),
     failureMessage: (message: string) => message,
   });

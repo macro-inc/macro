@@ -197,11 +197,10 @@ function DesktopRender(props: SplitFileMenuRenderProps) {
       </Dropdown.Trigger>
       <Dropdown.Content
         class="min-w-64 max-w-[min(22rem,calc(100vw-1rem))]"
-        onCloseAutoFocus={(event) => {
+        onCloseAutoFocus={() => {
           const run = afterClose;
           if (!run) return;
           afterClose = undefined;
-          event.preventDefault();
           queueMicrotask(run);
         }}
       >

@@ -3,7 +3,6 @@ import {
   createSplitTitleRename,
   createSplitTitleRenames,
 } from '@components/app/split-layout/title-rename';
-import type { InlineRename } from '@ui';
 import { queryClient } from '@queries/client';
 import type { DatabaseDetail } from '@service-storage/generated/schemas/databaseDetail';
 import type { TableDetail } from '@service-storage/generated/schemas/tableDetail';
@@ -16,6 +15,7 @@ import {
   within,
 } from '@solidjs/testing-library';
 import { QueryClientProvider } from '@tanstack/solid-query';
+import type { InlineRename } from '@ui';
 import { errAsync, okAsync, type ResultAsync } from 'neverthrow';
 import { type Accessor, createSignal } from 'solid-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -122,36 +122,34 @@ function setup(
   const [loaded, setLoaded] = createSignal(false);
   render(() => (
     <QueryClientProvider client={queryClient}>
-      <>
-        {(() => {
-          titleRename = createSplitTitleRename(titleRenames, {
-            id: () => 'db',
-            name: () => 'Customers',
-            enabled: () => loaded() && grant !== 'view',
-            rename: () => okAsync(undefined),
-            failureMessage: () => 'Could not rename',
-          });
-          return null;
-        })()}
-        <BlockItemSplitLabel id="db" name={() => 'Customers'} />
-        <DatabasePageActions
-          detail={
-            {
-              database: { id: 'db', name: 'Customers', owner_id: 'owner' },
-              grant,
-              tables: [],
-            } as unknown as DatabaseDetail
-          }
-          table={
-            selectedTable?.() ??
-            ({ table: { id: 'table', name: 'Contacts' } } as TableDetail)
-          }
-          entityActions={entityActions}
-          onImported={vi.fn()}
-          onRename={() => titleRename.begin('db')}
-          onDelete={remove}
-        />
-      </>
+      {(() => {
+        titleRename = createSplitTitleRename(titleRenames, {
+          id: () => 'db',
+          name: () => 'Customers',
+          enabled: () => loaded() && grant !== 'view',
+          rename: () => okAsync(undefined),
+          failureMessage: () => 'Could not rename',
+        });
+        return null;
+      })()}
+      <BlockItemSplitLabel id="db" name={() => 'Customers'} />
+      <DatabasePageActions
+        detail={
+          {
+            database: { id: 'db', name: 'Customers', owner_id: 'owner' },
+            grant,
+            tables: [],
+          } as unknown as DatabaseDetail
+        }
+        table={
+          selectedTable?.() ??
+          ({ table: { id: 'table', name: 'Contacts' } } as TableDetail)
+        }
+        entityActions={entityActions}
+        onImported={vi.fn()}
+        onRename={() => titleRename.begin('db')}
+        onDelete={remove}
+      />
     </QueryClientProvider>
   ));
   setLoaded(true);

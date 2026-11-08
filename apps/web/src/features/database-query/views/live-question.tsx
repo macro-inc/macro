@@ -3,8 +3,9 @@ import { isFeatureEnabled, showDatabaseSql } from '@core/constant/featureFlags';
 import LightningIcon from '@icon/system/regular/lightning.svg';
 import XIcon from '@icon/system/regular/x.svg';
 import { Popover } from '@kobalte/core/popover';
+import { createInlineRename, RenameInput } from '@ui';
+import { okAsync } from 'neverthrow';
 import { createSignal, type JSX, Show } from 'solid-js';
-import { AnswerTitleField } from '../components/answer-title-field';
 import { QueryResults, ScalarValue } from '../components/query-results';
 import { QuestionDetails } from '../components/question-details';
 import { ResizableAnswer } from '../components/resizable-answer';
@@ -37,21 +38,24 @@ export function LiveQuestion(props: {
   let content: HTMLDivElement | undefined;
   const title = () =>
     props.source.title || props.source.chart?.title || 'Database answer';
-  const [renaming, setRenaming] = createSignal(false);
-  const [draftTitle, setDraftTitle] = createSignal('');
+  const titleRename = createInlineRename({
+    key: (queryId: string) => queryId,
+    name: () => title(),
+    rename: (_queryId, next) => {
+      props.onRename?.(next);
+      return okAsync(undefined);
+    },
+    failureMessage: (failure: never) => failure,
+  });
+  const renaming = () =>
+    !!props.source.queryId && titleRename.isRenaming(props.source.queryId);
   const startRename = (event: MouseEvent | KeyboardEvent) => {
-    if (!props.onRename || !props.source.queryId) return;
+    const queryId = props.source.queryId;
+    if (!props.onRename || !queryId) return;
     event.preventDefault();
     event.stopPropagation();
     setOpen(false);
-    setDraftTitle(title());
-    setRenaming(true);
-  };
-  const finishRename = () => {
-    if (!renaming()) return;
-    const next = draftTitle().trim();
-    setRenaming(false);
-    if (next && next !== title()) props.onRename?.(next);
+    titleRename.begin(queryId);
   };
   const display = useAnswerDisplay();
   const names = display.names(() => props.answer);
@@ -95,12 +99,11 @@ export function LiveQuestion(props: {
           <Show
             when={!renaming()}
             fallback={
-              <AnswerTitleField
-                placement="inline"
-                value={draftTitle()}
-                onInput={setDraftTitle}
-                onCommit={finishRename}
-                onCancel={() => setRenaming(false)}
+              <RenameInput
+                rename={titleRename}
+                aria-label="Answer title"
+                maxLength={100}
+                class="mx-0.5 align-baseline text-sm font-medium"
               />
             }
           >
@@ -149,12 +152,12 @@ export function LiveQuestion(props: {
               <Show
                 when={!renaming()}
                 fallback={
-                  <AnswerTitleField
-                    placement="header"
-                    value={draftTitle()}
-                    onInput={setDraftTitle}
-                    onCommit={finishRename}
-                    onCancel={() => setRenaming(false)}
+                  <RenameInput
+                    rename={titleRename}
+                    aria-label="Answer title"
+                    maxLength={100}
+                    width="fill"
+                    class="flex-1"
                   />
                 }
               >

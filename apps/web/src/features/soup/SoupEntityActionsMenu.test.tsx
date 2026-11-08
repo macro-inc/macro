@@ -63,6 +63,7 @@ const viewContext: EntityActionViewContext = {
 const renderMenu = (extraItems?: () => JSX.Element) =>
   render(() => (
     <SoupEntityActionsMenu
+      runAfterClose={(run) => run()}
       entities={[]}
       list={{} as EntityActionListState}
       viewContext={viewContext}
@@ -83,6 +84,7 @@ describe('SoupEntityActionsMenu mark done', () => {
     } satisfies MarkDoneDelegate;
     render(() => (
       <SoupEntityActionsMenu
+        runAfterClose={(run) => run()}
         entities={[]}
         list={{} as EntityActionListState}
         viewContext={viewContext}
@@ -98,6 +100,7 @@ describe('SoupEntityActionsMenu view context', () => {
     const navigate = () => undefined;
     render(() => (
       <SoupEntityActionsMenu
+        runAfterClose={(run) => run()}
         entities={[]}
         list={{} as EntityActionListState}
         viewContext={viewContext}

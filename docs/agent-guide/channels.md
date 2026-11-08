@@ -336,8 +336,8 @@ from a thread, which list only for people who prompted them from the session
 itself (see [Home](home.md)). Rows show the shared agent
 icon and session title; opening one navigates to `/app/agent/<id>`. The session title
 menu uses the shared entity actions: Favorite/Unfavorite and Copy link, plus
-Rename and Delete for the owner. Rename uses the shared rename dialog, not a
-session-specific modal. Folder moves, duplication, and property/tag editing are
+Rename and Delete for the owner. Rename edits the header title in place, like
+every entity title (see [renaming](ui-conventions.md#renaming)). Folder moves, duplication, and property/tag editing are
 not offered because those APIs do not support sessions. Runtime controls remain
 session-specific.
 

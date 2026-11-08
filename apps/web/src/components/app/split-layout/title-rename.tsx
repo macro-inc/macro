@@ -4,7 +4,7 @@ import {
   type InlineRename,
   RenameInput,
   RenameTitle,
-} from '@ui';
+} from '@ui/components/InlineRename';
 import type { ResultAsync } from 'neverthrow';
 import {
   type Accessor,

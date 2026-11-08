@@ -350,11 +350,10 @@ function SplitLabelContextMenu(props: ParentProps) {
         <ContextMenu.Portal>
           <ContextMenuContent
             class="w-64"
-            onCloseAutoFocus={(event) => {
+            onCloseAutoFocus={() => {
               const run = afterClose;
               if (!run) return;
               afterClose = undefined;
-              event.preventDefault();
               queueMicrotask(run);
             }}
           >

@@ -161,9 +161,26 @@ export function RenameInput<Target>(props: {
 }): JSX.Element {
   const errorId = createUniqueId();
   let input: HTMLInputElement | undefined;
+  // Enter and Escape give focus back here when the rename restores it nowhere:
+  // what had focus when the field opened, unless that was the page or held the
+  // field, then the closest focusable element around the field (a row, or the
+  // list that owns its keyboard).
+  let opener: Element | null = null;
+  const returnFocus = () =>
+    queueMicrotask(() => {
+      if (document.activeElement !== document.body) return;
+      if (opener instanceof HTMLElement && opener.isConnected) opener.focus();
+    });
 
   onMount(() => {
     if (!input) return;
+    const active = document.activeElement;
+    // A focused wrapper around the field (a menu trigger round a row) is
+    // farther than the row itself.
+    const around = active === document.body || active?.contains(input);
+    opener = around
+      ? (input.parentElement?.closest('[tabindex]') ?? active)
+      : active;
     input.focus();
     input.select();
     // Selecting a long name scrolls the field to its end; show its start.
@@ -195,23 +212,27 @@ export function RenameInput<Target>(props: {
             ? 'w-[calc(100%+0.5rem)]'
             : 'field-sizing-content'
         )}
-        // Roving-focus containers (tab lists, grids) would take focus back.
-        onFocusIn={(event) => event.stopPropagation()}
-        onMouseDown={(event) => event.stopPropagation()}
-        onClick={(event) => event.stopPropagation()}
-        onDblClick={(event) => event.stopPropagation()}
-        onPointerDown={(event) => event.stopPropagation()}
-        onInput={(event) => props.rename.setDraft(event.currentTarget.value)}
+        // Bound natively: editors such as Lexical stop input at their root,
+        // before Solid's document-level delegation would see it, and stopping
+        // these here keeps a row, tab list or grid from acting on them.
+        on:focusin={(event) => event.stopPropagation()}
+        on:mousedown={(event) => event.stopPropagation()}
+        on:pointerdown={(event) => event.stopPropagation()}
+        on:click={(event) => event.stopPropagation()}
+        on:dblclick={(event) => event.stopPropagation()}
+        on:input={(event) => props.rename.setDraft(event.currentTarget.value)}
         onBlur={() => props.rename.save(false)}
-        onKeyDown={(event) => {
+        on:keydown={(event) => {
           event.stopPropagation();
           if (event.isComposing || event.keyCode === 229) return;
           if (event.key === 'Enter') {
             event.preventDefault();
             props.rename.save(true, props.onSubmit);
+            if (!props.onSubmit) returnFocus();
           } else if (event.key === 'Escape') {
             event.preventDefault();
             props.rename.cancel(true);
+            returnFocus();
           }
         }}
       />

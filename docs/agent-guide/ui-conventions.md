@@ -48,6 +48,30 @@ Button API and composition details live in the
 [shared primitive contract](../../.agents/rules/web/ui-primitives.md#button-and-buttongroup).
 Inline calendar-invitation text actions remove the transparent border to keep alignment.
 
+## Renaming
+
+Every entity title renames in place through `@ui`'s `createInlineRename`,
+`RenameTitle` and `RenameInput` (gallery: **InlineRename**). Compact titles
+(split headers, breadcrumbs, tabs, columns, list rows, Gantt bars) start on
+double-click, F2, the **Rename** menu item, or the `r` hotkey; page headings
+(projects, CRM records, calls) start on click. The field opens with the name
+selected. Enter and blur save, Escape restores, and an empty or unchanged name
+does nothing. A name the surface refuses (a duplicate column) keeps the field
+open with the reason. A save closes the field at once and shows the new name;
+a failure puts the old name back with a toast. Selecting several list rows
+opens the bulk rename dialog instead.
+
+Split headers rename what their file menu offers **Rename** for: the menu
+registers it with the split (`createSplitTitleRename`), and the split label or
+breadcrumb naming that entity renders the field. A menu item that starts a
+rename runs after the menu has closed and given focus back, or the returning
+focus would blur the field. On touch, tapping a header title opens its menu;
+choose **Rename** there.
+
+Check: double-click a document's split title, type, press Enter, and reload;
+right-click a Drive row, choose **Rename**, and press Escape to see the old name
+and focus return to the row.
+
 ## Responsive workspace navigation
 
 At the narrow breakpoint, docked ViewShell navigation closes over 140ms while

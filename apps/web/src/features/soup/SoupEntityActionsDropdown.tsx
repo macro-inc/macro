@@ -32,6 +32,7 @@ export function SoupEntityActionsDropdown(
 ) {
   const [trigger, setTrigger] = createSignal<HTMLElement>();
   const entities = () => [props.entity];
+  let afterClose: (() => void) | undefined;
 
   const pickers = createSoupEntityMenuPickers({
     entity: () => props.entity,
@@ -60,9 +61,16 @@ export function SoupEntityActionsDropdown(
             props.contentClass ??
             'min-w-64 max-w-[min(22rem,calc(100vw-1rem))] text-xs text-ink-muted'
           }
+          onCloseAutoFocus={() => {
+            const run = afterClose;
+            if (!run) return;
+            afterClose = undefined;
+            queueMicrotask(run);
+          }}
         >
           <Dropdown.Group>
             <SoupEntityActionsMenu
+              runAfterClose={(run) => (afterClose = run)}
               entities={entities()}
               list={props.list}
               viewContext={props.viewContext}

@@ -11,7 +11,7 @@ import { ListPropertyValue } from '@property/component/ListPropertyValue';
 import { Modals } from '@property/component/modal';
 import { PropertiesProvider } from '@property/context/PropertiesContext';
 import type { Property, PropertyApiValues } from '@property/types';
-import { cn, ProgressPill } from '@ui';
+import { cn, type InlineRename, ProgressPill, RenameInput } from '@ui';
 import { For, Match, Show, Suspense, Switch } from 'solid-js';
 import type { ProjectRow as ProjectRowData } from '../context/projects-context';
 import { canEditProject } from '../core/project';
@@ -77,6 +77,7 @@ export function ProjectRow(props: {
   onOpen(event: MouseEvent): void;
   onChecked(selected: boolean, shiftKey: boolean): void;
   onSave(property: Property, value: PropertyApiValues): Promise<void>;
+  rename: InlineRename<ProjectRowData>;
 }) {
   const canEdit = () => canEditProject(props.row.project);
   const properties = () => [...props.row.properties];
@@ -144,7 +145,21 @@ export function ProjectRow(props: {
             class="flex min-w-0 items-center gap-2 truncate font-medium"
           >
             <ProjectIcon class="size-4 shrink-0 text-ink-muted" />
-            <span class="min-w-0 truncate">{props.row.project.name}</span>
+            <Show
+              when={props.rename.isRenaming(props.row)}
+              fallback={
+                <span class="min-w-0 truncate">
+                  {props.rename.displayName(props.row)}
+                </span>
+              }
+            >
+              <RenameInput
+                rename={props.rename}
+                aria-label={t('entityActions.rename')}
+                maxLength={200}
+                width="fill"
+              />
+            </Show>
           </Entity.Slot>
           <For each={TASK_GRID_COLUMNS}>
             {(column) => (

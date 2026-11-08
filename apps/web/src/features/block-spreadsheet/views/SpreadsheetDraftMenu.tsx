@@ -63,11 +63,10 @@ export function SpreadsheetDraftMenu(props: {
           </Dropdown.Trigger>
           <Dropdown.Content
             class="w-64"
-            onCloseAutoFocus={(event) => {
+            onCloseAutoFocus={() => {
               const run = afterClose;
               if (!run) return;
               afterClose = undefined;
-              event.preventDefault();
               queueMicrotask(run);
             }}
           >

@@ -276,8 +276,8 @@ creates neither and keeps the draft available to retry with Enter.
 To rename a table, right-click its tab and choose **Rename table**, double-click
 the tab, or focus it and press F2. These actions also work on inactive tabs.
 The tab itself becomes an input. Enter or leaving the input saves; Escape cancels.
-Renaming preserves records and views. A concurrent rename asks you to reopen
-the editor, and a failed request keeps your draft available to retry.
+Renaming preserves records and views. A duplicate name keeps the field open
+with the reason; a failed request puts the old name back and says why in a toast.
 To reorder tables, drag a tab along the tab strip; an accent line shows where it
 will land, and Escape cancels the drag. From the keyboard, focus a tab, press
 Shift+F10 (or right-click it) and choose **Move left** or **Move right**; each is

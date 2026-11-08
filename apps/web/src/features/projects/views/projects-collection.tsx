@@ -39,7 +39,17 @@ import {
   SYSTEM_PROPERTY_IDS,
 } from '@property/identifiers';
 import type { Property, PropertyApiValues } from '@property/types';
-import { Button, ButtonGroup, Dropdown, Input } from '@ui';
+import { t } from '@app/lib/i18n';
+import { isMobile } from '@core/mobile/isMobile';
+import {
+  Button,
+  ButtonGroup,
+  createInlineRename,
+  Dropdown,
+  Input,
+  RenameInput,
+} from '@ui';
+import { ResultAsync } from 'neverthrow';
 import {
   type Accessor,
   batch,
@@ -57,7 +67,6 @@ import {
   ProjectRow,
 } from '../components/project-row';
 import { ProjectRowMenu } from '../components/project-row-menu';
-import { RenameProjectDialog } from '../components/rename-project-dialog';
 import {
   type ProjectRow as ProjectRowData,
   useProjectsContext,
@@ -200,7 +209,18 @@ export function ProjectsCollection(props: {
       },
     },
   });
-  const [renaming, setRenaming] = createSignal<ProjectRowData>();
+  const projectRename = createInlineRename({
+    key: (row: ProjectRowData) => row.project.id,
+    name: (row) => row.project.name,
+    rename: (row, name) =>
+      ResultAsync.fromPromise(
+        commands.rename(row.project.id, name),
+        () => 'Could not rename project. Please try again.'
+      ),
+    failureMessage: (message: string) => message,
+  });
+  // A desktop menu gives focus back as it closes; rename once it has.
+  let renameAfterMenuCloses: ProjectRowData | undefined;
   const [deleting, setDeleting] = createSignal<{
     rows: readonly ProjectRowData[];
     error?: string;
@@ -309,7 +329,10 @@ export function ProjectsCollection(props: {
         onOpenInNewSplit={(row) =>
           props.onOpen(row.project.id, { newSplit: true })
         }
-        onRename={(row) => setRenaming(row)}
+        onRename={(row) => {
+          if (isMobile()) projectRename.begin(row);
+          else renameAfterMenuCloses = row;
+        }}
         onSetOption={(rows, property, optionId) =>
           fireAndForget(setOption(rows, property, optionId), 'projects')
         }
@@ -323,7 +346,11 @@ export function ProjectsCollection(props: {
           list.selection.setAnchor(menu.rowId);
         }}
         onCloseAutoFocus={(event) => {
-          if (renaming() || deleting()) event.preventDefault();
+          const row = renameAfterMenuCloses;
+          renameAfterMenuCloses = undefined;
+          if (row) {
+            queueMicrotask(() => projectRename.begin(row));
+          } else if (deleting()) event.preventDefault();
         }}
       >
         {menu.children}
@@ -741,6 +768,7 @@ export function ProjectsCollection(props: {
                               <ProjectRow
                                 rowId={item().id}
                                 row={item().entity}
+                                rename={projectRename}
                                 highlighted={list.focus.isFocused(item().id)}
                                 checked={list.selection.isSelected(item().id)}
                                 onFocus={() =>
@@ -887,26 +915,26 @@ export function ProjectsCollection(props: {
                       optionId={statusOptionId(entity()) ?? ''}
                       class="size-3.5 shrink-0"
                     />
-                    <span class="min-w-0 truncate">
-                      {entity().project.name}
-                    </span>
+                    <Show
+                      when={projectRename.isRenaming(entity())}
+                      fallback={
+                        <span class="min-w-0 truncate">
+                          {projectRename.displayName(entity())}
+                        </span>
+                      }
+                    >
+                      <RenameInput
+                        rename={projectRename}
+                        aria-label={t('entityActions.rename')}
+                        maxLength={200}
+                        width="fill"
+                      />
+                    </Show>
                   </Gantt.Bar>
                 </Gantt.Row>
               </ProjectMenu>
             )}
           />
-        </Show>
-        <Show when={renaming()} keyed>
-          {(row) => (
-            <RenameProjectDialog
-              name={row.project.name}
-              onOpenChange={(open) => {
-                if (!open) setRenaming(undefined);
-              }}
-              onRename={(name) => commands.rename(row.project.id, name)}
-              onCloseAutoFocus={returnFocusToList}
-            />
-          )}
         </Show>
         <Show when={deleting()}>
           {(request) => (

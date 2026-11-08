@@ -8,7 +8,14 @@ import type { GanttGroupMove } from '@app/components/gantt/gantt-group-drag';
 import { ganttPlacedRange } from '@app/components/gantt/gantt-time';
 import { fireAndForget } from '@core/util/fireAndForget';
 import CaretRightIcon from '@icon/system/regular/caret-right.svg';
-import { cn, Layer } from '@ui';
+import {
+  cn,
+  createInlineRename,
+  type InlineRename,
+  Layer,
+  RenameInput,
+} from '@ui';
+import { ResultAsync } from 'neverthrow';
 import { Button } from '@ui/components/Button';
 import {
   createMemo,
@@ -26,7 +33,6 @@ import {
 } from '../components/timeline-bar-text';
 import { TimelineMenu } from '../components/timeline-menu';
 import { TimelineRangeEditor } from '../components/timeline-range-editor';
-import { TimelineRenameField } from '../components/timeline-rename-field';
 import { cellTimeRange, toCellTimeRange } from '../core/cell-date-range';
 import type { DatabaseEntityType } from '../core/column-inference';
 import type {
@@ -171,7 +177,6 @@ function TimelineChart(
   const [collapsed, setCollapsed] = createSignal<ReadonlySet<string>>(
     new Set()
   );
-  const [renaming, setRenaming] = createSignal<string>();
   const [rangeEditing, setRangeEditing] = createSignal<{
     rowId: string;
     anchor: DOMRect;
@@ -303,7 +308,7 @@ function TimelineChart(
           ).getBoundingClientRect(),
         })
       )
-      .with('rename', () => setRenaming(rowId))
+      .with('rename', () => recordRename.begin(rowId))
       // Its submenu picks the group, through the menu's onMove.
       .with('move', () => undefined)
       .with('add-dates', () => {
@@ -325,27 +330,25 @@ function TimelineChart(
       .with('delete', () => props.onRequestDelete?.(rowId))
       .exhaustive();
   }
-  const renameField = (rowId: string) => {
-    const column = labelColumn();
-    const row = rowOf(rowId);
-    const name =
-      column && row ? formatCellValue(column, rowValue(row, column.id)) : '';
-    const finish = () => {
-      setRenaming(undefined);
-      queueMicrotask(() => focusRecord(rowId));
-    };
-    return (
-      <TimelineRenameField
-        name={name}
-        onSave={(next) => {
-          finish();
-          if (column)
-            fireAndForget(props.onWrite(rowId, column.id, next), 'database');
-        }}
-        onCancel={finish}
-      />
-    );
-  };
+  const recordRename = createInlineRename({
+    key: (rowId: string) => rowId,
+    name: (rowId) => {
+      const column = labelColumn();
+      const row = rowOf(rowId);
+      return column && row
+        ? formatCellValue(column, rowValue(row, column.id))
+        : '';
+    },
+    // The records view reports a refused write in its failure banner.
+    rename: (rowId, name) => {
+      const column = labelColumn();
+      return ResultAsync.fromSafePromise(
+        column ? props.onWrite(rowId, column.id, name) : Promise.resolve(false)
+      );
+    },
+    failureMessage: (failure: never) => failure,
+    restoreFocus: focusRecord,
+  });
 
   return (
     <div ref={container} class="flex min-h-0 min-w-0 flex-1 flex-col">
@@ -443,8 +446,7 @@ function TimelineChart(
                                 canSchedule() &&
                                 !props.rowPending(record().row.rowId)
                               }
-                              renaming={renaming() === record().row.rowId}
-                              renameField={renameField}
+                              rename={recordRename}
                               onOpen={props.onOpen}
                               onSchedule={(dates) =>
                                 writeRange(
@@ -499,8 +501,7 @@ function TimelineRecordRow(props: {
   colorColumn: DatabaseViewColumn | undefined;
   grouped: boolean;
   schedulable: boolean;
-  renaming: boolean;
-  renameField: (rowId: string) => JSX.Element;
+  rename: InlineRename<string>;
   onOpen: (rowId: string) => void;
   onSchedule: (dates: GanttCreation) => Promise<boolean>;
 }) {
@@ -508,7 +509,15 @@ function TimelineRecordRow(props: {
   const title = () => cellTitle(props.record.row, props.labelColumn);
   const color = () => timelineBarColor(props.record.row, props.colorColumn);
   const editor = () =>
-    props.renaming ? props.renameField(rowId()) : undefined;
+    props.rename.isRenaming(rowId()) ? (
+      <div class="flex size-full items-center px-2 text-xs">
+        <RenameInput
+          rename={props.rename}
+          aria-label="Record name"
+          width="fill"
+        />
+      </div>
+    ) : undefined;
   const trailing = () => (
     <TimelineBarTrailing
       title={title()}

@@ -1,8 +1,11 @@
 import { displaySubject } from '@app/features/email-compose/core/subject-text';
+import { t } from '@app/lib/i18n';
+import { useSplitPanel } from '@components/app/split-layout/layoutUtils';
 import { StaticMarkdown } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
 import { unifiedListMarkdownTheme } from '@core/component/LexicalMarkdown/theme';
 import { blockNameToDefaultFile } from '@core/constant/allBlocks';
 import { formatDocumentName } from '@service-storage/util/filename';
+import { RenameInput } from '@ui';
 import { type JSX, Show } from 'solid-js';
 import { match } from 'ts-pattern';
 import { type EntityData, isGithubPrEntity } from '../types/entity';
@@ -60,6 +63,8 @@ function extractSearchHighlight(entity: EntityData): string | undefined {
 }
 
 export function EntityTitle(props: { entity: EntityData }) {
+  // A list row renames in place; see `makeRenameAction`.
+  const rowRename = useSplitPanel()?.rowRename;
   const titleData = () => {
     const searchHighlight = extractSearchHighlight(props.entity);
     if (searchHighlight) {
@@ -77,14 +82,27 @@ export function EntityTitle(props: { entity: EntityData }) {
 
   return (
     <Show
-      when={titleData().isMarkdown}
-      fallback={<span class="truncate">{titleData().text}</span>}
+      when={rowRename?.isRenaming(props.entity) ? rowRename : undefined}
+      fallback={
+        <Show
+          when={titleData().isMarkdown}
+          fallback={<span class="truncate">{titleData().text}</span>}
+        >
+          <StaticMarkdown
+            markdown={titleData().text as string}
+            theme={unifiedListMarkdownTheme}
+            singleLine={true}
+          />
+        </Show>
+      }
     >
-      <StaticMarkdown
-        markdown={titleData().text as string}
-        theme={unifiedListMarkdownTheme}
-        singleLine={true}
-      />
+      {(rename) => (
+        <RenameInput
+          rename={rename()}
+          aria-label={t('splitMenu.titleName')}
+          width="fill"
+        />
+      )}
     </Show>
   );
 }

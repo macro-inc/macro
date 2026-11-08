@@ -10,7 +10,8 @@ import {
   screen,
   waitFor,
 } from '@solidjs/testing-library';
-import { createSignal, For, type JSX, type ParentProps } from 'solid-js';
+import type { InlineRename } from '@ui';
+import { createSignal, For, type JSX, type ParentProps, Show } from 'solid-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   type ProjectRow,
@@ -104,15 +105,22 @@ vi.mock('@entity', () => ({
 // Rows portal their property editors, as the real cells do.
 vi.mock('../components/project-row', async () => {
   const { Portal } = await import('solid-js/web');
+  const { RenameInput } = await import('@ui/components/InlineRename');
   return {
     ProjectListHeader: () => null,
     ProjectRow: (props: {
       rowId: string;
       row: ProjectRow;
       highlighted: boolean;
+      rename: InlineRename<ProjectRow>;
     }) => (
       <div role="row" id={props.rowId} data-highlighted={props.highlighted}>
-        {props.row.project.name}
+        <Show
+          when={props.rename.isRenaming(props.row)}
+          fallback={props.rename.displayName(props.row)}
+        >
+          <RenameInput rename={props.rename} aria-label="Rename" />
+        </Show>
         <Portal>
           <button type="button">Edit {props.row.project.name}</button>
         </Portal>
@@ -413,27 +421,27 @@ describe('project row context menu', () => {
     ).toBe('true');
   });
 
-  it('renames through a dialog that keeps a failed name for retry', async () => {
+  it('renames a row in place and puts the name back when it fails', async () => {
     const view = setup([project('launch', 'Launch', 'edit')]);
     view.service.rename.mockRejectedValueOnce(new Error('Name taken'));
     await openMenu('Launch');
     choose('Rename');
-    const input = await screen.findByRole('textbox', { name: 'Name' });
+    const input = await screen.findByRole('textbox', { name: 'Rename' });
+    await waitFor(() => expect(document.activeElement).toBe(input));
     expect((input as HTMLInputElement).value).toBe('Launch');
-    const save = screen.getByRole('button', { name: 'Save name' });
-    expect(save.hasAttribute('disabled')).toBe(true);
     fireEvent.input(input, { target: { value: '  Launch v2 ' } });
-    fireEvent.click(save);
-    expect(await screen.findByRole('alert')).toHaveProperty(
-      'textContent',
-      'Could not rename project. Please try again.'
+    fireEvent.keyDown(input, { key: 'Enter' });
+    expect(screen.queryByRole('textbox', { name: 'Rename' })).toBeNull();
+    expect(view.service.rename).toHaveBeenCalledExactlyOnceWith(
+      'launch',
+      'Launch v2'
     );
-    fireEvent.click(save);
     await waitFor(() =>
-      expect(screen.queryByRole('textbox', { name: 'Name' })).toBeNull()
+      expect(toast.failure).toHaveBeenCalledWith(
+        'Could not rename project. Please try again.'
+      )
     );
-    expect(view.service.rename).toHaveBeenCalledTimes(2);
-    expect(view.service.rename).toHaveBeenLastCalledWith('launch', 'Launch v2');
+    expect(screen.getByText('Launch')).toBeTruthy();
   });
 
   it('deletes a project after confirmation', async () => {

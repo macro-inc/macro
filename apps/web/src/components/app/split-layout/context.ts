@@ -1,4 +1,6 @@
 import type { HotkeyToken } from '@core/hotkey/tokens';
+import type { EntityData } from '@entity';
+import type { InlineRename } from '@ui';
 import type { NullableSize } from '@solid-primitives/resize-observer';
 import {
   type Accessor,
@@ -131,6 +133,8 @@ export type SplitPanelContextType = {
   titleRenames: Accessor<readonly SplitTitleRename[]>;
   /** Adds one; the returned function removes it. */
   registerTitleRename: (registration: SplitTitleRename) => () => void;
+  /** Renames one of the split's list rows in place. */
+  rowRename: InlineRename<EntityData>;
   replaceOwnedSlot: ReplaceOwnedSlot;
   headerCollapser: PriorityCollapser;
   toolbarCollapser: PriorityCollapser;

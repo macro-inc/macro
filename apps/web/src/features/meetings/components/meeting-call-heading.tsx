@@ -1,16 +1,12 @@
-import { fireAndForget } from '@core/util/fireAndForget';
-import { Button } from '@ui';
-import { createSignal, onCleanup, onMount, Show } from 'solid-js';
+import { createInlineRename, RenameTitle } from '@ui';
+import { ResultAsync } from 'neverthrow';
+import { createSignal, onCleanup, onMount } from 'solid-js';
 
 export function MeetingCallHeading(props: {
   title: string;
   onRename?: (title: string) => Promise<void>;
 }) {
   const [now, setNow] = createSignal(Date.now());
-  const [editing, setEditing] = createSignal(false);
-  const [draft, setDraft] = createSignal('');
-  const [saving, setSaving] = createSignal(false);
-  const [error, setError] = createSignal(false);
   onMount(() => {
     const timer = globalThis.setInterval(() => setNow(Date.now()), 1000);
     onCleanup(() => globalThis.clearInterval(timer));
@@ -22,30 +18,16 @@ export function MeetingCallHeading(props: {
       minute: '2-digit',
     });
 
-  function edit() {
-    setDraft(props.title);
-    setError(false);
-    setEditing(true);
-  }
-
-  async function save() {
-    const title = draft().trim();
-    if (!props.onRename || saving() || !title) return;
-    if (title === props.title) {
-      setEditing(false);
-      return;
-    }
-    setSaving(true);
-    setError(false);
-    try {
-      await props.onRename(title);
-      setEditing(false);
-    } catch {
-      setError(true);
-    } finally {
-      setSaving(false);
-    }
-  }
+  const titleRename = createInlineRename({
+    key: (target: string) => target,
+    name: () => props.title,
+    rename: (_target, title) =>
+      ResultAsync.fromPromise(
+        props.onRename?.(title) ?? Promise.resolve(),
+        () => 'Could not rename the call. Try again.'
+      ),
+    failureMessage: (message: string) => message,
+  });
 
   return (
     <div class="min-w-0">
@@ -57,71 +39,18 @@ export function MeetingCallHeading(props: {
         >
           {currentTime()}
         </time>
-        <Show
-          when={editing() && props.onRename}
-          fallback={
-            <h1 class="min-w-0 text-lg font-semibold">
-              <Show when={props.onRename} fallback={props.title}>
-                <button
-                  type="button"
-                  aria-label="Rename call"
-                  class="flex items-center gap-2 rounded-md text-left hover:bg-hover focus-visible:outline-2 focus-visible:outline-accent"
-                  onClick={edit}
-                >
-                  <span class="break-words">{props.title}</span>
-                </button>
-              </Show>
-            </h1>
-          }
-        >
-          <form
-            class="flex flex-wrap items-center gap-2"
-            onSubmit={(event) => {
-              event.preventDefault();
-              fireAndForget(save(), 'meetings');
-            }}
-          >
-            <input
-              ref={(element) =>
-                onMount(() => {
-                  element.focus();
-                  element.select();
-                })
-              }
-              aria-label="Call name"
-              class="min-w-0 rounded-lg border border-edge-muted bg-input px-3 py-1.5 text-sm text-ink outline-none focus:border-accent"
-              value={draft()}
-              maxLength={200}
-              required
-              disabled={saving()}
-              onInput={(event) => setDraft(event.currentTarget.value)}
-              onKeyDown={(event) => {
-                if (event.key === 'Escape' && !saving()) setEditing(false);
-              }}
-            />
-            <Button
-              variant="primary"
-              type="submit"
-              disabled={saving() || !draft().trim()}
-            >
-              {saving() ? 'Saving…' : 'Save'}
-            </Button>
-            <Button
-              variant="ghost"
-              type="button"
-              disabled={saving()}
-              onClick={() => setEditing(false)}
-            >
-              Cancel
-            </Button>
-          </form>
-        </Show>
+        <h1 class="flex min-w-0 text-lg font-semibold">
+          <RenameTitle
+            rename={titleRename}
+            target="call"
+            startOn="click"
+            readOnly={!props.onRename}
+            aria-label="Call name"
+            maxLength={200}
+            class="break-words"
+          />
+        </h1>
       </div>
-      <Show when={editing() && error()}>
-        <p role="alert" class="mt-2 text-xs text-failure">
-          Could not rename the call. Try again.
-        </p>
-      </Show>
     </div>
   );
 }

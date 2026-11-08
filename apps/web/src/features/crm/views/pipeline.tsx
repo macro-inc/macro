@@ -136,10 +136,9 @@ export function PipelineView(props: {
               </Dropdown.Trigger>
               <Dropdown.Content
                 class="min-w-44"
-                onCloseAutoFocus={(event) => {
+                onCloseAutoFocus={() => {
                   if (!renameAfterMenuCloses) return;
                   renameAfterMenuCloses = false;
-                  event.preventDefault();
                   queueMicrotask(() => pipelineRename.begin(props.pipeline));
                 }}
               >

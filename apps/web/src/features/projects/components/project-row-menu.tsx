@@ -269,7 +269,9 @@ export function ProjectRowMenu(
   );
 }
 
-export function ProjectMenuDropdown(props: ProjectMenuProps) {
+export function ProjectMenuDropdown(
+  props: ProjectMenuProps & { onCloseAutoFocus?(event: Event): void }
+) {
   return (
     <Dropdown placement="bottom-start">
       <Dropdown.Trigger
@@ -280,7 +282,10 @@ export function ProjectMenuDropdown(props: ProjectMenuProps) {
       >
         <DotsThreeIcon class="size-3.5 touch:size-6 shrink-0 pointer-events-none" />
       </Dropdown.Trigger>
-      <Dropdown.Content class="min-w-64 max-w-[min(22rem,calc(100vw-1rem))] text-xs text-ink-muted">
+      <Dropdown.Content
+        class="min-w-64 max-w-[min(22rem,calc(100vw-1rem))] text-xs text-ink-muted"
+        onCloseAutoFocus={props.onCloseAutoFocus}
+      >
         <Dropdown.Group>
           <ProjectMenuItems {...props} />
         </Dropdown.Group>

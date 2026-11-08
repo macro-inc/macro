@@ -71,6 +71,7 @@ export const SoupEntityContextMenu: FlowComponent<
 > = (props) => {
   const drawerManager = useSoupEntityActionDrawer();
   const [menuPosition, setMenuPosition] = createSignal<SoupEntityMenuAnchor>();
+  let afterClose: (() => void) | undefined;
 
   const menuEntities = () =>
     getSoupMenuEntities(props.entity, props.selectedEntities());
@@ -157,8 +158,17 @@ export const SoupEntityContextMenu: FlowComponent<
           </ContextMenuTrigger>
           <ContextMenu.Portal>
             <Show when={props.entity}>
-              <ContextMenuContent class="min-w-64 max-w-[min(22rem,calc(100vw-1rem))] text-xs text-ink-muted">
+              <ContextMenuContent
+                class="min-w-64 max-w-[min(22rem,calc(100vw-1rem))] text-xs text-ink-muted"
+                onCloseAutoFocus={() => {
+                  const run = afterClose;
+                  if (!run) return;
+                  afterClose = undefined;
+                  queueMicrotask(run);
+                }}
+              >
                 <SoupEntityActionsMenu
+                  runAfterClose={(run) => (afterClose = run)}
                   entities={menuEntities()}
                   list={props.list}
                   viewContext={props.viewContext}

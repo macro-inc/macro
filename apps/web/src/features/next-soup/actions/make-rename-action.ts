@@ -1,5 +1,6 @@
 import { openBulkEditModal } from '@app/features/entity/bulk-edit/BulkEditEntityModal';
 import { t } from '@app/lib/i18n';
+import { useSplitPanel } from '@components/app/split-layout/layoutUtils';
 import { toast } from '@core/component/Toast/Toast';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { canEditChannelIdentity, type EntityData } from '@entity/types/entity';
@@ -13,6 +14,7 @@ type MakeRenameOptions = {
 
 export const makeRenameAction = (options: MakeRenameOptions) => {
   const { userId } = options;
+  const panel = useSplitPanel();
 
   const canExecute = (entity: EntityData): boolean => {
     if (entity.type === 'agent_session' && isSessionArchived(entity))
@@ -34,25 +36,17 @@ export const makeRenameAction = (options: MakeRenameOptions) => {
     return entity.ownerId === userId();
   };
 
-  const execute = async (entities: EntityData[]) => {
-    openBulkEditModal({
-      view: 'rename',
-      entities,
-      onFinish: () => {
-        toast.success(
-          entities.length > 1
-            ? t('entityActions.toastRenamedCount', { count: entities.length })
-            : t('entityActions.toastRenamed')
-        );
-      },
-    });
-  };
-
+  /** One row renames in place; several open the bulk rename. */
   const executeWithSoup = async (
     entities: EntityData[],
     soup: EntityActionListState
   ) => {
-    const firstEntity = entities[0];
+    const [firstEntity, ...rest] = entities;
+    if (firstEntity && rest.length === 0 && panel) {
+      soup.focus.set(firstEntity.id);
+      panel.rowRename.begin(firstEntity);
+      return;
+    }
 
     openBulkEditModal({
       view: 'rename',
@@ -77,5 +71,5 @@ export const makeRenameAction = (options: MakeRenameOptions) => {
     });
   };
 
-  return { canExecute, execute, executeWithSoup };
+  return { canExecute, executeWithSoup };
 };

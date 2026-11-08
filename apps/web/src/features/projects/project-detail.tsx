@@ -19,6 +19,10 @@ import {
   useSplitDisplayName,
   useSplitPanelOrThrow,
 } from '@components/app/split-layout/layoutUtils';
+import {
+  createSplitTitleRename,
+  SplitTitleCrumb,
+} from '@components/app/split-layout/title-rename';
 import { getIconConfig } from '@core/component/EntityIcon';
 import { toast } from '@core/component/Toast/Toast';
 import { ShareTrigger } from '@core/component/TopBar/ShareButton';
@@ -29,12 +33,12 @@ import SquaresFourIcon from '@icon/system/regular/squares-four.svg';
 import { SYSTEM_PROPERTY_IDS } from '@property/identifiers';
 import type { Property } from '@property/types';
 import { Tabs } from '@ui';
+import { ResultAsync } from 'neverthrow';
 import { createSignal, Match, Show, Suspense, Switch } from 'solid-js';
 import type { TaskCreateOptions } from '../tasks-view/types';
 import { DeleteProjectsDialog } from './components/delete-projects-dialog';
 import { ProjectMenuDropdown } from './components/project-row-menu';
 import { ProjectContentSkeleton } from './components/project-skeletons';
-import { RenameProjectDialog } from './components/rename-project-dialog';
 import {
   type ProjectSource,
   type ProjectsContext,
@@ -76,15 +80,17 @@ function ProjectBreadcrumbContent(props: ProjectBreadcrumbProps) {
       order={props.order}
     >
       {(item) => (
-        <ViewBreadcrumbs.Button
-          class="gap-1.5"
-          isActive={item.isActive()}
-          onClick={item.onSelect}
-          tooltip={name()}
-        >
-          <ProjectIcon class="size-3 shrink-0" />
-          <span class="truncate">{name()}</span>
-        </ViewBreadcrumbs.Button>
+        <SplitTitleCrumb id={props.entry.data.id} isActive={item.isActive()}>
+          <ViewBreadcrumbs.Button
+            class="gap-1.5"
+            isActive={item.isActive()}
+            onClick={item.onSelect}
+            tooltip={name()}
+          >
+            <ProjectIcon class="size-3 shrink-0" />
+            <span class="truncate">{name()}</span>
+          </ViewBreadcrumbs.Button>
+        </SplitTitleCrumb>
       )}
     </ViewBreadcrumbs.Item>
   );
@@ -118,8 +124,19 @@ function ProjectTitleMenu(props: {
   const layout = useSplitLayout();
   const copyLink = makeCopyLinkAction();
   const copyId = makeCopyEntityIdAction();
-  const [renaming, setRenaming] = createSignal(false);
   const [deleting, setDeleting] = createSignal(false);
+  const titleRename = createSplitTitleRename(useSplitPanelOrThrow(), {
+    id: () => props.project.id,
+    name: () => props.project.name,
+    enabled: () => canEditProject(props.project),
+    rename: (name) =>
+      ResultAsync.fromPromise(
+        props.commands.rename(props.project.id, name),
+        () => 'Could not rename project. Please try again.'
+      ),
+    failureMessage: (message: string) => message,
+  });
+  let renameAfterMenuCloses = false;
   const [error, setError] = createSignal<string>();
   const definition = (id: string) =>
     definitions
@@ -169,7 +186,12 @@ function ProjectTitleMenu(props: {
             newSplit: true,
           })
         }
-        onRename={() => setRenaming(true)}
+        onRename={() => (renameAfterMenuCloses = true)}
+        onCloseAutoFocus={() => {
+          if (!renameAfterMenuCloses) return;
+          renameAfterMenuCloses = false;
+          queueMicrotask(() => titleRename.begin(props.project.id));
+        }}
         onSetOption={(_, property, optionId) =>
           fireAndForget(setOption(property, optionId), 'projects')
         }
@@ -188,13 +210,6 @@ function ProjectTitleMenu(props: {
           setDeleting(true);
         }}
       />
-      <Show when={renaming()}>
-        <RenameProjectDialog
-          name={props.project.name}
-          onOpenChange={setRenaming}
-          onRename={(name) => props.commands.rename(props.project.id, name)}
-        />
-      </Show>
       <Show when={deleting()}>
         <DeleteProjectsDialog
           count={1}
