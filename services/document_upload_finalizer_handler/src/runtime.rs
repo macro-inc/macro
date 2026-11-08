@@ -8,6 +8,7 @@ use lexical_client::LexicalClient;
 use macro_env_var::env_vars;
 use macro_service_urls::{LexicalServiceUrl, SyncServiceUrl};
 use sqlx::postgres::PgPoolOptions;
+use std::sync::Arc;
 use sync_service_client::SyncServiceClient;
 
 use crate::app::{DocumentUploadFinalizer, ObjectCreated};
@@ -76,10 +77,12 @@ impl AppContext {
         );
         let finalizer = DocumentUploadFinalizer::new(document_port, object_reader, upgrade_storage);
 
+        let sync_service_client = SyncServiceClient::new(sync_service_auth_key, sync_service_url);
         Ok(Self {
             finalizer,
-            lexical_client: LexicalClient::from_env(internal_api_secret, lexical_service_url)?,
-            sync_service_client: SyncServiceClient::new(sync_service_auth_key, sync_service_url),
+            lexical_client: LexicalClient::from_env(internal_api_secret, lexical_service_url)?
+                .with_document_source(Arc::new(sync_service_client.clone())),
+            sync_service_client,
         })
     }
 

@@ -54,3 +54,6 @@ feature `axum`) that the SDK's `macro.images.generate()` calls.
 
 - Rules: `.agents/rules/rust/architecture.md`, `.agents/rules/rust/code.md`
   (GenAI telemetry/usage rules)
+
+Lexical caller mode checks use hand-written `lexical_client/test-utils` boundaries;
+verify HTTP call counts and independent raw-source reads in all three modes.

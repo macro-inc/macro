@@ -76,7 +76,7 @@ export class IDBSnapshotStore<T> implements SnapshotStore<T> {
     });
   }
 
-  private write<R>(operation: () => Promise<R>): Promise<R> {
+  private async write<R>(operation: () => Promise<R>): Promise<R> {
     const locks = globalThis.navigator?.locks;
     // The legacy path also runs on platforms where native sessions are unavailable.
     return locks

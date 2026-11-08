@@ -4,7 +4,6 @@ use serde_json::{Value, json};
 fn config_values() -> Value {
     json!({
         "ENVIRONMENT": "local",
-        "LEXICAL_ROUTE_MODES": "markdown=http,snapshot=http,composers=http,html=http",
         "KAFKA_BROKERS": "existing-broker:9092",
         "INTERNAL_API_KEY": "test",
         "AI_USAGE_FREE_INCLUDED_ALLOWANCE_CENTS": 500,

@@ -245,6 +245,9 @@ macro_document_composers = { path = "crates/macro_document_composers" }
 trigger_context = { path = "crates/trigger_context" }
 mention_date = { path = "crates/client/mention_date" }
 macro_config = { path = "crates/macro_config" }
+macro_tower_layers = { path = "crates/macro_tower_layers" }
+macro_service_urls = { path = "crates/macro_service_urls" }
+sync_service_client = { path = "crates/sync_service_client" }
 macro_document_model = { path = "crates/client/lexical/macro_document_model", default-features = false }
 document_session = { path = "crates/client/document_session" }
 phf = { version = "0.13.1", features = ["macros"] }

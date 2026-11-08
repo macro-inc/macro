@@ -364,7 +364,8 @@ async fn run_server() -> anyhow::Result<()> {
             config.internal_api_key.to_string(),
             LexicalServiceUrl::new()?.to_string(),
         )
-        .with_route_modes(config.lexical_route_modes.clone()),
+        .with_route_modes(config.lexical_route_modes.clone())
+        .with_document_source(sync_service_client.clone()),
     );
 
     let jwt_validation_args =

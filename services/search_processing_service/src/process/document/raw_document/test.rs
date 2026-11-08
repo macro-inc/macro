@@ -397,3 +397,39 @@ async fn test_unreadable_designs_are_read_errors() {
         assert!(read.is_err(), "{file_type}");
     }
 }
+
+#[sqlx::test(
+    migrations = "../../crates/macro_db_client/migrations",
+    fixtures(
+        path = "../../../../../../crates/macro_db_client/fixtures",
+        scripts("basic_versioned_document")
+    ),
+    fixtures("fixtures/markdown_file_type.sql")
+)]
+async fn sync_search_indexing_uses_the_selected_route_in_every_mode(pool: sqlx::PgPool) {
+    use lexical_client::test_utils::{FakeLexical, HELLO_DOCUMENT};
+    for mode in ["http", "in_process", "shadow"] {
+        let backend = FakeLexical::new(HELLO_DOCUMENT, vec![("GET", "/search/document-one", serde_json::json!({"data":[{"nodeId":"block-one","content":"Hello","rawContent":"{}"}]}))]).await;
+        let (storage, requests) = fake_storage(b"unexpected S3 fallback").await;
+        update_search_with_sync_document(
+            &fake_opensearch(&storage),
+            &pool,
+            &fake_s3(&storage),
+            BUCKET,
+            &backend.client(&format!("markdown={mode}")),
+            &saved_pdf_message(FileType::Md, "2"),
+        )
+        .await
+        .unwrap();
+        let requests = requests.lock().unwrap();
+        assert!(
+            requests.iter().all(|(path, _)| !path.starts_with("GET ")),
+            "sync export must not use the legacy S3 fallback"
+        );
+        assert!(requests.iter().any(|(path, body)| path.ends_with("/_bulk")
+            && body.contains("Hello")
+            && body.contains("block-one")));
+        assert_eq!(backend.requests().len(), usize::from(mode != "in_process"));
+        assert_eq!(backend.raw_reads(), usize::from(mode != "http"));
+    }
+}

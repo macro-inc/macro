@@ -339,7 +339,8 @@ async fn main() -> Result<()> {
         .await
         .context("failed to connect to database")?;
     let ctx = Arc::new(Ctx {
-        lexical: LexicalClient::from_env(internal_api_secret_key, lexical_service_url)?,
+        lexical: LexicalClient::from_env(internal_api_secret_key, lexical_service_url)?
+            .with_sync_from_env()?,
         recorder: NoopRecorder,
     });
 
@@ -666,4 +667,43 @@ fn masked_db_url(url: &str) -> String {
             Some(format!("{scheme}://{user}:******@{host}"))
         })
         .unwrap_or_else(|| url.to_string())
+}
+
+#[cfg(test)]
+mod route_test {
+    use super::*;
+    use lexical_client::test_utils::{FakeLexical, HELLO_DOCUMENT};
+
+    #[tokio::test]
+    async fn explicit_corpus_task_uses_the_selected_route_in_every_mode() {
+        for mode in ["http", "in_process", "shadow"] {
+            let backend = FakeLexical::new(
+                HELLO_DOCUMENT,
+                vec![(
+                    "GET",
+                    "/markdown/document-test?target=embedding",
+                    serde_json::json!({"data":"Hello"}),
+                )],
+            )
+            .await;
+            let context = Ctx {
+                lexical: backend.client(&format!("markdown={mode}")),
+                recorder: NoopRecorder,
+            };
+            let task = process_explicit(
+                &context,
+                CandidateRow {
+                    id: "document-test".into(),
+                    title: "Title".into(),
+                    owner: "owner".into(),
+                    properties: serde_json::json!([]),
+                },
+            )
+            .await;
+            assert_eq!(task.body, "Hello");
+            assert_eq!(task.title, "Title");
+            assert_eq!(backend.requests().len(), usize::from(mode != "in_process"));
+            assert_eq!(backend.raw_reads(), usize::from(mode != "http"));
+        }
+    }
 }

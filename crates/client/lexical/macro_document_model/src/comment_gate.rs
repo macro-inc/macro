@@ -81,3 +81,15 @@ pub fn is_comment_only_root_change(before_root: &Value, after_root: &Value) -> R
         &serde_json::from_value(serde_json::json!({"root":after_root}))?,
     )
 }
+
+/// Compare synchronization roots with explicit host capabilities for constructor defaults.
+pub fn is_comment_only_root_change_with_context(
+    before_root: &Value,
+    after_root: &Value,
+    context: &crate::DocumentContext,
+) -> Result<bool> {
+    let before = serde_json::from_value(serde_json::json!({"root":before_root}))?;
+    let after = serde_json::from_value(serde_json::json!({"root":after_root}))?;
+    Ok(content_without_comments_with_context(&before, context)?
+        == content_without_comments_with_context(&after, context)?)
+}

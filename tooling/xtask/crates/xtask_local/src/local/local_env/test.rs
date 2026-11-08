@@ -188,6 +188,10 @@ fn boot_stubs_do_not_overlap_authoritative_env() {
 fn boot_stubs_are_local_only() {
     let env = local_env();
     assert_eq!(
+        env.get("COMMENT_GATE_MODE").map(String::as_str),
+        Some("http")
+    );
+    assert_eq!(
         env.get("LEXICAL_ROUTE_MODES").map(String::as_str),
         Some("markdown=http,snapshot=http,composers=http,html=http")
     );

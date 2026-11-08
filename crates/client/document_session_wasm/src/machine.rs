@@ -75,16 +75,62 @@ impl Machine {
             SessionInput::Sync(SyncInput::Host(HostSignal::Visible)) => self.terminal = false,
             _ => {}
         }
-        let capture = crate::telemetry::begin();
-        let out = match &mut self.session {
-            Session::Editor(s) => s.handle(now, input),
-            Session::Doc(s) => s.handle(now, input),
+        let submitted = match &input {
+            SessionInput::Editor(Input::TextFromView { key, text, .. }) => {
+                Some((*key, text.clone()))
+            }
+            _ => None,
         };
-        let mut flags = output::encode(out, self.terminal, &mut self.output)?;
+        let capture = crate::telemetry::begin();
+        match &mut self.session {
+            Session::Editor(s) => {
+                s.handle(now, input);
+            }
+            Session::Doc(s) => {
+                s.handle(now, input);
+            }
+        }
         let mut messages = std::mem::take(&mut self.initial_telemetry);
         messages.extend(capture.finish());
+        let (out, state) = match &self.session {
+            Session::Editor(s) => (s.last_output(), Some(s.surface().state())),
+            Session::Doc(s) => (s.last_output(), None),
+        };
+        let wake_changed = self.wake != out.wake_at;
+        // A zero return is an exact acknowledgement of the DOM edit. Every
+        // other result carries authoritative text, including rejected edits
+        // whose rollback would otherwise produce no model Diff.
+        let correction = submitted.and_then(|(key, submitted)| {
+            let state = state?;
+            let text = state
+                .view()
+                .text(key)
+                .map(|node| node.text.as_str().to_owned());
+            let exact = text.as_deref() == Some(submitted.as_str());
+            let nonzero = !out.view.is_empty()
+                || !out.io.is_empty()
+                || out.need_peer_ids
+                || wake_changed
+                || !messages.is_empty();
+            if exact && !nonzero {
+                return None;
+            }
+            Some(lexical_model::Diff {
+                generation: state.max_key().generation(),
+                full_reconcile: false,
+                view_text_matches: None,
+                ops: vec![match text {
+                    Some(text) => lexical_model::DiffOp::Text { key, text },
+                    None => lexical_model::DiffOp::Remove {
+                        key,
+                        subtree_root: true,
+                    },
+                }],
+            })
+        });
+        let mut flags = output::encode(out, self.terminal, &mut self.output, correction)?;
         flags |= crate::telemetry::append(messages, &mut self.output)?;
-        if self.wake != out.wake_at {
+        if wake_changed {
             flags |= 4;
             self.wake = out.wake_at;
         }

@@ -1,5 +1,6 @@
 //! CLI for markdown document content lifecycle backfill.
 
+use std::sync::Arc;
 use std::time::Duration;
 
 use anyhow::Context as _;
@@ -171,10 +172,12 @@ fn build_markdown_initializer(
         .to_string();
     let lexical_service_url = LexicalServiceUrl::new()?.to_string();
 
+    let sync_client = SyncServiceClient::new(sync_service_auth_key, sync_service_url);
     Ok(OptionalMarkdownInitializer::Enabled(
         LexicalSyncMarkdownInitializer::new(
-            LexicalClient::from_env(internal_api_secret_key, lexical_service_url)?,
-            SyncServiceClient::new(sync_service_auth_key, sync_service_url),
+            LexicalClient::from_env(internal_api_secret_key, lexical_service_url)?
+                .with_document_source(Arc::new(sync_client.clone())),
+            sync_client,
         ),
     ))
 }

@@ -8,6 +8,7 @@ The host supplies identities and both clocks and executes the returned effects.
 ## Boundaries
 
 - Keep storage, transports, timers and identity generation outside this crate.
+- Read `last_output` to encode committed effects without processing another input.
 - One host input calls `handle` once; keep keystrokes inside the append/presence window.
 - SyncCore owns WAL, catch-up, flush, reset, access and comment delivery policy.
 - Surface imports queue view effects in the same output as their sync input.
