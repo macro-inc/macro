@@ -19,7 +19,8 @@ pub struct CallbackRead<'scope, 'editor> {
 impl CallbackContext {
     /// Keep one owned read peer alive for all reentrant calls in a pure callback.
     /// The capture must belong to the currently active exact update, including
-    /// its publication phase. Originless editor-state captures are rejected.
+    /// its publication phase. Originless captures additionally require the exact
+    /// canonical state and active lease supplied by commit preparation.
     pub fn with_read_scope<T>(
         &self,
         snapshot: &ForeignReadSnapshot,
@@ -29,7 +30,8 @@ impl CallbackContext {
             .0
             .upgrade()
             .ok_or(crate::replay::ReplayError::NoActiveEditor)?;
-        let active = frames.captured(snapshot)?;
+        let snapshot = frames.read_capture(snapshot)?;
+        let active = frames.captured(&snapshot)?;
         let mut context = frames.context(&active)?;
         context.replay.selections = context.replay.selections.fork_read();
         let first_created = context.replay.selections.len()?;
@@ -45,7 +47,7 @@ impl CallbackContext {
             let mut scope = CallbackRead {
                 context,
                 tx,
-                snapshot,
+                snapshot: &snapshot,
                 first_created,
             };
             let result = read(&mut scope);

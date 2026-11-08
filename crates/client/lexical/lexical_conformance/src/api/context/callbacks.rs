@@ -3,6 +3,7 @@ use super::*;
 use crate::replay::{Bindings, CaretBindings, RecordIdentities, SelectionBindings};
 use lexical_model::{ForeignEditorIdentity, ForeignReadSnapshot, ForeignUpdateIdentity};
 use std::sync::{Arc, Mutex, Weak};
+mod publication;
 mod read;
 pub use read::CallbackRead;
 
@@ -14,6 +15,7 @@ pub(super) struct Frames {
     carets: CaretBindings,
     current: Mutex<Option<ActiveUpdate>>,
     owner: Mutex<Option<ForeignEditorIdentity>>,
+    publication: Mutex<Option<Arc<publication::PreparedRead>>>,
 }
 
 #[derive(Clone)]
@@ -44,6 +46,7 @@ impl Frames {
             carets: replay.carets.clone(),
             current: Mutex::default(),
             owner: Mutex::default(),
+            publication: Mutex::default(),
         }
     }
 
@@ -128,7 +131,20 @@ impl Frames {
         if !snapshot.matches_origin(&active.owner, &active.update) {
             return Err(fail("callback capture belongs to another editor or update"));
         }
-        Ok(active)
+        if snapshot.matches_read_lease(None) {
+            return Ok(active);
+        }
+        let prepared = self
+            .publication
+            .lock()
+            .map_err(|_| fail("prepared read store poisoned"))?
+            .clone();
+        if !active.mutable
+            && prepared.is_some_and(|prepared| snapshot.matches_read_lease(Some(&prepared.lease)))
+        {
+            return Ok(active);
+        }
+        Err(fail("callback preparation lease is not active"))
     }
 
     fn context(self: &Arc<Self>, active: &ActiveUpdate) -> Result<Context> {
@@ -260,7 +276,8 @@ impl CallbackContext {
     /// Read a captured node's raw fields from an independently owned pure snapshot.
     /// The capture must belong to the current exact update, including its publication
     /// phase. This grants neither indexed API dispatch nor access to the source
-    /// transaction; editor-state captures without update provenance are rejected.
+    /// transaction. Originless state captures require the exact prepared state
+    /// and the currently installed publication lease.
     pub fn read_field(
         &self,
         snapshot: &ForeignReadSnapshot,
@@ -271,7 +288,8 @@ impl CallbackContext {
             .0
             .upgrade()
             .ok_or(crate::replay::ReplayError::NoActiveEditor)?;
-        let active = frames.captured(snapshot)?;
+        let snapshot = frames.read_capture(snapshot)?;
+        let active = frames.captured(&snapshot)?;
         let mut context = frames.context(&active)?;
         let committed = context
             .replay

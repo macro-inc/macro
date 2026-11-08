@@ -125,8 +125,10 @@ Static importJSON callbacks use HostNodeMutation with a null node and one serial
 
 Mutable selectionTransform callbacks receive the previous committed object and current active object. Consume original indexed arguments before encoding fallback selections; native-super bypasses one vtable call. Pipeline focus dispatch follows the live focus after the anchor callback.
 
-Pure exportJSON callbacks run against one independently owned guarded read peer. Reentrant indexed/native/raw reads use that peer; mutations, commands and registrations reject. Preserve original indexed arguments and opaque exceptions through Result/RAII. Inherited selection value writes and originless committed captures remain unsupported; this bounded adapter does not complete pure-hook hosting.
+Pure exportJSON callbacks run against one independently owned guarded read peer. Reentrant indexed/native/raw reads use that peer; mutations, commands and registrations reject. Preserve original indexed arguments and opaque exceptions through Result/RAII. Inherited selection value writes remain unsupported; originless committed captures require the exact prepared-state lease. This bounded adapter does not complete pure-hook hosting.
 
 Snapshot exportJSON result fields under the caught JS import before serde deserialization: its Object.entries import cannot catch getters. Preserve opaque getter/proxy exceptions and reject undefined results before sentinel encoding. The snapshot retains keys and undefined values instead of JSON.stringify normalization.
 
 Node-returning hook results share the caught tree snapshot with exportJSON before serde. Keep conversion inside the exact callback frame so getters may reenter legitimately, while getter/proxy failures unwind Rust normally. Optional node results still distinguish null from undefined; ignored unit returns never traverse their fields.
+
+Commit-time exportJSON reads the exact canonical next state with leased update metadata, including previous/detached selections and composition. Preparation errors revoke derived read captures before rollback; keep ViewAttached writable-record identities unchanged by using metadata-only contexts.

@@ -57,7 +57,7 @@ test('exportJSON reads pending fields and uses native super through an owned rea
   }
 });
 
-test('exportJSON guards writes, preserves local values and rejects unsupported publication captures', () => {
+test('exportJSON guards writes and preserves local values through publication', () => {
   const hook = foreignHookIndex().indexOf('exportJSON');
   const backend = new ConformanceBackend({
     namespace: 'foreign export guards',
@@ -129,14 +129,10 @@ test('exportJSON guards writes, preserves local values and rejects unsupported p
       ['mutable scope restored'],
       node
     );
-    // Diff serialization currently supplies an originless committed capture.
-    // Reject it until an exact publication capability is available.
-    expect(() => backend.commit()).toThrow(
-      'callback capture belongs to another editor or update'
-    );
+    backend.commit();
     backend.beginUpdate([], false);
     const root = backend.call('lexical.$getRoot', []);
-    expect(backend.call('LexicalNode.getChildrenSize', [], root)).toBe(0);
+    expect(backend.call('LexicalNode.getChildrenSize', [], root)).toBe(1);
     backend.commit();
   } finally {
     backend.dispose();
@@ -431,6 +427,192 @@ test('nested getters, proxies and array iterators stay inside the caught export 
     expect(backend.call('LexicalNode.exportJSON', [], node)).toEqual({
       text: 'after iterator',
     });
+    backend.commit();
+  } finally {
+    backend.dispose();
+  }
+});
+
+test('commit exports read previous and next selections and roll back an opaque getter failure', () => {
+  const hook = foreignHookIndex().indexOf('exportJSON');
+  const backend = new ConformanceBackend({
+    namespace: 'foreign publication export',
+    nodes: [
+      {
+        type: 'publication-export',
+        kind: 'Text',
+        extends: 'text',
+        overrides: (1n << BigInt(hook)).toString(),
+      },
+    ],
+  });
+  const failure = { opaque: 'publication export getter' };
+  const events: unknown[] = [];
+  let fail = false;
+  try {
+    backend.installForeign('publication-export', (message) => {
+      const previous = backend.call('lexical.$getPreviousSelection', []);
+      const current = backend.call('lexical.$getSelection', []);
+      const previousOffset =
+        previous === null
+          ? null
+          : backend.call(
+              'get:offset',
+              [],
+              backend.call('get:anchor', [], previous)
+            );
+      const currentOffset = backend.call(
+        'get:offset',
+        [],
+        backend.call('get:anchor', [], current)
+      );
+      events.push([
+        backend.call('LexicalNode.getTextContent', [], message.node),
+        previousOffset,
+        currentOffset,
+      ]);
+      if (fail)
+        return {
+          get text() {
+            throw failure;
+          },
+        };
+      return backend.callNative('LexicalNode.exportJSON', [], message.node);
+    });
+    backend.beginUpdate([], false);
+    const node = backend.call('conformance.createForeignNode', [
+      'publication-export',
+      {},
+    ]);
+    const paragraph = backend.call('lexical.$createParagraphNode', []);
+    backend.call('LexicalNode.append', [node], paragraph);
+    backend.call(
+      'LexicalNode.append',
+      [paragraph],
+      backend.call('lexical.$getRoot', [])
+    );
+    backend.call('LexicalNode.setTextContent', ['one'], node);
+    backend.call('LexicalNode.select', [1, 1], node);
+    backend.commit();
+    expect(events).toEqual([['one', null, 1]]);
+    backend.beginUpdate([], false);
+    backend.call('LexicalNode.setTextContent', ['two'], node);
+    backend.call(
+      'LexicalNode.updateFromJSON',
+      [
+        {
+          text: 'two',
+          format: 0,
+          detail: 0,
+          mode: 'normal',
+          style: '',
+          marker: 2,
+        },
+      ],
+      node
+    );
+    backend.call('LexicalNode.select', [2, 2], node);
+    backend.commit();
+    expect(events).toEqual([
+      ['one', null, 1],
+      ['two', 1, 2],
+    ]);
+    backend.beginUpdate([], false);
+    backend.call('LexicalNode.setTextContent', ['failed'], node);
+    backend.call(
+      'LexicalNode.updateFromJSON',
+      [
+        {
+          text: 'failed',
+          format: 0,
+          detail: 0,
+          mode: 'normal',
+          style: '',
+          marker: 3,
+        },
+      ],
+      node
+    );
+    fail = true;
+    let caught: unknown = 'not thrown';
+    try {
+      backend.commit();
+    } catch (error) {
+      caught = error;
+    }
+    expect(caught).toBe(failure);
+    backend.beginUpdate([], false);
+    expect(backend.call('LexicalNode.getTextContent', [], node)).toBe('two');
+    backend.call('LexicalNode.setTextContent', ['four'], node);
+    backend.call(
+      'LexicalNode.updateFromJSON',
+      [
+        {
+          text: 'four',
+          format: 0,
+          detail: 0,
+          mode: 'normal',
+          style: '',
+          marker: 4,
+        },
+      ],
+      node
+    );
+    fail = false;
+    backend.commit();
+    expect(events).toEqual([
+      ['one', null, 1],
+      ['two', 1, 2],
+      ['failed', 2, 2],
+      ['four', 2, 2],
+    ]);
+  } finally {
+    backend.dispose();
+  }
+});
+
+test('publication metadata preserves writable ViewAttached handles through cache updates', () => {
+  const backend = new ConformanceBackend({
+    namespace: 'publication view caches',
+    headless: false,
+  });
+  const handles = new NodeHandles(backend, (id) => ({ id }));
+  try {
+    backend.beginUpdate([], false);
+    const root = backend.call('lexical.$getRoot', []);
+    handles.node(root);
+    const paragraph = backend.call('lexical.$createParagraphNode', []);
+    handles.node(paragraph);
+    const text = backend.call('lexical.$createTextNode', ['one']);
+    backend.call('LexicalNode.append', [text], paragraph);
+    backend.call('LexicalNode.append', [paragraph], root);
+    backend.commit();
+    backend.beginUpdate([], false);
+    handles.node(backend.call('LexicalNode.setIndent', [1], root));
+    handles.node(backend.call('LexicalNode.setIndent', [1], paragraph));
+    backend.call('LexicalNode.setTextContent', ['two'], text);
+    backend.call('LexicalNode.setFormat', [1], text);
+    backend.call('LexicalNode.setStyle', ['color: blue'], text);
+    backend.flush();
+    const writableRoot = handles.node(
+      backend.call('LexicalNode.getLatest', [], root)
+    );
+    const writableParagraph = handles.node(
+      backend.call('LexicalNode.getLatest', [], paragraph)
+    );
+    backend.commit();
+    backend.beginUpdate([], false);
+    expect(handles.node(backend.call('LexicalNode.getLatest', [], root))).toBe(
+      writableRoot
+    );
+    expect(
+      handles.node(backend.call('LexicalNode.getLatest', [], paragraph))
+    ).toBe(writableParagraph);
+    expect(backend.readField(writableParagraph.id, '__textFormat')).toBe(1);
+    expect(backend.readField(writableParagraph.id, '__textStyle')).toBe(
+      'color: blue'
+    );
+    expect(backend.readField(writableRoot.id, '__indent')).toBe(1);
     backend.commit();
   } finally {
     backend.dispose();
