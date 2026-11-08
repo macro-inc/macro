@@ -79,3 +79,19 @@ routed links with deferred server callbacks. `presence_snapshot` retains literal
 and requires the first snapshot to survive later heartbeat hold restarts. `faults`
 and the routed native unit complete immutable issued token failures before healing
 Online, preserving the real core's pending-attempt retry policy.
+
+`gap_push::resolved_gaps_keep_the_existing_push_contiguous` retains literal280;
+server-backed gap recovery must preserve an outstanding own batch until ACK/timeout.
+
+Affected-link settlement: `lost_update` retains literal40. Transport regressions
+cover exact direct and shared-router recovery, in-flight receive loss, explicit Heal,
+a no-traffic partition, lost ACKs, and an already replaced socket generation.
+
+Presence retirement and replacement: lifecycle cases cover opposite bounded source/
+receiver clocks, strict stale-key mutation, AI fixed-key death, and peer replacement
+with periodic refresh disabled. `presence_replacement` retains literal259. Actual
+ClockSkew facts define the signed clock spread for strict expiry deadlines.
+
+`idle_presence::late_data_quiescence_republishes_before_observing_presence` retains
+literal157: a positive receiver clock can expire the entry-time selection before
+late data ACKs drain. One fixed fresh-publication phase follows preliminary idle.

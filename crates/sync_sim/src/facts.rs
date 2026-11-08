@@ -65,6 +65,13 @@ pub enum Fact {
         /// Core attempt identity.
         attempt: u32,
     },
+    /// An actual applied client wall-clock offset, including its signed direction.
+    ClockSkew {
+        /// Client whose injected clock changed.
+        client: ClientName,
+        /// Offset relative to the world's fixed wall origin.
+        wall_offset_ms: i64,
+    },
     /// Partition state, so expiry queries can locate the precise virtual interval.
     Partition {
         /// Affected client.
