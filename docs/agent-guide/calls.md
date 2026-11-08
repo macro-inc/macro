@@ -419,8 +419,8 @@ Chat is a separate island beside it. Both keep the safe-area gutters and stay
 below the tiles. The phone island has no screen-share button or device carets.
 The desktop control bar is centered beneath the tiles and the chat toggle sits
 at the stage's right edge, including when chat is docked. The toggle uses the
-same floating surface and shadow as the pill, in a single 56px round button
-(52px beside compact controls) without an outer ring. When space is tight,
+same floating surface and shadow as the pill. Its desktop button matches More:
+40px normally and 32px beside compact controls, with a 20px glyph. When space is tight,
 the pill shifts left to preserve the toggle and at least an 8px gap; there is no
 invisible balance element. The self view stays above the controls row. The
 toggle uses the primary button's inverted colours while open; existing

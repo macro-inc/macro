@@ -668,7 +668,12 @@ for (const width of [1280, 600]) {
       expect(box?.width).toBe(20);
       expect(box?.height).toBe(20);
       const frame = await button.boundingBox();
-      expect(frame?.width).toBe(width === 1280 ? 56 : 52);
+      const more = await page
+        .getByRole('button', { name: 'More', exact: true })
+        .boundingBox();
+      expect(frame?.width).toBe(more?.width);
+      expect(frame?.height).toBe(more?.height);
+      expect(frame?.width).toBe(width === 1280 ? 40 : 32);
       const dot = await button.locator('.bg-accent').boundingBox();
       expect(dot).not.toBeNull();
       const distance = Math.hypot(

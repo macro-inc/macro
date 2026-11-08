@@ -178,7 +178,6 @@ export function CallOverlay(props: {
       ref={panelButton}
       class={cn(
         'relative',
-        !isMobile() && (compactControls() ? 'size-13' : 'size-14'),
         !isMobile() && !panelOpen() && 'menu-surface text-ink'
       )}
       variant={panelOpen() ? (isMobile() ? 'accent' : 'primary') : 'secondary'}
@@ -817,7 +816,7 @@ export function CallOverlay(props: {
                     isMobile()
                       ? undefined
                       : {
-                          'grid-template-columns': `minmax(min-content,1fr) auto minmax(${(panelToggleSize.width ?? (compactControls() ? 48 : 56)) + (compactControls() ? 8 : 12)}px,1fr)`,
+                          'grid-template-columns': `minmax(min-content,1fr) auto minmax(${(panelToggleSize.width ?? (compactControls() ? 32 : 40)) + (compactControls() ? 8 : 12)}px,1fr)`,
                         }
                   }
                 >
