@@ -862,7 +862,6 @@ model_owner = { path = "crates/types/model_owner" }
 model_user = { path = "crates/types/model_user" }
 models_search = { path = "crates/search/models_search" }
 models_soup = { path = "crates/search/models_soup" }
-models_team = { path = "crates/types/models_team" }
 name_search = { path = "crates/search/name_search" }
 native_app_service = { path = "crates/accounts/native_app_service" }
 non_empty = { path = "crates/types/non_empty" }
@@ -943,6 +942,7 @@ system_skills = { path = "crates/agents/system_skills" }
 system_status = { path = "crates/accounts/system_status" }
 task_dedup = { path = "crates/projects/task_dedup" }
 team_id = { path = "crates/types/team_id" }
+team_types = { path = "crates/types/team_types" }
 teams = { path = "crates/accounts/teams", default-features = false }
 thread_id = { path = "crates/types/thread_id" }
 trigger_context = { path = "crates/types/trigger_context" }

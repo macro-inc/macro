@@ -52,7 +52,7 @@ lists what this group may depend on. `cargo x deps` reports edges that break it.
 | [`properties_types`](properties_types/AGENTS.md) | Part of the custom-properties feature (custom fields on documents, CRM records, and other entities). |
 | `search_cursor_types` |  |
 | `sfs_types` |  |
-| `models_team` |  |
+| `team_types` |  |
 | [`natural_time`](natural_time/AGENTS.md) | Reads English date and time phrases ("next friday at 3", "end of month", "nov 5-7", "in 2 hours") into calendar dates for task due dates, reminders and calendar events … |
 | `non_empty` |  |
 | [`notification_state`](notification_state/AGENTS.md) | Part of the notifications feature. |

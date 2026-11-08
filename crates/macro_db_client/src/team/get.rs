@@ -1,4 +1,4 @@
-use models_team::Team;
+use team_types::Team;
 
 pub async fn get_user_teams(
     db: &sqlx::Pool<sqlx::Postgres>,
