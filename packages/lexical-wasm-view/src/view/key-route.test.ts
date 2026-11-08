@@ -1,113 +1,22 @@
 // @vitest-environment jsdom
-import { readFileSync } from 'node:fs';
-import { resolve } from 'node:path';
-import {
-  ABI_MAJOR,
-  Access,
-  SessionConfigMsg,
-  SessionInputMsg,
-  Transport,
-} from '@macro-inc/collaboration/session/abi.generated';
-import { emptyInput } from '@macro-inc/collaboration/session/input';
-import { decodeOutput } from '@macro-inc/collaboration/session/output';
 import { beforeAll, expect, test } from 'vitest';
 import { registerNativeNormalizeEnter } from '../../../../apps/web/src/lib/core/component/LexicalMarkdown/plugins/normalize-enter/native';
 import { registerNativeTabIndentation } from '../../../../apps/web/src/lib/core/component/LexicalMarkdown/plugins/tab-indentation/native';
 import {
-  EditorSession,
-  initSync,
-} from '../../../../apps/web/src/lib/core/document-session/wasm/document_session_wasm.js';
-import { EditorView } from './editor-view';
-import { createBuiltinRegistry } from './node-views/builtins';
-import { registerMacroElementViews } from './node-views/macro';
-import type { ViewSink } from './port';
-import { SessionPort } from './session-port';
+  initializeNativeSurfaceTests,
+  nativeSurface,
+} from './test/native-surface';
 
-beforeAll(() =>
-  initSync({
-    module: readFileSync(
-      resolve(
-        import.meta.dirname,
-        '../../../../apps/web/src/lib/core/document-session/wasm/document_session_wasm_bg.wasm'
-      )
-    ),
-  })
-);
+beforeAll(initializeNativeSurfaceTests);
 
 test('application Tab routes once through the real Macro session despite its critical table listener', () => {
-  const session = EditorSession.createMacro(
-    ABI_MAJOR,
-    SessionConfigMsg.encode({
-      doc: 'group-b-key-fixture',
-      session: '00000000-0000-0000-0000-000000000001',
-      user: 'fixture-user',
-      peers: [7n, 8n, 9n],
-      access: Access.Edit,
-      transport: Transport.None,
-      durable: false,
-      chatter: false,
-      headless: false,
-      viewEngine: 1,
-      viewOs: 0,
-      token: '',
-      traceparent: '',
-      coalesce: 25,
-      snapshotInterval: 0,
-      observed: [],
-    }),
-    0,
-    0
-  );
-  let view: EditorView | undefined;
-  let calls = 0;
-  const sink: ViewSink = {
-    apply: (words, strings, effects) => view?.apply(words, strings, effects),
-    acknowledgeText: (input) => view?.acknowledgeText(input),
-    acknowledgeSelection: (selection) => view?.acknowledgeSelection(selection),
-    text: (key) => view?.text(key) ?? null,
-  };
-  const executor = {
-    session,
-    now: () => 1,
-    run(call: () => number, after?: (flags: number) => void) {
-      calls++;
-      const flags = call();
-      if (flags & (1 | 2 | 8 | 16)) {
-        const output = decodeOutput(session.takeOutput());
-        sink.apply(output.view, output.strings, output.viewEffects);
-      }
-      after?.(flags);
-    },
-  };
-  const port = new SessionPort(executor, sink, false);
-  const root = document.createElement('div');
-  document.body.appendChild(root);
-  view = EditorView.mount(
-    root,
-    port,
-    registerMacroElementViews(createBuiltinRegistry()),
-    {
-      namespace: 'group-b-keys',
-      theme: {},
-      editable: true,
-      preset: 'rich',
-      onError(error) {
-        throw error;
-      },
-    }
-  );
-  const mounted = view;
+  const fixture = nativeSurface();
+  const { session, port, root, view: mounted, counters } = fixture;
   const releaseTab = registerNativeTabIndentation(mounted);
   const releaseEnter = registerNativeNormalizeEnter(mounted);
   try {
     expect(port.listeners().get('Key(Tab)')).toBe(
       (1 << 4) | (1 << 2) | (1 << 0)
-    );
-    executor.run(() =>
-      session.input(SessionInputMsg.encode(emptyInput(0)), 1, 1)
-    );
-    executor.run(() =>
-      session.input(SessionInputMsg.encode(emptyInput(1)), 2, 2)
     );
     port.setState(
       JSON.stringify({
@@ -165,7 +74,7 @@ test('application Tab routes once through the real Macro session despite its cri
     session.nodeText = () => {
       throw new Error('Per-node crossing on routed key');
     };
-    calls = 0;
+    counters.admissions = 0;
     const tab = new KeyboardEvent('keydown', {
       key: 'Tab',
       keyCode: 9,
@@ -174,10 +83,10 @@ test('application Tab routes once through the real Macro session despite its cri
     });
     root.dispatchEvent(tab);
     expect(tab.defaultPrevented).toBe(true);
-    expect(calls).toBe(1);
+    expect(counters.admissions).toBe(1);
     expect(root.querySelectorAll('tr')).toHaveLength(2);
     expect(queries).toBe(0);
-    calls = 0;
+    counters.admissions = 0;
     root.dispatchEvent(
       new KeyboardEvent('keydown', {
         key: 'x',
@@ -186,12 +95,10 @@ test('application Tab routes once through the real Macro session despite its cri
         cancelable: true,
       })
     );
-    expect(calls).toBe(0);
+    expect(counters.admissions).toBe(0);
   } finally {
     releaseTab();
     releaseEnter();
-    mounted.dispose();
-    root.remove();
-    session.free();
+    fixture.close();
   }
 });
