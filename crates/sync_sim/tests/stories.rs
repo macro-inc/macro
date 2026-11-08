@@ -50,3 +50,6 @@ mod presence_snapshot;
 
 #[path = "stories/gap_push.rs"]
 mod gap_push;
+
+#[path = "stories/lost_update.rs"]
+mod lost_update;

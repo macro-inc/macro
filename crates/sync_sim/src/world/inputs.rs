@@ -273,6 +273,7 @@ impl Sim {
             && !self.net.partitions.contains(&key.0)
             && !self.net.offline.contains(&key.0);
         if !valid {
+            self.net.record_partition_loss(&key);
             self.frame_fact(
                 &key,
                 direction,
@@ -628,7 +629,7 @@ impl Sim {
             return Ok(());
         }
         if let Some(profile) = self.router_profile(key) {
-            return self.router_break(&profile, code);
+            return self.router_close(&profile, ConnId(key.2), code);
         }
         let Some(link) = self.net.links.get_mut(key) else {
             return Ok(());
