@@ -1,17 +1,18 @@
 import type { ReplyType } from '@app/features/email-compose/core/reply-type';
 import type { EmailMessage } from '@app/features/email-message/core/email-message';
 import { FloatRegionOrInline } from '@components/app/mobile/float-regions/FloatRegion';
-import { inboxIconProps } from '@core/component/inboxIcon';
-import { UserIcon } from '@core/component/UserIcon';
+import { type HotkeyToken, TOKENS } from '@core/hotkey/tokens';
 import { fireAndForget } from '@core/util/fireAndForget';
 import CheckBoldIcon from '@icon/system/bold/check-bold.svg?component-solid';
+import ArrowBendDoubleUpLeft from '@icon/system/regular/arrow-bend-double-up-left.svg';
 import ArrowBendUpLeft from '@icon/system/regular/arrow-bend-up-left.svg';
 import ArrowBendUpRight from '@icon/system/regular/arrow-bend-up-right.svg';
 import ArrowDown from '@icon/system/regular/arrow-down.svg';
+import ArrowRight from '@icon/system/regular/arrow-right.svg';
 import ArrowUp from '@icon/system/regular/arrow-up.svg';
 import CheckIcon from '@icon/system/regular/check.svg';
 import { createCallback } from '@solid-primitives/rootless';
-import { Button, cn } from '@ui';
+import { Button, cn, Hotkey } from '@ui';
 import { type Component, Show } from 'solid-js';
 import type { EmailThreadListNavigation } from '../context/email-thread-context';
 import { useEmailThreadState } from '../context/email-thread-state-context';
@@ -47,13 +48,35 @@ function ReplyActionButton(props: {
   );
 }
 
+function ReplyShortcutButton(props: {
+  icon: Component<{ class?: string }>;
+  label: string;
+  hotkey: HotkeyToken;
+  variant?: 'secondary';
+  onClick: () => void;
+}) {
+  return (
+    <Button
+      variant={props.variant ?? 'ghost'}
+      class="gap-2 pr-1.5"
+      onClick={props.onClick}
+    >
+      <props.icon class="size-4 shrink-0" />
+      <span>{props.label}</span>
+      <Hotkey
+        token={props.hotkey}
+        class="h-5 min-w-5 justify-center rounded-sm bg-ink/8 px-1 text-xs text-ink-muted"
+      />
+    </Button>
+  );
+}
+
 export function BottomReplyButtons(props: {
   lastMessage: EmailMessage;
   navigation?: EmailThreadListNavigation;
 }) {
   const ctx = useEmailThreadState();
   const viewContext = useEmailThreadViewContext();
-  const currentUserEmail = viewContext.thread.viewerEmail;
 
   const open = (type: ReplyType) =>
     createCallback(() => {
@@ -67,11 +90,6 @@ export function BottomReplyButtons(props: {
         isLastMessage: true,
       });
     });
-
-  const currentUserIconProps = () => {
-    const email = currentUserEmail();
-    return email ? inboxIconProps(email) : { email: '' };
-  };
 
   const isDone = () => ctx.isThreadDone();
 
@@ -96,20 +114,26 @@ export function BottomReplyButtons(props: {
     <Show
       when={viewContext.thread.isTouch()}
       fallback={
-        <div class="flex w-full items-center pt-4">
-          <button
-            type="button"
-            class="flex min-w-0 flex-1 items-center gap-2 rounded-md text-left text-sm text-ink-placeholder hover:text-ink-muted"
+        <div class="flex w-full flex-wrap items-center gap-2 pt-4">
+          <ReplyShortcutButton
+            icon={ArrowBendUpLeft}
+            label="Reply"
+            hotkey={TOKENS.email.reply}
+            variant="secondary"
+            onClick={open('reply')}
+          />
+          <ReplyShortcutButton
+            icon={ArrowBendDoubleUpLeft}
+            label="Reply all"
+            hotkey={TOKENS.email.replyAll}
             onClick={open('reply-all')}
-          >
-            <UserIcon
-              {...currentUserIconProps()}
-              size="md"
-              showTooltip={false}
-              suppressClick
-            />
-            <span class="truncate">Reply...</span>
-          </button>
+          />
+          <ReplyShortcutButton
+            icon={ArrowRight}
+            label="Forward"
+            hotkey={TOKENS.email.forward}
+            onClick={open('forward')}
+          />
         </div>
       }
     >
