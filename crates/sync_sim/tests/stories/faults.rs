@@ -145,3 +145,41 @@ fn failed_routed_upgrade_closes_the_accepted_server_half() {
         )
     );
 }
+
+#[test]
+fn settlement_waits_for_an_issued_token_failure_before_the_online_nudge() {
+    let mut config = SimConfig::calm(233);
+    config.session.backoff.max_retries = 0;
+    let outcome = verify(
+        config,
+        &[
+            Step::Open(OpenSpec::form("a", "profile")),
+            Step::Offline {
+                client: ClientName("a".into()),
+                offline: true,
+            },
+            Step::Run(Millis(500)),
+            Step::Edit {
+                client: ClientName("a".into()),
+                op: AbstractOp::FormSet {
+                    field: 1,
+                    value: 11,
+                },
+            },
+            Step::Settle,
+        ],
+    );
+    assert!(outcome.stats.gave_up >= 2);
+    assert_eq!(
+        outcome.finals.servers[&DocIx(0)].deep_value["fields"]["1"],
+        11
+    );
+    assert!(
+        outcome
+            .events
+            .iter()
+            .filter(|event| matches!(event.fact, Fact::TokenRequested { .. }))
+            .count()
+            >= 3
+    );
+}

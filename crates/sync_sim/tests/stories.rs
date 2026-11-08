@@ -44,3 +44,6 @@ mod confirmed_gap;
 
 #[path = "stories/gap_parent.rs"]
 mod gap_parent;
+
+#[path = "stories/presence_snapshot.rs"]
+mod presence_snapshot;

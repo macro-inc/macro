@@ -100,6 +100,49 @@ impl SimClock {
                 | Pending::RouterToken(..) | Pending::RouteConnect(..) => true,
         })
     }
+    // A finite FIFO cutoff for publications already issued at the healing boundary.
+    // Periodic refreshes scheduled later are deliberately outside this barrier.
+    pub(crate) fn issued_presence_until(&self, direction: crate::Direction) -> Option<u64> {
+        self.queue
+            .iter()
+            .filter_map(|((at, _, _), pending)| {
+                let publication = match pending {
+                    Pending::Up(_, _, _, delivery) if direction == crate::Direction::ToServer => {
+                        delivery.kind == crate::FrameKind::Awareness
+                    }
+                    Pending::Down(_, _, _, delivery) if direction == crate::Direction::ToClient => {
+                        delivery.kind == crate::FrameKind::Awareness
+                    }
+                    Pending::Input(
+                        _,
+                        _,
+                        SyncInput::SetPresence(_)
+                        | SyncInput::Chatter(doc_sync_core::ChatterMessage::Awareness(_)),
+                    ) => true,
+                    _ => false,
+                };
+                publication.then_some(*at)
+            })
+            .max()
+    }
+    // Host failures are sampled at issue time. Complete existing failed token
+    // requests before the settlement Online nudge, preserving real core retry rules.
+    pub(crate) fn pending_token_failures_until(&self) -> Option<u64> {
+        self.queue
+            .iter()
+            .filter_map(|((at, _, _), pending)| {
+                matches!(
+                    pending,
+                    Pending::Input(
+                        _,
+                        _,
+                        SyncInput::Token(doc_sync_core::TokenEvent::Failed { .. })
+                    ) | Pending::RouterToken(_, _, doc_sync_core::TokenEvent::Failed { .. })
+                )
+                .then_some(*at)
+            })
+            .max()
+    }
     pub(crate) fn clear_directory_heals(&mut self, doc: DocIx) {
         self.queue
             .retain(|_, event| !matches!(event, Pending::HealDirectory(key) if *key == doc));

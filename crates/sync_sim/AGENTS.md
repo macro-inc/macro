@@ -65,6 +65,10 @@ clients and real `sync_server_core::Room` callbacks over `sync_server_sim` ports
 - Settlement waits for queued non-periodic inputs, network frames and controls before
   its heartbeat hold; only periodic awareness, ping/pong, wake and alarm work is ignored.
   Core idleness and durable callback counters still cover outstanding operations.
+  Complete already-issued token failures before the healing Online signal. Capture
+  presence once per Settle after finite upstream/downstream FIFO publication barriers;
+  ignore later refreshes and restart the barriers for new socket/route lifetimes.
+  Keep bounded backward clock offsets and wait for publication time to catch up.
 - Settlement reopens gracefully stopped clients to drain retained WAL; Stop itself
   still waits only for durable local writes. Crashed clients require explicit reopen.
 - Settlement thaws injected source freezes through the real migration operation and
