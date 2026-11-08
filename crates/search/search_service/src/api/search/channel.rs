@@ -22,9 +22,9 @@ use models_search::channel::{
     ChannelSearchResponseItem, ChannelSearchResponseItemWithMetadata, ChannelSearchResult,
     ChannelSortTimestamp,
 };
-use models_search_cursor::{SearchCursorOption, SearchMethodCursor};
 use opensearch_client::search::channels::{ChannelSearchArgs, ChannelSortMode};
 use opensearch_client::search::model::SearchGotoContent;
+use search_cursor_types::{SearchCursorOption, SearchMethodCursor};
 use sqlx::types::Uuid;
 
 /// Fetches the per-user channel history info and message deletion states

@@ -27,16 +27,16 @@ pub(in crate::api::search) async fn search_names<'a>(
     term: String,
     exact_match: bool,
     limit: u32,
-    cursor: models_search_cursor::SearchCursorOption,
-) -> Result<(Vec<SearchHit>, models_search_cursor::SearchCursorOption), SearchError> {
+    cursor: search_cursor_types::SearchCursorOption,
+) -> Result<(Vec<SearchHit>, search_cursor_types::SearchCursorOption), SearchError> {
     let inner_cursor = match cursor {
-        models_search_cursor::SearchCursorOption::Done => {
-            return Ok((vec![], models_search_cursor::SearchCursorOption::Done));
+        search_cursor_types::SearchCursorOption::Done => {
+            return Ok((vec![], search_cursor_types::SearchCursorOption::Done));
         }
-        models_search_cursor::SearchCursorOption::NotDone(c) => c,
+        search_cursor_types::SearchCursorOption::NotDone(c) => c,
     };
     if filters.org_id.is_some() {
-        return Ok((vec![], models_search_cursor::SearchCursorOption::Done));
+        return Ok((vec![], search_cursor_types::SearchCursorOption::Done));
     }
     let channel_ids = filters
         .channel_ids

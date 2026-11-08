@@ -861,7 +861,6 @@ model_notifications = { path = "crates/notifications/model_notifications" }
 model_owner = { path = "crates/types/model_owner" }
 model_user = { path = "crates/types/model_user" }
 models_search = { path = "crates/search/models_search" }
-models_search_cursor = { path = "crates/types/models_search_cursor" }
 models_sfs = { path = "crates/types/models_sfs" }
 models_soup = { path = "crates/search/models_soup" }
 models_team = { path = "crates/types/models_team" }
@@ -906,6 +905,7 @@ s3_key = { path = "crates/types/s3_key" }
 saved_views = { path = "crates/databases/saved_views" }
 scheduled_action = { path = "crates/agents/scheduled_action" }
 scheduled_action_service_url = { path = "crates/platform/service_urls/scheduled_action_service_url" }
+search_cursor_types = { path = "crates/types/search_cursor_types" }
 search_processing_service_url = { path = "crates/platform/service_urls/search_processing_service_url" }
 search_service = { path = "crates/search/search_service" }
 search_service_client = { path = "crates/clients/search_service_client" }

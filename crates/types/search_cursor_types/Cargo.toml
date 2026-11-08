@@ -1,6 +1,6 @@
 [package]
 edition = "2024"
-name = "models_search_cursor"
+name = "search_cursor_types"
 publish = false
 version = "0.1.0"
 

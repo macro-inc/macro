@@ -2,8 +2,8 @@ use super::*;
 
 use crate::search::builder::updated_at_sort;
 use chrono::Utc;
-use models_search_cursor::SearchMethodCursor;
 use opensearch_query_builder::ToOpenSearchJson;
+use search_cursor_types::SearchMethodCursor;
 
 #[test]
 fn author_only_channel_match_without_highlight_keeps_deep_link() {

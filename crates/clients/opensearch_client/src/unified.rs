@@ -1,4 +1,4 @@
-use models_search_cursor::SearchCursorOption;
+use search_cursor_types::SearchCursorOption;
 
 use crate::{
     OpensearchClient, Result,

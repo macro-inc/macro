@@ -14128,18 +14128,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "models_search_cursor"
-version = "0.1.0"
-dependencies = [
- "base64 0.22.1",
- "chrono",
- "serde",
- "serde_json",
- "uuid",
- "workspace-hack",
-]
-
-[[package]]
 name = "models_sfs"
 version = "0.1.0"
 dependencies = [
@@ -14262,9 +14250,9 @@ dependencies = [
  "chrono",
  "macro_db_migrator",
  "macro_user_id",
- "models_search_cursor",
  "opensearch_types",
  "regex",
+ "search_cursor_types",
  "serde",
  "sqlx",
  "thiserror 2.0.18",
@@ -15202,12 +15190,12 @@ dependencies = [
  "h2 0.4.16",
  "hyper 1.9.0",
  "hyper-util",
- "models_search_cursor",
  "opensearch",
  "opensearch_query_builder",
  "opensearch_types",
  "reqwest 0.13.4",
  "rustls",
+ "search_cursor_types",
  "serde",
  "serde_json",
  "strum 0.27.2",
@@ -18459,6 +18447,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "search_cursor_types"
+version = "0.1.0"
+dependencies = [
+ "base64 0.22.1",
+ "chrono",
+ "serde",
+ "serde_json",
+ "uuid",
+ "workspace-hack",
+]
+
+[[package]]
 name = "search_processing_service"
 version = "0.1.0"
 dependencies = [
@@ -18575,7 +18575,6 @@ dependencies = [
  "macro_db_client",
  "macro_user_id",
  "models_search",
- "models_search_cursor",
  "models_soup",
  "name_search",
  "opensearch_client",
@@ -18584,6 +18583,7 @@ dependencies = [
  "properties_types",
  "readonly_pool",
  "rootcause",
+ "search_cursor_types",
  "serde",
  "serde_json",
  "shared_types",

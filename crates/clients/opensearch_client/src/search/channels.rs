@@ -15,9 +15,9 @@ use crate::{
 };
 
 use chrono::Utc;
-use models_search_cursor::{SearchCursorOption, SearchMethodCursor};
 use opensearch_query_builder::*;
 use opensearch_types::{OpenSearchEntityType, SearchEntityType, SearchIndex};
+use search_cursor_types::{SearchCursorOption, SearchMethodCursor};
 
 #[derive(Debug, serde::Serialize, serde::Deserialize)]
 pub(crate) struct ChannelMessageIndex {

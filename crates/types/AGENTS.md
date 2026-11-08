@@ -50,7 +50,7 @@ lists what this group may depend on. `cargo x deps` reports edges that break it.
 | [`pagination_types`](pagination_types/AGENTS.md) | Shared infrastructure. |
 | [`permissions_types`](permissions_types/AGENTS.md) | Part of entity sharing/permissions, used across nearly every feature. |
 | [`properties_types`](properties_types/AGENTS.md) | Part of the custom-properties feature (custom fields on documents, CRM records, and other entities). |
-| `models_search_cursor` |  |
+| `search_cursor_types` |  |
 | `models_sfs` |  |
 | `models_team` |  |
 | [`natural_time`](natural_time/AGENTS.md) | Reads English date and time phrases ("next friday at 3", "end of month", "nov 5-7", "in 2 hours") into calendar dates for task due dates, reminders and calendar events … |

@@ -16,7 +16,6 @@ use macro_authorization::{MacroAuthorizationExtractor, UserOrInternal};
 use macro_user_id::user_id::MacroUserId;
 use models_search::unified::SearchEntityFilters;
 use models_search::{MatchType, SearchOn, SimpleSearchResponse, unified::UnifiedSearchRequest};
-use models_search_cursor::{SearchCursor, SearchCursorOption, SearchMethodCursor};
 use opensearch_client::search::agent_sessions::{AgentSessionSearchArgs, AgentSessionSearchMode};
 use opensearch_client::search::call_records::CallRecordSearchMode;
 use opensearch_client::search::documents::{
@@ -24,6 +23,7 @@ use opensearch_client::search::documents::{
 };
 use opensearch_client::search::model::SearchHit;
 use opensearch_client::search::unified::UnifiedSearchArgs;
+use search_cursor_types::{SearchCursor, SearchCursorOption, SearchMethodCursor};
 use shared_types::{response::ErrorResponse, user::UserContext};
 
 /// Whether calendar events may appear in this search.
