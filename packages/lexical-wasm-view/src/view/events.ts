@@ -3,6 +3,7 @@
  * MIT licensed. Retargeted LexicalEvents.ts handlers and controlled-input gates.
  * Pin: Lexical 0.45.0 / 0cfcc169296723e07de2396cd42ea3434b5b79ed.
  */
+
 import {
   CommandCode,
   EditorInputMsg,
@@ -125,7 +126,7 @@ export function shouldPreventDefaultAndInsertText(
 
 function target(
   view: EditorView,
-  event: InputEvent,
+  event: Pick<InputEvent, 'getTargetRanges'>,
   backward: boolean,
   granularity: 'character' | 'word' | 'lineboundary'
 ) {
@@ -144,9 +145,30 @@ function target(
         focus: { ...focus, type: focus.type === 'text' ? 0 : 1 },
       };
   }
-  if (granularity === 'character' && selection.kind === 'range') {
+  if (
+    granularity === 'character' &&
+    selection.kind === 'range' &&
+    selection.anchor.key === selection.focus.key &&
+    selection.anchor.offset === selection.focus.offset &&
+    selection.anchor.type === 'text'
+  ) {
     const node = view.node(selection.anchor.key);
-    if (node && /^[\x00-\x7f]*$/.test(node.text)) return none;
+    const offset = selection.anchor.offset + (backward ? -1 : 1);
+    if (
+      node &&
+      Array.from(node.text).every(
+        (character) => character.charCodeAt(0) <= 127
+      ) &&
+      offset >= 0 &&
+      offset <= node.text.length
+    ) {
+      return {
+        ...none,
+        kind: 1,
+        anchor: { ...selection.anchor, type: 0 },
+        focus: { ...selection.anchor, offset, type: 0 },
+      };
+    }
   }
   const dom = view.root.ownerDocument.getSelection();
   if (!dom?.anchorNode || !dom.focusNode) return none;
@@ -171,6 +193,17 @@ export function registerEvents(view: EditorView): {
   const listeners: (() => void)[] = [];
   const drag = new DragAccess(view);
   listeners.push(() => drag.dispose());
+  const android =
+    /Android/.test(navigator.userAgent) && /Chrome/.test(navigator.userAgent);
+  let lastKey = '',
+    lastKeyAt = -Infinity;
+  let clearTimer: ReturnType<typeof setTimeout> | undefined;
+  let restoreTimer: ReturnType<typeof setTimeout> | undefined;
+  let postDelete: Extract<ViewSelection, { kind: 'range' }> | null = null;
+  listeners.push(() => {
+    clearTimeout(clearTimer);
+    clearTimeout(restoreTimer);
+  });
   let composing = false;
   let endingComposition = false;
   let composingKey: number | null = null;
@@ -197,7 +230,12 @@ export function registerEvents(view: EditorView): {
     root.addEventListener(name, wrapped);
     listeners.push(() => root.removeEventListener(name, wrapped));
   }
-  function command(command: number, text = '', a = 0): void {
+  function command(
+    command: number,
+    text = '',
+    a = 0,
+    clearComposition = false
+  ): void {
     const point = { key: 0, offset: 0, type: 0 };
     const target = {
       kind: 0,
@@ -210,7 +248,7 @@ export function registerEvents(view: EditorView): {
       EditorInputMsg.fromEditorCommand({
         command,
         a,
-        b: 0,
+        b: Number(clearComposition),
         text,
         selection: selectionMessage(readSelection(view)),
         target,
@@ -219,6 +257,8 @@ export function registerEvents(view: EditorView): {
     );
   }
   listen('keydown', (event) => {
+    lastKey = event.key;
+    lastKeyAt = event.timeStamp;
     if (composing || event.isComposing) return;
     if (pendingEnd !== null) {
       const pending = pendingEnd;
@@ -262,20 +302,96 @@ export function registerEvents(view: EditorView): {
       event.preventDefault();
       return;
     }
+    const apple = /Mac|iPhone|iPad|iPod/.test(navigator.platform);
+    const wordDelete =
+      !event.shiftKey &&
+      !event.metaKey &&
+      (apple
+        ? event.altKey && !event.ctrlKey
+        : event.ctrlKey && !event.altKey) &&
+      (event.key === 'Backspace' || event.key === 'Delete');
+    const lineDelete =
+      apple &&
+      !event.shiftKey &&
+      !event.altKey &&
+      ((event.metaKey &&
+        !event.ctrlKey &&
+        (event.key === 'Backspace' || event.key === 'Delete')) ||
+        (event.ctrlKey && !event.metaKey && event.key.toLowerCase() === 'k'));
+    let formatArgument: number | undefined;
+    if (
+      !event.shiftKey &&
+      !event.altKey &&
+      (apple
+        ? event.metaKey && !event.ctrlKey
+        : event.ctrlKey && !event.metaKey)
+    ) {
+      switch (event.key.toLowerCase()) {
+        case 'b':
+          formatArgument = 0;
+          break;
+        case 'i':
+          formatArgument = 1;
+          break;
+        case 'u':
+          formatArgument = 3;
+          break;
+      }
+    }
+    if (wordDelete || lineDelete || formatArgument !== undefined) {
+      event.preventDefault();
+      const backward = event.key === 'Backspace';
+      const empty = { key: 0, offset: 0, type: 0 };
+      const selectedTarget =
+        formatArgument === undefined
+          ? target(
+              view,
+              { getTargetRanges: () => [] },
+              backward,
+              lineDelete ? 'lineboundary' : 'word'
+            )
+          : {
+              kind: 0,
+              anchor: empty,
+              focus: empty,
+              dirty: false,
+              backward: false,
+            };
+      view.port.input(
+        EditorInputMsg.fromEditorKeyDown({
+          code: event.keyCode,
+          mods:
+            Number(event.shiftKey) |
+            (Number(event.altKey) << 1) |
+            (Number(event.ctrlKey) << 2) |
+            (Number(event.metaKey) << 3) |
+            (Number(event.repeat) << 4),
+          key: event.key,
+          command:
+            formatArgument !== undefined
+              ? CommandCode.FormatText
+              : lineDelete
+                ? CommandCode.DeleteLine
+                : CommandCode.DeleteWord,
+          argument: formatArgument ?? (backward ? 0 : 1),
+          selection: selectionMessage(readSelection(view)),
+          target: selectedTarget,
+          characterTarget: { ...selectedTarget, kind: 0 },
+        }),
+        (handled) => {
+          if (!handled) {
+            if (view.runViewCommand('KeyDown', event, 'after')) return;
+            if (keyCommand) view.runViewCommand(keyCommand, event, 'after');
+          }
+        }
+      );
+      return;
+    }
     let routed = 0;
     if ((event.ctrlKey || event.metaKey) && !event.altKey) {
       if (event.key.toLowerCase() === 'z')
         routed = event.shiftKey ? CommandCode.Redo : CommandCode.Undo;
       else if (event.key.toLowerCase() === 'y') routed = CommandCode.Redo;
-      else if (event.key.toLowerCase() === 'b') {
-        event.preventDefault();
-        command(CommandCode.FormatText, '', 1);
-        return;
-      } else if (event.key.toLowerCase() === 'i') {
-        event.preventDefault();
-        command(CommandCode.FormatText, '', 2);
-        return;
-      }
     }
     if (event.key === 'Tab')
       routed = event.shiftKey ? CommandCode.Outdent : CommandCode.InsertTab;
@@ -311,8 +427,72 @@ export function registerEvents(view: EditorView): {
     if (routed || view.consumePreventDefault()) event.preventDefault();
   });
   listen('beforeinput', (event) => {
-    if (!event.cancelable || composing || event.isComposing) return;
+    if (!event.cancelable) return;
     const type = event.inputType;
+    let clearComposition = false;
+    const selected = readSelection(view);
+    if (
+      android &&
+      type === 'deleteContentBackward' &&
+      selected.kind === 'range'
+    ) {
+      const sameNode = selected.anchor.key === selected.focus.key;
+      const key = selected.anchor.key;
+      const clear = () =>
+        view.port.composition(2, key, '', 0xffffffff, 0xffffffff, '');
+      if (
+        sameNode &&
+        (composing || event.isComposing) &&
+        (lastKey === 'MediaLast' ||
+          lastKey === 'Process' ||
+          lastKey === 'Unidentified') &&
+        event.timeStamp < lastKeyAt + 30
+      ) {
+        composing = false;
+        composingKey = null;
+        pendingEnd = null;
+        lastKeyAt = -Infinity;
+        clear();
+        clearTimeout(clearTimer);
+        clearTimer = setTimeout(clear, 30);
+        return;
+      }
+      const node = view.node(key),
+        flags = node ? view.flags(node) : undefined;
+      const parent =
+        node?.parent === null || node?.parent === undefined
+          ? null
+          : view.node(node.parent);
+      const index = parent?.children.indexOf(key) ?? -1;
+      const previous =
+        index > 0 ? view.node(parent?.children[index - 1] ?? 0) : null;
+      const all =
+        selected.anchor.offset === 0 &&
+        selected.focus.offset === node?.text.length;
+      const collapsed = selected.anchor.offset === selected.focus.offset;
+      if (
+        sameNode &&
+        node?.kind === 'text' &&
+        !all &&
+        flags?.canInsertTextAfter !== false &&
+        !(collapsed && previous?.kind === 'decorator')
+      ) {
+        clear();
+        composing = false;
+        composingKey = null;
+        return;
+      }
+      clearComposition = true;
+      composing = false;
+      composingKey = null;
+      pendingEnd = null;
+    }
+    if (type === 'insertFromComposition') {
+      composing = false;
+      composingKey = null;
+      pendingEnd = null;
+      clearComposition = true;
+    } else if (!clearComposition && (composing || event.isComposing)) return;
     if (
       type === 'insertText' &&
       !shouldPreventDefaultAndInsertText(view, event.data ?? '', event)
@@ -338,22 +518,48 @@ export function registerEvents(view: EditorView): {
       view.port.input(
         EditorInputMsg.fromEditorCommand({
           command,
-          a: Number(backward),
-          b: 0,
+          a: backward ? 0 : 1,
+          b: Number(clearComposition),
           text: '',
           selection: selectionMessage(selection),
           target: selectedTarget,
           characterTarget: { ...selectedTarget, kind: 0 },
         })
       );
+      if (android) {
+        const after = view.selection().selection;
+        postDelete =
+          after.kind === 'range' &&
+          after.anchor.key === after.focus.key &&
+          after.anchor.offset === after.focus.offset
+            ? after
+            : null;
+        clearTimeout(restoreTimer);
+        restoreTimer = setTimeout(() => {
+          postDelete = null;
+        }, 0);
+      }
     } else if (type === 'insertParagraph') command(CommandCode.InsertParagraph);
     else if (type === 'insertLineBreak') command(CommandCode.InsertLineBreak);
     else if (type === 'historyUndo') command(CommandCode.Undo);
     else if (type === 'historyRedo') command(CommandCode.Redo);
-    else if (type === 'formatBold') command(CommandCode.FormatText, '', 1);
-    else if (type === 'formatItalic') command(CommandCode.FormatText, '', 2);
-    else if (type === 'insertText' || type === 'insertReplacementText')
-      command(CommandCode.InsertText, event.data ?? '');
+    else if (type === 'formatBold') command(CommandCode.FormatText, '', 0);
+    else if (type === 'formatItalic') command(CommandCode.FormatText, '', 1);
+    else if (
+      [
+        'insertText',
+        'insertReplacementText',
+        'insertFromComposition',
+        'insertFromYank',
+        'insertFromDrop',
+      ].includes(type)
+    )
+      command(
+        CommandCode.InsertText,
+        event.dataTransfer?.getData('text/plain') ?? event.data ?? '',
+        0,
+        clearComposition
+      );
   });
   listen('input', () => {
     if (endingComposition) return;
@@ -416,11 +622,57 @@ export function registerEvents(view: EditorView): {
   const selectionChange = () => {
     if (!doc.activeElement || !view.ownsSelection(doc.activeElement)) return;
     const selection = readSelection(view);
+    const dom = doc.getSelection();
+    const marked = view.recentSelectionMark();
+    const markedRange =
+      marked?.selection.kind === 'range' ? marked.selection : null;
+    const saved = postDelete;
+    postDelete = null;
+    const context = {
+      domRangeSameNode:
+        dom?.type === 'Range' && dom.anchorNode === dom.focusNode,
+      domAnchorOffset: dom?.anchorOffset ?? 0,
+      domFocusOffset: dom?.focusOffset ?? 0,
+      ...(marked && markedRange
+        ? {
+            marked: {
+              format: marked.format,
+              style: marked.style,
+              anchor: {
+                ...markedRange.anchor,
+                type: markedRange.anchor.type === 'text' ? 0 : 1,
+              },
+            },
+          }
+        : {}),
+      ...(saved
+        ? {
+            postDeleteRestore: {
+              anchor: {
+                ...saved.anchor,
+                type: saved.anchor.type === 'text' ? 0 : 1,
+              },
+              focus: {
+                ...saved.focus,
+                type: saved.focus.type === 'text' ? 0 : 1,
+              },
+              format: view.selection().format,
+              style: view.selection().style,
+            },
+          }
+        : {}),
+    };
     if (
-      !sameSelection(selection, view.selection().selection) &&
-      !sameSelection(selection, lastSubmittedSelection)
+      saved ||
+      context.domRangeSameNode ||
+      (selection.kind === 'range' && selection.dirty) ||
+      (!sameSelection(selection, view.selection().selection) &&
+        !sameSelection(selection, lastSubmittedSelection))
     ) {
-      view.port.selectionFromView(selection);
+      view.port.selectionFromView(
+        selection,
+        marked || saved || context.domRangeSameNode ? context : undefined
+      );
       lastSubmittedSelection = readSelection(view);
     }
   };
@@ -445,6 +697,8 @@ export function registerEvents(view: EditorView): {
   });
   listen('click', (event) => {
     if (view.runViewCommand('Click', event, 'before')) return;
+    if (event.detail === 3)
+      view.port.selectionFromView(readSelection(view), { tripleClick: true });
     const key =
       event.target instanceof Node ? view.keyFromDOM(event.target) : null;
     if (key !== null && view.node(key)?.kind === 'decorator') {

@@ -1,4 +1,5 @@
 import { expect, test } from '@playwright/test';
+
 declare global {
   interface Window {
     imeFixture: {
@@ -31,6 +32,7 @@ declare global {
         payload: string;
         caret: boolean;
       };
+      unhandledKeyFallback(): number;
       capturedMimes: { mime: string; value: string }[];
       second(nested: boolean, state?: string): Promise<void>;
       highlights(): Promise<void>;
@@ -543,3 +545,328 @@ test('stored links follow upstream protocol filtering and formatted text keeps n
   expect(await page.evaluate(() => window.fixture.errors)).toEqual([]);
 });
 
+test('modifier delete derives a layout target at keydown without beforeinput', async ({
+  page,
+}) => {
+  await page.evaluate(() => {
+    window.fixture.reset('first second');
+    window.fixture.selectEnd();
+  });
+  const result = await page.evaluate(() => {
+    const selection = document.getSelection();
+    if (!selection?.anchorNode) throw new Error('Missing selection');
+    let modifies = 0;
+    const original = selection.modify.bind(selection);
+    selection.modify = (...args) => {
+      modifies++;
+      original(...args);
+    };
+    const event = new KeyboardEvent('keydown', {
+      key: 'Backspace',
+      ctrlKey: true,
+      bubbles: true,
+      cancelable: true,
+    });
+    document.getElementById('editor')?.dispatchEvent(event);
+    return { modifies, prevented: event.defaultPrevented };
+  });
+  expect(result).toEqual({ modifies: 1, prevented: true });
+  await expect(page.locator('#editor')).toHaveText('first ');
+  expect(await page.evaluate(() => window.fixture.errors)).toEqual([]);
+});
+
+test('Android native backspace deletes once and re-clears composition after 30ms', async ({
+  page,
+}) => {
+  await page.clock.install();
+  await page.addInitScript(() =>
+    Object.defineProperty(navigator, 'userAgent', {
+      value: 'Mozilla/5.0 Android Chrome/153.0.0.0',
+    })
+  );
+  await page.goto('/browser-test/index.html');
+  await expect(page.locator('#editor')).toHaveText('a');
+  await page.evaluate(() => {
+    window.fixture.reset('漢字');
+    window.fixture.selectEnd();
+    window.fixture.count();
+  });
+  const result = await page.evaluate(() => {
+    const root = document.getElementById('editor');
+    if (!root) throw new Error('Missing editor');
+    root.dispatchEvent(
+      new CompositionEvent('compositionstart', { bubbles: true, data: '' })
+    );
+    root.dispatchEvent(
+      new KeyboardEvent('keydown', {
+        key: 'MediaLast',
+        keyCode: 229,
+        isComposing: true,
+        bubbles: true,
+      })
+    );
+    const event = new InputEvent('beforeinput', {
+      inputType: 'deleteContentBackward',
+      isComposing: true,
+      bubbles: true,
+      cancelable: true,
+    });
+    root.dispatchEvent(event);
+    // Android may ignore preventDefault: perform its one native deletion.
+    const text = document.getSelection()?.anchorNode;
+    if (!text) throw new Error('Missing text');
+    text.nodeValue = '漢';
+    document.getSelection()?.setBaseAndExtent(text, 1, text, 1);
+    root.dispatchEvent(
+      new InputEvent('input', {
+        inputType: 'deleteContentBackward',
+        bubbles: true,
+      })
+    );
+    return { prevented: event.defaultPrevented, text: window.fixture.text() };
+  });
+  expect(result).toEqual({ prevented: false, text: '漢' });
+  await page.clock.runFor(31);
+  expect(
+    await page.evaluate(
+      () =>
+        window.fixture.crossings.filter((name) => name === 'composition').length
+    )
+  ).toBe(3);
+  await expect(page.locator('#editor')).toHaveText('漢');
+  await page.evaluate(() => {
+    const root = document.getElementById('editor');
+    const event = new InputEvent('beforeinput', {
+      data: '語',
+      bubbles: true,
+      cancelable: true,
+    });
+    // Desktop Chromium omits this Android/WebKit-only input type.
+    Object.defineProperty(event, 'inputType', {
+      value: 'insertFromComposition',
+    });
+    root?.dispatchEvent(event);
+  });
+  await expect(page.locator('#editor')).toHaveText('漢語');
+  expect(await page.evaluate(() => window.fixture.errors)).toEqual([]);
+});
+
+test('Android noncomposing backspace delegates eligible native deletion', async ({
+  page,
+}) => {
+  await page.addInitScript(() =>
+    Object.defineProperty(navigator, 'userAgent', {
+      value: 'Mozilla/5.0 Android Chrome/153.0.0.0',
+    })
+  );
+  await page.goto('/browser-test/index.html');
+  await expect(page.locator('#editor')).toHaveText('a');
+  await page.evaluate(() => {
+    window.fixture.reset('abc');
+    window.fixture.selectEnd();
+    window.fixture.count();
+  });
+  const prevented = await page.evaluate(() => {
+    const root = document.getElementById('editor');
+    const event = new InputEvent('beforeinput', {
+      inputType: 'deleteContentBackward',
+      bubbles: true,
+      cancelable: true,
+    });
+    root?.dispatchEvent(event);
+    const leaf = document.getSelection()?.anchorNode;
+    if (!leaf) throw new Error('Missing leaf');
+    leaf.nodeValue = 'ab';
+    document.getSelection()?.setBaseAndExtent(leaf, 2, leaf, 2);
+    root?.dispatchEvent(
+      new InputEvent('input', {
+        inputType: 'deleteContentBackward',
+        bubbles: true,
+      })
+    );
+    return event.defaultPrevented;
+  });
+  expect(prevented).toBe(false);
+  expect(await page.evaluate(() => window.fixture.text())).toBe('ab');
+  expect(await page.evaluate(() => window.fixture.errors)).toEqual([]);
+});
+
+test('collapsed typing format survives equivalent DOM element boundary selection', async ({
+  page,
+}) => {
+  await page.keyboard.press('Control+b');
+  await page.evaluate(() => {
+    const leaf = document.getSelection()?.anchorNode;
+    const wrapper = leaf?.parentNode;
+    if (!wrapper) throw new Error('Missing wrapper');
+    document.getSelection()?.setBaseAndExtent(wrapper, 1, wrapper, 1);
+    document.dispatchEvent(new Event('selectionchange'));
+  });
+  await page.keyboard.type('B');
+  await expect(page.locator('#editor strong')).toHaveText('B');
+  expect(await page.evaluate(() => window.fixture.errors)).toEqual([]);
+});
+
+test('controlled character deletion uses the ABI backward and forward directions', async ({
+  page,
+}) => {
+  await page.evaluate(() => {
+    window.fixture.reset('abcd');
+    window.fixture.selectEnd();
+    document.getElementById('editor')?.dispatchEvent(
+      new InputEvent('beforeinput', {
+        inputType: 'deleteContentBackward',
+        bubbles: true,
+        cancelable: true,
+      })
+    );
+  });
+  await expect(page.locator('#editor')).toHaveText('abc');
+  await page.evaluate(() => {
+    const leaf = document.getSelection()?.anchorNode;
+    if (!leaf) throw new Error('Missing leaf');
+    document.getSelection()?.setBaseAndExtent(leaf, 1, leaf, 1);
+    document.getElementById('editor')?.dispatchEvent(
+      new InputEvent('beforeinput', {
+        inputType: 'deleteContentForward',
+        bubbles: true,
+        cancelable: true,
+      })
+    );
+  });
+  await expect(page.locator('#editor')).toHaveText('ac');
+  expect(await page.evaluate(() => window.fixture.errors)).toEqual([]);
+});
+
+test('controlled transfer-only insertion uses the plain MIME payload', async ({
+  page,
+}) => {
+  await page.evaluate(() => {
+    const transfer = new DataTransfer();
+    transfer.setData('text/plain', 'transfer');
+    document.getElementById('editor')?.dispatchEvent(
+      new InputEvent('beforeinput', {
+        inputType: 'insertFromYank',
+        dataTransfer: transfer,
+        bubbles: true,
+        cancelable: true,
+      })
+    );
+  });
+  await expect(page.locator('#editor')).toHaveText('atransfer');
+  expect(await page.evaluate(() => window.fixture.errors)).toEqual([]);
+});
+
+test('Android controlled full-node deletion clears active composition', async ({
+  page,
+}) => {
+  await page.addInitScript(() =>
+    Object.defineProperty(navigator, 'userAgent', {
+      value: 'Mozilla/5.0 Android Chrome/153.0.0.0',
+    })
+  );
+  await page.goto('/browser-test/index.html');
+  await expect(page.locator('#editor')).toHaveText('a');
+  await page.evaluate(() => {
+    window.fixture.reset('漢字');
+    window.fixture.selectEnd();
+    const root = document.getElementById('editor');
+    root?.dispatchEvent(
+      new CompositionEvent('compositionstart', { bubbles: true, data: '' })
+    );
+    const leaf = document.getSelection()?.anchorNode;
+    if (!leaf) throw new Error('Missing leaf');
+    document.getSelection()?.setBaseAndExtent(leaf, 0, leaf, 2);
+    root?.dispatchEvent(
+      new InputEvent('beforeinput', {
+        inputType: 'deleteContentBackward',
+        isComposing: true,
+        bubbles: true,
+        cancelable: true,
+      })
+    );
+  });
+  await expect(page.locator('#editor')).toHaveText('');
+  await page.keyboard.type('continued');
+  await expect(page.locator('#editor')).toHaveText('continued');
+  expect(await page.evaluate(() => window.fixture.errors)).toEqual([]);
+});
+
+test('unhandled targeted key invokes lower-priority view listeners', async ({
+  page,
+}) => {
+  expect(await page.evaluate(() => window.fixture.unhandledKeyFallback())).toBe(
+    1
+  );
+  expect(await page.evaluate(() => window.fixture.errors)).toEqual([]);
+});
+
+test('Android composing selection across text nodes follows controlled deletion', async ({
+  page,
+}) => {
+  await page.addInitScript(() =>
+    Object.defineProperty(navigator, 'userAgent', {
+      value: 'Mozilla/5.0 Android Chrome/153.0.0.0',
+    })
+  );
+  await page.goto('/browser-test/index.html');
+  await expect(page.locator('#editor')).toHaveText('a');
+  await page.evaluate(() => {
+    const text = (value: string, format: number) => ({
+      type: 'text',
+      version: 1,
+      text: value,
+      format,
+      detail: 0,
+      mode: 'normal',
+      style: '',
+    });
+    window.fixture.setState(
+      JSON.stringify({
+        root: {
+          type: 'root',
+          version: 1,
+          children: [
+            {
+              type: 'paragraph',
+              version: 1,
+              children: [text('漢', 0), text('字', 1)],
+            },
+          ],
+        },
+      })
+    );
+    const root = document.getElementById('editor'),
+      first = root?.querySelector('span')?.firstChild,
+      second = root?.querySelector('strong')?.firstChild;
+    if (!first || !second) throw new Error('Missing text nodes');
+    document.getSelection()?.setBaseAndExtent(second, 1, second, 1);
+    root?.dispatchEvent(
+      new CompositionEvent('compositionstart', { bubbles: true, data: '' })
+    );
+    document.getSelection()?.setBaseAndExtent(first, 0, second, 1);
+    root?.dispatchEvent(
+      new InputEvent('beforeinput', {
+        inputType: 'deleteContentBackward',
+        isComposing: true,
+        bubbles: true,
+        cancelable: true,
+      })
+    );
+  });
+  await expect(page.locator('#editor')).toHaveText('');
+  await page.keyboard.type('continued');
+  await expect(page.locator('#editor')).toHaveText('continued');
+  expect(await page.evaluate(() => window.fixture.errors)).toEqual([]);
+});
+
+test('underline formatting shortcut uses the routed model command', async ({
+  page,
+}) => {
+  await page.keyboard.press('Control+u');
+  await page.keyboard.type('underlined');
+  await expect(page.locator('#editor .theme-underline')).toHaveText(
+    'underlined'
+  );
+  expect(await page.evaluate(() => window.fixture.errors)).toEqual([]);
+});
